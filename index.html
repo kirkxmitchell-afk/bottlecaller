@@ -369,6 +369,8 @@
             let currentEncounter = null;
             let currentStep = 0;
 
+            const TAP_EVENT = window.PointerEvent ? "pointerup" : "touchend";
+
             const onTap = (el, fn) => {
                 if (!el) return;
 
@@ -382,8 +384,7 @@
                     setTimeout(() => { justHandled = false; }, 350);
                 };
 
-                el.addEventListener("pointerup", handleTap, { passive: false });
-                el.addEventListener("touchend", handleTap, { passive: false });
+                el.addEventListener(TAP_EVENT, handleTap, { passive: false });
 
                 el.addEventListener("click", (e) => {
                     if (justHandled) return;
@@ -873,8 +874,7 @@
                     }
                 };
 
-                container.addEventListener("pointerup", handler, { passive: false });
-                container.addEventListener("touchend", handler, { passive: false });
+                container.addEventListener(TAP_EVENT, handler, { passive: false });
             }
 
             function updateRadioSelection(containerId) {
@@ -890,8 +890,7 @@
                     btn.classList.add("selected");
                 };
 
-                container.addEventListener("pointerup", handler, { passive: false });
-                container.addEventListener("touchend", handler, { passive: false });
+                container.addEventListener(TAP_EVENT, handler, { passive: false });
             }
 
             function collectSelectedOptions(containerId) {
@@ -1644,40 +1643,27 @@
                 const demoWineCards = ensureElement("demoWineCards");
                 const premiumWineCards = ensureElement("premiumWineCards");
 
+                const delHandler = (tier) => (e) => {
+                    e.preventDefault();
+                    const btn = e.target.closest(".small-btn");
+                    if (!btn || !btn.dataset || !btn.dataset.id) return;
+                    deleteWine(tier, btn.dataset.id);
+                };
+
                 if (demoWineTableBody) {
-                    demoWineTableBody.addEventListener("click", (e) => {
-                        const target = e.target;
-                        if (target && target.dataset && target.dataset.id) {
-                            deleteWine("demo", target.dataset.id);
-                        }
-                    });
+                    demoWineTableBody.addEventListener(TAP_EVENT, delHandler("demo"), { passive: false });
                 }
 
                 if (premiumWineTableBody) {
-                    premiumWineTableBody.addEventListener("click", (e) => {
-                        const target = e.target;
-                        if (target && target.dataset && target.dataset.id) {
-                            deleteWine("premium", target.dataset.id);
-                        }
-                    });
+                    premiumWineTableBody.addEventListener(TAP_EVENT, delHandler("premium"), { passive: false });
                 }
 
                 if (demoWineCards) {
-                    demoWineCards.addEventListener("click", (e) => {
-                        const target = e.target;
-                        if (target && target.dataset && target.dataset.id) {
-                            deleteWine("demo", target.dataset.id);
-                        }
-                    });
+                    demoWineCards.addEventListener(TAP_EVENT, delHandler("demo"), { passive: false });
                 }
 
                 if (premiumWineCards) {
-                    premiumWineCards.addEventListener("click", (e) => {
-                        const target = e.target;
-                        if (target && target.dataset && target.dataset.id) {
-                            deleteWine("premium", target.dataset.id);
-                        }
-                    });
+                    premiumWineCards.addEventListener(TAP_EVENT, delHandler("premium"), { passive: false });
                 }
             }
 
@@ -1720,7 +1706,7 @@
                     item.appendChild(details);
                     historyList.appendChild(item);
 
-                    toggleBtn.addEventListener("click", () => {
+                    onTap(toggleBtn, () => {
                         const isHidden = details.style.display === "none" || details.style.display === "";
                         details.style.display = isHidden ? "block" : "none";
                         toggleBtn.innerText = isHidden ? "Hide Details" : "View Details";
