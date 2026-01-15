@@ -232,7 +232,7 @@
     </section>
 
     <script>
-                document.addEventListener("DOMContentLoaded", () => {
+        document.addEventListener("DOMContentLoaded", () => {
             const demoWinesKey = "bc_demo_wines";
             const premiumWinesKey = "bc_premium_wines";
             const demoRunsKey = "bc_demo_runs";
@@ -371,8 +371,16 @@
 
             const onTap = (el, fn) => {
                 if (!el) return;
+
+                const handler = (e) => {
+                    e.preventDefault();
+                    fn(e);
+                };
+
+                el.addEventListener("pointerup", handler, { passive: false });
+                el.addEventListener("touchend", handler, { passive: false });
+
                 el.addEventListener("click", fn);
-                el.addEventListener("pointerup", fn);
             };
 
             function showScreen(screenId) {
@@ -843,8 +851,9 @@
                 const container = document.getElementById(containerId);
                 if (!container) return;
 
-                container.addEventListener("click", (e) => {
-                    const btn = e.target;
+                const handler = (e) => {
+                    e.preventDefault();
+                    const btn = e.target.closest(".option-btn");
                     if (!btn || !btn.dataset || !btn.dataset.value) return;
 
                     const selected = container.querySelectorAll(".option-btn.selected");
@@ -854,20 +863,27 @@
                         if (selected.length >= maxAllowed) return;
                         btn.classList.add("selected");
                     }
-                });
+                };
+
+                container.addEventListener("pointerup", handler, { passive: false });
+                container.addEventListener("touchend", handler, { passive: false });
             }
 
             function updateRadioSelection(containerId) {
                 const container = document.getElementById(containerId);
                 if (!container) return;
 
-                container.addEventListener("click", (e) => {
-                    const btn = e.target;
+                const handler = (e) => {
+                    e.preventDefault();
+                    const btn = e.target.closest(".option-btn");
                     if (!btn || !btn.dataset || !btn.dataset.value) return;
                     const buttons = container.querySelectorAll(".option-btn");
                     buttons.forEach(b => b.classList.remove("selected"));
                     btn.classList.add("selected");
-                });
+                };
+
+                container.addEventListener("pointerup", handler, { passive: false });
+                container.addEventListener("touchend", handler, { passive: false });
             }
 
             function collectSelectedOptions(containerId) {
@@ -1199,7 +1215,7 @@
                         btn.type = "button";
                         btn.className = "option-btn" + (currentEncounter.guestStateSelected === state ? " selected" : "");
                         btn.innerText = state;
-                        btn.addEventListener("click", () => {
+                        onTap(btn, () => {
                             currentEncounter.guestStateSelected = state;
                             renderEncounterStep();
                         });
@@ -1227,7 +1243,7 @@
                         btn.type = "button";
                         btn.className = "option-btn" + (currentEncounter.modeSelected === mode ? " selected" : "");
                         btn.innerText = mode;
-                        btn.addEventListener("click", () => {
+                        onTap(btn, () => {
                             currentEncounter.modeSelected = mode;
                             renderEncounterStep();
                         });
@@ -1254,7 +1270,7 @@
                         btn.type = "button";
                         btn.className = "option-btn" + (currentEncounter.hookSelected === hook ? " selected" : "");
                         btn.innerText = hook;
-                        btn.addEventListener("click", () => {
+                        onTap(btn, () => {
                             currentEncounter.hookSelected = hook;
                             renderEncounterStep();
                         });
@@ -1290,7 +1306,7 @@
                         btn.type = "button";
                         btn.className = "option-btn" + (currentEncounter.selectedS1 === slot ? " selected" : "");
                         btn.innerText = slot + ": " + currentEncounter.deliverOptionsS1[slot];
-                        btn.addEventListener("click", () => {
+                        onTap(btn, () => {
                             currentEncounter.selectedS1 = slot;
                             currentEncounter.deliveryLine1 = currentEncounter.deliverOptionsS1[slot];
                             renderEncounterStep();
@@ -1310,7 +1326,7 @@
                         btn.type = "button";
                         btn.className = "option-btn" + (currentEncounter.selectedS2 === slot ? " selected" : "");
                         btn.innerText = slot + ": " + currentEncounter.deliverOptionsS2[slot];
-                        btn.addEventListener("click", () => {
+                        onTap(btn, () => {
                             currentEncounter.selectedS2 = slot;
                             currentEncounter.deliveryLine2 = currentEncounter.deliverOptionsS2[slot];
                             renderEncounterStep();
@@ -1446,8 +1462,7 @@
                 const btn = document.createElement("button");
                 btn.type = "button";
                 btn.innerText = label;
-                btn.addEventListener("click", handler);
-                btn.addEventListener("pointerup", handler);
+                onTap(btn, handler);
                 container.appendChild(btn);
                 return btn;
             }
@@ -1762,7 +1777,6 @@
                 showScreen("screenHome");
             }
         });
-
     </script>
 </body>
 </html>
