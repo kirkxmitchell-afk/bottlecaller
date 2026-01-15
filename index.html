@@ -232,7 +232,7 @@
     </section>
 
     <script>
-        document.addEventListener("DOMContentLoaded", () => {
+                document.addEventListener("DOMContentLoaded", () => {
             const demoWinesKey = "bc_demo_wines";
             const premiumWinesKey = "bc_premium_wines";
             const demoRunsKey = "bc_demo_runs";
@@ -368,6 +368,12 @@
 
             let currentEncounter = null;
             let currentStep = 0;
+
+            const onTap = (el, fn) => {
+                if (!el) return;
+                el.addEventListener("click", fn);
+                el.addEventListener("pointerup", fn);
+            };
 
             function showScreen(screenId) {
                 const screens = document.querySelectorAll(".screen");
@@ -1441,6 +1447,7 @@
                 btn.type = "button";
                 btn.innerText = label;
                 btn.addEventListener("click", handler);
+                btn.addEventListener("pointerup", handler);
                 container.appendChild(btn);
                 return btn;
             }
@@ -1523,20 +1530,20 @@
                 const btnResetRunsPremium = ensureElement("btnResetRunsPremium");
                 const btnResetWinesPremium = ensureElement("btnResetWinesPremium");
 
-                if (btnWelcomeStart) btnWelcomeStart.addEventListener("click", () => {
+                onTap(btnWelcomeStart, () => {
                     localStorage.setItem(coverKey, "true");
                     showScreen("screenHome");
                 });
 
-                if (btnGoDemo) btnGoDemo.addEventListener("click", () => {
+                onTap(btnGoDemo, () => {
                     showScreen("screenSetupDemo");
                 });
 
-                if (btnGoPremium) btnGoPremium.addEventListener("click", () => {
+                onTap(btnGoPremium, () => {
                     showScreen("screenSetupPremium");
                 });
 
-                if (btnResetApp) btnResetApp.addEventListener("click", () => {
+                onTap(btnResetApp, () => {
                     if (!confirm("Reset app? This clears wines and runs.")) return;
                     localStorage.removeItem(demoWinesKey);
                     localStorage.removeItem(premiumWinesKey);
@@ -1559,55 +1566,55 @@
                     showScreen("screenHome");
                 });
 
-                if (btnContinueDemo) btnContinueDemo.addEventListener("click", () => {
+                onTap(btnContinueDemo, () => {
                     activeMode = "demo";
                     showScreen("screenPlay");
                     startEncounter();
                 });
 
-                if (btnContinuePremium) btnContinuePremium.addEventListener("click", () => {
+                onTap(btnContinuePremium, () => {
                     activeMode = "premium";
                     showScreen("screenPlay");
                     startEncounter();
                 });
 
-                if (btnBackHomeFromSetupDemo) btnBackHomeFromSetupDemo.addEventListener("click", () => {
+                onTap(btnBackHomeFromSetupDemo, () => {
                     showScreen("screenHome");
                 });
 
-                if (btnBackHomeFromSetupPremium) btnBackHomeFromSetupPremium.addEventListener("click", () => {
+                onTap(btnBackHomeFromSetupPremium, () => {
                     showScreen("screenHome");
                 });
 
-                if (btnBackHomeFromPlay) btnBackHomeFromPlay.addEventListener("click", () => {
+                onTap(btnBackHomeFromPlay, () => {
                     showScreen("screenHome");
                 });
 
-                if (btnBackHomeFromHistory) btnBackHomeFromHistory.addEventListener("click", () => {
+                onTap(btnBackHomeFromHistory, () => {
                     showScreen("screenHome");
                 });
 
-                if (btnViewHistoryDemo) btnViewHistoryDemo.addEventListener("click", () => {
+                onTap(btnViewHistoryDemo, () => {
                     activeMode = "demo";
                     renderHistory();
                     showScreen("screenHistory");
                 });
 
-                if (btnViewHistoryPremium) btnViewHistoryPremium.addEventListener("click", () => {
+                onTap(btnViewHistoryPremium, () => {
                     activeMode = "premium";
                     renderHistory();
                     showScreen("screenHistory");
                 });
 
-                if (btnResetRunsDemo) btnResetRunsDemo.addEventListener("click", () => resetRunsOnly("demo"));
-                if (btnResetWinesDemo) btnResetWinesDemo.addEventListener("click", () => resetWinesOnly("demo"));
-                if (btnResetRunsPremium) btnResetRunsPremium.addEventListener("click", () => resetRunsOnly("premium"));
-                if (btnResetWinesPremium) btnResetWinesPremium.addEventListener("click", () => resetWinesOnly("premium"));
+                onTap(btnResetRunsDemo, () => resetRunsOnly("demo"));
+                onTap(btnResetWinesDemo, () => resetWinesOnly("demo"));
+                onTap(btnResetRunsPremium, () => resetRunsOnly("premium"));
+                onTap(btnResetWinesPremium, () => resetWinesOnly("premium"));
 
                 const addWineBtnDemo = ensureElement("addWineBtnDemo");
                 const addWineBtnPremium = ensureElement("addWineBtnPremium");
-                if (addWineBtnDemo) addWineBtnDemo.addEventListener("click", () => addWineFromForm("demo"));
-                if (addWineBtnPremium) addWineBtnPremium.addEventListener("click", () => addWineFromForm("premium"));
+                onTap(addWineBtnDemo, () => addWineFromForm("demo"));
+                onTap(addWineBtnPremium, () => addWineFromForm("premium"));
 
                 const demoWineTableBody = ensureElement("demoWineTableBody");
                 const premiumWineTableBody = ensureElement("premiumWineTableBody");
@@ -1755,6 +1762,7 @@
                 showScreen("screenHome");
             }
         });
+
     </script>
 </body>
 </html>
