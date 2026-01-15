@@ -1,0 +1,1737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>BottleCaller Prototype</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 720px; margin: auto; overflow-x: hidden; }
+        button { padding: 10px 16px; font-size: 14px; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .button-row { margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap; }
+        .panel { margin-top: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; background: #f9f9f9; }
+        .card { border: 1px solid #ddd; border-radius: 6px; padding: 12px; background: #fff; margin-top: 10px; }
+        .score-row { margin: 6px 0; }
+        .small-text { font-size: 12px; color: #666; margin: 4px 0 10px 0; }
+        .manager-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+        .manager-row input, .manager-row select, .manager-row textarea { padding: 6px; font-size: 14px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 6px; font-size: 13px; text-align: left; }
+        th { background: #f0f0f0; }
+        .small-btn { padding: 4px 8px; font-size: 12px; }
+        .badge { display: inline-block; padding: 2px 6px; margin: 3px 4px 0 0; font-size: 12px; border-radius: 10px; background: #eee; }
+        .encounter-panel { margin-top: 15px; padding: 12px; border: 1px solid #ccc; border-radius: 5px; background: #fff; }
+        .step-header { font-weight: bold; margin-bottom: 8px; }
+        .option-grid { display: flex; gap: 8px; flex-wrap: wrap; }
+        .option-btn { border: 1px solid #aaa; background: #fff; padding: 8px 10px; border-radius: 6px; cursor: pointer; }
+        .option-btn.selected { background: #e3f2fd; border-color: #2196f3; }
+        .tooltip-trigger { margin-left: 6px; border: 1px solid #ccc; border-radius: 50%; width: 18px; height: 18px; display: inline-flex; justify-content: center; align-items: center; font-size: 12px; cursor: pointer; background: #fff; }
+        .tooltip-card { border: 1px solid #ccc; background: #fff; padding: 8px; border-radius: 5px; font-size: 12px; max-width: 320px; display: none; margin-top: 6px; }
+        .history-item { margin: 8px 0; padding: 6px; border-bottom: 1px dashed #ccc; }
+        .history-details { display: none; margin-top: 6px; font-size: 13px; }
+        .history-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .notice { padding: 8px; background: #fff7e6; border: 1px solid #f5c542; border-radius: 5px; }
+        .setup-required { padding: 10px; background: #fff3f3; border: 1px solid #f3b2b2; border-radius: 5px; }
+        .cover-screen { text-align: left; padding: 30px 20px; }
+        .cover-screen h2 { margin-top: 0; }
+        .cover-list { margin: 10px 0 16px 18px; }
+        .wine-table { width: 100%; }
+        .wine-cards { display: none; margin-top: 10px; }
+        .wine-card { border: 1px solid #ddd; border-radius: 6px; padding: 10px; background: #fff; margin-top: 10px; }
+        .wine-card-row { margin: 4px 0; }
+        .wine-card-label { font-weight: bold; }
+
+        @media (max-width: 767px) {
+            body { padding: 12px; }
+            .button-row { flex-direction: column; align-items: stretch; }
+            button { width: 100%; min-height: 48px; }
+            .manager-row { flex-direction: column; align-items: stretch; }
+            .manager-row input, .manager-row select, .manager-row textarea { width: 100%; }
+            .option-grid { flex-direction: column; }
+            .option-btn { width: 100%; min-height: 48px; }
+            .wine-table { display: none; }
+            .wine-cards { display: block; }
+        }
+
+        @media (min-width: 768px) {
+            .wine-cards { display: none; }
+        }
+    </style>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#111111">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+    <h1>BottleCaller Prototype</h1>
+
+    <div class="button-row" id="homeRow" style="display:none;">
+        <button id="homeBtn" type="button">Home</button>
+    </div>
+
+    <div class="panel cover-screen" id="coverScreen">
+        <h2>Welcome to BottleCaller</h2>
+        <p>BottleCaller trains servers to sell the right wine by matching guest psychology with the right delivery style — in under 5 minutes.</p>
+        <ul class="cover-list">
+            <li>Diagnose the guest</li>
+            <li>Choose Mode + Hook</li>
+            <li>Deliver in 2 sentences</li>
+        </ul>
+        <div class="button-row">
+            <button id="startCoverBtn" type="button">Start</button>
+        </div>
+        <div class="small-text">Demo Mode available</div>
+    </div>
+
+    <div class="panel" id="modeSelectScreen">
+        <h2>Choose your BottleCaller mode</h2>
+
+        <div class="card" id="demoCard">
+            <strong>Demo</strong>
+            <div class="score-row" id="demoStatusLine">Wines saved: 0 / 2</div>
+            <div class="score-row" id="demoLastActivity">Last activity: —</div>
+            <div class="score-row" id="demoRunsSaved">Runs saved: 0</div>
+            <div class="button-row">
+                <button id="demoSetupBtn" type="button">Setup Demo</button>
+                <button id="demoContinueBtn" type="button">Continue</button>
+                <button id="demoViewHistoryBtn" type="button">View History</button>
+                <button id="demoResetRunsBtn" type="button">Reset Runs Only</button>
+                <button id="demoResetWinesBtn" type="button">Reset Wines Only</button>
+            </div>
+        </div>
+
+        <div class="card" id="premiumCard">
+            <strong>Premium</strong>
+            <div class="score-row" id="premiumStatusLine">Wines saved: 0 / 10</div>
+            <div class="score-row" id="premiumLastActivity">Last activity: —</div>
+            <div class="score-row" id="premiumRunsSaved">Runs saved: 0</div>
+            <div class="button-row">
+                <button id="premiumSetupBtn" type="button">Setup Premium</button>
+                <button id="premiumContinueBtn" type="button">Continue</button>
+                <button id="premiumPlayAgainBtn" type="button">Play Again</button>
+                <button id="premiumViewHistoryBtn" type="button">View History</button>
+                <button id="premiumResetRunsBtn" type="button">Reset Runs Only</button>
+                <button id="premiumResetWinesBtn" type="button">Reset Wines Only</button>
+            </div>
+        </div>
+
+        <div class="button-row" style="margin-top:16px;">
+            <button id="resetAllBtn" type="button">Reset All</button>
+            <button id="backToWelcomeBtn" type="button">Back to Welcome</button>
+        </div>
+    </div>
+
+    <div class="panel" id="setupDemoScreen">
+        <h2>Demo Setup</h2>
+        <div class="score-row">Wines added: <span id="wineCountDemo">0 / 2</span></div>
+        <p class="small-text">Tip: Paste this wine into ChatGPT to understand its style (fruit profile, texture, oak, and a 1-sentence story), then come back and tick the boxes.</p>
+
+        <div class="manager-row">
+            <input type="text" id="wineNameInputDemo" placeholder="Wine Name (required)">
+            <input type="text" id="wineVarietalInputDemo" placeholder="Varietal (required)">
+        </div>
+        <div class="manager-row">
+            <button id="toggleAdditionalVarietalDemo" type="button" class="small-btn">Add Additional Varietal (not a blend)</button>
+        </div>
+        <div class="manager-row" id="additionalVarietalRowDemo" style="display:none;">
+            <input type="text" id="additionalVarietalInputDemo" placeholder="Additional Varietal (optional)">
+        </div>
+
+        <div class="manager-row">
+            <strong>Fruit Profile (choose up to 2):</strong>
+            <div class="option-grid" id="fruitOptionsDemo"></div>
+        </div>
+
+        <div class="manager-row">
+            <strong>Structure/Texture (choose up to 2):</strong>
+            <div class="option-grid" id="textureOptionsDemo"></div>
+        </div>
+
+        <div class="manager-row">
+            <strong>Oak Level (choose 1):</strong>
+            <div class="option-grid" id="oakOptionsDemo"></div>
+        </div>
+
+        <div class="manager-row">
+            <strong>Process (optional):</strong>
+            <select id="processInputDemo">
+                <option value="">Select process</option>
+                <option value="Stainless steel">Stainless steel</option>
+                <option value="Wild ferment">Wild ferment</option>
+                <option value="Maceration">Maceration</option>
+                <option value="Destemming">Destemming</option>
+                <option value="Whole bunch pressed">Whole bunch pressed</option>
+                <option value="Hand harvested">Hand harvested</option>
+                <option value="Time on lees">Time on lees</option>
+            </select>
+            <input type="text" id="regionInputDemo" placeholder="Region (optional)">
+        </div>
+
+        <div class="manager-row">
+            <textarea id="storyInputDemo" placeholder="Story (optional, 1 sentence)"></textarea>
+            <button id="addWineBtnDemo" type="button">Add Wine</button>
+        </div>
+
+        <div class="manager-panel">
+            <h3>Wine List</h3>
+            <table class="wine-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Varietal</th>
+                        <th>Fruit</th>
+                        <th>Texture</th>
+                        <th>Oak</th>
+                        <th>Process</th>
+                        <th>Region</th>
+                        <th>Story</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="demoWineTableBody"></tbody>
+            </table>
+            <div id="demoWineCards" class="wine-cards"></div>
+        </div>
+
+        <div class="button-row">
+            <button id="goDemoPlayBtn" type="button">Go to Demo Play</button>
+        </div>
+    </div>
+
+    <div class="panel" id="setupPremiumScreen">
+        <h2>Premium Setup</h2>
+        <div class="score-row">Wines added: <span id="wineCountPremium">0 / 10</span></div>
+        <p class="small-text">Tip: Paste this wine into ChatGPT to understand its style (fruit profile, texture, oak, and a 1-sentence story), then come back and tick the boxes.</p>
+
+        <div class="manager-row">
+            <input type="text" id="wineNameInputPremium" placeholder="Wine Name (required)">
+            <input type="text" id="wineVarietalInputPremium" placeholder="Varietal (required)">
+        </div>
+        <div class="manager-row">
+            <button id="toggleAdditionalVarietalPremium" type="button" class="small-btn">Add Additional Varietal (not a blend)</button>
+        </div>
+        <div class="manager-row" id="additionalVarietalRowPremium" style="display:none;">
+            <input type="text" id="additionalVarietalInputPremium" placeholder="Additional Varietal (optional)">
+        </div>
+
+        <div class="manager-row">
+            <strong>Fruit Profile (choose up to 2):</strong>
+            <div class="option-grid" id="fruitOptionsPremium"></div>
+        </div>
+
+        <div class="manager-row">
+            <strong>Structure/Texture (choose up to 2):</strong>
+            <div class="option-grid" id="textureOptionsPremium"></div>
+        </div>
+
+        <div class="manager-row">
+            <strong>Oak Level (choose 1):</strong>
+            <div class="option-grid" id="oakOptionsPremium"></div>
+        </div>
+
+        <div class="manager-row">
+            <strong>Process (optional):</strong>
+            <select id="processInputPremium">
+                <option value="">Select process</option>
+                <option value="Stainless steel">Stainless steel</option>
+                <option value="Wild ferment">Wild ferment</option>
+                <option value="Maceration">Maceration</option>
+                <option value="Destemming">Destemming</option>
+                <option value="Whole bunch pressed">Whole bunch pressed</option>
+                <option value="Hand harvested">Hand harvested</option>
+                <option value="Time on lees">Time on lees</option>
+            </select>
+            <input type="text" id="regionInputPremium" placeholder="Region (optional)">
+        </div>
+
+        <div class="manager-row">
+            <textarea id="storyInputPremium" placeholder="Story (optional, 1 sentence)"></textarea>
+            <button id="addWineBtnPremium" type="button">Add Wine</button>
+        </div>
+
+        <div class="manager-panel">
+            <h3>Wine List</h3>
+            <table class="wine-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Varietal</th>
+                        <th>Fruit</th>
+                        <th>Texture</th>
+                        <th>Oak</th>
+                        <th>Process</th>
+                        <th>Region</th>
+                        <th>Story</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="premiumWineTableBody"></tbody>
+            </table>
+            <div id="premiumWineCards" class="wine-cards"></div>
+        </div>
+
+        <div class="button-row">
+            <button id="goPremiumPlayBtn" type="button">Go to Premium Play</button>
+        </div>
+    </div>
+
+    <div class="panel" id="demoHomeScreen">
+        <h2>Demo Home</h2>
+        <div id="demoHomeStatus" class="score-row">Ready</div>
+        <div class="button-row">
+            <button id="startDemoEncounterBtn" type="button">Continue Demo</button>
+            <button id="demoHomeViewHistoryBtn" type="button">View Demo History</button>
+            <button id="demoHomeResetRunsBtn" type="button">Reset Runs Only</button>
+            <button id="demoHomeResetWinesBtn" type="button">Reset Wines Only</button>
+            <button id="demoSwitchPremiumBtn" type="button">Switch to Premium</button>
+            <button id="resetAllBtnFromDemoHome" type="button">Reset All</button>
+        </div>
+    </div>
+
+    <div class="panel" id="premiumHomeScreen">
+        <h2>Premium Home</h2>
+        <div class="button-row">
+            <button id="startPremiumEncounterBtn" type="button">Start Encounter</button>
+            <button id="premiumHomeViewHistoryBtn" type="button">View History</button>
+            <button id="premiumManageWinesBtn" type="button">Manage Wines</button>
+            <button id="premiumHomeResetRunsBtn" type="button">Reset Runs Only</button>
+            <button id="premiumHomeResetWinesBtn" type="button">Reset Wines Only</button>
+            <button id="resetAllBtnFromPremiumHome" type="button">Reset All</button>
+        </div>
+    </div>
+
+    <div class="panel" id="playScreen">
+        <div id="setupRequiredMessage" class="setup-required" style="display:none;">
+            Setup required. Add wines to unlock play.
+            <div class="button-row">
+                <button id="goToSetupBtn" type="button">Go to Setup</button>
+            </div>
+        </div>
+
+        <div id="encounterPanel" class="encounter-panel">
+            <div class="step-header" id="stepHeader"></div>
+            <div class="score-row"><strong id="wineDisplayName">Wine:</strong></div>
+            <div id="wineBadges"></div>
+            <div id="stepContent" style="margin-top:10px;"></div>
+            <div class="button-row" id="stepButtons"></div>
+        </div>
+    </div>
+
+    <div class="panel" id="historyScreen">
+        <h2>Session History</h2>
+        <div id="historyList"></div>
+        <div class="button-row">
+            <button id="historyBackBtn" type="button">Back</button>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const demoWinesKey = "bc_demo_wines";
+            const premiumWinesKey = "bc_premium_wines";
+            const demoRunsKey = "bc_demo_runs";
+            const premiumRunsKey = "bc_premium_runs";
+            const settingsKey = "bc_settings";
+            const coverKey = "bc_has_seen_cover";
+
+            const demoGuestTypes = ["Decider", "Bargain-Smart"];
+            const guestStates = ["Decider", "Fancy", "Griever", "Celebrator", "Bargain-Smart"];
+
+            const guestDialogueMap = {
+                "Decider": "Just pick something good. Quick.",
+                "Bargain-Smart": "What’s the best value on this list?",
+                "Fancy": "I want something more serious—what would you pour?",
+                "Griever": "Something easy… not too much.",
+                "Celebrator": "We’re celebrating—what’s fun and impressive?"
+            };
+
+            const premiumEncounterLibrary = [
+                { guestStateActual: "Decider", contextLine: "They tap the list once and look up.", guestLine: "Just pick something good. Quick.", bestMode: "LEAD", bestHook: "VALUE" },
+                { guestStateActual: "Decider", contextLine: "They keep the menu closed, waiting.", guestLine: "Give me your top choice, no debate.", bestMode: "LEAD", bestHook: "VALUE" },
+                { guestStateActual: "Decider", contextLine: "They lean forward and nod for speed.", guestLine: "Best bottle, right now.", bestMode: "LEAD", bestHook: "VALUE" },
+                { guestStateActual: "Decider", contextLine: "They glance once and move on.", guestLine: "I want the cleanest call on the list.", bestMode: "LEAD", bestHook: "VALUE" },
+
+                { guestStateActual: "Bargain-Smart", contextLine: "They track prices with a finger.", guestLine: "What’s the best value on this list?", bestMode: "HOLD", bestHook: "VALUE" },
+                { guestStateActual: "Bargain-Smart", contextLine: "They scan mid-range bottles.", guestLine: "Which bottle overdelivers for the price?", bestMode: "HOLD", bestHook: "VALUE" },
+                { guestStateActual: "Bargain-Smart", contextLine: "They compare two price points carefully.", guestLine: "Show me the smart spend, not the hype.", bestMode: "HOLD", bestHook: "VALUE" },
+                { guestStateActual: "Bargain-Smart", contextLine: "They ask for proof before choosing.", guestLine: "Where is the quality play?", bestMode: "HOLD", bestHook: "VALUE" },
+
+                { guestStateActual: "Fancy", contextLine: "They dress sharp and scan labels.", guestLine: "I want something more serious—what would you pour?", bestMode: "REFLECT", bestHook: "STORY" },
+                { guestStateActual: "Fancy", contextLine: "They mention a producer with a smile.", guestLine: "We drink elegant wines; steer us right.", bestMode: "REFLECT", bestHook: "STORY" },
+                { guestStateActual: "Fancy", contextLine: "They linger on the top section of the list.", guestLine: "Which bottle feels the most refined?", bestMode: "REFLECT", bestHook: "STORY" },
+                { guestStateActual: "Fancy", contextLine: "They tilt the menu toward you.", guestLine: "Pick something with real stature.", bestMode: "REFLECT", bestHook: "STORY" },
+
+                { guestStateActual: "Griever", contextLine: "They sit back and avoid the list.", guestLine: "Something easy… not too much.", bestMode: "HOLD", bestHook: "FLAVOUR" },
+                { guestStateActual: "Griever", contextLine: "They speak softly and look tired.", guestLine: "Keep it gentle and simple tonight.", bestMode: "HOLD", bestHook: "FLAVOUR" },
+                { guestStateActual: "Griever", contextLine: "They nod faintly without energy.", guestLine: "We just want a soft, calm pour.", bestMode: "HOLD", bestHook: "FLAVOUR" },
+                { guestStateActual: "Griever", contextLine: "They hold the menu loosely.", guestLine: "Nothing heavy—just a quiet glass.", bestMode: "HOLD", bestHook: "FLAVOUR" },
+
+                { guestStateActual: "Celebrator", contextLine: "They raise glasses and laugh.", guestLine: "We’re celebrating—what’s fun and impressive?", bestMode: "LEAD", bestHook: "STORY" },
+                { guestStateActual: "Celebrator", contextLine: "They gesture to friends across the table.", guestLine: "Bring the wow bottle.", bestMode: "LEAD", bestHook: "STORY" },
+                { guestStateActual: "Celebrator", contextLine: "They bounce in their seats, excited.", guestLine: "Give us something festive and memorable.", bestMode: "LEAD", bestHook: "STORY" },
+                { guestStateActual: "Celebrator", contextLine: "They ask for a kickoff pour.", guestLine: "We want a showstopper to kick this off.", bestMode: "LEAD", bestHook: "STORY" }
+            ];
+
+            const modeMap = {
+                "Decider": { optimal: "LEAD", neutral: "HOLD", damaging: "REFLECT" },
+                "Bargain-Smart": { optimal: "HOLD", neutral: "LEAD", damaging: "REFLECT" },
+                "Fancy": { optimal: "REFLECT", neutral: "LEAD", damaging: "HOLD" },
+                "Griever": { optimal: "HOLD", neutral: "REFLECT", damaging: "LEAD" },
+                "Celebrator": { optimal: "LEAD", neutral: "REFLECT", damaging: "HOLD" }
+            };
+
+            const hookMap = {
+                "Decider": { optimal: "VALUE", neutral: "FLAVOUR", damaging: "STORY" },
+                "Bargain-Smart": { optimal: "VALUE", neutral: "FLAVOUR", damaging: "STORY" },
+                "Fancy": { optimal: "STORY", neutral: "FLAVOUR", damaging: "VALUE" },
+                "Griever": { optimal: "FLAVOUR", neutral: "STORY", damaging: "VALUE" },
+                "Celebrator": { optimal: "STORY", neutral: "VALUE", damaging: "FLAVOUR" }
+            };
+
+            const guestStatePools = {
+                "Decider": [
+                    { contextLine: "They scan the list fast, ready to choose.", toneTag: "Short" },
+                    { contextLine: "They nod before you finish.", toneTag: "Direct" },
+                    { contextLine: "They already know what they want to feel.", toneTag: "Impatient" },
+                    { contextLine: "They avoid the list and look at you.", toneTag: "Focused" },
+                    { contextLine: "They lean in and wait.", toneTag: "Ready" }
+                ],
+                "Fancy": [
+                    { contextLine: "They dress sharp and scan labels.", toneTag: "Polished" },
+                    { contextLine: "They mention a producer softly.", toneTag: "Warm" },
+                    { contextLine: "They smile at the list’s top section.", toneTag: "Poised" },
+                    { contextLine: "They glance at you for validation.", toneTag: "Elevated" },
+                    { contextLine: "They tilt the list towards you.", toneTag: "Status" }
+                ],
+                "Griever": [
+                    { contextLine: "They speak quietly and avoid eye contact.", toneTag: "Soft" },
+                    { contextLine: "They sit back and sigh.", toneTag: "Low" },
+                    { contextLine: "They look tired and minimal.", toneTag: "Gentle" },
+                    { contextLine: "They barely open the list.", toneTag: "Reserved" },
+                    { contextLine: "They hold the menu loosely.", toneTag: "Quiet" }
+                ],
+                "Celebrator": [
+                    { contextLine: "They laugh and clink glasses.", toneTag: "Bright" },
+                    { contextLine: "They gesture to friends.", toneTag: "High" },
+                    { contextLine: "They smile before you speak.", toneTag: "Upbeat" },
+                    { contextLine: "They ask for something exciting.", toneTag: "Playful" },
+                    { contextLine: "They’re in party mode.", toneTag: "Loud" }
+                ],
+                "Bargain-Smart": [
+                    { contextLine: "They scan prices carefully.", toneTag: "Sharp" },
+                    { contextLine: "They compare options under their breath.", toneTag: "Skeptical" },
+                    { contextLine: "They tap the mid-range section.", toneTag: "Practical" },
+                    { contextLine: "They pause before choosing.", toneTag: "Measured" },
+                    { contextLine: "They look at you for proof.", toneTag: "Testing" }
+                ]
+            };
+
+            const cuePoolPhysical = [
+                "Menus closed, hands folded",
+                "Menus open, scanning food only",
+                "Wine list not requested",
+                "Asks for wine list immediately",
+                "Holds wine list tightly with both hands",
+                "Pages through wine list slowly",
+                "Pages through wine list quickly",
+                "Points at the price column",
+                "Points at regions/producers",
+                "Shows wine list to their partner",
+                "Whisper-discusses a bottle with partner",
+                "Looking at the table, not the list",
+                "Phone on table, glancing at time",
+                "Leans back, relaxed posture",
+                "Leans forward, focused posture",
+                "Avoids eye contact, quiet posture",
+                "Makes direct eye contact, waiting",
+                "Laughing with friends, animated gestures",
+                "Signals “we’re ready” with a hand raise",
+                "Nods quickly, impatient rhythm",
+                "Sighs, low energy posture",
+                "Taps finger on table",
+                "Holds the list for a long time without speaking",
+                "Closes wine list after one quick look",
+                "Keeps wine list open on the table"
+            ];
+
+            const cuePoolVerbal = [
+                "“What do you suggest?”",
+                "“What pairs well with the food?”",
+                "“We want something local.”",
+                "“What’s your best?”",
+                "“We’re in a bit of a rush.”",
+                "“What’s the best value here?”",
+                "“Is there something worth it without going crazy?”",
+                "“We usually drink [region/style].”",
+                "“We want something impressive.”",
+                "“Nothing too heavy.”",
+                "“Something easy…”",
+                "“We’re celebrating.”",
+                "“I don’t want to overthink it.”",
+                "“Can we get a wine list?”",
+                "“Any hidden gems?”",
+                "“What do most people order?”",
+                "“Is this expensive?”",
+                "“I’m not sure what to pick.”",
+                "“Do you have something smooth?”",
+                "“What would you drink?”"
+            ];
+
+            const stateCuePreferences = {
+                "Decider": {
+                    physical: [1, 3, 12, 13, 17, 19, 20, 22, 24],
+                    verbal: [4, 5, 13, 1],
+                    behavior: [
+                        "Just tell me the move.",
+                        "Top pick. Quick.",
+                        "Best red with this."
+                    ],
+                    context: [
+                        "They want a fast recommendation and direct eye contact.",
+                        "They seem impatient and ready to decide.",
+                        "They barely glance at the list and wait."
+                    ]
+                },
+                "Bargain-Smart": {
+                    physical: [6, 8, 23, 25, 7],
+                    verbal: [6, 7, 15, 17],
+                    behavior: [
+                        "What’s the smartest pick?",
+                        "What’s worth it?",
+                        "Best value, not hype."
+                    ],
+                    context: [
+                        "They linger on the list and compare prices.",
+                        "They look for proof before committing.",
+                        "They scan options with a skeptical pause."
+                    ]
+                },
+                "Fancy": {
+                    physical: [4, 9, 10, 11, 6, 25],
+                    verbal: [3, 8, 9, 20],
+                    behavior: [
+                        "Something serious.",
+                        "Something local but precise.",
+                        "What would you pour if you cared?"
+                    ],
+                    context: [
+                        "They scan regions and producer names carefully.",
+                        "They discuss the list with their partner.",
+                        "They want a refined, precise bottle."
+                    ]
+                },
+                "Griever": {
+                    physical: [12, 16, 21, 14, 3, 24],
+                    verbal: [10, 11, 18],
+                    behavior: [
+                        "Just something easy.",
+                        "Not too much.",
+                        "I don’t really know…"
+                    ],
+                    context: [
+                        "They keep the list closed and speak quietly.",
+                        "They avoid eye contact and seem tired.",
+                        "They want a low-effort choice."
+                    ]
+                },
+                "Celebrator": {
+                    physical: [18, 10, 25, 14],
+                    verbal: [12, 9, 1, 2],
+                    behavior: [
+                        "We’re celebrating — make it good.",
+                        "Something fun and impressive.",
+                        "What’s a confident bottle for the table?"
+                    ],
+                    context: [
+                        "They’re animated and sharing the list with friends.",
+                        "They want a lively, memorable bottle.",
+                        "They’re energized and want a moment."
+                    ]
+                }
+            };
+
+            const modeHelp = {
+                "LEAD": "You speak first with calm certainty. Example: “I’d go with this one—confident and clean.”",
+                "REFLECT": "You mirror their identity/taste/status. Example: “If you like something more elegant, this fits.”",
+                "HOLD": "You keep it minimal, no hype. Example: “I’d choose this. It’ll work well.”"
+            };
+
+            const hookHelp = {
+                "FLAVOUR": "Describe the style direction, not tasting notes. Example: “Fresh, clean, and structured.”",
+                "STORY": "Use the winemaker’s 1-sentence story (if saved). Example: “Planted against convention, it thrived.”",
+                "VALUE": "Prove value through one process cue (oak/ferment/etc). Example: “Wild ferment—serious quality.”"
+            };
+
+            const successExplanations = {
+                "Decider": "Deciders reward certainty. Lead + Value removes friction.",
+                "Bargain-Smart": "They hate hype. Hold steady and prove value through process.",
+                "Fancy": "They want identity recognition. Reflect + Story signals status.",
+                "Griever": "Pressure backfires. Hold space and keep it gentle.",
+                "Celebrator": "Energy sells the moment. Lead + Story elevates the table."
+            };
+
+            const lessons = {
+                "Decider": "Deciders punish waffle. Lead early.",
+                "Bargain-Smart": "Value buyers hate hype. Hold steady and be clear.",
+                "Fancy": "Status guests want recognition. Reflect their identity.",
+                "Griever": "Don’t push. Hold space and keep it simple.",
+                "Celebrator": "Bring energy. Story sells the moment."
+            };
+
+            const guestWhyMap = {
+                "Decider": "Deciders want a fast, confident recommendation and little back-and-forth.",
+                "Bargain-Smart": "Value seekers want proof and hate hype or vague claims.",
+                "Fancy": "They care about identity, precision, and a sense of status.",
+                "Griever": "They want low-pressure guidance and an easy decision.",
+                "Celebrator": "They want energy and a moment that feels special."
+            };
+
+            const modeWhyMap = {
+                "Decider": "Lead reduces friction for a decisive guest.",
+                "Bargain-Smart": "Hold keeps it grounded and avoids hype.",
+                "Fancy": "Reflect shows you understand their identity and taste.",
+                "Griever": "Hold keeps pressure low and pace gentle.",
+                "Celebrator": "Lead carries the energy they want."
+            };
+
+            const hookWhyMap = {
+                "Decider": "Value proves worth quickly and removes doubt.",
+                "Bargain-Smart": "Value links price to real process proof.",
+                "Fancy": "Story signals craft and status.",
+                "Griever": "Flavour keeps it simple and low-stakes.",
+                "Celebrator": "Story makes it feel special and memorable."
+            };
+
+            const fruitOptions = ["Red fruit", "Dark fruit", "Citrus", "Stone fruit", "Tropical", "Floral", "Herbal/Green", "Spicy", "Earthy/Savory", "Smoky"];
+            const textureOptions = ["Silky", "Chalky tannins", "Firm tannins", "Racy acidity", "Creamy", "Full-bodied", "Medium-bodied", "Light-bodied", "Fresh", "Bold"];
+            const oakOptions = ["None", "Light", "Subtle", "Noticeable"];
+            const processOptions = ["Stainless steel", "Wild ferment", "Maceration", "Destemming", "Whole bunch pressed", "Hand harvested", "Time on lees"];
+
+            let settings = loadSettings();
+            let activeScreen = "modeSelect";
+            let tier = settings.tier;
+
+            let demoWines = loadWines("demo");
+            let premiumWines = loadWines("premium");
+
+            let demoProgress = loadProgress("demo");
+            let premiumProgress = loadProgress("premium");
+
+            let demoStep = settings.demoStep;
+            let premiumEncounterIndex = settings.premiumEncounterIndex;
+            let lastPremiumWineName = settings.lastPremiumWineName || "";
+
+            let currentEncounter = null;
+            let currentStep = 0;
+            let encounterLogged = false;
+            let outcomeResult = null;
+            let shiftModeSelected = null;
+            let lastHomeScreen = "modeSelect";
+
+            let showAdditionalVarietalDemo = false;
+            let showAdditionalVarietalPremium = false;
+
+            function loadSettings() {
+                const raw = localStorage.getItem(settingsKey);
+                if (!raw) {
+                    return {
+                        tier: null,
+                        demoStep: 0,
+                        helpSeen: false,
+                        premiumEncounterIndex: 0,
+                        lastPremiumWineName: "",
+                        lastSentence1Correct: "",
+                        lastSentence1Wrong: "",
+                        lastSentence2Correct: "",
+                        lastSentence2Wrong: "",
+                        lastPhysicalCues: [],
+                        lastVerbalCues: [],
+                        stateBag: [],
+                        stateBagIndex: 0,
+                        lastGuestState: ""
+                    };
+                }
+                try {
+                    const parsed = JSON.parse(raw);
+                    return {
+                        tier: parsed.tier || null,
+                        demoStep: typeof parsed.demoStep === "number" ? parsed.demoStep : 0,
+                        helpSeen: !!parsed.helpSeen,
+                        premiumEncounterIndex: typeof parsed.premiumEncounterIndex === "number" ? parsed.premiumEncounterIndex : 0,
+                        lastPremiumWineName: parsed.lastPremiumWineName || "",
+                        lastSentence1Correct: parsed.lastSentence1Correct || "",
+                        lastSentence1Wrong: parsed.lastSentence1Wrong || "",
+                        lastSentence2Correct: parsed.lastSentence2Correct || "",
+                        lastSentence2Wrong: parsed.lastSentence2Wrong || "",
+                        lastPhysicalCues: Array.isArray(parsed.lastPhysicalCues) ? parsed.lastPhysicalCues : [],
+                        lastVerbalCues: Array.isArray(parsed.lastVerbalCues) ? parsed.lastVerbalCues : [],
+                        stateBag: Array.isArray(parsed.stateBag) ? parsed.stateBag : [],
+                        stateBagIndex: typeof parsed.stateBagIndex === "number" ? parsed.stateBagIndex : 0,
+                        lastGuestState: parsed.lastGuestState || ""
+                    };
+                } catch (e) {
+                    return {
+                        tier: null,
+                        demoStep: 0,
+                        helpSeen: false,
+                        premiumEncounterIndex: 0,
+                        lastPremiumWineName: "",
+                        lastSentence1Correct: "",
+                        lastSentence1Wrong: "",
+                        lastSentence2Correct: "",
+                        lastSentence2Wrong: "",
+                        lastPhysicalCues: [],
+                        lastVerbalCues: [],
+                        stateBag: [],
+                        stateBagIndex: 0,
+                        lastGuestState: ""
+                    };
+                }
+            }
+
+            function saveSettings() {
+                localStorage.setItem(settingsKey, JSON.stringify(settings));
+            }
+
+            function hasSeenCover() {
+                return localStorage.getItem(coverKey) === "true";
+            }
+
+            function markCoverSeen() {
+                localStorage.setItem(coverKey, "true");
+            }
+
+            function requiredWineCount(t) {
+                return t === "demo" ? 2 : 10;
+            }
+
+            function isUnlocked(t) {
+                return getWinesForTier(t).length >= requiredWineCount(t);
+            }
+
+            function generateWineId() {
+                return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+            }
+
+            function loadWines(t) {
+                const key = t === "demo" ? demoWinesKey : premiumWinesKey;
+                const raw = localStorage.getItem(key);
+                if (!raw) return [];
+                try {
+                    const parsed = JSON.parse(raw);
+                    if (!Array.isArray(parsed)) return [];
+                    let needsSave = false;
+                    const list = parsed.map(w => {
+                        const hasId = w && (typeof w.id === "string" || typeof w.id === "number");
+                        const hasAdditional = w && typeof w.additionalVarietal === "string";
+                        if (!hasId || !hasAdditional) needsSave = true;
+                        return sanitizeWine(w);
+                    });
+                    if (needsSave) localStorage.setItem(key, JSON.stringify(list));
+                    return list;
+                } catch (e) {
+                    return [];
+                }
+            }
+
+            function saveWines(t) {
+                const key = t === "demo" ? demoWinesKey : premiumWinesKey;
+                const data = t === "demo" ? demoWines : premiumWines;
+                localStorage.setItem(key, JSON.stringify(data));
+            }
+
+            function loadProgress(t) {
+                const key = t === "demo" ? demoRunsKey : premiumRunsKey;
+                const raw = localStorage.getItem(key);
+                if (!raw) return [];
+                try {
+                    const parsed = JSON.parse(raw);
+                    return Array.isArray(parsed) ? parsed : [];
+                } catch (e) {
+                    return [];
+                }
+            }
+
+            function saveProgress(t) {
+                const key = t === "demo" ? demoRunsKey : premiumRunsKey;
+                const data = t === "demo" ? demoProgress : premiumProgress;
+                localStorage.setItem(key, JSON.stringify(data));
+            }
+
+            function saveDemoStep(step) {
+                demoStep = step;
+                settings.demoStep = step;
+                saveSettings();
+            }
+
+            function savePremiumEncounterIndex(idx) {
+                premiumEncounterIndex = idx;
+                settings.premiumEncounterIndex = idx;
+                saveSettings();
+            }
+
+            function sanitizeWine(wine) {
+                const process = processOptions.includes(wine.process) ? wine.process : "";
+                return {
+                    id: wine.id || generateWineId(),
+                    name: wine.name || "",
+                    varietal: wine.varietal || "",
+                    additionalVarietal: wine.additionalVarietal || "",
+                    fruitTags: Array.isArray(wine.fruitTags) ? wine.fruitTags : [],
+                    textureTags: Array.isArray(wine.textureTags) ? wine.textureTags : [],
+                    oakLevel: wine.oakLevel || "",
+                    process: process,
+                    region: wine.region || "",
+                    story: wine.story || ""
+                };
+            }
+
+            function getWinesForTier(t) {
+                return t === "demo" ? demoWines : premiumWines;
+            }
+
+            function setTier(newTier) {
+                tier = newTier;
+                settings.tier = newTier;
+                saveSettings();
+                renderScreen();
+            }
+
+            function resetAll() {
+                const ok = confirm("This will delete wines + runs for demo and premium.");
+                if (!ok) return;
+                localStorage.removeItem(demoWinesKey);
+                localStorage.removeItem(premiumWinesKey);
+                localStorage.removeItem(demoRunsKey);
+                localStorage.removeItem(premiumRunsKey);
+                localStorage.removeItem(settingsKey);
+
+                settings = loadSettings();
+                tier = settings.tier;
+                demoWines = [];
+                premiumWines = [];
+                demoProgress = [];
+                premiumProgress = [];
+                demoStep = settings.demoStep;
+                premiumEncounterIndex = settings.premiumEncounterIndex;
+                lastPremiumWineName = settings.lastPremiumWineName;
+
+                activeScreen = "modeSelect";
+                renderScreen();
+            }
+
+            function resetRunsOnly(tierType) {
+                const ok = confirm("This will clear saved encounters but keep wines.");
+                if (!ok) return;
+                if (tierType === "demo") {
+                    demoProgress = [];
+                    saveProgress("demo");
+                    saveDemoStep(0);
+                } else {
+                    premiumProgress = [];
+                    saveProgress("premium");
+                    savePremiumEncounterIndex(0);
+                }
+                updateHomeCards();
+                renderScreen();
+            }
+
+            function resetWinesOnly(tierType) {
+                const ok = confirm("This will delete saved wines for this mode.");
+                if (!ok) return;
+                if (tierType === "demo") {
+                    demoWines = [];
+                    saveWines("demo");
+                    demoProgress = [];
+                    saveProgress("demo");
+                    saveDemoStep(0);
+                    if (tier === "demo") {
+                        activeScreen = "setupDemo";
+                    }
+                } else {
+                    premiumWines = [];
+                    saveWines("premium");
+                    premiumProgress = [];
+                    saveProgress("premium");
+                    savePremiumEncounterIndex(0);
+                    settings.lastPremiumWineName = "";
+                    saveSettings();
+                    if (tier === "premium") {
+                        activeScreen = "setupPremium";
+                    }
+                }
+                updateAfterWineChange();
+                renderScreen();
+            }
+
+            function updateHomeCards() {
+                const demoCount = demoWines.length;
+                const premiumCount = premiumWines.length;
+
+                const demoLast = getLastActivity(demoProgress);
+                const premiumLast = getLastActivity(premiumProgress);
+
+                const demoStatusLine = document.getElementById("demoStatusLine");
+                const premiumStatusLine = document.getElementById("premiumStatusLine");
+                const demoLastActivity = document.getElementById("demoLastActivity");
+                const premiumLastActivity = document.getElementById("premiumLastActivity");
+                const demoRunsSaved = document.getElementById("demoRunsSaved");
+                const premiumRunsSaved = document.getElementById("premiumRunsSaved");
+
+                if (demoStatusLine) demoStatusLine.innerText = "Wines saved: " + demoCount + " / 2";
+                if (premiumStatusLine) premiumStatusLine.innerText = "Wines saved: " + premiumCount + " / 10";
+                if (demoLastActivity) demoLastActivity.innerText = "Last activity: " + demoLast;
+                if (premiumLastActivity) premiumLastActivity.innerText = "Last activity: " + premiumLast;
+                if (demoRunsSaved) demoRunsSaved.innerText = "Runs saved: " + demoProgress.length;
+                if (premiumRunsSaved) premiumRunsSaved.innerText = "Runs saved: " + premiumProgress.length;
+
+                const demoSetupBtn = document.getElementById("demoSetupBtn");
+                const demoContinueBtn = document.getElementById("demoContinueBtn");
+                const demoViewHistoryBtn = document.getElementById("demoViewHistoryBtn");
+
+                const premiumSetupBtn = document.getElementById("premiumSetupBtn");
+                const premiumContinueBtn = document.getElementById("premiumContinueBtn");
+                const premiumPlayAgainBtn = document.getElementById("premiumPlayAgainBtn");
+                const premiumViewHistoryBtn = document.getElementById("premiumViewHistoryBtn");
+
+                const demoComplete = demoStep >= 2;
+                const demoUnlocked = demoCount >= 2;
+                const premiumUnlocked = premiumCount >= 10;
+                const premiumComplete = premiumProgress.length > 0;
+
+                if (demoSetupBtn) demoSetupBtn.style.display = demoUnlocked ? "none" : "inline-block";
+                if (demoContinueBtn) demoContinueBtn.style.display = demoUnlocked && !demoComplete ? "inline-block" : "none";
+                if (demoViewHistoryBtn) demoViewHistoryBtn.style.display = demoUnlocked ? "inline-block" : "none";
+
+                if (premiumSetupBtn) premiumSetupBtn.style.display = premiumUnlocked ? "none" : "inline-block";
+                if (premiumContinueBtn) premiumContinueBtn.style.display = premiumUnlocked && !premiumComplete ? "inline-block" : "none";
+                if (premiumPlayAgainBtn) premiumPlayAgainBtn.style.display = premiumUnlocked && premiumComplete ? "inline-block" : "none";
+                if (premiumViewHistoryBtn) premiumViewHistoryBtn.style.display = premiumUnlocked ? "inline-block" : "none";
+            }
+
+            function updateAfterWineChange() {
+                const demoCountEl = document.getElementById("wineCountDemo");
+                const premiumCountEl = document.getElementById("wineCountPremium");
+                if (demoCountEl) demoCountEl.innerText = demoWines.length + " / 2";
+                if (premiumCountEl) premiumCountEl.innerText = premiumWines.length + " / 10";
+
+                updateHomeCards();
+
+                if (tier === "demo" && isUnlocked("demo") && activeScreen === "setupDemo") {
+                    activeScreen = "demoHome";
+                }
+                if (tier === "premium" && isUnlocked("premium") && activeScreen === "setupPremium") {
+                    activeScreen = "premiumHome";
+                }
+
+                renderScreen();
+            }
+
+            function renderScreen() {
+                const screens = {
+                    cover: "coverScreen",
+                    modeSelect: "modeSelectScreen",
+                    setupDemo: "setupDemoScreen",
+                    setupPremium: "setupPremiumScreen",
+                    demoHome: "demoHomeScreen",
+                    premiumHome: "premiumHomeScreen",
+                    play: "playScreen",
+                    history: "historyScreen"
+                };
+
+                Object.keys(screens).forEach(key => {
+                    const el = document.getElementById(screens[key]);
+                    if (el) el.style.display = key === activeScreen ? "block" : "none";
+                });
+
+                const homeRow = document.getElementById("homeRow");
+                if (homeRow) homeRow.style.display = activeScreen === "modeSelect" ? "none" : "flex";
+
+                if (activeScreen === "modeSelect") {
+                    updateHomeCards();
+                }
+
+                if (activeScreen === "play") {
+                    renderPlayScreen();
+                }
+
+                if (activeScreen === "demoHome") {
+                    renderDemoHome();
+                }
+
+                if (activeScreen === "history") {
+                    renderHistory();
+                }
+            }
+
+            function renderDemoHome() {
+                const status = document.getElementById("demoHomeStatus");
+                const startBtn = document.getElementById("startDemoEncounterBtn");
+                const viewBtn = document.getElementById("demoHomeViewHistoryBtn");
+                const resetRunsBtn = document.getElementById("demoHomeResetRunsBtn");
+                const resetWinesBtn = document.getElementById("demoHomeResetWinesBtn");
+                const switchPremiumBtn = document.getElementById("demoSwitchPremiumBtn");
+                const resetAllBtn = document.getElementById("resetAllBtnFromDemoHome");
+
+                const unlocked = isUnlocked("demo");
+                const complete = demoStep >= 2;
+
+                if (status) status.innerText = complete ? "Demo complete." : "Ready for Demo.";
+
+                if (startBtn) {
+                    startBtn.style.display = unlocked && !complete ? "inline-block" : "none";
+                    startBtn.innerText = "Continue Demo";
+                }
+
+                if (viewBtn) viewBtn.style.display = unlocked ? "inline-block" : "none";
+                if (resetRunsBtn) resetRunsBtn.style.display = unlocked ? "inline-block" : "none";
+                if (resetWinesBtn) resetWinesBtn.style.display = unlocked ? "inline-block" : "none";
+                if (switchPremiumBtn) switchPremiumBtn.style.display = "inline-block";
+                if (resetAllBtn) resetAllBtn.style.display = "inline-block";
+            }
+
+            function renderPlayScreen() {
+                const setupMsg = document.getElementById("setupRequiredMessage");
+                const encounterPanel = document.getElementById("encounterPanel");
+                if (!tier) return;
+
+                if (!isUnlocked(tier)) {
+                    if (setupMsg) setupMsg.style.display = "block";
+                    if (encounterPanel) encounterPanel.style.display = "none";
+                } else {
+                    if (setupMsg) setupMsg.style.display = "none";
+                    if (encounterPanel) encounterPanel.style.display = "block";
+                }
+            }
+
+            function renderHistory() {
+                const historyList = document.getElementById("historyList");
+                if (!historyList) return;
+
+                historyList.innerText = "";
+                const list = (tier === "demo" ? demoProgress : premiumProgress).slice(-10).reverse();
+
+                list.forEach((entry, i) => {
+                    const item = document.createElement("div");
+                    item.className = "history-item";
+
+                    const row = document.createElement("div");
+                    row.className = "history-row";
+
+                    const summary = document.createElement("div");
+                    summary.innerText = entry.timestamp + " | " + entry.modeSelected + " | " + entry.wineSelected + " | " + entry.outcome;
+
+                    const toggleBtn = document.createElement("button");
+                    toggleBtn.className = "small-btn";
+                    toggleBtn.innerText = "View Details";
+                    toggleBtn.dataset.index = i.toString();
+
+                    const details = document.createElement("div");
+                    details.className = "history-details";
+                    details.id = "history-details-" + i.toString();
+                    details.innerText =
+                        "Guest Actual: " + entry.guestStateActual +
+                        " | Guest Selected: " + entry.guestStateSelected +
+                        " | Hook: " + entry.hookSelected +
+                        " | Shift: " + (entry.shiftModeSelected || "—");
+
+                    row.appendChild(summary);
+                    row.appendChild(toggleBtn);
+                    item.appendChild(row);
+                    item.appendChild(details);
+                    historyList.appendChild(item);
+                });
+            }
+
+            function getLastActivity(list) {
+                if (!list || list.length === 0) return "—";
+                const last = list[list.length - 1];
+                return last.timestamp || "—";
+            }
+
+            function updateWineTagsSelections(containerId, maxAllowed) {
+                const container = document.getElementById(containerId);
+                if (!container) return;
+
+                container.addEventListener("click", (e) => {
+                    const btn = e.target;
+                    if (!btn || !btn.dataset || !btn.dataset.value) return;
+
+                    const selected = container.querySelectorAll(".option-btn.selected");
+                    if (btn.classList.contains("selected")) {
+                        btn.classList.remove("selected");
+                    } else {
+                        if (selected.length >= maxAllowed) return;
+                        btn.classList.add("selected");
+                    }
+                });
+            }
+
+            function updateRadioSelection(containerId) {
+                const container = document.getElementById(containerId);
+                if (!container) return;
+
+                container.addEventListener("click", (e) => {
+                    const btn = e.target;
+                    if (!btn || !btn.dataset || !btn.dataset.value) return;
+                    const buttons = container.querySelectorAll(".option-btn");
+                    buttons.forEach(b => b.classList.remove("selected"));
+                    btn.classList.add("selected");
+                });
+            }
+
+            function buildOptionButtons(containerId, values) {
+                const container = document.getElementById(containerId);
+                if (!container) return;
+                container.innerText = "";
+                values.forEach(val => {
+                    const btn = document.createElement("button");
+                    btn.type = "button";
+                    btn.className = "option-btn";
+                    btn.dataset.value = val;
+                    btn.innerText = val;
+                    container.appendChild(btn);
+                });
+            }
+
+            function collectSelectedOptions(containerId) {
+                const container = document.getElementById(containerId);
+                if (!container) return [];
+                const selected = container.querySelectorAll(".option-btn.selected");
+                return Array.from(selected).map(btn => btn.dataset.value);
+            }
+
+            function collectSelectedRadio(containerId) {
+                const container = document.getElementById(containerId);
+                if (!container) return "";
+                const selected = container.querySelector(".option-btn.selected");
+                return selected ? selected.dataset.value : "";
+            }
+
+            function toggleAdditionalVarietal(tierType) {
+                if (tierType === "demo") {
+                    showAdditionalVarietalDemo = !showAdditionalVarietalDemo;
+                    const row = document.getElementById("additionalVarietalRowDemo");
+                    const btn = document.getElementById("toggleAdditionalVarietalDemo");
+                    if (row) row.style.display = showAdditionalVarietalDemo ? "flex" : "none";
+                    if (btn) btn.innerText = showAdditionalVarietalDemo ? "Hide Additional Varietal" : "Add Additional Varietal (not a blend)";
+                } else {
+                    showAdditionalVarietalPremium = !showAdditionalVarietalPremium;
+                    const row = document.getElementById("additionalVarietalRowPremium");
+                    const btn = document.getElementById("toggleAdditionalVarietalPremium");
+                    if (row) row.style.display = showAdditionalVarietalPremium ? "flex" : "none";
+                    if (btn) btn.innerText = showAdditionalVarietalPremium ? "Hide Additional Varietal" : "Add Additional Varietal (not a blend)";
+                }
+            }
+
+            function addWineFromForm(tierType) {
+                const isDemo = tierType === "demo";
+
+                const nameEl = document.getElementById(isDemo ? "wineNameInputDemo" : "wineNameInputPremium");
+                const varietalEl = document.getElementById(isDemo ? "wineVarietalInputDemo" : "wineVarietalInputPremium");
+                const additionalVarietalEl = document.getElementById(isDemo ? "additionalVarietalInputDemo" : "additionalVarietalInputPremium");
+                const processEl = document.getElementById(isDemo ? "processInputDemo" : "processInputPremium");
+                const regionEl = document.getElementById(isDemo ? "regionInputDemo" : "regionInputPremium");
+                const storyEl = document.getElementById(isDemo ? "storyInputDemo" : "storyInputPremium");
+
+                const fruitTags = collectSelectedOptions(isDemo ? "fruitOptionsDemo" : "fruitOptionsPremium");
+                const textureTags = collectSelectedOptions(isDemo ? "textureOptionsDemo" : "textureOptionsPremium");
+                const oakLevel = collectSelectedRadio(isDemo ? "oakOptionsDemo" : "oakOptionsPremium");
+
+                const name = nameEl ? nameEl.value.trim() : "";
+                const varietal = varietalEl ? varietalEl.value.trim() : "";
+                const additionalVarietal = additionalVarietalEl ? additionalVarietalEl.value.trim() : "";
+                const process = processEl ? processEl.value.trim() : "";
+                const region = regionEl ? regionEl.value.trim() : "";
+                const story = storyEl ? storyEl.value.trim() : "";
+
+                if (!name || !varietal || fruitTags.length === 0 || textureTags.length === 0 || !oakLevel) {
+                    alert("Please complete all required fields and select tags.");
+                    return;
+                }
+
+                const wine = {
+                    id: generateWineId(),
+                    name,
+                    varietal,
+                    additionalVarietal,
+                    fruitTags,
+                    textureTags,
+                    oakLevel,
+                    process,
+                    region,
+                    story
+                };
+
+                if (isDemo) {
+                    demoWines.push(wine);
+                    saveWines("demo");
+                } else {
+                    premiumWines.push(wine);
+                    saveWines("premium");
+                }
+
+                if (nameEl) nameEl.value = "";
+                if (varietalEl) varietalEl.value = "";
+                if (additionalVarietalEl) additionalVarietalEl.value = "";
+                if (processEl) processEl.value = "";
+                if (regionEl) regionEl.value = "";
+                if (storyEl) storyEl.value = "";
+
+                if (isDemo) {
+                    resetSelection("fruitOptionsDemo");
+                    resetSelection("textureOptionsDemo");
+                    resetSelection("oakOptionsDemo");
+                } else {
+                    resetSelection("fruitOptionsPremium");
+                    resetSelection("textureOptionsPremium");
+                    resetSelection("oakOptionsPremium");
+                }
+
+                updateAfterWineChange();
+                renderWineTables();
+            }
+
+            function resetSelection(containerId) {
+                const container = document.getElementById(containerId);
+                if (!container) return;
+                const buttons = container.querySelectorAll(".option-btn");
+                buttons.forEach(btn => btn.classList.remove("selected"));
+            }
+
+            function renderWineTables() {
+                renderWineTable("demo", "demoWineTableBody");
+                renderWineTable("premium", "premiumWineTableBody");
+                renderWineCards("demo", "demoWineCards");
+                renderWineCards("premium", "premiumWineCards");
+            }
+
+            function formatVarietal(wine) {
+                if (wine.additionalVarietal) {
+                    return wine.varietal + " (w/ " + wine.additionalVarietal + ")";
+                }
+                return wine.varietal;
+            }
+
+            function renderWineTable(tierType, tbodyId) {
+                const tbody = document.getElementById(tbodyId);
+                if (!tbody) return;
+                tbody.innerText = "";
+
+                const wines = tierType === "demo" ? demoWines : premiumWines;
+
+                wines.forEach((wine) => {
+                    const tr = document.createElement("tr");
+
+                    const cols = [
+                        wine.name,
+                        formatVarietal(wine),
+                        (wine.fruitTags || []).join(", "),
+                        (wine.textureTags || []).join(", "),
+                        wine.oakLevel || "",
+                        wine.process || "",
+                        wine.region || "",
+                        wine.story || ""
+                    ];
+
+                    cols.forEach(text => {
+                        const td = document.createElement("td");
+                        td.innerText = text;
+                        tr.appendChild(td);
+                    });
+
+                    const actionTd = document.createElement("td");
+                    const delBtn = document.createElement("button");
+                    delBtn.type = "button";
+                    delBtn.className = "small-btn";
+                    delBtn.dataset.id = wine.id;
+                    delBtn.dataset.tier = tierType;
+                    delBtn.innerText = "Delete";
+                    actionTd.appendChild(delBtn);
+                    tr.appendChild(actionTd);
+
+                    tbody.appendChild(tr);
+                });
+            }
+
+            function renderWineCards(tierType, containerId) {
+                const container = document.getElementById(containerId);
+                if (!container) return;
+                container.innerText = "";
+
+                const wines = tierType === "demo" ? demoWines : premiumWines;
+
+                wines.forEach((wine) => {
+                    const card = document.createElement("div");
+                    card.className = "wine-card";
+
+                    const rows = [
+                        { label: "Name", value: wine.name },
+                        { label: "Varietal", value: formatVarietal(wine) },
+                        { label: "Fruit", value: (wine.fruitTags || []).join(", ") || "—" },
+                        { label: "Texture", value: (wine.textureTags || []).join(", ") || "—" },
+                        { label: "Oak", value: wine.oakLevel || "—" },
+                        { label: "Process", value: wine.process || "—" },
+                        { label: "Region", value: wine.region || "—" },
+                        { label: "Story", value: wine.story || "—" }
+                    ];
+
+                    rows.forEach(row => {
+                        const line = document.createElement("div");
+                        line.className = "wine-card-row";
+                        const label = document.createElement("span");
+                        label.className = "wine-card-label";
+                        label.innerText = row.label + ": ";
+                        const value = document.createElement("span");
+                        value.innerText = row.value;
+                        line.appendChild(label);
+                        line.appendChild(value);
+                        card.appendChild(line);
+                    });
+
+                    const actionRow = document.createElement("div");
+                    actionRow.className = "button-row";
+                    const delBtn = document.createElement("button");
+                    delBtn.type = "button";
+                    delBtn.className = "small-btn";
+                    delBtn.dataset.id = wine.id;
+                    delBtn.dataset.tier = tierType;
+                    delBtn.innerText = "Delete";
+                    actionRow.appendChild(delBtn);
+                    card.appendChild(actionRow);
+
+                    container.appendChild(card);
+                });
+            }
+
+            function deleteWine(tierType, idToDelete) {
+                if (tierType === "demo") {
+                    demoWines = demoWines.filter(w => w.id !== idToDelete);
+                    saveWines("demo");
+                } else {
+                    premiumWines = premiumWines.filter(w => w.id !== idToDelete);
+                    saveWines("premium");
+                }
+                updateAfterWineChange();
+                renderWineTables();
+            }
+
+            function pickRandom(arr) {
+                return arr[Math.floor(Math.random() * arr.length)];
+            }
+
+            function pickCuesFromPool(pool, count, lastUsed) {
+                const filtered = pool.filter(cue => lastUsed.indexOf(cue) === -1);
+                let source = filtered.length >= count ? filtered.slice() : pool.slice();
+                const selected = [];
+                while (selected.length < count && source.length > 0) {
+                    const idx = Math.floor(Math.random() * source.length);
+                    selected.push(source[idx]);
+                    source.splice(idx, 1);
+                }
+                return selected;
+            }
+
+            function generateCues(guestStateActual) {
+                const prefs = stateCuePreferences[guestStateActual];
+                const physicalPool = prefs.physical.map(i => cuePoolPhysical[i - 1]).filter(Boolean);
+                const verbalPool = prefs.verbal.map(i => cuePoolVerbal[i - 1]).filter(Boolean);
+
+                const physicalCount = Math.random() < 0.5 ? 2 : 3;
+                const verbalCount = Math.random() < 0.6 ? 1 : 2;
+
+                const physicalCues = pickCuesFromPool(physicalPool, Math.min(physicalCount, physicalPool.length), settings.lastPhysicalCues);
+                const verbalCues = pickCuesFromPool(verbalPool, Math.min(verbalCount, verbalPool.length), settings.lastVerbalCues);
+
+                settings.lastPhysicalCues = physicalCues;
+                settings.lastVerbalCues = verbalCues;
+                saveSettings();
+
+                return { physicalCues, verbalCues };
+            }
+
+            function getDefaultStateBag() {
+                return ["Decider", "Fancy", "Griever", "Celebrator", "Bargain-Smart"];
+            }
+
+            function shuffleArray(arr) {
+                for (let i = arr.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    const temp = arr[i];
+                    arr[i] = arr[j];
+                    arr[j] = temp;
+                }
+                return arr;
+            }
+
+            function ensureStateBag() {
+                if (!Array.isArray(settings.stateBag) || settings.stateBag.length !== guestStates.length) {
+                    settings.stateBag = shuffleArray(getDefaultStateBag().slice());
+                    settings.stateBagIndex = 0;
+                }
+                if (typeof settings.stateBagIndex !== "number") settings.stateBagIndex = 0;
+                if (typeof settings.lastGuestState !== "string") settings.lastGuestState = "";
+                saveSettings();
+            }
+
+            function drawGuestStateFromBag() {
+                ensureStateBag();
+
+                if (settings.stateBagIndex >= settings.stateBag.length) {
+                    settings.stateBag = shuffleArray(getDefaultStateBag().slice());
+                    settings.stateBagIndex = 0;
+                }
+
+                const remaining = settings.stateBag.length - settings.stateBagIndex;
+                let idx = settings.stateBagIndex;
+                let pick = settings.stateBag[idx];
+
+                if (remaining >= 2 && pick === settings.lastGuestState) {
+                    const swapIdx = idx + 1;
+                    const temp = settings.stateBag[idx];
+                    settings.stateBag[idx] = settings.stateBag[swapIdx];
+                    settings.stateBag[swapIdx] = temp;
+                    pick = settings.stateBag[idx];
+                }
+
+                settings.stateBagIndex += 1;
+                settings.lastGuestState = pick;
+                saveSettings();
+                return pick;
+            }
+
+            function buildHookWeights() {
+                return { FLAVOUR: 1, STORY: 1, VALUE: 1 };
+            }
+
+            function adjustWeightsFromVerbal(weights, verbalCues) {
+                const text = verbalCues.join(" ").toLowerCase();
+                if (text.includes("pairs well") || text.includes("smooth") || text.includes("easy") || text.includes("not too heavy")) {
+                    weights.FLAVOUR += 3;
+                }
+                if (text.includes("best value") || text.includes("worth it") || text.includes("expensive") || text.includes("price")) {
+                    weights.VALUE += 3;
+                }
+                if (text.includes("local") || text.includes("region") || text.includes("producer") || text.includes("impressive") || text.includes("celebrating")) {
+                    weights.STORY += 3;
+                }
+                if (text.includes("best") || text.includes("top pick") || text.includes("quick") || text.includes("rush")) {
+                    weights.VALUE += 2;
+                    weights.FLAVOUR += 1;
+                }
+                return weights;
+            }
+
+            function adjustWeightsFromPhysical(weights, physicalCues) {
+                const text = physicalCues.join(" ").toLowerCase();
+                if (text.includes("price column")) {
+                    weights.VALUE += 3;
+                }
+                if (text.includes("pages through wine list slowly") || text.includes("points at regions/producers")) {
+                    weights.STORY += 2;
+                }
+                if (text.includes("food only") || text.includes("menus open")) {
+                    weights.FLAVOUR += 2;
+                }
+                if (text.includes("wine list not requested") || text.includes("menus closed")) {
+                    weights.VALUE += 2;
+                }
+                return weights;
+            }
+
+            function applyStateBias(weights, guestStateActual, verbalCues) {
+                const verb = verbalCues.join(" ").toLowerCase();
+                if (guestStateActual === "Bargain-Smart") {
+                    if (!verb.includes("local") && !verb.includes("producer") && !verb.includes("region") && !verb.includes("impressive") && !verb.includes("celebrating")) {
+                        weights.STORY = Math.max(1, Math.floor(weights.STORY / 2));
+                    }
+                }
+                if (guestStateActual === "Griever") {
+                    if (!verb.includes("local") && !verb.includes("producer") && !verb.includes("region")) {
+                        weights.STORY = Math.max(1, Math.floor(weights.STORY / 2));
+                    }
+                }
+                if (guestStateActual === "Fancy") {
+                    weights.STORY += 1;
+                    weights.FLAVOUR += 1;
+                }
+                return weights;
+            }
+
+            function pickWeightedHook(weights) {
+                const entries = Object.entries(weights);
+                const total = entries.reduce((sum, [, w]) => sum + w, 0);
+                let roll = Math.random() * total;
+                for (let i = 0; i < entries.length; i++) {
+                    const [hook, weight] = entries[i];
+                    roll -= weight;
+                    if (roll <= 0) return hook;
+                }
+                return "FLAVOUR";
+            }
+
+            function deriveBestHookFromCues(guestStateActual, physicalCues, verbalCues) {
+                let weights = buildHookWeights();
+                weights = adjustWeightsFromVerbal(weights, verbalCues);
+                weights = adjustWeightsFromPhysical(weights, physicalCues);
+                weights = applyStateBias(weights, guestStateActual, verbalCues);
+                return pickWeightedHook(weights);
+            }
+
+            function buildModeWeights() {
+                return { LEAD: 1, REFLECT: 1, HOLD: 1 };
+            }
+
+            function adjustModeWeightsFromVerbal(weights, verbalCues) {
+                const text = verbalCues.join(" ").toLowerCase();
+                if (text.includes("rush") || text.includes("quick") || text.includes("we’re ready") || text.includes("we're ready")) {
+                    weights.LEAD += 3;
+                }
+                if (text.includes("best") || text.includes("top pick") || text.includes("just pick")) {
+                    weights.LEAD += 2;
+                }
+                if (text.includes("best value") || text.includes("worth it") || text.includes("expensive") || text.includes("price")) {
+                    weights.HOLD += 3;
+                }
+                if (text.includes("hidden gems") || text.includes("not hype") || text.includes("skeptical")) {
+                    weights.HOLD += 2;
+                }
+                if (text.includes("local") || text.includes("region") || text.includes("producer") || text.includes("bordeaux") || text.includes("burgundy") || text.includes("napa") || text.includes("barolo") || text.includes("rioja") || text.includes("mosel") || text.includes("champagne")) {
+                    weights.REFLECT += 3;
+                }
+                if (text.includes("impressive") || text.includes("serious") || text.includes("elegant")) {
+                    weights.REFLECT += 2;
+                }
+                if (text.includes("something easy") || text.includes("not too heavy") || text.includes("don’t overthink") || text.includes("don't overthink")) {
+                    weights.HOLD += 2;
+                }
+                return weights;
+            }
+
+            function adjustModeWeightsFromPhysical(weights, physicalCues) {
+                const text = physicalCues.join(" ").toLowerCase();
+                if (text.includes("menus closed") || text.includes("signals") || text.includes("direct eye contact") || text.includes("impatient rhythm") || text.includes("phone on table")) {
+                    weights.LEAD += 2;
+                }
+                if (text.includes("price column") || text.includes("holds the list for a long time") || text.includes("pages through wine list quickly")) {
+                    weights.HOLD += 2;
+                }
+                if (text.includes("regions/producers") || text.includes("pages through wine list slowly") || text.includes("whisper-discusses") || text.includes("shows wine list to their partner")) {
+                    weights.REFLECT += 2;
+                }
+                if (text.includes("avoids eye contact") || text.includes("low energy") || text.includes("sighs")) {
+                    weights.HOLD += 2;
+                }
+                return weights;
+            }
+
+            function applyModeStateBias(weights, guestStateActual) {
+                if (guestStateActual === "Decider") weights.LEAD += 2;
+                if (guestStateActual === "Bargain-Smart") weights.HOLD += 2;
+                if (guestStateActual === "Fancy") weights.REFLECT += 2;
+                if (guestStateActual === "Griever") weights.HOLD += 2;
+                if (guestStateActual === "Celebrator") weights.LEAD += 2;
+                return weights;
+            }
+
+            function pickWeightedMode(weights) {
+                const entries = Object.entries(weights);
+                const total = entries.reduce((sum, [, w]) => sum + w, 0);
+                let roll = Math.random() * total;
+                for (let i = 0; i < entries.length; i++) {
+                    const [mode, weight] = entries[i];
+                    roll -= weight;
+                    if (roll <= 0) return mode;
+                }
+                return "LEAD";
+            }
+
+            function deriveBestModeFromCues(guestStateActual, physicalCues, verbalCues) {
+                let weights = buildModeWeights();
+                weights = adjustModeWeightsFromVerbal(weights, verbalCues);
+                weights = adjustModeWeightsFromPhysical(weights, physicalCues);
+                weights = applyModeStateBias(weights, guestStateActual);
+                return pickWeightedMode(weights);
+            }
+
+            function generateEncounterForState(guestStateActual) {
+                const cues = generateCues(guestStateActual);
+                const prefs = stateCuePreferences[guestStateActual];
+
+                const guestLine = pickRandom(prefs.behavior);
+                const contextLine = pickRandom(prefs.context);
+                const tonePick = pickRandom(guestStatePools[guestStateActual] || [{ toneTag: "" }]);
+                const toneTag = tonePick.toneTag || "";
+                const bestHook = deriveBestHookFromCues(guestStateActual, cues.physicalCues, cues.verbalCues);
+                const bestMode = deriveBestModeFromCues(guestStateActual, cues.physicalCues, cues.verbalCues);
+
+                return {
+                    guestStateActual,
+                    guestLine,
+                    contextLine,
+                    toneTag,
+                    physicalCues: cues.physicalCues,
+                    verbalCues: cues.verbalCues,
+                    bestMode: bestMode,
+                    bestHook: bestHook
+                };
+            }
+
+            function pickPremiumEncounterForState(state) {
+                const pool = premiumEncounterLibrary.filter(e => e.guestStateActual === state);
+                if (pool.length === 0) return null;
+                return pool[Math.floor(Math.random() * pool.length)];
+            }
+
+            function pickPremiumWine() {
+                if (premiumWines.length === 0) return null;
+                let selected = null;
+                if (premiumWines.length >= 3) {
+                    let attempts = 0;
+                    while (attempts < 10) {
+                        const candidate = premiumWines[Math.floor(Math.random() * premiumWines.length)];
+                        if (candidate.name !== lastPremiumWineName) {
+                            selected = candidate;
+                            break;
+                        }
+                        attempts += 1;
+                    }
+                    if (!selected) {
+                        selected = premiumWines.find(w => w.name !== lastPremiumWineName) || premiumWines[0];
+                    }
+                } else {
+                    selected = premiumWines[Math.floor(Math.random() * premiumWines.length)];
+                }
+
+                lastPremiumWineName = selected ? selected.name : "";
+                settings.lastPremiumWineName = lastPremiumWineName;
+                saveSettings();
+                return selected;
+            }
+
+            function startEncounter() {
+                if (!tier || !isUnlocked(tier)) return;
+
+                if (tier === "demo") {
+                    if (demoWines.length < 2) {
+                        alert("Add 2 wines to unlock demo.");
+                        return;
+                    }
+                    if (demoStep >= 2) {
+                        activeScreen = "demoHome";
+                        renderScreen();
+                        return;
+                    }
+                }
+
+                let wine = null;
+                let encounterData = null;
+
+                if (tier === "demo") {
+                    const guestStateActual = demoGuestTypes[demoStep];
+                    encounterData = generateEncounterForState(guestStateActual);
+                    wine = demoWines[demoStep];
+                } else {
+                    const guestStateActual = drawGuestStateFromBag();
+                    encounterData = generateEncounterForState(guestStateActual);
+                    const encounter = pickPremiumEncounterForState(guestStateActual);
+                    if (encounter) {
+                        encounterData.contextLine = encounter.contextLine;
+                        encounterData.guestLine = encounter.guestLine;
+                    } else {
+                        encounterData.guestLine = guestDialogueMap[guestStateActual] || encounterData.guestLine;
+                    }
+                    wine = pickPremiumWine();
+                }
+
+                if (!wine || !encounterData) return;
+
+                currentEncounter = {
+                    guestStateActual: encounterData.guestStateActual,
+                    guestStateSelected: "",
+                    modeSelected: "",
+                    hookSelected: "",
+                    wineSelected: wine,
+                    deliveryLine1: "",
+                    deliveryLine2: "",
+                    guestLine: encounterData.guestLine,
+                    contextLine: encounterData.contextLine,
+                    toneTag: encounterData.toneTag,
+                    physicalCues: encounterData.physicalCues,
+                    verbalCues: encounterData.verbalCues,
+                    bestMode: encounterData.bestMode,
+                    bestHook: encounterData.bestHook,
+                    deliverOptionsS1: null,
+                    deliverOptionsS2: null,
+                    selectedS1: null,
+                    selectedS2: null,
+                    correctSlotS1: null,
+                    correctSlotS2: null
+                };
+
+                currentStep = 0;
+                encounterLogged = false;
+                shiftModeSelected = null;
+                outcomeResult = null;
+
+                activeScreen = "play";
+                renderScreen();
+                renderEncounterStep();
+            }
+
+            /* ... JS CONTINUES UNCHANGED ... */
+
+            const demoWineTableBody = document.getElementById("demoWineTableBody");
+            if (demoWineTableBody) {
+                demoWineTableBody.addEventListener("click", (e) => {
+                    const target = e.target;
+                    if (target && target.dataset && target.dataset.id) {
+                        deleteWine("demo", target.dataset.id);
+                    }
+                });
+            }
+
+            const premiumWineTableBody = document.getElementById("premiumWineTableBody");
+            if (premiumWineTableBody) {
+                premiumWineTableBody.addEventListener("click", (e) => {
+                    const target = e.target;
+                    if (target && target.dataset && target.dataset.id) {
+                        deleteWine("premium", target.dataset.id);
+                    }
+                });
+            }
+
+            const demoWineCards = document.getElementById("demoWineCards");
+            if (demoWineCards) {
+                demoWineCards.addEventListener("click", (e) => {
+                    const target = e.target;
+                    if (target && target.dataset && target.dataset.id) {
+                        deleteWine("demo", target.dataset.id);
+                    }
+                });
+            }
+
+            const premiumWineCards = document.getElementById("premiumWineCards");
+            if (premiumWineCards) {
+                premiumWineCards.addEventListener("click", (e) => {
+                    const target = e.target;
+                    if (target && target.dataset && target.dataset.id) {
+                        deleteWine("premium", target.dataset.id);
+                    }
+                });
+            }
+
+            const historyList = document.getElementById("historyList");
+            if (historyList) {
+                historyList.addEventListener("click", handleHistoryToggle);
+            }
+
+            document.addEventListener("click", () => {
+                closeAllTooltips();
+            });
+        });
+        if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("service-worker.js");
+}
+    </script>
+</body>
+</html>
