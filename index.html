@@ -372,15 +372,23 @@
             const onTap = (el, fn) => {
                 if (!el) return;
 
-                const handler = (e) => {
+                let justHandled = false;
+
+                const handleTap = (e) => {
                     e.preventDefault();
+                    if (justHandled) return;
+                    justHandled = true;
                     fn(e);
+                    setTimeout(() => { justHandled = false; }, 350);
                 };
 
-                el.addEventListener("pointerup", handler, { passive: false });
-                el.addEventListener("touchend", handler, { passive: false });
+                el.addEventListener("pointerup", handleTap, { passive: false });
+                el.addEventListener("touchend", handleTap, { passive: false });
 
-                el.addEventListener("click", fn);
+                el.addEventListener("click", (e) => {
+                    if (justHandled) return;
+                    fn(e);
+                });
             };
 
             function showScreen(screenId) {
