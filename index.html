@@ -1013,25 +1013,75 @@ function bindInput(el, fn) {
       }
 
       function logEncounter() {
-        const entry = {
-          timestamp: new Date().toLocaleString(),
-          tier: activeMode,
+function logEncounter() {
+  // Hard safety
+  if (!currentEncounter) {
+    console.warn("logEncounter(): no currentEncounter");
+    return;
+  }
 
-          guestStateActual: currentEncounter.guestStateActual,
-          guestStateSelected: currentEncounter.guestStateSelected,
-          modeSelected: currentEncounter.modeSelected,
-          hookSelected: currentEncounter.hookSelected,
-          wineSelected: currentEncounter.wineSelected.name,
+  // Prevent double-logging the same encounter
+  if (currentEncounter.__logged === true) return;
 
-          deliveryLine1: currentEncounter.deliveryLine1 || "",
-          deliveryLine2: currentEncounter.deliveryLine2 || "",
+  const entry = {
+    timestamp: new Date().toLocaleString(),
+    tier: activeMode || "",
 
-          recoveryText: currentEncounter.recoveryText || "",
-          recoveryChoice: currentEncounter.recoveryChoice || "",
-          recoveryCorrect: !!currentEncounter.recoveryCorrect,
-          recoveryCorrectMode: currentEncounter.recoveryCorrectMode || "",
-          recoveryWhy: currentEncounter.recoveryWhy || ""
-        };
+    // Core choices
+    guestStateActual: currentEncounter.guestStateActual || "",
+    guestStateSelected: currentEncounter.guestStateSelected || "",
+    modeSelected: currentEncounter.modeSelected || "",
+    hookSelected: currentEncounter.hookSelected || "",
+
+    // Wine
+    wineSelected:
+      (currentEncounter.wineSelected && currentEncounter.wineSelected.name) ? currentEncounter.wineSelected.name : "",
+
+    // Delivery
+    deliveryLine1: currentEncounter.deliveryLine1 || "",
+    deliveryLine2: currentEncounter.deliveryLine2 || "",
+
+    // Hesitation moment (only if it happened)
+    hesitationText: currentEncounter.hesitationText || "",
+    hesitationChoice: currentEncounter.hesitationChoice || "",
+    hesitationCorrectMode: currentEncounter.hesitationCorrectMode || "",
+    hesitationCorrect: !!currentEncounter.hesitationCorrect
+  };
+
+  try {
+    if (activeMode === "demo") {
+      // Ensure arrays exist
+      if (!Array.isArray(demoRuns)) demoRuns = [];
+
+      demoRuns.push(entry);
+      saveProgress("demo");
+
+      // Advance demo step safely
+      if (typeof demoStep === "number" && typeof DEMO_LIMIT === "number") {
+        if (demoStep < DEMO_LIMIT) saveDemoStep(demoStep + 1);
+      }
+    } else if (activeMode === "premium") {
+      if (!Array.isArray(premiumRuns)) premiumRuns = [];
+
+      premiumRuns.push(entry);
+      saveProgress("premium");
+    } else {
+      console.warn("logEncounter(): activeMode not set, run not saved", { activeMode });
+      return;
+    }
+
+    // Mark logged AFTER successful save
+    currentEncounter.__logged = true;
+
+    // Refresh UI counts if available
+    if (typeof updateCounts === "function") updateCounts();
+  } catch (err) {
+    console.error("logEncounter(): failed to save run", err);
+    alert("Could not save history. Open console for details.");
+  }
+}
+
+
 
         if (activeMode === "demo") {
           demoRuns.push(entry);
@@ -1480,6 +1530,7 @@ function bindInput(el, fn) {
         if (!wine || !encounterData) return;
 
         currentEncounter = {
+            __logged: false,
           guestStateActual: encounterData.guestStateActual,
           guestStateSelected: "",
           modeSelected: "",
