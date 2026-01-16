@@ -1,236 +1,4 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>BottleCaller Prototype</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" href="style.css">
-</head>
-<body>
-    <h1>BottleCaller Prototype</h1>
-
-    <section id="screenWelcome" class="screen">
-        <div class="panel cover-screen">
-            <h2>Welcome to BottleCaller</h2>
-            <p>BottleCaller trains servers to sell the right wine by matching guest psychology with the right delivery style — in under 5 minutes.</p>
-            <ul class="cover-list">
-                <li>Diagnose the guest</li>
-                <li>Choose Mode + Hook</li>
-                <li>Deliver in 2 sentences</li>
-            </ul>
-            <div class="button-row">
-                <button id="btnWelcomeStart" type="button">Start</button>
-            </div>
-            <div class="small-text">Demo Mode available</div>
-        </div>
-    </section>
-
-    <section id="screenHome" class="screen">
-        <div class="panel">
-            <h2>Choose your BottleCaller mode</h2>
-
-            <div class="card">
-                <strong>Demo</strong>
-                <div class="score-row">Wines saved: <span id="homeDemoCount">0 / 2</span></div>
-                <div class="score-row">Runs saved: <span id="homeDemoRuns">0</span></div>
-                <div class="button-row">
-                    <button id="btnGoDemo" type="button">Setup Demo</button>
-                    <button id="btnViewHistoryDemo" type="button">View Demo History</button>
-                    <button id="btnResetRunsDemo" type="button">Reset Runs Only</button>
-                    <button id="btnResetWinesDemo" type="button">Reset Wines Only</button>
-                </div>
-            </div>
-
-            <div class="card">
-                <strong>Premium</strong>
-                <div class="score-row">Wines saved: <span id="homePremiumCount">0 / 10</span></div>
-                <div class="score-row">Runs saved: <span id="homePremiumRuns">0</span></div>
-                <div class="button-row">
-                    <button id="btnGoPremium" type="button">Setup Premium</button>
-                    <button id="btnViewHistoryPremium" type="button">View Premium History</button>
-                    <button id="btnResetRunsPremium" type="button">Reset Runs Only</button>
-                    <button id="btnResetWinesPremium" type="button">Reset Wines Only</button>
-                </div>
-            </div>
-
-            <div class="button-row" style="margin-top:16px;">
-                <button id="btnResetApp" type="button">Reset All</button>
-            </div>
-        </div>
-    </section>
-
-    <section id="screenSetupDemo" class="screen">
-        <div class="panel">
-            <h2>Demo Setup</h2>
-            <div class="score-row">Wines added: <span id="wineCountDemo">0 / 2</span></div>
-
-            <div class="manager-row">
-                <input type="text" id="wineNameInputDemo" placeholder="Wine Name (required)">
-                <input type="text" id="wineVarietalInputDemo" placeholder="Varietal (required)">
-            </div>
-
-            <div class="manager-row">
-                <strong>Fruit Profile (choose up to 2):</strong>
-                <div class="option-grid" id="fruitOptionsDemo"></div>
-            </div>
-
-            <div class="manager-row">
-                <strong>Structure/Texture (choose up to 2):</strong>
-                <div class="option-grid" id="textureOptionsDemo"></div>
-            </div>
-
-            <div class="manager-row">
-                <strong>Oak Level (choose 1):</strong>
-                <div class="option-grid" id="oakOptionsDemo"></div>
-            </div>
-
-            <div class="manager-row">
-                <strong>Process (optional):</strong>
-                <select id="processInputDemo">
-                    <option value="">Select process</option>
-                    <option value="Stainless steel">Stainless steel</option>
-                    <option value="Wild ferment">Wild ferment</option>
-                    <option value="Maceration">Maceration</option>
-                    <option value="Destemming">Destemming</option>
-                    <option value="Whole bunch pressed">Whole bunch pressed</option>
-                    <option value="Hand harvested">Hand harvested</option>
-                    <option value="Time on lees">Time on lees</option>
-                </select>
-                <input type="text" id="regionInputDemo" placeholder="Region (optional)">
-            </div>
-
-            <div class="manager-row">
-                <textarea id="storyInputDemo" placeholder="Story (optional, 1 sentence)"></textarea>
-                <button id="addWineBtnDemo" type="button">Add Wine</button>
-            </div>
-
-            <div class="manager-panel">
-                <h3>Wine List</h3>
-                <table class="wine-table">
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>Varietal</th>
-                            <th>Fruit</th>
-                            <th>Texture</th>
-                            <th>Oak</th>
-                            <th>Process</th>
-                            <th>Region</th>
-                            <th>Story</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody id="demoWineTableBody"></tbody>
-                </table>
-                <div id="demoWineCards" class="wine-cards"></div>
-            </div>
-
-            <div class="button-row">
-                <button id="btnContinueDemo" type="button">Continue Demo</button>
-                <button id="btnBackHomeFromSetupDemo" type="button">Back to Home</button>
-            </div>
-        </div>
-    </section>
-
-    <section id="screenSetupPremium" class="screen">
-        <div class="panel">
-            <h2>Premium Setup</h2>
-            <div class="score-row">Wines added: <span id="wineCountPremium">0 / 10</span></div>
-
-            <div class="manager-row">
-                <input type="text" id="wineNameInputPremium" placeholder="Wine Name (required)">
-                <input type="text" id="wineVarietalInputPremium" placeholder="Varietal (required)">
-            </div>
-
-            <div class="manager-row">
-                <strong>Fruit Profile (choose up to 2):</strong>
-                <div class="option-grid" id="fruitOptionsPremium"></div>
-            </div>
-
-            <div class="manager-row">
-                <strong>Structure/Texture (choose up to 2):</strong>
-                <div class="option-grid" id="textureOptionsPremium"></div>
-            </div>
-
-            <div class="manager-row">
-                <strong>Oak Level (choose 1):</strong>
-                <div class="option-grid" id="oakOptionsPremium"></div>
-            </div>
-
-            <div class="manager-row">
-                <strong>Process (optional):</strong>
-                <select id="processInputPremium">
-                    <option value="">Select process</option>
-                    <option value="Stainless steel">Stainless steel</option>
-                    <option value="Wild ferment">Wild ferment</option>
-                    <option value="Maceration">Maceration</option>
-                    <option value="Destemming">Destemming</option>
-                    <option value="Whole bunch pressed">Whole bunch pressed</option>
-                    <option value="Hand harvested">Hand harvested</option>
-                    <option value="Time on lees">Time on lees</option>
-                </select>
-                <input type="text" id="regionInputPremium" placeholder="Region (optional)">
-            </div>
-
-            <div class="manager-row">
-                <textarea id="storyInputPremium" placeholder="Story (optional, 1 sentence)"></textarea>
-                <button id="addWineBtnPremium" type="button">Add Wine</button>
-            </div>
-
-            <div class="manager-panel">
-                <h3>Wine List</h3>
-                <table class="wine-table">
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>Varietal</th>
-                            <th>Fruit</th>
-                            <th>Texture</th>
-                            <th>Oak</th>
-                            <th>Process</th>
-                            <th>Region</th>
-                            <th>Story</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody id="premiumWineTableBody"></tbody>
-                </table>
-                <div id="premiumWineCards" class="wine-cards"></div>
-            </div>
-
-            <div class="button-row">
-                <button id="btnContinuePremium" type="button">Continue Premium</button>
-                <button id="btnBackHomeFromSetupPremium" type="button">Back to Home</button>
-            </div>
-        </div>
-    </section>
-
-    <section id="screenPlay" class="screen">
-        <div class="panel">
-            <div class="button-row">
-                <button id="btnBackHomeFromPlay" type="button">Back to Home</button>
-            </div>
-
-            <div id="encounterPanel" class="encounter-panel">
-                <div class="step-header" id="stepHeader"></div>
-                <div class="score-row"><strong id="wineDisplayName">Wine:</strong></div>
-                <div id="wineBadges"></div>
-                <div id="stepContent" style="margin-top:10px;"></div>
-                <div class="button-row" id="stepButtons"></div>
-            </div>
-        </div>
-    </section>
-
-    <section id="screenHistory" class="screen">
-        <div class="panel">
-            <h2 id="historyTitle">Session History</h2>
-            <div id="historyList"></div>
-            <div class="button-row">
-                <button id="btnBackHomeFromHistory" type="button">Back</button>
-            </div>
-        </div>
-    </section>
- <script>
+<script>
 (() => {
   "use strict";
 
@@ -374,28 +142,34 @@
       let currentStep = 0;
 
       // ---------- Clean unified input handler ----------
-      const INPUT_EVENT = ("PointerEvent" in window) ? "pointerup" : (("ontouchend" in window) ? "touchend" : "click");
+      const HAS_POINTER = ("PointerEvent" in window) && ("onpointerup" in window);
+      const HAS_TOUCH = ("ontouchend" in window) || (navigator.maxTouchPoints > 0);
+      const INPUT_EVENT = HAS_POINTER ? "pointerup" : (HAS_TOUCH ? "touchend" : "click");
 
-      // simple lock per element (prevents double fire on mobile + weird hybrid devices)
+      // Helps mobile/webviews reduce ghost clicks / delays (JS-only)
+      try { document.documentElement.style.touchAction = "manipulation"; } catch (_) {}
+
       function bindInput(el, fn) {
         if (!el || typeof fn !== "function") return;
-
-        // prevent duplicate binding if init accidentally runs twice
         if (el.__bcBound) return;
         el.__bcBound = true;
 
-        el.addEventListener(INPUT_EVENT, (e) => {
-          // lock
+        const fire = (e) => {
           const now = Date.now();
           const last = el.__bcLastFire || 0;
           if (now - last < 350) return;
           el.__bcLastFire = now;
 
-          // only preventDefault when it’s actually safe/needed
-          if (INPUT_EVENT !== "click" && e.cancelable) e.preventDefault();
-
+          if (INPUT_EVENT !== "click" && e && e.cancelable) e.preventDefault();
           fn(e);
-        }, { passive: INPUT_EVENT === "click" });
+        };
+
+        el.addEventListener(INPUT_EVENT, fire, { passive: INPUT_EVENT === "click" });
+
+        // Safety fallback: still listen to click, lock prevents double-firing
+        if (INPUT_EVENT !== "click") {
+          el.addEventListener("click", fire, { passive: true });
+        }
       }
 
       // ---------- Screen + storage helpers ----------
@@ -545,8 +319,8 @@
         return pick;
       }
 
+      // (Weights / encounter gen unchanged)
       function buildHookWeights() { return { FLAVOUR: 1, STORY: 1, VALUE: 1 }; }
-
       function adjustWeightsFromVerbal(weights, verbalCues) {
         const text = verbalCues.join(" ").toLowerCase();
         if (text.includes("pairs well") || text.includes("smooth") || text.includes("easy") || text.includes("not too heavy")) weights.FLAVOUR += 3;
@@ -555,7 +329,6 @@
         if (text.includes("best") || text.includes("top pick") || text.includes("quick") || text.includes("rush")) { weights.VALUE += 2; weights.FLAVOUR += 1; }
         return weights;
       }
-
       function adjustWeightsFromPhysical(weights, physicalCues) {
         const text = physicalCues.join(" ").toLowerCase();
         if (text.includes("price column")) weights.VALUE += 3;
@@ -564,7 +337,6 @@
         if (text.includes("wine list not requested") || text.includes("menus closed")) weights.VALUE += 2;
         return weights;
       }
-
       function applyStateBias(weights, guestStateActual, verbalCues) {
         const verb = verbalCues.join(" ").toLowerCase();
         if (guestStateActual === "Bargain-Smart") {
@@ -580,7 +352,6 @@
         if (guestStateActual === "Fancy") { weights.STORY += 1; weights.FLAVOUR += 1; }
         return weights;
       }
-
       function pickWeightedHook(weights) {
         const entries = Object.entries(weights);
         const total = entries.reduce((sum, [, w]) => sum + w, 0);
@@ -591,7 +362,6 @@
         }
         return "FLAVOUR";
       }
-
       function deriveBestHookFromCues(guestStateActual, physicalCues, verbalCues) {
         let weights = buildHookWeights();
         weights = adjustWeightsFromVerbal(weights, verbalCues);
@@ -601,7 +371,6 @@
       }
 
       function buildModeWeights() { return { LEAD: 1, REFLECT: 1, HOLD: 1 }; }
-
       function adjustModeWeightsFromVerbal(weights, verbalCues) {
         const text = verbalCues.join(" ").toLowerCase();
         if (text.includes("rush") || text.includes("quick") || text.includes("we’re ready") || text.includes("we're ready")) weights.LEAD += 3;
@@ -612,7 +381,6 @@
         if (text.includes("something easy") || text.includes("not too heavy") || text.includes("don’t overthink") || text.includes("don't overthink")) weights.HOLD += 2;
         return weights;
       }
-
       function adjustModeWeightsFromPhysical(weights, physicalCues) {
         const text = physicalCues.join(" ").toLowerCase();
         if (text.includes("menus closed") || text.includes("signals") || text.includes("direct eye contact") || text.includes("impatient rhythm") || text.includes("phone on table")) weights.LEAD += 2;
@@ -621,7 +389,6 @@
         if (text.includes("avoids eye contact") || text.includes("low energy") || text.includes("sighs")) weights.HOLD += 2;
         return weights;
       }
-
       function applyModeStateBias(weights, guestStateActual) {
         if (guestStateActual === "Decider") weights.LEAD += 2;
         if (guestStateActual === "Bargain-Smart") weights.HOLD += 2;
@@ -630,7 +397,6 @@
         if (guestStateActual === "Celebrator") weights.LEAD += 2;
         return weights;
       }
-
       function pickWeightedMode(weights) {
         const entries = Object.entries(weights);
         const total = entries.reduce((sum, [, w]) => sum + w, 0);
@@ -641,7 +407,6 @@
         }
         return "LEAD";
       }
-
       function deriveBestModeFromCues(guestStateActual, physicalCues, verbalCues) {
         let weights = buildModeWeights();
         weights = adjustModeWeightsFromVerbal(weights, verbalCues);
@@ -748,12 +513,9 @@
         });
       }
 
-      // NON-NEGOTIABLE: closest(".option-btn") (fixes tapping inside button)
       function updateWineTagsSelections(containerId, maxAllowed) {
         const container = document.getElementById(containerId);
         if (!container) return;
-
-        // prevent duplicate binding if called again
         if (container.__bcBound) return;
 
         bindInput(container, (e) => {
@@ -773,8 +535,6 @@
       function updateRadioSelection(containerId) {
         const container = document.getElementById(containerId);
         if (!container) return;
-
-        // prevent duplicate binding if called again
         if (container.__bcBound) return;
 
         bindInput(container, (e) => {
@@ -1045,6 +805,33 @@
         return "❌";
       }
 
+      // ✅ WHY maps (added)
+      function modeWhy(state) {
+        const reasons = {
+          "Decider": "They want speed + certainty. LEAD reduces friction.",
+          "Bargain-Smart": "They want proof + control. HOLD feels safe and rational.",
+          "Fancy": "They want taste + identity. REFLECT matches status + nuance.",
+          "Griever": "They want softness + space. HOLD avoids pressure.",
+          "Celebrator": "They want energy + momentum. LEAD keeps the vibe up."
+        };
+        return reasons[state] || "";
+      }
+
+      function hookWhy(state) {
+        const reasons = {
+          "Decider": "VALUE is fastest: simple justification and clean decision.",
+          "Bargain-Smart": "VALUE answers the real question: is it worth it?",
+          "Fancy": "STORY signals status, origin, and meaning (not just taste).",
+          "Griever": "FLAVOUR is gentle and safe — no hype, no pressure.",
+          "Celebrator": "STORY amplifies the moment and the celebration."
+        };
+        return reasons[state] || "";
+      }
+
+      function guestReadWhy(state) {
+        return "The cues in this encounter were generated to match: " + state + ".";
+      }
+
       function addReflectionBlock(container, title, status, detail) {
         const block = document.createElement("div");
         block.className = "card";
@@ -1267,9 +1054,11 @@
           return;
         }
 
+        // ✅ Step 5: NO TIMER. Add REFLECT button.
         if (currentStep === 5) {
           const checks = evaluateChecks();
-          const correctCount = (checks.guestRead ? 1 : 0) +
+          const correctCount =
+            (checks.guestRead ? 1 : 0) +
             (checks.modeStatus === "optimal" ? 1 : 0) +
             (checks.hookStatus === "optimal" ? 1 : 0) +
             (checks.deliveryCorrect ? 1 : 0);
@@ -1278,10 +1067,11 @@
           else if (correctCount >= 3) stepContent.innerText = "⚠️ Hesitates. “Maybe… what else would you do?”";
           else stepContent.innerText = "❌ “We’ll choose, thanks.”";
 
-          setTimeout(() => {
+          addStepButton("REFLECT", () => {
             currentStep = 6;
             renderEncounterStep();
-          }, 900);
+          }, stepButtons);
+
           return;
         }
 
@@ -1292,13 +1082,36 @@
           reflectionTitle.innerText = "Reflection";
           stepContent.appendChild(reflectionTitle);
 
-          addReflectionBlock(stepContent, "Guest Read", checks.guestRead ? "✅" : "❌", "Cues pointed to " + currentEncounter.guestStateActual + ".");
-          addReflectionBlock(stepContent, "Mode", scoreSymbol(checks.modeStatus), "Best: " + modeMap[currentEncounter.guestStateActual].optimal);
-          addReflectionBlock(stepContent, "Hook", scoreSymbol(checks.hookStatus), "Best: " + hookMap[currentEncounter.guestStateActual].optimal);
+          // ✅ Now includes WHY
+          addReflectionBlock(
+            stepContent,
+            "Guest Read",
+            checks.guestRead ? "✅" : "❌",
+            "Cues pointed to " + currentEncounter.guestStateActual + ". " + guestReadWhy(currentEncounter.guestStateActual)
+          );
+
+          addReflectionBlock(
+            stepContent,
+            "Mode",
+            scoreSymbol(checks.modeStatus),
+            "Best: " + modeMap[currentEncounter.guestStateActual].optimal + " — " + modeWhy(currentEncounter.guestStateActual)
+          );
+
+          addReflectionBlock(
+            stepContent,
+            "Hook",
+            scoreSymbol(checks.hookStatus),
+            "Best: " + hookMap[currentEncounter.guestStateActual].optimal + " — " + hookWhy(currentEncounter.guestStateActual)
+          );
 
           const correctS1 = currentEncounter.deliverOptionsS1[currentEncounter.correctSlotS1];
           const correctS2 = currentEncounter.deliverOptionsS2[currentEncounter.correctSlotS2];
-          addReflectionBlock(stepContent, "Delivery", checks.deliveryCorrect ? "✅" : "❌", "Correct pair: " + correctS1 + " / " + correctS2);
+          addReflectionBlock(
+            stepContent,
+            "Delivery",
+            checks.deliveryCorrect ? "✅" : "❌",
+            "Correct pair: " + correctS1 + " / " + correctS2
+          );
 
           logEncounter();
 
@@ -1360,7 +1173,7 @@
         renderEncounterStep();
       }
 
-      // ---------- Button wiring (single consistent handler) ----------
+      // ---------- Button wiring ----------
       function ensureElement(id) {
         const el = document.getElementById(id);
         if (!el) console.error("Missing element:", id);
@@ -1387,6 +1200,7 @@
         const btnResetRunsPremium = ensureElement("btnResetRunsPremium");
         const btnResetWinesPremium = ensureElement("btnResetWinesPremium");
 
+        // Welcome -> Home (keep)
         bindInput(btnWelcomeStart, () => {
           localStorage.setItem(coverKey, "true");
           showScreen("screenHome");
@@ -1405,6 +1219,7 @@
           localStorage.removeItem("bc_state_bag");
           localStorage.removeItem("bc_state_bag_index");
           localStorage.removeItem("bc_last_guest_state");
+          localStorage.removeItem(coverKey);
 
           demoWines = [];
           premiumWines = [];
@@ -1414,10 +1229,11 @@
           stateBag = [];
           stateBagIndex = 0;
           lastGuestState = "";
+          activeMode = null;
 
           renderWineTables();
           updateCounts();
-          showScreen("screenHome");
+          showScreen("screenWelcome");
         });
 
         bindInput(btnContinueDemo, () => {
@@ -1459,7 +1275,7 @@
         bindInput(addWineBtnDemo, () => addWineFromForm("demo"));
         bindInput(addWineBtnPremium, () => addWineFromForm("premium"));
 
-        // Delete buttons via event delegation (closest fix)
+        // Delete buttons via delegation
         const demoWineTableBody = ensureElement("demoWineTableBody");
         const premiumWineTableBody = ensureElement("premiumWineTableBody");
         const demoWineCards = ensureElement("demoWineCards");
@@ -1477,6 +1293,24 @@
         bindInput(premiumWineTableBody, delHandler("premium"));
         bindInput(demoWineCards, delHandler("demo"));
         bindInput(premiumWineCards, delHandler("premium"));
+
+        // ✅ Home: add "Welcome" button (script-only)
+        const homePanel = document.querySelector("#screenHome .panel");
+        if (homePanel && !document.getElementById("btnBackToWelcome")) {
+          const row = document.createElement("div");
+          row.className = "button-row";
+          row.style.marginTop = "12px";
+
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.id = "btnBackToWelcome";
+          btn.innerText = "Welcome";
+
+          row.appendChild(btn);
+          homePanel.appendChild(row);
+
+          bindInput(btn, () => showScreen("screenWelcome"));
+        }
       }
 
       function renderHistory() {
@@ -1489,7 +1323,7 @@
         historyList.innerText = "";
         const list = (activeMode === "demo" ? demoRuns : premiumRuns).slice(-10).reverse();
 
-        list.forEach((entry, i) => {
+        list.forEach((entry) => {
           const item = document.createElement("div");
           item.className = "history-item";
 
@@ -1556,7 +1390,7 @@
         updateCounts();
       }
 
-      // ---------- Boot sequence (same logic, safer wiring) ----------
+      // ---------- Boot sequence ----------
       buildOptionButtons("fruitOptionsDemo", fruitOptions);
       buildOptionButtons("textureOptionsDemo", textureOptions);
       buildOptionButtons("oakOptionsDemo", oakOptions);
@@ -1577,8 +1411,8 @@
       updateCounts();
       initButtons();
 
-      if (localStorage.getItem(coverKey) !== "true") showScreen("screenWelcome");
-      else showScreen("screenHome");
+      // ✅ Always start on Welcome (no more disappearing)
+      showScreen("screenWelcome");
 
     } catch (err) {
       alert("App error: " + err.message);
@@ -1587,5 +1421,3 @@
   });
 })();
 </script>
-</body>
-</html>
