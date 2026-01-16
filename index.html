@@ -215,7 +215,7 @@
       </div>
     </div>
   </section>
-<script>
+        <script>
 (() => {
   "use strict";
 
@@ -251,7 +251,6 @@
       const guestStates = ["Decider", "Fancy", "Griever", "Celebrator", "Bargain-Smart"];
 
       // ---------- Fixed Demo Encounters (NO randomness) ----------
-      // These are the exact same two encounters every time.
       const DEMO_FIXED = [
         {
           guestStateActual: "Decider",
@@ -271,17 +270,17 @@
         }
       ];
 
-      // ---------- Hesitation scenarios (rotation pool) ----------
-      // Used only when they score exactly 3/4 before reflect.
-      const HESITATION_POOL = [
-        { text: "“Maybe… what would you pick if it was your table?”", correctMode: "LEAD" },
-        { text: "They pause, reread the wine list, then look up silently.", correctMode: "HOLD" },
-        { text: "“We’re celebrating actually… make it feel special.”", correctMode: "REFLECT" },
-        { text: "“Okay… but is it worth it for the price?”", correctMode: "HOLD" },
-        { text: "They nod… but glance at their partner for approval.", correctMode: "REFLECT" },
-        { text: "“I don’t want to mess this up… we’re not wine people.”", correctMode: "HOLD" },
-        { text: "“Just tell us what to do — we’re hungry.”", correctMode: "LEAD" },
-        { text: "They smile: “We usually drink lighter… not too heavy.”", correctMode: "REFLECT" }
+      // ---------- Recovery Moment scenarios (rotation pool) ----------
+      // Used only when they score exactly 3/4 before reflection.
+      const RECOVERY_POOL = [
+        { text: "“Maybe… what would you pick if it was your table?”", correctMode: "LEAD", why: "They’re asking you to decide. Reduce friction and commit for them." },
+        { text: "They pause, reread the wine list, then look up silently.", correctMode: "HOLD", why: "Silence = uncertainty. Create safety and lower pressure." },
+        { text: "“We’re celebrating actually… make it feel special.”", correctMode: "REFLECT", why: "They want identity + vibe. Mirror the moment and match tone." },
+        { text: "“Okay… but is it worth it for the price?”", correctMode: "HOLD", why: "They want proof before committing. Slow down and reassure." },
+        { text: "They nod… but glance at their partner for approval.", correctMode: "REFLECT", why: "You’re selling to the dynamic. Align both people with the choice." },
+        { text: "“I don’t want to mess this up… we’re not wine people.”", correctMode: "HOLD", why: "Remove ego-risk. Make it easy and safe to say yes." },
+        { text: "“Just tell us what to do — we’re hungry.”", correctMode: "LEAD", why: "Speed matters. Give direction, not more thinking." },
+        { text: "They smile: “We usually drink lighter… not too heavy.”", correctMode: "REFLECT", why: "They’re giving identity cues. Match preference and tailor." }
       ];
 
       // ---------- Rule maps ----------
@@ -321,11 +320,17 @@
       let currentEncounter = null;
       let currentStep = 0;
 
+      // ---------- Nav reset (fixes random history screen) ----------
+      function resetNavState() {
+        activeMode = null;
+        currentEncounter = null;
+        currentStep = 0;
+      }
+
       // ---------- Clean unified input handler ----------
       const HAS_POINTER = ("PointerEvent" in window) && ("onpointerup" in window);
       const HAS_TOUCH = ("ontouchend" in window) || (navigator.maxTouchPoints > 0);
       const INPUT_EVENT = HAS_POINTER ? "pointerup" : (HAS_TOUCH ? "touchend" : "click");
-
       try { document.documentElement.style.touchAction = "manipulation"; } catch (_) {}
 
       function bindInput(el, fn) {
@@ -336,7 +341,7 @@
         const fire = (e) => {
           const now = Date.now();
           const last = el.__bcLastFire || 0;
-          if (now - last < 350) return; // lock
+          if (now - last < 350) return;
           el.__bcLastFire = now;
 
           if (e) {
@@ -347,7 +352,7 @@
         };
 
         el.addEventListener(INPUT_EVENT, fire, { passive: INPUT_EVENT === "click" });
-        if (INPUT_EVENT !== "click") el.addEventListener("click", fire, { passive: true }); // desktop fallback
+        if (INPUT_EVENT !== "click") el.addEventListener("click", fire, { passive: true });
       }
 
       // ---------- Screens ----------
@@ -509,7 +514,6 @@
         const isDemo = tierType === "demo";
         const wines = isDemo ? demoWines : premiumWines;
         const limit = isDemo ? DEMO_LIMIT : PREMIUM_LIMIT;
-
         const locked = wines.length >= limit;
 
         setSetupCompleteUI(tierType, locked);
@@ -667,7 +671,6 @@
 
         const listNow = isDemo ? demoWines : premiumWines;
         if (listNow.length >= limit) {
-          // seamless flow into encounter
           toggleSetupFormVisibility(tierType, false);
           activeMode = tierType;
           showScreen("screenPlay");
@@ -823,7 +826,7 @@
         return wine.process ? wine.process : describeOak(wine);
       }
 
-      // Sentence 1 (emotional framing) - improved + less repetitive
+      // Sentence 1 (emotional framing)
       function buildSentence1Correct(encounter) {
         const mode = encounter.modeSelected;
 
@@ -849,16 +852,16 @@
           "Let’s match your vibe and choose something that fits.",
           "We can go for something " + t + " and intentional.",
           "Based on what you’re signaling, here’s the right lane.",
-          "We’ll keep it aligned with your taste and mood.",
+          "Aligned to your taste and mood — here’s the fit.",
           "I’m reading your style — let’s pick something that suits it."
         ];
 
         const holdLines = [
           "No rush — two quick options and you choose.",
-          "Let’s keep it low-pressure: I’ll give you a safe win.",
+          "Low-pressure: here’s a safe win.",
           "Small step first: one easy direction, no hard sell.",
-          "We’ll stay calm here — a simple option that won’t miss.",
-          "I’ll guide gently: one recommendation, zero pressure."
+          "Calm and simple — an option that won’t miss.",
+          "Gentle guide: one recommendation, zero pressure."
         ];
 
         if (mode === "LEAD") return pickRandom(leadLines);
@@ -901,7 +904,7 @@
         const wrongs = [
           "It’s all about big fruit and price.",
           "Process and oak both dominate everything.",
-          "This is a loud, flashy story without structure.",
+          "This is a loud story without structure.",
           "It’s complicated — I’ll explain it later.",
           "Let’s just gamble on something random."
         ];
@@ -999,7 +1002,6 @@
           timestamp: new Date().toLocaleString(),
           tier: activeMode,
 
-          // what happened
           guestStateActual: currentEncounter.guestStateActual,
           guestStateSelected: currentEncounter.guestStateSelected,
           modeSelected: currentEncounter.modeSelected,
@@ -1009,10 +1011,11 @@
           deliveryLine1: currentEncounter.deliveryLine1 || "",
           deliveryLine2: currentEncounter.deliveryLine2 || "",
 
-          // sacred hesitation moment (only if 3/4)
-          hesitationText: currentEncounter.hesitationText || "",
-          hesitationChoice: currentEncounter.hesitationChoice || "",
-          hesitationCorrect: !!currentEncounter.hesitationCorrect
+          recoveryText: currentEncounter.recoveryText || "",
+          recoveryChoice: currentEncounter.recoveryChoice || "",
+          recoveryCorrect: !!currentEncounter.recoveryCorrect,
+          recoveryCorrectMode: currentEncounter.recoveryCorrectMode || "",
+          recoveryWhy: currentEncounter.recoveryWhy || ""
         };
 
         if (activeMode === "demo") {
@@ -1027,11 +1030,34 @@
         updateCounts();
       }
 
-      // ---------- Sacred hesitation UI ----------
-      function getHesitationScenarioForEncounter() {
-        // deterministic-ish rotation per encounter timestamp (good enough for prototype)
-        const idx = Math.floor(Math.random() * HESITATION_POOL.length);
-        return HESITATION_POOL[idx];
+      // ---------- Recovery scenario ----------
+      function getRecoveryScenario() {
+        return pickRandom(RECOVERY_POOL);
+      }
+
+      // ---------- Mode help UI (ONLY on Mode step) ----------
+      function renderModeHelp(stepContent) {
+        const wrap = document.createElement("div");
+        wrap.className = "card";
+
+        const title = document.createElement("strong");
+        title.innerText = "Mode guide (quick)";
+        wrap.appendChild(title);
+
+        const lines = [
+          "LEAD = decide for them (speed + certainty).",
+          "HOLD = reduce pressure (safety + proof).",
+          "REFLECT = mirror identity (vibe + nuance)."
+        ];
+
+        lines.forEach(t => {
+          const d = document.createElement("div");
+          d.className = "small-text";
+          d.innerText = t;
+          wrap.appendChild(d);
+        });
+
+        stepContent.appendChild(wrap);
       }
 
       // ---------- Step renderer ----------
@@ -1117,11 +1143,31 @@
           return;
         }
 
-        // Step 2 Mode
+        // Step 2 Mode (ONLY place where the "?" help exists)
         if (currentStep === 2) {
-          const prompt = document.createElement("p");
+          const topRow = document.createElement("div");
+          topRow.className = "history-row";
+
+          const prompt = document.createElement("div");
           prompt.innerText = "Select a Mode";
-          stepContent.appendChild(prompt);
+          topRow.appendChild(prompt);
+
+          const helpBtn = document.createElement("button");
+          helpBtn.type = "button";
+          helpBtn.className = "small-btn";
+          helpBtn.innerText = " ? ";
+          topRow.appendChild(helpBtn);
+
+          stepContent.appendChild(topRow);
+
+          bindInput(helpBtn, () => {
+            currentEncounter.showModeHelp = !currentEncounter.showModeHelp;
+            renderEncounterStep();
+          });
+
+          if (currentEncounter.showModeHelp) {
+            renderModeHelp(stepContent);
+          }
 
           const options = document.createElement("div");
           options.className = "option-grid";
@@ -1143,7 +1189,7 @@
           return;
         }
 
-        // Step 3 Hook
+        // Step 3 Hook (NO help bubble here)
         if (currentStep === 3) {
           const prompt = document.createElement("p");
           prompt.innerText = "Select a Hook";
@@ -1223,7 +1269,7 @@
           return;
         }
 
-        // Step 5 Reaction (Sacred moment lives here)
+        // Step 5 Reaction (Recovery Moment lives here)
         if (currentStep === 5) {
           const checks = evaluateChecks();
           const correctCount =
@@ -1239,27 +1285,30 @@
             return;
           }
 
-          // 3 right -> hesitation scenario + you must answer with a Mode
+          // 3 right -> Recovery Moment (must answer)
           if (correctCount === 3) {
             const header = document.createElement("p");
             header.innerText = "⚠️ Hesitates… “Maybe… what else would you do?”";
             stepContent.appendChild(header);
 
-            if (!currentEncounter.hesitationText) {
-              const scenario = getHesitationScenarioForEncounter();
-              currentEncounter.hesitationText = scenario.text;
-              currentEncounter.hesitationCorrectMode = scenario.correctMode;
-              currentEncounter.hesitationChoice = "";
-              currentEncounter.hesitationCorrect = false;
+            if (!currentEncounter.recoveryText) {
+              const scenario = getRecoveryScenario();
+              currentEncounter.recoveryText = scenario.text;
+              currentEncounter.recoveryCorrectMode = scenario.correctMode;
+              currentEncounter.recoveryWhy = scenario.why;
+              currentEncounter.recoveryChoice = "";
+              currentEncounter.recoveryCorrect = false;
             }
 
-            const scenarioBox = document.createElement("div");
-            scenarioBox.className = "card";
-            scenarioBox.innerHTML = "<strong>Sacred moment</strong><div style='margin-top:6px;'>" + currentEncounter.hesitationText + "</div>";
-            stepContent.appendChild(scenarioBox);
+            const box = document.createElement("div");
+            box.className = "card";
+            box.innerHTML =
+              "<strong>Recovery Moment</strong>" +
+              "<div style='margin-top:6px;'>" + currentEncounter.recoveryText + "</div>";
+            stepContent.appendChild(box);
 
             const prompt = document.createElement("p");
-            prompt.innerText = "Choose the Mode that saves the sale:";
+            prompt.innerText = "Choose the Mode that closes the gap:";
             stepContent.appendChild(prompt);
 
             const options = document.createElement("div");
@@ -1268,11 +1317,11 @@
             ["LEAD", "REFLECT", "HOLD"].forEach(mode => {
               const btn = document.createElement("button");
               btn.type = "button";
-              btn.className = "option-btn" + (currentEncounter.hesitationChoice === mode ? " selected" : "");
+              btn.className = "option-btn" + (currentEncounter.recoveryChoice === mode ? " selected" : "");
               btn.innerText = mode;
               bindInput(btn, () => {
-                currentEncounter.hesitationChoice = mode;
-                currentEncounter.hesitationCorrect = (mode === currentEncounter.hesitationCorrectMode);
+                currentEncounter.recoveryChoice = mode;
+                currentEncounter.recoveryCorrect = (mode === currentEncounter.recoveryCorrectMode);
                 renderEncounterStep();
               });
               options.appendChild(btn);
@@ -1280,8 +1329,18 @@
 
             stepContent.appendChild(options);
 
-            const cont = addStepButton("REFLECT", () => { currentStep = 6; renderEncounterStep(); }, stepButtons);
-            if (!currentEncounter.hesitationChoice) cont.disabled = true;
+            // Once they pick, show why the correct answer is correct (THIS was missing)
+            if (currentEncounter.recoveryChoice) {
+              const explain = document.createElement("div");
+              explain.className = "notice";
+              explain.innerText =
+                "Best is " + currentEncounter.recoveryCorrectMode +
+                " — " + currentEncounter.recoveryWhy;
+              stepContent.appendChild(explain);
+            }
+
+            const cont = addStepButton("CONTINUE TO REFLECTION", () => { currentStep = 6; renderEncounterStep(); }, stepButtons);
+            if (!currentEncounter.recoveryChoice) cont.disabled = true;
             return;
           }
 
@@ -1303,7 +1362,7 @@
             stepContent,
             "Guest Read",
             checks.guestRead ? "✅" : "❌",
-            "Actual state: " + currentEncounter.guestStateActual + " | You chose: " + (currentEncounter.guestStateSelected || "—")
+            "Actual: " + currentEncounter.guestStateActual + " | You chose: " + (currentEncounter.guestStateSelected || "—")
           );
 
           addReflectionBlock(
@@ -1329,15 +1388,15 @@
             "Correct pair: " + correctS1 + " / " + correctS2
           );
 
-          // Sacred hesitation reflection (only if it happened)
-          if (currentEncounter.hesitationText) {
+          if (currentEncounter.recoveryText) {
             addReflectionBlock(
               stepContent,
-              "Sacred Moment",
-              currentEncounter.hesitationCorrect ? "✅" : "❌",
-              "Scenario: " + currentEncounter.hesitationText +
-              " | Correct: " + currentEncounter.hesitationCorrectMode +
-              " | You chose: " + (currentEncounter.hesitationChoice || "—")
+              "Recovery Moment",
+              currentEncounter.recoveryCorrect ? "✅" : "❌",
+              "Scenario: " + currentEncounter.recoveryText +
+              " | Best: " + currentEncounter.recoveryCorrectMode +
+              " | You chose: " + (currentEncounter.recoveryChoice || "—") +
+              " | Why: " + (currentEncounter.recoveryWhy || "")
             );
           }
 
@@ -1345,6 +1404,7 @@
 
           addStepButton("NEXT ENCOUNTER", () => {
             if (activeMode === "demo" && demoStep >= DEMO_LIMIT) {
+              resetNavState();
               showScreen("screenHome");
               return;
             }
@@ -1360,6 +1420,7 @@
         if (!activeMode || !isUnlocked(activeMode)) return;
 
         if (activeMode === "demo" && demoStep >= DEMO_LIMIT) {
+          resetNavState();
           showScreen("screenHome");
           return;
         }
@@ -1368,12 +1429,9 @@
         let encounterData = null;
 
         if (activeMode === "demo") {
-          // fixed, same every time
           encounterData = DEMO_FIXED[demoStep];
           wine = demoWines[demoStep];
         } else {
-          // Premium can be “alive” (random wine pick)
-          // Guest state can still be random in Premium for variety.
           const guestStateActual = pickRandom(guestStates);
           encounterData = {
             guestStateActual,
@@ -1409,10 +1467,13 @@
           correctSlotS1: null,
           correctSlotS2: null,
 
-          hesitationText: "",
-          hesitationCorrectMode: "",
-          hesitationChoice: "",
-          hesitationCorrect: false
+          showModeHelp: false,
+
+          recoveryText: "",
+          recoveryCorrectMode: "",
+          recoveryWhy: "",
+          recoveryChoice: "",
+          recoveryCorrect: false
         };
 
         currentStep = 0;
@@ -1448,8 +1509,8 @@
           details.className = "history-details";
           details.style.display = "none";
 
-          const hesitationLine = entry.hesitationText
-            ? `\nSacred: ${entry.hesitationText}\nChoice: ${entry.hesitationChoice} (${entry.hesitationCorrect ? "✅" : "❌"})`
+          const recoveryLine = entry.recoveryText
+            ? `\nRecovery: ${entry.recoveryText}\nBest: ${entry.recoveryCorrectMode}\nYou chose: ${entry.recoveryChoice} (${entry.recoveryCorrect ? "✅" : "❌"})\nWhy: ${entry.recoveryWhy}`
             : "";
 
           details.innerText =
@@ -1459,7 +1520,7 @@
             `Hook: ${entry.hookSelected}\n` +
             `Line 1: ${entry.deliveryLine1}\n` +
             `Line 2: ${entry.deliveryLine2}` +
-            hesitationLine;
+            recoveryLine;
 
           row.appendChild(summary);
           row.appendChild(toggleBtn);
@@ -1533,13 +1594,15 @@
         const btnResetRunsPremium = ensureElement("btnResetRunsPremium");
         const btnResetWinesPremium = ensureElement("btnResetWinesPremium");
 
+        // START should never carry old context
         bindInput(btnWelcomeStart, () => {
           localStorage.setItem(coverKey, "true");
+          resetNavState();
           showScreen("screenHome");
         });
 
-        bindInput(btnGoDemo, () => showScreen("screenSetupDemo"));
-        bindInput(btnGoPremium, () => showScreen("screenSetupPremium"));
+        bindInput(btnGoDemo, () => { resetNavState(); showScreen("screenSetupDemo"); });
+        bindInput(btnGoPremium, () => { resetNavState(); showScreen("screenSetupPremium"); });
 
         bindInput(btnResetApp, () => {
           if (!confirm("Reset app? This clears wines and runs.")) return;
@@ -1556,8 +1619,8 @@
           demoRuns = [];
           premiumRuns = [];
           demoStep = 0;
-          activeMode = null;
 
+          resetNavState();
           renderWineTables();
           showScreen("screenWelcome");
         });
@@ -1576,10 +1639,10 @@
           startEncounter();
         });
 
-        bindInput(btnBackHomeFromSetupDemo, () => showScreen("screenHome"));
-        bindInput(btnBackHomeFromSetupPremium, () => showScreen("screenHome"));
-        bindInput(btnBackHomeFromPlay, () => showScreen("screenHome"));
-        bindInput(btnBackHomeFromHistory, () => showScreen("screenHome"));
+        bindInput(btnBackHomeFromSetupDemo, () => { resetNavState(); showScreen("screenHome"); });
+        bindInput(btnBackHomeFromSetupPremium, () => { resetNavState(); showScreen("screenHome"); });
+        bindInput(btnBackHomeFromPlay, () => { resetNavState(); showScreen("screenHome"); });
+        bindInput(btnBackHomeFromHistory, () => { resetNavState(); showScreen("screenHome"); });
 
         bindInput(btnViewHistoryDemo, () => {
           activeMode = "demo";
@@ -1637,7 +1700,10 @@
           row.appendChild(btn);
           homePanel.appendChild(row);
 
-          bindInput(btn, () => showScreen("screenWelcome"));
+          bindInput(btn, () => {
+            resetNavState();
+            showScreen("screenWelcome");
+          });
         }
       }
 
@@ -1669,7 +1735,6 @@
     }
   });
 })();
-</script>
-
+        </script>
 </body>
 </html>
