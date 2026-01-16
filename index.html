@@ -1,3 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>BottleCaller Prototype</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <h1>BottleCaller Prototype</h1>
+
+  <section id="screenWelcome" class="screen">
+    <div class="panel cover-screen">
+      <h2>Welcome to BottleCaller</h2>
+      <p>BottleCaller trains servers to sell the right wine by matching guest psychology with the right delivery style — in under 5 minutes.</p>
+      <ul class="cover-list">
+        <li>Diagnose the guest</li>
+        <li>Choose Mode + Hook</li>
+        <li>Deliver in 2 sentences</li>
+      </ul>
+      <div class="button-row">
+        <button id="btnWelcomeStart" type="button">Start</button>
+      </div>
+      <div class="small-text">Demo Mode available</div>
+    </div>
+  </section>
+
+  <section id="screenHome" class="screen">
+    <div class="panel">
+      <h2>Choose your BottleCaller mode</h2>
+
+      <div class="card">
+        <strong>Demo</strong>
+        <div class="score-row">Wines saved: <span id="homeDemoCount">0 / 2</span></div>
+        <div class="score-row">Runs saved: <span id="homeDemoRuns">0</span></div>
+        <div class="button-row">
+          <button id="btnGoDemo" type="button">Setup Demo</button>
+          <button id="btnViewHistoryDemo" type="button">View Demo History</button>
+          <button id="btnResetRunsDemo" type="button">Reset Runs Only</button>
+          <button id="btnResetWinesDemo" type="button">Reset Wines Only</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <strong>Premium</strong>
+        <div class="score-row">Wines saved: <span id="homePremiumCount">0 / 10</span></div>
+        <div class="score-row">Runs saved: <span id="homePremiumRuns">0</span></div>
+        <div class="button-row">
+          <button id="btnGoPremium" type="button">Setup Premium</button>
+          <button id="btnViewHistoryPremium" type="button">View Premium History</button>
+          <button id="btnResetRunsPremium" type="button">Reset Runs Only</button>
+          <button id="btnResetWinesPremium" type="button">Reset Wines Only</button>
+        </div>
+      </div>
+
+      <div class="button-row" style="margin-top:16px;">
+        <button id="btnResetApp" type="button">Reset All</button>
+      </div>
+      <!-- NOTE: Welcome button will be injected by script -->
+    </div>
+  </section>
+
+  <section id="screenSetupDemo" class="screen">
+    <div class="panel">
+      <h2>Demo Setup</h2>
+      <div class="score-row">Wines added: <span id="wineCountDemo">0 / 2</span></div>
+
+      <div class="manager-row">
+        <input type="text" id="wineNameInputDemo" placeholder="Wine Name (required)" />
+        <input type="text" id="wineVarietalInputDemo" placeholder="Varietal (required)" />
+      </div>
+
+      <div class="manager-row">
+        <strong>Fruit Profile (choose up to 2):</strong>
+        <div class="option-grid" id="fruitOptionsDemo"></div>
+      </div>
+
+      <div class="manager-row">
+        <strong>Structure/Texture (choose up to 2):</strong>
+        <div class="option-grid" id="textureOptionsDemo"></div>
+      </div>
+
+      <div class="manager-row">
+        <strong>Oak Level (choose 1):</strong>
+        <div class="option-grid" id="oakOptionsDemo"></div>
+      </div>
+
+      <div class="manager-row">
+        <strong>Process (optional):</strong>
+        <select id="processInputDemo">
+          <option value="">Select process</option>
+          <option value="Stainless steel">Stainless steel</option>
+          <option value="Wild ferment">Wild ferment</option>
+          <option value="Maceration">Maceration</option>
+          <option value="Destemming">Destemming</option>
+          <option value="Whole bunch pressed">Whole bunch pressed</option>
+          <option value="Hand harvested">Hand harvested</option>
+          <option value="Time on lees">Time on lees</option>
+        </select>
+        <input type="text" id="regionInputDemo" placeholder="Region (optional)" />
+      </div>
+
+      <div class="manager-row">
+        <textarea id="storyInputDemo" placeholder="Story (optional, 1 sentence)"></textarea>
+        <button id="addWineBtnDemo" type="button">Add Wine</button>
+      </div>
+
+      <div class="manager-panel">
+        <h3>Wine List</h3>
+        <table class="wine-table">
+          <thead>
+            <tr>
+              <th>Name</th><th>Varietal</th><th>Fruit</th><th>Texture</th><th>Oak</th><th>Process</th><th>Region</th><th>Story</th><th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="demoWineTableBody"></tbody>
+        </table>
+        <div id="demoWineCards" class="wine-cards"></div>
+      </div>
+
+      <div class="button-row">
+        <button id="btnContinueDemo" type="button">Continue Demo</button>
+        <button id="btnBackHomeFromSetupDemo" type="button">Back to Home</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="screenSetupPremium" class="screen">
+    <div class="panel">
+      <h2>Premium Setup</h2>
+      <div class="score-row">Wines added: <span id="wineCountPremium">0 / 10</span></div>
+
+      <div class="manager-row">
+        <input type="text" id="wineNameInputPremium" placeholder="Wine Name (required)" />
+        <input type="text" id="wineVarietalInputPremium" placeholder="Varietal (required)" />
+      </div>
+
+      <div class="manager-row">
+        <strong>Fruit Profile (choose up to 2):</strong>
+        <div class="option-grid" id="fruitOptionsPremium"></div>
+      </div>
+
+      <div class="manager-row">
+        <strong>Structure/Texture (choose up to 2):</strong>
+        <div class="option-grid" id="textureOptionsPremium"></div>
+      </div>
+
+      <div class="manager-row">
+        <strong>Oak Level (choose 1):</strong>
+        <div class="option-grid" id="oakOptionsPremium"></div>
+      </div>
+
+      <div class="manager-row">
+        <strong>Process (optional):</strong>
+        <select id="processInputPremium">
+          <option value="">Select process</option>
+          <option value="Stainless steel">Stainless steel</option>
+          <option value="Wild ferment">Wild ferment</option>
+          <option value="Maceration">Maceration</option>
+          <option value="Destemming">Destemming</option>
+          <option value="Whole bunch pressed">Whole bunch pressed</option>
+          <option value="Hand harvested">Hand harvested</option>
+          <option value="Time on lees">Time on lees</option>
+        </select>
+        <input type="text" id="regionInputPremium" placeholder="Region (optional)" />
+      </div>
+
+      <div class="manager-row">
+        <textarea id="storyInputPremium" placeholder="Story (optional, 1 sentence)"></textarea>
+        <button id="addWineBtnPremium" type="button">Add Wine</button>
+      </div>
+
+      <div class="manager-panel">
+        <h3>Wine List</h3>
+        <table class="wine-table">
+          <thead>
+            <tr>
+              <th>Name</th><th>Varietal</th><th>Fruit</th><th>Texture</th><th>Oak</th><th>Process</th><th>Region</th><th>Story</th><th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="premiumWineTableBody"></tbody>
+        </table>
+        <div id="premiumWineCards" class="wine-cards"></div>
+      </div>
+
+      <div class="button-row">
+        <button id="btnContinuePremium" type="button">Continue Premium</button>
+        <button id="btnBackHomeFromSetupPremium" type="button">Back to Home</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="screenPlay" class="screen">
+    <div class="panel">
+      <div class="button-row">
+        <button id="btnBackHomeFromPlay" type="button">Back to Home</button>
+      </div>
+
+      <div id="encounterPanel" class="encounter-panel">
+        <div class="step-header" id="stepHeader"></div>
+        <div class="score-row"><strong id="wineDisplayName">Wine:</strong></div>
+        <div id="wineBadges"></div>
+        <div id="stepContent" style="margin-top:10px;"></div>
+        <div class="button-row" id="stepButtons"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="screenHistory" class="screen">
+    <div class="panel">
+      <h2 id="historyTitle">Session History</h2>
+      <div id="historyList"></div>
+      <div class="button-row">
+        <button id="btnBackHomeFromHistory" type="button">Back</button>
+      </div>
+    </div>
+  </section>
 <script>
 (() => {
   "use strict";
@@ -1421,3 +1638,5 @@
   });
 })();
 </script>
+</body>
+</html>
