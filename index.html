@@ -376,7 +376,7 @@
         if (el.__bcBound) return;
         el.__bcBound = true;
 
-                    const fire = (e) => {
+        const fire = (e) => {
           const now = Date.now();
           const last = el.__bcLastFire || 0;
           if (now - last < 350) return;
@@ -386,7 +386,6 @@
             if (INPUT_EVENT !== "click" && e.cancelable) e.preventDefault();
             e.stopPropagation();
           }
-
           fn(e);
         };
 
@@ -405,13 +404,8 @@
         target.classList.add("active");
       }
 
-      function requiredWineCount(t) {
-        return t === "demo" ? DEMO_LIMIT : PREMIUM_LIMIT;
-      }
-
-      function isUnlocked(t) {
-        return getWinesForTier(t).length >= requiredWineCount(t);
-      }
+      function requiredWineCount(t) { return t === "demo" ? DEMO_LIMIT : PREMIUM_LIMIT; }
+      function isUnlocked(t) { return getWinesForTier(t).length >= requiredWineCount(t); }
 
       // ---------- Storage ----------
       function generateWineId() {
@@ -515,13 +509,8 @@
         };
       }
 
-      function getWinesForTier(t) {
-        return t === "demo" ? demoWines : premiumWines;
-      }
-
-      function pickRandom(arr) {
-        return arr[Math.floor(Math.random() * arr.length)];
-      }
+      function getWinesForTier(t) { return t === "demo" ? demoWines : premiumWines; }
+      function pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
       function shuffleArray(arr) {
         for (let i = arr.length - 1; i > 0; i--) {
@@ -713,7 +702,7 @@
       function setSetupCompleteUI(tierType, locked) {
         const isDemo = tierType === "demo";
         const limit = isDemo ? DEMO_LIMIT : PREMIUM_LIMIT;
-        
+
         const screenId = isDemo ? "screenSetupDemo" : "screenSetupPremium";
         const screen = document.getElementById(screenId);
         if (!screen) return;
@@ -731,7 +720,7 @@
         const btnContinue = document.getElementById(isDemo ? "btnContinueDemo" : "btnContinuePremium");
 
         if (locked) {
-          banner.innerText = `✅ Setup complete (${limit}/${limit}). Start the encounter.`;
+          banner.innerText = `✅ Setup complete (${limit}/${limit}). Starting encounter…`;
           banner.style.display = "block";
           if (btnContinue) btnContinue.innerText = "Start encounter";
         } else {
@@ -740,7 +729,7 @@
           banner.innerText = `Add ${remaining} more wine(s) to unlock encounters.`;
           banner.style.display = "block";
           if (btnContinue) btnContinue.innerText = isDemo ? "Continue Demo" : "Continue Premium";
-    }
+        }
       }
 
       function toggleSetupFormVisibility(tierType, show) {
@@ -749,9 +738,7 @@
         if (!screen) return;
 
         const rows = Array.from(screen.querySelectorAll(".manager-row"));
-        rows.forEach(row => {
-          row.style.display = show ? "" : "none";
-        });
+        rows.forEach(row => { row.style.display = show ? "" : "none"; });
 
         const countLine = screen.querySelector(".score-row");
         if (countLine) countLine.style.display = show ? "" : "none";
@@ -764,10 +751,8 @@
 
         const locked = wines.length >= limit;
 
-        // status + button label
         setSetupCompleteUI(tierType, locked);
 
-        // lock inputs + add button
         const nameEl = document.getElementById(isDemo ? "wineNameInputDemo" : "wineNameInputPremium");
         const varietalEl = document.getElementById(isDemo ? "wineVarietalInputDemo" : "wineVarietalInputPremium");
         const processEl = document.getElementById(isDemo ? "processInputDemo" : "processInputPremium");
@@ -779,24 +764,11 @@
           if (el) el.disabled = locked;
         });
 
-        // dim only the input rows (keeps list + buttons usable)
-        const screen = document.getElementById(isDemo ? "screenSetupDemo" : "screenSetupPremium");
-        if (screen) {
-          const rows = screen.querySelectorAll(".manager-row");
-          rows.forEach(row => {
-            if (row.querySelector("input, select, textarea") || row.querySelector("#addWineBtnDemo, #addWineBtnPremium")) {
-              row.style.opacity = locked ? "0.6" : "1";
-            }
-          });
-        }
-
-        // ensure continue buttons enable only when locked
         const btnContinue = document.getElementById(isDemo ? "btnContinueDemo" : "btnContinuePremium");
-                if (btnContinue) btnContinue.disabled = !locked;
+        if (btnContinue) btnContinue.disabled = !locked;
 
-        // Hide the setup form when complete, show it when incomplete
         toggleSetupFormVisibility(tierType, !locked);
-      }  
+      }
 
       function updateCounts() {
         const demoCountEl = document.getElementById("wineCountDemo");
@@ -806,7 +778,6 @@
         if (premiumCountEl) premiumCountEl.innerText = premiumWines.length + " / " + PREMIUM_LIMIT;
 
         renderHomeCounts();
-
         updateSetupLock("demo");
         updateSetupLock("premium");
       }
@@ -881,7 +852,6 @@
         const isDemo = tierType === "demo";
         const limit = isDemo ? DEMO_LIMIT : PREMIUM_LIMIT;
 
-        // hard stop
         const list = isDemo ? demoWines : premiumWines;
         if (list.length >= limit) {
           updateSetupLock(tierType);
@@ -931,10 +901,9 @@
         resetSelection(isDemo ? "textureOptionsDemo" : "textureOptionsPremium");
         resetSelection(isDemo ? "oakOptionsDemo" : "oakOptionsPremium");
 
-                renderWineTables();
+        renderWineTables();
         updateCounts();
 
-        // Seamless flow: if setup just completed, go straight into encounter
         const limitNow = isDemo ? DEMO_LIMIT : PREMIUM_LIMIT;
         const listNow = isDemo ? demoWines : premiumWines;
 
@@ -952,7 +921,7 @@
         renderWineTable("premium", "premiumWineTableBody");
         renderWineCards("demo", "demoWineCards");
         renderWineCards("premium", "premiumWineCards");
-        updateCounts(); // keeps UI lock state correct
+        updateCounts();
       }
 
       function renderWineTable(tierType, tbodyId) {
@@ -1092,17 +1061,77 @@
 
       function getValueCue(wine) { return wine.process ? wine.process : describeOak(wine); }
 
+      // =========================================================
+      // SENTENCES (UPDATED: less repetitive + harder to pattern-solve)
+      // =========================================================
+
       function buildSentence1Correct(encounter) {
-        const tones = { "Decider": "decisive", "Bargain-Smart": "measured", "Fancy": "refined", "Griever": "gentle", "Celebrator": "upbeat" };
         const mode = encounter.modeSelected;
-        const tone = tones[encounter.guestStateActual] || "confident";
-        if (mode === "LEAD") return "I’ll lead with a " + tone + " call and keep it tight.";
-        if (mode === "REFLECT") return "I’ll mirror your " + tone + " style and keep it focused.";
-        return "I’ll keep it calm and low-pressure, " + tone + " and clear.";
+
+        // Small tone seasoning, but not mode-revealing words
+        const tone = {
+          "Decider": ["clean", "direct", "sharp"],
+          "Bargain-Smart": ["grounded", "practical", "steady"],
+          "Fancy": ["polished", "elegant", "refined"],
+          "Griever": ["soft", "calm", "gentle"],
+          "Celebrator": ["bright", "fun", "upbeat"]
+        };
+        const t = pickRandom(tone[encounter.guestStateActual] || ["confident"]);
+
+        // Overlap language across pools to stop keyword-solving.
+        // LEAD: decisive, but not “bossy”
+        const leadLines = [
+          "A clear pick works here — simple and " + t + ".",
+          "One clean recommendation fits this moment.",
+          "Let’s land on one bottle and move forward.",
+          "This is the direction that makes sense right now.",
+          "A strong, simple choice fits the table."
+        ];
+
+        // REFLECT: aligned, but not “mirror / match” giveaways
+        const reflectLines = [
+          "This fits what you’re signaling — " + t + " and intentional.",
+          "Based on your vibe, this lane suits you.",
+          "This choice aligns with the mood at the table.",
+          "The right fit here is something " + t + " and considered.",
+          "Reading your style — this lands well."
+        ];
+
+        // HOLD: low pressure, but not “hold / keep / calm” giveaways
+        const holdLines = [
+          "No rush — here’s a safe win that still feels " + t + ".",
+          "Two quick lanes exist; this one is the cleanest.",
+          "Low-pressure approach: one option that won’t miss.",
+          "A simple, steady choice keeps this easy.",
+          "Start with this — it’s a comfortable direction."
+        ];
+
+        if (mode === "LEAD") return pickRandom(leadLines);
+        if (mode === "REFLECT") return pickRandom(reflectLines);
+        return pickRandom(holdLines);
       }
 
       function buildSentence1Wrong() {
-        const wrongs = ["Let’s overthink this and keep it vague.", "I’ll hedge and make this feel uncertain.", "We can go big and theatrical first."];
+        // 16 wrongs: some are obviously bad, others are “plausible but wrong”
+        // Also avoids starting with “I’ll…”
+        const wrongs = [
+          "Everything here is good — any bottle works.",
+          "Hard to say… just pick one and we’ll see.",
+          "Start with the most expensive one — it’s impressive.",
+          "Three wines: I’ll list them fast and you choose.",
+          "No reason needed — just pick something.",
+          "Let me explain the full list before deciding.",
+          "This is all subjective anyway, so random is fine.",
+          "Avoid anything memorable — safe is always best.",
+          "Stay vague so there’s nothing to disagree with.",
+          "If it’s red, it basically tastes like red wine.",
+          "Oak equals quality — choose the oakiest one.",
+          "Push hard right now — hesitation means you need to sell harder.",
+          "Try to sound technical so it feels premium.",
+          "Pick by label design — guests love that.",
+          "Ask them ten questions first — then recommend.",
+          "Say nothing and let them figure it out."
+        ];
         return pickRandom(wrongs);
       }
 
@@ -1118,7 +1147,23 @@
       }
 
       function buildSentence2Wrong() {
-        const wrongs = ["It’s all about big fruit and price.", "Process and oak both dominate everything.", "This is a loud, flashy story without structure."];
+        // More wrong structural lines (14) so A/B isn’t obvious
+        const wrongs = [
+          "It’s basically sweet — everyone likes sweet.",
+          "This is heavy oak, so it must be premium.",
+          "Price is the main taste — higher means better.",
+          "It’s a famous wine… I think.",
+          "It tastes like grapes and alcohol, mostly.",
+          "Not sure on flavour, but the label looks serious.",
+          "This one is trendy on Instagram.",
+          "The best pairing is… any food, really.",
+          "It’s complex — too hard to explain, just trust it.",
+          "It’s smooth because it’s red.",
+          "This is the safest bottle because nobody talks about it.",
+          "We should choose the one with the longest story, even if it doesn’t fit.",
+          "Let’s focus on producer trivia instead of what it feels like to drink.",
+          "Pick it because it’s local — that’s the whole reason."
+        ];
         return pickRandom(wrongs);
       }
 
@@ -1135,6 +1180,7 @@
         encounter.deliverOptionsS2 = encounter.correctSlotS2 === "A" ? { A: correct2, B: wrong2 } : { A: wrong2, B: correct2 };
       }
 
+      // ---------- Evaluation ----------
       function evaluateChecks() {
         const guestRead = currentEncounter.guestStateSelected === currentEncounter.guestStateActual;
         const modeRule = modeMap[currentEncounter.guestStateActual];
@@ -1146,7 +1192,8 @@
         const hookStatus = currentEncounter.hookSelected === hookRule.optimal ? "optimal"
           : currentEncounter.hookSelected === hookRule.neutral ? "neutral" : "damaging";
 
-        const deliveryCorrect = currentEncounter.selectedS1 === currentEncounter.correctSlotS1 &&
+        const deliveryCorrect =
+          currentEncounter.selectedS1 === currentEncounter.correctSlotS1 &&
           currentEncounter.selectedS2 === currentEncounter.correctSlotS2;
 
         return { guestRead, modeStatus, hookStatus, deliveryCorrect };
@@ -1232,6 +1279,7 @@
         updateCounts();
       }
 
+      // ---------- Encounter rendering ----------
       function renderEncounterStep() {
         const stepHeader = document.getElementById("stepHeader");
         const stepContent = document.getElementById("stepContent");
@@ -1415,7 +1463,6 @@
           return;
         }
 
-        // Step 5: NO TIMER. Player presses REFLECT.
         if (currentStep === 5) {
           const checks = evaluateChecks();
           const correctCount =
@@ -1671,7 +1718,6 @@
           showScreen("screenWelcome");
         });
 
-        // Setup -> Start encounter (only when complete)
         bindInput(btnContinueDemo, () => {
           if (demoWines.length < DEMO_LIMIT) { alert("Add 2 demo wines to start."); return; }
           activeMode = "demo";
@@ -1713,7 +1759,6 @@
         bindInput(addWineBtnDemo, () => addWineFromForm("demo"));
         bindInput(addWineBtnPremium, () => addWineFromForm("premium"));
 
-        // Delete via delegation
         const demoWineTableBody = ensureElement("demoWineTableBody");
         const premiumWineTableBody = ensureElement("premiumWineTableBody");
         const demoWineCards = ensureElement("demoWineCards");
@@ -1732,7 +1777,6 @@
         bindInput(demoWineCards, delHandler("demo"));
         bindInput(premiumWineCards, delHandler("premium"));
 
-        // Home: inject "Welcome" button (script-only)
         const homePanel = document.querySelector("#screenHome .panel");
         if (homePanel && !document.getElementById("btnBackToWelcome")) {
           const row = document.createElement("div");
@@ -1771,7 +1815,6 @@
       renderWineTables();
       initButtons();
 
-      // Always start on Welcome
       showScreen("screenWelcome");
 
     } catch (err) {
