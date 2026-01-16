@@ -215,7 +215,8 @@
       </div>
     </div>
   </section>
-        <script>
+
+<script>
 (() => {
   "use strict";
 
@@ -231,8 +232,6 @@
   });
 
   document.addEventListener("DOMContentLoaded", () => {
-    document.getElementById("screenWelcome")?.classList.add("active");
-
     try {
       if (window.__BC_INIT_DONE__) return;
       window.__BC_INIT_DONE__ = true;
@@ -247,7 +246,6 @@
       const DEMO_LIMIT = 2;
       const PREMIUM_LIMIT = 10;
 
-      const demoGuestTypes = ["Decider", "Bargain-Smart"];
       const guestStates = ["Decider", "Fancy", "Griever", "Celebrator", "Bargain-Smart"];
 
       // ---------- Fixed Demo Encounters (NO randomness) ----------
@@ -271,7 +269,6 @@
       ];
 
       // ---------- Recovery Moment scenarios (rotation pool) ----------
-      // Used only when they score exactly 3/4 before reflection.
       const RECOVERY_POOL = [
         { text: "“Maybe… what would you pick if it was your table?”", correctMode: "LEAD", why: "They’re asking you to decide. Reduce friction and commit for them." },
         { text: "They pause, reread the wine list, then look up silently.", correctMode: "HOLD", why: "Silence = uncertainty. Create safety and lower pressure." },
@@ -307,68 +304,61 @@
       const processOptions = ["Stainless steel", "Wild ferment", "Maceration", "Destemming", "Whole bunch pressed", "Hand harvested", "Time on lees"];
 
       // ---------- Runtime state ----------
-      let activeMode = null;
-
+      let activeMode = null; // "demo" | "premium"
       let demoWines = loadWines("demo");
       let premiumWines = loadWines("premium");
-
       let demoRuns = loadProgress("demo");
       let premiumRuns = loadProgress("premium");
-
       let demoStep = loadDemoStep();
 
       let currentEncounter = null;
       let currentStep = 0;
 
-      // ---------- Nav reset (fixes random history screen) ----------
+      // ---------- Nav reset (DON'T clear activeMode; prevents weird side effects) ----------
       function resetNavState() {
-        activeMode = null;
         currentEncounter = null;
         currentStep = 0;
       }
 
-      // ---------- Clean unified input handler ----------
-      const HAS_POINTER = ("PointerEvent" in window) && ("onpointerup" in window);
+      // ---------- One clean input system ----------
+      const HAS_POINTER = ("PointerEvent" in window);
       const HAS_TOUCH = ("ontouchend" in window) || (navigator.maxTouchPoints > 0);
-      const INPUT_EVENT = HAS_POINTER ? "pointerup" : (HAS_TOUCH ? "touchend" : "click");
-      try { document.documentElement.style.touchAction = "manipulation"; } catch (_) {}
+      const PRIMARY_EVENT = HAS_POINTER ? "pointerup" : (HAS_TOUCH ? "touchend" : "click");
 
-// --- Global input lock to prevent cross-element double fire (mobile click ghosting) ---
-let __BC_LAST_INPUT_AT__ = 0;
+      // global lock: prevents cross-screen ghost clicks
+      let __BC_LAST_INPUT_AT__ = 0;
 
-function bindInput(el, fn) {
-  if (!el || typeof fn !== "function") return;
-  if (el.__bcBound) return;
-  el.__bcBound = true;
+      function bindInput(el, fn) {
+        if (!el || typeof fn !== "function") return;
+        if (el.__bcBound) return;
+        el.__bcBound = true;
 
-  const fire = (e) => {
-    const now = Date.now();
+        const fire = (e) => {
+          const now = Date.now();
 
-    // Global lock (prevents pointerup -> delayed click from hitting another button)
-    if (now - __BC_LAST_INPUT_AT__ < 450) return;
+          // block rapid doubles + cross-screen ghost click
+          if (now - __BC_LAST_INPUT_AT__ < 500) return;
 
-    // If we're on a touch/pointer device, ignore synthetic "click" that follows shortly after
-    if (e && e.type === "click" && INPUT_EVENT !== "click") {
-      return;
-    }
+          // if primary is pointer/touch, ignore synthetic click
+          if (e && e.type === "click" && PRIMARY_EVENT !== "click") return;
 
-    __BC_LAST_INPUT_AT__ = now;
+          __BC_LAST_INPUT_AT__ = now;
 
-    if (e) {
-      if (INPUT_EVENT !== "click" && e.cancelable) e.preventDefault();
-      e.stopPropagation();
-    }
-    fn(e);
-  };
+          if (e) {
+            if (PRIMARY_EVENT !== "click" && e.cancelable) e.preventDefault();
+            e.stopPropagation();
+          }
+          fn(e);
+        };
 
-  el.addEventListener(INPUT_EVENT, fire, { passive: INPUT_EVENT === "click" });
+        // primary
+        el.addEventListener(PRIMARY_EVENT, fire, { passive: PRIMARY_EVENT === "click" });
 
-  // Desktop-only fallback: only add click handler when click is the primary input
-  // (this is what prevents the "ghost click" issue on mobile)
-  if (INPUT_EVENT === "click") {
-    // no extra listener needed
-  }
-}
+        // desktop fallback ONLY (safe): always attach click, but guarded above
+        if (PRIMARY_EVENT !== "click") {
+          el.addEventListener("click", fire, { passive: true });
+        }
+      }
 
       // ---------- Screens ----------
       function showScreen(screenId) {
@@ -379,14 +369,6 @@ function bindInput(el, fn) {
           return;
         }
         target.classList.add("active");
-      }
-
-      function requiredWineCount(t) {
-        return t === "demo" ? DEMO_LIMIT : PREMIUM_LIMIT;
-      }
-
-      function isUnlocked(t) {
-        return getWinesForTier(t).length >= requiredWineCount(t);
       }
 
       // ---------- Storage ----------
@@ -444,8 +426,8 @@ function bindInput(el, fn) {
 
       function saveProgress(t) {
         const key = t === "demo" ? demoRunsKey : premiumRunsKey;
-        const data = t === "demo" ? demoRuns : premiumRuns;
-        localStorage.setItem(key, JSON.stringify(data));
+        const data = (t === "demo") ? demoRuns : premiumRuns;
+        localStorage.setItem(key, JSON.stringify(Array.isArray(data) ? data : []));
       }
 
       function loadDemoStep() {
@@ -461,6 +443,14 @@ function bindInput(el, fn) {
 
       function getWinesForTier(t) {
         return t === "demo" ? demoWines : premiumWines;
+      }
+
+      function requiredWineCount(t) {
+        return t === "demo" ? DEMO_LIMIT : PREMIUM_LIMIT;
+      }
+
+      function isUnlocked(t) {
+        return getWinesForTier(t).length >= requiredWineCount(t);
       }
 
       function pickRandom(arr) {
@@ -686,6 +676,7 @@ function bindInput(el, fn) {
 
         const listNow = isDemo ? demoWines : premiumWines;
         if (listNow.length >= limit) {
+          // Seamless: hide setup form + start encounter immediately
           toggleSetupFormVisibility(tierType, false);
           activeMode = tierType;
           showScreen("screenPlay");
@@ -841,7 +832,6 @@ function bindInput(el, fn) {
         return wine.process ? wine.process : describeOak(wine);
       }
 
-      // Sentence 1 (emotional framing)
       function buildSentence1Correct(encounter) {
         const mode = encounter.modeSelected;
 
@@ -902,7 +892,6 @@ function bindInput(el, fn) {
         return pickRandom(wrongs);
       }
 
-      // Sentence 2 (structure clarity)
       function buildSentence2Correct(encounter) {
         const wine = encounter.wineSelected;
         const name = wine.name;
@@ -1013,94 +1002,49 @@ function bindInput(el, fn) {
       }
 
       function logEncounter() {
-function logEncounter() {
-  // Hard safety
-  if (!currentEncounter) {
-    console.warn("logEncounter(): no currentEncounter");
-    return;
-  }
+        if (!currentEncounter) return;
+        if (currentEncounter.__logged) return;
+        if (activeMode !== "demo" && activeMode !== "premium") return;
 
-  // Prevent double-logging the same encounter
-  if (currentEncounter.__logged === true) return;
+        const entry = {
+          timestamp: new Date().toLocaleString(),
+          tier: activeMode,
 
-  const entry = {
-    timestamp: new Date().toLocaleString(),
-    tier: activeMode || "",
+          guestStateActual: currentEncounter.guestStateActual || "",
+          guestStateSelected: currentEncounter.guestStateSelected || "",
+          modeSelected: currentEncounter.modeSelected || "",
+          hookSelected: currentEncounter.hookSelected || "",
+          wineSelected: (currentEncounter.wineSelected && currentEncounter.wineSelected.name) ? currentEncounter.wineSelected.name : "",
 
-    // Core choices
-    guestStateActual: currentEncounter.guestStateActual || "",
-    guestStateSelected: currentEncounter.guestStateSelected || "",
-    modeSelected: currentEncounter.modeSelected || "",
-    hookSelected: currentEncounter.hookSelected || "",
+          deliveryLine1: currentEncounter.deliveryLine1 || "",
+          deliveryLine2: currentEncounter.deliveryLine2 || "",
 
-    // Wine
-    wineSelected:
-      (currentEncounter.wineSelected && currentEncounter.wineSelected.name) ? currentEncounter.wineSelected.name : "",
-
-    // Delivery
-    deliveryLine1: currentEncounter.deliveryLine1 || "",
-    deliveryLine2: currentEncounter.deliveryLine2 || "",
-
-    // Hesitation moment (only if it happened)
-    hesitationText: currentEncounter.hesitationText || "",
-    hesitationChoice: currentEncounter.hesitationChoice || "",
-    hesitationCorrectMode: currentEncounter.hesitationCorrectMode || "",
-    hesitationCorrect: !!currentEncounter.hesitationCorrect
-  };
-
-  try {
-    if (activeMode === "demo") {
-      // Ensure arrays exist
-      if (!Array.isArray(demoRuns)) demoRuns = [];
-
-      demoRuns.push(entry);
-      saveProgress("demo");
-
-      // Advance demo step safely
-      if (typeof demoStep === "number" && typeof DEMO_LIMIT === "number") {
-        if (demoStep < DEMO_LIMIT) saveDemoStep(demoStep + 1);
-      }
-    } else if (activeMode === "premium") {
-      if (!Array.isArray(premiumRuns)) premiumRuns = [];
-
-      premiumRuns.push(entry);
-      saveProgress("premium");
-    } else {
-      console.warn("logEncounter(): activeMode not set, run not saved", { activeMode });
-      return;
-    }
-
-    // Mark logged AFTER successful save
-    currentEncounter.__logged = true;
-
-    // Refresh UI counts if available
-    if (typeof updateCounts === "function") updateCounts();
-  } catch (err) {
-    console.error("logEncounter(): failed to save run", err);
-    alert("Could not save history. Open console for details.");
-  }
-}
-
-
+          recoveryText: currentEncounter.recoveryText || "",
+          recoveryChoice: currentEncounter.recoveryChoice || "",
+          recoveryCorrect: !!currentEncounter.recoveryCorrect,
+          recoveryCorrectMode: currentEncounter.recoveryCorrectMode || "",
+          recoveryWhy: currentEncounter.recoveryWhy || ""
+        };
 
         if (activeMode === "demo") {
+          if (!Array.isArray(demoRuns)) demoRuns = [];
           demoRuns.push(entry);
           saveProgress("demo");
-          if (demoStep < DEMO_LIMIT) saveDemoStep(demoStep + 1);
+          if (typeof demoStep === "number" && demoStep < DEMO_LIMIT) saveDemoStep(demoStep + 1);
         } else {
+          if (!Array.isArray(premiumRuns)) premiumRuns = [];
           premiumRuns.push(entry);
           saveProgress("premium");
         }
 
+        currentEncounter.__logged = true;
         updateCounts();
       }
 
-      // ---------- Recovery scenario ----------
       function getRecoveryScenario() {
         return pickRandom(RECOVERY_POOL);
       }
 
-      // ---------- Mode help UI (ONLY on Mode step) ----------
       function renderModeHelp(stepContent) {
         const wrap = document.createElement("div");
         wrap.className = "card";
@@ -1125,7 +1069,6 @@ function logEncounter() {
         stepContent.appendChild(wrap);
       }
 
-      // ---------- Step renderer ----------
       function renderEncounterStep() {
         const stepHeader = document.getElementById("stepHeader");
         const stepContent = document.getElementById("stepContent");
@@ -1148,7 +1091,6 @@ function logEncounter() {
         const stepLabels = ["Load", "Observe", "Mode", "Hook", "Deliver", "Reaction", "Reflect"];
         stepHeader.innerText = "Step " + (currentStep + 1) + " of 7: " + stepLabels[currentStep];
 
-        // Step 0
         if (currentStep === 0) {
           const p = document.createElement("p");
           p.innerText = "Encounter loaded. Press BEGIN to observe the guest.";
@@ -1157,7 +1099,6 @@ function logEncounter() {
           return;
         }
 
-        // Step 1 Observe
         if (currentStep === 1) {
           const context = document.createElement("p");
           context.innerText = currentEncounter.contextLine;
@@ -1220,27 +1161,24 @@ function logEncounter() {
           const helpBtn = document.createElement("button");
           helpBtn.type = "button";
           helpBtn.className = "small-btn";
-          topRow.appendChild(helpBtn);
-
-          helpBtn.className = "small-btn";  // keep
           helpBtn.innerText = "?";
 
-                // force it to be a small circular bubble even on mobile
-                helpBtn.style.width = "32px";
-                helpBtn.style.height = "32px";
-                helpBtn.style.minWidth = "32px";
-                helpBtn.style.minHeight = "32px";
-                helpBtn.style.maxWidth = "32px";
-                helpBtn.style.maxHeight = "32px";
-                helpBtn.style.padding = "0";
-                helpBtn.style.borderRadius = "999px";
-                helpBtn.style.display = "inline-flex";
-                helpBtn.style.alignItems = "center";
-                helpBtn.style.justifyContent = "center";
-                helpBtn.style.lineHeight = "1";
-                helpBtn.style.flex = "0 0 auto";
+          // force small circular bubble even on mobile
+          helpBtn.style.width = "32px";
+          helpBtn.style.height = "32px";
+          helpBtn.style.minWidth = "32px";
+          helpBtn.style.minHeight = "32px";
+          helpBtn.style.maxWidth = "32px";
+          helpBtn.style.maxHeight = "32px";
+          helpBtn.style.padding = "0";
+          helpBtn.style.borderRadius = "999px";
+          helpBtn.style.display = "inline-flex";
+          helpBtn.style.alignItems = "center";
+          helpBtn.style.justifyContent = "center";
+          helpBtn.style.lineHeight = "1";
+          helpBtn.style.flex = "0 0 auto";
 
-
+          topRow.appendChild(helpBtn);
           stepContent.appendChild(topRow);
 
           bindInput(helpBtn, () => {
@@ -1272,7 +1210,6 @@ function logEncounter() {
           return;
         }
 
-        // Step 3 Hook (NO help bubble here)
         if (currentStep === 3) {
           const prompt = document.createElement("p");
           prompt.innerText = "Select a Hook";
@@ -1298,7 +1235,6 @@ function logEncounter() {
           return;
         }
 
-        // Step 4 Deliver
         if (currentStep === 4) {
           const reminder = document.createElement("div");
           reminder.className = "notice";
@@ -1352,7 +1288,6 @@ function logEncounter() {
           return;
         }
 
-        // Step 5 Reaction (Recovery Moment lives here)
         if (currentStep === 5) {
           const checks = evaluateChecks();
           const correctCount =
@@ -1361,14 +1296,12 @@ function logEncounter() {
             (checks.hookStatus === "optimal" ? 1 : 0) +
             (checks.deliveryCorrect ? 1 : 0);
 
-          // 4 right -> trust
           if (correctCount >= 4) {
             stepContent.innerText = "✅ Nod. “Perfect.”";
             addStepButton("REFLECT", () => { currentStep = 6; renderEncounterStep(); }, stepButtons);
             return;
           }
 
-          // 3 right -> Recovery Moment (must answer)
           if (correctCount === 3) {
             const header = document.createElement("p");
             header.innerText = "⚠️ Hesitates… “Maybe… what else would you do?”";
@@ -1412,7 +1345,6 @@ function logEncounter() {
 
             stepContent.appendChild(options);
 
-            // Once they pick, show why the correct answer is correct (THIS was missing)
             if (currentEncounter.recoveryChoice) {
               const explain = document.createElement("div");
               explain.className = "notice";
@@ -1427,13 +1359,11 @@ function logEncounter() {
             return;
           }
 
-          // 2 or less -> they choose themselves
           stepContent.innerText = "❌ “We’ll choose, thanks.”";
           addStepButton("REFLECT", () => { currentStep = 6; renderEncounterStep(); }, stepButtons);
           return;
         }
 
-        // Step 6 Reflect
         if (currentStep === 6) {
           const checks = evaluateChecks();
 
@@ -1498,7 +1428,6 @@ function logEncounter() {
         }
       }
 
-      // ---------- Encounter start ----------
       function startEncounter() {
         if (!activeMode || !isUnlocked(activeMode)) return;
 
@@ -1530,7 +1459,8 @@ function logEncounter() {
         if (!wine || !encounterData) return;
 
         currentEncounter = {
-            __logged: false,
+          __logged: false,
+
           guestStateActual: encounterData.guestStateActual,
           guestStateSelected: "",
           modeSelected: "",
@@ -1564,7 +1494,6 @@ function logEncounter() {
         renderEncounterStep();
       }
 
-      // ---------- History ----------
       function renderHistory() {
         const historyList = document.getElementById("historyList");
         const historyTitle = document.getElementById("historyTitle");
@@ -1578,6 +1507,8 @@ function logEncounter() {
         list.forEach((entry) => {
           const item = document.createElement("div");
           item.className = "history-item";
+
+
 
           const row = document.createElement("div");
           row.className = "history-row";
@@ -1620,7 +1551,6 @@ function logEncounter() {
         });
       }
 
-      // ---------- Resets ----------
       function resetRunsOnly(tierType) {
         if (!confirm("This will clear saved encounters but keep wines.")) return;
         if (tierType === "demo") {
@@ -1651,7 +1581,6 @@ function logEncounter() {
         renderWineTables();
       }
 
-      // ---------- Buttons ----------
       function ensureElement(id) {
         const el = document.getElementById(id);
         if (!el) console.error("Missing element:", id);
@@ -1678,7 +1607,6 @@ function logEncounter() {
         const btnResetRunsPremium = ensureElement("btnResetRunsPremium");
         const btnResetWinesPremium = ensureElement("btnResetWinesPremium");
 
-        // START should never carry old context
         bindInput(btnWelcomeStart, () => {
           localStorage.setItem(coverKey, "true");
           resetNavState();
@@ -1704,6 +1632,7 @@ function logEncounter() {
           premiumRuns = [];
           demoStep = 0;
 
+          activeMode = null;
           resetNavState();
           renderWineTables();
           showScreen("screenWelcome");
@@ -1712,6 +1641,7 @@ function logEncounter() {
         bindInput(btnContinueDemo, () => {
           if (demoWines.length < DEMO_LIMIT) { alert("Add 2 demo wines to start."); return; }
           activeMode = "demo";
+          resetNavState();
           showScreen("screenPlay");
           startEncounter();
         });
@@ -1719,6 +1649,7 @@ function logEncounter() {
         bindInput(btnContinuePremium, () => {
           if (premiumWines.length < PREMIUM_LIMIT) { alert("Add 10 premium wines to start."); return; }
           activeMode = "premium";
+          resetNavState();
           showScreen("screenPlay");
           startEncounter();
         });
@@ -1750,7 +1681,6 @@ function logEncounter() {
         bindInput(addWineBtnDemo, () => addWineFromForm("demo"));
         bindInput(addWineBtnPremium, () => addWineFromForm("premium"));
 
-        // Delete via delegation
         const demoWineTableBody = ensureElement("demoWineTableBody");
         const premiumWineTableBody = ensureElement("premiumWineTableBody");
         const demoWineCards = ensureElement("demoWineCards");
@@ -1811,7 +1741,9 @@ function logEncounter() {
       renderWineTables();
       initButtons();
 
+      // Always start at Welcome
       showScreen("screenWelcome");
+      updateCounts();
 
     } catch (err) {
       alert("App error: " + err.message);
@@ -1819,6 +1751,7 @@ function logEncounter() {
     }
   });
 })();
-        </script>
+</script>
+
 </body>
 </html>
