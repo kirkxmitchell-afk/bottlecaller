@@ -232,6 +232,9 @@
 
   // ---------- One DOMContentLoaded only ----------
   document.addEventListener("DOMContentLoaded", () => {
+    // Failsafe: prevent blank screen if anything errors before showScreen()
+    document.getElementById("screenWelcome")?.classList.add("active");
+
     try {
       if (window.__BC_INIT_DONE__) return;
       window.__BC_INIT_DONE__ = true;
@@ -241,6 +244,9 @@
       const demoRunsKey = "bc_demo_runs";
       const premiumRunsKey = "bc_premium_runs";
       const coverKey = "bc_has_seen_cover";
+
+      const DEMO_LIMIT = 2;
+      const PREMIUM_LIMIT = 10;
 
       const demoGuestTypes = ["Decider", "Bargain-Smart"];
       const guestStates = ["Decider", "Fancy", "Griever", "Celebrator", "Bargain-Smart"];
@@ -343,6 +349,7 @@
       const processOptions = ["Stainless steel", "Wild ferment", "Maceration", "Destemming", "Whole bunch pressed", "Hand harvested", "Time on lees"];
 
       let activeMode = null;
+
       let demoWines = loadWines("demo");
       let premiumWines = loadWines("premium");
 
@@ -380,14 +387,10 @@
         };
 
         el.addEventListener(INPUT_EVENT, fire, { passive: INPUT_EVENT === "click" });
-
-        // Desktop click fallback (lock prevents double firing)
-        if (INPUT_EVENT !== "click") {
-          el.addEventListener("click", fire, { passive: true });
-        }
+        if (INPUT_EVENT !== "click") el.addEventListener("click", fire, { passive: true });
       }
 
-      // ---------- Screen + storage helpers ----------
+      // ---------- Screens ----------
       function showScreen(screenId) {
         document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
         const target = document.getElementById(screenId);
@@ -398,9 +401,15 @@
         target.classList.add("active");
       }
 
-      function requiredWineCount(t) { return t === "demo" ? 2 : 10; }
-      function isUnlocked(t) { return getWinesForTier(t).length >= requiredWineCount(t); }
+      function requiredWineCount(t) {
+        return t === "demo" ? DEMO_LIMIT : PREMIUM_LIMIT;
+      }
 
+      function isUnlocked(t) {
+        return getWinesForTier(t).length >= requiredWineCount(t);
+      }
+
+      // ---------- Storage ----------
       function generateWineId() {
         return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
       }
@@ -408,14 +417,12 @@
       function loadWines(t) {
         const key = t === "demo" ? demoWinesKey : premiumWinesKey;
         const raw = localStorage.getItem(key);
+        const limit = (t === "demo") ? DEMO_LIMIT : PREMIUM_LIMIT;
+
         if (!raw) return [];
-
-        const limit = (t === "demo") ? 2 : 10;
-
         try {
           const parsed = JSON.parse(raw);
           if (!Array.isArray(parsed)) return [];
-          // HARD CAP on load so storage can never make UI show 3/2 etc.
           return parsed.map(w => sanitizeWine(w)).slice(0, limit);
         } catch {
           return [];
@@ -424,8 +431,7 @@
 
       function saveWines(t) {
         const key = t === "demo" ? demoWinesKey : premiumWinesKey;
-        const limit = (t === "demo") ? 2 : 10;
-        // HARD CAP on save as well
+        const limit = (t === "demo") ? DEMO_LIMIT : PREMIUM_LIMIT;
         const data = (t === "demo" ? demoWines : premiumWines).slice(0, limit);
         localStorage.setItem(key, JSON.stringify(data));
       }
@@ -505,8 +511,13 @@
         };
       }
 
-      function getWinesForTier(t) { return t === "demo" ? demoWines : premiumWines; }
-      function pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+      function getWinesForTier(t) {
+        return t === "demo" ? demoWines : premiumWines;
+      }
+
+      function pickRandom(arr) {
+        return arr[Math.floor(Math.random() * arr.length)];
+      }
 
       function shuffleArray(arr) {
         for (let i = arr.length - 1; i > 0; i--) {
@@ -540,8 +551,9 @@
         return pick;
       }
 
-      // ---------- Weights / encounter gen (unchanged) ----------
+      // ---------- Encounter generation (unchanged logic) ----------
       function buildHookWeights() { return { FLAVOUR: 1, STORY: 1, VALUE: 1 }; }
+
       function adjustWeightsFromVerbal(weights, verbalCues) {
         const text = verbalCues.join(" ").toLowerCase();
         if (text.includes("pairs well") || text.includes("smooth") || text.includes("easy") || text.includes("not too heavy")) weights.FLAVOUR += 3;
@@ -550,6 +562,7 @@
         if (text.includes("best") || text.includes("top pick") || text.includes("quick") || text.includes("rush")) { weights.VALUE += 2; weights.FLAVOUR += 1; }
         return weights;
       }
+
       function adjustWeightsFromPhysical(weights, physicalCues) {
         const text = physicalCues.join(" ").toLowerCase();
         if (text.includes("price column")) weights.VALUE += 3;
@@ -558,6 +571,7 @@
         if (text.includes("wine list not requested") || text.includes("menus closed")) weights.VALUE += 2;
         return weights;
       }
+
       function applyStateBias(weights, guestStateActual, verbalCues) {
         const verb = verbalCues.join(" ").toLowerCase();
         if (guestStateActual === "Bargain-Smart") {
@@ -573,6 +587,7 @@
         if (guestStateActual === "Fancy") { weights.STORY += 1; weights.FLAVOUR += 1; }
         return weights;
       }
+
       function pickWeightedHook(weights) {
         const entries = Object.entries(weights);
         const total = entries.reduce((sum, [, w]) => sum + w, 0);
@@ -583,6 +598,7 @@
         }
         return "FLAVOUR";
       }
+
       function deriveBestHookFromCues(guestStateActual, physicalCues, verbalCues) {
         let weights = buildHookWeights();
         weights = adjustWeightsFromVerbal(weights, verbalCues);
@@ -592,6 +608,7 @@
       }
 
       function buildModeWeights() { return { LEAD: 1, REFLECT: 1, HOLD: 1 }; }
+
       function adjustModeWeightsFromVerbal(weights, verbalCues) {
         const text = verbalCues.join(" ").toLowerCase();
         if (text.includes("rush") || text.includes("quick") || text.includes("we’re ready") || text.includes("we're ready")) weights.LEAD += 3;
@@ -602,6 +619,7 @@
         if (text.includes("something easy") || text.includes("not too heavy") || text.includes("don’t overthink") || text.includes("don't overthink")) weights.HOLD += 2;
         return weights;
       }
+
       function adjustModeWeightsFromPhysical(weights, physicalCues) {
         const text = physicalCues.join(" ").toLowerCase();
         if (text.includes("menus closed") || text.includes("signals") || text.includes("direct eye contact") || text.includes("impatient rhythm") || text.includes("phone on table")) weights.LEAD += 2;
@@ -610,6 +628,7 @@
         if (text.includes("avoids eye contact") || text.includes("low energy") || text.includes("sighs")) weights.HOLD += 2;
         return weights;
       }
+
       function applyModeStateBias(weights, guestStateActual) {
         if (guestStateActual === "Decider") weights.LEAD += 2;
         if (guestStateActual === "Bargain-Smart") weights.HOLD += 2;
@@ -618,6 +637,7 @@
         if (guestStateActual === "Celebrator") weights.LEAD += 2;
         return weights;
       }
+
       function pickWeightedMode(weights) {
         const entries = Object.entries(weights);
         const total = entries.reduce((sum, [, w]) => sum + w, 0);
@@ -628,6 +648,7 @@
         }
         return "LEAD";
       }
+
       function deriveBestModeFromCues(guestStateActual, physicalCues, verbalCues) {
         let weights = buildModeWeights();
         weights = adjustModeWeightsFromVerbal(weights, verbalCues);
@@ -672,26 +693,63 @@
         return { guestStateActual, guestLine, contextLine, toneTag, physicalCues, verbalCues, bestMode, bestHook };
       }
 
-      // ---------- UI counts ----------
+      // ---------- UI: counts + setup completion ----------
       function renderHomeCounts() {
         const demoCount = document.getElementById("homeDemoCount");
         const premiumCount = document.getElementById("homePremiumCount");
         const demoRunsEl = document.getElementById("homeDemoRuns");
         const premiumRunsEl = document.getElementById("homePremiumRuns");
 
-        if (demoCount) demoCount.innerText = demoWines.length + " / 2";
-        if (premiumCount) premiumCount.innerText = premiumWines.length + " / 10";
+        if (demoCount) demoCount.innerText = demoWines.length + " / " + DEMO_LIMIT;
+        if (premiumCount) premiumCount.innerText = premiumWines.length + " / " + PREMIUM_LIMIT;
         if (demoRunsEl) demoRunsEl.innerText = demoRuns.length;
         if (premiumRunsEl) premiumRunsEl.innerText = premiumRuns.length;
+      }
+
+      function setSetupCompleteUI(tierType, locked) {
+        const isDemo = tierType === "demo";
+        const limit = isDemo ? DEMO_LIMIT : PREMIUM_LIMIT;
+
+        const screenId = isDemo ? "screenSetupDemo" : "screenSetupPremium";
+        const screen = document.getElementById(screenId);
+        if (!screen) return;
+
+        const panel = screen.querySelector(".panel") || screen;
+
+        let banner = panel.querySelector(".setup-status");
+        if (!banner) {
+          banner = document.createElement("div");
+          banner.className = "notice setup-status";
+          banner.style.marginBottom = "10px";
+          panel.insertBefore(banner, panel.firstChild);
+        }
+
+        const btnContinue = document.getElementById(isDemo ? "btnContinueDemo" : "btnContinuePremium");
+
+        if (locked) {
+          banner.innerText = `✅ Setup complete (${limit}/${limit}). Start the encounter.`;
+          banner.style.display = "block";
+          if (btnContinue) btnContinue.innerText = "Start encounter";
+        } else {
+          const current = isDemo ? demoWines.length : premiumWines.length;
+          const remaining = Math.max(0, limit - current);
+          banner.innerText = `Add ${remaining} more wine(s) to unlock encounters.`;
+          banner.style.display = "block";
+          if (btnContinue) btnContinue.innerText = isDemo ? "Continue Demo" : "Continue Premium";
+        }
       }
 
       function updateSetupLock(tierType) {
         const isDemo = tierType === "demo";
         const wines = isDemo ? demoWines : premiumWines;
-        const limit = isDemo ? 2 : 10;
+        const limit = isDemo ? DEMO_LIMIT : PREMIUM_LIMIT;
 
-        const countEl = document.getElementById(isDemo ? "wineCountDemo" : "wineCountPremium");
+        const locked = wines.length >= limit;
 
+        // status + button label
+        setSetupCompleteUI(tierType, locked);
+
+        // lock inputs + add button
         const nameEl = document.getElementById(isDemo ? "wineNameInputDemo" : "wineNameInputPremium");
         const varietalEl = document.getElementById(isDemo ? "wineVarietalInputDemo" : "wineVarietalInputPremium");
         const processEl = document.getElementById(isDemo ? "processInputDemo" : "processInputPremium");
@@ -699,49 +757,44 @@
         const storyEl = document.getElementById(isDemo ? "storyInputDemo" : "storyInputPremium");
         const addBtn = document.getElementById(isDemo ? "addWineBtnDemo" : "addWineBtnPremium");
 
-        const locked = wines.length >= limit;
+        [nameEl, varietalEl, processEl, regionEl, storyEl, addBtn].forEach(el => {
+          if (el) el.disabled = locked;
+        });
 
-        if (countEl) {
-          countEl.innerText = locked
-            ? `Setup done — Start encounter (${limit} / ${limit})`
-            : `${wines.length} / ${limit}`;
-        }
-
-        const disable = (el) => { if (el) el.disabled = locked; };
-        [nameEl, varietalEl, processEl, regionEl, storyEl, addBtn].forEach(disable);
-
-        // Optional visual mute of input rows (no CSS edits)
-        const panel = document.getElementById(isDemo ? "screenSetupDemo" : "screenSetupPremium");
-        if (panel) {
-          const rows = panel.querySelectorAll(".manager-row");
+        // dim only the input rows (keeps list + buttons usable)
+        const screen = document.getElementById(isDemo ? "screenSetupDemo" : "screenSetupPremium");
+        if (screen) {
+          const rows = screen.querySelectorAll(".manager-row");
           rows.forEach(row => {
-            const hasInputs = !!row.querySelector("input, select, textarea, #addWineBtnDemo, #addWineBtnPremium");
-            if (hasInputs) row.style.opacity = locked ? "0.6" : "1";
+            if (row.querySelector("input, select, textarea") || row.querySelector("#addWineBtnDemo, #addWineBtnPremium")) {
+              row.style.opacity = locked ? "0.6" : "1";
+            }
           });
         }
+
+        // ensure continue buttons enable only when locked
+        const btnContinue = document.getElementById(isDemo ? "btnContinueDemo" : "btnContinuePremium");
+        if (btnContinue) btnContinue.disabled = !locked;
       }
 
       function updateCounts() {
-        // HARD CAP in memory too (extra safety)
-        demoWines = demoWines.slice(0, 2);
-        premiumWines = premiumWines.slice(0, 10);
+        const demoCountEl = document.getElementById("wineCountDemo");
+        const premiumCountEl = document.getElementById("wineCountPremium");
 
-        const btnContinueDemo = document.getElementById("btnContinueDemo");
-        const btnContinuePremium = document.getElementById("btnContinuePremium");
-        if (btnContinueDemo) btnContinueDemo.disabled = demoWines.length < 2;
-        if (btnContinuePremium) btnContinuePremium.disabled = premiumWines.length < 10;
+        if (demoCountEl) demoCountEl.innerText = demoWines.length + " / " + DEMO_LIMIT;
+        if (premiumCountEl) premiumCountEl.innerText = premiumWines.length + " / " + PREMIUM_LIMIT;
 
         renderHomeCounts();
+
         updateSetupLock("demo");
         updateSetupLock("premium");
       }
 
-      // ---------- Setup (wine form) ----------
+      // ---------- Setup: selection helpers ----------
       function collectSelectedOptions(containerId) {
         const container = document.getElementById(containerId);
         if (!container) return [];
-        const selected = container.querySelectorAll(".option-btn.selected");
-        return Array.from(selected).map(btn => btn.dataset.value);
+        return Array.from(container.querySelectorAll(".option-btn.selected")).map(btn => btn.dataset.value);
       }
 
       function collectSelectedRadio(containerId) {
@@ -774,7 +827,6 @@
       function updateWineTagsSelections(containerId, maxAllowed) {
         const container = document.getElementById(containerId);
         if (!container) return;
-        if (container.__bcBound) return;
 
         bindInput(container, (e) => {
           const btn = e.target.closest(".option-btn");
@@ -793,7 +845,6 @@
       function updateRadioSelection(containerId) {
         const container = document.getElementById(containerId);
         if (!container) return;
-        if (container.__bcBound) return;
 
         bindInput(container, (e) => {
           const btn = e.target.closest(".option-btn");
@@ -804,15 +855,15 @@
         });
       }
 
+      // ---------- Add wine (hard-capped) ----------
       function addWineFromForm(tierType) {
         const isDemo = tierType === "demo";
-        const limit = isDemo ? 2 : 10;
-        const list = isDemo ? demoWines : premiumWines;
+        const limit = isDemo ? DEMO_LIMIT : PREMIUM_LIMIT;
 
-        // HARD CAP: never allow adding beyond limit
+        // hard stop
+        const list = isDemo ? demoWines : premiumWines;
         if (list.length >= limit) {
           updateSetupLock(tierType);
-          alert("Setup already complete for this mode.");
           return;
         }
 
@@ -841,11 +892,11 @@
 
         if (isDemo) {
           demoWines.push(wine);
-          demoWines = demoWines.slice(0, 2);
+          demoWines = demoWines.slice(0, DEMO_LIMIT);
           saveWines("demo");
         } else {
           premiumWines.push(wine);
-          premiumWines = premiumWines.slice(0, 10);
+          premiumWines = premiumWines.slice(0, PREMIUM_LIMIT);
           saveWines("premium");
         }
 
@@ -869,8 +920,7 @@
         renderWineTable("premium", "premiumWineTableBody");
         renderWineCards("demo", "demoWineCards");
         renderWineCards("premium", "premiumWineCards");
-        updateSetupLock("demo");
-        updateSetupLock("premium");
+        updateCounts(); // keeps UI lock state correct
       }
 
       function renderWineTable(tierType, tbodyId) {
@@ -964,14 +1014,13 @@
 
       function deleteWine(tierType, idToDelete) {
         if (tierType === "demo") {
-          demoWines = demoWines.filter(w => w.id !== idToDelete).slice(0, 2);
+          demoWines = demoWines.filter(w => w.id !== idToDelete).slice(0, DEMO_LIMIT);
           saveWines("demo");
         } else {
-          premiumWines = premiumWines.filter(w => w.id !== idToDelete).slice(0, 10);
+          premiumWines = premiumWines.filter(w => w.id !== idToDelete).slice(0, PREMIUM_LIMIT);
           saveWines("premium");
         }
         renderWineTables();
-        updateCounts();
       }
 
       // ---------- Encounter UI helpers ----------
@@ -1043,9 +1092,9 @@
 
       function initDeliverOptions(encounter) {
         const correct1 = buildSentence1Correct(encounter);
-        const wrong1 = buildSentence1Wrong(encounter);
+        const wrong1 = buildSentence1Wrong();
         const correct2 = buildSentence2Correct(encounter);
-        const wrong2 = buildSentence2Wrong(encounter);
+        const wrong2 = buildSentence2Wrong();
 
         encounter.correctSlotS1 = Math.random() < 0.5 ? "A" : "B";
         encounter.correctSlotS2 = Math.random() < 0.5 ? "A" : "B";
@@ -1086,7 +1135,6 @@
         return "❌";
       }
 
-      // WHY maps
       function modeWhy(state) {
         const reasons = {
           "Decider": "They want speed + certainty. LEAD reduces friction.",
@@ -1144,7 +1192,7 @@
         if (activeMode === "demo") {
           demoRuns.push(entry);
           saveProgress("demo");
-          if (demoStep < 2) saveDemoStep(demoStep + 1);
+          if (demoStep < DEMO_LIMIT) saveDemoStep(demoStep + 1);
         } else {
           premiumRuns.push(entry);
           saveProgress("premium");
@@ -1335,7 +1383,7 @@
           return;
         }
 
-        // Step 5: NO TIMER. REFLECT button.
+        // Step 5: NO TIMER. Player presses REFLECT.
         if (currentStep === 5) {
           const checks = evaluateChecks();
           const correctCount =
@@ -1396,10 +1444,9 @@
           logEncounter();
 
           addStepButton("NEXT ENCOUNTER", () => {
-            if (activeMode === "demo" && demoStep >= 2) { showScreen("screenHome"); return; }
+            if (activeMode === "demo" && demoStep >= DEMO_LIMIT) { showScreen("screenHome"); return; }
             startEncounter();
           }, stepButtons);
-
           return;
         }
       }
@@ -1407,7 +1454,7 @@
       function startEncounter() {
         if (!activeMode || !isUnlocked(activeMode)) return;
 
-        if (activeMode === "demo" && demoStep >= 2) {
+        if (activeMode === "demo" && demoStep >= DEMO_LIMIT) {
           showScreen("screenHome");
           return;
         }
@@ -1459,139 +1506,6 @@
         const el = document.getElementById(id);
         if (!el) console.error("Missing element:", id);
         return el;
-      }
-
-      function initButtons() {
-        const btnWelcomeStart = ensureElement("btnWelcomeStart");
-        const btnGoDemo = ensureElement("btnGoDemo");
-        const btnGoPremium = ensureElement("btnGoPremium");
-        const btnResetApp = ensureElement("btnResetApp");
-
-        const btnContinueDemo = ensureElement("btnContinueDemo");
-        const btnContinuePremium = ensureElement("btnContinuePremium");
-        const btnBackHomeFromSetupDemo = ensureElement("btnBackHomeFromSetupDemo");
-        const btnBackHomeFromSetupPremium = ensureElement("btnBackHomeFromSetupPremium");
-        const btnBackHomeFromPlay = ensureElement("btnBackHomeFromPlay");
-        const btnBackHomeFromHistory = ensureElement("btnBackHomeFromHistory");
-
-        const btnViewHistoryDemo = ensureElement("btnViewHistoryDemo");
-        const btnViewHistoryPremium = ensureElement("btnViewHistoryPremium");
-        const btnResetRunsDemo = ensureElement("btnResetRunsDemo");
-        const btnResetWinesDemo = ensureElement("btnResetWinesDemo");
-        const btnResetRunsPremium = ensureElement("btnResetRunsPremium");
-        const btnResetWinesPremium = ensureElement("btnResetWinesPremium");
-
-        bindInput(btnWelcomeStart, () => {
-          localStorage.setItem(coverKey, "true");
-          showScreen("screenHome");
-        });
-
-        bindInput(btnGoDemo, () => showScreen("screenSetupDemo"));
-        bindInput(btnGoPremium, () => showScreen("screenSetupPremium"));
-
-        bindInput(btnResetApp, () => {
-          if (!confirm("Reset app? This clears wines and runs.")) return;
-
-          localStorage.removeItem(demoWinesKey);
-          localStorage.removeItem(premiumWinesKey);
-          localStorage.removeItem(demoRunsKey);
-          localStorage.removeItem(premiumRunsKey);
-          localStorage.removeItem("bc_demo_step");
-          localStorage.removeItem("bc_state_bag");
-          localStorage.removeItem("bc_state_bag_index");
-          localStorage.removeItem("bc_last_guest_state");
-          localStorage.removeItem(coverKey);
-
-          demoWines = [];
-          premiumWines = [];
-          demoRuns = [];
-          premiumRuns = [];
-          demoStep = 0;
-          stateBag = [];
-          stateBagIndex = 0;
-          lastGuestState = "";
-          activeMode = null;
-
-          renderWineTables();
-          updateCounts();
-          showScreen("screenWelcome");
-        });
-
-        bindInput(btnContinueDemo, () => {
-          activeMode = "demo";
-          showScreen("screenPlay");
-          startEncounter();
-        });
-
-        bindInput(btnContinuePremium, () => {
-          activeMode = "premium";
-          showScreen("screenPlay");
-          startEncounter();
-        });
-
-        bindInput(btnBackHomeFromSetupDemo, () => showScreen("screenHome"));
-        bindInput(btnBackHomeFromSetupPremium, () => showScreen("screenHome"));
-        bindInput(btnBackHomeFromPlay, () => showScreen("screenHome"));
-        bindInput(btnBackHomeFromHistory, () => showScreen("screenHome"));
-
-        bindInput(btnViewHistoryDemo, () => {
-          activeMode = "demo";
-          renderHistory();
-          showScreen("screenHistory");
-        });
-
-        bindInput(btnViewHistoryPremium, () => {
-          activeMode = "premium";
-          renderHistory();
-          showScreen("screenHistory");
-        });
-
-        bindInput(btnResetRunsDemo, () => resetRunsOnly("demo"));
-        bindInput(btnResetWinesDemo, () => resetWinesOnly("demo"));
-        bindInput(btnResetRunsPremium, () => resetRunsOnly("premium"));
-        bindInput(btnResetWinesPremium, () => resetWinesOnly("premium"));
-
-        const addWineBtnDemo = ensureElement("addWineBtnDemo");
-        const addWineBtnPremium = ensureElement("addWineBtnPremium");
-        bindInput(addWineBtnDemo, () => addWineFromForm("demo"));
-        bindInput(addWineBtnPremium, () => addWineFromForm("premium"));
-
-        // Delete buttons via delegation
-        const demoWineTableBody = ensureElement("demoWineTableBody");
-        const premiumWineTableBody = ensureElement("premiumWineTableBody");
-        const demoWineCards = ensureElement("demoWineCards");
-        const premiumWineCards = ensureElement("premiumWineCards");
-
-        const delHandler = (tier) => (e) => {
-          const btn = e.target.closest(".small-btn");
-          if (!btn) return;
-          const id = btn.dataset && btn.dataset.id;
-          if (!id) return;
-          deleteWine(tier, id);
-        };
-
-        bindInput(demoWineTableBody, delHandler("demo"));
-        bindInput(premiumWineTableBody, delHandler("premium"));
-        bindInput(demoWineCards, delHandler("demo"));
-        bindInput(premiumWineCards, delHandler("premium"));
-
-        // Home: add "Welcome" button (script-only)
-        const homePanel = document.querySelector("#screenHome .panel");
-        if (homePanel && !document.getElementById("btnBackToWelcome")) {
-          const row = document.createElement("div");
-          row.className = "button-row";
-          row.style.marginTop = "12px";
-
-          const btn = document.createElement("button");
-          btn.type = "button";
-          btn.id = "btnBackToWelcome";
-          btn.innerText = "Welcome";
-
-          row.appendChild(btn);
-          homePanel.appendChild(row);
-
-          bindInput(btn, () => showScreen("screenWelcome"));
-        }
       }
 
       function renderHistory() {
@@ -1668,10 +1582,144 @@
           saveProgress("premium");
         }
         renderWineTables();
-        updateCounts();
       }
 
-      // ---------- Boot sequence ----------
+      function initButtons() {
+        const btnWelcomeStart = ensureElement("btnWelcomeStart");
+        const btnGoDemo = ensureElement("btnGoDemo");
+        const btnGoPremium = ensureElement("btnGoPremium");
+        const btnResetApp = ensureElement("btnResetApp");
+
+        const btnContinueDemo = ensureElement("btnContinueDemo");
+        const btnContinuePremium = ensureElement("btnContinuePremium");
+        const btnBackHomeFromSetupDemo = ensureElement("btnBackHomeFromSetupDemo");
+        const btnBackHomeFromSetupPremium = ensureElement("btnBackHomeFromSetupPremium");
+        const btnBackHomeFromPlay = ensureElement("btnBackHomeFromPlay");
+        const btnBackHomeFromHistory = ensureElement("btnBackHomeFromHistory");
+
+        const btnViewHistoryDemo = ensureElement("btnViewHistoryDemo");
+        const btnViewHistoryPremium = ensureElement("btnViewHistoryPremium");
+        const btnResetRunsDemo = ensureElement("btnResetRunsDemo");
+        const btnResetWinesDemo = ensureElement("btnResetWinesDemo");
+        const btnResetRunsPremium = ensureElement("btnResetRunsPremium");
+        const btnResetWinesPremium = ensureElement("btnResetWinesPremium");
+
+        bindInput(btnWelcomeStart, () => {
+          localStorage.setItem(coverKey, "true");
+          showScreen("screenHome");
+        });
+
+        bindInput(btnGoDemo, () => showScreen("screenSetupDemo"));
+        bindInput(btnGoPremium, () => showScreen("screenSetupPremium"));
+
+        bindInput(btnResetApp, () => {
+          if (!confirm("Reset app? This clears wines and runs.")) return;
+
+          localStorage.removeItem(demoWinesKey);
+          localStorage.removeItem(premiumWinesKey);
+          localStorage.removeItem(demoRunsKey);
+          localStorage.removeItem(premiumRunsKey);
+          localStorage.removeItem("bc_demo_step");
+          localStorage.removeItem("bc_state_bag");
+          localStorage.removeItem("bc_state_bag_index");
+          localStorage.removeItem("bc_last_guest_state");
+          localStorage.removeItem(coverKey);
+
+          demoWines = [];
+          premiumWines = [];
+          demoRuns = [];
+          premiumRuns = [];
+          demoStep = 0;
+          stateBag = [];
+          stateBagIndex = 0;
+          lastGuestState = "";
+          activeMode = null;
+
+          renderWineTables();
+          showScreen("screenWelcome");
+        });
+
+        // Setup -> Start encounter (only when complete)
+        bindInput(btnContinueDemo, () => {
+          if (demoWines.length < DEMO_LIMIT) { alert("Add 2 demo wines to start."); return; }
+          activeMode = "demo";
+          showScreen("screenPlay");
+          startEncounter();
+        });
+
+        bindInput(btnContinuePremium, () => {
+          if (premiumWines.length < PREMIUM_LIMIT) { alert("Add 10 premium wines to start."); return; }
+          activeMode = "premium";
+          showScreen("screenPlay");
+          startEncounter();
+        });
+
+        bindInput(btnBackHomeFromSetupDemo, () => showScreen("screenHome"));
+        bindInput(btnBackHomeFromSetupPremium, () => showScreen("screenHome"));
+        bindInput(btnBackHomeFromPlay, () => showScreen("screenHome"));
+        bindInput(btnBackHomeFromHistory, () => showScreen("screenHome"));
+
+        bindInput(btnViewHistoryDemo, () => {
+          activeMode = "demo";
+          renderHistory();
+          showScreen("screenHistory");
+        });
+
+        bindInput(btnViewHistoryPremium, () => {
+          activeMode = "premium";
+          renderHistory();
+          showScreen("screenHistory");
+        });
+
+        bindInput(btnResetRunsDemo, () => resetRunsOnly("demo"));
+        bindInput(btnResetWinesDemo, () => resetWinesOnly("demo"));
+        bindInput(btnResetRunsPremium, () => resetRunsOnly("premium"));
+        bindInput(btnResetWinesPremium, () => resetWinesOnly("premium"));
+
+        const addWineBtnDemo = ensureElement("addWineBtnDemo");
+        const addWineBtnPremium = ensureElement("addWineBtnPremium");
+        bindInput(addWineBtnDemo, () => addWineFromForm("demo"));
+        bindInput(addWineBtnPremium, () => addWineFromForm("premium"));
+
+        // Delete via delegation
+        const demoWineTableBody = ensureElement("demoWineTableBody");
+        const premiumWineTableBody = ensureElement("premiumWineTableBody");
+        const demoWineCards = ensureElement("demoWineCards");
+        const premiumWineCards = ensureElement("premiumWineCards");
+
+        const delHandler = (tier) => (e) => {
+          const btn = e.target.closest(".small-btn");
+          if (!btn) return;
+          const id = btn.dataset && btn.dataset.id;
+          if (!id) return;
+          deleteWine(tier, id);
+        };
+
+        bindInput(demoWineTableBody, delHandler("demo"));
+        bindInput(premiumWineTableBody, delHandler("premium"));
+        bindInput(demoWineCards, delHandler("demo"));
+        bindInput(premiumWineCards, delHandler("premium"));
+
+        // Home: inject "Welcome" button (script-only)
+        const homePanel = document.querySelector("#screenHome .panel");
+        if (homePanel && !document.getElementById("btnBackToWelcome")) {
+          const row = document.createElement("div");
+          row.className = "button-row";
+          row.style.marginTop = "12px";
+
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.id = "btnBackToWelcome";
+          btn.innerText = "Welcome";
+
+          row.appendChild(btn);
+          homePanel.appendChild(row);
+
+          bindInput(btn, () => showScreen("screenWelcome"));
+        }
+      }
+
+      // ---------- Boot ----------
       buildOptionButtons("fruitOptionsDemo", fruitOptions);
       buildOptionButtons("textureOptionsDemo", textureOptions);
       buildOptionButtons("oakOptionsDemo", oakOptions);
@@ -1689,7 +1737,6 @@
       updateRadioSelection("oakOptionsPremium");
 
       renderWineTables();
-      updateCounts();
       initButtons();
 
       // Always start on Welcome
