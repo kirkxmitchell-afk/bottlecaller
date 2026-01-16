@@ -739,6 +739,20 @@
         }
       }
 
+      function toggleSetupFormVisibility(tierType, show) {
+        const isDemo = tierType === "demo";
+        const screen = document.getElementById(isDemo ? "screenSetupDemo" : "screenSetupPremium");
+        if (!screen) return;
+
+        const rows = Array.from(screen.querySelectorAll(".manager-row"));
+        rows.forEach(row => {
+          row.style.display = show ? "" : "none";
+        });
+
+        const countLine = screen.querySelector(".score-row");
+        if (countLine) countLine.style.display = show ? "" : "none";
+      }
+
       function updateSetupLock(tierType) {
         const isDemo = tierType === "demo";
         const wines = isDemo ? demoWines : premiumWines;
@@ -775,6 +789,9 @@
         // ensure continue buttons enable only when locked
         const btnContinue = document.getElementById(isDemo ? "btnContinueDemo" : "btnContinuePremium");
         if (btnContinue) btnContinue.disabled = !locked;
+
+        // Hide the setup form when complete, show it when incomplete
+        toggleSetupFormVisibility(tierType, !locked);
       }
 
       function updateCounts() {
@@ -912,6 +929,17 @@
 
         renderWineTables();
         updateCounts();
+
+        // Seamless flow: if setup just completed, go straight into encounter
+        const limitNow = isDemo ? DEMO_LIMIT : PREMIUM_LIMIT;
+        const listNow = isDemo ? demoWines : premiumWines;
+
+        if (listNow.length >= limitNow) {
+          toggleSetupFormVisibility(tierType, false);
+          activeMode = tierType;
+          showScreen("screenPlay");
+          startEncounter();
+        }
       }
 
       // ---------- Wine list rendering ----------
