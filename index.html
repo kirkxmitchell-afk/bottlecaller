@@ -376,13 +376,17 @@
         if (el.__bcBound) return;
         el.__bcBound = true;
 
-        const fire = (e) => {
+                    const fire = (e) => {
           const now = Date.now();
           const last = el.__bcLastFire || 0;
           if (now - last < 350) return;
           el.__bcLastFire = now;
 
-          if (INPUT_EVENT !== "click" && e && e.cancelable) e.preventDefault();
+          if (e) {
+            if (INPUT_EVENT !== "click" && e.cancelable) e.preventDefault();
+            e.stopPropagation();
+          }
+
           fn(e);
         };
 
@@ -709,7 +713,7 @@
       function setSetupCompleteUI(tierType, locked) {
         const isDemo = tierType === "demo";
         const limit = isDemo ? DEMO_LIMIT : PREMIUM_LIMIT;
-
+        
         const screenId = isDemo ? "screenSetupDemo" : "screenSetupPremium";
         const screen = document.getElementById(screenId);
         if (!screen) return;
@@ -736,7 +740,7 @@
           banner.innerText = `Add ${remaining} more wine(s) to unlock encounters.`;
           banner.style.display = "block";
           if (btnContinue) btnContinue.innerText = isDemo ? "Continue Demo" : "Continue Premium";
-        }
+    }
       }
 
       function toggleSetupFormVisibility(tierType, show) {
@@ -788,11 +792,11 @@
 
         // ensure continue buttons enable only when locked
         const btnContinue = document.getElementById(isDemo ? "btnContinueDemo" : "btnContinuePremium");
-        if (btnContinue) btnContinue.disabled = !locked;
+                if (btnContinue) btnContinue.disabled = !locked;
 
         // Hide the setup form when complete, show it when incomplete
         toggleSetupFormVisibility(tierType, !locked);
-      }
+      }  
 
       function updateCounts() {
         const demoCountEl = document.getElementById("wineCountDemo");
@@ -927,7 +931,7 @@
         resetSelection(isDemo ? "textureOptionsDemo" : "textureOptionsPremium");
         resetSelection(isDemo ? "oakOptionsDemo" : "oakOptionsPremium");
 
-        renderWineTables();
+                renderWineTables();
         updateCounts();
 
         // Seamless flow: if setup just completed, go straight into encounter
@@ -1777,6 +1781,5 @@
   });
 })();
 </script>
-
 </body>
 </html>
