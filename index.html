@@ -233,7 +233,6 @@
   // ---------- One DOMContentLoaded only ----------
   document.addEventListener("DOMContentLoaded", () => {
     try {
-      // Guard to ensure we never init twice (hot reloads / duplicate script injection / etc.)
       if (window.__BC_INIT_DONE__) return;
       window.__BC_INIT_DONE__ = true;
 
@@ -363,7 +362,6 @@
       const HAS_TOUCH = ("ontouchend" in window) || (navigator.maxTouchPoints > 0);
       const INPUT_EVENT = HAS_POINTER ? "pointerup" : (HAS_TOUCH ? "touchend" : "click");
 
-      // Helps mobile/webviews reduce ghost clicks / delays (JS-only)
       try { document.documentElement.style.touchAction = "manipulation"; } catch (_) {}
 
       function bindInput(el, fn) {
@@ -383,7 +381,7 @@
 
         el.addEventListener(INPUT_EVENT, fire, { passive: INPUT_EVENT === "click" });
 
-        // Safety fallback: still listen to click, lock prevents double-firing
+        // Desktop click fallback (lock prevents double firing)
         if (INPUT_EVENT !== "click") {
           el.addEventListener("click", fire, { passive: true });
         }
@@ -411,10 +409,14 @@
         const key = t === "demo" ? demoWinesKey : premiumWinesKey;
         const raw = localStorage.getItem(key);
         if (!raw) return [];
+
+        const limit = (t === "demo") ? 2 : 10;
+
         try {
           const parsed = JSON.parse(raw);
           if (!Array.isArray(parsed)) return [];
-          return parsed.map(w => sanitizeWine(w));
+          // HARD CAP on load so storage can never make UI show 3/2 etc.
+          return parsed.map(w => sanitizeWine(w)).slice(0, limit);
         } catch {
           return [];
         }
@@ -422,7 +424,9 @@
 
       function saveWines(t) {
         const key = t === "demo" ? demoWinesKey : premiumWinesKey;
-        const data = t === "demo" ? demoWines : premiumWines;
+        const limit = (t === "demo") ? 2 : 10;
+        // HARD CAP on save as well
+        const data = (t === "demo" ? demoWines : premiumWines).slice(0, limit);
         localStorage.setItem(key, JSON.stringify(data));
       }
 
@@ -536,7 +540,7 @@
         return pick;
       }
 
-      // (Weights / encounter gen unchanged)
+      // ---------- Weights / encounter gen (unchanged) ----------
       function buildHookWeights() { return { FLAVOUR: 1, STORY: 1, VALUE: 1 }; }
       function adjustWeightsFromVerbal(weights, verbalCues) {
         const text = verbalCues.join(" ").toLowerCase();
@@ -668,7 +672,7 @@
         return { guestStateActual, guestLine, contextLine, toneTag, physicalCues, verbalCues, bestMode, bestHook };
       }
 
-      // ---------- UI counters ----------
+      // ---------- UI counts ----------
       function renderHomeCounts() {
         const demoCount = document.getElementById("homeDemoCount");
         const premiumCount = document.getElementById("homePremiumCount");
@@ -681,11 +685,46 @@
         if (premiumRunsEl) premiumRunsEl.innerText = premiumRuns.length;
       }
 
+      function updateSetupLock(tierType) {
+        const isDemo = tierType === "demo";
+        const wines = isDemo ? demoWines : premiumWines;
+        const limit = isDemo ? 2 : 10;
+
+        const countEl = document.getElementById(isDemo ? "wineCountDemo" : "wineCountPremium");
+
+        const nameEl = document.getElementById(isDemo ? "wineNameInputDemo" : "wineNameInputPremium");
+        const varietalEl = document.getElementById(isDemo ? "wineVarietalInputDemo" : "wineVarietalInputPremium");
+        const processEl = document.getElementById(isDemo ? "processInputDemo" : "processInputPremium");
+        const regionEl = document.getElementById(isDemo ? "regionInputDemo" : "regionInputPremium");
+        const storyEl = document.getElementById(isDemo ? "storyInputDemo" : "storyInputPremium");
+        const addBtn = document.getElementById(isDemo ? "addWineBtnDemo" : "addWineBtnPremium");
+
+        const locked = wines.length >= limit;
+
+        if (countEl) {
+          countEl.innerText = locked
+            ? `Setup done — Start encounter (${limit} / ${limit})`
+            : `${wines.length} / ${limit}`;
+        }
+
+        const disable = (el) => { if (el) el.disabled = locked; };
+        [nameEl, varietalEl, processEl, regionEl, storyEl, addBtn].forEach(disable);
+
+        // Optional visual mute of input rows (no CSS edits)
+        const panel = document.getElementById(isDemo ? "screenSetupDemo" : "screenSetupPremium");
+        if (panel) {
+          const rows = panel.querySelectorAll(".manager-row");
+          rows.forEach(row => {
+            const hasInputs = !!row.querySelector("input, select, textarea, #addWineBtnDemo, #addWineBtnPremium");
+            if (hasInputs) row.style.opacity = locked ? "0.6" : "1";
+          });
+        }
+      }
+
       function updateCounts() {
-        const demoCountEl = document.getElementById("wineCountDemo");
-        const premiumCountEl = document.getElementById("wineCountPremium");
-        if (demoCountEl) demoCountEl.innerText = demoWines.length + " / 2";
-        if (premiumCountEl) premiumCountEl.innerText = premiumWines.length + " / 10";
+        // HARD CAP in memory too (extra safety)
+        demoWines = demoWines.slice(0, 2);
+        premiumWines = premiumWines.slice(0, 10);
 
         const btnContinueDemo = document.getElementById("btnContinueDemo");
         const btnContinuePremium = document.getElementById("btnContinuePremium");
@@ -693,6 +732,8 @@
         if (btnContinuePremium) btnContinuePremium.disabled = premiumWines.length < 10;
 
         renderHomeCounts();
+        updateSetupLock("demo");
+        updateSetupLock("premium");
       }
 
       // ---------- Setup (wine form) ----------
@@ -765,6 +806,15 @@
 
       function addWineFromForm(tierType) {
         const isDemo = tierType === "demo";
+        const limit = isDemo ? 2 : 10;
+        const list = isDemo ? demoWines : premiumWines;
+
+        // HARD CAP: never allow adding beyond limit
+        if (list.length >= limit) {
+          updateSetupLock(tierType);
+          alert("Setup already complete for this mode.");
+          return;
+        }
 
         const nameEl = document.getElementById(isDemo ? "wineNameInputDemo" : "wineNameInputPremium");
         const varietalEl = document.getElementById(isDemo ? "wineVarietalInputDemo" : "wineVarietalInputPremium");
@@ -789,8 +839,15 @@
 
         const wine = { id: generateWineId(), name, varietal, fruitTags, textureTags, oakLevel, process, region, story };
 
-        if (isDemo) { demoWines.push(wine); saveWines("demo"); }
-        else { premiumWines.push(wine); saveWines("premium"); }
+        if (isDemo) {
+          demoWines.push(wine);
+          demoWines = demoWines.slice(0, 2);
+          saveWines("demo");
+        } else {
+          premiumWines.push(wine);
+          premiumWines = premiumWines.slice(0, 10);
+          saveWines("premium");
+        }
 
         if (nameEl) nameEl.value = "";
         if (varietalEl) varietalEl.value = "";
@@ -812,6 +869,8 @@
         renderWineTable("premium", "premiumWineTableBody");
         renderWineCards("demo", "demoWineCards");
         renderWineCards("premium", "premiumWineCards");
+        updateSetupLock("demo");
+        updateSetupLock("premium");
       }
 
       function renderWineTable(tierType, tbodyId) {
@@ -904,8 +963,13 @@
       }
 
       function deleteWine(tierType, idToDelete) {
-        if (tierType === "demo") { demoWines = demoWines.filter(w => w.id !== idToDelete); saveWines("demo"); }
-        else { premiumWines = premiumWines.filter(w => w.id !== idToDelete); saveWines("premium"); }
+        if (tierType === "demo") {
+          demoWines = demoWines.filter(w => w.id !== idToDelete).slice(0, 2);
+          saveWines("demo");
+        } else {
+          premiumWines = premiumWines.filter(w => w.id !== idToDelete).slice(0, 10);
+          saveWines("premium");
+        }
         renderWineTables();
         updateCounts();
       }
@@ -1022,7 +1086,7 @@
         return "❌";
       }
 
-      // ✅ WHY maps (added)
+      // WHY maps
       function modeWhy(state) {
         const reasons = {
           "Decider": "They want speed + certainty. LEAD reduces friction.",
@@ -1271,7 +1335,7 @@
           return;
         }
 
-        // ✅ Step 5: NO TIMER. Add REFLECT button.
+        // Step 5: NO TIMER. REFLECT button.
         if (currentStep === 5) {
           const checks = evaluateChecks();
           const correctCount =
@@ -1299,7 +1363,6 @@
           reflectionTitle.innerText = "Reflection";
           stepContent.appendChild(reflectionTitle);
 
-          // ✅ Now includes WHY
           addReflectionBlock(
             stepContent,
             "Guest Read",
@@ -1336,6 +1399,7 @@
             if (activeMode === "demo" && demoStep >= 2) { showScreen("screenHome"); return; }
             startEncounter();
           }, stepButtons);
+
           return;
         }
       }
@@ -1417,7 +1481,6 @@
         const btnResetRunsPremium = ensureElement("btnResetRunsPremium");
         const btnResetWinesPremium = ensureElement("btnResetWinesPremium");
 
-        // Welcome -> Home (keep)
         bindInput(btnWelcomeStart, () => {
           localStorage.setItem(coverKey, "true");
           showScreen("screenHome");
@@ -1428,6 +1491,7 @@
 
         bindInput(btnResetApp, () => {
           if (!confirm("Reset app? This clears wines and runs.")) return;
+
           localStorage.removeItem(demoWinesKey);
           localStorage.removeItem(premiumWinesKey);
           localStorage.removeItem(demoRunsKey);
@@ -1511,7 +1575,7 @@
         bindInput(demoWineCards, delHandler("demo"));
         bindInput(premiumWineCards, delHandler("premium"));
 
-        // ✅ Home: add "Welcome" button (script-only)
+        // Home: add "Welcome" button (script-only)
         const homePanel = document.querySelector("#screenHome .panel");
         if (homePanel && !document.getElementById("btnBackToWelcome")) {
           const row = document.createElement("div");
@@ -1628,7 +1692,7 @@
       updateCounts();
       initButtons();
 
-      // ✅ Always start on Welcome (no more disappearing)
+      // Always start on Welcome
       showScreen("screenWelcome");
 
     } catch (err) {
