@@ -232,6 +232,7 @@
     </section>
 <script>
 document.addEventListener("DOMContentLoaded", () => {
+    try {
     const demoWinesKey = "bc_demo_wines";
     const premiumWinesKey = "bc_premium_wines";
     const demoRunsKey = "bc_demo_runs";
@@ -355,27 +356,26 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const TAP_EVENT = window.PointerEvent ? "pointerup" : "touchend";
 
-    const onTap = (el, fn) => {
-        if (!el) return;
-
         let justHandled = false;
-
-        const handleTap = (e) => {
-            e.preventDefault();
-            if (justHandled) return;
-            justHandled = true;
-            fn(e);
-            setTimeout(() => { justHandled = false; }, 350);
         };
 
         el.addEventListener(TAP_EVENT, handleTap, { passive: false });
+        let justHandled = false;
+        const hasPointer = "PointerEvent" in window;
+        const hasTouch = "ontouchend" in window;
 
-        el.addEventListener("click", (e) => {
+        const handlePointerOrTouch = (e) => {
+            e.preventDefault();
             if (justHandled) return;
-            if (e && e.detail === 0) return;
-            fn(e);
-        });
-    };
+        };
+
+        const handleClick = (e) => {
+            setTimeout(() => { justHandled = false; }, 350);
+        };
+
+            el.addEventListener("touchend", handlePointerOrTouch, { passive: false });
+        } else {
+            el.addEventListener("click", handleClick);
 
     function showScreen(screenId) {
         const screens = document.querySelectorAll(".screen");
@@ -846,7 +846,6 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!container) return;
 
         const handler = (e) => {
-            e.preventDefault();
             const btn = e.target.closest(".option-btn");
             if (!btn || !btn.dataset || !btn.dataset.value) return;
 
@@ -859,7 +858,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         };
 
-        container.addEventListener(TAP_EVENT, handler, { passive: false });
+        onTap(container, handler);
     }
 
     function updateRadioSelection(containerId) {
@@ -867,7 +866,6 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!container) return;
 
         const handler = (e) => {
-            e.preventDefault();
             const btn = e.target.closest(".option-btn");
             if (!btn || !btn.dataset || !btn.dataset.value) return;
             const buttons = container.querySelectorAll(".option-btn");
@@ -875,7 +873,7 @@ document.addEventListener("DOMContentLoaded", () => {
             btn.classList.add("selected");
         };
 
-        container.addEventListener(TAP_EVENT, handler, { passive: false });
+        onTap(container, handler);
     }
 
     function collectSelectedOptions(containerId) {
@@ -1629,26 +1627,25 @@ document.addEventListener("DOMContentLoaded", () => {
         const premiumWineCards = ensureElement("premiumWineCards");
 
         const delHandler = (tier) => (e) => {
-            e.preventDefault();
             const btn = e.target.closest(".small-btn");
             if (!btn || !btn.dataset || !btn.dataset.id) return;
             deleteWine(tier, btn.dataset.id);
         };
 
         if (demoWineTableBody) {
-            demoWineTableBody.addEventListener(TAP_EVENT, delHandler("demo"), { passive: false });
+            onTap(demoWineTableBody, delHandler("demo"));
         }
 
         if (premiumWineTableBody) {
-            premiumWineTableBody.addEventListener(TAP_EVENT, delHandler("premium"), { passive: false });
+            onTap(premiumWineTableBody, delHandler("premium"));
         }
 
         if (demoWineCards) {
-            demoWineCards.addEventListener(TAP_EVENT, delHandler("demo"), { passive: false });
+            onTap(demoWineCards, delHandler("demo"));
         }
 
         if (premiumWineCards) {
-            premiumWineCards.addEventListener(TAP_EVENT, delHandler("premium"), { passive: false });
+            onTap(premiumWineCards, delHandler("premium"));
         }
     }
 
@@ -1754,6 +1751,11 @@ document.addEventListener("DOMContentLoaded", () => {
         showScreen("screenWelcome");
     } else {
         showScreen("screenHome");
+    }
+    // navigator.serviceWorker.register("service-worker.js");
+    } catch (err) {
+        alert("App error: " + err.message);
+        console.error(err);
     }
 });
 </script>
