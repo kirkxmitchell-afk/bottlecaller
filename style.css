@@ -32,14 +32,18 @@ th { background: #f0f0f0; }
 .wine-card-label { font-weight: bold; }
 .screen { display: none; }
 .screen.active { display: block; }
+.screen { display: none !important; }
+.screen.active { display: block !important; }
+
+button, .option-btn { touch-action: manipulation; }
 
 @media (max-width: 767px) {
     body { padding: 12px; }
-    .button-row { flex-direction: column; align-items: stretch; }
+    .button-row { flex-direction: column; align-items: stretch; gap: 10px; }
     button { width: 100%; min-height: 48px; }
-    .manager-row { flex-direction: column; align-items: stretch; }
+    .manager-row { flex-direction: column; align-items: stretch; gap: 10px; }
     .manager-row input, .manager-row select, .manager-row textarea { width: 100%; }
-    .option-grid { flex-direction: column; }
+    .option-grid { flex-direction: column; gap: 10px; }
     .option-btn { width: 100%; min-height: 48px; }
     .wine-table { display: none; }
     .wine-cards { display: block; }
@@ -47,24 +51,4 @@ th { background: #f0f0f0; }
 
 @media (min-width: 768px) {
     .wine-cards { display: none; }
-}
-
-.screen { display: none !important; }
-.screen.active { display: block !important; }
-
-button, .option-btn { touch-action: manipulation; }
-
-@media (max-width: 767px){
-  body { padding: 12px; }
-  .button-row { flex-direction: column; align-items: stretch; gap: 10px; }
-  button { width: 100%; min-height: 48px; }
-  .manager-row { flex-direction: column; align-items: stretch; gap: 10px; }
-  .manager-row input, .manager-row select, .manager-row textarea { width: 100%; }
-  .option-grid { flex-direction: column; gap: 10px; }
-  .option-btn { width: 100%; min-height: 48px; }
-  .wine-table { display: none; }
-  .wine-cards { display: block; }
-}
-@media (min-width: 768px){
-  .wine-cards { display: none; }
 }
