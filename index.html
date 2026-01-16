@@ -333,27 +333,42 @@
       const INPUT_EVENT = HAS_POINTER ? "pointerup" : (HAS_TOUCH ? "touchend" : "click");
       try { document.documentElement.style.touchAction = "manipulation"; } catch (_) {}
 
-      function bindInput(el, fn) {
-        if (!el || typeof fn !== "function") return;
-        if (el.__bcBound) return;
-        el.__bcBound = true;
+// --- Global input lock to prevent cross-element double fire (mobile click ghosting) ---
+let __BC_LAST_INPUT_AT__ = 0;
 
-        const fire = (e) => {
-          const now = Date.now();
-          const last = el.__bcLastFire || 0;
-          if (now - last < 350) return;
-          el.__bcLastFire = now;
+function bindInput(el, fn) {
+  if (!el || typeof fn !== "function") return;
+  if (el.__bcBound) return;
+  el.__bcBound = true;
 
-          if (e) {
-            if (INPUT_EVENT !== "click" && e.cancelable) e.preventDefault();
-            e.stopPropagation();
-          }
-          fn(e);
-        };
+  const fire = (e) => {
+    const now = Date.now();
 
-        el.addEventListener(INPUT_EVENT, fire, { passive: INPUT_EVENT === "click" });
-        if (INPUT_EVENT !== "click") el.addEventListener("click", fire, { passive: true });
-      }
+    // Global lock (prevents pointerup -> delayed click from hitting another button)
+    if (now - __BC_LAST_INPUT_AT__ < 450) return;
+
+    // If we're on a touch/pointer device, ignore synthetic "click" that follows shortly after
+    if (e && e.type === "click" && INPUT_EVENT !== "click") {
+      return;
+    }
+
+    __BC_LAST_INPUT_AT__ = now;
+
+    if (e) {
+      if (INPUT_EVENT !== "click" && e.cancelable) e.preventDefault();
+      e.stopPropagation();
+    }
+    fn(e);
+  };
+
+  el.addEventListener(INPUT_EVENT, fire, { passive: INPUT_EVENT === "click" });
+
+  // Desktop-only fallback: only add click handler when click is the primary input
+  // (this is what prevents the "ghost click" issue on mobile)
+  if (INPUT_EVENT === "click") {
+    // no extra listener needed
+  }
+}
 
       // ---------- Screens ----------
       function showScreen(screenId) {
@@ -1155,8 +1170,26 @@
           const helpBtn = document.createElement("button");
           helpBtn.type = "button";
           helpBtn.className = "small-btn";
-          helpBtn.innerText = " ? ";
           topRow.appendChild(helpBtn);
+
+          helpBtn.className = "small-btn";  // keep
+          helpBtn.innerText = "?";
+
+                // force it to be a small circular bubble even on mobile
+                helpBtn.style.width = "32px";
+                helpBtn.style.height = "32px";
+                helpBtn.style.minWidth = "32px";
+                helpBtn.style.minHeight = "32px";
+                helpBtn.style.maxWidth = "32px";
+                helpBtn.style.maxHeight = "32px";
+                helpBtn.style.padding = "0";
+                helpBtn.style.borderRadius = "999px";
+                helpBtn.style.display = "inline-flex";
+                helpBtn.style.alignItems = "center";
+                helpBtn.style.justifyContent = "center";
+                helpBtn.style.lineHeight = "1";
+                helpBtn.style.flex = "0 0 auto";
+
 
           stepContent.appendChild(topRow);
 
