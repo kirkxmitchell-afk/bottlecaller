@@ -230,15 +230,14 @@
     alert("App error: " + (e.reason && e.reason.message ? e.reason.message : String(e.reason)));
   });
 
-  // ---------- One DOMContentLoaded only ----------
   document.addEventListener("DOMContentLoaded", () => {
-    // Failsafe: prevent blank screen if anything errors before showScreen()
     document.getElementById("screenWelcome")?.classList.add("active");
 
     try {
       if (window.__BC_INIT_DONE__) return;
       window.__BC_INIT_DONE__ = true;
 
+      // ---------- Keys / limits ----------
       const demoWinesKey = "bc_demo_wines";
       const premiumWinesKey = "bc_premium_wines";
       const demoRunsKey = "bc_demo_runs";
@@ -251,82 +250,41 @@
       const demoGuestTypes = ["Decider", "Bargain-Smart"];
       const guestStates = ["Decider", "Fancy", "Griever", "Celebrator", "Bargain-Smart"];
 
-      const guestStatePools = {
-        "Decider": [
-          { contextLine: "They scan the list fast, ready to choose.", toneTag: "Short" },
-          { contextLine: "They nod before you finish.", toneTag: "Direct" },
-          { contextLine: "They avoid the list and look at you.", toneTag: "Focused" }
-        ],
-        "Fancy": [
-          { contextLine: "They dress sharp and scan labels.", toneTag: "Polished" },
-          { contextLine: "They mention a producer softly.", toneTag: "Warm" },
-          { contextLine: "They tilt the list towards you.", toneTag: "Status" }
-        ],
-        "Griever": [
-          { contextLine: "They speak quietly and avoid eye contact.", toneTag: "Soft" },
-          { contextLine: "They barely open the list.", toneTag: "Reserved" },
-          { contextLine: "They hold the menu loosely.", toneTag: "Quiet" }
-        ],
-        "Celebrator": [
-          { contextLine: "They laugh and clink glasses.", toneTag: "Bright" },
-          { contextLine: "They gesture to friends.", toneTag: "High" },
-          { contextLine: "They’re in party mode.", toneTag: "Loud" }
-        ],
-        "Bargain-Smart": [
-          { contextLine: "They scan prices carefully.", toneTag: "Sharp" },
-          { contextLine: "They compare options under their breath.", toneTag: "Skeptical" },
-          { contextLine: "They look at you for proof.", toneTag: "Testing" }
-        ]
-      };
-
-      const cuePoolPhysical = [
-        "Menus closed, hands folded",
-        "Wine list not requested",
-        "Holds wine list tightly with both hands",
-        "Pages through wine list slowly",
-        "Pages through wine list quickly",
-        "Points at the price column",
-        "Points at regions/producers",
-        "Shows wine list to their partner",
-        "Looking at the table, not the list",
-        "Phone on table, glancing at time",
-        "Leans back, relaxed posture",
-        "Leans forward, focused posture",
-        "Avoids eye contact, quiet posture",
-        "Makes direct eye contact, waiting",
-        "Laughing with friends, animated gestures",
-        "Signals “we’re ready” with a hand raise",
-        "Nods quickly, impatient rhythm",
-        "Sighs, low energy posture"
+      // ---------- Fixed Demo Encounters (NO randomness) ----------
+      // These are the exact same two encounters every time.
+      const DEMO_FIXED = [
+        {
+          guestStateActual: "Decider",
+          contextLine: "They scan the list fast, ready to choose.",
+          guestLine: "“We’re in a bit of a rush.”",
+          physicalCues: ["Phone on table, glancing at time", "Makes direct eye contact, waiting"],
+          verbalCues: ["“We’re in a bit of a rush.”", "“What’s your best?”"],
+          toneTag: "Direct"
+        },
+        {
+          guestStateActual: "Bargain-Smart",
+          contextLine: "They scan prices carefully and test your confidence.",
+          guestLine: "“Is there something worth it without going crazy?”",
+          physicalCues: ["Points at the price column", "Pages through wine list quickly"],
+          verbalCues: ["“Is there something worth it without going crazy?”", "“What’s the best value here?”"],
+          toneTag: "Testing"
+        }
       ];
 
-      const cuePoolVerbal = [
-        "“What do you suggest?”",
-        "“What pairs well with the food?”",
-        "“We want something local.”",
-        "“What’s your best?”",
-        "“We’re in a bit of a rush.”",
-        "“What’s the best value here?”",
-        "“Is there something worth it without going crazy?”",
-        "“We usually drink [region/style].”",
-        "“We want something impressive.”",
-        "“Nothing too heavy.”",
-        "“Something easy…”",
-        "“We’re celebrating.”",
-        "“I don’t want to overthink it.”",
-        "“Any hidden gems?”",
-        "“Is this expensive?”",
-        "“What would you drink?”"
+      // ---------- Hesitation scenarios (rotation pool) ----------
+      // Used only when they score exactly 3/4 before reflect.
+      const HESITATION_POOL = [
+        { text: "“Maybe… what would you pick if it was your table?”", correctMode: "LEAD" },
+        { text: "They pause, reread the wine list, then look up silently.", correctMode: "HOLD" },
+        { text: "“We’re celebrating actually… make it feel special.”", correctMode: "REFLECT" },
+        { text: "“Okay… but is it worth it for the price?”", correctMode: "HOLD" },
+        { text: "They nod… but glance at their partner for approval.", correctMode: "REFLECT" },
+        { text: "“I don’t want to mess this up… we’re not wine people.”", correctMode: "HOLD" },
+        { text: "“Just tell us what to do — we’re hungry.”", correctMode: "LEAD" },
+        { text: "They smile: “We usually drink lighter… not too heavy.”", correctMode: "REFLECT" }
       ];
 
-      const stateCuePreferences = {
-        "Decider": { physical: [1, 2, 9, 10, 14, 16, 17], verbal: [4, 5, 13] },
-        "Bargain-Smart": { physical: [4, 5, 6, 7], verbal: [6, 7, 14, 15] },
-        "Fancy": { physical: [4, 7, 8], verbal: [3, 8, 9, 16] },
-        "Griever": { physical: [9, 11, 13, 18], verbal: [10, 11, 13] },
-        "Celebrator": { physical: [15, 8, 16], verbal: [12, 9, 1] }
-      };
-
+      // ---------- Rule maps ----------
       const modeMap = {
         "Decider": { optimal: "LEAD", neutral: "HOLD", damaging: "REFLECT" },
         "Bargain-Smart": { optimal: "HOLD", neutral: "LEAD", damaging: "REFLECT" },
@@ -343,11 +301,13 @@
         "Celebrator": { optimal: "STORY", neutral: "VALUE", damaging: "FLAVOUR" }
       };
 
+      // ---------- Setup options ----------
       const fruitOptions = ["Red fruit", "Dark fruit", "Citrus", "Stone fruit", "Tropical", "Floral", "Herbal/Green", "Spicy", "Earthy/Savory", "Smoky"];
       const textureOptions = ["Silky", "Chalky tannins", "Firm tannins", "Racy acidity", "Creamy", "Full-bodied", "Medium-bodied", "Light-bodied", "Fresh", "Bold"];
       const oakOptions = ["None", "Light", "Subtle", "Noticeable"];
       const processOptions = ["Stainless steel", "Wild ferment", "Maceration", "Destemming", "Whole bunch pressed", "Hand harvested", "Time on lees"];
 
+      // ---------- Runtime state ----------
       let activeMode = null;
 
       let demoWines = loadWines("demo");
@@ -357,9 +317,6 @@
       let premiumRuns = loadProgress("premium");
 
       let demoStep = loadDemoStep();
-      let stateBag = loadStateBag();
-      let stateBagIndex = loadStateBagIndex();
-      let lastGuestState = loadLastGuestState();
 
       let currentEncounter = null;
       let currentStep = 0;
@@ -379,7 +336,7 @@
         const fire = (e) => {
           const now = Date.now();
           const last = el.__bcLastFire || 0;
-          if (now - last < 350) return;
+          if (now - last < 350) return; // lock
           el.__bcLastFire = now;
 
           if (e) {
@@ -390,7 +347,7 @@
         };
 
         el.addEventListener(INPUT_EVENT, fire, { passive: INPUT_EVENT === "click" });
-        if (INPUT_EVENT !== "click") el.addEventListener("click", fire, { passive: true });
+        if (INPUT_EVENT !== "click") el.addEventListener("click", fire, { passive: true }); // desktop fallback
       }
 
       // ---------- Screens ----------
@@ -404,19 +361,38 @@
         target.classList.add("active");
       }
 
-      function requiredWineCount(t) { return t === "demo" ? DEMO_LIMIT : PREMIUM_LIMIT; }
-      function isUnlocked(t) { return getWinesForTier(t).length >= requiredWineCount(t); }
+      function requiredWineCount(t) {
+        return t === "demo" ? DEMO_LIMIT : PREMIUM_LIMIT;
+      }
+
+      function isUnlocked(t) {
+        return getWinesForTier(t).length >= requiredWineCount(t);
+      }
 
       // ---------- Storage ----------
       function generateWineId() {
         return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
       }
 
+      function sanitizeWine(wine) {
+        const process = processOptions.includes(wine.process) ? wine.process : "";
+        return {
+          id: wine.id || generateWineId(),
+          name: wine.name || "",
+          varietal: wine.varietal || "",
+          fruitTags: Array.isArray(wine.fruitTags) ? wine.fruitTags : [],
+          textureTags: Array.isArray(wine.textureTags) ? wine.textureTags : [],
+          oakLevel: wine.oakLevel || "",
+          process,
+          region: wine.region || "",
+          story: wine.story || ""
+        };
+      }
+
       function loadWines(t) {
         const key = t === "demo" ? demoWinesKey : premiumWinesKey;
         const raw = localStorage.getItem(key);
         const limit = (t === "demo") ? DEMO_LIMIT : PREMIUM_LIMIT;
-
         if (!raw) return [];
         try {
           const parsed = JSON.parse(raw);
@@ -463,227 +439,12 @@
         localStorage.setItem("bc_demo_step", String(step));
       }
 
-      function loadStateBag() {
-        const raw = localStorage.getItem("bc_state_bag");
-        if (!raw) return [];
-        try { return JSON.parse(raw); } catch { return []; }
+      function getWinesForTier(t) {
+        return t === "demo" ? demoWines : premiumWines;
       }
 
-      function saveStateBag(bag) {
-        stateBag = bag;
-        localStorage.setItem("bc_state_bag", JSON.stringify(bag));
-      }
-
-      function loadStateBagIndex() {
-        const raw = localStorage.getItem("bc_state_bag_index");
-        const idx = parseInt(raw, 10);
-        return isNaN(idx) ? 0 : idx;
-      }
-
-      function saveStateBagIndex(idx) {
-        stateBagIndex = idx;
-        localStorage.setItem("bc_state_bag_index", String(idx));
-      }
-
-      function loadLastGuestState() {
-        return localStorage.getItem("bc_last_guest_state") || "";
-      }
-
-      function saveLastGuestState(state) {
-        lastGuestState = state;
-        localStorage.setItem("bc_last_guest_state", state);
-      }
-
-      function sanitizeWine(wine) {
-        const process = processOptions.includes(wine.process) ? wine.process : "";
-        return {
-          id: wine.id || generateWineId(),
-          name: wine.name || "",
-          varietal: wine.varietal || "",
-          fruitTags: Array.isArray(wine.fruitTags) ? wine.fruitTags : [],
-          textureTags: Array.isArray(wine.textureTags) ? wine.textureTags : [],
-          oakLevel: wine.oakLevel || "",
-          process,
-          region: wine.region || "",
-          story: wine.story || ""
-        };
-      }
-
-      function getWinesForTier(t) { return t === "demo" ? demoWines : premiumWines; }
-      function pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
-
-      function shuffleArray(arr) {
-        for (let i = arr.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [arr[i], arr[j]] = [arr[j], arr[i]];
-        }
-        return arr;
-      }
-
-      function drawGuestStateFromBag() {
-        if (!Array.isArray(stateBag) || stateBag.length !== guestStates.length) {
-          saveStateBag(shuffleArray(guestStates.slice()));
-          saveStateBagIndex(0);
-        }
-        if (stateBagIndex >= stateBag.length) {
-          saveStateBag(shuffleArray(guestStates.slice()));
-          saveStateBagIndex(0);
-        }
-
-        const remaining = stateBag.length - stateBagIndex;
-        let pick = stateBag[stateBagIndex];
-
-        if (remaining >= 2 && pick === lastGuestState) {
-          const swapIdx = stateBagIndex + 1;
-          [stateBag[stateBagIndex], stateBag[swapIdx]] = [stateBag[swapIdx], stateBag[stateBagIndex]];
-          pick = stateBag[stateBagIndex];
-        }
-
-        saveStateBagIndex(stateBagIndex + 1);
-        saveLastGuestState(pick);
-        return pick;
-      }
-
-      // ---------- Encounter generation (unchanged logic) ----------
-      function buildHookWeights() { return { FLAVOUR: 1, STORY: 1, VALUE: 1 }; }
-
-      function adjustWeightsFromVerbal(weights, verbalCues) {
-        const text = verbalCues.join(" ").toLowerCase();
-        if (text.includes("pairs well") || text.includes("smooth") || text.includes("easy") || text.includes("not too heavy")) weights.FLAVOUR += 3;
-        if (text.includes("best value") || text.includes("worth it") || text.includes("expensive") || text.includes("price")) weights.VALUE += 3;
-        if (text.includes("local") || text.includes("region") || text.includes("producer") || text.includes("impressive") || text.includes("celebrating")) weights.STORY += 3;
-        if (text.includes("best") || text.includes("top pick") || text.includes("quick") || text.includes("rush")) { weights.VALUE += 2; weights.FLAVOUR += 1; }
-        return weights;
-      }
-
-      function adjustWeightsFromPhysical(weights, physicalCues) {
-        const text = physicalCues.join(" ").toLowerCase();
-        if (text.includes("price column")) weights.VALUE += 3;
-        if (text.includes("pages through wine list slowly") || text.includes("points at regions/producers")) weights.STORY += 2;
-        if (text.includes("food only") || text.includes("menus open")) weights.FLAVOUR += 2;
-        if (text.includes("wine list not requested") || text.includes("menus closed")) weights.VALUE += 2;
-        return weights;
-      }
-
-      function applyStateBias(weights, guestStateActual, verbalCues) {
-        const verb = verbalCues.join(" ").toLowerCase();
-        if (guestStateActual === "Bargain-Smart") {
-          if (!verb.includes("local") && !verb.includes("producer") && !verb.includes("region") && !verb.includes("impressive") && !verb.includes("celebrating")) {
-            weights.STORY = Math.max(1, Math.floor(weights.STORY / 2));
-          }
-        }
-        if (guestStateActual === "Griever") {
-          if (!verb.includes("local") && !verb.includes("producer") && !verb.includes("region")) {
-            weights.STORY = Math.max(1, Math.floor(weights.STORY / 2));
-          }
-        }
-        if (guestStateActual === "Fancy") { weights.STORY += 1; weights.FLAVOUR += 1; }
-        return weights;
-      }
-
-      function pickWeightedHook(weights) {
-        const entries = Object.entries(weights);
-        const total = entries.reduce((sum, [, w]) => sum + w, 0);
-        let roll = Math.random() * total;
-        for (const [hook, weight] of entries) {
-          roll -= weight;
-          if (roll <= 0) return hook;
-        }
-        return "FLAVOUR";
-      }
-
-      function deriveBestHookFromCues(guestStateActual, physicalCues, verbalCues) {
-        let weights = buildHookWeights();
-        weights = adjustWeightsFromVerbal(weights, verbalCues);
-        weights = adjustWeightsFromPhysical(weights, physicalCues);
-        weights = applyStateBias(weights, guestStateActual, verbalCues);
-        return pickWeightedHook(weights);
-      }
-
-      function buildModeWeights() { return { LEAD: 1, REFLECT: 1, HOLD: 1 }; }
-
-      function adjustModeWeightsFromVerbal(weights, verbalCues) {
-        const text = verbalCues.join(" ").toLowerCase();
-        if (text.includes("rush") || text.includes("quick") || text.includes("we’re ready") || text.includes("we're ready")) weights.LEAD += 3;
-        if (text.includes("best") || text.includes("top pick") || text.includes("just pick")) weights.LEAD += 2;
-        if (text.includes("best value") || text.includes("worth it") || text.includes("expensive") || text.includes("price")) weights.HOLD += 3;
-        if (text.includes("hidden gems") || text.includes("not hype") || text.includes("skeptical")) weights.HOLD += 2;
-        if (text.includes("local") || text.includes("region") || text.includes("producer") || text.includes("impressive") || text.includes("serious") || text.includes("elegant")) weights.REFLECT += 3;
-        if (text.includes("something easy") || text.includes("not too heavy") || text.includes("don’t overthink") || text.includes("don't overthink")) weights.HOLD += 2;
-        return weights;
-      }
-
-      function adjustModeWeightsFromPhysical(weights, physicalCues) {
-        const text = physicalCues.join(" ").toLowerCase();
-        if (text.includes("menus closed") || text.includes("signals") || text.includes("direct eye contact") || text.includes("impatient rhythm") || text.includes("phone on table")) weights.LEAD += 2;
-        if (text.includes("price column") || text.includes("pages through wine list quickly")) weights.HOLD += 2;
-        if (text.includes("regions/producers") || text.includes("pages through wine list slowly") || text.includes("shows wine list to their partner")) weights.REFLECT += 2;
-        if (text.includes("avoids eye contact") || text.includes("low energy") || text.includes("sighs")) weights.HOLD += 2;
-        return weights;
-      }
-
-      function applyModeStateBias(weights, guestStateActual) {
-        if (guestStateActual === "Decider") weights.LEAD += 2;
-        if (guestStateActual === "Bargain-Smart") weights.HOLD += 2;
-        if (guestStateActual === "Fancy") weights.REFLECT += 2;
-        if (guestStateActual === "Griever") weights.HOLD += 2;
-        if (guestStateActual === "Celebrator") weights.LEAD += 2;
-        return weights;
-      }
-
-      function pickWeightedMode(weights) {
-        const entries = Object.entries(weights);
-        const total = entries.reduce((sum, [, w]) => sum + w, 0);
-        let roll = Math.random() * total;
-        for (const [mode, weight] of entries) {
-          roll -= weight;
-          if (roll <= 0) return mode;
-        }
-        return "LEAD";
-      }
-
-      function deriveBestModeFromCues(guestStateActual, physicalCues, verbalCues) {
-        let weights = buildModeWeights();
-        weights = adjustModeWeightsFromVerbal(weights, verbalCues);
-        weights = adjustModeWeightsFromPhysical(weights, physicalCues);
-        weights = applyModeStateBias(weights, guestStateActual);
-        return pickWeightedMode(weights);
-      }
-
-      function pickRandomSubset(pool, count) {
-        const source = pool.slice();
-        const selected = [];
-        while (selected.length < count && source.length > 0) {
-          const idx = Math.floor(Math.random() * source.length);
-          selected.push(source[idx]);
-          source.splice(idx, 1);
-        }
-        return selected;
-      }
-
-      function generateCues(guestStateActual) {
-        const prefs = stateCuePreferences[guestStateActual];
-        const physicalPool = prefs.physical.map(i => cuePoolPhysical[i - 1]).filter(Boolean);
-        const verbalPool = prefs.verbal.map(i => cuePoolVerbal[i - 1]).filter(Boolean);
-
-        const physicalCount = Math.random() < 0.5 ? 2 : 3;
-        const verbalCount = Math.random() < 0.6 ? 1 : 2;
-
-        const physicalCues = pickRandomSubset(physicalPool, physicalCount);
-        const verbalCues = pickRandomSubset(verbalPool, verbalCount);
-        return { physicalCues, verbalCues };
-      }
-
-      function generateEncounterForState(guestStateActual) {
-        const { physicalCues, verbalCues } = generateCues(guestStateActual);
-        const tonePick = pickRandom(guestStatePools[guestStateActual] || [{ toneTag: "" }]);
-        const toneTag = tonePick.toneTag || "";
-        const contextLine = pickRandom((guestStatePools[guestStateActual] || []).map(x => x.contextLine).filter(Boolean)) || "";
-        const guestLine = verbalCues[0] || "“What would you recommend?”";
-        const bestHook = deriveBestHookFromCues(guestStateActual, physicalCues, verbalCues);
-        const bestMode = deriveBestModeFromCues(guestStateActual, physicalCues, verbalCues);
-
-        return { guestStateActual, guestLine, contextLine, toneTag, physicalCues, verbalCues, bestMode, bestHook };
+      function pickRandom(arr) {
+        return arr[Math.floor(Math.random() * arr.length)];
       }
 
       // ---------- UI: counts + setup completion ----------
@@ -782,7 +543,7 @@
         updateSetupLock("premium");
       }
 
-      // ---------- Setup: selection helpers ----------
+      // ---------- Setup selection helpers ----------
       function collectSelectedOptions(containerId) {
         const container = document.getElementById(containerId);
         if (!container) return [];
@@ -847,7 +608,7 @@
         });
       }
 
-      // ---------- Add wine (hard-capped) ----------
+      // ---------- Add wine (hard-capped + seamless flow) ----------
       function addWineFromForm(tierType) {
         const isDemo = tierType === "demo";
         const limit = isDemo ? DEMO_LIMIT : PREMIUM_LIMIT;
@@ -904,10 +665,9 @@
         renderWineTables();
         updateCounts();
 
-        const limitNow = isDemo ? DEMO_LIMIT : PREMIUM_LIMIT;
         const listNow = isDemo ? demoWines : premiumWines;
-
-        if (listNow.length >= limitNow) {
+        if (listNow.length >= limit) {
+          // seamless flow into encounter
           toggleSetupFormVisibility(tierType, false);
           activeMode = tierType;
           showScreen("screenPlay");
@@ -1024,7 +784,7 @@
         renderWineTables();
       }
 
-      // ---------- Encounter UI helpers ----------
+      // ---------- Encounter helpers ----------
       function addBadge(container, text) {
         if (!text) return;
         const badge = document.createElement("span");
@@ -1059,51 +819,46 @@
         return oakMap[oak] || "balanced oak";
       }
 
-      function getValueCue(wine) { return wine.process ? wine.process : describeOak(wine); }
+      function getValueCue(wine) {
+        return wine.process ? wine.process : describeOak(wine);
+      }
 
-      // =========================================================
-      // SENTENCES (UPDATED: less repetitive + harder to pattern-solve)
-      // =========================================================
-
+      // Sentence 1 (emotional framing) - improved + less repetitive
       function buildSentence1Correct(encounter) {
         const mode = encounter.modeSelected;
 
-        // Small tone seasoning, but not mode-revealing words
         const tone = {
-          "Decider": ["clean", "direct", "sharp"],
-          "Bargain-Smart": ["grounded", "practical", "steady"],
-          "Fancy": ["polished", "elegant", "refined"],
-          "Griever": ["soft", "calm", "gentle"],
-          "Celebrator": ["bright", "fun", "upbeat"]
+          "Decider": ["direct", "decisive", "clean"],
+          "Bargain-Smart": ["measured", "grounded", "practical"],
+          "Fancy": ["refined", "polished", "elegant"],
+          "Griever": ["gentle", "soft", "patient"],
+          "Celebrator": ["upbeat", "energetic", "playful"]
         };
+
         const t = pickRandom(tone[encounter.guestStateActual] || ["confident"]);
 
-        // Overlap language across pools to stop keyword-solving.
-        // LEAD: decisive, but not “bossy”
         const leadLines = [
-          "A clear pick works here — simple and " + t + ".",
-          "One clean recommendation fits this moment.",
-          "Let’s land on one bottle and move forward.",
-          "This is the direction that makes sense right now.",
-          "A strong, simple choice fits the table."
+          "Here’s the fastest call: one confident pick.",
+          "Quick recommendation — one bottle, one reason.",
+          "Let’s land this with a clear choice.",
+          "I’m going to make the call for you — " + t + " and simple.",
+          "One strong direction: trust this pick."
         ];
 
-        // REFLECT: aligned, but not “mirror / match” giveaways
         const reflectLines = [
-          "This fits what you’re signaling — " + t + " and intentional.",
-          "Based on your vibe, this lane suits you.",
-          "This choice aligns with the mood at the table.",
-          "The right fit here is something " + t + " and considered.",
-          "Reading your style — this lands well."
+          "Let’s match your vibe and choose something that fits.",
+          "We can go for something " + t + " and intentional.",
+          "Based on what you’re signaling, here’s the right lane.",
+          "We’ll keep it aligned with your taste and mood.",
+          "I’m reading your style — let’s pick something that suits it."
         ];
 
-        // HOLD: low pressure, but not “hold / keep / calm” giveaways
         const holdLines = [
-          "No rush — here’s a safe win that still feels " + t + ".",
-          "Two quick lanes exist; this one is the cleanest.",
-          "Low-pressure approach: one option that won’t miss.",
-          "A simple, steady choice keeps this easy.",
-          "Start with this — it’s a comfortable direction."
+          "No rush — two quick options and you choose.",
+          "Let’s keep it low-pressure: I’ll give you a safe win.",
+          "Small step first: one easy direction, no hard sell.",
+          "We’ll stay calm here — a simple option that won’t miss.",
+          "I’ll guide gently: one recommendation, zero pressure."
         ];
 
         if (mode === "LEAD") return pickRandom(leadLines);
@@ -1112,29 +867,24 @@
       }
 
       function buildSentence1Wrong() {
-        // 16 wrongs: some are obviously bad, others are “plausible but wrong”
-        // Also avoids starting with “I’ll…”
         const wrongs = [
-          "Everything here is good — any bottle works.",
-          "Hard to say… just pick one and we’ll see.",
-          "Start with the most expensive one — it’s impressive.",
-          "Three wines: I’ll list them fast and you choose.",
-          "No reason needed — just pick something.",
-          "Let me explain the full list before deciding.",
-          "This is all subjective anyway, so random is fine.",
-          "Avoid anything memorable — safe is always best.",
-          "Stay vague so there’s nothing to disagree with.",
-          "If it’s red, it basically tastes like red wine.",
-          "Oak equals quality — choose the oakiest one.",
-          "Push hard right now — hesitation means you need to sell harder.",
-          "Try to sound technical so it feels premium.",
-          "Pick by label design — guests love that.",
-          "Ask them ten questions first — then recommend.",
-          "Say nothing and let them figure it out."
+          "Let’s make this complicated — you’ll feel it out.",
+          "Honestly… everything here is pretty good.",
+          "You choose first, then I’ll confirm it.",
+          "I can’t really say until I know exactly what you like.",
+          "Let’s start with the most expensive one — it’s impressive.",
+          "I’ll just name three wines and see what sticks.",
+          "We don’t need a reason — just pick something.",
+          "I’m not sure, but this one is popular so maybe that.",
+          "Let me explain the full wine list before we decide.",
+          "I’ll go with a random bottle — it’s all subjective anyway.",
+          "We’ll play it safe by avoiding anything memorable.",
+          "Let’s stay vague so you can’t disagree with me."
         ];
         return pickRandom(wrongs);
       }
 
+      // Sentence 2 (structure clarity)
       function buildSentence2Correct(encounter) {
         const wine = encounter.wineSelected;
         const name = wine.name;
@@ -1142,27 +892,18 @@
 
         if (hook === "FLAVOUR") return name + " is " + describeFruitAbstract(wine) + " with a " + describeTexture(wine) + " line.";
         if (hook === "VALUE") return name + " shows " + getValueCue(wine) + " for a " + describeTexture(wine) + " finish.";
+
         const story = wine.story ? wine.story : "It’s made with a quiet, thoughtful approach.";
         return name + ": " + story;
       }
 
       function buildSentence2Wrong() {
-        // More wrong structural lines (14) so A/B isn’t obvious
         const wrongs = [
-          "It’s basically sweet — everyone likes sweet.",
-          "This is heavy oak, so it must be premium.",
-          "Price is the main taste — higher means better.",
-          "It’s a famous wine… I think.",
-          "It tastes like grapes and alcohol, mostly.",
-          "Not sure on flavour, but the label looks serious.",
-          "This one is trendy on Instagram.",
-          "The best pairing is… any food, really.",
-          "It’s complex — too hard to explain, just trust it.",
-          "It’s smooth because it’s red.",
-          "This is the safest bottle because nobody talks about it.",
-          "We should choose the one with the longest story, even if it doesn’t fit.",
-          "Let’s focus on producer trivia instead of what it feels like to drink.",
-          "Pick it because it’s local — that’s the whole reason."
+          "It’s all about big fruit and price.",
+          "Process and oak both dominate everything.",
+          "This is a loud, flashy story without structure.",
+          "It’s complicated — I’ll explain it later.",
+          "Let’s just gamble on something random."
         ];
         return pickRandom(wrongs);
       }
@@ -1180,17 +921,19 @@
         encounter.deliverOptionsS2 = encounter.correctSlotS2 === "A" ? { A: correct2, B: wrong2 } : { A: wrong2, B: correct2 };
       }
 
-      // ---------- Evaluation ----------
       function evaluateChecks() {
         const guestRead = currentEncounter.guestStateSelected === currentEncounter.guestStateActual;
+
         const modeRule = modeMap[currentEncounter.guestStateActual];
         const hookRule = hookMap[currentEncounter.guestStateActual];
 
-        const modeStatus = currentEncounter.modeSelected === modeRule.optimal ? "optimal"
-          : currentEncounter.modeSelected === modeRule.neutral ? "neutral" : "damaging";
+        const modeStatus =
+          currentEncounter.modeSelected === modeRule.optimal ? "optimal" :
+          currentEncounter.modeSelected === modeRule.neutral ? "neutral" : "damaging";
 
-        const hookStatus = currentEncounter.hookSelected === hookRule.optimal ? "optimal"
-          : currentEncounter.hookSelected === hookRule.neutral ? "neutral" : "damaging";
+        const hookStatus =
+          currentEncounter.hookSelected === hookRule.optimal ? "optimal" :
+          currentEncounter.hookSelected === hookRule.neutral ? "neutral" : "damaging";
 
         const deliveryCorrect =
           currentEncounter.selectedS1 === currentEncounter.correctSlotS1 &&
@@ -1236,10 +979,6 @@
         return reasons[state] || "";
       }
 
-      function guestReadWhy(state) {
-        return "The cues in this encounter were generated to match: " + state + ".";
-      }
-
       function addReflectionBlock(container, title, status, detail) {
         const block = document.createElement("div");
         block.className = "card";
@@ -1257,15 +996,23 @@
 
       function logEncounter() {
         const entry = {
+          timestamp: new Date().toLocaleString(),
+          tier: activeMode,
+
+          // what happened
           guestStateActual: currentEncounter.guestStateActual,
           guestStateSelected: currentEncounter.guestStateSelected,
-          hookSelected: currentEncounter.hookSelected,
           modeSelected: currentEncounter.modeSelected,
+          hookSelected: currentEncounter.hookSelected,
           wineSelected: currentEncounter.wineSelected.name,
-          deliveryLine1: currentEncounter.deliveryLine1,
-          deliveryLine2: currentEncounter.deliveryLine2,
-          outcome: "complete",
-          timestamp: new Date().toLocaleString()
+
+          deliveryLine1: currentEncounter.deliveryLine1 || "",
+          deliveryLine2: currentEncounter.deliveryLine2 || "",
+
+          // sacred hesitation moment (only if 3/4)
+          hesitationText: currentEncounter.hesitationText || "",
+          hesitationChoice: currentEncounter.hesitationChoice || "",
+          hesitationCorrect: !!currentEncounter.hesitationCorrect
         };
 
         if (activeMode === "demo") {
@@ -1276,10 +1023,18 @@
           premiumRuns.push(entry);
           saveProgress("premium");
         }
+
         updateCounts();
       }
 
-      // ---------- Encounter rendering ----------
+      // ---------- Sacred hesitation UI ----------
+      function getHesitationScenarioForEncounter() {
+        // deterministic-ish rotation per encounter timestamp (good enough for prototype)
+        const idx = Math.floor(Math.random() * HESITATION_POOL.length);
+        return HESITATION_POOL[idx];
+      }
+
+      // ---------- Step renderer ----------
       function renderEncounterStep() {
         const stepHeader = document.getElementById("stepHeader");
         const stepContent = document.getElementById("stepContent");
@@ -1302,6 +1057,7 @@
         const stepLabels = ["Load", "Observe", "Mode", "Hook", "Deliver", "Reaction", "Reflect"];
         stepHeader.innerText = "Step " + (currentStep + 1) + " of 7: " + stepLabels[currentStep];
 
+        // Step 0
         if (currentStep === 0) {
           const p = document.createElement("p");
           p.innerText = "Encounter loaded. Press BEGIN to observe the guest.";
@@ -1310,6 +1066,7 @@
           return;
         }
 
+        // Step 1 Observe
         if (currentStep === 1) {
           const context = document.createElement("p");
           context.innerText = currentEncounter.contextLine;
@@ -1360,6 +1117,7 @@
           return;
         }
 
+        // Step 2 Mode
         if (currentStep === 2) {
           const prompt = document.createElement("p");
           prompt.innerText = "Select a Mode";
@@ -1385,6 +1143,7 @@
           return;
         }
 
+        // Step 3 Hook
         if (currentStep === 3) {
           const prompt = document.createElement("p");
           prompt.innerText = "Select a Hook";
@@ -1410,6 +1169,7 @@
           return;
         }
 
+        // Step 4 Deliver
         if (currentStep === 4) {
           const reminder = document.createElement("div");
           reminder.className = "notice";
@@ -1463,6 +1223,7 @@
           return;
         }
 
+        // Step 5 Reaction (Sacred moment lives here)
         if (currentStep === 5) {
           const checks = evaluateChecks();
           const correctCount =
@@ -1471,18 +1232,66 @@
             (checks.hookStatus === "optimal" ? 1 : 0) +
             (checks.deliveryCorrect ? 1 : 0);
 
-          if (correctCount >= 4) stepContent.innerText = "✅ Nod. “Perfect.”";
-          else if (correctCount >= 3) stepContent.innerText = "⚠️ Hesitates. “Maybe… what else would you do?”";
-          else stepContent.innerText = "❌ “We’ll choose, thanks.”";
+          // 4 right -> trust
+          if (correctCount >= 4) {
+            stepContent.innerText = "✅ Nod. “Perfect.”";
+            addStepButton("REFLECT", () => { currentStep = 6; renderEncounterStep(); }, stepButtons);
+            return;
+          }
 
-          addStepButton("REFLECT", () => {
-            currentStep = 6;
-            renderEncounterStep();
-          }, stepButtons);
+          // 3 right -> hesitation scenario + you must answer with a Mode
+          if (correctCount === 3) {
+            const header = document.createElement("p");
+            header.innerText = "⚠️ Hesitates… “Maybe… what else would you do?”";
+            stepContent.appendChild(header);
 
+            if (!currentEncounter.hesitationText) {
+              const scenario = getHesitationScenarioForEncounter();
+              currentEncounter.hesitationText = scenario.text;
+              currentEncounter.hesitationCorrectMode = scenario.correctMode;
+              currentEncounter.hesitationChoice = "";
+              currentEncounter.hesitationCorrect = false;
+            }
+
+            const scenarioBox = document.createElement("div");
+            scenarioBox.className = "card";
+            scenarioBox.innerHTML = "<strong>Sacred moment</strong><div style='margin-top:6px;'>" + currentEncounter.hesitationText + "</div>";
+            stepContent.appendChild(scenarioBox);
+
+            const prompt = document.createElement("p");
+            prompt.innerText = "Choose the Mode that saves the sale:";
+            stepContent.appendChild(prompt);
+
+            const options = document.createElement("div");
+            options.className = "option-grid";
+
+            ["LEAD", "REFLECT", "HOLD"].forEach(mode => {
+              const btn = document.createElement("button");
+              btn.type = "button";
+              btn.className = "option-btn" + (currentEncounter.hesitationChoice === mode ? " selected" : "");
+              btn.innerText = mode;
+              bindInput(btn, () => {
+                currentEncounter.hesitationChoice = mode;
+                currentEncounter.hesitationCorrect = (mode === currentEncounter.hesitationCorrectMode);
+                renderEncounterStep();
+              });
+              options.appendChild(btn);
+            });
+
+            stepContent.appendChild(options);
+
+            const cont = addStepButton("REFLECT", () => { currentStep = 6; renderEncounterStep(); }, stepButtons);
+            if (!currentEncounter.hesitationChoice) cont.disabled = true;
+            return;
+          }
+
+          // 2 or less -> they choose themselves
+          stepContent.innerText = "❌ “We’ll choose, thanks.”";
+          addStepButton("REFLECT", () => { currentStep = 6; renderEncounterStep(); }, stepButtons);
           return;
         }
 
+        // Step 6 Reflect
         if (currentStep === 6) {
           const checks = evaluateChecks();
 
@@ -1494,7 +1303,7 @@
             stepContent,
             "Guest Read",
             checks.guestRead ? "✅" : "❌",
-            "Cues pointed to " + currentEncounter.guestStateActual + ". " + guestReadWhy(currentEncounter.guestStateActual)
+            "Actual state: " + currentEncounter.guestStateActual + " | You chose: " + (currentEncounter.guestStateSelected || "—")
           );
 
           addReflectionBlock(
@@ -1520,16 +1329,33 @@
             "Correct pair: " + correctS1 + " / " + correctS2
           );
 
+          // Sacred hesitation reflection (only if it happened)
+          if (currentEncounter.hesitationText) {
+            addReflectionBlock(
+              stepContent,
+              "Sacred Moment",
+              currentEncounter.hesitationCorrect ? "✅" : "❌",
+              "Scenario: " + currentEncounter.hesitationText +
+              " | Correct: " + currentEncounter.hesitationCorrectMode +
+              " | You chose: " + (currentEncounter.hesitationChoice || "—")
+            );
+          }
+
           logEncounter();
 
           addStepButton("NEXT ENCOUNTER", () => {
-            if (activeMode === "demo" && demoStep >= DEMO_LIMIT) { showScreen("screenHome"); return; }
+            if (activeMode === "demo" && demoStep >= DEMO_LIMIT) {
+              showScreen("screenHome");
+              return;
+            }
             startEncounter();
           }, stepButtons);
+
           return;
         }
       }
 
+      // ---------- Encounter start ----------
       function startEncounter() {
         if (!activeMode || !isUnlocked(activeMode)) return;
 
@@ -1542,12 +1368,21 @@
         let encounterData = null;
 
         if (activeMode === "demo") {
-          const guestStateActual = demoGuestTypes[demoStep];
-          encounterData = generateEncounterForState(guestStateActual);
+          // fixed, same every time
+          encounterData = DEMO_FIXED[demoStep];
           wine = demoWines[demoStep];
         } else {
-          const guestStateActual = drawGuestStateFromBag();
-          encounterData = generateEncounterForState(guestStateActual);
+          // Premium can be “alive” (random wine pick)
+          // Guest state can still be random in Premium for variety.
+          const guestStateActual = pickRandom(guestStates);
+          encounterData = {
+            guestStateActual,
+            contextLine: "They look at you like they want you to guide them.",
+            guestLine: "“What do you suggest?”",
+            physicalCues: ["Makes direct eye contact, waiting"],
+            verbalCues: ["“What do you suggest?”"],
+            toneTag: ""
+          };
           wine = pickRandom(premiumWines);
         }
 
@@ -1566,36 +1401,34 @@
           toneTag: encounterData.toneTag,
           physicalCues: encounterData.physicalCues,
           verbalCues: encounterData.verbalCues,
-          bestMode: encounterData.bestMode,
-          bestHook: encounterData.bestHook,
+
           deliverOptionsS1: null,
           deliverOptionsS2: null,
           selectedS1: null,
           selectedS2: null,
           correctSlotS1: null,
-          correctSlotS2: null
+          correctSlotS2: null,
+
+          hesitationText: "",
+          hesitationCorrectMode: "",
+          hesitationChoice: "",
+          hesitationCorrect: false
         };
 
         currentStep = 0;
         renderEncounterStep();
       }
 
-      // ---------- Button wiring ----------
-      function ensureElement(id) {
-        const el = document.getElementById(id);
-        if (!el) console.error("Missing element:", id);
-        return el;
-      }
-
+      // ---------- History ----------
       function renderHistory() {
         const historyList = document.getElementById("historyList");
         const historyTitle = document.getElementById("historyTitle");
         if (!historyList || !historyTitle) return;
 
         historyTitle.innerText = activeMode === "demo" ? "Demo History" : "Premium History";
-
         historyList.innerText = "";
-        const list = (activeMode === "demo" ? demoRuns : premiumRuns).slice(-10).reverse();
+
+        const list = (activeMode === "demo" ? demoRuns : premiumRuns).slice(-20).reverse();
 
         list.forEach((entry) => {
           const item = document.createElement("div");
@@ -1605,7 +1438,7 @@
           row.className = "history-row";
 
           const summary = document.createElement("div");
-          summary.innerText = entry.timestamp + " | " + entry.modeSelected + " | " + entry.wineSelected;
+          summary.innerText = `${entry.timestamp} | Wine: ${entry.wineSelected} | Mode: ${entry.modeSelected} | Hook: ${entry.hookSelected}`;
 
           const toggleBtn = document.createElement("button");
           toggleBtn.className = "small-btn";
@@ -1614,10 +1447,19 @@
           const details = document.createElement("div");
           details.className = "history-details";
           details.style.display = "none";
+
+          const hesitationLine = entry.hesitationText
+            ? `\nSacred: ${entry.hesitationText}\nChoice: ${entry.hesitationChoice} (${entry.hesitationCorrect ? "✅" : "❌"})`
+            : "";
+
           details.innerText =
-            "Guest Actual: " + entry.guestStateActual +
-            " | Guest Selected: " + entry.guestStateSelected +
-            " | Hook: " + entry.hookSelected;
+            `Guest Actual: ${entry.guestStateActual}\n` +
+            `Guest Chosen: ${entry.guestStateSelected}\n` +
+            `Mode: ${entry.modeSelected}\n` +
+            `Hook: ${entry.hookSelected}\n` +
+            `Line 1: ${entry.deliveryLine1}\n` +
+            `Line 2: ${entry.deliveryLine2}` +
+            hesitationLine;
 
           row.appendChild(summary);
           row.appendChild(toggleBtn);
@@ -1633,6 +1475,7 @@
         });
       }
 
+      // ---------- Resets ----------
       function resetRunsOnly(tierType) {
         if (!confirm("This will clear saved encounters but keep wines.")) return;
         if (tierType === "demo") {
@@ -1661,6 +1504,13 @@
           saveProgress("premium");
         }
         renderWineTables();
+      }
+
+      // ---------- Buttons ----------
+      function ensureElement(id) {
+        const el = document.getElementById(id);
+        if (!el) console.error("Missing element:", id);
+        return el;
       }
 
       function initButtons() {
@@ -1699,9 +1549,6 @@
           localStorage.removeItem(demoRunsKey);
           localStorage.removeItem(premiumRunsKey);
           localStorage.removeItem("bc_demo_step");
-          localStorage.removeItem("bc_state_bag");
-          localStorage.removeItem("bc_state_bag_index");
-          localStorage.removeItem("bc_last_guest_state");
           localStorage.removeItem(coverKey);
 
           demoWines = [];
@@ -1709,9 +1556,6 @@
           demoRuns = [];
           premiumRuns = [];
           demoStep = 0;
-          stateBag = [];
-          stateBagIndex = 0;
-          lastGuestState = "";
           activeMode = null;
 
           renderWineTables();
@@ -1759,6 +1603,7 @@
         bindInput(addWineBtnDemo, () => addWineFromForm("demo"));
         bindInput(addWineBtnPremium, () => addWineFromForm("premium"));
 
+        // Delete via delegation
         const demoWineTableBody = ensureElement("demoWineTableBody");
         const premiumWineTableBody = ensureElement("premiumWineTableBody");
         const demoWineCards = ensureElement("demoWineCards");
@@ -1777,6 +1622,7 @@
         bindInput(demoWineCards, delHandler("demo"));
         bindInput(premiumWineCards, delHandler("premium"));
 
+        // Home: inject "Welcome" button (script-only)
         const homePanel = document.querySelector("#screenHome .panel");
         if (homePanel && !document.getElementById("btnBackToWelcome")) {
           const row = document.createElement("div");
@@ -1824,5 +1670,6 @@
   });
 })();
 </script>
+
 </body>
 </html>
