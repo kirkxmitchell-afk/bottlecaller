@@ -2,14 +2,10 @@
 import { createClient } from "@supabase/supabase-js";
 
 /**
- * Vite env variables must start with VITE_ and live in:
- * my-vite-app/.env
- *
+ * Env vars live in: my-vite-app/.env
  * Required:
  * - VITE_SUPABASE_URL
  * - VITE_SUPABASE_ANON_KEY
- *
- * After editing .env, restart: npm run dev
  */
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -22,20 +18,23 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-/* Auth helpers used by the app — keep these small and predictable */
 export async function signIn(email, password) {
   return supabase.auth.signInWithPassword({ email, password });
 }
 
 /**
- * Pass metadata to populate new.raw_user_meta_data in Postgres trigger:
+ * Pass metadata for the trigger:
  * signUp(email, password, { role: 'admin', display_name: 'Kirk' })
  */
 export async function signUp(email, password, metadata = {}) {
   return supabase.auth.signUp({
     email,
     password,
-    options: { data: metadata }
+    options: {
+      data: metadata,
+      // If confirm-email is ON, send user back to your app after confirming
+      emailRedirectTo: window.location.origin
+    }
   });
 }
 

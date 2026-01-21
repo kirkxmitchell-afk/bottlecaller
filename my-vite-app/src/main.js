@@ -55,7 +55,7 @@ document.querySelector("#app").innerHTML = `
   <section id="screenProfileError" class="screen hidden">
     <div class="panel stack">
       <h2>Account setup issue</h2>
-      <p>Profile row missing or blocked by RLS. This usually means signup didn’t create a profile.</p>
+      <p>Your profile row is missing. This is usually a trigger/config issue.</p>
       <button id="btnRetryRoute" type="button">Retry</button>
       <button id="btnLogoutE" type="button">Logout</button>
       <pre id="profileErrBox" style="white-space:pre-wrap"></pre>
@@ -111,16 +111,23 @@ async function routeAfterLogin() {
   }
   if (!user) return showScreen("screenAuth");
 
+  // STEP 4 CHANGE: use maybeSingle() so "0 rows" doesn't throw hard
   const { data: profile, error: pErr } = await supabase
     .from("profiles")
     .select("role, restaurant_id, display_name")
     .eq("user_id", user.id)
-    .single();
+    .maybeSingle();
 
-  if (pErr || !profile) {
-    console.error("Profile missing or blocked by RLS:", pErr);
+  if (pErr) {
+    console.error("Profile query error:", pErr);
     const errBox = document.getElementById("profileErrBox");
     if (errBox) errBox.textContent = JSON.stringify(pErr, null, 2);
+    return showScreen("screenProfileError");
+  }
+
+  if (!profile) {
+    const errBox = document.getElementById("profileErrBox");
+    if (errBox) errBox.textContent = "No profile row found for this user yet.";
     return showScreen("screenProfileError");
   }
 
@@ -152,7 +159,7 @@ document.getElementById("btnLogin").addEventListener("click", async () => {
   }
 });
 
-// ✅ Signup: send metadata, DO NOT insert profiles from client anymore
+// Signup: send metadata, trigger creates profile automatically
 async function doSignup(role) {
   try {
     const displayName = document.getElementById("suName").value.trim();
@@ -165,11 +172,11 @@ async function doSignup(role) {
     });
     if (error) throw error;
 
-    // Session might be null if confirm-email is ON; trigger still creates profile.
+    // Session may be null until email confirmed; this is fine.
     await getSession();
 
-    setMsg("signupMsg", "Signup complete. Now routing…");
-    await routeAfterLogin();
+    setMsg("signupMsg", "Signup created. Check your email to confirm, then return and log in.");
+    showScreen("screenAuth");
   } catch (e) {
     console.error(e);
     setMsg("signupMsg", e.message || "Signup failed");
