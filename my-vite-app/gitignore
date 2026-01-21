@@ -1,13 +1,10 @@
-# -------------------------
+cat > .gitignore <<'EOF'
 # Secrets / Env
-# -------------------------
 .env
 .env.*
 !.env.example
 
-# -------------------------
 # Logs
-# -------------------------
 logs
 *.log
 npm-debug.log*
@@ -15,22 +12,17 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+lerna-debug.log*
 
-# -------------------------
 # Dependencies
-# -------------------------
 node_modules/
 
-# -------------------------
 # Build output
-# -------------------------
 dist/
 dist-ssr/
 *.local
 
-# -------------------------
-# OS / Editor files
-# -------------------------
+# OS / Editor
 .DS_Store
 .vscode/*
 !.vscode/extensions.json
@@ -40,3 +32,4 @@ dist-ssr/
 *.njsproj
 *.sln
 *.sw?
+EOF
