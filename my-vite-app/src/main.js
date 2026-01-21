@@ -1,6 +1,6 @@
 // src/main.js
 import "./style.css";
-import { supabase, signIn, signUp, signOut } from "./lib/supabaseClient.js";
+import { supabase, signIn, signUp, signOut, getUser, getSession } from "./lib/supabaseClient.js";
 
 console.log("supabase client present:", !!supabase);
 
@@ -91,23 +91,24 @@ function setMsg(elId, msg) {
   if (el) el.textContent = msg || "";
 }
 
-// ---------- ROUTER (STEP 6 CORE) ----------
-async function routeAfterLogin() {
+function clearMsgs() {
   setMsg("authMsg", "");
   setMsg("signupMsg", "");
   setMsg("createRestMsg", "");
   setMsg("joinMsg", "");
-
   const errBox = document.getElementById("profileErrBox");
   if (errBox) errBox.textContent = "";
+}
 
-  const { data: userData, error: userErr } = await supabase.auth.getUser();
+// ---------- ROUTER (STEP 6 CORE) ----------
+async function routeAfterLogin() {
+  clearMsgs();
+
+  const { user, error: userErr } = await getUser();
   if (userErr) {
     console.error(userErr);
     return showScreen("screenAuth");
   }
-
-  const user = userData.user;
   if (!user) return showScreen("screenAuth");
 
   const { data: profile, error: pErr } = await supabase
@@ -118,6 +119,7 @@ async function routeAfterLogin() {
 
   if (pErr || !profile) {
     console.error("Profile missing or blocked by RLS:", pErr);
+    const errBox = document.getElementById("profileErrBox");
     if (errBox) errBox.textContent = JSON.stringify(pErr, null, 2);
     return showScreen("screenProfileError");
   }
@@ -150,9 +152,14 @@ document.getElementById("btnLogin").addEventListener("click", async () => {
   }
 });
 
-// NOTE: If email confirmation is ON, signUp may not create a session immediately,
-// and inserting profiles from the client will hit RLS. For fastest dev, turn off email confirmation.
-// For production, use an auth trigger to create profiles.
+/**
+ * Signup + profile insert:
+ * If Supabase email confirmation is ON, signUp may NOT create a session immediately.
+ * That means inserting into profiles from the client can fail RLS (auth.uid() null).
+ *
+ * Fast dev path: disable email confirmation.
+ * Production path: auth trigger creates profile server-side.
+ */
 async function doSignup(role) {
   try {
     const displayName = document.getElementById("suName").value.trim();
@@ -162,8 +169,15 @@ async function doSignup(role) {
     const { data, error } = await signUp(email, password);
     if (error) throw error;
 
-    const userId = data.user?.id;
-    if (!userId) throw new Error("No user returned from signUp");
+    const userId = data?.user?.id;
+    if (!userId) {
+      throw new Error(
+        "Signup created no active user session. If email confirmation is enabled, check your email first (or disable confirmation for dev)."
+      );
+    }
+
+    // Helps with timing in some environments (won't override confirm-email requirement)
+    await getSession();
 
     const { error: pErr } = await supabase.from("profiles").insert({
       user_id: userId,
@@ -171,7 +185,16 @@ async function doSignup(role) {
       display_name: displayName || null,
       restaurant_id: null
     });
-    if (pErr) throw pErr;
+
+    if (pErr) {
+      const msg = (pErr.message || "").toLowerCase();
+      if (msg.includes("row level security")) {
+        throw new Error(
+          "Profile creation blocked by RLS. If email confirmation is enabled, disable it for dev OR add an auth trigger to auto-create profiles."
+        );
+      }
+      throw pErr;
+    }
 
     setMsg("signupMsg", "Signup complete. Now routing…");
     await routeAfterLogin();
@@ -192,8 +215,7 @@ document.getElementById("btnCreateRestaurant").addEventListener("click", async (
 
     if (!name) throw new Error("Restaurant name is required");
 
-    const { data: userData } = await supabase.auth.getUser();
-    const user = userData.user;
+    const { user } = await getUser();
     if (!user) throw new Error("Not logged in");
 
     const code = Math.random().toString(16).slice(2, 12).toUpperCase();
@@ -243,7 +265,7 @@ document.getElementById("btnJoin").addEventListener("click", async () => {
 async function doLogout() {
   try {
     await signOut();
-    gameInitialized = false; // allow re-init after logout/login
+    gameInitialized = false;
     await routeAfterLogin();
   } catch (e) {
     console.error(e);
