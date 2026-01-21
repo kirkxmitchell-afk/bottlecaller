@@ -6,5 +6,5 @@ export {
   signOut,
   getUser,
   getSession,
-  onAuthStateChange,
+  onAuthStateChange
 } from "./lib/supabaseClient.js";

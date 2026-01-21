@@ -152,49 +152,21 @@ document.getElementById("btnLogin").addEventListener("click", async () => {
   }
 });
 
-/**
- * Signup + profile insert:
- * If Supabase email confirmation is ON, signUp may NOT create a session immediately.
- * That means inserting into profiles from the client can fail RLS (auth.uid() null).
- *
- * Fast dev path: disable email confirmation.
- * Production path: auth trigger creates profile server-side.
- */
+// ✅ Signup: send metadata, DO NOT insert profiles from client anymore
 async function doSignup(role) {
   try {
     const displayName = document.getElementById("suName").value.trim();
     const email = document.getElementById("suEmail").value.trim();
     const password = document.getElementById("suPassword").value;
 
-    const { data, error } = await signUp(email, password);
+    const { error } = await signUp(email, password, {
+      role,
+      display_name: displayName || null
+    });
     if (error) throw error;
 
-    const userId = data?.user?.id;
-    if (!userId) {
-      throw new Error(
-        "Signup created no active user session. If email confirmation is enabled, check your email first (or disable confirmation for dev)."
-      );
-    }
-
-    // Helps with timing in some environments (won't override confirm-email requirement)
+    // Session might be null if confirm-email is ON; trigger still creates profile.
     await getSession();
-
-    const { error: pErr } = await supabase.from("profiles").insert({
-      user_id: userId,
-      role,
-      display_name: displayName || null,
-      restaurant_id: null
-    });
-
-    if (pErr) {
-      const msg = (pErr.message || "").toLowerCase();
-      if (msg.includes("row level security")) {
-        throw new Error(
-          "Profile creation blocked by RLS. If email confirmation is enabled, disable it for dev OR add an auth trigger to auto-create profiles."
-        );
-      }
-      throw pErr;
-    }
 
     setMsg("signupMsg", "Signup complete. Now routing…");
     await routeAfterLogin();

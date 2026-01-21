@@ -27,8 +27,16 @@ export async function signIn(email, password) {
   return supabase.auth.signInWithPassword({ email, password });
 }
 
-export async function signUp(email, password) {
-  return supabase.auth.signUp({ email, password });
+/**
+ * Pass metadata to populate new.raw_user_meta_data in Postgres trigger:
+ * signUp(email, password, { role: 'admin', display_name: 'Kirk' })
+ */
+export async function signUp(email, password, metadata = {}) {
+  return supabase.auth.signUp({
+    email,
+    password,
+    options: { data: metadata }
+  });
 }
 
 export async function signOut() {

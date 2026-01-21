@@ -2,43 +2,20 @@
 import { supabase, signIn, signUp, signOut as sbSignOut, getUser, getSession } from "./lib/supabaseClient.js";
 
 /**
- * NOTE ABOUT SIGNUP + RLS:
- * If Supabase email confirmation is ON, signUp may NOT create an authenticated session immediately.
- * In that case, inserting into `profiles` from the client can hit RLS (auth.uid() is null).
- *
- * Fast dev path: disable email confirmation.
- * Production path: use an auth trigger to create profiles server-side.
+ * With the DB trigger enabled, you do NOT insert into profiles from the client anymore.
+ * The trigger creates the profile row automatically on signup.
  */
 
 export async function signUpEmail({ email, password, displayName, role }) {
-  // Create auth user
-  const { data, error } = await signUp(email, password);
+  const { error } = await signUp(email, password, {
+    role,
+    display_name: displayName || null
+  });
   if (error) throw error;
 
-  const userId = data?.user?.id;
-  if (!userId) throw new Error("Signup succeeded but no user returned.");
-
-  // Try to ensure session exists (helps in some cases; won't fix email-confirm-required)
+  // If email confirmation is enabled, session may be null until confirmed.
+  // That's okay now — the trigger still creates the profile row.
   await getSession();
-
-  // Create the user's profile row (required for routing)
-  const { error: pErr } = await supabase.from("profiles").insert({
-    user_id: userId,
-    role,
-    display_name: displayName || null,
-    restaurant_id: null
-  });
-
-  if (pErr) {
-    // Give a clearer message for the common case
-    const msg = pErr?.message || String(pErr);
-    if (msg.toLowerCase().includes("row level security")) {
-      throw new Error(
-        "Profile insert blocked by RLS. If email confirmation is enabled, disable it for dev or add an auth trigger to create profiles."
-      );
-    }
-    throw pErr;
-  }
 
   return { ok: true };
 }
@@ -57,7 +34,7 @@ export async function signOut() {
 export async function getCurrentSession() {
   const { session, error } = await getSession();
   if (error) throw error;
-  return session; // may be null
+  return session;
 }
 
 export async function getMyProfile() {
@@ -84,8 +61,6 @@ export async function joinRestaurantByCode(code) {
   });
 
   if (error) throw error;
-
-  // Expected: { ok: true } or { ok:false, error:'seat_limit_reached' }
   return data;
 }
 
@@ -114,7 +89,6 @@ export async function createRestaurant({ name, seatLimit = 15, code }) {
 
   if (error) throw error;
 
-  // Attach admin to their restaurant
   const { error: pErr } = await supabase
     .from("profiles")
     .update({ restaurant_id: data.id })
@@ -122,5 +96,5 @@ export async function createRestaurant({ name, seatLimit = 15, code }) {
 
   if (pErr) throw pErr;
 
-  return data; // includes code
+  return data;
 }
