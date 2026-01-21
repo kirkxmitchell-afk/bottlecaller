@@ -1,2 +1,10 @@
 // src/supabase.js
-export * from "./lib/supabaseClient.js";
+export {
+  supabase,
+  signIn,
+  signUp,
+  signOut,
+  getUser,
+  getSession,
+  onAuthStateChange,
+} from "./lib/supabaseClient.js";
