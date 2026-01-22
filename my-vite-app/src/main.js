@@ -83,7 +83,7 @@ document.querySelector("#app").innerHTML = `
     </div>
   </section>
 
-  <!-- ✅ DEBUG PANEL IS ALWAYS VISIBLE + PINNED (CSS-PROOF) -->
+  <!-- ✅ DEBUG PANEL (ALWAYS VISIBLE + PINNED) -->
   <pre id="debugPanel"
     style="
       position: fixed;
@@ -104,7 +104,7 @@ document.querySelector("#app").innerHTML = `
     "></pre>
 `;
 
-// If you don't see this text, the file isn't actually being loaded/refreshed.
+// If you don't see this text, this file isn't being loaded/refreshed.
 document.getElementById("debugPanel").textContent = "Debug panel live ✅";
 
 // ---------- HELPERS ----------
@@ -161,7 +161,7 @@ function renderInvitePanel() {
   }
 }
 
-// ---------- TIMEOUT HELPER (prevents "hang forever") ----------
+// ---------- TIMEOUT HELPER ----------
 function withTimeout(promise, ms, label = "operation") {
   let timer;
   const timeout = new Promise((_, reject) => {
@@ -170,7 +170,7 @@ function withTimeout(promise, ms, label = "operation") {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
-// ---------- DEBUG (ALWAYS VISIBLE + TIMEOUT SAFE) ----------
+// ---------- DEBUG ----------
 function setDebug(obj) {
   const el = document.getElementById("debugPanel");
   if (!el) return;
@@ -178,11 +178,11 @@ function setDebug(obj) {
 }
 
 /**
- * This function MUST NEVER "hang".
- * If Supabase calls stall, we show a timeout error in the debug panel instead of staying on "Debug panel live ✅".
+ * Timeout-safe debug refresh:
+ * - If auth endpoints stall, you'll SEE it (no silent hangs).
  */
 async function refreshDebug(extra = {}) {
-  // Show immediate activity (before any awaits), so we know it's being called
+  // show immediate activity before any awaits
   setDebug({
     ...extra,
     time: new Date().toISOString(),
@@ -244,7 +244,37 @@ async function refreshDebug(extra = {}) {
       time: new Date().toISOString(),
       debugError: e?.message || String(e),
       note:
-        "If this is a timeout (auth.getUser/auth.getSession), the browser is not reaching Supabase. Next: test <SUPABASE_URL>/auth/v1/health in the browser.",
+        "If you see auth.getUser/auth.getSession timeout, the browser is not completing requests to Supabase. Next: run ping.health below + open /auth/v1/health in the browser.",
+    });
+  }
+}
+
+// ---------- CONNECTIVITY PROBES (separate from supabase-js) ----------
+async function pingSupabaseHealth() {
+  const base = import.meta.env.VITE_SUPABASE_URL;
+  const url = `${base}/auth/v1/health`;
+
+  try {
+    setDebug({ step: "ping.health.start", url, time: new Date().toISOString() });
+    const res = await withTimeout(fetch(url, { method: "GET" }), 6000, "fetch.health");
+    const text = await res.text();
+    setDebug({
+      step: "ping.health.ok",
+      time: new Date().toISOString(),
+      url,
+      status: res.status,
+      bodyPreview: text.slice(0, 220),
+      hint:
+        "If this works but auth.getUser times out, it's likely something specific to auth/session requests or storage. If this times out too, it's pure connectivity/path blocking to Supabase.",
+    });
+  } catch (e) {
+    setDebug({
+      step: "ping.health.fail",
+      time: new Date().toISOString(),
+      url,
+      error: e?.message || String(e),
+      hint:
+        "If fetch.health times out, your browser cannot complete HTTPS requests to Supabase from this origin/network. Test the same URL directly in the address bar.",
     });
   }
 }
@@ -311,6 +341,7 @@ document.getElementById("btnGoSignup").addEventListener("click", () => {
 document.getElementById("btnLogin").addEventListener("click", async () => {
   try {
     clearMsgs();
+
     const email = document.getElementById("authEmail").value.trim();
     const password = document.getElementById("authPassword").value;
 
@@ -360,7 +391,7 @@ async function doSignup(role) {
 document.getElementById("btnRoleAdmin").addEventListener("click", () => doSignup("admin"));
 document.getElementById("btnRoleWaiter").addEventListener("click", () => doSignup("waiter"));
 
-// Create restaurant
+// Create restaurant (Admin)
 document.getElementById("btnCreateRestaurant").addEventListener("click", async () => {
   try {
     clearMsgs({ keepCreate: true });
@@ -383,7 +414,10 @@ document.getElementById("btnCreateRestaurant").addEventListener("click", async (
       .single();
     if (rErr) throw rErr;
 
-    const { error: pErr } = await supabase.from("profiles").update({ restaurant_id: r.id }).eq("user_id", user.id);
+    const { error: pErr } = await supabase
+      .from("profiles")
+      .update({ restaurant_id: r.id })
+      .eq("user_id", user.id);
     if (pErr) throw pErr;
 
     appState.lastCreatedRestaurant = r;
@@ -416,7 +450,7 @@ document.getElementById("btnContinueToGame").addEventListener("click", async () 
   await routeAfterLogin();
 });
 
-// Join restaurant
+// Join restaurant (Waiter)
 document.getElementById("btnJoin").addEventListener("click", async () => {
   try {
     clearMsgs({ keepCreate: true });
@@ -470,12 +504,15 @@ async function doLogout() {
 
 document.getElementById("btnRetryRoute").addEventListener("click", () => routeAfterLogin());
 
-// Run on load
+// ---------- BOOT ----------
 routeAfterLogin();
 refreshDebug({ step: "app.load" });
+
+// Run a direct health ping (not using supabase-js) to isolate connectivity issues.
+pingSupabaseHealth();
 
 // Re-route on auth changes
 supabase.auth.onAuthStateChange(() => routeAfterLogin());
 
-// Prove we reached the end of this file (if you don't see this, script crashed earlier)
-setDebug({ step: "main.js reached end ✅" });
+// prove we reached the end of the file
+setDebug({ step: "main.js reached end ✅", time: new Date().toISOString() });
