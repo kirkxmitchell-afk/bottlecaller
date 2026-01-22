@@ -37,7 +37,20 @@ document.querySelector("#app").innerHTML = `
       <input id="restName" type="text" placeholder="Restaurant name" />
       <input id="restSeats" type="number" placeholder="Seat limit (default 15)" />
       <button id="btnCreateRestaurant" type="button">Create</button>
+
       <div id="createRestMsg"></div>
+
+      <div id="invitePanel" class="hidden">
+        <hr/>
+        <h3>Invite your waiters</h3>
+        <p><b>Join code:</b> <span id="inviteCodeText"></span></p>
+        <div class="row">
+          <button id="btnCopyCode" type="button">Copy code</button>
+          <button id="btnContinueToGame" type="button">Continue to game</button>
+        </div>
+        <div id="inviteMsg"></div>
+      </div>
+
       <button id="btnLogoutA" type="button">Logout</button>
     </div>
   </section>
@@ -69,14 +82,43 @@ document.querySelector("#app").innerHTML = `
       <button id="btnLogoutG" type="button">Logout</button>
     </div>
   </section>
+
+  <!-- ✅ DEBUG PANEL IS ALWAYS VISIBLE + PINNED (CSS-PROOF) -->
+  <pre id="debugPanel"
+    style="
+      position: fixed;
+      right: 12px;
+      bottom: 12px;
+      width: min(560px, 92vw);
+      max-height: 55vh;
+      overflow: auto;
+      z-index: 99999;
+      white-space: pre-wrap;
+      background: rgba(0,0,0,0.94);
+      color: #00ff66;
+      padding: 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      border: 1px solid rgba(0,255,102,0.35);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.55);
+    "></pre>
 `;
+
+// If you don't see this text, the file isn't actually being loaded/refreshed.
+document.getElementById("debugPanel").textContent = "Debug panel live ✅";
 
 // ---------- HELPERS ----------
 let gameInitialized = false;
 
+const appState = {
+  lastCreatedRestaurant: null, // { id, name, code, seat_limit }
+};
+
 function showScreen(id) {
   document.querySelectorAll(".screen").forEach((s) => s.classList.add("hidden"));
   document.getElementById(id)?.classList.remove("hidden");
+
+  if (id === "screenCreateRestaurant") renderInvitePanel();
 
   if (id === "screenGame" && !gameInitialized) {
     gameInitialized = true;
@@ -84,6 +126,8 @@ function showScreen(id) {
       window.initBottleCallerGame();
     }
   }
+
+  setTimeout(() => refreshDebug({ step: "showScreen", screen: id }), 0);
 }
 
 function setMsg(elId, msg) {
@@ -91,51 +135,171 @@ function setMsg(elId, msg) {
   if (el) el.textContent = msg || "";
 }
 
-function clearMsgs() {
+function clearMsgs(opts = { keepCreate: false }) {
   setMsg("authMsg", "");
   setMsg("signupMsg", "");
-  setMsg("createRestMsg", "");
   setMsg("joinMsg", "");
+  setMsg("inviteMsg", "");
+  if (!opts.keepCreate) setMsg("createRestMsg", "");
   const errBox = document.getElementById("profileErrBox");
   if (errBox) errBox.textContent = "";
 }
 
-// ---------- ROUTER (STEP 6 CORE) ----------
-async function routeAfterLogin() {
-  clearMsgs();
+function renderInvitePanel() {
+  const panel = document.getElementById("invitePanel");
+  const codeText = document.getElementById("inviteCodeText");
+  if (!panel || !codeText) return;
 
-  const { user, error: userErr } = await getUser();
-  if (userErr) {
-    console.error(userErr);
+  const r = appState.lastCreatedRestaurant;
+  if (r?.code) {
+    panel.classList.remove("hidden");
+    codeText.textContent = r.code;
+  } else {
+    panel.classList.add("hidden");
+    codeText.textContent = "";
+    setMsg("inviteMsg", "");
+  }
+}
+
+// ---------- TIMEOUT HELPER (prevents "hang forever") ----------
+function withTimeout(promise, ms, label = "operation") {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+// ---------- DEBUG (ALWAYS VISIBLE + TIMEOUT SAFE) ----------
+function setDebug(obj) {
+  const el = document.getElementById("debugPanel");
+  if (!el) return;
+  el.textContent = JSON.stringify(obj, null, 2);
+}
+
+/**
+ * This function MUST NEVER "hang".
+ * If Supabase calls stall, we show a timeout error in the debug panel instead of staying on "Debug panel live ✅".
+ */
+async function refreshDebug(extra = {}) {
+  // Show immediate activity (before any awaits), so we know it's being called
+  setDebug({
+    ...extra,
+    time: new Date().toISOString(),
+    debug: "refreshDebug called",
+  });
+
+  try {
+    const uRes = await withTimeout(supabase.auth.getUser(), 4000, "auth.getUser");
+    const sRes = await withTimeout(supabase.auth.getSession(), 4000, "auth.getSession");
+
+    const uData = uRes?.data;
+    const uErr = uRes?.error;
+    const sData = sRes?.data;
+    const sErr = sRes?.error;
+
+    let profile = null;
+    let pErr = null;
+
+    if (uData?.user) {
+      const res = await withTimeout(
+        supabase
+          .from("profiles")
+          .select("role, restaurant_id, display_name")
+          .eq("user_id", uData.user.id)
+          .maybeSingle(),
+        4000,
+        "profiles.select"
+      );
+      profile = res.data ?? null;
+      pErr = res.error ?? null;
+    }
+
+    const visibleScreens = Array.from(document.querySelectorAll(".screen"))
+      .filter((s) => !s.classList.contains("hidden"))
+      .map((s) => s.id);
+
+    setDebug({
+      ...extra,
+      time: new Date().toISOString(),
+      auth: {
+        user: uData?.user ? { id: uData.user.id, email: uData.user.email } : null,
+        hasSession: !!sData?.session,
+        userError: uErr?.message || null,
+        sessionError: sErr?.message || null,
+      },
+      profile,
+      profileError: pErr
+        ? { message: pErr.message, code: pErr.code, details: pErr.details, hint: pErr.hint }
+        : null,
+      screenVisible: visibleScreens,
+      lastCreatedRestaurant: appState.lastCreatedRestaurant
+        ? { id: appState.lastCreatedRestaurant.id, code: appState.lastCreatedRestaurant.code }
+        : null,
+    });
+  } catch (e) {
+    console.error("refreshDebug error:", e);
+    setDebug({
+      ...extra,
+      time: new Date().toISOString(),
+      debugError: e?.message || String(e),
+      note:
+        "If this is a timeout (auth.getUser/auth.getSession), the browser is not reaching Supabase. Next: test <SUPABASE_URL>/auth/v1/health in the browser.",
+    });
+  }
+}
+
+// ---------- ROUTER ----------
+async function routeAfterLogin(opts = { clear: true }) {
+  if (opts.clear) clearMsgs();
+
+  try {
+    await refreshDebug({ step: "route.start" });
+
+    const { user, error: userErr } = await getUser();
+    await refreshDebug({ step: "route.gotUser", hasUser: !!user, userErr: userErr?.message || null });
+
+    if (userErr) {
+      setMsg("authMsg", `Auth error: ${userErr.message || "unknown"}`);
+      return showScreen("screenAuth");
+    }
+
+    if (!user) {
+      setMsg("authMsg", "No active session. Log in again.");
+      return showScreen("screenAuth");
+    }
+
+    const { data: profile, error: pErr } = await supabase
+      .from("profiles")
+      .select("role, restaurant_id, display_name")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    await refreshDebug({ step: "route.profileFetched", hasProfile: !!profile, pErr: pErr?.message || null });
+
+    if (pErr) {
+      const errBox = document.getElementById("profileErrBox");
+      if (errBox) errBox.textContent = JSON.stringify(pErr, null, 2);
+      return showScreen("screenProfileError");
+    }
+
+    if (!profile) {
+      const errBox = document.getElementById("profileErrBox");
+      if (errBox) errBox.textContent = "No profile row found for this user yet.";
+      return showScreen("screenProfileError");
+    }
+
+    if (!profile.restaurant_id) {
+      return showScreen(profile.role === "admin" ? "screenCreateRestaurant" : "screenJoinRestaurant");
+    }
+
+    return showScreen("screenGame");
+  } catch (e) {
+    console.error("routeAfterLogin crash:", e);
+    setMsg("authMsg", `Router crashed: ${e.message || e}`);
+    await refreshDebug({ step: "route.crash", error: e.message || String(e) });
     return showScreen("screenAuth");
   }
-  if (!user) return showScreen("screenAuth");
-
-  // STEP 4 CHANGE: use maybeSingle() so "0 rows" doesn't throw hard
-  const { data: profile, error: pErr } = await supabase
-    .from("profiles")
-    .select("role, restaurant_id, display_name")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  if (pErr) {
-    console.error("Profile query error:", pErr);
-    const errBox = document.getElementById("profileErrBox");
-    if (errBox) errBox.textContent = JSON.stringify(pErr, null, 2);
-    return showScreen("screenProfileError");
-  }
-
-  if (!profile) {
-    const errBox = document.getElementById("profileErrBox");
-    if (errBox) errBox.textContent = "No profile row found for this user yet.";
-    return showScreen("screenProfileError");
-  }
-
-  if (!profile.restaurant_id) {
-    return showScreen(profile.role === "admin" ? "screenCreateRestaurant" : "screenJoinRestaurant");
-  }
-
-  return showScreen("screenGame");
 }
 
 // ---------- ACTIONS ----------
@@ -146,48 +310,61 @@ document.getElementById("btnGoSignup").addEventListener("click", () => {
 
 document.getElementById("btnLogin").addEventListener("click", async () => {
   try {
+    clearMsgs();
     const email = document.getElementById("authEmail").value.trim();
     const password = document.getElementById("authPassword").value;
 
-    const { error } = await signIn(email, password);
-    if (error) throw error;
+    setMsg("authMsg", "Logging in...");
+    await refreshDebug({ step: "login.clicked", email });
+
+    // If this hangs, we surface it
+    const res = await withTimeout(signIn(email, password), 12000, "signIn");
+    await refreshDebug({ step: "login.signInReturned", signInError: res?.error?.message || null });
+
+    if (res?.error) throw res.error;
+
+    setMsg("authMsg", "Signed in. Routing...");
+    await refreshDebug({ step: "login.success" });
 
     await routeAfterLogin();
   } catch (e) {
     console.error(e);
     setMsg("authMsg", e.message || "Login failed");
+    await refreshDebug({ step: "login.failed", error: e.message || String(e) });
   }
 });
 
-// Signup: send metadata, trigger creates profile automatically
+// Signup
 async function doSignup(role) {
   try {
     const displayName = document.getElementById("suName").value.trim();
     const email = document.getElementById("suEmail").value.trim();
     const password = document.getElementById("suPassword").value;
 
-    const { error } = await signUp(email, password, {
-      role,
-      display_name: displayName || null
-    });
+    await refreshDebug({ step: "signup.clicked", role, email });
+
+    const { error } = await signUp(email, password, { role, display_name: displayName || null });
     if (error) throw error;
 
-    // Session may be null until email confirmed; this is fine.
     await getSession();
-
     setMsg("signupMsg", "Signup created. Check your email to confirm, then return and log in.");
     showScreen("screenAuth");
+    await refreshDebug({ step: "signup.success", role, email });
   } catch (e) {
     console.error(e);
     setMsg("signupMsg", e.message || "Signup failed");
+    await refreshDebug({ step: "signup.failed", error: e.message || String(e) });
   }
 }
 
 document.getElementById("btnRoleAdmin").addEventListener("click", () => doSignup("admin"));
 document.getElementById("btnRoleWaiter").addEventListener("click", () => doSignup("waiter"));
 
+// Create restaurant
 document.getElementById("btnCreateRestaurant").addEventListener("click", async () => {
   try {
+    clearMsgs({ keepCreate: true });
+
     const name = document.getElementById("restName").value.trim();
     const seatLimitRaw = document.getElementById("restSeats").value;
     const seatLimit = seatLimitRaw ? parseInt(seatLimitRaw, 10) : 15;
@@ -202,30 +379,60 @@ document.getElementById("btnCreateRestaurant").addEventListener("click", async (
     const { data: r, error: rErr } = await supabase
       .from("restaurants")
       .insert({ name, code, seat_limit: seatLimit, created_by: user.id })
-      .select()
+      .select("id,name,code,seat_limit")
       .single();
     if (rErr) throw rErr;
 
-    const { error: pErr } = await supabase
-      .from("profiles")
-      .update({ restaurant_id: r.id })
-      .eq("user_id", user.id);
+    const { error: pErr } = await supabase.from("profiles").update({ restaurant_id: r.id }).eq("user_id", user.id);
     if (pErr) throw pErr;
 
-    setMsg("createRestMsg", `Created. Join code: ${r.code}`);
-    await routeAfterLogin();
+    appState.lastCreatedRestaurant = r;
+
+    setMsg("createRestMsg", `Created. Share this join code with your waiters: ${r.code}`);
+    showScreen("screenCreateRestaurant");
+    await refreshDebug({ step: "createRestaurant.success", code: r.code });
   } catch (e) {
     console.error(e);
     setMsg("createRestMsg", e.message || "Create failed");
+    await refreshDebug({ step: "createRestaurant.failed", error: e.message || String(e) });
   }
 });
 
+document.getElementById("btnCopyCode").addEventListener("click", async () => {
+  try {
+    const code = appState.lastCreatedRestaurant?.code;
+    if (!code) throw new Error("No code to copy yet.");
+    await navigator.clipboard.writeText(code);
+    setMsg("inviteMsg", "Copied to clipboard.");
+  } catch (e) {
+    console.error(e);
+    setMsg("inviteMsg", e.message || "Copy failed.");
+  } finally {
+    await refreshDebug({ step: "copyCode.clicked" });
+  }
+});
+
+document.getElementById("btnContinueToGame").addEventListener("click", async () => {
+  await routeAfterLogin();
+});
+
+// Join restaurant
 document.getElementById("btnJoin").addEventListener("click", async () => {
   try {
+    clearMsgs({ keepCreate: true });
+
     const code = document.getElementById("joinCode").value.trim().toUpperCase();
     if (!code) throw new Error("Enter a restaurant code");
 
-    const { data, error } = await supabase.rpc("join_restaurant_by_code", { p_code: code });
+    await refreshDebug({ step: "join.clicked", code });
+
+    // Support both possible RPC parameter names (p_code vs join_code)
+    let rpcRes = await supabase.rpc("join_restaurant_by_code", { p_code: code });
+    if (rpcRes.error && /p_code/i.test(rpcRes.error.message || "")) {
+      rpcRes = await supabase.rpc("join_restaurant_by_code", { join_code: code });
+    }
+
+    const { data, error } = rpcRes;
     if (error) throw error;
 
     if (!data?.ok) {
@@ -234,20 +441,26 @@ document.getElementById("btnJoin").addEventListener("click", async () => {
       throw new Error("Could not join restaurant.");
     }
 
+    await refreshDebug({ step: "join.success" });
     await routeAfterLogin();
   } catch (e) {
     console.error(e);
     setMsg("joinMsg", e.message || "Join failed");
+    await refreshDebug({ step: "join.failed", error: e.message || String(e) });
   }
 });
 
+// Logout
 async function doLogout() {
   try {
     await signOut();
     gameInitialized = false;
+    appState.lastCreatedRestaurant = null;
     await routeAfterLogin();
   } catch (e) {
     console.error(e);
+  } finally {
+    await refreshDebug({ step: "logout" });
   }
 }
 
@@ -255,10 +468,14 @@ async function doLogout() {
   document.getElementById(id).addEventListener("click", doLogout);
 });
 
-document.getElementById("btnRetryRoute").addEventListener("click", routeAfterLogin);
+document.getElementById("btnRetryRoute").addEventListener("click", () => routeAfterLogin());
 
 // Run on load
 routeAfterLogin();
+refreshDebug({ step: "app.load" });
 
 // Re-route on auth changes
 supabase.auth.onAuthStateChange(() => routeAfterLogin());
+
+// Prove we reached the end of this file (if you don't see this, script crashed earlier)
+setDebug({ step: "main.js reached end ✅" });
