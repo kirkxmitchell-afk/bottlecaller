@@ -17,7 +17,7 @@ document.querySelector("#app").innerHTML = `
       </div>
 
       <p style="margin-top:6px; opacity:.9;">
-        Demo is open. Premium is for restaurant teams (invite-only).
+        Demo is open. Premium is for restaurant teams (invite-only + manager approval).
       </p>
 
       <div class="row" style="margin-top:6px;">
@@ -29,7 +29,7 @@ document.querySelector("#app").innerHTML = `
 
       <h3 style="margin:0;">Dev login (optional)</h3>
       <p style="margin-top:6px; opacity:.8; font-size:13px;">
-        This is only for testing. Premium entry is below.
+        This is only for testing. Premium entry is above.
       </p>
 
       <input id="authEmail" type="email" placeholder="Email" />
@@ -78,12 +78,12 @@ document.querySelector("#app").innerHTML = `
       <div id="premMsg"></div>
 
       <p style="margin-top:10px; opacity:.75; font-size:12px;">
-        Waiters join via invite-only email verification + join code.
+        Waiters request access using the join code. Managers accept/reject in the menu.
       </p>
     </div>
   </section>
 
-  <!-- PREMIUM WAITER JOIN (Invite-only + Email OTP + Join Code) -->
+  <!-- PREMIUM WAITER JOIN (Invite-only + Manager approval) -->
   <section id="screenPremiumWaiterJoin" class="screen hidden">
     <div class="panel stack">
       <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
@@ -92,26 +92,36 @@ document.querySelector("#app").innerHTML = `
       </div>
 
       <p style="margin-top:6px; opacity:.9;">
-        Enter your invite email + the restaurant join code. We’ll send a 6-digit code to verify your email.
+        Enter the restaurant join code. Your manager must approve your request.
       </p>
 
-      <input id="wjEmail" type="email" placeholder="Invite email" />
       <input id="wjCode" type="text" placeholder="Restaurant join code" />
 
       <div class="row">
-        <button id="btnSendOtp" type="button">Send verification code</button>
-      </div>
-
-      <input id="wjOtp" type="text" placeholder="6-digit code" />
-      <div class="row">
-        <button id="btnVerifyOtpAndJoin" type="button">Verify + Join</button>
+        <button id="btnRequestJoin" type="button">Request Access</button>
       </div>
 
       <div id="wjMsg"></div>
 
       <p style="margin-top:10px; opacity:.75; font-size:12px;">
-        Invite-only: if your email isn’t on the manager invite list, you can’t join.
+        Invite-only: your email must be on the manager invite list (if invite required is enabled).
       </p>
+    </div>
+  </section>
+
+  <!-- WAITING FOR APPROVAL -->
+  <section id="screenWaiterPending" class="screen hidden">
+    <div class="panel stack">
+      <h2>Waiting for approval</h2>
+      <p>Your manager must approve your request from their Premium menu.</p>
+      <div id="pendingMsg"></div>
+
+      <div class="row">
+        <button id="btnPendingRefresh" type="button">Refresh</button>
+        <button id="btnPendingCancel" type="button">Cancel request</button>
+      </div>
+
+      <button id="btnLogoutPending" type="button">Logout</button>
     </div>
   </section>
 
@@ -235,6 +245,14 @@ document.querySelector("#app").innerHTML = `
 
       <hr style="opacity:.25; margin:12px 0;" />
 
+      <h3 style="margin:0;">Join requests</h3>
+      <p style="margin:6px 0 0; font-size:12px; opacity:.8;">
+        Waiters request access using the join code. Approve once-off here.
+      </p>
+      <div id="joinRequestsList" style="margin-top:10px; font-size:12px; opacity:.95;"></div>
+
+      <hr style="opacity:.25; margin:12px 0;" />
+
       <h3 style="margin:0;">Invite emails</h3>
       <div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
         <input id="inviteEmailInput" type="email" placeholder="waiter@email.com" style="flex:1; min-width:220px;" />
@@ -275,11 +293,14 @@ let appMode = "public"; // public | demo | premium
 let routingLock = false;
 let lastRouteAt = 0;
 
+let pendingPollTimer = null;
+
 const appState = {
   session: null,
   profile: null, // { role, restaurant_id, display_name }
   restaurant: null, // { id, name, code, seat_limit, require_invite }
   invites: [],
+  joinRequests: [],
 };
 
 // ------------------------------------------------------------
@@ -300,6 +321,7 @@ function clearMsgs() {
   setMsg("signupMsgDev", "");
   setMsg("premMsg", "");
   setMsg("wjMsg", "");
+  setMsg("pendingMsg", "");
   setMsg("createRestMsg", "");
   setMsg("inviteMsg", "");
   setMsg("hudMsg", "");
@@ -323,6 +345,11 @@ function normEmail(v) {
 
 function normCode(v) {
   return (v || "").trim().toUpperCase();
+}
+
+function stopPendingPoll() {
+  if (pendingPollTimer) clearInterval(pendingPollTimer);
+  pendingPollTimer = null;
 }
 
 // ------------------------------------------------------------
@@ -362,6 +389,37 @@ async function loadInvites(restaurantId) {
   return res.data || [];
 }
 
+async function loadPendingJoinRequests(restaurantId) {
+  const res = await withTimeout(
+    supabase
+      .from("join_requests")
+      .select("id,email,status,created_at")
+      .eq("restaurant_id", restaurantId)
+      .eq("status", "pending")
+      .order("created_at", { ascending: false }),
+    12000,
+    "join_requests.select"
+  );
+  if (res.error) throw res.error;
+  return res.data || [];
+}
+
+async function fetchMyLatestJoinRequest(userId) {
+  const res = await withTimeout(
+    supabase
+      .from("join_requests")
+      .select("id,status,restaurant_id,created_at")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    12000,
+    "join_requests.my_latest"
+  );
+  if (res.error) throw res.error;
+  return res.data;
+}
+
 // ------------------------------------------------------------
 // HUD
 // ------------------------------------------------------------
@@ -384,16 +442,13 @@ function renderHud() {
   document.getElementById("hudSeatLimit").textContent = r?.seat_limit ?? "-";
   document.getElementById("hudRequireInvite").textContent = r ? (r.require_invite ? "Yes" : "No") : "-";
 
-  // Badge can show role too
   const badge = document.getElementById("premiumBadge");
-  if (badge) badge.textContent = `PREMIUM • ${role.toUpperCase()}`;
+  if (badge) badge.textContent = `PREMIUM • ${String(role).toUpperCase()}`;
 
-  // Admin block
   const adminBlock = document.getElementById("adminOnlyBlock");
   if (role === "admin") adminBlock.classList.remove("hidden");
   else adminBlock.classList.add("hidden");
 
-  // Admin form defaults
   const toggle = document.getElementById("toggleRequireInvite");
   if (toggle && r) toggle.checked = !!r.require_invite;
 
@@ -401,6 +456,7 @@ function renderHud() {
   if (seatInput && r) seatInput.value = String(r.seat_limit ?? "");
 
   renderInvitesList();
+  renderJoinRequestsList();
 }
 
 function renderInvitesList() {
@@ -413,7 +469,7 @@ function renderInvitesList() {
     return;
   }
 
-  const rows = invites
+  el.innerHTML = invites
     .map((i) => {
       const status = i.status;
       const email = i.email;
@@ -438,9 +494,6 @@ function renderInvitesList() {
     })
     .join("");
 
-  el.innerHTML = rows;
-
-  // attach click handlers
   el.querySelectorAll("button[data-action]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const action = btn.getAttribute("data-action");
@@ -449,6 +502,52 @@ function renderInvitesList() {
 
       if (action === "revoke") await adminRevokeInvite(email);
       if (action === "reinvite") await adminAddInvite(email);
+    });
+  });
+}
+
+function renderJoinRequestsList() {
+  const el = document.getElementById("joinRequestsList");
+  if (!el) return;
+
+  const reqs = appState.joinRequests || [];
+  if (!reqs.length) {
+    el.innerHTML = `<div style="opacity:.8;">No pending requests.</div>`;
+    return;
+  }
+
+  el.innerHTML = reqs
+    .map((r) => {
+      const email = r.email || "unknown";
+      const created = r.created_at ? new Date(r.created_at).toLocaleString() : "";
+      return `
+        <div style="display:flex; justify-content:space-between; gap:10px; padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.08);">
+          <div style="min-width:0;">
+            <div style="font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${email}</div>
+            <div style="font-size:12px; opacity:.75;">pending • ${created}</div>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <button data-approve="${r.id}" style="font-size:12px;">Accept</button>
+            <button data-reject="${r.id}" style="font-size:12px; opacity:.9;">Reject</button>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+
+  el.querySelectorAll("button[data-approve]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const id = btn.getAttribute("data-approve");
+      if (!id) return;
+      await adminApproveJoinRequest(id);
+    });
+  });
+
+  el.querySelectorAll("button[data-reject]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const id = btn.getAttribute("data-reject");
+      if (!id) return;
+      await adminRejectJoinRequest(id);
     });
   });
 }
@@ -482,6 +581,8 @@ async function routePremium(reason = "manual") {
       appState.profile = null;
       appState.restaurant = null;
       appState.invites = [];
+      appState.joinRequests = [];
+      stopPendingPoll();
       return showScreen("screenPremiumAuth");
     }
 
@@ -498,9 +599,22 @@ async function routePremium(reason = "manual") {
     });
 
     if (!profile?.restaurant_id) {
-      // Only admins should create restaurant
-      if (profile?.role === "admin") return showScreen("screenCreateRestaurant");
-      // Waiters who are authenticated but not yet joined:
+      // Admins: create restaurant
+      if (profile?.role === "admin") {
+        stopPendingPoll();
+        return showScreen("screenCreateRestaurant");
+      }
+
+      // Waiters: if they already have a pending request, show waiting screen.
+      const latestReq = await fetchMyLatestJoinRequest(userId);
+      if (latestReq?.status === "pending") {
+        showScreen("screenWaiterPending");
+        setMsg("pendingMsg", "Status: pending");
+        startPendingPoll(userId);
+        return;
+      }
+
+      stopPendingPoll();
       return showScreen("screenPremiumWaiterJoin");
     }
 
@@ -508,33 +622,66 @@ async function routePremium(reason = "manual") {
     const restaurant = await loadRestaurant(profile.restaurant_id);
     appState.restaurant = restaurant;
 
-    // Load invites only for admin (RLS enforces anyway)
+    // Load invites + requests for admin (RLS enforces anyway)
     if (profile.role === "admin") {
       try {
         appState.invites = await loadInvites(restaurant.id);
       } catch (e) {
-        // If RLS blocks, show in debug but don't crash premium
-        setDebug({
-          step: "invites.load.failed",
-          time: new Date().toISOString(),
-          error: e?.message || String(e),
-        });
+        setDebug({ step: "invites.load.failed", time: new Date().toISOString(), error: e?.message || String(e) });
         appState.invites = [];
+      }
+
+      try {
+        appState.joinRequests = await loadPendingJoinRequests(restaurant.id);
+      } catch (e) {
+        setDebug({ step: "join_requests.load.failed", time: new Date().toISOString(), error: e?.message || String(e) });
+        appState.joinRequests = [];
       }
     } else {
       appState.invites = [];
+      appState.joinRequests = [];
     }
 
     renderHud();
+    stopPendingPoll();
     appMode = "premium";
     return showScreen("screenPremiumApp");
   } catch (e) {
     console.error(e);
     setDebug({ step: "premium.route.crash", time: new Date().toISOString(), error: e.message || String(e) });
+    stopPendingPoll();
     return showScreen("screenPremiumAuth");
   } finally {
     routingLock = false;
   }
+}
+
+// ------------------------------------------------------------
+// Pending poll (waiter)
+// ------------------------------------------------------------
+function startPendingPoll(userId) {
+  stopPendingPoll();
+  pendingPollTimer = setInterval(async () => {
+    try {
+      const req = await fetchMyLatestJoinRequest(userId);
+      if (!req) return;
+
+      setMsg("pendingMsg", `Status: ${req.status}`);
+
+      if (req.status === "approved") {
+        stopPendingPoll();
+        await routePremium("waiter.approved");
+      } else if (req.status === "rejected") {
+        stopPendingPoll();
+        setMsg("pendingMsg", "Status: rejected. Ask your manager or check the invite.");
+      } else if (req.status === "canceled") {
+        stopPendingPoll();
+        setMsg("pendingMsg", "Status: canceled.");
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, 2500);
 }
 
 // ------------------------------------------------------------
@@ -552,8 +699,6 @@ async function adminAddInvite(emailRaw) {
     if (!sess?.user) throw new Error("Not logged in.");
     if (appState.profile?.role !== "admin") throw new Error("Admin only.");
 
-    // Insert or re-enable if it already exists (unique constraint)
-    // We'll try insert first; if conflicts, update to pending.
     const ins = await withTimeout(
       supabase.from("restaurant_invites").insert({
         restaurant_id: r.id,
@@ -566,7 +711,6 @@ async function adminAddInvite(emailRaw) {
     );
 
     if (ins.error) {
-      // If unique violation, set it back to pending (re-invite)
       const upd = await withTimeout(
         supabase
           .from("restaurant_invites")
@@ -688,79 +832,93 @@ async function adminSaveSeatLimit() {
   }
 }
 
-// ------------------------------------------------------------
-// Premium waiter join (Invite-only + Email OTP)
-// ------------------------------------------------------------
-async function sendJoinOtp() {
+async function adminRefreshRequests() {
   try {
-    clearMsgs();
-    const email = normEmail(document.getElementById("wjEmail").value);
-    const code = normCode(document.getElementById("wjCode").value);
-
-    if (!email) throw new Error("Enter your invite email.");
-    if (!code) throw new Error("Enter the restaurant join code.");
-
-    setMsg("wjMsg", "Sending verification code...");
-    setDebug({ step: "waiter.otp.send.start", time: new Date().toISOString(), email, code });
-
-    // Passwordless email OTP (Supabase sends code/email)
-    const res = await withTimeout(
-      supabase.auth.signInWithOtp({
-        email,
-        options: {
-          shouldCreateUser: true,
-          emailRedirectTo: window.location.origin,
-        },
-      }),
-      15000,
-      "auth.signInWithOtp"
-    );
-
-    if (res.error) throw res.error;
-
-    setMsg("wjMsg", "Code sent. Check your email and enter the 6-digit code.");
-    setDebug({ step: "waiter.otp.send.ok", time: new Date().toISOString(), email });
+    const r = appState.restaurant;
+    if (!r?.id) return;
+    if (appState.profile?.role !== "admin") return;
+    appState.joinRequests = await loadPendingJoinRequests(r.id);
+    renderJoinRequestsList();
   } catch (e) {
-    console.error(e);
-    setMsg("wjMsg", e?.message || "Failed to send code");
-    setDebug({ step: "waiter.otp.send.failed", time: new Date().toISOString(), error: e?.message || String(e) });
+    setDebug({ step: "join_requests.refresh.failed", time: new Date().toISOString(), error: e?.message || String(e) });
   }
 }
 
-async function verifyOtpAndJoin() {
+async function adminApproveJoinRequest(requestId) {
+  try {
+    setMsg("hudMsg", "");
+    if (appState.profile?.role !== "admin") throw new Error("Admin only.");
+
+    setMsg("hudMsg", "Approving...");
+    setDebug({ step: "join_requests.approve.start", time: new Date().toISOString(), requestId });
+
+    const rpc = await withTimeout(
+      supabase.rpc("approve_join_request", { p_request_id: requestId }),
+      15000,
+      "rpc.approve_join_request"
+    );
+    if (rpc.error) throw rpc.error;
+    if (!rpc.data?.ok) throw new Error(rpc.data?.error || "Approve failed");
+
+    setMsg("hudMsg", "Approved (once-off).");
+    setDebug({ step: "join_requests.approve.ok", time: new Date().toISOString(), requestId });
+
+    await adminRefreshRequests();
+  } catch (e) {
+    console.error(e);
+    setMsg("hudMsg", e?.message || "Approve failed");
+    setDebug({ step: "join_requests.approve.failed", time: new Date().toISOString(), error: e?.message || String(e) });
+  }
+}
+
+async function adminRejectJoinRequest(requestId) {
+  try {
+    setMsg("hudMsg", "");
+    if (appState.profile?.role !== "admin") throw new Error("Admin only.");
+
+    setMsg("hudMsg", "Rejecting...");
+    setDebug({ step: "join_requests.reject.start", time: new Date().toISOString(), requestId });
+
+    const rpc = await withTimeout(
+      supabase.rpc("reject_join_request", { p_request_id: requestId }),
+      15000,
+      "rpc.reject_join_request"
+    );
+    if (rpc.error) throw rpc.error;
+    if (!rpc.data?.ok) throw new Error(rpc.data?.error || "Reject failed");
+
+    setMsg("hudMsg", "Rejected.");
+    setDebug({ step: "join_requests.reject.ok", time: new Date().toISOString(), requestId });
+
+    await adminRefreshRequests();
+  } catch (e) {
+    console.error(e);
+    setMsg("hudMsg", e?.message || "Reject failed");
+    setDebug({ step: "join_requests.reject.failed", time: new Date().toISOString(), error: e?.message || String(e) });
+  }
+}
+
+// ------------------------------------------------------------
+// Premium waiter request join (no email)
+// ------------------------------------------------------------
+async function waiterRequestJoin() {
   try {
     clearMsgs();
-    const email = normEmail(document.getElementById("wjEmail").value);
+
     const code = normCode(document.getElementById("wjCode").value);
-    const otp = (document.getElementById("wjOtp").value || "").trim();
-
-    if (!email) throw new Error("Enter your invite email.");
     if (!code) throw new Error("Enter the restaurant join code.");
-    if (!otp) throw new Error("Enter the 6-digit code from your email.");
 
-    setMsg("wjMsg", "Verifying code...");
-    setDebug({ step: "waiter.otp.verify.start", time: new Date().toISOString(), email });
+    const { session, error: sErr } = await withTimeout(getSession(), 8000, "getSession");
+    if (sErr) throw sErr;
+    if (!session?.user) throw new Error("You must be logged in to request access (create a waiter account).");
 
-    const verify = await withTimeout(
-      supabase.auth.verifyOtp({
-        email,
-        token: otp,
-        type: "email",
-      }),
-      15000,
-      "auth.verifyOtp"
-    );
+    setMsg("wjMsg", "Requesting access...");
+    setDebug({ step: "waiter.request_join.start", time: new Date().toISOString(), code });
 
-    if (verify.error) throw verify.error;
-
-    setMsg("wjMsg", "Verified. Joining restaurant...");
-    setDebug({ step: "waiter.join.rpc.start", time: new Date().toISOString(), email, code });
-
-    // Now that we have a session, call join RPC (invite-only enforced in DB)
     const rpc = await withTimeout(
-      supabase.rpc("join_restaurant_by_code", { p_code: code }),
+      supabase.rpc("request_join_by_code", { p_code: code }),
       15000,
-      "rpc.join_restaurant_by_code"
+      "rpc.request_join_by_code"
     );
 
     if (rpc.error) throw rpc.error;
@@ -768,27 +926,72 @@ async function verifyOtpAndJoin() {
     if (!rpc.data?.ok) {
       const err = rpc.data?.error || "unknown";
       if (err === "invite_required") throw new Error("Invite required. Ask the manager to add your email.");
-      if (err === "seat_limit_reached") throw new Error("Seat limit reached (restaurant full).");
       if (err === "invalid_code") throw new Error("Invalid join code.");
       if (err === "already_in_restaurant") throw new Error("You are already assigned to a restaurant.");
-      throw new Error("Could not join restaurant.");
+      throw new Error("Could not request access.");
     }
 
-    setMsg("wjMsg", "Joined. Loading Premium...");
-    setDebug({ step: "waiter.join.ok", time: new Date().toISOString(), restaurant_id: rpc.data.restaurant_id });
+    setMsg("wjMsg", "Requested. Waiting for manager approval...");
+    setDebug({ step: "waiter.request_join.ok", time: new Date().toISOString(), restaurant_id: rpc.data.restaurant_id });
 
-    await routePremium("waiter.join.ok");
+    showScreen("screenWaiterPending");
+    setMsg("pendingMsg", "Status: pending");
+    startPendingPoll(session.user.id);
   } catch (e) {
     console.error(e);
-    setMsg("wjMsg", e?.message || "Join failed");
-    setDebug({ step: "waiter.join.failed", time: new Date().toISOString(), error: e?.message || String(e) });
+    setMsg("wjMsg", e?.message || "Request failed");
+    setDebug({ step: "waiter.request_join.failed", time: new Date().toISOString(), error: e?.message || String(e) });
+  }
+}
+
+async function waiterCancelPending() {
+  try {
+    clearMsgs();
+    const { session, error: sErr } = await withTimeout(getSession(), 8000, "getSession");
+    if (sErr) throw sErr;
+    if (!session?.user) throw new Error("Not logged in.");
+
+    const latest = await fetchMyLatestJoinRequest(session.user.id);
+    if (!latest || latest.status !== "pending") throw new Error("No pending request to cancel.");
+
+    const upd = await withTimeout(
+      supabase.from("join_requests").update({ status: "canceled" }).eq("id", latest.id),
+      12000,
+      "join_requests.cancel"
+    );
+    if (upd.error) throw upd.error;
+
+    stopPendingPoll();
+    setMsg("pendingMsg", "Canceled.");
+    showScreen("screenPremiumWaiterJoin");
+  } catch (e) {
+    console.error(e);
+    setMsg("pendingMsg", e?.message || "Cancel failed");
+  }
+}
+
+async function waiterRefreshPending() {
+  try {
+    const { session } = await withTimeout(getSession(), 8000, "getSession");
+    const userId = session?.user?.id;
+    if (!userId) throw new Error("Not logged in.");
+
+    const latest = await fetchMyLatestJoinRequest(userId);
+    if (!latest) {
+      setMsg("pendingMsg", "No request found.");
+      return;
+    }
+    setMsg("pendingMsg", `Status: ${latest.status}`);
+    if (latest.status === "approved") await routePremium("waiter.manual_refresh.approved");
+  } catch (e) {
+    setMsg("pendingMsg", e?.message || "Refresh failed");
   }
 }
 
 // ------------------------------------------------------------
 // Create restaurant (Premium admin)
 // - default 15 seats
-// - default require_invite = true (invite-only, as you requested)
+// - default require_invite = true
 // ------------------------------------------------------------
 async function createPremiumRestaurant() {
   try {
@@ -801,7 +1004,7 @@ async function createPremiumRestaurant() {
     if (!session?.user) throw new Error("Not logged in.");
 
     const seatLimit = 15;
-    const requireInvite = true; // ✅ invite-only premium default
+    const requireInvite = true;
     const joinCode = Math.random().toString(16).slice(2, 12).toUpperCase();
 
     setMsg("createRestMsg", "Creating...");
@@ -826,7 +1029,6 @@ async function createPremiumRestaurant() {
 
     const r = ins.data;
 
-    // Link admin profile to restaurant
     const upd = await withTimeout(
       supabase.from("profiles").update({ restaurant_id: r.id }).eq("user_id", session.user.id),
       15000,
@@ -834,14 +1036,12 @@ async function createPremiumRestaurant() {
     );
     if (upd.error) throw upd.error;
 
-    // Render invite panel preview
     document.getElementById("invitePanel").classList.remove("hidden");
     document.getElementById("inviteCodeText").textContent = r.code;
 
     setMsg("createRestMsg", "Created. Join code is inside Premium menu.");
     setDebug({ step: "restaurant.create.ok", time: new Date().toISOString(), restaurant: r });
 
-    // Route into premium
     await routePremium("restaurant.create.ok");
   } catch (e) {
     console.error(e);
@@ -859,7 +1059,6 @@ document.getElementById("btnStartDemo").addEventListener("click", () => {
   appMode = "demo";
   setDebug({ step: "demo.start", time: new Date().toISOString() });
   showScreen("screenGameDemo");
-  // If your embedded HTML game initializer exists, call it.
   if (typeof window.initBottleCallerGame === "function") {
     try { window.initBottleCallerGame(); } catch {}
   }
@@ -926,7 +1125,11 @@ async function devSignup(role) {
     if (!email) throw new Error("Enter email.");
     if (!password) throw new Error("Enter password.");
 
-    const { error } = await withTimeout(signUp(email, password, { role, display_name: displayName || null }), 15000, "dev.signUp");
+    const { error } = await withTimeout(
+      signUp(email, password, { role, display_name: displayName || null }),
+      15000,
+      "dev.signUp"
+    );
     if (error) throw error;
 
     setMsg("signupMsgDev", "Signup created. If confirmation is on, confirm email then log in.");
@@ -976,7 +1179,11 @@ document.getElementById("btnPremiumSignup").addEventListener("click", async () =
     setMsg("premMsg", "Creating Premium manager account...");
     setDebug({ step: "premium.signup.start", time: new Date().toISOString(), email });
 
-    const { error } = await withTimeout(signUp(email, password, { role: "admin", display_name: null }), 15000, "premium.signUp");
+    const { error } = await withTimeout(
+      signUp(email, password, { role: "admin", display_name: null }),
+      15000,
+      "premium.signUp"
+    );
     if (error) throw error;
 
     setMsg("premMsg", "Account created. If confirmation is on, confirm email then log in.");
@@ -1004,12 +1211,15 @@ document.getElementById("btnCopyCode").addEventListener("click", async () => {
 });
 document.getElementById("btnEnterPremium").addEventListener("click", () => routePremium("enterPremium"));
 
-// Premium waiter join handlers
-document.getElementById("btnSendOtp").addEventListener("click", sendJoinOtp);
-document.getElementById("btnVerifyOtpAndJoin").addEventListener("click", verifyOtpAndJoin);
+// Waiter request join handlers
+document.getElementById("btnRequestJoin").addEventListener("click", waiterRequestJoin);
+document.getElementById("btnPendingRefresh").addEventListener("click", waiterRefreshPending);
+document.getElementById("btnPendingCancel").addEventListener("click", waiterCancelPending);
 
 // HUD open/close
-document.getElementById("btnOpenHud").addEventListener("click", () => {
+document.getElementById("btnOpenHud").addEventListener("click", async () => {
+  // refresh requests each time manager opens HUD
+  if (appState.profile?.role === "admin") await adminRefreshRequests();
   renderHud();
   openHud();
 });
@@ -1040,6 +1250,7 @@ document.getElementById("btnSaveSeatLimit").addEventListener("click", adminSaveS
 // Logout (premium)
 async function logoutPremium() {
   try {
+    stopPendingPoll();
     await signOut();
   } finally {
     appMode = "public";
@@ -1047,6 +1258,7 @@ async function logoutPremium() {
     appState.profile = null;
     appState.restaurant = null;
     appState.invites = [];
+    appState.joinRequests = [];
     closeHud();
     showScreen("screenPremiumAuth");
     setDebug({ step: "premium.logout", time: new Date().toISOString() });
@@ -1054,6 +1266,7 @@ async function logoutPremium() {
 }
 document.getElementById("btnLogoutPremium").addEventListener("click", logoutPremium);
 document.getElementById("btnLogoutCreate").addEventListener("click", logoutPremium);
+document.getElementById("btnLogoutPending").addEventListener("click", logoutPremium);
 
 // ------------------------------------------------------------
 // Boot + auth change routing
@@ -1063,10 +1276,7 @@ setDebug({ step: "boot.ready", time: new Date().toISOString(), supabaseUrl: impo
 
 supabase.auth.onAuthStateChange((event) => {
   setDebug({ step: "auth.change", event, time: new Date().toISOString() });
-  // Let auth storage settle
   setTimeout(() => {
-    // If user is in premium context OR already logged-in, route premium
-    // (This allows waiters after OTP to land in Premium)
     routePremium(`auth.change:${event}`);
   }, 150);
 });
