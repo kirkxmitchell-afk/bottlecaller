@@ -22,7 +22,6 @@ document.querySelector("#app").innerHTML = `
         </div>
       </div>
 
-      <div class="kicker">Identity</div>
       <h1 class="title">Sign in once. Choose your path.</h1>
       <p class="subtle">
         Waiters play Demo immediately and can join by code. Managers enter Premium to configure the restaurant.
