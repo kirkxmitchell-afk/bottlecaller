@@ -5,7 +5,7 @@ import { supabase, signIn, signUp, signOut, getSession } from "./lib/supabaseCli
 console.log("supabase client present:", !!supabase);
 
 // ------------------------------------------------------------
-// UI
+// UI (same look/structure, but removed join_requests + approval screens)
 // ------------------------------------------------------------
 document.querySelector("#app").innerHTML = `
   <!-- PUBLIC ENTRY (Demo + Premium) -->
@@ -29,7 +29,7 @@ document.querySelector("#app").innerHTML = `
 
       <h3 style="margin:0;">Dev login (optional)</h3>
       <p style="margin-top:6px; opacity:.8; font-size:13px;">
-        This is only for testing. If you log in as a waiter, you will land in Demo.
+        This is only for testing. Waiters land inside Demo after login.
       </p>
 
       <input id="authEmail" type="email" placeholder="Email" />
@@ -63,7 +63,7 @@ document.querySelector("#app").innerHTML = `
       </div>
 
       <p style="margin-top:6px; opacity:.9;">
-        Premium is for restaurant teams. Default <b>15 seats</b> (editable later).
+        Premium is for <b>managers</b>. Default <b>15 seats</b> (editable later).
       </p>
 
       <h3 style="margin:0;">Manager login</h3>
@@ -131,7 +131,7 @@ document.querySelector("#app").innerHTML = `
     </div>
   </section>
 
-  <!-- DEMO APP (This is where waiters land after signup/login) -->
+  <!-- DEMO APP -->
   <section id="screenGameDemo" class="screen hidden">
     <div class="panel stack">
       <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
@@ -141,7 +141,8 @@ document.querySelector("#app").innerHTML = `
             DEMO
           </span>
           <span id="demoAuthedBadge"
-            style="display:none; font-size:12px; padding:4px 8px; border:1px solid rgba(0,0,0,.15); border-radius:999px; opacity:.9;">
+            class="hidden"
+            style="font-size:12px; padding:4px 8px; border:1px solid rgba(0,0,0,.15); border-radius:999px; opacity:.85;">
             LOGGED IN
           </span>
         </div>
@@ -353,20 +354,56 @@ async function loadInvites(restaurantId) {
   return res.data || [];
 }
 
+async function loadAuthedState(reason = "manual") {
+  const { session, error: sErr } = await withTimeout(getSession(), 8000, "getSession");
+  if (sErr) throw sErr;
+
+  appState.session = session || null;
+  appState.profile = null;
+  appState.restaurant = null;
+  appState.invites = [];
+
+  if (!session?.user) {
+    setDebug({ step: "authedState.none", time: new Date().toISOString(), reason });
+    return;
+  }
+
+  const profile = await loadProfile(session.user.id);
+  appState.profile = profile;
+
+  if (profile?.restaurant_id) {
+    try {
+      appState.restaurant = await loadRestaurant(profile.restaurant_id);
+    } catch {}
+  }
+
+  setDebug({
+    step: "authedState.loaded",
+    time: new Date().toISOString(),
+    reason,
+    user: { id: session.user.id, email: session.user.email },
+    profile,
+    restaurant: appState.restaurant ? { id: appState.restaurant.id, name: appState.restaurant.name } : null,
+  });
+}
+
 // ------------------------------------------------------------
-// DEMO (authed waiter lands here)
+// DEMO UI logic (join-by-code lives here now)
 // ------------------------------------------------------------
 function renderDemoJoinBlock() {
   const badge = document.getElementById("demoAuthedBadge");
   const joinBlock = document.getElementById("demoJoinBlock");
 
   const isAuthed = !!appState.session?.user;
-  if (badge) badge.style.display = isAuthed ? "inline-flex" : "none";
+  if (badge) {
+    if (isAuthed) badge.classList.remove("hidden");
+    else badge.classList.add("hidden");
+  }
 
   const role = appState.profile?.role;
   const hasRestaurant = !!appState.profile?.restaurant_id;
 
-  // Visible only for logged-in waiter with restaurant_id null
+  // visible only for logged-in waiter who is NOT assigned to a restaurant
   const showJoin = isAuthed && role === "waiter" && !hasRestaurant;
 
   if (joinBlock) {
@@ -378,19 +415,18 @@ function renderDemoJoinBlock() {
 async function demoJoinRestaurantByCode() {
   try {
     clearMsgs();
+
     const code = normCode(document.getElementById("demoJoinCode")?.value);
     if (!code) throw new Error("Enter a join code.");
 
-    const { session, error: sErr } = await withTimeout(getSession(), 8000, "getSession");
-    if (sErr) throw sErr;
-    if (!session?.user) throw new Error("You must be logged in.");
-
-    if (appState.profile?.role !== "waiter") throw new Error("Join by code is for waiter accounts.");
+    await loadAuthedState("demo.join.precheck");
+    if (!appState.session?.user) throw new Error("You must be logged in as a waiter first.");
+    if (appState.profile?.role !== "waiter") throw new Error("Join-by-code is for waiter accounts.");
 
     setMsg("demoJoinMsg", "Joining...");
     setDebug({ step: "demo.join.start", time: new Date().toISOString(), code });
 
-    // IMPORTANT: param name must match the SQL signature p_code
+    // IMPORTANT: param name must match p_code in SQL
     const rpc = await withTimeout(
       supabase.rpc("join_restaurant_by_code", { p_code: code }),
       15000,
@@ -398,6 +434,7 @@ async function demoJoinRestaurantByCode() {
     );
 
     if (rpc.error) throw rpc.error;
+
     if (!rpc.data?.ok) {
       const err = rpc.data?.error || "unknown";
       if (err === "invalid_code") throw new Error("Invalid join code.");
@@ -410,7 +447,7 @@ async function demoJoinRestaurantByCode() {
     setMsg("demoJoinMsg", "Joined ✅ Premium unlocked.");
     setDebug({ step: "demo.join.ok", time: new Date().toISOString(), restaurant_id: rpc.data.restaurant_id });
 
-    // Refresh state so join block hides + premium becomes available
+    // refresh state so join block hides and premium routing works
     await loadAuthedState("demo.join.refresh");
     renderDemoJoinBlock();
   } catch (e) {
@@ -423,11 +460,13 @@ async function demoJoinRestaurantByCode() {
 async function routeDemo(reason = "manual") {
   appMode = "demo";
   clearMsgs();
-  setDebug({ step: "route.demo", time: new Date().toISOString(), reason });
+  try {
+    await loadAuthedState(`routeDemo:${reason}`);
+  } catch {}
+  setDebug({ step: "route.demo", time: new Date().toISOString(), reason, authed: !!appState.session?.user });
   showScreen("screenGameDemo");
   renderDemoJoinBlock();
 
-  // Optional: initialize demo game
   if (typeof window.initBottleCallerGame === "function") {
     try {
       window.initBottleCallerGame();
@@ -521,7 +560,7 @@ function renderInvitesList() {
 }
 
 // ------------------------------------------------------------
-// Premium router (only when user clicks Premium, keep separate from Demo)
+// Premium router (Premium stays separate; no auto-open from auth unless admin)
 // ------------------------------------------------------------
 async function routePremium(reason = "manual") {
   const now = Date.now();
@@ -533,68 +572,47 @@ async function routePremium(reason = "manual") {
   try {
     clearMsgs();
 
-    const { session, error: sErr } = await withTimeout(getSession(), 8000, "getSession");
-    appState.session = session || null;
+    await loadAuthedState(`routePremium:${reason}`);
 
     setDebug({
-      step: "premium.route.session",
+      step: "premium.route",
       time: new Date().toISOString(),
       reason,
-      hasSession: !!session,
-      sessionError: sErr?.message || null,
+      hasSession: !!appState.session?.user,
+      profile: appState.profile,
     });
 
-    if (sErr || !session?.user) {
+    if (!appState.session?.user) {
       appMode = "public";
-      appState.profile = null;
-      appState.restaurant = null;
-      appState.invites = [];
       closeHud();
-      showScreen("screenPremiumAuth");
-      return;
+      return showScreen("screenPremiumAuth");
     }
 
-    const userId = session.user.id;
-    const profile = await loadProfile(userId);
-    appState.profile = profile;
+    const profile = appState.profile;
 
-    setDebug({
-      step: "premium.route.profile",
-      time: new Date().toISOString(),
-      user: { id: userId, email: session.user.email },
-      profile,
-    });
-
-    // Waiters MUST join from Demo first (step-by-step)
+    // Waiter without restaurant: keep Premium separate and push them to Demo join
     if (profile?.role === "waiter" && !profile?.restaurant_id) {
-      appMode = "premium";
       showScreen("screenPremiumAuth");
-      setMsg("premMsg", "Join a restaurant from Demo first (paste your join code there).");
+      setMsg("premMsg", "Waiters: join a restaurant from Demo (paste your join code there).");
       return;
     }
 
-    // Admins without restaurant: create one
-    if (!profile?.restaurant_id && profile?.role === "admin") {
-      appMode = "premium";
-      showScreen("screenCreateRestaurant");
-      return;
+    // Admin without restaurant: create it
+    if (profile?.role === "admin" && !profile?.restaurant_id) {
+      return showScreen("screenCreateRestaurant");
     }
 
-    // Anyone with a restaurant can enter Premium app
+    // Anyone with restaurant_id can enter Premium app
     if (!profile?.restaurant_id) {
-      appMode = "premium";
       showScreen("screenPremiumAuth");
       setMsg("premMsg", "No restaurant assigned yet.");
       return;
     }
 
-    const restaurant = await loadRestaurant(profile.restaurant_id);
-    appState.restaurant = restaurant;
-
-    // Load invites for admin (RLS enforces anyway)
-    if (profile.role === "admin") {
+    // If admin, load invites for the HUD
+    if (profile.role === "admin" && appState.restaurant?.id) {
       try {
-        appState.invites = await loadInvites(restaurant.id);
+        appState.invites = await loadInvites(appState.restaurant.id);
       } catch (e) {
         setDebug({ step: "invites.load.failed", time: new Date().toISOString(), error: e?.message || String(e) });
         appState.invites = [];
@@ -614,42 +632,6 @@ async function routePremium(reason = "manual") {
   } finally {
     routingLock = false;
   }
-}
-
-// ------------------------------------------------------------
-// Load authed state (session + profile + optional restaurant)
-// ------------------------------------------------------------
-async function loadAuthedState(reason = "manual") {
-  const { session, error: sErr } = await withTimeout(getSession(), 8000, "getSession");
-  if (sErr) throw sErr;
-
-  appState.session = session || null;
-  appState.profile = null;
-  appState.restaurant = null;
-  appState.invites = [];
-
-  if (!session?.user) {
-    setDebug({ step: "authedState.none", time: new Date().toISOString(), reason });
-    return;
-  }
-
-  const profile = await loadProfile(session.user.id);
-  appState.profile = profile;
-
-  if (profile?.restaurant_id) {
-    try {
-      appState.restaurant = await loadRestaurant(profile.restaurant_id);
-    } catch {}
-  }
-
-  setDebug({
-    step: "authedState.loaded",
-    time: new Date().toISOString(),
-    reason,
-    user: { id: session.user.id, email: session.user.email },
-    profile,
-    restaurant: appState.restaurant ? { id: appState.restaurant.id, name: appState.restaurant.name } : null,
-  });
 }
 
 // ------------------------------------------------------------
@@ -767,7 +749,11 @@ async function adminSaveRequireInvite() {
   } catch (e) {
     console.error(e);
     setMsg("hudMsg", e?.message || "Save failed (RLS may block updates)");
-    setDebug({ step: "restaurants.require_invite.failed", time: new Date().toISOString(), error: e?.message || String(e) });
+    setDebug({
+      step: "restaurants.require_invite.failed",
+      time: new Date().toISOString(),
+      error: e?.message || String(e),
+    });
   }
 }
 
@@ -815,38 +801,30 @@ async function createPremiumRestaurant() {
     if (sErr) throw sErr;
     if (!session?.user) throw new Error("Not logged in.");
 
-    const seatLimit = 15;
-    const requireInvite = true;
-    const joinCode = Math.random().toString(16).slice(2, 12).toUpperCase();
-
     setMsg("createRestMsg", "Creating...");
     setDebug({ step: "restaurant.create.start", time: new Date().toISOString(), name });
 
-    const ins = await withTimeout(
-      supabase
-        .from("restaurants")
-        .insert({
-          name,
-          code: joinCode,
-          seat_limit: seatLimit,
-          require_invite: requireInvite,
-          created_by: session.user.id,
-        })
-        .select("id,name,code,seat_limit,require_invite")
-        .single(),
+    // ✅ One atomic DB call does everything:
+    // - generates code
+    // - inserts restaurant
+    // - attaches your profile.restaurant_id
+    const rpc = await withTimeout(
+      supabase.rpc("create_restaurant", { p_name: name }),
       15000,
-      "restaurants.insert"
+      "rpc.create_restaurant"
     );
-    if (ins.error) throw ins.error;
 
-    const r = ins.data;
+    if (rpc.error) throw rpc.error;
 
-    const upd = await withTimeout(
-      supabase.from("profiles").update({ restaurant_id: r.id }).eq("user_id", session.user.id),
-      15000,
-      "profiles.update(restaurant_id)"
-    );
-    if (upd.error) throw upd.error;
+    if (!rpc.data?.ok) {
+      const err = rpc.data?.error || "unknown";
+      if (err === "admin_only") throw new Error("Only managers can create a restaurant.");
+      if (err === "already_has_restaurant") throw new Error("You already belong to a restaurant.");
+      if (err === "name_required") throw new Error("Restaurant name is required.");
+      throw new Error("Create failed.");
+    }
+
+    const r = rpc.data.restaurant;
 
     document.getElementById("invitePanel").classList.remove("hidden");
     document.getElementById("inviteCodeText").textContent = r.code;
@@ -862,43 +840,48 @@ async function createPremiumRestaurant() {
   }
 }
 
+
 // ------------------------------------------------------------
 // Buttons / Events
 // ------------------------------------------------------------
 
-// Demo (public start)
+// Demo start (public)
 document.getElementById("btnStartDemo").addEventListener("click", () => routeDemo("public.start_demo"));
+
+// Demo exit
 document.getElementById("btnExitDemo").addEventListener("click", () => {
   appMode = "public";
   setDebug({ step: "demo.exit", time: new Date().toISOString() });
   showScreen("screenAuth");
 });
 
-// Demo: join + premium
+// Demo join + demo -> premium
 document.getElementById("btnDemoJoin").addEventListener("click", demoJoinRestaurantByCode);
 document.getElementById("btnDemoGoPremium").addEventListener("click", () => routePremium("demo.premium.click"));
 
-// Public → Premium
+// Public → Premium (manager auth screen)
 document.getElementById("btnGoPremium").addEventListener("click", () => routePremium("public.premium.click"));
 document.getElementById("btnBackToAuth").addEventListener("click", () => {
   appMode = "public";
   showScreen("screenAuth");
 });
 
-// Public → “I have a premium join code” (now: go to Demo; join happens inside Demo for logged-in waiter)
+// Public → “I have a Premium join code”
+// This now sends you to Demo (join happens inside Demo for logged-in waiter)
 document.getElementById("btnGoPremiumWaiterJoin").addEventListener("click", async () => {
-  // If not logged in, keep them in public and tell them to log in as waiter first.
+  clearMsgs();
   try {
-    clearMsgs();
     await loadAuthedState("public.have_code");
     if (!appState.session?.user) {
       setMsg("authMsg", "Log in as a waiter first, then paste the join code inside Demo.");
-      showScreen("screenAuth");
       return;
     }
     await routeDemo("public.have_code.to_demo");
-  } catch {
-    showScreen("screenAuth");
+    // small UX nudge
+    const input = document.getElementById("demoJoinCode");
+    if (input && !input.classList.contains("hidden")) input.focus();
+  } catch (e) {
+    setMsg("authMsg", "Log in as a waiter first, then paste the join code inside Demo.");
   }
 });
 
@@ -1027,7 +1010,7 @@ document.getElementById("btnCopyCode").addEventListener("click", async () => {
 document.getElementById("btnEnterPremium").addEventListener("click", () => routePremium("enterPremium"));
 
 // HUD open/close
-document.getElementById("btnOpenHud").addEventListener("click", async () => {
+document.getElementById("btnOpenHud").addEventListener("click", () => {
   renderHud();
   openHud();
 });
@@ -1074,32 +1057,30 @@ document.getElementById("btnLogoutPremium").addEventListener("click", () => logo
 document.getElementById("btnLogoutCreate").addEventListener("click", () => logoutAll("create.logout"));
 
 // ------------------------------------------------------------
-// Auth → route decision
-// waiter signup/login => DEMO loads
-// premium remains separate (only on click)
+// Auth routing:
+// - waiter signup/login -> DEMO loads (with join input if restaurant_id null)
+// - premium stays separate; admin can route into premium
 // ------------------------------------------------------------
 async function routeAfterAuth(reason = "auth") {
   try {
     clearMsgs();
-    await loadAuthedState(reason);
+    await loadAuthedState(`routeAfterAuth:${reason}`);
 
-    // Not logged in: stay public
     if (!appState.session?.user) {
       appMode = "public";
       showScreen("screenAuth");
       return;
     }
 
-    // Logged in: decide landing
     const role = appState.profile?.role;
 
-    // Waiter ALWAYS lands in Demo
+    // Waiter ALWAYS lands in demo (this is your requested behavior)
     if (role === "waiter") {
       await routeDemo(`authed.waiter:${reason}`);
       return;
     }
 
-    // Admin (manager) lands in Premium flow
+    // Admin can go Premium (still separate from Demo)
     await routePremium(`authed.admin:${reason}`);
   } catch (e) {
     console.error(e);
@@ -1116,7 +1097,6 @@ setDebug({ step: "boot.ready", time: new Date().toISOString(), supabaseUrl: impo
 
 supabase.auth.onAuthStateChange((event) => {
   setDebug({ step: "auth.change", event, time: new Date().toISOString() });
-  // IMPORTANT: do NOT auto-open Premium. Land waiters in Demo.
   setTimeout(() => {
     routeAfterAuth(`auth.change:${event}`);
   }, 150);
