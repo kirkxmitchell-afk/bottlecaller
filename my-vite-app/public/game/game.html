@@ -4,8 +4,10 @@
   <meta charset="UTF-8" />
   <title>BottleCaller Prototype</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="stylesheet" href="style.css" />
+  <!-- ✅ IMPORTANT: because this file is served at /game/game.html -->
+  <link rel="stylesheet" href="/game/game.css" />
 </head>
+
 <body>
   <h1>BottleCaller Prototype</h1>
 
@@ -29,7 +31,7 @@
     <div class="panel">
       <h2>Choose your BottleCaller mode</h2>
 
-      <!-- ✅ Added id=cardDemo -->
+      <!-- Demo card -->
       <div class="card" id="cardDemo">
         <strong>Demo</strong>
         <div class="score-row">Wines saved: <span id="homeDemoCount">0 / 2</span></div>
@@ -42,7 +44,7 @@
         </div>
       </div>
 
-      <!-- ✅ Added id=cardPremium -->
+      <!-- Premium card -->
       <div class="card" id="cardPremium">
         <strong>Premium</strong>
         <div class="score-row">Wines saved: <span id="homePremiumCount">0 / 10</span></div>
@@ -238,41 +240,49 @@
       if (window.__BC_INIT_DONE__) return;
       window.__BC_INIT_DONE__ = true;
 
-            // ---- SaaS shell mode enforcement (Option A) ----
+      // ============================================================
+      // ✅ SaaS shell mode enforcement (Option A) - SINGLE SOURCE
+      // - /game/game.html?mode=demo   => Demo only
+      // - /game/game.html?mode=premium => Premium only
+      // ============================================================
       function readModeFromUrl() {
-  const m = new URLSearchParams(window.location.search).get("mode");
-  return (m || "").toLowerCase();
-}
+        const m = new URLSearchParams(window.location.search).get("mode");
+        return (m || "").toLowerCase();
+      }
 
-function enforceMode(mode) {
-  const demoCard = document.getElementById("cardDemo");
-  const premiumCard = document.getElementById("cardPremium");
+      function enforceMode(mode) {
+        const demoCard = document.getElementById("cardDemo");
+        const premiumCard = document.getElementById("cardPremium");
 
-  if (mode === "premium") {
-    if (demoCard) demoCard.style.display = "none";
-    if (premiumCard) premiumCard.style.display = "";
-  } else {
-    if (premiumCard) premiumCard.style.display = "none";
-    if (demoCard) demoCard.style.display = "";
-  }
-}
+        // Hide both first (prevents flashing + prevents conflicts)
+        if (demoCard) demoCard.style.display = "none";
+        if (premiumCard) premiumCard.style.display = "none";
 
-let bcMode = readModeFromUrl() || "demo";
-enforceMode(bcMode);
+        if (mode === "premium") {
+          if (premiumCard) premiumCard.style.display = "";
+        } else {
+          if (demoCard) demoCard.style.display = "";
+        }
 
-// Optional: allow parent to change mode dynamically
-window.addEventListener("message", (event) => {
-  if (event.origin !== window.location.origin) return;
-  const data = event.data;
-  if (!data || data.type !== "BC_SET_MODE") return;
+        window.__BC_MODE__ = mode;
+      }
 
-  const next = String(data.mode || "").toLowerCase();
-  if (next === "demo" || next === "premium") {
-    bcMode = next;
-    enforceMode(bcMode);
-  }
-});
+      let bcMode = readModeFromUrl() || "demo";
+      if (bcMode !== "demo" && bcMode !== "premium") bcMode = "demo";
+      enforceMode(bcMode);
 
+      // Optional: allow parent to change mode dynamically (not required)
+      window.addEventListener("message", (event) => {
+        if (event.origin !== window.location.origin) return;
+        const data = event.data;
+        if (!data || data.type !== "BC_SET_MODE") return;
+
+        const next = String(data.mode || "").toLowerCase();
+        if (next === "demo" || next === "premium") {
+          bcMode = next;
+          enforceMode(bcMode);
+        }
+      });
 
       // ---------- Keys / limits ----------
       const demoWinesKey = "bc_demo_wines";
@@ -285,28 +295,6 @@ window.addEventListener("message", (event) => {
       const PREMIUM_LIMIT = 10;
 
       const guestStates = ["Decider", "Fancy", "Griever", "Celebrator", "Bargain-Smart"];
-
-      // ---------- SaaS shell forced mode ----------
-      // Your Vite shell can set: window.BC_FORCED_MODE = "premium" | "demo"
-      // Or URL can include: ?mode=premium OR ?mode=demo
-      const forcedMode =
-        (window.BC_FORCED_MODE || "").toLowerCase() ||
-        (new URLSearchParams(window.location.search).get("mode") || "").toLowerCase();
-
-      function applyForcedModeUI() {
-        const demoCard = document.getElementById("cardDemo");
-        const premiumCard = document.getElementById("cardPremium");
-
-        if (forcedMode === "premium") {
-          if (demoCard) demoCard.style.display = "none";
-          if (premiumCard) premiumCard.style.display = "";
-        }
-
-        if (forcedMode === "demo") {
-          if (premiumCard) premiumCard.style.display = "none";
-          if (demoCard) demoCard.style.display = "";
-        }
-      }
 
       // ---------- Fixed Demo Encounters (NO randomness) ----------
       const DEMO_FIXED = [
@@ -374,7 +362,7 @@ window.addEventListener("message", (event) => {
       let currentEncounter = null;
       let currentStep = 0;
 
-      // ---------- Nav reset (DON'T clear activeMode; prevents weird side effects) ----------
+      // ---------- Nav reset ----------
       function resetNavState() {
         currentEncounter = null;
         currentStep = 0;
@@ -385,7 +373,6 @@ window.addEventListener("message", (event) => {
       const HAS_TOUCH = ("ontouchend" in window) || (navigator.maxTouchPoints > 0);
       const PRIMARY_EVENT = HAS_POINTER ? "pointerup" : (HAS_TOUCH ? "touchend" : "click");
 
-      // global lock: prevents cross-screen ghost clicks
       let __BC_LAST_INPUT_AT__ = 0;
 
       function bindInput(el, fn) {
@@ -395,11 +382,7 @@ window.addEventListener("message", (event) => {
 
         const fire = (e) => {
           const now = Date.now();
-
-          // block rapid doubles + cross-screen ghost click
           if (now - __BC_LAST_INPUT_AT__ < 500) return;
-
-          // if primary is pointer/touch, ignore synthetic click
           if (e && e.type === "click" && PRIMARY_EVENT !== "click") return;
 
           __BC_LAST_INPUT_AT__ = now;
@@ -411,10 +394,7 @@ window.addEventListener("message", (event) => {
           fn(e);
         };
 
-        // primary
         el.addEventListener(PRIMARY_EVENT, fire, { passive: PRIMARY_EVENT === "click" });
-
-        // desktop fallback ONLY (safe): always attach click, but guarded above
         if (PRIMARY_EVENT !== "click") {
           el.addEventListener("click", fire, { passive: true });
         }
@@ -677,7 +657,7 @@ window.addEventListener("message", (event) => {
         });
       }
 
-      // ---------- Add wine (hard-capped + seamless flow) ----------
+      // ---------- Add wine ----------
       function addWineFromForm(tierType) {
         const isDemo = tierType === "demo";
         const limit = isDemo ? DEMO_LIMIT : PREMIUM_LIMIT;
@@ -736,7 +716,6 @@ window.addEventListener("message", (event) => {
 
         const listNow = isDemo ? demoWines : premiumWines;
         if (listNow.length >= limit) {
-          // Seamless: hide setup form + start encounter immediately
           toggleSetupFormVisibility(tierType, false);
           activeMode = tierType;
           showScreen("screenPlay");
@@ -1209,7 +1188,6 @@ window.addEventListener("message", (event) => {
           return;
         }
 
-        // Step 2 Mode
         if (currentStep === 2) {
           const topRow = document.createElement("div");
           topRow.className = "history-row";
@@ -1664,6 +1642,14 @@ window.addEventListener("message", (event) => {
         const btnResetRunsPremium = ensureElement("btnResetRunsPremium");
         const btnResetWinesPremium = ensureElement("btnResetWinesPremium");
 
+        // ✅ HARD LOCK: if this iframe is premium, hide demo buttons even if DOM shows them
+        if (window.__BC_MODE__ === "premium") {
+          if (btnGoDemo) btnGoDemo.style.display = "none";
+          if (btnViewHistoryDemo) btnViewHistoryDemo.style.display = "none";
+          if (btnResetRunsDemo) btnResetRunsDemo.style.display = "none";
+          if (btnResetWinesDemo) btnResetWinesDemo.style.display = "none";
+        }
+
         bindInput(btnWelcomeStart, () => {
           localStorage.setItem(coverKey, "true");
           resetNavState();
@@ -1696,6 +1682,7 @@ window.addEventListener("message", (event) => {
         });
 
         bindInput(btnContinueDemo, () => {
+          if (window.__BC_MODE__ === "premium") return; // extra safety
           if (demoWines.length < DEMO_LIMIT) { alert("Add 2 demo wines to start."); return; }
           activeMode = "demo";
           resetNavState();
@@ -1717,6 +1704,7 @@ window.addEventListener("message", (event) => {
         bindInput(btnBackHomeFromHistory, () => { resetNavState(); showScreen("screenHome"); });
 
         bindInput(btnViewHistoryDemo, () => {
+          if (window.__BC_MODE__ === "premium") return;
           activeMode = "demo";
           renderHistory();
           showScreen("screenHistory");
@@ -1797,9 +1785,6 @@ window.addEventListener("message", (event) => {
 
       renderWineTables();
       initButtons();
-
-      // ✅ Apply forced mode (hides Demo card when premium forced, etc.)
-      applyForcedModeUI();
 
       // Always start at Welcome
       showScreen("screenWelcome");
