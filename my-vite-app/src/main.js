@@ -263,6 +263,10 @@ let appMode = "public"; // public | demo | premium
 let routingLock = false;
 let lastRouteAt = 0;
 
+// NEW: what the user is trying to do from the Home screen
+// If they clicked Premium while logged out, intent becomes "premium" and login routes to Premium.
+let authIntent = "demo"; // demo | premium
+
 const uiState = {
   role: "waiter", // waiter | admin
   mode: "login", // login | signup
@@ -327,14 +331,46 @@ function setHomeAuthUI(isAuthed) {
   }
 }
 
+// NEW: seed window check (30-day access without restaurant_id)
+function isSeedActive(profile) {
+  if (!profile) return false;
+  if (profile.access_tier !== "seed") return false;
+  if (!profile.seed_expires_at) return false;
+  const exp = new Date(profile.seed_expires_at).getTime();
+  return Number.isFinite(exp) && exp > Date.now();
+}
+
+// NEW: home screen intent toggle (premium login vs demo login)
+function setAuthIntent(next) {
+  authIntent = next === "premium" ? "premium" : "demo";
+
+  const title = document.querySelector("#screenHome .title");
+  const sub = document.querySelector("#screenHome .subtle");
+  const premiumBtn = document.getElementById("btnHomePremium");
+
+  if (authIntent === "premium") {
+    if (title) title.textContent = "Premium Login";
+    if (sub)
+      sub.textContent =
+        "Sign in as Waiter or Manager to access Premium. (Seed users can enter without a restaurant for 30 days.)";
+    if (premiumBtn) premiumBtn.textContent = "Premium ✓";
+  } else {
+    if (title) title.textContent = "Join Game";
+    if (sub)
+      sub.textContent =
+        "Waiters play Demo immediately and can join by code. Managers enter Premium to configure the restaurant.";
+    if (premiumBtn) premiumBtn.textContent = "Premium";
+  }
+}
+
 // ------------------------------------------------------------
-// GAME LOADING (iframe) — the fix
+// GAME LOADING (iframe) — isolated
 // ------------------------------------------------------------
 function mountGameIframe(targetId, mode /* "demo" | "premium" */) {
   const mount = document.getElementById(targetId);
   if (!mount) return;
 
-  // Force mode via query param (game reads this)
+  // Your public/ path: /public/game/game.html
   const src = `/game/game.html?mode=${encodeURIComponent(mode)}`;
 
   mount.innerHTML = `
@@ -351,33 +387,22 @@ function mountGameIframe(targetId, mode /* "demo" | "premium" */) {
         box-shadow: 0 10px 28px rgba(0,0,0,0.55);
       "
       loading="eager"
-      referrerpolicy="no-referrer"
     ></iframe>
   `;
 
-  const frame = document.getElementById(`${targetId}Frame`);
-
-  // 🔒 Extra-hard force: tell the game its mode after it loads
-  // (game.html must listen for this message)
-  frame?.addEventListener("load", () => {
-    try {
-      frame.contentWindow?.postMessage(
-        { type: "BC_SET_MODE", mode },
-        window.location.origin
-      );
-    } catch {}
-  });
-
-  setDebug({ step: "game.iframe.mounted", targetId, src, mode, time: new Date().toISOString() });
+  setDebug({ step: "game.iframe.mounted", targetId, src, time: new Date().toISOString() });
 }
-
 
 // ------------------------------------------------------------
 // Data loaders
 // ------------------------------------------------------------
 async function loadProfile(userId) {
   const res = await withTimeout(
-    supabase.from("profiles").select("role, restaurant_id, display_name").eq("user_id", userId).maybeSingle(),
+    supabase
+      .from("profiles")
+      .select("role, restaurant_id, display_name, access_tier, seed_expires_at")
+      .eq("user_id", userId)
+      .maybeSingle(),
     12000,
     "profiles.select"
   );
@@ -514,14 +539,24 @@ async function routePremium(reason = "manual") {
 
     const profile = appState.profile;
 
-    // Waiter cannot access Premium until restaurant_id exists
-    if (profile?.role === "waiter" && !profile?.restaurant_id) {
-      await routeDemo("premium.block.waiter.no_restaurant");
-      setMsg("demoJoinMsg", "Join a restaurant to unlock Premium. You can keep playing Demo.", "error");
+    // Premium access rules:
+    // - OK if restaurant_id exists
+    // - OK if seed active (30 days) even without restaurant_id
+    // - Otherwise block to demo + join message
+    const seedOk = isSeedActive(profile);
+    const hasRestaurant = !!profile?.restaurant_id;
+
+    if (!hasRestaurant && !seedOk) {
+      await routeDemo("premium.block.no_restaurant_and_not_seed");
+      setMsg(
+        "demoJoinMsg",
+        "Premium is locked. Join a restaurant to unlock Premium (or get Seed access). You can keep playing Demo.",
+        "error"
+      );
       return;
     }
 
-    // Admin without restaurant: create it
+    // Admin without restaurant: create it (unless seed is being used, but admin probably wants create anyway)
     if (profile?.role === "admin" && !profile?.restaurant_id) {
       appMode = "premium";
       showScreen("screenCreateRestaurant");
@@ -905,12 +940,17 @@ async function submitAuth() {
 
       await loadAuthedState("login.ok");
 
-      // ROUTE: admin -> premium, waiter -> premium if has restaurant else demo
-      if (appState.profile?.role === "admin") {
-        await routePremium("admin.login");
+      // ROUTE AFTER LOGIN depends on intent:
+      // - If Premium intent -> try premium now (will block if not eligible)
+      // - If Demo intent -> go demo unless eligible (restaurant_id or seed)
+      if (authIntent === "premium") {
+        await routePremium("login.intent.premium");
       } else {
-        if (appState.profile?.restaurant_id) await routePremium("waiter.login.has_restaurant");
-        else await routeDemo("waiter.login.no_restaurant");
+        if (appState.profile?.restaurant_id || isSeedActive(appState.profile)) {
+          await routePremium("login.demoIntent.butEligibleForPremium");
+        } else {
+          await routeDemo("login.intent.demo");
+        }
       }
       return;
     }
@@ -946,6 +986,10 @@ async function logoutAll(reason = "logout") {
     appState.invites = [];
     closeHud();
     setHomeAuthUI(false);
+
+    // reset intent back to demo every time you log out
+    setAuthIntent("demo");
+
     showScreen("screenHome");
     setDebug({ step: "logout", time: new Date().toISOString(), reason });
   }
@@ -954,7 +998,19 @@ async function logoutAll(reason = "logout") {
 // ------------------------------------------------------------
 // Wire events
 // ------------------------------------------------------------
-document.getElementById("btnHomePremium").addEventListener("click", () => routePremium("home.premium"));
+
+// Home Premium button:
+// - if logged out -> switches login to Premium intent
+// - if logged in -> attempts premium routing
+document.getElementById("btnHomePremium").addEventListener("click", async () => {
+  if (!appState.session?.user) {
+    setAuthIntent("premium");
+    setMsg("authMsg", "Premium selected. Login or Sign up below.", "success");
+    return;
+  }
+  await routePremium("home.premium");
+});
+
 document.getElementById("btnHomeLogout").addEventListener("click", () => logoutAll("home.logout"));
 document.getElementById("btnAuthSubmit").addEventListener("click", submitAuth);
 
@@ -964,11 +1020,22 @@ document.getElementById("tabModeLogin").addEventListener("click", () => setMode(
 document.getElementById("tabModeSignup").addEventListener("click", () => setMode("signup"));
 
 document.getElementById("btnDemoJoin").addEventListener("click", demoJoinRestaurantByCode);
-document.getElementById("btnDemoPremium").addEventListener("click", () => routePremium("demo.premium"));
-document.getElementById("btnDemoExit").addEventListener("click", () => showScreen("screenHome"));
+
+// In demo, Premium button means “try premium”
+document.getElementById("btnDemoPremium").addEventListener("click", async () => {
+  setAuthIntent("premium");
+  await routePremium("demo.premium");
+});
+
+// Exit demo back home (reset intent to demo so home copy makes sense)
+document.getElementById("btnDemoExit").addEventListener("click", () => {
+  setAuthIntent("demo");
+  showScreen("screenHome");
+});
 
 document.getElementById("btnCreateRestaurant").addEventListener("click", createPremiumRestaurant);
 document.getElementById("btnLogoutCreate").addEventListener("click", () => logoutAll("create.logout"));
+
 document.getElementById("btnCopyCode").addEventListener("click", async () => {
   try {
     const code = (document.getElementById("inviteCodeText").textContent || "").trim();
@@ -1015,6 +1082,8 @@ document.getElementById("btnSaveSeatLimit").addEventListener("click", adminSaveS
 showScreen("screenHome");
 setRole("waiter");
 setMode("login");
+setAuthIntent("demo");
+
 setDebug({ step: "boot.ready", time: new Date().toISOString(), supabaseUrl: import.meta.env.VITE_SUPABASE_URL });
 
 supabase.auth.onAuthStateChange((event) => {
@@ -1024,14 +1093,18 @@ supabase.auth.onAuthStateChange((event) => {
     try {
       await loadAuthedState(`auth.change:${event}`);
 
-      // ROUTE: admin -> premium; waiter -> premium if has restaurant else demo
-      if (appState.profile?.role === "admin") {
-        await routePremium(`auth.change.admin:${event}`);
-      } else if (appState.profile?.role === "waiter") {
-        if (appState.profile?.restaurant_id) await routePremium(`auth.change.waiter.has_restaurant:${event}`);
-        else await routeDemo(`auth.change.waiter.no_restaurant:${event}`);
+      const p = appState.profile;
+
+      // If user intended Premium, always try premium.
+      // Otherwise route demo unless eligible (restaurant or seed).
+      if (authIntent === "premium") {
+        await routePremium(`auth.change.intent.premium:${event}`);
       } else {
-        showScreen("screenHome");
+        if (p?.restaurant_id || isSeedActive(p)) {
+          await routePremium(`auth.change.demoIntent.butEligibleForPremium:${event}`);
+        } else {
+          await routeDemo(`auth.change.intent.demo:${event}`);
+        }
       }
     } catch {
       showScreen("screenHome");
@@ -1044,11 +1117,11 @@ supabase.auth.onAuthStateChange((event) => {
   try {
     await loadAuthedState("boot.resume");
 
-    if (appState.profile?.role === "admin") {
-      await routePremium("boot.resume.admin");
-    } else if (appState.profile?.role === "waiter") {
-      if (appState.profile?.restaurant_id) await routePremium("boot.resume.waiter.has_restaurant");
-      else await routeDemo("boot.resume.waiter.no_restaurant");
+    const p = appState.profile;
+    if (p?.restaurant_id || isSeedActive(p)) {
+      await routePremium("boot.resume.eligibleForPremium");
+    } else {
+      await routeDemo("boot.resume.demo");
     }
   } catch {}
 })();
