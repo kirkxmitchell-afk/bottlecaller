@@ -14,7 +14,7 @@ document.querySelector("#app").innerHTML = `
       <div class="topbar">
         <div class="brand">
           <h2>BottleCaller</h2>
-          <span id="homeAuthBadge" class="badge badge-accent hidden">LOGGED IN</span>
+          <span id="homeAuthBadge" class="badge hidden">LOGGED IN</span>
         </div>
         <div class="row">
           <button id="btnHomePremium" class="btn-ghost" type="button">Premium</button>
@@ -61,7 +61,7 @@ document.querySelector("#app").innerHTML = `
       <div class="topbar">
         <div class="brand">
           <h2>Create Restaurant</h2>
-          <span class="badge badge-accent">PREMIUM</span>
+          <span class="badge">PREMIUM</span>
         </div>
         <button id="btnLogoutCreate" class="btn-danger" type="button">Logout</button>
       </div>
@@ -93,7 +93,7 @@ document.querySelector("#app").innerHTML = `
       <div class="topbar">
         <div class="brand">
           <h2>BottleCaller</h2>
-          <span id="premiumBadge" class="badge badge-accent">PREMIUM</span>
+          <span id="premiumBadge" class="badge">PREMIUM</span>
         </div>
         <div class="row">
           <button id="btnOpenHud" class="btn-ghost" type="button">Menu</button>
@@ -101,7 +101,8 @@ document.querySelector("#app").innerHTML = `
         </div>
       </div>
 
-      <div id="premiumRoot" style="margin-top:10px;">GAME LOADS HERE</div>
+      <!-- Game lives here (isolated) -->
+      <div id="premiumRoot" style="margin-top:10px;"></div>
     </div>
   </section>
 
@@ -112,7 +113,7 @@ document.querySelector("#app").innerHTML = `
         <div class="brand">
           <h2>BottleCaller</h2>
           <span class="badge">DEMO</span>
-          <span id="demoAuthedBadge" class="badge badge-accent hidden">LOGGED IN</span>
+          <span id="demoAuthedBadge" class="badge hidden">LOGGED IN</span>
         </div>
         <div class="row">
           <button id="btnDemoPremium" class="btn-ghost" type="button">Premium</button>
@@ -141,7 +142,8 @@ document.querySelector("#app").innerHTML = `
         <div id="demoJoinMsg" class="small" style="margin-top:10px;"></div>
       </div>
 
-      <div id="gameRootDemo" style="margin-top:10px;">GAME LOADS HERE</div>
+      <!-- Game lives here (isolated) -->
+      <div id="gameRootDemo" style="margin-top:10px;"></div>
     </div>
   </section>
 
@@ -232,8 +234,27 @@ document.querySelector("#app").innerHTML = `
     "></pre>
 `;
 
+// ------------------------------------------------------------
+// Debug + global crash catcher (so you never get “silent white”)
+// ------------------------------------------------------------
 const debugEl = document.getElementById("debugPanel");
+function setDebug(obj) {
+  debugEl.textContent = JSON.stringify(obj, null, 2);
+}
 debugEl.textContent = "Debug panel live ✅";
+
+window.addEventListener("error", (e) => {
+  setDebug({
+    step: "window.error",
+    message: e?.message,
+    source: e?.filename,
+    line: e?.lineno,
+    col: e?.colno,
+  });
+});
+window.addEventListener("unhandledrejection", (e) => {
+  setDebug({ step: "unhandledrejection", reason: String(e?.reason?.message || e?.reason) });
+});
 
 // ------------------------------------------------------------
 // State
@@ -279,10 +300,6 @@ function clearMsgs() {
   setMsg("demoJoinMsg", "");
 }
 
-function setDebug(obj) {
-  debugEl.textContent = JSON.stringify(obj, null, 2);
-}
-
 function withTimeout(promise, ms, label = "operation") {
   let timer;
   const timeout = new Promise((_, reject) => {
@@ -310,50 +327,34 @@ function setHomeAuthUI(isAuthed) {
   }
 }
 
-/**
- * Robust game init:
- * - waits until screen has been swapped in (double RAF)
- * - passes a mount element if supported
- * - otherwise sets window.BOTTLECALLER_ROOT_ID for "global id" style engines
- */
-function initGameIfAvailable(targetId) {
-  const fn = window.initBottleCallerGame;
-  if (typeof fn !== "function") {
-    setDebug({ step: "game.init.missing", targetId, time: new Date().toISOString() });
-    return;
-  }
+// ------------------------------------------------------------
+// GAME LOADING (iframe) — the fix
+// ------------------------------------------------------------
+function mountGameIframe(targetId, mode /* "demo" | "premium" */) {
+  const mount = document.getElementById(targetId);
+  if (!mount) return;
 
-  const mountEl = document.getElementById(targetId);
-  if (!mountEl) {
-    setDebug({ step: "game.mount.missing_el", targetId, time: new Date().toISOString() });
-    return;
-  }
+  // Important: isolate game in its own document to avoid CSS/JS conflicts
+  const src = `/game/game.html?mode=${encodeURIComponent(mode)}`;
 
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      try {
-        // Clear placeholder text so you can see it mount
-        // (safe even if your engine overwrites innerHTML)
-        mountEl.innerHTML = "";
+  mount.innerHTML = `
+    <iframe
+      id="${targetId}Frame"
+      src="${src}"
+      title="BottleCaller Game"
+      style="
+        width: 100%;
+        height: min(78vh, 860px);
+        border: 1px solid rgba(255,255,255,0.10);
+        border-radius: 14px;
+        background: rgba(0,0,0,0.35);
+        box-shadow: 0 10px 28px rgba(0,0,0,0.55);
+      "
+      loading="eager"
+    ></iframe>
+  `;
 
-        if (fn.length >= 1) {
-          fn(mountEl);
-        } else {
-          window.BOTTLECALLER_ROOT_ID = targetId;
-          fn();
-        }
-
-        setDebug({ step: "game.mount.ok", targetId, time: new Date().toISOString() });
-      } catch (e) {
-        setDebug({
-          step: "game.mount.failed",
-          targetId,
-          time: new Date().toISOString(),
-          error: e?.message || String(e),
-        });
-      }
-    });
-  });
+  setDebug({ step: "game.iframe.mounted", targetId, src, time: new Date().toISOString() });
 }
 
 // ------------------------------------------------------------
@@ -474,7 +475,9 @@ async function routeDemo(reason = "manual") {
   setDebug({ step: "route.demo", time: new Date().toISOString(), reason, authed: !!appState.session?.user });
   showScreen("screenGameDemo");
   renderDemoJoinBlock();
-  initGameIfAvailable("gameRootDemo");
+
+  // Load game (demo)
+  mountGameIframe("gameRootDemo", "demo");
 }
 
 async function routePremium(reason = "manual") {
@@ -524,7 +527,9 @@ async function routePremium(reason = "manual") {
     renderHud();
     appMode = "premium";
     showScreen("screenPremiumApp");
-    initGameIfAvailable("premiumRoot");
+
+    // Load game (premium)
+    mountGameIframe("premiumRoot", "premium");
   } catch (e) {
     console.error(e);
     setDebug({ step: "premium.route.crash", time: new Date().toISOString(), error: e.message || String(e) });
@@ -590,7 +595,7 @@ async function demoJoinRestaurantByCode() {
     await loadAuthedState("demo.join.refresh");
     renderDemoJoinBlock();
 
-    // NEW: jump into Premium immediately once waiter is attached
+    // Auto-enter Premium
     if (appState.profile?.restaurant_id) {
       await routePremium("demo.join.auto_to_premium");
     }
@@ -611,42 +616,6 @@ function openHud() {
 function closeHud() {
   document.getElementById("hudBackdrop").classList.add("hidden");
   document.getElementById("hudPanel").classList.add("hidden");
-}
-
-function renderHud() {
-  const role = appState.profile?.role || "-";
-  const r = appState.restaurant;
-
-  document.getElementById("hudRole").textContent = role;
-  document.getElementById("hudRestName").textContent = r?.name || "-";
-  document.getElementById("hudJoinCode").textContent = r?.code || "-";
-  document.getElementById("hudSeatLimit").textContent = r?.seat_limit ?? "-";
-  document.getElementById("hudRequireInvite").textContent = r ? (r.require_invite ? "Yes" : "No") : "-";
-
-  const badge = document.getElementById("premiumBadge");
-  if (badge) badge.textContent = `PREMIUM • ${String(role).toUpperCase()}`;
-
-  const adminBlock = document.getElementById("adminOnlyBlock");
-  const joinRow = document.getElementById("hudJoinRow");
-  const copyRow = document.getElementById("hudCopyRow");
-
-  if (role === "admin") {
-    adminBlock.classList.remove("hidden");
-    joinRow.classList.remove("hidden");
-    copyRow.classList.remove("hidden");
-  } else {
-    adminBlock.classList.add("hidden");
-    joinRow.classList.add("hidden");
-    copyRow.classList.add("hidden");
-  }
-
-  const toggle = document.getElementById("toggleRequireInvite");
-  if (toggle && r) toggle.checked = !!r.require_invite;
-
-  const seatInput = document.getElementById("seatLimitInput");
-  if (seatInput && r) seatInput.value = String(r.seat_limit ?? "");
-
-  renderInvitesList();
 }
 
 function renderInvitesList() {
@@ -693,6 +662,42 @@ function renderInvitesList() {
       if (action === "reinvite") await adminAddInvite(email);
     });
   });
+}
+
+function renderHud() {
+  const role = appState.profile?.role || "-";
+  const r = appState.restaurant;
+
+  document.getElementById("hudRole").textContent = role;
+  document.getElementById("hudRestName").textContent = r?.name || "-";
+  document.getElementById("hudJoinCode").textContent = r?.code || "-";
+  document.getElementById("hudSeatLimit").textContent = r?.seat_limit ?? "-";
+  document.getElementById("hudRequireInvite").textContent = r ? (r.require_invite ? "Yes" : "No") : "-";
+
+  const badge = document.getElementById("premiumBadge");
+  if (badge) badge.textContent = `PREMIUM • ${String(role).toUpperCase()}`;
+
+  const adminBlock = document.getElementById("adminOnlyBlock");
+  const joinRow = document.getElementById("hudJoinRow");
+  const copyRow = document.getElementById("hudCopyRow");
+
+  if (role === "admin") {
+    adminBlock.classList.remove("hidden");
+    joinRow.classList.remove("hidden");
+    copyRow.classList.remove("hidden");
+  } else {
+    adminBlock.classList.add("hidden");
+    joinRow.classList.add("hidden");
+    copyRow.classList.add("hidden");
+  }
+
+  const toggle = document.getElementById("toggleRequireInvite");
+  if (toggle && r) toggle.checked = !!r.require_invite;
+
+  const seatInput = document.getElementById("seatLimitInput");
+  if (seatInput && r) seatInput.value = String(r.seat_limit ?? "");
+
+  renderInvitesList();
 }
 
 // ------------------------------------------------------------
@@ -1032,51 +1037,3 @@ supabase.auth.onAuthStateChange((event) => {
     }
   } catch {}
 })();
-
-// ------------------------------------------------------------
-// HUD rendering (kept minimal)
-// ------------------------------------------------------------
-function openHud() {
-  document.getElementById("hudBackdrop").classList.remove("hidden");
-  document.getElementById("hudPanel").classList.remove("hidden");
-}
-function closeHud() {
-  document.getElementById("hudBackdrop").classList.add("hidden");
-  document.getElementById("hudPanel").classList.add("hidden");
-}
-
-function renderHud() {
-  const role = appState.profile?.role || "-";
-  const r = appState.restaurant;
-
-  document.getElementById("hudRole").textContent = role;
-  document.getElementById("hudRestName").textContent = r?.name || "-";
-  document.getElementById("hudJoinCode").textContent = r?.code || "-";
-  document.getElementById("hudSeatLimit").textContent = r?.seat_limit ?? "-";
-  document.getElementById("hudRequireInvite").textContent = r ? (r.require_invite ? "Yes" : "No") : "-";
-
-  const badge = document.getElementById("premiumBadge");
-  if (badge) badge.textContent = `PREMIUM • ${String(role).toUpperCase()}`;
-
-  const adminBlock = document.getElementById("adminOnlyBlock");
-  const joinRow = document.getElementById("hudJoinRow");
-  const copyRow = document.getElementById("hudCopyRow");
-
-  if (role === "admin") {
-    adminBlock.classList.remove("hidden");
-    joinRow.classList.remove("hidden");
-    copyRow.classList.remove("hidden");
-  } else {
-    adminBlock.classList.add("hidden");
-    joinRow.classList.add("hidden");
-    copyRow.classList.add("hidden");
-  }
-
-  const toggle = document.getElementById("toggleRequireInvite");
-  if (toggle && r) toggle.checked = !!r.require_invite;
-
-  const seatInput = document.getElementById("seatLimitInput");
-  if (seatInput && r) seatInput.value = String(r.seat_limit ?? "");
-
-  renderInvitesList();
-}
