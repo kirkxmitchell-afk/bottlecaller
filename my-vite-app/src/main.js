@@ -334,7 +334,7 @@ function mountGameIframe(targetId, mode /* "demo" | "premium" */) {
   const mount = document.getElementById(targetId);
   if (!mount) return;
 
-  // Important: isolate game in its own document to avoid CSS/JS conflicts
+  // Force mode via query param (game reads this)
   const src = `/game/game.html?mode=${encodeURIComponent(mode)}`;
 
   mount.innerHTML = `
@@ -351,11 +351,26 @@ function mountGameIframe(targetId, mode /* "demo" | "premium" */) {
         box-shadow: 0 10px 28px rgba(0,0,0,0.55);
       "
       loading="eager"
+      referrerpolicy="no-referrer"
     ></iframe>
   `;
 
-  setDebug({ step: "game.iframe.mounted", targetId, src, time: new Date().toISOString() });
+  const frame = document.getElementById(`${targetId}Frame`);
+
+  // 🔒 Extra-hard force: tell the game its mode after it loads
+  // (game.html must listen for this message)
+  frame?.addEventListener("load", () => {
+    try {
+      frame.contentWindow?.postMessage(
+        { type: "BC_SET_MODE", mode },
+        window.location.origin
+      );
+    } catch {}
+  });
+
+  setDebug({ step: "game.iframe.mounted", targetId, src, mode, time: new Date().toISOString() });
 }
+
 
 // ------------------------------------------------------------
 // Data loaders

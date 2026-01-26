@@ -238,6 +238,42 @@
       if (window.__BC_INIT_DONE__) return;
       window.__BC_INIT_DONE__ = true;
 
+            // ---- SaaS shell mode enforcement (Option A) ----
+      function readModeFromUrl() {
+  const m = new URLSearchParams(window.location.search).get("mode");
+  return (m || "").toLowerCase();
+}
+
+function enforceMode(mode) {
+  const demoCard = document.getElementById("cardDemo");
+  const premiumCard = document.getElementById("cardPremium");
+
+  if (mode === "premium") {
+    if (demoCard) demoCard.style.display = "none";
+    if (premiumCard) premiumCard.style.display = "";
+  } else {
+    if (premiumCard) premiumCard.style.display = "none";
+    if (demoCard) demoCard.style.display = "";
+  }
+}
+
+let bcMode = readModeFromUrl() || "demo";
+enforceMode(bcMode);
+
+// Optional: allow parent to change mode dynamically
+window.addEventListener("message", (event) => {
+  if (event.origin !== window.location.origin) return;
+  const data = event.data;
+  if (!data || data.type !== "BC_SET_MODE") return;
+
+  const next = String(data.mode || "").toLowerCase();
+  if (next === "demo" || next === "premium") {
+    bcMode = next;
+    enforceMode(bcMode);
+  }
+});
+
+
       // ---------- Keys / limits ----------
       const demoWinesKey = "bc_demo_wines";
       const premiumWinesKey = "bc_premium_wines";
