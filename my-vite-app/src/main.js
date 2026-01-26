@@ -170,14 +170,14 @@ document.querySelector("#app").innerHTML = `
       <div><b>Role:</b> <span id="hudRole">-</span></div>
       <div><b>Restaurant:</b> <span id="hudRestName">-</span></div>
 
-      <!-- Join code is now ADMIN ONLY -->
+      <!-- Join code ADMIN ONLY -->
       <div id="hudJoinRow" class="hidden"><b>Join code:</b> <span id="hudJoinCode">-</span></div>
 
       <div><b>Seat limit:</b> <span id="hudSeatLimit">-</span></div>
       <div><b>Invite required:</b> <span id="hudRequireInvite">-</span></div>
     </div>
 
-    <!-- Copy join code is now ADMIN ONLY -->
+    <!-- Copy join code ADMIN ONLY -->
     <div id="hudCopyRow" class="row hidden" style="margin-top:10px;">
       <button id="btnCopyHudCode" type="button">Copy join code</button>
     </div>
@@ -244,7 +244,7 @@ let lastRouteAt = 0;
 
 const uiState = {
   role: "waiter", // waiter | admin
-  mode: "login",  // login | signup
+  mode: "login", // login | signup
 };
 
 const appState = {
@@ -291,8 +291,12 @@ function withTimeout(promise, ms, label = "operation") {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
-function normEmail(v) { return (v || "").trim().toLowerCase(); }
-function normCode(v) { return (v || "").trim().toUpperCase(); }
+function normEmail(v) {
+  return (v || "").trim().toLowerCase();
+}
+function normCode(v) {
+  return (v || "").trim().toUpperCase();
+}
 
 function setHomeAuthUI(isAuthed) {
   const badge = document.getElementById("homeAuthBadge");
@@ -306,10 +310,50 @@ function setHomeAuthUI(isAuthed) {
   }
 }
 
-function initGameIfAvailable() {
-  if (typeof window.initBottleCallerGame === "function") {
-    try { window.initBottleCallerGame(); } catch {}
+/**
+ * Robust game init:
+ * - waits until screen has been swapped in (double RAF)
+ * - passes a mount element if supported
+ * - otherwise sets window.BOTTLECALLER_ROOT_ID for "global id" style engines
+ */
+function initGameIfAvailable(targetId) {
+  const fn = window.initBottleCallerGame;
+  if (typeof fn !== "function") {
+    setDebug({ step: "game.init.missing", targetId, time: new Date().toISOString() });
+    return;
   }
+
+  const mountEl = document.getElementById(targetId);
+  if (!mountEl) {
+    setDebug({ step: "game.mount.missing_el", targetId, time: new Date().toISOString() });
+    return;
+  }
+
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      try {
+        // Clear placeholder text so you can see it mount
+        // (safe even if your engine overwrites innerHTML)
+        mountEl.innerHTML = "";
+
+        if (fn.length >= 1) {
+          fn(mountEl);
+        } else {
+          window.BOTTLECALLER_ROOT_ID = targetId;
+          fn();
+        }
+
+        setDebug({ step: "game.mount.ok", targetId, time: new Date().toISOString() });
+      } catch (e) {
+        setDebug({
+          step: "game.mount.failed",
+          targetId,
+          time: new Date().toISOString(),
+          error: e?.message || String(e),
+        });
+      }
+    });
+  });
 }
 
 // ------------------------------------------------------------
@@ -369,7 +413,9 @@ async function loadAuthedState(reason = "manual") {
   appState.profile = profile;
 
   if (profile?.restaurant_id) {
-    try { appState.restaurant = await loadRestaurant(profile.restaurant_id); } catch {}
+    try {
+      appState.restaurant = await loadRestaurant(profile.restaurant_id);
+    } catch {}
   }
 
   setDebug({
@@ -389,16 +435,26 @@ function setRole(role) {
   uiState.role = role;
   const w = document.getElementById("tabRoleWaiter");
   const m = document.getElementById("tabRoleManager");
-  if (role === "waiter") { w.classList.add("active"); m.classList.remove("active"); }
-  else { m.classList.add("active"); w.classList.remove("active"); }
+  if (role === "waiter") {
+    w.classList.add("active");
+    m.classList.remove("active");
+  } else {
+    m.classList.add("active");
+    w.classList.remove("active");
+  }
 }
 
 function setMode(mode) {
   uiState.mode = mode;
   const l = document.getElementById("tabModeLogin");
   const s = document.getElementById("tabModeSignup");
-  if (mode === "login") { l.classList.add("active"); s.classList.remove("active"); }
-  else { s.classList.add("active"); l.classList.remove("active"); }
+  if (mode === "login") {
+    l.classList.add("active");
+    s.classList.remove("active");
+  } else {
+    s.classList.add("active");
+    l.classList.remove("active");
+  }
 
   const wrap = document.getElementById("displayNameWrap");
   if (mode === "signup") wrap.classList.remove("hidden");
@@ -411,12 +467,14 @@ function setMode(mode) {
 async function routeDemo(reason = "manual") {
   clearMsgs();
   appMode = "demo";
-  try { await loadAuthedState(`routeDemo:${reason}`); } catch {}
+  try {
+    await loadAuthedState(`routeDemo:${reason}`);
+  } catch {}
 
   setDebug({ step: "route.demo", time: new Date().toISOString(), reason, authed: !!appState.session?.user });
   showScreen("screenGameDemo");
   renderDemoJoinBlock();
-  initGameIfAvailable();
+  initGameIfAvailable("gameRootDemo");
 }
 
 async function routePremium(reason = "manual") {
@@ -454,7 +512,11 @@ async function routePremium(reason = "manual") {
 
     // Load invites for admin
     if (profile?.role === "admin" && appState.restaurant?.id) {
-      try { appState.invites = await loadInvites(appState.restaurant.id); } catch { appState.invites = []; }
+      try {
+        appState.invites = await loadInvites(appState.restaurant.id);
+      } catch {
+        appState.invites = [];
+      }
     } else {
       appState.invites = [];
     }
@@ -462,7 +524,7 @@ async function routePremium(reason = "manual") {
     renderHud();
     appMode = "premium";
     showScreen("screenPremiumApp");
-    initGameIfAvailable();
+    initGameIfAvailable("premiumRoot");
   } catch (e) {
     console.error(e);
     setDebug({ step: "premium.route.crash", time: new Date().toISOString(), error: e.message || String(e) });
@@ -527,6 +589,11 @@ async function demoJoinRestaurantByCode() {
 
     await loadAuthedState("demo.join.refresh");
     renderDemoJoinBlock();
+
+    // NEW: jump into Premium immediately once waiter is attached
+    if (appState.profile?.restaurant_id) {
+      await routePremium("demo.join.auto_to_premium");
+    }
   } catch (e) {
     console.error(e);
     setMsg("demoJoinMsg", e?.message || "Join failed", "error");
@@ -730,7 +797,7 @@ async function adminSaveRequireInvite() {
 
     appState.restaurant = upd.data;
     renderHud();
-    setMsg("hudMsg", `Saved.`, "success");
+    setMsg("hudMsg", "Saved.", "success");
   } catch (e) {
     console.error(e);
     setMsg("hudMsg", e?.message || "Save failed (RLS may block updates)", "error");
@@ -757,7 +824,7 @@ async function adminSaveSeatLimit() {
 
     appState.restaurant = upd.data;
     renderHud();
-    setMsg("hudMsg", `Saved.`, "success");
+    setMsg("hudMsg", "Saved.", "success");
   } catch (e) {
     console.error(e);
     setMsg("hudMsg", e?.message || "Save failed (RLS may block updates)", "error");
@@ -818,14 +885,12 @@ async function submitAuth() {
 
       await loadAuthedState("login.ok");
 
-      // NEW: manager auto-routes to premium
+      // ROUTE: admin -> premium, waiter -> premium if has restaurant else demo
       if (appState.profile?.role === "admin") {
-        setMsg("authMsg", "", "normal");
         await routePremium("admin.login");
       } else {
-        // waiter -> demo
-        setMsg("authMsg", "", "normal");
-        await routeDemo("waiter.login");
+        if (appState.profile?.restaurant_id) await routePremium("waiter.login.has_restaurant");
+        else await routeDemo("waiter.login.no_restaurant");
       }
       return;
     }
@@ -897,12 +962,14 @@ document.getElementById("btnCopyCode").addEventListener("click", async () => {
 document.getElementById("btnEnterPremium").addEventListener("click", () => routePremium("enterPremium"));
 
 document.getElementById("btnLogoutPremium").addEventListener("click", () => logoutAll("premium.logout"));
-document.getElementById("btnOpenHud").addEventListener("click", () => { renderHud(); openHud(); });
+document.getElementById("btnOpenHud").addEventListener("click", () => {
+  renderHud();
+  openHud();
+});
 
 document.getElementById("btnCloseHud").addEventListener("click", closeHud);
 document.getElementById("hudBackdrop").addEventListener("click", closeHud);
 
-// HUD copy code is admin-only; listener can still exist safely
 document.getElementById("btnCopyHudCode").addEventListener("click", async () => {
   try {
     const code = appState.restaurant?.code;
@@ -932,14 +999,20 @@ setDebug({ step: "boot.ready", time: new Date().toISOString(), supabaseUrl: impo
 
 supabase.auth.onAuthStateChange((event) => {
   setDebug({ step: "auth.change", event, time: new Date().toISOString() });
+
   setTimeout(async () => {
     try {
       await loadAuthedState(`auth.change:${event}`);
 
-      // NEW: admin auto to premium, waiter auto to demo
-      if (appState.profile?.role === "admin") await routePremium(`auth.change.admin:${event}`);
-      else if (appState.profile?.role === "waiter") await routeDemo(`auth.change.waiter:${event}`);
-      else showScreen("screenHome");
+      // ROUTE: admin -> premium; waiter -> premium if has restaurant else demo
+      if (appState.profile?.role === "admin") {
+        await routePremium(`auth.change.admin:${event}`);
+      } else if (appState.profile?.role === "waiter") {
+        if (appState.profile?.restaurant_id) await routePremium(`auth.change.waiter.has_restaurant:${event}`);
+        else await routeDemo(`auth.change.waiter.no_restaurant:${event}`);
+      } else {
+        showScreen("screenHome");
+      }
     } catch {
       showScreen("screenHome");
     }
@@ -950,7 +1023,60 @@ supabase.auth.onAuthStateChange((event) => {
 (async function bootResume() {
   try {
     await loadAuthedState("boot.resume");
-    if (appState.profile?.role === "admin") await routePremium("boot.resume.admin");
-    else if (appState.profile?.role === "waiter") await routeDemo("boot.resume.waiter");
+
+    if (appState.profile?.role === "admin") {
+      await routePremium("boot.resume.admin");
+    } else if (appState.profile?.role === "waiter") {
+      if (appState.profile?.restaurant_id) await routePremium("boot.resume.waiter.has_restaurant");
+      else await routeDemo("boot.resume.waiter.no_restaurant");
+    }
   } catch {}
 })();
+
+// ------------------------------------------------------------
+// HUD rendering (kept minimal)
+// ------------------------------------------------------------
+function openHud() {
+  document.getElementById("hudBackdrop").classList.remove("hidden");
+  document.getElementById("hudPanel").classList.remove("hidden");
+}
+function closeHud() {
+  document.getElementById("hudBackdrop").classList.add("hidden");
+  document.getElementById("hudPanel").classList.add("hidden");
+}
+
+function renderHud() {
+  const role = appState.profile?.role || "-";
+  const r = appState.restaurant;
+
+  document.getElementById("hudRole").textContent = role;
+  document.getElementById("hudRestName").textContent = r?.name || "-";
+  document.getElementById("hudJoinCode").textContent = r?.code || "-";
+  document.getElementById("hudSeatLimit").textContent = r?.seat_limit ?? "-";
+  document.getElementById("hudRequireInvite").textContent = r ? (r.require_invite ? "Yes" : "No") : "-";
+
+  const badge = document.getElementById("premiumBadge");
+  if (badge) badge.textContent = `PREMIUM • ${String(role).toUpperCase()}`;
+
+  const adminBlock = document.getElementById("adminOnlyBlock");
+  const joinRow = document.getElementById("hudJoinRow");
+  const copyRow = document.getElementById("hudCopyRow");
+
+  if (role === "admin") {
+    adminBlock.classList.remove("hidden");
+    joinRow.classList.remove("hidden");
+    copyRow.classList.remove("hidden");
+  } else {
+    adminBlock.classList.add("hidden");
+    joinRow.classList.add("hidden");
+    copyRow.classList.add("hidden");
+  }
+
+  const toggle = document.getElementById("toggleRequireInvite");
+  if (toggle && r) toggle.checked = !!r.require_invite;
+
+  const seatInput = document.getElementById("seatLimitInput");
+  if (seatInput && r) seatInput.value = String(r.seat_limit ?? "");
+
+  renderInvitesList();
+}
