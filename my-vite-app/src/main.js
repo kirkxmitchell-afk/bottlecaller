@@ -22,7 +22,7 @@ document.querySelector("#app").innerHTML = `
         </div>
       </div>
 
-      <h1 class="title">Sign in once. Choose your path.</h1>
+      <h1 class="title">Join Game</h1>
       <p class="subtle">
         Waiters play Demo immediately and can join by code. Managers enter Premium to configure the restaurant.
       </p>
@@ -169,12 +169,16 @@ document.querySelector("#app").innerHTML = `
     <div style="margin-top:10px; font-size:13px; opacity:.95;">
       <div><b>Role:</b> <span id="hudRole">-</span></div>
       <div><b>Restaurant:</b> <span id="hudRestName">-</span></div>
-      <div><b>Join code:</b> <span id="hudJoinCode">-</span></div>
+
+      <!-- Join code is now ADMIN ONLY -->
+      <div id="hudJoinRow" class="hidden"><b>Join code:</b> <span id="hudJoinCode">-</span></div>
+
       <div><b>Seat limit:</b> <span id="hudSeatLimit">-</span></div>
       <div><b>Invite required:</b> <span id="hudRequireInvite">-</span></div>
     </div>
 
-    <div class="row" style="margin-top:10px;">
+    <!-- Copy join code is now ADMIN ONLY -->
+    <div id="hudCopyRow" class="row hidden" style="margin-top:10px;">
       <button id="btnCopyHudCode" type="button">Copy join code</button>
     </div>
 
@@ -202,7 +206,7 @@ document.querySelector("#app").innerHTML = `
       <h3 style="margin:0;">Invite emails</h3>
       <div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
         <input id="inviteEmailInput" type="email" placeholder="waiter@email.com" style="flex:1; min-width:220px;" />
-        <button id="btnAddInvite" class="btn-primary" type="button">Add invite</button>
+        <button id="btnAddInvite" class="btn-primary" type="button">Add waiter</button>
       </div>
 
       <div id="invitesList" style="margin-top:10px; font-size:12px; opacity:.95;"></div>
@@ -299,6 +303,12 @@ function setHomeAuthUI(isAuthed) {
   } else {
     badge?.classList.add("hidden");
     logoutBtn?.classList.add("hidden");
+  }
+}
+
+function initGameIfAvailable() {
+  if (typeof window.initBottleCallerGame === "function") {
+    try { window.initBottleCallerGame(); } catch {}
   }
 }
 
@@ -406,10 +416,7 @@ async function routeDemo(reason = "manual") {
   setDebug({ step: "route.demo", time: new Date().toISOString(), reason, authed: !!appState.session?.user });
   showScreen("screenGameDemo");
   renderDemoJoinBlock();
-
-  if (typeof window.initBottleCallerGame === "function") {
-    try { window.initBottleCallerGame(); } catch {}
-  }
+  initGameIfAvailable();
 }
 
 async function routePremium(reason = "manual") {
@@ -455,6 +462,7 @@ async function routePremium(reason = "manual") {
     renderHud();
     appMode = "premium";
     showScreen("screenPremiumApp");
+    initGameIfAvailable();
   } catch (e) {
     console.error(e);
     setDebug({ step: "premium.route.crash", time: new Date().toISOString(), error: e.message || String(e) });
@@ -552,8 +560,18 @@ function renderHud() {
   if (badge) badge.textContent = `PREMIUM • ${String(role).toUpperCase()}`;
 
   const adminBlock = document.getElementById("adminOnlyBlock");
-  if (role === "admin") adminBlock.classList.remove("hidden");
-  else adminBlock.classList.add("hidden");
+  const joinRow = document.getElementById("hudJoinRow");
+  const copyRow = document.getElementById("hudCopyRow");
+
+  if (role === "admin") {
+    adminBlock.classList.remove("hidden");
+    joinRow.classList.remove("hidden");
+    copyRow.classList.remove("hidden");
+  } else {
+    adminBlock.classList.add("hidden");
+    joinRow.classList.add("hidden");
+    copyRow.classList.add("hidden");
+  }
 
   const toggle = document.getElementById("toggleRequireInvite");
   if (toggle && r) toggle.checked = !!r.require_invite;
@@ -570,7 +588,7 @@ function renderInvitesList() {
 
   const invites = appState.invites || [];
   if (!invites.length) {
-    el.innerHTML = `<div style="opacity:.8;">No invites yet.</div>`;
+    el.innerHTML = `<div style="opacity:.8;">No waiters added yet.</div>`;
     return;
   }
 
@@ -582,8 +600,8 @@ function renderInvitesList() {
 
       const btn =
         status === "revoked"
-          ? `<button data-action="reinvite" data-email="${email}" style="font-size:12px;">Re-invite</button>`
-          : `<button data-action="revoke" data-email="${email}" style="font-size:12px;">Dissociate</button>`;
+          ? `<button data-action="reinvite" data-email="${email}" style="font-size:12px;">Re-add</button>`
+          : `<button data-action="revoke" data-email="${email}" style="font-size:12px;">Remove</button>`;
 
       return `
         <div style="display:flex; justify-content:space-between; gap:10px; padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.08);">
@@ -651,10 +669,10 @@ async function adminAddInvite(emailRaw) {
 
     appState.invites = await loadInvites(r.id);
     renderInvitesList();
-    setMsg("hudMsg", `Invited: ${email}`, "success");
+    setMsg("hudMsg", `Added: ${email}`, "success");
   } catch (e) {
     console.error(e);
-    setMsg("hudMsg", e?.message || "Invite failed", "error");
+    setMsg("hudMsg", e?.message || "Add failed", "error");
   }
 }
 
@@ -687,10 +705,10 @@ async function adminRevokeInvite(emailRaw) {
 
     appState.invites = await loadInvites(r.id);
     renderInvitesList();
-    setMsg("hudMsg", `Dissociated: ${email}`, "success");
+    setMsg("hudMsg", `Removed: ${email}`, "success");
   } catch (e) {
     console.error(e);
-    setMsg("hudMsg", e?.message || "Dissociate failed", "error");
+    setMsg("hudMsg", e?.message || "Remove failed", "error");
   }
 }
 
@@ -800,13 +818,14 @@ async function submitAuth() {
 
       await loadAuthedState("login.ok");
 
-      // Waiter goes to demo; Manager stays home and presses Premium by choice.
-      if (appState.profile?.role === "waiter") {
+      // NEW: manager auto-routes to premium
+      if (appState.profile?.role === "admin") {
+        setMsg("authMsg", "", "normal");
+        await routePremium("admin.login");
+      } else {
+        // waiter -> demo
         setMsg("authMsg", "", "normal");
         await routeDemo("waiter.login");
-      } else {
-        showScreen("screenHome");
-        setMsg("authMsg", "Logged in ✅ Press Premium when you're ready.", "success");
       }
       return;
     }
@@ -883,6 +902,7 @@ document.getElementById("btnOpenHud").addEventListener("click", () => { renderHu
 document.getElementById("btnCloseHud").addEventListener("click", closeHud);
 document.getElementById("hudBackdrop").addEventListener("click", closeHud);
 
+// HUD copy code is admin-only; listener can still exist safely
 document.getElementById("btnCopyHudCode").addEventListener("click", async () => {
   try {
     const code = appState.restaurant?.code;
@@ -915,8 +935,10 @@ supabase.auth.onAuthStateChange((event) => {
   setTimeout(async () => {
     try {
       await loadAuthedState(`auth.change:${event}`);
-      // If a waiter logs in, keep the experience “flow-forward” to demo:
-      if (appState.profile?.role === "waiter") await routeDemo(`auth.change.waiter:${event}`);
+
+      // NEW: admin auto to premium, waiter auto to demo
+      if (appState.profile?.role === "admin") await routePremium(`auth.change.admin:${event}`);
+      else if (appState.profile?.role === "waiter") await routeDemo(`auth.change.waiter:${event}`);
       else showScreen("screenHome");
     } catch {
       showScreen("screenHome");
@@ -924,10 +946,11 @@ supabase.auth.onAuthStateChange((event) => {
   }, 150);
 });
 
-// Resume state on refresh (but don’t force Premium automatically)
+// Resume state on refresh
 (async function bootResume() {
   try {
     await loadAuthedState("boot.resume");
-    if (appState.profile?.role === "waiter") await routeDemo("boot.resume.waiter");
+    if (appState.profile?.role === "admin") await routePremium("boot.resume.admin");
+    else if (appState.profile?.role === "waiter") await routeDemo("boot.resume.waiter");
   } catch {}
 })();
