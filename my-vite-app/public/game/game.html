@@ -241,34 +241,33 @@
       window.__BC_INIT_DONE__ = true;
 
       // ============================================================
-      // ✅ SaaS shell mode enforcement (Option A) - SINGLE SOURCE
-      // - /game/game.html?mode=demo   => Demo only
-      // - /game/game.html?mode=premium => Premium only
+      // ✅ MODE ENFORCEMENT (single source of truth)
+      // - /game/game.html?mode=demo     => Demo-only
+      // - /game/game.html?mode=premium  => Premium-only
       // ============================================================
       function readModeFromUrl() {
         const m = new URLSearchParams(window.location.search).get("mode");
-        return (m || "").toLowerCase();
+        return (m || "demo").toLowerCase();
       }
+
+      let bcMode = readModeFromUrl();
+      if (bcMode !== "demo" && bcMode !== "premium") bcMode = "demo";
+      window.__BC_MODE__ = bcMode;
 
       function enforceMode(mode) {
         const demoCard = document.getElementById("cardDemo");
         const premiumCard = document.getElementById("cardPremium");
+        const setupDemo = document.getElementById("screenSetupDemo");
+        const setupPremium = document.getElementById("screenSetupPremium");
 
-        // Hide both first (prevents flashing + prevents conflicts)
-        if (demoCard) demoCard.style.display = "none";
-        if (premiumCard) premiumCard.style.display = "none";
+        if (demoCard) demoCard.style.display = (mode === "demo") ? "" : "none";
+        if (premiumCard) premiumCard.style.display = (mode === "premium") ? "" : "none";
 
-        if (mode === "premium") {
-          if (premiumCard) premiumCard.style.display = "";
-        } else {
-          if (demoCard) demoCard.style.display = "";
-        }
-
-        window.__BC_MODE__ = mode;
+        // Hard hide setup screens so wrong mode can’t be reached
+        if (setupDemo) setupDemo.style.display = (mode === "demo") ? "" : "none";
+        if (setupPremium) setupPremium.style.display = (mode === "premium") ? "" : "none";
       }
 
-      let bcMode = readModeFromUrl() || "demo";
-      if (bcMode !== "demo" && bcMode !== "premium") bcMode = "demo";
       enforceMode(bcMode);
 
       // Optional: allow parent to change mode dynamically (not required)
@@ -280,6 +279,7 @@
         const next = String(data.mode || "").toLowerCase();
         if (next === "demo" || next === "premium") {
           bcMode = next;
+          window.__BC_MODE__ = bcMode;
           enforceMode(bcMode);
         }
       });
@@ -352,12 +352,15 @@
       const processOptions = ["Stainless steel", "Wild ferment", "Maceration", "Destemming", "Whole bunch pressed", "Hand harvested", "Time on lees"];
 
       // ---------- Runtime state ----------
-      let activeMode = null; // "demo" | "premium"
-      let demoWines = loadWines("demo");
-      let premiumWines = loadWines("premium");
-      let demoRuns = loadProgress("demo");
-      let premiumRuns = loadProgress("premium");
-      let demoStep = loadDemoStep();
+      // ✅ Lock "activeMode" to iframe mode
+      let activeMode = bcMode; // "demo" | "premium"
+
+      // ✅ IMPORTANT: only load data for the active mode (prevents demo bleed into premium)
+      let demoWines = (bcMode === "demo") ? loadWines("demo") : [];
+      let premiumWines = (bcMode === "premium") ? loadWines("premium") : [];
+      let demoRuns = (bcMode === "demo") ? loadProgress("demo") : [];
+      let premiumRuns = (bcMode === "premium") ? loadProgress("premium") : [];
+      let demoStep = (bcMode === "demo") ? loadDemoStep() : 0;
 
       let currentEncounter = null;
       let currentStep = 0;
@@ -588,8 +591,8 @@
         if (premiumCountEl) premiumCountEl.innerText = premiumWines.length + " / " + PREMIUM_LIMIT;
 
         renderHomeCounts();
-        updateSetupLock("demo");
-        updateSetupLock("premium");
+        if (bcMode === "demo") updateSetupLock("demo");
+        if (bcMode === "premium") updateSetupLock("premium");
       }
 
       // ---------- Setup selection helpers ----------
@@ -659,6 +662,9 @@
 
       // ---------- Add wine ----------
       function addWineFromForm(tierType) {
+        // hard lock to mode
+        if (tierType !== bcMode) return;
+
         const isDemo = tierType === "demo";
         const limit = isDemo ? DEMO_LIMIT : PREMIUM_LIMIT;
 
@@ -725,10 +731,14 @@
 
       // ---------- Wine list rendering ----------
       function renderWineTables() {
-        renderWineTable("demo", "demoWineTableBody");
-        renderWineTable("premium", "premiumWineTableBody");
-        renderWineCards("demo", "demoWineCards");
-        renderWineCards("premium", "premiumWineCards");
+        if (bcMode === "demo") {
+          renderWineTable("demo", "demoWineTableBody");
+          renderWineCards("demo", "demoWineCards");
+        }
+        if (bcMode === "premium") {
+          renderWineTable("premium", "premiumWineTableBody");
+          renderWineCards("premium", "premiumWineCards");
+        }
         updateCounts();
       }
 
@@ -822,6 +832,8 @@
       }
 
       function deleteWine(tierType, idToDelete) {
+        if (tierType !== bcMode) return;
+
         if (tierType === "demo") {
           demoWines = demoWines.filter(w => w.id !== idToDelete).slice(0, DEMO_LIMIT);
           saveWines("demo");
@@ -1587,6 +1599,7 @@
       }
 
       function resetRunsOnly(tierType) {
+        if (tierType !== bcMode) return;
         if (!confirm("This will clear saved encounters but keep wines.")) return;
         if (tierType === "demo") {
           demoRuns = [];
@@ -1600,6 +1613,7 @@
       }
 
       function resetWinesOnly(tierType) {
+        if (tierType !== bcMode) return;
         if (!confirm("This will delete saved wines for this mode.")) return;
         if (tierType === "demo") {
           demoWines = [];
@@ -1642,22 +1656,30 @@
         const btnResetRunsPremium = ensureElement("btnResetRunsPremium");
         const btnResetWinesPremium = ensureElement("btnResetWinesPremium");
 
-        // ✅ HARD LOCK: if this iframe is premium, hide demo buttons even if DOM shows them
-        if (window.__BC_MODE__ === "premium") {
-          if (btnGoDemo) btnGoDemo.style.display = "none";
-          if (btnViewHistoryDemo) btnViewHistoryDemo.style.display = "none";
-          if (btnResetRunsDemo) btnResetRunsDemo.style.display = "none";
-          if (btnResetWinesDemo) btnResetWinesDemo.style.display = "none";
-        }
-
+        // Start routing: premium goes straight to premium setup
         bindInput(btnWelcomeStart, () => {
           localStorage.setItem(coverKey, "true");
           resetNavState();
-          showScreen("screenHome");
+
+          if (bcMode === "premium") {
+            showScreen("screenSetupPremium");
+          } else {
+            showScreen("screenHome");
+          }
         });
 
-        bindInput(btnGoDemo, () => { resetNavState(); showScreen("screenSetupDemo"); });
-        bindInput(btnGoPremium, () => { resetNavState(); showScreen("screenSetupPremium"); });
+        // Hard locked navigation
+        bindInput(btnGoDemo, () => {
+          if (bcMode !== "demo") return;
+          resetNavState();
+          showScreen("screenSetupDemo");
+        });
+
+        bindInput(btnGoPremium, () => {
+          if (bcMode !== "premium") return;
+          resetNavState();
+          showScreen("screenSetupPremium");
+        });
 
         bindInput(btnResetApp, () => {
           if (!confirm("Reset app? This clears wines and runs.")) return;
@@ -1675,14 +1697,14 @@
           premiumRuns = [];
           demoStep = 0;
 
-          activeMode = null;
+          activeMode = bcMode;
           resetNavState();
           renderWineTables();
           showScreen("screenWelcome");
         });
 
         bindInput(btnContinueDemo, () => {
-          if (window.__BC_MODE__ === "premium") return; // extra safety
+          if (bcMode !== "demo") return;
           if (demoWines.length < DEMO_LIMIT) { alert("Add 2 demo wines to start."); return; }
           activeMode = "demo";
           resetNavState();
@@ -1691,6 +1713,7 @@
         });
 
         bindInput(btnContinuePremium, () => {
+          if (bcMode !== "premium") return;
           if (premiumWines.length < PREMIUM_LIMIT) { alert("Add 10 premium wines to start."); return; }
           activeMode = "premium";
           resetNavState();
@@ -1698,19 +1721,35 @@
           startEncounter();
         });
 
-        bindInput(btnBackHomeFromSetupDemo, () => { resetNavState(); showScreen("screenHome"); });
-        bindInput(btnBackHomeFromSetupPremium, () => { resetNavState(); showScreen("screenHome"); });
-        bindInput(btnBackHomeFromPlay, () => { resetNavState(); showScreen("screenHome"); });
-        bindInput(btnBackHomeFromHistory, () => { resetNavState(); showScreen("screenHome"); });
+        bindInput(btnBackHomeFromSetupDemo, () => {
+          resetNavState();
+          showScreen(bcMode === "demo" ? "screenHome" : "screenWelcome");
+        });
+
+        bindInput(btnBackHomeFromSetupPremium, () => {
+          resetNavState();
+          showScreen(bcMode === "premium" ? "screenWelcome" : "screenHome");
+        });
+
+        bindInput(btnBackHomeFromPlay, () => {
+          resetNavState();
+          showScreen(bcMode === "premium" ? "screenWelcome" : "screenHome");
+        });
+
+        bindInput(btnBackHomeFromHistory, () => {
+          resetNavState();
+          showScreen(bcMode === "premium" ? "screenWelcome" : "screenHome");
+        });
 
         bindInput(btnViewHistoryDemo, () => {
-          if (window.__BC_MODE__ === "premium") return;
+          if (bcMode !== "demo") return;
           activeMode = "demo";
           renderHistory();
           showScreen("screenHistory");
         });
 
         bindInput(btnViewHistoryPremium, () => {
+          if (bcMode !== "premium") return;
           activeMode = "premium";
           renderHistory();
           showScreen("screenHistory");
@@ -1732,6 +1771,7 @@
         const premiumWineCards = ensureElement("premiumWineCards");
 
         const delHandler = (tier) => (e) => {
+          if (tier !== bcMode) return;
           const btn = e.target.closest(".small-btn");
           if (!btn) return;
           const id = btn.dataset && btn.dataset.id;
@@ -1767,21 +1807,25 @@
       }
 
       // ---------- Boot ----------
-      buildOptionButtons("fruitOptionsDemo", fruitOptions);
-      buildOptionButtons("textureOptionsDemo", textureOptions);
-      buildOptionButtons("oakOptionsDemo", oakOptions);
+      if (bcMode === "demo") {
+        buildOptionButtons("fruitOptionsDemo", fruitOptions);
+        buildOptionButtons("textureOptionsDemo", textureOptions);
+        buildOptionButtons("oakOptionsDemo", oakOptions);
 
-      buildOptionButtons("fruitOptionsPremium", fruitOptions);
-      buildOptionButtons("textureOptionsPremium", textureOptions);
-      buildOptionButtons("oakOptionsPremium", oakOptions);
+        updateWineTagsSelections("fruitOptionsDemo", 2);
+        updateWineTagsSelections("textureOptionsDemo", 2);
+        updateRadioSelection("oakOptionsDemo");
+      }
 
-      updateWineTagsSelections("fruitOptionsDemo", 2);
-      updateWineTagsSelections("textureOptionsDemo", 2);
-      updateRadioSelection("oakOptionsDemo");
+      if (bcMode === "premium") {
+        buildOptionButtons("fruitOptionsPremium", fruitOptions);
+        buildOptionButtons("textureOptionsPremium", textureOptions);
+        buildOptionButtons("oakOptionsPremium", oakOptions);
 
-      updateWineTagsSelections("fruitOptionsPremium", 2);
-      updateWineTagsSelections("textureOptionsPremium", 2);
-      updateRadioSelection("oakOptionsPremium");
+        updateWineTagsSelections("fruitOptionsPremium", 2);
+        updateWineTagsSelections("textureOptionsPremium", 2);
+        updateRadioSelection("oakOptionsPremium");
+      }
 
       renderWineTables();
       initButtons();
