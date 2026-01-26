@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>BottleCaller Prototype</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="stylesheet" href="game.css" />
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <h1>BottleCaller Prototype</h1>
@@ -29,11 +29,12 @@
     <div class="panel">
       <h2>Choose your BottleCaller mode</h2>
 
-      <div class="card">
+      <!-- ✅ Added id=cardDemo -->
+      <div class="card" id="cardDemo">
         <strong>Demo</strong>
         <div class="score-row">Wines saved: <span id="homeDemoCount">0 / 2</span></div>
         <div class="score-row">Runs saved: <span id="homeDemoRuns">0</span></div>
-        <div class="button-row">
+        <div class="button-row" id="demoButtons">
           <button id="btnGoDemo" type="button">Setup Demo</button>
           <button id="btnViewHistoryDemo" type="button">View Demo History</button>
           <button id="btnResetRunsDemo" type="button">Reset Runs Only</button>
@@ -41,11 +42,12 @@
         </div>
       </div>
 
-      <div class="card">
+      <!-- ✅ Added id=cardPremium -->
+      <div class="card" id="cardPremium">
         <strong>Premium</strong>
         <div class="score-row">Wines saved: <span id="homePremiumCount">0 / 10</span></div>
         <div class="score-row">Runs saved: <span id="homePremiumRuns">0</span></div>
-        <div class="button-row">
+        <div class="button-row" id="premiumButtons">
           <button id="btnGoPremium" type="button">Setup Premium</button>
           <button id="btnViewHistoryPremium" type="button">View Premium History</button>
           <button id="btnResetRunsPremium" type="button">Reset Runs Only</button>
@@ -247,6 +249,28 @@
       const PREMIUM_LIMIT = 10;
 
       const guestStates = ["Decider", "Fancy", "Griever", "Celebrator", "Bargain-Smart"];
+
+      // ---------- SaaS shell forced mode ----------
+      // Your Vite shell can set: window.BC_FORCED_MODE = "premium" | "demo"
+      // Or URL can include: ?mode=premium OR ?mode=demo
+      const forcedMode =
+        (window.BC_FORCED_MODE || "").toLowerCase() ||
+        (new URLSearchParams(window.location.search).get("mode") || "").toLowerCase();
+
+      function applyForcedModeUI() {
+        const demoCard = document.getElementById("cardDemo");
+        const premiumCard = document.getElementById("cardPremium");
+
+        if (forcedMode === "premium") {
+          if (demoCard) demoCard.style.display = "none";
+          if (premiumCard) premiumCard.style.display = "";
+        }
+
+        if (forcedMode === "demo") {
+          if (premiumCard) premiumCard.style.display = "none";
+          if (demoCard) demoCard.style.display = "";
+        }
+      }
 
       // ---------- Fixed Demo Encounters (NO randomness) ----------
       const DEMO_FIXED = [
@@ -1149,7 +1173,7 @@
           return;
         }
 
-        // Step 2 Mode (ONLY place where the "?" help exists)
+        // Step 2 Mode
         if (currentStep === 2) {
           const topRow = document.createElement("div");
           topRow.className = "history-row";
@@ -1163,7 +1187,6 @@
           helpBtn.className = "small-btn";
           helpBtn.innerText = "?";
 
-          // force small circular bubble even on mobile
           helpBtn.style.width = "32px";
           helpBtn.style.height = "32px";
           helpBtn.style.minWidth = "32px";
@@ -1508,8 +1531,6 @@
           const item = document.createElement("div");
           item.className = "history-item";
 
-
-
           const row = document.createElement("div");
           row.className = "history-row";
 
@@ -1740,6 +1761,9 @@
 
       renderWineTables();
       initButtons();
+
+      // ✅ Apply forced mode (hides Demo card when premium forced, etc.)
+      applyForcedModeUI();
 
       // Always start at Welcome
       showScreen("screenWelcome");
