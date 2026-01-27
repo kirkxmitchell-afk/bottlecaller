@@ -245,30 +245,45 @@
       // - /game/game.html?mode=demo     => Demo-only
       // - /game/game.html?mode=premium  => Premium-only
       // ============================================================
-      function readModeFromUrl() {
-        const m = new URLSearchParams(window.location.search).get("mode");
-        return (m || "demo").toLowerCase();
-      }
+      // ============================================================
+// HARD MODE LOCK (iframe source of truth)
+// /game/game.html?mode=demo     => Demo ONLY
+// /game/game.html?mode=premium  => Premium ONLY
+// ============================================================
 
-      let bcMode = readModeFromUrl();
-      if (bcMode !== "demo" && bcMode !== "premium") bcMode = "demo";
-      window.__BC_MODE__ = bcMode;
+function readModeFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const mode = (params.get("mode") || "").toLowerCase();
+  return mode === "premium" ? "premium" : "demo";
+}
 
-      function enforceMode(mode) {
-        const demoCard = document.getElementById("cardDemo");
-        const premiumCard = document.getElementById("cardPremium");
-        const setupDemo = document.getElementById("screenSetupDemo");
-        const setupPremium = document.getElementById("screenSetupPremium");
+function enforceMode(mode) {
+  const demoCard = document.getElementById("cardDemo");
+  const premiumCard = document.getElementById("cardPremium");
+  const setupDemo = document.getElementById("screenSetupDemo");
+  const setupPremium = document.getElementById("screenSetupPremium");
 
-        if (demoCard) demoCard.style.display = (mode === "demo") ? "" : "none";
-        if (premiumCard) premiumCard.style.display = (mode === "premium") ? "" : "none";
+  // Hide EVERYTHING first (prevents bleed)
+  if (demoCard) demoCard.style.display = "none";
+  if (premiumCard) premiumCard.style.display = "none";
+  if (setupDemo) setupDemo.style.display = "none";
+  if (setupPremium) setupPremium.style.display = "none";
 
-        // Hard hide setup screens so wrong mode can’t be reached
-        if (setupDemo) setupDemo.style.display = (mode === "demo") ? "" : "none";
-        if (setupPremium) setupPremium.style.display = (mode === "premium") ? "" : "none";
-      }
+  // Show ONLY the allowed mode
+  if (mode === "premium") {
+    if (premiumCard) premiumCard.style.display = "";
+    if (setupPremium) setupPremium.style.display = "";
+  } else {
+    if (demoCard) demoCard.style.display = "";
+    if (setupDemo) setupDemo.style.display = "";
+  }
 
-      enforceMode(bcMode);
+  window.__BC_MODE__ = mode; // single source of truth
+}
+
+const bcMode = readModeFromUrl();
+enforceMode(bcMode);
+
 
       // Optional: allow parent to change mode dynamically (not required)
       window.addEventListener("message", (event) => {
