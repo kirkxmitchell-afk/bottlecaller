@@ -1075,6 +1075,14 @@ supabase.auth.onAuthStateChange((event) => {
     try {
       await loadAuthedState(`auth.change:${event}`);
 
+            // ✅ If logged out, stay on Home so sign-in is visible
+      if (!appState.session?.user) {
+        setAuthIntent("demo");
+        showScreen("screenHome");
+        setDebug({ step: "auth.change.logged_out", event, time: new Date().toISOString() });
+        return;
+      }
+
       const p = appState.profile;
       const ent = canAccessPremium(p);
 
@@ -1094,8 +1102,20 @@ supabase.auth.onAuthStateChange((event) => {
 (async function bootResume() {
   try {
     await loadAuthedState("boot.resume");
-    const ent = canAccessPremium(appState.profile);
-    if (ent.ok) await routePremium(`boot.resume.entitled.${ent.reason}`);
-    else await routeDemo("boot.resume.demo");
+
+    // ✅ If not logged in, stay on Home
+    if (!appState.session?.user) {
+      setAuthIntent("demo");
+      showScreen("screenHome");
+      setDebug({ step: "boot.resume.logged_out", time: new Date().toISOString() });
+      return;
+    }
+
+    const p = appState.profile;
+    if (p?.restaurant_id || isSeedActive(p)) {
+      await routePremium("boot.resume.eligibleForPremium");
+    } else {
+      await routeDemo("boot.resume.demo");
+    }
   } catch {}
 })();
