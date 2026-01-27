@@ -18,6 +18,7 @@ document.querySelector("#app").innerHTML = `
         </div>
         <div class="row">
           <button id="btnHomePremium" class="btn-ghost" type="button">Premium</button>
+          <button id="btnHomeExitPremium" class="btn-ghost hidden" type="button">Exit Premium</button>
           <button id="btnHomeLogout" class="btn-danger hidden" type="button">Logout</button>
         </div>
       </div>
@@ -32,7 +33,7 @@ document.querySelector("#app").innerHTML = `
         <input id="authPassword" type="password" placeholder="Password" />
 
         <!-- Tabs UNDER fields -->
-        <div class="tabs" style="margin-top:2px;">
+        <div class="tabs" id="roleTabs" style="margin-top:2px;">
           <button id="tabRoleWaiter" class="tab active" type="button">Waiter</button>
           <button id="tabRoleManager" class="tab" type="button">Manager</button>
         </div>
@@ -266,7 +267,7 @@ let lastRouteAt = 0;
 let authIntent = "demo"; // demo | premium
 
 const uiState = {
-  role: "waiter", // waiter | manager
+  role: "waiter", // waiter | manager (used only for signup UI)
   mode: "login", // login | signup
 };
 
@@ -352,19 +353,22 @@ function setAuthIntent(next) {
   const title = document.querySelector("#screenHome .title");
   const sub = document.querySelector("#screenHome .subtle");
   const premiumBtn = document.getElementById("btnHomePremium");
+  const exitBtn = document.getElementById("btnHomeExitPremium");
 
   if (authIntent === "premium") {
     if (title) title.textContent = "Premium Login";
     if (sub)
       sub.textContent =
-        "Sign in as Waiter or Manager to access Premium. (Access requires restaurant OR First50 OR 30-day pass.)";
+        "Sign in to access Premium. (Access requires restaurant OR First50 OR 30-day pass.)";
     if (premiumBtn) premiumBtn.textContent = "Premium ✓";
+    if (exitBtn) exitBtn.classList.remove("hidden");
   } else {
     if (title) title.textContent = "Join Game";
     if (sub)
       sub.textContent =
         "Waiters play Demo immediately and can join by code. Managers enter Premium to configure the restaurant.";
     if (premiumBtn) premiumBtn.textContent = "Premium";
+    if (exitBtn) exitBtn.classList.add("hidden");
   }
 }
 
@@ -504,6 +508,13 @@ function setMode(mode) {
   const wrap = document.getElementById("displayNameWrap");
   if (uiState.mode === "signup") wrap.classList.remove("hidden");
   else wrap.classList.add("hidden");
+
+  // ✅ Role tabs only matter for signup; hide them during login
+  const roleTabs = document.getElementById("roleTabs");
+  if (roleTabs) {
+    if (uiState.mode === "login") roleTabs.classList.add("hidden");
+    else roleTabs.classList.remove("hidden");
+  }
 }
 
 // ------------------------------------------------------------
@@ -744,7 +755,7 @@ function renderHud() {
 }
 
 // ------------------------------------------------------------
-// Manager actions (HUD) — keep your existing logic (RLS will decide)
+// Manager actions (HUD)
 // ------------------------------------------------------------
 async function adminAddInvite(emailRaw) {
   try {
@@ -924,7 +935,7 @@ async function submitAuth() {
     if (!email) throw new Error("Enter email.");
     if (!password) throw new Error("Enter password.");
 
-    const role = uiState.role === "waiter" ? "waiter" : "manager";
+    const roleForSignup = uiState.role === "waiter" ? "waiter" : "manager";
 
     if (uiState.mode === "login") {
       setMsg("authMsg", "Logging in...");
@@ -933,10 +944,14 @@ async function submitAuth() {
 
       await loadAuthedState("login.ok");
 
+      // ✅ Force UI role to match real profile role (prevents confusion)
+      const pr = String(appState.profile?.role || "").toLowerCase();
+      if (pr === "manager") setRole("manager");
+      if (pr === "waiter") setRole("waiter");
+
       if (authIntent === "premium") {
         await routePremium("login.intent.premium");
       } else {
-        // demo intent: go premium only if entitled, else demo
         const ent = canAccessPremium(appState.profile);
         if (ent.ok) await routePremium(`login.demoIntent.entitled.${ent.reason}`);
         else await routeDemo("login.intent.demo");
@@ -947,7 +962,7 @@ async function submitAuth() {
     // signup
     setMsg("authMsg", "Creating account...");
     const { error } = await withTimeout(
-      signUp(email, password, { role, display_name: displayName || null }),
+      signUp(email, password, { role: roleForSignup, display_name: displayName || null }),
       15000,
       "auth.signUp"
     );
@@ -986,13 +1001,29 @@ async function logoutAll(reason = "logout") {
 // ------------------------------------------------------------
 // Wire events
 // ------------------------------------------------------------
+
+// ✅ Optional: Premium button toggles intent when logged out
 document.getElementById("btnHomePremium").addEventListener("click", async () => {
+  // Logged out: toggle intent
   if (!appState.session?.user) {
-    setAuthIntent("premium");
-    setMsg("authMsg", "Premium selected. Login or Sign up below.", "success");
+    if (authIntent === "premium") {
+      setAuthIntent("demo");
+      setMsg("authMsg", "", "normal");
+    } else {
+      setAuthIntent("premium");
+      setMsg("authMsg", "Premium selected. Login or Sign up below.", "success");
+    }
     return;
   }
+
+  // Logged in: go Premium
   await routePremium("home.premium");
+});
+
+// ✅ Exit Premium (logged out intent)
+document.getElementById("btnHomeExitPremium").addEventListener("click", () => {
+  setAuthIntent("demo");
+  setMsg("authMsg", "", "normal");
 });
 
 document.getElementById("btnHomeLogout").addEventListener("click", () => logoutAll("home.logout"));
@@ -1075,7 +1106,7 @@ supabase.auth.onAuthStateChange((event) => {
     try {
       await loadAuthedState(`auth.change:${event}`);
 
-            // ✅ If logged out, stay on Home so sign-in is visible
+      // ✅ If logged out, stay on Home so sign-in is visible
       if (!appState.session?.user) {
         setAuthIntent("demo");
         showScreen("screenHome");
@@ -1112,8 +1143,10 @@ supabase.auth.onAuthStateChange((event) => {
     }
 
     const p = appState.profile;
-    if (p?.restaurant_id || isSeedActive(p)) {
-      await routePremium("boot.resume.eligibleForPremium");
+    const ent = canAccessPremium(p);
+
+    if (ent.ok) {
+      await routePremium(`boot.resume.entitled.${ent.reason}`);
     } else {
       await routeDemo("boot.resume.demo");
     }
