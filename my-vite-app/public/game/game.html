@@ -6,6 +6,42 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <!-- ✅ IMPORTANT: because this file is served at /game/game.html -->
   <link rel="stylesheet" href="/game/game.css" />
+  <style>
+  /* Hide everything until mode is locked */
+  #cardDemo,
+  #cardPremium,
+  #screenSetupDemo,
+  #screenSetupPremium {
+    display: none !important;
+  }
+
+  /* DEMO MODE */
+  html[data-bc-mode="demo"] #cardDemo,
+  html[data-bc-mode="demo"] #screenSetupDemo {
+    display: block !important;
+  }
+
+  /* PREMIUM MODE */
+  html[data-bc-mode="premium"] #cardPremium,
+  html[data-bc-mode="premium"] #screenSetupPremium {
+    display: block !important;
+  }
+</style>
+
+<script>
+  (function () {
+    const params = new URLSearchParams(window.location.search);
+    const raw = (params.get("mode") || "demo").toLowerCase();
+    const mode = raw === "premium" ? "premium" : "demo";
+
+    // Lock mode globally
+    document.documentElement.setAttribute("data-bc-mode", mode);
+    window.__BC_MODE__ = mode;
+
+    console.log("[BottleCaller] MODE LOCKED:", mode);
+  })();
+</script>
+
 </head>
 
 <body>
