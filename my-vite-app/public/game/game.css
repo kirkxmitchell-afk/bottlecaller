@@ -180,7 +180,7 @@ button[disabled] { opacity: 0.5; cursor: not-allowed; transform: none; }
   opacity: 0.9;
 }
 
-/* Accent button used for “menu highlight/select” (dark green + glow) */
+/* Accent button used for “menu highlight/select” */
 .btn-accent {
   border-color: var(--greenBorder);
   background: var(--greenBg);
@@ -192,12 +192,12 @@ button[disabled] { opacity: 0.5; cursor: not-allowed; transform: none; }
   box-shadow: 0 0 0 3px rgba(35, 170, 125, 0.20), 0 18px 50px rgba(0,0,0,0.60);
 }
 
-/* ---------- Tabs (no outer wrapper border) ---------- */
+/* ---------- Tabs ---------- */
 .tabs {
   display: flex;
   gap: 10px;
-  padding: 0;            /* no wrapper padding */
-  border: 0;            /* remove wrapper border */
+  padding: 0;
+  border: 0;
   background: transparent;
 }
 
@@ -234,3 +234,14 @@ button[disabled] { opacity: 0.5; cursor: not-allowed; transform: none; }
 
 .successText { color: var(--greenText); }
 .errorText { color: rgba(255, 140, 140, 0.92); }
+
+/* ------------------------------------------------------------
+   Game router visibility fix
+------------------------------------------------------------ */
+.screen {
+  display: none;
+}
+
+.screen.active {
+  display: block !important;
+}
