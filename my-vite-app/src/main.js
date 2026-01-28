@@ -264,7 +264,7 @@ let appMode = "public"; // public | demo | premium
 let routingLock = false;
 let lastRouteAt = 0;
 
-let authIntent = "demo"; // demo | premium
+let authIntent = "demo"; // demo | premium (UI-only; routing is determined by profile.restaurant_id)
 
 const uiState = {
   role: "waiter", // waiter | manager (used only for signup UI)
@@ -330,23 +330,7 @@ function setHomeAuthUI(isAuthed) {
   }
 }
 
-// Premium entitlement check (Option 2)
-function canAccessPremium(profile) {
-  const role = String(profile?.role || "").toLowerCase();
-  const restaurantId = profile?.restaurant_id ?? null;
-
-  const isFirst50 = !!profile?.is_first50;
-  const passExpiresAt = profile?.premium_pass_expires_at ? new Date(profile.premium_pass_expires_at) : null;
-  const passOk = passExpiresAt && !isNaN(passExpiresAt.getTime()) && passExpiresAt.getTime() > Date.now();
-
-  if (role !== "waiter" && role !== "manager") return { ok: false, reason: "invalid_role" };
-  if (restaurantId) return { ok: true, reason: "entitled.restaurant" };
-  if (isFirst50) return { ok: true, reason: "entitled.first50" };
-  if (passOk) return { ok: true, reason: "entitled.pass30" };
-  return { ok: false, reason: "no_entitlement" };
-}
-
-// Home screen intent toggle
+// Home screen intent toggle (UI-only)
 function setAuthIntent(next) {
   authIntent = next === "premium" ? "premium" : "demo";
 
@@ -357,9 +341,7 @@ function setAuthIntent(next) {
 
   if (authIntent === "premium") {
     if (title) title.textContent = "Premium Login";
-    if (sub)
-      sub.textContent =
-        "Sign in to access Premium. (Access requires restaurant OR First50 OR 30-day pass.)";
+    if (sub) sub.textContent = "Sign in to access Premium.";
     if (premiumBtn) premiumBtn.textContent = "Premium ✓";
     if (exitBtn) exitBtn.classList.remove("hidden");
   } else {
@@ -373,32 +355,39 @@ function setAuthIntent(next) {
 }
 
 // ------------------------------------------------------------
-// GAME LOADING (iframe)
+// GAME LOADING (iframe) — single source of truth is iframe URL
 // ------------------------------------------------------------
+function unmountGameIframe(targetId) {
+  const mount = document.getElementById(targetId);
+  if (!mount) return;
+  mount.innerHTML = ""; // hard destroy (prevents sticky/stacking/cached mode bleed)
+}
+
 function mountGameIframe(targetId, mode /* "demo" | "premium" */) {
   const mount = document.getElementById(targetId);
   if (!mount) return;
 
-  const src = `/game/game.html?mode=${encodeURIComponent(mode)}`;
+  // HARD destroy first
+  mount.innerHTML = "";
 
-  mount.innerHTML = `
-    <iframe
-      id="${targetId}Frame"
-      src="${src}"
-      title="BottleCaller Game"
-      style="
-        width: 100%;
-        height: min(78vh, 860px);
-        border: 1px solid rgba(255,255,255,0.10);
-        border-radius: 14px;
-        background: rgba(0,0,0,0.35);
-        box-shadow: 0 10px 28px rgba(0,0,0,0.55);
-      "
-      loading="eager"
-    ></iframe>
-  `;
+  const v = Date.now();
+  const src = `/game/game.html?mode=${encodeURIComponent(mode)}&v=${v}`;
 
-  setDebug({ step: "game.iframe.mounted", targetId, src, time: new Date().toISOString() });
+  const iframe = document.createElement("iframe");
+  iframe.id = `${targetId}Frame`;
+  iframe.src = src;
+  iframe.title = "BottleCaller Game";
+  iframe.loading = "eager";
+  iframe.style.width = "100%";
+  iframe.style.height = "min(78vh, 860px)";
+  iframe.style.border = "1px solid rgba(255,255,255,0.10)";
+  iframe.style.borderRadius = "14px";
+  iframe.style.background = "rgba(0,0,0,0.35)";
+  iframe.style.boxShadow = "0 10px 28px rgba(0,0,0,0.55)";
+
+  mount.appendChild(iframe);
+
+  setDebug({ step: "game.iframe.mounted", targetId, mode, src, time: new Date().toISOString() });
 }
 
 // ------------------------------------------------------------
@@ -509,7 +498,7 @@ function setMode(mode) {
   if (uiState.mode === "signup") wrap.classList.remove("hidden");
   else wrap.classList.add("hidden");
 
-  // ✅ Role tabs only matter for signup; hide them during login
+  // Role tabs only matter for signup; hide them during login
   const roleTabs = document.getElementById("roleTabs");
   if (roleTabs) {
     if (uiState.mode === "login") roleTabs.classList.add("hidden");
@@ -518,18 +507,38 @@ function setMode(mode) {
 }
 
 // ------------------------------------------------------------
-// Routing rules
+// Routing rules (single source of truth)
+// - logged out: Home
+// - logged in + profile.restaurant_id: Premium
+// - else: Demo
 // ------------------------------------------------------------
+function profileHasRestaurant(profile) {
+  return !!(profile && profile.restaurant_id);
+}
+
 async function routeDemo(reason = "manual") {
   clearMsgs();
   appMode = "demo";
+
+  // HARD ensure premium iframe is destroyed
+  unmountGameIframe("premiumRoot");
+
   try {
     await loadAuthedState(`routeDemo:${reason}`);
   } catch {}
 
-  setDebug({ step: "route.demo", time: new Date().toISOString(), reason, authed: !!appState.session?.user });
+  setDebug({
+    step: "route.demo",
+    time: new Date().toISOString(),
+    reason,
+    authed: !!appState.session?.user,
+    restaurant_id: appState.profile?.restaurant_id ?? null,
+  });
+
   showScreen("screenGameDemo");
   renderDemoJoinBlock();
+
+  // Mount demo iframe ONLY on demo screen
   mountGameIframe("gameRootDemo", "demo");
 }
 
@@ -542,6 +551,10 @@ async function routePremium(reason = "manual") {
 
   try {
     clearMsgs();
+
+    // HARD ensure demo iframe is destroyed
+    unmountGameIframe("gameRootDemo");
+
     await loadAuthedState(`routePremium:${reason}`);
 
     if (!appState.session?.user) {
@@ -550,21 +563,21 @@ async function routePremium(reason = "manual") {
       return;
     }
 
-    const profile = appState.profile;
-    const entitlement = canAccessPremium(profile);
-
-    if (!entitlement.ok) {
-      await routeDemo(`premium.block.${entitlement.reason}`);
+    // Premium routing is ONLY restaurant-based (per spec)
+    if (!profileHasRestaurant(appState.profile)) {
+      await routeDemo(`premium.block.no_restaurant:${reason}`);
       setMsg(
         "demoJoinMsg",
-        "Premium is locked. Join a restaurant to unlock Premium (or get First50 / 30-day pass). You can keep playing Demo.",
+        "Premium is locked. Join a restaurant (ask your manager for the join code). You can keep playing Demo.",
         "error"
       );
       return;
     }
 
-    // Manager without restaurant -> create it
-    if (String(profile?.role).toLowerCase() === "manager" && !profile?.restaurant_id) {
+    const profile = appState.profile;
+
+    // Manager without restaurant would have been blocked above; keep this in case DB is inconsistent
+    if (String(profile?.role).toLowerCase() === "manager" && !profileHasRestaurant(profile)) {
       appMode = "premium";
       showScreen("screenCreateRestaurant");
       return;
@@ -584,12 +597,52 @@ async function routePremium(reason = "manual") {
     renderHud();
     appMode = "premium";
     showScreen("screenPremiumApp");
+
+    // Mount premium iframe ONLY on premium screen
     mountGameIframe("premiumRoot", "premium");
   } catch (e) {
     console.error(e);
     setDebug({ step: "premium.route.crash", time: new Date().toISOString(), error: e.message || String(e) });
     showScreen("screenHome");
     setMsg("authMsg", "Premium routing failed — check debug panel.", "error");
+  } finally {
+    routingLock = false;
+  }
+}
+
+// Central decision point (prevents “blink” / wrong auto-route)
+async function decideRoute(reason = "decideRoute") {
+  const now = Date.now();
+  if (routingLock) return;
+  if (now - lastRouteAt < 150) return;
+  lastRouteAt = now;
+
+  routingLock = true;
+  try {
+    await loadAuthedState(`decideRoute:${reason}`);
+
+    // Logged out: stay Home, do NOT mount any iframe
+    if (!appState.session?.user) {
+      appMode = "public";
+      closeHud();
+      unmountGameIframe("premiumRoot");
+      unmountGameIframe("gameRootDemo");
+      setAuthIntent("demo");
+      showScreen("screenHome");
+      setDebug({ step: "route.home.logged_out", time: new Date().toISOString(), reason });
+      return;
+    }
+
+    // Logged in: route based on restaurant_id ONLY
+    if (profileHasRestaurant(appState.profile)) {
+      await routePremium(`decide.has_restaurant:${reason}`);
+    } else {
+      await routeDemo(`decide.no_restaurant:${reason}`);
+    }
+  } catch (e) {
+    console.error(e);
+    showScreen("screenHome");
+    setDebug({ step: "decideRoute.failed", time: new Date().toISOString(), reason, error: e?.message || String(e) });
   } finally {
     routingLock = false;
   }
@@ -650,9 +703,8 @@ async function demoJoinRestaurantByCode() {
     await loadAuthedState("demo.join.refresh");
     renderDemoJoinBlock();
 
-    if (appState.profile?.restaurant_id) {
-      await routePremium("demo.join.auto_to_premium");
-    }
+    // Auto-route via single source of truth
+    await decideRoute("demo.join.post");
   } catch (e) {
     console.error(e);
     setMsg("demoJoinMsg", e?.message || "Join failed", "error");
@@ -900,11 +952,7 @@ async function createPremiumRestaurant() {
     if (!name) throw new Error("Restaurant name is required.");
 
     setMsg("createRestMsg", "Creating...");
-    const rpc = await withTimeout(
-      supabase.rpc("create_restaurant", { p_name: name }),
-      15000,
-      "rpc.create_restaurant"
-    );
+    const rpc = await withTimeout(supabase.rpc("create_restaurant", { p_name: name }), 15000, "rpc.create_restaurant");
 
     if (rpc.error) throw rpc.error;
     if (!rpc.data?.ok) throw new Error(rpc.data?.error || "Create failed");
@@ -914,7 +962,7 @@ async function createPremiumRestaurant() {
     document.getElementById("inviteCodeText").textContent = r.code;
     setMsg("createRestMsg", "Created ✅", "success");
 
-    await routePremium("restaurant.create.ok");
+    await decideRoute("restaurant.create.ok");
   } catch (e) {
     console.error(e);
     setMsg("createRestMsg", e?.message || "Create failed", "error");
@@ -942,20 +990,8 @@ async function submitAuth() {
       const res = await withTimeout(signIn(email, password), 15000, "auth.signIn");
       if (res.error) throw res.error;
 
-      await loadAuthedState("login.ok");
-
-      // ✅ Force UI role to match real profile role (prevents confusion)
-      const pr = String(appState.profile?.role || "").toLowerCase();
-      if (pr === "manager") setRole("manager");
-      if (pr === "waiter") setRole("waiter");
-
-      if (authIntent === "premium") {
-        await routePremium("login.intent.premium");
-      } else {
-        const ent = canAccessPremium(appState.profile);
-        if (ent.ok) await routePremium(`login.demoIntent.entitled.${ent.reason}`);
-        else await routeDemo("login.intent.demo");
-      }
+      // Central route decision after login (prevents wrong-mode blink)
+      await decideRoute("login.ok");
       return;
     }
 
@@ -991,6 +1027,10 @@ async function logoutAll(reason = "logout") {
     closeHud();
     setHomeAuthUI(false);
 
+    // HARD unmount both iframes
+    unmountGameIframe("premiumRoot");
+    unmountGameIframe("gameRootDemo");
+
     setAuthIntent("demo");
 
     showScreen("screenHome");
@@ -1002,9 +1042,9 @@ async function logoutAll(reason = "logout") {
 // Wire events
 // ------------------------------------------------------------
 
-// ✅ Optional: Premium button toggles intent when logged out
+// Premium button
 document.getElementById("btnHomePremium").addEventListener("click", async () => {
-  // Logged out: toggle intent
+  // Logged out: toggle intent (UI only)
   if (!appState.session?.user) {
     if (authIntent === "premium") {
       setAuthIntent("demo");
@@ -1016,11 +1056,11 @@ document.getElementById("btnHomePremium").addEventListener("click", async () => 
     return;
   }
 
-  // Logged in: go Premium
+  // Logged in: attempt to go Premium (will enforce restaurant_id rule)
   await routePremium("home.premium");
 });
 
-// ✅ Exit Premium (logged out intent)
+// Exit Premium (logged out intent)
 document.getElementById("btnHomeExitPremium").addEventListener("click", () => {
   setAuthIntent("demo");
   setMsg("authMsg", "", "normal");
@@ -1043,6 +1083,8 @@ document.getElementById("btnDemoPremium").addEventListener("click", async () => 
 
 document.getElementById("btnDemoExit").addEventListener("click", () => {
   setAuthIntent("demo");
+  // leave demo: destroy iframe (prevents old demo mode persisting)
+  unmountGameIframe("gameRootDemo");
   showScreen("screenHome");
 });
 
@@ -1097,58 +1139,29 @@ setRole("waiter");
 setMode("login");
 setAuthIntent("demo");
 
-setDebug({ step: "boot.ready", time: new Date().toISOString(), supabaseUrl: import.meta.env.VITE_SUPABASE_URL });
+setDebug({
+  step: "boot.ready",
+  time: new Date().toISOString(),
+  supabaseUrl: import.meta.env.VITE_SUPABASE_URL,
+});
 
-supabase.auth.onAuthStateChange((event) => {
+// Debounced auth router (prevents “blink” + double-routes)
+let authRouteTimer = null;
+
+function onAuthStateChange(event) {
   setDebug({ step: "auth.change", event, time: new Date().toISOString() });
 
-  setTimeout(async () => {
-    try {
-      await loadAuthedState(`auth.change:${event}`);
+  if (authRouteTimer) clearTimeout(authRouteTimer);
+  authRouteTimer = setTimeout(async () => {
+    await decideRoute(`auth.change:${event}`);
+  }, 120);
+}
 
-      // ✅ If logged out, stay on Home so sign-in is visible
-      if (!appState.session?.user) {
-        setAuthIntent("demo");
-        showScreen("screenHome");
-        setDebug({ step: "auth.change.logged_out", event, time: new Date().toISOString() });
-        return;
-      }
-
-      const p = appState.profile;
-      const ent = canAccessPremium(p);
-
-      if (authIntent === "premium") {
-        await routePremium(`auth.change.intent.premium:${event}`);
-      } else {
-        if (ent.ok) await routePremium(`auth.change.demoIntent.entitled.${ent.reason}:${event}`);
-        else await routeDemo(`auth.change.intent.demo:${event}`);
-      }
-    } catch {
-      showScreen("screenHome");
-    }
-  }, 150);
+supabase.auth.onAuthStateChange((event) => {
+  onAuthStateChange(event);
 });
 
 // Resume state on refresh
 (async function bootResume() {
-  try {
-    await loadAuthedState("boot.resume");
-
-    // ✅ If not logged in, stay on Home
-    if (!appState.session?.user) {
-      setAuthIntent("demo");
-      showScreen("screenHome");
-      setDebug({ step: "boot.resume.logged_out", time: new Date().toISOString() });
-      return;
-    }
-
-    const p = appState.profile;
-    const ent = canAccessPremium(p);
-
-    if (ent.ok) {
-      await routePremium(`boot.resume.entitled.${ent.reason}`);
-    } else {
-      await routeDemo("boot.resume.demo");
-    }
-  } catch {}
+  await decideRoute("boot.resume");
 })();
