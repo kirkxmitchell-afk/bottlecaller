@@ -32,8 +32,17 @@ document.querySelector("#app").innerHTML = `
         <input id="authEmail" type="email" placeholder="Email" />
         <input id="authPassword" type="password" placeholder="Password" />
 
+        <!-- ✅ Premium intent extras (only visible when Premium is selected) -->
+        <div id="premiumIntentBlock" class="hidden" style="margin-top:10px;">
+          <input id="premiumLicenseCode" type="text" placeholder="Enter Premium code" />
+          <div class="small" style="margin-top:8px;">
+            Contact us for purchase:
+            <a href="mailto:hello@bottlecaller.com">hello@bottlecaller.com</a>
+          </div>
+        </div>
+
         <!-- Tabs UNDER fields -->
-        <div class="tabs" id="roleTabs" style="margin-top:2px;">
+        <div class="tabs" id="roleTabs" style="margin-top:10px;">
           <button id="tabRoleWaiter" class="tab active" type="button">Waiter</button>
           <button id="tabRoleManager" class="tab" type="button">Manager</button>
         </div>
@@ -122,14 +131,13 @@ document.querySelector("#app").innerHTML = `
         </div>
       </div>
 
-      <!-- Join block: logged-in waiter sees it.
-           If waiter already has restaurant, we show status instead of hiding the whole block. -->
-      <div id="demoJoinBlock" class="card hidden">
+      <!-- Join block: only for logged-in waiter with no restaurant -->
+      <div id="demoJoinBlock" class="hidden card">
         <div class="row" style="justify-content:space-between; align-items:flex-start;">
           <div style="min-width:220px;">
             <b>Join a restaurant</b>
             <p class="small" style="margin-top:6px;">
-              Paste the join code. If invite is required, the manager must add your email first.
+              Paste the join code. You can keep playing Demo while Premium access is restricted.
             </p>
           </div>
 
@@ -146,15 +154,6 @@ document.querySelector("#app").innerHTML = `
 
       <!-- Game lives here (isolated) -->
       <div id="gameRootDemo" style="margin-top:10px;"></div>
-
-      <!-- Footer support/contact (always visible on demo screen) -->
-      <div id="demoSupportCard" class="card" style="margin-top:12px;">
-        <b>Support</b>
-        <div class="small" style="margin-top:6px;">
-          To enter premium please contact:
-          <span class="mono">hello@bottlecaller.com</span>
-        </div>
-      </div>
     </div>
   </section>
 
@@ -276,13 +275,6 @@ let lastRouteAt = 0;
 
 let authIntent = "demo"; // demo | premium
 
-// ✅ Route token to prevent old async routes from winning
-let routeToken = 0;
-function nextRouteToken() {
-  routeToken += 1;
-  return routeToken;
-}
-
 const uiState = {
   role: "waiter", // waiter | manager (used only for signup UI)
   mode: "login", // login | signup
@@ -377,7 +369,7 @@ function setAuthIntent(next) {
 
   if (authIntent === "premium") {
     if (title) title.textContent = "Premium Login";
-    if (sub) sub.textContent = "Sign in to access Premium. (Restaurant members route into Premium automatically.)";
+    if (sub) sub.textContent = "Login, then enter your Premium code (or contact us to purchase).";
     if (premiumBtn) premiumBtn.textContent = "Premium ✓";
     if (exitBtn) exitBtn.classList.remove("hidden");
   } else {
@@ -387,6 +379,13 @@ function setAuthIntent(next) {
         "Waiters play Demo immediately and can join by code. Managers enter Premium to configure the restaurant.";
     if (premiumBtn) premiumBtn.textContent = "Premium";
     if (exitBtn) exitBtn.classList.add("hidden");
+  }
+
+  // ✅ show/hide premium code + contact block
+  const premiumIntentBlock = document.getElementById("premiumIntentBlock");
+  if (premiumIntentBlock) {
+    if (authIntent === "premium") premiumIntentBlock.classList.remove("hidden");
+    else premiumIntentBlock.classList.add("hidden");
   }
 }
 
@@ -405,7 +404,7 @@ function closeHud() {
 // ------------------------------------------------------------
 // GAME LOADING (iframe) — no sticky stacking, no unwanted resets
 // ------------------------------------------------------------
-let currentIframeMode = null;      // "demo" | "premium"
+let currentIframeMode = null; // "demo" | "premium"
 let currentIframeVersion = Date.now(); // stable per mode-session
 
 function clearGameMounts() {
@@ -429,15 +428,14 @@ function mountGameIframe(targetId, mode /* "demo" | "premium" */) {
 
   // ✅ Prevent unwanted resets: if same mode already mounted in this target, do nothing
   const existing = mount.querySelector("iframe");
-  if (existing && currentIframeMode === mode) {
-    return;
-  }
+  if (existing && currentIframeMode === mode) return;
 
   currentIframeMode = mode;
 
   // Cache-busting param required — but stable within this mode session
   const src = `/game/game.html?mode=${encodeURIComponent(mode)}&v=${currentIframeVersion}`;
 
+  // ✅ Smaller default height to avoid giant empty space before setup
   mount.innerHTML = `
     <iframe
       id="${targetId}Frame"
@@ -445,7 +443,7 @@ function mountGameIframe(targetId, mode /* "demo" | "premium" */) {
       title="BottleCaller Game"
       style="
         width: 100%;
-        height: min(78vh, 860px);
+        height: 420px;
         border: 1px solid rgba(255,255,255,0.10);
         border-radius: 14px;
         background: rgba(0,0,0,0.35);
@@ -457,6 +455,23 @@ function mountGameIframe(targetId, mode /* "demo" | "premium" */) {
 
   setDebug({ step: "game.iframe.mounted", targetId, mode, src, time: new Date().toISOString() });
 }
+
+// ✅ Optional auto-resize (requires matching postMessage in game.html)
+window.addEventListener("message", (event) => {
+  const data = event?.data;
+  if (!data || data.type !== "BC_IFRAME_HEIGHT") return;
+
+  const demoFrame = document.getElementById("gameRootDemoFrame");
+  const premFrame = document.getElementById("premiumRootFrame");
+  const frame = data.mode === "premium" ? premFrame : demoFrame;
+  if (!frame) return;
+
+  const h = Number(data.height);
+  if (!Number.isFinite(h)) return;
+
+  const clamped = Math.max(360, Math.min(860, h + 24));
+  frame.style.height = clamped + "px";
+});
 
 // ------------------------------------------------------------
 // Data loaders
@@ -584,34 +599,11 @@ function renderDemoJoinBlock() {
   const isAuthed = !!appState.session?.user;
   if (badge) (isAuthed ? badge.classList.remove("hidden") : badge.classList.add("hidden"));
 
-  // Logged out => hide join block
-  if (!isAuthed) {
-    joinBlock?.classList.add("hidden");
-    return;
-  }
-
   const role = String(appState.profile?.role || "").toLowerCase();
   const hasRestaurant = !!appState.profile?.restaurant_id;
 
-  // Only waiters see the join UI, but keep it predictable while debugging:
-  // - waiter with restaurant: show block + message (no need to hide)
-  // - waiter without restaurant: show block + input
-  // - manager: hide block
-  if (role !== "waiter") {
-    joinBlock?.classList.add("hidden");
-    return;
-  }
-
-  joinBlock?.classList.remove("hidden");
-
-  if (hasRestaurant) {
-    setMsg("demoJoinMsg", "You already belong to a restaurant. Premium will route automatically.", "success");
-  } else {
-    // don’t overwrite errors while they’re testing
-    if (!document.getElementById("demoJoinMsg")?.textContent) {
-      setMsg("demoJoinMsg", "");
-    }
-  }
+  const showJoin = isAuthed && role === "waiter" && !hasRestaurant;
+  if (joinBlock) (showJoin ? joinBlock.classList.remove("hidden") : joinBlock.classList.add("hidden"));
 }
 
 async function demoJoinRestaurantByCode() {
@@ -663,15 +655,14 @@ async function demoJoinRestaurantByCode() {
 }
 
 // ------------------------------------------------------------
-// Routing rules (manager-first + restaurant-first)
+// Routing rules (restaurant-first)
 // ------------------------------------------------------------
 let authRouteTimer = null;
 
-async function routeDemo(reason = "manual", token = null) {
+async function routeDemo(reason = "manual") {
   clearMsgs();
   closeHud(); // ✅ prevent overlay stealing clicks
 
-  const myToken = token ?? nextRouteToken();
   const was = appMode;
   appMode = "demo";
 
@@ -679,10 +670,6 @@ async function routeDemo(reason = "manual", token = null) {
     await loadAuthedState(`routeDemo:${reason}`);
   } catch {}
 
-  // If a newer route started, abort
-  if (myToken !== routeToken) return;
-
-  // Only force remount if switching modes
   if (was !== "demo") forceRemountForModeSwitch("demo");
 
   setDebug({ step: "route.demo", time: new Date().toISOString(), reason, authed: !!appState.session?.user });
@@ -691,8 +678,7 @@ async function routeDemo(reason = "manual", token = null) {
   mountGameIframe("gameRootDemo", "demo");
 }
 
-async function routePremium(reason = "manual", token = null) {
-  const myToken = token ?? nextRouteToken();
+async function routePremium(reason = "manual") {
   const now = Date.now();
   if (routingLock) return;
   if (now - lastRouteAt < 250) return;
@@ -703,11 +689,7 @@ async function routePremium(reason = "manual", token = null) {
 
   try {
     clearMsgs();
-
     await loadAuthedState(`routePremium:${reason}`);
-
-    // If a newer route started, abort
-    if (myToken !== routeToken) return;
 
     if (!appState.session?.user) {
       closeHud();
@@ -717,21 +699,10 @@ async function routePremium(reason = "manual", token = null) {
     }
 
     const profile = appState.profile;
-    const role = String(profile?.role || "").toLowerCase();
-
-    // ✅ MANAGER-FIRST RULE:
-    // Managers never go to demo. If they don't have a restaurant, they go to Create Restaurant.
-    if (role === "manager" && !profile?.restaurant_id) {
-      appMode = "premium";
-      closeHud();
-      showScreen("screenCreateRestaurant");
-      return;
-    }
 
     // ✅ HARD RULE: restaurant membership routes to premium always (do not block on access_tier)
     if (profile?.restaurant_id) {
-      // Load invites for manager
-      if (role === "manager" && appState.restaurant?.id) {
+      if (String(profile?.role).toLowerCase() === "manager" && appState.restaurant?.id) {
         try {
           appState.invites = await loadInvites(appState.restaurant.id);
         } catch {
@@ -744,7 +715,6 @@ async function routePremium(reason = "manual", token = null) {
       renderHud();
       appMode = "premium";
 
-      // Only force remount if switching modes
       if (was !== "premium") forceRemountForModeSwitch("premium");
 
       showScreen("screenPremiumApp");
@@ -756,7 +726,7 @@ async function routePremium(reason = "manual", token = null) {
     const entitlement = canAccessPremium(profile);
 
     if (!entitlement.ok) {
-      await routeDemo(`premium.block.${entitlement.reason}`, myToken);
+      await routeDemo(`premium.block.${entitlement.reason}`);
       setMsg(
         "demoJoinMsg",
         "Premium is locked. Join a restaurant to unlock Premium. You can keep playing Demo.",
@@ -765,7 +735,14 @@ async function routePremium(reason = "manual", token = null) {
       return;
     }
 
-    // Fallback (entitled but no restaurant; e.g. solo in future)
+    // Manager without restaurant -> create it
+    if (String(profile?.role).toLowerCase() === "manager" && !profile?.restaurant_id) {
+      appMode = "premium";
+      closeHud();
+      showScreen("screenCreateRestaurant");
+      return;
+    }
+
     renderHud();
     appMode = "premium";
 
@@ -786,13 +763,9 @@ async function routePremium(reason = "manual", token = null) {
 
 async function decideRoute(reason = "decideRoute") {
   clearMsgs();
-  const myToken = nextRouteToken();
 
   try {
     await loadAuthedState(reason);
-
-    // If a newer route started, abort
-    if (myToken !== routeToken) return;
 
     // 1) Logged out => Home
     if (!appState.session?.user) {
@@ -804,25 +777,16 @@ async function decideRoute(reason = "decideRoute") {
       return;
     }
 
-    const role = String(appState.profile?.role || "").toLowerCase();
-
-    // ✅ MANAGER-FIRST: managers always go Premium flow (never demo).
-    if (role === "manager") {
-      setAuthIntent("premium");
-      await routePremium(`decideRoute.manager:${reason}`, myToken);
-      return;
-    }
-
-    // 2) restaurant membership => Premium always
+    // 2) HARD RULE: restaurant membership => Premium always
     if (appState.profile?.restaurant_id) {
-      setAuthIntent("premium"); // UI label only
-      await routePremium(`decideRoute.restaurant:${reason}`, myToken);
+      setAuthIntent("premium");
+      await routePremium(`decideRoute.restaurant:${reason}`);
       return;
     }
 
-    // 3) No restaurant waiter => Demo
+    // 3) No restaurant => Demo
     setAuthIntent("demo");
-    await routeDemo(`decideRoute.no_restaurant:${reason}`, myToken);
+    await routeDemo(`decideRoute.no_restaurant:${reason}`);
   } catch (e) {
     console.error(e);
     closeHud();
@@ -1089,6 +1053,32 @@ async function createPremiumRestaurant() {
 }
 
 // ------------------------------------------------------------
+// Premium code redemption (assumes an RPC exists)
+// ------------------------------------------------------------
+async function redeemPremiumCodeIfProvided() {
+  // Only attempt if premium intent is selected
+  if (authIntent !== "premium") return { attempted: false, ok: false };
+
+  const raw = document.getElementById("premiumLicenseCode")?.value;
+  const code = normCode(raw);
+  if (!code) return { attempted: false, ok: false };
+
+  // IMPORTANT:
+  // This RPC name/param must match YOUR database function.
+  // If yours is named differently, change the next line only.
+  const rpc = await withTimeout(
+    supabase.rpc("claim_license_code", { p_code: code }),
+    15000,
+    "rpc.claim_license_code"
+  );
+
+  if (rpc.error) throw rpc.error;
+  if (!rpc.data?.ok) throw new Error(rpc.data?.error || "Code failed");
+
+  return { attempted: true, ok: true, data: rpc.data };
+}
+
+// ------------------------------------------------------------
 // Auth submit
 // ------------------------------------------------------------
 async function submitAuth() {
@@ -1110,6 +1100,17 @@ async function submitAuth() {
       if (res.error) throw res.error;
 
       await loadAuthedState("login.ok");
+
+      // ✅ If Premium intent + code entered, redeem it BEFORE routing
+      if (authIntent === "premium") {
+        const codeEntered = normCode(document.getElementById("premiumLicenseCode")?.value);
+        if (codeEntered) {
+          setMsg("authMsg", "Applying Premium code...");
+          await redeemPremiumCodeIfProvided();
+          await loadAuthedState("login.claim.refresh");
+          setMsg("authMsg", "Premium code applied ✅", "success");
+        }
+      }
 
       // ✅ Force UI role to match real profile role (prevents confusion)
       const pr = String(appState.profile?.role || "").toLowerCase();
@@ -1165,16 +1166,16 @@ async function logoutAll(reason = "logout") {
 // Wire events
 // ------------------------------------------------------------
 
-// ✅ Optional: Premium button toggles intent when logged out
+// ✅ Premium button toggles intent when logged out; routes when logged in
 document.getElementById("btnHomePremium").addEventListener("click", async () => {
-  // Logged out: toggle intent
+  // Logged out: toggle intent only
   if (!appState.session?.user) {
     if (authIntent === "premium") {
       setAuthIntent("demo");
       setMsg("authMsg", "", "normal");
     } else {
       setAuthIntent("premium");
-      setMsg("authMsg", "Premium selected. Login or Sign up below.", "success");
+      setMsg("authMsg", "Premium selected. Login below and enter your Premium code.", "success");
     }
     return;
   }
@@ -1274,8 +1275,7 @@ supabase.auth.onAuthStateChange((event) => {
     try {
       if (event === "TOKEN_REFRESHED") {
         await loadAuthedState(`auth.refresh:${event}`);
-        // do not call decideRoute here (prevents iframe reset)
-        return;
+        return; // do not call decideRoute here (prevents iframe reset)
       }
       await decideRoute(`auth.change:${event}`);
     } catch {
@@ -1291,17 +1291,3 @@ supabase.auth.onAuthStateChange((event) => {
     await decideRoute("boot.resume");
   } catch {}
 })();
-
-// ------------------------------------------------------------
-// ✅ Expose safe debug handle (fixes "appState is not defined" in console)
-// ------------------------------------------------------------
-window.BC = {
-  appState,
-  uiState,
-  setAuthIntent,
-  decideRoute,
-  routeDemo,
-  routePremium,
-  loadAuthedState,
-  logoutAll,
-};
