@@ -122,13 +122,14 @@ document.querySelector("#app").innerHTML = `
         </div>
       </div>
 
-      <!-- Join block: only for logged-in waiter with no restaurant -->
-      <div id="demoJoinBlock" class="hidden card">
+      <!-- Join block: logged-in waiter sees it.
+           If waiter already has restaurant, we show status instead of hiding the whole block. -->
+      <div id="demoJoinBlock" class="card hidden">
         <div class="row" style="justify-content:space-between; align-items:flex-start;">
           <div style="min-width:220px;">
             <b>Join a restaurant</b>
             <p class="small" style="margin-top:6px;">
-              Paste the join code. You can keep playing Demo while Premium access is restricted.
+              Paste the join code. If invite is required, the manager must add your email first.
             </p>
           </div>
 
@@ -145,6 +146,15 @@ document.querySelector("#app").innerHTML = `
 
       <!-- Game lives here (isolated) -->
       <div id="gameRootDemo" style="margin-top:10px;"></div>
+
+      <!-- Footer support/contact (always visible on demo screen) -->
+      <div id="demoSupportCard" class="card" style="margin-top:12px;">
+        <b>Support</b>
+        <div class="small" style="margin-top:6px;">
+          If something looks wrong while debugging, send a screenshot + the debug panel to:
+          <span class="mono">support@bottlecaller.com</span>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -265,6 +275,13 @@ let routingLock = false;
 let lastRouteAt = 0;
 
 let authIntent = "demo"; // demo | premium
+
+// ✅ Route token to prevent old async routes from winning
+let routeToken = 0;
+function nextRouteToken() {
+  routeToken += 1;
+  return routeToken;
+}
 
 const uiState = {
   role: "waiter", // waiter | manager (used only for signup UI)
@@ -567,11 +584,34 @@ function renderDemoJoinBlock() {
   const isAuthed = !!appState.session?.user;
   if (badge) (isAuthed ? badge.classList.remove("hidden") : badge.classList.add("hidden"));
 
+  // Logged out => hide join block
+  if (!isAuthed) {
+    joinBlock?.classList.add("hidden");
+    return;
+  }
+
   const role = String(appState.profile?.role || "").toLowerCase();
   const hasRestaurant = !!appState.profile?.restaurant_id;
 
-  const showJoin = isAuthed && role === "waiter" && !hasRestaurant;
-  if (joinBlock) (showJoin ? joinBlock.classList.remove("hidden") : joinBlock.classList.add("hidden"));
+  // Only waiters see the join UI, but keep it predictable while debugging:
+  // - waiter with restaurant: show block + message (no need to hide)
+  // - waiter without restaurant: show block + input
+  // - manager: hide block
+  if (role !== "waiter") {
+    joinBlock?.classList.add("hidden");
+    return;
+  }
+
+  joinBlock?.classList.remove("hidden");
+
+  if (hasRestaurant) {
+    setMsg("demoJoinMsg", "You already belong to a restaurant. Premium will route automatically.", "success");
+  } else {
+    // don’t overwrite errors while they’re testing
+    if (!document.getElementById("demoJoinMsg")?.textContent) {
+      setMsg("demoJoinMsg", "");
+    }
+  }
 }
 
 async function demoJoinRestaurantByCode() {
@@ -623,20 +663,24 @@ async function demoJoinRestaurantByCode() {
 }
 
 // ------------------------------------------------------------
-// Routing rules (restaurant-first)
+// Routing rules (manager-first + restaurant-first)
 // ------------------------------------------------------------
 let authRouteTimer = null;
 
-async function routeDemo(reason = "manual") {
+async function routeDemo(reason = "manual", token = null) {
   clearMsgs();
   closeHud(); // ✅ prevent overlay stealing clicks
 
+  const myToken = token ?? nextRouteToken();
   const was = appMode;
   appMode = "demo";
 
   try {
     await loadAuthedState(`routeDemo:${reason}`);
   } catch {}
+
+  // If a newer route started, abort
+  if (myToken !== routeToken) return;
 
   // Only force remount if switching modes
   if (was !== "demo") forceRemountForModeSwitch("demo");
@@ -647,7 +691,8 @@ async function routeDemo(reason = "manual") {
   mountGameIframe("gameRootDemo", "demo");
 }
 
-async function routePremium(reason = "manual") {
+async function routePremium(reason = "manual", token = null) {
+  const myToken = token ?? nextRouteToken();
   const now = Date.now();
   if (routingLock) return;
   if (now - lastRouteAt < 250) return;
@@ -661,6 +706,9 @@ async function routePremium(reason = "manual") {
 
     await loadAuthedState(`routePremium:${reason}`);
 
+    // If a newer route started, abort
+    if (myToken !== routeToken) return;
+
     if (!appState.session?.user) {
       closeHud();
       showScreen("screenHome");
@@ -669,11 +717,21 @@ async function routePremium(reason = "manual") {
     }
 
     const profile = appState.profile;
+    const role = String(profile?.role || "").toLowerCase();
+
+    // ✅ MANAGER-FIRST RULE:
+    // Managers never go to demo. If they don't have a restaurant, they go to Create Restaurant.
+    if (role === "manager" && !profile?.restaurant_id) {
+      appMode = "premium";
+      closeHud();
+      showScreen("screenCreateRestaurant");
+      return;
+    }
 
     // ✅ HARD RULE: restaurant membership routes to premium always (do not block on access_tier)
     if (profile?.restaurant_id) {
       // Load invites for manager
-      if (String(profile?.role).toLowerCase() === "manager" && appState.restaurant?.id) {
+      if (role === "manager" && appState.restaurant?.id) {
         try {
           appState.invites = await loadInvites(appState.restaurant.id);
         } catch {
@@ -698,20 +756,12 @@ async function routePremium(reason = "manual") {
     const entitlement = canAccessPremium(profile);
 
     if (!entitlement.ok) {
-      await routeDemo(`premium.block.${entitlement.reason}`);
+      await routeDemo(`premium.block.${entitlement.reason}`, myToken);
       setMsg(
         "demoJoinMsg",
         "Premium is locked. Join a restaurant to unlock Premium. You can keep playing Demo.",
         "error"
       );
-      return;
-    }
-
-    // Manager without restaurant -> create it
-    if (String(profile?.role).toLowerCase() === "manager" && !profile?.restaurant_id) {
-      appMode = "premium";
-      closeHud();
-      showScreen("screenCreateRestaurant");
       return;
     }
 
@@ -736,9 +786,13 @@ async function routePremium(reason = "manual") {
 
 async function decideRoute(reason = "decideRoute") {
   clearMsgs();
+  const myToken = nextRouteToken();
 
   try {
     await loadAuthedState(reason);
+
+    // If a newer route started, abort
+    if (myToken !== routeToken) return;
 
     // 1) Logged out => Home
     if (!appState.session?.user) {
@@ -750,16 +804,25 @@ async function decideRoute(reason = "decideRoute") {
       return;
     }
 
-    // 2) HARD RULE: restaurant membership => Premium always
-    if (appState.profile?.restaurant_id) {
-      setAuthIntent("premium"); // UI label only
-      await routePremium(`decideRoute.restaurant:${reason}`);
+    const role = String(appState.profile?.role || "").toLowerCase();
+
+    // ✅ MANAGER-FIRST: managers always go Premium flow (never demo).
+    if (role === "manager") {
+      setAuthIntent("premium");
+      await routePremium(`decideRoute.manager:${reason}`, myToken);
       return;
     }
 
-    // 3) No restaurant => Demo
+    // 2) restaurant membership => Premium always
+    if (appState.profile?.restaurant_id) {
+      setAuthIntent("premium"); // UI label only
+      await routePremium(`decideRoute.restaurant:${reason}`, myToken);
+      return;
+    }
+
+    // 3) No restaurant waiter => Demo
     setAuthIntent("demo");
-    await routeDemo(`decideRoute.no_restaurant:${reason}`);
+    await routeDemo(`decideRoute.no_restaurant:${reason}`, myToken);
   } catch (e) {
     console.error(e);
     closeHud();
@@ -1228,3 +1291,17 @@ supabase.auth.onAuthStateChange((event) => {
     await decideRoute("boot.resume");
   } catch {}
 })();
+
+// ------------------------------------------------------------
+// ✅ Expose safe debug handle (fixes "appState is not defined" in console)
+// ------------------------------------------------------------
+window.BC = {
+  appState,
+  uiState,
+  setAuthIntent,
+  decideRoute,
+  routeDemo,
+  routePremium,
+  loadAuthedState,
+  logoutAll,
+};
