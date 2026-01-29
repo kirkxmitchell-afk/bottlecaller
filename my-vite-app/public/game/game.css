@@ -214,21 +214,16 @@ button[disabled] { opacity: 0.5; cursor: not-allowed; transform: none; }
 
 /* ---------- Option grid + selection highlight ---------- */
 .option-grid {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   gap: 10px;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   margin-top: 10px;
 }
 
 .option-btn {
-  width: 100%;
-  text-align: left;
-  border: 1px solid rgba(255,255,255,0.12);
-  background: rgba(255,255,255,0.03);
-  color: rgba(244,246,247,0.86);
-  padding: 10px 12px;
-  border-radius: 12px;
-  cursor: pointer;
+  flex: 0 1 auto;
+  min-width: 140px;
+  max-width: 100%;
 }
 
 .option-btn:hover {
