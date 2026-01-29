@@ -1,56 +1,44 @@
 // src/game/engineBridge.ts
 import {
-  initEncounter,
-  pickGuestType,
-  pickMode,
-  pickHook,
-  finalizeEncounter,
-  type EngineState,
-  type EngineFeedback,
+  computeReaction,
+  type ReactionChecks,
+  type ReactionResult,
 } from "./engine";
 
-// Store state only in memory (no storage, no side effects)
-let state: EngineState | null = null;
+// Debug memory only (in-memory, no storage)
+let lastChecks: ReactionChecks | null = null;
+let lastResult: ReactionResult | null = null;
 
-// Helper: ensure we always have a state
-function requireState(): EngineState {
-  if (!state) throw new Error("Engine not initialized. Call startEncounter() first.");
-  return state;
-}
+type EngineBridgeAPI = {
+  // Phase 1: overlay calculator used by the current UI (game.html)
+  computeReaction: (checks: ReactionChecks) => ReactionResult;
 
-// Define the global API the UI will call
+  // Debug helpers
+  __debug: {
+    getLast: () => { lastChecks: ReactionChecks | null; lastResult: ReactionResult | null };
+    clear: () => void;
+  };
+};
+
 export function installEngineBridge() {
-  const api = {
-    startEncounter(encounterId: string) {
-      state = initEncounter(encounterId);
-      return { ok: true, encounterId };
+  const api: EngineBridgeAPI = {
+    computeReaction(checks) {
+      lastChecks = checks;
+      lastResult = computeReaction(checks);
+      return lastResult;
     },
 
-    chooseGuestType(guestType: string): EngineFeedback {
-      state = pickGuestType(requireState(), guestType);
-      return state.feedback; // your engine should expose feedback
-    },
-
-    chooseMode(mode: string): EngineFeedback {
-      state = pickMode(requireState(), mode);
-      return state.feedback;
-    },
-
-    chooseHook(hookId: string): EngineFeedback {
-      state = pickHook(requireState(), hookId);
-      return state.feedback;
-    },
-
-    finalize(): EngineFeedback {
-      state = finalizeEncounter(requireState());
-      return state.feedback;
-    },
-
-    getState() {
-      return state; // useful for debugging
+    __debug: {
+      getLast: () => ({ lastChecks, lastResult }),
+      clear: () => {
+        lastChecks = null;
+        lastResult = null;
+      },
     },
   };
 
   // Attach to window (iframe global)
   (window as any).EngineBridge = api;
+
+  console.log("[BottleCaller] EngineBridge installed", api);
 }

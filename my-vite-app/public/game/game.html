@@ -468,44 +468,6 @@
         return arr[Math.floor(Math.random() * arr.length)];
       }
 
-      // ============================================================
-      // ✅ CHAIN SCORE + SIGNAL (Whole chain, pivot bands)
-      // - This replaces “hook-only” signal.
-      // ============================================================
-      function computeChainScore(checks) {
-        // Guest read: 1 or 0
-        const read = checks.guestRead ? 1.0 : 0.0;
-
-        // Mode: optimal=1, neutral=0.5, damaging=0
-        const mode = checks.modeStatus === "optimal" ? 1.0 : checks.modeStatus === "neutral" ? 0.5 : 0.0;
-
-        // Hook: optimal=1, neutral=0.5, damaging=0
-        const hook = checks.hookStatus === "optimal" ? 1.0 : checks.hookStatus === "neutral" ? 0.5 : 0.0;
-
-        // Delivery: right final hook = 1 else 0
-        const delivery = checks.deliveryCorrect ? 1.0 : 0.0;
-
-        return read + mode + hook + delivery; // 0..4
-      }
-
-      function signalFromChainScore(score) {
-        // Bands you can tune later; these feel right for 0..4 scale
-        if (score >= 3.0) return "green";
-        if (score >= 2.0) return "yellow";
-        return "red";
-      }
-
-      function pivotUnlockedFromScore(score) {
-        // Equivalent of “pivot gate threshold”
-        return score >= 2.0;
-      }
-
-      function canOfferReset(encounter) {
-        // Your locked rule: reset only if first mode was "scout".
-        // This prototype has LEAD/REFLECT/HOLD, so we map scout ≈ HOLD (the "slow down / reduce pressure" mode).
-        return encounter && encounter.modeSelected === "HOLD";
-      }
-
       // ---------- IDs for the active mode ----------
       const ids = isDemo ? {
         cardCount: "homeDemoCount",
@@ -835,7 +797,7 @@
 
         const leadLines = [
           "Here’s the fastest call: one confident pick.",
-          "Quick recommendation — one bottle, one reason.",
+          "Quick recommendation — one confident pick.",
           "Let’s land this with a clear choice.",
           "I’m going to make the call for you — " + t + " and simple.",
           "One strong direction: trust this pick."
@@ -1272,39 +1234,46 @@
         }
 
         // ============================================================
-        // STEP 5: Reaction (NOW driven by chain signal)
-        // ✅ Right final hook never fails
-        // ✅ Signal is whole chain
-        // ✅ Green pivots stay (power move)
-        // ✅ Reset only if first mode was HOLD (scout-mapped)
+        // STEP 5: Reaction (NOW driven by EngineBridge overlay)
         // ============================================================
         if (currentStep === 5) {
-          const checks = evaluateChecks();
-          const chainScore = computeChainScore(checks);
-          const chainSignal = signalFromChainScore(chainScore);
-          const pivotUnlocked = pivotUnlockedFromScore(chainScore);
+          const checksRaw = evaluateChecks();
 
-          currentEncounter.chainScore = chainScore;
-          currentEncounter.chainSignal = chainSignal;
+          // Build ReactionChecks for the engine overlay (pure calculator)
+          const reactionChecks = {
+            guestRead: checksRaw.guestRead,
+            modeStatus: checksRaw.modeStatus,
+            hookStatus: checksRaw.hookStatus,
+            deliveryCorrect: checksRaw.deliveryCorrect,
+            firstMode: currentEncounter.modeSelected || "" // "LEAD" | "REFLECT" | "HOLD" | ""
+          };
+
+          // Guard: if EngineBridge didn't load, fail loudly (debug-fast)
+          if (!window.EngineBridge || typeof window.EngineBridge.computeReaction !== "function") {
+            throw new Error("EngineBridge not loaded. Ensure /src/game/gameEntry.ts is loaded inside the iframe before </body>.");
+          }
+
+          const result = window.EngineBridge.computeReaction(reactionChecks);
+
+          // Persist telemetry on encounter for history + reflection
+          currentEncounter.chainScore = result.chainScore;
+          currentEncounter.chainSignal = result.chainSignal;
 
           const signalChip = document.createElement("div");
           signalChip.className = "notice";
-          signalChip.innerText = `Signal: ${chainSignal.toUpperCase()} (score ${chainScore.toFixed(1)} / 4.0)`;
+          signalChip.innerText = `Signal: ${result.chainSignal.toUpperCase()} (score ${result.chainScore.toFixed(1)} / 4.0)`;
           stepContent.appendChild(signalChip);
 
-          // RIGHT FINAL HOOK NEVER FAILS:
-          // If deliveryCorrect is true, we always pass (no reject).
-          if (checks.deliveryCorrect) {
-            // If chain is green, sometimes upgrade; else nod.
-            const upgraded = (chainSignal === "green") && (Math.random() < 0.35);
+          // ✅ Right final hook never fails
+          if (result.deliveryCorrect) {
+            const upgraded = (result.chainSignal === "green") && (Math.random() < 0.35);
             stepContent.appendChild(document.createTextNode(upgraded ? "✅ Upgrade. “Nice — that’s the move.”" : "✅ Nod. “Perfect.”"));
             addStepButton("REFLECT", () => { currentStep = 6; renderEncounterStep(); }, stepButtons);
             return;
           }
 
-          // Not delivery-correct:
-          // If pivot unlocked and signal is green/yellow/red, offer pivot.
-          if (pivotUnlocked) {
+          // Pivot unlocked => offer pivot flow
+          if (result.pivotUnlocked) {
             // Build pivot scenario if not already set
             if (!currentEncounter.recoveryText) {
               const scenario = getPivotScenario();
@@ -1316,19 +1285,16 @@
               currentEncounter.resetUsed = false;
             }
 
-            // Decide pivot type label
+            // Map engine pivot label to UI label
             const pivotType =
-              chainSignal === "green" ? "POWER MOVE PIVOT" :
-              chainSignal === "yellow" ? "RECOVERY PIVOT" :
-              "RECOVERY PIVOT";
-
+              result.pivotType === "POWER_MOVE_PIVOT" ? "POWER MOVE PIVOT" : "RECOVERY PIVOT";
             currentEncounter.pivotType = pivotType;
 
             const header = document.createElement("p");
             header.innerText =
-              chainSignal === "green"
+              result.chainSignal === "green"
                 ? "🟢 They’re with you — but you can still tighten the close."
-                : chainSignal === "yellow"
+                : result.chainSignal === "yellow"
                   ? "🟡 Hesitates… you can recover this."
                   : "🔴 Pushback… you need a recovery pivot.";
             stepContent.appendChild(header);
@@ -1362,8 +1328,9 @@
 
             stepContent.appendChild(options);
 
-            // Reset option (only if first mode was HOLD)
-            const resetAllowed = canOfferReset(currentEncounter);
+            // Reset gate comes from engine overlay
+            const resetAllowed = !!result.resetAllowed;
+
             const resetRow = document.createElement("div");
             resetRow.className = "notice";
             resetRow.innerText = resetAllowed
@@ -1373,6 +1340,7 @@
 
             const resetBtn = addStepButton("RESET (only if HOLD)", () => {
               if (!resetAllowed) return;
+
               // Reset the encounter attempt but keep the same guest + wine
               currentEncounter.resetUsed = true;
 
@@ -1772,7 +1740,7 @@
 
 </script>
 
+  <!-- ✅ MUST be inside body so the iframe reliably loads EngineBridge -->
+  <script type="module" src="/src/game/gameEntry.ts"></script>
 </body>
 </html>
-
-<script type="module" src="/src/game/gameEntry.ts"></script>

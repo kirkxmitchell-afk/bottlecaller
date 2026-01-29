@@ -460,3 +460,81 @@ export function exampleEncounter(stage: Stage = 1): Encounter {
     },
   };
 }
+
+// ============================================================
+// Engine Overlay: Reaction Calculator (for current UI prototype)
+// - Pure functions only
+// - No DOM, no storage, no routing, no Supabase
+// - IMPORTANT: uses distinct type names to avoid collisions
+// ============================================================
+
+export type UiMode = "LEAD" | "REFLECT" | "HOLD";
+export type UiHook = "FLAVOUR" | "STORY" | "VALUE";
+export type ModeStatus = "optimal" | "neutral" | "damaging";
+export type HookStatus = "optimal" | "neutral" | "damaging";
+
+export type ReactionChecks = {
+  guestRead: boolean;
+  modeStatus: ModeStatus;
+  hookStatus: HookStatus;
+  deliveryCorrect: boolean;
+
+  /**
+   * v1 locked rule:
+   * reset only allowed if first mode was "scout".
+   * In current prototype UI we map scout ≈ HOLD.
+   */
+  firstMode: UiMode | "" | null | undefined;
+};
+
+export type ReactionResult = {
+  chainScore: number;       // 0..4
+  chainSignal: Signal;      // uses your existing Signal type (green/yellow/red)
+  pivotUnlocked: boolean;   // score band gate
+  resetAllowed: boolean;    // firstMode == HOLD (scout-mapped)
+  deliveryCorrect: boolean; // passed through
+  pivotType: "POWER_MOVE_PIVOT" | "RECOVERY_PIVOT" | "";
+};
+
+export function computeChainScore(checks: ReactionChecks): number {
+  const read = checks.guestRead ? 1.0 : 0.0;
+  const mode = checks.modeStatus === "optimal" ? 1.0 : checks.modeStatus === "neutral" ? 0.5 : 0.0;
+  const hook = checks.hookStatus === "optimal" ? 1.0 : checks.hookStatus === "neutral" ? 0.5 : 0.0;
+  const delivery = checks.deliveryCorrect ? 1.0 : 0.0;
+  return read + mode + hook + delivery;
+}
+
+export function signalFromChainScore(score: number): Signal {
+  if (score >= 3.0) return "green";
+  if (score >= 2.0) return "yellow";
+  return "red";
+}
+
+export function pivotUnlockedFromScore(score: number): boolean {
+  return score >= 2.0;
+}
+
+export function resetAllowedFromFirstMode(firstMode: ReactionChecks["firstMode"]): boolean {
+  return firstMode === "HOLD";
+}
+
+export function computeReaction(checks: ReactionChecks): ReactionResult {
+  const chainScore = computeChainScore(checks);
+  const chainSignal = signalFromChainScore(chainScore);
+  const pivotUnlocked = pivotUnlockedFromScore(chainScore);
+  const resetAllowed = resetAllowedFromFirstMode(checks.firstMode);
+
+  let pivotType: ReactionResult["pivotType"] = "";
+  if (!checks.deliveryCorrect && pivotUnlocked) {
+    pivotType = chainSignal === "green" ? "POWER_MOVE_PIVOT" : "RECOVERY_PIVOT";
+  }
+
+  return {
+    chainScore,
+    chainSignal,
+    pivotUnlocked,
+    resetAllowed,
+    deliveryCorrect: checks.deliveryCorrect,
+    pivotType,
+  };
+}
