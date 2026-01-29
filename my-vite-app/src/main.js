@@ -151,8 +151,8 @@ document.querySelector("#app").innerHTML = `
       <div id="demoSupportCard" class="card" style="margin-top:12px;">
         <b>Support</b>
         <div class="small" style="margin-top:6px;">
-          If something looks wrong while debugging, send a screenshot + the debug panel to:
-          <span class="mono">support@bottlecaller.com</span>
+          To enter premium please contact:
+          <span class="mono">hello@bottlecaller.com</span>
         </div>
       </div>
     </div>
