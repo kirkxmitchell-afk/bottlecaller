@@ -255,8 +255,6 @@
 
       // ============================================================
       // ✅ MODE ENFORCEMENT (single source of truth)
-      // - /game/game.html?mode=demo     => Demo-only UI + data
-      // - /game/game.html?mode=premium  => Premium-only UI + data
       // ============================================================
       const bcMode = (window.__BC_MODE__ === "premium") ? "premium" : "demo";
       const isDemo = bcMode === "demo";
@@ -276,7 +274,7 @@
         removeEl("screenSetupDemo");
       }
 
-      // ---------- Welcome copy (no demo/premium crossover text) ----------
+      // ---------- Welcome copy ----------
       const welcomeFooterNote = document.getElementById("welcomeFooterNote");
       if (welcomeFooterNote) {
         welcomeFooterNote.textContent = isDemo ? "Demo mode" : "";
@@ -314,8 +312,8 @@
         }
       ];
 
-      // ---------- Recovery Moment scenarios (rotation pool) ----------
-      const RECOVERY_POOL = [
+      // ---------- Pivot (Recovery / Power Move) scenarios ----------
+      const PIVOT_POOL = [
         { text: "“Maybe… what would you pick if it was your table?”", correctMode: "LEAD", why: "They’re asking you to decide. Reduce friction and commit for them." },
         { text: "They pause, reread the wine list, then look up silently.", correctMode: "HOLD", why: "Silence = uncertainty. Create safety and lower pressure." },
         { text: "“We’re celebrating actually… make it feel special.”", correctMode: "REFLECT", why: "They want identity + vibe. Mirror the moment and match tone." },
@@ -349,7 +347,7 @@
       const oakOptions = ["None", "Light", "Subtle", "Noticeable"];
       const processOptions = ["Stainless steel", "Wild ferment", "Maceration", "Destemming", "Whole bunch pressed", "Hand harvested", "Time on lees"];
 
-      // ---------- Runtime state (single-mode only) ----------
+      // ---------- Runtime state ----------
       let wines = loadWines();
       let runs = loadRuns();
       let demoStep = isDemo ? loadDemoStep() : 0;
@@ -470,6 +468,44 @@
         return arr[Math.floor(Math.random() * arr.length)];
       }
 
+      // ============================================================
+      // ✅ CHAIN SCORE + SIGNAL (Whole chain, pivot bands)
+      // - This replaces “hook-only” signal.
+      // ============================================================
+      function computeChainScore(checks) {
+        // Guest read: 1 or 0
+        const read = checks.guestRead ? 1.0 : 0.0;
+
+        // Mode: optimal=1, neutral=0.5, damaging=0
+        const mode = checks.modeStatus === "optimal" ? 1.0 : checks.modeStatus === "neutral" ? 0.5 : 0.0;
+
+        // Hook: optimal=1, neutral=0.5, damaging=0
+        const hook = checks.hookStatus === "optimal" ? 1.0 : checks.hookStatus === "neutral" ? 0.5 : 0.0;
+
+        // Delivery: right final hook = 1 else 0
+        const delivery = checks.deliveryCorrect ? 1.0 : 0.0;
+
+        return read + mode + hook + delivery; // 0..4
+      }
+
+      function signalFromChainScore(score) {
+        // Bands you can tune later; these feel right for 0..4 scale
+        if (score >= 3.0) return "green";
+        if (score >= 2.0) return "yellow";
+        return "red";
+      }
+
+      function pivotUnlockedFromScore(score) {
+        // Equivalent of “pivot gate threshold”
+        return score >= 2.0;
+      }
+
+      function canOfferReset(encounter) {
+        // Your locked rule: reset only if first mode was "scout".
+        // This prototype has LEAD/REFLECT/HOLD, so we map scout ≈ HOLD (the "slow down / reduce pressure" mode).
+        return encounter && encounter.modeSelected === "HOLD";
+      }
+
       // ---------- IDs for the active mode ----------
       const ids = isDemo ? {
         cardCount: "homeDemoCount",
@@ -517,7 +553,7 @@
         btnResetWines: "btnResetWinesPremium"
       };
 
-      // ---------- UI: counts + setup completion ----------
+      // ---------- UI: counts ----------
       function renderHomeCounts() {
         const countEl = document.getElementById(ids.cardCount);
         const runsEl = document.getElementById(ids.cardRuns);
@@ -969,11 +1005,18 @@
           deliveryLine1: currentEncounter.deliveryLine1 || "",
           deliveryLine2: currentEncounter.deliveryLine2 || "",
 
+          // Pivot fields (kept compatible with old names)
           recoveryText: currentEncounter.recoveryText || "",
           recoveryChoice: currentEncounter.recoveryChoice || "",
           recoveryCorrect: !!currentEncounter.recoveryCorrect,
           recoveryCorrectMode: currentEncounter.recoveryCorrectMode || "",
-          recoveryWhy: currentEncounter.recoveryWhy || ""
+          recoveryWhy: currentEncounter.recoveryWhy || "",
+
+          // New telemetry
+          chainScore: currentEncounter.chainScore ?? null,
+          chainSignal: currentEncounter.chainSignal ?? "",
+          pivotType: currentEncounter.pivotType || "",
+          resetUsed: !!currentEncounter.resetUsed
         };
 
         if (!Array.isArray(runs)) runs = [];
@@ -986,8 +1029,8 @@
         updateCounts();
       }
 
-      function getRecoveryScenario() {
-        return pickRandom(RECOVERY_POOL);
+      function getPivotScenario() {
+        return pickRandom(PIVOT_POOL);
       }
 
       function renderModeHelp(stepContent) {
@@ -1228,39 +1271,73 @@
           return;
         }
 
+        // ============================================================
+        // STEP 5: Reaction (NOW driven by chain signal)
+        // ✅ Right final hook never fails
+        // ✅ Signal is whole chain
+        // ✅ Green pivots stay (power move)
+        // ✅ Reset only if first mode was HOLD (scout-mapped)
+        // ============================================================
         if (currentStep === 5) {
           const checks = evaluateChecks();
-          const correctCount =
-            (checks.guestRead ? 1 : 0) +
-            (checks.modeStatus === "optimal" ? 1 : 0) +
-            (checks.hookStatus === "optimal" ? 1 : 0) +
-            (checks.deliveryCorrect ? 1 : 0);
+          const chainScore = computeChainScore(checks);
+          const chainSignal = signalFromChainScore(chainScore);
+          const pivotUnlocked = pivotUnlockedFromScore(chainScore);
 
-          if (correctCount >= 4) {
-            stepContent.innerText = "✅ Nod. “Perfect.”";
+          currentEncounter.chainScore = chainScore;
+          currentEncounter.chainSignal = chainSignal;
+
+          const signalChip = document.createElement("div");
+          signalChip.className = "notice";
+          signalChip.innerText = `Signal: ${chainSignal.toUpperCase()} (score ${chainScore.toFixed(1)} / 4.0)`;
+          stepContent.appendChild(signalChip);
+
+          // RIGHT FINAL HOOK NEVER FAILS:
+          // If deliveryCorrect is true, we always pass (no reject).
+          if (checks.deliveryCorrect) {
+            // If chain is green, sometimes upgrade; else nod.
+            const upgraded = (chainSignal === "green") && (Math.random() < 0.35);
+            stepContent.appendChild(document.createTextNode(upgraded ? "✅ Upgrade. “Nice — that’s the move.”" : "✅ Nod. “Perfect.”"));
             addStepButton("REFLECT", () => { currentStep = 6; renderEncounterStep(); }, stepButtons);
             return;
           }
 
-          if (correctCount === 3) {
-            const header = document.createElement("p");
-            header.innerText = "⚠️ Hesitates… “Maybe… what else would you do?”";
-            stepContent.appendChild(header);
-
+          // Not delivery-correct:
+          // If pivot unlocked and signal is green/yellow/red, offer pivot.
+          if (pivotUnlocked) {
+            // Build pivot scenario if not already set
             if (!currentEncounter.recoveryText) {
-              const scenario = getRecoveryScenario();
+              const scenario = getPivotScenario();
               currentEncounter.recoveryText = scenario.text;
               currentEncounter.recoveryCorrectMode = scenario.correctMode;
               currentEncounter.recoveryWhy = scenario.why;
               currentEncounter.recoveryChoice = "";
               currentEncounter.recoveryCorrect = false;
+              currentEncounter.resetUsed = false;
             }
+
+            // Decide pivot type label
+            const pivotType =
+              chainSignal === "green" ? "POWER MOVE PIVOT" :
+              chainSignal === "yellow" ? "RECOVERY PIVOT" :
+              "RECOVERY PIVOT";
+
+            currentEncounter.pivotType = pivotType;
+
+            const header = document.createElement("p");
+            header.innerText =
+              chainSignal === "green"
+                ? "🟢 They’re with you — but you can still tighten the close."
+                : chainSignal === "yellow"
+                  ? "🟡 Hesitates… you can recover this."
+                  : "🔴 Pushback… you need a recovery pivot.";
+            stepContent.appendChild(header);
 
             const box = document.createElement("div");
             box.className = "card";
             box.innerHTML =
-              "<strong>Recovery Moment</strong>" +
-              "<div style='margin-top:6px;'>" + currentEncounter.recoveryText + "</div>";
+              `<strong>${pivotType}</strong>` +
+              `<div style='margin-top:6px;'>${currentEncounter.recoveryText}</div>`;
             stepContent.appendChild(box);
 
             const prompt = document.createElement("p");
@@ -1285,6 +1362,43 @@
 
             stepContent.appendChild(options);
 
+            // Reset option (only if first mode was HOLD)
+            const resetAllowed = canOfferReset(currentEncounter);
+            const resetRow = document.createElement("div");
+            resetRow.className = "notice";
+            resetRow.innerText = resetAllowed
+              ? "Reset available: because you started with HOLD (scout-mapped)."
+              : "Reset not available: only if you started with HOLD (scout-mapped).";
+            stepContent.appendChild(resetRow);
+
+            const resetBtn = addStepButton("RESET (only if HOLD)", () => {
+              if (!resetAllowed) return;
+              // Reset the encounter attempt but keep the same guest + wine
+              currentEncounter.resetUsed = true;
+
+              currentEncounter.guestStateSelected = "";
+              currentEncounter.modeSelected = "";
+              currentEncounter.hookSelected = "";
+              currentEncounter.deliveryLine1 = "";
+              currentEncounter.deliveryLine2 = "";
+              currentEncounter.deliverOptionsS1 = null;
+              currentEncounter.deliverOptionsS2 = null;
+              currentEncounter.selectedS1 = null;
+              currentEncounter.selectedS2 = null;
+              currentEncounter.correctSlotS1 = null;
+              currentEncounter.correctSlotS2 = null;
+              currentEncounter.showModeHelp = false;
+
+              // Clear pivot choice so they can re-run clean
+              currentEncounter.recoveryChoice = "";
+              currentEncounter.recoveryCorrect = false;
+
+              currentStep = 1; // go back to Observe
+              renderEncounterStep();
+            }, stepButtons);
+
+            if (!resetAllowed) resetBtn.disabled = true;
+
             if (currentEncounter.recoveryChoice) {
               const explain = document.createElement("div");
               explain.className = "notice";
@@ -1295,10 +1409,12 @@
             }
 
             const cont = addStepButton("CONTINUE TO REFLECTION", () => { currentStep = 6; renderEncounterStep(); }, stepButtons);
-            if (!currentEncounter.recoveryChoice) cont.disabled = true;
+            if (!currentEncounter.recoveryChoice && !currentEncounter.resetUsed) cont.disabled = true;
+
             return;
           }
 
+          // Pivot not unlocked => fail state
           stepContent.innerText = "❌ “We’ll choose, thanks.”";
           addStepButton("REFLECT", () => { currentStep = 6; renderEncounterStep(); }, stepButtons);
           return;
@@ -1341,15 +1457,35 @@
             "Correct pair: " + correctS1 + " / " + correctS2
           );
 
+          // Chain telemetry
+          if (typeof currentEncounter.chainScore === "number") {
+            addReflectionBlock(
+              stepContent,
+              "Chain Signal",
+              (currentEncounter.chainSignal || "").toUpperCase(),
+              `Score: ${currentEncounter.chainScore.toFixed(1)} / 4.0`
+            );
+          }
+
           if (currentEncounter.recoveryText) {
             addReflectionBlock(
               stepContent,
-              "Recovery Moment",
-              currentEncounter.recoveryCorrect ? "✅" : "❌",
-              "Scenario: " + currentEncounter.recoveryText +
+              "Pivot",
+              currentEncounter.recoveryCorrect ? "✅" : (currentEncounter.recoveryChoice ? "❌" : "—"),
+              "Type: " + (currentEncounter.pivotType || "—") +
+              " | Scenario: " + currentEncounter.recoveryText +
               " | Best: " + currentEncounter.recoveryCorrectMode +
               " | You chose: " + (currentEncounter.recoveryChoice || "—") +
               " | Why: " + (currentEncounter.recoveryWhy || "")
+            );
+          }
+
+          if (currentEncounter.resetUsed) {
+            addReflectionBlock(
+              stepContent,
+              "Reset",
+              "✅",
+              "You used reset (only allowed if first mode was HOLD)."
             );
           }
 
@@ -1419,11 +1555,19 @@
           correctSlotS1: null,
           correctSlotS2: null,
           showModeHelp: false,
+
+          // Pivot state (re-using existing keys for compatibility)
           recoveryText: "",
           recoveryCorrectMode: "",
           recoveryWhy: "",
           recoveryChoice: "",
-          recoveryCorrect: false
+          recoveryCorrect: false,
+
+          // New
+          chainScore: null,
+          chainSignal: "",
+          pivotType: "",
+          resetUsed: false
         };
 
         currentStep = 0;
@@ -1459,8 +1603,13 @@
           details.style.display = "none";
 
           const recoveryLine = entry.recoveryText
-            ? `\nRecovery: ${entry.recoveryText}\nBest: ${entry.recoveryCorrectMode}\nYou chose: ${entry.recoveryChoice} (${entry.recoveryCorrect ? "✅" : "❌"})\nWhy: ${entry.recoveryWhy}`
+            ? `\nPivot: ${entry.pivotType || "—"}\nScenario: ${entry.recoveryText}\nBest: ${entry.recoveryCorrectMode}\nYou chose: ${entry.recoveryChoice} (${entry.recoveryCorrect ? "✅" : "❌"})\nWhy: ${entry.recoveryWhy}`
             : "";
+
+          const telemetry =
+            (entry.chainScore != null || entry.chainSignal)
+              ? `\nSignal: ${(entry.chainSignal || "").toUpperCase()} (score ${entry.chainScore})\nReset used: ${entry.resetUsed ? "YES" : "NO"}`
+              : "";
 
           details.innerText =
             `Guest Actual: ${entry.guestStateActual}\n` +
@@ -1469,6 +1618,7 @@
             `Hook: ${entry.hookSelected}\n` +
             `Line 1: ${entry.deliveryLine1}\n` +
             `Line 2: ${entry.deliveryLine2}` +
+            telemetry +
             recoveryLine;
 
           row.appendChild(summary);
@@ -1519,22 +1669,17 @@
         const btnResetRuns = document.getElementById(ids.btnResetRuns);
         const btnResetWines = document.getElementById(ids.btnResetWines);
 
-        // Start routing:
-        // - demo    => Home (demo-only card)
-        // - premium => Setup (premium-only)
         bindInput(btnWelcomeStart, () => {
           localStorage.setItem(coverKey, "true");
           resetNavState();
           showScreen(isDemo ? "screenHome" : ids.setupScreen);
         });
 
-        // Setup nav (hard locked to mode)
         bindInput(btnGoSetup, () => {
           resetNavState();
           showScreen(ids.setupScreen);
         });
 
-        // Reset all (both keys, plus cover)
         bindInput(btnResetApp, () => {
           if (!confirm("Reset app? This clears wines and runs.")) return;
 
@@ -1587,7 +1732,6 @@
         const addWineBtn = document.getElementById(ids.addWineBtn);
         bindInput(addWineBtn, () => addWineFromForm());
 
-        // Delete delegation (table + cards)
         const wineTableBody = document.getElementById(ids.wineTableBody);
         const wineCards = document.getElementById(ids.wineCards);
 
