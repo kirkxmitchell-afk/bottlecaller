@@ -840,7 +840,7 @@
       }
 
       function buildSentence1Wrong() {
-        const wrongs = [
+        return [
           "Let’s make this complicated — you’ll feel it out.",
           "Honestly… everything here is pretty good.",
           "You choose first, then I’ll confirm it.",
@@ -854,7 +854,6 @@
           "We’ll play it safe by avoiding anything memorable.",
           "Let’s stay vague so you can’t disagree with me."
         ];
-        return pickRandom(wrongs);
       }
 
       function buildSentence2Correct(encounter) {
@@ -870,27 +869,83 @@
       }
 
       function buildSentence2Wrong() {
-        const wrongs = [
+        return [
           "It’s all about big fruit and price.",
           "Process and oak both dominate everything.",
           "This is a loud story without structure.",
           "It’s complicated — I’ll explain it later.",
           "Let’s just gamble on something random."
         ];
-        return pickRandom(wrongs);
+      }
+
+      function getSlots(n) {
+        return n === 3 ? ["A", "B", "C"] : ["A", "B"];
+      }
+
+      function pickDifferent(arr, notThis) {
+        if (!Array.isArray(arr) || !arr.length) return "";
+        const filtered = arr.filter(x => x !== notThis);
+        return filtered.length ? pickRandom(filtered) : pickRandom(arr);
       }
 
       function initDeliverOptions(encounter) {
+        const diff = encounter.difficulty ?? 1;
+
+        // Difficulty ramp:
+        // 1-2: AB / AB
+        // 3-4: ABC / AB
+        // 5:   ABC / ABC
+        const s1Count = diff >= 3 ? 3 : 2;
+        const s2Count = diff >= 5 ? 3 : 2;
+
+        const slots1 = getSlots(s1Count);
+        const slots2 = getSlots(s2Count);
+
         const correct1 = buildSentence1Correct(encounter);
-        const wrong1 = buildSentence1Wrong();
+        const wrongs1 = buildSentence1Wrong();
+        const wrong1a = pickRandom(wrongs1);
+        const wrong1b = pickDifferent(wrongs1, wrong1a);
+
         const correct2 = buildSentence2Correct(encounter);
-        const wrong2 = buildSentence2Wrong();
+        const wrongs2 = buildSentence2Wrong();
+        const wrong2a = pickRandom(wrongs2);
+        const wrong2b = pickDifferent(wrongs2, wrong2a);
 
-        encounter.correctSlotS1 = Math.random() < 0.5 ? "A" : "B";
-        encounter.correctSlotS2 = Math.random() < 0.5 ? "A" : "B";
+        // Choose which slot is correct
+        encounter.correctSlotS1 = slots1[Math.floor(Math.random() * slots1.length)];
+        encounter.correctSlotS2 = slots2[Math.floor(Math.random() * slots2.length)];
 
-        encounter.deliverOptionsS1 = encounter.correctSlotS1 === "A" ? { A: correct1, B: wrong1 } : { A: wrong1, B: correct1 };
-        encounter.deliverOptionsS2 = encounter.correctSlotS2 === "A" ? { A: correct2, B: wrong2 } : { A: wrong2, B: correct2 };
+        // Build option maps
+        const map1 = {};
+        const map2 = {};
+
+        // Sentence 1 map
+        slots1.forEach((slot) => {
+          if (slot === encounter.correctSlotS1) map1[slot] = correct1;
+        });
+
+        // Fill remaining with wrongs
+        const s1WrongPool = [wrong1a, wrong1b];
+        slots1.forEach((slot) => {
+          if (!map1[slot]) map1[slot] = s1WrongPool.shift() || pickRandom(wrongs1);
+        });
+
+        // Sentence 2 map
+        slots2.forEach((slot) => {
+          if (slot === encounter.correctSlotS2) map2[slot] = correct2;
+        });
+
+        const s2WrongPool = [wrong2a, wrong2b];
+        slots2.forEach((slot) => {
+          if (!map2[slot]) map2[slot] = s2WrongPool.shift() || pickRandom(wrongs2);
+        });
+
+        encounter.deliverOptionsS1 = map1;
+        encounter.deliverOptionsS2 = map2;
+
+        // Ensure selected values reset correctly if difficulty changes mid-run
+        if (!slots1.includes(encounter.selectedS1)) encounter.selectedS1 = null;
+        if (!slots2.includes(encounter.selectedS2)) encounter.selectedS2 = null;
       }
 
       function evaluateChecks() {
@@ -1214,7 +1269,8 @@
 
           const line1Options = document.createElement("div");
           line1Options.className = "option-grid";
-          ["A", "B"].forEach(slot => {
+          const slots1 = Object.keys(currentEncounter.deliverOptionsS1 || {});
+          slots1.forEach(slot => {
             const btn = document.createElement("button");
             btn.type = "button";
             btn.className = "option-btn" + (currentEncounter.selectedS1 === slot ? " selected" : "");
@@ -1234,7 +1290,8 @@
 
           const line2Options = document.createElement("div");
           line2Options.className = "option-grid";
-          ["A", "B"].forEach(slot => {
+          const slots2 = Object.keys(currentEncounter.deliverOptionsS2 || {});
+          slots2.forEach(slot => {
             const btn = document.createElement("button");
             btn.type = "button";
             btn.className = "option-btn" + (currentEncounter.selectedS2 === slot ? " selected" : "");

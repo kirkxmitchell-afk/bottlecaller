@@ -8,14 +8,10 @@ export type Stage = 1 | 2 | 3;
 export type Difficulty = 1 | 2 | 3 | 4 | 5;
 
 export type GuestState = "Decider" | "Fancy" | "Griever" | "Celebrator" | "Bargain-Smart";
-
 export type EncounterTier = "demo" | "premium";
 
 export type Encounter = {
-  id: number; // unique
-  tier: EncounterTier; // demo/premium
-  stage: Stage;
-  difficulty: Difficulty;
+  encounterNumber: number; // 1..N within a tier
 
   // What the UI shows in Step 1 (Observe)
   guestStateActual: GuestState;
@@ -27,11 +23,13 @@ export type Encounter = {
 
   toneTag?: string;
 
+  // Difficulty (1 easiest .. 5 hardest)
+  difficulty: Difficulty;
+
   // Optional classification tags to help select or filter encounters
   tags?: string[];
 
-  // Optional: if you want deterministic wine selection per encounter
-  // (use `wineIndexHint` to suggest a deterministic wine index; selection is handled by the runtime)
+  // Optional: deterministic wine selection hint
   wineIndexHint?: number; // e.g. 0..LIMIT-1
 };
 
@@ -47,9 +45,7 @@ export type EncounterPack = {
 export const ENCOUNTERS: EncounterPack = {
   demo: [
     {
-      id: 1,
-      tier: "demo",
-      stage: 1,
+      encounterNumber: 1,
       difficulty: 1,
       guestStateActual: "Decider",
       contextLine: "They scan the list fast, ready to choose.",
@@ -60,9 +56,7 @@ export const ENCOUNTERS: EncounterPack = {
       wineIndexHint: 0,
     },
     {
-      id: 2,
-      tier: "demo",
-      stage: 1,
+      encounterNumber: 2,
       difficulty: 1,
       guestStateActual: "Bargain-Smart",
       contextLine: "They scan prices carefully and test your confidence.",
@@ -77,9 +71,7 @@ export const ENCOUNTERS: EncounterPack = {
   premium: [
     // --- Stage 1 (1–7) learn the loop ---
     {
-      id: 101,
-      tier: "premium",
-      stage: 1,
+      encounterNumber: 1,
       difficulty: 1,
       guestStateActual: "Decider",
       contextLine: "They want a clean decision with minimal talk.",
@@ -90,9 +82,7 @@ export const ENCOUNTERS: EncounterPack = {
       tags: ["decider", "lead", "fast"],
     },
     {
-      id: 102,
-      tier: "premium",
-      stage: 1,
+      encounterNumber: 2,
       difficulty: 1,
       guestStateActual: "Griever",
       contextLine: "They look tired. They want safety, not performance.",
@@ -103,9 +93,7 @@ export const ENCOUNTERS: EncounterPack = {
       tags: ["griever", "hold", "soft"],
     },
     {
-      id: 103,
-      tier: "premium",
-      stage: 1,
+      encounterNumber: 3,
       difficulty: 1,
       guestStateActual: "Fancy",
       contextLine: "They’re checking if you have taste and standards.",
@@ -116,9 +104,7 @@ export const ENCOUNTERS: EncounterPack = {
       tags: ["fancy", "reflect", "status"],
     },
     {
-      id: 104,
-      tier: "premium",
-      stage: 1,
+      encounterNumber: 4,
       difficulty: 2,
       guestStateActual: "Bargain-Smart",
       contextLine: "They’re not cheap — they’re rational. They want proof.",
@@ -129,9 +115,7 @@ export const ENCOUNTERS: EncounterPack = {
       tags: ["bargain-smart", "hold", "value"],
     },
     {
-      id: 105,
-      tier: "premium",
-      stage: 1,
+      encounterNumber: 5,
       difficulty: 2,
       guestStateActual: "Celebrator",
       contextLine: "Energy is up — they want the moment to feel special.",
@@ -142,9 +126,7 @@ export const ENCOUNTERS: EncounterPack = {
       tags: ["celebrator", "lead", "vibe"],
     },
     {
-      id: 106,
-      tier: "premium",
-      stage: 1,
+      encounterNumber: 6,
       difficulty: 2,
       guestStateActual: "Decider",
       contextLine: "They’re decisive but impatient — don’t over-explain.",
@@ -155,9 +137,7 @@ export const ENCOUNTERS: EncounterPack = {
       tags: ["decider", "lead", "impatient"],
     },
     {
-      id: 107,
-      tier: "premium",
-      stage: 1,
+      encounterNumber: 7,
       difficulty: 3,
       guestStateActual: "Fancy",
       contextLine: "They want you to sound like you belong in their world.",
@@ -170,9 +150,7 @@ export const ENCOUNTERS: EncounterPack = {
 
     // --- Stage 2 (8–14) introduce more pressure / second-guessing ---
     {
-      id: 108,
-      tier: "premium",
-      stage: 2,
+      encounterNumber: 8,
       difficulty: 2,
       guestStateActual: "Griever",
       contextLine: "They’re anxious about choosing wrong — make it safe.",
@@ -183,9 +161,7 @@ export const ENCOUNTERS: EncounterPack = {
       tags: ["griever", "hold", "anxious"],
     },
     {
-      id: 109,
-      tier: "premium",
-      stage: 2,
+      encounterNumber: 9,
       difficulty: 3,
       guestStateActual: "Bargain-Smart",
       contextLine: "They’ll buy premium if you justify it like a pro.",
@@ -196,9 +172,7 @@ export const ENCOUNTERS: EncounterPack = {
       tags: ["bargain-smart", "hold", "compare"],
     },
     {
-      id: 110,
-      tier: "premium",
-      stage: 2,
+      encounterNumber: 10,
       difficulty: 3,
       guestStateActual: "Celebrator",
       contextLine: "They’re in a mood—your job is to elevate it, not teach.",
@@ -209,9 +183,7 @@ export const ENCOUNTERS: EncounterPack = {
       tags: ["celebrator", "reflect", "story"],
     },
     {
-      id: 111,
-      tier: "premium",
-      stage: 2,
+      encounterNumber: 11,
       difficulty: 4,
       guestStateActual: "Fancy",
       contextLine: "They’re testing if you can be precise without rambling.",
@@ -222,9 +194,7 @@ export const ENCOUNTERS: EncounterPack = {
       tags: ["fancy", "reflect", "test"],
     },
     {
-      id: 112,
-      tier: "premium",
-      stage: 2,
+      encounterNumber: 12,
       difficulty: 4,
       guestStateActual: "Decider",
       contextLine: "They want certainty; your hesitation loses the table.",
@@ -235,9 +205,7 @@ export const ENCOUNTERS: EncounterPack = {
       tags: ["decider", "lead", "now"],
     },
     {
-      id: 113,
-      tier: "premium",
-      stage: 2,
+      encounterNumber: 13,
       difficulty: 4,
       guestStateActual: "Griever",
       contextLine: "They’re quietly resisting pressure — soften and simplify.",
@@ -248,9 +216,7 @@ export const ENCOUNTERS: EncounterPack = {
       tags: ["griever", "hold", "withdrawn"],
     },
     {
-      id: 114,
-      tier: "premium",
-      stage: 2,
+      encounterNumber: 14,
       difficulty: 5,
       guestStateActual: "Bargain-Smart",
       contextLine: "They’ll challenge your claim. One weak answer = no sale.",
@@ -263,9 +229,7 @@ export const ENCOUNTERS: EncounterPack = {
 
     // --- Stage 3 (15–20) advanced: social dynamics / higher stakes ---
     {
-      id: 115,
-      tier: "premium",
-      stage: 3,
+      encounterNumber: 15,
       difficulty: 3,
       guestStateActual: "Celebrator",
       contextLine: "They want a win the whole table agrees on.",
@@ -276,9 +240,7 @@ export const ENCOUNTERS: EncounterPack = {
       tags: ["celebrator", "lead", "group"],
     },
     {
-      id: 116,
-      tier: "premium",
-      stage: 3,
+      encounterNumber: 16,
       difficulty: 4,
       guestStateActual: "Fancy",
       contextLine: "They’re the alpha at the table — impress without trying too hard.",
@@ -289,9 +251,7 @@ export const ENCOUNTERS: EncounterPack = {
       tags: ["fancy", "reflect", "power"],
     },
     {
-      id: 117,
-      tier: "premium",
-      stage: 3,
+      encounterNumber: 17,
       difficulty: 4,
       guestStateActual: "Decider",
       contextLine: "They want a single decisive call but will punish fluff.",
@@ -302,9 +262,7 @@ export const ENCOUNTERS: EncounterPack = {
       tags: ["decider", "lead", "no-fluff"],
     },
     {
-      id: 118,
-      tier: "premium",
-      stage: 3,
+      encounterNumber: 18,
       difficulty: 5,
       guestStateActual: "Bargain-Smart",
       contextLine: "They negotiate emotionally: you must reframe value, not defend price.",
@@ -315,9 +273,7 @@ export const ENCOUNTERS: EncounterPack = {
       tags: ["bargain-smart", "hold", "reframe"],
     },
     {
-      id: 119,
-      tier: "premium",
-      stage: 3,
+      encounterNumber: 19,
       difficulty: 5,
       guestStateActual: "Griever",
       contextLine: "They’ll say yes only if it feels safe and effortless.",
@@ -328,9 +284,7 @@ export const ENCOUNTERS: EncounterPack = {
       tags: ["griever", "hold", "careful"],
     },
     {
-      id: 120,
-      tier: "premium",
-      stage: 3,
+      encounterNumber: 20,
       difficulty: 5,
       guestStateActual: "Fancy",
       contextLine: "They want you to lead with taste, not price or hype.",
@@ -351,15 +305,15 @@ export function getEncountersForTier(tier: EncounterTier): Encounter[] {
   return tier === "demo" ? ENCOUNTERS.demo : ENCOUNTERS.premium;
 }
 
-export function getEncounterById(id: number): Encounter | undefined {
-  return [...ENCOUNTERS.demo, ...ENCOUNTERS.premium].find((e) => e.id === id);
+export function getEncounterByNumber(n: number): Encounter | undefined {
+  return [...ENCOUNTERS.demo, ...ENCOUNTERS.premium].find((e) => e.encounterNumber === n);
 }
 
-export function getNextEncounterId(tier: EncounterTier, currentId: number): number | null {
-  const list = getEncountersForTier(tier).slice().sort((a, b) => a.id - b.id);
-  const idx = list.findIndex((e) => e.id === currentId);
-  if (idx < 0) return list[0]?.id ?? null;
-  return list[idx + 1]?.id ?? null;
+export function getNextEncounterNumber(tier: EncounterTier, currentNumber: number): number | null {
+  const list = getEncountersForTier(tier).slice().sort((a, b) => a.encounterNumber - b.encounterNumber);
+  const idx = list.findIndex((e) => e.encounterNumber === currentNumber);
+  if (idx < 0) return list[0]?.encounterNumber ?? null;
+  return list[idx + 1]?.encounterNumber ?? null;
 }
 
 // ------------------------------------------------------------
@@ -369,23 +323,19 @@ export function getNextEncounterId(tier: EncounterTier, currentId: number): numb
 export function validateEncounters(pack: EncounterPack = ENCOUNTERS): { ok: true } {
   const all = [...pack.demo, ...pack.premium];
 
-  // Unique ids
+  // Unique encounter numbers
   const seen = new Set<number>();
   for (const e of all) {
-    if (seen.has(e.id)) throw new Error(`[encounters] Duplicate id: ${e.id}`);
-    seen.add(e.id);
+    if (seen.has(e.encounterNumber)) throw new Error(`[encounters] Duplicate encounterNumber: ${e.encounterNumber}`);
+    seen.add(e.encounterNumber);
   }
-
-  // Tier correctness
-  for (const e of pack.demo) if (e.tier !== "demo") throw new Error(`[encounters] demo encounter ${e.id} tier != demo`);
-  for (const e of pack.premium) if (e.tier !== "premium") throw new Error(`[encounters] premium encounter ${e.id} tier != premium`);
 
   // Required fields
   for (const e of all) {
-    if (!e.contextLine?.trim()) throw new Error(`[encounters] ${e.id} missing contextLine`);
-    if (!e.guestLine?.trim()) throw new Error(`[encounters] ${e.id} missing guestLine`);
-    if (!Array.isArray(e.physicalCues) || e.physicalCues.length === 0) throw new Error(`[encounters] ${e.id} missing physicalCues`);
-    if (!Array.isArray(e.verbalCues) || e.verbalCues.length === 0) throw new Error(`[encounters] ${e.id} missing verbalCues`);
+    if (!e.contextLine?.trim()) throw new Error(`[encounters] ${e.encounterNumber} missing contextLine`);
+    if (!e.guestLine?.trim()) throw new Error(`[encounters] ${e.encounterNumber} missing guestLine`);
+    if (!Array.isArray(e.physicalCues) || e.physicalCues.length === 0) throw new Error(`[encounters] ${e.encounterNumber} missing physicalCues`);
+    if (!Array.isArray(e.verbalCues) || e.verbalCues.length === 0) throw new Error(`[encounters] ${e.encounterNumber} missing verbalCues`);
   }
 
   // Expectations
