@@ -20,6 +20,9 @@
       console.log("[BottleCaller] MODE LOCKED:", mode);
     })();
   </script>
+
+  <!-- ✅ Load the TS entry EARLY so window.EngineBridge + window.__BC_ENCOUNTERS__ exist before DOMContentLoaded -->
+  <script type="module" src="/src/game/gameEntry.ts"></script>
 </head>
 
 <body>
@@ -292,25 +295,58 @@
 
       const guestStates = ["Decider", "Fancy", "Griever", "Celebrator", "Bargain-Smart"];
 
-      // ---------- Fixed Demo Encounters (NO randomness) ----------
-      const DEMO_FIXED = [
-        {
-          guestStateActual: "Decider",
-          contextLine: "They scan the list fast, ready to choose.",
-          guestLine: "“We’re in a bit of a rush.”",
-          physicalCues: ["Phone on table, glancing at time", "Makes direct eye contact, waiting"],
-          verbalCues: ["“We’re in a bit of a rush.”", "“What’s your best?”"],
-          toneTag: "Direct"
-        },
-        {
-          guestStateActual: "Bargain-Smart",
-          contextLine: "They scan prices carefully and test your confidence.",
-          guestLine: "“Is there something worth it without going crazy?”",
-          physicalCues: ["Points at the price column", "Pages through wine list quickly"],
-          verbalCues: ["“Is there something worth it without going crazy?”", "“What’s the best value here?”"],
-          toneTag: "Testing"
+      // ============================================================
+      // ✅ ENCOUNTERS: authored source of truth from gameEntry.ts
+      // window.__BC_ENCOUNTERS__ = { demo: [...], premium: [...] }
+      // ============================================================
+      function getAuthoredEncounters() {
+        const pack = window.__BC_ENCOUNTERS__;
+        const list = pack && pack[bcMode];
+        return Array.isArray(list) ? list : [];
+      }
+
+      function normalizeEncounter(e) {
+        // Supports common variants so encounter.ts can evolve without breaking UI
+        return {
+          id: e.id ?? e.encounterId ?? null,
+          guestStateActual: e.guestStateActual ?? e.guestTypeActual ?? e.guest ?? "",
+          contextLine: e.contextLine ?? e.context ?? "",
+          guestLine: e.guestLine ?? e.line ?? e.spokenLine ?? "",
+          physicalCues: e.physicalCues ?? e.bodyLanguage ?? [],
+          verbalCues: e.verbalCues ?? e.cues ?? [],
+          toneTag: e.toneTag ?? e.tone ?? ""
+        };
+      }
+
+      function getEncounterProgressKey(mode) {
+        return mode === "premium" ? "bc_premium_encounter_idx" : "bc_demo_encounter_idx";
+      }
+
+      let encounterIdx = (() => {
+        const raw = localStorage.getItem(getEncounterProgressKey(bcMode));
+        const n = parseInt(raw || "0", 10);
+        return Number.isFinite(n) && n >= 0 ? n : 0;
+      })();
+
+      function saveEncounterIdx(n) {
+        encounterIdx = n;
+        localStorage.setItem(getEncounterProgressKey(bcMode), String(n));
+      }
+
+      function pickNextEncounter() {
+        const authored = getAuthoredEncounters().map(normalizeEncounter);
+
+        if (!authored.length) return null;
+
+        if (bcMode === "demo") {
+          if (encounterIdx >= authored.length) return null;
+          return authored[encounterIdx];
         }
-      ];
+
+        // Premium: cycle through authored list (stable, not random)
+        const idx = encounterIdx % authored.length;
+        return authored[idx];
+      }
 
       // ---------- Pivot (Recovery / Power Move) scenarios ----------
       const PIVOT_POOL = [
@@ -350,7 +386,6 @@
       // ---------- Runtime state ----------
       let wines = loadWines();
       let runs = loadRuns();
-      let demoStep = isDemo ? loadDemoStep() : 0;
 
       let currentEncounter = null;
       let currentStep = 0;
@@ -447,17 +482,6 @@
 
       function saveRuns() {
         localStorage.setItem(runsKey, JSON.stringify(Array.isArray(runs) ? runs : []));
-      }
-
-      function loadDemoStep() {
-        const raw = localStorage.getItem("bc_demo_step");
-        const step = parseInt(raw, 10);
-        return isNaN(step) ? 0 : step;
-      }
-
-      function saveDemoStep(step) {
-        demoStep = step;
-        localStorage.setItem("bc_demo_step", String(step));
       }
 
       function isUnlocked() {
@@ -958,6 +982,8 @@
           timestamp: new Date().toLocaleString(),
           tier: bcMode,
 
+          encounterId: currentEncounter.encounterId ?? null,
+
           guestStateActual: currentEncounter.guestStateActual || "",
           guestStateSelected: currentEncounter.guestStateSelected || "",
           modeSelected: currentEncounter.modeSelected || "",
@@ -985,7 +1011,15 @@
         runs.push(entry);
         saveRuns();
 
-        if (isDemo && typeof demoStep === "number" && demoStep < LIMIT) saveDemoStep(demoStep + 1);
+        // ✅ Advance authored encounter index
+        const authoredCount = getAuthoredEncounters().length;
+        if (authoredCount) {
+          if (isDemo) {
+            saveEncounterIdx(Math.min(encounterIdx + 1, authoredCount));
+          } else {
+            saveEncounterIdx(encounterIdx + 1);
+          }
+        }
 
         currentEncounter.__logged = true;
         updateCounts();
@@ -1250,7 +1284,6 @@
 
           // Guard: if EngineBridge didn't load, fail loudly (debug-fast)
           if (!window.EngineBridge || typeof window.EngineBridge.computeReaction !== "function") {
-            // IMPORTANT: never include a literal </script> inside a <script> tag (it can terminate the tag)
             const scriptTagHint = "<script type='module' src='/src/game/gameEntry.ts'><" + "/script>";
             throw new Error(
               "EngineBridge not loaded. Confirm the module is loading: " +
@@ -1466,10 +1499,13 @@
           logEncounter();
 
           addStepButton("NEXT ENCOUNTER", () => {
-            if (isDemo && demoStep >= LIMIT) {
-              resetNavState();
-              showScreen("screenHome");
-              return;
+            if (isDemo) {
+              const authoredCount = getAuthoredEncounters().length;
+              if (authoredCount && encounterIdx >= authoredCount) {
+                resetNavState();
+                showScreen("screenHome");
+                return;
+              }
             }
             startEncounter();
           }, stepButtons);
@@ -1481,47 +1517,52 @@
       function startEncounter() {
         if (!isUnlocked()) return;
 
-        if (isDemo && demoStep >= LIMIT) {
+        const authoredCount = getAuthoredEncounters().length;
+
+        // Demo ends when authored demo encounters end
+        if (bcMode === "demo" && authoredCount && encounterIdx >= authoredCount) {
+          resetNavState();
+          showScreen("screenHome");
+          return;
+        }
+
+        const encounterData = pickNextEncounter();
+        if (!encounterData) {
+          alert("No authored encounters loaded. Check src/game/encounter.ts and gameEntry.ts export.");
           resetNavState();
           showScreen("screenHome");
           return;
         }
 
         let wine = null;
-        let encounterData = null;
-
-        if (isDemo) {
-          encounterData = DEMO_FIXED[demoStep];
-          wine = wines[demoStep];
+        if (bcMode === "demo") {
+          wine = wines[Math.min(encounterIdx, wines.length - 1)];
         } else {
-          const guestStateActual = pickRandom(guestStates);
-          encounterData = {
-            guestStateActual,
-            contextLine: "They look at you like they want you to guide them.",
-            guestLine: "“What do you suggest?”",
-            physicalCues: ["Makes direct eye contact, waiting"],
-            verbalCues: ["“What do you suggest?”"],
-            toneTag: ""
-          };
           wine = pickRandom(wines);
         }
 
-        if (!wine || !encounterData) return;
+        if (!wine) return;
 
         currentEncounter = {
           __logged: false,
+
+          encounterId: encounterData.id ?? null,
+
           guestStateActual: encounterData.guestStateActual,
           guestStateSelected: "",
           modeSelected: "",
           hookSelected: "",
           wineSelected: wine,
+
           deliveryLine1: "",
           deliveryLine2: "",
+
           guestLine: encounterData.guestLine,
           contextLine: encounterData.contextLine,
           toneTag: encounterData.toneTag,
           physicalCues: encounterData.physicalCues,
           verbalCues: encounterData.verbalCues,
+
           deliverOptionsS1: null,
           deliverOptionsS2: null,
           selectedS1: null,
@@ -1613,7 +1654,7 @@
         if (!confirm("This will clear saved encounters but keep wines.")) return;
         runs = [];
         saveRuns();
-        if (isDemo) saveDemoStep(0);
+        saveEncounterIdx(0);
         updateCounts();
       }
 
@@ -1623,7 +1664,7 @@
         saveWines();
         runs = [];
         saveRuns();
-        if (isDemo) saveDemoStep(0);
+        saveEncounterIdx(0);
         renderWineTables();
       }
 
@@ -1661,12 +1702,13 @@
           localStorage.removeItem(premiumWinesKey);
           localStorage.removeItem(demoRunsKey);
           localStorage.removeItem(premiumRunsKey);
-          localStorage.removeItem("bc_demo_step");
+          localStorage.removeItem(getEncounterProgressKey("demo"));
+          localStorage.removeItem(getEncounterProgressKey("premium"));
           localStorage.removeItem(coverKey);
 
           wines = [];
           runs = [];
-          demoStep = isDemo ? 0 : demoStep;
+          saveEncounterIdx(0);
 
           resetNavState();
           renderWineTables();
@@ -1743,10 +1785,7 @@
     }
   });
 })();
-
 </script>
 
-  <!-- ✅ MUST be inside body so the iframe reliably loads EngineBridge -->
-  <script type="module" src="/src/game/gameEntry.ts"></script>
 </body>
 </html>
