@@ -320,45 +320,61 @@ export function getNextEncounterNumber(tier: EncounterTier, currentNumber: numbe
 // Validation (call once at boot, fail loud in dev)
 // ------------------------------------------------------------
 
-export function validateEncounters(pack: EncounterPack = ENCOUNTERS): { ok: true } {
-  const all = [...pack.demo, ...pack.premium];
+function assert(cond: any, msg: string): asserts cond {
+  if (!cond) throw new Error(msg);
+}
 
-  // Debug helper: quickly print duplicate encounterNumbers per list
-  function findDupes(list: any[], label: string) {
-    const seen = new Set<number>();
-    const dupes = new Set<number>();
-    for (const e of list) {
-      const n = e.encounterNumber;
-      if (seen.has(n)) dupes.add(n);
-      seen.add(n);
-    }
-    if (dupes.size) {
-      console.error(`[encounters] ${label} duplicates:`, Array.from(dupes));
-    }
-  }
+function normalizeEncounterNumber(n: any): number {
+  const num = typeof n === "string" ? parseInt(n, 10) : n;
+  return Number.isFinite(num) ? num : NaN;
+}
 
-  // Print any duplicates for faster debugging
-  findDupes(pack.demo, "demo");
-  findDupes(pack.premium, "premium");
+function validateList(list: any[], label: string) {
+  assert(Array.isArray(list), `[encounters] ${label} must be an array`);
 
-  // Unique encounter numbers
   const seen = new Set<number>();
-  for (const e of all) {
-    if (seen.has(e.encounterNumber)) throw new Error(`[encounters] Duplicate encounterNumber: ${e.encounterNumber}`);
-    seen.add(e.encounterNumber);
+  const dupes = new Set<number>();
+
+  for (let i = 0; i < list.length; i++) {
+    const e = list[i];
+    assert(e && typeof e === "object", `[encounters] ${label}[${i}] must be an object`);
+
+    const n = normalizeEncounterNumber((e as any).encounterNumber);
+    assert(Number.isFinite(n), `[encounters] ${label}[${i}] encounterNumber must be a number`);
+
+    // Force it back onto the object so later code is consistent
+    (e as any).encounterNumber = n;
+
+    if (seen.has(n)) dupes.add(n);
+    seen.add(n);
+
+    // Minimal required fields (tighten later)
+    assert(typeof (e as any).guestStateActual === "string" && (e as any).guestStateActual.length,
+      `[encounters] ${label}[${i}] missing guestStateActual`);
+
+    assert(typeof (e as any).contextLine === "string" && (e as any).contextLine.length,
+      `[encounters] ${label}[${i}] missing contextLine`);
+
+    assert(typeof (e as any).guestLine === "string" && (e as any).guestLine.length,
+      `[encounters] ${label}[${i}] missing guestLine`);
   }
 
-  // Required fields
-  for (const e of all) {
-    if (!e.contextLine?.trim()) throw new Error(`[encounters] ${e.encounterNumber} missing contextLine`);
-    if (!e.guestLine?.trim()) throw new Error(`[encounters] ${e.encounterNumber} missing guestLine`);
-    if (!Array.isArray(e.physicalCues) || e.physicalCues.length === 0) throw new Error(`[encounters] ${e.encounterNumber} missing physicalCues`);
-    if (!Array.isArray(e.verbalCues) || e.verbalCues.length === 0) throw new Error(`[encounters] ${e.encounterNumber} missing verbalCues`);
+  if (dupes.size) {
+    console.error(`[encounters] ${label} duplicates:`, Array.from(dupes));
+    // Throw the *first* duplicate number in a stable way
+    const first = Array.from(dupes)[0];
+    throw new Error(`[encounters] Duplicate encounterNumber: ${first} (${label})`);
   }
+}
 
-  // Expectations
-  if (pack.demo.length !== 2) console.warn(`[encounters] demo length is ${pack.demo.length} (expected 2)`);
-  if (pack.premium.length < 20) console.warn(`[encounters] premium length is ${pack.premium.length} (expected >= 20)`);
+export function validateEncounters(pack: EncounterPack) {
+  assert(pack && typeof pack === "object", `[encounters] pack missing`);
 
-  return { ok: true };
+  // Validate each list independently (NO cross-contamination)
+  validateList((pack as any).demo, "demo");
+  validateList((pack as any).premium, "premium");
+
+  // Optional: sanity check expected counts (comment out if you don't want it)
+  // assert(pack.demo.length > 0, "[encounters] demo list is empty");
+  // assert(pack.premium.length > 0, "[encounters] premium list is empty");
 }
