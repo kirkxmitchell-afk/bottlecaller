@@ -323,6 +323,24 @@ export function getNextEncounterNumber(tier: EncounterTier, currentNumber: numbe
 export function validateEncounters(pack: EncounterPack = ENCOUNTERS): { ok: true } {
   const all = [...pack.demo, ...pack.premium];
 
+  // Debug helper: quickly print duplicate encounterNumbers per list
+  function findDupes(list: any[], label: string) {
+    const seen = new Set<number>();
+    const dupes = new Set<number>();
+    for (const e of list) {
+      const n = e.encounterNumber;
+      if (seen.has(n)) dupes.add(n);
+      seen.add(n);
+    }
+    if (dupes.size) {
+      console.error(`[encounters] ${label} duplicates:`, Array.from(dupes));
+    }
+  }
+
+  // Print any duplicates for faster debugging
+  findDupes(pack.demo, "demo");
+  findDupes(pack.premium, "premium");
+
   // Unique encounter numbers
   const seen = new Set<number>();
   for (const e of all) {
