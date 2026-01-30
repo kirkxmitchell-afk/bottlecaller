@@ -20,9 +20,6 @@
       console.log("[BottleCaller] MODE LOCKED:", mode);
     })();
   </script>
-
-  <!-- ✅ Load the TS entry EARLY so window.EngineBridge + window.__BC_ENCOUNTERS__ exist before DOMContentLoaded -->
-  <script type="module" src="/src/game/gameEntry.ts"></script>
 </head>
 
 <body>
@@ -296,56 +293,34 @@
       const guestStates = ["Decider", "Fancy", "Griever", "Celebrator", "Bargain-Smart"];
 
       // ============================================================
-      // ✅ ENCOUNTERS: authored source of truth from gameEntry.ts
-      // window.__BC_ENCOUNTERS__ = { demo: [...], premium: [...] }
+      // ✅ ENCOUNTERS (from gameEntry.ts -> window.__BC_ENCOUNTERS__)
       // ============================================================
-      function getAuthoredEncounters() {
-        const pack = window.__BC_ENCOUNTERS__;
-        const list = pack && pack[bcMode];
-        return Array.isArray(list) ? list : [];
-      }
+      const ENCOUNTER_INDEX_KEY = isDemo ? "bc_demo_encounter_index" : "bc_premium_encounter_index";
 
-      function normalizeEncounter(e) {
-        // Supports common variants so encounter.ts can evolve without breaking UI
-        return {
-          id: e.id ?? e.encounterId ?? null,
-          guestStateActual: e.guestStateActual ?? e.guestTypeActual ?? e.guest ?? "",
-          contextLine: e.contextLine ?? e.context ?? "",
-          guestLine: e.guestLine ?? e.line ?? e.spokenLine ?? "",
-          physicalCues: e.physicalCues ?? e.bodyLanguage ?? [],
-          verbalCues: e.verbalCues ?? e.cues ?? [],
-          toneTag: e.toneTag ?? e.tone ?? ""
-        };
-      }
-
-      function getEncounterProgressKey(mode) {
-        return mode === "premium" ? "bc_premium_encounter_idx" : "bc_demo_encounter_idx";
-      }
-
-      let encounterIdx = (() => {
-        const raw = localStorage.getItem(getEncounterProgressKey(bcMode));
-        const n = parseInt(raw || "0", 10);
+      function loadEncounterIndex() {
+        const raw = localStorage.getItem(ENCOUNTER_INDEX_KEY);
+        const n = parseInt(raw, 10);
         return Number.isFinite(n) && n >= 0 ? n : 0;
-      })();
-
-      function saveEncounterIdx(n) {
-        encounterIdx = n;
-        localStorage.setItem(getEncounterProgressKey(bcMode), String(n));
       }
 
-      function pickNextEncounter() {
-        const authored = getAuthoredEncounters().map(normalizeEncounter);
+      function saveEncounterIndex(n) {
+        localStorage.setItem(ENCOUNTER_INDEX_KEY, String(n));
+      }
 
-        if (!authored.length) return null;
+      function resetEncounterIndex() {
+        saveEncounterIndex(0);
+      }
 
-        if (bcMode === "demo") {
-          if (encounterIdx >= authored.length) return null;
-          return authored[encounterIdx];
-        }
+      const ENCOUNTERS_BY_MODE = (window.__BC_ENCOUNTERS__ || {});
+      const ENCOUNTERS = Array.isArray(ENCOUNTERS_BY_MODE[bcMode]) ? ENCOUNTERS_BY_MODE[bcMode] : [];
+      const ENCOUNTER_COUNT = ENCOUNTERS.length;
 
-        // Premium: cycle through authored list (stable, not random)
-        const idx = encounterIdx % authored.length;
-        return authored[idx];
+      let encounterIndex = loadEncounterIndex();
+
+      function getEncounterAt(i) {
+        if (!ENCOUNTER_COUNT) return null;
+        const idx = i % ENCOUNTER_COUNT;
+        return ENCOUNTERS[idx];
       }
 
       // ---------- Pivot (Recovery / Power Move) scenarios ----------
@@ -982,8 +957,6 @@
           timestamp: new Date().toLocaleString(),
           tier: bcMode,
 
-          encounterId: currentEncounter.encounterId ?? null,
-
           guestStateActual: currentEncounter.guestStateActual || "",
           guestStateSelected: currentEncounter.guestStateSelected || "",
           modeSelected: currentEncounter.modeSelected || "",
@@ -1011,15 +984,9 @@
         runs.push(entry);
         saveRuns();
 
-        // ✅ Advance authored encounter index
-        const authoredCount = getAuthoredEncounters().length;
-        if (authoredCount) {
-          if (isDemo) {
-            saveEncounterIdx(Math.min(encounterIdx + 1, authoredCount));
-          } else {
-            saveEncounterIdx(encounterIdx + 1);
-          }
-        }
+        // advance encounter progression
+        encounterIndex = encounterIndex + 1;
+        saveEncounterIndex(encounterIndex);
 
         currentEncounter.__logged = true;
         updateCounts();
@@ -1268,21 +1235,19 @@
         }
 
         // ============================================================
-        // STEP 5: Reaction (NOW driven by EngineBridge overlay)
+        // STEP 5: Reaction (driven by EngineBridge)
         // ============================================================
         if (currentStep === 5) {
           const checksRaw = evaluateChecks();
 
-          // Build ReactionChecks for the engine overlay (pure calculator)
           const reactionChecks = {
             guestRead: checksRaw.guestRead,
             modeStatus: checksRaw.modeStatus,
             hookStatus: checksRaw.hookStatus,
             deliveryCorrect: checksRaw.deliveryCorrect,
-            firstMode: currentEncounter.modeSelected || "" // "LEAD" | "REFLECT" | "HOLD" | ""
+            firstMode: currentEncounter.modeSelected || ""
           };
 
-          // Guard: if EngineBridge didn't load, fail loudly (debug-fast)
           if (!window.EngineBridge || typeof window.EngineBridge.computeReaction !== "function") {
             const scriptTagHint = "<script type='module' src='/src/game/gameEntry.ts'><" + "/script>";
             throw new Error(
@@ -1294,16 +1259,15 @@
 
           const result = window.EngineBridge.computeReaction(reactionChecks);
 
-          // Persist telemetry on encounter for history + reflection
           currentEncounter.chainScore = result.chainScore;
           currentEncounter.chainSignal = result.chainSignal;
 
           const signalChip = document.createElement("div");
           signalChip.className = "notice";
-          signalChip.innerText = `Signal: ${result.chainSignal.toUpperCase()} (score ${result.chainScore.toFixed(1)} / 4.0)`;
+          signalChip.innerText = "Signal: " + String(result.chainSignal || "").toUpperCase() +
+            " (score " + Number(result.chainScore).toFixed(1) + " / 4.0)";
           stepContent.appendChild(signalChip);
 
-          // ✅ Right final hook never fails
           if (result.deliveryCorrect) {
             const upgraded = (result.chainSignal === "green") && (Math.random() < 0.35);
             stepContent.appendChild(document.createTextNode(upgraded ? "✅ Upgrade. “Nice — that’s the move.”" : "✅ Nod. “Perfect.”"));
@@ -1311,9 +1275,7 @@
             return;
           }
 
-          // Pivot unlocked => offer pivot flow
           if (result.pivotUnlocked) {
-            // Build pivot scenario if not already set
             if (!currentEncounter.recoveryText) {
               const scenario = getPivotScenario();
               currentEncounter.recoveryText = scenario.text;
@@ -1324,7 +1286,6 @@
               currentEncounter.resetUsed = false;
             }
 
-            // Map engine pivot label to UI label
             const pivotType =
               result.pivotType === "POWER_MOVE_PIVOT" ? "POWER MOVE PIVOT" : "RECOVERY PIVOT";
             currentEncounter.pivotType = pivotType;
@@ -1341,8 +1302,8 @@
             const box = document.createElement("div");
             box.className = "card";
             box.innerHTML =
-              `<strong>${pivotType}</strong>` +
-              `<div style='margin-top:6px;'>${currentEncounter.recoveryText}</div>`;
+              "<strong>" + pivotType + "</strong>" +
+              "<div style='margin-top:6px;'>" + currentEncounter.recoveryText + "</div>";
             stepContent.appendChild(box);
 
             const prompt = document.createElement("p");
@@ -1367,7 +1328,6 @@
 
             stepContent.appendChild(options);
 
-            // Reset gate comes from engine overlay
             const resetAllowed = !!result.resetAllowed;
 
             const resetRow = document.createElement("div");
@@ -1380,7 +1340,6 @@
             const resetBtn = addStepButton("RESET (only if HOLD)", () => {
               if (!resetAllowed) return;
 
-              // Reset the encounter attempt but keep the same guest + wine
               currentEncounter.resetUsed = true;
 
               currentEncounter.guestStateSelected = "";
@@ -1396,11 +1355,10 @@
               currentEncounter.correctSlotS2 = null;
               currentEncounter.showModeHelp = false;
 
-              // Clear pivot choice so they can re-run clean
               currentEncounter.recoveryChoice = "";
               currentEncounter.recoveryCorrect = false;
 
-              currentStep = 1; // go back to Observe
+              currentStep = 1;
               renderEncounterStep();
             }, stepButtons);
 
@@ -1421,7 +1379,6 @@
             return;
           }
 
-          // Pivot not unlocked => fail state
           stepContent.innerText = "❌ “We’ll choose, thanks.”";
           addStepButton("REFLECT", () => { currentStep = 6; renderEncounterStep(); }, stepButtons);
           return;
@@ -1464,13 +1421,12 @@
             "Correct pair: " + correctS1 + " / " + correctS2
           );
 
-          // Chain telemetry
           if (typeof currentEncounter.chainScore === "number") {
             addReflectionBlock(
               stepContent,
               "Chain Signal",
               (currentEncounter.chainSignal || "").toUpperCase(),
-              `Score: ${currentEncounter.chainScore.toFixed(1)} / 4.0`
+              "Score: " + currentEncounter.chainScore.toFixed(1) + " / 4.0"
             );
           }
 
@@ -1499,13 +1455,10 @@
           logEncounter();
 
           addStepButton("NEXT ENCOUNTER", () => {
-            if (isDemo) {
-              const authoredCount = getAuthoredEncounters().length;
-              if (authoredCount && encounterIdx >= authoredCount) {
-                resetNavState();
-                showScreen("screenHome");
-                return;
-              }
+            if (isDemo && encounterIndex >= ENCOUNTER_COUNT) {
+              resetNavState();
+              showScreen("screenHome");
+              return;
             }
             startEncounter();
           }, stepButtons);
@@ -1517,51 +1470,52 @@
       function startEncounter() {
         if (!isUnlocked()) return;
 
-        const authoredCount = getAuthoredEncounters().length;
+        if (!ENCOUNTER_COUNT) {
+          alert("No encounters loaded. Check window.__BC_ENCOUNTERS__ and gameEntry.ts.");
+          console.error("[BC] No encounters found for mode:", bcMode, window.__BC_ENCOUNTERS__);
+          return;
+        }
 
-        // Demo ends when authored demo encounters end
-        if (bcMode === "demo" && authoredCount && encounterIdx >= authoredCount) {
+        if (isDemo && encounterIndex >= ENCOUNTER_COUNT) {
           resetNavState();
           showScreen("screenHome");
           return;
         }
 
-        const encounterData = pickNextEncounter();
-        if (!encounterData) {
-          alert("No authored encounters loaded. Check src/game/encounter.ts and gameEntry.ts export.");
-          resetNavState();
-          showScreen("screenHome");
-          return;
-        }
+        const encounterData = getEncounterAt(encounterIndex);
+        if (!encounterData) return;
 
         let wine = null;
-        if (bcMode === "demo") {
-          wine = wines[Math.min(encounterIdx, wines.length - 1)];
+        if (isDemo) {
+          wine = wines[encounterIndex] || wines[0] || null;
         } else {
           wine = pickRandom(wines);
         }
-
         if (!wine) return;
+
+        const guestStateActual = encounterData.guestStateActual || encounterData.guestState || "";
+        const contextLine = encounterData.contextLine || encounterData.context || "They look at you like they want you to guide them.";
+        const guestLine = encounterData.guestLine || encounterData.line || "“What do you suggest?”";
+        const physicalCues = Array.isArray(encounterData.physicalCues) ? encounterData.physicalCues : [];
+        const verbalCues = Array.isArray(encounterData.verbalCues) ? encounterData.verbalCues : [];
+        const toneTag = encounterData.toneTag || "";
 
         currentEncounter = {
           __logged: false,
 
-          encounterId: encounterData.id ?? null,
+          guestStateActual,
+          contextLine,
+          guestLine,
+          physicalCues,
+          verbalCues,
+          toneTag,
 
-          guestStateActual: encounterData.guestStateActual,
           guestStateSelected: "",
           modeSelected: "",
           hookSelected: "",
           wineSelected: wine,
-
           deliveryLine1: "",
           deliveryLine2: "",
-
-          guestLine: encounterData.guestLine,
-          contextLine: encounterData.contextLine,
-          toneTag: encounterData.toneTag,
-          physicalCues: encounterData.physicalCues,
-          verbalCues: encounterData.verbalCues,
 
           deliverOptionsS1: null,
           deliverOptionsS2: null,
@@ -1571,14 +1525,12 @@
           correctSlotS2: null,
           showModeHelp: false,
 
-          // Pivot state (re-using existing keys for compatibility)
           recoveryText: "",
           recoveryCorrectMode: "",
           recoveryWhy: "",
           recoveryChoice: "",
           recoveryCorrect: false,
 
-          // New
           chainScore: null,
           chainSignal: "",
           pivotType: "",
@@ -1607,7 +1559,7 @@
           row.className = "history-row";
 
           const summary = document.createElement("div");
-          summary.innerText = `${entry.timestamp} | Wine: ${entry.wineSelected} | Mode: ${entry.modeSelected} | Hook: ${entry.hookSelected}`;
+          summary.innerText = entry.timestamp + " | Wine: " + entry.wineSelected + " | Mode: " + entry.modeSelected + " | Hook: " + entry.hookSelected;
 
           const toggleBtn = document.createElement("button");
           toggleBtn.className = "small-btn";
@@ -1618,21 +1570,26 @@
           details.style.display = "none";
 
           const recoveryLine = entry.recoveryText
-            ? `\nPivot: ${entry.pivotType || "—"}\nScenario: ${entry.recoveryText}\nBest: ${entry.recoveryCorrectMode}\nYou chose: ${entry.recoveryChoice} (${entry.recoveryCorrect ? "✅" : "❌"})\nWhy: ${entry.recoveryWhy}`
+            ? "\nPivot: " + (entry.pivotType || "—") +
+              "\nScenario: " + entry.recoveryText +
+              "\nBest: " + entry.recoveryCorrectMode +
+              "\nYou chose: " + entry.recoveryChoice + " (" + (entry.recoveryCorrect ? "✅" : "❌") + ")" +
+              "\nWhy: " + entry.recoveryWhy
             : "";
 
           const telemetry =
             (entry.chainScore != null || entry.chainSignal)
-              ? `\nSignal: ${(entry.chainSignal || "").toUpperCase()} (score ${entry.chainScore})\nReset used: ${entry.resetUsed ? "YES" : "NO"}`
+              ? "\nSignal: " + String(entry.chainSignal || "").toUpperCase() + " (score " + entry.chainScore + ")" +
+                "\nReset used: " + (entry.resetUsed ? "YES" : "NO")
               : "";
 
           details.innerText =
-            `Guest Actual: ${entry.guestStateActual}\n` +
-            `Guest Chosen: ${entry.guestStateSelected}\n` +
-            `Mode: ${entry.modeSelected}\n` +
-            `Hook: ${entry.hookSelected}\n` +
-            `Line 1: ${entry.deliveryLine1}\n` +
-            `Line 2: ${entry.deliveryLine2}` +
+            "Guest Actual: " + entry.guestStateActual + "\n" +
+            "Guest Chosen: " + entry.guestStateSelected + "\n" +
+            "Mode: " + entry.modeSelected + "\n" +
+            "Hook: " + entry.hookSelected + "\n" +
+            "Line 1: " + entry.deliveryLine1 + "\n" +
+            "Line 2: " + entry.deliveryLine2 +
             telemetry +
             recoveryLine;
 
@@ -1654,7 +1611,8 @@
         if (!confirm("This will clear saved encounters but keep wines.")) return;
         runs = [];
         saveRuns();
-        saveEncounterIdx(0);
+        resetEncounterIndex();
+        encounterIndex = 0;
         updateCounts();
       }
 
@@ -1664,7 +1622,8 @@
         saveWines();
         runs = [];
         saveRuns();
-        saveEncounterIdx(0);
+        resetEncounterIndex();
+        encounterIndex = 0;
         renderWineTables();
       }
 
@@ -1702,13 +1661,14 @@
           localStorage.removeItem(premiumWinesKey);
           localStorage.removeItem(demoRunsKey);
           localStorage.removeItem(premiumRunsKey);
-          localStorage.removeItem(getEncounterProgressKey("demo"));
-          localStorage.removeItem(getEncounterProgressKey("premium"));
+          localStorage.removeItem("bc_demo_encounter_index");
+          localStorage.removeItem("bc_premium_encounter_index");
           localStorage.removeItem(coverKey);
 
           wines = [];
           runs = [];
-          saveEncounterIdx(0);
+          resetEncounterIndex();
+          encounterIndex = 0;
 
           resetNavState();
           renderWineTables();
@@ -1716,7 +1676,7 @@
         });
 
         bindInput(btnContinue, () => {
-          if (!isUnlocked()) { alert(`Add ${LIMIT} wines to start.`); return; }
+          if (!isUnlocked()) { alert("Add " + LIMIT + " wines to start."); return; }
           resetNavState();
           showScreen("screenPlay");
           startEncounter();
@@ -1779,13 +1739,24 @@
       showScreen("screenWelcome");
       updateCounts();
 
+      // Helpful debug (optional)
+      console.log("[BC] game.html boot ✅", {
+        bcMode,
+        encounters: ENCOUNTER_COUNT,
+        encounterIndex,
+        engineBridge: !!(window.EngineBridge && typeof window.EngineBridge.computeReaction === "function")
+      });
+
     } catch (err) {
       alert("App error: " + err.message);
       console.error(err);
     }
   });
 })();
+
 </script>
 
+  <!-- ✅ MUST be inside body so the iframe reliably loads EngineBridge + encounters -->
+  <script type="module" src="/src/game/gameEntry.ts"></script>
 </body>
 </html>
