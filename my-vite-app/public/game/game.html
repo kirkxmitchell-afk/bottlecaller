@@ -295,16 +295,19 @@
       // ============================================================
       // ✅ ENCOUNTERS (from gameEntry.ts -> window.__BC_ENCOUNTERS__)
       // ============================================================
-      const ENCOUNTER_INDEX_KEY = isDemo ? "bc_demo_encounter_index" : "bc_premium_encounter_index";
+      // ✅ Encounter progression keys (per mode)
+      const demoEncounterIndexKey = "bc_demo_encounter_index";
+      const premiumEncounterIndexKey = "bc_premium_encounter_index";
+      const encounterIndexKey = isDemo ? demoEncounterIndexKey : premiumEncounterIndexKey;
 
       function loadEncounterIndex() {
-        const raw = localStorage.getItem(ENCOUNTER_INDEX_KEY);
+        const raw = localStorage.getItem(encounterIndexKey);
         const n = parseInt(raw, 10);
         return Number.isFinite(n) && n >= 0 ? n : 0;
       }
 
       function saveEncounterIndex(n) {
-        localStorage.setItem(ENCOUNTER_INDEX_KEY, String(n));
+        localStorage.setItem(encounterIndexKey, String(n));
       }
 
       function resetEncounterIndex() {
@@ -321,6 +324,16 @@
         if (!ENCOUNTER_COUNT) return null;
         const idx = i % ENCOUNTER_COUNT;
         return ENCOUNTERS[idx];
+      }
+
+      function getEncounterListForMode() {
+        const all = window.__BC_ENCOUNTERS__;
+        if (!all) return [];
+
+        const modeKey = (window.__BC_MODE__ === "premium") ? "premium" : "demo";
+        const list = all[modeKey];
+
+        return Array.isArray(list) ? list : [];
       }
 
       // ---------- Pivot (Recovery / Power Move) scenarios ----------
@@ -1455,11 +1468,11 @@
           logEncounter();
 
           addStepButton("NEXT ENCOUNTER", () => {
-            if (isDemo && encounterIndex >= ENCOUNTER_COUNT) {
-              resetNavState();
-              showScreen("screenHome");
-              return;
-            }
+            encounterIndex += 1;
+            saveEncounterIndex(encounterIndex);
+
+            resetNavState();
+            showScreen("screenPlay");
             startEncounter();
           }, stepButtons);
 
@@ -1470,67 +1483,79 @@
       function startEncounter() {
         if (!isUnlocked()) return;
 
-        if (!ENCOUNTER_COUNT) {
-          alert("No encounters loaded. Check window.__BC_ENCOUNTERS__ and gameEntry.ts.");
-          console.error("[BC] No encounters found for mode:", bcMode, window.__BC_ENCOUNTERS__);
+        const list = getEncounterListForMode();
+        if (!list.length) {
+          alert("No encounters loaded. Check window.__BC_ENCOUNTERS__.");
+          console.error("[BC] No encounters available for mode:", window.__BC_MODE__, window.__BC_ENCOUNTERS__);
           return;
         }
 
-        if (isDemo && encounterIndex >= ENCOUNTER_COUNT) {
+        // If reached end -> back home (you can change this to loop if you want)
+        if (encounterIndex >= list.length) {
           resetNavState();
           showScreen("screenHome");
           return;
         }
 
-        const encounterData = getEncounterAt(encounterIndex);
-        if (!encounterData) return;
+        // Grab encounter by progression index
+        const enc = list[encounterIndex];
 
+        // Wine selection rule:
+        // - demo: use wine at same index (0/1)
+        // - premium: you can rotate wines or pick by index
         let wine = null;
         if (isDemo) {
           wine = wines[encounterIndex] || wines[0] || null;
         } else {
-          wine = pickRandom(wines);
+          wine = wines[encounterIndex % wines.length] || wines[0] || null;
         }
-        if (!wine) return;
 
-        const guestStateActual = encounterData.guestStateActual || encounterData.guestState || "";
-        const contextLine = encounterData.contextLine || encounterData.context || "They look at you like they want you to guide them.";
-        const guestLine = encounterData.guestLine || encounterData.line || "“What do you suggest?”";
-        const physicalCues = Array.isArray(encounterData.physicalCues) ? encounterData.physicalCues : [];
-        const verbalCues = Array.isArray(encounterData.verbalCues) ? encounterData.verbalCues : [];
-        const toneTag = encounterData.toneTag || "";
+        if (!wine) {
+          alert("No wine available. Please add wines first.");
+          return;
+        }
 
+        // Normalize encounter fields (so old UI code works)
         currentEncounter = {
           __logged: false,
 
-          guestStateActual,
-          contextLine,
-          guestLine,
-          physicalCues,
-          verbalCues,
-          toneTag,
+          // Encounter data (coming from encounters.ts)
+          encounterNumber: enc.encounterNumber ?? (encounterIndex + 1),
+          guestStateActual: enc.guestStateActual || "",
+          contextLine: enc.contextLine || "",
+          guestLine: enc.guestLine || "",
+          physicalCues: Array.isArray(enc.physicalCues) ? enc.physicalCues : [],
+          verbalCues: Array.isArray(enc.verbalCues) ? enc.verbalCues : [],
+          toneTag: enc.toneTag || "",
 
+          // Player choices
           guestStateSelected: "",
           modeSelected: "",
           hookSelected: "",
+
+          // Wine
           wineSelected: wine,
+
+          // Delivery
           deliveryLine1: "",
           deliveryLine2: "",
-
           deliverOptionsS1: null,
           deliverOptionsS2: null,
           selectedS1: null,
           selectedS2: null,
           correctSlotS1: null,
           correctSlotS2: null,
+
           showModeHelp: false,
 
+          // Pivot
           recoveryText: "",
           recoveryCorrectMode: "",
           recoveryWhy: "",
           recoveryChoice: "",
           recoveryCorrect: false,
 
+          // Engine telemetry
           chainScore: null,
           chainSignal: "",
           pivotType: "",
@@ -1661,8 +1686,8 @@
           localStorage.removeItem(premiumWinesKey);
           localStorage.removeItem(demoRunsKey);
           localStorage.removeItem(premiumRunsKey);
-          localStorage.removeItem("bc_demo_encounter_index");
-          localStorage.removeItem("bc_premium_encounter_index");
+          localStorage.removeItem(demoEncounterIndexKey);
+          localStorage.removeItem(premiumEncounterIndexKey);
           localStorage.removeItem(coverKey);
 
           wines = [];

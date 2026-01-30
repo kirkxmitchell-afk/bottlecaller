@@ -28,7 +28,7 @@ export type Encounter = {
   toneTag?: string;
 
   // Optional: if you want deterministic wine selection per encounter
-  // (demo currently uses wine = wines[demoStep], premium random)
+  // (use `wineIndexHint` to suggest a deterministic wine index; selection is handled by the runtime)
   wineIndexHint?: number; // e.g. 0..LIMIT-1
 };
 
