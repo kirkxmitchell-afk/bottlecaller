@@ -38,9 +38,6 @@
         <button id="btnWelcomeStart" type="button">Start</button>
       </div>
       <div class="small-text" id="welcomeFooterNote"></div>
-
-      <!-- ✅ NEW: quick status line so you know engine loaded -->
-      <div class="small-text" id="engineStatus" style="margin-top:8px; opacity:0.8;"></div>
     </div>
   </section>
 
@@ -251,6 +248,24 @@
     alert("App error: " + (e.reason && e.reason.message ? e.reason.message : String(e.reason)));
   });
 
+  // ✅ DEBUG WRAPPER (idempotent, no redeclare errors)
+  function ensureEngineBridgeDebug() {
+    const eb = window.EngineBridge;
+    if (!eb || typeof eb.computeReaction !== "function") return false;
+    if (eb.__bcWrapped) return true;
+
+    const orig = eb.computeReaction;
+    eb.computeReaction = function (args) {
+      const out = orig(args);
+      console.log("[BC] computeReaction CALLED ✅", { args, out });
+      return out;
+    };
+
+    eb.__bcWrapped = true;
+    console.log("[BC] EngineBridge ready ✅", eb);
+    return true;
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     try {
       if (window.__BC_INIT_DONE__) return;
@@ -262,6 +277,11 @@
       const bcMode = (window.__BC_MODE__ === "premium") ? "premium" : "demo";
       const isDemo = bcMode === "demo";
       const LIMIT = isDemo ? 2 : 10;
+
+      // Attempt to wrap EngineBridge early (it might already exist)
+      ensureEngineBridgeDebug();
+      // And again shortly after (in case module loads after DOMContentLoaded)
+      setTimeout(ensureEngineBridgeDebug, 0);
 
       // ---------- Remove all non-mode DOM (prevents any bleed) ----------
       function removeEl(id) {
@@ -281,15 +301,6 @@
       const welcomeFooterNote = document.getElementById("welcomeFooterNote");
       if (welcomeFooterNote) {
         welcomeFooterNote.textContent = isDemo ? "Demo mode" : "";
-      }
-
-      // ---------- Engine status line ----------
-      const engineStatus = document.getElementById("engineStatus");
-      if (engineStatus) {
-        const ok = !!(window.EngineBridge && typeof window.EngineBridge.computeReaction === "function");
-        engineStatus.textContent = ok
-          ? "Engine: ✅ loaded (computeReaction ready)"
-          : "Engine: ⏳ loading… (computeReaction not ready yet)";
       }
 
       // ---------- Keys / limits ----------
@@ -1246,7 +1257,7 @@
         }
 
         // ============================================================
-        // STEP 5: Reaction (driven by EngineBridge overlay)
+        // STEP 5: Reaction (NOW driven by EngineBridge overlay)
         // ============================================================
         if (currentStep === 5) {
           const checksRaw = evaluateChecks();
@@ -1256,21 +1267,21 @@
             modeStatus: checksRaw.modeStatus,
             hookStatus: checksRaw.hookStatus,
             deliveryCorrect: checksRaw.deliveryCorrect,
-            firstMode: currentEncounter.modeSelected || ""
+            firstMode: currentEncounter.modeSelected || "" // "LEAD" | "REFLECT" | "HOLD" | ""
           };
 
-          if (!window.EngineBridge || typeof window.EngineBridge.computeReaction !== "function") {
-            throw new Error(
-              "EngineBridge not loaded in iframe. " +
-              "Check that /src/game/engineBridge.ts is imported as a module (see bottom of game.html) " +
-              "and that the Vite path is correct."
-            );
-          }
+          // ✅ STEP 5 DEBUG: ensure wrapper + logs are active before calling engine
+          ensureEngineBridgeDebug();
+if (!window.EngineBridge || typeof window.EngineBridge.computeReaction !== "function") {
+  throw new Error(
+    "EngineBridge not loaded. Confirm /src/game/gameEntry.ts is loading and installs window.EngineBridge."
+  );
+}
 
-          console.log("[BC] Step 5 → computeReaction input ✅", reactionChecks);
+
           const result = window.EngineBridge.computeReaction(reactionChecks);
-          console.log("[BC] Step 5 → computeReaction result ✅", result);
 
+          // Persist telemetry on encounter for history + reflection
           currentEncounter.chainScore = result.chainScore;
           currentEncounter.chainSignal = result.chainSignal;
 
@@ -1279,7 +1290,6 @@
           signalChip.innerText = `Signal: ${result.chainSignal.toUpperCase()} (score ${result.chainScore.toFixed(1)} / 4.0)`;
           stepContent.appendChild(signalChip);
 
-          // ✅ Right final hook never fails
           if (result.deliveryCorrect) {
             const upgraded = (result.chainSignal === "green") && (Math.random() < 0.35);
             stepContent.appendChild(document.createTextNode(upgraded ? "✅ Upgrade. “Nice — that’s the move.”" : "✅ Nod. “Perfect.”"));
@@ -1287,7 +1297,6 @@
             return;
           }
 
-          // Pivot unlocked => offer pivot flow
           if (result.pivotUnlocked) {
             if (!currentEncounter.recoveryText) {
               const scenario = getPivotScenario();
@@ -1392,7 +1401,6 @@
             return;
           }
 
-          // Pivot not unlocked => fail state
           stepContent.innerText = "❌ “We’ll choose, thanks.”";
           addStepButton("REFLECT", () => { currentStep = 6; renderEncounterStep(); }, stepButtons);
           return;
@@ -1746,5 +1754,7 @@
 })();
 </script>
 
-<!-- ✅ NEW: install EngineBridge directly in the iframe (no console hooks needed) -->
-<script
+  <!-- ✅ MUST be inside body so the iframe reliably loads EngineBridge -->
+  <script type="module" src="/src/game/gameEntry.ts"></script>
+</body>
+</html>
