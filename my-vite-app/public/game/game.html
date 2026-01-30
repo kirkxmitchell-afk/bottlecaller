@@ -977,31 +977,31 @@
           guestStateSelected: currentEncounter.guestStateSelected || "",
           modeSelected: currentEncounter.modeSelected || "",
           hookSelected: currentEncounter.hookSelected || "",
-          wineSelected: (currentEncounter.wineSelected && currentEncounter.wineSelected.name) ? currentEncounter.wineSelected.name : "",
+          wineSelected:
+            (currentEncounter.wineSelected && currentEncounter.wineSelected.name)
+              ? currentEncounter.wineSelected.name
+              : "",
 
           deliveryLine1: currentEncounter.deliveryLine1 || "",
           deliveryLine2: currentEncounter.deliveryLine2 || "",
 
-          // Pivot fields (kept compatible with old names)
+          // Pivot fields
           recoveryText: currentEncounter.recoveryText || "",
           recoveryChoice: currentEncounter.recoveryChoice || "",
           recoveryCorrect: !!currentEncounter.recoveryCorrect,
           recoveryCorrectMode: currentEncounter.recoveryCorrectMode || "",
           recoveryWhy: currentEncounter.recoveryWhy || "",
 
-          // New telemetry
+          // Telemetry
           chainScore: currentEncounter.chainScore ?? null,
           chainSignal: currentEncounter.chainSignal ?? "",
           pivotType: currentEncounter.pivotType || "",
-          resetUsed: !!currentEncounter.resetUsed
+          resetUsed: !!currentEncounter.resetUsed,
         };
 
         if (!Array.isArray(runs)) runs = [];
         runs.push(entry);
         saveRuns();
-
-  // encounter progression is advanced by the UI (NEXT ENCOUNTER).
-  // logEncounter should only save the run.
 
         currentEncounter.__logged = true;
         updateCounts();
@@ -1470,9 +1470,10 @@
           logEncounter();
 
           addStepButton("NEXT ENCOUNTER", () => {
-            // demo progresses 0 -> 1 -> 2 ...
-            encounterIndex = (encounterIndex ?? 0) + 1;
-            saveEncounterIndex(encounterIndex);
+            if (isDemo) {
+              encounterIndex = (encounterIndex ?? 0) + 1;
+              saveEncounterIndex(encounterIndex);
+            }
 
             startEncounter();
           }, stepButtons);
