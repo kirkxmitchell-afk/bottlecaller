@@ -27,6 +27,9 @@ export type Encounter = {
 
   toneTag?: string;
 
+  // Optional classification tags to help select or filter encounters
+  tags?: string[];
+
   // Optional: if you want deterministic wine selection per encounter
   // (use `wineIndexHint` to suggest a deterministic wine index; selection is handled by the runtime)
   wineIndexHint?: number; // e.g. 0..LIMIT-1
@@ -84,6 +87,7 @@ export const ENCOUNTERS: EncounterPack = {
       physicalCues: ["Menu half-closed", "Looks up immediately"],
       verbalCues: ["“Just pick something good.”", "“What would you order?”"],
       toneTag: "Fast",
+      tags: ["decider", "lead", "fast"],
     },
     {
       id: 102,
@@ -96,6 +100,7 @@ export const ENCOUNTERS: EncounterPack = {
       physicalCues: ["Soft voice", "Avoids eye contact"],
       verbalCues: ["“Something easy.”", "“Not too heavy.”"],
       toneTag: "Soft",
+      tags: ["griever", "hold", "soft"],
     },
     {
       id: 103,
@@ -108,6 +113,7 @@ export const ENCOUNTERS: EncounterPack = {
       physicalCues: ["Slow scan of the list", "Raises eyebrow slightly"],
       verbalCues: ["“More refined.”", "“What’s your best glass?”"],
       toneTag: "Status",
+      tags: ["fancy", "reflect", "status"],
     },
     {
       id: 104,
@@ -120,6 +126,7 @@ export const ENCOUNTERS: EncounterPack = {
       physicalCues: ["Finger on price column", "Leans in slightly"],
       verbalCues: ["“Best value.”", "“Worth it for the price?”"],
       toneTag: "Proof",
+      tags: ["bargain-smart", "hold", "value"],
     },
     {
       id: 105,
@@ -132,6 +139,7 @@ export const ENCOUNTERS: EncounterPack = {
       physicalCues: ["Smiling", "Glances around the table"],
       verbalCues: ["“Make it fun.”", "“Something memorable.”"],
       toneTag: "Vibe",
+      tags: ["celebrator", "lead", "vibe"],
     },
     {
       id: 106,
@@ -144,6 +152,7 @@ export const ENCOUNTERS: EncounterPack = {
       physicalCues: ["Tap-tap on the menu", "Short nods"],
       verbalCues: ["“Two options.”", "“Keep it quick.”"],
       toneTag: "Impatient",
+      tags: ["decider", "lead", "impatient"],
     },
     {
       id: 107,
@@ -156,6 +165,7 @@ export const ENCOUNTERS: EncounterPack = {
       physicalCues: ["Tilts head", "Quiet confidence"],
       verbalCues: ["“Elegant.”", "“Not too heavy.”"],
       toneTag: "Elegant",
+      tags: ["fancy", "reflect", "elegant"],
     },
 
     // --- Stage 2 (8–14) introduce more pressure / second-guessing ---
@@ -170,6 +180,7 @@ export const ENCOUNTERS: EncounterPack = {
       physicalCues: ["Small laugh", "Looks to friend for help"],
       verbalCues: ["“I don’t want to mess this up.”", "“We’re not wine people.”"],
       toneTag: "Anxious",
+      tags: ["griever", "hold", "anxious"],
     },
     {
       id: 109,
@@ -182,6 +193,7 @@ export const ENCOUNTERS: EncounterPack = {
       physicalCues: ["Points at two bottles", "Waits for your argument"],
       verbalCues: ["“Worth more?”", "“What’s the difference?”"],
       toneTag: "Compare",
+      tags: ["bargain-smart", "hold", "compare"],
     },
     {
       id: 110,
@@ -194,6 +206,7 @@ export const ENCOUNTERS: EncounterPack = {
       physicalCues: ["Laughing", "Leans back relaxed"],
       verbalCues: ["“With a story.”", "“What’s your favorite?”"],
       toneTag: "High",
+      tags: ["celebrator", "reflect", "story"],
     },
     {
       id: 111,
@@ -206,6 +219,7 @@ export const ENCOUNTERS: EncounterPack = {
       physicalCues: ["Direct stare", "Small smirk"],
       verbalCues: ["“Old world or new world?”", "“Be specific.”"],
       toneTag: "Test",
+      tags: ["fancy", "reflect", "test"],
     },
     {
       id: 112,
@@ -218,6 +232,7 @@ export const ENCOUNTERS: EncounterPack = {
       physicalCues: ["Glances at kitchen", "Menu closed"],
       verbalCues: ["“Tell us what to do.”", "“We’re hungry.”"],
       toneTag: "Now",
+      tags: ["decider", "lead", "now"],
     },
     {
       id: 113,
@@ -230,6 +245,7 @@ export const ENCOUNTERS: EncounterPack = {
       physicalCues: ["Half smile", "Looks away"],
       verbalCues: ["“Just water.”", "“Maybe later.”"],
       toneTag: "Withdrawn",
+      tags: ["griever", "hold", "withdrawn"],
     },
     {
       id: 114,
@@ -242,6 +258,7 @@ export const ENCOUNTERS: EncounterPack = {
       physicalCues: ["Crossed arms", "Narrowed eyes"],
       verbalCues: ["“Actually good?”", "“Or just expensive?”"],
       toneTag: "Skeptical",
+      tags: ["bargain-smart", "hold", "skeptical"],
     },
 
     // --- Stage 3 (15–20) advanced: social dynamics / higher stakes ---
@@ -256,6 +273,7 @@ export const ENCOUNTERS: EncounterPack = {
       physicalCues: ["Looks around the table", "Group nods"],
       verbalCues: ["“Everyone will like.”", "“Crowd-pleaser.”"],
       toneTag: "Group",
+      tags: ["celebrator", "lead", "group"],
     },
     {
       id: 116,
@@ -268,6 +286,7 @@ export const ENCOUNTERS: EncounterPack = {
       physicalCues: ["Leans back", "Confident smile"],
       verbalCues: ["“We drink well.”", "“Surprise me.”"],
       toneTag: "Power",
+      tags: ["fancy", "reflect", "power"],
     },
     {
       id: 117,
@@ -280,6 +299,7 @@ export const ENCOUNTERS: EncounterPack = {
       physicalCues: ["Hand up (stop gesture)", "Quick eye contact"],
       verbalCues: ["“No speech.”", "“One pick.”"],
       toneTag: "NoFluff",
+      tags: ["decider", "lead", "no-fluff"],
     },
     {
       id: 118,
@@ -292,6 +312,7 @@ export const ENCOUNTERS: EncounterPack = {
       physicalCues: ["Tilts head", "Waits"],
       verbalCues: ["“What do we get?”", "“Convince me.”"],
       toneTag: "Reframe",
+      tags: ["bargain-smart", "hold", "reframe"],
     },
     {
       id: 119,
@@ -304,6 +325,7 @@ export const ENCOUNTERS: EncounterPack = {
       physicalCues: ["Soft voice", "Looks down at the list"],
       verbalCues: ["“Not too intense.”", "“Keep it simple.”"],
       toneTag: "Careful",
+      tags: ["griever", "hold", "careful"],
     },
     {
       id: 120,
@@ -316,6 +338,7 @@ export const ENCOUNTERS: EncounterPack = {
       physicalCues: ["Still posture", "Long pause after asking"],
       verbalCues: ["“Most elegant.”", "“Not obvious.”"],
       toneTag: "Taste",
+      tags: ["fancy", "reflect", "taste"],
     },
   ],
 };
