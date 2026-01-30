@@ -318,7 +318,10 @@
       const ENCOUNTERS = Array.isArray(ENCOUNTERS_BY_MODE[bcMode]) ? ENCOUNTERS_BY_MODE[bcMode] : [];
       const ENCOUNTER_COUNT = ENCOUNTERS.length;
 
-      let encounterIndex = loadEncounterIndex();
+  let encounterIndex = loadEncounterIndex();
+
+  // ✅ Ensure the key exists (so console never shows null)
+  saveEncounterIndex(encounterIndex);
 
       function getEncounterAt(i) {
         if (!ENCOUNTER_COUNT) return null;
@@ -1703,6 +1706,11 @@
         bindInput(btnContinue, () => {
           if (!isUnlocked()) { alert("Add " + LIMIT + " wines to start."); return; }
           resetNavState();
+
+          // Start fresh runs at the first encounter
+          encounterIndex = 0;
+          saveEncounterIndex(encounterIndex);
+
           showScreen("screenPlay");
           startEncounter();
         });
