@@ -1470,8 +1470,8 @@
           logEncounter();
 
           addStepButton("NEXT ENCOUNTER", () => {
-            // ✅ advance ONLY here (single source of truth)
-            encounterIndex = (encounterIndex || 0) + 1;
+            // demo progresses 0 -> 1 -> 2 ...
+            encounterIndex = (encounterIndex ?? 0) + 1;
             saveEncounterIndex(encounterIndex);
 
             startEncounter();
