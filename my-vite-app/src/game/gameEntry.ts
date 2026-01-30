@@ -1,6 +1,7 @@
 // src/game/gameEntry.ts
 import { installEngineBridge } from "./engineBridge";
-import { ENCOUNTERS, validateEncounters } from "./encounters";
+import { ENCOUNTERS, validateEncounters } from "./encounter";
+
 
 declare global {
   interface Window {
