@@ -1055,7 +1055,11 @@
         if (wine.process) addBadge(wineBadges, wine.process);
 
         const stepLabels = ["Load", "Observe", "Mode", "Hook", "Deliver", "Reaction", "Reflect"];
-        stepHeader.innerText = "Step " + (currentStep + 1) + " of 7: " + stepLabels[currentStep];
+        const n = currentEncounter.encounterNumber ?? (encounterIndex + 1);
+        const d = currentEncounter.difficulty ?? 1;
+
+        stepHeader.innerText =
+          `Encounter ${n} / ${getEncounterListForMode().length}  •  Difficulty ${d}  —  Step ${currentStep + 1} of 7: ${stepLabels[currentStep]}`;
 
         if (currentStep === 0) {
           const p = document.createElement("p");
@@ -1543,6 +1547,10 @@
           physicalCues: Array.isArray(enc.physicalCues) ? enc.physicalCues : [],
           verbalCues: Array.isArray(enc.verbalCues) ? enc.verbalCues : [],
           toneTag: enc.toneTag || "",
+
+          // Metadata
+          difficulty: enc.difficulty ?? 1,
+          tags: Array.isArray(enc.tags) ? enc.tags : [],
 
           // Player choices
           guestStateSelected: "",
