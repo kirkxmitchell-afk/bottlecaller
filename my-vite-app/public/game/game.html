@@ -1000,9 +1000,8 @@
         runs.push(entry);
         saveRuns();
 
-        // advance encounter progression
-        encounterIndex = encounterIndex + 1;
-        saveEncounterIndex(encounterIndex);
+  // encounter progression is advanced by the UI (NEXT ENCOUNTER).
+  // logEncounter should only save the run.
 
         currentEncounter.__logged = true;
         updateCounts();
