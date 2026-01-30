@@ -1655,6 +1655,10 @@
         // Reset progression for current mode
         saveEncounterIndex(0);
         encounterIndex = 0;
+
+        // Clear any in-memory encounter/navigation state
+        resetNavState();
+
         updateCounts();
       }
 
@@ -1667,7 +1671,14 @@
         // Reset progression for current mode
         saveEncounterIndex(0);
         encounterIndex = 0;
+
+        // Clear any in-memory encounter/navigation state
+        resetNavState();
+
         renderWineTables();
+
+        // ✅ Jump directly to Setup
+        showScreen(ids.setupScreen);
       }
 
       // ---------- Buttons ----------
