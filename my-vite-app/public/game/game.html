@@ -1491,22 +1491,36 @@
           return;
         }
 
-        // If reached end -> back home (you can change this to loop if you want)
-        if (encounterIndex >= list.length) {
+        // For premium, if reached end -> back home (you can change this to loop if you want)
+        if (!isDemo && encounterIndex >= list.length) {
           resetNavState();
           showScreen("screenHome");
           return;
         }
 
-        // Grab encounter by progression index
-        const enc = list[encounterIndex];
+        // Determine encounter selection. For demo we loop through demo list.
+        let enc = null;
+        let demoIdx = encounterIndex;
+        if (isDemo) {
+          const demoList = (window.__BC_ENCOUNTERS__?.demo || []);
+          if (!demoList.length) {
+            alert("No demo encounters loaded. Check window.__BC_ENCOUNTERS__.demo.");
+            console.error("[BC] No demo encounters for mode:", window.__BC_MODE__, window.__BC_ENCOUNTERS__);
+            return;
+          }
+          // loop demo by index
+          demoIdx = demoList.length ? (encounterIndex % demoList.length) : 0;
+          enc = demoList[demoIdx];
+        } else {
+          enc = list[encounterIndex];
+        }
 
         // Wine selection rule:
-        // - demo: use wine at same index (0/1)
-        // - premium: you can rotate wines or pick by index
+        // - demo: use wine at same index as the encounter (looped index)
+        // - premium: rotate wines or pick by index
         let wine = null;
         if (isDemo) {
-          wine = wines[encounterIndex] || wines[0] || null;
+          wine = wines[demoIdx] || wines[0] || null;
         } else {
           wine = wines[encounterIndex % wines.length] || wines[0] || null;
         }
