@@ -1494,17 +1494,17 @@
         // ----------------------------
         // Index rules (progression)
         // ----------------------------
-        // Demo: STOP when complete (recommended for a real demo)
-        if (isDemo && encounterIndex >= list.length) {
+        // Premium: STOP when complete (finite)
+        if (!isDemo && encounterIndex >= list.length) {
           resetNavState();
           showScreen("screenHome");
           return;
         }
 
-        // Premium: LOOP forever
+        // Demo: LOOP forever (demo cycles)
         const idx = isDemo
-          ? encounterIndex
-          : (encounterIndex % list.length);
+          ? (encounterIndex % list.length)
+          : encounterIndex;
 
         // If you WANT demo to loop instead, replace idx line above with:
         // const idx = (encounterIndex % list.length);
