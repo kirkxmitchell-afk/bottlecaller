@@ -1097,6 +1097,137 @@
         return reasons[state] || "";
       }
 
+      // ==============================
+      // SCORING UX: Strength + Fix Summary (Step 5 + Step 6)
+      // ==============================
+
+      function signalEmoji(sig) {
+        sig = String(sig || "").toLowerCase();
+        if (sig === "green") return "🟢";
+        if (sig === "yellow") return "🟡";
+        if (sig === "red") return "🔴";
+        return "⚪";
+      }
+
+      function bestModeFor(state) {
+        return (modeMap[state] && modeMap[state].optimal) ? modeMap[state].optimal : "";
+      }
+
+      function bestHookFor(state) {
+        return (hookMap[state] && hookMap[state].optimal) ? hookMap[state].optimal : "";
+      }
+
+      function buildStrengthFixSummary(checks, result, enc) {
+        // checks: { guestRead, modeStatus, hookStatus, deliveryCorrect }
+        // result: { chainSignal, chainScore, pivotUnlocked, resetAllowed, pivotType, deliveryCorrect }
+        // enc: currentEncounter
+
+        const actual = enc.guestStateActual || "";
+        const chosen = enc.guestStateSelected || "";
+
+        const strengths = [];
+        const fixes = [];
+        const next = [];
+
+        // --- Strengths ---
+        if (checks.guestRead) strengths.push(`Read was correct: you identified **${actual}**.`);
+        if (checks.modeStatus === "optimal") strengths.push(`Mode nailed: **${enc.modeSelected}** fits ${actual}.`);
+        if (checks.hookStatus === "optimal") strengths.push(`Hook nailed: **${enc.hookSelected}** fits ${actual}.`);
+        if (checks.deliveryCorrect) strengths.push(`Delivery pair was correct (2 sentences clean).`);
+
+        // If no explicit strengths, still give something
+        if (!strengths.length) strengths.push(`You stayed in the sequence (Read → Mode → Hook → Deliver). That matters.`);
+
+        // --- Fixes (prioritised) ---
+        if (!checks.guestRead) {
+          fixes.push(`Guest read missed: you chose **${chosen || "—"}**, actual was **${actual}**.`);
+          next.push(`Micro-fix: re-read ONE cue (verbal or physical) and name the intent in 2 words.`);
+        }
+
+        if (checks.modeStatus !== "optimal") {
+          fixes.push(`Mode mismatch: best was **${bestModeFor(actual)}** (you chose **${enc.modeSelected || "—"}**).`);
+          next.push(`Micro-fix: for ${actual}, default to **${bestModeFor(actual)}** unless you see a strong counter-cue.`);
+        }
+
+        if (checks.hookStatus !== "optimal") {
+          fixes.push(`Hook mismatch: best was **${bestHookFor(actual)}** (you chose **${enc.hookSelected || "—"}**).`);
+          next.push(`Micro-fix: pick the hook that answers the guest’s real question in 1 line.`);
+        }
+
+        if (!checks.deliveryCorrect) {
+          fixes.push(`Delivery missed: the sentence pair didn’t land the right emotional + structural combo.`);
+          next.push(`Micro-fix: sentence 1 = emotional framing, sentence 2 = concrete wine reason (fruit/texture/oak/process).`);
+        }
+
+        // If everything is optimal but still yellow/red (rare), give a “tighten” note
+        const sig = String(result.chainSignal || "").toLowerCase();
+        if (checks.guestRead && checks.modeStatus === "optimal" && checks.hookStatus === "optimal" && checks.deliveryCorrect) {
+          if (sig !== "green") next.push(`Tighten: shorten sentence 1 by 20% and lead with certainty.`);
+        }
+
+        // --- One-liner grade cue ---
+        const score = (typeof result.chainScore === "number") ? result.chainScore : null;
+        const grade =
+          sig === "green" ? "STRONG" :
+          sig === "yellow" ? "RECOVERABLE" :
+          sig === "red" ? "BROKE" : "UNKNOWN";
+
+        const header = `${signalEmoji(sig)} ${grade}${score != null ? ` — ${score.toFixed(1)} / 4.0` : ""}`;
+
+        return {
+          header,
+          strengths,
+          fixes,
+          next: next.length ? next : [`Micro-fix: do it again with the correct Mode + best Hook.`],
+          signal: sig,
+          score
+        };
+      }
+
+      function renderUxSummary(container, summary, opts = {}) {
+        // opts: { title?: string, compact?: boolean }
+        if (!container || !summary) return;
+
+        const wrap = document.createElement("div");
+        wrap.className = "card";
+
+        const title = document.createElement("strong");
+        title.innerText = opts.title || "Scoring Summary";
+        wrap.appendChild(title);
+
+        const head = document.createElement("div");
+        head.className = "notice";
+        head.style.marginTop = "8px";
+        head.innerText = summary.header;
+        wrap.appendChild(head);
+
+        const makeList = (label, items) => {
+          const block = document.createElement("div");
+          block.style.marginTop = "10px";
+
+          const lbl = document.createElement("div");
+          lbl.style.fontWeight = "700";
+          lbl.innerText = label;
+          block.appendChild(lbl);
+
+          items.slice(0, opts.compact ? 2 : 3).forEach(t => {
+            const line = document.createElement("div");
+            line.className = "small-text";
+            // simple markdown-ish bold: keep it plain for now
+            line.innerText = t.replace(/\*\*/g, "");
+            block.appendChild(line);
+          });
+
+          return block;
+        };
+
+        wrap.appendChild(makeList("✅ Strength", summary.strengths));
+        if (summary.fixes && summary.fixes.length) wrap.appendChild(makeList("🔧 Fix", summary.fixes));
+        wrap.appendChild(makeList("🎯 Next", summary.next));
+
+        container.appendChild(wrap);
+      }
+
       function addReflectionBlock(container, title, status, detail) {
         const block = document.createElement("div");
         block.className = "card";
@@ -1146,6 +1277,11 @@
           chainSignal: currentEncounter.chainSignal ?? "",
           pivotType: currentEncounter.pivotType || "",
           resetUsed: !!currentEncounter.resetUsed,
+          // UX summary (for history)
+          uxHeader: currentEncounter.__uxSummary?.header || "",
+          uxStrength: (currentEncounter.__uxSummary?.strengths || [])[0] || "",
+          uxFix: (currentEncounter.__uxSummary?.fixes || [])[0] || "",
+          uxNext: (currentEncounter.__uxSummary?.next || [])[0] || "",
         };
 
         if (!Array.isArray(runs)) runs = [];
@@ -1432,6 +1568,15 @@
           currentEncounter.chainScore = result.chainScore;
           currentEncounter.chainSignal = result.chainSignal;
 
+          // ---------- UX Summary (instant feedback) ----------
+          try {
+            const summary = buildStrengthFixSummary(checksRaw, result, currentEncounter);
+            currentEncounter.__uxSummary = summary; // store for Step 6 + history if you want
+            renderUxSummary(stepContent, summary, { title: "In-the-moment feedback", compact: true });
+          } catch (e) {
+            console.warn("Failed to build UX summary:", e);
+          }
+
           const signalChip = document.createElement("div");
           signalChip.className = "notice";
           signalChip.innerText = "Signal: " + String(result.chainSignal || "").toUpperCase() +
@@ -1561,6 +1706,12 @@
           reflectionTitle.innerText = "Reflection";
           stepContent.appendChild(reflectionTitle);
 
+            // ---------- UX Summary (repeat + expanded) ----------
+            const saved = currentEncounter.__uxSummary;
+            if (saved) {
+              renderUxSummary(stepContent, saved, { title: "Summary to lock it in", compact: false });
+            }
+
           addReflectionBlock(
             stepContent,
             "Guest Read",
@@ -1599,6 +1750,26 @@
               "Score: " + currentEncounter.chainScore.toFixed(1) + " / 4.0"
             );
           }
+
+          // ---------- Tier grade cue (simple) ----------
+          (function(){
+            const n = Number(currentEncounter.encounterNumber || 0) || 0;
+            const tier = (typeof getTierFromEncounterNumber === "function") ? getTierFromEncounterNumber(n) : "";
+            if (tier) {
+              const sig = String(currentEncounter.chainSignal || "").toLowerCase();
+              const grade =
+                sig === "green" ? "PASS (clean)" :
+                sig === "yellow" ? "PASS (needs recovery)" :
+                sig === "red" ? "FAIL (repeat this tier skill)" : "—";
+
+              addReflectionBlock(
+                stepContent,
+                "Tier Grade",
+                grade,
+                `Tier ${tier} | Encounter ${n}`
+              );
+            }
+          })();
 
           if (currentEncounter.recoveryText) {
             addReflectionBlock(
