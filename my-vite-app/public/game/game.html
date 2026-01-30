@@ -1340,11 +1340,24 @@
         if (wine.process) addBadge(wineBadges, wine.process);
 
         const stepLabels = ["Load", "Observe", "Mode", "Hook", "Deliver", "Reaction", "Reflect"];
-        const n = currentEncounter.encounterNumber ?? (encounterIndex + 1);
-        const d = currentEncounter.difficulty ?? 1;
 
+        // --- NEW: tier/difficulty/focus/trap chip ---
+        const meta = (currentEncounter && currentEncounter.meta) ? currentEncounter.meta : null;
+        const tier = meta && meta.tier ? meta.tier : "";
+        const diff = meta && (meta.difficulty || meta.difficulty === 0) ? meta.difficulty : "";
+        const focus = meta && meta.skillFocus ? meta.skillFocus : "";
+        const trap = meta && meta.trapType ? meta.trapType : "";
+
+        const chipParts = [];
+        if (tier) chipParts.push(`Tier ${tier}`);
+        if (diff) chipParts.push(`Difficulty ${diff}`);
+        if (focus) chipParts.push(`Focus: ${focus}`);
+        if (trap && trap !== "none") chipParts.push(`Trap: ${trap}`);
+
+        // Header line + chip line (two-line header)
         stepHeader.innerText =
-          `Encounter ${n} / ${getEncounterListForMode().length}  •  Difficulty ${d}  —  Step ${currentStep + 1} of 7: ${stepLabels[currentStep]}`;
+          "Step " + (currentStep + 1) + " of 7: " + stepLabels[currentStep] +
+          (chipParts.length ? "\n" + chipParts.join(" • ") : "");
 
         if (currentStep === 0) {
           const p = document.createElement("p");

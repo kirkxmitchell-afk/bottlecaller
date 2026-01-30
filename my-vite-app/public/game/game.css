@@ -268,8 +268,8 @@ button.selected,
 .badge {
   display: inline-flex;
   align-items: center;
-  font-size: 12px;
-  padding: 4px 10px;
+  font-size: 11px;
+  padding: 3px 8px;
   border: 1px solid var(--border2);
   border-radius: 999px;
   opacity: 0.95;
@@ -285,6 +285,7 @@ button.selected,
   color: rgba(244,246,247,0.75);
   margin-bottom: 8px;
 }
+#stepHeader { white-space: pre-line; } /* lets \n render as a new line */
 
 /* ---------- History ---------- */
 .history-item {
