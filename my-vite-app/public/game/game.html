@@ -1564,18 +1564,15 @@
           }
 
           const result = window.EngineBridge.computeReaction(reactionChecks);
-
+          // Persist telemetry on encounter for history + reflection
           currentEncounter.chainScore = result.chainScore;
           currentEncounter.chainSignal = result.chainSignal;
 
-          // ---------- UX Summary (instant feedback) ----------
-          try {
-            const summary = buildStrengthFixSummary(checksRaw, result, currentEncounter);
-            currentEncounter.__uxSummary = summary; // store for Step 6 + history if you want
-            renderUxSummary(stepContent, summary, { title: "In-the-moment feedback", compact: true });
-          } catch (e) {
-            console.warn("Failed to build UX summary:", e);
-          }
+          // ✅ ADD THIS (debug + summary render)
+          console.log("[BC] UX summary build", { checksRaw, result });
+          const summary = buildStrengthFixSummary(checksRaw, result, currentEncounter);
+          currentEncounter.__uxSummary = summary;
+          renderUxSummary(stepContent, summary, { title: "In-the-moment feedback", compact: true });
 
           const signalChip = document.createElement("div");
           signalChip.className = "notice";
@@ -1706,11 +1703,14 @@
           reflectionTitle.innerText = "Reflection";
           stepContent.appendChild(reflectionTitle);
 
-            // ---------- UX Summary (repeat + expanded) ----------
-            const saved = currentEncounter.__uxSummary;
-            if (saved) {
-              renderUxSummary(stepContent, saved, { title: "Summary to lock it in", compact: false });
-            }
+          // ✅ ADD THIS (debug + summary render)
+          console.log("[BC] Step6 summary", currentEncounter.__uxSummary);
+          if (currentEncounter.__uxSummary) {
+            renderUxSummary(stepContent, currentEncounter.__uxSummary, {
+              title: "Summary to lock it in",
+              compact: false
+            });
+          }
 
           addReflectionBlock(
             stepContent,
