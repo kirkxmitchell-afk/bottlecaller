@@ -4,17 +4,52 @@
 // - Pure data + validation helpers
 // - No DOM, no storage, no engine imports
 
-export type Stage = 1 | 2 | 3;
-export type Difficulty = 1 | 2 | 3 | 4 | 5;
+export type GuestState =
+  | "Decider"
+  | "Fancy"
+  | "Griever"
+  | "Celebrator"
+  | "Bargain-Smart";
 
-export type GuestState = "Decider" | "Fancy" | "Griever" | "Celebrator" | "Bargain-Smart";
-export type EncounterTier = "demo" | "premium";
+export type SkillFocus =
+  | "read"
+  | "mode"
+  | "hook"
+  | "delivery"
+  | "pivot"
+  | "reset";
+
+export type TrapType =
+  | "none"
+  | "mixed-signals"
+  | "value-bait"
+  | "status-test"
+  | "silence"
+  | "partner-check"
+  | "time-pressure"
+  | "price-pushback"
+  | "false-agreement"
+  | "too-much-info";
+
+export type EncounterMeta = {
+  /** Tier bucket (Strict unlock uses this) */
+  tier: 1 | 2 | 3;
+
+  /** Micro difficulty inside tier (1 easiest -> 5 hardest) */
+  difficulty: 1 | 2 | 3 | 4 | 5;
+
+  /** What this encounter is really training */
+  skillFocus: SkillFocus;
+
+  /** What trap is being used (or "none") */
+  trapType: TrapType;
+};
 
 export type Encounter = {
-  encounterNumber: number; // 1..N within a tier
+  encounterNumber: number; // 1..N
 
-  // What the UI shows in Step 1 (Observe)
   guestStateActual: GuestState;
+
   contextLine: string;
   guestLine: string;
 
@@ -22,21 +57,24 @@ export type Encounter = {
   verbalCues: string[];
 
   toneTag?: string;
+  meta: EncounterMeta;
 
-  // Difficulty (1 easiest .. 5 hardest)
-  difficulty: Difficulty;
-
-  // Optional classification tags to help select or filter encounters
+  // Backwards-compatible fields (optional)
+  difficulty?: number;
   tags?: string[];
-
-  // Optional: deterministic wine selection hint
-  wineIndexHint?: number; // e.g. 0..LIMIT-1
+  wineIndexHint?: number;
 };
 
 export type EncounterPack = {
-  demo: Encounter[];     // usually 2
-  premium: Encounter[];  // usually 20
+  demo: Encounter[];
+  premium: Encounter[];
 };
+
+export function tierFromEncounterNumber(n: number): 1 | 2 | 3 {
+  if (n >= 1 && n <= 5) return 1;
+  if (n >= 6 && n <= 12) return 2;
+  return 3; // 13..20
+}
 
 // ------------------------------------------------------------
 // ✅ AUTHOR HERE
@@ -53,7 +91,8 @@ export const ENCOUNTERS: EncounterPack = {
       physicalCues: ["Phone on table, glancing at time", "Direct eye contact, waiting"],
       verbalCues: ["“We’re in a bit of a rush.”", "“What’s your best?”"],
       toneTag: "Direct",
-      wineIndexHint: 0,
+  meta: { tier: tierFromEncounterNumber(1), difficulty: 1, skillFocus: "read", trapType: "none" },
+  wineIndexHint: 0,
     },
     {
       encounterNumber: 2,
@@ -64,7 +103,8 @@ export const ENCOUNTERS: EncounterPack = {
       physicalCues: ["Points at the price column", "Pages through wine list quickly"],
       verbalCues: ["“Is there something worth it without going crazy?”", "“What’s the best value here?”"],
       toneTag: "Testing",
-      wineIndexHint: 1,
+  meta: { tier: tierFromEncounterNumber(2), difficulty: 1, skillFocus: "read", trapType: "none" },
+  wineIndexHint: 1,
     },
   ],
 
@@ -78,8 +118,9 @@ export const ENCOUNTERS: EncounterPack = {
       guestLine: "“Just pick something good — we’ll trust you.”",
       physicalCues: ["Menu half-closed", "Looks up immediately"],
       verbalCues: ["“Just pick something good.”", "“What would you order?”"],
-      toneTag: "Fast",
-      tags: ["decider", "lead", "fast"],
+  toneTag: "Fast",
+  tags: ["decider", "lead", "fast"],
+  meta: { tier: tierFromEncounterNumber(1), difficulty: 1, skillFocus: "read", trapType: "none" },
     },
     {
       encounterNumber: 2,
@@ -89,8 +130,9 @@ export const ENCOUNTERS: EncounterPack = {
       guestLine: "“I don’t really know wine… something easy?”",
       physicalCues: ["Soft voice", "Avoids eye contact"],
       verbalCues: ["“Something easy.”", "“Not too heavy.”"],
-      toneTag: "Soft",
-      tags: ["griever", "hold", "soft"],
+  toneTag: "Soft",
+  tags: ["griever", "hold", "soft"],
+  meta: { tier: tierFromEncounterNumber(2), difficulty: 1, skillFocus: "read", trapType: "none" },
     },
     {
       encounterNumber: 3,
@@ -100,8 +142,9 @@ export const ENCOUNTERS: EncounterPack = {
       guestLine: "“Do you have something more… refined?”",
       physicalCues: ["Slow scan of the list", "Raises eyebrow slightly"],
       verbalCues: ["“More refined.”", "“What’s your best glass?”"],
-      toneTag: "Status",
-      tags: ["fancy", "reflect", "status"],
+  toneTag: "Status",
+  tags: ["fancy", "reflect", "status"],
+  meta: { tier: tierFromEncounterNumber(3), difficulty: 1, skillFocus: "read", trapType: "none" },
     },
     {
       encounterNumber: 4,
@@ -111,8 +154,9 @@ export const ENCOUNTERS: EncounterPack = {
       guestLine: "“What’s the best value bottle here?”",
       physicalCues: ["Finger on price column", "Leans in slightly"],
       verbalCues: ["“Best value.”", "“Worth it for the price?”"],
-      toneTag: "Proof",
-      tags: ["bargain-smart", "hold", "value"],
+  toneTag: "Proof",
+  tags: ["bargain-smart", "hold", "value"],
+  meta: { tier: tierFromEncounterNumber(4), difficulty: 2, skillFocus: "read", trapType: "none" },
     },
     {
       encounterNumber: 5,
@@ -122,8 +166,9 @@ export const ENCOUNTERS: EncounterPack = {
       guestLine: "“We’re celebrating — make it fun.”",
       physicalCues: ["Smiling", "Glances around the table"],
       verbalCues: ["“Make it fun.”", "“Something memorable.”"],
-      toneTag: "Vibe",
-      tags: ["celebrator", "lead", "vibe"],
+  toneTag: "Vibe",
+  tags: ["celebrator", "lead", "vibe"],
+  meta: { tier: tierFromEncounterNumber(5), difficulty: 2, skillFocus: "read", trapType: "none" },
     },
     {
       encounterNumber: 6,
@@ -133,8 +178,9 @@ export const ENCOUNTERS: EncounterPack = {
       guestLine: "“Two options. Then we choose.”",
       physicalCues: ["Tap-tap on the menu", "Short nods"],
       verbalCues: ["“Two options.”", "“Keep it quick.”"],
-      toneTag: "Impatient",
-      tags: ["decider", "lead", "impatient"],
+  toneTag: "Impatient",
+  tags: ["decider", "lead", "impatient"],
+  meta: { tier: tierFromEncounterNumber(6), difficulty: 2, skillFocus: "read", trapType: "none" },
     },
     {
       encounterNumber: 7,
@@ -144,8 +190,9 @@ export const ENCOUNTERS: EncounterPack = {
       guestLine: "“We like lighter reds… elegant.”",
       physicalCues: ["Tilts head", "Quiet confidence"],
       verbalCues: ["“Elegant.”", "“Not too heavy.”"],
-      toneTag: "Elegant",
-      tags: ["fancy", "reflect", "elegant"],
+  toneTag: "Elegant",
+  tags: ["fancy", "reflect", "elegant"],
+  meta: { tier: tierFromEncounterNumber(7), difficulty: 3, skillFocus: "read", trapType: "none" },
     },
 
     // --- Stage 2 (8–14) introduce more pressure / second-guessing ---
@@ -157,8 +204,9 @@ export const ENCOUNTERS: EncounterPack = {
       guestLine: "“I don’t want to mess this up.”",
       physicalCues: ["Small laugh", "Looks to friend for help"],
       verbalCues: ["“I don’t want to mess this up.”", "“We’re not wine people.”"],
-      toneTag: "Anxious",
-      tags: ["griever", "hold", "anxious"],
+  toneTag: "Anxious",
+  tags: ["griever", "hold", "anxious"],
+  meta: { tier: tierFromEncounterNumber(8), difficulty: 2, skillFocus: "read", trapType: "none" },
     },
     {
       encounterNumber: 9,
@@ -168,8 +216,9 @@ export const ENCOUNTERS: EncounterPack = {
       guestLine: "“What makes this worth more?”",
       physicalCues: ["Points at two bottles", "Waits for your argument"],
       verbalCues: ["“Worth more?”", "“What’s the difference?”"],
-      toneTag: "Compare",
-      tags: ["bargain-smart", "hold", "compare"],
+  toneTag: "Compare",
+  tags: ["bargain-smart", "hold", "compare"],
+  meta: { tier: tierFromEncounterNumber(9), difficulty: 3, skillFocus: "read", trapType: "none" },
     },
     {
       encounterNumber: 10,
@@ -179,8 +228,9 @@ export const ENCOUNTERS: EncounterPack = {
       guestLine: "“We want something with a story.”",
       physicalCues: ["Laughing", "Leans back relaxed"],
       verbalCues: ["“With a story.”", "“What’s your favorite?”"],
-      toneTag: "High",
-      tags: ["celebrator", "reflect", "story"],
+  toneTag: "High",
+  tags: ["celebrator", "reflect", "story"],
+  meta: { tier: tierFromEncounterNumber(10), difficulty: 3, skillFocus: "read", trapType: "none" },
     },
     {
       encounterNumber: 11,
@@ -190,8 +240,9 @@ export const ENCOUNTERS: EncounterPack = {
       guestLine: "“What’s the style — old world or new world?”",
       physicalCues: ["Direct stare", "Small smirk"],
       verbalCues: ["“Old world or new world?”", "“Be specific.”"],
-      toneTag: "Test",
-      tags: ["fancy", "reflect", "test"],
+  toneTag: "Test",
+  tags: ["fancy", "reflect", "test"],
+  meta: { tier: tierFromEncounterNumber(11), difficulty: 4, skillFocus: "read", trapType: "none" },
     },
     {
       encounterNumber: 12,
@@ -201,8 +252,9 @@ export const ENCOUNTERS: EncounterPack = {
       guestLine: "“Just tell us what to do — we’re hungry.”",
       physicalCues: ["Glances at kitchen", "Menu closed"],
       verbalCues: ["“Tell us what to do.”", "“We’re hungry.”"],
-      toneTag: "Now",
-      tags: ["decider", "lead", "now"],
+  toneTag: "Now",
+  tags: ["decider", "lead", "now"],
+  meta: { tier: tierFromEncounterNumber(12), difficulty: 4, skillFocus: "read", trapType: "none" },
     },
     {
       encounterNumber: 13,
@@ -212,8 +264,9 @@ export const ENCOUNTERS: EncounterPack = {
       guestLine: "“Maybe we’ll just do water for now.”",
       physicalCues: ["Half smile", "Looks away"],
       verbalCues: ["“Just water.”", "“Maybe later.”"],
-      toneTag: "Withdrawn",
-      tags: ["griever", "hold", "withdrawn"],
+  toneTag: "Withdrawn",
+  tags: ["griever", "hold", "withdrawn"],
+  meta: { tier: tierFromEncounterNumber(13), difficulty: 4, skillFocus: "read", trapType: "none" },
     },
     {
       encounterNumber: 14,
@@ -223,8 +276,9 @@ export const ENCOUNTERS: EncounterPack = {
       guestLine: "“Is that actually good… or just expensive?”",
       physicalCues: ["Crossed arms", "Narrowed eyes"],
       verbalCues: ["“Actually good?”", "“Or just expensive?”"],
-      toneTag: "Skeptical",
-      tags: ["bargain-smart", "hold", "skeptical"],
+  toneTag: "Skeptical",
+  tags: ["bargain-smart", "hold", "skeptical"],
+  meta: { tier: tierFromEncounterNumber(14), difficulty: 5, skillFocus: "read", trapType: "none" },
     },
 
     // --- Stage 3 (15–20) advanced: social dynamics / higher stakes ---
@@ -236,8 +290,9 @@ export const ENCOUNTERS: EncounterPack = {
       guestLine: "“Something everyone will like.”",
       physicalCues: ["Looks around the table", "Group nods"],
       verbalCues: ["“Everyone will like.”", "“Crowd-pleaser.”"],
-      toneTag: "Group",
-      tags: ["celebrator", "lead", "group"],
+  toneTag: "Group",
+  tags: ["celebrator", "lead", "group"],
+  meta: { tier: tierFromEncounterNumber(15), difficulty: 3, skillFocus: "read", trapType: "none" },
     },
     {
       encounterNumber: 16,
@@ -247,8 +302,9 @@ export const ENCOUNTERS: EncounterPack = {
       guestLine: "“We drink well. Surprise me.”",
       physicalCues: ["Leans back", "Confident smile"],
       verbalCues: ["“We drink well.”", "“Surprise me.”"],
-      toneTag: "Power",
-      tags: ["fancy", "reflect", "power"],
+  toneTag: "Power",
+  tags: ["fancy", "reflect", "power"],
+  meta: { tier: tierFromEncounterNumber(16), difficulty: 4, skillFocus: "read", trapType: "none" },
     },
     {
       encounterNumber: 17,
@@ -258,8 +314,9 @@ export const ENCOUNTERS: EncounterPack = {
       guestLine: "“One pick. No speech.”",
       physicalCues: ["Hand up (stop gesture)", "Quick eye contact"],
       verbalCues: ["“No speech.”", "“One pick.”"],
-      toneTag: "NoFluff",
-      tags: ["decider", "lead", "no-fluff"],
+  toneTag: "NoFluff",
+  tags: ["decider", "lead", "no-fluff"],
+  meta: { tier: tierFromEncounterNumber(17), difficulty: 4, skillFocus: "read", trapType: "none" },
     },
     {
       encounterNumber: 18,
@@ -269,8 +326,9 @@ export const ENCOUNTERS: EncounterPack = {
       guestLine: "“If we spend more, what do we *get*?”",
       physicalCues: ["Tilts head", "Waits"],
       verbalCues: ["“What do we get?”", "“Convince me.”"],
-      toneTag: "Reframe",
-      tags: ["bargain-smart", "hold", "reframe"],
+  toneTag: "Reframe",
+  tags: ["bargain-smart", "hold", "reframe"],
+  meta: { tier: tierFromEncounterNumber(18), difficulty: 5, skillFocus: "read", trapType: "none" },
     },
     {
       encounterNumber: 19,
@@ -280,8 +338,9 @@ export const ENCOUNTERS: EncounterPack = {
       guestLine: "“I don’t want anything too intense.”",
       physicalCues: ["Soft voice", "Looks down at the list"],
       verbalCues: ["“Not too intense.”", "“Keep it simple.”"],
-      toneTag: "Careful",
-      tags: ["griever", "hold", "careful"],
+  toneTag: "Careful",
+  tags: ["griever", "hold", "careful"],
+  meta: { tier: tierFromEncounterNumber(19), difficulty: 5, skillFocus: "read", trapType: "none" },
     },
     {
       encounterNumber: 20,
@@ -291,8 +350,9 @@ export const ENCOUNTERS: EncounterPack = {
       guestLine: "“What’s the most *elegant* bottle tonight?”",
       physicalCues: ["Still posture", "Long pause after asking"],
       verbalCues: ["“Most elegant.”", "“Not obvious.”"],
-      toneTag: "Taste",
-      tags: ["fancy", "reflect", "taste"],
+  toneTag: "Taste",
+  tags: ["fancy", "reflect", "taste"],
+  meta: { tier: tierFromEncounterNumber(20), difficulty: 5, skillFocus: "read", trapType: "none" },
     },
   ],
 };
@@ -301,7 +361,7 @@ export const ENCOUNTERS: EncounterPack = {
 // Helpers
 // ------------------------------------------------------------
 
-export function getEncountersForTier(tier: EncounterTier): Encounter[] {
+export function getEncountersForTier(tier: "demo" | "premium"): Encounter[] {
   return tier === "demo" ? ENCOUNTERS.demo : ENCOUNTERS.premium;
 }
 
@@ -309,7 +369,7 @@ export function getEncounterByNumber(n: number): Encounter | undefined {
   return [...ENCOUNTERS.demo, ...ENCOUNTERS.premium].find((e) => e.encounterNumber === n);
 }
 
-export function getNextEncounterNumber(tier: EncounterTier, currentNumber: number): number | null {
+export function getNextEncounterNumber(tier: "demo" | "premium", currentNumber: number): number | null {
   const list = getEncountersForTier(tier).slice().sort((a, b) => a.encounterNumber - b.encounterNumber);
   const idx = list.findIndex((e) => e.encounterNumber === currentNumber);
   if (idx < 0) return list[0]?.encounterNumber ?? null;
