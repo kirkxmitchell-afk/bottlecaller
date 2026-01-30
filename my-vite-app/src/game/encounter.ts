@@ -18,7 +18,6 @@ export type SkillFocus =
   | "delivery"
   | "pivot"
   | "reset";
-
 export type TrapType =
   | "none"
   | "mixed-signals"
@@ -91,8 +90,8 @@ export const ENCOUNTERS: EncounterPack = {
       physicalCues: ["Phone on table, glancing at time", "Direct eye contact, waiting"],
       verbalCues: ["“We’re in a bit of a rush.”", "“What’s your best?”"],
       toneTag: "Direct",
-  meta: { tier: tierFromEncounterNumber(1), difficulty: 1, skillFocus: "read", trapType: "none" },
-  wineIndexHint: 0,
+      meta: { tier: tierFromEncounterNumber(1), difficulty: 1, skillFocus: "read", trapType: "none" },
+      wineIndexHint: 0,
     },
     {
       encounterNumber: 2,
@@ -103,8 +102,8 @@ export const ENCOUNTERS: EncounterPack = {
       physicalCues: ["Points at the price column", "Pages through wine list quickly"],
       verbalCues: ["“Is there something worth it without going crazy?”", "“What’s the best value here?”"],
       toneTag: "Testing",
-  meta: { tier: tierFromEncounterNumber(2), difficulty: 1, skillFocus: "read", trapType: "none" },
-  wineIndexHint: 1,
+      meta: { tier: tierFromEncounterNumber(2), difficulty: 1, skillFocus: "read", trapType: "none" },
+      wineIndexHint: 1,
     },
   ],
 
