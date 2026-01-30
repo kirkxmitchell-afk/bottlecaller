@@ -248,24 +248,6 @@
     alert("App error: " + (e.reason && e.reason.message ? e.reason.message : String(e.reason)));
   });
 
-  // ✅ DEBUG WRAPPER (idempotent, no redeclare errors)
-  function ensureEngineBridgeDebug() {
-    const eb = window.EngineBridge;
-    if (!eb || typeof eb.computeReaction !== "function") return false;
-    if (eb.__bcWrapped) return true;
-
-    const orig = eb.computeReaction;
-    eb.computeReaction = function (args) {
-      const out = orig(args);
-      console.log("[BC] computeReaction CALLED ✅", { args, out });
-      return out;
-    };
-
-    eb.__bcWrapped = true;
-    console.log("[BC] EngineBridge ready ✅", eb);
-    return true;
-  }
-
   document.addEventListener("DOMContentLoaded", () => {
     try {
       if (window.__BC_INIT_DONE__) return;
@@ -277,11 +259,6 @@
       const bcMode = (window.__BC_MODE__ === "premium") ? "premium" : "demo";
       const isDemo = bcMode === "demo";
       const LIMIT = isDemo ? 2 : 10;
-
-      // Attempt to wrap EngineBridge early (it might already exist)
-      ensureEngineBridgeDebug();
-      // And again shortly after (in case module loads after DOMContentLoaded)
-      setTimeout(ensureEngineBridgeDebug, 0);
 
       // ---------- Remove all non-mode DOM (prevents any bleed) ----------
       function removeEl(id) {
@@ -1262,6 +1239,7 @@
         if (currentStep === 5) {
           const checksRaw = evaluateChecks();
 
+          // Build ReactionChecks for the engine overlay (pure calculator)
           const reactionChecks = {
             guestRead: checksRaw.guestRead,
             modeStatus: checksRaw.modeStatus,
@@ -1270,14 +1248,16 @@
             firstMode: currentEncounter.modeSelected || "" // "LEAD" | "REFLECT" | "HOLD" | ""
           };
 
-          // ✅ STEP 5 DEBUG: ensure wrapper + logs are active before calling engine
-          ensureEngineBridgeDebug();
-if (!window.EngineBridge || typeof window.EngineBridge.computeReaction !== "function") {
-  throw new Error(
-    "EngineBridge not loaded. Confirm /src/game/gameEntry.ts is loading and installs window.EngineBridge."
-  );
-}
-
+          // Guard: if EngineBridge didn't load, fail loudly (debug-fast)
+          if (!window.EngineBridge || typeof window.EngineBridge.computeReaction !== "function") {
+            // IMPORTANT: never include a literal </script> inside a <script> tag (it can terminate the tag)
+            const scriptTagHint = "<script type='module' src='/src/game/gameEntry.ts'><" + "/script>";
+            throw new Error(
+              "EngineBridge not loaded. Confirm the module is loading: " +
+              scriptTagHint +
+              " and that gameEntry installs window.EngineBridge."
+            );
+          }
 
           const result = window.EngineBridge.computeReaction(reactionChecks);
 
@@ -1290,6 +1270,7 @@ if (!window.EngineBridge || typeof window.EngineBridge.computeReaction !== "func
           signalChip.innerText = `Signal: ${result.chainSignal.toUpperCase()} (score ${result.chainScore.toFixed(1)} / 4.0)`;
           stepContent.appendChild(signalChip);
 
+          // ✅ Right final hook never fails
           if (result.deliveryCorrect) {
             const upgraded = (result.chainSignal === "green") && (Math.random() < 0.35);
             stepContent.appendChild(document.createTextNode(upgraded ? "✅ Upgrade. “Nice — that’s the move.”" : "✅ Nod. “Perfect.”"));
@@ -1297,7 +1278,9 @@ if (!window.EngineBridge || typeof window.EngineBridge.computeReaction !== "func
             return;
           }
 
+          // Pivot unlocked => offer pivot flow
           if (result.pivotUnlocked) {
+            // Build pivot scenario if not already set
             if (!currentEncounter.recoveryText) {
               const scenario = getPivotScenario();
               currentEncounter.recoveryText = scenario.text;
@@ -1308,6 +1291,7 @@ if (!window.EngineBridge || typeof window.EngineBridge.computeReaction !== "func
               currentEncounter.resetUsed = false;
             }
 
+            // Map engine pivot label to UI label
             const pivotType =
               result.pivotType === "POWER_MOVE_PIVOT" ? "POWER MOVE PIVOT" : "RECOVERY PIVOT";
             currentEncounter.pivotType = pivotType;
@@ -1350,6 +1334,7 @@ if (!window.EngineBridge || typeof window.EngineBridge.computeReaction !== "func
 
             stepContent.appendChild(options);
 
+            // Reset gate comes from engine overlay
             const resetAllowed = !!result.resetAllowed;
 
             const resetRow = document.createElement("div");
@@ -1362,6 +1347,7 @@ if (!window.EngineBridge || typeof window.EngineBridge.computeReaction !== "func
             const resetBtn = addStepButton("RESET (only if HOLD)", () => {
               if (!resetAllowed) return;
 
+              // Reset the encounter attempt but keep the same guest + wine
               currentEncounter.resetUsed = true;
 
               currentEncounter.guestStateSelected = "";
@@ -1377,10 +1363,11 @@ if (!window.EngineBridge || typeof window.EngineBridge.computeReaction !== "func
               currentEncounter.correctSlotS2 = null;
               currentEncounter.showModeHelp = false;
 
+              // Clear pivot choice so they can re-run clean
               currentEncounter.recoveryChoice = "";
               currentEncounter.recoveryCorrect = false;
 
-              currentStep = 1;
+              currentStep = 1; // go back to Observe
               renderEncounterStep();
             }, stepButtons);
 
@@ -1401,6 +1388,7 @@ if (!window.EngineBridge || typeof window.EngineBridge.computeReaction !== "func
             return;
           }
 
+          // Pivot not unlocked => fail state
           stepContent.innerText = "❌ “We’ll choose, thanks.”";
           addStepButton("REFLECT", () => { currentStep = 6; renderEncounterStep(); }, stepButtons);
           return;
@@ -1443,6 +1431,7 @@ if (!window.EngineBridge || typeof window.EngineBridge.computeReaction !== "func
             "Correct pair: " + correctS1 + " / " + correctS2
           );
 
+          // Chain telemetry
           if (typeof currentEncounter.chainScore === "number") {
             addReflectionBlock(
               stepContent,
@@ -1541,12 +1530,14 @@ if (!window.EngineBridge || typeof window.EngineBridge.computeReaction !== "func
           correctSlotS2: null,
           showModeHelp: false,
 
+          // Pivot state (re-using existing keys for compatibility)
           recoveryText: "",
           recoveryCorrectMode: "",
           recoveryWhy: "",
           recoveryChoice: "",
           recoveryCorrect: false,
 
+          // New
           chainScore: null,
           chainSignal: "",
           pivotType: "",
@@ -1752,6 +1743,7 @@ if (!window.EngineBridge || typeof window.EngineBridge.computeReaction !== "func
     }
   });
 })();
+
 </script>
 
   <!-- ✅ MUST be inside body so the iframe reliably loads EngineBridge -->
