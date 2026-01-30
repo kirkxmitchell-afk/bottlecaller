@@ -378,6 +378,97 @@
       let wines = loadWines();
       let runs = loadRuns();
 
+      // ==============================
+      // STRICT UNLOCKS (Option A)
+      // Tier 1: encounters 1–5
+      // Tier 2: encounters 6–12
+      // Tier 3: encounters 13–20
+      // Unlock rules:
+      // - Tier 2 unlock: ≥4 greens in Tier 1, ≤1 red
+      // - Tier 3 unlock: ≥6 greens in Tier 2 AND green streak ≥3 (in Tier 2)
+      // ==============================
+
+      function getTierFromEncounterNumber(n) {
+        if (n >= 1 && n <= 5) return 1;
+        if (n >= 6 && n <= 12) return 2;
+        return 3; // 13–20
+      }
+
+      function getTierBounds(tier) {
+        if (tier === 1) return { min: 1, max: 5 };
+        if (tier === 2) return { min: 6, max: 12 };
+        return { min: 13, max: 20 };
+      }
+
+      function getRunsForCurrentMode() {
+        // Your run entries store `tier: bcMode` (demo/premium). We'll use that.
+        return Array.isArray(runs) ? runs.filter(r => r && r.tier === bcMode) : [];
+      }
+
+      function computeTierStats(tier) {
+        const { min, max } = getTierBounds(tier);
+        const list = getRunsForCurrentMode().filter(r => {
+          const n = Number(r.encounterNumber);
+          return Number.isFinite(n) && n >= min && n <= max;
+        });
+
+        let greens = 0, yellows = 0, reds = 0;
+        let streak = 0, maxStreak = 0;
+
+        // runs are pushed chronologically -> iterate in order to compute streaks
+        for (const r of list) {
+          const sig = String(r.chainSignal || "").toLowerCase();
+          if (sig === "green") {
+            greens++;
+            streak++;
+            if (streak > maxStreak) maxStreak = streak;
+          } else if (sig === "yellow") {
+            yellows++;
+            streak = 0;
+          } else if (sig === "red") {
+            reds++;
+            streak = 0;
+          } else {
+            // no signal recorded -> break streak
+            streak = 0;
+          }
+        }
+
+        return { total: list.length, greens, yellows, reds, maxStreak };
+      }
+
+      function getUnlockedTierStrict() {
+        // Default: Tier 1 is always available
+        const t1 = computeTierStats(1);
+        const tier2Unlocked = (t1.greens >= 4) && (t1.reds <= 1);
+
+        if (!tier2Unlocked) return 1;
+
+        const t2 = computeTierStats(2);
+        const tier3Unlocked = (t2.greens >= 6) && (t2.maxStreak >= 3);
+
+        return tier3Unlocked ? 3 : 2;
+      }
+
+      function explainLockReason(targetTier) {
+        if (targetTier === 2) {
+          const t1 = computeTierStats(1);
+          return `Tier 2 locked.\n\nNeed in Tier 1 (encounters 1–5):\n- Greens ≥ 4 (you have ${t1.greens})\n- Reds ≤ 1 (you have ${t1.reds})`;
+        }
+        if (targetTier === 3) {
+          const t2 = computeTierStats(2);
+          return `Tier 3 locked.\n\nNeed in Tier 2 (encounters 6–12):\n- Greens ≥ 6 (you have ${t2.greens})\n- Green streak ≥ 3 (your best is ${t2.maxStreak})`;
+        }
+        return `Tier ${targetTier} locked.`;
+      }
+
+      function clampEncounterIndexToUnlockedTier(idx) {
+        const unlocked = getUnlockedTierStrict();
+        const { max } = getTierBounds(unlocked);
+        const maxIndexAllowed = max - 1; // encounterNumber is 1-based; index is 0-based
+        return Math.min(Math.max(0, idx), maxIndexAllowed);
+      }
+
       let currentEncounter = null;
       let currentStep = 0;
 
@@ -1028,6 +1119,9 @@
           timestamp: new Date().toLocaleString(),
           tier: bcMode,
 
+          encounterNumber: currentEncounter.encounterNumber ?? null,
+          encounterTier: getTierFromEncounterNumber(currentEncounter.encounterNumber ?? 1),
+
           guestStateActual: currentEncounter.guestStateActual || "",
           guestStateSelected: currentEncounter.guestStateSelected || "",
           modeSelected: currentEncounter.modeSelected || "",
@@ -1532,6 +1626,24 @@
 
           addStepButton("NEXT ENCOUNTER", () => {
             encounterIndex = (encounterIndex ?? 0) + 1;
+
+            // Strict tier gating applies to premium only
+            if (!isDemo) {
+              const clamped = clampEncounterIndexToUnlockedTier(encounterIndex);
+
+              if (clamped !== encounterIndex) {
+                // They tried to push into a locked tier
+                const targetTier = getTierFromEncounterNumber(encounterIndex + 1);
+                alert(explainLockReason(targetTier));
+
+                encounterIndex = clamped;
+                saveEncounterIndex(encounterIndex);
+                resetNavState();
+                showScreen("screenHome");
+                return;
+              }
+            }
+
             saveEncounterIndex(encounterIndex);
             startEncounter();
           }, stepButtons);
@@ -1548,6 +1660,22 @@
           alert("No encounters loaded. Check window.__BC_ENCOUNTERS__.");
           console.error("[BC] No encounters available for mode:", window.__BC_MODE__, window.__BC_ENCOUNTERS__);
           return;
+        }
+
+        // Hard guard: ensure requested encounter is within unlocked tier (premium only)
+        if (!isDemo) {
+          const unlockedTier = getUnlockedTierStrict();
+          const requestedEncounterNumber = (encounterIndex ?? 0) + 1;
+          const requestedTier = getTierFromEncounterNumber(requestedEncounterNumber);
+
+          if (requestedTier > unlockedTier) {
+            alert(explainLockReason(requestedTier));
+            encounterIndex = clampEncounterIndexToUnlockedTier(encounterIndex ?? 0);
+            saveEncounterIndex(encounterIndex);
+            resetNavState();
+            showScreen("screenHome");
+            return;
+          }
         }
 
         // ----------------------------
