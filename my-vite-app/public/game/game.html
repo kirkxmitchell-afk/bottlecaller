@@ -1470,11 +1470,10 @@
           logEncounter();
 
           addStepButton("NEXT ENCOUNTER", () => {
-            encounterIndex += 1;
+            // ✅ advance ONLY here (single source of truth)
+            encounterIndex = (encounterIndex || 0) + 1;
             saveEncounterIndex(encounterIndex);
 
-            resetNavState();
-            showScreen("screenPlay");
             startEncounter();
           }, stepButtons);
 
