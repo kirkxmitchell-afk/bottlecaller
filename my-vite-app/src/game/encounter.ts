@@ -427,14 +427,56 @@ function validateList(list: any[], label: string) {
   }
 }
 
-export function validateEncounters(pack: EncounterPack) {
-  assert(pack && typeof pack === "object", `[encounters] pack missing`);
+export function validateEncounters(pack: EncounterPack): void {
+  function assert(cond: any, msg: string) {
+    if (!cond) throw new Error(msg);
+  }
 
-  // Validate each list independently (NO cross-contamination)
-  validateList((pack as any).demo, "demo");
-  validateList((pack as any).premium, "premium");
+  function findDupes(list: any[], label: string) {
+    const seen = new Set<number>();
+    const dupes = new Set<number>();
+    for (const e of list) {
+      const n = e?.encounterNumber;
+      if (seen.has(n)) dupes.add(n);
+      seen.add(n);
+    }
+    if (dupes.size) {
+      throw new Error(`[encounters] Duplicate encounterNumber in ${label}: ${Array.from(dupes).join(", ")}`);
+    }
+  }
 
-  // Optional: sanity check expected counts (comment out if you don't want it)
-  // assert(pack.demo.length > 0, "[encounters] demo list is empty");
-  // assert(pack.premium.length > 0, "[encounters] premium list is empty");
+  function validateList(list: any[], label: string) {
+    assert(Array.isArray(list), `[encounters] ${label} must be an array`);
+    assert(list.length > 0, `[encounters] ${label} is empty`);
+
+    findDupes(list, label);
+
+    for (const e of list) {
+      assert(typeof e.encounterNumber === "number", `[encounters] ${label} missing encounterNumber`);
+      assert(e.encounterNumber >= 1, `[encounters] ${label} encounterNumber must be >= 1`);
+
+      assert(typeof e.guestStateActual === "string", `[encounters] ${label} #${e.encounterNumber} missing guestStateActual`);
+      assert(typeof e.contextLine === "string" && e.contextLine.length > 0, `[encounters] ${label} #${e.encounterNumber} missing contextLine`);
+      assert(typeof e.guestLine === "string" && e.guestLine.length > 0, `[encounters] ${label} #${e.encounterNumber} missing guestLine`);
+
+      assert(Array.isArray(e.physicalCues), `[encounters] ${label} #${e.encounterNumber} physicalCues must be array`);
+      assert(Array.isArray(e.verbalCues), `[encounters] ${label} #${e.encounterNumber} verbalCues must be array`);
+
+      assert(e.meta && typeof e.meta === "object", `[encounters] ${label} #${e.encounterNumber} missing meta`);
+      assert([1, 2, 3].includes(e.meta.tier), `[encounters] ${label} #${e.encounterNumber} meta.tier must be 1|2|3`);
+      assert([1, 2, 3, 4, 5].includes(e.meta.difficulty), `[encounters] ${label} #${e.encounterNumber} meta.difficulty must be 1..5`);
+      assert(typeof e.meta.skillFocus === "string", `[encounters] ${label} #${e.encounterNumber} meta.skillFocus missing`);
+      assert(typeof e.meta.trapType === "string", `[encounters] ${label} #${e.encounterNumber} meta.trapType missing`);
+
+      // Tier must match encounterNumber bucket (prevents accidental mis-tagging)
+      const expectedTier = tierFromEncounterNumber(e.encounterNumber);
+      assert(
+        e.meta.tier === expectedTier,
+        `[encounters] ${label} #${e.encounterNumber} meta.tier is ${e.meta.tier} but should be ${expectedTier}`
+      );
+    }
+  }
+
+  validateList(pack.demo, "demo");
+  validateList(pack.premium, "premium");
 }
