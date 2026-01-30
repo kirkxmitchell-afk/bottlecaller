@@ -28,7 +28,14 @@ export type TrapType =
   | "time-pressure"
   | "price-pushback"
   | "false-agreement"
-  | "too-much-info";
+  | "too-much-info"
+  | "group-consensus"
+  | "proof-demand"
+  | "ego-risk"
+  | "speed-pressure"
+  | "identity-cue"
+  | "vibe-amplify"
+  | "precision-test";
 
 export type EncounterMeta = {
   /** Tier bucket (Strict unlock uses this) */
@@ -277,101 +284,133 @@ export const ENCOUNTERS: EncounterPack = {
     },
     {
       encounterNumber: 13,
-      difficulty: 4,
       guestStateActual: "Griever",
       contextLine: "They’re quietly resisting pressure — soften and simplify.",
       guestLine: "“Maybe we’ll just do water for now.”",
       physicalCues: ["Half smile", "Looks away"],
       verbalCues: ["“Just water.”", "“Maybe later.”"],
-  toneTag: "Withdrawn",
-  tags: ["griever", "hold", "withdrawn"],
-  meta: { tier: tierFromEncounterNumber(13), difficulty: 4, skillFocus: "read", trapType: "none" },
+      toneTag: "Withdrawn",
+      tags: ["griever", "hold", "withdrawn"],
+      meta: {
+        tier: tierFromEncounterNumber(13),
+        difficulty: 4,
+        skillFocus: "pivot",
+        trapType: "silence",
+      },
     },
     {
       encounterNumber: 14,
-      difficulty: 5,
       guestStateActual: "Bargain-Smart",
       contextLine: "They’ll challenge your claim. One weak answer = no sale.",
       guestLine: "“Is that actually good… or just expensive?”",
       physicalCues: ["Crossed arms", "Narrowed eyes"],
       verbalCues: ["“Actually good?”", "“Or just expensive?”"],
-  toneTag: "Skeptical",
-  tags: ["bargain-smart", "hold", "skeptical"],
-  meta: { tier: tierFromEncounterNumber(14), difficulty: 5, skillFocus: "read", trapType: "none" },
+      toneTag: "Skeptical",
+      tags: ["bargain-smart", "hold", "skeptical"],
+      meta: {
+        tier: tierFromEncounterNumber(14),
+        difficulty: 5,
+        skillFocus: "hook",
+        trapType: "price-pushback",
+      },
     },
 
     // --- Stage 3 (15–20) advanced: social dynamics / higher stakes ---
     {
       encounterNumber: 15,
-      difficulty: 3,
       guestStateActual: "Celebrator",
       contextLine: "They want a win the whole table agrees on.",
       guestLine: "“Something everyone will like.”",
       physicalCues: ["Looks around the table", "Group nods"],
       verbalCues: ["“Everyone will like.”", "“Crowd-pleaser.”"],
-  toneTag: "Group",
-  tags: ["celebrator", "lead", "group"],
-  meta: { tier: tierFromEncounterNumber(15), difficulty: 3, skillFocus: "read", trapType: "none" },
+      toneTag: "Group",
+      tags: ["celebrator", "lead", "group"],
+      meta: {
+        tier: tierFromEncounterNumber(15),
+        difficulty: 4,
+        skillFocus: "delivery",
+        trapType: "group-consensus",
+      },
     },
     {
       encounterNumber: 16,
-      difficulty: 4,
       guestStateActual: "Fancy",
       contextLine: "They’re the alpha at the table — impress without trying too hard.",
       guestLine: "“We drink well. Surprise me.”",
       physicalCues: ["Leans back", "Confident smile"],
       verbalCues: ["“We drink well.”", "“Surprise me.”"],
-  toneTag: "Power",
-  tags: ["fancy", "reflect", "power"],
-  meta: { tier: tierFromEncounterNumber(16), difficulty: 4, skillFocus: "read", trapType: "none" },
+      toneTag: "Power",
+      tags: ["fancy", "reflect", "power"],
+      meta: {
+        tier: tierFromEncounterNumber(16),
+        difficulty: 4,
+        skillFocus: "delivery",
+        trapType: "status-test",
+      },
     },
     {
       encounterNumber: 17,
-      difficulty: 4,
       guestStateActual: "Decider",
       contextLine: "They want a single decisive call but will punish fluff.",
       guestLine: "“One pick. No speech.”",
       physicalCues: ["Hand up (stop gesture)", "Quick eye contact"],
       verbalCues: ["“No speech.”", "“One pick.”"],
-  toneTag: "NoFluff",
-  tags: ["decider", "lead", "no-fluff"],
-  meta: { tier: tierFromEncounterNumber(17), difficulty: 4, skillFocus: "read", trapType: "none" },
+      toneTag: "NoFluff",
+      tags: ["decider", "lead", "no-fluff"],
+      meta: {
+        tier: tierFromEncounterNumber(17),
+        difficulty: 4,
+        skillFocus: "pivot",
+        trapType: "too-much-info",
+      },
     },
     {
       encounterNumber: 18,
-      difficulty: 5,
       guestStateActual: "Bargain-Smart",
       contextLine: "They negotiate emotionally: you must reframe value, not defend price.",
       guestLine: "“If we spend more, what do we *get*?”",
       physicalCues: ["Tilts head", "Waits"],
       verbalCues: ["“What do we get?”", "“Convince me.”"],
-  toneTag: "Reframe",
-  tags: ["bargain-smart", "hold", "reframe"],
-  meta: { tier: tierFromEncounterNumber(18), difficulty: 5, skillFocus: "read", trapType: "none" },
+      toneTag: "Reframe",
+      tags: ["bargain-smart", "hold", "reframe"],
+      meta: {
+        tier: tierFromEncounterNumber(18),
+        difficulty: 5,
+        skillFocus: "hook",
+        trapType: "proof-demand",
+      },
     },
     {
       encounterNumber: 19,
-      difficulty: 5,
       guestStateActual: "Griever",
       contextLine: "They’ll say yes only if it feels safe and effortless.",
       guestLine: "“I don’t want anything too intense.”",
       physicalCues: ["Soft voice", "Looks down at the list"],
       verbalCues: ["“Not too intense.”", "“Keep it simple.”"],
-  toneTag: "Careful",
-  tags: ["griever", "hold", "careful"],
-  meta: { tier: tierFromEncounterNumber(19), difficulty: 5, skillFocus: "read", trapType: "none" },
+      toneTag: "Careful",
+      tags: ["griever", "hold", "careful"],
+      meta: {
+        tier: tierFromEncounterNumber(19),
+        difficulty: 5,
+        skillFocus: "pivot",
+        trapType: "ego-risk",
+      },
     },
     {
       encounterNumber: 20,
-      difficulty: 5,
       guestStateActual: "Fancy",
       contextLine: "They want you to lead with taste, not price or hype.",
       guestLine: "“What’s the most *elegant* bottle tonight?”",
       physicalCues: ["Still posture", "Long pause after asking"],
       verbalCues: ["“Most elegant.”", "“Not obvious.”"],
-  toneTag: "Taste",
-  tags: ["fancy", "reflect", "taste"],
-  meta: { tier: tierFromEncounterNumber(20), difficulty: 5, skillFocus: "read", trapType: "none" },
+      toneTag: "Taste",
+      tags: ["fancy", "reflect", "taste"],
+      meta: {
+        tier: tierFromEncounterNumber(20),
+        difficulty: 5,
+        skillFocus: "delivery",
+        trapType: "status-test",
+      },
     },
   ],
 };
