@@ -1531,10 +1531,8 @@
           logEncounter();
 
           addStepButton("NEXT ENCOUNTER", () => {
-            // advance for BOTH demo + premium
             encounterIndex = (encounterIndex ?? 0) + 1;
             saveEncounterIndex(encounterIndex);
-
             startEncounter();
           }, stepButtons);
 
