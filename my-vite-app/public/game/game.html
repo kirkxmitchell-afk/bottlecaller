@@ -291,6 +291,86 @@
       const runsKey  = isDemo ? demoRunsKey  : premiumRunsKey;
 
       // ============================================================
+      // ✅ STREAK SYSTEM (Rule B: break only on FAIL)
+      // - Show ONLY after Reflection (Step 6)
+      // - Per-mode storage
+      // ============================================================
+      const demoStreakKey = "bc_demo_streak";
+      const premiumStreakKey = "bc_premium_streak";
+      const demoBestStreakKey = "bc_demo_best_streak";
+      const premiumBestStreakKey = "bc_premium_best_streak";
+
+      const streakKey = isDemo ? demoStreakKey : premiumStreakKey;
+      const bestStreakKey = isDemo ? demoBestStreakKey : premiumBestStreakKey;
+
+      function loadInt(key, fallback = 0) {
+        const n = parseInt(localStorage.getItem(key), 10);
+        return Number.isFinite(n) ? n : fallback;
+      }
+      function saveInt(key, n) {
+        localStorage.setItem(key, String(n));
+      }
+
+      let streak = loadInt(streakKey, 0);
+      let bestStreak = loadInt(bestStreakKey, 0);
+
+      // Rule B: streak breaks ONLY if:
+      // - chainSignal === "red" AND
+      //   - no pivot was available, OR
+      //   - pivot available but failed
+      function didBreakStreakRuleB(encounter) {
+        const sig = String(encounter?.chainSignal || "").toLowerCase();
+        if (sig !== "red") return false;
+
+        const hadPivot = !!(encounter && (encounter.recoveryText || encounter.pivotType));
+        if (!hadPivot) return true;
+
+        return !encounter.recoveryCorrect;
+      }
+
+      function updateStreakAfterEncounter(encounter) {
+        const broke = didBreakStreakRuleB(encounter);
+
+        if (broke) {
+          streak = 0;
+        } else {
+          streak = (streak || 0) + 1;
+          if (streak > bestStreak) bestStreak = streak;
+        }
+
+        saveInt(streakKey, streak);
+        saveInt(bestStreakKey, bestStreak);
+
+        return { broke, streak, bestStreak };
+      }
+
+      function renderStreakBlock(container, streakInfo) {
+        if (!container || !streakInfo) return;
+
+        const block = document.createElement("div");
+        block.className = "card";
+
+        const title = document.createElement("strong");
+        title.innerText = "Streak";
+        block.appendChild(title);
+
+        const line1 = document.createElement("div");
+        line1.style.marginTop = "6px";
+        line1.innerText = streakInfo.broke
+          ? "Streak broken — guest resistance."
+          : "Streak continues — momentum kept.";
+        block.appendChild(line1);
+
+        const line2 = document.createElement("div");
+        line2.className = "small-text";
+        line2.style.marginTop = "6px";
+        line2.innerText = `Current: ${streakInfo.streak}  |  Best: ${streakInfo.bestStreak}`;
+        block.appendChild(line2);
+
+        container.appendChild(block);
+      }
+
+      // ============================================================
       // ✅ Mastery tracking (per mode)
       // ============================================================
       const demoMasteryKey = "bc_demo_mastery";
@@ -2171,6 +2251,12 @@
 
           stepContent.appendChild(sfBlock);
 
+          // ============================================================
+          // ✅ STREAK (Rule B) — update + show AFTER reflection only
+          // ============================================================
+          const streakInfo = updateStreakAfterEncounter(currentEncounter);
+          renderStreakBlock(stepContent, streakInfo);
+
           logEncounter();
 
           addStepButton("NEXT ENCOUNTER", () => {
@@ -2399,6 +2485,10 @@
         saveRuns();
         mastery = { ...DEFAULT_MASTERY };
         saveMastery(mastery);
+        saveInt(streakKey, 0);
+        saveInt(bestStreakKey, 0);
+        streak = 0;
+        bestStreak = 0;
         // Reset progression for current mode
         saveEncounterIndex(0);
         encounterIndex = 0;
@@ -2417,6 +2507,10 @@
         saveRuns();
         mastery = { ...DEFAULT_MASTERY };
         saveMastery(mastery);
+        saveInt(streakKey, 0);
+        saveInt(bestStreakKey, 0);
+        streak = 0;
+        bestStreak = 0;
         // Reset progression for current mode
         saveEncounterIndex(0);
         encounterIndex = 0;
@@ -2464,6 +2558,10 @@
           localStorage.removeItem(premiumWinesKey);
           localStorage.removeItem(demoRunsKey);
           localStorage.removeItem(premiumRunsKey);
+          localStorage.removeItem(demoStreakKey);
+          localStorage.removeItem(premiumStreakKey);
+          localStorage.removeItem(demoBestStreakKey);
+          localStorage.removeItem(premiumBestStreakKey);
           localStorage.removeItem(demoEncounterIndexKey);
           localStorage.removeItem(premiumEncounterIndexKey);
           localStorage.removeItem(coverKey);
