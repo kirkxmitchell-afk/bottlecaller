@@ -1893,6 +1893,12 @@
             );
           }
 
+          if (currentEncounter.__reactionComputed) {
+            console.log("[BC] Reaction already computed for this step (skipping) ✅");
+            return;
+          }
+          currentEncounter.__reactionComputed = true;
+
           const result = window.EngineBridge.computeReaction(reactionChecks);
           // Persist telemetry on encounter for history + reflection
           currentEncounter.chainScore = result.chainScore;
@@ -2029,11 +2035,7 @@
         if (currentStep === 6) {
           const checks = evaluateChecks();
           // ✅ Update mastery for this encounter's skillFocus
-          const skillFocus =
-            currentEncounter.skillFocus ||
-            currentEncounter.meta?.skillFocus ||
-            "read";
-          updateMasteryFromEncounter(skillFocus, checks, currentEncounter);
+          updateMasteryFromEncounter(currentEncounter.skillFocus || "read", checks, currentEncounter);
 
           const reflectionTitle = document.createElement("h3");
           reflectionTitle.innerText = "Reflection";
@@ -2272,8 +2274,8 @@
           // Encounter content (from encounters.ts)
           encounterNumber: enc.encounterNumber ?? (encounterIndex + 1),
           // ✅ ADD THESE TWO:
-          meta: enc.meta || null,
-          skillFocus: (enc.meta && enc.meta.skillFocus) ? enc.meta.skillFocus : "read",
+          meta: enc?.meta || null,
+          skillFocus: enc?.meta?.skillFocus || "read",
           guestStateActual: enc.guestStateActual || "",
           contextLine: enc.contextLine || "",
           guestLine: enc.guestLine || "",
@@ -2316,7 +2318,8 @@
           chainScore: null,
           chainSignal: "",
           pivotType: "",
-          resetUsed: false
+          resetUsed: false,
+          __reactionComputed: false
         };
         window.__BC_LAST_ENCOUNTER__ = currentEncounter;
 
