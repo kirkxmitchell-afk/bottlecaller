@@ -314,6 +314,10 @@
       let streak = loadInt(streakKey, 0);
       let bestStreak = loadInt(bestStreakKey, 0);
 
+      // Ensure keys exist (prevents null checks)
+      if (localStorage.getItem(streakKey) === null) saveInt(streakKey, streak);
+      if (localStorage.getItem(bestStreakKey) === null) saveInt(bestStreakKey, bestStreak);
+
       // Rule B: streak breaks ONLY if:
       // - chainSignal === "red" AND
       //   - no pivot was available, OR
