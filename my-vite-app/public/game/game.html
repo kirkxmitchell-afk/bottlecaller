@@ -2029,7 +2029,8 @@
         if (currentStep === 6) {
           const checks = evaluateChecks();
           // ✅ Update mastery for this encounter's skillFocus
-          updateMasteryFromEncounter(currentEncounter.skillFocus || "read", checks, currentEncounter);
+          const sf = currentEncounter.skillFocus || currentEncounter.meta?.skillFocus || "read";
+          updateMasteryFromEncounter(sf, checks, currentEncounter);
 
           const reflectionTitle = document.createElement("h3");
           reflectionTitle.innerText = "Reflection";
@@ -2264,11 +2265,12 @@
         // ----------------------------
         currentEncounter = {
           __logged: false,
-          skillFocus: (enc && enc.meta && enc.meta.skillFocus) ? enc.meta.skillFocus : "read",
-          tier: (enc && enc.meta && enc.meta.tier) ? enc.meta.tier : null,
 
           // Encounter content (from encounters.ts)
-          encounterNumber: enc.encounterNumber ?? (idx + 1),
+          encounterNumber: enc.encounterNumber ?? (encounterIndex + 1),
+          // ✅ ADD THESE TWO:
+          meta: enc.meta || null,
+          skillFocus: (enc.meta && enc.meta.skillFocus) ? enc.meta.skillFocus : "read",
           guestStateActual: enc.guestStateActual || "",
           contextLine: enc.contextLine || "",
           guestLine: enc.guestLine || "",
@@ -2313,6 +2315,7 @@
           pivotType: "",
           resetUsed: false
         };
+        window.__BC_LAST_ENCOUNTER__ = currentEncounter;
 
         currentStep = 0;
         renderEncounterStep();
