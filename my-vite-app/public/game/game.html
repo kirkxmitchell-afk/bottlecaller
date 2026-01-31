@@ -1243,6 +1243,103 @@
         container.appendChild(block);
       }
 
+      function statusScore(s) {
+        if (s === "optimal") return 2;
+        if (s === "neutral") return 1;
+        return 0; // damaging
+      }
+
+      function pickStrengthFix(checks) {
+        // checks = { guestRead, modeStatus, hookStatus, deliveryCorrect }
+        // Decide biggest win + biggest gap
+
+        const strengths = [];
+        const gaps = [];
+
+        // Strength candidates
+        if (checks.guestRead) strengths.push({ key: "read", text: "✅ Strength: You read the guest correctly." });
+        if (checks.modeStatus === "optimal") strengths.push({ key: "mode", text: "✅ Strength: You matched the Mode perfectly." });
+        if (checks.hookStatus === "optimal") strengths.push({ key: "hook", text: "✅ Strength: You chose the right Hook for that guest." });
+        if (checks.deliveryCorrect) strengths.push({ key: "delivery", text: "✅ Strength: Your 2-sentence delivery landed clean." });
+
+        // Gap candidates (ordered by leverage)
+        if (!checks.guestRead) gaps.push({ key: "read", text: "⚠️ Fix: Your first job is the read. Re-check cues before you pick a Mode." });
+        if (checks.modeStatus === "damaging") gaps.push({ key: "mode", text: "⚠️ Fix: Your Mode fought the guest. Switch to the guest’s optimal Mode next time." });
+        if (checks.hookStatus === "damaging") gaps.push({ key: "hook", text: "⚠️ Fix: Your Hook didn’t match what they care about. Choose the guest’s optimal Hook." });
+        if (!checks.deliveryCorrect) gaps.push({ key: "delivery", text: "⚠️ Fix: Delivery missed. Sentence 1 = emotion/tone, Sentence 2 = structure/value." });
+
+        // Choose best strength: prioritize Read > Mode > Hook > Delivery
+        const strengthPriority = ["read", "mode", "hook", "delivery"];
+        let strength = strengths.sort((a,b) => strengthPriority.indexOf(a.key) - strengthPriority.indexOf(b.key))[0];
+        if (!strength) strength = { key: "effort", text: "✅ Strength: You got through the sequence under pressure." };
+
+        // Choose biggest gap: prioritize Read > Mode > Hook > Delivery
+        const gapPriority = ["read", "mode", "hook", "delivery"];
+        let fix = gaps.sort((a,b) => gapPriority.indexOf(a.key) - gapPriority.indexOf(b.key))[0];
+        if (!fix) fix = { key: "tighten", text: "⚠️ Fix: Tighten speed. Fewer words, cleaner confidence." };
+
+        // One repeatable “next rule”
+        const rules = {
+          read: "Next rule: Don’t choose a Mode until you can say: “They want speed / safety / status / proof / vibe.”",
+          mode: "Next rule: If your Mode isn’t working, stop explaining — change Mode.",
+          hook: "Next rule: Hook must answer their real question: VALUE / STORY / FLAVOUR.",
+          delivery: "Next rule: Sentence 1 sets emotion. Sentence 2 gives the reason.",
+          tighten: "Next rule: Cut your words in half and commit."
+        };
+
+        const nextRule = rules[fix.key] || "Next rule: Commit faster and lead the table.";
+
+        return { strength: strength.text, fix: fix.text, nextRule };
+      }
+
+      function renderStrengthFixBlock(container, checks, encounter) {
+        const wrap = document.createElement("div");
+        wrap.className = "card";
+
+        const title = document.createElement("strong");
+        title.innerText = "Strength + Fix";
+        wrap.appendChild(title);
+
+        const picked = pickStrengthFix(checks);
+
+        const s = document.createElement("div");
+        s.style.marginTop = "8px";
+        s.innerText = picked.strength;
+        wrap.appendChild(s);
+
+        const f = document.createElement("div");
+        f.style.marginTop = "6px";
+        f.innerText = picked.fix;
+        wrap.appendChild(f);
+
+        // Optional: pivot + reset notes (only if used/available)
+        if (encounter && encounter.pivotType) {
+          const p = document.createElement("div");
+          p.className = "small-text";
+          p.style.marginTop = "8px";
+          const pivotResult = encounter.recoveryChoice
+            ? (encounter.recoveryCorrect ? "✅ Pivot correct." : "❌ Pivot wrong.")
+            : "— Pivot not chosen.";
+          p.innerText = `Pivot: ${encounter.pivotType} • ${pivotResult}`;
+          wrap.appendChild(p);
+        }
+
+        if (encounter && encounter.resetUsed) {
+          const r = document.createElement("div");
+          r.className = "small-text";
+          r.innerText = "Reset: ✅ Used (allowed only if first mode was HOLD).";
+          wrap.appendChild(r);
+        }
+
+        const rule = document.createElement("div");
+        rule.className = "notice";
+        rule.style.marginTop = "10px";
+        rule.innerText = picked.nextRule;
+        wrap.appendChild(rule);
+
+        container.appendChild(wrap);
+      }
+
       function logEncounter() {
         if (!currentEncounter || currentEncounter.__logged) return;
 
@@ -1715,6 +1812,9 @@
           const reflectionTitle = document.createElement("h3");
           reflectionTitle.innerText = "Reflection";
           stepContent.appendChild(reflectionTitle);
+
+          // ✅ NEW: Strength + Fix (end of reflection)
+          renderStrengthFixBlock(stepContent, checks, currentEncounter);
 
           // ✅ ADD THIS (debug + summary render)
           console.log("[BC] Step6 summary", currentEncounter.__uxSummary);
