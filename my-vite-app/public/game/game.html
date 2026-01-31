@@ -1340,6 +1340,116 @@
         container.appendChild(wrap);
       }
 
+      function getTierLabel(enc) {
+        // Prefer meta tier if present, else fall back to encounterNumber ranges
+        const n = enc?.encounterNumber || 0;
+        const t = enc?.meta?.tier;
+        if (t) return String(t); // "foundation" etc if you ever switch
+        if (n <= 5) return "T1 (1–5)";
+        if (n <= 12) return "T2 (6–12)";
+        return "T3 (13–20)";
+      }
+
+      function statusPoints(status) {
+        if (status === "optimal") return 1;
+        if (status === "neutral") return 0;
+        return -1; // damaging
+      }
+
+      function computePerformanceGrade(enc, checks) {
+        const signal = (enc.chainSignal || "").toLowerCase();
+        const tier = getTierLabel(enc);
+
+        // Core points (max-ish 5)
+        let pts = 0;
+        if (checks.guestRead) pts += 1;
+        pts += statusPoints(checks.modeStatus);
+        pts += statusPoints(checks.hookStatus);
+        if (checks.deliveryCorrect) pts += 1;
+
+        // Pivot handling (only matters if pivot was actually present)
+        const pivotWasOffered = !!enc.recoveryText; // your existing flag
+        const pivotCorrect = pivotWasOffered ? !!enc.recoveryCorrect : null;
+
+        if (pivotWasOffered) {
+          // Reward correct pivot; punish wrong pivot because it’s table-control
+          pts += pivotCorrect ? 1 : -1;
+        }
+
+        // Reset is not “bad”, but it’s a learning wheel.
+        // Slight penalty so A means “clean”
+        if (enc.resetUsed) pts -= 0.5;
+
+        // Hard caps by signal (chainSignal is your overall “feel”)
+        // You can’t get an A on red, even if points are weird.
+        let maxGrade = "A";
+        if (signal === "yellow") maxGrade = "B";
+        if (signal === "red") maxGrade = "C";
+
+        // Base grade by points
+        // (pts typically ranges -3 to 5.5)
+        let grade = "C";
+        if (pts >= 3) grade = "B";
+        if (pts >= 4.5) grade = "A";
+
+        // Apply cap
+        if (maxGrade === "B" && grade === "A") grade = "B";
+        if (maxGrade === "C" && (grade === "A" || grade === "B")) grade = "C";
+
+        // Tier tightening (later tiers are stricter)
+        // T3: A requires cleaner execution
+        if (tier.startsWith("T3") && grade === "A" && pts < 5) grade = "B";
+
+        // Explanations for UI
+        const why = [];
+        if (!checks.guestRead) why.push("Missed the guest read.");
+        if (checks.modeStatus === "damaging") why.push("Mode choice hurt trust.");
+        if (checks.hookStatus === "damaging") why.push("Hook mismatched motivation.");
+        if (!checks.deliveryCorrect) why.push("Delivery pair wasn’t clean.");
+        if (pivotWasOffered && !pivotCorrect) why.push("Pivot choice didn’t close the gap.");
+        if (enc.resetUsed) why.push("Used reset (training wheel).");
+
+        const clean = why.length === 0;
+        const headline =
+          grade === "A" ? "Floor-ready."
+          : grade === "B" ? "Works, but leaks money."
+          : "Unstable under pressure.";
+
+        return { grade, tier, pts, signal, headline, why, clean };
+      }
+
+      function renderPerformanceGradeBlock(container, gradeObj) {
+        const block = document.createElement("div");
+        block.className = "card";
+
+        const title = document.createElement("strong");
+        title.innerText = `Performance Grade: ${gradeObj.grade} — ${gradeObj.tier}`;
+        block.appendChild(title);
+
+        const meta = document.createElement("div");
+        meta.className = "small-text";
+        meta.innerText = `Signal: ${(gradeObj.signal || "—").toUpperCase()} | Score: ${gradeObj.pts.toFixed(1)} pts`;
+        block.appendChild(meta);
+
+        const headline = document.createElement("div");
+        headline.style.marginTop = "6px";
+        headline.innerText = gradeObj.headline;
+        block.appendChild(headline);
+
+        if (!gradeObj.clean) {
+          const ul = document.createElement("ul");
+          ul.style.marginTop = "8px";
+          gradeObj.why.slice(0, 3).forEach(reason => { // keep it tight
+            const li = document.createElement("li");
+            li.innerText = reason;
+            ul.appendChild(li);
+          });
+          block.appendChild(ul);
+        }
+
+        container.appendChild(block);
+      }
+
       function logEncounter() {
         if (!currentEncounter || currentEncounter.__logged) return;
 
@@ -1374,6 +1484,7 @@
           chainSignal: currentEncounter.chainSignal ?? "",
           pivotType: currentEncounter.pivotType || "",
           resetUsed: !!currentEncounter.resetUsed,
+          performanceGrade: currentEncounter.performanceGrade || "",
           // UX summary (for history)
           uxHeader: currentEncounter.__uxSummary?.header || "",
           uxStrength: (currentEncounter.__uxSummary?.strengths || [])[0] || "",
@@ -1906,6 +2017,10 @@
             );
           }
 
+          const gradeObj = computePerformanceGrade(currentEncounter, checks);
+          currentEncounter.performanceGrade = gradeObj.grade;
+          renderPerformanceGradeBlock(stepContent, gradeObj);
+
           logEncounter();
 
           addStepButton("NEXT ENCOUNTER", () => {
@@ -2075,7 +2190,7 @@
           row.className = "history-row";
 
           const summary = document.createElement("div");
-          summary.innerText = entry.timestamp + " | Wine: " + entry.wineSelected + " | Mode: " + entry.modeSelected + " | Hook: " + entry.hookSelected;
+          summary.innerText = `${entry.timestamp} | Grade: ${entry.performanceGrade || "—"} | Wine: ${entry.wineSelected} | Mode: ${entry.modeSelected} | Hook: ${entry.hookSelected}`;
 
           const toggleBtn = document.createElement("button");
           toggleBtn.className = "small-btn";
