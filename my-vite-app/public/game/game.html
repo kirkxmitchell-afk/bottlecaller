@@ -236,6 +236,54 @@
 <script>
 window.__BC_GAME_HTML_MARKER__ = "streak-debug-v1";
 console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
+(function () {
+  function modeKey() {
+    return (window.__BC_MODE__ === "premium") ? "premium" : "demo";
+  }
+
+  function k(name) {
+    return `bc_${modeKey()}_${name}`;
+  }
+
+  function getInt(key, fallback = 0) {
+    const raw = localStorage.getItem(key);
+    const n = parseInt(raw, 10);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
+  // Rule B: streak breaks ONLY on red. Yellow still keeps streak alive.
+  function updateStreakAfterEncounter(enc) {
+    const sig = String(enc?.chainSignal || "").toLowerCase(); // "green" | "yellow" | "red"
+    const streakKey = k("streak");
+    const bestKey = k("best_streak");
+
+    let streak = getInt(streakKey, 0);
+    let best = getInt(bestKey, 0);
+
+    // If no signal yet, don't change anything.
+    if (!sig) {
+      return { signal: sig || "none", streak, best, changed: false };
+    }
+
+    if (sig === "red") {
+      streak = 0;
+    } else {
+      streak = streak + 1;
+      if (streak > best) best = streak;
+    }
+
+    localStorage.setItem(streakKey, String(streak));
+    localStorage.setItem(bestKey, String(best));
+
+    return { signal: sig, streak, best, changed: true };
+  }
+
+  window.__BC_DEBUG__ = window.__BC_DEBUG__ || {};
+  window.__BC_DEBUG__.updateStreakAfterEncounter = updateStreakAfterEncounter;
+
+  window.__BC_STREAK_DEBUG_READY__ = true;
+  console.log("[BC] STREAK DEBUG READY ✅", { mode: modeKey() });
+})();
 (() => {
   "use strict";
 
