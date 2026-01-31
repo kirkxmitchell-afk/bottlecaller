@@ -2029,8 +2029,11 @@
         if (currentStep === 6) {
           const checks = evaluateChecks();
           // ✅ Update mastery for this encounter's skillFocus
-          const sf = currentEncounter.skillFocus || currentEncounter.meta?.skillFocus || "read";
-          updateMasteryFromEncounter(sf, checks, currentEncounter);
+          const skillFocus =
+            currentEncounter.skillFocus ||
+            currentEncounter.meta?.skillFocus ||
+            "read";
+          updateMasteryFromEncounter(skillFocus, checks, currentEncounter);
 
           const reflectionTitle = document.createElement("h3");
           reflectionTitle.innerText = "Reflection";
@@ -2137,7 +2140,7 @@
           // ✅ Strength + Fix (Mastery snapshot)
           // ============================================================
           mastery = loadMastery(); // reload latest
-          const sf = getStrengthAndFix(mastery);
+          const strengthFix = getStrengthAndFix(mastery);
 
           const sfBlock = document.createElement("div");
           sfBlock.className = "card";
@@ -2149,12 +2152,12 @@
           const sfLine1 = document.createElement("div");
           sfLine1.className = "small-text";
           sfLine1.innerText =
-            `Strength: ${sf.strongest.toUpperCase()} (${sf.strongestPct}%)  |  Fix: ${sf.weakest.toUpperCase()} (${sf.weakestPct}%)`;
+            `Strength: ${strengthFix.strongest.toUpperCase()} (${strengthFix.strongestPct}%)  |  Fix: ${strengthFix.weakest.toUpperCase()} (${strengthFix.weakestPct}%)`;
           sfBlock.appendChild(sfLine1);
 
           const sfLine2 = document.createElement("div");
           sfLine2.style.marginTop = "8px";
-          sfLine2.innerText = sf.fixText;
+          sfLine2.innerText = strengthFix.fixText;
           sfBlock.appendChild(sfLine2);
 
           // Optional: show what THIS encounter trained
