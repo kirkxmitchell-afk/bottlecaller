@@ -716,6 +716,7 @@
 
         return { signal, streak, best, rule: "B" };
       }
+      window.updateStreakAfterEncounter = updateStreakAfterEncounter;
 
       function renderStreakBlock(container, info) {
         if (!container || !info) return;
