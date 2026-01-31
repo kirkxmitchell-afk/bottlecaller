@@ -296,92 +296,12 @@
       // - Per-mode storage
       // ============================================================
       const demoStreakKey = "bc_demo_streak";
-      const premiumStreakKey = "bc_premium_streak";
       const demoBestStreakKey = "bc_demo_best_streak";
+      const premiumStreakKey = "bc_premium_streak";
       const premiumBestStreakKey = "bc_premium_best_streak";
 
       const streakKey = isDemo ? demoStreakKey : premiumStreakKey;
       const bestStreakKey = isDemo ? demoBestStreakKey : premiumBestStreakKey;
-
-      function loadInt(key, fallback = 0) {
-        const n = parseInt(localStorage.getItem(key), 10);
-        return Number.isFinite(n) ? n : fallback;
-      }
-      function saveInt(key, n) {
-        localStorage.setItem(key, String(n));
-      }
-
-      let streak = loadInt(streakKey, 0);
-      let bestStreak = loadInt(bestStreakKey, 0);
-
-      // Ensure keys exist (prevents null checks)
-      if (localStorage.getItem(streakKey) === null) saveInt(streakKey, streak);
-      if (localStorage.getItem(bestStreakKey) === null) saveInt(bestStreakKey, bestStreak);
-
-      // Rule B: streak breaks ONLY if:
-      // - chainSignal === "red" AND
-      //   - no pivot was available, OR
-      //   - pivot available but failed
-      function didBreakStreakRuleB(encounter) {
-        const sig = String(encounter?.chainSignal || "").toLowerCase();
-        if (sig !== "red") return false;
-
-        const hadPivot = !!(encounter && (encounter.recoveryText || encounter.pivotType));
-        if (!hadPivot) return true;
-
-        return !encounter.recoveryCorrect;
-      }
-
-      function updateStreakAfterEncounter(encounter) {
-        // Keys per mode
-        const modeKey = (window.__BC_MODE__ === "premium") ? "premium" : "demo";
-        const streakKey = modeKey === "premium" ? "bc_premium_streak" : "bc_demo_streak";
-        const bestKey   = modeKey === "premium" ? "bc_premium_best_streak" : "bc_demo_best_streak";
-
-        // Read existing values
-        const cur = parseInt(localStorage.getItem(streakKey) || "0", 10) || 0;
-        const best = parseInt(localStorage.getItem(bestKey) || "0", 10) || 0;
-
-        // Normalize signal safely
-        const sig = String(encounter?.chainSignal || "").toLowerCase();
-
-        // ---- Rule B1 pass condition (for now): GREEN only ----
-        const passed = (sig === "green");
-
-        const next = passed ? (cur + 1) : 0;
-        const nextBest = Math.max(best, next);
-
-        localStorage.setItem(streakKey, String(next));
-        localStorage.setItem(bestKey, String(nextBest));
-
-        return { streak: next, best: nextBest, passed, signal: sig };
-      }
-
-      function renderStreakBlock(container, streakInfo) {
-        if (!container || !streakInfo) return;
-
-        const block = document.createElement("div");
-        block.className = "card";
-
-        const title = document.createElement("strong");
-        title.innerText = "Streak";
-        block.appendChild(title);
-
-        const line1 = document.createElement("div");
-        line1.style.marginTop = "6px";
-        line1.innerText = streakInfo.broke
-          ? "Streak broken — guest resistance."
-          : "Streak continues — momentum kept.";
-        block.appendChild(line1);
-
-        const line2 = document.createElement("div");
-        line2.className = "small-text";
-        line2.style.marginTop = "6px";
-        line2.innerText = `Current: ${streakInfo.streak}  |  Best: ${streakInfo.bestStreak}`;
-        block.appendChild(line2);
-
-        container.appendChild(block);
-      }
 
       // ============================================================
       // ✅ Mastery tracking (per mode)
@@ -766,6 +686,58 @@
 
       function saveRuns() {
         localStorage.setItem(runsKey, JSON.stringify(Array.isArray(runs) ? runs : []));
+      }
+
+      function loadInt(key, fallback = 0) {
+        const raw = localStorage.getItem(key);
+        const n = parseInt(raw, 10);
+        return Number.isFinite(n) ? n : fallback;
+      }
+
+      // Rule B:
+      // - streak increments only if chainSignal is green
+      // - otherwise streak resets to 0
+      // - bestStreak tracks max
+      function updateStreakAfterEncounter(encounter) {
+        const signal = String(encounter?.chainSignal || "").toLowerCase();
+
+        let streak = loadInt(streakKey, 0);
+        let best = loadInt(bestStreakKey, 0);
+
+        if (signal === "green") {
+          streak += 1;
+          if (streak > best) best = streak;
+        } else {
+          streak = 0;
+        }
+
+        localStorage.setItem(streakKey, String(streak));
+        localStorage.setItem(bestStreakKey, String(best));
+
+        return { signal, streak, best, rule: "B" };
+      }
+
+      function renderStreakBlock(container, info) {
+        if (!container || !info) return;
+
+        const block = document.createElement("div");
+        block.className = "card";
+
+        const title = document.createElement("strong");
+        title.innerText = "Streak";
+        block.appendChild(title);
+
+        const line = document.createElement("div");
+        line.className = "small-text";
+        line.innerText = "Rule B: Green = +1, Yellow/Red = reset";
+        block.appendChild(line);
+
+        const stats = document.createElement("div");
+        stats.style.marginTop = "8px";
+        stats.innerText = `Signal: ${String(info.signal).toUpperCase()} | Streak: ${info.streak} | Best: ${info.best}`;
+        block.appendChild(stats);
+
+        container.appendChild(block);
       }
 
       function isUnlocked() {
@@ -2499,10 +2471,8 @@
         saveRuns();
         mastery = { ...DEFAULT_MASTERY };
         saveMastery(mastery);
-        saveInt(streakKey, 0);
-        saveInt(bestStreakKey, 0);
-        streak = 0;
-        bestStreak = 0;
+        localStorage.setItem(streakKey, "0");
+        localStorage.setItem(bestStreakKey, "0");
         // Reset progression for current mode
         saveEncounterIndex(0);
         encounterIndex = 0;
@@ -2521,10 +2491,8 @@
         saveRuns();
         mastery = { ...DEFAULT_MASTERY };
         saveMastery(mastery);
-        saveInt(streakKey, 0);
-        saveInt(bestStreakKey, 0);
-        streak = 0;
-        bestStreak = 0;
+        localStorage.setItem(streakKey, "0");
+        localStorage.setItem(bestStreakKey, "0");
         // Reset progression for current mode
         saveEncounterIndex(0);
         encounterIndex = 0;
