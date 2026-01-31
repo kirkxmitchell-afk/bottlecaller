@@ -290,6 +290,114 @@
       const winesKey = isDemo ? demoWinesKey : premiumWinesKey;
       const runsKey  = isDemo ? demoRunsKey  : premiumRunsKey;
 
+      // ============================================================
+      // ✅ Mastery tracking (per mode)
+      // ============================================================
+      const demoMasteryKey = "bc_demo_mastery";
+      const premiumMasteryKey = "bc_premium_mastery";
+      const masteryKey = isDemo ? demoMasteryKey : premiumMasteryKey;
+
+      const DEFAULT_MASTERY = {
+        read: { attempts: 0, pass: 0 },
+        mode: { attempts: 0, pass: 0 },
+        hook: { attempts: 0, pass: 0 },
+        delivery: { attempts: 0, pass: 0 },
+        pivot: { attempts: 0, pass: 0 }
+      };
+
+      function safeParseJSON(raw, fallback) {
+        try { return JSON.parse(raw); } catch { return fallback; }
+      }
+
+      function loadMastery() {
+        const raw = localStorage.getItem(masteryKey);
+        const parsed = raw ? safeParseJSON(raw, null) : null;
+        const merged = { ...DEFAULT_MASTERY };
+
+        if (parsed && typeof parsed === "object") {
+          Object.keys(merged).forEach((k) => {
+            const node = parsed[k];
+            if (node && typeof node === "object") {
+              merged[k] = {
+                attempts: Number.isFinite(+node.attempts) ? +node.attempts : 0,
+                pass: Number.isFinite(+node.pass) ? +node.pass : 0
+              };
+            }
+          });
+        }
+
+        return merged;
+      }
+
+      function saveMastery(m) {
+        localStorage.setItem(masteryKey, JSON.stringify(m || DEFAULT_MASTERY));
+      }
+
+      function pct(pass, attempts) {
+        if (!attempts) return 0;
+        return Math.round((pass / attempts) * 100);
+      }
+
+      function getStrengthAndFix(m) {
+        const skills = ["read", "mode", "hook", "delivery", "pivot"];
+
+        // Only rank skills that have attempts (except if none have attempts)
+        const withAttempts = skills.filter(s => (m[s]?.attempts || 0) > 0);
+        const pool = withAttempts.length ? withAttempts : skills;
+
+        let strongest = pool[0];
+        let weakest = pool[0];
+
+        pool.forEach((s) => {
+          const p = pct(m[s].pass, m[s].attempts);
+          const pStrong = pct(m[strongest].pass, m[strongest].attempts);
+          const pWeak = pct(m[weakest].pass, m[weakest].attempts);
+
+          if (p > pStrong) strongest = s;
+          if (p < pWeak) weakest = s;
+        });
+
+        const fixMap = {
+          read: "Fix: slow down 1 beat and identify ONE cue (verbal or physical) before choosing the guest type.",
+          mode: "Fix: pick the Mode that matches the guest’s NEED (speed / safety / identity). Don’t pick your favorite mode.",
+          hook: "Fix: match the hook to their motive: VALUE for proof, STORY for status/occasion, FLAVOUR for safety.",
+          delivery: "Fix: sentence 1 = emotional framing, sentence 2 = structural clarity. No extra explanation.",
+          pivot: "Fix: when pushback hits, choose the Mode that removes friction (HOLD), commits (LEAD), or mirrors identity (REFLECT)."
+        };
+
+        return {
+          strongest,
+          weakest,
+          strongestPct: pct(m[strongest].pass, m[strongest].attempts),
+          weakestPct: pct(m[weakest].pass, m[weakest].attempts),
+          fixText: fixMap[weakest] || ""
+        };
+      }
+
+      function updateMasteryFromEncounter(skillFocus, checks, encounter) {
+        if (!skillFocus || !DEFAULT_MASTERY[skillFocus]) return;
+
+        // Decide pass/fail by skill
+        let passed = false;
+
+        if (skillFocus === "read") passed = !!checks.guestRead;
+        else if (skillFocus === "mode") passed = (checks.modeStatus === "optimal");
+        else if (skillFocus === "hook") passed = (checks.hookStatus === "optimal");
+        else if (skillFocus === "delivery") passed = !!checks.deliveryCorrect;
+        else if (skillFocus === "pivot") {
+          // Only count pivot if a pivot was actually presented/used
+          const pivotAttempted = !!(encounter && encounter.recoveryText);
+          if (!pivotAttempted) return; // do not count pivot attempts when none happened
+          passed = !!encounter.recoveryCorrect;
+        }
+
+        mastery = mastery || loadMastery();
+        mastery[skillFocus].attempts += 1;
+        if (passed) mastery[skillFocus].pass += 1;
+
+        saveMastery(mastery);
+      }
+
       const guestStates = ["Decider", "Fancy", "Griever", "Celebrator", "Bargain-Smart"];
 
       // ============================================================
@@ -377,6 +485,7 @@
       // ---------- Runtime state ----------
       let wines = loadWines();
       let runs = loadRuns();
+      let mastery = loadMastery();
 
       // ==============================
       // STRICT UNLOCKS (Option A)
@@ -1919,6 +2028,8 @@
 
         if (currentStep === 6) {
           const checks = evaluateChecks();
+          // ✅ Update mastery for this encounter's skillFocus
+          updateMasteryFromEncounter(currentEncounter.skillFocus || "read", checks, currentEncounter);
 
           const reflectionTitle = document.createElement("h3");
           reflectionTitle.innerText = "Reflection";
@@ -2021,6 +2132,39 @@
           currentEncounter.performanceGrade = gradeObj.grade;
           renderPerformanceGradeBlock(stepContent, gradeObj);
 
+          // ============================================================
+          // ✅ Strength + Fix (Mastery snapshot)
+          // ============================================================
+          mastery = loadMastery(); // reload latest
+          const sf = getStrengthAndFix(mastery);
+
+          const sfBlock = document.createElement("div");
+          sfBlock.className = "card";
+
+          const sfTitle = document.createElement("strong");
+          sfTitle.innerText = "Strength + Fix";
+          sfBlock.appendChild(sfTitle);
+
+          const sfLine1 = document.createElement("div");
+          sfLine1.className = "small-text";
+          sfLine1.innerText =
+            `Strength: ${sf.strongest.toUpperCase()} (${sf.strongestPct}%)  |  Fix: ${sf.weakest.toUpperCase()} (${sf.weakestPct}%)`;
+          sfBlock.appendChild(sfLine1);
+
+          const sfLine2 = document.createElement("div");
+          sfLine2.style.marginTop = "8px";
+          sfLine2.innerText = sf.fixText;
+          sfBlock.appendChild(sfLine2);
+
+          // Optional: show what THIS encounter trained
+          const sfLine3 = document.createElement("div");
+          sfLine3.className = "small-text";
+          sfLine3.style.marginTop = "8px";
+          sfLine3.innerText = `This encounter trained: ${(currentEncounter.skillFocus || "read").toUpperCase()}`;
+          sfBlock.appendChild(sfLine3);
+
+          stepContent.appendChild(sfBlock);
+
           logEncounter();
 
           addStepButton("NEXT ENCOUNTER", () => {
@@ -2120,6 +2264,8 @@
         // ----------------------------
         currentEncounter = {
           __logged: false,
+          skillFocus: (enc && enc.meta && enc.meta.skillFocus) ? enc.meta.skillFocus : "read",
+          tier: (enc && enc.meta && enc.meta.tier) ? enc.meta.tier : null,
 
           // Encounter content (from encounters.ts)
           encounterNumber: enc.encounterNumber ?? (idx + 1),
@@ -2242,6 +2388,8 @@
         if (!confirm("This will clear saved encounters but keep wines.")) return;
         runs = [];
         saveRuns();
+        mastery = { ...DEFAULT_MASTERY };
+        saveMastery(mastery);
         // Reset progression for current mode
         saveEncounterIndex(0);
         encounterIndex = 0;
@@ -2258,6 +2406,8 @@
         saveWines();
         runs = [];
         saveRuns();
+        mastery = { ...DEFAULT_MASTERY };
+        saveMastery(mastery);
         // Reset progression for current mode
         saveEncounterIndex(0);
         encounterIndex = 0;
