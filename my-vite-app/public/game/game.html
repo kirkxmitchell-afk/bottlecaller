@@ -2150,6 +2150,8 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
 
         if (currentStep === 6) {
           const checks = evaluateChecks();
+          // Make the last encounter available for console checks
+          window.__BC_LAST_ENCOUNTER__ = currentEncounter;
           // ✅ Update mastery for this encounter's skillFocus
           updateMasteryFromEncounter(currentEncounter.skillFocus || "read", checks, currentEncounter);
 
@@ -2287,11 +2289,12 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
 
           stepContent.appendChild(sfBlock);
 
-          // ============================================================
-          // ✅ STREAK (Rule B) — update + show AFTER reflection only
-          // ============================================================
-          console.log("[BC] Step6 reached ✅", { encounterNumber: currentEncounter?.encounterNumber, chainSignal: currentEncounter?.chainSignal });
-          const streakInfo = updateStreakAfterEncounter(currentEncounter);
+          // ✅ STREAK (Rule B) — update after reflection only
+          const streakInfo = window.__BC_DEBUG__?.updateStreakAfterEncounter
+            ? window.__BC_DEBUG__.updateStreakAfterEncounter(currentEncounter)
+            : { signal: "missing", streak: 0, best: 0, changed: false };
+
+          console.log("[BC] streakInfo", streakInfo);
           renderStreakBlock(stepContent, streakInfo);
 
           logEncounter();
