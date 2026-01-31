@@ -2273,9 +2273,9 @@
 
           // Encounter content (from encounters.ts)
           encounterNumber: enc.encounterNumber ?? (encounterIndex + 1),
-          // ✅ ADD THESE TWO:
-          meta: enc?.meta || null,
-          skillFocus: enc?.meta?.skillFocus || "read",
+          // ✅ KEEP META + SKILLFOCUS ON THE ENCOUNTER OBJECT
+          meta: enc.meta || null,
+          skillFocus: (enc.meta && enc.meta.skillFocus) ? enc.meta.skillFocus : "read",
           guestStateActual: enc.guestStateActual || "",
           contextLine: enc.contextLine || "",
           guestLine: enc.guestLine || "",
