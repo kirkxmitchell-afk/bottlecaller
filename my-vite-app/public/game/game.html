@@ -2020,6 +2020,11 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
           currentEncounter.chainScore = result.chainScore;
           currentEncounter.chainSignal = result.chainSignal;
 
+          const teaser = document.createElement("div");
+          teaser.className = "small-text";
+          teaser.innerText = "Streak updates after Reflection (Step 7).";
+          stepContent.appendChild(teaser);
+
           // ✅ ADD THIS (debug + summary render)
           console.log("[BC] UX summary build", { checksRaw, result });
           const summary = buildStrengthFixSummary(checksRaw, result, currentEncounter);
