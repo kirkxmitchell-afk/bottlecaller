@@ -333,19 +333,28 @@
       }
 
       function updateStreakAfterEncounter(encounter) {
-        const broke = didBreakStreakRuleB(encounter);
+        // Keys per mode
+        const modeKey = (window.__BC_MODE__ === "premium") ? "premium" : "demo";
+        const streakKey = modeKey === "premium" ? "bc_premium_streak" : "bc_demo_streak";
+        const bestKey   = modeKey === "premium" ? "bc_premium_best_streak" : "bc_demo_best_streak";
 
-        if (broke) {
-          streak = 0;
-        } else {
-          streak = (streak || 0) + 1;
-          if (streak > bestStreak) bestStreak = streak;
-        }
+        // Read existing values
+        const cur = parseInt(localStorage.getItem(streakKey) || "0", 10) || 0;
+        const best = parseInt(localStorage.getItem(bestKey) || "0", 10) || 0;
 
-        saveInt(streakKey, streak);
-        saveInt(bestStreakKey, bestStreak);
+        // Normalize signal safely
+        const sig = String(encounter?.chainSignal || "").toLowerCase();
 
-        return { broke, streak, bestStreak };
+        // ---- Rule B1 pass condition (for now): GREEN only ----
+        const passed = (sig === "green");
+
+        const next = passed ? (cur + 1) : 0;
+        const nextBest = Math.max(best, next);
+
+        localStorage.setItem(streakKey, String(next));
+        localStorage.setItem(bestKey, String(nextBest));
+
+        return { streak: next, best: nextBest, passed, signal: sig };
       }
 
       function renderStreakBlock(container, streakInfo) {
