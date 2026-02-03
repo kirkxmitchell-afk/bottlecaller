@@ -70,6 +70,7 @@
           <button id="btnViewHistoryPremium" type="button">View History</button>
           <button id="btnResetRunsPremium" type="button">Reset Runs Only</button>
           <button id="btnResetWinesPremium" type="button">Reset Wines Only</button>
+          <button id="btnFiveMinDrill" type="button">5-Min Drill (3 reps)</button>
         </div>
       </div>
 
@@ -633,6 +634,12 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
       function startDrillSession() {
         sessionType = "drill";
         drillRepDone = 0;
+        window.__BC_SESSION__ = {
+          type: "drill",
+          repTarget: drillRepTarget,
+          repDone: drillRepDone,
+          startedAt: Date.now(),
+        };
 
         // Drill starts from current encounterIndex position (or force 0 if you want)
         // If you want drill always start from encounter 1:
@@ -646,12 +653,16 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
       function startProgressionSession() {
         sessionType = "progression";
         drillRepDone = 0;
+        window.__BC_SESSION__ = {
+          type: "progression",
+          repTarget: null,
+          repDone: 0,
+          startedAt: Date.now(),
+        };
         resetNavState();
         showScreen("screenPlay");
         startEncounter();
       }
-
-      window.__BC_SESSION__ = () => ({ sessionType, drillRepDone, drillRepTarget, encounterIndex });
 
       // ==============================
       // STRICT UNLOCKS (Option A)
@@ -914,6 +925,12 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
         block.appendChild(stats);
 
         container.appendChild(block);
+      }
+
+      function getDrillRep() {
+        const s = window.__BC_SESSION__;
+        if (!s || s.type !== "drill") return null;
+        return Math.max(1, (s.repDone || 0) + 1); // rep you're currently playing
       }
 
       function renderDrillSummary() {
@@ -2045,6 +2062,7 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
         if (diff) chipParts.push(`Difficulty ${diff}`);
         if (focus) chipParts.push(`Focus: ${focus}`);
         if (trap && trap !== "none") chipParts.push(`Trap: ${trap}`);
+        if (currentEncounter.__drillRep) chipParts.push(`Rep ${currentEncounter.__drillRep}/3`);
 
         // Header line + chip line (two-line header)
         stepHeader.innerText =
@@ -2251,13 +2269,47 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
         if (currentStep === 5) {
           const checksRaw = evaluateChecks();
 
+          const rep = getDrillRep(); // null if not in drill
+
+          let guestRead = checksRaw.guestRead;
+          let modeStatus = checksRaw.modeStatus;
+          let hookStatus = checksRaw.hookStatus;
+          let deliveryCorrect = checksRaw.deliveryCorrect;
+
+          // ---- 3-rep tightening rules ----
+          // Rep 1: forgiving (yellow is acceptable if read+mode are decent)
+          // Rep 2: medium (delivery matters more)
+          // Rep 3: strict (any damaging or delivery miss becomes red pressure)
+          if (rep === 1) {
+            // allow a delivery miss to be treated as "neutral" pressure if everything else is good
+            // (we do that by temporarily treating delivery as correct for scoring purposes)
+            if (!deliveryCorrect && guestRead && modeStatus !== "damaging" && hookStatus !== "damaging") {
+              deliveryCorrect = true;
+            }
+          }
+
+          if (rep === 2) {
+            // if hook is damaging, treat it as worse (force red behaviour)
+            if (hookStatus === "damaging") {
+              modeStatus = "damaging"; // pushes overall chain down
+            }
+          }
+
+          if (rep === 3) {
+            // strict: any miss becomes hard
+            if (!guestRead) modeStatus = "damaging";
+            if (!deliveryCorrect) hookStatus = "damaging";
+          }
+
           const reactionChecks = {
-            guestRead: checksRaw.guestRead,
-            modeStatus: checksRaw.modeStatus,
-            hookStatus: checksRaw.hookStatus,
-            deliveryCorrect: checksRaw.deliveryCorrect,
+            guestRead,
+            modeStatus,
+            hookStatus,
+            deliveryCorrect,
             firstMode: currentEncounter.modeSelected || ""
           };
+
+          currentEncounter.__drillRep = rep || null;
 
           if (!window.EngineBridge || typeof window.EngineBridge.computeReaction !== "function") {
             const scriptTagHint = "<script type='module' src='/src/game/gameEntry.ts'><" + "/script>";
@@ -2568,6 +2620,9 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
           // ============================================================
           if (isDrill()) {
             drillRepDone += 1;
+            if (window.__BC_SESSION__ && window.__BC_SESSION__.type === "drill") {
+              window.__BC_SESSION__.repDone = drillRepDone;
+            }
 
             // If drill complete -> end session now (no next encounter)
             if (drillRepDone >= drillRepTarget) {
@@ -2854,6 +2909,7 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
         const btnResetWines = document.getElementById(ids.btnResetWines);
         const btnBackHomeFromDrillSummary = document.getElementById("btnBackHomeFromDrillSummary");
         const btnStartAnotherDrill = document.getElementById("btnStartAnotherDrill");
+        const btnFiveMinDrill = document.getElementById("btnFiveMinDrill");
 
         bindInput(btnWelcomeStart, () => {
           localStorage.setItem(coverKey, "true");
@@ -2935,6 +2991,38 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
         bindInput(drillBtnPremium, () => {
           if (!isUnlocked()) { alert("Add " + LIMIT + " wines to start."); return; }
           startDrillSession();
+        });
+
+        bindInput(btnFiveMinDrill, () => {
+          if (!isUnlocked()) { alert("Add " + LIMIT + " wines to start."); return; }
+
+          const today = new Date().toISOString().slice(0, 10);
+          const lastKey = "bc_last_drill_day_" + (window.__BC_MODE__ === "premium" ? "premium" : "demo");
+          const last = localStorage.getItem(lastKey);
+
+          if (last === today) {
+            alert("5-Min Drill already done today. Come back tomorrow.");
+            return;
+          }
+          localStorage.setItem(lastKey, today);
+
+          window.__BC_SESSION__ = {
+            type: "drill",
+            repTarget: 3,
+            repDone: 0,
+            startedAt: Date.now(),
+          };
+          sessionType = "drill";
+          drillRepTarget = 3;
+          drillRepDone = 0;
+
+          // Drill starts at current unlocked first encounter (or 0 if you want)
+          encounterIndex = 0;
+          saveEncounterIndex(encounterIndex);
+
+          resetNavState();
+          showScreen("screenPlay");
+          startEncounter();
         });
 
         bindInput(btnBackHomeFromDrillSummary, () => {
