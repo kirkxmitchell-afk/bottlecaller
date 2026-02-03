@@ -316,6 +316,71 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
       window.__BC_INIT_DONE__ = true;
 
       // ============================================================
+// 🔌 NAV listener from parent app (main.js top buttons)
+// ============================================================
+window.addEventListener("message", (e) => {
+  const m = e?.data;
+  if (!m || m.source !== "BC_MSG" || m.v !== 1) return;
+  if (m.type !== "nav") return;
+
+  console.log("[BC] NAV REQUEST:", m.screen);
+
+  if (m.screen === "managerBoard") {
+    openManagerBoard();
+  }
+
+  if (m.screen === "fiveMinDrill") {
+    startFiveMinuteDrill();
+  }
+});
+
+// ============================================================
+// ✅ Resolvers (no guessing: we route using what already exists)
+// ============================================================
+function startFiveMinuteDrill() {
+  // 1) Prefer your existing premium drill button if it exists
+  const btn =
+    document.getElementById("btnStartDrillPremium") || // your existing "5-Minute Drill"
+    document.getElementById("btnFiveMinDrill");        // older injected one (should now be removed)
+
+  if (btn) {
+    btn.click();
+    return;
+  }
+
+  // 2) If you already have a function, call it (safe)
+  if (typeof window.startDrill === "function") {
+    window.startDrill();
+    return;
+  }
+
+  console.warn("[BC] startFiveMinuteDrill: no known entry point found");
+}
+
+function openManagerBoard() {
+  // 1) If you already render a manager board screen, trigger it via existing button
+  const btn =
+    document.getElementById("btnOpenManagerBoard") ||
+    document.getElementById("btnManagerBoard");
+
+  // NOTE: btnManagerBoard is in main.js (parent), not inside iframe.
+  // So inside game.html, we look for in-iframe manager board triggers.
+  if (btn && btn.id !== "btnManagerBoard") {
+    btn.click();
+    return;
+  }
+
+  // 2) If you have a known render function, call it safely
+  if (typeof window.renderManagerBoard === "function") {
+    window.renderManagerBoard();
+    return;
+  }
+
+  console.warn("[BC] openManagerBoard: no known entry point found");
+}
+
+
+      // ============================================================
       // ✅ MODE ENFORCEMENT (single source of truth)
       // ============================================================
       const bcMode = (window.__BC_MODE__ === "premium") ? "premium" : "demo";
