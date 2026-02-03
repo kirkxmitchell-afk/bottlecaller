@@ -527,6 +527,17 @@ function mountGameIframe(targetId, mode /* "demo" | "premium" */) {
   setDebug({ step: "game.iframe.mounted", targetId, mode, src, time: new Date().toISOString() });
 }
 
+function postToPremiumIframe(message) {
+  const frame = document.getElementById("premiumRootFrame");
+  if (!frame?.contentWindow) return false;
+
+  frame.contentWindow.postMessage(
+    { source: "BC_MSG", v: 1, ...message },
+    window.location.origin
+  );
+  return true;
+}
+
 // ✅ Optional auto-resize (requires matching postMessage in game.html)
 window.addEventListener("message", (event) => {
   const data = event?.data;
@@ -1395,18 +1406,13 @@ document.getElementById("btnCopyCode").addEventListener("click", async () => {
 document.getElementById("btnEnterPremium").addEventListener("click", () => decideRoute("enterPremium"));
 
 document.getElementById("btnLogoutPremium").addEventListener("click", () => logoutAll("premium.logout"));
-document.getElementById("btnManagerBoard").addEventListener("click", async () => {
-  await routeManagerBoard("topbar");
+document.getElementById("btnManagerBoard")?.addEventListener("click", () => {
+  const ok = postToPremiumIframe({ type: "nav", screen: "managerBoard" });
+  if (!ok) setDebug({ step: "btnManagerBoard.failed", reason: "premium iframe not ready" });
 });
 document.getElementById("btnFiveMinRep").addEventListener("click", () => {
-  postToGame("nav", { target: "five_min_drill" });
-});
-document.getElementById("btnTopFiveMinDrill")?.addEventListener("click", () => {
-  // Tell iframe to open/start drill
-  postToGame("nav", { target: "five_min_drill" });
-});
-document.getElementById("btnTopManagerBoard")?.addEventListener("click", async () => {
-  await routeManagerBoard("topbar");
+  const ok = postToPremiumIframe({ type: "nav", screen: "fiveMinDrill" });
+  if (!ok) setDebug({ step: "btnFiveMinRep.failed", reason: "premium iframe not ready" });
 });
 document.getElementById("btnOpenHud").addEventListener("click", () => {
   renderHud();
