@@ -120,6 +120,35 @@ document.querySelector("#app").innerHTML = `
     </div>
   </section>
 
+  <!-- MANAGER BOARD -->
+  <section id="screenManagerBoard" class="screen hidden">
+    <div class="panel stack">
+      <div class="topbar">
+        <div class="brand">
+          <h2>Manager Board</h2>
+          <span class="badge">PREMIUM</span>
+        </div>
+        <div class="row">
+          <button id="btnBackToPremium" class="btn-ghost" type="button">Back</button>
+          <button id="btnLogoutManagerBoard" class="btn-danger" type="button">Logout</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="score-row">Restaurant: <span id="mbRestName">-</span></div>
+        <div class="score-row">Total runs: <span id="mbRunsTotal">-</span></div>
+        <div class="score-row">Total drills: <span id="mbDrillsTotal">-</span></div>
+      </div>
+
+      <div class="card">
+        <h3 style="margin:0 0 8px 0;">Recent activity</h3>
+        <div id="mbRecent" class="small" style="opacity:.9;">Loading…</div>
+      </div>
+
+      <div id="mbMsg" class="small"></div>
+    </div>
+  </section>
+
   <!-- DEMO APP -->
   <section id="screenGameDemo" class="screen hidden">
     <div class="panel stack">
@@ -556,6 +585,79 @@ async function loadInvites(restaurantId) {
   return res.data || [];
 }
 
+async function loadManagerBoardData() {
+  try {
+    const r = appState.restaurant;
+    if (!r?.id) throw new Error("Restaurant not loaded.");
+
+    document.getElementById("mbRestName").textContent = r.name || "-";
+    document.getElementById("mbMsg").textContent = "";
+
+    // --- IMPORTANT ---
+    // Replace these table names to match what YOU actually created.
+    const RUNS_TABLE = "bc_runs";
+    const DRILLS_TABLE = "bc_drill_runs";
+
+    // Totals
+    const runsRes = await supabase
+      .from(RUNS_TABLE)
+      .select("id", { count: "exact", head: true })
+      .eq("restaurant_id", r.id);
+
+    const drillsRes = await supabase
+      .from(DRILLS_TABLE)
+      .select("id", { count: "exact", head: true })
+      .eq("restaurant_id", r.id);
+
+    if (runsRes.error) throw runsRes.error;
+    if (drillsRes.error) throw drillsRes.error;
+
+    document.getElementById("mbRunsTotal").textContent = String(runsRes.count ?? 0);
+    document.getElementById("mbDrillsTotal").textContent = String(drillsRes.count ?? 0);
+
+    // Recent (example: last 8 combined — you can improve later)
+    const recentRuns = await supabase
+      .from(RUNS_TABLE)
+      .select("created_at, user_id, outcome")
+      .eq("restaurant_id", r.id)
+      .order("created_at", { ascending: false })
+      .limit(5);
+
+    const recentDrills = await supabase
+      .from(DRILLS_TABLE)
+      .select("created_at, user_id, rep_index, score")
+      .eq("restaurant_id", r.id)
+      .order("created_at", { ascending: false })
+      .limit(5);
+
+    if (recentRuns.error) throw recentRuns.error;
+    if (recentDrills.error) throw recentDrills.error;
+
+    const items = [
+      ...(recentRuns.data || []).map((x) => ({ t: x.created_at, line: `Run • ${x.outcome || "-"}` })),
+      ...(recentDrills.data || []).map((x) => ({ t: x.created_at, line: `Drill • rep ${x.rep_index ?? "?"} • score ${x.score ?? "-"}` })),
+    ]
+      .sort((a, b) => new Date(b.t) - new Date(a.t))
+      .slice(0, 8);
+
+    document.getElementById("mbRecent").innerHTML =
+      items.length
+        ? items
+            .map(
+              (i) =>
+                `<div style="padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.08);">${i.line}<div style="opacity:.6; font-size:12px;">${i.t}</div></div>`
+            )
+            .join("")
+        : `<div style="opacity:.8;">No activity yet.</div>`;
+
+    setDebug({ step: "managerBoard.loaded", restaurant_id: r.id, runs: runsRes.count, drills: drillsRes.count });
+  } catch (e) {
+    console.error(e);
+    document.getElementById("mbMsg").textContent = e?.message || "Failed to load manager board";
+    setDebug({ step: "managerBoard.error", error: e?.message || String(e) });
+  }
+}
+
 async function loadAuthedState(reason = "manual") {
   const { session, error: sErr } = await withTimeout(getSession(), 8000, "getSession");
   if (sErr) throw sErr;
@@ -801,6 +903,24 @@ async function routePremium(reason = "manual") {
   } finally {
     routingLock = false;
   }
+}
+
+async function routeManagerBoard(reason = "manual") {
+  clearMsgs();
+  closeHud();
+
+  await loadAuthedState(`routeManagerBoard:${reason}`);
+
+  const role = String(appState.profile?.role || "").toLowerCase();
+  if (role !== "manager") {
+    setDebug({ step: "managerBoard.blocked", reason, role });
+    setMsg("authMsg", "Manager Board is manager-only.", "error");
+    showScreen("screenPremiumApp");
+    return;
+  }
+
+  showScreen("screenManagerBoard");
+  await loadManagerBoardData();
 }
 
 async function decideRoute(reason = "decideRoute") {
@@ -1275,9 +1395,8 @@ document.getElementById("btnCopyCode").addEventListener("click", async () => {
 document.getElementById("btnEnterPremium").addEventListener("click", () => decideRoute("enterPremium"));
 
 document.getElementById("btnLogoutPremium").addEventListener("click", () => logoutAll("premium.logout"));
-document.getElementById("btnManagerBoard").addEventListener("click", () => {
-  // only managers should see/use this (we will hide it in renderHud below)
-  postToGame("nav", { target: "manager_board" });
+document.getElementById("btnManagerBoard").addEventListener("click", async () => {
+  await routeManagerBoard("topbar");
 });
 document.getElementById("btnFiveMinRep").addEventListener("click", () => {
   postToGame("nav", { target: "five_min_drill" });
@@ -1286,6 +1405,9 @@ document.getElementById("btnTopFiveMinDrill")?.addEventListener("click", () => {
   // Tell iframe to open/start drill
   postToGame("nav", { target: "five_min_drill" });
 });
+document.getElementById("btnTopManagerBoard")?.addEventListener("click", async () => {
+  await routeManagerBoard("topbar");
+});
 document.getElementById("btnOpenHud").addEventListener("click", () => {
   renderHud();
   openHud();
@@ -1293,6 +1415,10 @@ document.getElementById("btnOpenHud").addEventListener("click", () => {
 
 document.getElementById("btnCloseHud").addEventListener("click", closeHud);
 document.getElementById("hudBackdrop").addEventListener("click", closeHud);
+document.getElementById("btnBackToPremium")?.addEventListener("click", () => {
+  showScreen("screenPremiumApp");
+});
+document.getElementById("btnLogoutManagerBoard")?.addEventListener("click", () => logoutAll("managerBoard.logout"));
 
 document.getElementById("btnCopyHudCode").addEventListener("click", async () => {
   try {
