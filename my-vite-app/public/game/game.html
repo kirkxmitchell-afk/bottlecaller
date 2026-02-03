@@ -52,6 +52,7 @@
         <div class="score-row">Runs saved: <span id="homeDemoRuns">0</span></div>
         <div class="button-row" id="demoButtons">
           <button id="btnGoDemo" type="button">Setup</button>
+          <button id="btnStartDrillDemo" type="button">5-Minute Drill</button>
           <button id="btnViewHistoryDemo" type="button">View History</button>
           <button id="btnResetRunsDemo" type="button">Reset Runs Only</button>
           <button id="btnResetWinesDemo" type="button">Reset Wines Only</button>
@@ -65,6 +66,7 @@
         <div class="score-row">Runs saved: <span id="homePremiumRuns">0</span></div>
         <div class="button-row" id="premiumButtons">
           <button id="btnGoPremium" type="button">Setup</button>
+          <button id="btnStartDrillPremium" type="button">5-Minute Drill</button>
           <button id="btnViewHistoryPremium" type="button">View History</button>
           <button id="btnResetRunsPremium" type="button">Reset Runs Only</button>
           <button id="btnResetWinesPremium" type="button">Reset Wines Only</button>
@@ -229,6 +231,17 @@
       <div id="historyList"></div>
       <div class="button-row">
         <button id="btnBackHomeFromHistory" type="button">Back</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="screenDrillSummary" class="screen">
+    <div class="panel">
+      <h2>5-Minute Drill Complete</h2>
+      <div id="drillSummaryBody"></div>
+      <div class="button-row">
+        <button id="btnBackHomeFromDrillSummary" type="button">Back</button>
+        <button id="btnStartAnotherDrill" type="button">Another 5-Minute Drill</button>
       </div>
     </div>
   </section>
@@ -609,6 +622,37 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
       const mode = new URLSearchParams(location.search).get("mode") || "demo";
       reportWinesToParent(mode, wines);
 
+      // ============================================================
+      // ✅ SESSION CONTAINER (drill vs progression)
+      // ============================================================
+      let sessionType = null; // "drill" | "progression" | null
+      let drillRepTarget = 3;
+      let drillRepDone = 0;
+
+      function isDrill() { return sessionType === "drill"; }
+      function startDrillSession() {
+        sessionType = "drill";
+        drillRepDone = 0;
+
+        // Drill starts from current encounterIndex position (or force 0 if you want)
+        // If you want drill always start from encounter 1:
+        // encounterIndex = 0; saveEncounterIndex(encounterIndex);
+
+        resetNavState();
+        showScreen("screenPlay");
+        startEncounter();
+      }
+
+      function startProgressionSession() {
+        sessionType = "progression";
+        drillRepDone = 0;
+        resetNavState();
+        showScreen("screenPlay");
+        startEncounter();
+      }
+
+      window.__BC_SESSION__ = () => ({ sessionType, drillRepDone, drillRepTarget, encounterIndex });
+
       // ==============================
       // STRICT UNLOCKS (Option A)
       // Tier 1: encounters 1–5
@@ -870,6 +914,69 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
         block.appendChild(stats);
 
         container.appendChild(block);
+      }
+
+      function renderDrillSummary() {
+        const body = document.getElementById("drillSummaryBody");
+        if (!body) return;
+        body.innerText = "";
+
+        // Pull last 3 reps for this mode + this session
+        // We'll tag runs with sessionType so we can filter cleanly.
+        const list = (runs || [])
+          .filter(r => r && r.tier === bcMode && r.sessionType === "drill")
+          .slice(-drillRepTarget);
+
+        // Basic counts
+        const greens = list.filter(x => String(x.chainSignal || "").toLowerCase() === "green").length;
+        const yellows = list.filter(x => String(x.chainSignal || "").toLowerCase() === "yellow").length;
+        const reds = list.filter(x => String(x.chainSignal || "").toLowerCase() === "red").length;
+
+        const avgScore =
+          list.length
+            ? Math.round((list.reduce((a, x) => a + (Number(x.chainScore) || 0), 0) / list.length) * 10) / 10
+            : 0;
+
+        const headline = document.createElement("div");
+        headline.className = "notice";
+        headline.innerText = `Reps: ${list.length}/${drillRepTarget} • Avg score: ${avgScore} • 🟢${greens} 🟡${yellows} 🔴${reds}`;
+        body.appendChild(headline);
+
+        // Show strongest + fix (you already compute mastery snapshot)
+        const m = loadMastery();
+        const sf = getStrengthAndFix(m);
+
+        const sfBlock = document.createElement("div");
+        sfBlock.className = "card";
+
+        const t = document.createElement("strong");
+        t.innerText = "Today’s focus";
+        sfBlock.appendChild(t);
+
+        const l1 = document.createElement("div");
+        l1.className = "small-text";
+        l1.innerText = `Strength: ${sf.strongest.toUpperCase()} (${sf.strongestPct}%) • Fix: ${sf.weakest.toUpperCase()} (${sf.weakestPct}%)`;
+        sfBlock.appendChild(l1);
+
+        const l2 = document.createElement("div");
+        l2.style.marginTop = "8px";
+        l2.innerText = sf.fixText || "Fix: run the drill again clean.";
+        sfBlock.appendChild(l2);
+
+        body.appendChild(sfBlock);
+
+        // List rep outcomes (tight)
+        list.forEach((r, i) => {
+          const row = document.createElement("div");
+          row.className = "card";
+          row.innerText = `Rep ${i + 1}: ${String(r.chainSignal || "—").toUpperCase()} • Grade ${r.performanceGrade || "—"} • ${r.wineSelected || ""}`;
+          body.appendChild(row);
+        });
+      }
+
+      function endDrillSession() {
+        showScreen("screenDrillSummary");
+        renderDrillSummary();
       }
 
       function isUnlocked() {
@@ -1831,6 +1938,9 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
           timestamp: new Date().toLocaleString(),
           tier: bcMode,
 
+          sessionType: sessionType || "progression",
+          repIndex: isDrill() ? (drillRepDone + 1) : null,
+
           encounterNumber: currentEncounter.encounterNumber ?? null,
           encounterTier: getTierFromEncounterNumber(currentEncounter.encounterNumber ?? 1),
 
@@ -2453,7 +2563,20 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
 
           logEncounter();
 
-          addStepButton("NEXT ENCOUNTER", () => {
+          // ============================================================
+          // ✅ DRILL REP ACCOUNTING (3 reps then stop)
+          // ============================================================
+          if (isDrill()) {
+            drillRepDone += 1;
+
+            // If drill complete -> end session now (no next encounter)
+            if (drillRepDone >= drillRepTarget) {
+              endDrillSession();
+              return;
+            }
+          }
+
+          addStepButton(isDrill() ? "NEXT REP" : "NEXT ENCOUNTER", () => {
             encounterIndex = (encounterIndex ?? 0) + 1;
 
             // Strict tier gating applies to premium only
@@ -2729,6 +2852,8 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
         const btnViewHistory = document.getElementById(ids.btnViewHistory);
         const btnResetRuns = document.getElementById(ids.btnResetRuns);
         const btnResetWines = document.getElementById(ids.btnResetWines);
+        const btnBackHomeFromDrillSummary = document.getElementById("btnBackHomeFromDrillSummary");
+        const btnStartAnotherDrill = document.getElementById("btnStartAnotherDrill");
 
         bindInput(btnWelcomeStart, () => {
           localStorage.setItem(coverKey, "true");
@@ -2796,6 +2921,31 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
         bindInput(btnViewHistory, () => {
           renderHistory();
           showScreen("screenHistory");
+        });
+
+        // Drill buttons (exists only for the mode DOM that remains)
+        const drillBtnDemo = document.getElementById("btnStartDrillDemo");
+        const drillBtnPremium = document.getElementById("btnStartDrillPremium");
+
+        bindInput(drillBtnDemo, () => {
+          if (!isUnlocked()) { alert("Add " + LIMIT + " wines to start."); return; }
+          startDrillSession();
+        });
+
+        bindInput(drillBtnPremium, () => {
+          if (!isUnlocked()) { alert("Add " + LIMIT + " wines to start."); return; }
+          startDrillSession();
+        });
+
+        bindInput(btnBackHomeFromDrillSummary, () => {
+          sessionType = null;
+          resetNavState();
+          showScreen(isDemo ? "screenHome" : "screenWelcome");
+        });
+
+        bindInput(btnStartAnotherDrill, () => {
+          if (!isUnlocked()) { alert("Add " + LIMIT + " wines to start."); return; }
+          startDrillSession();
         });
 
         bindInput(btnResetRuns, () => resetRunsOnly());
