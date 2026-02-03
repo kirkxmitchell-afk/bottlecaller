@@ -336,6 +336,26 @@ function getPremiumFrameWindow() {
   return frame?.contentWindow || null;
 }
 
+function getPremiumFrame() {
+  return document.getElementById("premiumRootFrame") || document.querySelector("#premiumRoot iframe");
+}
+
+function postToGame(type, payload = {}) {
+  const frame = getPremiumFrame();
+  const win = frame?.contentWindow;
+  if (!win) {
+    setDebug({ step: "postToGame.no_frame", type, payload });
+    return false;
+  }
+
+  win.postMessage(
+    { source: "BC_MSG", v: 1, type, ...payload },
+    window.location.origin
+  );
+
+  return true;
+}
+
 function sendPremiumNav(action) {
   const w = getPremiumFrameWindow();
   if (!w) {
@@ -1257,10 +1277,14 @@ document.getElementById("btnEnterPremium").addEventListener("click", () => decid
 document.getElementById("btnLogoutPremium").addEventListener("click", () => logoutAll("premium.logout"));
 document.getElementById("btnManagerBoard").addEventListener("click", () => {
   // only managers should see/use this (we will hide it in renderHud below)
-  sendPremiumNav("manager_board");
+  postToGame("nav", { target: "manager_board" });
 });
 document.getElementById("btnFiveMinRep").addEventListener("click", () => {
-  sendPremiumNav("five_min_rep");
+  postToGame("nav", { target: "five_min_drill" });
+});
+document.getElementById("btnTopFiveMinDrill")?.addEventListener("click", () => {
+  // Tell iframe to open/start drill
+  postToGame("nav", { target: "five_min_drill" });
 });
 document.getElementById("btnOpenHud").addEventListener("click", () => {
   renderHud();
