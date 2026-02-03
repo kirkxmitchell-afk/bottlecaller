@@ -3071,8 +3071,14 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
       initButtons();
       applyRoleGatingToSetupUI();
 
-      // Always start at Welcome
-      showScreen("screenWelcome");
+      // Decide initial screen (premium should land on Home)
+      const hasSeenCover = localStorage.getItem(coverKey) === "true";
+
+      if (isDemo) {
+        showScreen(hasSeenCover ? "screenHome" : "screenWelcome");
+      } else {
+        showScreen("screenHome");
+      }
       updateCounts();
 
       // Helpful debug (optional)
