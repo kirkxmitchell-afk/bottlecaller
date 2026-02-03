@@ -260,6 +260,29 @@ document.querySelector("#app").innerHTML = `
     <div id="hudMsg" class="small" style="margin-top:10px;"></div>
   </div>
 
+  <!-- MANAGER BOARD OVERLAY -->
+  <div id="mgrBackdrop" class="hidden"
+    style="position:fixed; inset:0; background: rgba(0,0,0,0.55); z-index: 100000;"></div>
+
+  <div id="mgrPanel" class="hidden"
+    style="
+      position:fixed; left: 12px; right: 12px; top: 12px;
+      max-width: 980px; margin: 0 auto;
+      z-index: 100001;
+      background: #0b0d0f; color: #fff;
+      border-radius: 14px;
+      padding: 12px;
+      border: 1px solid rgba(255,255,255,0.10);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    ">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+      <b>Manager Board</b>
+      <button id="btnCloseMgr" type="button" style="font-size:12px;">Close</button>
+    </div>
+
+    <div id="mgrBody" style="margin-top:10px; font-size:13px; opacity:.95;"></div>
+  </div>
+
   <!-- DEBUG PANEL -->
   <pre id="debugPanel"
     style="
@@ -408,6 +431,67 @@ function setHomeAuthUI(isAuthed) {
     badge?.classList.add("hidden");
     logoutBtn?.classList.add("hidden");
   }
+}
+
+function openMgrBoard() {
+  document.getElementById("mgrBackdrop").classList.remove("hidden");
+  document.getElementById("mgrPanel").classList.remove("hidden");
+}
+
+function closeMgrBoard() {
+  document.getElementById("mgrBackdrop").classList.add("hidden");
+  document.getElementById("mgrPanel").classList.add("hidden");
+}
+
+async function loadMgrBoard() {
+  const body = document.getElementById("mgrBody");
+  body.innerHTML = "Loading...";
+
+  const userId = appState.session?.user?.id;
+  if (!userId) {
+    body.innerHTML = "Not logged in.";
+    return;
+  }
+
+  // Fetch view row for this user
+  const res = await supabase.from("bc_manager_board_v1").select("*").eq("user_id", userId).maybeSingle();
+
+  if (res.error) {
+    body.innerHTML = "Load failed: " + res.error.message;
+    return;
+  }
+  if (!res.data) {
+    body.innerHTML = "No data yet.";
+    return;
+  }
+
+  const r = res.data;
+  body.innerHTML = `
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+      <div class="card" style="padding:10px; border:1px solid rgba(255,255,255,.08); border-radius:12px;">
+        <div><b>Readiness:</b> ${r.readiness || "-"}</div>
+        <div><b>Shift suitability:</b> ${r.shift_suitability || "-"}</div>
+        <div><b>Pairing requirement:</b> ${r.pairing_requirement || "-"}</div>
+        <div><b>Trend:</b> ${r.trend || "-"}</div>
+        <div><b>Confidence:</b> ${r.confidence || "-"}</div>
+      </div>
+
+      <div class="card" style="padding:10px; border:1px solid rgba(255,255,255,.08); border-radius:12px;">
+        <div><b>Weakest link:</b> ${r.weakest_link || "-"}</div>
+        <div><b>Weakest rate:</b> ${r.weakest_rate ?? "-"}</div>
+        <div><b>Ritual done today:</b> ${String(r.ritual_done_today)}</div>
+        <div><b>Rituals last 7d:</b> ${r.rituals_last_7d ?? "-"}</div>
+        <div><b>Last ritual at:</b> ${r.last_ritual_at || "-"}</div>
+      </div>
+
+      <div class="card" style="grid-column: 1 / -1; padding:10px; border:1px solid rgba(255,255,255,.08); border-radius:12px;">
+        <div><b>Drill title:</b> ${r.drill_title || "-"}</div>
+        <div style="margin-top:6px;"><b>Drill script:</b><br/>${(r.drill_script || "-").replace(/\\n/g,"<br/>")}</div>
+        <div style="margin-top:6px;"><b>Manager instruction:</b><br/>${(r.manager_instruction || "-").replace(/\\n/g,"<br/>")}</div>
+        <div style="margin-top:6px;"><b>Directive:</b> ${r.directive || "-"}</div>
+      </div>
+    </div>
+  `;
 }
 
 // Premium entitlement check (Option 2)
@@ -1422,7 +1506,8 @@ document.getElementById("btnEnterPremium").addEventListener("click", () => decid
 
 document.getElementById("btnLogoutPremium").addEventListener("click", () => logoutAll("premium.logout"));
 document.getElementById("btnManagerBoard")?.addEventListener("click", () => {
-  postNavToPremiumIframe("managerBoard");
+  openMgrBoard();
+  void loadMgrBoard();
 });
 document.getElementById("btnFiveMinRep")?.addEventListener("click", () => {
   postNavToPremiumIframe("fiveMinDrill");
@@ -1434,6 +1519,8 @@ document.getElementById("btnOpenHud").addEventListener("click", () => {
 
 document.getElementById("btnCloseHud").addEventListener("click", closeHud);
 document.getElementById("hudBackdrop").addEventListener("click", closeHud);
+document.getElementById("btnCloseMgr")?.addEventListener("click", closeMgrBoard);
+document.getElementById("mgrBackdrop")?.addEventListener("click", closeMgrBoard);
 document.getElementById("btnBackToPremium")?.addEventListener("click", () => {
   showScreen("screenPremiumApp");
 });
