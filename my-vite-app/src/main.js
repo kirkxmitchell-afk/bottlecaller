@@ -538,6 +538,21 @@ function postToPremiumIframe(message) {
   return true;
 }
 
+function postNavToPremiumIframe(screen) {
+  const frame = document.getElementById("premiumRootFrame");
+  if (!frame || !frame.contentWindow) {
+    setDebug({ step: "nav.post.failed", reason: "no premium iframe", screen });
+    return;
+  }
+
+  frame.contentWindow.postMessage(
+    { source: "BC_MSG", v: 1, type: "nav", screen },
+    window.location.origin
+  );
+
+  setDebug({ step: "nav.post.sent", screen, time: new Date().toISOString() });
+}
+
 // ✅ Optional auto-resize (requires matching postMessage in game.html)
 window.addEventListener("message", (event) => {
   const data = event?.data;
@@ -1407,12 +1422,10 @@ document.getElementById("btnEnterPremium").addEventListener("click", () => decid
 
 document.getElementById("btnLogoutPremium").addEventListener("click", () => logoutAll("premium.logout"));
 document.getElementById("btnManagerBoard")?.addEventListener("click", () => {
-  const ok = postToPremiumIframe({ type: "nav", screen: "managerBoard" });
-  if (!ok) setDebug({ step: "btnManagerBoard.failed", reason: "premium iframe not ready" });
+  postNavToPremiumIframe("managerBoard");
 });
-document.getElementById("btnFiveMinRep").addEventListener("click", () => {
-  const ok = postToPremiumIframe({ type: "nav", screen: "fiveMinDrill" });
-  if (!ok) setDebug({ step: "btnFiveMinRep.failed", reason: "premium iframe not ready" });
+document.getElementById("btnFiveMinRep")?.addEventListener("click", () => {
+  postNavToPremiumIframe("fiveMinDrill");
 });
 document.getElementById("btnOpenHud").addEventListener("click", () => {
   renderHud();
