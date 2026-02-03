@@ -370,7 +370,7 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
         if (m.type !== "nav") return;
 
         // 1) Manager Board
-        if (m.action === "manager_board") {
+        if (m.action === "manager_board" || m.target === "manager_board") {
           // Prefer clicking an existing in-iframe button if you have one:
           const btn = document.getElementById("btnManagerBoard");
           if (btn) { btn.click(); return; }
@@ -386,7 +386,7 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
         }
 
         // 2) 5-Min Rep
-        if (m.action === "five_min_rep") {
+        if (m.action === "five_min_rep" || m.target === "five_min_drill") {
           // Click the existing drill button if it exists
           const btn = document.getElementById("btnFiveMinDrill");
           if (btn) { btn.click(); return; }
@@ -397,7 +397,7 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
             return;
           }
 
-          console.warn("[BC] five_min_rep: no handler found");
+          console.warn("[BC] five_min_drill: handler missing");
           return;
         }
       });
