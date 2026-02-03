@@ -347,6 +347,8 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
 
       const role = BC_CTX?.role || null;
       const restaurantId = BC_CTX?.restaurantId || null;
+      const isManager = role === "manager";
+      const isWaiter = role === "waiter";
 
       console.log("[BC] ctx:", { role, restaurantId });
 
@@ -586,9 +588,26 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
       const processOptions = ["Stainless steel", "Wild ferment", "Maceration", "Destemming", "Whole bunch pressed", "Hand harvested", "Time on lees"];
 
       // ---------- Runtime state ----------
-      let wines = loadWines();
+      let wines = [];
       let runs = loadRuns();
       let mastery = loadMastery();
+
+      wines = await loadWines();
+      if (isDemo) {
+        wines = DEMO_WINES.slice(); // hard override; demo wines are fixed
+      }
+
+      function reportWinesToParent(mode, wines) {
+        try {
+          window.parent?.postMessage(
+            { source: "BC_MSG", v: 1, type: "wines_report", mode, wines },
+            window.location.origin
+          );
+        } catch {}
+      }
+
+      const mode = new URLSearchParams(location.search).get("mode") || "demo";
+      reportWinesToParent(mode, wines);
 
       // ==============================
       // STRICT UNLOCKS (Option A)
@@ -747,20 +766,42 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
         };
       }
 
-      function loadWines() {
-        const raw = localStorage.getItem(winesKey);
-        if (!raw) return [];
+      async function loadWines() {
+        // Demo stays localStorage forever
+        if (isDemo || !restaurantId) {
+          const raw = localStorage.getItem(winesKey);
+          if (!raw) return [];
+          try {
+            const parsed = JSON.parse(raw);
+            if (!Array.isArray(parsed)) return [];
+            return parsed.map(w => sanitizeWine(w)).slice(0, LIMIT);
+          } catch {
+            return [];
+          }
+        }
+
+        // Premium + restaurantId => DB wines
+        if (!window.WineBridge || typeof window.WineBridge.fetchRestaurantWines !== "function") {
+          alert("WineBridge missing. Confirm /src/game/gameEntry.ts exposes window.WineBridge.");
+          return [];
+        }
+
         try {
-          const parsed = JSON.parse(raw);
-          if (!Array.isArray(parsed)) return [];
-          return parsed.map(w => sanitizeWine(w)).slice(0, LIMIT);
-        } catch {
+          const dbWines = await window.WineBridge.fetchRestaurantWines(restaurantId);
+          // sanitize + enforce LIMIT
+          return (dbWines || []).map(w => sanitizeWine(w)).slice(0, LIMIT);
+        } catch (e) {
+          console.error("[BC] fetchRestaurantWines failed:", e);
+          alert("Failed to load restaurant wines. Check Supabase + RLS.");
           return [];
         }
       }
 
       function saveWines() {
-        localStorage.setItem(winesKey, JSON.stringify((wines || []).slice(0, LIMIT)));
+        // Demo only uses localStorage
+        if (isDemo || !restaurantId) {
+          localStorage.setItem(winesKey, JSON.stringify((wines || []).slice(0, LIMIT)));
+        }
       }
 
       function loadRuns() {
@@ -885,6 +926,26 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
         btnResetRuns: "btnResetRunsPremium",
         btnResetWines: "btnResetWinesPremium"
       };
+
+      // In premium waiter mode, disable setup edits
+      function applyRoleGatingToSetupUI() {
+        if (isDemo) return; // demo doesn't care
+        if (!restaurantId) return;
+
+        if (!isManager) {
+          // disable add + inputs (waiter should not edit restaurant wines)
+          const addBtn = document.getElementById(ids.addWineBtn);
+          if (addBtn) addBtn.disabled = true;
+
+          [ids.wineName, ids.wineVarietal, ids.region, ids.story, ids.process].forEach((id) => {
+            const el = document.getElementById(id);
+            if (el) el.disabled = true;
+          });
+
+          // Also stop selecting tags (simple block)
+          // (You can leave the UI visible but inert)
+        }
+      }
 
       // ---------- UI: counts ----------
       function renderHomeCounts() {
@@ -1059,14 +1120,29 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
         updateCounts();
       }
 
-      function deleteWine(idToDelete) {
+      async function deleteWine(idToDelete) {
+        if (!isDemo && restaurantId) {
+          if (!isManager) return;
+
+          try {
+            await window.WineBridge.deleteRestaurantWine(idToDelete);
+            wines = await loadWines();
+            renderWineTables();
+          } catch (e) {
+            console.error("[BC] deleteRestaurantWine failed:", e);
+            alert("Failed to delete wine (check RLS).");
+          }
+          return;
+        }
+
+        // demo/local fallback
         wines = wines.filter(w => w.id !== idToDelete).slice(0, LIMIT);
         saveWines();
         renderWineTables();
       }
 
       // ---------- Add wine ----------
-      function addWineFromForm() {
+      async function addWineFromForm() {
         if (wines.length >= LIMIT) return;
 
         const nameEl = document.getElementById(ids.wineName);
@@ -1091,9 +1167,42 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
         }
 
         const wine = { id: generateWineId(), name, varietal, fruitTags, textureTags, oakLevel, process, region, story };
-        wines.push(wine);
-        wines = wines.slice(0, LIMIT);
-        saveWines();
+        let usedDb = false;
+
+        if (!isDemo && restaurantId) {
+          if (!isManager) {
+            alert("Only managers can edit the restaurant wine list.");
+            return;
+          }
+
+          try {
+            await window.WineBridge.addRestaurantWine(restaurantId, {
+              name,
+              varietal,
+              fruitTags,
+              textureTags,
+              oakLevel,
+              process,
+              region,
+              story
+            });
+
+            // Reload wines from DB (single source of truth)
+            wines = await loadWines();
+            usedDb = true;
+          } catch (e) {
+            console.error("[BC] addRestaurantWine failed:", e);
+            alert("Failed to save wine (check RLS / role / restaurantId).");
+            return;
+          }
+        }
+
+        if (!usedDb) {
+          // demo fallback (existing behavior)
+          wines.push(wine);
+          wines = wines.slice(0, LIMIT);
+          saveWines();
+        }
 
         if (nameEl) nameEl.value = "";
         if (varietalEl) varietalEl.value = "";
@@ -2714,6 +2823,7 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
       buildOptionButtons(ids.fruitOptions, fruitOptions);
       buildOptionButtons(ids.textureOptions, textureOptions);
       buildOptionButtons(ids.oakOptions, oakOptions);
+      applyRoleGatingToSetupUI();
 
       updateWineTagsSelections(ids.fruitOptions, 2);
       updateWineTagsSelections(ids.textureOptions, 2);
@@ -2721,6 +2831,7 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
 
       renderWineTables();
       initButtons();
+      applyRoleGatingToSetupUI();
 
       // Always start at Welcome
       showScreen("screenWelcome");
