@@ -298,7 +298,7 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
     alert("App error: " + (e.reason && e.reason.message ? e.reason.message : String(e.reason)));
   });
 
-  document.addEventListener("DOMContentLoaded", () => {
+  document.addEventListener("DOMContentLoaded", async () => {
     try {
       if (window.__BC_INIT_DONE__) return;
       window.__BC_INIT_DONE__ = true;
@@ -309,6 +309,46 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
       const bcMode = (window.__BC_MODE__ === "premium") ? "premium" : "demo";
       const isDemo = bcMode === "demo";
       const LIMIT = isDemo ? 2 : 10;
+
+      // ============================================================
+      // ✅ CONTEXT HANDSHAKE (role + restaurantId from parent app)
+      // ============================================================
+      function requestCtxFromParent() {
+        return new Promise((resolve) => {
+          const TRUSTED_SOURCE = "BC_MSG";
+          const VERSION = 1;
+
+          function onMsg(e) {
+            const m = e.data;
+            if (!m || m.source !== TRUSTED_SOURCE || m.v !== VERSION) return;
+            if (m.type !== "ctx") return;
+            window.removeEventListener("message", onMsg);
+            resolve(m.ctx || null);
+          }
+
+          window.addEventListener("message", onMsg);
+
+          // ask parent
+          window.parent.postMessage(
+            { source: TRUSTED_SOURCE, v: VERSION, type: "ctx_request", mode: bcMode },
+            window.location.origin
+          );
+
+          // safety timeout (don’t hang forever)
+          setTimeout(() => {
+            window.removeEventListener("message", onMsg);
+            resolve(null);
+          }, 1500);
+        });
+      }
+
+      const BC_CTX = await requestCtxFromParent();
+      window.__BC_CTX__ = BC_CTX;
+
+      const role = BC_CTX?.role || null;
+      const restaurantId = BC_CTX?.restaurantId || null;
+
+      console.log("[BC] ctx:", { role, restaurantId });
 
       // ---------- Remove all non-mode DOM (prevents any bleed) ----------
       function removeEl(id) {
