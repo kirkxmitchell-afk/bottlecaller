@@ -932,6 +932,18 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
         return Math.max(1, (s.repDone || 0) + 1); // rep you're currently playing
       }
 
+      function todayKey() {
+        const t = new Date();
+        const y = t.getFullYear();
+        const m = String(t.getMonth() + 1).padStart(2, "0");
+        const d = String(t.getDate()).padStart(2, "0");
+        return `${y}-${m}-${d}`;
+      }
+
+      function drillDoneKey() {
+        return `bc_last_drill_day_${bcMode}`;
+      }
+
       function renderDrillSummary() {
         const body = document.getElementById("drillSummaryBody");
         if (!body) return;
@@ -2625,6 +2637,7 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
 
             // If drill complete -> end session now (no next encounter)
             if (drillRepDone >= drillRepTarget) {
+              localStorage.setItem(drillDoneKey(), todayKey());
               endDrillSession();
               return;
             }
@@ -2989,15 +3002,10 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
         bindInput(btnFiveMinDrill, () => {
           if (!isUnlocked()) { alert("Add " + LIMIT + " wines to start."); return; }
 
-          const today = new Date().toISOString().slice(0, 10);
-          const lastKey = "bc_last_drill_day_" + (window.__BC_MODE__ === "premium" ? "premium" : "demo");
-          const last = localStorage.getItem(lastKey);
-
-          if (last === today) {
+          if (localStorage.getItem(drillDoneKey()) === todayKey()) {
             alert("5-Min Drill already done today. Come back tomorrow.");
             return;
           }
-          localStorage.setItem(lastKey, today);
 
           window.__BC_SESSION__ = {
             type: "drill",
