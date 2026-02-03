@@ -107,6 +107,10 @@ document.querySelector("#app").innerHTML = `
         </div>
         <div class="row">
           <button id="btnOpenHud" class="btn-ghost" type="button">Menu</button>
+
+          <button id="btnManagerBoard" class="btn-ghost" type="button">Manager Board</button>
+          <button id="btnFiveMinRep" class="btn-ghost" type="button">5-Min Rep</button>
+
           <button id="btnLogoutPremium" class="btn-danger" type="button">Logout</button>
         </div>
       </div>
@@ -325,6 +329,24 @@ function normEmail(v) {
 }
 function normCode(v) {
   return (v || "").trim().toUpperCase();
+}
+
+function getPremiumFrameWindow() {
+  const frame = document.getElementById("premiumRootFrame");
+  return frame?.contentWindow || null;
+}
+
+function sendPremiumNav(action) {
+  const w = getPremiumFrameWindow();
+  if (!w) {
+    setDebug({ step: "premium.nav.failed", reason: "no_frame_window", action });
+    return;
+  }
+
+  w.postMessage(
+    { source: "BC_MSG", v: 1, type: "nav", action },
+    window.location.origin
+  );
 }
 
 function setHomeAuthUI(isAuthed) {
@@ -859,6 +881,12 @@ function renderHud() {
   document.getElementById("hudSeatLimit").textContent = r?.seat_limit ?? "-";
   document.getElementById("hudRequireInvite").textContent = r ? (r.require_invite ? "Yes" : "No") : "-";
 
+  const mgrBtn = document.getElementById("btnManagerBoard");
+  if (mgrBtn) {
+    if (role === "manager") mgrBtn.classList.remove("hidden");
+    else mgrBtn.classList.add("hidden");
+  }
+
   const badge = document.getElementById("premiumBadge");
   if (badge) badge.textContent = `PREMIUM • ${String(role).toUpperCase()}`;
 
@@ -1227,6 +1255,13 @@ document.getElementById("btnCopyCode").addEventListener("click", async () => {
 document.getElementById("btnEnterPremium").addEventListener("click", () => decideRoute("enterPremium"));
 
 document.getElementById("btnLogoutPremium").addEventListener("click", () => logoutAll("premium.logout"));
+document.getElementById("btnManagerBoard").addEventListener("click", () => {
+  // only managers should see/use this (we will hide it in renderHud below)
+  sendPremiumNav("manager_board");
+});
+document.getElementById("btnFiveMinRep").addEventListener("click", () => {
+  sendPremiumNav("five_min_rep");
+});
 document.getElementById("btnOpenHud").addEventListener("click", () => {
   renderHud();
   openHud();

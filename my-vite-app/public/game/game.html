@@ -365,6 +365,44 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
 
       console.log("[BC] ctx:", { role, restaurantId });
 
+      window.addEventListener("message", (e) => {
+        const m = e?.data;
+        if (!m || m.source !== "BC_MSG" || m.v !== 1) return;
+        if (m.type !== "nav") return;
+
+        // 1) Manager Board
+        if (m.action === "manager_board") {
+          // Prefer clicking an existing in-iframe button if you have one:
+          const btn = document.getElementById("btnManagerBoard");
+          if (btn) { btn.click(); return; }
+
+          // Or show a screen if you already have it:
+          if (typeof showScreen === "function" && document.getElementById("screenManagerBoard")) {
+            showScreen("screenManagerBoard");
+            return;
+          }
+
+          console.warn("[BC] manager_board: no handler found");
+          return;
+        }
+
+        // 2) 5-Min Rep
+        if (m.action === "five_min_rep") {
+          // Click the existing drill button if it exists
+          const btn = document.getElementById("btnFiveMinDrill");
+          if (btn) { btn.click(); return; }
+
+          // Or call your drill function if that’s what you’re using
+          if (typeof startFiveMinDrill === "function") {
+            startFiveMinDrill();
+            return;
+          }
+
+          console.warn("[BC] five_min_rep: no handler found");
+          return;
+        }
+      });
+
       // ---------- Remove all non-mode DOM (prevents any bleed) ----------
       function removeEl(id) {
         const el = document.getElementById(id);
