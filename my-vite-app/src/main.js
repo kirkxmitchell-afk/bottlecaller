@@ -1723,3 +1723,9 @@ supabase.auth.onAuthStateChange((event) => {
     await decideRoute("boot.resume");
   } catch {}
 })();
+
+window.addEventListener("message", (event) => {
+  if (event?.data?.source === "BC_MSG") {
+    console.log("[PARENT] got BC_MSG:", event.data, "origin:", event.origin);
+  }
+});
