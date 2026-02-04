@@ -315,30 +315,6 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
       if (window.__BC_INIT_DONE__) return;
       window.__BC_INIT_DONE__ = true;
 
-      // ------------------------------------------------------------
-      // BC CTX (from parent)
-      // ------------------------------------------------------------
-      window.__BC_CTX__ = window.__BC_CTX__ || { userId: null, restaurantId: null, role: null, mode: null };
-
-      window.addEventListener("message", (event) => {
-        const msg = event?.data;
-        if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
-        if (event.origin !== window.location.origin) return;
-
-        if (msg.type === "bc_ctx") {
-          window.__BC_CTX__ = msg.ctx || window.__BC_CTX__;
-          console.log("[BC] ctx received ✅", window.__BC_CTX__);
-        }
-      });
-
-      // Ask parent for ctx (in case parent didn't push yet)
-      try {
-        window.parent?.postMessage({ source: "BC_MSG", v: 1, type: "bc_ctx_request" }, window.location.origin);
-        console.log("[BC] ctx requested → parent");
-      } catch (e) {
-        console.warn("[BC] ctx request failed", e);
-      }
-
       function bcEmitEvent(eventType, payload) {
         try {
           const ctx = window.__BC_CTX__ || null;
@@ -446,6 +422,35 @@ function openManagerBoard() {
       const bcMode = (window.__BC_MODE__ === "premium") ? "premium" : "demo";
       const isDemo = bcMode === "demo";
       const LIMIT = isDemo ? 2 : 10;
+
+      // ------------------------------------------------------------
+      // BC CTX (iframe) — receive ctx from parent and store globally
+      // ------------------------------------------------------------
+      window.__BC_CTX__ = null;
+
+      window.addEventListener("message", (event) => {
+        const msg = event?.data;
+        if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
+        if (event.origin !== window.location.origin) return;
+
+        // ✅ Receive ctx from parent
+        if (msg.type === "bc_ctx") {
+          window.__BC_CTX__ = msg.ctx || null;
+          console.log("[BC] ctx received ✅", window.__BC_CTX__);
+          return;
+        }
+      });
+
+      // Ask parent for ctx (in case parent didn't push yet)
+      try {
+        window.parent?.postMessage(
+          { source: "BC_MSG", v: 1, type: "bc_ctx_request", mode: bcMode },
+          window.location.origin
+        );
+        console.log("[BC] ctx requested…", { mode: bcMode });
+      } catch (e) {
+        console.warn("[BC] ctx request failed", e);
+      }
 
       // ============================================================
       // ✅ CONTEXT HANDSHAKE (role + restaurantId from parent app)
