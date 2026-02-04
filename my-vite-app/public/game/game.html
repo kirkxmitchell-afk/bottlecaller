@@ -443,26 +443,13 @@ function openManagerBoard() {
         if (m.to === "FIVE_MIN_REP") {
           console.log("[BC] NAV: FIVE_MIN_REP");
 
-          // Try the buttons you already proved exist in the iframe
-          const tryIds = [
-            "btnStartAnotherDrill",     // from Drill Summary screen
-            "btnStartDrillPremium",     // if you still have it
-            "btnWelcomeStart",          // if drill starts from welcome path
-            "btnContinuePremium"        // fallback if your drill starts after setup screen
-          ];
-
-          let clicked = false;
-          for (const id of tryIds) {
-            const btn = document.getElementById(id);
-            if (btn) {
-              btn.click();
-              clicked = true;
-              console.log("[BC] NAV clicked:", id);
-              break;
-            }
+          const fn = window.__BC_NAV__?.startFiveMinuteDrill;
+          if (typeof fn === "function") {
+            fn(); // <-- reliable: calls the real drill start
+            console.log("[BC] NAV startFiveMinuteDrill() called ✅");
+          } else {
+            console.warn("[BC] NAV FIVE_MIN_REP: startFiveMinuteDrill not exposed");
           }
-
-          if (!clicked) console.warn("[BC] NAV FIVE_MIN_REP: no known drill button found");
         }
       });
 
@@ -3242,6 +3229,16 @@ function openManagerBoard() {
       renderWineTables();
       initButtons();
       applyRoleGatingToSetupUI();
+
+      // ============================================================
+      // ✅ EXPOSE NAV ENTRY POINTS (parent can call reliably)
+      // ============================================================
+      window.__BC_NAV__ = window.__BC_NAV__ || {};
+
+      // If your function is named startFiveMinuteDrill, expose it:
+      if (typeof startFiveMinuteDrill === "function") {
+        window.__BC_NAV__.startFiveMinuteDrill = startFiveMinuteDrill;
+      }
 
       // Decide initial screen (premium should land on Home)
       const hasSeenCover = localStorage.getItem(coverKey) === "true";
