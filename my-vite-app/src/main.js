@@ -1076,6 +1076,26 @@ async function routeDemo(reason = "manual") {
   showScreen("screenGameDemo");
   renderDemoJoinBlock();
   mountGameIframe("gameRootDemo", "demo");
+  setTimeout(() => {
+    const frame = document.getElementById("gameRootDemoFrame");
+    const w = frame?.contentWindow;
+    if (!w) return;
+
+    w.postMessage(
+      {
+        source: "BC_MSG",
+        v: 1,
+        type: "bc_ctx",
+        ctx: {
+          userId: appState.session?.user?.id || null,
+          restaurantId: appState.profile?.restaurant_id || null,
+          role: appState.profile?.role || null,
+          mode: "demo",
+        },
+      },
+      window.location.origin
+    );
+  }, 50);
 }
 
 async function routePremium(reason = "manual") {
@@ -1119,6 +1139,26 @@ async function routePremium(reason = "manual") {
 
       showScreen("screenPremiumApp");
       mountGameIframe("premiumRoot", "premium");
+      setTimeout(() => {
+        const frame = document.getElementById("premiumRootFrame");
+        const w = frame?.contentWindow;
+        if (!w) return;
+
+        w.postMessage(
+          {
+            source: "BC_MSG",
+            v: 1,
+            type: "bc_ctx",
+            ctx: {
+              userId: appState.session?.user?.id || null,
+              restaurantId: appState.profile?.restaurant_id || null,
+              role: appState.profile?.role || null,
+              mode: "premium",
+            },
+          },
+          window.location.origin
+        );
+      }, 50);
       return;
     }
 
@@ -1150,6 +1190,26 @@ async function routePremium(reason = "manual") {
 
     showScreen("screenPremiumApp");
     mountGameIframe("premiumRoot", "premium");
+    setTimeout(() => {
+      const frame = document.getElementById("premiumRootFrame");
+      const w = frame?.contentWindow;
+      if (!w) return;
+
+      w.postMessage(
+        {
+          source: "BC_MSG",
+          v: 1,
+          type: "bc_ctx",
+          ctx: {
+            userId: appState.session?.user?.id || null,
+            restaurantId: appState.profile?.restaurant_id || null,
+            role: appState.profile?.role || null,
+            mode: "premium",
+          },
+        },
+        window.location.origin
+      );
+    }, 50);
   } catch (e) {
     console.error(e);
     setDebug({ step: "premium.route.crash", time: new Date().toISOString(), error: e.message || String(e) });
