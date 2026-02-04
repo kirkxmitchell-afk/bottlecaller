@@ -737,6 +737,29 @@ window.addEventListener("message", async (event) => {
   }
 });
 
+// --- BC ctx responder (parent) ---
+window.addEventListener("message", (event) => {
+  try {
+    const msg = event?.data;
+    if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
+    if (event.origin !== window.location.origin) return;
+
+    if (msg.type !== "bc_ctx_request") return;
+
+    const ctx = {
+      userId: appState.session?.user?.id || null,
+      restaurantId: appState.profile?.restaurant_id || null,
+      role: appState.profile?.role || null,
+      mode: appMode, // or "demo"/"premium" if you prefer
+    };
+
+    event.source?.postMessage({ source: "BC_MSG", v: 1, type: "bc_ctx", ctx }, event.origin);
+    console.log("[BC] ctx served ✅", ctx);
+  } catch (e) {
+    console.warn("[BC] ctx serve failed", e);
+  }
+});
+
 // ------------------------------------------------------------
 // Data loaders
 // ------------------------------------------------------------

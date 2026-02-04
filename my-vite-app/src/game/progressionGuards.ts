@@ -194,11 +194,11 @@ function gate_T1_to_T2(win: RecentWindow): { ok: boolean; reasons: string[] } {
 function gate_T2_to_T3(win: RecentWindow): { ok: boolean; reasons: string[] } {
   const reasons: string[] = [];
   // “recovery success > failure”
-  const fails = Math.max(0, win.recoveryAttempts - win.recoverySuccess);
-  if (!(win.recovery controversies?)) {
-    // do nothing; keep as is
+  const fails = Math.max(0, (win.recoveryAttempts ?? 0) - (win.recoverySuccess ?? 0));
+  if ((win.recoveryAttempts ?? 0) < 1) reasons.push("recovery_not_attempted");
+  if (!((win.recoverySuccess ?? 0) > fails)) {
+    reasons.push("recovery_not_net_positive");
   }
-  if (!(win.recoverySuccess > fails)) reasons.push("recovery_not_net_positive");
   // “no panic pattern” handled earlier
   // “confidence trend rising or stable” -> approximate using weakestRate + reds
   if (win.reds > 0) reasons.push("recent_red_present");

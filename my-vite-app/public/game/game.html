@@ -465,6 +465,33 @@ function openManagerBoard() {
 
       console.log("[BC] ctx:", { role, restaurantId });
 
+      // --- BC ctx bootstrap (iframe) ---
+      window.__BC_CTX__ = window.__BC_CTX__ || { userId: null, restaurantId: null, role: null, mode: null };
+
+      function bcRequestCtx() {
+        try {
+          window.parent?.postMessage({ source: "BC_MSG", v: 1, type: "bc_ctx_request" }, window.location.origin);
+          console.log("[BC] ctx requested");
+        } catch (e) {
+          console.warn("[BC] ctx request failed", e);
+        }
+      }
+
+      // request immediately + retry once (covers timing)
+      bcRequestCtx();
+      setTimeout(bcRequestCtx, 250);
+
+      window.addEventListener("message", (event) => {
+        const msg = event?.data;
+        if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
+        if (event.origin !== window.location.origin) return;
+
+        if (msg.type === "bc_ctx") {
+          window.__BC_CTX__ = msg.ctx || window.__BC_CTX__;
+          console.log("[BC] ctx received ✅", window.__BC_CTX__);
+        }
+      });
+
       // ============================================================
       // ✅ NAV from parent (main.js) — click existing drill buttons
       // ============================================================
