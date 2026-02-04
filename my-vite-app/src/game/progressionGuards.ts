@@ -231,14 +231,17 @@ function sanitize(intent: ProgressionDecision): ProgressionDecision {
 export function installProgressionGuards(getCtx: () => BcCtx | null) {
   // runtime assertions you want the game to obey
   function assertCtx() {
-    const ctx = getCtx();
-    const mode = ctx?.mode || (window as any).__BC_MODE__ || null;
+    const w = window as any;
+    const ctx = w.__BC_CTX__ || {};
+    const mode = ctx.mode || w.__BC_MODE__ || null;
+
     if (!mode) throw new Error("[PROGRESSION] ctx missing mode");
-    if (!ctx?.userId) throw new Error("[PROGRESSION] ctx missing userId");
-    if (mode === "premium" && !ctx.restaurantId) {
-      throw new Error("[PROGRESSION] premium requires restaurantId");
-    }
-    return { ...ctx, mode };
+    if (!ctx.userId) throw new Error("[PROGRESSION] ctx missing userId");
+    if (!ctx.restaurantId) throw new Error("[PROGRESSION] ctx missing restaurantId");
+
+    const normalized = { ...ctx, mode };
+    w.__BC_CTX__ = normalized;      // keep it canonical
+    return normalized;              // ✅ now your console call returns data
   }
 
   // expose a single callable “contract” API inside the iframe
