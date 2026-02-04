@@ -2,12 +2,14 @@
 import { installEngineBridge } from "./engineBridge";
 import { ENCOUNTERS, validateEncounters } from "./encounter";
 import * as WineBridge from "./wineBridge";
+import * as EventLogBridge from "./eventLogBridge";
 
 
 declare global {
   interface Window {
     EngineBridge?: any;
     WineBridge?: any;
+    EventLogBridge?: any;
     __BC_ENCOUNTERS__?: any;
     __BC_GAME_ENTRY_INSTALLED__?: boolean;
   }
@@ -29,6 +31,7 @@ declare global {
 
   // ✅ expose wine API
   window.WineBridge = WineBridge;
+  window.EventLogBridge = EventLogBridge;
 
   // Expose encounters -> game.html can read this without importing TS
   window.__BC_ENCOUNTERS__ = ENCOUNTERS;

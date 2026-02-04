@@ -2840,7 +2840,9 @@ function openManagerBoard() {
 
             // If drill complete -> end session now (no next encounter)
             if (drillRepDone >= drillRepTarget) {
-              localStorage.setItem(drillDoneKey(), localDayKey());
+              if (bcMode !== "premium") {
+                localStorage.setItem(drillDoneKey(), localDayKey());
+              }
               endDrillSession();
               return;
             }
@@ -3202,12 +3204,20 @@ function openManagerBoard() {
           startDrillSession();
         });
 
-        bindInput(btnFiveMinDrill, () => {
+        bindInput(btnFiveMinDrill, async () => {
           if (!isUnlocked()) { alert("Add " + LIMIT + " wines to start."); return; }
 
-          if (localStorage.getItem(drillDoneKey()) === localDayKey()) {
-            alert("5-Min Drill already done today. Come back tomorrow.");
-            return;
+          if (bcMode === "premium") {
+            const doneToday = await window.EventLogBridge.hasRitualCompletedTodayZA();
+            if (doneToday) {
+              alert("5-Min Drill already done today. Come back tomorrow.");
+              return;
+            }
+          } else {
+            if (localStorage.getItem(drillDoneKey()) === localDayKey()) {
+              alert("5-Min Drill already done today. Come back tomorrow.");
+              return;
+            }
           }
 
           window.__BC_SESSION__ = {
