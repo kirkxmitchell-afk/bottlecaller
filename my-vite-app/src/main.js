@@ -683,10 +683,28 @@ window.addEventListener("message", async (event) => {
     if (!eventType) return;
 
     const userId = appState.session?.user?.id || null;
-    const restaurantId = appState.profile?.restaurant_id || null;
 
-    // if not authed, ignore
-    if (!userId) return;
+    // parent truth first
+    let restaurantId = appState.profile?.restaurant_id || null;
+
+    // fallback only (helps during early hydration)
+    if (!restaurantId && payload?.restaurantId) restaurantId = payload.restaurantId;
+
+    // hard stop: DB requires restaurant_id
+    if (!userId || !restaurantId) {
+      event.source?.postMessage(
+        {
+          source: "BC_MSG",
+          v: 1,
+          type: "event_log_ack",
+          ok: false,
+          eventType,
+          error: !userId ? "not_authed" : "missing_restaurant_id",
+        },
+        event.origin
+      );
+      return;
+    }
 
     const row = {
       event_id: payload?.eventId || crypto.randomUUID(),
@@ -697,7 +715,9 @@ window.addEventListener("message", async (event) => {
       occurred_at: new Date().toISOString(),
     };
 
-    const ins = await supabase.from("bc_event_log").insert(row);
+    const ins = await supabase
+      .from("bc_event_log")
+      .upsert(row, { onConflict: "event_id" });
     if (ins.error) throw ins.error;
 
     // reply ack (optional)

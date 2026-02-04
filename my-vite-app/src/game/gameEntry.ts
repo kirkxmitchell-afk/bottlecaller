@@ -3,6 +3,7 @@ import { installEngineBridge } from "./engineBridge";
 import { ENCOUNTERS, validateEncounters } from "./encounter";
 import * as WineBridge from "./wineBridge";
 import * as EventLogBridge from "./eventLogBridge";
+import * as ProgressionBridge from "./progressionBridge";
 
 
 declare global {
@@ -10,6 +11,7 @@ declare global {
     EngineBridge?: any;
     WineBridge?: any;
     EventLogBridge?: any;
+    ProgressionBridge?: any;
     __BC_ENCOUNTERS__?: any;
     __BC_GAME_ENTRY_INSTALLED__?: boolean;
   }
@@ -32,12 +34,14 @@ declare global {
   // ✅ expose wine API
   window.WineBridge = WineBridge;
   window.EventLogBridge = EventLogBridge;
+  window.ProgressionBridge = ProgressionBridge;
 
   // Expose encounters -> game.html can read this without importing TS
   window.__BC_ENCOUNTERS__ = ENCOUNTERS;
 
   console.log("[BC] EngineBridge installed ✅", window.EngineBridge);
   console.log("[BC] WineBridge installed ✅", window.WineBridge);
+  console.log("[BC] ProgressionBridge installed ✅", window.ProgressionBridge);
   console.log("[BC] Encounters loaded ✅", {
     demo: ENCOUNTERS.demo.length,
     premium: ENCOUNTERS.premium.length,

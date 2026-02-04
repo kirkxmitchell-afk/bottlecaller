@@ -317,12 +317,26 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
 
       function bcEmitEvent(eventType, payload) {
         try {
+          const ctx = window.__BC_CTX__ || null;
+
           window.parent.postMessage(
-            { source: "BC_MSG", v: 1, type: "event_log", eventType, payload: payload || {} },
+            {
+              source: "BC_MSG",
+              v: 1,
+              type: "event_log",
+              eventType,
+              payload: {
+                eventId: payload?.eventId || crypto.randomUUID(),
+                ...(payload || {}),
+                // add these two so parent can validate/debug
+                restaurantId: ctx?.restaurantId || null,
+                role: ctx?.role || null,
+              },
+            },
             window.location.origin
           );
         } catch (e) {
-          console.warn("[BC] bcEmitEvent failed", e);
+          console.error("[BC] bcEmitEvent failed:", e);
         }
       }
 
@@ -1223,8 +1237,44 @@ function openManagerBoard() {
         renderDrillSummary();
       }
 
+      async function guardTier(desiredTier) {
+        // Only applies in premium with ctx
+        if (bcMode !== "premium") return desiredTier;
+        if (!window.__BC_CTX__?.userId || !window.__BC_CTX__?.restaurantId) return desiredTier;
+
+        if (!window.ProgressionBridge?.decideAllowedTier) return desiredTier;
+
+        try {
+          const res = await window.ProgressionBridge.decideAllowedTier({
+            userId: window.__BC_CTX__.userId,
+            restaurantId: window.__BC_CTX__.restaurantId,
+            desiredTier,
+            attemptedPromotion: null,
+          });
+
+          console.log("[BC] progression.guard", { desiredTier, tierToServe: res.tierToServe, reasons: res.reasons });
+          return res.tierToServe || desiredTier;
+        } catch (e) {
+          console.warn("[BC] progression.guard failed, falling back:", e);
+          return desiredTier;
+        }
+      }
+
       function isUnlocked() {
         return wines.length >= LIMIT;
+      }
+
+      function pickNextEncounterByTier(list, tier) {
+        if (!Array.isArray(list) || list.length === 0) return null;
+        if (!tier) {
+          const idx = isDemo ? (encounterIndex % list.length) : encounterIndex;
+          return list[idx];
+        }
+
+        const bounds = getTierBounds(tier);
+        const desiredIdx = isDemo ? (encounterIndex % list.length) : encounterIndex;
+        const targetIndex = Math.min(bounds.max - 1, Math.max(bounds.min - 1, desiredIdx));
+        return list[targetIndex] || list[desiredIdx] || list[0] || null;
       }
 
       function pickRandom(arr) {
@@ -2924,7 +2974,7 @@ function openManagerBoard() {
         }
       }
 
-      function startEncounter() {
+      async function startEncounter() {
         if (!isUnlocked()) return;
 
         if (!sessionId) {
@@ -2987,7 +3037,17 @@ function openManagerBoard() {
         // If you WANT demo to loop instead, replace idx line above with:
         // const idx = (encounterIndex % list.length);
 
-        const enc = list[idx];
+        let enc = list[idx];
+
+        const nextEncounterNumber = enc.encounterNumber ?? (encounterIndex + 1);
+        const desiredTier = getTierFromEncounterNumber(nextEncounterNumber);
+        const allowedTier = await guardTier(desiredTier);
+
+        enc = pickNextEncounterByTier(list, allowedTier || desiredTier);
+        if (enc && Number.isFinite(enc.encounterNumber)) {
+          encounterIndex = Math.max((enc.encounterNumber || 1) - 1, 0);
+          saveEncounterIndex(encounterIndex);
+        }
 
         // ----------------------------
         // Wine selection
@@ -2996,7 +3056,7 @@ function openManagerBoard() {
 
         if (isDemo) {
           // Demo: wine matches encounter index (same pacing)
-          wine = wines[idx] || wines[0] || null;
+          wine = wines[(encounterIndex % list.length)] || wines[0] || null;
         } else {
           // Premium: rotate through wines
           wine = wines[(encounterIndex % wines.length)] || wines[0] || null;
