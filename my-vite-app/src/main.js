@@ -668,6 +668,56 @@ window.addEventListener("message", (event) => {
 });
 
 // ------------------------------------------------------------
+// BC Event Sink: game iframe -> parent -> Supabase (bc_event_log)
+// ------------------------------------------------------------
+window.addEventListener("message", async (event) => {
+  try {
+    const msg = event?.data;
+    if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
+    if (msg.type !== "event_log") return;
+
+    // basic safety: same origin only
+    if (event.origin !== window.location.origin) return;
+
+    const { eventType, payload } = msg;
+    if (!eventType) return;
+
+    const userId = appState.session?.user?.id || null;
+    const restaurantId = appState.profile?.restaurant_id || null;
+
+    // if not authed, ignore
+    if (!userId) return;
+
+    const row = {
+      event_id: payload?.eventId || crypto.randomUUID(),
+      user_id: userId,
+      restaurant_id: restaurantId,
+      event_type: String(eventType),
+      payload: payload || {},
+      occurred_at: new Date().toISOString(),
+    };
+
+    const ins = await supabase.from("bc_event_log").insert(row);
+    if (ins.error) throw ins.error;
+
+    // reply ack (optional)
+    event.source?.postMessage(
+      { source: "BC_MSG", v: 1, type: "event_log_ack", ok: true, eventType },
+      event.origin
+    );
+  } catch (e) {
+    console.error("[BC] event_log failed:", e);
+    // best-effort nack
+    try {
+      event.source?.postMessage(
+        { source: "BC_MSG", v: 1, type: "event_log_ack", ok: false, error: String(e?.message || e) },
+        event.origin
+      );
+    } catch {}
+  }
+});
+
+// ------------------------------------------------------------
 // Data loaders
 // ------------------------------------------------------------
 async function loadProfile(userId) {

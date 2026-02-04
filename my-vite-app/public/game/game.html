@@ -315,6 +315,17 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
       if (window.__BC_INIT_DONE__) return;
       window.__BC_INIT_DONE__ = true;
 
+      function bcEmitEvent(eventType, payload) {
+        try {
+          window.parent.postMessage(
+            { source: "BC_MSG", v: 1, type: "event_log", eventType, payload: payload || {} },
+            window.location.origin
+          );
+        } catch (e) {
+          console.warn("[BC] bcEmitEvent failed", e);
+        }
+      }
+
       // ============================================================
 // 🔌 NAV listener from parent app (main.js top buttons)
 // ============================================================
@@ -2165,6 +2176,40 @@ function openManagerBoard() {
         if (!Array.isArray(runs)) runs = [];
         runs.push(entry);
         saveRuns();
+
+        bcEmitEvent("encounter_resolved", {
+          v: 2,
+          mode: bcMode,
+          sessionId: sessionId || null,
+          seq: (currentEncounter.seq ?? null),
+          encounterId: currentEncounter.id || currentEncounter.encounterId || null,
+          encounterNumber: currentEncounter.encounterNumber ?? null,
+          tier: getTierFromEncounterNumber(currentEncounter.encounterNumber ?? 1),
+          chosen: {
+            guestType: currentEncounter.guestStateSelected || "",
+            mode: currentEncounter.modeSelected || "",
+            hook: currentEncounter.hookSelected || "",
+          },
+          actual: {
+            guestType: currentEncounter.guestStateActual || "",
+          },
+          checks: {
+            readCorrect: !!currentEncounter.readCorrect,
+            modeStatus: currentEncounter.modeStatus || "",
+            hookStatus: currentEncounter.hookStatus || "",
+            deliveryCorrect: !!currentEncounter.deliveryCorrect,
+          },
+          pivot: {
+            type: currentEncounter.pivotType || "",
+            taken: !!currentEncounter.pivotTaken,
+            success: !!currentEncounter.pivotSuccess,
+          },
+          chainScore: currentEncounter.chainScore ?? null,
+          chainSignal: currentEncounter.chainSignal ?? "",
+          performanceGrade: currentEncounter.performanceGrade || "",
+          wineSelected: (currentEncounter.wineSelected?.name) ? currentEncounter.wineSelected.name : "",
+          occurredAtMs: Date.now(),
+        });
 
         currentEncounter.__logged = true;
         updateCounts();
