@@ -741,6 +741,7 @@ function openManagerBoard() {
       let wines = [];
       let runs = loadRuns();
       let mastery = loadMastery();
+      let sessionId = null;
 
       wines = await loadWines();
       if (isDemo) {
@@ -1169,6 +1170,44 @@ function openManagerBoard() {
           row.innerText = `Rep ${i + 1}: ${String(r.chainSignal || "—").toUpperCase()} • Grade ${r.performanceGrade || "—"} • ${r.wineSelected || ""}`;
           body.appendChild(row);
         });
+      }
+
+      function computeSessionStats() {
+        if (!sessionId) {
+          return {
+            encountersResolved: 0,
+            greens: 0,
+            yellows: 0,
+            reds: 0,
+            avgChainScore: 0,
+            anyRed: false,
+            anyRedT2Plus: false,
+          };
+        }
+
+        const list = (runs || []).filter((r) => r && r.sessionId === sessionId);
+        const greens = list.filter((r) => String(r.chainSignal || "").toLowerCase() === "green").length;
+        const yellows = list.filter((r) => String(r.chainSignal || "").toLowerCase() === "yellow").length;
+        const reds = list.filter((r) => String(r.chainSignal || "").toLowerCase() === "red").length;
+        const avgChainScore = list.length
+          ? Math.round((list.reduce((a, r) => a + (Number(r.chainScore) || 0), 0) / list.length) * 10) / 10
+          : 0;
+        const anyRed = reds > 0;
+        const anyRedT2Plus = list.some((r) => {
+          const tier = r.encounterTier ?? getTierFromEncounterNumber(r.encounterNumber ?? 1);
+          const sig = String(r.chainSignal || "").toLowerCase();
+          return sig === "red" && tier >= 2;
+        });
+
+        return {
+          encountersResolved: list.length,
+          greens,
+          yellows,
+          reds,
+          avgChainScore,
+          anyRed,
+          anyRedT2Plus,
+        };
       }
 
       function endDrillSession() {
@@ -2134,6 +2173,7 @@ function openManagerBoard() {
         const entry = {
           timestamp: new Date().toLocaleString(),
           tier: bcMode,
+          sessionId: sessionId || null,
 
           sessionType: sessionType || "progression",
           repIndex: isDrill() ? (drillRepDone + 1) : null,
@@ -2879,6 +2919,20 @@ function openManagerBoard() {
       function startEncounter() {
         if (!isUnlocked()) return;
 
+        if (!sessionId) {
+          sessionId = crypto.randomUUID();
+          const startedKey = `bc_session_started_${bcMode}_${sessionId}`;
+          if (!localStorage.getItem(startedKey)) {
+            bcEmitEvent("session_started", {
+              v: 1,
+              mode: bcMode,
+              sessionId,
+              occurredAtMs: Date.now(),
+            });
+            localStorage.setItem(startedKey, "1");
+          }
+        }
+
         const list = getEncounterListForMode(); // should return demo or premium list based on bcMode
         if (!Array.isArray(list) || list.length === 0) {
           alert("No encounters loaded. Check window.__BC_ENCOUNTERS__.");
@@ -3182,6 +3236,25 @@ function openManagerBoard() {
         });
 
         bindInput(btnBackHomeFromPlay, () => {
+          if (sessionId) {
+            const sessionStats = computeSessionStats();
+            bcEmitEvent("session_ended", {
+              v: 1,
+              mode: bcMode,
+              sessionId,
+              occurredAtMs: Date.now(),
+              summary: {
+                encountersResolved: sessionStats.encountersResolved,
+                greens: sessionStats.greens,
+                yellows: sessionStats.yellows,
+                reds: sessionStats.reds,
+                avgChainScore: sessionStats.avgChainScore,
+                anyRed: sessionStats.anyRed,
+                anyRedT2Plus: sessionStats.anyRedT2Plus,
+              },
+            });
+            sessionId = null;
+          }
           resetNavState();
           showScreen(isDemo ? "screenHome" : "screenWelcome");
         });
