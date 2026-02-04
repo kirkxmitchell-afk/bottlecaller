@@ -611,6 +611,19 @@ function mountGameIframe(targetId, mode /* "demo" | "premium" */) {
   setDebug({ step: "game.iframe.mounted", targetId, mode, src, time: new Date().toISOString() });
 }
 
+function callPremiumIframeNav(fnName) {
+  const frame = document.getElementById("premiumRootFrame");
+  const w = frame?.contentWindow;
+  if (!w) return setDebug({ step: "nav.fail", reason: "no_premium_iframe" });
+
+  const nav = w.__BC_NAV__;
+  if (!nav || typeof nav[fnName] !== "function") {
+    return setDebug({ step: "nav.fail", fnName, reason: "entry_point_missing" });
+  }
+
+  nav[fnName]();
+}
+
 function postToPremiumIframe(message) {
   const frame = document.getElementById("premiumRootFrame");
   if (!frame?.contentWindow) return false;
@@ -1506,11 +1519,10 @@ document.getElementById("btnEnterPremium").addEventListener("click", () => decid
 
 document.getElementById("btnLogoutPremium").addEventListener("click", () => logoutAll("premium.logout"));
 document.getElementById("btnManagerBoard")?.addEventListener("click", () => {
-  openMgrBoard();
-  void loadMgrBoard();
+  callPremiumIframeNav("managerBoard");
 });
 document.getElementById("btnFiveMinRep")?.addEventListener("click", () => {
-  postNavToPremiumIframe("fiveMinDrill");
+  callPremiumIframeNav("fiveMinDrill");
 });
 document.getElementById("btnOpenHud").addEventListener("click", () => {
   renderHud();

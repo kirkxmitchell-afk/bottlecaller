@@ -900,6 +900,37 @@ function openManagerBoard() {
         target.classList.add("active");
       }
 
+      // ============================================================
+      // ✅ NAV ENTRY POINTS (called from parent/topbar)
+      // ============================================================
+      window.__BC_NAV__ = window.__BC_NAV__ || {};
+
+      window.__BC_NAV__.fiveMinDrill = () => {
+        // Always start the drill from code, not by clicking random buttons.
+        // Use the SAME internal start function your drill already uses.
+        try {
+          console.log("[BC] NAV -> fiveMinDrill");
+
+          // If you have a dedicated drill screen, go there first.
+          // If not, skip this line.
+          if (typeof showScreen === "function") showScreen("screenDrill"); // only if screenDrill exists
+
+          // ✅ call the real drill initializer
+          startFiveMinuteDrill();
+        } catch (e) {
+          console.warn("[BC] NAV fiveMinDrill failed", e);
+        }
+      };
+
+      window.__BC_NAV__.managerBoard = () => {
+        try {
+          console.log("[BC] NAV -> managerBoard");
+          openManagerBoard();
+        } catch (e) {
+          console.warn("[BC] NAV managerBoard failed", e);
+        }
+      };
+
       function resetNavState() {
         currentEncounter = null;
         currentStep = 0;
@@ -1037,16 +1068,17 @@ function openManagerBoard() {
         return Math.max(1, (s.repDone || 0) + 1); // rep you're currently playing
       }
 
-      function todayKey() {
-        const t = new Date();
-        const y = t.getFullYear();
-        const m = String(t.getMonth() + 1).padStart(2, "0");
-        const d = String(t.getDate()).padStart(2, "0");
-        return `${y}-${m}-${d}`;
+      function localDayKey(d = new Date()) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        return `${y}-${m}-${day}`;
       }
 
       function drillDoneKey() {
-        return `bc_last_drill_day_${bcMode}`;
+        const uid = window.__BC_CTX__?.userId || "anon";
+        const rid = window.__BC_CTX__?.restaurantId || "no_restaurant";
+        return `bc_last_drill_day_${bcMode}_${rid}_${uid}`;
       }
 
       function renderDrillSummary() {
@@ -2742,7 +2774,7 @@ function openManagerBoard() {
 
             // If drill complete -> end session now (no next encounter)
             if (drillRepDone >= drillRepTarget) {
-              localStorage.setItem(drillDoneKey(), todayKey());
+              localStorage.setItem(drillDoneKey(), localDayKey());
               endDrillSession();
               return;
             }
@@ -3107,7 +3139,7 @@ function openManagerBoard() {
         bindInput(btnFiveMinDrill, () => {
           if (!isUnlocked()) { alert("Add " + LIMIT + " wines to start."); return; }
 
-          if (localStorage.getItem(drillDoneKey()) === todayKey()) {
+          if (localStorage.getItem(drillDoneKey()) === localDayKey()) {
             alert("5-Min Drill already done today. Come back tomorrow.");
             return;
           }
