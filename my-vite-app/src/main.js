@@ -331,35 +331,24 @@ const appState = {
 };
 
 // ------------------------------------------------------------
-// BC CTX responder (parent -> iframe)
-// ------------------------------------------------------------
-function bcBuildCtx() {
-  return {
-    userId: appState.session?.user?.id || null,
-    restaurantId: appState.profile?.restaurant_id || null,
-    role: appState.profile?.role || null,
-    mode: appMode || null, // "demo" | "premium" | "public"
-  };
-}
-
-window.addEventListener("message", (event) => {
-  const msg = event?.data;
-  if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
-  if (event.origin !== window.location.origin) return;
-
-  if (msg.type === "bc_ctx_request") {
-    const ctx = bcBuildCtx();
-    event.source?.postMessage({ source: "BC_MSG", v: 1, type: "bc_ctx", ctx }, event.origin);
-    console.log("[BC] ctx served ✅", ctx);
-  }
-});
-
-// ------------------------------------------------------------
 // Helpers
 // ------------------------------------------------------------
 function showScreen(id) {
   document.querySelectorAll(".screen").forEach((s) => s.classList.add("hidden"));
   document.getElementById(id)?.classList.remove("hidden");
+}
+
+function buildBcCtx(modeOverride = null) {
+  const userId = appState.session?.user?.id || null;
+  const restaurantId = appState.profile?.restaurant_id || null;
+  const role = appState.profile?.role || null;
+
+  // Prefer explicit override, otherwise infer from appMode
+  const mode =
+    modeOverride ||
+    (appMode === "premium" ? "premium" : appMode === "demo" ? "demo" : null);
+
+  return { userId, restaurantId, role, mode };
 }
 
 function setMsg(elId, msg, kind = "normal") {
@@ -633,6 +622,22 @@ function mountGameIframe(targetId, mode /* "demo" | "premium" */) {
     ></iframe>
   `;
 
+  const frame = document.getElementById(`${targetId}Frame`);
+  if (frame) {
+    frame.addEventListener("load", () => {
+      try {
+        const ctx = buildBcCtx(mode);
+        frame.contentWindow?.postMessage(
+          { source: "BC_MSG", v: 1, type: "bc_ctx", ctx },
+          window.location.origin
+        );
+        console.log("[BC] ctx pushed on iframe load ✅", ctx);
+      } catch (e) {
+        console.warn("[BC] ctx push failed", e);
+      }
+    });
+  }
+
   setDebug({ step: "game.iframe.mounted", targetId, mode, src, time: new Date().toISOString() });
 }
 
@@ -698,10 +703,24 @@ window.addEventListener("message", async (event) => {
   try {
     const msg = event?.data;
     if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
-    if (msg.type !== "event_log") return;
-
-    // basic safety: same origin only
     if (event.origin !== window.location.origin) return;
+
+    // ------------------------------------------------------------
+    // BC CTX responder (parent -> iframe)
+    // ------------------------------------------------------------
+    if (msg.type === "bc_ctx_request") {
+      const ctx = buildBcCtx(msg?.mode || null);
+
+      event.source?.postMessage(
+        { source: "BC_MSG", v: 1, type: "bc_ctx", ctx },
+        event.origin
+      );
+
+      console.log("[BC] ctx replied ✅", ctx);
+      return;
+    }
+
+    if (msg.type !== "event_log") return;
 
     const { eventType, payload } = msg;
     if (!eventType) return;
@@ -911,7 +930,7 @@ async function loadAuthedState(reason = "manual") {
 
   // ✅ Push ctx to any mounted iframes (premium + demo) after profile is loaded
   try {
-    const ctx = bcBuildCtx();
+    const ctx = buildBcCtx();
     const demoFrame = document.getElementById("gameRootDemoFrame");
     const premFrame = document.getElementById("premiumRootFrame");
     [demoFrame, premFrame].forEach((f) => {
