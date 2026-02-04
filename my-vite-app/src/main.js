@@ -697,19 +697,29 @@ window.addEventListener("message", (event) => {
 });
 
 // ------------------------------------------------------------
-// BC Event Sink: game iframe -> parent -> Supabase (bc_event_log)
+// BC Bridge: iframe -> parent
+// Handles:
+// - bc_ctx_request (iframe asks for context)
+// - event_log (iframe emits telemetry)
 // ------------------------------------------------------------
 window.addEventListener("message", async (event) => {
   try {
     const msg = event?.data;
     if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
+
+    // Same-origin only (your game is served from the same Vite origin)
     if (event.origin !== window.location.origin) return;
 
-    // ------------------------------------------------------------
-    // BC CTX responder (parent -> iframe)
-    // ------------------------------------------------------------
+    // ✅ 1) ctx request MUST be handled before any event_log filtering
     if (msg.type === "bc_ctx_request") {
-      const ctx = buildBcCtx(msg?.mode || null);
+      const userId = appState.session?.user?.id || null;
+      const restaurantId = appState.profile?.restaurant_id || null;
+      const role = appState.profile?.role || null;
+
+      // Prefer requested mode, fallback to current appMode
+      const mode = msg?.mode || (appMode === "premium" ? "premium" : appMode === "demo" ? "demo" : null);
+
+      const ctx = { userId, restaurantId, role, mode };
 
       event.source?.postMessage(
         { source: "BC_MSG", v: 1, type: "bc_ctx", ctx },
@@ -720,30 +730,24 @@ window.addEventListener("message", async (event) => {
       return;
     }
 
+    // ✅ 2) event_log (telemetry)
     if (msg.type !== "event_log") return;
 
     const { eventType, payload } = msg;
     if (!eventType) return;
 
     const userId = appState.session?.user?.id || null;
+    const restaurantId = appState.profile?.restaurant_id || null;
 
-    // parent truth first
-    let restaurantId = appState.profile?.restaurant_id || null;
+    // If not authed, ignore
+    if (!userId) return;
 
-    // fallback only (helps during early hydration)
-    if (!restaurantId && payload?.restaurantId) restaurantId = payload.restaurantId;
-
-    // hard stop: DB requires restaurant_id
-    if (!userId || !restaurantId) {
+    // If your DB requires restaurant_id (it does), do NOT insert without it
+    if (!restaurantId) {
+      console.warn("[BC] event_log skipped (no restaurant_id)", { eventType });
+      // optional nack
       event.source?.postMessage(
-        {
-          source: "BC_MSG",
-          v: 1,
-          type: "event_log_ack",
-          ok: false,
-          eventType,
-          error: !userId ? "not_authed" : "missing_restaurant_id",
-        },
+        { source: "BC_MSG", v: 1, type: "event_log_ack", ok: false, error: "no_restaurant_id" },
         event.origin
       );
       return;
@@ -758,9 +762,11 @@ window.addEventListener("message", async (event) => {
       occurred_at: new Date().toISOString(),
     };
 
+    // ✅ upsert prevents double logs
     const ins = await supabase
       .from("bc_event_log")
       .upsert(row, { onConflict: "event_id" });
+
     if (ins.error) throw ins.error;
 
     // reply ack (optional)
@@ -769,8 +775,7 @@ window.addEventListener("message", async (event) => {
       event.origin
     );
   } catch (e) {
-    console.error("[BC] event_log failed:", e);
-    // best-effort nack
+    console.error("[BC] parent bridge failed:", e);
     try {
       event.source?.postMessage(
         { source: "BC_MSG", v: 1, type: "event_log_ack", ok: false, error: String(e?.message || e) },
