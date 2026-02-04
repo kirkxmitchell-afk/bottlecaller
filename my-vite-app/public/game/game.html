@@ -442,7 +442,15 @@ function openManagerBoard() {
         // if (event.origin !== window.location.origin) return;
 
         if (msg.type === "bc_ctx") {
-          window.__BC_CTX__ = msg.ctx || null;
+          // Normalize + guarantee mode is always present
+          const incoming = msg.ctx || {};
+          window.__BC_CTX__ = {
+            userId: incoming.userId ?? null,
+            restaurantId: incoming.restaurantId ?? null,
+            role: incoming.role ?? null,
+            mode: incoming.mode ?? window.__BC_MODE__ ?? null, // ✅ IMPORTANT
+          };
+
           console.log("[BC] ctx received ✅", window.__BC_CTX__);
           window.dispatchEvent(new CustomEvent("BC_CTX_READY", { detail: window.__BC_CTX__ }));
         }

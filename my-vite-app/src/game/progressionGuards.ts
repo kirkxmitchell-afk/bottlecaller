@@ -232,12 +232,13 @@ export function installProgressionGuards(getCtx: () => BcCtx | null) {
   // runtime assertions you want the game to obey
   function assertCtx() {
     const ctx = getCtx();
-    if (!ctx?.mode) throw new Error("[PROGRESSION] ctx missing mode");
+    const mode = ctx?.mode || (window as any).__BC_MODE__ || null;
+    if (!mode) throw new Error("[PROGRESSION] ctx missing mode");
     if (!ctx?.userId) throw new Error("[PROGRESSION] ctx missing userId");
-    if (ctx.mode === "premium" && !ctx.restaurantId) {
+    if (mode === "premium" && !ctx.restaurantId) {
       throw new Error("[PROGRESSION] premium requires restaurantId");
     }
-    return ctx;
+    return { ...ctx, mode };
   }
 
   // expose a single callable “contract” API inside the iframe
