@@ -326,6 +326,14 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
         }
       }
 
+      function bcSessionStartedKey(mode, sessionId) {
+        return `bc_session_started_${mode}_${sessionId}`;
+      }
+
+      function bcSessionEndedKey(mode, sessionId) {
+        return `bc_session_ended_${mode}_${sessionId}`;
+      }
+
       // ============================================================
 // 🔌 NAV listener from parent app (main.js top buttons)
 // ============================================================
@@ -2921,15 +2929,20 @@ function openManagerBoard() {
 
         if (!sessionId) {
           sessionId = crypto.randomUUID();
-          const startedKey = `bc_session_started_${bcMode}_${sessionId}`;
-          if (!localStorage.getItem(startedKey)) {
-            bcEmitEvent("session_started", {
-              v: 1,
-              mode: bcMode,
-              sessionId,
-              occurredAtMs: Date.now(),
-            });
-            localStorage.setItem(startedKey, "1");
+          try {
+            const k = bcSessionStartedKey(bcMode, sessionId);
+            if (!localStorage.getItem(k)) {
+              bcEmitEvent("session_started", {
+                v: 1,
+                mode: bcMode,
+                sessionId,
+                occurredAtMs: Date.now(),
+              });
+              localStorage.setItem(k, "1");
+              console.log("[BC] session_started ✅", { mode: bcMode, sessionId });
+            }
+          } catch (e) {
+            console.warn("[BC] session_started failed", e);
           }
         }
 
@@ -3236,24 +3249,26 @@ function openManagerBoard() {
         });
 
         bindInput(btnBackHomeFromPlay, () => {
-          if (sessionId) {
-            const sessionStats = computeSessionStats();
-            bcEmitEvent("session_ended", {
-              v: 1,
-              mode: bcMode,
-              sessionId,
-              occurredAtMs: Date.now(),
-              summary: {
-                encountersResolved: sessionStats.encountersResolved,
-                greens: sessionStats.greens,
-                yellows: sessionStats.yellows,
-                reds: sessionStats.reds,
-                avgChainScore: sessionStats.avgChainScore,
-                anyRed: sessionStats.anyRed,
-                anyRedT2Plus: sessionStats.anyRedT2Plus,
-              },
-            });
-            sessionId = null;
+          try {
+            if (sessionId) {
+              const k = bcSessionEndedKey(bcMode, sessionId);
+              if (!localStorage.getItem(k)) {
+                bcEmitEvent("session_ended", {
+                  v: 1,
+                  mode: bcMode,
+                  sessionId,
+                  occurredAtMs: Date.now(),
+                  summary: {
+                    // minimal v1: you can expand later
+                    note: "ended_via_back_from_play",
+                  },
+                });
+                localStorage.setItem(k, "1");
+                console.log("[BC] session_ended ✅", { mode: bcMode, sessionId });
+              }
+            }
+          } catch (e) {
+            console.warn("[BC] session_ended failed", e);
           }
           resetNavState();
           showScreen(isDemo ? "screenHome" : "screenWelcome");
