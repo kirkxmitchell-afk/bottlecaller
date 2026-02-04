@@ -260,27 +260,14 @@ document.querySelector("#app").innerHTML = `
     <div id="hudMsg" class="small" style="margin-top:10px;"></div>
   </div>
 
-  <!-- MANAGER BOARD OVERLAY -->
-  <div id="mgrBackdrop" class="hidden"
-    style="position:fixed; inset:0; background: rgba(0,0,0,0.55); z-index: 100000;"></div>
-
-  <div id="mgrPanel" class="hidden"
-    style="
-      position:fixed; left: 12px; right: 12px; top: 12px;
-      max-width: 980px; margin: 0 auto;
-      z-index: 100001;
-      background: #0b0d0f; color: #fff;
-      border-radius: 14px;
-      padding: 12px;
-      border: 1px solid rgba(255,255,255,0.10);
-      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-    ">
-    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+  <!-- MANAGER BOARD MODAL -->
+  <div id="mgrBoardBackdrop" class="hidden" style="position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:99996;"></div>
+  <div id="mgrBoardModal" class="hidden" style="position:fixed; right:12px; left:12px; top:12px; bottom:12px; z-index:99997; overflow:auto; background:#0b0d0f; color:#fff; border:1px solid rgba(255,255,255,.10); border-radius:14px; padding:12px; box-shadow:0 10px 30px rgba(0,0,0,.5);">
+    <div class="row" style="justify-content:space-between; align-items:center;">
       <b>Manager Board</b>
-      <button id="btnCloseMgr" type="button" style="font-size:12px;">Close</button>
+      <button id="btnCloseMgrBoard" type="button" style="font-size:12px;">Close</button>
     </div>
-
-    <div id="mgrBody" style="margin-top:10px; font-size:13px; opacity:.95;"></div>
+    <div id="mgrBoardBody" style="margin-top:12px;"></div>
   </div>
 
   <!-- DEBUG PANEL -->
@@ -434,64 +421,78 @@ function setHomeAuthUI(isAuthed) {
 }
 
 function openMgrBoard() {
-  document.getElementById("mgrBackdrop").classList.remove("hidden");
-  document.getElementById("mgrPanel").classList.remove("hidden");
+  document.getElementById("mgrBoardBackdrop")?.classList.remove("hidden");
+  document.getElementById("mgrBoardModal")?.classList.remove("hidden");
 }
 
 function closeMgrBoard() {
-  document.getElementById("mgrBackdrop").classList.add("hidden");
-  document.getElementById("mgrPanel").classList.add("hidden");
+  document.getElementById("mgrBoardBackdrop")?.classList.add("hidden");
+  document.getElementById("mgrBoardModal")?.classList.add("hidden");
 }
 
-async function loadMgrBoard() {
-  const body = document.getElementById("mgrBody");
-  body.innerHTML = "Loading...";
+async function loadManagerBoard() {
+  const body = document.getElementById("mgrBoardBody");
+  if (!body) return;
 
-  const userId = appState.session?.user?.id;
-  if (!userId) {
-    body.innerHTML = "Not logged in.";
+  const r = appState.restaurant;
+  if (!r?.id) {
+    body.innerHTML = `<div style="opacity:.85;">No restaurant loaded.</div>`;
     return;
   }
 
-  // Fetch view row for this user
-  const res = await supabase.from("bc_manager_board_v1").select("*").eq("user_id", userId).maybeSingle();
+  body.innerHTML = `<div style="opacity:.85;">Loading…</div>`;
+
+  const res = await withTimeout(
+    supabase
+      .from("bc_manager_board_v1")
+      .select("*")
+      .eq("restaurant_id", r.id)
+      .order("user_id", { ascending: true }),
+    12000,
+    "bc_manager_board_v1.select"
+  );
 
   if (res.error) {
-    body.innerHTML = "Load failed: " + res.error.message;
-    return;
-  }
-  if (!res.data) {
-    body.innerHTML = "No data yet.";
+    body.innerHTML = `<div style="color:#ff6b6b;">Failed: ${res.error.message}</div>`;
     return;
   }
 
-  const r = res.data;
-  body.innerHTML = `
-    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
-      <div class="card" style="padding:10px; border:1px solid rgba(255,255,255,.08); border-radius:12px;">
-        <div><b>Readiness:</b> ${r.readiness || "-"}</div>
-        <div><b>Shift suitability:</b> ${r.shift_suitability || "-"}</div>
-        <div><b>Pairing requirement:</b> ${r.pairing_requirement || "-"}</div>
-        <div><b>Trend:</b> ${r.trend || "-"}</div>
-        <div><b>Confidence:</b> ${r.confidence || "-"}</div>
+  const rows = res.data || [];
+  if (!rows.length) {
+    body.innerHTML = `<div style="opacity:.85;">No board rows yet.</div>`;
+    return;
+  }
+
+  body.innerHTML = rows
+    .map(
+      (x) => `
+    <div style="border:1px solid rgba(255,255,255,.10); border-radius:12px; padding:12px; margin-bottom:10px;">
+      <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+        <div><b>User</b>: <span class="mono">${x.user_id || "-"}</span></div>
+        <div><b>Readiness</b>: ${x.readiness || "-"}</div>
+        <div><b>Confidence</b>: ${x.confidence || "-"}</div>
       </div>
 
-      <div class="card" style="padding:10px; border:1px solid rgba(255,255,255,.08); border-radius:12px;">
-        <div><b>Weakest link:</b> ${r.weakest_link || "-"}</div>
-        <div><b>Weakest rate:</b> ${r.weakest_rate ?? "-"}</div>
-        <div><b>Ritual done today:</b> ${String(r.ritual_done_today)}</div>
-        <div><b>Rituals last 7d:</b> ${r.rituals_last_7d ?? "-"}</div>
-        <div><b>Last ritual at:</b> ${r.last_ritual_at || "-"}</div>
+      <div style="margin-top:10px; opacity:.95;">
+        <div><b>Weakest link</b>: ${x.weakest_link || "-"} (${x.weakest_rate ?? "-"})</div>
+        <div><b>Trend</b>: ${x.trend || "-"}</div>
+        <div><b>Ritual done today</b>: ${x.ritual_done_today ? "Yes" : "No"}</div>
+        <div><b>Rituals last 7d</b>: ${x.rituals_last_7d ?? "-"}</div>
       </div>
 
-      <div class="card" style="grid-column: 1 / -1; padding:10px; border:1px solid rgba(255,255,255,.08); border-radius:12px;">
-        <div><b>Drill title:</b> ${r.drill_title || "-"}</div>
-        <div style="margin-top:6px;"><b>Drill script:</b><br/>${(r.drill_script || "-").replace(/\\n/g,"<br/>")}</div>
-        <div style="margin-top:6px;"><b>Manager instruction:</b><br/>${(r.manager_instruction || "-").replace(/\\n/g,"<br/>")}</div>
-        <div style="margin-top:6px;"><b>Directive:</b> ${r.directive || "-"}</div>
+      <hr style="opacity:.2; margin:10px 0;" />
+
+      <div><b>Drill</b>: ${x.drill_title || "-"}</div>
+      <div style="margin-top:6px; white-space:pre-wrap; opacity:.9;">${x.drill_script || ""}</div>
+
+      <div style="margin-top:10px; opacity:.95;">
+        <div><b>Manager instruction</b>: ${x.manager_instruction || "-"}</div>
+        <div><b>Directive</b>: ${x.directive || "-"}</div>
       </div>
     </div>
-  `;
+  `
+    )
+    .join("");
 }
 
 // Premium entitlement check (Option 2)
@@ -626,13 +627,12 @@ function callPremiumIframeNav(fnName) {
 
 function postToPremiumIframe(message) {
   const frame = document.getElementById("premiumRootFrame");
-  if (!frame?.contentWindow) return false;
-
-  frame.contentWindow.postMessage(
-    { source: "BC_MSG", v: 1, ...message },
-    window.location.origin
-  );
-  return true;
+  const w = frame?.contentWindow;
+  if (!w) {
+    setDebug({ step: "iframe.post.fail", reason: "no_premium_iframe" });
+    return;
+  }
+  w.postMessage(message, window.location.origin);
 }
 
 function postNavToPremiumIframe(screen) {
@@ -1519,10 +1519,11 @@ document.getElementById("btnEnterPremium").addEventListener("click", () => decid
 
 document.getElementById("btnLogoutPremium").addEventListener("click", () => logoutAll("premium.logout"));
 document.getElementById("btnManagerBoard")?.addEventListener("click", () => {
-  callPremiumIframeNav("managerBoard");
+  openMgrBoard();
+  void loadManagerBoard();
 });
 document.getElementById("btnFiveMinRep")?.addEventListener("click", () => {
-  callPremiumIframeNav("fiveMinDrill");
+  postToPremiumIframe({ source: "BC_APP", type: "NAV", to: "FIVE_MIN_REP" });
 });
 document.getElementById("btnOpenHud").addEventListener("click", () => {
   renderHud();
@@ -1531,8 +1532,8 @@ document.getElementById("btnOpenHud").addEventListener("click", () => {
 
 document.getElementById("btnCloseHud").addEventListener("click", closeHud);
 document.getElementById("hudBackdrop").addEventListener("click", closeHud);
-document.getElementById("btnCloseMgr")?.addEventListener("click", closeMgrBoard);
-document.getElementById("mgrBackdrop")?.addEventListener("click", closeMgrBoard);
+document.getElementById("btnCloseMgrBoard")?.addEventListener("click", closeMgrBoard);
+document.getElementById("mgrBoardBackdrop")?.addEventListener("click", closeMgrBoard);
 document.getElementById("btnBackToPremium")?.addEventListener("click", () => {
   showScreen("screenPremiumApp");
 });

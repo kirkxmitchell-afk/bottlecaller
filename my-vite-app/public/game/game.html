@@ -432,6 +432,40 @@ function openManagerBoard() {
 
       console.log("[BC] ctx:", { role, restaurantId });
 
+      // ============================================================
+      // ✅ NAV from parent (main.js) — click existing drill buttons
+      // ============================================================
+      window.addEventListener("message", (e) => {
+        if (e.origin !== window.location.origin) return;
+        const m = e.data;
+        if (!m || m.source !== "BC_APP" || m.type !== "NAV") return;
+
+        if (m.to === "FIVE_MIN_REP") {
+          console.log("[BC] NAV: FIVE_MIN_REP");
+
+          // Try the buttons you already proved exist in the iframe
+          const tryIds = [
+            "btnStartAnotherDrill",     // from Drill Summary screen
+            "btnStartDrillPremium",     // if you still have it
+            "btnWelcomeStart",          // if drill starts from welcome path
+            "btnContinuePremium"        // fallback if your drill starts after setup screen
+          ];
+
+          let clicked = false;
+          for (const id of tryIds) {
+            const btn = document.getElementById(id);
+            if (btn) {
+              btn.click();
+              clicked = true;
+              console.log("[BC] NAV clicked:", id);
+              break;
+            }
+          }
+
+          if (!clicked) console.warn("[BC] NAV FIVE_MIN_REP: no known drill button found");
+        }
+      });
+
       window.addEventListener("message", (e) => {
         const m = e?.data;
         if (!m || m.source !== "BC_MSG" || m.v !== 1) return;
