@@ -444,6 +444,7 @@ function openManagerBoard() {
         if (msg.type === "bc_ctx") {
           window.__BC_CTX__ = msg.ctx || null;
           console.log("[BC] ctx received ✅", window.__BC_CTX__);
+          window.dispatchEvent(new CustomEvent("BC_CTX_READY", { detail: window.__BC_CTX__ }));
         }
       });
 

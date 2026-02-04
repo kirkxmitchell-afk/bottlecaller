@@ -59,6 +59,13 @@ export type GuardResult = {
   reasons: string[];
 };
 
+export type BcCtx = {
+  userId: string | null;
+  restaurantId: string | null;
+  role: string | null;
+  mode: "demo" | "premium" | null;
+};
+
 function hardAssert(cond: any, msg: string): asserts cond {
   if (!cond) throw new Error(`[BC_GUARD] ${msg}`);
 }
@@ -219,4 +226,49 @@ function sanitize(intent: ProgressionDecision): ProgressionDecision {
   if (out.nextTier && out.nextTier > Math.max(...allowed)) out.nextTier = undefined;
 
   return out;
+}
+
+export function installProgressionGuards(getCtx: () => BcCtx | null) {
+  // runtime assertions you want the game to obey
+  function assertCtx() {
+    const ctx = getCtx();
+    if (!ctx?.mode) throw new Error("[PROGRESSION] ctx missing mode");
+    if (!ctx?.userId) throw new Error("[PROGRESSION] ctx missing userId");
+    if (ctx.mode === "premium" && !ctx.restaurantId) {
+      throw new Error("[PROGRESSION] premium requires restaurantId");
+    }
+    return ctx;
+  }
+
+  // expose a single callable “contract” API inside the iframe
+  const ProgressionBridge = {
+    getCtx: () => getCtx(),
+    assertCtx,
+
+    // Example guard: forbid Tier2+ if not enough Tier1 reps (you can swap your logic in here)
+    decideAllowedTier(stats: {
+      tier1Wins: number;
+      tier2Wins: number;
+      tier3Wins: number;
+      last10Greens: number;
+      anyRedT2Plus: boolean;
+    }) {
+      const ctx = assertCtx();
+
+      // demo: lock at tier1
+      if (ctx.mode === "demo") return 1;
+
+      // premium: example rule (replace with your “contract”)
+      if (stats.anyRedT2Plus) return 1;
+      if (stats.tier1Wins < 3) return 1;
+      if (stats.tier2Wins < 2) return 2;
+      return 3;
+    },
+  };
+
+  // install onto iframe window (this is what you'll call from console/tests)
+  // @ts-ignore
+  window.ProgressionBridge = ProgressionBridge;
+
+  return ProgressionBridge;
 }

@@ -4,6 +4,7 @@ import { ENCOUNTERS, validateEncounters } from "./encounter";
 import * as WineBridge from "./wineBridge";
 import * as EventLogBridge from "./eventLogBridge";
 import * as ProgressionBridge from "./progressionBridge";
+import { installProgressionGuards } from "./progressionGuards";
 
 
 declare global {
@@ -14,7 +15,13 @@ declare global {
     ProgressionBridge?: any;
     __BC_ENCOUNTERS__?: any;
     __BC_GAME_ENTRY_INSTALLED__?: boolean;
+    __BC_CTX__?: any;
   }
+}
+
+function getCtxFromWindow() {
+  // @ts-ignore
+  return window.__BC_CTX__ || null;
 }
 
 (function boot() {
@@ -35,6 +42,18 @@ declare global {
   window.WineBridge = WineBridge;
   window.EventLogBridge = EventLogBridge;
   window.ProgressionBridge = ProgressionBridge;
+
+  // Install guards ONLY when ctx arrives
+  window.addEventListener("BC_CTX_READY", () => {
+    const bridge = installProgressionGuards(getCtxFromWindow);
+    console.log("[BC] ProgressionBridge installed ✅", bridge);
+  });
+
+  // In case ctx already arrived before this module loaded:
+  if ((window as any).__BC_CTX__) {
+    const bridge = installProgressionGuards(getCtxFromWindow);
+    console.log("[BC] ProgressionBridge installed (late) ✅", bridge);
+  }
 
   // Expose encounters -> game.html can read this without importing TS
   window.__BC_ENCOUNTERS__ = ENCOUNTERS;
