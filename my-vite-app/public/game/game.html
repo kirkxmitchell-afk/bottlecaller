@@ -338,23 +338,26 @@ window.addEventListener("message", (e) => {
 // ✅ Resolvers (no guessing: we route using what already exists)
 // ============================================================
 function startFiveMinuteDrill() {
-  // 1) Prefer your existing premium drill button if it exists
-  const btn =
-    document.getElementById("btnStartDrillPremium") || // your existing "5-Minute Drill"
-    document.getElementById("btnFiveMinDrill");        // older injected one (should now be removed)
+  // 1) Find the "Another 5-Minute Drill" button (it exists but may be on a hidden screen)
+  const btn = document.getElementById("btnStartAnotherDrill");
 
-  if (btn) {
-    btn.click();
+  if (!btn) {
+    console.warn("[BC] startFiveMinuteDrill: btnStartAnotherDrill not found");
     return;
   }
 
-  // 2) If you already have a function, call it (safe)
-  if (typeof window.startDrill === "function") {
-    window.startDrill();
-    return;
+  // 2) Activate the screen that contains it
+  const screen = btn.closest(".screen");
+  if (screen && !screen.classList.contains("active")) {
+    // deactivate others
+    document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+    screen.classList.add("active");
   }
 
-  console.warn("[BC] startFiveMinuteDrill: no known entry point found");
+  // 3) Click it (this should run the existing drill start logic)
+  btn.click();
+
+  console.log("[BC] startFiveMinuteDrill: launched via btnStartAnotherDrill");
 }
 
 function openManagerBoard() {
