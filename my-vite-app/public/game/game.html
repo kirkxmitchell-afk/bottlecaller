@@ -782,10 +782,12 @@ function openManagerBoard() {
         const all = window.__BC_ENCOUNTERS__;
         if (!all) return [];
 
-        const modeKey = (window.__BC_MODE__ === "premium") ? "premium" : "demo";
-        const list = all[modeKey];
+        const m = window.__BC_MODE__;
+        if (m === "premium") return Array.isArray(all.premium) ? all.premium : [];
+        if (m === "demo") return Array.isArray(all.demo) ? all.demo : [];
 
-        return Array.isArray(list) ? list : [];
+        console.warn("[BC] __BC_MODE__ unexpected:", m);
+        return [];
       }
 
       // ---------- Pivot (Recovery / Power Move) scenarios ----------
