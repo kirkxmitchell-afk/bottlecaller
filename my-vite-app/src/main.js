@@ -336,6 +336,98 @@ window.__BC_DEBUG__ = {
 };
 
 // ------------------------------------------------------------
+// BC Bridge: iframe -> parent
+// Handles:
+// - bc_ctx_request (iframe asks for context)
+// - event_log (iframe emits telemetry)
+// ------------------------------------------------------------
+if (!window.__BC_PARENT_BRIDGE__) {
+  window.__BC_PARENT_BRIDGE__ = true;
+
+  window.addEventListener("message", async (event) => {
+    try {
+      const msg = event?.data;
+      if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
+
+      // Same-origin only (your game is served from the same Vite origin)
+      if (event.origin !== window.location.origin) return;
+
+      // ✅ 1) ctx request MUST be handled before any event_log filtering
+      if (msg.type === "bc_ctx_request") {
+        const userId = appState.session?.user?.id || null;
+        const restaurantId = appState.profile?.restaurant_id || null;
+        const role = appState.profile?.role || null;
+
+        const mode = msg?.mode ?? null;
+
+        const ctx = { userId, restaurantId, role, mode };
+
+        event.source?.postMessage(
+          { source: "BC_MSG", v: 1, type: "bc_ctx", ctx },
+          event.origin
+        );
+
+        console.log("[BC] ctx replied ✅", ctx);
+        return;
+      }
+
+      // ✅ 2) event_log (telemetry)
+      if (msg.type !== "event_log") return;
+
+      const { eventType, payload } = msg;
+      if (!eventType) return;
+
+      const userId = appState.session?.user?.id || null;
+      const restaurantId = appState.profile?.restaurant_id || null;
+
+      // If not authed, ignore
+      if (!userId) return;
+
+      // If your DB requires restaurant_id, do NOT insert without it
+      if (!restaurantId) {
+        console.warn("[BC] event_log skipped (no restaurant_id)", { eventType });
+        // optional nack
+        event.source?.postMessage(
+          { source: "BC_MSG", v: 1, type: "event_log_ack", ok: false, error: "no_restaurant_id" },
+          event.origin
+        );
+        return;
+      }
+
+      const row = {
+        event_id: payload?.eventId || crypto.randomUUID(),
+        user_id: userId,
+        restaurant_id: restaurantId,
+        event_type: String(eventType),
+        payload: payload || {},
+        occurred_at: new Date().toISOString(),
+      };
+
+      // ✅ upsert prevents double logs
+      const ins = await supabase
+        .from("bc_event_log")
+        .upsert(row, { onConflict: "event_id" });
+
+      if (ins.error) throw ins.error;
+
+      // reply ack (optional)
+      event.source?.postMessage(
+        { source: "BC_MSG", v: 1, type: "event_log_ack", ok: true, eventType },
+        event.origin
+      );
+    } catch (e) {
+      console.error("[BC] parent bridge failed:", e);
+      try {
+        event.source?.postMessage(
+          { source: "BC_MSG", v: 1, type: "event_log_ack", ok: false, error: String(e?.message || e) },
+          event.origin
+        );
+      } catch {}
+    }
+  });
+}
+
+// ------------------------------------------------------------
 // Progression Snapshot Provider (PARENT) -> used by progressionRouter
 // ------------------------------------------------------------
 window.__BC_GET_PROGRESSION_SNAPSHOT__ = async ({ userId, restaurantId }) => {
@@ -762,98 +854,6 @@ window.addEventListener("message", (event) => {
   const clamped = Math.max(360, Math.min(860, h + 24));
   frame.style.height = clamped + "px";
 });
-
-if (!window.__BC_PARENT_BRIDGE__) {
-  window.__BC_PARENT_BRIDGE__ = true;
-
-  // ------------------------------------------------------------
-  // BC Bridge: iframe -> parent
-  // Handles:
-  // - bc_ctx_request (iframe asks for context)
-  // - event_log (iframe emits telemetry)
-  // ------------------------------------------------------------
-  window.addEventListener("message", async (event) => {
-    try {
-      const msg = event?.data;
-      if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
-
-      // Same-origin only (your game is served from the same Vite origin)
-      if (event.origin !== window.location.origin) return;
-
-      // ✅ 1) ctx request MUST be handled before any event_log filtering
-      if (msg.type === "bc_ctx_request") {
-        const userId = appState.session?.user?.id || null;
-        const restaurantId = appState.profile?.restaurant_id || null;
-        const role = appState.profile?.role || null;
-
-        const mode = msg?.mode ?? null;
-
-        const ctx = { userId, restaurantId, role, mode };
-
-        event.source?.postMessage(
-          { source: "BC_MSG", v: 1, type: "bc_ctx", ctx },
-          event.origin
-        );
-
-        console.log("[BC] ctx replied ✅", ctx);
-        return;
-      }
-
-      // ✅ 2) event_log (telemetry)
-      if (msg.type !== "event_log") return;
-
-      const { eventType, payload } = msg;
-      if (!eventType) return;
-
-      const userId = appState.session?.user?.id || null;
-      const restaurantId = appState.profile?.restaurant_id || null;
-
-      // If not authed, ignore
-      if (!userId) return;
-
-      // If your DB requires restaurant_id (it does), do NOT insert without it
-      if (!restaurantId) {
-        console.warn("[BC] event_log skipped (no restaurant_id)", { eventType });
-        // optional nack
-        event.source?.postMessage(
-          { source: "BC_MSG", v: 1, type: "event_log_ack", ok: false, error: "no_restaurant_id" },
-          event.origin
-        );
-        return;
-      }
-
-      const row = {
-        event_id: payload?.eventId || crypto.randomUUID(),
-        user_id: userId,
-        restaurant_id: restaurantId,
-        event_type: String(eventType),
-        payload: payload || {},
-        occurred_at: new Date().toISOString(),
-      };
-
-      // ✅ upsert prevents double logs
-      const ins = await supabase
-        .from("bc_event_log")
-        .upsert(row, { onConflict: "event_id" });
-
-      if (ins.error) throw ins.error;
-
-      // reply ack (optional)
-      event.source?.postMessage(
-        { source: "BC_MSG", v: 1, type: "event_log_ack", ok: true, eventType },
-        event.origin
-      );
-    } catch (e) {
-      console.error("[BC] parent bridge failed:", e);
-      try {
-        event.source?.postMessage(
-          { source: "BC_MSG", v: 1, type: "event_log_ack", ok: false, error: String(e?.message || e) },
-          event.origin
-        );
-      } catch {}
-    }
-  });
-}
 
 // ------------------------------------------------------------
 // Data loaders
