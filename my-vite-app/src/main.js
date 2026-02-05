@@ -330,6 +330,11 @@ const appState = {
   invites: [],
 };
 
+window.__BC_DEBUG__ = {
+  get session() { return appState.session; },
+  get profile() { return appState.profile; }
+};
+
 // ------------------------------------------------------------
 // Progression Snapshot Provider (PARENT) -> used by progressionRouter
 // ------------------------------------------------------------
