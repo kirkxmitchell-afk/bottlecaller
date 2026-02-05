@@ -317,6 +317,15 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
 
       function bcEmitEvent(eventType, payload) {
         try {
+          console.log("[BC][EMIT]", eventType, {
+            v: payload?.v,
+            encounterId: payload?.encounterId,
+            sessionId: payload?.sessionId,
+            hasChecks: payload ? Object.prototype.hasOwnProperty.call(payload, "checks") : false,
+            keys: payload ? Object.keys(payload) : [],
+          });
+          console.trace("[BC][EMIT TRACE] " + eventType);
+
           const ctx = window.__BC_CTX__ || null;
 
           window.parent.postMessage(
