@@ -55,23 +55,18 @@ export async function decideAllowedTier(
 
     if (rErr) throw rErr;
 
-    // Totals (sum from bc_sessions_v1) — ALIASED so TS is happy
     const { data: t, error: tErr } = await supabase
       .from("bc_sessions_v1")
-      .select(`
-        encounters_total:encounters_resolved.sum(),
-        pivots_taken_total:pivots_taken.sum(),
-        pivots_success_total:pivots_success.sum()
-      `)
+      .select("encounters_total:encounters_resolved.sum(),pivots_taken_total:pivots_taken.sum(),pivots_success_total:pivots_success.sum()")
       .eq("user_id", input.userId)
       .eq("restaurant_id", input.restaurantId)
       .maybeSingle();
 
     if (tErr) throw tErr;
 
-    snap.last10Count = r?.last10_count ?? 0;
-    snap.last10Greens = r?.last10_greens ?? 0;
-    snap.last10Reds = r?.last10_reds ?? 0;
+    snap.last10Count = Number(r?.last10_count ?? 0) || 0;
+    snap.last10Greens = Number(r?.last10_greens ?? 0) || 0;
+    snap.last10Reds = Number(r?.last10_reds ?? 0) || 0;
     snap.anyRedT2Plus = !!r?.session_any_red_t2plus;
 
     snap.encountersTotal = Number(t?.encounters_total ?? 0) || 0;
