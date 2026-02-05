@@ -2346,39 +2346,58 @@ function openManagerBoard() {
         runs.push(entry);
         saveRuns();
 
-        bcEmitEvent("encounter_resolved", {
-          v: 2,
-          mode: bcMode,
-          sessionId: sessionId || null,
-          seq: (currentEncounter.seq ?? null),
-          encounterId: currentEncounter.id || currentEncounter.encounterId || null,
-          encounterNumber: currentEncounter.encounterNumber ?? null,
-          tier: getTierFromEncounterNumber(currentEncounter.encounterNumber ?? 1),
-          chosen: {
-            guestType: currentEncounter.guestStateSelected || "",
-            mode: currentEncounter.modeSelected || "",
-            hook: currentEncounter.hookSelected || "",
-          },
-          actual: {
-            guestType: currentEncounter.guestStateActual || "",
-          },
-          checks: {
-            readCorrect: !!currentEncounter.readCorrect,
-            modeStatus: currentEncounter.modeStatus || "",
-            hookStatus: currentEncounter.hookStatus || "",
-            deliveryCorrect: !!currentEncounter.deliveryCorrect,
-          },
-          pivot: {
-            type: currentEncounter.pivotType || "",
-            taken: !!currentEncounter.pivotTaken,
-            success: !!currentEncounter.pivotSuccess,
-          },
-          chainScore: currentEncounter.chainScore ?? null,
-          chainSignal: currentEncounter.chainSignal ?? "",
-          performanceGrade: currentEncounter.performanceGrade || "",
-          wineSelected: (currentEncounter.wineSelected?.name) ? currentEncounter.wineSelected.name : "",
-          occurredAtMs: Date.now(),
-        });
+        function buildEncounterResolvedPayloadV2() {
+          const ce = currentEncounter || {};
+
+          return {
+            v: 2,
+            mode: bcMode || "",
+            sessionId: sessionId || null,
+            seq: Number.isFinite(ce.seq) ? ce.seq : null,
+
+            encounterId: ce.id || ce.encounterId || null,
+            encounterNumber: Number.isFinite(ce.encounterNumber) ? ce.encounterNumber : null,
+            tier: getTierFromEncounterNumber(Number(ce.encounterNumber || 1)),
+
+            chosen: {
+              guestType: String(ce.guestStateSelected || ""),
+              mode: String(ce.modeSelected || ""),
+              hook: String(ce.hookSelected || ""),
+            },
+
+            actual: {
+              guestType: String(ce.guestStateActual || ""),
+            },
+
+            // ✅ MUST EXIST (even if blank)
+            checks: {
+              readCorrect: !!ce.readCorrect,
+              modeStatus: String(ce.modeStatus || ""),
+              hookStatus: String(ce.hookStatus || ""),
+              deliveryCorrect: !!ce.deliveryCorrect,
+            },
+
+            // ✅ MUST EXIST (even if blank)
+            pivot: {
+              type: String(ce.pivotType || ""),
+              taken: !!ce.pivotTaken,
+              success: !!ce.pivotSuccess,
+              recoveryWhy: String(ce.recoveryWhy || ""),
+              recoveryChoice: String(ce.recoveryChoice || ""),
+              recoveryCorrectMode: String(ce.recoveryCorrectMode || ""),
+            },
+
+            chainScore: Number.isFinite(ce.chainScore) ? ce.chainScore : null,
+            chainSignal: String(ce.chainSignal || ""),
+            performanceGrade: String(ce.performanceGrade || ""),
+            wineSelected: String(ce.wineSelected?.name || ""),
+            occurredAtMs: Date.now(),
+          };
+        }
+
+        const payload = buildEncounterResolvedPayloadV2();
+        console.log("[BC] emit encounter_resolved v2 payload ✅", payload);
+        bcEmitEvent("encounter_resolved", payload);
 
         currentEncounter.__logged = true;
         updateCounts();
