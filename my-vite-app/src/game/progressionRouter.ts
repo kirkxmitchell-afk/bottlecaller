@@ -55,33 +55,24 @@ export async function decideAllowedTier(
 
     if (rErr) throw rErr;
 
-    // Totals (client-side sum from bc_sessions_v1)
-    const { data: rows, error: sErr } = await supabase
-      .from("bc_sessions_v1")
-      .select("encounters_resolved,pivots_taken,pivots_success")
-      .eq("user_id", input.userId)
-      .eq("restaurant_id", input.restaurantId);
-
-    if (sErr) throw sErr;
-
-    const totals = (rows || []).reduce(
-      (acc, row: any) => {
-        acc.encountersTotal += Number(row?.encounters_resolved ?? 0) || 0;
-        acc.pivotsTaken += Number(row?.pivots_taken ?? 0) || 0;
-        acc.pivotsSuccess += Number(row?.pivots_success ?? 0) || 0;
-        return acc;
-      },
-      { encountersTotal: 0, pivotsTaken: 0, pivotsSuccess: 0 }
-    );
-
     snap.last10Count = Number(r?.last10_count ?? 0) || 0;
     snap.last10Greens = Number(r?.last10_greens ?? 0) || 0;
     snap.last10Reds = Number(r?.last10_reds ?? 0) || 0;
     snap.anyRedT2Plus = !!r?.session_any_red_t2plus;
 
-    snap.encountersTotal = totals.encountersTotal;
-    snap.pivotsTaken = totals.pivotsTaken;
-    snap.pivotsSuccess = totals.pivotsSuccess;
+    // Totals (pre-aggregated in a view)
+    const { data: t, error: tErr } = await supabase
+      .from("bc_totals_v1")
+      .select("encounters_total,pivots_taken_total,pivots_success_total")
+      .eq("user_id", input.userId)
+      .eq("restaurant_id", input.restaurantId)
+      .maybeSingle();
+
+    if (tErr) throw tErr;
+
+    snap.encountersTotal = Number(t?.encounters_total ?? 0) || 0;
+    snap.pivotsTaken = Number(t?.pivots_taken_total ?? 0) || 0;
+    snap.pivotsSuccess = Number(t?.pivots_success_total ?? 0) || 0;
   } else {
     // optional extras if you later wire them
     snap.encountersTotal = input.encountersTotal ?? snap.last10Count;
