@@ -3135,6 +3135,11 @@ function openManagerBoard() {
         // ----------------------------
         // Normalize encounter -> UI state
         // ----------------------------
+        console.assert(
+          typeof enc.encounterNumber === "number",
+          "[BC] Encounter missing encounterNumber",
+          enc
+        );
         currentEncounter = {
           __logged: false,
 
