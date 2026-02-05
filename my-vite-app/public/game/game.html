@@ -424,68 +424,34 @@ function openManagerBoard() {
       const LIMIT = isDemo ? 2 : 10;
 
       // ------------------------------------------------------------
-      // BC CTX (iframe) — TEMP TRACE
+      // BC CTX (iframe) — boot request + reply handler
       // ------------------------------------------------------------
-      window.__BC_CTX__ = null;
+      window.__BC_CTX__ = window.__BC_CTX__ || null;
 
-      window.addEventListener("message", (event) => {
-        const msg = event?.data;
-
-        // log every BC_MSG
-        if (msg?.source === "BC_MSG") {
-          console.log("[BC] iframe got BC_MSG:", msg, "origin:", event.origin);
-        }
-
-        if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
-
-        // TEMP: don't block on origin while debugging
-        // if (event.origin !== window.location.origin) return;
-
-        if (msg.type === "bc_ctx") {
-          // Normalize + guarantee mode is always present
-          const incoming = msg.ctx || {};
-          window.__BC_CTX__ = {
-            userId: incoming.userId ?? null,
-            restaurantId: incoming.restaurantId ?? null,
-            role: incoming.role ?? null,
-            mode: incoming.mode ?? window.__BC_MODE__ ?? null, // ✅ IMPORTANT
-          };
-
-          console.log("[BC] ctx received ✅", window.__BC_CTX__);
-          window.dispatchEvent(new CustomEvent("BC_CTX_READY", { detail: window.__BC_CTX__ }));
-        }
-      });
-
-      function bcRequestCtx() {
+      function requestCtxOnce() {
         try {
           window.parent.postMessage(
             { source: "BC_MSG", v: 1, type: "bc_ctx_request", mode: window.__BC_MODE__ || null },
             window.location.origin
           );
-          console.log("[BC] ctx requested ✅");
         } catch (e) {
-          console.log("[BC] ctx request failed:", e);
+          console.warn("[BC] ctx request failed", e);
         }
       }
 
-      // request on boot
-      document.addEventListener("DOMContentLoaded", () => {
-        bcRequestCtx();
+      window.addEventListener("message", (event) => {
+        const msg = event?.data;
+        if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
+        if (event.origin !== window.location.origin) return;
+
+        if (msg.type === "bc_ctx" && msg.ctx) {
+          window.__BC_CTX__ = msg.ctx;
+          console.log("[BC] ctx set ✅", window.__BC_CTX__);
+          window.dispatchEvent(new CustomEvent("BC_CTX_READY", { detail: window.__BC_CTX__ }));
+        }
       });
 
-      // request again 250ms later (covers race conditions once and for all)
-      setTimeout(bcRequestCtx, 250);
-
-      // Ask parent for ctx (in case parent didn't push yet)
-      try {
-        window.parent?.postMessage(
-          { source: "BC_MSG", v: 1, type: "bc_ctx_request", mode: bcMode },
-          window.location.origin
-        );
-        console.log("[BC] ctx requested…", { mode: bcMode });
-      } catch (e) {
-        console.warn("[BC] ctx request failed", e);
-      }
+      requestCtxOnce();
 
       // ============================================================
       // ✅ CONTEXT HANDSHAKE (role + restaurantId from parent app)

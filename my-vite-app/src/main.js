@@ -783,8 +783,7 @@ window.addEventListener("message", async (event) => {
       const restaurantId = appState.profile?.restaurant_id || null;
       const role = appState.profile?.role || null;
 
-      // Prefer requested mode, fallback to current appMode
-      const mode = msg?.mode || (appMode === "premium" ? "premium" : appMode === "demo" ? "demo" : null);
+      const mode = msg?.mode ?? null;
 
       const ctx = { userId, restaurantId, role, mode };
 
