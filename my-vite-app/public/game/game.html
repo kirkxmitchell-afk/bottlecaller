@@ -2395,7 +2395,13 @@ function openManagerBoard() {
           };
         }
 
+        if (!sessionId) {
+          sessionId = crypto.randomUUID();
+        }
+
         const payload = buildEncounterResolvedPayloadV2();
+        payload.sessionId = payload.sessionId || sessionId;
+        payload.encounterId = payload.encounterId || currentEncounter?.id || currentEncounter?.encounterId || null;
         console.log("[BC] emit encounter_resolved v2 payload ✅", payload);
         bcEmitEvent("encounter_resolved", payload);
 
@@ -3151,8 +3157,14 @@ function openManagerBoard() {
           "[BC] Encounter missing encounterNumber",
           enc
         );
+        const encounterIdStable =
+          enc.id ||
+          enc.encounterId ||
+          `${bcMode}_${String(enc.encounterNumber ?? (encounterIndex + 1))}`;
         currentEncounter = {
           __logged: false,
+          id: encounterIdStable,
+          encounterId: encounterIdStable,
 
           // Encounter content (from encounters.ts)
           encounterNumber: enc.encounterNumber ?? (encounterIndex + 1),
