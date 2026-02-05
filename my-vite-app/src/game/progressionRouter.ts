@@ -46,29 +46,43 @@ export async function decideAllowedTier(
   };
 
   if (input.userId && input.restaurantId) {
-    const { data, error } = await supabase
+    const { data: r, error: rErr } = await supabase
       .from("bc_readiness_v1")
-      .select(
-        "last10_count,last10_greens,last10_reds,session_any_red_t2plus"
-      )
+      .select("last10_count,last10_greens,last10_reds,session_any_red_t2plus")
       .eq("user_id", input.userId)
       .eq("restaurant_id", input.restaurantId)
       .maybeSingle();
 
-    if (error) {
-      console.warn("[PROGRESSION] readiness fetch failed", error);
-    }
+    if (rErr) throw rErr;
 
-    snap.last10Count = data?.last10_count ?? 0;
-    snap.last10Greens = data?.last10_greens ?? 0;
-    snap.last10Reds = data?.last10_reds ?? 0;
-    snap.anyRedT2Plus = !!data?.session_any_red_t2plus;
+    // Totals (sum from bc_sessions_v1) — ALIASED so TS is happy
+    const { data: t, error: tErr } = await supabase
+      .from("bc_sessions_v1")
+      .select(`
+        encounters_total:encounters_resolved.sum(),
+        pivots_taken_total:pivots_taken.sum(),
+        pivots_success_total:pivots_success.sum()
+      `)
+      .eq("user_id", input.userId)
+      .eq("restaurant_id", input.restaurantId)
+      .maybeSingle();
+
+    if (tErr) throw tErr;
+
+    snap.last10Count = r?.last10_count ?? 0;
+    snap.last10Greens = r?.last10_greens ?? 0;
+    snap.last10Reds = r?.last10_reds ?? 0;
+    snap.anyRedT2Plus = !!r?.session_any_red_t2plus;
+
+    snap.encountersTotal = Number(t?.encounters_total ?? 0) || 0;
+    snap.pivotsTaken = Number(t?.pivots_taken_total ?? 0) || 0;
+    snap.pivotsSuccess = Number(t?.pivots_success_total ?? 0) || 0;
+  } else {
+    // optional extras if you later wire them
+    snap.encountersTotal = input.encountersTotal ?? snap.last10Count;
+    snap.pivotsTaken = input.pivotsTaken ?? 0;
+    snap.pivotsSuccess = input.pivotsSuccess ?? 0;
   }
-
-  // optional extras if you later wire them
-  snap.encountersTotal = input.encountersTotal ?? snap.last10Count;
-  snap.pivotsTaken = input.pivotsTaken ?? 0;
-  snap.pivotsSuccess = input.pivotsSuccess ?? 0;
 
   const { tierToServe, reasonsByTier } =
     decideAllowedTierFromSnapshot(snap);
