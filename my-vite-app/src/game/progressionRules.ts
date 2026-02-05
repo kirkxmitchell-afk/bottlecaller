@@ -2,56 +2,49 @@
 
 export type Tier = 1 | 2 | 3;
 
-export interface ProgressionSnapshot {
+export type ProgressionSnapshot = {
+  // minimum signals needed to decide tier
   encountersTotal: number;
 
-  // Last-N window (already derivable from views)
   last10Count: number;
   last10Greens: number;
-  last10Yellows: number;
   last10Reds: number;
 
-  // Tier-specific risk
   anyRedT2Plus: boolean;
 
-  // Pivot signal
   pivotsTaken: number;
   pivotsSuccess: number;
-}
+};
 
-export interface TierRule {
+export type TierRule = {
   minEncountersTotal: number;
-  minGreenRateLast10: number;     // 0–1
-  maxRedsLast10: number;          // absolute
+  minGreenRateLast10: number; // 0..1
+  maxRedsLast10: number; // integer (0..10)
   forbidRedT2Plus: boolean;
   requirePivotSuccess: boolean;
-}
+};
 
+// LOCKED contract: Tier 1 always allowed, Tier 2 requires stability, Tier 3 requires mastery + no red in T2+
 export const PROGRESSION_RULES: Record<Tier, TierRule> = {
   1: {
-    // Tier 1 is always allowed
     minEncountersTotal: 0,
     minGreenRateLast10: 0,
-    maxRedsLast10: Infinity,
+    maxRedsLast10: 10,
     forbidRedT2Plus: false,
     requirePivotSuccess: false,
   },
-
   2: {
-    // “Can you perform cleanly without pressure?”
-    minEncountersTotal: 8,
-    minGreenRateLast10: 0.7,   // 7 / 10 greens
-    maxRedsLast10: 1,          // tolerance for learning
+    minEncountersTotal: 5,      // must have finished Tier 1 (1–5)
+    minGreenRateLast10: 0.6,    // at least 60% green in last 10
+    maxRedsLast10: 1,           // allow at most 1 red in last 10
     forbidRedT2Plus: false,
     requirePivotSuccess: false,
   },
-
   3: {
-    // “Can you survive pressure?”
-    minEncountersTotal: 12,
-    minGreenRateLast10: 0.75,  // 3 out of 4 decisions correct
-    maxRedsLast10: 0,          // zero tolerance
-    forbidRedT2Plus: true,
-    requirePivotSuccess: true, // must prove recovery skill
+    minEncountersTotal: 12,     // must have completed through Tier 2 range (6–12)
+    minGreenRateLast10: 0.8,    // at least 80% green in last 10
+    maxRedsLast10: 0,           // zero reds in last 10
+    forbidRedT2Plus: true,      // **hard rule**
+    requirePivotSuccess: true,  // must prove at least one successful pivot
   },
 };
