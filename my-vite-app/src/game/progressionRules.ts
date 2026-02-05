@@ -48,3 +48,8 @@ export const PROGRESSION_RULES: Record<Tier, TierRule> = {
     requirePivotSuccess: true,  // must prove at least one successful pivot
   },
 };
+
+export type ProgressionCtx = {
+  userId: string;
+  restaurantId: string;
+};
