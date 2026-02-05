@@ -1279,7 +1279,6 @@ function openManagerBoard() {
         // Only applies in premium with ctx
         if (bcMode !== "premium") return desiredTier;
         if (!window.__BC_CTX__?.userId || !window.__BC_CTX__?.restaurantId) return desiredTier;
-
         if (!window.ProgressionBridge?.decideAllowedTier) return desiredTier;
 
         try {
@@ -1290,8 +1289,29 @@ function openManagerBoard() {
             attemptedPromotion: null,
           });
 
-          console.log("[BC] progression.guard", { desiredTier, tierToServe: res.tierToServe, reasons: res.reasons });
-          return res.tierToServe || desiredTier;
+          // 👇 this is the critical debug line
+          console.log("[BC] progression.guard raw result:", res);
+
+          // Shape-proof extraction
+          const tierToServe =
+            (typeof res === "number" ? res : null) ??
+            res?.tierToServe ??
+            res?.tier_to_serve ??
+            res?.tier ??
+            res?.result?.tierToServe ??
+            res?.result?.tier_to_serve ??
+            null;
+
+          const reasons =
+            res?.reasons ??
+            res?.result?.reasons ??
+            res?.reasonsByTier?.[desiredTier] ??
+            res?.result?.reasonsByTier?.[desiredTier] ??
+            [];
+
+          console.log("[BC] progression.guard", { desiredTier, tierToServe, reasons });
+
+          return Number(tierToServe) || desiredTier;
         } catch (e) {
           console.warn("[BC] progression.guard failed, falling back:", e);
           return desiredTier;
