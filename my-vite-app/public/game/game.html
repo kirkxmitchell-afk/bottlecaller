@@ -422,6 +422,12 @@ function openManagerBoard() {
       const bcMode = (window.__BC_MODE__ === "premium") ? "premium" : "demo";
       const isDemo = bcMode === "demo";
       const LIMIT = isDemo ? 2 : 10;
+      // ✅ DEMO_WINES fallback (iframe-local)
+      const DEMO_WINES = (Array.isArray(window.DEMO_WINES) ? window.DEMO_WINES : [
+        { name: "demo_red", varietal: "Red Blend" },
+        { name: "demo_white", varietal: "White Blend" },
+        { name: "demo_bubbles", varietal: "Sparkling" },
+      ]);
 
       // ------------------------------------------------------------
       // BC CTX (iframe) — boot request + reply handler
