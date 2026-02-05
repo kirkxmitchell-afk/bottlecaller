@@ -3105,9 +3105,23 @@ function openManagerBoard() {
 
         const nextEncounterNumber = enc.encounterNumber ?? (encounterIndex + 1);
         const desiredTier = getTierFromEncounterNumber(nextEncounterNumber);
+
+        if (![1,2,3].includes(desiredTier)) {
+          console.warn("[BC] bad desiredTier", { desiredTier, nextEncounterNumber });
+        }
+
+        // ✅ Single source of truth (async). This already uses ctx + ProgressionBridge.
         const allowedTier = await guardTier(desiredTier);
 
-        enc = pickNextEncounterByTier(list, allowedTier || desiredTier);
+        // ✅ Never allow null/undefined to flow
+        const allowedTierFinal = Number(allowedTier) || desiredTier;
+
+        if (![1,2,3].includes(allowedTierFinal)) {
+          console.warn("[BC] bad allowedTierFinal", { allowedTierFinal, allowedTier, desiredTier });
+        }
+
+        // ✅ Now pick encounter using tier bounds
+        enc = pickNextEncounterByTier(list, allowedTierFinal);
         if (enc && Number.isFinite(enc.encounterNumber)) {
           encounterIndex = Math.max((enc.encounterNumber || 1) - 1, 0);
           saveEncounterIndex(encounterIndex);
