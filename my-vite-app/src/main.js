@@ -403,6 +403,19 @@ if (!window.__BC_PARENT_BRIDGE__) {
         occurred_at: new Date().toISOString(),
       };
 
+      if (eventType === "encounter_resolved") {
+        const p = payload || {};
+        console.log("[BC] about to upsert encounter_resolved payload fields", {
+          v: p?.v,
+          encounterId: p?.encounterId,
+          sessionId: p?.sessionId,
+          hasChecksKey: Object.prototype.hasOwnProperty.call(p, "checks"),
+          keys: Object.keys(p || {}),
+        });
+      }
+
+      console.log("[BC] upsert row", row);
+
       // ✅ upsert prevents double logs
       const ins = await supabase
         .from("bc_event_log")

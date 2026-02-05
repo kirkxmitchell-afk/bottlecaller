@@ -2400,20 +2400,6 @@ function openManagerBoard() {
           return payload;
         }
 
-        function assertEncounterResolvedV2(payload) {
-          const ok =
-            payload &&
-            payload.v === 2 &&
-            !!payload.encounterId &&
-            !!payload.sessionId &&
-            Object.prototype.hasOwnProperty.call(payload, "checks");
-
-          if (!ok) {
-            console.error("[BC] BAD encounter_resolved payload (blocked)", payload);
-            throw new Error("encounter_resolved payload failed v2 contract");
-          }
-        }
-
         const payload = buildEncounterResolvedPayloadV2();
 
         console.log("[BC] encounter_resolved required fields", {
@@ -2423,8 +2409,16 @@ function openManagerBoard() {
           hasChecks: Object.prototype.hasOwnProperty.call(payload || {}, "checks"),
         });
 
-        assertEncounterResolvedV2(payload);
-        bcEmitEvent("encounter_resolved", payload);
+        if (
+          payload?.v === 2 &&
+          payload?.encounterId &&
+          payload?.sessionId &&
+          payload?.checks
+        ) {
+          bcEmitEvent("encounter_resolved", payload);
+        } else {
+          console.warn("[BC] blocked encounter_resolved (invalid payload)", payload);
+        }
 
         currentEncounter.__logged = true;
         updateCounts();
