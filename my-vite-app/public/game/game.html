@@ -2347,62 +2347,83 @@ function openManagerBoard() {
         saveRuns();
 
         function buildEncounterResolvedPayloadV2() {
-          const ce = currentEncounter || {};
+          const encounterId =
+            currentEncounter?.id ||
+            currentEncounter?.encounterId ||
+            (Number.isFinite(currentEncounter?.encounterNumber)
+              ? `${bcMode}_${currentEncounter.encounterNumber}`
+              : null);
 
-          return {
+          const payload = {
             v: 2,
-            mode: bcMode || "",
-            sessionId: sessionId || null,
-            seq: Number.isFinite(ce.seq) ? ce.seq : null,
+            mode: bcMode,
 
-            encounterId: ce.id || ce.encounterId || null,
-            encounterNumber: Number.isFinite(ce.encounterNumber) ? ce.encounterNumber : null,
-            tier: getTierFromEncounterNumber(Number(ce.encounterNumber || 1)),
+            // REQUIRED by DB
+            sessionId: sessionId || null,
+            encounterId: encounterId,
+
+            // everything else (ok if null)
+            seq: currentEncounter?.seq ?? null,
+            encounterNumber: currentEncounter?.encounterNumber ?? null,
+            tier: getTierFromEncounterNumber(currentEncounter?.encounterNumber ?? 1),
 
             chosen: {
-              guestType: String(ce.guestStateSelected || ""),
-              mode: String(ce.modeSelected || ""),
-              hook: String(ce.hookSelected || ""),
+              guestType: currentEncounter?.guestStateSelected || "",
+              mode: currentEncounter?.modeSelected || "",
+              hook: currentEncounter?.hookSelected || "",
             },
-
             actual: {
-              guestType: String(ce.guestStateActual || ""),
+              guestType: currentEncounter?.guestStateActual || "",
             },
 
-            // ✅ MUST EXIST (even if blank)
+            // REQUIRED by DB: key must exist
             checks: {
-              readCorrect: !!ce.readCorrect,
-              modeStatus: String(ce.modeStatus || ""),
-              hookStatus: String(ce.hookStatus || ""),
-              deliveryCorrect: !!ce.deliveryCorrect,
+              readCorrect: !!currentEncounter?.readCorrect,
+              modeStatus: currentEncounter?.modeStatus || "",
+              hookStatus: currentEncounter?.hookStatus || "",
+              deliveryCorrect: !!currentEncounter?.deliveryCorrect,
             },
 
-            // ✅ MUST EXIST (even if blank)
             pivot: {
-              type: String(ce.pivotType || ""),
-              taken: !!ce.pivotTaken,
-              success: !!ce.pivotSuccess,
-              recoveryWhy: String(ce.recoveryWhy || ""),
-              recoveryChoice: String(ce.recoveryChoice || ""),
-              recoveryCorrectMode: String(ce.recoveryCorrectMode || ""),
+              type: currentEncounter?.pivotType || "",
+              taken: !!currentEncounter?.pivotTaken,
+              success: !!currentEncounter?.pivotSuccess,
             },
 
-            chainScore: Number.isFinite(ce.chainScore) ? ce.chainScore : null,
-            chainSignal: String(ce.chainSignal || ""),
-            performanceGrade: String(ce.performanceGrade || ""),
-            wineSelected: String(ce.wineSelected?.name || ""),
+            chainScore: currentEncounter?.chainScore ?? null,
+            chainSignal: currentEncounter?.chainSignal ?? "",
+            performanceGrade: currentEncounter?.performanceGrade || "",
+            wineSelected: currentEncounter?.wineSelected?.name || "",
             occurredAtMs: Date.now(),
           };
+
+          return payload;
         }
 
-        if (!sessionId) {
-          sessionId = crypto.randomUUID();
+        function assertEncounterResolvedV2(payload) {
+          const ok =
+            payload &&
+            payload.v === 2 &&
+            !!payload.encounterId &&
+            !!payload.sessionId &&
+            Object.prototype.hasOwnProperty.call(payload, "checks");
+
+          if (!ok) {
+            console.error("[BC] BAD encounter_resolved payload (blocked)", payload);
+            throw new Error("encounter_resolved payload failed v2 contract");
+          }
         }
 
         const payload = buildEncounterResolvedPayloadV2();
-        payload.sessionId = payload.sessionId || sessionId;
-        payload.encounterId = payload.encounterId || currentEncounter?.id || currentEncounter?.encounterId || null;
-        console.log("[BC] emit encounter_resolved v2 payload ✅", payload);
+
+        console.log("[BC] encounter_resolved required fields", {
+          v: payload?.v,
+          encounterId: payload?.encounterId,
+          sessionId: payload?.sessionId,
+          hasChecks: Object.prototype.hasOwnProperty.call(payload || {}, "checks"),
+        });
+
+        assertEncounterResolvedV2(payload);
         bcEmitEvent("encounter_resolved", payload);
 
         currentEncounter.__logged = true;
