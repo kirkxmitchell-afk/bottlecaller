@@ -1330,15 +1330,28 @@ function openManagerBoard() {
 
       function pickNextEncounterByTier(list, tier) {
         if (!Array.isArray(list) || list.length === 0) return null;
-        if (!tier) {
-          const idx = isDemo ? (encounterIndex % list.length) : encounterIndex;
-          return list[idx];
+
+        const idxDefault = isDemo ? (encounterIndex % list.length) : encounterIndex;
+
+        // If tier missing or invalid, fall back to normal progression
+        if (![1,2,3].includes(Number(tier))) {
+          return list[idxDefault] || list[0] || null;
         }
 
-        const bounds = getTierBounds(tier);
-        const desiredIdx = isDemo ? (encounterIndex % list.length) : encounterIndex;
-        const targetIndex = Math.min(bounds.max - 1, Math.max(bounds.min - 1, desiredIdx));
-        return list[targetIndex] || list[desiredIdx] || list[0] || null;
+        const bounds = getTierBounds(Number(tier));
+
+        // Convert bounds (1-based encounter numbers) to 0-based indexes
+        const minIdx = Math.max(0, (bounds.min || 1) - 1);
+        const maxIdx = Math.max(minIdx, (bounds.max || list.length) - 1);
+
+        // Clamp to list length
+        const clampedMin = Math.min(minIdx, list.length - 1);
+        const clampedMax = Math.min(maxIdx, list.length - 1);
+
+        // Pick index: keep current “pace” but forced inside tier band
+        const targetIndex = Math.min(clampedMax, Math.max(clampedMin, idxDefault));
+
+        return list[targetIndex] || list[idxDefault] || list[0] || null;
       }
 
       function pickRandom(arr) {
@@ -3067,22 +3080,6 @@ function openManagerBoard() {
           return;
         }
 
-        // Hard guard: ensure requested encounter is within unlocked tier (premium only)
-        if (!isDemo) {
-          const unlockedTier = getUnlockedTierStrict();
-          const requestedEncounterNumber = (encounterIndex ?? 0) + 1;
-          const requestedTier = getTierFromEncounterNumber(requestedEncounterNumber);
-
-          if (requestedTier > unlockedTier) {
-            alert(explainLockReason(requestedTier));
-            encounterIndex = clampEncounterIndexToUnlockedTier(encounterIndex ?? 0);
-            saveEncounterIndex(encounterIndex);
-            resetNavState();
-            showScreen("screenHome");
-            return;
-          }
-        }
-
         // ----------------------------
         // Index rules (progression)
         // ----------------------------
@@ -3093,38 +3090,26 @@ function openManagerBoard() {
           return;
         }
 
-        // Demo: LOOP forever (demo cycles)
-        const idx = isDemo
-          ? (encounterIndex % list.length)
-          : encounterIndex;
+        let enc;
+        // DEMO: loop, no tiers
+        if (isDemo) {
+          const idx = (encounterIndex % list.length);
+          enc = list[idx];
+        } else {
+          // PREMIUM: tier guard + tier-bounded pick
+          const nextEncounterNumber = list[encounterIndex]?.encounterNumber ?? (encounterIndex + 1);
+          const desiredTier = getTierFromEncounterNumber(nextEncounterNumber);
 
-        // If you WANT demo to loop instead, replace idx line above with:
-        // const idx = (encounterIndex % list.length);
+          const allowedTier = await guardTier(desiredTier);
+          const allowedTierFinal = allowedTier || desiredTier;
 
-        let enc = list[idx];
+          enc = pickNextEncounterByTier(list, allowedTierFinal);
 
-        const nextEncounterNumber = enc.encounterNumber ?? (encounterIndex + 1);
-        const desiredTier = getTierFromEncounterNumber(nextEncounterNumber);
-
-        if (![1,2,3].includes(desiredTier)) {
-          console.warn("[BC] bad desiredTier", { desiredTier, nextEncounterNumber });
-        }
-
-        // ✅ Single source of truth (async). This already uses ctx + ProgressionBridge.
-        const allowedTier = await guardTier(desiredTier);
-
-        // ✅ Never allow null/undefined to flow
-        const allowedTierFinal = Number(allowedTier) || desiredTier;
-
-        if (![1,2,3].includes(allowedTierFinal)) {
-          console.warn("[BC] bad allowedTierFinal", { allowedTierFinal, allowedTier, desiredTier });
-        }
-
-        // ✅ Now pick encounter using tier bounds
-        enc = pickNextEncounterByTier(list, allowedTierFinal);
-        if (enc && Number.isFinite(enc.encounterNumber)) {
-          encounterIndex = Math.max((enc.encounterNumber || 1) - 1, 0);
-          saveEncounterIndex(encounterIndex);
+          // sync encounterIndex to selected encounterNumber
+          if (enc?.encounterNumber) {
+            encounterIndex = Math.max(enc.encounterNumber - 1, 0);
+            saveEncounterIndex(encounterIndex);
+          }
         }
 
         // ----------------------------
