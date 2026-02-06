@@ -454,6 +454,17 @@ function openManagerBoard() {
         }
       }
 
+      function requestCtxFromParent() {
+        try {
+          window.parent.postMessage(
+            { source: "BC_MSG", v: 1, type: "bc_ctx_request", mode: window.__BC_MODE__ },
+            window.location.origin
+          );
+        } catch (e) {
+          console.warn("[BC] ctx_request failed:", e);
+        }
+      }
+
       window.addEventListener("message", (event) => {
         const msg = event?.data;
         if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
@@ -469,7 +480,13 @@ function openManagerBoard() {
         }
       });
 
-      requestCtxOnce();
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", () => {
+          requestCtxFromParent();
+        });
+      } else {
+        requestCtxFromParent();
+      }
 
       // ============================================================
       // ✅ CONTEXT HANDSHAKE (role + restaurantId from parent app)
