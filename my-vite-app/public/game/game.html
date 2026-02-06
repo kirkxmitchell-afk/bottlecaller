@@ -455,86 +455,52 @@ function openManagerBoard() {
       // ------------------------------------------------------------
       window.__BC_CTX__ = window.__BC_CTX__ || null;
 
-      function requestCtxOnce() {
-        try {
-          window.parent.postMessage(
-            { source: "BC_MSG", v: 1, type: "bc_ctx_request", mode: window.__BC_MODE__ || null },
-            window.location.origin
-          );
-        } catch (e) {
-          console.warn("[BC] ctx request failed", e);
+      (function () {
+        window.__BC_CTX__ = window.__BC_CTX__ || null;
+
+        if (!window.__BC_CTX_READY__) {
+          window.__BC_CTX_READY__ = new Promise((resolve) => {
+            window.__BC_CTX_RESOLVE__ = resolve;
+          });
         }
-      }
 
-      function requestCtxFromParent() {
-        try {
-          window.parent.postMessage(
-            { source: "BC_MSG", v: 1, type: "bc_ctx_request", mode: window.__BC_MODE__ },
-            window.location.origin
-          );
-        } catch (e) {
-          console.warn("[BC] ctx_request failed:", e);
-        }
-      }
-
-      window.addEventListener("message", (event) => {
-        const msg = event?.data;
-        if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
-        if (event.origin !== window.location.origin) return;
-
-        if (msg.type === "bc_ctx" && msg.ctx) {
-          window.__BC_CTX__ = msg.ctx;
-          console.log("[BC] ctx set ✅", window.__BC_CTX__);
-          window.dispatchEvent(new CustomEvent("BC_CTX_READY", { detail: window.__BC_CTX__ }));
-          if (typeof renderProgressMeterUnderBackButton === "function") {
-            renderProgressMeterUnderBackButton();
+        function requestCtxFromParent() {
+          try {
+            window.parent.postMessage(
+              { source: "BC_MSG", v: 1, type: "bc_ctx_request", mode: window.__BC_MODE__ || null },
+              window.location.origin
+            );
+          } catch (e) {
+            console.warn("[BC] ctx_request failed", e);
           }
         }
-      });
 
-      if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", () => {
+        window.addEventListener("message", function (event) {
+          try {
+            var msg = event && event.data;
+            if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
+            if (event.origin !== window.location.origin) return;
+
+            if (msg.type === "bc_ctx" && msg.ctx) {
+              window.__BC_CTX__ = msg.ctx;
+              try { window.__BC_CTX_RESOLVE__?.(window.__BC_CTX__); } catch {}
+              console.log("[BC] ctx received ✅", window.__BC_CTX__);
+              window.dispatchEvent(new CustomEvent("BC_CTX_READY", { detail: window.__BC_CTX__ }));
+              if (typeof renderProgressMeterUnderBackButton === "function") {
+                renderProgressMeterUnderBackButton();
+              }
+            }
+          } catch (e) {
+            console.warn("[BC] ctx handler failed", e);
+          }
+        });
+
+        document.addEventListener("DOMContentLoaded", function () {
           requestCtxFromParent();
         });
-      } else {
-        requestCtxFromParent();
-      }
+      })();
 
-      // ============================================================
-      // ✅ CONTEXT HANDSHAKE (role + restaurantId from parent app)
-      // ============================================================
-      function requestCtxFromParent() {
-        return new Promise((resolve) => {
-          const TRUSTED_SOURCE = "BC_MSG";
-          const VERSION = 1;
-
-          function onMsg(e) {
-            const m = e.data;
-            if (!m || m.source !== TRUSTED_SOURCE || m.v !== VERSION) return;
-            if (m.type !== "ctx") return;
-            window.removeEventListener("message", onMsg);
-            resolve(m.ctx || null);
-          }
-
-          window.addEventListener("message", onMsg);
-
-          // ask parent
-          window.parent.postMessage(
-            { source: TRUSTED_SOURCE, v: VERSION, type: "ctx_request", mode: bcMode },
-            window.location.origin
-          );
-
-          // safety timeout (don’t hang forever)
-          setTimeout(() => {
-            window.removeEventListener("message", onMsg);
-            resolve(null);
-          }, 1500);
-        });
-      }
-
-      const BC_CTX = await requestCtxFromParent();
-      window.__BC_CTX__ = BC_CTX;
-
+      const BC_CTX = window.__BC_CTX__ || null;
       const role = BC_CTX?.role || null;
       const restaurantId = BC_CTX?.restaurantId || null;
       const isManager = role === "manager";
@@ -1316,24 +1282,35 @@ function openManagerBoard() {
         renderDrillSummary();
       }
 
+      async function getCtxStrict(timeoutMs = 1500) {
+        if (window.__BC_CTX__?.userId && window.__BC_CTX__?.restaurantId) return window.__BC_CTX__;
+
+        await Promise.race([
+          window.__BC_CTX_READY__ || Promise.resolve(),
+          new Promise((_, rej) => setTimeout(() => rej(new Error("ctx_timeout")), timeoutMs)),
+        ]);
+
+        if (!window.__BC_CTX__?.userId || !window.__BC_CTX__?.restaurantId) {
+          throw new Error("ctx_missing");
+        }
+        return window.__BC_CTX__;
+      }
+
       async function renderProgressMeterUnderBackButton() {
         const el = document.getElementById("progressMeter");
         if (!el) return;
 
         // ctx must exist in the iframe
-        const ctx = window.__BC_CTX__;
         const desiredTier = getTierFromEncounterNumber((encounterIndex ?? 0) + 1);
-
-        // If no bridge or no ctx yet, show a friendly placeholder
-        if (!window.ProgressionBridge?.decideAllowedTier || !ctx?.userId || !ctx?.restaurantId) {
-          el.innerHTML = `
-            <div class="muted">Progression status not ready yet.</div>
-            <div class="muted">Waiting for login context…</div>
-          `;
-          return;
-        }
+        el.innerHTML = `<div class="muted">Waiting for login context…</div>`;
 
         try {
+          const ctx = await getCtxStrict();
+          if (!window.ProgressionBridge?.decideAllowedTier) {
+            el.innerHTML = `<div class="muted">Progression status not ready yet.</div>`;
+            return;
+          }
+
           const res = await window.ProgressionBridge.decideAllowedTier({
             desiredTier,
             userId: ctx.userId,
@@ -1350,20 +1327,22 @@ function openManagerBoard() {
           `;
         } catch (e) {
           console.warn("[BC] renderProgressMeter failed:", e);
-          el.innerHTML = `<div class="muted">Progression status error.</div>`;
+          el.innerHTML = `<div class="muted">Progression status unavailable (ctx missing).</div>`;
         }
       }
 
       async function guardTier(desiredTier) {
         // Only applies in premium with ctx
         if (bcMode !== "premium") return desiredTier;
-        if (!window.__BC_CTX__?.userId || !window.__BC_CTX__?.restaurantId) return desiredTier;
         if (!window.ProgressionBridge?.decideAllowedTier) return desiredTier;
 
         try {
+          const ctx = await getCtxStrict().catch(() => null);
+          if (!ctx) return desiredTier;
+
           const res = await window.ProgressionBridge.decideAllowedTier({
-            userId: window.__BC_CTX__.userId,
-            restaurantId: window.__BC_CTX__.restaurantId,
+            userId: ctx.userId,
+            restaurantId: ctx.restaurantId,
             desiredTier,
             attemptedPromotion: null,
           });
