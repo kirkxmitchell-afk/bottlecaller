@@ -2522,9 +2522,7 @@ function openManagerBoard() {
           parent.appendChild(details);
         }
 
-        if (currentStep === 1) {
-          renderProgressMeterUnderBackButton();
-        }
+        renderProgressMeterUnderBackButton();
 
         if (currentStep === 0) {
           const p = document.createElement("p");
