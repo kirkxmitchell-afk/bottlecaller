@@ -8,11 +8,28 @@
   <link rel="stylesheet" href="/game/game.css" />
 
   <script>
+    function bcGetMode() {
+      // 1) URL param wins
+      const p = new URLSearchParams(window.location.search)
+      const urlMode = (p.get("mode") || "").toLowerCase()
+      if (urlMode === "premium" || urlMode === "demo") return urlMode
+
+      // 2) injected mode fallback
+      const injected = (window.__BC_MODE__ || "").toLowerCase()
+      if (injected === "premium" || injected === "demo") return injected
+
+      // 3) default
+      return "demo"
+    }
+
+    // Canonical mode used everywhere
+    window.__BC_MODE__ = bcGetMode()
+
     // --- BC runtime (must exist before anything reads it) ---
     window.__BC_RUNTIME__ = window.__BC_RUNTIME__ || {
       ctx: null,
       ctxStatus: "pending", // pending | hydrated | timeout
-      mode: window.__BC_MODE__ || "demo",
+      mode: window.__BC_MODE__,
       progression: {
         tierAllowed: 1,
         tierRequested: 1,
