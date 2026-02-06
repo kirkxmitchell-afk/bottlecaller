@@ -440,6 +440,9 @@ function openManagerBoard() {
       const bcMode = (window.__BC_MODE__ === "premium") ? "premium" : "demo";
       const isDemo = bcMode === "demo";
       const LIMIT = isDemo ? 2 : 10;
+      if (window === window.top) {
+        console.warn("[BC] game.html opened as top-level page. ctx bridge will not work. Open via the main app route that mounts the iframe.");
+      }
       if (!window.ProgressionBridge && window.parent?.ProgressionBridge) {
         window.ProgressionBridge = window.parent.ProgressionBridge;
       }
