@@ -8,6 +8,64 @@
   <link rel="stylesheet" href="/game/game.css" />
 
   <script>
+    // --- BC runtime (must exist before anything reads it) ---
+    window.__BC_RUNTIME__ = window.__BC_RUNTIME__ || {
+      ctx: null,
+      ctxStatus: "pending", // pending | hydrated | timeout
+      mode: window.__BC_MODE__ || "demo",
+      progression: {
+        tierAllowed: 1,
+        tierRequested: 1,
+        reasonsHuman: [],
+        snapshot: null
+      }
+    }
+
+    // --- CTX receive (must be registered early) ---
+    window.addEventListener("message", (e) => {
+      const d = e?.data
+      if (!d || d.source !== "BC_MSG" || d.v !== 1) return
+
+      if (d.type === "bc_ctx") {
+        window.__BC_RUNTIME__.ctx = d
+        window.__BC_RUNTIME__.ctxStatus = "hydrated"
+
+        try { hydrateProgressionFromCtx(d) } catch (_) {}
+        try { refreshProgressionUI() } catch (_) {}
+
+        // Optional: expose for quick inspection (non-UX)
+        window.__BC_CTX__ = d
+      }
+    })
+
+    // --- CTX request + retry (prevents race) ---
+    ;(function requestCtxWithRetry() {
+      const mode = window.__BC_RUNTIME__.mode
+      const msg = { source: "BC_MSG", v: 1, type: "bc_ctx_request", mode }
+
+      let attempts = 0
+      const maxAttempts = 8   // ~1.2s total
+      const intervalMs = 150
+
+      function tick() {
+        if (window.__BC_RUNTIME__.ctxStatus === "hydrated") return
+        attempts += 1
+
+        // ask parent
+        window.parent?.postMessage(msg, "*")
+
+        if (attempts >= maxAttempts) {
+          window.__BC_RUNTIME__.ctxStatus = "timeout"
+          try { refreshProgressionUI() } catch (_) {}
+          return
+        }
+        setTimeout(tick, intervalMs)
+      }
+
+      // start after listener is installed
+      setTimeout(tick, 0)
+    })()
+
     (function () {
       const params = new URLSearchParams(window.location.search);
       const raw = String(params.get("mode") || "demo").toLowerCase();
