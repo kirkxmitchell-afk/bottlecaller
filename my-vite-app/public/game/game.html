@@ -463,6 +463,9 @@ function openManagerBoard() {
           window.__BC_CTX__ = msg.ctx;
           console.log("[BC] ctx set ✅", window.__BC_CTX__);
           window.dispatchEvent(new CustomEvent("BC_CTX_READY", { detail: window.__BC_CTX__ }));
+          if (typeof renderProgressMeterUnderBackButton === "function") {
+            renderProgressMeterUnderBackButton();
+          }
         }
       });
 
