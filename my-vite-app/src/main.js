@@ -335,6 +335,24 @@ window.__BC_DEBUG__ = {
   get profile() { return appState.profile; }
 };
 
+if (!window.__BC_PARENT_TRACE__) {
+  window.__BC_PARENT_TRACE__ = true;
+  window.addEventListener("message", (event) => {
+    const msg = event?.data;
+    if (msg?.source === "BC_MSG") {
+      console.log(
+        "[PARENT] got",
+        msg,
+        "origin:",
+        event.origin,
+        "from iframe?",
+        event.source === document.getElementById("premiumRootFrame")?.contentWindow
+      );
+    }
+  });
+  console.log("parent listener armed");
+}
+
 // ------------------------------------------------------------
 // BC Bridge: iframe -> parent
 // Handles:
