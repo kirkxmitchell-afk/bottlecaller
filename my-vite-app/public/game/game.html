@@ -1284,6 +1284,44 @@ function openManagerBoard() {
         renderDrillSummary();
       }
 
+      async function renderProgressMeterUnderBackButton() {
+        const el = document.getElementById("progressMeter");
+        if (!el) return;
+
+        // ctx must exist in the iframe
+        const ctx = window.__BC_CTX__;
+        const desiredTier = getTierFromEncounterNumber((encounterIndex ?? 0) + 1);
+
+        // If no bridge or no ctx yet, show a friendly placeholder
+        if (!window.ProgressionBridge?.decideAllowedTier || !ctx?.userId || !ctx?.restaurantId) {
+          el.innerHTML = `
+            <div class="muted">Progression status not ready yet.</div>
+            <div class="muted">Waiting for login context…</div>
+          `;
+          return;
+        }
+
+        try {
+          const res = await window.ProgressionBridge.decideAllowedTier({
+            desiredTier,
+            userId: ctx.userId,
+            restaurantId: ctx.restaurantId
+          });
+
+          const tierToServe = res?.tierToServe ?? 1;
+          const reasonsHuman = Array.isArray(res?.reasonsHuman) ? res.reasonsHuman : [];
+
+          el.innerHTML = `
+            <div><strong>Allowed Tier:</strong> ${tierToServe}</div>
+            <div><strong>Requested Tier:</strong> ${desiredTier}</div>
+            ${reasonsHuman.length ? `<div style="margin-top:8px;"><strong>Blocked by:</strong><ul>${reasonsHuman.map(x=>`<li>${x}</li>`).join("")}</ul></div>` : `<div class="muted" style="margin-top:8px;">No blocks.</div>`}
+          `;
+        } catch (e) {
+          console.warn("[BC] renderProgressMeter failed:", e);
+          el.innerHTML = `<div class="muted">Progression status error.</div>`;
+        }
+      }
+
       async function guardTier(desiredTier) {
         // Only applies in premium with ctx
         if (bcMode !== "premium") return desiredTier;
@@ -2522,7 +2560,9 @@ function openManagerBoard() {
           parent.appendChild(details);
         }
 
-        renderProgressMeterUnderBackButton();
+        if (typeof renderProgressMeterUnderBackButton === "function") {
+          renderProgressMeterUnderBackButton();
+        }
 
         if (currentStep === 0) {
           const p = document.createElement("p");
