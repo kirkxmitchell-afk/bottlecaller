@@ -440,9 +440,6 @@ function openManagerBoard() {
       const bcMode = (window.__BC_MODE__ === "premium") ? "premium" : "demo";
       const isDemo = bcMode === "demo";
       const LIMIT = isDemo ? 2 : 10;
-      if (window === window.top) {
-        console.warn("[BC] game.html opened as top-level page. ctx bridge will not work. Open via the main app route that mounts the iframe.");
-      }
       if (!window.ProgressionBridge && window.parent?.ProgressionBridge) {
         window.ProgressionBridge = window.parent.ProgressionBridge;
       }
@@ -454,53 +451,57 @@ function openManagerBoard() {
       ]);
 
       // ------------------------------------------------------------
-      // BC CTX (iframe) — boot request + reply handler
+      // BC CTX bootstrap (iframe-only) — SINGLE INSTANCE
       // ------------------------------------------------------------
-      window.__BC_CTX__ = window.__BC_CTX__ || null;
+      (() => {
+        if (window.__BC_CTX_BOOTSTRAPPED__) return;
+        window.__BC_CTX_BOOTSTRAPPED__ = true;
 
-      (function () {
-        window.__BC_CTX__ = window.__BC_CTX__ || null;
+        window.__BC_CTX__ = window.__BC_CTX__ ?? null;
 
-        if (!window.__BC_CTX_READY__) {
-          window.__BC_CTX_READY__ = new Promise((resolve) => {
-            window.__BC_CTX_RESOLVE__ = resolve;
-          });
+        let resolveReady;
+        window.__BC_CTX_READY__ = new Promise((res) => (resolveReady = res));
+        window.__BC_CTX_RESOLVE__ = () => {
+          try { resolveReady(window.__BC_CTX__); } catch {}
+        };
+
+        const isEmbedded = window !== window.top;
+
+        // If game.html is opened directly (top-level), do NOT block the game.
+        if (!isEmbedded) {
+          console.warn("[BC] game.html is top-level (not iframe) — skipping ctx bootstrap");
+          window.__BC_CTX__ = null;
+          window.__BC_CTX_RESOLVE__();
+          return;
         }
 
-        function requestCtxFromParent() {
-          try {
-            window.parent.postMessage(
-              { source: "BC_MSG", v: 1, type: "bc_ctx_request", mode: window.__BC_MODE__ || null },
-              window.location.origin
-            );
-          } catch (e) {
-            console.warn("[BC] ctx_request failed", e);
-          }
-        }
+        // Listen for ctx
+        window.addEventListener("message", (event) => {
+          const msg = event?.data;
+          if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
+          if (event.origin !== window.location.origin) return;
 
-        window.addEventListener("message", function (event) {
-          try {
-            var msg = event && event.data;
-            if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
-            if (event.origin !== window.location.origin) return;
-
-            if (msg.type === "bc_ctx" && msg.ctx) {
-              window.__BC_CTX__ = msg.ctx;
-              try { window.__BC_CTX_RESOLVE__?.(window.__BC_CTX__); } catch {}
-              console.log("[BC] ctx received ✅", window.__BC_CTX__);
-              window.dispatchEvent(new CustomEvent("BC_CTX_READY", { detail: window.__BC_CTX__ }));
-              if (typeof renderProgressMeterUnderBackButton === "function") {
-                renderProgressMeterUnderBackButton();
-              }
+          if (msg.type === "bc_ctx" && msg.ctx) {
+            window.__BC_CTX__ = msg.ctx;
+            console.log("[BC] ctx received ✅", msg.ctx);
+            window.__BC_CTX_RESOLVE__();
+            if (typeof renderProgressMeterUnderBackButton === "function") {
+              renderProgressMeterUnderBackButton();
             }
-          } catch (e) {
-            console.warn("[BC] ctx handler failed", e);
           }
         });
 
-        document.addEventListener("DOMContentLoaded", function () {
-          requestCtxFromParent();
-        });
+        // Request ctx from parent
+        try {
+          window.parent.postMessage(
+            { source:"BC_MSG", v:1, type:"bc_ctx_request", mode: window.__BC_MODE__ || null },
+            window.location.origin
+          );
+          console.log("[BC] ctx request sent ✅");
+        } catch (e) {
+          console.warn("[BC] ctx request failed", e);
+          window.__BC_CTX_RESOLVE__();
+        }
       })();
 
       const BC_CTX = window.__BC_CTX__ || null;
