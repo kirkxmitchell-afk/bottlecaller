@@ -364,6 +364,25 @@ button.selected,
   color: rgba(244,246,247,0.62);
 }
 
+.bc-details {
+  margin-top: 10px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  background: rgba(0,0,0,0.18);
+}
+
+.bc-summary {
+  cursor: pointer;
+  padding: 10px 12px;
+  font-weight: 600;
+  user-select: none;
+}
+
+.bc-details-body {
+  padding: 10px 12px 12px;
+  border-top: 1px solid rgba(255,255,255,0.10);
+}
+
 /* ---------- Minor utilities ---------- */
 .successText { color: var(--greenText); }
 .errorText { color: rgba(255, 140, 140, 0.92); }
