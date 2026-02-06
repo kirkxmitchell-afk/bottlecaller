@@ -310,6 +310,15 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
     alert("App error: " + (e.reason && e.reason.message ? e.reason.message : String(e.reason)));
   });
 
+  window.addEventListener("unhandledrejection", (event) => {
+    const msg = String(event?.reason?.message || event?.reason || "");
+    if (/abort|aborted|AbortError/i.test(msg)) {
+      // ignore refresh-cancelled async work
+      event.preventDefault?.();
+      console.warn("[BC] ignored AbortError:", msg);
+    }
+  });
+
   document.addEventListener("DOMContentLoaded", async () => {
     try {
       if (window.__BC_INIT_DONE__) return;
@@ -431,6 +440,9 @@ function openManagerBoard() {
       const bcMode = (window.__BC_MODE__ === "premium") ? "premium" : "demo";
       const isDemo = bcMode === "demo";
       const LIMIT = isDemo ? 2 : 10;
+      if (!window.ProgressionBridge && window.parent?.ProgressionBridge) {
+        window.ProgressionBridge = window.parent.ProgressionBridge;
+      }
       // ✅ DEMO_WINES fallback (iframe-local)
       const DEMO_WINES = (Array.isArray(window.DEMO_WINES) ? window.DEMO_WINES : [
         { name: "demo_red", varietal: "Red Blend" },
