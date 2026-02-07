@@ -56,7 +56,7 @@
         window.__BC_RUNTIME__.ctxStatus = "hydrated"
 
         try { hydrateProgressionFromCtx(flat) } catch (_) {}
-        try { refreshProgressionUI() } catch (_) {}
+        try { if (typeof applyRoleVisibility === "function") applyRoleVisibility(); } catch (_) {}
 
         // Optional: expose for quick inspection (non-UX)
         window.__BC_CTX__ = flat
@@ -81,7 +81,6 @@
 
         if (attempts >= maxAttempts) {
           window.__BC_RUNTIME__.ctxStatus = "timeout"
-          try { refreshProgressionUI() } catch (_) {}
           return
         }
         setTimeout(tick, intervalMs)
@@ -127,7 +126,7 @@
           <button id="btnStartDrillDemo" type="button">5-Minute Drill</button>
           <button id="btnViewHistoryDemo" type="button">View History</button>
           <button id="btnResetRunsDemo" type="button">Reset Runs Only</button>
-          <button id="btnResetWinesDemo" type="button">Reset Wines Only</button>
+          <button id="btnResetWinesDemo" type="button" data-role="manager">Reset Wines Only</button>
         </div>
       </div>
 
@@ -140,20 +139,7 @@
           <button id="btnGoPremium" type="button">Setup</button>
           <button id="btnViewHistoryPremium" type="button">View History</button>
           <button id="btnResetRunsPremium" type="button">Reset Runs Only</button>
-          <button id="btnResetWinesPremium" type="button">Reset Wines Only</button>
-        </div>
-      </div>
-
-      <div class="button-row" id="bcProgressionRow">
-        <button id="btnProgressionStatus" type="button" aria-expanded="false">
-          Progression Status
-        </button>
-
-        <div id="progressionPanel" class="bc-panel" hidden>
-          <div class="bc-row"><strong>Level</strong> <span id="bcProgLevel"></span></div>
-          <div class="bc-row"><strong>Focus</strong> <span id="bcProgFocus"></span></div>
-          <div class="bc-row"><strong>Next</strong> <span id="bcProgNext"></span></div>
-          <div id="bcProgNote" class="bc-note"></div>
+          <button id="btnResetWinesPremium" type="button" data-role="manager">Reset Wines Only</button>
         </div>
       </div>
 
@@ -408,6 +394,7 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
     try {
       if (window.__BC_INIT_DONE__) return;
       window.__BC_INIT_DONE__ = true;
+      applyRoleVisibility();
 
       function bcEmitEvent(eventType, payload) {
         try {
@@ -1002,6 +989,14 @@ function openManagerBoard() {
         startEncounter();
       }
 
+      function applyRoleVisibility() {
+        const role = window.__BC_RUNTIME__?.ctx?.role || null;
+        const isManager = role === "manager";
+        document.querySelectorAll('[data-role="manager"]').forEach(el => {
+          el.style.display = isManager ? "" : "none";
+        });
+      }
+
       // ==============================
       // STRICT UNLOCKS (Option A)
       // Tier 1: encounters 1–5
@@ -1453,51 +1448,6 @@ function openManagerBoard() {
           note: null
         };
       }
-
-      function refreshProgressionUI() {
-        const runtime = window.__BC_RUNTIME__;
-        const view = getPlayerProgressionView(runtime);
-
-        const levelEl = document.getElementById("bcProgLevel");
-        const focusEl = document.getElementById("bcProgFocus");
-        const nextEl = document.getElementById("bcProgNext");
-        const noteEl = document.getElementById("bcProgNote");
-
-        if (!levelEl || !focusEl || !nextEl || !noteEl) return;
-
-        levelEl.textContent = view.level || "";
-        focusEl.textContent = view.focus || "";
-        nextEl.textContent = view.next || "";
-
-        if (view.note) {
-          noteEl.textContent = view.note;
-          noteEl.style.display = "block";
-        } else {
-          noteEl.textContent = "";
-          noteEl.style.display = "none";
-        }
-      }
-
-      (function wireProgressionDropdown() {
-        const row = document.getElementById("bcProgressionRow");
-        const btn = document.getElementById("btnProgressionStatus");
-        const panel = document.getElementById("progressionPanel");
-        if (!btn || !panel) return;
-
-        // 🔒 TEMP: hide in-game progression UI (outer menu is primary)
-        if (row) row.style.display = "none";
-
-        btn.addEventListener("click", () => {
-          const open = btn.getAttribute("aria-expanded") === "true";
-          btn.setAttribute("aria-expanded", String(!open));
-          panel.hidden = open;
-
-          if (!open) refreshProgressionUI(); // update on open
-        });
-
-        // Initial render (non-blocking)
-        refreshProgressionUI();
-      })();
 
       async function getCtxStrict(timeoutMs = 1500) {
         if (window.__BC_CTX__?.userId && window.__BC_CTX__?.restaurantId) return window.__BC_CTX__;
