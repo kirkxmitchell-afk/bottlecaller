@@ -2788,30 +2788,8 @@ function openManagerBoard() {
           "Step " + (currentStep + 1) + " of 7: " + stepLabels[currentStep] +
           (chipParts.length ? "\n" + chipParts.join(" • ") : "");
 
-        if (!document.getElementById("progressionStatus")) {
-          const details = document.createElement("details");
-          details.id = "progressionStatus";
-          details.className = "bc-details";
-
-          const summary = document.createElement("summary");
-          summary.className = "bc-summary";
-          summary.innerText = "Progression Status";
-
-          const body = document.createElement("div");
-          body.id = "progressMeter";
-          body.className = "bc-details-body";
-          body.innerHTML = `<div class="muted">Loading…</div>`;
-
-          details.appendChild(summary);
-          details.appendChild(body);
-
-          const parent = stepHeader.parentElement || stepHeader;
-          parent.appendChild(details);
-        }
-
-        if (typeof renderProgressMeterUnderBackButton === "function") {
-          renderProgressMeterUnderBackButton();
-        }
+        // ---- in-game Progression Status UI DISABLED (parent owns progression UX) ----
+        if (true) { /* intentionally disabled */ }
 
         if (currentStep === 0) {
           const p = document.createElement("p");
