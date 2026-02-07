@@ -1412,25 +1412,30 @@ function openManagerBoard() {
         renderDrillSummary();
       }
 
-      function bcFeedbackFromResult(result) {
-        const c = result?.checks || result || {};
-        const pivotTaken = !!result?.pivotTaken;
-        const pivotSuccess = !!result?.pivotSuccess;
+      function bcFeedbackFromOutcome(reactionChecks, result) {
+        const readCorrect = !!reactionChecks?.readCorrect;
+        const deliveryCorrect = !!reactionChecks?.deliveryCorrect;
+        const modeStatus = reactionChecks?.modeStatus || "";
+        const hookStatus = reactionChecks?.hookStatus || "";
         const signal = (result?.chainSignal || "").toLowerCase();
 
-        if (pivotTaken) {
-          return pivotSuccess
-            ? "Good recovery — you stayed in control."
-            : "You lost control after the pivot. Slow down and reset your lead.";
+        // Pivot moment (we don't know taken/success here, only unlocked)
+        if (result?.pivotUnlocked) {
+          const t = result?.pivotType || "";
+          if (t) return `Pressure shifted (${t}). Stay calm and recover your lead.`;
+          return "Pressure shifted. Stay calm and recover your lead.";
         }
 
-        if (c.readCorrect && c.deliveryCorrect) return "Clean execution — you led the table with confidence.";
-        if (!c.readCorrect) return "You misread the guest. Pause and spot intent before you speak.";
-        if (!c.deliveryCorrect) return "The delivery slipped. Keep it simple and lead earlier.";
+        // Core Tier 1 loop
+        if (readCorrect && deliveryCorrect) return "Clean execution — you led the table with confidence.";
+        if (!readCorrect) return "You misread the guest. Pause and spot intent before you speak.";
+        if (!deliveryCorrect) return "The delivery slipped. Keep it simple and lead earlier.";
 
-        if (c.modeStatus && c.modeStatus !== "correct") return "Mode selection was off. Match your approach to the guest’s state.";
-        if (c.hookStatus && c.hookStatus !== "correct") return "Hook timing was late. Lead sooner with one clear suggestion.";
+        // Tier 2 nuance, still calm (only if provided)
+        if (modeStatus && modeStatus !== "correct") return "Mode selection was off. Match your approach to the guest’s state.";
+        if (hookStatus && hookStatus !== "correct") return "Hook timing was late. Lead sooner with one clear suggestion.";
 
+        // Signal fallback
         if (signal === "green") return "You’re getting more consistent. Keep the pace.";
         if (signal === "yellow") return "Close — keep it calm and tighten the sequence.";
         if (signal === "red") return "Reset and try again. Lead the moment, don’t chase it.";
@@ -3059,7 +3064,7 @@ function openManagerBoard() {
           if (result.deliveryCorrect) {
             const upgraded = (result.chainSignal === "green") && (Math.random() < 0.35);
             stepContent.appendChild(document.createTextNode(upgraded ? "✅ Upgrade. “Nice — that’s the move.”" : "✅ Nod. “Perfect.”"));
-            appendFeedbackLine(stepContent, bcFeedbackFromResult(result));
+            appendFeedbackLine(stepContent, bcFeedbackFromOutcome(reactionChecks, result));
             addStepButton("REFLECT", () => { currentStep = 6; renderEncounterStep(); }, stepButtons);
             return;
           }
@@ -3162,7 +3167,7 @@ function openManagerBoard() {
               stepContent.appendChild(explain);
             }
 
-            appendFeedbackLine(stepContent, bcFeedbackFromResult(result));
+            appendFeedbackLine(stepContent, bcFeedbackFromOutcome(reactionChecks, result));
 
             const cont = addStepButton("CONTINUE TO REFLECTION", () => { currentStep = 6; renderEncounterStep(); }, stepButtons);
             if (!currentEncounter.recoveryChoice && !currentEncounter.resetUsed) cont.disabled = true;
@@ -3171,7 +3176,7 @@ function openManagerBoard() {
           }
 
           stepContent.innerText = "❌ “We’ll choose, thanks.”";
-          appendFeedbackLine(stepContent, bcFeedbackFromResult(result));
+          appendFeedbackLine(stepContent, bcFeedbackFromOutcome(reactionChecks, result));
           addStepButton("REFLECT", () => { currentStep = 6; renderEncounterStep(); }, stepButtons);
           return;
         }
