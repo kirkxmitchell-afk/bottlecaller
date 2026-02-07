@@ -84,7 +84,7 @@
       setTimeout(tick, 0)
     })()
 
-    (function () {
+    ;(function () {
       const params = new URLSearchParams(window.location.search);
       const raw = String(params.get("mode") || "demo").toLowerCase();
       const mode = raw === "premium" ? "premium" : "demo";
@@ -324,7 +324,7 @@
 <script>
 window.__BC_GAME_HTML_MARKER__ = "streak-debug-v1";
 console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
-(function () {
+;(function () {
   function modeKey() {
     return (window.__BC_MODE__ === "premium") ? "premium" : "demo";
   }
@@ -372,7 +372,7 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
   window.__BC_STREAK_DEBUG_READY__ = true;
   console.log("[BC] STREAK DEBUG READY ✅", { mode: modeKey() });
 })();
-(() => {
+;(() => {
   "use strict";
 
   // ---------- Global safety net (never silently die) ----------
@@ -529,7 +529,7 @@ function openManagerBoard() {
       // ------------------------------------------------------------
       // BC CTX bootstrap (iframe-only) — SINGLE INSTANCE
       // ------------------------------------------------------------
-      (() => {
+      ;(() => {
         if (window.__BC_CTX_BOOTSTRAPPED__) return;
         window.__BC_CTX_BOOTSTRAPPED__ = true;
 
