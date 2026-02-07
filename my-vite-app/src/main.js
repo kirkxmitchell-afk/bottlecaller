@@ -630,6 +630,26 @@ function refreshParentProgressionUI() {
 
 window.refreshParentProgressionUI = refreshParentProgressionUI;
 
+function mapTierToPhase2View(tierAllowed) {
+  const t = Number(tierAllowed || 1);
+
+  if (t < 2) {
+    return {
+      level: "Building recognition",
+      focus: "Reading guest intent",
+      next: "Keep playing encounters",
+      note: "Progress updates after a few sessions"
+    };
+  }
+
+  return {
+    level: "Developing confidence",
+    focus: "Staying steady under pushback",
+    next: "Stay consistent across a few sessions",
+    note: null
+  };
+}
+
 function bcKeySeenTier2Unlock(userId, restaurantId) {
   return `bc_seen_unlock_t2__${userId}__${restaurantId}`;
 }
@@ -698,12 +718,7 @@ async function refreshParentProgressionFromDb() {
     });
 
     const tier = result?.tierToServe ?? 1;
-    appState.progressionView = {
-      level: tier >= 2 ? "Developing confidence" : "Building recognition",
-      focus: tier >= 2 ? "Staying steady under pushback" : "Reading guest intent",
-      next: result?.reasonsHuman?.[0] || (tier >= 2 ? "Stay consistent across sessions" : "Keep playing encounters"),
-      note: null
-    };
+    appState.progressionView = mapTierToPhase2View(tier);
 
     // --- Phase 2 unlock messaging (one-time, calm) ---
     const prev = appState._lastAllowedTier || 1;
