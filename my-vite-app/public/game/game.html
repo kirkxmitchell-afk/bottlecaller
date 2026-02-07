@@ -957,49 +957,38 @@ function openManagerBoard() {
 
       function setInputValue(id, value) {
         const el = document.getElementById(id);
-        if (!el) return;
+        if (!el) {
+          console.warn("[BC] missing input", id);
+          return;
+        }
         el.value = value ?? "";
-        // Trigger listeners if your UI relies on them
         el.dispatchEvent(new Event("input", { bubbles: true }));
         el.dispatchEvent(new Event("change", { bubbles: true }));
+        el.blur?.();
+        console.log("[BC] hydrated inputs", id, el.value);
       }
 
-      // Option chips: we don’t know your exact markup, so we handle common patterns:
-      // - buttons/divs inside the container with data-value="x" or innerText matching
-      // - selected state via .active or aria-pressed=true
-      function selectOptions(containerId, values) {
+      function clickMatch(containerId, wantedValues, { single = false } = {}) {
         const box = document.getElementById(containerId);
         if (!box) return;
 
-        const wanted = new Set((values || []).map(v => String(v).trim().toLowerCase()).filter(Boolean));
+        const wanted = new Set(
+          (Array.isArray(wantedValues) ? wantedValues : [wantedValues])
+            .map(v => String(v || "").trim().toLowerCase())
+            .filter(Boolean)
+        );
 
-        const items = Array.from(box.querySelectorAll("[data-value], button, .option, .chip, div, span"))
-          .filter(n => (n instanceof HTMLElement));
+        const nodes = Array.from(box.querySelectorAll("button, [data-value], .option, .chip, div, span"))
+          .filter(n => n instanceof HTMLElement);
 
-        items.forEach(node => {
+        // If single, pick the first match
+        for (const node of nodes) {
           const raw = (node.getAttribute("data-value") || node.innerText || "").trim().toLowerCase();
-          const on = wanted.has(raw);
-
-          node.classList.toggle("active", on);
-          node.setAttribute("aria-pressed", on ? "true" : "false");
-        });
-      }
-
-      function selectSingleOption(containerId, value) {
-        const v = String(value || "").trim().toLowerCase();
-        const box = document.getElementById(containerId);
-        if (!box) return;
-
-        const items = Array.from(box.querySelectorAll("[data-value], button, .option, .chip, div, span"))
-          .filter(n => (n instanceof HTMLElement));
-
-        items.forEach(node => {
-          const raw = (node.getAttribute("data-value") || node.innerText || "").trim().toLowerCase();
-          const on = v && raw === v;
-
-          node.classList.toggle("active", on);
-          node.setAttribute("aria-pressed", on ? "true" : "false");
-        });
+          if (wanted.has(raw)) {
+            node.click(); // ✅ crucial
+            if (single) break;
+          }
+        }
       }
 
       // Call this when selecting a wine OR when opening Setup
@@ -1014,9 +1003,13 @@ function openManagerBoard() {
         setInputValue(ids.regionId, wine._region);
 
         // chips
-        selectOptions(ids.fruitBoxId, wine._fruit);
-        selectOptions(ids.textureBoxId, wine._texture);
-        selectSingleOption(ids.oakBoxId, wine._oak);
+        clickMatch(ids.fruitBoxId, wine._fruit, { single: false });
+        clickMatch(ids.textureBoxId, wine._texture, { single: false });
+        clickMatch(ids.oakBoxId, wine._oak, { single: true });
+      }
+
+      function getWinesStorageKeyForMode(mode) {
+        return mode === "premium" ? "bc_wines_premium" : "bc_wines";
       }
 
       // ---------- Runtime state ----------
@@ -3823,21 +3816,27 @@ function openManagerBoard() {
           localStorage.setItem(coverKey, "true");
           resetNavState();
           showScreen(isDemo ? "screenHome" : ids.setupScreen);
-          const listKey = (bcMode === "premium") ? "bc_wines_premium" : "bc_wines";
-          const list = JSON.parse(localStorage.getItem(listKey) || "[]");
-          if (Array.isArray(list) && list.length) {
-            hydrateSetupFormFromWine(bcMode, list[0]);
-          }
+          setTimeout(() => {
+            const mode = window.__BC_MODE__ || bcMode;
+            const key = getWinesStorageKeyForMode(mode);
+            const wines = JSON.parse(localStorage.getItem(key) || "[]");
+            console.log("[BC] setup hydrate after showScreen", { mode, key, count: wines.length });
+
+            if (Array.isArray(wines) && wines.length) hydrateSetupFormFromWine(mode, wines[0]);
+          }, 0);
         });
 
         bindInput(btnGoSetup, () => {
           resetNavState();
           showScreen(ids.setupScreen);
-          const listKey = (bcMode === "premium") ? "bc_wines_premium" : "bc_wines";
-          const list = JSON.parse(localStorage.getItem(listKey) || "[]");
-          if (Array.isArray(list) && list.length) {
-            hydrateSetupFormFromWine(bcMode, list[0]);
-          }
+          setTimeout(() => {
+            const mode = window.__BC_MODE__ || bcMode;
+            const key = getWinesStorageKeyForMode(mode);
+            const wines = JSON.parse(localStorage.getItem(key) || "[]");
+            console.log("[BC] setup hydrate after showScreen", { mode, key, count: wines.length });
+
+            if (Array.isArray(wines) && wines.length) hydrateSetupFormFromWine(mode, wines[0]);
+          }, 0);
         });
 
         bindInput(btnResetApp, () => {
