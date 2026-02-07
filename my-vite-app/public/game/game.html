@@ -55,6 +55,30 @@
         window.__BC_RUNTIME__.ctx = flat
         window.__BC_RUNTIME__.ctxStatus = "hydrated"
 
+        try {
+          const rid = flat.restaurantId || flat.restaurant_id || null;
+          if (rid) {
+            window.__BC_RUNTIME__.wineKey = `bc_wines_restaurant_${rid}`;
+            // If restaurant-scoped exists, mirror it into existing keys the UI might read.
+            const r = JSON.parse(localStorage.getItem(window.__BC_RUNTIME__.wineKey) || "[]");
+            if (Array.isArray(r) && r.length >= 10) {
+              localStorage.setItem("bc_wines_premium", JSON.stringify(r));
+              localStorage.setItem("bc_wines", JSON.stringify(r));
+              localStorage.setItem("BC_WINES", JSON.stringify(r));
+              console.log("[BC] wines mirrored from restaurant key ✅", { rid, count: r.length });
+            } else {
+              // If restaurant key missing but premium exists, seed restaurant key (manager-owned source)
+              const p = JSON.parse(localStorage.getItem("bc_wines_premium") || "[]");
+              if (Array.isArray(p) && p.length >= 10) {
+                localStorage.setItem(window.__BC_RUNTIME__.wineKey, JSON.stringify(p));
+                console.log("[BC] wines seeded to restaurant key ✅", { rid, count: p.length });
+              }
+            }
+          }
+        } catch (e) {
+          console.warn("[BC] wine key hydrate failed", e);
+        }
+
         try { hydrateProgressionFromCtx(flat) } catch (_) {}
         try { if (typeof applyRoleVisibility === "function") applyRoleVisibility(); } catch (_) {}
 
@@ -219,6 +243,7 @@
       <h2>Setup</h2>
       <div class="score-row">Wines added: <span id="wineCountPremium">0 / 10</span></div>
 
+      <div id="wineAdminPanel">
       <div class="manager-row">
         <input type="text" id="wineNameInputPremium" placeholder="Wine Name (required)" />
         <input type="text" id="wineVarietalInputPremium" placeholder="Varietal (required)" />
@@ -270,6 +295,7 @@
           <tbody id="premiumWineTableBody"></tbody>
         </table>
         <div id="premiumWineCards" class="wine-cards"></div>
+      </div>
       </div>
 
       <div class="button-row">
@@ -998,6 +1024,11 @@ function openManagerBoard() {
         document.querySelectorAll('[data-role="manager"]').forEach(el => {
           el.style.display = isManager ? "" : "none";
         });
+
+        const adminPanel = document.getElementById("wineAdminPanel");
+        if (adminPanel) {
+          adminPanel.style.display = isManager ? "" : "none";
+        }
       }
 
       // ==============================
