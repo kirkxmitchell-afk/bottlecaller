@@ -3379,7 +3379,16 @@ function openManagerBoard() {
               if (clamped !== encounterIndex) {
                 // They tried to push into a locked tier
                 const targetTier = getTierFromEncounterNumber(encounterIndex + 1);
-                alert(explainLockReason(targetTier));
+                if (targetTier === 2) {
+                  alert(
+                    "Not yet.\n\n" +
+                    "Tier 2 introduces recovery under pressure.\n" +
+                    "Clean reads and calm delivery come first.\n\n" +
+                    "Repeat this tier until the sequence feels automatic."
+                  );
+                } else {
+                  alert(explainLockReason(targetTier));
+                }
 
                 encounterIndex = clamped;
                 saveEncounterIndex(encounterIndex);
