@@ -2780,7 +2780,11 @@ function openManagerBoard() {
 
         const chipParts = [];
         if (tier) chipParts.push(`Tier ${tier}`);
-        if (diff) chipParts.push(`Difficulty ${diff}`);
+        // Phase 0/1 clamp: never show/assume difficulty above 2 yet
+        let diffNum = (diff === "" ? "" : Number(diff));
+        if (diffNum !== "" && Number.isFinite(diffNum)) diffNum = Math.min(2, Math.max(1, diffNum));
+        const diffLabel = (diffNum === "" ? "" : diffNum);
+        if (diffLabel !== "") chipParts.push(`Difficulty ${diffLabel}`);
         if (focus) chipParts.push(`Focus: ${focus}`);
         if (trap && trap !== "none") chipParts.push(`Trap: ${trap}`);
         if (currentEncounter.__drillRep) chipParts.push(`Rep ${currentEncounter.__drillRep}/3`);
