@@ -376,16 +376,23 @@ if (!window.__BC_PARENT_BRIDGE__) {
         const restaurantId = appState.profile?.restaurant_id || null;
         const role = appState.profile?.role || null;
 
-        const mode = msg?.mode ?? null;
+        // Canonical mode: request wins, fallback to app-known mode, then null
+        const mode = (msg?.mode ?? null);
 
-        const ctx = { userId, restaurantId, role, mode };
+        // ✅ Canonical, FLAT ctx payload (no nested ctx object)
+        const bcCtx = {
+          source: "BC_MSG",
+          v: 1,
+          type: "bc_ctx",
+          userId,
+          restaurantId,
+          role,
+          mode,
+        };
 
-        event.source?.postMessage(
-          { source: "BC_MSG", v: 1, type: "bc_ctx", ctx },
-          event.origin
-        );
+        event.source?.postMessage(bcCtx, event.origin);
 
-        console.log("[BC] ctx replied ✅", ctx);
+        console.log("[BC] ctx replied ✅", bcCtx);
         return;
       }
 
