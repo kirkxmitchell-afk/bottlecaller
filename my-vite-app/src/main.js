@@ -115,6 +115,27 @@ document.querySelector("#app").innerHTML = `
         </div>
       </div>
 
+      <div id="bcProgressionCard" class="bc-prog-card">
+        <div class="bc-prog-title">Progression Status</div>
+
+        <div class="bc-prog-line">
+          <div class="bc-prog-k">Level</div>
+          <div id="bcProgLevelParent" class="bc-prog-v">Building recognition</div>
+        </div>
+
+        <div class="bc-prog-line">
+          <div class="bc-prog-k">Focus</div>
+          <div id="bcProgFocusParent" class="bc-prog-v">Reading guest intent</div>
+        </div>
+
+        <div class="bc-prog-line">
+          <div class="bc-prog-k">Next</div>
+          <div id="bcProgNextParent" class="bc-prog-v">Keep playing encounters</div>
+        </div>
+
+        <div id="bcProgNoteParent" class="bc-prog-note" style="display:none;"></div>
+      </div>
+
       <!-- Game lives here (isolated) -->
       <div id="premiumRoot" style="margin-top:10px;"></div>
     </div>
@@ -563,6 +584,51 @@ function clearMsgs() {
   setMsg("inviteMsg", "");
   setMsg("hudMsg", "");
   setMsg("demoJoinMsg", "");
+}
+
+function getParentProgressionView() {
+  // Phase 0/1: descriptive + safe.
+  // Later we’ll wire this to progressionRouter snapshot.
+  const hasCtx = !!(appState?.session?.user?.id);
+
+  if (!hasCtx) {
+    return {
+      level: "Building recognition",
+      focus: "Reading guest intent",
+      next: "Keep playing encounters",
+      note: "Progress updates after a few sessions"
+    };
+  }
+
+  return {
+    level: "Building recognition",
+    focus: "Reading guest intent",
+    next: "Keep playing encounters",
+    note: null
+  };
+}
+
+function refreshParentProgressionUI() {
+  const v = getParentProgressionView();
+
+  const levelEl = document.getElementById("bcProgLevelParent");
+  const focusEl = document.getElementById("bcProgFocusParent");
+  const nextEl = document.getElementById("bcProgNextParent");
+  const noteEl = document.getElementById("bcProgNoteParent");
+
+  if (!levelEl || !focusEl || !nextEl || !noteEl) return;
+
+  levelEl.textContent = v.level || "";
+  focusEl.textContent = v.focus || "";
+  nextEl.textContent = v.next || "";
+
+  if (v.note) {
+    noteEl.textContent = v.note;
+    noteEl.style.display = "block";
+  } else {
+    noteEl.textContent = "";
+    noteEl.style.display = "none";
+  }
 }
 
 function withTimeout(promise, ms, label = "operation") {

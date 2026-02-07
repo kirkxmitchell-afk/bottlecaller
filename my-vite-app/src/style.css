@@ -102,6 +102,41 @@ button, input { font-family: inherit; }
   opacity: 0.9;
 }
 
+.bc-prog-card{
+  margin: 14px 0 10px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 14px;
+  background: rgba(0,0,0,0.25);
+  max-width: 560px;
+}
+
+.bc-prog-title{
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.bc-prog-line{
+  display: flex;
+  gap: 12px;
+  margin: 6px 0;
+}
+
+.bc-prog-k{
+  width: 64px;
+  opacity: 0.85;
+}
+
+.bc-prog-v{
+  opacity: 0.95;
+}
+
+.bc-prog-note{
+  margin-top: 8px;
+  opacity: 0.8;
+  font-size: 0.95em;
+}
+
 h1,h2,h3 { margin: 0; }
 h3 { font-size: 14px; letter-spacing: 0.6px; text-transform: uppercase; opacity: 0.92; }
 p { margin: 0; color: var(--muted); line-height: 1.5; }
