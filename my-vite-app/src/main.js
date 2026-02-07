@@ -359,6 +359,7 @@ appState.progressionView = appState.progressionView || {
   next: "Keep playing encounters",
   note: null
 };
+appState._lastAllowedTier = appState._lastAllowedTier || 1;
 
 window.__BC_DEBUG__ = {
   get session() { return appState.session; },
@@ -423,7 +424,6 @@ if (!window.__BC_PARENT_BRIDGE__) {
         event.source?.postMessage(bcCtx, event.origin);
 
         console.log("[BC] ctx replied ✅", bcCtx);
-        refreshParentProgressionFromDb();
         return;
       }
 
@@ -644,6 +644,7 @@ function markSeenTier2Unlock(userId, restaurantId) {
   catch {}
 }
 
+let _unlockHideTimer = null;
 function showTier2UnlockNotice() {
   const el = document.getElementById("bcUnlockNotice");
   if (!el) return;
@@ -654,6 +655,11 @@ function showTier2UnlockNotice() {
     "Your job is to stay calm, adjust, and keep control.";
 
   el.style.display = "block";
+
+  if (_unlockHideTimer) clearTimeout(_unlockHideTimer);
+  _unlockHideTimer = setTimeout(() => {
+    hideTier2UnlockNotice();
+  }, 6500);
 }
 
 function hideTier2UnlockNotice() {
@@ -694,23 +700,20 @@ async function refreshParentProgressionFromDb() {
     const tier = result?.tierToServe ?? 1;
     appState.progressionView = {
       level: tier >= 2 ? "Developing confidence" : "Building recognition",
-      focus: tier >= 2 ? "Choosing the right mode" : "Reading guest intent",
-      next: result?.reasonsHuman?.[0] || "Keep playing encounters",
+      focus: tier >= 2 ? "Staying steady under pushback" : "Reading guest intent",
+      next: result?.reasonsHuman?.[0] || (tier >= 2 ? "Stay consistent across sessions" : "Keep playing encounters"),
       note: null
     };
 
     // --- Phase 2 unlock messaging (one-time, calm) ---
-    if (tier >= 2) {
-      if (!hasSeenTier2Unlock(userId, restaurantId)) {
-        showTier2UnlockNotice();
-        markSeenTier2Unlock(userId, restaurantId);
-      } else {
-        // Don’t keep showing it forever
-        hideTier2UnlockNotice();
-      }
-    } else {
-      hideTier2UnlockNotice();
+    const prev = appState._lastAllowedTier || 1;
+    appState._lastAllowedTier = tier;
+
+    if (prev < 2 && tier >= 2 && !hasSeenTier2Unlock(userId, restaurantId)) {
+      showTier2UnlockNotice();
+      markSeenTier2Unlock(userId, restaurantId);
     }
+    if (tier < 2) hideTier2UnlockNotice();
 
     refreshParentProgressionUI();
   } catch {
@@ -1192,6 +1195,8 @@ async function loadAuthedState(reason = "manual") {
       appState.restaurant = await loadRestaurant(profile.restaurant_id);
     } catch {}
   }
+
+  if (appMode === "premium") refreshParentProgressionFromDb();
 
   setDebug({
     step: "authedState.loaded",
