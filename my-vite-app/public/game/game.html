@@ -916,8 +916,7 @@ function openManagerBoard() {
         return null;
       }
 
-      const mode = new URLSearchParams(location.search).get("mode") || "demo";
-      const isDemo = mode === "demo";
+      const mode = window.__BC_MODE__ || (new URLSearchParams(location.search).get("mode") || "demo");
 
       // 1) Load existing wine system first (do not change it)
       wines = await loadWines();
