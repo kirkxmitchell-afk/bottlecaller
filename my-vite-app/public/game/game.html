@@ -44,14 +44,15 @@
       if (!d || d.source !== "BC_MSG" || d.v !== 1) return
 
       if (d.type === "bc_ctx") {
-        window.__BC_RUNTIME__.ctx = d
+        const flat = d.ctx ? { ...d, ...d.ctx } : d
+        window.__BC_RUNTIME__.ctx = flat
         window.__BC_RUNTIME__.ctxStatus = "hydrated"
 
-        try { hydrateProgressionFromCtx(d) } catch (_) {}
+        try { hydrateProgressionFromCtx(flat) } catch (_) {}
         try { refreshProgressionUI() } catch (_) {}
 
         // Optional: expose for quick inspection (non-UX)
-        window.__BC_CTX__ = d
+        window.__BC_CTX__ = flat
       }
     })
 

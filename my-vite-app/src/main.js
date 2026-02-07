@@ -823,12 +823,12 @@ function mountGameIframe(targetId, mode /* "demo" | "premium" */) {
   if (frame) {
     frame.addEventListener("load", () => {
       try {
-        const ctx = buildBcCtx(mode);
+        const bcCtx = buildBcCtx(mode); // should return { userId, restaurantId, role, mode }
         frame.contentWindow?.postMessage(
-          { source: "BC_MSG", v: 1, type: "bc_ctx", ctx },
+          { source: "BC_MSG", v: 1, type: "bc_ctx", ...bcCtx },
           window.location.origin
         );
-        console.log("[BC] ctx pushed on iframe load ✅", ctx);
+        console.log("[BC] ctx pushed on iframe load ✅", { source:"BC_MSG", v:1, type:"bc_ctx", ...bcCtx });
       } catch (e) {
         console.warn("[BC] ctx push failed", e);
       }
