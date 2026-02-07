@@ -1479,9 +1479,13 @@ function openManagerBoard() {
       }
 
       (function wireProgressionDropdown() {
+        const row = document.getElementById("bcProgressionRow");
         const btn = document.getElementById("btnProgressionStatus");
         const panel = document.getElementById("progressionPanel");
         if (!btn || !panel) return;
+
+        // 🔒 TEMP: hide in-game progression UI (outer menu is primary)
+        if (row) row.style.display = "none";
 
         btn.addEventListener("click", () => {
           const open = btn.getAttribute("aria-expanded") === "true";
