@@ -24,6 +24,8 @@
 
     // Canonical mode used everywhere
     window.__BC_MODE__ = bcGetMode()
+    document.documentElement.setAttribute("data-bc-mode", window.__BC_MODE__);
+    console.log("[BottleCaller] MODE:", window.__BC_MODE__);
 
     // --- BC runtime (must exist before anything reads it) ---
     window.__BC_RUNTIME__ = window.__BC_RUNTIME__ || {
@@ -54,7 +56,7 @@
         // Optional: expose for quick inspection (non-UX)
         window.__BC_CTX__ = flat
       }
-    })
+    });
 
     // --- CTX request + retry (prevents race) ---
     ;(function requestCtxWithRetry() {
@@ -84,17 +86,6 @@
       setTimeout(tick, 0)
     })()
 
-    ;(function () {
-      const params = new URLSearchParams(window.location.search);
-      const raw = String(params.get("mode") || "demo").toLowerCase();
-      const mode = raw === "premium" ? "premium" : "demo";
-
-      // Lock mode globally (single source of truth for this file)
-      document.documentElement.setAttribute("data-bc-mode", mode);
-      window.__BC_MODE__ = mode;
-
-      console.log("[BottleCaller] MODE LOCKED:", mode);
-    })();
   </script>
 </head>
 
