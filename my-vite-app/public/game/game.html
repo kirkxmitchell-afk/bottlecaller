@@ -921,38 +921,67 @@ function openManagerBoard() {
         };
       }
 
-      // Convert your stored schema -> what UI expects
-      function adaptWineForSetupForm(w) {
-        const wine = { ...(w || {}) };
+      function wineToForm(w) {
+        const varietalStr =
+          Array.isArray(w?.varietals) ? w.varietals.join(" / ")
+          : (w?.varietal || "");
 
-        // name
-        wine._name = wine.name || "";
+        // Heuristic mapping: fruit/texture probably live in notes right now
+        const notes = Array.isArray(w?.notes) ? w.notes : [];
 
-        // varietal string for input
-        const v = wine.varietal || (Array.isArray(wine.varietals) ? wine.varietals.join(" / ") : "");
-        wine._varietal = v || "";
+        // If you already store explicit fruit/texture arrays, prefer them
+        const fruit = Array.isArray(w?.fruit) ? w.fruit
+          : Array.isArray(w?._fruit) ? w._fruit
+          : [];
 
-        // region string
-        wine._region = wine.region || "";
+        const texture = Array.isArray(w?.texture) ? w.texture
+          : Array.isArray(w?._texture) ? w._texture
+          : [];
 
-        // process/story (your schema doesn't have these reliably)
-        wine._process = wine.process || "";
-        wine._story = wine.story || "";
+        return {
+          name: w?.name || "",
+          varietal: varietalStr,
+          region: w?.region || "",
+          oak: w?.oak || w?.oak_level || "",
+          fruit: fruit.length ? fruit : [],
+          texture: texture.length ? texture : [],
+          story: w?.story || w?.processAndStory || w?.storyText || "",
+          process: w?.process || w?.vinification || ""
+        };
+      }
 
-        // fruit / texture / oak for option chips
-        // If your schema has explicit fields, prefer them
-        // otherwise derive minimally
-        const notes = Array.isArray(wine.notes) ? wine.notes : [];
+      function formToWine(form, prevWine = {}) {
+        // Preserve rich fields you don’t edit in UI
+        const out = { ...prevWine };
 
-        wine._fruit = wine.fruit || notes.slice(0, 2);               // array of strings
-        wine._texture = wine.texture || [wine.body].filter(Boolean); // array of strings
-        wine._oak = wine.oak_level || wine.oak || "";                // string
+        out.name = form.name || out.name || "";
 
-        // normalize types
-        if (typeof wine._fruit === "string") wine._fruit = [wine._fruit];
-        if (typeof wine._texture === "string") wine._texture = [wine._texture];
+        // Store canonical varietals as array
+        if (form.varietal) {
+          out.varietals = String(form.varietal)
+            .split("/")
+            .map(s => s.trim())
+            .filter(Boolean);
+        }
 
-        return wine;
+        out.region = form.region || out.region || "";
+        out.oak = form.oak || out.oak || "none";
+
+        // Canonical fruit/texture arrays
+        out.fruit = Array.isArray(form.fruit) ? form.fruit : [];
+        out.texture = Array.isArray(form.texture) ? form.texture : [];
+
+        // Canonical text blocks
+        out.story = form.story || "";
+        out.process = form.process || "";
+
+        // Legacy fields to keep existing UI working
+        out.varietal = form.varietal || out.varietal || "";
+        out.fruitTags = Array.isArray(form.fruit) ? form.fruit : (out.fruitTags || []);
+        out.textureTags = Array.isArray(form.texture) ? form.texture : (out.textureTags || []);
+        out.oakLevel = form.oak || out.oakLevel || "";
+
+        return out;
       }
 
       function setInputValue(id, value) {
@@ -994,18 +1023,20 @@ function openManagerBoard() {
       // Call this when selecting a wine OR when opening Setup
       function hydrateSetupFormFromWine(mode, wineObj) {
         const ids = getWineFieldIds(mode);
-        const wine = adaptWineForSetupForm(wineObj);
+        const form = wineToForm(wineObj);
 
-        setInputValue(ids.nameId, wine._name);
-        setInputValue(ids.varietalId, wine._varietal);
-        setInputValue(ids.storyId, wine._story);
-        setInputValue(ids.processId, wine._process);
-        setInputValue(ids.regionId, wine._region);
+        console.log("[BC] wineToForm", wineToForm(wineObj));
+
+        setInputValue(ids.nameId, form.name);
+        setInputValue(ids.varietalId, form.varietal);
+        setInputValue(ids.storyId, form.story);
+        setInputValue(ids.processId, form.process);
+        setInputValue(ids.regionId, form.region);
 
         // chips
-        clickMatch(ids.fruitBoxId, wine._fruit, { single: false });
-        clickMatch(ids.textureBoxId, wine._texture, { single: false });
-        clickMatch(ids.oakBoxId, wine._oak, { single: true });
+        clickMatch(ids.fruitBoxId, form.fruit, { single: false });
+        clickMatch(ids.textureBoxId, form.texture, { single: false });
+        clickMatch(ids.oakBoxId, form.oak, { single: true });
       }
 
       function getWinesStorageKeyForMode(mode) {
@@ -1017,6 +1048,7 @@ function openManagerBoard() {
       let runs = loadRuns();
       let mastery = loadMastery();
       let sessionId = null;
+      let selectedWineIndex = null;
 
       function tryParseArray(v) {
         if (!v) return null;
@@ -1315,12 +1347,43 @@ function openManagerBoard() {
           id: wine.id || generateWineId(),
           name: wine.name || "",
           varietal: wine.varietal || "",
-          fruitTags: Array.isArray(wine.fruitTags) ? wine.fruitTags : [],
-          textureTags: Array.isArray(wine.textureTags) ? wine.textureTags : [],
-          oakLevel: wine.oakLevel || "",
+          fruitTags: Array.isArray(wine.fruitTags)
+            ? wine.fruitTags
+            : Array.isArray(wine.fruit)
+            ? wine.fruit
+            : [],
+          textureTags: Array.isArray(wine.textureTags)
+            ? wine.textureTags
+            : Array.isArray(wine.texture)
+            ? wine.texture
+            : [],
+          oakLevel: wine.oakLevel || wine.oak_level || wine.oak || "",
           process,
           region: wine.region || "",
           story: wine.story || ""
+        };
+      }
+
+      function dbWineToRuntimeWine(row) {
+        if (!row) return null;
+
+        const varietalsArr =
+          typeof row.varietal === "string" && row.varietal.trim()
+            ? row.varietal.split("/").map(s => s.trim()).filter(Boolean)
+            : [];
+
+        return {
+          id: row.id,
+          name: row.name || "",
+          region: row.region || "",
+          varietal: row.varietal || "",
+          varietals: varietalsArr,
+          fruit: Array.isArray(row.fruit_tags) ? row.fruit_tags : [],
+          texture: Array.isArray(row.texture_tags) ? row.texture_tags : [],
+          oak: row.oak_level || "",
+          oak_level: row.oak_level || "",
+          process: row.process || "",
+          story: row.story || ""
         };
       }
 
@@ -1347,7 +1410,10 @@ function openManagerBoard() {
         try {
           const dbWines = await window.WineBridge.fetchRestaurantWines(restaurantId);
           // sanitize + enforce LIMIT
-          return (dbWines || []).map(w => sanitizeWine(w)).slice(0, LIMIT);
+          return (dbWines || [])
+            .map(dbWineToRuntimeWine)
+            .map(w => sanitizeWine(w))
+            .slice(0, LIMIT);
         } catch (e) {
           console.error("[BC] fetchRestaurantWines failed:", e);
           alert("Failed to load restaurant wines. Check Supabase + RLS.");
@@ -1933,9 +1999,10 @@ function openManagerBoard() {
         if (!tbody) return;
         tbody.innerText = "";
 
-        wines.forEach((wine) => {
+        wines.forEach((wine, idx) => {
           const tr = document.createElement("tr");
           tr.addEventListener("click", () => {
+            selectedWineIndex = idx;
             hydrateSetupFormFromWine(bcMode, wine);
           });
           const cols = [
@@ -2067,7 +2134,18 @@ function openManagerBoard() {
           return;
         }
 
-        const wine = { id: generateWineId(), name, varietal, fruitTags, textureTags, oakLevel, process, region, story };
+        const formState = {
+          name,
+          varietal,
+          process,
+          region,
+          story,
+          fruit: fruitTags,
+          texture: textureTags,
+          oak: oakLevel
+        };
+        console.log("[BC] formToWine", formToWine(formState, wines[selectedWineIndex ?? 0]));
+        const wine = formToWine(formState, { id: generateWineId() });
         let usedDb = false;
 
         if (!isDemo && restaurantId) {
@@ -2080,9 +2158,9 @@ function openManagerBoard() {
             await window.WineBridge.addRestaurantWine(restaurantId, {
               name,
               varietal,
-              fruitTags,
-              textureTags,
-              oakLevel,
+              fruit_tags: fruitTags,
+              texture_tags: textureTags,
+              oak_level: oakLevel,
               process,
               region,
               story
