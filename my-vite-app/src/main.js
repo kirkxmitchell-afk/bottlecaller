@@ -360,6 +360,7 @@ appState.progressionView = appState.progressionView || {
   note: null
 };
 appState._lastAllowedTier = appState._lastAllowedTier || 1;
+let _unlockHideTimer = null;
 
 window.__BC_DEBUG__ = {
   get session() { return appState.session; },
@@ -650,22 +651,17 @@ function mapTierToPhase2View(tierAllowed) {
   };
 }
 
-function bcKeySeenTier2Unlock(userId, restaurantId) {
+function bcSeenKeyT2(userId, restaurantId) {
   return `bc_seen_unlock_t2__${userId}__${restaurantId}`;
 }
-
-function hasSeenTier2Unlock(userId, restaurantId) {
-  try { return localStorage.getItem(bcKeySeenTier2Unlock(userId, restaurantId)) === "1"; }
-  catch { return false; }
+function hasSeenT2(userId, restaurantId) {
+  try { return localStorage.getItem(bcSeenKeyT2(userId, restaurantId)) === "1"; } catch { return false; }
+}
+function markSeenT2(userId, restaurantId) {
+  try { localStorage.setItem(bcSeenKeyT2(userId, restaurantId), "1"); } catch {}
 }
 
-function markSeenTier2Unlock(userId, restaurantId) {
-  try { localStorage.setItem(bcKeySeenTier2Unlock(userId, restaurantId), "1"); }
-  catch {}
-}
-
-let _unlockHideTimer = null;
-function showTier2UnlockNotice() {
+function showT2NoticeOnce() {
   const el = document.getElementById("bcUnlockNotice");
   if (!el) return;
 
@@ -678,11 +674,12 @@ function showTier2UnlockNotice() {
 
   if (_unlockHideTimer) clearTimeout(_unlockHideTimer);
   _unlockHideTimer = setTimeout(() => {
-    hideTier2UnlockNotice();
+    el.style.display = "none";
+    el.innerText = "";
   }, 6500);
 }
 
-function hideTier2UnlockNotice() {
+function hideUnlockNotice() {
   const el = document.getElementById("bcUnlockNotice");
   if (!el) return;
   el.style.display = "none";
@@ -724,11 +721,11 @@ async function refreshParentProgressionFromDb() {
     const prev = appState._lastAllowedTier || 1;
     appState._lastAllowedTier = tier;
 
-    if (prev < 2 && tier >= 2 && !hasSeenTier2Unlock(userId, restaurantId)) {
-      showTier2UnlockNotice();
-      markSeenTier2Unlock(userId, restaurantId);
+    if (prev < 2 && tier >= 2 && !hasSeenT2(userId, restaurantId)) {
+      showT2NoticeOnce();
+      markSeenT2(userId, restaurantId);
     }
-    if (tier < 2) hideTier2UnlockNotice();
+    if (tier < 2) hideUnlockNotice();
 
     refreshParentProgressionUI();
   } catch {

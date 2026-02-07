@@ -3378,8 +3378,13 @@ function openManagerBoard() {
 
               if (clamped !== encounterIndex) {
                 // They tried to push into a locked tier
-                const targetTier = getTierFromEncounterNumber(encounterIndex + 1);
-                if (targetTier === 2) {
+                const targetTierRaw = getTierFromEncounterNumber(encounterIndex + 1);
+                const targetTier = Math.min(2, targetTierRaw);
+
+                // Phase 0/1/2: never talk about Tier 3
+                if (targetTierRaw >= 3) {
+                  alert("Not yet.\n\nNew pressure scenarios will come later. For now, keep building clean reps.");
+                } else if (targetTier === 2) {
                   alert(
                     "Not yet.\n\n" +
                     "Tier 2 introduces recovery under pressure.\n" +
@@ -3387,7 +3392,7 @@ function openManagerBoard() {
                     "Repeat this tier until the sequence feels automatic."
                   );
                 } else {
-                  alert(explainLockReason(targetTier));
+                  alert("Not yet. Keep playing encounters.");
                 }
 
                 encounterIndex = clamped;
