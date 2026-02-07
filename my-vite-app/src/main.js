@@ -1,6 +1,7 @@
 // src/main.js
 import "./style.css";
 import { supabase, signIn, signUp, signOut, getSession } from "./lib/supabaseClient.js";
+import { decideAllowedTier } from "./game/progressionBridge";
 
 console.log("supabase client present:", !!supabase);
 
@@ -350,6 +351,12 @@ const appState = {
   restaurant: null,
   invites: [],
 };
+appState.progressionView = appState.progressionView || {
+  level: "Building recognition",
+  focus: "Reading guest intent",
+  next: "Keep playing encounters",
+  note: null
+};
 
 window.__BC_DEBUG__ = {
   get session() { return appState.session; },
@@ -414,6 +421,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
         event.source?.postMessage(bcCtx, event.origin);
 
         console.log("[BC] ctx replied ✅", bcCtx);
+        refreshParentProgressionFromDb();
         return;
       }
 
@@ -587,20 +595,7 @@ function clearMsgs() {
 }
 
 function getParentProgressionView() {
-  // Phase 0/1: descriptive + safe.
-  // Later we’ll wire this to progressionRouter snapshot.
-  const hasCtx = !!(appState?.session?.user?.id);
-
-  if (!hasCtx) {
-    return {
-      level: "Building recognition",
-      focus: "Reading guest intent",
-      next: "Keep playing encounters",
-      note: "Progress updates after a few sessions"
-    };
-  }
-
-  return {
+  return appState.progressionView || {
     level: "Building recognition",
     focus: "Reading guest intent",
     next: "Keep playing encounters",
@@ -632,6 +627,56 @@ function refreshParentProgressionUI() {
 }
 
 window.refreshParentProgressionUI = refreshParentProgressionUI;
+
+let _progInflight = false;
+async function refreshParentProgressionFromDb() {
+  if (_progInflight) return;
+  _progInflight = true;
+  try {
+    const userId = appState.session?.user?.id || null;
+    const restaurantId = appState.profile?.restaurant_id || null;
+
+    if (!userId || !restaurantId) {
+      appState.progressionView = {
+        level: "Building recognition",
+        focus: "Reading guest intent",
+        next: "Keep playing encounters",
+        note: "Progress updates after a few sessions"
+      };
+      refreshParentProgressionUI();
+      return;
+    }
+
+    const desiredTier = 2;
+    const result = await decideAllowedTier({
+      desiredTier,
+      userId,
+      restaurantId,
+      role: appState.profile?.role,
+      mode: "premium"
+    });
+
+    const tier = result?.tierToServe ?? 1;
+    appState.progressionView = {
+      level: tier >= 2 ? "Developing confidence" : "Building recognition",
+      focus: tier >= 2 ? "Choosing the right mode" : "Reading guest intent",
+      next: result?.reasonsHuman?.[0] || "Keep playing encounters",
+      note: null
+    };
+
+    refreshParentProgressionUI();
+  } catch {
+    appState.progressionView = {
+      level: "Building recognition",
+      focus: "Reading guest intent",
+      next: "Keep playing encounters",
+      note: "Progress updates after a few sessions"
+    };
+    refreshParentProgressionUI();
+  } finally {
+    _progInflight = false;
+  }
+}
 
 function withTimeout(promise, ms, label = "operation") {
   let timer;

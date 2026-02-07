@@ -3572,7 +3572,7 @@ function openManagerBoard() {
       }
 
       function resetWinesOnly() {
-        if (!confirm("This will delete saved wines for this mode.")) return;
+        if (!confirm("Reset wines for this restaurant? This can’t be undone.")) return;
         wines = [];
         saveWines();
         runs = [];
