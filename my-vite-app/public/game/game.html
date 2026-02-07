@@ -39,6 +39,11 @@
         snapshot: null
       }
     };
+    window.__BC_RUNTIME__.wines = window.__BC_RUNTIME__.wines || {
+      list: null,
+      sourceKey: null,
+      status: "pending"
+    };
 
     // --- CTX receive (must be registered early) ---
     window.addEventListener("message", (e) => {
@@ -881,9 +886,56 @@ function openManagerBoard() {
       let mastery = loadMastery();
       let sessionId = null;
 
+      function tryParseArray(v) {
+        if (!v) return null;
+        try {
+          const parsed = JSON.parse(v);
+          return Array.isArray(parsed) ? parsed : null;
+        } catch {
+          return null;
+        }
+      }
+
+      function hydrateWinesDeterministic(mode) {
+        // IMPORTANT: read-only scan. Never clears or overwrites storage.
+        const candidates = [
+          mode === "premium" ? "bc_wines_premium" : null,
+          "bc_wines",
+          "BC_WINES",
+          "bc_wines_demo",
+          "__BC_WINES__",
+          "bc_wines_premium__string",
+          "BC_WINES__string",
+        ].filter(Boolean);
+
+        for (const key of candidates) {
+          const raw = localStorage.getItem(key);
+          const arr = tryParseArray(raw);
+          if (arr && arr.length >= 10) return { wines: arr, sourceKey: key };
+        }
+        return null;
+      }
+
+      const mode = new URLSearchParams(location.search).get("mode") || "demo";
+      const isDemo = mode === "demo";
+
+      // 1) Load existing wine system first (do not change it)
       wines = await loadWines();
+
+      // 2) Demo hard override stays sacred
       if (isDemo) {
-        wines = DEMO_WINES.slice(); // hard override; demo wines are fixed
+        wines = DEMO_WINES.slice();
+      } else {
+        // 3) Premium fallback: if loadWines came back empty/short, scan storage keys
+        if (!Array.isArray(wines) || wines.length < 10) {
+          const found = hydrateWinesDeterministic("premium");
+          if (found?.wines?.length >= 10) {
+            wines = found.wines;
+            console.log("[BC] wines hydrated via fallback ✅", { sourceKey: found.sourceKey, count: wines.length });
+          } else {
+            console.warn("[BC] wines missing/short in premium ⚠️", { count: Array.isArray(wines) ? wines.length : null });
+          }
+        }
       }
 
       function reportWinesToParent(mode, wines) {
@@ -895,7 +947,6 @@ function openManagerBoard() {
         } catch {}
       }
 
-      const mode = new URLSearchParams(location.search).get("mode") || "demo";
       reportWinesToParent(mode, wines);
 
       // ============================================================
