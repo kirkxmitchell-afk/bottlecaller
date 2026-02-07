@@ -1451,6 +1451,29 @@ function openManagerBoard() {
         stepContent.appendChild(line);
       }
 
+      function bcReflectionAnchor(checks, encounter) {
+        const readCorrect = !!checks?.guestRead;
+        const deliveryCorrect = !!checks?.deliveryCorrect;
+        const modeStatus = checks?.modeStatus || "";
+        const hookStatus = checks?.hookStatus || "";
+        const signal = (encounter?.chainSignal || "").toLowerCase();
+
+        if (encounter?.pivotUnlocked) return "Pressure shifted. The goal was recovery, not perfection.";
+
+        if (readCorrect && deliveryCorrect) return "You led early and stayed calm. That’s the move.";
+        if (!readCorrect) return "The read was late — the table took control first.";
+        if (!deliveryCorrect) return "You had the right idea, but the delivery slipped under pressure.";
+
+        if (modeStatus && modeStatus !== "correct") return "Your approach didn’t match the guest’s state.";
+        if (hookStatus && hookStatus !== "correct") return "Your hook timing was late. Lead sooner with one clear suggestion.";
+
+        if (signal === "green") return "Consistency is improving. Keep the pace.";
+        if (signal === "yellow") return "Close. Tighten the sequence and keep it calm.";
+        if (signal === "red") return "Reset and repeat. Lead the moment before it leads you.";
+
+        return "Good rep. Keep going.";
+      }
+
       function tierToLabel(tier) {
         if (tier >= 2) return "Developing confidence";
         return "Building recognition";
@@ -3191,6 +3214,13 @@ function openManagerBoard() {
           const reflectionTitle = document.createElement("h3");
           reflectionTitle.innerText = "Reflection";
           stepContent.appendChild(reflectionTitle);
+
+          const anchor = document.createElement("div");
+          anchor.className = "small-text";
+          anchor.style.marginTop = "6px";
+          anchor.style.opacity = "0.9";
+          anchor.innerText = bcReflectionAnchor(checks, currentEncounter);
+          stepContent.appendChild(anchor);
 
           // ✅ NEW: Strength + Fix (end of reflection)
           renderStrengthFixBlock(stepContent, checks, currentEncounter);
