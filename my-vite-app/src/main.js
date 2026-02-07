@@ -631,6 +631,8 @@ function refreshParentProgressionUI() {
   }
 }
 
+window.refreshParentProgressionUI = refreshParentProgressionUI;
+
 function withTimeout(promise, ms, label = "operation") {
   let timer;
   const timeout = new Promise((_, reject) => {
@@ -1300,6 +1302,7 @@ async function routePremium(reason = "manual") {
 
       showScreen("screenPremiumApp");
       mountGameIframe("premiumRoot", "premium");
+      refreshParentProgressionUI();
       setTimeout(() => {
         const frame = document.getElementById("premiumRootFrame");
         const w = frame?.contentWindow;
@@ -1351,6 +1354,7 @@ async function routePremium(reason = "manual") {
 
     showScreen("screenPremiumApp");
     mountGameIframe("premiumRoot", "premium");
+    refreshParentProgressionUI();
     setTimeout(() => {
       const frame = document.getElementById("premiumRootFrame");
       const w = frame?.contentWindow;
