@@ -2377,6 +2377,14 @@ function openManagerBoard() {
         container.appendChild(block);
       }
 
+      function sessionSignalDetail(signal) {
+        const s = String(signal || "").toLowerCase();
+        if (s === "green") return "You stayed ahead of the table. Keep this rhythm.";
+        if (s === "yellow") return "You recovered, but the sequence wobbled. Tighten the order.";
+        if (s === "red") return "The table took control. Reset and lead earlier next time.";
+        return "Keep practicing clean sequences under pressure.";
+      }
+
       function statusScore(s) {
         if (s === "optimal") return 2;
         if (s === "neutral") return 1;
@@ -3264,34 +3272,14 @@ function openManagerBoard() {
             "Correct pair: " + correctS1 + " / " + correctS2
           );
 
-          if (typeof currentEncounter.chainScore === "number") {
+          if (currentEncounter.chainSignal) {
             addReflectionBlock(
               stepContent,
-              "Chain Signal",
-              (currentEncounter.chainSignal || "").toUpperCase(),
-              "Score: " + currentEncounter.chainScore.toFixed(1) + " / 4.0"
+              "Session Signal",
+              String(currentEncounter.chainSignal || "").toUpperCase(),
+              sessionSignalDetail(currentEncounter.chainSignal)
             );
           }
-
-          // ---------- Tier grade cue (simple) ----------
-          (function(){
-            const n = Number(currentEncounter.encounterNumber || 0) || 0;
-            const tier = (typeof getTierFromEncounterNumber === "function") ? getTierFromEncounterNumber(n) : "";
-            if (tier) {
-              const sig = String(currentEncounter.chainSignal || "").toLowerCase();
-              const grade =
-                sig === "green" ? "PASS (clean)" :
-                sig === "yellow" ? "PASS (needs recovery)" :
-                sig === "red" ? "FAIL (repeat this tier skill)" : "—";
-
-              addReflectionBlock(
-                stepContent,
-                "Tier Grade",
-                grade,
-                `Tier ${tier} | Encounter ${n}`
-              );
-            }
-          })();
 
           if (currentEncounter.recoveryText) {
             addReflectionBlock(

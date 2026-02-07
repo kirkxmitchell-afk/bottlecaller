@@ -137,6 +137,8 @@ document.querySelector("#app").innerHTML = `
         <div id="bcProgNoteParent" class="bc-prog-note" style="display:none;"></div>
       </div>
 
+      <div id="bcUnlockNotice" class="bc-unlock" style="display:none;"></div>
+
       <!-- Game lives here (isolated) -->
       <div id="premiumRoot" style="margin-top:10px;"></div>
     </div>
@@ -628,6 +630,39 @@ function refreshParentProgressionUI() {
 
 window.refreshParentProgressionUI = refreshParentProgressionUI;
 
+function bcKeySeenTier2Unlock(userId, restaurantId) {
+  return `bc_seen_unlock_t2__${userId}__${restaurantId}`;
+}
+
+function hasSeenTier2Unlock(userId, restaurantId) {
+  try { return localStorage.getItem(bcKeySeenTier2Unlock(userId, restaurantId)) === "1"; }
+  catch { return false; }
+}
+
+function markSeenTier2Unlock(userId, restaurantId) {
+  try { localStorage.setItem(bcKeySeenTier2Unlock(userId, restaurantId), "1"); }
+  catch {}
+}
+
+function showTier2UnlockNotice() {
+  const el = document.getElementById("bcUnlockNotice");
+  if (!el) return;
+
+  el.innerText =
+    "You’re ready to manage pressure, not just read it.\n\n" +
+    "From here on, guests will push back.\n" +
+    "Your job is to stay calm, adjust, and keep control.";
+
+  el.style.display = "block";
+}
+
+function hideTier2UnlockNotice() {
+  const el = document.getElementById("bcUnlockNotice");
+  if (!el) return;
+  el.style.display = "none";
+  el.innerText = "";
+}
+
 let _progInflight = false;
 async function refreshParentProgressionFromDb() {
   if (_progInflight) return;
@@ -663,6 +698,19 @@ async function refreshParentProgressionFromDb() {
       next: result?.reasonsHuman?.[0] || "Keep playing encounters",
       note: null
     };
+
+    // --- Phase 2 unlock messaging (one-time, calm) ---
+    if (tier >= 2) {
+      if (!hasSeenTier2Unlock(userId, restaurantId)) {
+        showTier2UnlockNotice();
+        markSeenTier2Unlock(userId, restaurantId);
+      } else {
+        // Don’t keep showing it forever
+        hideTier2UnlockNotice();
+      }
+    } else {
+      hideTier2UnlockNotice();
+    }
 
     refreshParentProgressionUI();
   } catch {
