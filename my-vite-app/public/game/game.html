@@ -1416,6 +1416,44 @@ function openManagerBoard() {
         renderDrillSummary();
       }
 
+      function tierToLabel(tier) {
+        if (tier >= 2) return "Developing confidence";
+        return "Building recognition";
+      }
+
+      function tierToFocus(tier) {
+        if (tier >= 2) return "Choosing the right mode";
+        return "Reading guest intent";
+      }
+
+      // ✅ Local, non-blocking fallback.
+      // If a real getPlayerProgressionView exists elsewhere later, we use it.
+      function getPlayerProgressionView(runtime) {
+        // If another script defines it, prefer that version.
+        if (typeof window.getPlayerProgressionView === "function" && window.getPlayerProgressionView !== getPlayerProgressionView) {
+          return window.getPlayerProgressionView(runtime);
+        }
+
+        const hydrated = runtime?.ctxStatus === "hydrated";
+        const tierAllowed = runtime?.progression?.tierAllowed ?? 1;
+
+        if (!hydrated) {
+          return {
+            level: "Building recognition",
+            focus: "Reading guest intent",
+            next: "Keep playing encounters",
+            note: "Progress updates after a few sessions"
+          };
+        }
+
+        return {
+          level: tierToLabel(tierAllowed),
+          focus: tierToFocus(tierAllowed),
+          next: runtime?.progression?.reasonsHuman?.[0] || "Keep playing",
+          note: null
+        };
+      }
+
       function refreshProgressionUI() {
         const runtime = window.__BC_RUNTIME__;
         const view = getPlayerProgressionView(runtime);
