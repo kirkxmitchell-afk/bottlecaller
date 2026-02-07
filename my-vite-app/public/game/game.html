@@ -938,6 +938,8 @@ function openManagerBoard() {
         }
       }
 
+      console.log("[BC] wine schema sample", wines?.[0]);
+
       function reportWinesToParent(mode, wines) {
         try {
           window.parent?.postMessage(
