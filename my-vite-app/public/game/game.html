@@ -907,6 +907,118 @@ function openManagerBoard() {
       const oakOptions = ["None", "Light", "Subtle", "Noticeable"];
       const processOptions = ["Stainless steel", "Wild ferment", "Maceration", "Destemming", "Whole bunch pressed", "Hand harvested", "Time on lees"];
 
+      function getWineFieldIds(mode) {
+        const isPremium = mode === "premium";
+        return {
+          nameId: isPremium ? "wineNameInputPremium" : "wineNameInputDemo",
+          varietalId: isPremium ? "wineVarietalInputPremium" : "wineVarietalInputDemo",
+          storyId: isPremium ? "storyInputPremium" : "storyInputDemo",
+          processId: isPremium ? "processInputPremium" : "processInputDemo",
+          regionId: isPremium ? "regionInputPremium" : "regionInputDemo",
+          fruitBoxId: isPremium ? "fruitOptionsPremium" : "fruitOptionsDemo",
+          textureBoxId: isPremium ? "textureOptionsPremium" : "textureOptionsDemo",
+          oakBoxId: isPremium ? "oakOptionsPremium" : "oakOptionsDemo",
+        };
+      }
+
+      // Convert your stored schema -> what UI expects
+      function adaptWineForSetupForm(w) {
+        const wine = { ...(w || {}) };
+
+        // name
+        wine._name = wine.name || "";
+
+        // varietal string for input
+        const v = wine.varietal || (Array.isArray(wine.varietals) ? wine.varietals.join(" / ") : "");
+        wine._varietal = v || "";
+
+        // region string
+        wine._region = wine.region || "";
+
+        // process/story (your schema doesn't have these reliably)
+        wine._process = wine.process || "";
+        wine._story = wine.story || "";
+
+        // fruit / texture / oak for option chips
+        // If your schema has explicit fields, prefer them
+        // otherwise derive minimally
+        const notes = Array.isArray(wine.notes) ? wine.notes : [];
+
+        wine._fruit = wine.fruit || notes.slice(0, 2);               // array of strings
+        wine._texture = wine.texture || [wine.body].filter(Boolean); // array of strings
+        wine._oak = wine.oak_level || wine.oak || "";                // string
+
+        // normalize types
+        if (typeof wine._fruit === "string") wine._fruit = [wine._fruit];
+        if (typeof wine._texture === "string") wine._texture = [wine._texture];
+
+        return wine;
+      }
+
+      function setInputValue(id, value) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.value = value ?? "";
+        // Trigger listeners if your UI relies on them
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+
+      // Option chips: we don’t know your exact markup, so we handle common patterns:
+      // - buttons/divs inside the container with data-value="x" or innerText matching
+      // - selected state via .active or aria-pressed=true
+      function selectOptions(containerId, values) {
+        const box = document.getElementById(containerId);
+        if (!box) return;
+
+        const wanted = new Set((values || []).map(v => String(v).trim().toLowerCase()).filter(Boolean));
+
+        const items = Array.from(box.querySelectorAll("[data-value], button, .option, .chip, div, span"))
+          .filter(n => (n instanceof HTMLElement));
+
+        items.forEach(node => {
+          const raw = (node.getAttribute("data-value") || node.innerText || "").trim().toLowerCase();
+          const on = wanted.has(raw);
+
+          node.classList.toggle("active", on);
+          node.setAttribute("aria-pressed", on ? "true" : "false");
+        });
+      }
+
+      function selectSingleOption(containerId, value) {
+        const v = String(value || "").trim().toLowerCase();
+        const box = document.getElementById(containerId);
+        if (!box) return;
+
+        const items = Array.from(box.querySelectorAll("[data-value], button, .option, .chip, div, span"))
+          .filter(n => (n instanceof HTMLElement));
+
+        items.forEach(node => {
+          const raw = (node.getAttribute("data-value") || node.innerText || "").trim().toLowerCase();
+          const on = v && raw === v;
+
+          node.classList.toggle("active", on);
+          node.setAttribute("aria-pressed", on ? "true" : "false");
+        });
+      }
+
+      // Call this when selecting a wine OR when opening Setup
+      function hydrateSetupFormFromWine(mode, wineObj) {
+        const ids = getWineFieldIds(mode);
+        const wine = adaptWineForSetupForm(wineObj);
+
+        setInputValue(ids.nameId, wine._name);
+        setInputValue(ids.varietalId, wine._varietal);
+        setInputValue(ids.storyId, wine._story);
+        setInputValue(ids.processId, wine._process);
+        setInputValue(ids.regionId, wine._region);
+
+        // chips
+        selectOptions(ids.fruitBoxId, wine._fruit);
+        selectOptions(ids.textureBoxId, wine._texture);
+        selectSingleOption(ids.oakBoxId, wine._oak);
+      }
+
       // ---------- Runtime state ----------
       let wines = [];
       let runs = loadRuns();
@@ -1830,6 +1942,9 @@ function openManagerBoard() {
 
         wines.forEach((wine) => {
           const tr = document.createElement("tr");
+          tr.addEventListener("click", () => {
+            hydrateSetupFormFromWine(bcMode, wine);
+          });
           const cols = [
             wine.name,
             wine.varietal,
@@ -3708,11 +3823,21 @@ function openManagerBoard() {
           localStorage.setItem(coverKey, "true");
           resetNavState();
           showScreen(isDemo ? "screenHome" : ids.setupScreen);
+          const listKey = (bcMode === "premium") ? "bc_wines_premium" : "bc_wines";
+          const list = JSON.parse(localStorage.getItem(listKey) || "[]");
+          if (Array.isArray(list) && list.length) {
+            hydrateSetupFormFromWine(bcMode, list[0]);
+          }
         });
 
         bindInput(btnGoSetup, () => {
           resetNavState();
           showScreen(ids.setupScreen);
+          const listKey = (bcMode === "premium") ? "bc_wines_premium" : "bc_wines";
+          const list = JSON.parse(localStorage.getItem(listKey) || "[]");
+          if (Array.isArray(list) && list.length) {
+            hydrateSetupFormFromWine(bcMode, list[0]);
+          }
         });
 
         bindInput(btnResetApp, () => {
