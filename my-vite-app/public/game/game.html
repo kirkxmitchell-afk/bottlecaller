@@ -1412,27 +1412,25 @@ function openManagerBoard() {
         renderDrillSummary();
       }
 
-      function bcFeedbackFromResolved(ev) {
-        const c = ev?.checks || {};
-        const pivot = ev?.pivot || {};
-        const signal = (ev?.chainSignal || "").toLowerCase();
+      function bcFeedbackFromResult(result) {
+        const c = result?.checks || result || {};
+        const pivotTaken = !!result?.pivotTaken;
+        const pivotSuccess = !!result?.pivotSuccess;
+        const signal = (result?.chainSignal || "").toLowerCase();
 
-        // Priority 1: recovery/pivot moments
-        if (pivot?.taken) {
-          if (pivot.success) return "Good recovery — you stayed in control.";
-          return "You lost control after the pivot. Slow down and reset your lead.";
+        if (pivotTaken) {
+          return pivotSuccess
+            ? "Good recovery — you stayed in control."
+            : "You lost control after the pivot. Slow down and reset your lead.";
         }
 
-        // Priority 2: read + delivery (core Tier 1 loop)
         if (c.readCorrect && c.deliveryCorrect) return "Clean execution — you led the table with confidence.";
         if (!c.readCorrect) return "You misread the guest. Pause and spot intent before you speak.";
         if (!c.deliveryCorrect) return "The delivery slipped. Keep it simple and lead earlier.";
 
-        // Priority 3: mode/hook nuance (Tier 2 language, still calm)
         if (c.modeStatus && c.modeStatus !== "correct") return "Mode selection was off. Match your approach to the guest’s state.";
         if (c.hookStatus && c.hookStatus !== "correct") return "Hook timing was late. Lead sooner with one clear suggestion.";
 
-        // Priority 4: chain signal fallback
         if (signal === "green") return "You’re getting more consistent. Keep the pace.";
         if (signal === "yellow") return "Close — keep it calm and tighten the sequence.";
         if (signal === "red") return "Reset and try again. Lead the moment, don’t chase it.";
@@ -1440,10 +1438,12 @@ function openManagerBoard() {
         return "Good rep. Keep playing encounters.";
       }
 
-      function renderEncounterFeedback(ev) {
-        const el = document.getElementById("bcFeedbackLine");
-        if (!el) return;
-        el.textContent = bcFeedbackFromResolved(ev);
+      function appendFeedbackLine(stepContent, text) {
+        const line = document.createElement("div");
+        line.style.marginTop = "10px";
+        line.style.opacity = "0.85";
+        line.textContent = text;
+        stepContent.appendChild(line);
       }
 
       function tierToLabel(tier) {
@@ -2669,8 +2669,6 @@ function openManagerBoard() {
           hasChecks: Object.prototype.hasOwnProperty.call(payload || {}, "checks"),
         });
 
-        renderEncounterFeedback(payload);
-
         if (
           payload?.v === 2 &&
           payload?.encounterId &&
@@ -3061,6 +3059,7 @@ function openManagerBoard() {
           if (result.deliveryCorrect) {
             const upgraded = (result.chainSignal === "green") && (Math.random() < 0.35);
             stepContent.appendChild(document.createTextNode(upgraded ? "✅ Upgrade. “Nice — that’s the move.”" : "✅ Nod. “Perfect.”"));
+            appendFeedbackLine(stepContent, bcFeedbackFromResult(result));
             addStepButton("REFLECT", () => { currentStep = 6; renderEncounterStep(); }, stepButtons);
             return;
           }
@@ -3163,6 +3162,8 @@ function openManagerBoard() {
               stepContent.appendChild(explain);
             }
 
+            appendFeedbackLine(stepContent, bcFeedbackFromResult(result));
+
             const cont = addStepButton("CONTINUE TO REFLECTION", () => { currentStep = 6; renderEncounterStep(); }, stepButtons);
             if (!currentEncounter.recoveryChoice && !currentEncounter.resetUsed) cont.disabled = true;
 
@@ -3170,6 +3171,7 @@ function openManagerBoard() {
           }
 
           stepContent.innerText = "❌ “We’ll choose, thanks.”";
+          appendFeedbackLine(stepContent, bcFeedbackFromResult(result));
           addStepButton("REFLECT", () => { currentStep = 6; renderEncounterStep(); }, stepButtons);
           return;
         }
