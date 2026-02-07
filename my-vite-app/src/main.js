@@ -1041,20 +1041,7 @@ async function loadAuthedState(reason = "manual") {
     restaurant: appState.restaurant ? { id: appState.restaurant.id, name: appState.restaurant.name, code: appState.restaurant.code } : null,
   });
 
-  // ✅ Push ctx to any mounted iframes (premium + demo) after profile is loaded
-  try {
-    const ctx = buildBcCtx();
-    const demoFrame = document.getElementById("gameRootDemoFrame");
-    const premFrame = document.getElementById("premiumRootFrame");
-    [demoFrame, premFrame].forEach((f) => {
-      if (f?.contentWindow) {
-        f.contentWindow.postMessage({ source: "BC_MSG", v: 1, type: "bc_ctx", ctx }, window.location.origin);
-      }
-    });
-    console.log("[BC] ctx pushed ✅", ctx);
-  } catch (e) {
-    console.warn("[BC] ctx push failed", e);
-  }
+  // (ctx push removed here; only iframe onload + bc_ctx_request reply are allowed)
 }
 
 // ------------------------------------------------------------
