@@ -144,6 +144,19 @@
         </div>
       </div>
 
+      <div class="button-row" id="bcProgressionRow">
+        <button id="btnProgressionStatus" type="button" aria-expanded="false">
+          Progression Status
+        </button>
+
+        <div id="progressionPanel" class="bc-panel" hidden>
+          <div class="bc-row"><strong>Level</strong> <span id="bcProgLevel"></span></div>
+          <div class="bc-row"><strong>Focus</strong> <span id="bcProgFocus"></span></div>
+          <div class="bc-row"><strong>Next</strong> <span id="bcProgNext"></span></div>
+          <div id="bcProgNote" class="bc-note"></div>
+        </div>
+      </div>
+
       <div class="button-row" style="margin-top:16px;">
         <button id="btnResetApp" type="button">Reset All</button>
       </div>
@@ -1402,6 +1415,47 @@ function openManagerBoard() {
         showScreen("screenDrillSummary");
         renderDrillSummary();
       }
+
+      function refreshProgressionUI() {
+        const runtime = window.__BC_RUNTIME__;
+        const view = getPlayerProgressionView(runtime);
+
+        const levelEl = document.getElementById("bcProgLevel");
+        const focusEl = document.getElementById("bcProgFocus");
+        const nextEl = document.getElementById("bcProgNext");
+        const noteEl = document.getElementById("bcProgNote");
+
+        if (!levelEl || !focusEl || !nextEl || !noteEl) return;
+
+        levelEl.textContent = view.level || "";
+        focusEl.textContent = view.focus || "";
+        nextEl.textContent = view.next || "";
+
+        if (view.note) {
+          noteEl.textContent = view.note;
+          noteEl.style.display = "block";
+        } else {
+          noteEl.textContent = "";
+          noteEl.style.display = "none";
+        }
+      }
+
+      (function wireProgressionDropdown() {
+        const btn = document.getElementById("btnProgressionStatus");
+        const panel = document.getElementById("progressionPanel");
+        if (!btn || !panel) return;
+
+        btn.addEventListener("click", () => {
+          const open = btn.getAttribute("aria-expanded") === "true";
+          btn.setAttribute("aria-expanded", String(!open));
+          panel.hidden = open;
+
+          if (!open) refreshProgressionUI(); // update on open
+        });
+
+        // Initial render (non-blocking)
+        refreshProgressionUI();
+      })();
 
       async function getCtxStrict(timeoutMs = 1500) {
         if (window.__BC_CTX__?.userId && window.__BC_CTX__?.restaurantId) return window.__BC_CTX__;

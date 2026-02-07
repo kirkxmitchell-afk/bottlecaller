@@ -383,6 +383,32 @@ button.selected,
   border-top: 1px solid rgba(255,255,255,0.10);
 }
 
+.bc-panel {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  background: rgba(0,0,0,0.25);
+  max-width: 520px;
+}
+
+.bc-row {
+  display: flex;
+  gap: 10px;
+  margin: 6px 0;
+}
+
+.bc-row strong {
+  width: 70px;
+  opacity: 0.9;
+}
+
+.bc-note {
+  margin-top: 8px;
+  opacity: 0.85;
+  font-size: 0.95em;
+}
+
 /* ---------- Minor utilities ---------- */
 .successText { color: var(--greenText); }
 .errorText { color: rgba(255, 140, 140, 0.92); }
