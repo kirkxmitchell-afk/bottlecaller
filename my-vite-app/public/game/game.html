@@ -57,7 +57,7 @@
 
         try {
           const rid = flat.restaurantId || flat.restaurant_id || null;
-          if (rid) {
+          if (window.__BC_MODE__ === "premium" && rid) {
             window.__BC_RUNTIME__.wineKey = `bc_wines_restaurant_${rid}`;
             // If restaurant-scoped exists, mirror it into existing keys the UI might read.
             const r = JSON.parse(localStorage.getItem(window.__BC_RUNTIME__.wineKey) || "[]");
@@ -851,6 +851,16 @@ function openManagerBoard() {
 
   let encounterIndex = loadEncounterIndex();
 
+  // ✅ Single source of truth for resume:
+  // Only resume from bc_*_encounter_index. No other key may set encounterIndex.
+  if (!isDemo) {
+    const idx = Number(localStorage.getItem(premiumEncounterIndexKey));
+    encounterIndex = Number.isFinite(idx) && idx >= 0 ? idx : 0;
+  } else {
+    const idx = Number(localStorage.getItem(demoEncounterIndexKey));
+    encounterIndex = Number.isFinite(idx) && idx >= 0 ? idx : 0;
+  }
+
   // ✅ Ensure the key exists (so console never shows null)
   saveEncounterIndex(encounterIndex);
 
@@ -1341,6 +1351,48 @@ function openManagerBoard() {
         return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
       }
 
+      function normalizeWineToDbShape(w) {
+        const varietal =
+          (w?.varietal && String(w.varietal)) ||
+          (Array.isArray(w?.varietals) ? w.varietals.join(" / ") : "");
+
+        const oak_level =
+          (w?.oak_level && String(w.oak_level)) ||
+          (w?.oak && String(w.oak)) ||
+          "none";
+
+        // crude but consistent mapping (you can tune later)
+        const fruit_tags =
+          Array.isArray(w?.fruit_tags) ? w.fruit_tags :
+          Array.isArray(w?.notes) ? w.notes.filter(n => ["citrus","berry","plum","stone fruit","tropical","apple","pear","lemon","lime","cherry"].includes(String(n).toLowerCase())) :
+          [];
+
+        const texture_tags =
+          Array.isArray(w?.texture_tags) ? w.texture_tags :
+          [
+            w?.body ? String(w.body) : null,
+            w?.tannin ? String(w.tannin) : null,
+            w?.acidity ? String(w.acidity) : null,
+          ].filter(Boolean);
+
+        // If missing, generate safe defaults (so form + DB are complete)
+        const region = w?.region ? String(w.region) : "";
+        const process = w?.process ? String(w.process) : "Standard cellar practices";
+        const story = w?.story ? String(w.story) : "A reliable house pick for the style.";
+
+        return {
+          id: w?.id || null,
+          name: String(w?.name || "").trim(),
+          varietal: String(varietal || "").trim(),
+          fruit_tags,
+          texture_tags,
+          oak_level: String(oak_level || "").trim(),
+          process: String(process || "").trim(),
+          region: String(region || "").trim(),
+          story: String(story || "").trim()
+        };
+      }
+
       function sanitizeWine(wine) {
         const process = processOptions.includes(wine.process) ? wine.process : "";
         return {
@@ -1349,11 +1401,15 @@ function openManagerBoard() {
           varietal: wine.varietal || "",
           fruitTags: Array.isArray(wine.fruitTags)
             ? wine.fruitTags
+            : Array.isArray(wine.fruit_tags)
+            ? wine.fruit_tags
             : Array.isArray(wine.fruit)
             ? wine.fruit
             : [],
           textureTags: Array.isArray(wine.textureTags)
             ? wine.textureTags
+            : Array.isArray(wine.texture_tags)
+            ? wine.texture_tags
             : Array.isArray(wine.texture)
             ? wine.texture
             : [],
@@ -1361,29 +1417,6 @@ function openManagerBoard() {
           process,
           region: wine.region || "",
           story: wine.story || ""
-        };
-      }
-
-      function dbWineToRuntimeWine(row) {
-        if (!row) return null;
-
-        const varietalsArr =
-          typeof row.varietal === "string" && row.varietal.trim()
-            ? row.varietal.split("/").map(s => s.trim()).filter(Boolean)
-            : [];
-
-        return {
-          id: row.id,
-          name: row.name || "",
-          region: row.region || "",
-          varietal: row.varietal || "",
-          varietals: varietalsArr,
-          fruit: Array.isArray(row.fruit_tags) ? row.fruit_tags : [],
-          texture: Array.isArray(row.texture_tags) ? row.texture_tags : [],
-          oak: row.oak_level || "",
-          oak_level: row.oak_level || "",
-          process: row.process || "",
-          story: row.story || ""
         };
       }
 
@@ -1395,7 +1428,7 @@ function openManagerBoard() {
           try {
             const parsed = JSON.parse(raw);
             if (!Array.isArray(parsed)) return [];
-            return parsed.map(w => sanitizeWine(w)).slice(0, LIMIT);
+            return parsed.map(normalizeWineToDbShape).map(w => sanitizeWine(w)).slice(0, LIMIT);
           } catch {
             return [];
           }
@@ -1411,7 +1444,7 @@ function openManagerBoard() {
           const dbWines = await window.WineBridge.fetchRestaurantWines(restaurantId);
           // sanitize + enforce LIMIT
           return (dbWines || [])
-            .map(dbWineToRuntimeWine)
+            .map(normalizeWineToDbShape)
             .map(w => sanitizeWine(w))
             .slice(0, LIMIT);
         } catch (e) {
