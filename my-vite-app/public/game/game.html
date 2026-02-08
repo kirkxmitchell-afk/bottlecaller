@@ -1393,6 +1393,15 @@ function openManagerBoard() {
         };
       }
 
+      function persistWines(key, list) {
+        try { localStorage.setItem(key, JSON.stringify(list)); } catch {}
+      }
+      // One-time console cleanup (keep for dev use):
+      // const raw = JSON.parse(localStorage.getItem("bc_wines_premium") || "[]");
+      // const fixed = raw.map(normalizeWineToDbShape);
+      // localStorage.setItem("bc_wines_premium", JSON.stringify(fixed));
+      // console.log("fixed sample", JSON.parse(localStorage.getItem("bc_wines_premium") || "[]")[0]);
+
       function sanitizeWine(wine) {
         const process = processOptions.includes(wine.process) ? wine.process : "";
         return {
@@ -1428,7 +1437,12 @@ function openManagerBoard() {
           try {
             const parsed = JSON.parse(raw);
             if (!Array.isArray(parsed)) return [];
-            return parsed.map(normalizeWineToDbShape).map(w => sanitizeWine(w)).slice(0, LIMIT);
+            const out = parsed
+              .map(normalizeWineToDbShape)
+              .map(w => sanitizeWine(w))
+              .slice(0, LIMIT);
+            persistWines(winesKey, out);
+            return out;
           } catch {
             return [];
           }
@@ -1443,10 +1457,12 @@ function openManagerBoard() {
         try {
           const dbWines = await window.WineBridge.fetchRestaurantWines(restaurantId);
           // sanitize + enforce LIMIT
-          return (dbWines || [])
+          const out = (dbWines || [])
             .map(normalizeWineToDbShape)
             .map(w => sanitizeWine(w))
             .slice(0, LIMIT);
+          persistWines(winesKey, out);
+          return out;
         } catch (e) {
           console.error("[BC] fetchRestaurantWines failed:", e);
           alert("Failed to load restaurant wines. Check Supabase + RLS.");
