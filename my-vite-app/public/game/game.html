@@ -852,7 +852,7 @@ function openManagerBoard() {
       window.__BC_KEYS__ = { demoEncounterIndexKey, premiumEncounterIndexKey, encounterIndexKey };
 
       function loadEncounterIndexSafe() {
-        const raw = localStorage.getItem(encounterIndexKey);
+        const raw = localStorage.getItem(encounterIndexKey); // ✅ use dynamic key
         const n = Number(raw);
         if (!Number.isFinite(n) || n < 0) return 0;
         return n;
@@ -878,23 +878,24 @@ function openManagerBoard() {
       const ENCOUNTERS = Array.isArray(ENCOUNTERS_BY_MODE[bcMode]) ? ENCOUNTERS_BY_MODE[bcMode] : [];
       const ENCOUNTER_COUNT = ENCOUNTERS.length;
 
-  let encounterIndex = loadEncounterIndexSafe();
+      function bootEncounterIndex() {
+        const params = new URLSearchParams(location.search);
+        const forceReset = params.get("reset_progress") === "1";
 
-  // ✅ Boot encounter index (never force a value)
-  (function bootEncounterIndex() {
-    const raw = localStorage.getItem(encounterIndexKey);
-    const n = Number(raw);
+        if (forceReset) {
+          encounterIndex = 0;
+          saveEncounterIndex(0);
+          console.log("[BC] progress force-reset -> Encounter 1");
+          return;
+        }
 
-    // if missing/invalid -> force 0
-    if (raw == null || !Number.isFinite(n) || n < 0) {
-      encounterIndex = 0;
-      saveEncounterIndex(0);
-      return;
-    }
+        // ✅ read only, no writes
+        encounterIndex = loadEncounterIndexSafe();
+        console.log("[BC] progress resume ->", encounterIndex);
+      }
 
-    // otherwise trust stored value, but DO NOT WRITE IT BACK
-    encounterIndex = n;
-  })();
+  let encounterIndex = 0;
+  bootEncounterIndex();
 
       function getEncounterAt(i) {
         if (!ENCOUNTER_COUNT) return null;
