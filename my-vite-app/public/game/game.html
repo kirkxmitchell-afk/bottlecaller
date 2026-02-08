@@ -27,6 +27,23 @@
     document.documentElement.setAttribute("data-bc-mode", window.__BC_MODE__);
     console.log("[BottleCaller] MODE:", window.__BC_MODE__);
 
+    // ================================
+    // DEBUG: trace who writes encounter index
+    // Remove after we fix.
+    // ================================
+    ;(() => {
+      try {
+        const _set = localStorage.setItem.bind(localStorage);
+        localStorage.setItem = (k, v) => {
+          if (k === "bc_premium_encounter_index") {
+            console.trace("[BC] WRITE bc_premium_encounter_index =", v);
+          }
+          return _set(k, v);
+        };
+        console.log("[BC] traceEncounterIndexWrites armed ✅");
+      } catch {}
+    })();
+
     // --- BC runtime (must exist before anything reads it) ---
     window.__BC_RUNTIME__ = window.__BC_RUNTIME__ || {
       ctx: null,
@@ -831,10 +848,11 @@ function openManagerBoard() {
       const premiumEncounterIndexKey = "bc_premium_encounter_index";
       const encounterIndexKey = isDemo ? demoEncounterIndexKey : premiumEncounterIndexKey;
 
-      function loadEncounterIndex() {
-        const raw = localStorage.getItem(encounterIndexKey);
+      function loadEncounterIndexSafe() {
+        const raw = localStorage.getItem("bc_premium_encounter_index");
         const n = Number(raw);
-        return Number.isFinite(n) && n >= 0 ? n : 0;
+        if (!Number.isFinite(n) || n < 0) return 0;
+        return n;
       }
 
       function saveEncounterIndex(n) {
@@ -849,17 +867,7 @@ function openManagerBoard() {
       const ENCOUNTERS = Array.isArray(ENCOUNTERS_BY_MODE[bcMode]) ? ENCOUNTERS_BY_MODE[bcMode] : [];
       const ENCOUNTER_COUNT = ENCOUNTERS.length;
 
-  let encounterIndex = loadEncounterIndex();
-
-  // ✅ Single source of truth for resume:
-  // Only resume from bc_*_encounter_index. No other key may set encounterIndex.
-  if (!isDemo) {
-    const idx = Number(localStorage.getItem(premiumEncounterIndexKey));
-    encounterIndex = Number.isFinite(idx) && idx >= 0 ? idx : 0;
-  } else {
-    const idx = Number(localStorage.getItem(demoEncounterIndexKey));
-    encounterIndex = Number.isFinite(idx) && idx >= 0 ? idx : 0;
-  }
+  let encounterIndex = loadEncounterIndexSafe();
 
   // ✅ Ensure the key exists (so console never shows null)
   saveEncounterIndex(encounterIndex);
