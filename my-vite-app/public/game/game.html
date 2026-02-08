@@ -849,6 +849,7 @@ function openManagerBoard() {
       const demoEncounterIndexKey = "bc_demo_encounter_index";
       const premiumEncounterIndexKey = "bc_premium_encounter_index";
       const encounterIndexKey = isDemo ? demoEncounterIndexKey : premiumEncounterIndexKey;
+      window.__BC_KEYS__ = { demoEncounterIndexKey, premiumEncounterIndexKey, encounterIndexKey };
 
       function loadEncounterIndexSafe() {
         const raw = localStorage.getItem(encounterIndexKey);
@@ -883,14 +884,16 @@ function openManagerBoard() {
   (function bootEncounterIndex() {
     const raw = localStorage.getItem(encounterIndexKey);
     const n = Number(raw);
-    const idx = Number.isFinite(n) && n >= 0 ? n : 0;
 
-    encounterIndex = idx;
-
-    // only write if missing/invalid
+    // if missing/invalid -> force 0
     if (raw == null || !Number.isFinite(n) || n < 0) {
+      encounterIndex = 0;
       saveEncounterIndex(0);
+      return;
     }
+
+    // otherwise trust stored value, but DO NOT WRITE IT BACK
+    encounterIndex = n;
   })();
 
       function getEncounterAt(i) {
