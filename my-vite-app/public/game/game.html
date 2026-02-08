@@ -831,16 +831,10 @@ function openManagerBoard() {
       const premiumEncounterIndexKey = "bc_premium_encounter_index";
       const encounterIndexKey = isDemo ? demoEncounterIndexKey : premiumEncounterIndexKey;
 
-      function loadEncounterIndexSafe() {
+      function loadEncounterIndex() {
         const raw = localStorage.getItem(encounterIndexKey);
         const n = Number(raw);
-
-        // If missing/NaN/negative => start fresh
-        if (!Number.isFinite(n) || n < 0) return 0;
-
-        // If beyond max encounters, clamp
-        const max = (isDemo ? 2 : 20) - 1;
-        return Math.min(n, max);
+        return Number.isFinite(n) && n >= 0 ? n : 0;
       }
 
       function saveEncounterIndex(n) {
@@ -855,7 +849,7 @@ function openManagerBoard() {
       const ENCOUNTERS = Array.isArray(ENCOUNTERS_BY_MODE[bcMode]) ? ENCOUNTERS_BY_MODE[bcMode] : [];
       const ENCOUNTER_COUNT = ENCOUNTERS.length;
 
-  let encounterIndex = loadEncounterIndexSafe();
+  let encounterIndex = loadEncounterIndex();
 
   // ✅ Ensure the key exists (so console never shows null)
   saveEncounterIndex(encounterIndex);
