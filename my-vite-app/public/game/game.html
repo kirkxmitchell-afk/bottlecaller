@@ -167,6 +167,7 @@
           <button id="btnStartDrillDemo" type="button">5-Minute Drill</button>
           <button id="btnViewHistoryDemo" type="button">View History</button>
           <button id="btnResetRunsDemo" type="button">Reset Runs Only</button>
+          <button id="btnResetProgressDemo" type="button">Start from Encounter 1</button>
           <button id="btnResetWinesDemo" type="button" data-role="manager">Reset Wines Only</button>
         </div>
       </div>
@@ -180,6 +181,7 @@
           <button id="btnGoPremium" type="button">Setup</button>
           <button id="btnViewHistoryPremium" type="button">View History</button>
           <button id="btnResetRunsPremium" type="button">Reset Runs Only</button>
+          <button id="btnResetProgressPremium" type="button">Start from Encounter 1</button>
           <button id="btnResetWinesPremium" type="button" data-role="manager">Reset Wines Only</button>
         </div>
       </div>
@@ -863,14 +865,32 @@ function openManagerBoard() {
         saveEncounterIndex(0);
       }
 
+      function resetProgressToStart() {
+        encounterIndex = 0;
+        saveEncounterIndex(0);
+        alert("Progress reset: starting from Encounter 1.");
+        resetNavState();
+        showScreen("screenHome");
+      }
+
       const ENCOUNTERS_BY_MODE = (window.__BC_ENCOUNTERS__ || {});
       const ENCOUNTERS = Array.isArray(ENCOUNTERS_BY_MODE[bcMode]) ? ENCOUNTERS_BY_MODE[bcMode] : [];
       const ENCOUNTER_COUNT = ENCOUNTERS.length;
 
   let encounterIndex = loadEncounterIndexSafe();
 
-  // ✅ Ensure the key exists (so console never shows null)
-  saveEncounterIndex(encounterIndex);
+  // ✅ Boot encounter index (never force a value)
+  (function bootEncounterIndex() {
+    const raw = localStorage.getItem("bc_premium_encounter_index");
+    const n = Number(raw);
+    const idx = Number.isFinite(n) && n >= 0 ? n : 0;
+
+    // single source of truth
+    encounterIndex = idx;
+
+    // only write if missing/invalid
+    if (idx === 0 && raw !== "0") saveEncounterIndex(0);
+  })();
 
       function getEncounterAt(i) {
         if (!ENCOUNTER_COUNT) return null;
@@ -1360,44 +1380,41 @@ function openManagerBoard() {
       }
 
       function normalizeWineToDbShape(w) {
-        const varietal =
-          (w?.varietal && String(w.varietal)) ||
-          (Array.isArray(w?.varietals) ? w.varietals.join(" / ") : "");
+        if (!w || typeof w !== "object") return w;
 
-        const oak_level =
-          (w?.oak_level && String(w.oak_level)) ||
-          (w?.oak && String(w.oak)) ||
-          "none";
+        // already normalized
+        if ("fruit_tags" in w || "texture_tags" in w || "oak_level" in w) return w;
 
-        // crude but consistent mapping (you can tune later)
-        const fruit_tags =
-          Array.isArray(w?.fruit_tags) ? w.fruit_tags :
-          Array.isArray(w?.notes) ? w.notes.filter(n => ["citrus","berry","plum","stone fruit","tropical","apple","pear","lemon","lime","cherry"].includes(String(n).toLowerCase())) :
-          [];
+        const varietalText =
+          (typeof w.varietal === "string" && w.varietal.trim()) ? w.varietal.trim()
+          : Array.isArray(w.varietals) ? w.varietals.filter(Boolean).join(" / ")
+          : "";
 
-        const texture_tags =
-          Array.isArray(w?.texture_tags) ? w.texture_tags :
-          [
-            w?.body ? String(w.body) : null,
-            w?.tannin ? String(w.tannin) : null,
-            w?.acidity ? String(w.acidity) : null,
-          ].filter(Boolean);
+        const fruitArr =
+          Array.isArray(w.fruit_tags) ? w.fruit_tags
+          : Array.isArray(w.fruit) ? w.fruit
+          : [];
 
-        // If missing, generate safe defaults (so form + DB are complete)
-        const region = w?.region ? String(w.region) : "";
-        const process = w?.process ? String(w.process) : "Standard cellar practices";
-        const story = w?.story ? String(w.story) : "A reliable house pick for the style.";
+        const textureArr =
+          Array.isArray(w.texture_tags) ? w.texture_tags
+          : Array.isArray(w.texture) ? w.texture
+          : [];
+
+        const oak =
+          (typeof w.oak_level === "string" && w.oak_level) ? w.oak_level
+          : (typeof w.oak === "string" && w.oak) ? w.oak
+          : "";
 
         return {
-          id: w?.id || null,
-          name: String(w?.name || "").trim(),
-          varietal: String(varietal || "").trim(),
-          fruit_tags,
-          texture_tags,
-          oak_level: String(oak_level || "").trim(),
-          process: String(process || "").trim(),
-          region: String(region || "").trim(),
-          story: String(story || "").trim()
+          id: w.id,
+          name: w.name || "",
+          varietal: varietalText,
+          fruit_tags: fruitArr,
+          texture_tags: textureArr,
+          oak_level: oak,
+          process: w.process || "",
+          region: w.region || "",
+          story: w.story || ""
         };
       }
 
@@ -3943,6 +3960,9 @@ function openManagerBoard() {
         const btnViewHistory = document.getElementById(ids.btnViewHistory);
         const btnResetRuns = document.getElementById(ids.btnResetRuns);
         const btnResetWines = document.getElementById(ids.btnResetWines);
+        const btnResetProgress = document.getElementById(
+          isDemo ? "btnResetProgressDemo" : "btnResetProgressPremium"
+        );
         const btnBackHomeFromDrillSummary = document.getElementById("btnBackHomeFromDrillSummary");
         const btnStartAnotherDrill = document.getElementById("btnStartAnotherDrill");
         const btnFiveMinDrill = document.getElementById("btnFiveMinDrill");
@@ -4108,6 +4128,7 @@ function openManagerBoard() {
 
         bindInput(btnResetRuns, () => resetRunsOnly());
         bindInput(btnResetWines, () => resetWinesOnly());
+        bindInput(btnResetProgress, () => resetProgressToStart());
 
         const addWineBtn = document.getElementById(ids.addWineBtn);
         bindInput(addWineBtn, () => addWineFromForm());
