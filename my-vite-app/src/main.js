@@ -4,6 +4,7 @@ import { supabase, signIn, signUp, signOut, getSession } from "./lib/supabaseCli
 import { decideAllowedTier } from "./game/progressionBridge";
 
 console.log("supabase client present:", !!supabase);
+window.__BC_SUPABASE__ = supabase;
 
 // ------------------------------------------------------------
 // UI
@@ -994,6 +995,13 @@ function closeHud() {
   document.getElementById("hudPanel").classList.add("hidden");
 }
 
+function unmountDemoGame() {
+  const demoRoot = document.getElementById("gameRootDemo");
+  if (!demoRoot) return;
+  demoRoot.innerHTML = "";
+  console.log("[BC] demo game unmounted ✅");
+}
+
 // ------------------------------------------------------------
 // GAME LOADING (iframe) — no sticky stacking, no unwanted resets
 // ------------------------------------------------------------
@@ -1650,6 +1658,13 @@ async function routeDemo(reason = "manual") {
 
   if (was !== "demo") forceRemountForModeSwitch("demo");
 
+  const p = window.__BC_APP_STATE__?.profile;
+  const isPremium = String(p?.access_tier || "").toLowerCase().startsWith("premium");
+  if (isPremium) {
+    console.log("[BC] premium user -> skipping demo mount ✅");
+    return;
+  }
+
   setDebug({ step: "route.demo", time: new Date().toISOString(), reason, authed: !!appState.session?.user });
   showScreen("screenGameDemo");
   renderDemoJoinBlock();
@@ -1715,6 +1730,7 @@ async function routePremium(reason = "manual") {
 
       if (was !== "premium") forceRemountForModeSwitch("premium");
 
+      unmountDemoGame();
       showScreen("screenPremiumApp");
       const p = window.__BC_APP_STATE__?.profile;
       const isPremium = String(p?.access_tier || "").toLowerCase().startsWith("premium");
@@ -1776,6 +1792,7 @@ async function routePremium(reason = "manual") {
 
     if (was !== "premium") forceRemountForModeSwitch("premium");
 
+    unmountDemoGame();
     showScreen("screenPremiumApp");
     const p = window.__BC_APP_STATE__?.profile;
     const isPremium = String(p?.access_tier || "").toLowerCase().startsWith("premium");
@@ -1833,6 +1850,7 @@ async function routeManagerBoard(reason = "manual") {
     return;
   }
 
+  unmountDemoGame();
   showScreen("screenManagerBoard");
   applyManagerBoardVisibility();
   await loadManagerBoardData();
