@@ -1716,6 +1716,15 @@ async function routePremium(reason = "manual") {
       if (was !== "premium") forceRemountForModeSwitch("premium");
 
       showScreen("screenPremiumApp");
+      const p = window.__BC_APP_STATE__?.profile;
+      const isPremium = String(p?.access_tier || "").toLowerCase().startsWith("premium");
+      const isGroup = String(p?.scope_type || "").toLowerCase() === "group";
+
+      if (isPremium && isGroup && !p?.restaurant_id) {
+        console.log("[BC] group manager needs active restaurant -> Manager Board");
+        showScreen("screenManagerBoard");
+        return;
+      }
       mountGameIframe("premiumRoot", "premium");
       refreshParentProgressionUI();
       setTimeout(() => {
@@ -1768,6 +1777,15 @@ async function routePremium(reason = "manual") {
     if (was !== "premium") forceRemountForModeSwitch("premium");
 
     showScreen("screenPremiumApp");
+    const p = window.__BC_APP_STATE__?.profile;
+    const isPremium = String(p?.access_tier || "").toLowerCase().startsWith("premium");
+    const isGroup = String(p?.scope_type || "").toLowerCase() === "group";
+
+    if (isPremium && isGroup && !p?.restaurant_id) {
+      console.log("[BC] group manager needs active restaurant -> Manager Board");
+      showScreen("screenManagerBoard");
+      return;
+    }
     mountGameIframe("premiumRoot", "premium");
     refreshParentProgressionUI();
     setTimeout(() => {
