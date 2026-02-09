@@ -1353,71 +1353,62 @@ function pushCtxToPremiumIframe(source = "manual") {
   );
 }
 
+function mountPremiumGameIframe() {
+  const root = document.getElementById("premiumRoot");
+  if (!root) return;
+
+  root.innerHTML = "";
+
+  const iframe = document.createElement("iframe");
+  iframe.src = `/game/game.html?mode=premium&v=${Date.now()}`;
+  iframe.style.width = "100%";
+  iframe.style.height = "78vh";
+  iframe.style.border = "0";
+  root.appendChild(iframe);
+
+  console.log("[BC] mounted premium iframe", iframe.src);
+}
+
 async function setActiveRestaurantForGroup(restaurantId) {
-  const uid = appState.session?.user?.id;
-  const p = appState.profile;
+  if (!restaurantId) return;
 
-  if (!uid || !p?.scope_id || p.scope_type !== "group") {
-    alert("Group manager context missing.");
-    return;
-  }
+  // 1) persist selection
+  const userRes = await supabase.auth.getUser();
+  const uid = userRes?.data?.user?.id;
+  if (!uid) return;
 
-  if (!restaurantId) {
-    alert("Choose a restaurant first.");
-    return;
-  }
-
-  // Optional safety: ensure this restaurant is in the group scope
-  const { data: rows, error: listErr } = await supabase.rpc("get_scope_restaurants", {
-    p_scope_id: p.scope_id
-  });
-  if (listErr) {
-    console.error("[BC] get_scope_restaurants error", listErr);
-    alert("Couldn’t validate group restaurants.");
-    return;
-  }
-  const ok = (rows || []).some((r) => r.restaurant_id === restaurantId);
-  if (!ok) {
-    alert("That restaurant isn’t in this group scope.");
-    return;
-  }
-
-  // Update profile active restaurant
   const { error } = await supabase
     .from("profiles")
     .update({ restaurant_id: restaurantId })
     .eq("user_id", uid);
 
   if (error) {
-    console.error("[BC] setActiveRestaurant update error", error);
-    alert("Failed to set active restaurant.");
+    console.error("[BC] setActiveRestaurantForGroup update error", error);
     return;
   }
 
-  // Keep appState consistent
-  appState.profile.restaurant_id = restaurantId;
+  // 2) hydrate parent state
+  const profile = await loadProfile(uid);
+  window.__BC_APP_STATE__ = window.__BC_APP_STATE__ || {};
+  window.__BC_APP_STATE__.profile = profile;
+  appState.profile = profile;
 
-  // Load restaurant object (if your UI uses it)
-  try {
-    appState.restaurant = await loadRestaurant(restaurantId);
-  } catch (e) {
-    console.warn("[BC] loadRestaurant failed after switch", e);
+  if (profile?.restaurant_id) {
+    try {
+      window.__BC_APP_STATE__.restaurant = await loadRestaurant(profile.restaurant_id);
+      appState.restaurant = window.__BC_APP_STATE__.restaurant;
+    } catch (e) {
+      console.warn("[BC] loadRestaurant failed after switch", e);
+    }
   }
 
-  // Refresh parent progression (your existing function)
-  if (typeof refreshParentProgressionFromDb === "function") {
-    await refreshParentProgressionFromDb();
-  } else if (typeof refreshParentProgressionUI === "function") {
-    refreshParentProgressionUI();
-  }
+  console.log("[BC] active restaurant set", {
+    restaurant_id: window.__BC_APP_STATE__?.profile?.restaurant_id,
+    restaurant: window.__BC_APP_STATE__?.restaurant
+  });
 
-  // 🔥 Push updated ctx to iframe immediately
-  pushCtxToPremiumIframe("group_switch");
-
-  // Refresh picker UI so hint + selection match new active restaurant
-  await loadGroupRestaurantsForPicker();
-
-  console.log("[BC] Active restaurant set ✅", { restaurantId });
+  // 3) mount premium game (and clear any old iframe)
+  mountPremiumGameIframe();
 }
 
 async function loadManagerBoardData() {
