@@ -1135,7 +1135,9 @@ async function loadProfile(userId) {
   const res = await withTimeout(
     supabase
       .from("profiles")
-      .select("role, restaurant_id, display_name, access_tier, is_first50, premium_pass_expires_at")
+      .select(
+        "user_id, role, restaurant_id, display_name, access_tier, scope_type, scope_id, premium_pass_expires_at, is_first50, premium_grant_source, premium_grant_ref"
+      )
       .eq("user_id", userId)
       .maybeSingle(),
     12000,
