@@ -164,6 +164,38 @@ document.querySelector("#app").innerHTML = `
         <div class="score-row">Total drills: <span id="mbDrillsTotal">-</span></div>
       </div>
 
+      <div id="mbBillingAccess" class="card" style="margin-top:12px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+          <strong>Billing & Access</strong>
+          <span id="mbSeatStatus" class="badge">Seats: —</span>
+        </div>
+
+        <div class="small-text" id="mbSeatDetail" style="margin-top:6px;">
+          Loading seat usage…
+        </div>
+
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
+          <button id="mbSeat15" class="btn-ghost" type="button">Set seats: 15</button>
+          <button id="mbSeat30" class="btn-ghost" type="button">Set seats: 30</button>
+          <button id="mbSeat60" class="btn-ghost" type="button">Set seats: 60</button>
+          <button id="mbRefreshSeats" class="btn-ghost" type="button">Refresh</button>
+        </div>
+
+        <hr style="opacity:.2; margin:12px 0;" />
+
+        <strong>Enterprise Signup</strong>
+        <div class="small-text" style="margin-top:6px;">
+          Paste an Enterprise manager_setup code to upgrade this manager scope.
+        </div>
+
+        <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+          <input id="mbEnterpriseCode" type="text" placeholder="ENTERPRISE_XXXXX" style="flex:1; min-width:220px;" />
+          <button id="mbRedeemEnterprise" class="btn-primary" type="button">Redeem</button>
+        </div>
+
+        <div id="mbEnterpriseMsg" class="small-text" style="margin-top:8px;"></div>
+      </div>
+
       <div class="card">
         <h3 style="margin:0 0 8px 0;">Recent activity</h3>
         <div id="mbRecent" class="small" style="opacity:.9;">Loading…</div>
@@ -1110,6 +1142,126 @@ async function loadInvites(restaurantId) {
   return res.data || [];
 }
 
+async function loadManagerBoardSeats() {
+  const rid = appState.profile?.restaurant_id || null;
+  const elStatus = document.getElementById("mbSeatStatus");
+  const elDetail = document.getElementById("mbSeatDetail");
+
+  if (!rid) {
+    if (elStatus) elStatus.textContent = "Seats: —";
+    if (elDetail) elDetail.textContent = "No restaurant_id on profile.";
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from("bc_restaurant_seats_v1")
+    .select("restaurant_id, seat_limit, seats_used, seats_remaining")
+    .eq("restaurant_id", rid)
+    .maybeSingle();
+
+  if (error) {
+    if (elStatus) elStatus.textContent = "Seats: error";
+    if (elDetail) elDetail.textContent = "Failed to load seats: " + error.message;
+    return;
+  }
+
+  if (!data) {
+    if (elStatus) elStatus.textContent = "Seats: —";
+    if (elDetail) elDetail.textContent = "No seats row found for this restaurant.";
+    return;
+  }
+
+  if (elStatus) elStatus.textContent = `Seats: ${data.seats_used}/${data.seat_limit}`;
+  if (elDetail) {
+    elDetail.textContent =
+      `Seat limit: ${data.seat_limit} • Used (premium waiters): ${data.seats_used} • Remaining: ${data.seats_remaining}`;
+  }
+}
+
+async function adminSetSeats(newLimit) {
+  if (appState.profile?.role !== "manager") {
+    alert("Managers only.");
+    return;
+  }
+  const rid = appState.profile?.restaurant_id || null;
+  if (!rid) return alert("Missing restaurant_id on profile.");
+
+  const { error } = await supabase.rpc("admin_set_seat_limit", {
+    p_restaurant_id: rid,
+    p_new_limit: newLimit
+  });
+
+  if (error) {
+    alert("Seat update failed: " + error.message);
+    return;
+  }
+
+  await loadManagerBoardSeats();
+}
+
+async function redeemEnterpriseManagerSetupCode() {
+  if (appState.profile?.role !== "manager") {
+    alert("Managers only.");
+    return;
+  }
+  const input = document.getElementById("mbEnterpriseCode");
+  const msg = document.getElementById("mbEnterpriseMsg");
+  const code = (input?.value || "").trim().toUpperCase();
+
+  if (!code) return;
+
+  if (msg) msg.textContent = "Redeeming…";
+
+  const { data, error } = await supabase.rpc("redeem_code", { p_code: code });
+
+  if (error) {
+    if (msg) msg.textContent = "Failed: " + error.message;
+    return;
+  }
+
+  if (data?.ok === false) {
+    if (msg) msg.textContent = "Failed: " + (data?.error || "unknown");
+    return;
+  }
+
+  if (msg) msg.textContent = "✅ Redeemed. Reloading profile…";
+
+  try {
+    const session = appState.session;
+    if (session?.user?.id) {
+      appState.profile = await loadProfile(session.user.id);
+    }
+  } catch {}
+
+  if (msg) msg.textContent = "✅ Enterprise upgrade applied (if code was enterprise).";
+}
+
+function wireManagerBoardBillingAccess() {
+  const isMgr = appState.profile?.role === "manager";
+  const b15 = document.getElementById("mbSeat15");
+  const b30 = document.getElementById("mbSeat30");
+  const b60 = document.getElementById("mbSeat60");
+  const bRef = document.getElementById("mbRefreshSeats");
+  const bRedeem = document.getElementById("mbRedeemEnterprise");
+  const codeInput = document.getElementById("mbEnterpriseCode");
+  const msg = document.getElementById("mbEnterpriseMsg");
+
+  [b15, b30, b60].forEach((el) => {
+    if (el) el.style.display = isMgr ? "" : "none";
+  });
+  if (bRedeem) bRedeem.style.display = isMgr ? "" : "none";
+  if (codeInput) codeInput.style.display = isMgr ? "" : "none";
+  if (msg && !isMgr) msg.textContent = "";
+
+  if (b15) b15.onclick = () => adminSetSeats(15);
+  if (b30) b30.onclick = () => adminSetSeats(30);
+  if (b60) b60.onclick = () => adminSetSeats(60);
+  if (bRef) bRef.onclick = () => loadManagerBoardSeats();
+  if (bRedeem) bRedeem.onclick = () => redeemEnterpriseManagerSetupCode();
+
+  loadManagerBoardSeats();
+}
+
 async function loadManagerBoardData() {
   try {
     const r = appState.restaurant;
@@ -1512,6 +1664,7 @@ async function routeManagerBoard(reason = "manual") {
 
   showScreen("screenManagerBoard");
   await loadManagerBoardData();
+  wireManagerBoardBillingAccess();
 }
 
 async function decideRoute(reason = "decideRoute") {
