@@ -1290,58 +1290,43 @@ function applyManagerBoardVisibility() {
 }
 
 async function loadGroupRestaurantsForPicker() {
-  const p = appState.profile;
-  const wrap = document.getElementById("groupRestaurantPicker");
   const sel = document.getElementById("selActiveRestaurant");
-  const hint = document.getElementById("activeRestaurantHint");
+  if (!sel) return;
 
-  if (!wrap || !sel || !hint) return;
+  // reset UI
+  sel.innerHTML = "";
 
-  // Only for group managers
-  const isGroup = p?.scope_type === "group" && !!p?.scope_id;
-  if (!isGroup) {
-    wrap.style.display = "none";
+  const p = window.__BC_APP_STATE__?.profile;
+  const scopeType = String(p?.scope_type || "").toLowerCase();
+  const scopeId = p?.scope_id;
+
+  // Only group managers get the picker
+  if (scopeType !== "group" || !scopeId) {
+    // hide the picker row if you want
+    // document.getElementById("rowActiveRestaurant")?.style && (document.getElementById("rowActiveRestaurant").style.display = "none");
     return;
   }
 
-  wrap.style.display = "block";
-  sel.innerHTML = `<option value="">Loading…</option>`;
-  hint.innerText = "";
-
-  const { data, error } = await supabase.rpc("get_scope_restaurants", {
-    p_scope_id: p.scope_id
-  });
+  // IMPORTANT: this must read from bc_scope_restaurants, not profiles.restaurant_id
+  const { data, error } = await supabase
+    .from("bc_scope_restaurants")
+    .select("restaurant_id, restaurants(name)")
+    .eq("scope_id", scopeId);
 
   if (error) {
-    console.error("[BC] get_scope_restaurants error", error);
-    sel.innerHTML = `<option value="">Failed to load</option>`;
-    hint.innerText = "Couldn’t load restaurants for this group.";
+    console.error("[BC] loadGroupRestaurantsForPicker error", error);
     return;
   }
 
   const rows = Array.isArray(data) ? data : [];
-  if (!rows.length) {
-    sel.innerHTML = `<option value="">No restaurants in this group</option>`;
-    hint.innerText = "Add a restaurant to the group first.";
-    return;
-  }
+  rows.forEach((r) => {
+    const opt = document.createElement("option");
+    opt.value = r.restaurant_id;
+    opt.textContent = r.restaurants?.name || r.restaurant_id;
+    sel.appendChild(opt);
+  });
 
-  sel.innerHTML = rows
-    .map((r) => {
-      const name = r.restaurant_name || "Unnamed restaurant";
-      const code = r.restaurant_code ? ` (${r.restaurant_code})` : "";
-      return `<option value="${r.restaurant_id}">${name}${code}</option>`;
-    })
-    .join("");
-
-  // Preselect current active restaurant (if any)
-  const currentRid = p?.restaurant_id || "";
-  if (currentRid) sel.value = currentRid;
-
-  const selected = rows.find((x) => x.restaurant_id === sel.value);
-  hint.innerText = selected
-    ? `Current selection: ${selected.restaurant_name}`
-    : "Pick the restaurant you want active for management + gameplay.";
+  console.log("[BC] group picker hydrated", { scopeId, count: rows.length, rows });
 }
 
 function pushCtxToPremiumIframe(source = "manual") {
