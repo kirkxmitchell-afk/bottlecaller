@@ -1307,25 +1307,22 @@ async function loadGroupRestaurantsForPicker() {
   const sel = document.getElementById("selActiveRestaurant");
   if (!sel) return;
 
-  // reset UI
   sel.innerHTML = "";
 
-  const p = window.__BC_APP_STATE__?.profile;
-  const scopeType = String(p?.scope_type || "").toLowerCase();
-  const scopeId = p?.scope_id;
+  const scopeType = String(appState.profile?.scope_type || "");
+  const scopeId = appState.profile?.scope_id;
 
-  // Only group managers get the picker
-  if (scopeType !== "group" || !scopeId) {
-    // hide the picker row if you want
-    // document.getElementById("rowActiveRestaurant")?.style && (document.getElementById("rowActiveRestaurant").style.display = "none");
+  // Only show picker for group / enterprise
+  if (!scopeId || (scopeType !== "group" && scopeType !== "enterprise")) {
     return;
   }
 
   // IMPORTANT: this must read from bc_scope_restaurants, not profiles.restaurant_id
   const { data, error } = await supabase
     .from("bc_scope_restaurants")
-    .select("restaurant_id, restaurants(name)")
+    .select("restaurant_id, restaurants!inner(name)")
     .eq("scope_id", scopeId);
+    .order("created_at", { ascending: true });
 
   if (error) {
     console.error("[BC] loadGroupRestaurantsForPicker error", error);
@@ -1333,12 +1330,17 @@ async function loadGroupRestaurantsForPicker() {
   }
 
   const rows = Array.isArray(data) ? data : [];
-  rows.forEach((r) => {
+  rows.forEach((row) => {
     const opt = document.createElement("option");
-    opt.value = r.restaurant_id;
-    opt.textContent = r.restaurants?.name || r.restaurant_id;
+    opt.value = row.restaurant_id;
+    opt.textContent = row.restaurants?.name || row.restaurant_id;
     sel.appendChild(opt);
   });
+
+  // Optional: preselect active restaurant if already set
+  if (appState.profile?.restaurant_id) {
+    sel.value = appState.profile.restaurant_id;
+  }
 
   console.log("[BC] group picker hydrated", { scopeId, count: rows.length, rows });
 }
@@ -1387,8 +1389,7 @@ async function setActiveRestaurantForGroup(restaurantId) {
   if (!restaurantId) return;
 
   // 1) persist selection
-  const userRes = await supabase.auth.getUser();
-  const uid = userRes?.data?.user?.id;
+  const uid = appState.profile?.user_id;
   if (!uid) return;
 
   const { error } = await supabase
