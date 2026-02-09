@@ -196,6 +196,20 @@ document.querySelector("#app").innerHTML = `
         <div id="mbEnterpriseMsg" class="small-text" style="margin-top:8px;"></div>
       </div>
 
+      <div id="groupRestaurantPicker" class="card" style="display:none; margin-top:10px;">
+        <strong>Active Restaurant</strong>
+        <div class="small-text" style="margin-top:6px;">
+          Group managers switch which restaurant they’re managing right now.
+        </div>
+
+        <div style="display:flex; gap:8px; margin-top:10px; align-items:center;">
+          <select id="selActiveRestaurant" class="input" style="flex:1;"></select>
+          <button id="btnSetActiveRestaurant" class="btn" type="button">Set</button>
+        </div>
+
+        <div id="activeRestaurantHint" class="small-text" style="margin-top:8px;"></div>
+      </div>
+
       <div class="card">
         <h3 style="margin:0 0 8px 0;">Recent activity</h3>
         <div id="mbRecent" class="small" style="opacity:.9;">Loading…</div>
@@ -385,6 +399,7 @@ const appState = {
   restaurant: null,
   invites: [],
 };
+window.__BC_APP_STATE__ = appState;
 appState.progressionView = appState.progressionView || {
   level: "Building recognition",
   focus: "Reading guest intent",
@@ -1262,6 +1277,164 @@ function wireManagerBoardBillingAccess() {
   loadManagerBoardSeats();
 }
 
+function applyManagerBoardVisibility() {
+  const p = appState.profile || {};
+  const role = String(p.role || "").toLowerCase();
+  const scopeType = String(p.scope_type || "").toLowerCase();
+
+  const picker = document.getElementById("groupRestaurantPicker");
+  if (picker) {
+    const show = role === "manager" && scopeType === "group" && !!p.scope_id;
+    picker.style.display = show ? "block" : "none";
+  }
+}
+
+async function loadGroupRestaurantsForPicker() {
+  const p = appState.profile;
+  const wrap = document.getElementById("groupRestaurantPicker");
+  const sel = document.getElementById("selActiveRestaurant");
+  const hint = document.getElementById("activeRestaurantHint");
+
+  if (!wrap || !sel || !hint) return;
+
+  // Only for group managers
+  const isGroup = p?.scope_type === "group" && !!p?.scope_id;
+  if (!isGroup) {
+    wrap.style.display = "none";
+    return;
+  }
+
+  wrap.style.display = "block";
+  sel.innerHTML = `<option value="">Loading…</option>`;
+  hint.innerText = "";
+
+  const { data, error } = await supabase.rpc("get_scope_restaurants", {
+    p_scope_id: p.scope_id
+  });
+
+  if (error) {
+    console.error("[BC] get_scope_restaurants error", error);
+    sel.innerHTML = `<option value="">Failed to load</option>`;
+    hint.innerText = "Couldn’t load restaurants for this group.";
+    return;
+  }
+
+  const rows = Array.isArray(data) ? data : [];
+  if (!rows.length) {
+    sel.innerHTML = `<option value="">No restaurants in this group</option>`;
+    hint.innerText = "Add a restaurant to the group first.";
+    return;
+  }
+
+  sel.innerHTML = rows
+    .map((r) => {
+      const name = r.restaurant_name || "Unnamed restaurant";
+      const code = r.restaurant_code ? ` (${r.restaurant_code})` : "";
+      return `<option value="${r.restaurant_id}">${name}${code}</option>`;
+    })
+    .join("");
+
+  // Preselect current active restaurant (if any)
+  const currentRid = p?.restaurant_id || "";
+  if (currentRid) sel.value = currentRid;
+
+  const selected = rows.find((x) => x.restaurant_id === sel.value);
+  hint.innerText = selected
+    ? `Current selection: ${selected.restaurant_name}`
+    : "Pick the restaurant you want active for management + gameplay.";
+}
+
+function pushCtxToPremiumIframe(source = "manual") {
+  const iframe = document.querySelector("#premiumRoot iframe");
+  if (!iframe || !iframe.contentWindow) return;
+
+  const uid = appState.session?.user?.id || null;
+
+  iframe.contentWindow.postMessage(
+    {
+      source: "BC_MSG",
+      v: 1,
+      type: "bc_ctx",
+      mode: "premium",
+      userId: uid,
+      role: appState.profile?.role || null,
+      scopeType: appState.profile?.scope_type || null,
+      scopeId: appState.profile?.scope_id || null,
+      restaurantId: appState.profile?.restaurant_id || null,
+      accessTier: appState.profile?.access_tier || null,
+      _from: source,
+    },
+    "*"
+  );
+}
+
+async function setActiveRestaurantForGroup(restaurantId) {
+  const uid = appState.session?.user?.id;
+  const p = appState.profile;
+
+  if (!uid || !p?.scope_id || p.scope_type !== "group") {
+    alert("Group manager context missing.");
+    return;
+  }
+
+  if (!restaurantId) {
+    alert("Choose a restaurant first.");
+    return;
+  }
+
+  // Optional safety: ensure this restaurant is in the group scope
+  const { data: rows, error: listErr } = await supabase.rpc("get_scope_restaurants", {
+    p_scope_id: p.scope_id
+  });
+  if (listErr) {
+    console.error("[BC] get_scope_restaurants error", listErr);
+    alert("Couldn’t validate group restaurants.");
+    return;
+  }
+  const ok = (rows || []).some((r) => r.restaurant_id === restaurantId);
+  if (!ok) {
+    alert("That restaurant isn’t in this group scope.");
+    return;
+  }
+
+  // Update profile active restaurant
+  const { error } = await supabase
+    .from("profiles")
+    .update({ restaurant_id: restaurantId })
+    .eq("user_id", uid);
+
+  if (error) {
+    console.error("[BC] setActiveRestaurant update error", error);
+    alert("Failed to set active restaurant.");
+    return;
+  }
+
+  // Keep appState consistent
+  appState.profile.restaurant_id = restaurantId;
+
+  // Load restaurant object (if your UI uses it)
+  try {
+    appState.restaurant = await loadRestaurant(restaurantId);
+  } catch (e) {
+    console.warn("[BC] loadRestaurant failed after switch", e);
+  }
+
+  // Refresh parent progression (your existing function)
+  if (typeof refreshParentProgressionFromDb === "function") {
+    await refreshParentProgressionFromDb();
+  } else if (typeof refreshParentProgressionUI === "function") {
+    refreshParentProgressionUI();
+  }
+
+  // 🔥 Push updated ctx to iframe immediately
+  pushCtxToPremiumIframe("group_switch");
+
+  // Refresh picker UI so hint + selection match new active restaurant
+  await loadGroupRestaurantsForPicker();
+
+  console.log("[BC] Active restaurant set ✅", { restaurantId });
+}
+
 async function loadManagerBoardData() {
   try {
     const r = appState.restaurant;
@@ -1663,8 +1836,19 @@ async function routeManagerBoard(reason = "manual") {
   }
 
   showScreen("screenManagerBoard");
+  applyManagerBoardVisibility();
   await loadManagerBoardData();
   wireManagerBoardBillingAccess();
+  await loadGroupRestaurantsForPicker();
+
+  const btn = document.getElementById("btnSetActiveRestaurant");
+  const sel = document.getElementById("selActiveRestaurant");
+  if (btn && sel && !btn.__bcBound) {
+    btn.__bcBound = true;
+    btn.addEventListener("click", async () => {
+      await setActiveRestaurantForGroup(sel.value);
+    });
+  }
 }
 
 async function decideRoute(reason = "decideRoute") {
