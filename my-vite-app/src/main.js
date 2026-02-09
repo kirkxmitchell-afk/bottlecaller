@@ -439,7 +439,11 @@ if (!window.__BC_PARENT_TRACE__) {
 // - event_log (iframe emits telemetry)
 // ------------------------------------------------------------
 if (!window.__BC_PARENT_BRIDGE__) {
-  window.__BC_PARENT_BRIDGE__ = true;
+  window.__BC_PARENT_BRIDGE__ = {
+    loadGroupRestaurantsForPicker,
+    setActiveRestaurantForGroup,
+    mountPremiumGameIframe,
+  };
 
   window.addEventListener("message", async (event) => {
     try {
