@@ -1321,7 +1321,7 @@ async function loadGroupRestaurantsForPicker() {
   const { data, error } = await supabase
     .from("bc_scope_restaurants")
     .select("restaurant_id, restaurants!inner(name)")
-    .eq("scope_id", scopeId);
+    .eq("scope_id", scopeId)
     .order("created_at", { ascending: true });
 
   if (error) {
