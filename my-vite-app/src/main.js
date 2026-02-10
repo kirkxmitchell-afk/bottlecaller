@@ -332,15 +332,6 @@ document.querySelector("#app").innerHTML = `
   </div>
 
   <!-- MANAGER BOARD MODAL -->
-  <div id="mgrBoardBackdrop" class="hidden" style="position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:99996;"></div>
-  <div id="mgrBoardModal" class="hidden" style="position:fixed; right:12px; left:12px; top:12px; bottom:12px; z-index:99997; overflow:auto; background:#0b0d0f; color:#fff; border:1px solid rgba(255,255,255,.10); border-radius:14px; padding:12px; box-shadow:0 10px 30px rgba(0,0,0,.5);">
-    <div class="row" style="justify-content:space-between; align-items:center;">
-      <b>Manager Board</b>
-      <button id="btnCloseMgrBoard" type="button" style="font-size:12px;">Close</button>
-    </div>
-    <div id="mgrBoardBody" style="margin-top:12px;"></div>
-  </div>
-
   <!-- DEBUG PANEL -->
   <pre id="debugPanel"
     style="
@@ -858,81 +849,6 @@ function setHomeAuthUI(isAuthed) {
   }
 }
 
-function openMgrBoard() {
-  document.getElementById("mgrBoardBackdrop")?.classList.remove("hidden");
-  document.getElementById("mgrBoardModal")?.classList.remove("hidden");
-}
-
-function closeMgrBoard() {
-  document.getElementById("mgrBoardBackdrop")?.classList.add("hidden");
-  document.getElementById("mgrBoardModal")?.classList.add("hidden");
-}
-
-async function loadManagerBoard() {
-  const body = document.getElementById("mgrBoardBody");
-  if (!body) return;
-
-  const r = appState.restaurant;
-  if (!r?.id) {
-    body.innerHTML = `<div style="opacity:.85;">No restaurant loaded.</div>`;
-    return;
-  }
-
-  body.innerHTML = `<div style="opacity:.85;">Loading…</div>`;
-
-  const res = await withTimeout(
-    supabase
-      .from("bc_manager_board_v1")
-      .select("*")
-      .eq("restaurant_id", r.id)
-      .order("user_id", { ascending: true }),
-    12000,
-    "bc_manager_board_v1.select"
-  );
-
-  if (res.error) {
-    body.innerHTML = `<div style="color:#ff6b6b;">Failed: ${res.error.message}</div>`;
-    return;
-  }
-
-  const rows = res.data || [];
-  if (!rows.length) {
-    body.innerHTML = `<div style="opacity:.85;">No board rows yet.</div>`;
-    return;
-  }
-
-  body.innerHTML = rows
-    .map(
-      (x) => `
-    <div style="border:1px solid rgba(255,255,255,.10); border-radius:12px; padding:12px; margin-bottom:10px;">
-      <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;">
-        <div><b>User</b>: <span class="mono">${x.user_id || "-"}</span></div>
-        <div><b>Readiness</b>: ${x.readiness || "-"}</div>
-        <div><b>Confidence</b>: ${x.confidence || "-"}</div>
-      </div>
-
-      <div style="margin-top:10px; opacity:.95;">
-        <div><b>Weakest link</b>: ${x.weakest_link || "-"} (${x.weakest_rate ?? "-"})</div>
-        <div><b>Trend</b>: ${x.trend || "-"}</div>
-        <div><b>Ritual done today</b>: ${x.ritual_done_today ? "Yes" : "No"}</div>
-        <div><b>Rituals last 7d</b>: ${x.rituals_last_7d ?? "-"}</div>
-      </div>
-
-      <hr style="opacity:.2; margin:10px 0;" />
-
-      <div><b>Drill</b>: ${x.drill_title || "-"}</div>
-      <div style="margin-top:6px; white-space:pre-wrap; opacity:.9;">${x.drill_script || ""}</div>
-
-      <div style="margin-top:10px; opacity:.95;">
-        <div><b>Manager instruction</b>: ${x.manager_instruction || "-"}</div>
-        <div><b>Directive</b>: ${x.directive || "-"}</div>
-      </div>
-    </div>
-  `
-    )
-    .join("");
-}
-
 // Premium entitlement check (Option 2)
 // NOTE: restaurant_id must override everything. We will not use access_tier to block restaurant users.
 function canAccessPremium(profile) {
@@ -1000,6 +916,34 @@ function unmountDemoGame() {
   if (!demoRoot) return;
   demoRoot.innerHTML = "";
   console.log("[BC] demo game unmounted ✅");
+}
+
+function wireManagerBoardButton() {
+  const el =
+    document.getElementById("btnManagerBoard") ||
+    [...document.querySelectorAll("button,a")].find((x) =>
+      /manager board/i.test((x.textContent || x.value || "").trim())
+    );
+
+  if (!el) {
+    console.warn("[BC] Manager Board button not found to wire");
+    return;
+  }
+
+  if (el.__bcBound) return;
+  el.__bcBound = true;
+
+  el.addEventListener("click", async (e) => {
+    e.preventDefault();
+    console.log("[BC] Manager Board click -> routeManagerBoard");
+    try {
+      await routeManagerBoard("nav");
+    } catch (err) {
+      console.error("[BC] routeManagerBoard failed", err);
+    }
+  });
+
+  console.log("[BC] Manager Board button wired ✅", el);
 }
 
 // ------------------------------------------------------------
@@ -1534,6 +1478,8 @@ async function loadAuthedState(reason = "manual") {
     profile,
     restaurant: appState.restaurant ? { id: appState.restaurant.id, name: appState.restaurant.name, code: appState.restaurant.code } : null,
   });
+
+  wireManagerBoardButton();
 
   // (ctx push removed here; only iframe onload + bc_ctx_request reply are allowed)
 }
@@ -2342,10 +2288,7 @@ document.getElementById("btnCopyCode").addEventListener("click", async () => {
 document.getElementById("btnEnterPremium").addEventListener("click", () => decideRoute("enterPremium"));
 
 document.getElementById("btnLogoutPremium").addEventListener("click", () => logoutAll("premium.logout"));
-document.getElementById("btnManagerBoard")?.addEventListener("click", () => {
-  openMgrBoard();
-  void loadManagerBoard();
-});
+wireManagerBoardButton();
 document.getElementById("btnFiveMinRep")?.addEventListener("click", () => {
   postToPremiumIframe({ source: "BC_APP", type: "NAV", to: "FIVE_MIN_REP" });
 });
@@ -2356,8 +2299,6 @@ document.getElementById("btnOpenHud").addEventListener("click", () => {
 
 document.getElementById("btnCloseHud").addEventListener("click", closeHud);
 document.getElementById("hudBackdrop").addEventListener("click", closeHud);
-document.getElementById("btnCloseMgrBoard")?.addEventListener("click", closeMgrBoard);
-document.getElementById("mgrBoardBackdrop")?.addEventListener("click", closeMgrBoard);
 document.getElementById("btnBackToPremium")?.addEventListener("click", () => {
   showScreen("screenPremiumApp");
 });
