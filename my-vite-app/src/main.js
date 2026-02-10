@@ -1379,12 +1379,12 @@ async function loadManagerBoardData() {
     // Totals
     const runsRes = await supabase
       .from(RUNS_TABLE)
-      .select("id", { count: "exact", head: true })
+      .select("session_id", { count: "exact", head: true })
       .eq("restaurant_id", r.id);
 
     const drillsRes = await supabase
       .from(DRILLS_TABLE)
-      .select("id", { count: "exact", head: true })
+      .select("event_id", { count: "exact", head: true })
       .eq("restaurant_id", r.id);
 
     if (runsRes.error) throw runsRes.error;

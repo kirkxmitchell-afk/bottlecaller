@@ -1233,6 +1233,15 @@ function openManagerBoard() {
         return { min: 13, max: 20 };
       }
 
+      function clampEncounterIndexToTier(tier, idx) {
+        const { min, max } = getTierBounds(tier);
+        const start = Math.max(0, (min || 1) - 1);
+        const end = Math.max(start, (max || ENCOUNTER_COUNT || 1) - 1);
+        if (!Number.isFinite(idx)) return start;
+        if (idx < start || idx > end) return start;
+        return idx;
+      }
+
       function getRunsForCurrentMode() {
         // Your run entries store `tier: bcMode` (demo/premium). We'll use that.
         return Array.isArray(runs) ? runs.filter(r => r && r.tier === bcMode) : [];
@@ -3751,6 +3760,10 @@ function openManagerBoard() {
 
           const allowedTier = await guardTier(desiredTier);
           const allowedTierFinal = allowedTier || desiredTier;
+
+          // ✅ Stop higher-tier resume from hijacking lower-tier play
+          encounterIndex = clampEncounterIndexToTier(allowedTierFinal, encounterIndex);
+          saveEncounterIndex(encounterIndex);
 
           enc = pickNextEncounterByTier(list, allowedTierFinal);
 
