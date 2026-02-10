@@ -529,6 +529,33 @@ function startFiveMinuteDrill() {
   console.log("[BC] startFiveMinuteDrill: launched via btnStartAnotherDrill");
 }
 
+// Start drill from parent
+window.addEventListener("message", async (ev) => {
+  if (ev.origin !== location.origin) return;
+  const msg = ev.data;
+  if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
+
+  if (msg.type === "start_drill") {
+    const repTarget = Number(msg.repTarget || 3);
+
+    if (!isUnlocked()) {
+      alert("Add " + LIMIT + " wines to start.");
+      return;
+    }
+
+    // Premium daily gate (keep your existing rule)
+    if (bcMode === "premium") {
+      const doneToday = await window.EventLogBridge?.hasRitualCompletedTodayZA?.().catch(() => false);
+      if (doneToday) {
+        alert("5-Min Drill already done today. Come back tomorrow.");
+        return;
+      }
+    }
+
+    startDrillSession(repTarget);
+  }
+});
+
 function openManagerBoard() {
   // 1) If you already render a manager board screen, trigger it via existing button
   const btn =
@@ -1165,19 +1192,33 @@ function openManagerBoard() {
       let drillRepDone = 0;
 
       function isDrill() { return sessionType === "drill"; }
-      function startDrillSession() {
-        sessionType = "drill";
-        drillRepDone = 0;
+      function startDrillSession(repTarget = 3) {
         window.__BC_SESSION__ = {
           type: "drill",
-          repTarget: drillRepTarget,
-          repDone: drillRepDone,
+          repTarget,
+          repDone: 0,
           startedAt: Date.now(),
         };
 
-        // Drill starts from current encounterIndex position (or force 0 if you want)
-        // If you want drill always start from encounter 1:
-        // encounterIndex = 0; saveEncounterIndex(encounterIndex);
+        sessionType = "drill";
+        drillRepTarget = repTarget;
+        drillRepDone = 0;
+
+        // Start drill at tier 1 entry point (or keep your desired logic)
+        encounterIndex = 0;
+        saveEncounterIndex(encounterIndex);
+
+        // ✅ LOG: drill started
+        try {
+          bcEmitEvent("drill_started", {
+            v: 1,
+            mode: bcMode,
+            repTarget,
+            startedAtMs: Date.now(),
+          });
+        } catch (e) {
+          console.warn("[BC] drill_started emit failed", e);
+        }
 
         resetNavState();
         showScreen("screenPlay");
@@ -1707,6 +1748,32 @@ function openManagerBoard() {
       function endDrillSession() {
         showScreen("screenDrillSummary");
         renderDrillSummary();
+      }
+
+      function finishDrillSession(summary = {}) {
+        const payload = {
+          v: 1,
+          mode: bcMode,
+          repTarget: drillRepTarget,
+          repDone: drillRepDone,
+          startedAtMs: window.__BC_SESSION__?.startedAt || null,
+          endedAtMs: Date.now(),
+          ...summary,
+        };
+
+        try {
+          bcEmitEvent("drill_completed", payload);
+          console.log("[BC] drill_completed ✅", payload);
+        } catch (e) {
+          console.warn("[BC] drill_completed emit failed", e);
+        }
+
+        // mark ritual done (existing logic)
+        try {
+          if (bcMode !== "premium") {
+            localStorage.setItem(drillDoneKey(), localDayKey());
+          }
+        } catch {}
       }
 
       function bcFeedbackFromOutcome(reactionChecks, result) {
@@ -3638,9 +3705,7 @@ function openManagerBoard() {
 
             // If drill complete -> end session now (no next encounter)
             if (drillRepDone >= drillRepTarget) {
-              if (bcMode !== "premium") {
-                localStorage.setItem(drillDoneKey(), localDayKey());
-              }
+              finishDrillSession();
               endDrillSession();
               return;
             }
@@ -4086,7 +4151,7 @@ function openManagerBoard() {
 
         bindInput(drillBtnDemo, () => {
           if (!isUnlocked()) { alert("Add " + LIMIT + " wines to start."); return; }
-          startDrillSession();
+          startDrillSession(3);
         });
 
         bindInput(btnFiveMinDrill, async () => {
@@ -4105,23 +4170,7 @@ function openManagerBoard() {
             }
           }
 
-          window.__BC_SESSION__ = {
-            type: "drill",
-            repTarget: 3,
-            repDone: 0,
-            startedAt: Date.now(),
-          };
-          sessionType = "drill";
-          drillRepTarget = 3;
-          drillRepDone = 0;
-
-          // Drill starts at current unlocked first encounter (or 0 if you want)
-          encounterIndex = 0;
-          saveEncounterIndex(encounterIndex);
-
-          resetNavState();
-          showScreen("screenPlay");
-          startEncounter();
+          startDrillSession(3);
         });
 
         bindInput(btnBackHomeFromDrillSummary, () => {
@@ -4132,7 +4181,7 @@ function openManagerBoard() {
 
         bindInput(btnStartAnotherDrill, () => {
           if (!isUnlocked()) { alert("Add " + LIMIT + " wines to start."); return; }
-          startDrillSession();
+          startDrillSession(3);
         });
 
         bindInput(btnResetRuns, () => resetRunsOnly());

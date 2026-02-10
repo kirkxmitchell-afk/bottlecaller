@@ -211,6 +211,16 @@ document.querySelector("#app").innerHTML = `
         <div id="activeRestaurantHint" class="small-text" style="margin-top:8px;"></div>
       </div>
 
+      <div style="margin-top:12px;">
+        <div style="font-weight:600; margin-bottom:6px;">Best streaks</div>
+        <div id="mbBestStreaks" style="opacity:.9;">-</div>
+      </div>
+
+      <div style="margin-top:12px;">
+        <div style="font-weight:600; margin-bottom:6px;">Needs coaching</div>
+        <div id="mbNeedsCoaching" style="opacity:.9;">-</div>
+      </div>
+
       <div class="card">
         <h3 style="margin:0 0 8px 0;">Recent activity</h3>
         <div id="mbRecent" class="small" style="opacity:.9;">Loading…</div>
@@ -918,6 +928,33 @@ function unmountDemoGame() {
   console.log("[BC] demo game unmounted ✅");
 }
 
+async function startPremiumDrillFromParent() {
+  // Ensure premium iframe exists (mount if needed)
+  mountPremiumGameIframe();
+
+  // Give it a beat to load its message listener
+  await new Promise((r) => setTimeout(r, 150));
+
+  const iframe = document.querySelector("#premiumRoot iframe");
+  const win = iframe?.contentWindow;
+  if (!win) {
+    console.warn("[BC] premium iframe not available for drill");
+    return;
+  }
+
+  win.postMessage(
+    {
+      source: "BC_MSG",
+      v: 1,
+      type: "start_drill",
+      repTarget: 3,
+    },
+    location.origin
+  );
+
+  console.log("[BC] start_drill sent to iframe ✅");
+}
+
 function wireManagerBoardButton() {
   const btn = document.getElementById("btnManagerBoard");
   if (!btn) {
@@ -1371,12 +1408,14 @@ async function loadManagerBoardData() {
     document.getElementById("mbRestName").textContent = r.name || "-";
     document.getElementById("mbMsg").textContent = "";
 
-    // --- IMPORTANT ---
-    // Point at the views you actually have
-    const RUNS_TABLE = "bc_sessions_v1";                 // sessions count ~ “runs”
-    const DRILLS_TABLE = "bc_encounter_resolutions_v1";  // resolutions count ~ “drills” (until drill mode exists)
+    // Views you actually have
+    const RUNS_TABLE = "bc_sessions_v1";                 // sessions summary
+    const DRILLS_TABLE = "bc_event_log";                 // drill events
+    const STREAK_TABLE = "bc_encounter_resolutions_v1";  // chain signal source
 
+    // -----------------------------
     // Totals
+    // -----------------------------
     const runsRes = await supabase
       .from(RUNS_TABLE)
       .select("session_id", { count: "exact", head: true })
@@ -1385,7 +1424,8 @@ async function loadManagerBoardData() {
     const drillsRes = await supabase
       .from(DRILLS_TABLE)
       .select("event_id", { count: "exact", head: true })
-      .eq("restaurant_id", r.id);
+      .eq("restaurant_id", r.id)
+      .eq("event_type", "drill_completed");
 
     if (runsRes.error) throw runsRes.error;
     if (drillsRes.error) throw drillsRes.error;
@@ -1393,35 +1433,38 @@ async function loadManagerBoardData() {
     document.getElementById("mbRunsTotal").textContent = String(runsRes.count ?? 0);
     document.getElementById("mbDrillsTotal").textContent = String(drillsRes.count ?? 0);
 
-    // Recent sessions
+    // -----------------------------
+    // Recent activity feed
+    // -----------------------------
     const recentRuns = await supabase
       .from(RUNS_TABLE)
-      .select("session_start, user_id, encounters_resolved, greens, yellows, reds, avg_chain_score")
+      .select("session_start, user_id, encounters_resolved, avg_chain_score, greens, yellows, reds")
       .eq("restaurant_id", r.id)
       .order("session_start", { ascending: false })
       .limit(5);
 
-    if (recentRuns.error) throw recentRuns.error;
-
     const recentDrills = await supabase
       .from(DRILLS_TABLE)
-      .select("created_at, user_id, encounter_id, signal")
+      .select("occurred_at, user_id, payload")
       .eq("restaurant_id", r.id)
-      .order("created_at", { ascending: false })
+      .eq("event_type", "drill_completed")
+      .order("occurred_at", { ascending: false })
       .limit(5);
 
+    if (recentRuns.error) throw recentRuns.error;
     if (recentDrills.error) throw recentDrills.error;
 
     const items = [
       ...(recentRuns.data || []).map((x) => ({
         t: x.session_start,
-        line: `Session • ${x.user_id?.slice(0, 8) || "-"} • ${x.encounters_resolved ?? 0} res • avg ${Number(x.avg_chain_score ?? 0).toFixed(2)}`,
+        line: `Session • ${String(x.user_id || "-").slice(0, 8)} • ${x.encounters_resolved ?? 0} res • avg ${(Number(x.avg_chain_score ?? 0)).toFixed(2)} • G/Y/R ${x.greens ?? 0}/${x.yellows ?? 0}/${x.reds ?? 0}`,
       })),
       ...(recentDrills.data || []).map((x) => ({
-        t: x.created_at,
-        line: `Resolved • ${x.signal || "-"} • ${x.encounter_id || "-"}`,
+        t: x.occurred_at,
+        line: `Drill • ${x.user_id?.slice(0, 8) || "-"} • reps ${x.payload?.repDone ?? "-"} / ${x.payload?.repTarget ?? "-"}`,
       })),
     ]
+      .filter((i) => i.t)
       .sort((a, b) => new Date(b.t) - new Date(a.t))
       .slice(0, 8);
 
@@ -1430,12 +1473,160 @@ async function loadManagerBoardData() {
         ? items
             .map(
               (i) =>
-                `<div style="padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.08);">${i.line}<div style="opacity:.6; font-size:12px;">${i.t}</div></div>`
+                `<div style="padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.08);">
+                  ${i.line}
+                  <div style="opacity:.6; font-size:12px;">${i.t}</div>
+                </div>`
             )
             .join("")
         : `<div style="opacity:.8;">No activity yet.</div>`;
 
-    setDebug({ step: "managerBoard.loaded", restaurant_id: r.id, runs: runsRes.count, drills: drillsRes.count });
+    // -----------------------------
+    // Best streaks (computed from encounter resolutions)
+    // Definition:
+    // - "current streak" = consecutive greens from the most recent backwards
+    // - "best streak" = max consecutive greens anywhere in recent history
+    // Note: we compute from recent rows to keep it light.
+    // -----------------------------
+    const STREAK_LIMIT = 800; // adjust later; 800 is fine for small restaurants
+    const streakRes = await supabase
+      .from(STREAK_TABLE)
+      .select("user_id, occurred_at, chain_signal")
+      .eq("restaurant_id", r.id)
+      .order("occurred_at", { ascending: false })
+      .limit(STREAK_LIMIT);
+
+    if (streakRes.error) throw streakRes.error;
+
+    const byUser = new Map();
+    for (const row of streakRes.data || []) {
+      if (!row?.user_id) continue;
+      const arr = byUser.get(row.user_id) || [];
+      arr.push(row);
+      byUser.set(row.user_id, arr);
+    }
+
+    function computeStreaks(rowsDesc) {
+      // rowsDesc: most recent first
+      const sigs = rowsDesc.map((r) => String(r.chain_signal || "").toLowerCase());
+
+      // current: count greens from start until first non-green
+      let current = 0;
+      for (const s of sigs) {
+        if (s === "green") current++;
+        else break;
+      }
+
+      // best: max consecutive greens anywhere
+      let best = 0, run = 0;
+      for (const s of sigs) {
+        if (s === "green") {
+          run++;
+          if (run > best) best = run;
+        } else {
+          run = 0;
+        }
+      }
+
+      return { current, best, sampleN: sigs.length };
+    }
+
+    const streakRows = [];
+    for (const [userId, rows] of byUser.entries()) {
+      const { current, best, sampleN } = computeStreaks(rows);
+      streakRows.push({ userId, current, best, sampleN });
+    }
+
+    streakRows.sort((a, b) => (b.best - a.best) || (b.current - a.current));
+    const topStreaks = streakRows.slice(0, 5);
+
+    const streakEl = document.getElementById("mbBestStreaks");
+    if (streakEl) {
+      streakEl.innerHTML = topStreaks.length
+        ? topStreaks
+            .map((x) => {
+              const u = String(x.userId).slice(0, 8);
+              return `<div style="padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.08);">
+                        <div><b>${u}</b> • best <b>${x.best}</b> • current <b>${x.current}</b></div>
+                        <div style="opacity:.6; font-size:12px;">sampled last ${x.sampleN} resolves</div>
+                      </div>`;
+            })
+            .join("")
+        : `<div style="opacity:.8;">No streak data yet.</div>`;
+    }
+
+    // -----------------------------
+    // Needs coaching (ranked, not binary)
+    // Uses bc_user_latest_v1 so it works even when sessions are sparse
+    // -----------------------------
+    const latestRes = await supabase
+      .from("bc_user_latest_v1")
+      .select("user_id, last10_count, last10_greens, last10_yellows, last10_reds, last10_avg_chain_score, latest_chain_signal, latest_tier, latest_grade, latest_occurred_at")
+      .eq("restaurant_id", r.id)
+      .order("latest_occurred_at", { ascending: false })
+      .limit(200);
+
+    if (latestRes.error) throw latestRes.error;
+
+    const coaching = (latestRes.data || [])
+      .map((u) => {
+        const n = Number(u.last10_count ?? 0);
+        const reds = Number(u.last10_reds ?? 0);
+        const avg = Number(u.last10_avg_chain_score ?? 0);
+
+        // score higher = more attention needed
+        // (reds are heavy, low avg also heavy, low sample dampened)
+        const attention =
+          (reds * 3) +
+          (avg < 2.2 ? 2 : 0) +
+          (avg < 1.8 ? 2 : 0) +
+          (n >= 8 ? 1 : 0);
+
+        return {
+          user_id: u.user_id,
+          attention,
+          n,
+          reds,
+          avg,
+          latest_signal: u.latest_chain_signal,
+          latest_tier: u.latest_tier,
+          latest_grade: u.latest_grade,
+          latest_occurred_at: u.latest_occurred_at,
+        };
+      })
+      .sort((a, b) => (b.attention - a.attention) || (b.reds - a.reds) || (a.avg - b.avg))
+      .slice(0, 5);
+
+    const coachEl = document.getElementById("mbNeedsCoaching");
+    if (coachEl) {
+      coachEl.innerHTML = coaching.length
+        ? coaching
+            .map((x) => {
+              const u = String(x.user_id).slice(0, 8);
+              const reasons = [
+                x.reds > 0 ? `${x.reds} red(s) in last10` : null,
+                Number.isFinite(x.avg) ? `avg ${x.avg.toFixed(2)}` : null,
+                x.latest_signal ? `latest ${x.latest_signal}` : null,
+                x.latest_tier ? `tier ${x.latest_tier}` : null,
+              ].filter(Boolean);
+
+              return `<div style="padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.08);">
+                        <div><b>${u}</b> • ${reasons.join(" • ")}</div>
+                        <div style="opacity:.6; font-size:12px;">${x.latest_occurred_at || ""}</div>
+                      </div>`;
+            })
+            .join("")
+        : `<div style="opacity:.8;">No coaching signals yet.</div>`;
+    }
+
+    setDebug({
+      step: "managerBoard.loaded",
+      restaurant_id: r.id,
+      runs: runsRes.count,
+      drills: drillsRes.count,
+      streakUsers: topStreaks.length,
+      coachingUsers: coaching.length,
+    });
   } catch (e) {
     console.error(e);
     document.getElementById("mbMsg").textContent = e?.message || "Failed to load manager board";
@@ -1812,6 +2003,7 @@ async function routeManagerBoard(reason = "manual") {
     btn.__bcBound = true;
     btn.addEventListener("click", async () => {
       await setActiveRestaurantForGroup(sel.value);
+      await loadManagerBoardData(); // refresh board for new restaurant
     });
   }
 }
@@ -2289,9 +2481,13 @@ document.getElementById("btnEnterPremium").addEventListener("click", () => decid
 
 document.getElementById("btnLogoutPremium").addEventListener("click", () => logoutAll("premium.logout"));
 wireManagerBoardButton();
-document.getElementById("btnFiveMinRep")?.addEventListener("click", () => {
-  postToPremiumIframe({ source: "BC_APP", type: "NAV", to: "FIVE_MIN_REP" });
-});
+const btnFiveMinRep = document.getElementById("btnFiveMinRep");
+if (btnFiveMinRep && !btnFiveMinRep.__bcBound) {
+  btnFiveMinRep.__bcBound = true;
+  btnFiveMinRep.addEventListener("click", async () => {
+    await startPremiumDrillFromParent();
+  });
+}
 document.getElementById("btnOpenHud").addEventListener("click", () => {
   renderHud();
   openHud();
