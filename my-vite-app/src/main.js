@@ -919,23 +919,16 @@ function unmountDemoGame() {
 }
 
 function wireManagerBoardButton() {
-  const el =
-    document.getElementById("btnManagerBoard") ||
-    [...document.querySelectorAll("button,a")].find((x) =>
-      /manager board/i.test((x.textContent || x.value || "").trim())
-    );
-
-  if (!el) {
-    console.warn("[BC] Manager Board button not found to wire");
+  const btn = document.getElementById("btnManagerBoard");
+  if (!btn) {
+    console.warn("[BC] btnManagerBoard not found");
     return;
   }
+  if (btn.__bcBound) return;
+  btn.__bcBound = true;
 
-  if (el.__bcBound) return;
-  el.__bcBound = true;
-
-  el.addEventListener("click", async (e) => {
+  btn.addEventListener("click", async (e) => {
     e.preventDefault();
-    console.log("[BC] Manager Board click -> routeManagerBoard");
     try {
       await routeManagerBoard("nav");
     } catch (err) {
@@ -943,7 +936,7 @@ function wireManagerBoardButton() {
     }
   });
 
-  console.log("[BC] Manager Board button wired ✅", el);
+  console.log("[BC] btnManagerBoard wired ✅");
 }
 
 // ------------------------------------------------------------
@@ -2358,6 +2351,7 @@ supabase.auth.onAuthStateChange((event) => {
 (async function bootResume() {
   try {
     await decideRoute("boot.resume");
+    wireManagerBoardButton();
   } catch {}
 })();
 
