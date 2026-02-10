@@ -1372,9 +1372,9 @@ async function loadManagerBoardData() {
     document.getElementById("mbMsg").textContent = "";
 
     // --- IMPORTANT ---
-    // Replace these table names to match what YOU actually created.
-    const RUNS_TABLE = "bc_runs";
-    const DRILLS_TABLE = "bc_drill_runs";
+    // Point at the views you actually have
+    const RUNS_TABLE = "bc_sessions_v1";                 // sessions count ~ “runs”
+    const DRILLS_TABLE = "bc_encounter_resolutions_v1";  // resolutions count ~ “drills” (until drill mode exists)
 
     // Totals
     const runsRes = await supabase
@@ -1396,14 +1396,14 @@ async function loadManagerBoardData() {
     // Recent (example: last 8 combined — you can improve later)
     const recentRuns = await supabase
       .from(RUNS_TABLE)
-      .select("created_at, user_id, outcome")
+      .select("created_at, user_id")
       .eq("restaurant_id", r.id)
       .order("created_at", { ascending: false })
       .limit(5);
 
     const recentDrills = await supabase
       .from(DRILLS_TABLE)
-      .select("created_at, user_id, rep_index, score")
+      .select("created_at, user_id, encounter_id, signal")
       .eq("restaurant_id", r.id)
       .order("created_at", { ascending: false })
       .limit(5);
@@ -1412,8 +1412,8 @@ async function loadManagerBoardData() {
     if (recentDrills.error) throw recentDrills.error;
 
     const items = [
-      ...(recentRuns.data || []).map((x) => ({ t: x.created_at, line: `Run • ${x.outcome || "-"}` })),
-      ...(recentDrills.data || []).map((x) => ({ t: x.created_at, line: `Drill • rep ${x.rep_index ?? "?"} • score ${x.score ?? "-"}` })),
+      ...(recentRuns.data || []).map((x) => ({ t: x.created_at, line: `Session • ${x.user_id?.slice(0, 8) || "-"}` })),
+      ...(recentDrills.data || []).map((x) => ({ t: x.created_at, line: `Resolved • ${x.signal || "-"} • ${x.encounter_id || "-"}` })),
     ]
       .sort((a, b) => new Date(b.t) - new Date(a.t))
       .slice(0, 8);

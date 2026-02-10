@@ -1864,7 +1864,7 @@ function openManagerBoard() {
           console.log("[BC] progression.guard raw result:", res);
 
           // Shape-proof extraction
-          const tierToServe =
+          const allowedTierRaw =
             (typeof res === "number" ? res : null) ??
             res?.tierToServe ??
             res?.tier_to_serve ??
@@ -1880,9 +1880,18 @@ function openManagerBoard() {
             res?.result?.reasonsByTier?.[desiredTier] ??
             [];
 
-          console.log("[BC] progression.guard", { desiredTier, tierToServe, reasons });
+          const allowedTier = Number.isFinite(+allowedTierRaw) ? +allowedTierRaw : 1;
+          const desiredTierNum = Number.isFinite(+desiredTier) ? +desiredTier : 1;
 
-          return Number(tierToServe) || desiredTier;
+          // ✅ Serve the requested tier, but never above what they’re allowed to access
+          const tierToServe = Math.min(desiredTierNum, allowedTier);
+
+          // (optional safety) keep tiers in range
+          const tierToServeSafe = Math.max(1, Math.min(3, tierToServe));
+
+          console.log("[BC] progression.guard", { desiredTier, tierToServe: tierToServeSafe, reasons });
+
+          return tierToServeSafe;
         } catch (e) {
           console.warn("[BC] progression.guard failed, falling back:", e);
           return desiredTier;
