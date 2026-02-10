@@ -1393,13 +1393,15 @@ async function loadManagerBoardData() {
     document.getElementById("mbRunsTotal").textContent = String(runsRes.count ?? 0);
     document.getElementById("mbDrillsTotal").textContent = String(drillsRes.count ?? 0);
 
-    // Recent (example: last 8 combined — you can improve later)
+    // Recent sessions
     const recentRuns = await supabase
       .from(RUNS_TABLE)
-      .select("created_at, user_id")
+      .select("session_start, user_id, encounters_resolved, greens, yellows, reds, avg_chain_score")
       .eq("restaurant_id", r.id)
-      .order("created_at", { ascending: false })
+      .order("session_start", { ascending: false })
       .limit(5);
+
+    if (recentRuns.error) throw recentRuns.error;
 
     const recentDrills = await supabase
       .from(DRILLS_TABLE)
@@ -1408,12 +1410,17 @@ async function loadManagerBoardData() {
       .order("created_at", { ascending: false })
       .limit(5);
 
-    if (recentRuns.error) throw recentRuns.error;
     if (recentDrills.error) throw recentDrills.error;
 
     const items = [
-      ...(recentRuns.data || []).map((x) => ({ t: x.created_at, line: `Session • ${x.user_id?.slice(0, 8) || "-"}` })),
-      ...(recentDrills.data || []).map((x) => ({ t: x.created_at, line: `Resolved • ${x.signal || "-"} • ${x.encounter_id || "-"}` })),
+      ...(recentRuns.data || []).map((x) => ({
+        t: x.session_start,
+        line: `Session • ${x.user_id?.slice(0, 8) || "-"} • ${x.encounters_resolved ?? 0} res • avg ${Number(x.avg_chain_score ?? 0).toFixed(2)}`,
+      })),
+      ...(recentDrills.data || []).map((x) => ({
+        t: x.created_at,
+        line: `Resolved • ${x.signal || "-"} • ${x.encounter_id || "-"}`,
+      })),
     ]
       .sort((a, b) => new Date(b.t) - new Date(a.t))
       .slice(0, 8);

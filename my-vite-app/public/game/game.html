@@ -1242,6 +1242,11 @@ function openManagerBoard() {
         return idx;
       }
 
+      function tierStartIndex(tier) {
+        const { min } = getTierBounds(tier);
+        return Math.max(0, (min || 1) - 1);
+      }
+
       function getRunsForCurrentMode() {
         // Your run entries store `tier: bcMode` (demo/premium). We'll use that.
         return Array.isArray(runs) ? runs.filter(r => r && r.tier === bcMode) : [];
@@ -1909,32 +1914,6 @@ function openManagerBoard() {
 
       function isUnlocked() {
         return wines.length >= LIMIT;
-      }
-
-      function pickNextEncounterByTier(list, tier) {
-        if (!Array.isArray(list) || list.length === 0) return null;
-
-        const idxDefault = isDemo ? (encounterIndex % list.length) : encounterIndex;
-
-        // If tier missing or invalid, fall back to normal progression
-        if (![1,2,3].includes(Number(tier))) {
-          return list[idxDefault] || list[0] || null;
-        }
-
-        const bounds = getTierBounds(Number(tier));
-
-        // Convert bounds (1-based encounter numbers) to 0-based indexes
-        const minIdx = Math.max(0, (bounds.min || 1) - 1);
-        const maxIdx = Math.max(minIdx, (bounds.max || list.length) - 1);
-
-        // Clamp to list length
-        const clampedMin = Math.min(minIdx, list.length - 1);
-        const clampedMax = Math.min(maxIdx, list.length - 1);
-
-        // Pick index: keep current “pace” but forced inside tier band
-        const targetIndex = Math.min(clampedMax, Math.max(clampedMin, idxDefault));
-
-        return list[targetIndex] || list[idxDefault] || list[0] || null;
       }
 
       function pickRandom(arr) {
@@ -3754,23 +3733,26 @@ function openManagerBoard() {
           const idx = (encounterIndex % list.length);
           enc = list[idx];
         } else {
-          // PREMIUM: tier guard + tier-bounded pick
+          // PREMIUM: tier guard + tier-bounded play (deterministic)
           const nextEncounterNumber = list[encounterIndex]?.encounterNumber ?? (encounterIndex + 1);
           const desiredTier = getTierFromEncounterNumber(nextEncounterNumber);
 
           const allowedTier = await guardTier(desiredTier);
           const allowedTierFinal = allowedTier || desiredTier;
 
-          // ✅ Stop higher-tier resume from hijacking lower-tier play
+          // 1) clamp encounterIndex into the allowed tier band
           encounterIndex = clampEncounterIndexToTier(allowedTierFinal, encounterIndex);
           saveEncounterIndex(encounterIndex);
 
-          enc = pickNextEncounterByTier(list, allowedTierFinal);
+          // 2) serve encounterIndex directly (no random pick)
+          enc = list[encounterIndex];
 
-          // sync encounterIndex to selected encounterNumber
-          if (enc?.encounterNumber) {
-            encounterIndex = Math.max(enc.encounterNumber - 1, 0);
+          // 3) safety: if data oddness happens, hard-fallback to tier start
+          if (!enc) {
+            const startIdx = tierStartIndex(allowedTierFinal);
+            encounterIndex = startIdx;
             saveEncounterIndex(encounterIndex);
+            enc = list[encounterIndex];
           }
         }
 
