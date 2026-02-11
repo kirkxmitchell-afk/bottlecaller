@@ -647,7 +647,6 @@ function openManagerBoard() {
       const premiumRunsKey = "bc_premium_runs";
       const coverKey = "bc_has_seen_cover";
 
-      const winesKey = isDemo ? demoWinesKey : premiumWinesKey;
       const runsKey  = isDemo ? demoRunsKey  : premiumRunsKey;
 
       // ============================================================
@@ -1013,32 +1012,60 @@ function openManagerBoard() {
         clickMatch(ids.oakBoxId, form.oak, { single: true });
       }
 
-      function getWinesStorageKeyForMode(mode) {
-        return mode === "premium" ? "bc_wines_premium" : "bc_wines";
-      }
+      const WineStore = (() => {
+        function key(rid) {
+          if (!rid) throw new Error("WineStore.key: missing restaurantId");
+          return `bc_wines_restaurant_${rid}`;
+        }
+
+        function read(rid) {
+          const k = key(rid);
+          try {
+            return JSON.parse(localStorage.getItem(k) || "[]");
+          } catch {
+            return [];
+          }
+        }
+
+        function write(rid, list) {
+          const k = key(rid);
+          if (!Array.isArray(list)) throw new Error("WineStore.write: wines not array");
+          localStorage.setItem(k, JSON.stringify(list));
+          try {
+            localStorage.setItem("bc_wines", JSON.stringify(list));
+            localStorage.setItem("BC_WINES", JSON.stringify(list));
+          } catch {}
+        }
+
+        function remove(rid) {
+          localStorage.removeItem(key(rid));
+        }
+
+        function migrateIfNeeded(rid) {
+          const canonical = read(rid);
+          if (canonical.length) return canonical;
+
+          const legacyKeys = ["bc_wines_premium", "bc_wines", "BC_WINES"];
+          for (const lk of legacyKeys) {
+            try {
+              const data = JSON.parse(localStorage.getItem(lk) || "[]");
+              if (Array.isArray(data) && data.length) {
+                write(rid, data);
+                return data;
+              }
+            } catch {}
+          }
+          return canonical;
+        }
+
+        return { read, write, remove, migrateIfNeeded };
+      })();
 
       function getWinesSafe() {
         if (Array.isArray(wines) && wines.length) return wines;
-
-        if (restaurantId) {
-          const key = `bc_wines_restaurant_${restaurantId}`;
-          try {
-            const raw = localStorage.getItem(key);
-            const parsed = raw ? JSON.parse(raw) : null;
-            if (Array.isArray(parsed) && parsed.length) return parsed;
-          } catch {}
-        }
-
-        const legacyKeys = ["bc_wines", "BC_WINES"];
-        for (const k of legacyKeys) {
-          try {
-            const raw = localStorage.getItem(k);
-            const parsed = raw ? JSON.parse(raw) : null;
-            if (Array.isArray(parsed) && parsed.length) return parsed;
-          } catch {}
-        }
-
-        return [];
+        if (!restaurantId) return [];
+        const list = WineStore.read(restaurantId);
+        return Array.isArray(list) ? list : [];
       }
 
       function resetSessionState() {
@@ -1097,9 +1124,6 @@ function openManagerBoard() {
             renderProgressMeterUnderBackButton();
           }
           restaurantId = msg.ctx?.restaurantId || null;
-          if (typeof hydrateWinesForRestaurantIfNeeded === "function") {
-            hydrateWinesForRestaurantIfNeeded();
-          }
           if (typeof updateCounts === "function") updateCounts();
           if (typeof renderWineTables === "function") renderWineTables();
           return;
@@ -1140,84 +1164,7 @@ function openManagerBoard() {
       window.__BC_MESSAGE_HANDLER_ATTACHED__ = true;
       try { window.dispatchEvent(new Event("BC_MSG_HANDLER_READY")); } catch {}
 
-      function tryParseArray(v) {
-        if (!v) return null;
-        try {
-          const parsed = JSON.parse(v);
-          return Array.isArray(parsed) ? parsed : null;
-        } catch {
-          return null;
-        }
-      }
-
-      function hydrateWinesDeterministic(mode, restaurantId) {
-        // 1) If we know the restaurant, ALWAYS try its key first
-        if (mode === "premium" && restaurantId) {
-          const k = `bc_wines_restaurant_${restaurantId}`;
-          const raw = localStorage.getItem(k);
-          if (raw) {
-            try {
-              const arr = JSON.parse(raw);
-              if (Array.isArray(arr) && arr.length) {
-                return {
-                  sourceKey: k,
-                  wines: arr.map(normalizeWineToDbShape).map(sanitizeWine).slice(0, LIMIT)
-                };
-              }
-            } catch {}
-          }
-        }
-
-        // 2) Otherwise fall back to your old scan logic
-        // IMPORTANT: read-only scan. Never clears or overwrites storage.
-        const candidates = [
-          mode === "premium" ? "bc_wines_premium" : null,
-          "bc_wines",
-          "BC_WINES",
-          "bc_wines_demo",
-          "__BC_WINES__",
-          "bc_wines_premium__string",
-          "BC_WINES__string",
-        ].filter(Boolean);
-
-        for (const key of candidates) {
-          const raw = localStorage.getItem(key);
-          const arr = tryParseArray(raw);
-          if (arr && arr.length >= 10) return { wines: arr, sourceKey: key };
-        }
-        return null;
-      }
-
-      function hydrateWinesForRestaurantIfNeeded() {
-        if (isDemo) return false;
-        if (!restaurantId) return false;
-
-        // if already unlocked, no-op
-        if (Array.isArray(wines) && wines.length >= LIMIT) return true;
-
-        const found = hydrateWinesDeterministic("premium", restaurantId);
-        if (found?.wines?.length >= LIMIT) {
-          wines = found.wines.slice(0, LIMIT);
-          console.log("[BC] wines late-hydrated ✅", {
-            restaurantId,
-            sourceKey: found.sourceKey,
-            count: wines.length,
-          });
-
-          // keep your existing local persistence behaviour consistent
-          try {
-            const k = `bc_wines_restaurant_${restaurantId}`;
-            localStorage.setItem(k, JSON.stringify(wines));
-          } catch {}
-          return true;
-        }
-
-        console.warn("[BC] wines still missing after late hydrate ⚠️", { restaurantId, count: wines?.length || 0 });
-        return false;
-      }
-
       // Debug helpers (safe)
-      window.hydrateWinesForRestaurantIfNeeded = hydrateWinesForRestaurantIfNeeded;
       window.__BC_GAME_STATE__ = {
         get: () => ({
           restaurantId,
@@ -1230,24 +1177,15 @@ function openManagerBoard() {
 
       mode = window.__BC_MODE__ || (new URLSearchParams(location.search).get("mode") || "demo");
 
-      // 1) Load existing wine system first (do not change it)
       await waitForRestaurantId();
-      wines = await loadWines();
+      if (!restaurantId && isDemo) restaurantId = "demo";
+      if (restaurantId) {
+        wines = WineStore.migrateIfNeeded(restaurantId);
+      }
 
-      // 2) Demo hard override stays sacred
       if (isDemo) {
         wines = DEMO_WINES.slice();
-      } else {
-        // 3) Premium fallback: if loadWines came back empty/short, scan storage keys
-        if (!Array.isArray(wines) || wines.length < 10) {
-          const found = hydrateWinesDeterministic("premium", restaurantId);
-          if (found?.wines?.length >= 10) {
-            wines = found.wines;
-            console.log("[BC] wines hydrated via fallback ✅", { sourceKey: found.sourceKey, count: wines.length });
-          } else {
-            console.warn("[BC] wines missing/short in premium ⚠️", { count: Array.isArray(wines) ? wines.length : null });
-          }
-        }
+        if (restaurantId) WineStore.write(restaurantId, wines);
       }
 
       console.log("[BC] wine schema sample", wines?.[0]);
@@ -1714,9 +1652,6 @@ function openManagerBoard() {
         };
       }
 
-      function persistWines(key, list) {
-        try { localStorage.setItem(key, JSON.stringify(list)); } catch {}
-      }
       // One-time console cleanup (keep for dev use):
       // const raw = JSON.parse(localStorage.getItem("bc_wines_premium") || "[]");
       // const fixed = raw.map(normalizeWineToDbShape);
@@ -1751,51 +1686,25 @@ function openManagerBoard() {
       }
 
       async function loadWines() {
-        // Demo stays localStorage forever
-        if (isDemo || !restaurantId) {
-          const raw = localStorage.getItem(winesKey);
-          if (!raw) return [];
-          try {
-            const parsed = JSON.parse(raw);
-            if (!Array.isArray(parsed)) return [];
-            const out = parsed
-              .map(normalizeWineToDbShape)
-              .map(w => sanitizeWine(w))
-              .slice(0, LIMIT);
-            persistWines(winesKey, out);
-            return out;
-          } catch {
-            return [];
-          }
-        }
-
-        // Premium + restaurantId => DB wines
-        if (!window.WineBridge || typeof window.WineBridge.fetchRestaurantWines !== "function") {
-          alert("WineBridge missing. Confirm /src/game/gameEntry.ts exposes window.WineBridge.");
-          return [];
-        }
-
-        try {
-          const dbWines = await window.WineBridge.fetchRestaurantWines(restaurantId);
-          // sanitize + enforce LIMIT
-          const out = (dbWines || [])
-            .map(normalizeWineToDbShape)
-            .map(w => sanitizeWine(w))
-            .slice(0, LIMIT);
-          persistWines(winesKey, out);
-          return out;
-        } catch (e) {
-          console.error("[BC] fetchRestaurantWines failed:", e);
-          alert("Failed to load restaurant wines. Check Supabase + RLS.");
-          return [];
-        }
+        if (!restaurantId) return [];
+        const out = WineStore.migrateIfNeeded(restaurantId);
+        return (out || [])
+          .map(normalizeWineToDbShape)
+          .map(w => sanitizeWine(w))
+          .slice(0, LIMIT);
       }
 
-      function saveWines() {
-        // Demo only uses localStorage
-        if (isDemo || !restaurantId) {
-          localStorage.setItem(winesKey, JSON.stringify((wines || []).slice(0, LIMIT)));
+      function saveWines({ allowEmpty = false } = {}) {
+        if (!restaurantId) return;
+        const next = Array.isArray(wines) ? wines.slice(0, LIMIT) : [];
+        if (!allowEmpty && next.length === 0) {
+          console.warn("[WINE] saveWines blocked: would overwrite with empty", { restaurantId, LIMIT });
+          console.trace("[WINE] saveWines caller stack");
+          return;
         }
+        console.log("[WINE] saveWines ✅", { restaurantId, count: next.length, LIMIT });
+        console.trace("[WINE] saveWines caller stack");
+        WineStore.write(restaurantId, next);
       }
 
       function loadRuns() {
@@ -2215,8 +2124,14 @@ function openManagerBoard() {
         }
       }
 
+      function getWineCount() {
+        if (!restaurantId) return 0;
+        const list = WineStore.read(restaurantId);
+        return Array.isArray(list) ? list.length : 0;
+      }
+
       function isUnlocked() {
-        return wines.length >= LIMIT;
+        return getWineCount() >= LIMIT;
       }
 
       function pickRandom(arr) {
@@ -2432,7 +2347,9 @@ function openManagerBoard() {
 
           try {
             await window.WineBridge.deleteRestaurantWine(idToDelete);
-            wines = await loadWines();
+            const list = WineStore.read(restaurantId).filter(w => w.id !== idToDelete).slice(0, LIMIT);
+            WineStore.write(restaurantId, list);
+            wines = list;
             renderWineTables();
           } catch (e) {
             console.error("[BC] deleteRestaurantWine failed:", e);
@@ -2443,13 +2360,14 @@ function openManagerBoard() {
 
         // demo/local fallback
         wines = wines.filter(w => w.id !== idToDelete).slice(0, LIMIT);
-        saveWines();
+        if (restaurantId) WineStore.write(restaurantId, wines);
         renderWineTables();
       }
 
       // ---------- Add wine ----------
       async function addWineFromForm() {
-        if (wines.length >= LIMIT) return;
+        const list = restaurantId ? WineStore.read(restaurantId) : [];
+        if (list.length >= LIMIT) return;
 
         const nameEl = document.getElementById(ids.wineName);
         const varietalEl = document.getElementById(ids.wineVarietal);
@@ -2504,8 +2422,6 @@ function openManagerBoard() {
               story
             });
 
-            // Reload wines from DB (single source of truth)
-            wines = await loadWines();
             usedDb = true;
           } catch (e) {
             console.error("[BC] addRestaurantWine failed:", e);
@@ -2514,11 +2430,13 @@ function openManagerBoard() {
           }
         }
 
-        if (!usedDb) {
-          // demo fallback (existing behavior)
+        if (restaurantId) {
+          list.push(wine);
+          wines = list.slice(0, LIMIT);
+          saveWines();
+        } else if (!usedDb) {
           wines.push(wine);
           wines = wines.slice(0, LIMIT);
-          saveWines();
         }
 
         if (nameEl) nameEl.value = "";
@@ -4232,7 +4150,7 @@ function openManagerBoard() {
       function resetWinesOnly() {
         if (!confirm("Reset wines for this restaurant? This can’t be undone.")) return;
         wines = [];
-        saveWines();
+        saveWines({ allowEmpty: true });
         runs = [];
         saveRuns();
         mastery = { ...DEFAULT_MASTERY };
@@ -4286,12 +4204,11 @@ function openManagerBoard() {
           resetNavState();
           showScreen(isDemo ? "screenHome" : ids.setupScreen);
           setTimeout(() => {
-            const mode = window.__BC_MODE__ || bcMode;
-            const key = getWinesStorageKeyForMode(mode);
-            const wines = JSON.parse(localStorage.getItem(key) || "[]");
-            console.log("[BC] setup hydrate after showScreen", { mode, key, count: wines.length });
+            const list = restaurantId ? WineStore.read(restaurantId) : [];
+            wines = Array.isArray(list) ? list : [];
+            console.log("[BC] setup hydrate after showScreen", { restaurantId, count: wines.length });
 
-            if (Array.isArray(wines) && wines.length) hydrateSetupFormFromWine(mode, wines[0]);
+            if (wines.length) hydrateSetupFormFromWine(bcMode, wines[0]);
           }, 0);
         });
 
@@ -4305,12 +4222,11 @@ function openManagerBoard() {
           resetNavState();
           showScreen(ids.setupScreen);
           setTimeout(() => {
-            const mode = window.__BC_MODE__ || bcMode;
-            const key = getWinesStorageKeyForMode(mode);
-            const wines = JSON.parse(localStorage.getItem(key) || "[]");
-            console.log("[BC] setup hydrate after showScreen", { mode, key, count: wines.length });
+            const list = restaurantId ? WineStore.read(restaurantId) : [];
+            wines = Array.isArray(list) ? list : [];
+            console.log("[BC] setup hydrate after showScreen", { restaurantId, count: wines.length });
 
-            if (Array.isArray(wines) && wines.length) hydrateSetupFormFromWine(mode, wines[0]);
+            if (wines.length) hydrateSetupFormFromWine(bcMode, wines[0]);
           }, 0);
         });
 
@@ -4328,6 +4244,7 @@ function openManagerBoard() {
           localStorage.removeItem(demoEncounterIndexKey);
           localStorage.removeItem(premiumEncounterIndexKey);
           localStorage.removeItem(coverKey);
+          if (restaurantId) WineStore.remove(restaurantId);
 
           wines = [];
           runs = [];
