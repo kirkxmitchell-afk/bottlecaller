@@ -599,9 +599,6 @@ function openManagerBoard() {
       const bcMode = (window.__BC_MODE__ === "premium") ? "premium" : "demo";
       const isDemo = bcMode === "demo";
       const LIMIT = isDemo ? 2 : 10;
-      window.__BC_GAME_STATE__ = {
-        get: () => ({ restaurantId, winesCount: wines?.length || 0, mode: bcMode, limit: LIMIT })
-      };
       if (!window.ProgressionBridge && window.parent?.ProgressionBridge) {
         window.ProgressionBridge = window.parent.ProgressionBridge;
       }
@@ -1226,6 +1223,18 @@ function openManagerBoard() {
         console.warn("[BC] wines still missing after late hydrate ⚠️", { restaurantId, count: wines?.length || 0 });
         return false;
       }
+
+      // Debug helpers (safe)
+      window.hydrateWinesForRestaurantIfNeeded = hydrateWinesForRestaurantIfNeeded;
+      window.__BC_GAME_STATE__ = {
+        get: () => ({
+          restaurantId,
+          winesCount: Array.isArray(wines) ? wines.length : 0,
+          mode: bcMode,
+          limit: LIMIT,
+          sessionType,
+        })
+      };
 
       const mode = window.__BC_MODE__ || (new URLSearchParams(location.search).get("mode") || "demo");
 
