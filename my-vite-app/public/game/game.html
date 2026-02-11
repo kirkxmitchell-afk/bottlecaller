@@ -4149,7 +4149,13 @@ function openManagerBoard() {
         const btnStartAnotherDrill = document.getElementById("btnStartAnotherDrill");
         const btnFiveMinDrill = document.getElementById("btnFiveMinDrill");
 
+        console.log("[SETUP] btnWelcomeStart element =", btnWelcomeStart);
+        console.log("[SETUP] btnWelcomeStart id/class =", btnWelcomeStart?.id, btnWelcomeStart?.className);
         bindInput(btnWelcomeStart, () => {
+          if (sessionType === "drill") {
+            console.warn("[NAV] setup blocked: drill active");
+            return;
+          }
           localStorage.setItem(coverKey, "true");
           resetNavState();
           showScreen(isDemo ? "screenHome" : ids.setupScreen);
@@ -4163,7 +4169,13 @@ function openManagerBoard() {
           }, 0);
         });
 
+        console.log("[SETUP] btnGoSetup element =", btnGoSetup);
+        console.log("[SETUP] btnGoSetup id/class =", btnGoSetup?.id, btnGoSetup?.className);
         bindInput(btnGoSetup, () => {
+          if (sessionType === "drill") {
+            console.warn("[NAV] setup blocked: drill active");
+            return;
+          }
           resetNavState();
           showScreen(ids.setupScreen);
           setTimeout(() => {
@@ -4261,7 +4273,12 @@ function openManagerBoard() {
           startDrillSession(3);
         });
 
-        bindInput(btnFiveMinDrill, async () => {
+        console.log("[DRILL] btnFiveMinDrill element =", btnFiveMinDrill);
+        console.log("[DRILL] btnFiveMinDrill id/class =", btnFiveMinDrill?.id, btnFiveMinDrill?.className);
+        bindInput(btnFiveMinDrill, async (e) => {
+          sessionType = "drill";
+          if (e?.preventDefault) e.preventDefault();
+          if (e?.stopPropagation) e.stopPropagation();
           if (bcMode === "premium") {
             const doneToday = await window.EventLogBridge.hasRitualCompletedTodayZA();
             if (doneToday) {
