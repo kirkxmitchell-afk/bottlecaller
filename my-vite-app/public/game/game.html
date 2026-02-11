@@ -1687,11 +1687,33 @@ function openManagerBoard() {
 
       async function loadWines() {
         if (!restaurantId) return [];
-        const out = WineStore.migrateIfNeeded(restaurantId);
-        return (out || [])
-          .map(normalizeWineToDbShape)
-          .map(w => sanitizeWine(w))
-          .slice(0, LIMIT);
+        // DEMO: localStorage only
+        if (isDemo) {
+          const out = WineStore.migrateIfNeeded(restaurantId);
+          return (out || [])
+            .map(normalizeWineToDbShape)
+            .map(w => sanitizeWine(w))
+            .slice(0, LIMIT);
+        }
+
+        // PREMIUM: DB source of truth
+        try {
+          const rows = await window.WineBridge.fetchRestaurantWines(restaurantId);
+          const out = (rows || [])
+            .map(normalizeWineToDbShape)
+            .map(w => sanitizeWine(w));
+
+          try { WineStore.write(restaurantId, out.slice(0, LIMIT)); } catch {}
+
+          return out.slice(0, LIMIT);
+        } catch (e) {
+          console.warn("[WINE] DB fetch failed, falling back to cache", e);
+          const out = WineStore.migrateIfNeeded(restaurantId);
+          return (out || [])
+            .map(normalizeWineToDbShape)
+            .map(w => sanitizeWine(w))
+            .slice(0, LIMIT);
+        }
       }
 
       function saveWines({ allowEmpty = false } = {}) {
@@ -2422,7 +2444,9 @@ function openManagerBoard() {
               story
             });
 
-            usedDb = true;
+            wines = await loadWines();
+            renderWineTables();
+            return;
           } catch (e) {
             console.error("[BC] addRestaurantWine failed:", e);
             alert("Failed to save wine (check RLS / role / restaurantId).");
@@ -2451,11 +2475,7 @@ function openManagerBoard() {
 
         renderWineTables();
 
-        if (isUnlocked()) {
-          resetNavState();
-          showScreen("screenPlay");
-          startEncounter();
-        }
+        // no auto-start after save
       }
 
       // ---------- Encounter helpers ----------
@@ -4149,8 +4169,13 @@ function openManagerBoard() {
 
       function resetWinesOnly() {
         if (!confirm("Reset wines for this restaurant? This can’t be undone.")) return;
+        if (!isDemo && restaurantId) {
+          if (!isManager) { alert("Only managers can reset wines."); return; }
+          try { window.WineBridge.deleteAllRestaurantWines(restaurantId); } catch {}
+        }
+
         wines = [];
-        saveWines({ allowEmpty: true });
+        try { WineStore.remove(restaurantId); } catch {}
         runs = [];
         saveRuns();
         mastery = { ...DEFAULT_MASTERY };

@@ -79,3 +79,18 @@ export async function deleteRestaurantWine(wineId: string) {
   const { error } = await supabase.from("bc_wines").delete().eq("id", wineId);
   if (error) throw error;
 }
+
+export async function deleteAllRestaurantWines(restaurantId: string) {
+  const { data: userRes, error: uErr } = await supabase.auth.getUser();
+  if (uErr) throw uErr;
+
+  const userId = userRes?.user?.id;
+  if (!userId) throw new Error("not_authenticated");
+
+  const { error } = await supabase
+    .from("bc_wines")
+    .delete()
+    .eq("restaurant_id", restaurantId);
+  if (error) throw error;
+  return true;
+}
