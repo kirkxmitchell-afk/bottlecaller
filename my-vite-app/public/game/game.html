@@ -1123,6 +1123,14 @@ function openManagerBoard() {
         return mode === "premium" ? "bc_wines_premium" : "bc_wines";
       }
 
+      async function waitForRestaurantId(ms = 2000) {
+        const t0 = Date.now();
+        while (!restaurantId && Date.now() - t0 < ms) {
+          await new Promise(r => setTimeout(r, 50));
+        }
+        return !!restaurantId;
+      }
+
       // ---------- Runtime state ----------
       let wines = [];
       let runs = loadRuns();
@@ -1140,7 +1148,25 @@ function openManagerBoard() {
         }
       }
 
-      function hydrateWinesDeterministic(mode) {
+      function hydrateWinesDeterministic(mode, restaurantId) {
+        // 1) If we know the restaurant, ALWAYS try its key first
+        if (mode === "premium" && restaurantId) {
+          const k = `bc_wines_restaurant_${restaurantId}`;
+          const raw = localStorage.getItem(k);
+          if (raw) {
+            try {
+              const arr = JSON.parse(raw);
+              if (Array.isArray(arr) && arr.length) {
+                return {
+                  sourceKey: k,
+                  wines: arr.map(normalizeWineToDbShape).map(sanitizeWine).slice(0, LIMIT)
+                };
+              }
+            } catch {}
+          }
+        }
+
+        // 2) Otherwise fall back to your old scan logic
         // IMPORTANT: read-only scan. Never clears or overwrites storage.
         const candidates = [
           mode === "premium" ? "bc_wines_premium" : null,
@@ -1163,6 +1189,7 @@ function openManagerBoard() {
       const mode = window.__BC_MODE__ || (new URLSearchParams(location.search).get("mode") || "demo");
 
       // 1) Load existing wine system first (do not change it)
+      await waitForRestaurantId();
       wines = await loadWines();
 
       // 2) Demo hard override stays sacred
@@ -1171,7 +1198,7 @@ function openManagerBoard() {
       } else {
         // 3) Premium fallback: if loadWines came back empty/short, scan storage keys
         if (!Array.isArray(wines) || wines.length < 10) {
-          const found = hydrateWinesDeterministic("premium");
+          const found = hydrateWinesDeterministic("premium", restaurantId);
           if (found?.wines?.length >= 10) {
             wines = found.wines;
             console.log("[BC] wines hydrated via fallback ✅", { sourceKey: found.sourceKey, count: wines.length });
