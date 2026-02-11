@@ -2507,7 +2507,7 @@ function openManagerBoard() {
       }
 
       function buildSentence2Correct(encounter) {
-        const wine = encounter.wineSelected;
+        const wine = encounter?.wineSelected || { name: "DRILL" };
         const name = wine.name;
         const hook = encounter.hookSelected;
 
@@ -3184,7 +3184,7 @@ function openManagerBoard() {
         stepContent.innerText = "";
         stepButtons.innerText = "";
 
-        const wine = currentEncounter.wineSelected;
+        const wine = currentEncounter?.wineSelected || { name: "DRILL" };
         wineDisplayName.innerText = "Wine: " + wine.name + " (" + wine.varietal + ")";
         wineBadges.innerText = "";
         addBadge(wineBadges, (wine.fruitTags || []).join(", "));
@@ -3821,7 +3821,7 @@ function openManagerBoard() {
           sessionType,
           encounterIndex: (typeof encounterIndex !== "undefined") ? encounterIndex : "UNDEFINED"
         });
-        if (!isUnlocked()) return;
+        if (sessionType !== "drill" && !isUnlocked()) return;
 
         if (!sessionId) {
           sessionId = crypto.randomUUID();
@@ -3900,18 +3900,22 @@ function openManagerBoard() {
         // Wine selection
         // ----------------------------
         let wine = null;
-
-        if (isDemo) {
-          // Demo: wine matches encounter index (same pacing)
-          wine = wines[(encounterIndex % list.length)] || wines[0] || null;
+        if (sessionType === "drill") {
+          // Placeholder for drill so renderers can read wineSelected.name safely.
+          wine = { name: "DRILL", varietal: "", region: "", story: "" };
         } else {
-          // Premium: rotate through wines
-          wine = wines[(encounterIndex % wines.length)] || wines[0] || null;
-        }
+          if (isDemo) {
+            // Demo: wine matches encounter index (same pacing)
+            wine = wines[(encounterIndex % list.length)] || wines[0] || null;
+          } else {
+            // Premium: rotate through wines
+            wine = wines[(encounterIndex % wines.length)] || wines[0] || null;
+          }
 
-        if (!wine) {
-          alert("No wine available. Please add wines first.");
-          return;
+          if (!wine) {
+            alert("No wine available. Please add wines first.");
+            return;
+          }
         }
 
         // ----------------------------
