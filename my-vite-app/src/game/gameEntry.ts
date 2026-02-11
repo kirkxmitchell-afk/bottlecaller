@@ -1,4 +1,6 @@
 // src/game/gameEntry.ts
+console.log("[BOOT] gameEntry.ts evaluated");
+
 import { installEngineBridge } from "./engineBridge";
 import { ENCOUNTERS, validateEncounters } from "./encounter";
 import * as WineBridge from "./wineBridge";
@@ -23,6 +25,18 @@ function getCtxFromWindow() {
   // @ts-ignore
   return window.__BC_CTX__ || null;
 }
+
+(function bootLogs() {
+  window.addEventListener("DOMContentLoaded", () => {
+    console.log("[BOOT] DOM ready, mounting screens");
+    console.log("[BOOT] screenWelcome?", !!document.querySelector("#screenWelcome"));
+    console.log("[BOOT] screenPlay?", !!document.querySelector("#screenPlay"));
+  });
+
+  window.addEventListener("BC_MSG_HANDLER_READY", () => {
+    console.log("[BOOT] postMessage listener attached");
+  });
+})();
 
 (function boot() {
   // Prevent double-install (HMR / re-import / iframe reload edge cases)

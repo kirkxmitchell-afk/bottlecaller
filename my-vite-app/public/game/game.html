@@ -461,11 +461,29 @@ function openManagerBoard() {
       const bcMode = (window.__BC_MODE__ === "premium") ? "premium" : "demo";
       const isDemo = bcMode === "demo";
       const LIMIT = isDemo ? 2 : 10;
-      // --- DRILL + SESSION STATE (MUST be first state) ---
-      let sessionType = null;     // "drill" | null
+      // --- SESSION STATE (single source of truth) ---
+      let sessionId = null;
+      let sessionType = null; // "drill" | "run" | null
       let drillRepTarget = 3;
       let drillRepDone = 0;
-      sessionId = sessionId ?? null;
+      // optional: if you have these elsewhere, declare here too
+      let restaurantId = null;
+      let userId = null;
+      let mode = null;
+      let role = null;
+      // Crash becomes visible (iframe)
+      window.addEventListener("error", (e) => {
+        const el = document.createElement("div");
+        el.style.cssText = "position:fixed;inset:0;background:#111;color:#fff;padding:16px;z-index:999999;font:14px/1.4 monospace;";
+        el.textContent = "BottleCaller crashed:\n\n" + (e.error?.stack || e.message || String(e));
+        document.body.appendChild(el);
+      });
+      window.addEventListener("unhandledrejection", (e) => {
+        const el = document.createElement("div");
+        el.style.cssText = "position:fixed;inset:0;background:#111;color:#fff;padding:16px;z-index:999999;font:14px/1.4 monospace;";
+        el.textContent = "BottleCaller crashed (promise):\n\n" + (e.reason?.stack || e.reason || String(e.reason));
+        document.body.appendChild(el);
+      });
       if (!window.ProgressionBridge && window.parent?.ProgressionBridge) {
         window.ProgressionBridge = window.parent.ProgressionBridge;
       }
@@ -921,6 +939,13 @@ function openManagerBoard() {
         return mode === "premium" ? "bc_wines_premium" : "bc_wines";
       }
 
+      function resetSessionState() {
+        sessionId = null;
+        sessionType = null;
+        drillRepDone = 0;
+        drillRepTarget = 3;
+      }
+
       async function waitForRestaurantId(ms = 2000) {
         const t0 = Date.now();
         while (!restaurantId && Date.now() - t0 < ms) {
@@ -933,7 +958,6 @@ function openManagerBoard() {
       let wines = [];
       let runs = loadRuns();
       let mastery = loadMastery();
-      sessionId = sessionId ?? null;
       let selectedWineIndex = null;
 
       // Single message handler (iframe)
@@ -962,6 +986,7 @@ function openManagerBoard() {
         if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
 
         if (msg.type === "bc_ctx" && msg.ctx) {
+          console.log("[MSG] bc_ctx received", msg.payload);
           window.__BC_CTX__ = msg.ctx;
           console.log("[BC] ctx received ✅", msg.ctx);
           window.__BC_CTX_RESOLVE__?.();
@@ -1002,6 +1027,7 @@ function openManagerBoard() {
         }
 
         if (msg.type === "start_drill") {
+          console.log("[MSG] start_drill received", msg);
           console.log("[BC] start_drill RECEIVED ✅", msg);
           console.log("[BC] start_drill received, sessionType currently =", sessionType);
           // hard gate (same rule as parent)
@@ -1041,6 +1067,8 @@ function openManagerBoard() {
           console.log("[BC] drill started ✅", window.__BC_SESSION__);
         }
       });
+      window.__BC_MESSAGE_HANDLER_ATTACHED__ = true;
+      try { window.dispatchEvent(new Event("BC_MSG_HANDLER_READY")); } catch {}
 
       function tryParseArray(v) {
         if (!v) return null;
