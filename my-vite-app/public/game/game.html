@@ -432,112 +432,6 @@ async function waitForWines(min = 10, tries = 20) {
   return false;
 }
 
-// Single message handler (iframe)
-console.log("[BC] start_drill listener loaded ✅");
-window.addEventListener("message", async (ev) => {
-  if (ev.origin !== location.origin) return;
-  const msg = ev.data;
-  if (!msg) return;
-
-  // BC_APP NAV (parent button routing)
-  if (msg.source === "BC_APP" && msg.type === "NAV") {
-    if (msg.to === "FIVE_MIN_REP") {
-      console.log("[BC] NAV: FIVE_MIN_REP");
-      const fn = window.__BC_NAV__?.startFiveMinuteDrill;
-      if (typeof fn === "function") {
-        fn();
-        console.log("[BC] NAV startFiveMinuteDrill() called ✅");
-      } else {
-        console.warn("[BC] NAV FIVE_MIN_REP: startFiveMinuteDrill not exposed");
-      }
-    }
-    return;
-  }
-
-  // BC_MSG (ctx + nav + drill)
-  if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
-
-  if (msg.type === "bc_ctx" && msg.ctx) {
-    window.__BC_CTX__ = msg.ctx;
-    console.log("[BC] ctx received ✅", msg.ctx);
-    window.__BC_CTX_RESOLVE__?.();
-    if (typeof renderProgressMeterUnderBackButton === "function") {
-      renderProgressMeterUnderBackButton();
-    }
-    restaurantId = msg.ctx?.restaurantId || null;
-    if (typeof hydrateWinesForRestaurantIfNeeded === "function") {
-      hydrateWinesForRestaurantIfNeeded();
-    }
-    if (typeof updateCounts === "function") updateCounts();
-    if (typeof renderWineTables === "function") renderWineTables();
-    return;
-  }
-
-  if (msg.type === "nav") {
-    if (msg.action === "manager_board" || msg.target === "manager_board") {
-      const btn = document.getElementById("btnManagerBoard");
-      if (btn) { btn.click(); return; }
-      if (typeof showScreen === "function" && document.getElementById("screenManagerBoard")) {
-        showScreen("screenManagerBoard");
-        return;
-      }
-      console.warn("[BC] manager_board: no handler found");
-      return;
-    }
-
-    if (msg.action === "five_min_rep" || msg.target === "five_min_drill") {
-      const btn = document.getElementById("btnFiveMinDrill");
-      if (btn) { btn.click(); return; }
-      if (typeof startFiveMinDrill === "function") {
-        startFiveMinDrill();
-        return;
-      }
-      console.warn("[BC] five_min_drill: handler missing");
-      return;
-    }
-  }
-
-  if (msg.type === "start_drill") {
-    console.log("[BC] start_drill RECEIVED ✅", msg);
-    console.log("[BC] start_drill received, sessionType currently =", sessionType);
-    // hard gate (same rule as parent)
-    if (!Array.isArray(wines) || wines.length < LIMIT) {
-      // try a late hydrate from localStorage restaurant key
-      const rid = window.__BC_CTX__?.restaurantId;
-      const raw = rid ? localStorage.getItem(`bc_wines_restaurant_${rid}`) : null;
-      try {
-        const arr = raw ? JSON.parse(raw) : [];
-        if (Array.isArray(arr) && arr.length >= LIMIT) wines = arr.slice(0, LIMIT);
-      } catch {}
-    }
-    if (!Array.isArray(wines) || wines.length < LIMIT) {
-      alert("Add 10 wines to start.");
-      return;
-    }
-
-    window.__BC_SESSION__ = {
-      type: "drill",
-      repTarget: Number(msg.repTarget || 3),
-      repDone: 0,
-      startedAt: Date.now(),
-    };
-
-    sessionType = "drill";
-    drillRepTarget = window.__BC_SESSION__.repTarget;
-    drillRepDone = 0;
-
-    // Drill starts at tier 1 base (or current unlocked — your call later)
-    encounterIndex = 0;
-    saveEncounterIndex(encounterIndex);
-
-    resetNavState();
-    showScreen("screenPlay");
-    startEncounter();
-
-    console.log("[BC] drill started ✅", window.__BC_SESSION__);
-  }
-});
-
 function openManagerBoard() {
   // 1) If you already render a manager board screen, trigger it via existing button
   const btn =
@@ -1039,8 +933,114 @@ function openManagerBoard() {
       let wines = [];
       let runs = loadRuns();
       let mastery = loadMastery();
-      let sessionId = null;
+      sessionId = sessionId ?? null;
       let selectedWineIndex = null;
+
+      // Single message handler (iframe)
+      console.log("[BC] start_drill listener loaded ✅");
+      window.addEventListener("message", async (ev) => {
+        if (ev.origin !== location.origin) return;
+        const msg = ev.data;
+        if (!msg) return;
+
+        // BC_APP NAV (parent button routing)
+        if (msg.source === "BC_APP" && msg.type === "NAV") {
+          if (msg.to === "FIVE_MIN_REP") {
+            console.log("[BC] NAV: FIVE_MIN_REP");
+            const fn = window.__BC_NAV__?.startFiveMinuteDrill;
+            if (typeof fn === "function") {
+              fn();
+              console.log("[BC] NAV startFiveMinuteDrill() called ✅");
+            } else {
+              console.warn("[BC] NAV FIVE_MIN_REP: startFiveMinuteDrill not exposed");
+            }
+          }
+          return;
+        }
+
+        // BC_MSG (ctx + nav + drill)
+        if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
+
+        if (msg.type === "bc_ctx" && msg.ctx) {
+          window.__BC_CTX__ = msg.ctx;
+          console.log("[BC] ctx received ✅", msg.ctx);
+          window.__BC_CTX_RESOLVE__?.();
+          if (typeof renderProgressMeterUnderBackButton === "function") {
+            renderProgressMeterUnderBackButton();
+          }
+          restaurantId = msg.ctx?.restaurantId || null;
+          if (typeof hydrateWinesForRestaurantIfNeeded === "function") {
+            hydrateWinesForRestaurantIfNeeded();
+          }
+          if (typeof updateCounts === "function") updateCounts();
+          if (typeof renderWineTables === "function") renderWineTables();
+          return;
+        }
+
+        if (msg.type === "nav") {
+          if (msg.action === "manager_board" || msg.target === "manager_board") {
+            const btn = document.getElementById("btnManagerBoard");
+            if (btn) { btn.click(); return; }
+            if (typeof showScreen === "function" && document.getElementById("screenManagerBoard")) {
+              showScreen("screenManagerBoard");
+              return;
+            }
+            console.warn("[BC] manager_board: no handler found");
+            return;
+          }
+
+          if (msg.action === "five_min_rep" || msg.target === "five_min_drill") {
+            const btn = document.getElementById("btnFiveMinDrill");
+            if (btn) { btn.click(); return; }
+            if (typeof startFiveMinDrill === "function") {
+              startFiveMinDrill();
+              return;
+            }
+            console.warn("[BC] five_min_drill: handler missing");
+            return;
+          }
+        }
+
+        if (msg.type === "start_drill") {
+          console.log("[BC] start_drill RECEIVED ✅", msg);
+          console.log("[BC] start_drill received, sessionType currently =", sessionType);
+          // hard gate (same rule as parent)
+          if (!Array.isArray(wines) || wines.length < LIMIT) {
+            // try a late hydrate from localStorage restaurant key
+            const rid = window.__BC_CTX__?.restaurantId;
+            const raw = rid ? localStorage.getItem(`bc_wines_restaurant_${rid}`) : null;
+            try {
+              const arr = raw ? JSON.parse(raw) : [];
+              if (Array.isArray(arr) && arr.length >= LIMIT) wines = arr.slice(0, LIMIT);
+            } catch {}
+          }
+          if (!Array.isArray(wines) || wines.length < LIMIT) {
+            alert("Add 10 wines to start.");
+            return;
+          }
+
+          window.__BC_SESSION__ = {
+            type: "drill",
+            repTarget: Number(msg.repTarget || 3),
+            repDone: 0,
+            startedAt: Date.now(),
+          };
+
+          sessionType = "drill";
+          drillRepTarget = window.__BC_SESSION__.repTarget;
+          drillRepDone = 0;
+
+          // Drill starts at tier 1 base (or current unlocked — your call later)
+          encounterIndex = 0;
+          saveEncounterIndex(encounterIndex);
+
+          resetNavState();
+          showScreen("screenPlay");
+          startEncounter();
+
+          console.log("[BC] drill started ✅", window.__BC_SESSION__);
+        }
+      });
 
       function tryParseArray(v) {
         if (!v) return null;
