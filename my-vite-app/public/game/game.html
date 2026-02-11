@@ -620,8 +620,11 @@ function openManagerBoard() {
       const bcMode = (window.__BC_MODE__ === "premium") ? "premium" : "demo";
       const isDemo = bcMode === "demo";
       const LIMIT = isDemo ? 2 : 10;
-      // MUST be defined before any callsite uses it (TDZ fix)
-      let sessionType = null;
+      // --- DRILL + SESSION STATE (MUST be first state) ---
+      let sessionType = null;     // "drill" | null
+      let drillRepTarget = 3;
+      let drillRepDone = 0;
+      let sessionId = null;
       if (!window.ProgressionBridge && window.parent?.ProgressionBridge) {
         window.ProgressionBridge = window.parent.ProgressionBridge;
       }
@@ -1297,10 +1300,6 @@ function openManagerBoard() {
       // ============================================================
       // ✅ SESSION CONTAINER (drill vs progression)
       // ============================================================
-      // sessionType declared near top (single source)
-      let drillRepTarget = 3;
-      let drillRepDone = 0;
-
       function isDrill() { return sessionType === "drill"; }
       function startDrillSession(repTarget = 3) {
         window.__BC_SESSION__ = {
