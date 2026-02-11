@@ -1292,7 +1292,10 @@ function openManagerBoard() {
         btn.dataset.bound = "1";
 
         btn.addEventListener("click", () => {
-          console.log("[DRILL] 5-min drill clicked");
+          console.log("[DRILL] 5-min drill clicked — forcing drill flow");
+          try { event?.preventDefault?.(); } catch {}
+          try { event?.stopPropagation?.(); } catch {}
+          sessionType = "drill";
           startDrillSession(3);
           showPlayScreen?.();
         });
