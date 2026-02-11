@@ -246,7 +246,7 @@
 
       <div id="encounterPanel" class="encounter-panel">
         <div class="step-header" id="stepHeader"></div>
-        <div class="score-row"><strong id="wineDisplayName">Wine:</strong></div>
+        <div class="score-row"><strong id="wineDisplayName">Session:</strong></div>
         <div id="wineBadges"></div>
         <div id="stepContent" style="margin-top:10px;"></div>
         <div id="bcFeedbackLine" style="margin-top:10px; opacity:0.85;"></div>
@@ -3931,6 +3931,12 @@ function openManagerBoard() {
           }
         }
 
+        // DRILL: deterministic encounter selection (no tier logic, no wine deps)
+        if (sessionType === "drill") {
+          const idx = (typeof encounterIndex === "number" ? encounterIndex : 0) % list.length;
+          enc = list[idx];
+        }
+
         // ----------------------------
         // Wine selection
         // ----------------------------
@@ -3956,6 +3962,13 @@ function openManagerBoard() {
         // ----------------------------
         // Normalize encounter -> UI state
         // ----------------------------
+        enc = enc || {};
+        enc.encounterNumber = enc.encounterNumber ?? (encounterIndex + 1);
+        enc.contextLine = enc.contextLine ?? "";
+        enc.guestLine = enc.guestLine ?? "";
+        enc.physicalCues = Array.isArray(enc.physicalCues) ? enc.physicalCues : [];
+        enc.verbalCues = Array.isArray(enc.verbalCues) ? enc.verbalCues : [];
+
         console.assert(
           typeof enc.encounterNumber === "number",
           "[BC] Encounter missing encounterNumber",
@@ -4044,7 +4057,10 @@ function openManagerBoard() {
           row.className = "history-row";
 
           const summary = document.createElement("div");
-          summary.innerText = `${entry.timestamp} | Grade: ${entry.performanceGrade || "—"} | Wine: ${entry.wineSelected} | Mode: ${entry.modeSelected} | Hook: ${entry.hookSelected}`;
+          const isDrill = entry.sessionType === "drill";
+          summary.innerText = isDrill
+            ? `${entry.timestamp} | Grade: ${entry.performanceGrade || "—"} | Drill | Mode: ${entry.modeSelected} | Hook: ${entry.hookSelected}`
+            : `${entry.timestamp} | Grade: ${entry.performanceGrade || "—"} | Wine: ${entry.wineSelected} | Mode: ${entry.modeSelected} | Hook: ${entry.hookSelected}`;
 
           const toggleBtn = document.createElement("button");
           toggleBtn.className = "small-btn";
