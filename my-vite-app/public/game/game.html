@@ -550,6 +550,7 @@ window.addEventListener("message", async (ev) => {
 
   if (msg.type === "start_drill") {
     console.log("[BC] start_drill RECEIVED ✅", msg);
+    console.log("[BC] start_drill received, sessionType currently =", sessionType);
     // hard gate (same rule as parent)
     if (!Array.isArray(wines) || wines.length < LIMIT) {
       // try a late hydrate from localStorage restaurant key
