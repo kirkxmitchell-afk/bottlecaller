@@ -2485,6 +2485,19 @@ const btnFiveMinRep = document.getElementById("btnFiveMinRep");
 if (btnFiveMinRep && !btnFiveMinRep.__bcBound) {
   btnFiveMinRep.__bcBound = true;
   btnFiveMinRep.addEventListener("click", async () => {
+    const rid = appState.restaurant?.id;
+    const raw = rid ? localStorage.getItem(`bc_wines_restaurant_${rid}`) : null;
+    let count = 0;
+    if (raw) {
+      try {
+        const arr = JSON.parse(raw);
+        count = Array.isArray(arr) ? arr.length : 0;
+      } catch {}
+    }
+    if (count < 10) {
+      alert("Add 10 wines to start.");
+      return;
+    }
     await startPremiumDrillFromParent();
   });
 }
