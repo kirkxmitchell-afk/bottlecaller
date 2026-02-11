@@ -466,6 +466,9 @@ function openManagerBoard() {
       let sessionType = null; // "drill" | "run" | null
       let drillRepTarget = 3;
       let drillRepDone = 0;
+      // ---------- ENCOUNTER STATE (declare once, before any use) ----------
+      let currentEncounter = null;
+      let currentStep = 0;
       // optional: if you have these elsewhere, declare here too
       let restaurantId = null;
       let userId = null;
@@ -1476,9 +1479,6 @@ function openManagerBoard() {
         const maxIndexAllowed = max - 1; // encounterNumber is 1-based; index is 0-based
         return Math.min(Math.max(0, idx), maxIndexAllowed);
       }
-
-      let currentEncounter = null;
-      let currentStep = 0;
 
       // ---------- One clean input system ----------
       const HAS_POINTER = ("PointerEvent" in window);
