@@ -1117,19 +1117,6 @@ function openManagerBoard() {
           console.log("[MSG] start_drill received", msg);
           console.log("[BC] start_drill RECEIVED ✅", msg);
           console.log("[BC] start_drill received, sessionType currently =", sessionType);
-          // hard gate (same rule as parent)
-          const W = getWinesSafe();
-          console.log("[DRILL] wine gate", {
-            W: W.length,
-            inMemory: Array.isArray(wines) ? wines.length : null,
-            restaurantId,
-            LIMIT,
-            bcMode
-          });
-          if (W.length < LIMIT) {
-            alert(`You must add ${LIMIT} wines.`);
-            return;
-          }
 
           window.__BC_SESSION__ = {
             type: "drill",
@@ -1278,37 +1265,6 @@ function openManagerBoard() {
       }
 
       reportWinesToParent(bcMode, wines);
-
-      function bindDrillButton() {
-        const btn =
-          document.querySelector("#btn5MinDrill") ||
-          document.querySelector('[data-action="drill-5min"]');
-
-        console.log("[BOOT] bindDrillButton: found?", !!btn);
-
-        if (!btn) return false;
-
-        if (btn.dataset.bound === "1") return true;
-        btn.dataset.bound = "1";
-
-        btn.addEventListener("click", () => {
-          console.log("[DRILL] 5-min drill clicked — forcing drill flow");
-          try { event?.preventDefault?.(); } catch {}
-          try { event?.stopPropagation?.(); } catch {}
-          sessionType = "drill";
-          startDrillSession(3);
-          showPlayScreen?.();
-        });
-
-        return true;
-      }
-
-      bindDrillButton();
-      let _bindTries = 0;
-      const _bindTimer = setInterval(() => {
-        _bindTries++;
-        if (bindDrillButton() || _bindTries > 20) clearInterval(_bindTimer);
-      }, 200);
 
       console.log("[BOOT] screenWelcome?", !!document.querySelector("#screenWelcome"));
       console.log("[BOOT] screenPlay?", !!document.querySelector("#screenPlay"));
@@ -4232,15 +4188,10 @@ function openManagerBoard() {
         const drillBtnDemo = document.getElementById("btnStartDrillDemo");
 
         bindInput(drillBtnDemo, () => {
-          const isManager = String(window.__BC_CTX__?.role || "").toLowerCase() === "manager";
-          if (!isUnlocked() && !isManager) { alert("Add " + LIMIT + " wines to start."); return; }
           startDrillSession(3);
         });
 
         bindInput(btnFiveMinDrill, async () => {
-          const isManager = String(window.__BC_CTX__?.role || "").toLowerCase() === "manager";
-          if (!isUnlocked() && !isManager) { alert("Add " + LIMIT + " wines to start."); return; }
-
           if (bcMode === "premium") {
             const doneToday = await window.EventLogBridge.hasRitualCompletedTodayZA();
             if (doneToday) {
@@ -4264,8 +4215,6 @@ function openManagerBoard() {
         });
 
         bindInput(btnStartAnotherDrill, () => {
-          const isManager = String(window.__BC_CTX__?.role || "").toLowerCase() === "manager";
-          if (!isUnlocked() && !isManager) { alert("Add " + LIMIT + " wines to start."); return; }
           startDrillSession(3);
         });
 
