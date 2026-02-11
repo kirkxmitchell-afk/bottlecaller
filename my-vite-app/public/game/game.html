@@ -549,6 +549,7 @@ window.addEventListener("message", async (ev) => {
   if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
 
   if (msg.type === "start_drill") {
+    console.log("[BC] start_drill RECEIVED ✅", msg);
     // hard gate (same rule as parent)
     if (!Array.isArray(wines) || wines.length < LIMIT) {
       // try a late hydrate from localStorage restaurant key

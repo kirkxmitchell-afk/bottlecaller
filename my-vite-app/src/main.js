@@ -929,30 +929,40 @@ function unmountDemoGame() {
 }
 
 async function startPremiumDrillFromParent() {
-  // Ensure premium iframe exists (mount if needed)
   mountPremiumGameIframe();
 
-  // Give it a beat to load its message listener
-  await new Promise((r) => setTimeout(r, 150));
-
   const iframe = document.querySelector("#premiumRoot iframe");
-  const win = iframe?.contentWindow;
-  if (!win) {
-    console.warn("[BC] premium iframe not available for drill");
+  if (!iframe) {
+    console.warn("[BC] premium iframe missing");
     return;
   }
 
+  // Wait for the iframe document to load
+  await new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error("iframe load timeout")), 8000);
+    iframe.addEventListener(
+      "load",
+      () => {
+        clearTimeout(t);
+        resolve();
+      },
+      { once: true }
+    );
+  });
+
+  const win = iframe.contentWindow;
+  if (!win) {
+    console.warn("[BC] iframe contentWindow missing after load");
+    return;
+  }
+
+  // Fire start_drill AFTER load (listener will exist)
   win.postMessage(
-    {
-      source: "BC_MSG",
-      v: 1,
-      type: "bc_start_drill",
-      repTarget: 3,
-    },
+    { source: "BC_MSG", v: 1, type: "start_drill", repTarget: 3 },
     location.origin
   );
 
-  console.log("[BC] start_drill sent to iframe ✅");
+  console.log("[BC] start_drill sent to iframe ✅ (after load)");
 }
 
 function wireManagerBoardButton() {
