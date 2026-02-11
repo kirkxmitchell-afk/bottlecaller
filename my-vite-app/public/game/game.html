@@ -529,6 +529,14 @@ function startFiveMinuteDrill() {
   console.log("[BC] startFiveMinuteDrill: launched via btnStartAnotherDrill");
 }
 
+async function waitForWines(min = 10, tries = 20) {
+  for (let i = 0; i < tries; i++) {
+    if (Array.isArray(wines) && wines.length >= min) return true;
+    await new Promise(r => setTimeout(r, 100));
+  }
+  return false;
+}
+
 // Start drill from parent
 window.addEventListener("message", async (ev) => {
   if (ev.origin !== location.origin) return;
@@ -538,7 +546,9 @@ window.addEventListener("message", async (ev) => {
   if (msg.type === "start_drill") {
     const repTarget = Number(msg.repTarget || 3);
 
-    if (!isUnlocked()) {
+    const isManager = String(window.__BC_CTX__?.role || "").toLowerCase() === "manager";
+    const ok = await waitForWines(LIMIT);
+    if (!ok && !isManager) {
       alert("Add " + LIMIT + " wines to start.");
       return;
     }
@@ -4150,12 +4160,14 @@ function openManagerBoard() {
         const drillBtnDemo = document.getElementById("btnStartDrillDemo");
 
         bindInput(drillBtnDemo, () => {
-          if (!isUnlocked()) { alert("Add " + LIMIT + " wines to start."); return; }
+          const isManager = String(window.__BC_CTX__?.role || "").toLowerCase() === "manager";
+          if (!isUnlocked() && !isManager) { alert("Add " + LIMIT + " wines to start."); return; }
           startDrillSession(3);
         });
 
         bindInput(btnFiveMinDrill, async () => {
-          if (!isUnlocked()) { alert("Add " + LIMIT + " wines to start."); return; }
+          const isManager = String(window.__BC_CTX__?.role || "").toLowerCase() === "manager";
+          if (!isUnlocked() && !isManager) { alert("Add " + LIMIT + " wines to start."); return; }
 
           if (bcMode === "premium") {
             const doneToday = await window.EventLogBridge.hasRitualCompletedTodayZA();
@@ -4180,7 +4192,8 @@ function openManagerBoard() {
         });
 
         bindInput(btnStartAnotherDrill, () => {
-          if (!isUnlocked()) { alert("Add " + LIMIT + " wines to start."); return; }
+          const isManager = String(window.__BC_CTX__?.role || "").toLowerCase() === "manager";
+          if (!isUnlocked() && !isManager) { alert("Add " + LIMIT + " wines to start."); return; }
           startDrillSession(3);
         });
 
