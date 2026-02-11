@@ -1451,43 +1451,48 @@ function openManagerBoard() {
         return Math.min(Math.max(0, idx), maxIndexAllowed);
       }
 
-      // ---------- One clean input system ----------
-      const HAS_POINTER = ("PointerEvent" in window);
-      const HAS_TOUCH = ("ontouchend" in window) || (navigator.maxTouchPoints > 0);
-      const PRIMARY_EVENT = HAS_POINTER ? "pointerup" : (HAS_TOUCH ? "touchend" : "click");
-
+      // ---------- One clean input system (TDZ-proof) ----------
       let __BC_LAST_INPUT_AT__ = 0;
+
+      function getPrimaryEvent() {
+        try {
+          const HAS_POINTER = ("PointerEvent" in window);
+          const HAS_TOUCH = ("ontouchend" in window) || (navigator.maxTouchPoints > 0);
+          return HAS_POINTER ? "pointerup" : (HAS_TOUCH ? "touchend" : "click");
+        } catch {
+          return "click";
+        }
+      }
 
       function bindInput(el, fn) {
         if (!el || typeof fn !== "function") return;
         if (el.__bcBound) return;
         el.__bcBound = true;
 
+        const primary = getPrimaryEvent();
+
         const fire = async (e) => {
           const now = Date.now();
           if (now - __BC_LAST_INPUT_AT__ < 500) return;
-          if (e && e.type === "click" && PRIMARY_EVENT !== "click") return;
+          if (e && e.type === "click" && primary !== "click") return;
 
           __BC_LAST_INPUT_AT__ = now;
 
           if (e) {
-            if (PRIMARY_EVENT !== "click" && e.cancelable) e.preventDefault();
+            if (primary !== "click" && e.cancelable) e.preventDefault();
             e.stopPropagation();
           }
 
           try {
-            const ev = (typeof PRIMARY_EVENT !== "undefined") ? PRIMARY_EVENT : null;
-            if (ev) {
-              try {
-                bcEmitEvent(ev, {
-                  v: 1,
-                  kind: "ui_click",
-                  id: el.id || null,
-                  at: Date.now(),
-                });
-              } catch (err) {
-                console.warn("[BC] click emit failed (ignored)", err);
-              }
+            try {
+              bcEmitEvent(primary, {
+                v: 1,
+                kind: "ui_click",
+                id: el.id || null,
+                at: Date.now(),
+              });
+            } catch (err) {
+              console.warn("[BC] click emit failed (ignored)", err);
             }
           } catch (err) {
             console.warn("[BC] bindInput telemetry skipped", err);
@@ -1501,8 +1506,8 @@ function openManagerBoard() {
           }
         };
 
-        el.addEventListener(PRIMARY_EVENT, fire, { passive: PRIMARY_EVENT === "click" });
-        if (PRIMARY_EVENT !== "click") el.addEventListener("click", fire, { passive: true });
+        el.addEventListener(primary, fire, { passive: primary === "click" });
+        if (primary !== "click") el.addEventListener("click", fire, { passive: true });
       }
 
       // ---------- Screens ----------
