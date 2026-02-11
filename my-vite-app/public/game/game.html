@@ -1275,6 +1275,13 @@ function openManagerBoard() {
       // ============================================================
       function isDrill() { return sessionType === "drill"; }
       function startDrillSession(repTarget = 3) {
+        console.log("[DRILL] startDrillSession()", {
+          repTarget,
+          sessionType_before: sessionType,
+          encounterIndex_before: (typeof encounterIndex !== "undefined") ? encounterIndex : "UNDEFINED",
+          hasStartEncounter: typeof startEncounter,
+          screenPlayExists: !!document.getElementById("screenPlay")
+        });
         window.__BC_SESSION__ = {
           type: "drill",
           repTarget,
@@ -1304,6 +1311,11 @@ function openManagerBoard() {
 
         resetNavState();
         showScreen("screenPlay");
+        console.log("[DRILL] about to startEncounter()", {
+          sessionType,
+          encounterIndex,
+          encountersLen: Array.isArray(ENCOUNTERS) ? ENCOUNTERS.length : "NO ENCOUNTERS var"
+        });
         startEncounter();
       }
 
@@ -3805,6 +3817,10 @@ function openManagerBoard() {
       }
 
       async function startEncounter() {
+        console.log("[ENCOUNTER] startEncounter()", {
+          sessionType,
+          encounterIndex: (typeof encounterIndex !== "undefined") ? encounterIndex : "UNDEFINED"
+        });
         if (!isUnlocked()) return;
 
         if (!sessionId) {
@@ -3827,6 +3843,14 @@ function openManagerBoard() {
         }
 
         const list = getEncounterListForMode(); // should return demo or premium list based on bcMode
+        if (!Array.isArray(list) || list.length === 0) {
+          alert("Encounter list is empty. Drill cannot start.");
+          return;
+        }
+        if (typeof encounterIndex !== "number") {
+          alert("encounterIndex not set. Drill cannot start.");
+          return;
+        }
         if (!Array.isArray(list) || list.length === 0) {
           alert("No encounters loaded. Check window.__BC_ENCOUNTERS__.");
           console.error("[BC] No encounters available for mode:", window.__BC_MODE__, window.__BC_ENCOUNTERS__);
