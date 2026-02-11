@@ -471,6 +471,7 @@ function openManagerBoard() {
       let userId = null;
       let mode = null;
       let role = null;
+      console.log("[BOOT] declared", { restaurantId, role, mode, bcMode });
       // Crash becomes visible (iframe)
       window.addEventListener("error", (e) => {
         const el = document.createElement("div");
