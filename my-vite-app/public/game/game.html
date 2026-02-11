@@ -533,8 +533,8 @@ function openManagerBoard() {
       })();
 
       const BC_CTX = window.__BC_CTX__ || null;
-      const role = BC_CTX?.role || null;
-      let restaurantId = BC_CTX?.restaurantId || null;
+      role = BC_CTX?.role ?? role ?? null;
+      restaurantId = BC_CTX?.restaurantId ?? restaurantId ?? null;
       const isManager = role === "manager";
       const isWaiter = role === "waiter";
 
@@ -1158,7 +1158,7 @@ function openManagerBoard() {
         })
       };
 
-      const mode = window.__BC_MODE__ || (new URLSearchParams(location.search).get("mode") || "demo");
+      mode = window.__BC_MODE__ || (new URLSearchParams(location.search).get("mode") || "demo");
 
       // 1) Load existing wine system first (do not change it)
       await waitForRestaurantId();
