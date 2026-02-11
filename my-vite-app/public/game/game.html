@@ -238,6 +238,19 @@
     </div>
   </section>
 
+  <section id="screenDrill" class="screen">
+    <div class="panel">
+      <div class="drillHeader">
+        <h2 id="drillTitle">5-Minute Drill</h2>
+        <div id="drillCounter"></div>
+      </div>
+
+      <div id="drillStepHeader"></div>
+      <div id="drillStepContent"></div>
+      <div id="drillStepButtons"></div>
+    </div>
+  </section>
+
   <section id="screenPlay" class="screen">
     <div class="panel">
       <div class="button-row">
@@ -267,9 +280,11 @@
 
   <section id="screenDrillSummary" class="screen">
     <div class="panel">
-      <h2>5-Minute Drill Complete</h2>
+      <h2>Drill Complete</h2>
+      <div id="drillSummary"></div>
       <div id="drillSummaryBody"></div>
       <div class="button-row">
+        <button id="btnExitDrill" type="button">Exit</button>
         <button id="btnBackHomeFromDrillSummary" type="button">Back</button>
         <button id="btnStartAnotherDrill" type="button">Another 5-Minute Drill</button>
       </div>
@@ -1046,6 +1061,7 @@ function openManagerBoard() {
       let runs = loadRuns();
       let mastery = loadMastery();
       let selectedWineIndex = null;
+      let DRILL = null;
 
       // Single message handler (iframe)
       console.log("[BC] start_drill listener loaded ✅");
@@ -1117,27 +1133,8 @@ function openManagerBoard() {
           console.log("[MSG] start_drill received", msg);
           console.log("[BC] start_drill RECEIVED ✅", msg);
           console.log("[BC] start_drill received, sessionType currently =", sessionType);
-
-          window.__BC_SESSION__ = {
-            type: "drill",
-            repTarget: Number(msg.repTarget || 3),
-            repDone: 0,
-            startedAt: Date.now(),
-          };
-
-          sessionType = "drill";
-          drillRepTarget = window.__BC_SESSION__.repTarget;
-          drillRepDone = 0;
-
-          // Drill starts at tier 1 base (or current unlocked — your call later)
-          encounterIndex = 0;
-          saveEncounterIndex(encounterIndex);
-
-          resetNavState();
-          showScreen("screenPlay");
-          startEncounter();
-
-          console.log("[BC] drill started ✅", window.__BC_SESSION__);
+          startDrill(Number(msg.repTarget || 3), msg.focus || null, msg.starter || "manager");
+          console.log("[BC] drill started ✅", DRILL);
         }
       });
       window.__BC_MESSAGE_HANDLER_ATTACHED__ = true;
@@ -1274,49 +1271,155 @@ function openManagerBoard() {
       // ✅ SESSION CONTAINER (drill vs progression)
       // ============================================================
       function isDrill() { return sessionType === "drill"; }
-      function startDrillSession(repTarget = 3) {
-        console.log("[DRILL] startDrillSession()", {
-          repTarget,
-          sessionType_before: sessionType,
-          encounterIndex_before: (typeof encounterIndex !== "undefined") ? encounterIndex : "UNDEFINED",
-          hasStartEncounter: typeof startEncounter,
-          screenPlayExists: !!document.getElementById("screenPlay")
-        });
-        window.__BC_SESSION__ = {
-          type: "drill",
-          repTarget,
-          repDone: 0,
-          startedAt: Date.now(),
-        };
-
+      function startDrill(repTarget = 3, focus = null, starter = "manager") {
+        DRILL = { repTarget, repDone: 0, startedAt: Date.now(), focus, starter };
         sessionType = "drill";
         drillRepTarget = repTarget;
         drillRepDone = 0;
-
-        // Start drill at tier 1 entry point (or keep your desired logic)
-        encounterIndex = 0;
-        saveEncounterIndex(encounterIndex);
-
-        // ✅ LOG: drill started
-        try {
-          bcEmitEvent("drill_started", {
-            v: 1,
-            mode: bcMode,
-            repTarget,
-            startedAtMs: Date.now(),
-          });
-        } catch (e) {
-          console.warn("[BC] drill_started emit failed", e);
-        }
+        sessionId = sessionId || crypto.randomUUID();
 
         resetNavState();
-        showScreen("screenPlay");
-        console.log("[DRILL] about to startEncounter()", {
-          sessionType,
-          encounterIndex,
-          encountersLen: Array.isArray(ENCOUNTERS) ? ENCOUNTERS.length : "NO ENCOUNTERS var"
-        });
-        startEncounter();
+        showScreen("screenDrill");
+        renderDrillRepCounter();
+        drillStartStep1();
+      }
+
+      function renderDrillRepCounter() {
+        const el = document.getElementById("drillCounter");
+        if (!el || !DRILL) return;
+        el.textContent = `Rep ${DRILL.repDone + 1} / ${DRILL.repTarget}`;
+      }
+
+      function drillStartStep1() {
+        currentStep = 0;
+        startEncounterForDrill();
+      }
+
+      async function startEncounterForDrill() {
+        const list = getEncounterListForMode();
+        if (!Array.isArray(list) || list.length === 0) {
+          alert("No encounters loaded. Drill cannot start.");
+          return;
+        }
+
+        if (typeof encounterIndex !== "number") encounterIndex = 0;
+        const enc = list[encounterIndex % list.length];
+
+        currentEncounter = {
+          __logged: false,
+          id: enc.id || `drill_${enc.encounterNumber ?? (encounterIndex + 1)}`,
+          encounterNumber: enc.encounterNumber ?? (encounterIndex + 1),
+          meta: enc.meta || null,
+          skillFocus: (enc.meta && enc.meta.skillFocus) ? enc.meta.skillFocus : "read",
+          guestStateActual: enc.guestStateActual || "",
+          contextLine: enc.contextLine || "",
+          guestLine: enc.guestLine || "",
+          physicalCues: Array.isArray(enc.physicalCues) ? enc.physicalCues : [],
+          verbalCues: Array.isArray(enc.verbalCues) ? enc.verbalCues : [],
+          toneTag: enc.toneTag || "",
+          difficulty: enc.difficulty ?? 1,
+          tags: Array.isArray(enc.tags) ? enc.tags : [],
+
+          guestStateSelected: "",
+          modeSelected: "",
+          hookSelected: "",
+
+          wineSelected: { name: "—", varietal: "" },
+
+          chainScore: null,
+          chainSignal: "",
+          pivotType: "",
+          resetUsed: false,
+          __reactionComputed: false
+        };
+
+        window.__BC_LAST_ENCOUNTER__ = currentEncounter;
+        renderDrillStep();
+      }
+
+      function renderDrillStep() {
+        const stepHeader = document.getElementById("drillStepHeader");
+        const stepContent = document.getElementById("drillStepContent");
+        const stepButtons = document.getElementById("drillStepButtons");
+        if (!stepHeader || !stepContent || !stepButtons || !currentEncounter) return;
+
+        stepContent.innerHTML = "";
+        stepButtons.innerHTML = "";
+
+        if (currentStep === 0) {
+          stepHeader.textContent = "Step 1 — Read the Room";
+          stepContent.textContent =
+            `${currentEncounter.contextLine}\n\n` +
+            `${currentEncounter.guestLine}`;
+
+          ["Browser","Budget Guard","Celebrator","Alpha","Analyst","Make-It-Easy"].forEach(label=>{
+            const b = document.createElement("button");
+            b.type = "button";
+            b.textContent = label;
+            b.onclick = () => {
+              currentEncounter.guestStateSelected = label.toLowerCase().replace(/ /g,"_");
+              currentStep = 1;
+              renderDrillStep();
+            };
+            stepButtons.appendChild(b);
+          });
+          return;
+        }
+
+        if (currentStep === 1) {
+          stepHeader.textContent = "Step 2 — Choose Mode";
+          stepContent.textContent = "Pick your control strategy.";
+          ["Scout","Guide","Charm","Authority"].forEach(label=>{
+            const b = document.createElement("button");
+            b.type = "button";
+            b.textContent = label;
+            b.onclick = () => {
+              currentEncounter.modeSelected = label.toLowerCase();
+              currentStep = 2;
+              renderDrillStep();
+            };
+            stepButtons.appendChild(b);
+          });
+          return;
+        }
+
+        if (currentStep === 2) {
+          stepHeader.textContent = "Step 3 — Hook";
+          stepContent.textContent = "Choose your opening line.";
+          ["Hook A","Hook B","Hook C"].forEach(label=>{
+            const b = document.createElement("button");
+            b.type = "button";
+            b.textContent = label;
+            b.onclick = () => {
+              currentEncounter.hookSelected = label;
+              drillCompleteRep();
+            };
+            stepButtons.appendChild(b);
+          });
+          return;
+        }
+      }
+
+      function drillCompleteRep() {
+        if (!DRILL) return;
+
+        DRILL.repDone += 1;
+        encounterIndex += 1;
+
+        if (DRILL.repDone >= DRILL.repTarget) {
+          showScreen("screenDrillSummary");
+          const s = document.getElementById("drillSummary");
+          if (s) s.textContent = `Completed ${DRILL.repTarget} reps.`;
+          return;
+        }
+
+        renderDrillRepCounter();
+        currentStep = 0;
+        startEncounterForDrill();
+      }
+
+      function startDrillSession(repTarget = 3) {
+        startDrill(repTarget);
       }
 
       function startProgressionSession() {
@@ -1547,7 +1650,7 @@ function openManagerBoard() {
           if (typeof showScreen === "function") showScreen("screenDrill"); // only if screenDrill exists
 
           // ✅ call the real drill initializer
-          startFiveMinuteDrill();
+          startDrill(3);
         } catch (e) {
           console.warn("[BC] NAV fiveMinDrill failed", e);
         }
@@ -4168,6 +4271,7 @@ function openManagerBoard() {
           isDemo ? "btnResetProgressDemo" : "btnResetProgressPremium"
         );
         const btnBackHomeFromDrillSummary = document.getElementById("btnBackHomeFromDrillSummary");
+        const btnExitDrill = document.getElementById("btnExitDrill");
         const btnStartAnotherDrill = document.getElementById("btnStartAnotherDrill");
         const btnFiveMinDrill = document.getElementById("btnFiveMinDrill");
 
@@ -4292,7 +4396,7 @@ function openManagerBoard() {
         const drillBtnDemo = document.getElementById("btnStartDrillDemo");
 
         bindInput(drillBtnDemo, () => {
-          startDrillSession(3);
+          startDrill(3);
         });
 
         console.log("[DRILL] btnFiveMinDrill element =", btnFiveMinDrill);
@@ -4314,7 +4418,7 @@ function openManagerBoard() {
             }
           }
 
-          startDrillSession(3);
+          startDrill(3);
         });
 
         bindInput(btnBackHomeFromDrillSummary, () => {
@@ -4323,8 +4427,14 @@ function openManagerBoard() {
           showScreen(isDemo ? "screenHome" : "screenWelcome");
         });
 
+        bindInput(btnExitDrill, () => {
+          DRILL = null;
+          sessionType = null;
+          showScreen("screenHome");
+        });
+
         bindInput(btnStartAnotherDrill, () => {
-          startDrillSession(3);
+          startDrill(3);
         });
 
         bindInput(btnResetRuns, () => resetRunsOnly());
@@ -4376,10 +4486,12 @@ function openManagerBoard() {
       // Decide initial screen (premium should land on Home)
       const hasSeenCover = localStorage.getItem(coverKey) === "true";
 
-      if (isDemo) {
-        showScreen(hasSeenCover ? "screenHome" : "screenWelcome");
-      } else {
-        showScreen("screenHome");
+      if (sessionType !== "drill") {
+        if (isDemo) {
+          showScreen(hasSeenCover ? "screenHome" : "screenWelcome");
+        } else {
+          showScreen("screenHome");
+        }
       }
       updateCounts();
 
