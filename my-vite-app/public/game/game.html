@@ -71,6 +71,9 @@
         const flat = d.ctx ? { ...d, ...d.ctx } : d
         window.__BC_RUNTIME__.ctx = flat
         window.__BC_RUNTIME__.ctxStatus = "hydrated"
+        try {
+          restaurantId = flat.restaurantId || flat.restaurant_id || restaurantId || null;
+        } catch {}
 
         try {
           const rid = flat.restaurantId || flat.restaurant_id || null;
@@ -98,6 +101,7 @@
 
         try { hydrateProgressionFromCtx(flat) } catch (_) {}
         try { if (typeof applyRoleVisibility === "function") applyRoleVisibility(); } catch (_) {}
+        try { if (typeof hydrateWinesForRestaurantIfNeeded === "function") hydrateWinesForRestaurantIfNeeded(); } catch (_) {}
 
         // Optional: expose for quick inspection (non-UX)
         window.__BC_CTX__ = flat
@@ -1202,11 +1206,21 @@ function openManagerBoard() {
         const found = hydrateWinesDeterministic("premium", restaurantId);
         if (found?.wines?.length >= LIMIT) {
           wines = found.wines.slice(0, LIMIT);
-          console.log("[BC] wines late-hydrated ✅", { restaurantId, sourceKey: found.sourceKey, count: wines.length });
+          console.log("[BC] wines late-hydrated ✅", {
+            restaurantId,
+            sourceKey: found.sourceKey,
+            count: wines.length,
+          });
+
+          // keep your existing local persistence behaviour consistent
+          try {
+            const k = `bc_wines_restaurant_${restaurantId}`;
+            localStorage.setItem(k, JSON.stringify(wines));
+          } catch {}
           return true;
         }
 
-        console.warn("[BC] wines still missing after late hydrate", { restaurantId });
+        console.warn("[BC] wines still missing after late hydrate ⚠️", { restaurantId, count: wines?.length || 0 });
         return false;
       }
 
