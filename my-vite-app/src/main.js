@@ -946,7 +946,7 @@ async function startPremiumDrillFromParent() {
     {
       source: "BC_MSG",
       v: 1,
-      type: "start_drill",
+      type: "bc_start_drill",
       repTarget: 3,
     },
     location.origin

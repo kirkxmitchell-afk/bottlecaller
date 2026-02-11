@@ -548,26 +548,44 @@ window.addEventListener("message", async (ev) => {
   if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
 
   if (msg.type === "start_drill") {
-    const repTarget = Number(msg.repTarget || 3);
-
-    const isManager = String(window.__BC_CTX__?.role || "").toLowerCase() === "manager";
-    const ok = await waitForWines(LIMIT);
-    if (!ok && !isManager) {
-      alert("Add " + LIMIT + " wines to start.");
+    // hard gate (same rule as parent)
+    if (!Array.isArray(wines) || wines.length < LIMIT) {
+      // try a late hydrate from localStorage restaurant key
+      const rid = window.__BC_CTX__?.restaurantId;
+      const raw = rid ? localStorage.getItem(`bc_wines_restaurant_${rid}`) : null;
+      try {
+        const arr = raw ? JSON.parse(raw) : [];
+        if (Array.isArray(arr) && arr.length >= LIMIT) wines = arr.slice(0, LIMIT);
+      } catch {}
+    }
+    if (!Array.isArray(wines) || wines.length < LIMIT) {
+      alert("Add 10 wines to start.");
       return;
     }
 
-    // Premium daily gate (keep your existing rule)
-    if (bcMode === "premium") {
-      const doneToday = await window.EventLogBridge?.hasRitualCompletedTodayZA?.().catch(() => false);
-      if (doneToday) {
-        alert("5-Min Drill already done today. Come back tomorrow.");
-        return;
-      }
-    }
+    window.__BC_SESSION__ = {
+      type: "drill",
+      repTarget: Number(msg.repTarget || 3),
+      repDone: 0,
+      startedAt: Date.now(),
+    };
 
-    startDrillSession(repTarget);
+    sessionType = "drill";
+    drillRepTarget = window.__BC_SESSION__.repTarget;
+    drillRepDone = 0;
+
+    // Drill starts at tier 1 base (or current unlocked — your call later)
+    encounterIndex = 0;
+    saveEncounterIndex(encounterIndex);
+
+    resetNavState();
+    showScreen("screenPlay");
+    startEncounter();
+
+    console.log("[BC] drill started ✅", window.__BC_SESSION__);
   }
+
+  // bc_start_drill handler removed (use start_drill only)
 });
 
 function openManagerBoard() {
