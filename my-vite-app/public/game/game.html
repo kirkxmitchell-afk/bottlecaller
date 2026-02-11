@@ -643,6 +643,12 @@ function openManagerBoard() {
             if (typeof renderProgressMeterUnderBackButton === "function") {
               renderProgressMeterUnderBackButton();
             }
+            restaurantId = msg.ctx?.restaurantId || null;
+            if (typeof hydrateWinesForRestaurantIfNeeded === "function") {
+              hydrateWinesForRestaurantIfNeeded();
+            }
+            if (typeof updateCounts === "function") updateCounts();
+            if (typeof renderWineTables === "function") renderWineTables();
           }
         });
 
@@ -661,7 +667,7 @@ function openManagerBoard() {
 
       const BC_CTX = window.__BC_CTX__ || null;
       const role = BC_CTX?.role || null;
-      const restaurantId = BC_CTX?.restaurantId || null;
+      let restaurantId = BC_CTX?.restaurantId || null;
       const isManager = role === "manager";
       const isWaiter = role === "waiter";
 
@@ -1184,6 +1190,24 @@ function openManagerBoard() {
           if (arr && arr.length >= 10) return { wines: arr, sourceKey: key };
         }
         return null;
+      }
+
+      function hydrateWinesForRestaurantIfNeeded() {
+        if (isDemo) return false;
+        if (!restaurantId) return false;
+
+        // if already unlocked, no-op
+        if (Array.isArray(wines) && wines.length >= LIMIT) return true;
+
+        const found = hydrateWinesDeterministic("premium", restaurantId);
+        if (found?.wines?.length >= LIMIT) {
+          wines = found.wines.slice(0, LIMIT);
+          console.log("[BC] wines late-hydrated ✅", { restaurantId, sourceKey: found.sourceKey, count: wines.length });
+          return true;
+        }
+
+        console.warn("[BC] wines still missing after late hydrate", { restaurantId });
+        return false;
       }
 
       const mode = window.__BC_MODE__ || (new URLSearchParams(location.search).get("mode") || "demo");
