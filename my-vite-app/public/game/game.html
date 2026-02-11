@@ -1471,6 +1471,19 @@ function openManagerBoard() {
 
       // ---------- Screens ----------
       function showScreen(screenId) {
+        console.log("[NAV] showScreen ->", screenId);
+        console.log(new Error("[NAV] caller stack").stack);
+
+        // If drill is active, do not allow anything to kick us back to setup/home
+        if (
+          sessionType === "drill" &&
+          (screenId === ids.setupScreen || screenId === "screenHome" || screenId === "screenWelcome")
+        ) {
+          console.warn("[NAV] blocked screen switch during drill:", screenId);
+          console.log(new Error("[NAV] blocked caller stack").stack);
+          return;
+        }
+
         document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
         const target = document.getElementById(screenId);
         if (!target) return;
