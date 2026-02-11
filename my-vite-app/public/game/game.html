@@ -3214,12 +3214,18 @@ function openManagerBoard() {
         stepButtons.innerText = "";
 
         const wine = currentEncounter?.wineSelected || { name: "DRILL" };
-        wineDisplayName.innerText = "Wine: " + wine.name + " (" + wine.varietal + ")";
-        wineBadges.innerText = "";
-        addBadge(wineBadges, (wine.fruitTags || []).join(", "));
-        addBadge(wineBadges, (wine.textureTags || []).join(", "));
-        addBadge(wineBadges, wine.oakLevel || "");
-        if (wine.process) addBadge(wineBadges, wine.process);
+        const isDrill = sessionType === "drill";
+        if (isDrill) {
+          wineDisplayName.innerText = "5-Min Drill";
+          wineBadges.innerText = "";
+        } else {
+          wineDisplayName.innerText = "Wine: " + wine.name + " (" + (wine.varietal || "") + ")";
+          wineBadges.innerText = "";
+          addBadge(wineBadges, (wine.fruitTags || []).join(", "));
+          addBadge(wineBadges, (wine.textureTags || []).join(", "));
+          addBadge(wineBadges, wine.oakLevel || "");
+          if (wine.process) addBadge(wineBadges, wine.process);
+        }
 
         const stepLabels = ["Load", "Observe", "Mode", "Hook", "Deliver", "Reaction", "Reflect"];
 

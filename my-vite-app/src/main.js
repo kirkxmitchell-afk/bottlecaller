@@ -929,7 +929,7 @@ function unmountDemoGame() {
 }
 
 async function startPremiumDrillFromParent(repTarget = 3) {
-  const iframe = document.getElementById("premiumRootFrame");
+  const iframe = document.querySelector('iframe[id$="Frame"][title="BottleCaller Game"]');
 
   const win = iframe?.contentWindow;
 
@@ -2480,11 +2480,19 @@ wireManagerBoardButton();
 const btnFiveMinRep = document.getElementById("btnFiveMinRep");
 if (btnFiveMinRep && !btnFiveMinRep.__bcBound) {
   btnFiveMinRep.__bcBound = true;
-  btnFiveMinRep.addEventListener("click", async (e) => {
-    if (e?.preventDefault) e.preventDefault();
-    if (e?.stopPropagation) e.stopPropagation();
-    await startPremiumDrillFromParent();
-  });
+
+  const onDrillClick = async (e) => {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+    e?.stopImmediatePropagation?.();
+
+    await startPremiumDrillFromParent(3);
+    return false;
+  };
+
+  const ev = ("PointerEvent" in window) ? "pointerup" : "click";
+  btnFiveMinRep.addEventListener(ev, onDrillClick, { capture: true });
+  if (ev !== "click") btnFiveMinRep.addEventListener("click", onDrillClick, { capture: true });
 }
 document.getElementById("btnOpenHud").addEventListener("click", () => {
   renderHud();
