@@ -541,7 +541,8 @@ async function waitForWines(min = 10, tries = 20) {
   return false;
 }
 
-// Start drill from parent
+  // Start drill from parent
+  console.log("[BC] start_drill listener loaded ✅");
 window.addEventListener("message", async (ev) => {
   if (ev.origin !== location.origin) return;
   const msg = ev.data;
