@@ -940,6 +940,30 @@ function openManagerBoard() {
         return mode === "premium" ? "bc_wines_premium" : "bc_wines";
       }
 
+      function getWinesSafe() {
+        if (Array.isArray(wines) && wines.length) return wines;
+
+        if (restaurantId) {
+          const key = `bc_wines_restaurant_${restaurantId}`;
+          try {
+            const raw = localStorage.getItem(key);
+            const parsed = raw ? JSON.parse(raw) : null;
+            if (Array.isArray(parsed) && parsed.length) return parsed;
+          } catch {}
+        }
+
+        const legacyKeys = ["bc_wines", "BC_WINES"];
+        for (const k of legacyKeys) {
+          try {
+            const raw = localStorage.getItem(k);
+            const parsed = raw ? JSON.parse(raw) : null;
+            if (Array.isArray(parsed) && parsed.length) return parsed;
+          } catch {}
+        }
+
+        return [];
+      }
+
       function resetSessionState() {
         sessionId = null;
         sessionType = null;
@@ -1032,17 +1056,16 @@ function openManagerBoard() {
           console.log("[BC] start_drill RECEIVED ✅", msg);
           console.log("[BC] start_drill received, sessionType currently =", sessionType);
           // hard gate (same rule as parent)
-          if (!Array.isArray(wines) || wines.length < LIMIT) {
-            // try a late hydrate from localStorage restaurant key
-            const rid = window.__BC_CTX__?.restaurantId;
-            const raw = rid ? localStorage.getItem(`bc_wines_restaurant_${rid}`) : null;
-            try {
-              const arr = raw ? JSON.parse(raw) : [];
-              if (Array.isArray(arr) && arr.length >= LIMIT) wines = arr.slice(0, LIMIT);
-            } catch {}
-          }
-          if (!Array.isArray(wines) || wines.length < LIMIT) {
-            alert("Add 10 wines to start.");
+          const W = getWinesSafe();
+          console.log("[DRILL] wine gate", {
+            W: W.length,
+            inMemory: Array.isArray(wines) ? wines.length : null,
+            restaurantId,
+            LIMIT,
+            bcMode
+          });
+          if (W.length < LIMIT) {
+            alert(`You must add ${LIMIT} wines.`);
             return;
           }
 
@@ -2094,15 +2117,17 @@ function openManagerBoard() {
 
       // ---------- UI: counts ----------
       function renderHomeCounts() {
+        const W = getWinesSafe();
         const countEl = document.getElementById(ids.cardCount);
         const runsEl = document.getElementById(ids.cardRuns);
-        if (countEl) countEl.innerText = wines.length + " / " + LIMIT;
+        if (countEl) countEl.innerText = W.length + " / " + LIMIT;
         if (runsEl) runsEl.innerText = runs.length;
       }
 
       function updateCounts() {
+        const W = getWinesSafe();
         const wineCountEl = document.getElementById(ids.wineCount);
-        if (wineCountEl) wineCountEl.innerText = wines.length + " / " + LIMIT;
+        if (wineCountEl) wineCountEl.innerText = W.length + " / " + LIMIT;
         renderHomeCounts();
 
         const btnContinue = document.getElementById(ids.btnContinue);
