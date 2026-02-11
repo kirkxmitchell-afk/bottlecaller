@@ -44,96 +44,6 @@
       } catch {}
     })();
 
-    // --- BC runtime (must exist before anything reads it) ---
-    window.__BC_RUNTIME__ = window.__BC_RUNTIME__ || {
-      ctx: null,
-      ctxStatus: "pending", // pending | hydrated | timeout
-      mode: window.__BC_MODE__,
-      progression: {
-        tierAllowed: 1,
-        tierRequested: 1,
-        reasonsHuman: [],
-        snapshot: null
-      }
-    };
-    window.__BC_RUNTIME__.wines = window.__BC_RUNTIME__.wines || {
-      list: null,
-      sourceKey: null,
-      status: "pending"
-    };
-
-    // --- CTX receive (must be registered early) ---
-    window.addEventListener("message", (e) => {
-      const d = e?.data
-      if (!d || d.source !== "BC_MSG" || d.v !== 1) return
-
-      if (d.type === "bc_ctx") {
-        const flat = d.ctx ? { ...d, ...d.ctx } : d
-        window.__BC_RUNTIME__.ctx = flat
-        window.__BC_RUNTIME__.ctxStatus = "hydrated"
-        try {
-          restaurantId = flat.restaurantId || flat.restaurant_id || restaurantId || null;
-        } catch {}
-
-        try {
-          const rid = flat.restaurantId || flat.restaurant_id || null;
-          if (window.__BC_MODE__ === "premium" && rid) {
-            window.__BC_RUNTIME__.wineKey = `bc_wines_restaurant_${rid}`;
-            // If restaurant-scoped exists, mirror it into existing keys the UI might read.
-            const r = JSON.parse(localStorage.getItem(window.__BC_RUNTIME__.wineKey) || "[]");
-            if (Array.isArray(r) && r.length >= 10) {
-              localStorage.setItem("bc_wines_premium", JSON.stringify(r));
-              localStorage.setItem("bc_wines", JSON.stringify(r));
-              localStorage.setItem("BC_WINES", JSON.stringify(r));
-              console.log("[BC] wines mirrored from restaurant key ✅", { rid, count: r.length });
-            } else {
-              // If restaurant key missing but premium exists, seed restaurant key (manager-owned source)
-              const p = JSON.parse(localStorage.getItem("bc_wines_premium") || "[]");
-              if (Array.isArray(p) && p.length >= 10) {
-                localStorage.setItem(window.__BC_RUNTIME__.wineKey, JSON.stringify(p));
-                console.log("[BC] wines seeded to restaurant key ✅", { rid, count: p.length });
-              }
-            }
-          }
-        } catch (e) {
-          console.warn("[BC] wine key hydrate failed", e);
-        }
-
-        try { hydrateProgressionFromCtx(flat) } catch (_) {}
-        try { if (typeof applyRoleVisibility === "function") applyRoleVisibility(); } catch (_) {}
-        try { if (typeof hydrateWinesForRestaurantIfNeeded === "function") hydrateWinesForRestaurantIfNeeded(); } catch (_) {}
-
-        // Optional: expose for quick inspection (non-UX)
-        window.__BC_CTX__ = flat
-      }
-    });
-
-    // --- CTX request + retry (prevents race) ---
-    ;(function requestCtxWithRetry() {
-      const mode = window.__BC_RUNTIME__.mode
-      const msg = { source: "BC_MSG", v: 1, type: "bc_ctx_request", mode }
-
-      let attempts = 0
-      const maxAttempts = 8   // ~1.2s total
-      const intervalMs = 150
-
-      function tick() {
-        if (window.__BC_RUNTIME__.ctxStatus === "hydrated") return
-        attempts += 1
-
-        // ask parent
-        window.parent?.postMessage(msg, "*")
-
-        if (attempts >= maxAttempts) {
-          window.__BC_RUNTIME__.ctxStatus = "timeout"
-          return
-        }
-        setTimeout(tick, intervalMs)
-      }
-
-      // start after listener is installed
-      setTimeout(tick, 0)
-    })()
 
   </script>
 </head>
@@ -488,25 +398,6 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
         return `bc_session_ended_${mode}_${sessionId}`;
       }
 
-      // ============================================================
-// 🔌 NAV listener from parent app (main.js top buttons)
-// ============================================================
-window.addEventListener("message", (e) => {
-  const m = e?.data;
-  if (!m || m.source !== "BC_MSG" || m.v !== 1) return;
-  if (m.type !== "nav") return;
-
-  console.log("[BC] NAV REQUEST:", m.screen);
-
-  if (m.screen === "managerBoard") {
-    openManagerBoard();
-  }
-
-  if (m.screen === "fiveMinDrill") {
-    startFiveMinuteDrill();
-  }
-});
-
 // ============================================================
 // ✅ Resolvers (no guessing: we route using what already exists)
 // ============================================================
@@ -541,12 +432,70 @@ async function waitForWines(min = 10, tries = 20) {
   return false;
 }
 
-  // Start drill from parent
-  console.log("[BC] start_drill listener loaded ✅");
+// Single message handler (iframe)
+console.log("[BC] start_drill listener loaded ✅");
 window.addEventListener("message", async (ev) => {
   if (ev.origin !== location.origin) return;
   const msg = ev.data;
+  if (!msg) return;
+
+  // BC_APP NAV (parent button routing)
+  if (msg.source === "BC_APP" && msg.type === "NAV") {
+    if (msg.to === "FIVE_MIN_REP") {
+      console.log("[BC] NAV: FIVE_MIN_REP");
+      const fn = window.__BC_NAV__?.startFiveMinuteDrill;
+      if (typeof fn === "function") {
+        fn();
+        console.log("[BC] NAV startFiveMinuteDrill() called ✅");
+      } else {
+        console.warn("[BC] NAV FIVE_MIN_REP: startFiveMinuteDrill not exposed");
+      }
+    }
+    return;
+  }
+
+  // BC_MSG (ctx + nav + drill)
   if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
+
+  if (msg.type === "bc_ctx" && msg.ctx) {
+    window.__BC_CTX__ = msg.ctx;
+    console.log("[BC] ctx received ✅", msg.ctx);
+    window.__BC_CTX_RESOLVE__?.();
+    if (typeof renderProgressMeterUnderBackButton === "function") {
+      renderProgressMeterUnderBackButton();
+    }
+    restaurantId = msg.ctx?.restaurantId || null;
+    if (typeof hydrateWinesForRestaurantIfNeeded === "function") {
+      hydrateWinesForRestaurantIfNeeded();
+    }
+    if (typeof updateCounts === "function") updateCounts();
+    if (typeof renderWineTables === "function") renderWineTables();
+    return;
+  }
+
+  if (msg.type === "nav") {
+    if (msg.action === "manager_board" || msg.target === "manager_board") {
+      const btn = document.getElementById("btnManagerBoard");
+      if (btn) { btn.click(); return; }
+      if (typeof showScreen === "function" && document.getElementById("screenManagerBoard")) {
+        showScreen("screenManagerBoard");
+        return;
+      }
+      console.warn("[BC] manager_board: no handler found");
+      return;
+    }
+
+    if (msg.action === "five_min_rep" || msg.target === "five_min_drill") {
+      const btn = document.getElementById("btnFiveMinDrill");
+      if (btn) { btn.click(); return; }
+      if (typeof startFiveMinDrill === "function") {
+        startFiveMinDrill();
+        return;
+      }
+      console.warn("[BC] five_min_drill: handler missing");
+      return;
+    }
+  }
 
   if (msg.type === "start_drill") {
     console.log("[BC] start_drill RECEIVED ✅", msg);
@@ -587,8 +536,6 @@ window.addEventListener("message", async (ev) => {
 
     console.log("[BC] drill started ✅", window.__BC_SESSION__);
   }
-
-  // bc_start_drill handler removed (use start_drill only)
 });
 
 function openManagerBoard() {
@@ -624,7 +571,7 @@ function openManagerBoard() {
       let sessionType = null;     // "drill" | null
       let drillRepTarget = 3;
       let drillRepDone = 0;
-      let sessionId = null;
+      sessionId = sessionId ?? null;
       if (!window.ProgressionBridge && window.parent?.ProgressionBridge) {
         window.ProgressionBridge = window.parent.ProgressionBridge;
       }
@@ -660,28 +607,6 @@ function openManagerBoard() {
           return;
         }
 
-        // Listen for ctx
-        window.addEventListener("message", (event) => {
-          const msg = event?.data;
-          if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
-          if (event.origin !== window.location.origin) return;
-
-          if (msg.type === "bc_ctx" && msg.ctx) {
-            window.__BC_CTX__ = msg.ctx;
-            console.log("[BC] ctx received ✅", msg.ctx);
-            window.__BC_CTX_RESOLVE__();
-            if (typeof renderProgressMeterUnderBackButton === "function") {
-              renderProgressMeterUnderBackButton();
-            }
-            restaurantId = msg.ctx?.restaurantId || null;
-            if (typeof hydrateWinesForRestaurantIfNeeded === "function") {
-              hydrateWinesForRestaurantIfNeeded();
-            }
-            if (typeof updateCounts === "function") updateCounts();
-            if (typeof renderWineTables === "function") renderWineTables();
-          }
-        });
-
         // Request ctx from parent
         try {
           window.parent.postMessage(
@@ -703,64 +628,7 @@ function openManagerBoard() {
 
       console.log("[BC] ctx:", { role, restaurantId });
 
-      // ============================================================
-      // ✅ NAV from parent (main.js) — click existing drill buttons
-      // ============================================================
-      window.addEventListener("message", (e) => {
-        if (e.origin !== window.location.origin) return;
-        const m = e.data;
-        if (!m || m.source !== "BC_APP" || m.type !== "NAV") return;
-
-        if (m.to === "FIVE_MIN_REP") {
-          console.log("[BC] NAV: FIVE_MIN_REP");
-
-          const fn = window.__BC_NAV__?.startFiveMinuteDrill;
-          if (typeof fn === "function") {
-            fn(); // <-- reliable: calls the real drill start
-            console.log("[BC] NAV startFiveMinuteDrill() called ✅");
-          } else {
-            console.warn("[BC] NAV FIVE_MIN_REP: startFiveMinuteDrill not exposed");
-          }
-        }
-      });
-
-      window.addEventListener("message", (e) => {
-        const m = e?.data;
-        if (!m || m.source !== "BC_MSG" || m.v !== 1) return;
-        if (m.type !== "nav") return;
-
-        // 1) Manager Board
-        if (m.action === "manager_board" || m.target === "manager_board") {
-          // Prefer clicking an existing in-iframe button if you have one:
-          const btn = document.getElementById("btnManagerBoard");
-          if (btn) { btn.click(); return; }
-
-          // Or show a screen if you already have it:
-          if (typeof showScreen === "function" && document.getElementById("screenManagerBoard")) {
-            showScreen("screenManagerBoard");
-            return;
-          }
-
-          console.warn("[BC] manager_board: no handler found");
-          return;
-        }
-
-        // 2) 5-Min Rep
-        if (m.action === "five_min_rep" || m.target === "five_min_drill") {
-          // Click the existing drill button if it exists
-          const btn = document.getElementById("btnFiveMinDrill");
-          if (btn) { btn.click(); return; }
-
-          // Or call your drill function if that’s what you’re using
-          if (typeof startFiveMinDrill === "function") {
-            startFiveMinDrill();
-            return;
-          }
-
-          console.warn("[BC] five_min_drill: handler missing");
-          return;
-        }
-      });
+      // (message handlers consolidated below)
 
       // ---------- Remove all non-mode DOM (prevents any bleed) ----------
       function removeEl(id) {
