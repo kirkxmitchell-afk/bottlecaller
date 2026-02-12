@@ -1929,12 +1929,11 @@ async function routeDemo(reason = "manual") {
         source: "BC_MSG",
         v: 1,
         type: "bc_ctx",
-        ctx: {
-          userId: appState.session?.user?.id || null,
-          restaurantId: appState.profile?.restaurant_id || null,
-          role: appState.profile?.role || null,
-          mode: "demo",
-        },
+        userId: appState.session?.user?.id || null,
+        restaurantId: appState.profile?.restaurant_id || null,
+        scopeId: appState.profile?.scope_id || null,
+        role: appState.profile?.role || null,
+        mode: "demo",
       },
       window.location.origin
     );
