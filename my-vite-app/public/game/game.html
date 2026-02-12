@@ -490,6 +490,7 @@ function openManagerBoard() {
       let scopeId = null;
       let mode = null;
       let role = null;
+      window.__BC_RUNTIME__ = () => ({ userId, restaurantId, scopeId, role, mode });
       console.log("[BOOT] declared", { restaurantId, role, mode, bcMode });
       // Crash becomes visible (iframe)
       window.addEventListener("error", (e) => {
@@ -1136,21 +1137,15 @@ function openManagerBoard() {
           return;
         }
 
-        const incomingAllNull =
-          (msg.userId == null) &&
-          (msg.restaurantId == null) &&
-          (msg.scopeId == null) &&
-          (msg.role == null);
-
-        if (incomingAllNull && window.__BC_CTX__?.restaurantId) {
-          console.warn("[BC] ignoring null bc_ctx overwrite", msg);
+        if (window.__BC_CTX__?.userId && !msg.userId) {
+          console.warn("[BC] ignoring bc_ctx overwrite without userId", msg);
           return;
         }
 
-        userId = msg.userId ?? null;
-        restaurantId = msg.restaurantId ?? null;
-        scopeId = msg.scopeId ?? null;
-        role = msg.role ?? null;
+        userId = msg.userId ?? userId ?? null;
+        restaurantId = msg.restaurantId ?? restaurantId ?? null;
+        scopeId = msg.scopeId ?? scopeId ?? null;
+        role = msg.role ?? role ?? null;
         mode = msg.mode ?? mode ?? null;
 
         window.__BC_CTX__ = { userId, restaurantId, scopeId, role, mode };
