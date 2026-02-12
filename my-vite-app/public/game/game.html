@@ -632,15 +632,15 @@ function openManagerBoard() {
           return;
         }
 
-        // Request ctx from parent
+        // In iframe: request ctx from parent ASAP
         try {
           window.parent.postMessage(
-            { source:"BC_MSG", v:1, type:"bc_ctx_request", mode: window.__BC_MODE__ || null },
+            { source:"BC_MSG", v:1, type:"bc_ctx_request", mode: window.__BC_MODE__ || bcMode || null },
             "*"
           );
-          console.log("[BC] ctx request sent ✅");
+          console.log("[BC] bc_ctx_request sent ✅");
         } catch (e) {
-          console.warn("[BC] ctx request failed", e);
+          console.warn("[BC] bc_ctx_request failed", e);
           window.__BC_CTX_RESOLVE__();
         }
       })();
@@ -1119,6 +1119,25 @@ function openManagerBoard() {
       }
 
       // ---------- Runtime state ----------
+      // ---- ctx gate (single source of truth) ----
+      window.__BC_CTX__ = null;
+      window.__BC_CTX_READY__ = new Promise((resolve) => {
+        window.__BC_CTX_RESOLVE__ = resolve;
+      });
+
+      function applyBcCtx(msg) {
+        userId = msg.userId ?? null;
+        restaurantId = msg.restaurantId ?? null;
+        scopeId = msg.scopeId ?? null;
+        role = msg.role ?? null;
+        mode = msg.mode ?? bcMode ?? null;
+
+        window.__BC_CTX__ = { userId, restaurantId, scopeId, role, mode };
+
+        console.log("[BC] bc_ctx applied ✅", window.__BC_CTX__);
+        try { window.__BC_CTX_RESOLVE__?.(window.__BC_CTX__); } catch {}
+      }
+
       let wines = [];
       let runs = loadRuns();
       let mastery = loadMastery();
@@ -1151,6 +1170,7 @@ function openManagerBoard() {
         if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
 
         if (msg.type === "bc_ctx") {
+          applyBcCtx(msg);
           return;
         }
 
@@ -1179,11 +1199,25 @@ function openManagerBoard() {
         }
 
         if (msg.type === "start_drill") {
+          await window.__BC_CTX_READY__;
+
+          // Ensure wines are loaded before drill begins
+          if (!Array.isArray(wines) || wines.length === 0) {
+            try {
+              await waitForRestaurantId();
+              wines = await loadWines();
+              console.log("[BC] wines loaded for drill ✅", { count: wines?.length || 0, restaurantId });
+            } catch (e) {
+              console.warn("[BC] wines load failed before drill", e);
+            }
+          }
+
           console.log("[MSG] start_drill received", msg);
           console.log("[BC] start_drill RECEIVED ✅", msg);
           console.log("[BC] start_drill received, sessionType currently =", sessionType);
           startDrill(Number(msg.repTarget || 3), msg.focus || null, msg.starter || "manager");
           console.log("[BC] drill started ✅", DRILL);
+          return;
         }
       });
       window.__BC_MESSAGE_HANDLER_ATTACHED__ = true;
