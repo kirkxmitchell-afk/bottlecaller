@@ -1154,6 +1154,48 @@ function openManagerBoard() {
         try { window.__BC_CTX_RESOLVE__?.(window.__BC_CTX__); } catch {}
       }
 
+      let __BC_WINES_BOOTSTRAPPED__ = false;
+
+      async function bootstrapWinesFromCtx() {
+        if (__BC_WINES_BOOTSTRAPPED__) return;
+        const rid = window.__BC_CTX__?.restaurantId;
+        if (!rid) return;
+
+        __BC_WINES_BOOTSTRAPPED__ = true;
+
+        try {
+          if (window.WineBridge?.fetchRestaurantWines) {
+            const dbWines = await window.WineBridge.fetchRestaurantWines(rid);
+            if (Array.isArray(dbWines)) {
+              wines = dbWines.slice(0, LIMIT);
+              try { WineStore?.write?.(rid, wines); } catch {}
+            }
+          }
+
+          if (!Array.isArray(wines) || wines.length === 0) {
+            const cached = WineStore?.migrateIfNeeded?.(rid) || WineStore?.read?.(rid) || [];
+            wines = Array.isArray(cached) ? cached.slice(0, LIMIT) : [];
+          }
+
+          console.log("[BC] wines bootstrapped ✅", { rid, count: wines.length });
+
+          if (document.getElementById("screenSetupPremium") && !document.getElementById("screenSetupPremium")?.classList.contains("hidden")) {
+            try {
+              renderWineTables?.();
+              if (wines[0]) hydrateSetupFormFromWine?.(bcMode, wines[0]);
+            } catch {}
+          }
+
+          try {
+            window.parent?.postMessage({ source: "BC_MSG", v: 1, type: "wines_report", mode: bcMode, wines }, location.origin);
+          } catch {}
+
+        } catch (e) {
+          console.warn("[BC] bootstrapWinesFromCtx failed", e);
+          __BC_WINES_BOOTSTRAPPED__ = false;
+        }
+      }
+
       let wines = [];
       let runs = loadRuns();
       let mastery = loadMastery();
@@ -1187,6 +1229,7 @@ function openManagerBoard() {
 
         if (msg.type === "bc_ctx") {
           applyBcCtx(msg);
+          bootstrapWinesFromCtx();
           return;
         }
 
@@ -1198,6 +1241,13 @@ function openManagerBoard() {
             if (typeof showScreen === "function" && document.getElementById("screenSetupPremium")) {
               resetNavState?.();
               showScreen("screenSetupPremium");
+              bootstrapWinesFromCtx?.();
+              setTimeout(() => {
+                try {
+                  renderWineTables?.();
+                  if (wines?.[0]) hydrateSetupFormFromWine?.(bcMode, wines[0]);
+                } catch {}
+              }, 0);
               return;
             }
 

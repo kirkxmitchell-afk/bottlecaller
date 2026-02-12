@@ -471,18 +471,8 @@ if (!window.__BC_PARENT_BRIDGE__) {
           bcCtx,
         });
 
-        if (bcCtx.mode === "premium" && !bcCtx.restaurantId) {
-          console.warn("[PARENT] premium ctx missing restaurantId — refusing to send null ctx", bcCtx);
-          setTimeout(() => {
-            try {
-              const retry = buildBcCtx(msg?.mode ?? null);
-              event.source?.postMessage(
-                { source: "BC_MSG", v: 1, type: "bc_ctx", ...retry },
-                event.origin
-              );
-              console.log("[PARENT] bc_ctx retry ✅", retry);
-            } catch {}
-          }, 150);
+        if (!bcCtx?.userId || !bcCtx?.restaurantId || !bcCtx?.role) {
+          console.warn("[PARENT] refusing to send null/partial bc_ctx", bcCtx);
           return;
         }
 
