@@ -1126,6 +1126,16 @@ function openManagerBoard() {
       });
 
       function applyBcCtx(msg) {
+        const hasIdentity =
+          msg.userId != null ||
+          msg.restaurantId != null ||
+          msg.scopeId != null;
+
+        if (!hasIdentity) {
+          console.warn("[BC] ignoring bc_ctx without identity fields", msg);
+          return;
+        }
+
         const incomingAllNull =
           (msg.userId == null) &&
           (msg.restaurantId == null) &&
