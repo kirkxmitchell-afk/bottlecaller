@@ -4647,6 +4647,16 @@ function openManagerBoard() {
         engineBridge: !!(window.EngineBridge && typeof window.EngineBridge.computeReaction === "function")
       });
 
+      // DEBUG ONLY (iframe)
+      window.__BC_DEBUG__ = () => ({
+        ctx: window.__BC_CTX__ || null,
+        runtime: window.__BC_RUNTIME__?.() || null,
+        hasWineStore: typeof WineStore !== "undefined",
+        wineStoreKeys: (typeof WineStore !== "undefined" ? Object.keys(WineStore) : []),
+        wineStoreRead: (rid) => (typeof WineStore !== "undefined" ? WineStore.read(rid) : null),
+        winesLen: (typeof wines !== "undefined" && Array.isArray(wines) ? wines.length : null),
+      });
+
     } catch (err) {
       alert("App error: " + err.message);
       console.error(err);
