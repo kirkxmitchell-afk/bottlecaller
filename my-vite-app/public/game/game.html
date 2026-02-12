@@ -1165,8 +1165,7 @@ function openManagerBoard() {
       let __BC_WINES_BOOTSTRAPPED__ = false;
 
       async function bootstrapWinesFromCtx(force = false) {
-        const rid = window.__BC_CTX__?.restaurantId || restaurantId || null;
-        const sid = window.__BC_CTX__?.scopeId || scopeId || null;
+        const rid = window.__BC_CTX__?.restaurantId || null;
         if (!rid) return;
 
         if (__BC_WINES_BOOTSTRAPPED__ && !force) return;
@@ -1174,9 +1173,7 @@ function openManagerBoard() {
 
         try {
           if (window.WineBridge?.fetchRestaurantWines) {
-            const fn = window.WineBridge.fetchRestaurantWines;
-            const dbWines =
-              fn.length >= 2 ? await fn(sid, rid) : await fn(rid);
+            const dbWines = await window.WineBridge.fetchRestaurantWines(rid);
             if (Array.isArray(dbWines)) {
               wines = dbWines.slice(0, LIMIT);
               try { WineStore?.write?.(rid, wines); } catch {}
@@ -4514,7 +4511,12 @@ function openManagerBoard() {
               console.log("[BC] setup hydrate after showScreen", { restaurantId, count: wines.length });
               if (wines.length) hydrateSetupFormFromWine(bcMode, wines[0]);
             } else {
-              requestWinesFromParent();
+              const rid = window.__BC_CTX__?.restaurantId || null;
+              const list = rid ? WineStore.read(rid) : [];
+              wines = Array.isArray(list) ? list : [];
+              console.log("[BC] setup hydrate", { rid, count: wines.length });
+              if (wines.length) hydrateSetupFormFromWine(bcMode, wines[0]);
+              renderWineTables?.();
             }
           }, 0);
           if (!isDemo) {
