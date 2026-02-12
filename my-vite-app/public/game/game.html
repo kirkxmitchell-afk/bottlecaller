@@ -4562,8 +4562,9 @@ function openManagerBoard() {
         });
 
         bindInput(btnBackFromSetup, () => {
+          if (sessionType === "drill") return;
           resetNavState();
-          showScreen(isDemo ? "screenHome" : "screenWelcome");
+          showScreen("screenHome");
         });
 
         bindInput(btnBackHomeFromPlay, () => {
