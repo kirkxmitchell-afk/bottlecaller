@@ -942,9 +942,7 @@ function wireParentButtons() {
   if (btnSetup && !btnSetup.__bcBound) {
     btnSetup.__bcBound = true;
     btnSetup.addEventListener("click", () => {
-      hydratePremiumSetupWines();
       postToGame("nav", { target: "setup" });
-      postToGame("wines_request", { mode: "premium" });
     });
   }
 

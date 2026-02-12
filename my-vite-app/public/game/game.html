@@ -1245,16 +1245,25 @@ function openManagerBoard() {
 
         if (msg.type === "nav") {
           if (msg.action === "setup" || msg.target === "setup") {
-            resetNavState?.();
-            showScreen?.("screenSetupPremium");
+            // go to setup screen inside iframe
+            resetNavState();
+            showScreen(ids.setupScreen); // should be "screenSetupPremium" in premium mode
 
-            bootstrapWinesFromCtx(true);
+            // hydrate setup UI from local cache
             setTimeout(() => {
-              try {
-                renderWineTables?.();
-                if (wines?.[0]) hydrateSetupFormFromWine?.(bcMode, wines[0]);
-              } catch (e) {
-                console.warn("[BC] setup hydrate failed", e);
+              const rid = window.__BC_CTX__?.restaurantId || null;
+              const list = rid ? WineStore.read(rid) : [];
+              wines = Array.isArray(list) ? list : [];
+
+              console.log("[BC] NAV setup -> hydrate", { rid, count: wines.length });
+
+              // ensure template/table renders
+              renderWineTables();
+
+              // if you have a “selected wine” preview / form hydrate
+              if (wines.length) {
+                selectedWineIndex = 0;
+                hydrateSetupFormFromWine(bcMode, wines[0]);
               }
             }, 0);
 
