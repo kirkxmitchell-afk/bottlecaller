@@ -937,6 +937,61 @@ function openManagerBoard() {
         };
       }
 
+      function renderOptionGrid(boxId, options, limit = 2) {
+        const box = document.getElementById(boxId);
+        if (!box) return;
+        box.innerHTML = "";
+
+        options.forEach((label) => {
+          const b = document.createElement("button");
+          b.type = "button";
+          b.className = "option-btn";
+          b.textContent = label;
+
+          b.addEventListener("click", () => {
+            b.classList.toggle("selected");
+            if (limit && box.querySelectorAll(".option-btn.selected").length > limit) {
+              b.classList.remove("selected");
+            }
+          });
+
+          box.appendChild(b);
+        });
+      }
+
+      function initSetupTemplate(mode) {
+        const ids = getWineFieldIds(mode);
+        renderOptionGrid(ids.fruitBoxId, fruitOptions, 2);
+        renderOptionGrid(ids.textureBoxId, textureOptions, 2);
+        renderOptionGrid(ids.oakBoxId, oakOptions, 1);
+      }
+
+      async function hydrateSetupFromDbIfPossible(mode) {
+        const rid = window.__BC_CTX__?.restaurantId;
+        if (!rid) {
+          console.warn("[SETUP] skip hydrate: no restaurantId yet");
+          return;
+        }
+
+        try {
+          const rows = await window.WineBridge.fetchRestaurantWines(rid);
+          wines = Array.isArray(rows) ? rows : [];
+          console.log("[SETUP] hydrated wines ✅", { rid, count: wines.length });
+
+          renderWineTables?.();
+          const c = document.getElementById("wineCountPremium");
+          if (c) c.textContent = `${Math.min(wines.length, 10)} / 10`;
+        } catch (e) {
+          console.error("[SETUP] hydrate failed", e);
+        }
+      }
+
+      async function openSetupScreen(mode) {
+        initSetupTemplate(mode);
+        showScreen("screenSetupPremium");
+        await hydrateSetupFromDbIfPossible(mode);
+      }
+
       function wineToForm(w) {
         const varietalStr =
           Array.isArray(w?.varietals) ? w.varietals.join(" / ")
@@ -1159,6 +1214,10 @@ function openManagerBoard() {
 
         console.log("[BC] bc_ctx applied ✅", window.__BC_CTX__);
         bootstrapWinesFromCtx(false);
+        try {
+          const isOnSetup = !document.getElementById("screenSetupPremium")?.classList.contains("hidden");
+          if (isOnSetup) openSetupScreen("premium");
+        } catch {}
         try { window.__BC_CTX_RESOLVE__?.(window.__BC_CTX__); } catch {}
       }
 
@@ -4512,26 +4571,7 @@ function openManagerBoard() {
             return;
           }
           resetNavState();
-          showScreen(ids.setupScreen);
-          setTimeout(() => {
-            if (isDemo) {
-              const list = restaurantId ? WineStore.read(restaurantId) : [];
-              wines = Array.isArray(list) ? list : [];
-              console.log("[BC] setup hydrate after showScreen", { restaurantId, count: wines.length });
-              if (wines.length) hydrateSetupFormFromWine(bcMode, wines[0]);
-            } else {
-              const rid = window.__BC_CTX__?.restaurantId || null;
-              const list = rid ? WineStore.read(rid) : [];
-              wines = Array.isArray(list) ? list : [];
-              console.log("[BC] setup hydrate", { rid, count: wines.length });
-              if (wines.length) hydrateSetupFormFromWine(bcMode, wines[0]);
-              renderWineTables?.();
-            }
-          }, 0);
-          if (!isDemo) {
-            await hydrateWinesForRestaurant();
-            if (wines.length) hydrateSetupFormFromWine(bcMode, wines[0]);
-          }
+          await openSetupScreen("premium");
         });
 
         bindInput(btnResetApp, () => {
