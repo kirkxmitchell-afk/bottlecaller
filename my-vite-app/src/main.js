@@ -111,6 +111,7 @@ document.querySelector("#app").innerHTML = `
           <button id="btnOpenHud" class="btn-ghost" type="button">Menu</button>
 
           <button id="btnManagerBoard" class="btn-ghost" type="button">Manager Board</button>
+          <button id="btnGoSetupPremium" class="btn-ghost" type="button">Setup</button>
           <button id="btnFiveMinRep" class="btn-ghost" type="button">5-Min Rep</button>
 
           <button id="btnLogoutPremium" class="btn-danger" type="button">Logout</button>
@@ -487,6 +488,11 @@ if (!window.__BC_PARENT_BRIDGE__) {
         return;
       }
 
+      if (msg.type === "wines_request") {
+        await fetchAndSendWines(event.source);
+        return;
+      }
+
       // ✅ 2) event_log (telemetry)
       if (msg.type !== "event_log") return;
 
@@ -845,6 +851,36 @@ function postToGame(type, payload = {}) {
   return true;
 }
 
+async function fetchAndSendWines(targetWindow = null) {
+  const restaurantId = getActiveRestaurantId();
+  const scopeId = appState.profile?.scope_id || null;
+  if (!restaurantId || !scopeId) {
+    console.warn("[PARENT] wines_request blocked: missing scope/restaurant", { scopeId, restaurantId });
+    return;
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("bc_wines")
+      .select("*")
+      .eq("scope_id", scopeId)
+      .eq("restaurant_id", restaurantId)
+      .order("created_at", { ascending: true });
+
+    if (error) throw error;
+
+    const wines = Array.isArray(data) ? data : [];
+    const win = targetWindow || getPremiumFrame()?.contentWindow;
+    win?.postMessage(
+      { source: "BC_MSG", v: 1, type: "wines_set", wines },
+      window.location.origin
+    );
+    console.log("[PARENT] wines_set -> iframe ✅", { count: wines.length, restaurantId });
+  } catch (e) {
+    console.warn("[PARENT] fetchAndSendWines failed", e);
+  }
+}
+
 function sendPremiumNav(action) {
   const w = getPremiumFrameWindow();
   if (!w) {
@@ -856,6 +892,34 @@ function sendPremiumNav(action) {
     { source: "BC_MSG", v: 1, type: "nav", action },
     window.location.origin
   );
+}
+
+function wireParentButtons() {
+  const btnSetup = document.getElementById("btnGoSetupPremium");
+  const btnManagerBoard = document.getElementById("btnManagerBoard");
+  const btnFiveMinRep = document.getElementById("btnFiveMinRep");
+
+  if (btnSetup && !btnSetup.__bcBound) {
+    btnSetup.__bcBound = true;
+    btnSetup.addEventListener("click", () => {
+      postToGame("nav", { target: "setup" });
+      postToGame("wines_request");
+    });
+  }
+
+  if (btnManagerBoard && !btnManagerBoard.__bcBound) {
+    btnManagerBoard.__bcBound = true;
+    btnManagerBoard.addEventListener("click", () => {
+      postToGame("nav", { target: "manager_board" });
+    });
+  }
+
+  if (btnFiveMinRep && !btnFiveMinRep.__bcBound) {
+    btnFiveMinRep.__bcBound = true;
+    btnFiveMinRep.addEventListener("click", () => {
+      postToGame("start_drill", { repTarget: 3 });
+    });
+  }
 }
 
 function setHomeAuthUI(isAuthed) {
@@ -1877,27 +1941,8 @@ async function routePremium(reason = "manual") {
         return;
       }
       mountGameIframe("premiumRoot", "premium");
+      wireParentButtons();
       refreshParentProgressionUI();
-      setTimeout(() => {
-        const frame = document.getElementById("premiumRootFrame");
-        const w = frame?.contentWindow;
-        if (!w) return;
-
-        w.postMessage(
-          {
-            source: "BC_MSG",
-            v: 1,
-            type: "bc_ctx",
-            ctx: {
-              userId: appState.session?.user?.id || null,
-              restaurantId: appState.profile?.restaurant_id || null,
-              role: appState.profile?.role || null,
-              mode: "premium",
-            },
-          },
-          window.location.origin
-        );
-      }, 50);
       return;
     }
 
@@ -1929,6 +1974,7 @@ async function routePremium(reason = "manual") {
 
     unmountDemoGame();
     showScreen("screenPremiumApp");
+    wireParentButtons();
     const p = window.__BC_APP_STATE__?.profile;
     const isPremium = String(p?.access_tier || "").toLowerCase().startsWith("premium");
     const isGroup = String(p?.scope_type || "").toLowerCase() === "group";
@@ -2476,22 +2522,6 @@ document.getElementById("btnEnterPremium").addEventListener("click", () => decid
 
 document.getElementById("btnLogoutPremium").addEventListener("click", () => logoutAll("premium.logout"));
 wireManagerBoardButton();
-const btnFiveMinRep = document.getElementById("btnFiveMinRep");
-if (btnFiveMinRep && !btnFiveMinRep.__bcBound) {
-  btnFiveMinRep.__bcBound = true;
-
-  const fire = async (e) => {
-    e?.preventDefault?.();
-    e?.stopPropagation?.();
-    e?.stopImmediatePropagation?.();
-
-    await startPremiumDrillFromParent(3);
-    return false;
-  };
-
-  btnFiveMinRep.addEventListener("pointerdown", fire, { capture: true });
-  btnFiveMinRep.addEventListener("click", fire, { capture: true });
-}
 document.getElementById("btnOpenHud").addEventListener("click", () => {
   renderHud();
   openHud();

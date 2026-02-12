@@ -1186,6 +1186,16 @@ function openManagerBoard() {
         }
 
         if (msg.type === "nav") {
+          if (msg.target === "setup" || msg.action === "setup") {
+            if (sessionType === "drill") {
+              console.warn("[NAV] setup blocked: drill active");
+              return;
+            }
+            resetNavState();
+            showScreen(ids.setupScreen);
+            requestWinesFromParent();
+            return;
+          }
           if (msg.action === "manager_board" || msg.target === "manager_board") {
             const btn = document.getElementById("btnManagerBoard");
             if (btn) { btn.click(); return; }
@@ -1230,6 +1240,17 @@ function openManagerBoard() {
           console.log("[BC] drill started ✅", DRILL);
           return;
         }
+        if (msg.type === "wines_set") {
+          wines = Array.isArray(msg.wines) ? msg.wines : [];
+          if (restaurantId) {
+            try { WineStore.write(restaurantId, wines); } catch {}
+          }
+          console.log("[BC] wines_set ✅", { count: wines.length });
+          if (wines.length) {
+            try { hydrateSetupFormFromWine(bcMode, wines[0]); } catch {}
+          }
+          return;
+        }
       });
       window.__BC_MESSAGE_HANDLER_ATTACHED__ = true;
       try { window.dispatchEvent(new Event("BC_MSG_HANDLER_READY")); } catch {}
@@ -1270,6 +1291,15 @@ function openManagerBoard() {
       }
 
       reportWinesToParent(bcMode, wines);
+
+      function requestWinesFromParent() {
+        try {
+          window.parent?.postMessage(
+            { source: "BC_MSG", v: 1, type: "wines_request" },
+            "*"
+          );
+        } catch {}
+      }
 
       console.log("[BOOT] screenWelcome?", !!document.querySelector("#screenWelcome"));
       console.log("[BOOT] screenPlay?", !!document.querySelector("#screenPlay"));
@@ -2748,9 +2778,17 @@ function openManagerBoard() {
           currentEncounter.modeSelected === modeRule.optimal ? "optimal" :
           currentEncounter.modeSelected === modeRule.neutral ? "neutral" : "damaging";
 
-        const hookStatus =
-          currentEncounter.hookSelected === hookRule.optimal ? "optimal" :
-          currentEncounter.hookSelected === hookRule.neutral ? "neutral" : "damaging";
+        let hookStatus = "damaging";
+        const hookId = currentEncounter.hookSelected;
+        const hookTier = currentEncounter.hookMeta?.tier || "neutral";
+        if (currentEncounter.hookMeta) {
+          hookStatus = hookTier === "right" ? "optimal" :
+            hookTier === "slightly" ? "neutral" : "damaging";
+        } else {
+          hookStatus =
+            hookId === hookRule.optimal ? "optimal" :
+            hookId === hookRule.neutral ? "neutral" : "damaging";
+        }
 
         const deliveryCorrect =
           currentEncounter.selectedS1 === currentEncounter.correctSlotS1 &&
@@ -3313,6 +3351,32 @@ function openManagerBoard() {
         stepContent.appendChild(wrap);
       }
 
+      function getDrillHookOptions(encounter, wine) {
+        const safeWine = wine || {};
+        const name = safeWine.name || "This bottle";
+
+        return [
+          {
+            id: "hA",
+            text: `If you want something easy and safe tonight, ${name} is a great call.`,
+            tier: "right",
+            hookType: "guest_centered_framing",
+          },
+          {
+            id: "hB",
+            text: "Quick one — are you leaning lighter and fresh, or richer and smooth?",
+            tier: "slightly",
+            hookType: "guest_centered_framing",
+          },
+          {
+            id: "hC",
+            text: `${name} is the right bottle for the table.`,
+            tier: "wrong",
+            hookType: "outcome_centered_framing",
+          },
+        ];
+      }
+
       function renderEncounterStep() {
         const stepHeader = document.getElementById("stepHeader");
         const stepContent = document.getElementById("stepContent");
@@ -3482,20 +3546,29 @@ function openManagerBoard() {
 
         if (currentStep === 3) {
           const prompt = document.createElement("p");
-          prompt.innerText = "Select a Hook";
+          prompt.innerText = "Which sentence do you lead with?";
           stepContent.appendChild(prompt);
+
+          const wine = currentEncounter?.wineSelected || { name: "This bottle" };
+          const opts = getDrillHookOptions(currentEncounter, wine);
 
           const options = document.createElement("div");
           options.className = "option-grid";
-          ["FLAVOUR", "STORY", "VALUE"].forEach(hook => {
+
+          console.log("[DRILL] hook opts", opts);
+
+          opts.forEach((opt) => {
             const btn = document.createElement("button");
             btn.type = "button";
-            btn.className = "option-btn" + (currentEncounter.hookSelected === hook ? " selected" : "");
-            btn.innerText = hook;
+            btn.className = "option-btn" + (currentEncounter.hookSelected === opt.id ? " selected" : "");
+            btn.innerText = opt.text || "(missing hook text)";
+
             bindInput(btn, () => {
-              currentEncounter.hookSelected = hook;
+              currentEncounter.hookSelected = opt.id;
+              currentEncounter.hookMeta = opt;
               renderEncounterStep();
             });
+
             options.appendChild(btn);
           });
           stepContent.appendChild(options);
@@ -4299,11 +4372,14 @@ function openManagerBoard() {
           resetNavState();
           showScreen(isDemo ? "screenHome" : ids.setupScreen);
           setTimeout(() => {
-            const list = restaurantId ? WineStore.read(restaurantId) : [];
-            wines = Array.isArray(list) ? list : [];
-            console.log("[BC] setup hydrate after showScreen", { restaurantId, count: wines.length });
-
-            if (wines.length) hydrateSetupFormFromWine(bcMode, wines[0]);
+            if (isDemo) {
+              const list = restaurantId ? WineStore.read(restaurantId) : [];
+              wines = Array.isArray(list) ? list : [];
+              console.log("[BC] setup hydrate after showScreen", { restaurantId, count: wines.length });
+              if (wines.length) hydrateSetupFormFromWine(bcMode, wines[0]);
+            } else {
+              requestWinesFromParent();
+            }
           }, 0);
         });
 
@@ -4317,11 +4393,14 @@ function openManagerBoard() {
           resetNavState();
           showScreen(ids.setupScreen);
           setTimeout(() => {
-            const list = restaurantId ? WineStore.read(restaurantId) : [];
-            wines = Array.isArray(list) ? list : [];
-            console.log("[BC] setup hydrate after showScreen", { restaurantId, count: wines.length });
-
-            if (wines.length) hydrateSetupFormFromWine(bcMode, wines[0]);
+            if (isDemo) {
+              const list = restaurantId ? WineStore.read(restaurantId) : [];
+              wines = Array.isArray(list) ? list : [];
+              console.log("[BC] setup hydrate after showScreen", { restaurantId, count: wines.length });
+              if (wines.length) hydrateSetupFormFromWine(bcMode, wines[0]);
+            } else {
+              requestWinesFromParent();
+            }
           }, 0);
         });
 
