@@ -1091,6 +1091,24 @@ function openManagerBoard() {
       let selectedWineIndex = null;
       let DRILL = null;
 
+      window.addEventListener("message", (event) => {
+        const msg = event?.data;
+        if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
+
+        if (msg.type === "bc_ctx") {
+          // store ctx on window so devtools + other modules can see it
+          window.__BC_CTX__ = {
+            userId: msg.userId ?? null,
+            restaurantId: msg.restaurantId ?? null,
+            scopeId: msg.scopeId ?? null,
+            role: msg.role ?? null,
+            mode: msg.mode ?? null,
+          };
+
+          console.log("[BC] bc_ctx received ✅", window.__BC_CTX__);
+        }
+      });
+
       // Single message handler (iframe)
       console.log("[BC] start_drill listener loaded ✅");
       window.addEventListener("message", async (ev) => {
@@ -1118,13 +1136,13 @@ function openManagerBoard() {
 
         if (msg.type === "bc_ctx" && msg.ctx) {
           console.log("[MSG] bc_ctx received", msg);
-          userId = msg.userId ?? null;
-          restaurantId = msg.restaurantId ?? null;
-          scopeId = msg.scopeId ?? null;
-          role = msg.role ?? null;
-          mode = msg.mode ?? null;
+          const ctx = window.__BC_CTX__ || {};
+          userId = ctx.userId ?? null;
+          restaurantId = ctx.restaurantId ?? null;
+          scopeId = ctx.scopeId ?? null;
+          role = ctx.role ?? null;
+          mode = ctx.mode ?? null;
 
-          window.__BC_CTX__ = { userId, restaurantId, scopeId, role, mode };
           console.log("[BC] ctx received ✅", window.__BC_CTX__);
           window.__BC_CTX_RESOLVE__?.();
           if (typeof renderProgressMeterUnderBackButton === "function") {
