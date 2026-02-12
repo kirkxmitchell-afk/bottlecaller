@@ -1126,11 +1126,22 @@ function openManagerBoard() {
       });
 
       function applyBcCtx(msg) {
+        const incomingAllNull =
+          (msg.userId == null) &&
+          (msg.restaurantId == null) &&
+          (msg.scopeId == null) &&
+          (msg.role == null);
+
+        if (incomingAllNull && window.__BC_CTX__?.restaurantId) {
+          console.warn("[BC] ignoring null bc_ctx overwrite", msg);
+          return;
+        }
+
         userId = msg.userId ?? null;
         restaurantId = msg.restaurantId ?? null;
         scopeId = msg.scopeId ?? null;
         role = msg.role ?? null;
-        mode = msg.mode ?? bcMode ?? null;
+        mode = msg.mode ?? mode ?? null;
 
         window.__BC_CTX__ = { userId, restaurantId, scopeId, role, mode };
 
