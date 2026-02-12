@@ -4572,11 +4572,35 @@ function openManagerBoard() {
           startEncounter();
         });
 
-        bindInput(btnBackFromSetup, () => {
-          if (sessionType === "drill") return;
-          resetNavState();
-          showScreen("screenHome");
+        function goToFrontDoor() {
+          resetNavState?.();
+          if (typeof showScreen === "function" && document.getElementById("screenHome")) {
+            showScreen("screenHome");
+            return;
+          }
+          if (typeof showScreen === "function" && document.getElementById("screenWelcome")) {
+            showScreen("screenWelcome");
+          }
+        }
+
+        ["btnSetupBack", "btnSetupBackPremium", "btnBackFromSetup", "btnBackHomeFromSetupPremium", "btnBackHomeFromSetupDemo", "btnBack"].forEach((id) => {
+          const el = document.getElementById(id);
+          if (el && !el.__bcBound) {
+            el.__bcBound = true;
+            bindInput(el, () => {
+              if (sessionType === "drill") return;
+              goToFrontDoor();
+            });
+          }
         });
+
+        if (btnBackFromSetup && !btnBackFromSetup.__bcBound) {
+          btnBackFromSetup.__bcBound = true;
+          bindInput(btnBackFromSetup, () => {
+            if (sessionType === "drill") return;
+            goToFrontDoor();
+          });
+        }
 
         bindInput(btnBackHomeFromPlay, () => {
           try {
