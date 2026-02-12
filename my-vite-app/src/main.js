@@ -457,29 +457,33 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
       // ✅ 1) ctx request MUST be handled before any event_log filtering
       if (msg.type === "bc_ctx_request") {
-        const userId = appState.session?.user?.id || null;
-        const restaurantId = appState.profile?.restaurant_id || null;
-        const role = appState.profile?.role || null;
-        const scopeId = appState.profile?.scope_id || null;
+        const bcCtx = buildBcCtx(msg?.mode ?? null);
 
-        // Canonical mode: request wins, fallback to app-known mode, then null
-        const mode = (msg?.mode ?? null);
+        console.log("[PARENT] bc_ctx_request -> reply", {
+          requested: msg?.mode ?? null,
+          bcCtx,
+        });
 
-        // ✅ Canonical, FLAT ctx payload (no nested ctx object)
-        const bcCtx = {
-          source: "BC_MSG",
-          v: 1,
-          type: "bc_ctx",
-          userId,
-          restaurantId,
-          scopeId,
-          role,
-          mode,
-        };
+        if (bcCtx.mode === "premium" && !bcCtx.restaurantId) {
+          console.warn("[PARENT] premium ctx missing restaurantId — refusing to send null ctx", bcCtx);
+          setTimeout(() => {
+            try {
+              const retry = buildBcCtx(msg?.mode ?? null);
+              event.source?.postMessage(
+                { source: "BC_MSG", v: 1, type: "bc_ctx", ...retry },
+                event.origin
+              );
+              console.log("[PARENT] bc_ctx retry ✅", retry);
+            } catch {}
+          }, 150);
+          return;
+        }
 
-        event.source?.postMessage(bcCtx, event.origin);
+        event.source?.postMessage(
+          { source: "BC_MSG", v: 1, type: "bc_ctx", ...bcCtx },
+          event.origin
+        );
 
-        console.log("[BC] ctx replied ✅", bcCtx);
         return;
       }
 
@@ -622,16 +626,20 @@ function showScreen(id) {
   document.getElementById(id)?.classList.remove("hidden");
 }
 
-function buildBcCtx(modeOverride = null) {
-  const userId = appState.session?.user?.id || null;
-  const restaurantId = appState.profile?.restaurant_id || null;
-  const role = appState.profile?.role || null;
-  const scopeId = appState.profile?.scope_id || null;
+function getActiveRestaurantId() {
+  return (
+    appState.activeRestaurantId ||
+    appState.profile?.restaurant_id ||
+    null
+  );
+}
 
-  // Prefer explicit override, otherwise infer from appMode
-  const mode =
-    modeOverride ||
-    (appMode === "premium" ? "premium" : appMode === "demo" ? "demo" : null);
+function buildBcCtx(requestedMode = null) {
+  const userId = appState.session?.user?.id ?? null;
+  const role = appState.profile?.role ?? null;
+  const scopeId = appState.profile?.scope_id ?? null;
+  const restaurantId = getActiveRestaurantId();
+  const mode = requestedMode ?? null;
 
   return { userId, restaurantId, scopeId, role, mode };
 }
