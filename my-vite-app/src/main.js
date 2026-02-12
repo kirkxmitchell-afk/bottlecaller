@@ -402,6 +402,7 @@ const appState = {
   restaurant: null,
   invites: [],
 };
+appState.activeRestaurantId = localStorage.getItem("bc_active_restaurant_id") || null;
 window.__BC_APP_STATE__ = appState;
 appState.progressionView = appState.progressionView || {
   level: "Building recognition",
@@ -881,6 +882,51 @@ async function fetchAndSendWines(targetWindow = null) {
   }
 }
 
+async function hydratePremiumSetupWines() {
+  const frame = document.getElementById("premiumRootFrame");
+  const w = frame?.contentWindow;
+  if (!w) return;
+
+  const restaurantId =
+    appState.activeRestaurantId ||
+    appState.profile?.restaurant_id ||
+    null;
+
+  if (!restaurantId) {
+    console.warn("[BC] hydratePremiumSetupWines: no restaurantId");
+    return;
+  }
+
+  try {
+    let list = null;
+    if (window.WineBridge?.fetchRestaurantWines) {
+      list = await window.WineBridge.fetchRestaurantWines(restaurantId);
+    } else {
+      const scopeId = appState.profile?.scope_id || null;
+      const { data, error } = await supabase
+        .from("bc_wines")
+        .select("*")
+        .eq("scope_id", scopeId)
+        .eq("restaurant_id", restaurantId)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      list = data;
+    }
+
+    const wines = Array.isArray(list) ? list : [];
+    appState.wines = wines;
+
+    w.postMessage(
+      { source: "BC_MSG", v: 1, type: "wines_sync", restaurantId, wines },
+      window.location.origin
+    );
+
+    console.log("[BC] parent pushed wines_sync ✅", { restaurantId, count: wines.length });
+  } catch (e) {
+    console.error("[BC] hydratePremiumSetupWines failed", e);
+  }
+}
+
 function sendPremiumNav(action) {
   const w = getPremiumFrameWindow();
   if (!w) {
@@ -902,8 +948,9 @@ function wireParentButtons() {
   if (btnSetup && !btnSetup.__bcBound) {
     btnSetup.__bcBound = true;
     btnSetup.addEventListener("click", () => {
+      hydratePremiumSetupWines();
       postToGame("nav", { target: "setup" });
-      postToGame("wines_request");
+      postToGame("wines_request", { mode: "premium" });
     });
   }
 
@@ -1986,26 +2033,6 @@ async function routePremium(reason = "manual") {
     }
     mountGameIframe("premiumRoot", "premium");
     refreshParentProgressionUI();
-    setTimeout(() => {
-      const frame = document.getElementById("premiumRootFrame");
-      const w = frame?.contentWindow;
-      if (!w) return;
-
-      w.postMessage(
-        {
-          source: "BC_MSG",
-          v: 1,
-          type: "bc_ctx",
-          ctx: {
-            userId: appState.session?.user?.id || null,
-            restaurantId: appState.profile?.restaurant_id || null,
-            role: appState.profile?.role || null,
-            mode: "premium",
-          },
-        },
-        window.location.origin
-      );
-    }, 50);
   } catch (e) {
     console.error(e);
     setDebug({ step: "premium.route.crash", time: new Date().toISOString(), error: e.message || String(e) });
@@ -2043,7 +2070,11 @@ async function routeManagerBoard(reason = "manual") {
   if (btn && sel && !btn.__bcBound) {
     btn.__bcBound = true;
     btn.addEventListener("click", async () => {
-      await setActiveRestaurantForGroup(sel.value);
+      const rid = sel.value;
+      await setActiveRestaurantForGroup(rid);
+
+      appState.activeRestaurantId = rid;
+      try { localStorage.setItem("bc_active_restaurant_id", rid); } catch {}
       await loadManagerBoardData(); // refresh board for new restaurant
     });
   }

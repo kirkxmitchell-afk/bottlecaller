@@ -1196,14 +1196,17 @@ function openManagerBoard() {
         }
 
         if (msg.type === "nav") {
-          if (msg.target === "setup" || msg.action === "setup") {
-            if (sessionType === "drill") {
-              console.warn("[NAV] setup blocked: drill active");
+          if (msg.action === "setup" || msg.target === "setup") {
+            const btn = document.getElementById("btnGoPremium") || document.getElementById("btnGoSetup");
+            if (btn) { btn.click(); return; }
+
+            if (typeof showScreen === "function" && document.getElementById("screenSetupPremium")) {
+              resetNavState?.();
+              showScreen("screenSetupPremium");
               return;
             }
-            resetNavState();
-            showScreen(ids.setupScreen);
-            requestWinesFromParent();
+
+            console.warn("[BC] setup: no handler found");
             return;
           }
           if (msg.action === "manager_board" || msg.target === "manager_board") {
@@ -1250,14 +1253,23 @@ function openManagerBoard() {
           console.log("[BC] drill started ✅", DRILL);
           return;
         }
-        if (msg.type === "wines_set") {
+        if (msg.type === "wines_sync") {
+          if (!msg.restaurantId) return;
+          if (restaurantId && msg.restaurantId !== restaurantId) {
+            console.warn("[BC] wines_sync ignored: restaurant mismatch", { got: msg.restaurantId, want: restaurantId });
+            return;
+          }
           wines = Array.isArray(msg.wines) ? msg.wines : [];
           if (restaurantId) {
             try { WineStore.write(restaurantId, wines); } catch {}
           }
-          console.log("[BC] wines_set ✅", { count: wines.length });
-          if (wines.length) {
-            try { hydrateSetupFormFromWine(bcMode, wines[0]); } catch {}
+          console.log("[BC] wines_sync applied ✅", { restaurantId, count: wines.length });
+          try {
+            if (document.getElementById("screenSetupPremium") && wines[0]) {
+              hydrateSetupFormFromWine(bcMode, wines[0]);
+            }
+          } catch (e) {
+            console.warn("[BC] hydrateSetupFormFromWine failed", e);
           }
           return;
         }
@@ -4370,6 +4382,18 @@ function openManagerBoard() {
         const btnExitDrill = document.getElementById("btnExitDrill");
         const btnStartAnotherDrill = document.getElementById("btnStartAnotherDrill");
         const btnFiveMinDrill = document.getElementById("btnFiveMinDrill");
+
+        const IS_IFRAME = !!window.frameElement;
+        if (IS_IFRAME && btnGoSetup) {
+          btnGoSetup.textContent = "Start";
+          btnGoSetup.onclick = null;
+          btnGoSetup.__bcBound = false;
+          bindInput(btnGoSetup, () => {
+            resetNavState();
+            showScreen("screenPlay");
+            startEncounter();
+          });
+        }
 
         console.log("[SETUP] btnWelcomeStart element =", btnWelcomeStart);
         console.log("[SETUP] btnWelcomeStart id/class =", btnWelcomeStart?.id, btnWelcomeStart?.className);
