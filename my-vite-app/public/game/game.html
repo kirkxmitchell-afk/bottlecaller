@@ -1091,23 +1091,28 @@ function openManagerBoard() {
       let selectedWineIndex = null;
       let DRILL = null;
 
-      window.addEventListener("message", (event) => {
-        const msg = event?.data;
-        if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
+      function installBcCtxListener() {
+        if (window.__BC_CTX_LISTENER_INSTALLED__) return;
+        window.__BC_CTX_LISTENER_INSTALLED__ = true;
 
-        if (msg.type === "bc_ctx") {
-          // store ctx on window so devtools + other modules can see it
-          window.__BC_CTX__ = {
-            userId: msg.userId ?? null,
-            restaurantId: msg.restaurantId ?? null,
-            scopeId: msg.scopeId ?? null,
-            role: msg.role ?? null,
-            mode: msg.mode ?? null,
-          };
+        window.addEventListener("message", (event) => {
+          const msg = event?.data;
+          if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
 
-          console.log("[BC] bc_ctx received ✅", window.__BC_CTX__);
-        }
-      });
+          if (msg.type === "bc_ctx") {
+            window.__BC_CTX__ = {
+              userId: msg.userId ?? null,
+              restaurantId: msg.restaurantId ?? null,
+              scopeId: msg.scopeId ?? null,
+              role: msg.role ?? null,
+              mode: msg.mode ?? null,
+            };
+            console.log("[BC] bc_ctx received ✅", window.__BC_CTX__);
+          }
+        });
+      }
+
+      installBcCtxListener();
 
       // Single message handler (iframe)
       console.log("[BC] start_drill listener loaded ✅");
