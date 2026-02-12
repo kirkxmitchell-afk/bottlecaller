@@ -459,6 +459,10 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
       // ✅ 1) ctx request MUST be handled before any event_log filtering
       if (msg.type === "bc_ctx_request") {
+        if (!appState.session?.user?.id || !appState.profile?.role) {
+          console.warn("[PARENT] ctx not ready — ignoring bc_ctx_request");
+          return;
+        }
         const bcCtx = buildBcCtx(msg?.mode ?? null);
 
         console.log("[PARENT] bc_ctx_request -> reply", {
