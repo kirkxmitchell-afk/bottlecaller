@@ -3,6 +3,7 @@ import { supabase } from "../lib/supabaseClient.js";
 
 export type WineRow = {
   id: string;
+  scope_id?: string;
   restaurant_id: string;
   created_by: string;
   name: string;
@@ -40,10 +41,11 @@ function toUiWine(r: WineRow) {
   };
 }
 
-export async function fetchRestaurantWines(restaurantId: string) {
+export async function fetchRestaurantWines(scopeId: string, restaurantId: string) {
   const { data, error } = await supabase
     .from("bc_wines")
     .select("*")
+    .eq("scope_id", scopeId)
     .eq("restaurant_id", restaurantId)
     .order("created_at", { ascending: true });
 
@@ -51,7 +53,7 @@ export async function fetchRestaurantWines(restaurantId: string) {
   return (data || []).map(toUiWine);
 }
 
-export async function addRestaurantWine(restaurantId: string, wine: WineInput) {
+export async function addRestaurantWine(scopeId: string, restaurantId: string, wine: WineInput) {
   const { data: userRes, error: uErr } = await supabase.auth.getUser();
   if (uErr) throw uErr;
 
@@ -59,6 +61,7 @@ export async function addRestaurantWine(restaurantId: string, wine: WineInput) {
   if (!userId) throw new Error("not_authenticated");
 
   const row = {
+    scope_id: scopeId,
     restaurant_id: restaurantId,
     created_by: userId,
     name: wine.name,
@@ -80,16 +83,11 @@ export async function deleteRestaurantWine(wineId: string) {
   if (error) throw error;
 }
 
-export async function deleteAllRestaurantWines(restaurantId: string) {
-  const { data: userRes, error: uErr } = await supabase.auth.getUser();
-  if (uErr) throw uErr;
-
-  const userId = userRes?.user?.id;
-  if (!userId) throw new Error("not_authenticated");
-
+export async function deleteAllRestaurantWines(scopeId: string, restaurantId: string) {
   const { error } = await supabase
     .from("bc_wines")
     .delete()
+    .eq("scope_id", scopeId)
     .eq("restaurant_id", restaurantId);
   if (error) throw error;
   return true;

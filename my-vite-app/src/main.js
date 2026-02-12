@@ -460,6 +460,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
         const userId = appState.session?.user?.id || null;
         const restaurantId = appState.profile?.restaurant_id || null;
         const role = appState.profile?.role || null;
+        const scopeId = appState.profile?.scope_id || null;
 
         // Canonical mode: request wins, fallback to app-known mode, then null
         const mode = (msg?.mode ?? null);
@@ -471,6 +472,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
           type: "bc_ctx",
           userId,
           restaurantId,
+          scopeId,
           role,
           mode,
         };
@@ -624,13 +626,14 @@ function buildBcCtx(modeOverride = null) {
   const userId = appState.session?.user?.id || null;
   const restaurantId = appState.profile?.restaurant_id || null;
   const role = appState.profile?.role || null;
+  const scopeId = appState.profile?.scope_id || null;
 
   // Prefer explicit override, otherwise infer from appMode
   const mode =
     modeOverride ||
     (appMode === "premium" ? "premium" : appMode === "demo" ? "demo" : null);
 
-  return { userId, restaurantId, role, mode };
+  return { userId, restaurantId, scopeId, role, mode };
 }
 
 function setMsg(elId, msg, kind = "normal") {

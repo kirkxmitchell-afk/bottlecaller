@@ -487,6 +487,7 @@ function openManagerBoard() {
       // optional: if you have these elsewhere, declare here too
       let restaurantId = null;
       let userId = null;
+      let scopeId = null;
       let mode = null;
       let role = null;
       console.log("[BOOT] declared", { restaurantId, role, mode, bcMode });
@@ -1116,9 +1117,15 @@ function openManagerBoard() {
         if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
 
         if (msg.type === "bc_ctx" && msg.ctx) {
-          console.log("[MSG] bc_ctx received", msg.payload);
-          window.__BC_CTX__ = msg.ctx;
-          console.log("[BC] ctx received ✅", msg.ctx);
+          console.log("[MSG] bc_ctx received", msg);
+          userId = msg.userId ?? null;
+          restaurantId = msg.restaurantId ?? null;
+          scopeId = msg.scopeId ?? null;
+          role = msg.role ?? null;
+          mode = msg.mode ?? null;
+
+          window.__BC_CTX__ = { userId, restaurantId, scopeId, role, mode };
+          console.log("[BC] ctx received ✅", window.__BC_CTX__);
           window.__BC_CTX_RESOLVE__?.();
           if (typeof renderProgressMeterUnderBackButton === "function") {
             renderProgressMeterUnderBackButton();
@@ -1698,7 +1705,7 @@ function openManagerBoard() {
 
         // PREMIUM: DB source of truth
         try {
-          const rows = await window.WineBridge.fetchRestaurantWines(restaurantId);
+          const rows = await window.WineBridge.fetchRestaurantWines(scopeId, restaurantId);
           const out = (rows || [])
             .map(normalizeWineToDbShape)
             .map(w => sanitizeWine(w));
@@ -2433,7 +2440,7 @@ function openManagerBoard() {
           }
 
           try {
-            await window.WineBridge.addRestaurantWine(restaurantId, {
+            await window.WineBridge.addRestaurantWine(scopeId, restaurantId, {
               name,
               varietal,
               fruit_tags: fruitTags,
@@ -4171,7 +4178,7 @@ function openManagerBoard() {
         if (!confirm("Reset wines for this restaurant? This can’t be undone.")) return;
         if (!isDemo && restaurantId) {
           if (!isManager) { alert("Only managers can reset wines."); return; }
-          try { window.WineBridge.deleteAllRestaurantWines(restaurantId); } catch {}
+          try { window.WineBridge.deleteAllRestaurantWines(scopeId, restaurantId); } catch {}
         }
 
         wines = [];
