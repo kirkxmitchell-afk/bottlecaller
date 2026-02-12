@@ -62,6 +62,13 @@
       </ul>
       <div class="button-row">
         <button id="btnWelcomeStart" type="button">Start</button>
+        <button
+          id="btnWelcomeBackToSetup"
+          type="button"
+          class="btn-ghost"
+        >
+          Back to Setup
+        </button>
       </div>
       <div class="small-text" id="welcomeFooterNote"></div>
     </div>
@@ -4431,6 +4438,7 @@ function openManagerBoard() {
       function initButtons() {
         const btnWelcomeStart = document.getElementById("btnWelcomeStart");
         const btnResetApp = document.getElementById("btnResetApp");
+        const btnBackToSetup = document.getElementById("btnWelcomeBackToSetup");
 
         const btnGoSetup = document.getElementById(ids.btnGoSetup);
         const btnContinue = document.getElementById(ids.btnContinue);
@@ -4482,6 +4490,12 @@ function openManagerBoard() {
               requestWinesFromParent();
             }
           }, 0);
+        });
+
+        bindInput(btnBackToSetup, () => {
+          if (sessionType === "drill") return;
+          resetNavState();
+          showScreen(ids.setupScreen);
         });
 
         console.log("[SETUP] btnGoSetup element =", btnGoSetup);
