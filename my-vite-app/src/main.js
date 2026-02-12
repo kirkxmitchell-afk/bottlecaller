@@ -146,6 +146,74 @@ document.querySelector("#app").innerHTML = `
     </div>
   </section>
 
+  <!-- PREMIUM SETUP (PARENT-OWNED) -->
+  <section id="screenSetupPremium" class="screen hidden">
+    <div class="panel">
+      <h2>Setup</h2>
+      <div class="score-row">Wines added: <span id="wineCountPremium">0 / 10</span></div>
+
+      <div id="wineAdminPanel">
+      <div class="manager-row">
+        <input type="text" id="wineNameInputPremium" placeholder="Wine Name (required)" />
+        <input type="text" id="wineVarietalInputPremium" placeholder="Varietal (required)" />
+      </div>
+
+      <div class="manager-row">
+        <strong>Fruit Profile (choose up to 2):</strong>
+        <div class="option-grid" id="fruitOptionsPremium"></div>
+      </div>
+
+      <div class="manager-row">
+        <strong>Structure/Texture (choose up to 2):</strong>
+        <div class="option-grid" id="textureOptionsPremium"></div>
+      </div>
+
+      <div class="manager-row">
+        <strong>Oak Level (choose 1):</strong>
+        <div class="option-grid" id="oakOptionsPremium"></div>
+      </div>
+
+      <div class="manager-row">
+        <strong>Process (optional):</strong>
+        <select id="processInputPremium">
+          <option value="">Select process</option>
+          <option value="Stainless steel">Stainless steel</option>
+          <option value="Wild ferment">Wild ferment</option>
+          <option value="Maceration">Maceration</option>
+          <option value="Destemming">Destemming</option>
+          <option value="Whole bunch pressed">Whole bunch pressed</option>
+          <option value="Hand harvested">Hand harvested</option>
+          <option value="Time on lees">Time on lees</option>
+        </select>
+        <input type="text" id="regionInputPremium" placeholder="Region (optional)" />
+      </div>
+
+      <div class="manager-row">
+        <textarea id="storyInputPremium" placeholder="Story (optional, 1 sentence)"></textarea>
+        <button id="addWineBtnPremium" type="button">Add Wine</button>
+      </div>
+
+      <div class="manager-panel">
+        <h3>Wine List</h3>
+        <table class="wine-table">
+          <thead>
+            <tr>
+              <th>Name</th><th>Varietal</th><th>Fruit</th><th>Texture</th><th>Oak</th><th>Process</th><th>Region</th><th>Story</th><th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="premiumWineTableBody"></tbody>
+        </table>
+        <div id="premiumWineCards" class="wine-cards"></div>
+      </div>
+      </div>
+
+      <div class="button-row">
+        <button id="btnContinuePremium" type="button">Start</button>
+        <button id="btnBackHomeFromSetupPremium" type="button">Back</button>
+      </div>
+    </div>
+  </section>
+
   <!-- MANAGER BOARD -->
   <section id="screenManagerBoard" class="screen hidden">
     <div class="panel stack">
@@ -417,6 +485,129 @@ window.__BC_DEBUG__ = {
   get session() { return appState.session; },
   get profile() { return appState.profile; }
 };
+
+// ====== Wine Setup (PARENT) ======
+const WINE_LIMIT = 10;
+const FRUIT_OPTS = ["Red fruit","Dark fruit","Citrus","Stone fruit","Tropical","Floral","Herbal/Green","Spicy","Earthy/Savory","Smoky"];
+const TEXTURE_OPTS = ["Silky","Chalky tannins","Firm tannins","Racy acidity","Creamy","Full-bodied","Medium-bodied","Light-bodied","Fresh","Bold"];
+const OAK_OPTS = ["None","Light","Subtle","Noticeable"];
+
+function getRestaurantIdOrNull() {
+  return appState?.profile?.restaurant_id || null;
+}
+
+function setupMultiSelectGrid(containerId, options, maxPick, getState, setState) {
+  const box = document.getElementById(containerId);
+  if (!box) return;
+  box.innerHTML = "";
+
+  options.forEach((label) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "option-btn";
+    btn.textContent = label;
+
+    const refresh = () => {
+      const selected = getState();
+      btn.classList.toggle("selected", selected.includes(label));
+    };
+
+    btn.addEventListener("click", () => {
+      const selected = [...getState()];
+      const idx = selected.indexOf(label);
+      if (idx >= 0) {
+        selected.splice(idx, 1);
+      } else {
+        if (selected.length >= maxPick) return;
+        selected.push(label);
+      }
+      setState(selected);
+      refresh();
+    });
+
+    refresh();
+    box.appendChild(btn);
+  });
+}
+
+function setupSingleSelectGrid(containerId, options, getState, setState) {
+  const box = document.getElementById(containerId);
+  if (!box) return;
+  box.innerHTML = "";
+
+  options.forEach((label) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "option-btn";
+    btn.textContent = label;
+
+    const refresh = () => {
+      btn.classList.toggle("selected", getState() === label);
+    };
+
+    btn.addEventListener("click", () => {
+      setState(label);
+      [...box.querySelectorAll("button")].forEach((b) => b.classList.remove("selected"));
+      refresh();
+    });
+
+    refresh();
+    box.appendChild(btn);
+  });
+}
+
+function renderWineCount(count) {
+  const el = document.getElementById("wineCountPremium");
+  if (el) el.textContent = `${count} / ${WINE_LIMIT}`;
+}
+
+function renderWineTable(wines) {
+  const body = document.getElementById("premiumWineTableBody");
+  const cards = document.getElementById("premiumWineCards");
+  if (body) body.innerHTML = "";
+  if (cards) cards.innerHTML = "";
+
+  renderWineCount(wines.length);
+
+  wines.forEach((w) => {
+    if (body) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${escapeHtml(w.name)}</td>
+        <td>${escapeHtml(w.varietal)}</td>
+        <td>${escapeHtml((w.fruit_tags || []).join(", "))}</td>
+        <td>${escapeHtml((w.texture_tags || []).join(", "))}</td>
+        <td>${escapeHtml(w.oak_level || "")}</td>
+        <td>${escapeHtml(w.process || "")}</td>
+        <td>${escapeHtml(w.region || "")}</td>
+        <td>${escapeHtml(w.story || "")}</td>
+        <td><button type="button" class="btn-danger" data-wine-del="${w.id}">Delete</button></td>
+      `;
+      body.appendChild(tr);
+    }
+
+    if (cards) {
+      const div = document.createElement("div");
+      div.className = "wine-card";
+      div.innerHTML = `
+        <div><strong>${escapeHtml(w.name)}</strong> — ${escapeHtml(w.varietal)}</div>
+        <div>${escapeHtml((w.fruit_tags || []).join(", "))} · ${escapeHtml((w.texture_tags || []).join(", "))} · ${escapeHtml(w.oak_level || "")}</div>
+        <div>${escapeHtml(w.region || "")} ${w.process ? "· " + escapeHtml(w.process) : ""}</div>
+        <div>${escapeHtml(w.story || "")}</div>
+        <button type="button" class="btn-danger" data-wine-del="${w.id}">Delete</button>
+      `;
+      cards.appendChild(div);
+    }
+  });
+}
+
+function escapeHtml(s) {
+  return String(s ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
 
 if (!window.__BC_PARENT_TRACE__) {
   window.__BC_PARENT_TRACE__ = true;
@@ -876,48 +1067,153 @@ async function fetchAndSendWines(targetWindow = null) {
   }
 }
 
-async function hydratePremiumSetupWines() {
-  const frame = document.getElementById("premiumRootFrame");
-  const w = frame?.contentWindow;
-  if (!w) return;
+async function fetchParentRestaurantWines(restaurantId) {
+  const { data, error } = await supabase
+    .from("bc_wines")
+    .select("*")
+    .eq("restaurant_id", restaurantId)
+    .order("created_at", { ascending: true });
 
-  const restaurantId =
-    appState.activeRestaurantId ||
-    appState.profile?.restaurant_id ||
-    null;
+  if (error) throw error;
+  return data || [];
+}
 
+async function insertParentRestaurantWine(restaurantId, payload) {
+  const { data: userRes, error: uErr } = await supabase.auth.getUser();
+  if (uErr) throw uErr;
+  const userId = userRes?.user?.id;
+  if (!userId) throw new Error("not_authenticated");
+
+  const row = {
+    restaurant_id: restaurantId,
+    created_by: userId,
+    name: payload.name,
+    varietal: payload.varietal,
+    fruit_tags: payload.fruit_tags,
+    texture_tags: payload.texture_tags,
+    oak_level: payload.oak_level,
+    process: payload.process || "",
+    region: payload.region || "",
+    story: payload.story || "",
+  };
+
+  const { error } = await supabase.from("bc_wines").insert(row);
+  if (error) throw error;
+}
+
+async function deleteParentRestaurantWine(wineId) {
+  const { error } = await supabase.from("bc_wines").delete().eq("id", wineId);
+  if (error) throw error;
+}
+
+async function openPremiumSetupScreen() {
+  showScreen("screenSetupPremium");
+
+  const restaurantId = getRestaurantIdOrNull();
   if (!restaurantId) {
-    console.warn("[BC] hydratePremiumSetupWines: no restaurantId");
+    renderWineCount(0);
+    renderWineTable([]);
     return;
   }
 
-  try {
-    let list = null;
-    if (window.WineBridge?.fetchRestaurantWines) {
-      list = await window.WineBridge.fetchRestaurantWines(restaurantId);
-    } else {
-      const scopeId = appState.profile?.scope_id || null;
-      const { data, error } = await supabase
-        .from("bc_wines")
-        .select("*")
-        .eq("scope_id", scopeId)
-        .eq("restaurant_id", restaurantId)
-        .order("created_at", { ascending: true });
-      if (error) throw error;
-      list = data;
-    }
+  let fruitSel = [];
+  let textureSel = [];
+  let oakSel = "";
 
-    const wines = Array.isArray(list) ? list : [];
-    appState.wines = wines;
+  setupMultiSelectGrid("fruitOptionsPremium", FRUIT_OPTS, 2, () => fruitSel, (v) => (fruitSel = v));
+  setupMultiSelectGrid("textureOptionsPremium", TEXTURE_OPTS, 2, () => textureSel, (v) => (textureSel = v));
+  setupSingleSelectGrid("oakOptionsPremium", OAK_OPTS, () => oakSel, (v) => (oakSel = v));
 
-    w.postMessage(
-      { source: "BC_MSG", v: 1, type: "wines_sync", restaurantId, wines },
-      window.location.origin
-    );
+  const wines = await fetchParentRestaurantWines(restaurantId);
+  renderWineTable(wines.slice(0, WINE_LIMIT));
 
-    console.log("[BC] parent pushed wines_sync ✅", { restaurantId, count: wines.length });
-  } catch (e) {
-    console.error("[BC] hydratePremiumSetupWines failed", e);
+  const addBtn = document.getElementById("addWineBtnPremium");
+  if (addBtn && !addBtn.__bcBound) {
+    addBtn.__bcBound = true;
+    addBtn.addEventListener("click", async () => {
+      const name = (document.getElementById("wineNameInputPremium")?.value || "").trim();
+      const varietal = (document.getElementById("wineVarietalInputPremium")?.value || "").trim();
+      const process = (document.getElementById("processInputPremium")?.value || "").trim();
+      const region = (document.getElementById("regionInputPremium")?.value || "").trim();
+      const story = (document.getElementById("storyInputPremium")?.value || "").trim();
+
+      if (!name || !varietal || fruitSel.length === 0 || textureSel.length === 0 || !oakSel) {
+        alert("Please complete required fields and select fruit, texture, and oak.");
+        return;
+      }
+
+      try {
+        await insertParentRestaurantWine(restaurantId, {
+          name,
+          varietal,
+          fruit_tags: fruitSel,
+          texture_tags: textureSel,
+          oak_level: oakSel,
+          process,
+          region,
+          story,
+        });
+
+        document.getElementById("wineNameInputPremium").value = "";
+        document.getElementById("wineVarietalInputPremium").value = "";
+        document.getElementById("processInputPremium").value = "";
+        document.getElementById("regionInputPremium").value = "";
+        document.getElementById("storyInputPremium").value = "";
+        fruitSel = [];
+        textureSel = [];
+        oakSel = "";
+
+        setupMultiSelectGrid("fruitOptionsPremium", FRUIT_OPTS, 2, () => fruitSel, (v) => (fruitSel = v));
+        setupMultiSelectGrid("textureOptionsPremium", TEXTURE_OPTS, 2, () => textureSel, (v) => (textureSel = v));
+        setupSingleSelectGrid("oakOptionsPremium", OAK_OPTS, () => oakSel, (v) => (oakSel = v));
+
+        const refreshed = await fetchParentRestaurantWines(restaurantId);
+        renderWineTable(refreshed.slice(0, WINE_LIMIT));
+      } catch (e) {
+        console.error("[BC] add wine failed", e);
+        alert("Failed to save wine.");
+      }
+    });
+  }
+
+  const body = document.getElementById("premiumWineTableBody");
+  const cards = document.getElementById("premiumWineCards");
+  const bindDeleteDelegation = (root) => {
+    if (!root || root.__bcBound) return;
+    root.__bcBound = true;
+    root.addEventListener("click", async (ev) => {
+      const btn = ev.target?.closest?.("[data-wine-del]");
+      const wineId = btn?.getAttribute?.("data-wine-del");
+      if (!wineId) return;
+      if (!confirm("Delete this wine?")) return;
+
+      try {
+        await deleteParentRestaurantWine(wineId);
+        const refreshed = await fetchParentRestaurantWines(restaurantId);
+        renderWineTable(refreshed.slice(0, WINE_LIMIT));
+      } catch (e) {
+        console.error("[BC] delete wine failed", e);
+        alert("Failed to delete wine.");
+      }
+    });
+  };
+  bindDeleteDelegation(body);
+  bindDeleteDelegation(cards);
+
+  const backBtn = document.getElementById("btnBackHomeFromSetupPremium");
+  if (backBtn && !backBtn.__bcBound) {
+    backBtn.__bcBound = true;
+    backBtn.addEventListener("click", () => {
+      showScreen("screenPremiumApp");
+    });
+  }
+
+  const startBtn = document.getElementById("btnContinuePremium");
+  if (startBtn && !startBtn.__bcBound) {
+    startBtn.__bcBound = true;
+    startBtn.addEventListener("click", () => {
+      showScreen("screenPremiumApp");
+    });
   }
 }
 
@@ -942,7 +1238,7 @@ function wireParentButtons() {
   if (btnSetup && !btnSetup.__bcBound) {
     btnSetup.__bcBound = true;
     btnSetup.addEventListener("click", () => {
-      postToGame("nav", { target: "setup" });
+      openPremiumSetupScreen();
     });
   }
 
