@@ -588,11 +588,45 @@ function openManagerBoard() {
           try { resolveReady(window.__BC_CTX__); } catch {}
         };
 
-        const isEmbedded = window !== window.top;
+        function setCtx(msg) {
+          window.__BC_CTX__ = {
+            userId: msg.userId ?? null,
+            restaurantId: msg.restaurantId ?? null,
+            scopeId: msg.scopeId ?? null,
+            role: msg.role ?? null,
+            mode: msg.mode ?? null,
+          };
+          window.__BC_CTX_RESOLVE__?.(window.__BC_CTX__);
+        }
+        window.__BC_SET_CTX__ = setCtx;
+
+        if (!window.__BC_CTX_LISTENER_INSTALLED__) {
+          window.__BC_CTX_LISTENER_INSTALLED__ = true;
+          window.addEventListener("message", (event) => {
+            const msg = event?.data;
+            if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
+            if (msg.type !== "bc_ctx") return;
+            setCtx(msg);
+            console.log("[BC] bc_ctx received ✅", window.__BC_CTX__);
+            if (typeof renderProgressMeterUnderBackButton === "function") {
+              renderProgressMeterUnderBackButton();
+            }
+            userId = window.__BC_CTX__?.userId ?? userId ?? null;
+            restaurantId = window.__BC_CTX__?.restaurantId ?? restaurantId ?? null;
+            scopeId = window.__BC_CTX__?.scopeId ?? scopeId ?? null;
+            role = window.__BC_CTX__?.role ?? role ?? null;
+            mode = window.__BC_CTX__?.mode ?? mode ?? null;
+            if (typeof updateCounts === "function") updateCounts();
+            if (typeof renderWineTables === "function") renderWineTables();
+          });
+        }
+
+        const IS_IFRAME = !!window.frameElement;
+        console.log("[BC] iframe check", { IS_IFRAME, hasFrameElement: !!window.frameElement });
 
         // If game.html is opened directly (top-level), do NOT block the game.
-        if (!isEmbedded) {
-          console.warn("[BC] game.html is top-level (not iframe) — skipping ctx bootstrap");
+        if (!IS_IFRAME) {
+          console.log("[BC] top-level — skipping ctx bootstrap");
           window.__BC_CTX__ = null;
           window.__BC_CTX_RESOLVE__();
           return;
@@ -602,7 +636,7 @@ function openManagerBoard() {
         try {
           window.parent.postMessage(
             { source:"BC_MSG", v:1, type:"bc_ctx_request", mode: window.__BC_MODE__ || null },
-            window.location.origin
+            "*"
           );
           console.log("[BC] ctx request sent ✅");
         } catch (e) {
@@ -1091,29 +1125,6 @@ function openManagerBoard() {
       let selectedWineIndex = null;
       let DRILL = null;
 
-      function installBcCtxListener() {
-        if (window.__BC_CTX_LISTENER_INSTALLED__) return;
-        window.__BC_CTX_LISTENER_INSTALLED__ = true;
-
-        window.addEventListener("message", (event) => {
-          const msg = event?.data;
-          if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
-
-          if (msg.type === "bc_ctx") {
-            window.__BC_CTX__ = {
-              userId: msg.userId ?? null,
-              restaurantId: msg.restaurantId ?? null,
-              scopeId: msg.scopeId ?? null,
-              role: msg.role ?? null,
-              mode: msg.mode ?? null,
-            };
-            console.log("[BC] bc_ctx received ✅", window.__BC_CTX__);
-          }
-        });
-      }
-
-      installBcCtxListener();
-
       // Single message handler (iframe)
       console.log("[BC] start_drill listener loaded ✅");
       window.addEventListener("message", async (ev) => {
@@ -1139,23 +1150,7 @@ function openManagerBoard() {
         // BC_MSG (ctx + nav + drill)
         if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
 
-        if (msg.type === "bc_ctx" && msg.ctx) {
-          console.log("[MSG] bc_ctx received", msg);
-          const ctx = window.__BC_CTX__ || {};
-          userId = ctx.userId ?? null;
-          restaurantId = ctx.restaurantId ?? null;
-          scopeId = ctx.scopeId ?? null;
-          role = ctx.role ?? null;
-          mode = ctx.mode ?? null;
-
-          console.log("[BC] ctx received ✅", window.__BC_CTX__);
-          window.__BC_CTX_RESOLVE__?.();
-          if (typeof renderProgressMeterUnderBackButton === "function") {
-            renderProgressMeterUnderBackButton();
-          }
-          restaurantId = msg.ctx?.restaurantId || null;
-          if (typeof updateCounts === "function") updateCounts();
-          if (typeof renderWineTables === "function") renderWineTables();
+        if (msg.type === "bc_ctx") {
           return;
         }
 

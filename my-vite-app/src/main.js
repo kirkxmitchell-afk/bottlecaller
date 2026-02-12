@@ -1029,21 +1029,7 @@ function mountGameIframe(targetId, mode /* "demo" | "premium" */) {
     ></iframe>
   `;
 
-  const frame = document.getElementById(`${targetId}Frame`);
-  if (frame) {
-    frame.addEventListener("load", () => {
-      try {
-        const bcCtx = buildBcCtx(mode); // should return { userId, restaurantId, role, mode }
-        frame.contentWindow?.postMessage(
-          { source: "BC_MSG", v: 1, type: "bc_ctx", ...bcCtx },
-          window.location.origin
-        );
-        console.log("[BC] ctx pushed on iframe load ✅", { source:"BC_MSG", v:1, type:"bc_ctx", ...bcCtx });
-      } catch (e) {
-        console.warn("[BC] ctx push failed", e);
-      }
-    });
-  }
+  // ctx is now delivered only via bc_ctx_request reply from the iframe
 
   setDebug({ step: "game.iframe.mounted", targetId, mode, src, time: new Date().toISOString() });
 }
