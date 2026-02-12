@@ -1318,6 +1318,26 @@ function openManagerBoard() {
         } catch {}
       }
 
+      async function hydrateWinesForRestaurant() {
+        if (!restaurantId) return [];
+
+        if (!isDemo && window.WineBridge?.fetchRestaurantWines) {
+          try {
+            const list = await window.WineBridge.fetchRestaurantWines(scopeId, restaurantId);
+            wines = Array.isArray(list) ? list : [];
+            if (restaurantId) WineStore.write(restaurantId, wines);
+            console.log("[BC] wines hydrated from DB ✅", { restaurantId, count: wines.length });
+            return wines;
+          } catch (e) {
+            console.warn("[BC] fetchRestaurantWines failed, fallback to cache", e);
+          }
+        }
+
+        const cached = restaurantId ? WineStore.read(restaurantId) : [];
+        wines = Array.isArray(cached) ? cached : [];
+        return wines;
+      }
+
       console.log("[BOOT] screenWelcome?", !!document.querySelector("#screenWelcome"));
       console.log("[BOOT] screenPlay?", !!document.querySelector("#screenPlay"));
       console.log("[BOOT] btn5MinDrill?", !!document.querySelector("#btn5MinDrill"));
@@ -4414,7 +4434,7 @@ function openManagerBoard() {
 
         console.log("[SETUP] btnGoSetup element =", btnGoSetup);
         console.log("[SETUP] btnGoSetup id/class =", btnGoSetup?.id, btnGoSetup?.className);
-        bindInput(btnGoSetup, () => {
+        bindInput(btnGoSetup, async () => {
           if (sessionType === "drill") {
             console.warn("[NAV] setup blocked: drill active");
             return;
@@ -4431,6 +4451,10 @@ function openManagerBoard() {
               requestWinesFromParent();
             }
           }, 0);
+          if (!isDemo) {
+            await hydrateWinesForRestaurant();
+            if (wines.length) hydrateSetupFormFromWine(bcMode, wines[0]);
+          }
         });
 
         bindInput(btnResetApp, () => {

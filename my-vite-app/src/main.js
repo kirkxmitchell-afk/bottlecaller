@@ -113,6 +113,7 @@ document.querySelector("#app").innerHTML = `
           <button id="btnManagerBoard" class="btn-ghost" type="button">Manager Board</button>
           <button id="btnGoSetupPremium" class="btn-ghost" type="button">Setup</button>
           <button id="btnFiveMinRep" class="btn-ghost" type="button">5-Min Rep</button>
+          <button id="btnBackPremium" class="btn-ghost" type="button">Back</button>
 
           <button id="btnLogoutPremium" class="btn-danger" type="button">Logout</button>
         </div>
@@ -948,6 +949,7 @@ function wireParentButtons() {
   const btnSetup = document.getElementById("btnGoSetupPremium");
   const btnManagerBoard = document.getElementById("btnManagerBoard");
   const btnFiveMinRep = document.getElementById("btnFiveMinRep");
+  const btnBack = document.getElementById("btnBackPremium");
 
   if (btnSetup && !btnSetup.__bcBound) {
     btnSetup.__bcBound = true;
@@ -969,6 +971,13 @@ function wireParentButtons() {
     btnFiveMinRep.__bcBound = true;
     btnFiveMinRep.addEventListener("click", () => {
       postToGame("start_drill", { repTarget: 3 });
+    });
+  }
+
+  if (btnBack && !btnBack.__bcBound) {
+    btnBack.__bcBound = true;
+    btnBack.addEventListener("click", () => {
+      showScreen("screenPremiumApp");
     });
   }
 }
