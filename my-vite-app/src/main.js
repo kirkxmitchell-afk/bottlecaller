@@ -114,6 +114,7 @@ document.querySelector("#app").innerHTML = `
           <button id="btnGoSetupPremium" class="btn-ghost" type="button">Setup</button>
           <button id="btnFiveMinRep" class="btn-ghost" type="button">5-Min Rep</button>
           <button id="btnBackPremium" class="btn-ghost" type="button">Back</button>
+          <button id="btnBackHome" class="btn-ghost" type="button">Back</button>
 
           <button id="btnLogoutPremium" class="btn-danger" type="button">Logout</button>
         </div>
@@ -940,6 +941,7 @@ function wireParentButtons() {
   const btnManagerBoard = document.getElementById("btnManagerBoard");
   const btnFiveMinRep = document.getElementById("btnFiveMinRep");
   const btnBack = document.getElementById("btnBackPremium");
+  const btnBackHome = document.getElementById("btnBackHome");
 
   if (btnSetup && !btnSetup.__bcBound) {
     btnSetup.__bcBound = true;
@@ -968,6 +970,13 @@ function wireParentButtons() {
     btnBack.__bcBound = true;
     btnBack.addEventListener("click", () => {
       showScreen("screenPremiumApp");
+    });
+  }
+
+  if (btnBackHome && !btnBackHome.__bcBound) {
+    btnBackHome.__bcBound = true;
+    btnBackHome.addEventListener("click", () => {
+      showScreen("screenHome");
     });
   }
 }
