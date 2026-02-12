@@ -41,11 +41,10 @@ function toUiWine(r: WineRow) {
   };
 }
 
-export async function fetchRestaurantWines(scopeId: string, restaurantId: string) {
+export async function fetchRestaurantWines(restaurantId: string) {
   const { data, error } = await supabase
     .from("bc_wines")
     .select("*")
-    .eq("scope_id", scopeId)
     .eq("restaurant_id", restaurantId)
     .order("created_at", { ascending: true });
 

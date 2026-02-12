@@ -1159,6 +1159,7 @@ function openManagerBoard() {
 
       async function bootstrapWinesFromCtx(force = false) {
         const rid = window.__BC_CTX__?.restaurantId || restaurantId || null;
+        const sid = window.__BC_CTX__?.scopeId || scopeId || null;
         if (!rid) return;
 
         if (__BC_WINES_BOOTSTRAPPED__ && !force) return;
@@ -1166,7 +1167,9 @@ function openManagerBoard() {
 
         try {
           if (window.WineBridge?.fetchRestaurantWines) {
-            const dbWines = await window.WineBridge.fetchRestaurantWines(rid);
+            const fn = window.WineBridge.fetchRestaurantWines;
+            const dbWines =
+              fn.length >= 2 ? await fn(sid, rid) : await fn(rid);
             if (Array.isArray(dbWines)) {
               wines = dbWines.slice(0, LIMIT);
               try { WineStore?.write?.(rid, wines); } catch {}
@@ -1372,7 +1375,7 @@ function openManagerBoard() {
 
         if (!isDemo && window.WineBridge?.fetchRestaurantWines) {
           try {
-            const list = await window.WineBridge.fetchRestaurantWines(scopeId, restaurantId);
+            const list = await window.WineBridge.fetchRestaurantWines(restaurantId);
             wines = Array.isArray(list) ? list : [];
             if (restaurantId) WineStore.write(restaurantId, wines);
             console.log("[BC] wines hydrated from DB ✅", { restaurantId, count: wines.length });
@@ -1884,7 +1887,7 @@ function openManagerBoard() {
 
         // PREMIUM: DB source of truth
         try {
-          const rows = await window.WineBridge.fetchRestaurantWines(scopeId, restaurantId);
+          const rows = await window.WineBridge.fetchRestaurantWines(restaurantId);
           const out = (rows || [])
             .map(normalizeWineToDbShape)
             .map(w => sanitizeWine(w));
