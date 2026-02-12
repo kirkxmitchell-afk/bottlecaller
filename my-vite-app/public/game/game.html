@@ -1151,16 +1151,17 @@ function openManagerBoard() {
         window.__BC_CTX__ = { userId, restaurantId, scopeId, role, mode };
 
         console.log("[BC] bc_ctx applied ✅", window.__BC_CTX__);
+        bootstrapWinesFromCtx(false);
         try { window.__BC_CTX_RESOLVE__?.(window.__BC_CTX__); } catch {}
       }
 
       let __BC_WINES_BOOTSTRAPPED__ = false;
 
-      async function bootstrapWinesFromCtx() {
-        if (__BC_WINES_BOOTSTRAPPED__) return;
-        const rid = window.__BC_CTX__?.restaurantId;
+      async function bootstrapWinesFromCtx(force = false) {
+        const rid = window.__BC_CTX__?.restaurantId || restaurantId || null;
         if (!rid) return;
 
+        if (__BC_WINES_BOOTSTRAPPED__ && !force) return;
         __BC_WINES_BOOTSTRAPPED__ = true;
 
         try {
@@ -1173,23 +1174,25 @@ function openManagerBoard() {
           }
 
           if (!Array.isArray(wines) || wines.length === 0) {
-            const cached = WineStore?.migrateIfNeeded?.(rid) || WineStore?.read?.(rid) || [];
+            const cached =
+              WineStore?.migrateIfNeeded?.(rid) ||
+              WineStore?.read?.(rid) ||
+              [];
             wines = Array.isArray(cached) ? cached.slice(0, LIMIT) : [];
           }
 
           console.log("[BC] wines bootstrapped ✅", { rid, count: wines.length });
 
-          if (document.getElementById("screenSetupPremium") && !document.getElementById("screenSetupPremium")?.classList.contains("hidden")) {
+          const setupEl = document.getElementById("screenSetupPremium");
+          const setupVisible = setupEl && !setupEl.classList.contains("hidden");
+          if (setupVisible) {
             try {
               renderWineTables?.();
-              if (wines[0]) hydrateSetupFormFromWine?.(bcMode, wines[0]);
-            } catch {}
+              if (wines?.[0]) hydrateSetupFormFromWine?.(bcMode, wines[0]);
+            } catch (e) {
+              console.warn("[BC] setup paint failed", e);
+            }
           }
-
-          try {
-            window.parent?.postMessage({ source: "BC_MSG", v: 1, type: "wines_report", mode: bcMode, wines }, location.origin);
-          } catch {}
-
         } catch (e) {
           console.warn("[BC] bootstrapWinesFromCtx failed", e);
           __BC_WINES_BOOTSTRAPPED__ = false;
@@ -1235,23 +1238,19 @@ function openManagerBoard() {
 
         if (msg.type === "nav") {
           if (msg.action === "setup" || msg.target === "setup") {
-            const btn = document.getElementById("btnGoPremium") || document.getElementById("btnGoSetup");
-            if (btn) { btn.click(); return; }
+            resetNavState?.();
+            showScreen?.("screenSetupPremium");
 
-            if (typeof showScreen === "function" && document.getElementById("screenSetupPremium")) {
-              resetNavState?.();
-              showScreen("screenSetupPremium");
-              bootstrapWinesFromCtx?.();
-              setTimeout(() => {
-                try {
-                  renderWineTables?.();
-                  if (wines?.[0]) hydrateSetupFormFromWine?.(bcMode, wines[0]);
-                } catch {}
-              }, 0);
-              return;
-            }
+            bootstrapWinesFromCtx(true);
+            setTimeout(() => {
+              try {
+                renderWineTables?.();
+                if (wines?.[0]) hydrateSetupFormFromWine?.(bcMode, wines[0]);
+              } catch (e) {
+                console.warn("[BC] setup hydrate failed", e);
+              }
+            }, 0);
 
-            console.warn("[BC] setup: no handler found");
             return;
           }
           if (msg.action === "manager_board" || msg.target === "manager_board") {
