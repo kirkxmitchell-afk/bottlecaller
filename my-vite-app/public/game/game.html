@@ -1223,19 +1223,60 @@ function openManagerBoard() {
 
       let __BC_WINES_BOOTSTRAPPED__ = false;
 
+      async function migrateCachedWinesToDbIfNeeded(rid) {
+        const flagKey = `bc_wines_migrated_${rid}`;
+        if (localStorage.getItem(flagKey) === "1") return false;
+
+        const roleNow = window.__BC_CTX__?.role || null;
+        if (roleNow !== "manager" && roleNow !== "group_manager" && roleNow !== "enterprise") return false;
+
+        const cached = Array.isArray(WineStore.read(rid)) ? WineStore.read(rid) : [];
+        if (!cached.length) {
+          localStorage.setItem(flagKey, "1");
+          return false;
+        }
+
+        console.log("[BC] DB empty, migrating cached wines -> DB...", { rid, cached: cached.length });
+
+        for (const w of cached) {
+          try {
+            await window.WineBridge.addRestaurantWine(rid, {
+              name: w.name,
+              varietal: w.varietal,
+              fruitTags: w.fruitTags || [],
+              textureTags: w.textureTags || [],
+              oakLevel: w.oakLevel || "",
+              process: w.process || "",
+              region: w.region || "",
+              story: w.story || "",
+            });
+          } catch (e) {
+            console.warn("[BC] migrate wine insert skipped/failed", w?.name, e?.message || e);
+          }
+        }
+
+        localStorage.setItem(flagKey, "1");
+        return true;
+      }
+
       async function bootstrapWinesFromCtx() {
         const rid = window.__BC_CTX__?.restaurantId;
         if (!rid) return;
 
         try {
-          const rows = await window.WineBridge.fetchRestaurantWines(rid);
+          let rows = await window.WineBridge.fetchRestaurantWines(rid);
+
+          if (!rows || rows.length === 0) {
+            const migrated = await migrateCachedWinesToDbIfNeeded(rid);
+            if (migrated) {
+              rows = await window.WineBridge.fetchRestaurantWines(rid);
+            }
+          }
 
           wines = Array.isArray(rows) ? rows.slice(0, LIMIT) : [];
-
           WineStore.write(rid, wines);
 
-          console.log("[BC] wines bootstrapped from DB ✅", { rid, count: wines.length });
-
+          console.log("[BC] wines bootstrapped ✅", { rid, count: wines.length });
           renderWineTables?.();
         } catch (e) {
           console.warn("[BC] wines bootstrap failed — leaving cache as-is", e);
