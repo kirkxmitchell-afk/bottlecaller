@@ -561,6 +561,26 @@ function renderWineCount(count) {
   if (el) el.textContent = `${count} / ${WINE_LIMIT}`;
 }
 
+function normalizeWineRow(row) {
+  if (!row) return row;
+  if (row.fruitTags || row.oakLevel) return row;
+  return {
+    id: row.id,
+    restaurantId: row.restaurant_id,
+    createdBy: row.created_by,
+    name: row.name,
+    varietal: row.varietal,
+    fruitTags: Array.isArray(row.fruit_tags) ? row.fruit_tags : [],
+    textureTags: Array.isArray(row.texture_tags) ? row.texture_tags : [],
+    oakLevel: row.oak_level ?? "",
+    process: row.process ?? "",
+    region: row.region ?? "",
+    story: row.story ?? "",
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 function renderWineTable(wines) {
   const body = document.getElementById("premiumWineTableBody");
   const cards = document.getElementById("premiumWineCards");
@@ -575,9 +595,9 @@ function renderWineTable(wines) {
       tr.innerHTML = `
         <td>${escapeHtml(w.name)}</td>
         <td>${escapeHtml(w.varietal)}</td>
-        <td>${escapeHtml((w.fruit_tags || []).join(", "))}</td>
-        <td>${escapeHtml((w.texture_tags || []).join(", "))}</td>
-        <td>${escapeHtml(w.oak_level || "")}</td>
+        <td>${escapeHtml((w.fruitTags || []).join(", "))}</td>
+        <td>${escapeHtml((w.textureTags || []).join(", "))}</td>
+        <td>${escapeHtml(w.oakLevel || "")}</td>
         <td>${escapeHtml(w.process || "")}</td>
         <td>${escapeHtml(w.region || "")}</td>
         <td>${escapeHtml(w.story || "")}</td>
@@ -591,7 +611,7 @@ function renderWineTable(wines) {
       div.className = "wine-card";
       div.innerHTML = `
         <div><strong>${escapeHtml(w.name)}</strong> — ${escapeHtml(w.varietal)}</div>
-        <div>${escapeHtml((w.fruit_tags || []).join(", "))} · ${escapeHtml((w.texture_tags || []).join(", "))} · ${escapeHtml(w.oak_level || "")}</div>
+        <div>${escapeHtml((w.fruitTags || []).join(", "))} · ${escapeHtml((w.textureTags || []).join(", "))} · ${escapeHtml(w.oakLevel || "")}</div>
         <div>${escapeHtml(w.region || "")} ${w.process ? "· " + escapeHtml(w.process) : ""}</div>
         <div>${escapeHtml(w.story || "")}</div>
         <button type="button" class="btn-danger" data-wine-del="${w.id}">Delete</button>
@@ -1124,7 +1144,8 @@ async function openPremiumSetupScreen() {
   setupMultiSelectGrid("textureOptionsPremium", TEXTURE_OPTS, 2, () => textureSel, (v) => (textureSel = v));
   setupSingleSelectGrid("oakOptionsPremium", OAK_OPTS, () => oakSel, (v) => (oakSel = v));
 
-  const wines = await fetchParentRestaurantWines(restaurantId);
+  const winesRaw = await fetchParentRestaurantWines(restaurantId);
+  const wines = (winesRaw || []).map(normalizeWineRow);
   renderWineTable(wines.slice(0, WINE_LIMIT));
 
   const addBtn = document.getElementById("addWineBtnPremium");
@@ -1167,7 +1188,8 @@ async function openPremiumSetupScreen() {
         setupMultiSelectGrid("textureOptionsPremium", TEXTURE_OPTS, 2, () => textureSel, (v) => (textureSel = v));
         setupSingleSelectGrid("oakOptionsPremium", OAK_OPTS, () => oakSel, (v) => (oakSel = v));
 
-        const refreshed = await fetchParentRestaurantWines(restaurantId);
+        const refreshedRaw = await fetchParentRestaurantWines(restaurantId);
+        const refreshed = (refreshedRaw || []).map(normalizeWineRow);
         renderWineTable(refreshed.slice(0, WINE_LIMIT));
       } catch (e) {
         console.error("[BC] add wine failed", e);
@@ -1189,7 +1211,8 @@ async function openPremiumSetupScreen() {
 
       try {
         await deleteParentRestaurantWine(wineId);
-        const refreshed = await fetchParentRestaurantWines(restaurantId);
+        const refreshedRaw = await fetchParentRestaurantWines(restaurantId);
+        const refreshed = (refreshedRaw || []).map(normalizeWineRow);
         renderWineTable(refreshed.slice(0, WINE_LIMIT));
       } catch (e) {
         console.error("[BC] delete wine failed", e);
