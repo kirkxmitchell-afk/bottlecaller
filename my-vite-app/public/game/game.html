@@ -968,13 +968,14 @@ function openManagerBoard() {
 
       async function hydrateSetupFromDbIfPossible(mode) {
         const rid = window.__BC_CTX__?.restaurantId;
-        if (!rid) {
+        const sid = window.__BC_CTX__?.scopeId || scopeId || null;
+        if (!rid || !sid) {
           console.warn("[SETUP] skip hydrate: no restaurantId yet");
           return;
         }
 
         try {
-          const rows = await window.WineBridge.fetchRestaurantWines(rid);
+          const rows = await window.WineBridge.fetchRestaurantWines(sid, rid);
           wines = Array.isArray(rows) ? rows : [];
           console.log("[SETUP] hydrated wines ✅", { rid, count: wines.length });
 
@@ -1213,7 +1214,7 @@ function openManagerBoard() {
         window.__BC_CTX__ = { userId, restaurantId, scopeId, role, mode };
 
         console.log("[BC] bc_ctx applied ✅", window.__BC_CTX__);
-        bootstrapWinesFromCtx(false);
+        bootstrapWinesFromCtx();
         try {
           const isOnSetup = !document.getElementById("screenSetupPremium")?.classList.contains("hidden");
           if (isOnSetup) openSetupScreen("premium");
@@ -1228,8 +1229,9 @@ function openManagerBoard() {
         if (localStorage.getItem(flagKey) === "1") return false;
 
         const roleNow = window.__BC_CTX__?.role || null;
+        const sid = window.__BC_CTX__?.scopeId || scopeId || null;
         const canWrite = (roleNow === "manager" || roleNow === "group_manager" || roleNow === "enterprise");
-        if (!canWrite) return false;
+        if (!canWrite || !sid) return false;
 
         const dbg = window.__BC_DEBUG__?.();
         const cached = (typeof dbg?.wineStoreRead === "function") ? (dbg.wineStoreRead(rid) || []) : [];
@@ -1245,7 +1247,7 @@ function openManagerBoard() {
 
         for (const w of cached) {
           try {
-            await window.WineBridge.addRestaurantWine(rid, {
+            await window.WineBridge.addRestaurantWine(sid, rid, {
               name: w.name,
               varietal: w.varietal,
               fruitTags: w.fruitTags || [],
@@ -1275,15 +1277,16 @@ function openManagerBoard() {
 
       async function bootstrapWinesFromCtx() {
         const rid = window.__BC_CTX__?.restaurantId;
-        if (!rid) return;
+        const sid = window.__BC_CTX__?.scopeId || scopeId || null;
+        if (!rid || !sid) return;
 
         try {
-          let rows = await window.WineBridge.fetchRestaurantWines(rid);
+          let rows = await window.WineBridge.fetchRestaurantWines(sid, rid);
 
           if (!rows || rows.length === 0) {
             const migrated = await migrateCachedWinesToDbIfNeeded(rid);
             if (migrated) {
-              rows = await window.WineBridge.fetchRestaurantWines(rid);
+              rows = await window.WineBridge.fetchRestaurantWines(sid, rid);
             }
           }
 
@@ -1480,7 +1483,9 @@ function openManagerBoard() {
 
         if (!isDemo && window.WineBridge?.fetchRestaurantWines) {
           try {
-            const list = await window.WineBridge.fetchRestaurantWines(restaurantId);
+            const sid = window.__BC_CTX__?.scopeId || scopeId || null;
+            if (!sid) throw new Error("missing_scope_id");
+            const list = await window.WineBridge.fetchRestaurantWines(sid, restaurantId);
             wines = Array.isArray(list) ? list : [];
             if (restaurantId) WineStore.write(restaurantId, wines);
             console.log("[BC] wines hydrated from DB ✅", { restaurantId, count: wines.length });
@@ -1992,7 +1997,9 @@ function openManagerBoard() {
 
         // PREMIUM: DB source of truth
         try {
-          const rows = await window.WineBridge.fetchRestaurantWines(restaurantId);
+          const sid = window.__BC_CTX__?.scopeId || scopeId || null;
+          if (!sid) throw new Error("missing_scope_id");
+          const rows = await window.WineBridge.fetchRestaurantWines(sid, restaurantId);
           const out = (rows || [])
             .map(normalizeWineToDbShape)
             .map(w => sanitizeWine(w));
