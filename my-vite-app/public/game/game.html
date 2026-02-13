@@ -1228,15 +1228,20 @@ function openManagerBoard() {
         if (localStorage.getItem(flagKey) === "1") return false;
 
         const roleNow = window.__BC_CTX__?.role || null;
-        if (roleNow !== "manager" && roleNow !== "group_manager" && roleNow !== "enterprise") return false;
+        const canWrite = (roleNow === "manager" || roleNow === "group_manager" || roleNow === "enterprise");
+        if (!canWrite) return false;
 
-        const cached = Array.isArray(WineStore.read(rid)) ? WineStore.read(rid) : [];
-        if (!cached.length) {
+        const dbg = window.__BC_DEBUG__?.();
+        const cached = (typeof dbg?.wineStoreRead === "function") ? (dbg.wineStoreRead(rid) || []) : [];
+        if (!Array.isArray(cached) || cached.length === 0) {
           localStorage.setItem(flagKey, "1");
           return false;
         }
 
-        console.log("[BC] DB empty, migrating cached wines -> DB...", { rid, cached: cached.length });
+        console.log("[BC] MIGRATE cache -> DB start", { rid, cached: cached.length });
+
+        let ok = 0;
+        let fail = 0;
 
         for (const w of cached) {
           try {
@@ -1250,13 +1255,22 @@ function openManagerBoard() {
               region: w.region || "",
               story: w.story || "",
             });
+            ok++;
           } catch (e) {
-            console.warn("[BC] migrate wine insert skipped/failed", w?.name, e?.message || e);
+            fail++;
+            console.warn("[BC] MIGRATE insert failed", {
+              name: w?.name,
+              varietal: w?.varietal,
+              msg: e?.message || e
+            });
           }
         }
 
-        localStorage.setItem(flagKey, "1");
-        return true;
+        console.log("[BC] MIGRATE done", { ok, fail });
+
+        if (ok > 0) localStorage.setItem(flagKey, "1");
+
+        return ok > 0;
       }
 
       async function bootstrapWinesFromCtx() {
@@ -1274,7 +1288,8 @@ function openManagerBoard() {
           }
 
           wines = Array.isArray(rows) ? rows.slice(0, LIMIT) : [];
-          WineStore.write(rid, wines);
+
+          try { WineStore.write(rid, wines); } catch {}
 
           console.log("[BC] wines bootstrapped ✅", { rid, count: wines.length });
           renderWineTables?.();
