@@ -181,63 +181,77 @@
   <section id="screenSetupPremium" class="screen">
     <div class="panel">
       <h2>Setup</h2>
-      <div class="score-row">Wines added: <span id="wineCountPremium">0 / 10</span></div>
-
-      <div id="wineAdminPanel">
-      <div class="manager-row">
-        <input type="text" id="wineNameInputPremium" placeholder="Wine Name (required)" />
-        <input type="text" id="wineVarietalInputPremium" placeholder="Varietal (required)" />
+      <div class="score-row">
+        Wines added: <span id="wineCountPremium">0 / 10</span>
       </div>
 
-      <div class="manager-row">
-        <strong>Fruit Profile (choose up to 2):</strong>
-        <div class="option-grid" id="fruitOptionsPremium"></div>
-      </div>
-
-      <div class="manager-row">
-        <strong>Structure/Texture (choose up to 2):</strong>
-        <div class="option-grid" id="textureOptionsPremium"></div>
-      </div>
-
-      <div class="manager-row">
-        <strong>Oak Level (choose 1):</strong>
-        <div class="option-grid" id="oakOptionsPremium"></div>
-      </div>
-
-      <div class="manager-row">
-        <strong>Process (optional):</strong>
-        <select id="processInputPremium">
-          <option value="">Select process</option>
-          <option value="Stainless steel">Stainless steel</option>
-          <option value="Wild ferment">Wild ferment</option>
-          <option value="Maceration">Maceration</option>
-          <option value="Destemming">Destemming</option>
-          <option value="Whole bunch pressed">Whole bunch pressed</option>
-          <option value="Hand harvested">Hand harvested</option>
-          <option value="Time on lees">Time on lees</option>
-        </select>
-        <input type="text" id="regionInputPremium" placeholder="Region (optional)" />
-      </div>
-
-      <div class="manager-row">
-        <textarea id="storyInputPremium" placeholder="Story (optional, 1 sentence)"></textarea>
-        <button id="addWineBtnPremium" type="button">Add Wine</button>
-      </div>
-
+      <!-- WINE LIST AREA -->
       <div class="manager-panel">
         <h3>Wine List</h3>
-        <table class="wine-table">
-          <thead>
-            <tr>
-              <th>Name</th><th>Varietal</th><th>Fruit</th><th>Texture</th><th>Oak</th><th>Process</th><th>Region</th><th>Story</th><th>Action</th>
-            </tr>
-          </thead>
-          <tbody id="premiumWineTableBody"></tbody>
-        </table>
+
+        <!-- 1) SHORT FORM FIRST (CARDS) -->
         <div id="premiumWineCards" class="wine-cards"></div>
-      </div>
+
+        <!-- 2) DROPDOWN UNDER CARDS -->
+        <details id="premiumWineAdvanced" class="wine-advanced">
+          <summary>Advanced (add wines + table)</summary>
+
+          <!-- INPUT FORM INSIDE DROPDOWN -->
+          <div id="wineAdminPanel" style="margin-top:10px;">
+            <div class="manager-row">
+              <input type="text" id="wineNameInputPremium" placeholder="Wine Name (required)" />
+              <input type="text" id="wineVarietalInputPremium" placeholder="Varietal (required)" />
+            </div>
+
+            <div class="manager-row">
+              <strong>Fruit Profile (choose up to 2):</strong>
+              <div class="option-grid" id="fruitOptionsPremium"></div>
+            </div>
+
+            <div class="manager-row">
+              <strong>Structure/Texture (choose up to 2):</strong>
+              <div class="option-grid" id="textureOptionsPremium"></div>
+            </div>
+
+            <div class="manager-row">
+              <strong>Oak Level (choose 1):</strong>
+              <div class="option-grid" id="oakOptionsPremium"></div>
+            </div>
+
+            <div class="manager-row">
+              <strong>Process (optional):</strong>
+              <select id="processInputPremium">
+                <option value="">Select process</option>
+                <option value="Stainless steel">Stainless steel</option>
+                <option value="Wild ferment">Wild ferment</option>
+                <option value="Maceration">Maceration</option>
+                <option value="Destemming">Destemming</option>
+                <option value="Whole bunch pressed">Whole bunch pressed</option>
+                <option value="Hand harvested">Hand harvested</option>
+                <option value="Time on lees">Time on lees</option>
+              </select>
+              <input type="text" id="regionInputPremium" placeholder="Region (optional)" />
+            </div>
+
+            <div class="manager-row">
+              <textarea id="storyInputPremium" placeholder="Story (optional, 1 sentence)"></textarea>
+              <button id="addWineBtnPremium" type="button">Add Wine</button>
+            </div>
+          </div>
+
+          <!-- TABLE VIEW INSIDE DROPDOWN -->
+          <table class="wine-table" style="margin-top:12px;">
+            <thead>
+              <tr>
+                <th>Name</th><th>Varietal</th><th>Fruit</th><th>Texture</th><th>Oak</th><th>Process</th><th>Region</th><th>Story</th><th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="premiumWineTableBody"></tbody>
+          </table>
+        </details>
       </div>
 
+      <!-- EXISTING BUTTONS (KEEP AS-IS) -->
       <div class="button-row">
         <button id="btnContinuePremium" type="button">Start</button>
         <button id="btnBackHomeFromSetupPremium" type="button">Back</button>
