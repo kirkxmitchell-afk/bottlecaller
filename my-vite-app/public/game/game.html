@@ -185,7 +185,7 @@
         Wines added: <span id="wineCountPremium">0 / 10</span>
       </div>
 
-      <!-- WINE LIST AREA -->
+      <!-- WINE LIST PANEL -->
       <div class="manager-panel">
         <h3>Wine List</h3>
 
@@ -193,11 +193,11 @@
         <div id="premiumWineCards" class="wine-cards"></div>
 
         <!-- 2) DROPDOWN UNDER CARDS -->
-        <details id="premiumWineAdvanced" class="wine-advanced">
+        <details id="premiumWineAdvanced" class="wine-advanced" style="margin-top:12px;">
           <summary>Advanced (add wines + table)</summary>
 
           <!-- INPUT FORM INSIDE DROPDOWN -->
-          <div id="wineAdminPanel" style="margin-top:10px;">
+          <div id="wineAdminPanel" style="margin-top:12px;">
             <div class="manager-row">
               <input type="text" id="wineNameInputPremium" placeholder="Wine Name (required)" />
               <input type="text" id="wineVarietalInputPremium" placeholder="Varietal (required)" />
@@ -243,7 +243,15 @@
           <table class="wine-table" style="margin-top:12px;">
             <thead>
               <tr>
-                <th>Name</th><th>Varietal</th><th>Fruit</th><th>Texture</th><th>Oak</th><th>Process</th><th>Region</th><th>Story</th><th>Action</th>
+                <th>Name</th>
+                <th>Varietal</th>
+                <th>Fruit</th>
+                <th>Texture</th>
+                <th>Oak</th>
+                <th>Process</th>
+                <th>Region</th>
+                <th>Story</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody id="premiumWineTableBody"></tbody>
@@ -251,7 +259,6 @@
         </details>
       </div>
 
-      <!-- EXISTING BUTTONS (KEEP AS-IS) -->
       <div class="button-row">
         <button id="btnContinuePremium" type="button">Start</button>
         <button id="btnBackHomeFromSetupPremium" type="button">Back</button>
