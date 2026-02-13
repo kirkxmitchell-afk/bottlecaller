@@ -1242,10 +1242,17 @@ function openManagerBoard() {
 
         console.log("[BC] MIGRATE cache -> DB start", { rid, cached: cached.length });
 
+        const existing = await window.WineBridge.fetchRestaurantWines(sid, rid);
+        const existingKey = new Set((existing || []).map(x =>
+          `${(x.name||"").toLowerCase()}::${(x.varietal||"").toLowerCase()}`
+        ));
+
         let ok = 0;
         let fail = 0;
 
         for (const w of cached) {
+          const key = `${(w.name||"").toLowerCase()}::${(w.varietal||"").toLowerCase()}`;
+          if (existingKey.has(key)) continue;
           try {
             await window.WineBridge.addRestaurantWine(sid, rid, {
               name: w.name,
@@ -1282,15 +1289,21 @@ function openManagerBoard() {
 
         try {
           let rows = await window.WineBridge.fetchRestaurantWines(sid, rid);
+          rows = Array.isArray(rows) ? rows : [];
 
-          if (!rows || rows.length === 0) {
+          const dbg = window.__BC_DEBUG__?.();
+          const cached = (typeof dbg?.wineStoreRead === "function") ? (dbg.wineStoreRead(rid) || []) : [];
+          const cachedCount = Array.isArray(cached) ? cached.length : 0;
+
+          if (rows.length < LIMIT && cachedCount > rows.length) {
             const migrated = await migrateCachedWinesToDbIfNeeded(rid);
             if (migrated) {
               rows = await window.WineBridge.fetchRestaurantWines(sid, rid);
+              rows = Array.isArray(rows) ? rows : [];
             }
           }
 
-          wines = Array.isArray(rows) ? rows.slice(0, LIMIT) : [];
+          wines = rows.slice(0, LIMIT);
 
           try { WineStore.write(rid, wines); } catch {}
 
