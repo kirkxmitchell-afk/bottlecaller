@@ -1373,6 +1373,11 @@ function openManagerBoard() {
         }
 
         if (msg.type === "nav") {
+          if (msg.target === "setup_premium" || msg.action === "setup_premium") {
+            resetNavState?.();
+            showScreen("screenSetupPremium");
+            return;
+          }
           if (msg.action === "setup" || msg.target === "setup") {
             // go to setup screen inside iframe
             resetNavState();

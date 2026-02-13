@@ -1261,7 +1261,8 @@ function wireParentButtons() {
   if (btnSetup && !btnSetup.__bcBound) {
     btnSetup.__bcBound = true;
     btnSetup.addEventListener("click", () => {
-      openPremiumSetupScreen();
+      showScreen("screenPremiumApp");
+      postToGame("nav", { target: "setup_premium" });
     });
   }
 
