@@ -581,7 +581,7 @@ function scoreDecider(checks: ReactionChecks): DeciderResult {
   if (hookType.includes("outcome_centered")) hookScore -= 1;
 
   const good = ["quick", "simple", "easy", "safe", "best", "i’d go", "i'd go", "can’t miss", "can't miss", "straightforward", "in a rush"];
-  const bad  = ["leaning", "or", "maybe", "perhaps", "few options", "what do you feel", "do you prefer"];
+  const bad  = ["leaning", "maybe", "perhaps", "few options", "what do you feel", "do you prefer"];
 
   for (const k of good) if (text.includes(k)) hookScore += 1;
   for (const k of bad) if (text.includes(k)) hookScore -= 1;
