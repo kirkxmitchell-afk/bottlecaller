@@ -1432,6 +1432,16 @@ function openManagerBoard() {
       let selectedWineIndex = null;
       let DRILL = null;
 
+      // ---- Debug export (PARENT) ----
+      window.__BC_PARENT_DEBUG__ = function () {
+        return {
+          sessionType: (typeof sessionType !== "undefined" ? sessionType : "NO_VAR"),
+          currentStep: (typeof currentStep !== "undefined" ? currentStep : "NO_VAR"),
+          drill: (typeof DRILL !== "undefined" ? DRILL : "NO_VAR"),
+          lastEncounter: window.__BC_LAST_ENCOUNTER__ || null
+        };
+      };
+
       // Single message handler (iframe)
       console.log("[BC] start_drill listener loaded ✅");
       window.addEventListener("message", async (ev) => {
