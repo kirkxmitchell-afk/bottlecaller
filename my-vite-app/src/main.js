@@ -1276,7 +1276,8 @@ function wireParentButtons() {
   if (btnFiveMinRep && !btnFiveMinRep.__bcBound) {
     btnFiveMinRep.__bcBound = true;
     btnFiveMinRep.addEventListener("click", () => {
-      postToGame("start_drill", { repTarget: 3 });
+      const tier = 0;
+      postToGame("start_drill", { repTarget: 3, focus: null, starter: "manager", tier });
     });
   }
 

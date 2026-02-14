@@ -1636,6 +1636,7 @@ function openManagerBoard() {
       function isDrill() { return sessionType === "drill"; }
       function startDrill(repTarget = 3, focus = null, starter = "manager", tier = 0) {
         DRILL = { repTarget, repDone: 0, startedAt: Date.now(), focus, starter, tier: (typeof tier === "number" ? tier : 0) };
+        DRILL.activeWine = (Array.isArray(wines) && wines.length ? wines[0] : { name: "This bottle" });
         sessionType = "drill";
         drillRepTarget = repTarget;
         drillRepDone = 0;
@@ -3709,30 +3710,56 @@ function openManagerBoard() {
         stepContent.appendChild(wrap);
       }
 
-      function getDrillHookOptions(encounter, wine) {
-        const safeWine = wine || {};
-        const name = safeWine.name || "This bottle";
+      function getDrillHookOptions(encounter, wine, meta = {}) {
+        const name = wine?.name || "This bottle";
+        const starter = meta.starter || "manager";
+        const tier = typeof meta.tier === "number" ? meta.tier : 0;
 
-        return [
-          {
-            id: "hA",
-            text: `If you want something easy and safe tonight, ${name} is a great call.`,
-            tier: "right",
-            hookType: "guest_centered_framing",
-          },
-          {
-            id: "hB",
-            text: "Quick one — are you leaning lighter and fresh, or richer and smooth?",
-            tier: "slightly",
-            hookType: "guest_centered_framing",
-          },
-          {
-            id: "hC",
-            text: `${name} is the right bottle for the table.`,
-            tier: "wrong",
-            hookType: "outcome_centered_framing",
-          },
+        const tone =
+          starter === "enterprise" ? "operator" :
+          starter === "group_manager" ? "standardize" :
+          "floor";
+
+        const leadLine =
+          tone === "operator"
+            ? `If you want the cleanest, safest choice — ${name}.`
+            : tone === "standardize"
+            ? `For something reliable and easy to sell — ${name}.`
+            : `If you want something easy and safe tonight, ${name} is a great call.`;
+
+        const reflectLine =
+          "Quick one — are you leaning lighter and fresh, or richer and smooth?";
+
+        const holdLine =
+          tone === "operator"
+            ? `${name} is the one that keeps the table happy — no surprises.`
+            : `${name} is the right bottle for the table.`;
+
+        const base = [
+          { id: "hA", text: leadLine, tier: "right", hookType: "guest_centered_framing" },
+          { id: "hB", text: reflectLine, tier: "slightly", hookType: "diagnostic_question" },
+          { id: "hC", text: holdLine, tier: "wrong", hookType: "outcome_centered_framing" },
         ];
+
+        if (tier >= 1) {
+          base.unshift({
+            id: "hD",
+            text: `One sentence: ${name} — ${wine?.story ? wine.story : "it’s made with a quiet, deliberate approach."}`,
+            tier: "right",
+            hookType: "story_authority"
+          });
+        }
+
+        if (tier >= 2) {
+          base.unshift({
+            id: "hE",
+            text: `If you want the “premium-feeling” option without the risk, ${name} does that.`,
+            tier: "right",
+            hookType: "value_framing"
+          });
+        }
+
+        return base;
       }
 
       function renderEncounterStep() {
@@ -3909,8 +3936,10 @@ function openManagerBoard() {
           prompt.innerText = "Which sentence do you lead with?";
           stepContent.appendChild(prompt);
 
-          const wine = currentEncounter?.wineSelected || { name: "This bottle" };
-          const opts = getDrillHookOptions(currentEncounter, wine);
+          const wine = DRILL?.activeWine || { name: "This bottle" };
+          const tier = DRILL?.tier ?? 0;
+          const starter = DRILL?.starter ?? "manager";
+          const opts = getDrillHookOptions(currentEncounter, wine, { tier, starter });
 
           const options = document.createElement("div");
           options.className = "option-grid";
@@ -3926,14 +3955,14 @@ function openManagerBoard() {
             bindInput(btn, () => {
               currentEncounter.hookSelected = opt.id;
               currentEncounter.hookMeta = opt;
-              renderEncounterStep();
+              renderDrillStep();
             });
 
             options.appendChild(btn);
           });
           stepContent.appendChild(options);
 
-          const contBtn = addStepButton("CONTINUE", () => { currentStep = 4; renderEncounterStep(); }, stepButtons);
+          const contBtn = addStepButton("CONTINUE", () => { currentStep = 4; renderDrillStep(); }, stepButtons);
           if (!currentEncounter.hookSelected) contBtn.disabled = true;
           return;
         }
