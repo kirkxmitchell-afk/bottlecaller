@@ -911,14 +911,17 @@ function openManagerBoard() {
       }
 
       function getEncounterListForMode() {
-        const all = window.__BC_ENCOUNTERS__;
-        if (!all) return [];
+        const mode = (typeof bcMode !== "undefined" && bcMode) ? bcMode : (window.__BC_CTX__?.mode || "premium");
 
-        const m = window.__BC_MODE__;
-        if (m === "premium") return Array.isArray(all.premium) ? all.premium : [];
-        if (m === "demo") return Array.isArray(all.demo) ? all.demo : [];
+        const bundle = window.__BC_ENCOUNTERS__ || (typeof encounters !== "undefined" ? encounters : null);
 
-        console.warn("[BC] __BC_MODE__ unexpected:", m);
+        if (Array.isArray(bundle)) return bundle;
+
+        if (bundle && typeof bundle === "object") {
+          const list = bundle[mode] || bundle.premium || bundle.demo || [];
+          return Array.isArray(list) ? list : [];
+        }
+
         return [];
       }
 
