@@ -4176,14 +4176,11 @@ function openManagerBoard() {
             firstMode: currentEncounter.modeSelected || ""
           };
 
-          const g = (currentEncounter.guestStateActual || "").toLowerCase();
-          const mode = (currentEncounter.modeSelected || "").toLowerCase();
-          const hookText = currentEncounter.hookMeta?.text || "";
-          const hookType = currentEncounter.hookMeta?.hookType || "";
+          const g = String(currentEncounter.guestStateActual || "").toLowerCase();
           if (g === "decider") {
-            reactionChecks.deciderMode = mode;
-            reactionChecks.deciderHookText = hookText;
-            reactionChecks.deciderHookType = hookType;
+            reactionChecks.deciderMode = String(currentEncounter.modeSelected || "");
+            reactionChecks.deciderHookType = String(currentEncounter.hookMeta?.hookType || "");
+            reactionChecks.deciderHookText = String(currentEncounter.hookMeta?.text || "");
           }
 
           currentEncounter.__drillRep = rep || null;
@@ -4207,6 +4204,7 @@ function openManagerBoard() {
           // Persist telemetry on encounter for history + reflection
           currentEncounter.chainScore = result.chainScore;
           currentEncounter.chainSignal = result.chainSignal;
+          currentEncounter.__decider = result.__decider;
           if (result.__decider?.signal === "DECIDER_FRICTION") {
             currentEncounter.chainSignalDetail =
               "They’re not resisting the wine — they’re resisting time waste. Tighten the path.";
