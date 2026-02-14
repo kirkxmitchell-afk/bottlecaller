@@ -1201,6 +1201,29 @@ function openManagerBoard() {
         return Array.isArray(list) ? list : [];
       }
 
+      // --------- Tier → allowed modes ---------
+      function resolveTierForSession(sessionType) {
+        if (sessionType === "drill" && typeof DRILL !== "undefined" && DRILL && typeof DRILL.tier === "number") {
+          return DRILL.tier;
+        }
+        return 0;
+      }
+
+      function getAllowedDrillModesByTier(tier) {
+        if (tier <= 0) return ["scout", "guide"];
+        if (tier === 1) return ["scout", "guide", "charm"];
+        return ["scout", "guide", "charm", "authority"];
+      }
+
+      function getAllowedGameModesByTier(tier) {
+        if (tier <= 0) return ["LEAD", "REFLECT"];
+        return ["LEAD", "REFLECT", "HOLD"];
+      }
+
+      function modeLabelForDrill(modeKey) {
+        return modeKey.charAt(0).toUpperCase() + modeKey.slice(1);
+      }
+
       // ----------------------------
       // Drill ActiveWine (premium)
       // ----------------------------
@@ -1502,7 +1525,12 @@ function openManagerBoard() {
           console.log("[MSG] start_drill received", msg);
           console.log("[BC] start_drill RECEIVED ✅", msg);
           console.log("[BC] start_drill received, sessionType currently =", sessionType);
-          startDrill(Number(msg.repTarget || 3), msg.focus || null, msg.starter || "manager");
+          startDrill(
+            Number(msg.repTarget || 3),
+            msg.focus || null,
+            msg.starter || "manager",
+            typeof msg.tier === "number" ? msg.tier : 0
+          );
           console.log("[BC] drill started ✅", DRILL);
           return;
         }
@@ -1606,8 +1634,8 @@ function openManagerBoard() {
       // ✅ SESSION CONTAINER (drill vs progression)
       // ============================================================
       function isDrill() { return sessionType === "drill"; }
-      function startDrill(repTarget = 3, focus = null, starter = "manager") {
-        DRILL = { repTarget, repDone: 0, startedAt: Date.now(), focus, starter };
+      function startDrill(repTarget = 3, focus = null, starter = "manager", tier = 0) {
+        DRILL = { repTarget, repDone: 0, startedAt: Date.now(), focus, starter, tier: (typeof tier === "number" ? tier : 0) };
         sessionType = "drill";
         drillRepTarget = repTarget;
         drillRepDone = 0;
@@ -1704,17 +1732,22 @@ function openManagerBoard() {
         if (currentStep === 1) {
           stepHeader.textContent = "Step 2 — Choose Mode";
           stepContent.textContent = "Pick your control strategy.";
-          ["Scout","Guide","Charm","Authority"].forEach(label=>{
+
+          const tier = resolveTierForSession("drill");
+          const allowed = getAllowedDrillModesByTier(tier);
+
+          allowed.forEach((modeKey) => {
             const b = document.createElement("button");
             b.type = "button";
-            b.textContent = label;
+            b.textContent = modeLabelForDrill(modeKey);
             b.onclick = () => {
-              currentEncounter.modeSelected = label.toLowerCase();
+              currentEncounter.modeSelected = modeKey;
               currentStep = 2;
               renderDrillStep();
             };
             stepButtons.appendChild(b);
           });
+
           return;
         }
 
@@ -3851,7 +3884,9 @@ function openManagerBoard() {
 
           const options = document.createElement("div");
           options.className = "option-grid";
-          ["LEAD", "REFLECT", "HOLD"].forEach(mode => {
+          const tier = resolveTierForSession(sessionType);
+          const allowedModes = getAllowedGameModesByTier(tier);
+          allowedModes.forEach(mode => {
             const btn = document.createElement("button");
             btn.type = "button";
             btn.className = "option-btn" + (currentEncounter.modeSelected === mode ? " selected" : "");
