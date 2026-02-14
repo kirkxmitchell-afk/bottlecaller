@@ -1709,6 +1709,21 @@ function openManagerBoard() {
         startEncounterForDrill();
       }
 
+      window.__BC_FORCE_DECIDER__ = function () {
+        const list = getEncounterListForMode?.() || [];
+        if (!list.length) {
+          console.warn("[FORCE_DECIDER] no encounters in parent list");
+          return false;
+        }
+        const i = list.findIndex(e => String(e?.guestStateActual || "").toLowerCase() === "decider");
+        console.log("[FORCE_DECIDER] index:", i, "len:", list.length);
+        if (i < 0) return false;
+
+        encounterIndex = i;
+        startEncounterForDrill();
+        return true;
+      };
+
       async function startEncounterForDrill() {
         const list = getEncounterListForMode();
         if (!Array.isArray(list) || list.length === 0) {
@@ -1747,6 +1762,7 @@ function openManagerBoard() {
           __reactionComputed: false
         };
 
+        window.__BC_PARENT_LAST_ENCOUNTER__ = currentEncounter;
         window.__BC_LAST_ENCOUNTER__ = currentEncounter;
         renderDrillStep();
       }
