@@ -1704,6 +1704,24 @@ function openManagerBoard() {
         el.textContent = `Rep ${DRILL.repDone + 1} / ${DRILL.repTarget}`;
       }
 
+      function buildReactionChecksFromEncounter(enc) {
+        const mode = (enc?.modeSelected || "").toLowerCase();
+        const hookMeta = enc?.hookMeta || null;
+
+        const checks = {
+          guestRead: (enc?.guestReadSelected || "").toLowerCase(),
+          modeStatus: enc?.modeSelected ? "picked" : "none",
+          hookStatus: enc?.hookSelected ? "picked" : "none",
+          deliveryCorrect: true,
+          firstMode: mode,
+          deciderMode: mode,
+          deciderHookText: hookMeta?.text || "",
+          deciderHookType: hookMeta?.hookType || "",
+        };
+
+        return checks;
+      }
+
       function emitDrillPick(stage = "complete") {
         try {
           const payload = {
@@ -1902,6 +1920,29 @@ function openManagerBoard() {
 
       function drillCompleteRep() {
         if (!DRILL) return;
+
+        try {
+          const checks = buildReactionChecksFromEncounter(currentEncounter);
+
+          const result = window.EngineBridge?.computeReaction
+            ? window.EngineBridge.computeReaction(checks)
+            : null;
+
+          if (result) {
+            currentEncounter.chainScore = result.chainScore;
+            currentEncounter.chainSignal = result.chainSignal;
+            currentEncounter.pivotType = result.pivotType || "";
+            currentEncounter.__decider = result.__decider || null;
+            currentEncounter.__reactionComputed = true;
+          } else {
+            currentEncounter.__reactionComputed = false;
+          }
+        } catch (e) {
+          console.warn("[DRILL] computeReaction failed", e);
+          currentEncounter.__reactionComputed = false;
+        }
+
+        window.__BC_LAST_ENCOUNTER__ = currentEncounter;
 
         emitDrillPick("complete");
 
