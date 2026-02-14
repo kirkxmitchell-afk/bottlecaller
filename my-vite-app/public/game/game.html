@@ -1709,19 +1709,32 @@ function openManagerBoard() {
         startEncounterForDrill();
       }
 
-      window.__BC_FORCE_DECIDER__ = function () {
-        const list = getEncounterListForMode?.() || [];
-        if (!list.length) {
-          console.warn("[FORCE_DECIDER] no encounters in parent list");
-          return false;
+      // ---- Debug helpers (iframe-only) ----
+      window.__BC_DEBUG_GET_ENCOUNTERS__ = function () {
+        try {
+          return (typeof getEncounterListForMode === "function" ? (getEncounterListForMode() || []) : []);
+        } catch (e) {
+          console.warn("[__BC_DEBUG_GET_ENCOUNTERS__] failed", e);
+          return [];
         }
+      };
+
+      window.__BC_FORCE_DECIDER__ = function () {
+        const list = window.__BC_DEBUG_GET_ENCOUNTERS__();
+        console.log("[IFRAME FORCE_DECIDER] list len:", list.length);
+
         const i = list.findIndex(e => String(e?.guestStateActual || "").toLowerCase() === "decider");
-        console.log("[FORCE_DECIDER] index:", i, "len:", list.length);
-        if (i < 0) return false;
+        console.log("[IFRAME FORCE_DECIDER] decider index:", i);
+
+        if (i < 0) return "NO_DECIDER";
+        if (typeof startEncounterForDrill !== "function") return "NO_startEncounterForDrill";
 
         encounterIndex = i;
         startEncounterForDrill();
-        return true;
+        window.__BC_LAST_ENCOUNTER__ = currentEncounter;
+
+        console.log("[IFRAME FORCE_DECIDER] now at:", currentEncounter?.encounterNumber, currentEncounter?.guestStateActual);
+        return "OK";
       };
 
       async function startEncounterForDrill() {
