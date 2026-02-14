@@ -699,6 +699,11 @@ if (!window.__BC_PARENT_BRIDGE__) {
         return;
       }
 
+      if (msg.type === "drill_pick") {
+        console.log("[PARENT] drill_pick ✅", msg);
+        return;
+      }
+
       // ✅ 2) event_log (telemetry)
       if (msg.type !== "event_log") return;
 

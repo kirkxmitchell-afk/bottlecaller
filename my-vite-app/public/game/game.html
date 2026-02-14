@@ -1704,6 +1704,33 @@ function openManagerBoard() {
         el.textContent = `Rep ${DRILL.repDone + 1} / ${DRILL.repTarget}`;
       }
 
+      function emitDrillPickToParent() {
+        try {
+          const e = currentEncounter;
+          if (!e) return;
+
+          window.parent?.postMessage({
+            source: "BC_MSG",
+            v: 1,
+            type: "drill_pick",
+            mode: bcMode || "premium",
+            encounterId: e.id || null,
+            encounterNumber: e.encounterNumber || null,
+            guestStateActual: e.guestStateActual || "",
+            guestReadSelected: e.guestReadSelected || e.guestStateSelected || "",
+            modeSelected: e.modeSelected || "",
+            hookSelected: e.hookSelected || "",
+            hookMeta: e.hookMeta ? {
+              id: e.hookMeta.id,
+              hookType: e.hookMeta.hookType || "",
+              text: e.hookMeta.text || ""
+            } : null
+          }, "*");
+        } catch (err) {
+          console.warn("[DRILL] emitDrillPickToParent failed", err);
+        }
+      }
+
       function drillStartStep1() {
         currentStep = 0;
         startEncounterForDrill();
@@ -1831,6 +1858,7 @@ function openManagerBoard() {
             b.textContent = modeLabelForDrill(modeKey);
             b.onclick = () => {
               currentEncounter.modeSelected = modeKey;
+              emitDrillPickToParent();
               currentStep = 2;
               renderDrillStep();
             };
@@ -1865,6 +1893,8 @@ function openManagerBoard() {
             b.onclick = () => {
               currentEncounter.hookSelected = opt.id;
               currentEncounter.hookMeta = opt;
+
+              emitDrillPickToParent();
 
               drillCompleteRep();
             };
