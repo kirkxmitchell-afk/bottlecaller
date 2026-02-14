@@ -588,7 +588,7 @@ function scoreDecider(checks: ReactionChecks): DeciderResult {
 
   const total = modeScore + hookScore;
 
-  let signal: ReactionResult["__decider"]["signal"] = "DECIDER_NEUTRAL";
+  let signal: DeciderResult["signal"] = "DECIDER_NEUTRAL";
   if (total >= 3) signal = "DECIDER_TRUST_GAINED";
   else if (total <= -2) signal = "DECIDER_FRICTION";
 
