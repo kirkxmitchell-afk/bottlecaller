@@ -1201,6 +1201,22 @@ function openManagerBoard() {
         return Array.isArray(list) ? list : [];
       }
 
+      const GUEST_READ_MATCH = {
+        Decider: ["make_it_easy", "alpha"],
+        Browser: ["browser"],
+        Guarded: ["budget_guard"],
+        Celebrator: ["celebrator"],
+        Analyzer: ["analyst"],
+      };
+
+      function isCorrectGuestRead(encounter) {
+        const actual = encounter?.guestStateActual;
+        const read = encounter?.guestReadSelected;
+        const validReads = GUEST_READ_MATCH[actual] || [];
+        if (validReads.length) return validReads.includes(read);
+        return read === actual;
+      }
+
       // --------- Tier → allowed modes ---------
       function resolveTierForSession(sessionType) {
         if (sessionType === "drill" && typeof DRILL !== "undefined" && DRILL && typeof DRILL.tier === "number") {
@@ -1213,6 +1229,15 @@ function openManagerBoard() {
         if (tier <= 0) return ["scout", "guide"];
         if (tier === 1) return ["scout", "guide", "charm"];
         return ["scout", "guide", "charm", "authority"];
+      }
+
+      function getDrillModeOrderForGuest(guestStateActual, allowed) {
+        const g = (guestStateActual || "").toLowerCase();
+        if (g === "decider") {
+          const rank = { authority: 0, guide: 1, scout: 2, charm: 3 };
+          return allowed.slice().sort((a, b) => (rank[a] ?? 99) - (rank[b] ?? 99));
+        }
+        return allowed;
       }
 
       function getAllowedGameModesByTier(tier) {
@@ -1687,7 +1712,7 @@ function openManagerBoard() {
           difficulty: enc.difficulty ?? 1,
           tags: Array.isArray(enc.tags) ? enc.tags : [],
 
-          guestStateSelected: "",
+          guestReadSelected: "",
           modeSelected: "",
           hookSelected: "",
 
@@ -1724,7 +1749,15 @@ function openManagerBoard() {
             b.type = "button";
             b.textContent = label;
             b.onclick = () => {
-              currentEncounter.guestStateSelected = label.toLowerCase().replace(/ /g,"_");
+              const guestKey = {
+                "Browser": "browser",
+                "Budget Guard": "budget_guard",
+                "Celebrator": "celebrator",
+                "Alpha": "alpha",
+                "Analyst": "analyst",
+                "Make-It-Easy": "make_it_easy",
+              }[label];
+              currentEncounter.guestReadSelected = guestKey;
               currentStep = 1;
               renderDrillStep();
             };
@@ -1739,8 +1772,9 @@ function openManagerBoard() {
 
           const tier = resolveTierForSession("drill");
           const allowed = getAllowedDrillModesByTier(tier);
+          const ordered = getDrillModeOrderForGuest(currentEncounter.guestStateActual, allowed);
 
-          allowed.forEach((modeKey) => {
+          ordered.forEach((modeKey) => {
             const b = document.createElement("button");
             b.type = "button";
             b.textContent = modeLabelForDrill(modeKey);
@@ -3151,7 +3185,7 @@ function openManagerBoard() {
       }
 
       function evaluateChecks() {
-        const guestRead = currentEncounter.guestStateSelected === currentEncounter.guestStateActual;
+        const guestRead = isCorrectGuestRead(currentEncounter);
 
         const modeRule = modeMap[currentEncounter.guestStateActual];
         const hookRule = hookMap[currentEncounter.guestStateActual];
@@ -3242,7 +3276,7 @@ function openManagerBoard() {
         // enc: currentEncounter
 
         const actual = enc.guestStateActual || "";
-        const chosen = enc.guestStateSelected || "";
+        const chosen = enc.guestReadSelected || "";
 
         const strengths = [];
         const fixes = [];
@@ -3592,7 +3626,7 @@ function openManagerBoard() {
           encounterTier: getTierFromEncounterNumber(currentEncounter.encounterNumber ?? 1),
 
           guestStateActual: currentEncounter.guestStateActual || "",
-          guestStateSelected: currentEncounter.guestStateSelected || "",
+          guestReadSelected: currentEncounter.guestReadSelected || "",
           modeSelected: currentEncounter.modeSelected || "",
           hookSelected: currentEncounter.hookSelected || "",
           wineSelected:
@@ -3649,7 +3683,7 @@ function openManagerBoard() {
             tier: getTierFromEncounterNumber(currentEncounter?.encounterNumber ?? 1),
 
             chosen: {
-              guestType: currentEncounter?.guestStateSelected || "",
+              guestType: currentEncounter?.guestReadSelected || "",
               mode: currentEncounter?.modeSelected || "",
               hook: currentEncounter?.hookSelected || "",
             },
@@ -3881,10 +3915,10 @@ function openManagerBoard() {
           guestStates.forEach(state => {
             const btn = document.createElement("button");
             btn.type = "button";
-            btn.className = "option-btn" + (currentEncounter.guestStateSelected === state ? " selected" : "");
+            btn.className = "option-btn" + (currentEncounter.guestReadSelected === state ? " selected" : "");
             btn.innerText = state;
             bindInput(btn, () => {
-              currentEncounter.guestStateSelected = state;
+              currentEncounter.guestReadSelected = state;
               renderEncounterStep();
             });
             options.appendChild(btn);
@@ -3892,7 +3926,7 @@ function openManagerBoard() {
           stepContent.appendChild(options);
 
           const lockInBtn = addStepButton("LOCK IN", () => { currentStep = 2; renderEncounterStep(); }, stepButtons);
-          if (!currentEncounter.guestStateSelected) lockInBtn.disabled = true;
+          if (!currentEncounter.guestReadSelected) lockInBtn.disabled = true;
           return;
         }
 
@@ -4091,6 +4125,16 @@ function openManagerBoard() {
             firstMode: currentEncounter.modeSelected || ""
           };
 
+          const g = (currentEncounter.guestStateActual || "").toLowerCase();
+          const mode = (currentEncounter.modeSelected || "").toLowerCase();
+          const hookText = currentEncounter.hookMeta?.text || "";
+          const hookType = currentEncounter.hookMeta?.hookType || "";
+          if (g === "decider") {
+            reactionChecks.deciderMode = mode;
+            reactionChecks.deciderHookText = hookText;
+            reactionChecks.deciderHookType = hookType;
+          }
+
           currentEncounter.__drillRep = rep || null;
 
           if (!window.EngineBridge || typeof window.EngineBridge.computeReaction !== "function") {
@@ -4112,6 +4156,14 @@ function openManagerBoard() {
           // Persist telemetry on encounter for history + reflection
           currentEncounter.chainScore = result.chainScore;
           currentEncounter.chainSignal = result.chainSignal;
+          if (result.__decider?.signal === "DECIDER_FRICTION") {
+            currentEncounter.chainSignalDetail =
+              "They’re not resisting the wine — they’re resisting time waste. Tighten the path.";
+          }
+          if (result.__decider?.signal === "DECIDER_TRUST_GAINED") {
+            currentEncounter.chainSignalDetail =
+              "They relax because you made it fast, safe, and inevitable.";
+          }
 
           const teaser = document.createElement("div");
           teaser.className = "small-text";
@@ -4205,7 +4257,7 @@ function openManagerBoard() {
 
               currentEncounter.resetUsed = true;
 
-              currentEncounter.guestStateSelected = "";
+              currentEncounter.guestReadSelected = "";
               currentEncounter.modeSelected = "";
               currentEncounter.hookSelected = "";
               currentEncounter.deliveryLine1 = "";
@@ -4284,7 +4336,7 @@ function openManagerBoard() {
             stepContent,
             "Guest Read",
             checks.guestRead ? "✅" : "❌",
-            "Actual: " + currentEncounter.guestStateActual + " | You chose: " + (currentEncounter.guestStateSelected || "—")
+            "Actual: " + currentEncounter.guestStateActual + " | You chose: " + (currentEncounter.guestReadSelected || "—")
           );
 
           addReflectionBlock(
@@ -4596,7 +4648,7 @@ function openManagerBoard() {
           tags: Array.isArray(enc.tags) ? enc.tags : [],
 
           // Player choices
-          guestStateSelected: "",
+          guestReadSelected: "",
           modeSelected: "",
           hookSelected: "",
 
@@ -4682,7 +4734,7 @@ function openManagerBoard() {
 
           details.innerText =
             "Guest Actual: " + entry.guestStateActual + "\n" +
-            "Guest Chosen: " + entry.guestStateSelected + "\n" +
+            "Guest Chosen: " + entry.guestReadSelected + "\n" +
             "Mode: " + entry.modeSelected + "\n" +
             "Hook: " + entry.hookSelected + "\n" +
             "Line 1: " + entry.deliveryLine1 + "\n" +

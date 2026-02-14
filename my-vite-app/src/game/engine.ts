@@ -485,6 +485,9 @@ export type ReactionChecks = {
    * In current prototype UI we map scout ≈ HOLD.
    */
   firstMode: UiMode | "" | null | undefined;
+  deciderMode?: string;
+  deciderHookText?: string;
+  deciderHookType?: string;
 };
 
 export type ReactionResult = {
@@ -494,6 +497,12 @@ export type ReactionResult = {
   resetAllowed: boolean;    // firstMode == HOLD (scout-mapped)
   deliveryCorrect: boolean; // passed through
   pivotType: "POWER_MOVE_PIVOT" | "RECOVERY_PIVOT" | "";
+  __decider?: {
+    total: number;
+    signal: "DECIDER_NEUTRAL" | "DECIDER_TRUST_GAINED" | "DECIDER_FRICTION";
+    modeScore: number;
+    hookScore: number;
+  };
 };
 
 export function computeChainScore(checks: ReactionChecks): number {
@@ -519,7 +528,12 @@ export function resetAllowedFromFirstMode(firstMode: ReactionChecks["firstMode"]
 }
 
 export function computeReaction(checks: ReactionChecks): ReactionResult {
-  const chainScore = computeChainScore(checks);
+  let chainScore = computeChainScore(checks);
+  let deciderResult: ReactionResult["__decider"] | undefined;
+  if (checks.deciderMode || checks.deciderHookText || checks.deciderHookType) {
+    deciderResult = scoreDecider(checks);
+    chainScore = Math.max(0, Math.min(4, chainScore + deciderResult.total));
+  }
   const chainSignal = signalFromChainScore(chainScore);
   const pivotUnlocked = pivotUnlockedFromScore(chainScore);
   const resetAllowed = resetAllowedFromFirstMode(checks.firstMode);
@@ -536,5 +550,36 @@ export function computeReaction(checks: ReactionChecks): ReactionResult {
     resetAllowed,
     deliveryCorrect: checks.deliveryCorrect,
     pivotType,
+    __decider: deciderResult,
   };
+}
+
+function scoreDecider(checks: ReactionChecks): ReactionResult["__decider"] {
+  const mode = (checks.deciderMode || "").toLowerCase();
+  const text = (checks.deciderHookText || "").toLowerCase();
+  const hookType = (checks.deciderHookType || "").toLowerCase();
+
+  let modeScore = 0;
+  if (mode === "authority") modeScore = 2;
+  else if (mode === "guide") modeScore = 1;
+  else if (mode === "scout") modeScore = -1;
+  else if (mode === "charm") modeScore = -2;
+
+  let hookScore = 0;
+  if (hookType.includes("guest_centered")) hookScore += 1;
+  if (hookType.includes("outcome_centered")) hookScore -= 1;
+
+  const good = ["quick", "simple", "easy", "safe", "best", "i’d go", "i'd go", "can’t miss", "can't miss", "straightforward", "in a rush"];
+  const bad  = ["leaning", "or", "maybe", "perhaps", "few options", "what do you feel", "do you prefer"];
+
+  for (const k of good) if (text.includes(k)) hookScore += 1;
+  for (const k of bad) if (text.includes(k)) hookScore -= 1;
+
+  const total = modeScore + hookScore;
+
+  let signal: ReactionResult["__decider"]["signal"] = "DECIDER_NEUTRAL";
+  if (total >= 3) signal = "DECIDER_TRUST_GAINED";
+  else if (total <= -2) signal = "DECIDER_FRICTION";
+
+  return { total, signal, modeScore, hookScore };
 }
