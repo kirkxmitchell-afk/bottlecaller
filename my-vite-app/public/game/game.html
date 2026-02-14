@@ -1201,6 +1201,36 @@ function openManagerBoard() {
         return Array.isArray(list) ? list : [];
       }
 
+      // ----------------------------
+      // Drill ActiveWine (premium)
+      // ----------------------------
+      function getWineById(id) {
+        if (!id) return null;
+        if (!Array.isArray(wines)) return null;
+        return wines.find(w => w && w.id === id) || null;
+      }
+
+      function pickDeterministicDrillWine() {
+        if (!Array.isArray(wines) || wines.length === 0) return null;
+        const idx = (typeof encounterIndex === "number" ? encounterIndex : 0) % wines.length;
+        return wines[idx] || wines[0] || null;
+      }
+
+      function setActiveWineForDrill(wine) {
+        window.__BC_ACTIVE_WINE__ = wine || null;
+        if (wine) {
+          console.log("[BC] ActiveWine set ✅", { id: wine.id, name: wine.name });
+        } else {
+          console.log("[BC] ActiveWine cleared");
+        }
+      }
+
+      function getActiveWineForDrill() {
+        const w = window.__BC_ACTIVE_WINE__;
+        if (w && w.name) return w;
+        return pickDeterministicDrillWine();
+      }
+
       function resetSessionState() {
         sessionId = null;
         sessionType = null;
@@ -1453,6 +1483,22 @@ function openManagerBoard() {
             }
           }
 
+          let chosen = null;
+
+          if (msg.activeWineId) {
+            chosen = getWineById(msg.activeWineId);
+          }
+
+          if (!chosen && msg.activeWine && msg.activeWine.name) {
+            chosen = msg.activeWine;
+          }
+
+          if (!chosen) {
+            chosen = pickDeterministicDrillWine();
+          }
+
+          setActiveWineForDrill(chosen);
+
           console.log("[MSG] start_drill received", msg);
           console.log("[BC] start_drill RECEIVED ✅", msg);
           console.log("[BC] start_drill received, sessionType currently =", sessionType);
@@ -1613,7 +1659,7 @@ function openManagerBoard() {
           modeSelected: "",
           hookSelected: "",
 
-          wineSelected: { name: "—", varietal: "" },
+          wineSelected: getActiveWineForDrill() || { name: "—", varietal: "" },
 
           chainScore: null,
           chainSignal: "",
