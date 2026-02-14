@@ -1442,6 +1442,15 @@ function openManagerBoard() {
         };
       };
 
+      window.__BC_IFRAME_DEBUG__ = function () {
+        return {
+          sessionType: (typeof sessionType !== "undefined" ? sessionType : "NO_VAR"),
+          currentStep: (typeof currentStep !== "undefined" ? currentStep : "NO_VAR"),
+          DRILL: (typeof DRILL !== "undefined" ? DRILL : "NO_VAR"),
+          lastEncounter: window.__BC_LAST_ENCOUNTER__ || null
+        };
+      };
+
       // Single message handler (iframe)
       console.log("[BC] start_drill listener loaded ✅");
       window.addEventListener("message", async (ev) => {

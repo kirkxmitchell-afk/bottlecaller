@@ -505,6 +505,22 @@ export type ReactionResult = {
   };
 };
 
+type DeciderSignal = "DECIDER_NEUTRAL" | "DECIDER_TRUST_GAINED" | "DECIDER_FRICTION";
+
+type DeciderResult = {
+  total: number;
+  signal: DeciderSignal;
+  modeScore: number;
+  hookScore: number;
+};
+
+const DECIDER_DEFAULT: DeciderResult = {
+  total: 0,
+  signal: "DECIDER_NEUTRAL",
+  modeScore: 0,
+  hookScore: 0,
+};
+
 export function computeChainScore(checks: ReactionChecks): number {
   const read = checks.guestRead ? 1.0 : 0.0;
   const mode = checks.modeStatus === "optimal" ? 1.0 : checks.modeStatus === "neutral" ? 0.5 : 0.0;
@@ -529,11 +545,11 @@ export function resetAllowedFromFirstMode(firstMode: ReactionChecks["firstMode"]
 
 export function computeReaction(checks: ReactionChecks): ReactionResult {
   let chainScore = computeChainScore(checks);
-  let deciderResult: ReactionResult["__decider"] | undefined;
-  if (checks.deciderMode || checks.deciderHookText || checks.deciderHookType) {
-    deciderResult = scoreDecider(checks);
-    chainScore = Math.max(0, Math.min(4, chainScore + deciderResult.total));
-  }
+  const deciderResult: DeciderResult =
+    (checks.deciderMode || checks.deciderHookText || checks.deciderHookType)
+      ? (scoreDecider(checks) ?? DECIDER_DEFAULT)
+      : DECIDER_DEFAULT;
+  chainScore = Math.max(0, Math.min(4, chainScore + deciderResult.total));
   const chainSignal = signalFromChainScore(chainScore);
   const pivotUnlocked = pivotUnlockedFromScore(chainScore);
   const resetAllowed = resetAllowedFromFirstMode(checks.firstMode);
@@ -554,7 +570,7 @@ export function computeReaction(checks: ReactionChecks): ReactionResult {
   };
 }
 
-function scoreDecider(checks: ReactionChecks): ReactionResult["__decider"] {
+function scoreDecider(checks: ReactionChecks): DeciderResult {
   const mode = (checks.deciderMode || "").toLowerCase();
   const text = (checks.deciderHookText || "").toLowerCase();
   const hookType = (checks.deciderHookType || "").toLowerCase();
