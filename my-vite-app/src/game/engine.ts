@@ -497,12 +497,7 @@ export type ReactionResult = {
   resetAllowed: boolean;    // firstMode == HOLD (scout-mapped)
   deliveryCorrect: boolean; // passed through
   pivotType: "POWER_MOVE_PIVOT" | "RECOVERY_PIVOT" | "";
-  __decider?: {
-    total: number;
-    signal: "DECIDER_NEUTRAL" | "DECIDER_TRUST_GAINED" | "DECIDER_FRICTION";
-    modeScore: number;
-    hookScore: number;
-  };
+  __decider: DeciderResult;
 };
 
 type DeciderSignal = "DECIDER_NEUTRAL" | "DECIDER_TRUST_GAINED" | "DECIDER_FRICTION";
