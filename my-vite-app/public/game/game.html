@@ -1637,6 +1637,9 @@ function openManagerBoard() {
       function startDrill(repTarget = 3, focus = null, starter = "manager", tier = 0) {
         DRILL = { repTarget, repDone: 0, startedAt: Date.now(), focus, starter, tier: (typeof tier === "number" ? tier : 0) };
         DRILL.activeWine = (Array.isArray(wines) && wines.length ? wines[0] : { name: "This bottle" });
+        if (!DRILL.activeWine) {
+          DRILL.activeWine = (Array.isArray(wines) && wines.length) ? wines[0] : { name: "This bottle", varietal: "" };
+        }
         sessionType = "drill";
         drillRepTarget = repTarget;
         drillRepDone = 0;
@@ -1755,16 +1758,36 @@ function openManagerBoard() {
         if (currentStep === 2) {
           stepHeader.textContent = "Step 3 — Hook";
           stepContent.textContent = "Choose your opening line.";
-          ["Hook A","Hook B","Hook C"].forEach(label=>{
+          const tier = resolveTierForSession("drill");
+          const starter = (DRILL && DRILL.starter) ? DRILL.starter : "manager";
+
+          const wine =
+            (DRILL && DRILL.activeWine) ? DRILL.activeWine :
+            (currentEncounter && currentEncounter.wineSelected) ? currentEncounter.wineSelected :
+            { name: "This bottle", varietal: "" };
+
+          const opts = getDrillHookOptions(currentEncounter, wine, { tier, starter });
+
+          const options = document.createElement("div");
+          options.className = "option-grid";
+
+          opts.forEach((opt) => {
             const b = document.createElement("button");
             b.type = "button";
-            b.textContent = label;
+            b.className = "option-btn" + (currentEncounter.hookSelected === opt.id ? " selected" : "");
+            b.textContent = opt.text || "(missing hook text)";
+
             b.onclick = () => {
-              currentEncounter.hookSelected = label;
+              currentEncounter.hookSelected = opt.id;
+              currentEncounter.hookMeta = opt;
+
               drillCompleteRep();
             };
-            stepButtons.appendChild(b);
+
+            options.appendChild(b);
           });
+
+          stepContent.appendChild(options);
           return;
         }
       }
