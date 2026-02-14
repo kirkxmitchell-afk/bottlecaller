@@ -629,6 +629,39 @@ function escapeHtml(s) {
     .replaceAll('"', "&quot;");
 }
 
+function buildReactionChecksFromDrillPick(msg) {
+  const g = String(msg.guestStateActual || "").toLowerCase();
+  const mode = String(msg.modeSelected || "").toLowerCase();
+  const hookType = String(msg.hookMeta?.hookType || "").toLowerCase();
+  const hookText = String(msg.hookMeta?.text || "");
+
+  const guestRead =
+    (String(msg.guestReadSelected || "").toLowerCase() === g)
+      ? "right"
+      : "wrong";
+
+  const modeStatus = "picked";
+  const hookStatus = msg.hookMeta?.tier || "picked";
+  const deliveryCorrect = true;
+
+  const checks = {
+    guestRead,
+    modeStatus,
+    hookStatus,
+    deliveryCorrect,
+    firstMode: mode,
+    ...(g === "decider"
+      ? {
+          deciderMode: mode,
+          deciderHookType: hookType,
+          deciderHookText: hookText,
+        }
+      : {})
+  };
+
+  return checks;
+}
+
 if (!window.__BC_PARENT_TRACE__) {
   window.__BC_PARENT_TRACE__ = true;
   window.addEventListener("message", (event) => {
@@ -700,6 +733,27 @@ if (!window.__BC_PARENT_BRIDGE__) {
       }
 
       if (msg.type === "drill_pick") {
+        if (msg.stage === "complete") {
+          const checks = buildReactionChecksFromDrillPick(msg);
+          const result = window.EngineBridge.computeReaction(checks);
+
+          window.__BC_PARENT_LAST_ENCOUNTER__ = {
+            ...msg,
+            chainScore: result.chainScore,
+            chainSignal: result.chainSignal,
+            pivotType: result.pivotType,
+            __decider: result.__decider,
+            __checks: checks,
+          };
+
+          console.log("[PARENT] REACTION ✅", {
+            chainScore: result.chainScore,
+            chainSignal: result.chainSignal,
+            decider: result.__decider,
+            checks,
+          });
+          return;
+        }
         console.log("[PARENT] drill_pick ✅", msg);
         return;
       }
