@@ -542,7 +542,7 @@ export function computeReaction(checks: ReactionChecks): ReactionResult {
   let chainScore = computeChainScore(checks);
   const deciderResult: DeciderResult =
     (checks.deciderMode || checks.deciderHookText || checks.deciderHookType)
-      ? (scoreDecider(checks) ?? DECIDER_DEFAULT)
+      ? scoreDecider(checks)
       : DECIDER_DEFAULT;
   chainScore = Math.max(0, Math.min(4, chainScore + deciderResult.total));
   const chainSignal = signalFromChainScore(chainScore);
