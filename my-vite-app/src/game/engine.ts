@@ -647,6 +647,9 @@ export function computeReaction(checks: ReactionChecks): ReactionResult {
   chainScore = Math.max(0, Math.min(4, chainScore + deciderResult.total));
   const pen = applyFalseSafetyResetPenalty(chainScore, checks);
   chainScore = pen.chainScore;
+  if (checks.resetUsed) {
+    chainScore = Math.min(chainScore, 2);
+  }
   const chainSignal = signalFromChainScore(chainScore);
   const pivotUnlocked = pivotUnlockedFromScore(chainScore);
   const resetAllowed = resetAllowedFromFirstMode(checks.firstMode);
