@@ -733,9 +733,6 @@ if (!window.__BC_PARENT_BRIDGE__) {
       }
 
       if (msg.type === "drill_pick") {
-        if (!window.EngineBridge?.computeReaction) {
-          console.log("[PARENT] no EngineBridge in parent; skipping compute ✅");
-        }
         window.__BC_PARENT_LAST_ENCOUNTER__ = msg;
         console.log("[PARENT] drill_pick stored ✅", msg);
         return;
