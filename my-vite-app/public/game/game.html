@@ -1887,6 +1887,9 @@ function openManagerBoard() {
             b.textContent = modeLabelForDrill(modeKey);
             b.onclick = () => {
               currentEncounter.modeSelected = modeKey;
+              if (!currentEncounter.firstMode) {
+                currentEncounter.firstMode = modeKey;
+              }
               currentStep = 2;
               renderDrillStep();
             };

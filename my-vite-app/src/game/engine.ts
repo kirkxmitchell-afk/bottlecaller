@@ -487,12 +487,8 @@ export type ReactionChecks = {
   hookStatus?: HookStatus;
   deliveryCorrect: boolean;
 
-  /**
-   * v1 locked rule:
-   * reset only allowed if first mode was "scout".
-   * In current prototype UI we map scout ≈ HOLD.
-   */
-  firstMode: UiMode | "" | null | undefined;
+  // v1 locked rule: reset only allowed if first mode was "scout".
+  firstMode?: string | null;
   deciderMode?: string;
   deciderHookText?: string;
   deciderHookType?: string;
@@ -618,7 +614,7 @@ export function pivotUnlockedFromScore(score: number): boolean {
 }
 
 export function resetAllowedFromFirstMode(firstMode: ReactionChecks["firstMode"]): boolean {
-  return firstMode === "HOLD";
+  return String(firstMode || "").toLowerCase() === "scout";
 }
 
 export function computeReaction(checks: ReactionChecks): ReactionResult {
