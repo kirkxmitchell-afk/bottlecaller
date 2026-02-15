@@ -649,6 +649,9 @@ export function computeReaction(checks: ReactionChecks): ReactionResult {
   chainScore = pen.chainScore;
   if (checks.resetUsed) {
     chainScore = Math.min(chainScore, 2);
+    if ((checks.tier ?? 0) >= 2) {
+      chainScore = Math.max(0, chainScore - 1);
+    }
   }
   const chainSignal = signalFromChainScore(chainScore);
   const pivotUnlocked = pivotUnlockedFromScore(chainScore);
