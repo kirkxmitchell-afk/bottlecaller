@@ -1709,15 +1709,16 @@ function openManagerBoard() {
         const hookMeta = enc?.hookMeta || null;
 
         const checks = {
-          guestRead: (enc?.guestReadSelected || "").toLowerCase(),
-          modeStatus: enc?.modeSelected ? "picked" : "none",
-          hookStatus: enc?.hookSelected ? "picked" : "none",
+          guestRead: (typeof isCorrectGuestRead === "function")
+            ? isCorrectGuestRead(enc)
+            : (String(enc?.guestReadSelected || "").toLowerCase() === String(enc?.guestStateActual || "").toLowerCase()),
           deliveryCorrect: true,
           firstMode: mode,
           deciderMode: mode,
           deciderHookText: hookMeta?.text || "",
           deciderHookType: hookMeta?.hookType || "",
           tier: DRILL?.tier ?? 0,
+          guestStateActual: enc?.guestStateActual || "",
           activeWine: {
             fruit: enc?.wineSelected?.fruitTags || [],
             texture: enc?.wineSelected?.textureTags || [],

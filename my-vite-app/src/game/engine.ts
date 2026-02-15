@@ -483,8 +483,8 @@ export type WineCue = {
 
 export type ReactionChecks = {
   guestRead: boolean;
-  modeStatus: ModeStatus;
-  hookStatus: HookStatus;
+  modeStatus?: ModeStatus;
+  hookStatus?: HookStatus;
   deliveryCorrect: boolean;
 
   /**
@@ -496,8 +496,11 @@ export type ReactionChecks = {
   deciderMode?: string;
   deciderHookText?: string;
   deciderHookType?: string;
+  hookType?: string;
+  hookText?: string;
   activeWine?: WineCue;
   tier?: number;
+  guestStateActual?: string;
 };
 
 export type ReactionResult = {
@@ -526,12 +529,81 @@ export const DECIDER_DEFAULT: DeciderResult = {
   hookScore: 0,
 };
 
+function statusToPoints(s: ModeStatus): number {
+  if (s === "optimal") return 1;
+  if (s === "neutral") return 0;
+  return -1;
+}
+
+function scoreModeStatus(checks: ReactionChecks): ModeStatus {
+  const g = (checks.guestStateActual || "").toLowerCase();
+  const m = (checks.deciderMode || checks.firstMode || "").toLowerCase();
+  const tier = checks.tier ?? 0;
+  const strict = tier >= 2;
+
+  if (g === "decider") {
+    if (m === "authority") return "optimal";
+    if (m === "guide") return "optimal";
+    if (m === "scout") return strict ? "damaging" : "neutral";
+    if (m === "charm") return strict ? "damaging" : "neutral";
+  }
+
+  return "neutral";
+}
+
+function scoreHookStatus(checks: ReactionChecks): HookStatus {
+  const hookType = (checks.deciderHookType || checks.hookType || "").toLowerCase();
+  const text = (checks.deciderHookText || checks.hookText || "").toLowerCase();
+  const wine = checks.activeWine || {};
+  const tier = checks.tier ?? 0;
+  const strict = tier >= 2;
+
+  const texture = (wine.texture || []).map(t => String(t).toLowerCase());
+  const oak = String(wine.oak || "").toLowerCase();
+
+  const claimsFresh =
+    text.includes("fresh") || text.includes("crisp") || text.includes("bright") || text.includes("zippy");
+  const hasFreshCue = texture.some(t => t.includes("fresh") || t.includes("racy"));
+
+  if (claimsFresh && !hasFreshCue) return strict ? "damaging" : "neutral";
+
+  const claimsOak =
+    text.includes("oak") || text.includes("vanilla") || text.includes("toast") || text.includes("spice");
+  const hasOak = oak !== "" && oak !== "none";
+
+  if (claimsOak && !hasOak) return strict ? "damaging" : "neutral";
+
+  const claimsLight = text.includes("light") || text.includes("clean") || text.includes("easy");
+  const claimsRich = text.includes("rich") || text.includes("bold") || text.includes("full");
+
+  const hasLight = texture.some(t => t.includes("light-bodied") || t.includes("fresh"));
+  const hasRich = texture.some(t => t.includes("full-bodied") || t.includes("bold") || t.includes("creamy"));
+
+  if (claimsLight && !hasLight) return strict ? "damaging" : "neutral";
+  if (claimsRich && !hasRich) return strict ? "damaging" : "neutral";
+
+  if (hookType.includes("guest_centered")) return "optimal";
+  if (hookType.includes("outcome_centered")) return strict ? "damaging" : "neutral";
+  if (hookType.includes("diagnostic")) return "neutral";
+
+  return "neutral";
+}
+
 export function computeChainScore(checks: ReactionChecks): number {
-  const read = checks.guestRead ? 1.0 : 0.0;
-  const mode = checks.modeStatus === "optimal" ? 1.0 : checks.modeStatus === "neutral" ? 0.5 : 0.0;
-  const hook = checks.hookStatus === "optimal" ? 1.0 : checks.hookStatus === "neutral" ? 0.5 : 0.0;
-  const delivery = checks.deliveryCorrect ? 1.0 : 0.0;
-  return read + mode + hook + delivery;
+  let score = 0;
+
+  score += checks.guestRead ? 1 : -1;
+
+  const isDecider = (checks.guestStateActual || "").toLowerCase() === "decider";
+  const mode = isDecider ? scoreModeStatus(checks) : (checks.modeStatus ?? "neutral");
+  const hook = isDecider ? scoreHookStatus(checks) : (checks.hookStatus ?? "neutral");
+
+  score += statusToPoints(mode);
+  score += statusToPoints(hook);
+
+  score += checks.deliveryCorrect ? 1 : -1;
+
+  return Math.max(0, Math.min(4, score));
 }
 
 export function signalFromChainScore(score: number): Signal {
