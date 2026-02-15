@@ -500,16 +500,16 @@ export type ReactionResult = {
   __decider: DeciderResult;
 };
 
-type DeciderSignal = "DECIDER_NEUTRAL" | "DECIDER_TRUST_GAINED" | "DECIDER_FRICTION";
+export type DeciderSignal = "DECIDER_NEUTRAL" | "DECIDER_TRUST_GAINED" | "DECIDER_FRICTION";
 
-type DeciderResult = {
+export type DeciderResult = {
   total: number;
   signal: DeciderSignal;
   modeScore: number;
   hookScore: number;
 };
 
-const DECIDER_DEFAULT: DeciderResult = {
+export const DECIDER_DEFAULT: DeciderResult = {
   total: 0,
   signal: "DECIDER_NEUTRAL",
   modeScore: 0,
@@ -542,7 +542,7 @@ export function computeReaction(checks: ReactionChecks): ReactionResult {
   let chainScore = computeChainScore(checks);
   const deciderResult: DeciderResult =
     (checks.deciderMode || checks.deciderHookText || checks.deciderHookType)
-      ? scoreDecider(checks)
+      ? (scoreDecider(checks) ?? DECIDER_DEFAULT)
       : DECIDER_DEFAULT;
   chainScore = Math.max(0, Math.min(4, chainScore + deciderResult.total));
   const chainSignal = signalFromChainScore(chainScore);
