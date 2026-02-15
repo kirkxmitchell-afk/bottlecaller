@@ -1719,6 +1719,9 @@ function openManagerBoard() {
           deciderHookType: hookMeta?.hookType || "",
           tier: DRILL?.tier ?? 0,
           guestStateActual: enc?.guestStateActual || "",
+          modeSelected: enc?.modeSelected || "",
+          hookType: hookMeta?.hookType || "",
+          hookText: hookMeta?.text || "",
           activeWine: {
             fruit: enc?.wineSelected?.fruitTags || [],
             texture: enc?.wineSelected?.textureTags || [],

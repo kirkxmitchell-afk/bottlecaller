@@ -501,6 +501,7 @@ export type ReactionChecks = {
   activeWine?: WineCue;
   tier?: number;
   guestStateActual?: string;
+  modeSelected?: string;
 };
 
 export type ReactionResult = {
@@ -529,7 +530,7 @@ export const DECIDER_DEFAULT: DeciderResult = {
   hookScore: 0,
 };
 
-function statusToPoints(s: ModeStatus): number {
+function statusToPoints(s: ModeStatus | HookStatus): number {
   if (s === "optimal") return 1;
   if (s === "neutral") return 0;
   return -1;
@@ -537,7 +538,7 @@ function statusToPoints(s: ModeStatus): number {
 
 function scoreModeStatus(checks: ReactionChecks): ModeStatus {
   const g = (checks.guestStateActual || "").toLowerCase();
-  const m = (checks.deciderMode || checks.firstMode || "").toLowerCase();
+  const m = (checks.deciderMode || checks.modeSelected || "").toLowerCase();
   const tier = checks.tier ?? 0;
   const strict = tier >= 2;
 
