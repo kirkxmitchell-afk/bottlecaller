@@ -733,28 +733,11 @@ if (!window.__BC_PARENT_BRIDGE__) {
       }
 
       if (msg.type === "drill_pick") {
-        if (msg.stage === "complete") {
-          const checks = buildReactionChecksFromDrillPick(msg);
-          const result = window.EngineBridge.computeReaction(checks);
-
-          window.__BC_PARENT_LAST_ENCOUNTER__ = {
-            ...msg,
-            chainScore: result.chainScore,
-            chainSignal: result.chainSignal,
-            pivotType: result.pivotType,
-            __decider: result.__decider,
-            __checks: checks,
-          };
-
-          console.log("[PARENT] REACTION ✅", {
-            chainScore: result.chainScore,
-            chainSignal: result.chainSignal,
-            decider: result.__decider,
-            checks,
-          });
-          return;
+        if (!window.EngineBridge?.computeReaction) {
+          console.log("[PARENT] no EngineBridge in parent; skipping compute ✅");
         }
-        console.log("[PARENT] drill_pick ✅", msg);
+        window.__BC_PARENT_LAST_ENCOUNTER__ = msg;
+        console.log("[PARENT] drill_pick stored ✅", msg);
         return;
       }
 

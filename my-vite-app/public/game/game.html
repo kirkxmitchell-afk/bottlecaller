@@ -1737,6 +1737,9 @@ function openManagerBoard() {
             modeSelected: currentEncounter?.modeSelected || "",
             hookSelected: currentEncounter?.hookSelected || "",
             hookMeta: currentEncounter?.hookMeta || null,
+            chainScore: currentEncounter?.chainScore ?? null,
+            chainSignal: currentEncounter?.chainSignal ?? "",
+            __decider: currentEncounter?.__decider ?? null,
           };
 
           window.parent?.postMessage(payload, location.origin);
