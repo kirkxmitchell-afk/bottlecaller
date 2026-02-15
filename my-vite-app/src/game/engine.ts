@@ -483,8 +483,6 @@ export type WineCue = {
 
 export type ReactionChecks = {
   guestRead: boolean;
-  modeStatus?: ModeStatus;
-  hookStatus?: HookStatus;
   deliveryCorrect: boolean;
 
   // v1 locked rule: reset only allowed if first mode was "scout".
@@ -498,6 +496,9 @@ export type ReactionChecks = {
   tier?: number;
   guestStateActual?: string;
   modeSelected?: string;
+  resetUsed?: boolean;
+  modeStatus?: ModeStatus;
+  hookStatus?: HookStatus;
 };
 
 export type ReactionResult = {
@@ -508,6 +509,7 @@ export type ReactionResult = {
   deliveryCorrect: boolean; // passed through
   pivotType: "POWER_MOVE_PIVOT" | "RECOVERY_PIVOT" | "";
   __decider: DeciderResult;
+  __resetPenalty?: number;
 };
 
 export type DeciderSignal = "DECIDER_NEUTRAL" | "DECIDER_TRUST_GAINED" | "DECIDER_FRICTION";
@@ -614,7 +616,26 @@ export function pivotUnlockedFromScore(score: number): boolean {
 }
 
 export function resetAllowedFromFirstMode(firstMode: ReactionChecks["firstMode"]): boolean {
-  return String(firstMode || "").toLowerCase() === "scout";
+  return true;
+}
+
+function applyFalseSafetyResetPenalty(
+  chainScore: number,
+  checks: ReactionChecks
+): { chainScore: number; penaltyApplied: boolean; penaltyPoints: number } {
+  if (!checks.resetUsed) return { chainScore, penaltyApplied: false, penaltyPoints: 0 };
+
+  const first = String(checks.firstMode || "").toLowerCase();
+  if (first === "scout") return { chainScore, penaltyApplied: false, penaltyPoints: 0 };
+
+  const tier = checks.tier ?? 0;
+  const penalty = tier >= 2 ? 2 : 1;
+
+  return {
+    chainScore: Math.max(0, chainScore - penalty),
+    penaltyApplied: true,
+    penaltyPoints: penalty,
+  };
 }
 
 export function computeReaction(checks: ReactionChecks): ReactionResult {
@@ -624,6 +645,8 @@ export function computeReaction(checks: ReactionChecks): ReactionResult {
       ? (scoreDecider(checks) ?? DECIDER_DEFAULT)
       : DECIDER_DEFAULT;
   chainScore = Math.max(0, Math.min(4, chainScore + deciderResult.total));
+  const pen = applyFalseSafetyResetPenalty(chainScore, checks);
+  chainScore = pen.chainScore;
   const chainSignal = signalFromChainScore(chainScore);
   const pivotUnlocked = pivotUnlockedFromScore(chainScore);
   const resetAllowed = resetAllowedFromFirstMode(checks.firstMode);
@@ -631,6 +654,11 @@ export function computeReaction(checks: ReactionChecks): ReactionResult {
   let pivotType: ReactionResult["pivotType"] = "";
   if (!checks.deliveryCorrect && pivotUnlocked) {
     pivotType = chainSignal === "green" ? "POWER_MOVE_PIVOT" : "RECOVERY_PIVOT";
+  }
+
+  const tier = checks.tier ?? 0;
+  if (pen.penaltyApplied && tier >= 2) {
+    if (pivotUnlocked) pivotType = "RECOVERY_PIVOT";
   }
 
   return {
@@ -641,6 +669,7 @@ export function computeReaction(checks: ReactionChecks): ReactionResult {
     deliveryCorrect: checks.deliveryCorrect,
     pivotType,
     __decider: deciderResult,
+    __resetPenalty: pen.penaltyApplied ? pen.penaltyPoints : 0,
   };
 }
 

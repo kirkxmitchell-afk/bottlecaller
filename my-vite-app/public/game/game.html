@@ -1722,6 +1722,8 @@ function openManagerBoard() {
           modeSelected: enc?.modeSelected || "",
           hookType: hookMeta?.hookType || "",
           hookText: hookMeta?.text || "",
+          resetUsed: !!enc?.resetUsed,
+          firstMode: enc?.firstMode || enc?.modeSelected || "",
           activeWine: {
             fruit: enc?.wineSelected?.fruitTags || [],
             texture: enc?.wineSelected?.textureTags || [],
