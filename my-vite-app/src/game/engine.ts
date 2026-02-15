@@ -611,8 +611,12 @@ export function signalFromChainScore(score: number): Signal {
   return "red";
 }
 
-export function pivotUnlockedFromScore(score: number): boolean {
-  return score >= 2.0;
+export function pivotUnlockedFromScore(score: number, checks?: ReactionChecks): boolean {
+  const tier = checks?.tier ?? 0;
+  const resetUsed = !!checks?.resetUsed;
+  let need = 2.0;
+  if (resetUsed && tier >= 2) need = 4.0;
+  return score >= need;
 }
 
 export function resetAllowedFromFirstMode(firstMode: ReactionChecks["firstMode"]): boolean {
@@ -654,12 +658,17 @@ export function computeReaction(checks: ReactionChecks): ReactionResult {
     }
   }
   const chainSignal = signalFromChainScore(chainScore);
-  const pivotUnlocked = pivotUnlockedFromScore(chainScore);
+  const pivotUnlocked = pivotUnlockedFromScore(chainScore, checks);
   const resetAllowed = resetAllowedFromFirstMode(checks.firstMode);
 
   let pivotType: ReactionResult["pivotType"] = "";
   if (!checks.deliveryCorrect && pivotUnlocked) {
-    pivotType = chainSignal === "green" ? "POWER_MOVE_PIVOT" : "RECOVERY_PIVOT";
+    const resetUsed = !!checks.resetUsed;
+    if (resetUsed) {
+      pivotType = "RECOVERY_PIVOT";
+    } else {
+      pivotType = chainSignal === "green" ? "POWER_MOVE_PIVOT" : "RECOVERY_PIVOT";
+    }
   }
 
   const tier = checks.tier ?? 0;
