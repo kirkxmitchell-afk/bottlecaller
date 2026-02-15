@@ -473,6 +473,14 @@ export type UiHook = "FLAVOUR" | "STORY" | "VALUE";
 export type ModeStatus = "optimal" | "neutral" | "damaging";
 export type HookStatus = "optimal" | "neutral" | "damaging";
 
+export type WineCue = {
+  fruit?: string[];
+  texture?: string[];
+  oak?: string;
+  process?: string;
+  region?: string;
+};
+
 export type ReactionChecks = {
   guestRead: boolean;
   modeStatus: ModeStatus;
@@ -488,6 +496,8 @@ export type ReactionChecks = {
   deciderMode?: string;
   deciderHookText?: string;
   deciderHookType?: string;
+  activeWine?: WineCue;
+  tier?: number;
 };
 
 export type ReactionResult = {

@@ -1717,6 +1717,14 @@ function openManagerBoard() {
           deciderMode: mode,
           deciderHookText: hookMeta?.text || "",
           deciderHookType: hookMeta?.hookType || "",
+          tier: DRILL?.tier ?? 0,
+          activeWine: {
+            fruit: enc?.wineSelected?.fruitTags || [],
+            texture: enc?.wineSelected?.textureTags || [],
+            oak: enc?.wineSelected?.oakLevel || "",
+            process: enc?.wineSelected?.process || "",
+            region: enc?.wineSelected?.region || "",
+          },
         };
 
         return checks;
