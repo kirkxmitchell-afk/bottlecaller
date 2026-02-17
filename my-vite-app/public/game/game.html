@@ -564,15 +564,12 @@ function openManagerBoard() {
 
       function loadProg() {
         const key = progKey();
-        if (!key) {
-          PROG = defaultProg();
-          return;
-        }
+        if (!key) return defaultProg();
         try {
           const raw = localStorage.getItem(key);
-          PROG = raw ? { ...defaultProg(), ...JSON.parse(raw) } : defaultProg();
+          return raw ? { ...defaultProg(), ...JSON.parse(raw) } : defaultProg();
         } catch {
-          PROG = defaultProg();
+          return defaultProg();
         }
       }
 
@@ -696,17 +693,23 @@ function openManagerBoard() {
       }
 
       function ensureProgLoaded() {
-        if (PROG) return PROG;
+        PROG = PROG || loadProg();
 
-        const key = progKey();
-        if (!key) {
-          PROG = defaultProg();
-          return PROG;
-        }
+        PROG.axes = PROG.axes || { control: 0, selectivity: 0, compression: 0 };
+        PROG.flags = PROG.flags || { resetDebt: 0 };
+        PROG.unlocks = PROG.unlocks || {};
+        PROG.counters = PROG.counters || {};
 
-        loadProg();
         evaluateUnlocks();
+        window.PROG = PROG;
         window.__BC_PROG__ = PROG;
+
+        const prev = window.__BC_DEBUG__;
+        window.__BC_DEBUG__ = () => {
+          const base = (typeof prev === "function") ? prev() : {};
+          return { ...base, PROG };
+        };
+
         return PROG;
       }
 
