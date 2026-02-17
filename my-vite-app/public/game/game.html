@@ -1487,8 +1487,8 @@ function openManagerBoard() {
 
       function getAllowedGameModesByTier(tier) {
         if (tier <= 0) return [MODE.SCOUT, MODE.GUIDE];
-        if (tier === 1) return [MODE.SCOUT, MODE.GUIDE, MODE.AUTH];
-        return [MODE.SCOUT, MODE.GUIDE, MODE.AUTH];
+        if (tier === 1) return [MODE.SCOUT, MODE.GUIDE, MODE.CHARM];
+        return [MODE.SCOUT, MODE.GUIDE, MODE.CHARM, MODE.AUTH];
       }
 
       function modeLabelForDrill(modeKey) {
