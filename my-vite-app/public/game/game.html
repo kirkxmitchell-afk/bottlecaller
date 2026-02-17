@@ -738,7 +738,7 @@ function openManagerBoard() {
 
       function isModeUnlocked(modeLabel) {
         ensureProgLoaded();
-        if (modeLabel === "LEAD") return !!PROG.unlocks.authorityMode;
+        if (modeLabel === MODE.AUTH) return !!PROG.unlocks.authorityMode;
         return true;
       }
       // ✅ DEMO_WINES fallback (iframe-local)
@@ -1132,23 +1132,23 @@ function openManagerBoard() {
 
       // ---------- Pivot (Recovery / Power Move) scenarios ----------
       const PIVOT_POOL = [
-        { text: "“Maybe… what would you pick if it was your table?”", correctMode: "LEAD", why: "They’re asking you to decide. Reduce friction and commit for them." },
-        { text: "They pause, reread the wine list, then look up silently.", correctMode: "HOLD", why: "Silence = uncertainty. Create safety and lower pressure." },
-        { text: "“We’re celebrating actually… make it feel special.”", correctMode: "REFLECT", why: "They want identity + vibe. Mirror the moment and match tone." },
-        { text: "“Okay… but is it worth it for the price?”", correctMode: "HOLD", why: "They want proof before committing. Slow down and reassure." },
-        { text: "They nod… but glance at their partner for approval.", correctMode: "REFLECT", why: "You’re selling to the dynamic. Align both people with the choice." },
-        { text: "“I don’t want to mess this up… we’re not wine people.”", correctMode: "HOLD", why: "Remove ego-risk. Make it easy and safe to say yes." },
-        { text: "“Just tell us what to do — we’re hungry.”", correctMode: "LEAD", why: "Speed matters. Give direction, not more thinking." },
-        { text: "They smile: “We usually drink lighter… not too heavy.”", correctMode: "REFLECT", why: "They’re giving identity cues. Match preference and tailor." }
+        { text: "“Maybe… what would you pick if it was your table?”", correctMode: MODE.AUTH, why: "They’re asking you to decide. Reduce friction and commit for them." },
+        { text: "They pause, reread the wine list, then look up silently.", correctMode: MODE.SCOUT, why: "Silence = uncertainty. Create safety and lower pressure." },
+        { text: "“We’re celebrating actually… make it feel special.”", correctMode: MODE.GUIDE, why: "They want identity + vibe. Mirror the moment and match tone." },
+        { text: "“Okay… but is it worth it for the price?”", correctMode: MODE.SCOUT, why: "They want proof before committing. Slow down and reassure." },
+        { text: "They nod… but glance at their partner for approval.", correctMode: MODE.GUIDE, why: "You’re selling to the dynamic. Align both people with the choice." },
+        { text: "“I don’t want to mess this up… we’re not wine people.”", correctMode: MODE.SCOUT, why: "Remove ego-risk. Make it easy and safe to say yes." },
+        { text: "“Just tell us what to do — we’re hungry.”", correctMode: MODE.AUTH, why: "Speed matters. Give direction, not more thinking." },
+        { text: "They smile: “We usually drink lighter… not too heavy.”", correctMode: MODE.GUIDE, why: "They’re giving identity cues. Match preference and tailor." }
       ];
 
       // ---------- Rule maps ----------
       const modeMap = {
-        "Decider": { optimal: "LEAD", neutral: "HOLD", damaging: "REFLECT" },
-        "Bargain-Smart": { optimal: "HOLD", neutral: "LEAD", damaging: "REFLECT" },
-        "Fancy": { optimal: "REFLECT", neutral: "LEAD", damaging: "HOLD" },
-        "Griever": { optimal: "HOLD", neutral: "REFLECT", damaging: "LEAD" },
-        "Celebrator": { optimal: "LEAD", neutral: "REFLECT", damaging: "HOLD" }
+        "Decider": { optimal: MODE.AUTH, neutral: MODE.SCOUT, damaging: MODE.GUIDE },
+        "Bargain-Smart": { optimal: MODE.SCOUT, neutral: MODE.AUTH, damaging: MODE.GUIDE },
+        "Fancy": { optimal: MODE.GUIDE, neutral: MODE.AUTH, damaging: MODE.SCOUT },
+        "Griever": { optimal: MODE.SCOUT, neutral: MODE.GUIDE, damaging: MODE.AUTH },
+        "Celebrator": { optimal: MODE.AUTH, neutral: MODE.GUIDE, damaging: MODE.SCOUT }
       };
 
       const hookMap = {
@@ -1417,6 +1417,43 @@ function openManagerBoard() {
         Analyzer: ["analyst"],
       };
 
+      // Canonical mode keys used by engine + telemetry
+      const MODE = {
+        SCOUT: "scout",
+        GUIDE: "guide",
+        CHARM: "charm",
+        AUTH: "authority",
+      };
+
+      function canonicalModeFromUi(label) {
+        const s = String(label || "").trim().toLowerCase();
+        if (s === "scout") return MODE.SCOUT;
+        if (s === "guide") return MODE.GUIDE;
+        if (s === "charm") return MODE.CHARM;
+        if (s === "authority") return MODE.AUTH;
+        if (s === "hold") return MODE.SCOUT;
+        if (s === "reflect") return MODE.GUIDE;
+        if (s === "lead") return MODE.AUTH;
+        if (s === MODE.SCOUT || s === MODE.GUIDE || s === MODE.CHARM || s === MODE.AUTH) return s;
+        return "";
+      }
+
+      function uiModeLabel(modeKey, uiStyle) {
+        const k = String(modeKey || "").toLowerCase();
+        if (uiStyle === "game") {
+          if (k === MODE.SCOUT) return "HOLD";
+          if (k === MODE.GUIDE) return "REFLECT";
+          if (k === MODE.AUTH) return "LEAD";
+          if (k === MODE.CHARM) return "CHARM";
+        } else {
+          if (k === MODE.SCOUT) return "Scout";
+          if (k === MODE.GUIDE) return "Guide";
+          if (k === MODE.CHARM) return "Charm";
+          if (k === MODE.AUTH) return "Authority";
+        }
+        return String(modeKey || "");
+      }
+
       function isCorrectGuestRead(encounter) {
         const actual = encounter?.guestStateActual;
         const read = encounter?.guestReadSelected;
@@ -1434,28 +1471,28 @@ function openManagerBoard() {
       }
 
       function getAllowedDrillModesByTier(tier) {
-        if (tier <= 0) return ["scout", "guide"];
-        if (tier === 1) return ["scout", "guide", "charm"];
-        return ["scout", "guide", "charm", "authority"];
+        if (tier <= 0) return [MODE.SCOUT, MODE.GUIDE];
+        if (tier === 1) return [MODE.SCOUT, MODE.GUIDE, MODE.CHARM];
+        return [MODE.SCOUT, MODE.GUIDE, MODE.CHARM, MODE.AUTH];
       }
 
       function getDrillModeOrderForGuest(guestStateActual, allowed) {
         const g = (guestStateActual || "").toLowerCase();
         if (g === "decider") {
-          const rank = { authority: 0, guide: 1, scout: 2, charm: 3 };
+          const rank = { [MODE.AUTH]: 0, [MODE.GUIDE]: 1, [MODE.SCOUT]: 2, [MODE.CHARM]: 3 };
           return allowed.slice().sort((a, b) => (rank[a] ?? 99) - (rank[b] ?? 99));
         }
         return allowed;
       }
 
       function getAllowedGameModesByTier(tier) {
-        if (tier <= 0) return ["HOLD", "REFLECT"];
-        if (tier === 1) return ["HOLD", "REFLECT", "LEAD"];
-        return ["HOLD", "REFLECT", "LEAD"];
+        if (tier <= 0) return [MODE.SCOUT, MODE.GUIDE];
+        if (tier === 1) return [MODE.SCOUT, MODE.GUIDE, MODE.AUTH];
+        return [MODE.SCOUT, MODE.GUIDE, MODE.AUTH];
       }
 
       function modeLabelForDrill(modeKey) {
-        return modeKey.charAt(0).toUpperCase() + modeKey.slice(1);
+        return uiModeLabel(modeKey, "drill");
       }
 
       // ----------------------------
@@ -3428,8 +3465,8 @@ function openManagerBoard() {
           "Gentle guide: one recommendation, zero pressure."
         ];
 
-        if (mode === "LEAD") return pickRandom(leadLines);
-        if (mode === "REFLECT") return pickRandom(reflectLines);
+        if (mode === MODE.AUTH) return pickRandom(leadLines);
+        if (mode === MODE.GUIDE) return pickRandom(reflectLines);
         return pickRandom(holdLines);
       }
 
@@ -3548,9 +3585,9 @@ function openManagerBoard() {
         const modeRule = modeMap[currentEncounter.guestStateActual];
         const hookRule = hookMap[currentEncounter.guestStateActual];
 
-        const modeStatus =
-          currentEncounter.modeSelected === modeRule.optimal ? "optimal" :
-          currentEncounter.modeSelected === modeRule.neutral ? "neutral" : "damaging";
+          const modeStatus =
+            currentEncounter.modeSelected === modeRule.optimal ? "optimal" :
+            currentEncounter.modeSelected === modeRule.neutral ? "neutral" : "damaging";
 
         let hookStatus = "damaging";
         const hookId = currentEncounter.hookSelected;
@@ -3621,7 +3658,7 @@ function openManagerBoard() {
       }
 
       function bestModeFor(state) {
-        return (modeMap[state] && modeMap[state].optimal) ? modeMap[state].optimal : "";
+        return (modeMap[state] && modeMap[state].optimal) ? uiModeLabel(modeMap[state].optimal, "game") : "";
       }
 
       function bestHookFor(state) {
@@ -3642,7 +3679,7 @@ function openManagerBoard() {
 
         // --- Strengths ---
         if (checks.guestRead) strengths.push(`Read was correct: you identified **${actual}**.`);
-        if (checks.modeStatus === "optimal") strengths.push(`Mode nailed: **${enc.modeSelected}** fits ${actual}.`);
+        if (checks.modeStatus === "optimal") strengths.push(`Mode nailed: **${uiModeLabel(enc.modeSelected, "game")}** fits ${actual}.`);
         if (checks.hookStatus === "optimal") strengths.push(`Hook nailed: **${enc.hookSelected}** fits ${actual}.`);
         if (checks.deliveryCorrect) strengths.push(`Delivery pair was correct (2 sentences clean).`);
 
@@ -3656,7 +3693,7 @@ function openManagerBoard() {
         }
 
         if (checks.modeStatus !== "optimal") {
-          fixes.push(`Mode mismatch: best was **${bestModeFor(actual)}** (you chose **${enc.modeSelected || "—"}**).`);
+          fixes.push(`Mode mismatch: best was **${bestModeFor(actual)}** (you chose **${uiModeLabel(enc.modeSelected, "game") || "—"}**).`);
           next.push(`Micro-fix: for ${actual}, default to **${bestModeFor(actual)}** unless you see a strong counter-cue.`);
         }
 
@@ -4383,7 +4420,7 @@ function openManagerBoard() {
             const btn = document.createElement("button");
             btn.type = "button";
             btn.className = "option-btn" + (currentEncounter.modeSelected === mode ? " selected" : "");
-            btn.innerText = mode;
+            btn.innerText = uiModeLabel(mode, "game");
             bindInput(btn, () => {
               currentEncounter.modeSelected = mode;
               renderEncounterStep();
@@ -4630,11 +4667,11 @@ function openManagerBoard() {
             const options = document.createElement("div");
             options.className = "option-grid";
 
-            ["LEAD", "REFLECT", "HOLD"].forEach(mode => {
+            [MODE.AUTH, MODE.GUIDE, MODE.SCOUT].forEach(mode => {
               const btn = document.createElement("button");
               btn.type = "button";
               btn.className = "option-btn" + (currentEncounter.recoveryChoice === mode ? " selected" : "");
-              btn.innerText = mode;
+              btn.innerText = uiModeLabel(mode, "game");
               bindInput(btn, () => {
                 currentEncounter.recoveryChoice = mode;
                 currentEncounter.recoveryCorrect = (mode === currentEncounter.recoveryCorrectMode);
@@ -4685,7 +4722,7 @@ function openManagerBoard() {
               const explain = document.createElement("div");
               explain.className = "notice";
               explain.innerText =
-                "Best is " + currentEncounter.recoveryCorrectMode +
+                "Best is " + uiModeLabel(currentEncounter.recoveryCorrectMode, "game") +
                 " — " + currentEncounter.recoveryWhy;
               stepContent.appendChild(explain);
             }
@@ -5109,9 +5146,10 @@ function openManagerBoard() {
 
           const summary = document.createElement("div");
           const isDrill = entry.sessionType === "drill";
+          const modeLabel = uiModeLabel(entry.modeSelected, isDrill ? "drill" : "game");
           summary.innerText = isDrill
-            ? `${entry.timestamp} | Grade: ${entry.performanceGrade || "—"} | Drill | Mode: ${entry.modeSelected} | Hook: ${entry.hookSelected}`
-            : `${entry.timestamp} | Grade: ${entry.performanceGrade || "—"} | Wine: ${entry.wineSelected} | Mode: ${entry.modeSelected} | Hook: ${entry.hookSelected}`;
+            ? `${entry.timestamp} | Grade: ${entry.performanceGrade || "—"} | Drill | Mode: ${modeLabel} | Hook: ${entry.hookSelected}`
+            : `${entry.timestamp} | Grade: ${entry.performanceGrade || "—"} | Wine: ${entry.wineSelected} | Mode: ${modeLabel} | Hook: ${entry.hookSelected}`;
 
           const toggleBtn = document.createElement("button");
           toggleBtn.className = "small-btn";
@@ -5138,7 +5176,7 @@ function openManagerBoard() {
           details.innerText =
             "Guest Actual: " + entry.guestStateActual + "\n" +
             "Guest Chosen: " + entry.guestReadSelected + "\n" +
-            "Mode: " + entry.modeSelected + "\n" +
+            "Mode: " + uiModeLabel(entry.modeSelected, (entry.sessionType === "drill") ? "drill" : "game") + "\n" +
             "Hook: " + entry.hookSelected + "\n" +
             "Line 1: " + entry.deliveryLine1 + "\n" +
             "Line 2: " + entry.deliveryLine2 +
