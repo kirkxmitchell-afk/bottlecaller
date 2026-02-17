@@ -374,15 +374,24 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
   "use strict";
 
   // ===== CANONICAL MODES (MUST BE AT TOP) =====
-  const MODE = {
+  var MODE = {
     SCOUT: "scout",
     GUIDE: "guide",
     CHARM: "charm",
     AUTH: "authority",
+    CLOSER: "closer",
   };
 
   // ===== RUNTIME STATE (MUST BE DECLARED EARLY) =====
-  let wines = [];
+  var wines = Array.isArray(window.wines) ? window.wines : [];
+  window.wines = wines;
+
+  // ---- ctx gate (single source of truth) ----
+  window.__BC_CTX__ = window.__BC_CTX__ ?? null;
+  window.__BC_CTX_READY__ = window.__BC_CTX_READY__ ?? new Promise((res) => {
+    window.__BC_CTX_READY_RESOLVE__ = res;
+    window.__BC_CTX_RESOLVE__ = res;
+  });
 
   // ---------- Global safety net (never silently die) ----------
   window.addEventListener("error", (e) => {
@@ -717,12 +726,20 @@ function openManagerBoard() {
       }
 
       function ensureProgLoaded() {
-        PROG = PROG || loadProg();
+        const key = progKey();
+        if (!PROG) {
+          PROG = defaultProg();
+        }
 
         PROG.axes = PROG.axes || { control: 0, selectivity: 0, compression: 0 };
         PROG.flags = PROG.flags || { resetDebt: 0 };
         PROG.unlocks = PROG.unlocks || {};
         PROG.counters = PROG.counters || {};
+
+        if (key && PROG.__key !== key) {
+          PROG = loadProg();
+          PROG.__key = key;
+        }
 
         evaluateUnlocks();
         console.log("[PROG] ensure key =", progKey());
@@ -839,15 +856,8 @@ function openManagerBoard() {
         if (window.__BC_CTX_BOOTSTRAPPED__) return;
         window.__BC_CTX_BOOTSTRAPPED__ = true;
 
-        window.__BC_CTX__ = window.__BC_CTX__ ?? null;
-
-        let resolveReady;
-        window.__BC_CTX_READY__ = new Promise((res) => (resolveReady = res));
-        window.__BC_CTX_RESOLVE__ = () => {
-          try { resolveReady(window.__BC_CTX__); } catch {}
-        };
-
         function setCtx(msg) {
+          if (window.__BC_CTX__?.userId) return;
           window.__BC_CTX__ = {
             userId: msg.userId ?? null,
             restaurantId: msg.restaurantId ?? null,
@@ -855,7 +865,7 @@ function openManagerBoard() {
             role: msg.role ?? null,
             mode: msg.mode ?? null,
           };
-          window.__BC_CTX_RESOLVE__?.(window.__BC_CTX__);
+          window.__BC_CTX_READY_RESOLVE__?.(window.__BC_CTX__);
         }
         window.__BC_SET_CTX__ = setCtx;
 
@@ -886,8 +896,10 @@ function openManagerBoard() {
         // If game.html is opened directly (top-level), do NOT block the game.
         if (!IS_IFRAME) {
           console.log("[BC] top-level — skipping ctx bootstrap");
-          window.__BC_CTX__ = null;
-          window.__BC_CTX_RESOLVE__?.();
+          if (!window.__BC_CTX__?.userId) {
+            window.__BC_CTX__ = window.__BC_CTX__ ?? null;
+          }
+          window.__BC_CTX_READY_RESOLVE__?.();
           return;
         }
 
@@ -900,8 +912,17 @@ function openManagerBoard() {
           console.log("[BC] bc_ctx_request sent ✅");
         } catch (e) {
           console.warn("[BC] bc_ctx_request failed", e);
-          window.__BC_CTX_RESOLVE__();
+          window.__BC_CTX_READY_RESOLVE__?.();
         }
+
+        (async () => {
+          try {
+            await window.__BC_CTX_READY__;
+            window.__BC_ENSURE_PROG__?.();
+          } catch (e) {
+            console.warn("[PROG] ensure after ctx failed", e);
+          }
+        })();
       })();
 
       const BC_CTX = window.__BC_CTX__ || null;
@@ -1435,10 +1456,12 @@ function openManagerBoard() {
         if (s === "guide") return MODE.GUIDE;
         if (s === "charm") return MODE.CHARM;
         if (s === "authority") return MODE.AUTH;
+        if (s === "closer") return MODE.CLOSER;
         if (s === "hold") return MODE.SCOUT;
         if (s === "reflect") return MODE.GUIDE;
         if (s === "lead") return MODE.AUTH;
-        if (s === MODE.SCOUT || s === MODE.GUIDE || s === MODE.CHARM || s === MODE.AUTH) return s;
+        if (s === "close") return MODE.CLOSER;
+        if (s === MODE.SCOUT || s === MODE.GUIDE || s === MODE.CHARM || s === MODE.AUTH || s === MODE.CLOSER) return s;
         return "";
       }
 
@@ -1449,11 +1472,13 @@ function openManagerBoard() {
           if (k === MODE.GUIDE) return "REFLECT";
           if (k === MODE.AUTH) return "LEAD";
           if (k === MODE.CHARM) return "CHARM";
+          if (k === MODE.CLOSER) return "CLOSE";
         } else {
           if (k === MODE.SCOUT) return "Scout";
           if (k === MODE.GUIDE) return "Guide";
           if (k === MODE.CHARM) return "Charm";
           if (k === MODE.AUTH) return "Authority";
+          if (k === MODE.CLOSER) return "Closer";
         }
         return String(modeKey || "");
       }
@@ -1562,13 +1587,6 @@ function openManagerBoard() {
         }
         return !!restaurantId;
       }
-
-      // ---------- Runtime state ----------
-      // ---- ctx gate (single source of truth) ----
-      window.__BC_CTX__ = null;
-      window.__BC_CTX_READY__ = new Promise((resolve) => {
-        window.__BC_CTX_RESOLVE__ = resolve;
-      });
 
       function applyBcCtx(msg) {
         const hasIdentity =
