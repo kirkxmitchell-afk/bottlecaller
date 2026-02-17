@@ -5429,6 +5429,7 @@ function openManagerBoard() {
       window.__BC_DEBUG__ = () => ({
         ctx: window.__BC_CTX__ || null,
         runtime: window.__BC_RUNTIME__?.() || null,
+        PROG: (typeof PROG !== "undefined" ? PROG : null),
         hasWineStore: typeof WineStore !== "undefined",
         wineStoreKeys: (typeof WineStore !== "undefined" ? Object.keys(WineStore) : []),
         wineStoreRead: (rid) => (typeof WineStore !== "undefined" ? WineStore.read(rid) : null),
