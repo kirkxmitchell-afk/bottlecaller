@@ -497,6 +497,7 @@ export type ReactionChecks = {
   guestStateActual?: string;
   modeSelected?: string;
   resetUsed?: boolean;
+  powerMoveAllowed?: boolean;
   modeStatus?: ModeStatus;
   hookStatus?: HookStatus;
 };
@@ -674,6 +675,9 @@ export function computeReaction(checks: ReactionChecks): ReactionResult {
   const tier = checks.tier ?? 0;
   if (pen.penaltyApplied && tier >= 2) {
     if (pivotUnlocked) pivotType = "RECOVERY_PIVOT";
+  }
+  if (pivotType === "POWER_MOVE_PIVOT" && checks.powerMoveAllowed === false) {
+    pivotType = "RECOVERY_PIVOT";
   }
 
   return {

@@ -509,6 +509,8 @@ function openManagerBoard() {
       let sessionType = null; // "drill" | "run" | null
       let drillRepTarget = 3;
       let drillRepDone = 0;
+      // ---------- PROGRESSION STATE (iframe-local, per waiter + restaurant) ----------
+      let PROG = null;
       // ---------- ENCOUNTER STATE (declare once, before any use) ----------
       let currentEncounter = null;
       let currentStep = 0;
@@ -535,6 +537,183 @@ function openManagerBoard() {
       });
       if (!window.ProgressionBridge && window.parent?.ProgressionBridge) {
         window.ProgressionBridge = window.parent.ProgressionBridge;
+      }
+
+      function progKey() {
+        const uid = window.__BC_CTX__?.userId;
+        const rid = window.__BC_CTX__?.restaurantId;
+        if (!uid || !rid) return null;
+        return `bc_prog_v1_${uid}_${rid}`;
+      }
+
+      function defaultProg() {
+        return {
+          v: 1,
+          axes: { control: 0, selectivity: 0, compression: 0 },
+          unlocks: {
+            authorityMode: false,
+            compressedQuestions: false,
+            powerMovePivot: false,
+            explorationSafeHooks: false,
+            singleVariableHooks: false,
+          },
+          flags: { resetDebt: 0 },
+          stats: {}
+        };
+      }
+
+      function loadProg() {
+        const key = progKey();
+        if (!key) {
+          PROG = defaultProg();
+          return;
+        }
+        try {
+          const raw = localStorage.getItem(key);
+          PROG = raw ? { ...defaultProg(), ...JSON.parse(raw) } : defaultProg();
+        } catch {
+          PROG = defaultProg();
+        }
+      }
+
+      function saveProg() {
+        const key = progKey();
+        if (!key || !PROG) return;
+        try { localStorage.setItem(key, JSON.stringify(PROG)); } catch {}
+      }
+
+      function clampProg() {
+        const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+        PROG.axes.control = clamp(PROG.axes.control, 0, 12);
+        PROG.axes.selectivity = clamp(PROG.axes.selectivity, 0, 12);
+        PROG.axes.compression = clamp(PROG.axes.compression, 0, 12);
+        PROG.flags.resetDebt = clamp(PROG.flags.resetDebt, 0, 6);
+      }
+
+      function evaluateUnlocks() {
+        PROG.unlocks = PROG.unlocks || {};
+        PROG.counters = PROG.counters || {};
+
+        if (!PROG.unlocks.authorityMode) {
+          const dec = PROG.counters.deciderGood || 0;
+          const bro = PROG.counters.browserGood || 0;
+          const ana = PROG.counters.analystGood || 0;
+
+          if (dec >= 2) PROG.unlocks.authorityMode = true;
+          else if (bro >= 3) PROG.unlocks.authorityMode = true;
+          else if (ana >= 2) PROG.unlocks.authorityMode = true;
+        }
+
+        const debt = PROG.flags?.resetDebt || 0;
+        if (!PROG.unlocks.compressedQuestions) {
+          PROG.unlocks.compressedQuestions = PROG.axes.compression >= (3 + debt);
+        }
+        if (!PROG.unlocks.powerMovePivot) {
+          PROG.unlocks.powerMovePivot = (PROG.axes.control >= 4 && PROG.axes.selectivity >= 1);
+        }
+        if (!PROG.unlocks.explorationSafeHooks) {
+          PROG.unlocks.explorationSafeHooks = PROG.axes.selectivity >= 3;
+        }
+        if (!PROG.unlocks.singleVariableHooks) {
+          PROG.unlocks.singleVariableHooks = PROG.axes.compression >= 4;
+        }
+      }
+
+      function applyDrillPickToProg(m) {
+        const g = String(m?.guestStateActual || "").toLowerCase();
+        const hookType = String(m?.hookMeta?.hookType || "").toLowerCase();
+        const hookTier = String(m?.hookMeta?.tier || "").toLowerCase();
+        const modePick = String(m?.modeSelected || "").toLowerCase();
+        const resetUsed = !!m?.resetUsed;
+
+        PROG.counters = PROG.counters || {};
+        PROG.counters.deciderGood = PROG.counters.deciderGood || 0;
+        PROG.counters.browserGood = PROG.counters.browserGood || 0;
+        PROG.counters.analystGood = PROG.counters.analystGood || 0;
+
+        if (g === "decider") {
+          if (hookType.includes("guest_centered")) {
+            PROG.axes.control += 1;
+            PROG.axes.compression += 0.5;
+            if (hookTier !== "wrong") PROG.counters.deciderGood += 1;
+          } else if (hookType.includes("diagnostic")) {
+            PROG.axes.selectivity += 1;
+            PROG.axes.compression += 1;
+            if (hookTier !== "wrong") PROG.counters.deciderGood += 1;
+          } else if (hookType.includes("outcome_centered")) {
+            PROG.axes.control += 2;
+            PROG.axes.selectivity -= 0.5;
+          }
+
+          if (modePick === "authority") PROG.axes.control += 0.5;
+          if (modePick === "guide") PROG.axes.compression += 0.25;
+          if (modePick === "scout") PROG.axes.selectivity += 0.25;
+        }
+
+        if (g === "browser") {
+          const isGoodHook =
+            (hookType.includes("diagnostic") || hookType.includes("guest_centered")) &&
+            hookTier !== "wrong";
+
+          if (hookType.includes("diagnostic")) {
+            PROG.axes.selectivity += 0.75;
+            PROG.axes.compression += 0.25;
+          } else if (hookType.includes("guest_centered")) {
+            PROG.axes.compression += 0.5;
+            PROG.axes.control += 0.25;
+          } else if (hookType.includes("outcome_centered")) {
+            PROG.axes.control += 0.5;
+            PROG.axes.selectivity -= 0.25;
+          }
+
+          if (isGoodHook) PROG.counters.browserGood += 1;
+        }
+
+        if (g === "analyst") {
+          const chainScore = (typeof m?.chainScore === "number") ? m.chainScore : null;
+          const notWrong = hookTier !== "wrong";
+          const isGood = (chainScore !== null) && (chainScore >= 3) && notWrong;
+
+          if (hookType.includes("diagnostic")) {
+            PROG.axes.selectivity += 0.5;
+          } else if (hookType.includes("guest_centered")) {
+            PROG.axes.compression += 0.5;
+          } else if (hookType.includes("outcome_centered")) {
+            PROG.axes.control += 0.25;
+            PROG.axes.selectivity -= 0.25;
+          }
+
+          if (isGood) PROG.counters.analystGood += 1;
+        }
+
+        PROG.flags = PROG.flags || {};
+        PROG.flags.resetDebt = PROG.flags.resetDebt || 0;
+        if (resetUsed) PROG.flags.resetDebt += 1;
+
+        clampProg();
+        evaluateUnlocks();
+        saveProg();
+      }
+
+      function ensureProgLoaded() {
+        if (PROG) return PROG;
+
+        const key = progKey();
+        if (!key) {
+          PROG = defaultProg();
+          return PROG;
+        }
+
+        loadProg();
+        evaluateUnlocks();
+        window.__BC_PROG__ = PROG;
+        return PROG;
+      }
+
+      function isModeUnlocked(modeLabel) {
+        ensureProgLoaded();
+        if (modeLabel === "LEAD") return !!PROG.unlocks.authorityMode;
+        return true;
       }
       // ✅ DEMO_WINES fallback (iframe-local)
       const DEMO_WINES = (Array.isArray(window.DEMO_WINES) ? window.DEMO_WINES : [
@@ -1244,8 +1423,9 @@ function openManagerBoard() {
       }
 
       function getAllowedGameModesByTier(tier) {
-        if (tier <= 0) return ["LEAD", "REFLECT"];
-        return ["LEAD", "REFLECT", "HOLD"];
+        if (tier <= 0) return ["HOLD", "REFLECT"];
+        if (tier === 1) return ["HOLD", "REFLECT", "LEAD"];
+        return ["HOLD", "REFLECT", "LEAD"];
       }
 
       function modeLabelForDrill(modeKey) {
@@ -1329,6 +1509,7 @@ function openManagerBoard() {
         window.__BC_CTX__ = { userId, restaurantId, scopeId, role, mode };
 
         console.log("[BC] bc_ctx applied ✅", window.__BC_CTX__);
+        ensureProgLoaded();
         bootstrapWinesFromCtx();
         try {
           const isOnSetup = !document.getElementById("screenSetupPremium")?.classList.contains("hidden");
@@ -1707,13 +1888,14 @@ function openManagerBoard() {
       function buildReactionChecksFromEncounter(enc) {
         const mode = (enc?.modeSelected || "").toLowerCase();
         const hookMeta = enc?.hookMeta || null;
+        ensureProgLoaded();
+        const prog = PROG;
 
         const checks = {
           guestRead: (typeof isCorrectGuestRead === "function")
             ? isCorrectGuestRead(enc)
             : (String(enc?.guestReadSelected || "").toLowerCase() === String(enc?.guestStateActual || "").toLowerCase()),
           deliveryCorrect: true,
-          firstMode: mode,
           deciderMode: mode,
           deciderHookText: hookMeta?.text || "",
           deciderHookType: hookMeta?.hookType || "",
@@ -1724,6 +1906,7 @@ function openManagerBoard() {
           hookText: hookMeta?.text || "",
           resetUsed: !!enc?.resetUsed,
           firstMode: enc?.firstMode || enc?.modeSelected || "",
+          powerMoveAllowed: !!prog.unlocks.powerMovePivot,
           activeWine: {
             fruit: enc?.wineSelected?.fruitTags || [],
             texture: enc?.wineSelected?.textureTags || [],
@@ -1880,7 +2063,12 @@ function openManagerBoard() {
           stepContent.textContent = "Pick your control strategy.";
 
           const tier = resolveTierForSession("drill");
-          const allowed = getAllowedDrillModesByTier(tier);
+          ensureProgLoaded();
+          const prog = PROG;
+          let allowed = getAllowedDrillModesByTier(tier);
+          if (!prog.unlocks.authorityMode) {
+            allowed = allowed.filter(m => m !== "authority");
+          }
           const ordered = getDrillModeOrderForGuest(currentEncounter.guestStateActual, allowed);
 
           ordered.forEach((modeKey) => {
@@ -1912,7 +2100,10 @@ function openManagerBoard() {
             (currentEncounter && currentEncounter.wineSelected) ? currentEncounter.wineSelected :
             { name: "This bottle", varietal: "" };
 
-          const opts = getDrillHookOptions(currentEncounter, wine, { tier, starter });
+          ensureProgLoaded();
+          const prog = PROG;
+          const optsRaw = getDrillHookOptions(currentEncounter, wine, { tier, starter });
+          const opts = filterHookOptionsForProgression(optsRaw, prog);
 
           const options = document.createElement("div");
           options.className = "option-grid";
@@ -1963,6 +2154,18 @@ function openManagerBoard() {
         }
 
         window.__BC_LAST_ENCOUNTER__ = currentEncounter;
+
+        try {
+          applyDrillPickToProg({
+            guestStateActual: currentEncounter?.guestStateActual,
+            modeSelected: currentEncounter?.modeSelected,
+            hookMeta: currentEncounter?.hookMeta,
+            resetUsed: currentEncounter?.resetUsed,
+          });
+          window.__BC_PROG__ = PROG;
+        } catch (e) {
+          console.warn("[DRILL] progression update failed", e);
+        }
 
         emitDrillPick("complete");
 
@@ -3956,6 +4159,18 @@ function openManagerBoard() {
         return base;
       }
 
+      function filterHookOptionsForProgression(opts, prog) {
+        if (!prog || !prog.unlocks) return opts;
+        let out = opts.slice();
+        if (!prog.unlocks.singleVariableHooks) {
+          out = out.filter(o => o.hookType !== "value_framing");
+        }
+        if (!prog.unlocks.explorationSafeHooks) {
+          out = out.filter(o => o.hookType !== "story_authority");
+        }
+        return out;
+      }
+
       function renderEncounterStep() {
         const stepHeader = document.getElementById("stepHeader");
         const stepContent = document.getElementById("stepContent");
@@ -4106,7 +4321,7 @@ function openManagerBoard() {
           const options = document.createElement("div");
           options.className = "option-grid";
           const tier = resolveTierForSession(sessionType);
-          const allowedModes = getAllowedGameModesByTier(tier);
+          let allowedModes = getAllowedGameModesByTier(tier).filter(isModeUnlocked);
           allowedModes.forEach(mode => {
             const btn = document.createElement("button");
             btn.type = "button";
@@ -4133,7 +4348,10 @@ function openManagerBoard() {
           const wine = DRILL?.activeWine || { name: "This bottle" };
           const tier = DRILL?.tier ?? 0;
           const starter = DRILL?.starter ?? "manager";
-          const opts = getDrillHookOptions(currentEncounter, wine, { tier, starter });
+          ensureProgLoaded();
+          const prog = PROG;
+          const optsRaw = getDrillHookOptions(currentEncounter, wine, { tier, starter });
+          const opts = filterHookOptionsForProgression(optsRaw, prog);
 
           const options = document.createElement("div");
           options.className = "option-grid";
@@ -4255,19 +4473,13 @@ function openManagerBoard() {
           }
 
           const reactionChecks = {
+            ...buildReactionChecksFromEncounter(currentEncounter),
             guestRead,
             modeStatus,
             hookStatus,
             deliveryCorrect,
-            firstMode: currentEncounter.modeSelected || ""
+            firstMode: currentEncounter.firstMode || currentEncounter.modeSelected || ""
           };
-
-          const g = String(currentEncounter.guestStateActual || "").toLowerCase();
-          if (g === "decider") {
-            reactionChecks.deciderMode = String(currentEncounter.modeSelected || "");
-            reactionChecks.deciderHookType = String(currentEncounter.hookMeta?.hookType || "");
-            reactionChecks.deciderHookText = String(currentEncounter.hookMeta?.text || "");
-          }
 
           currentEncounter.__drillRep = rep || null;
 
@@ -4639,6 +4851,7 @@ function openManagerBoard() {
           sessionType,
           encounterIndex: (typeof encounterIndex !== "undefined") ? encounterIndex : "UNDEFINED"
         });
+        ensureProgLoaded();
         if (sessionType !== "drill" && !isUnlocked()) return;
 
         if (!sessionId) {
