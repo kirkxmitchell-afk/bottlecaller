@@ -867,6 +867,7 @@ function openManagerBoard() {
             mode: msg.mode ?? null,
           };
           window.__BC_CTX_READY_RESOLVE__?.(window.__BC_CTX__);
+          window.__BC_CTX_RESOLVE__?.(window.__BC_CTX__);
         }
         window.__BC_SET_CTX__ = setCtx;
 
@@ -886,9 +887,34 @@ function openManagerBoard() {
             scopeId = window.__BC_CTX__?.scopeId ?? scopeId ?? null;
             role = window.__BC_CTX__?.role ?? role ?? null;
             mode = window.__BC_CTX__?.mode ?? mode ?? null;
-            if (typeof updateCounts === "function") updateCounts();
-            if (typeof renderWineTables === "function") renderWineTables();
+            try {
+              const winesReady = (typeof window.wines !== "undefined");
+              if (winesReady && typeof updateCounts === "function") updateCounts();
+              if (winesReady && typeof renderWineTables === "function") renderWineTables();
+            } catch (e) {
+              console.warn("[BC] skip counts/tables (boot race)", e);
+            }
           });
+
+          function requestCtxAgain() {
+            try {
+              window.parent?.postMessage(
+                { source: "BC_MSG", v: 1, type: "bc_ctx_request", mode: (window.bcMode || "premium") },
+                location.origin
+              );
+              console.log("[BC] bc_ctx_request re-sent ✅");
+            } catch (e) {
+              console.warn("[BC] re-request ctx failed", e);
+            }
+          }
+
+          setTimeout(() => {
+            if (!window.__BC_CTX__?.userId) requestCtxAgain();
+          }, 0);
+
+          setTimeout(() => {
+            if (!window.__BC_CTX__?.userId) requestCtxAgain();
+          }, 250);
         }
 
         const IS_IFRAME = (window.parent && window.parent !== window) || !!window.frameElement;
