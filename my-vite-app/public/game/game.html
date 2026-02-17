@@ -373,6 +373,17 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
 ;(() => {
   "use strict";
 
+  // ===== CANONICAL MODES (MUST BE AT TOP) =====
+  const MODE = {
+    SCOUT: "scout",
+    GUIDE: "guide",
+    CHARM: "charm",
+    AUTH: "authority",
+  };
+
+  // ===== RUNTIME STATE (MUST BE DECLARED EARLY) =====
+  let wines = [];
+
   // ---------- Global safety net (never silently die) ----------
   window.addEventListener("error", (e) => {
     console.error("Global error:", e.error || e.message || e);
@@ -1417,14 +1428,6 @@ function openManagerBoard() {
         Analyzer: ["analyst"],
       };
 
-      // Canonical mode keys used by engine + telemetry
-      const MODE = {
-        SCOUT: "scout",
-        GUIDE: "guide",
-        CHARM: "charm",
-        AUTH: "authority",
-      };
-
       function canonicalModeFromUi(label) {
         const s = String(label || "").trim().toLowerCase();
         if (s === "scout") return MODE.SCOUT;
@@ -1673,7 +1676,7 @@ function openManagerBoard() {
         }
       }
 
-      let wines = [];
+      // wines declared at top-level (avoid TDZ)
       let runs = loadRuns();
       let mastery = loadMastery();
       let selectedWineIndex = null;
