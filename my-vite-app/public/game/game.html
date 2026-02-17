@@ -713,6 +713,8 @@ function openManagerBoard() {
         return PROG;
       }
 
+      window.__BC_ENSURE_PROG__ = ensureProgLoaded;
+
       function isModeUnlocked(modeLabel) {
         ensureProgLoaded();
         if (modeLabel === "LEAD") return !!PROG.unlocks.authorityMode;
