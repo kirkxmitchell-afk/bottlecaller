@@ -3,6 +3,45 @@ import "./style.css";
 import { supabase, signIn, signUp, signOut, getSession } from "./lib/supabaseClient.js";
 import { decideAllowedTier } from "./game/progressionBridge";
 
+// ===== CANONICAL MODES =====
+const MODE = {
+  SCOUT: "scout",
+  GUIDE: "guide",
+  CHARM: "charm",
+  AUTH: "authority",
+};
+
+function canonicalModeFromUi(label) {
+  const s = String(label || "").trim().toLowerCase();
+  if (s === "scout") return MODE.SCOUT;
+  if (s === "guide") return MODE.GUIDE;
+  if (s === "charm") return MODE.CHARM;
+  if (s === "authority") return MODE.AUTH;
+  if (s === "hold") return MODE.SCOUT;
+  if (s === "reflect") return MODE.GUIDE;
+  if (s === "lead") return MODE.AUTH;
+  if (s === MODE.SCOUT || s === MODE.GUIDE || s === MODE.CHARM || s === MODE.AUTH) return s;
+  return "";
+}
+
+function uiModeLabel(modeKey, uiStyle) {
+  const k = String(modeKey || "").toLowerCase();
+  if (uiStyle === "game") {
+    if (k === MODE.SCOUT) return "HOLD";
+    if (k === MODE.GUIDE) return "REFLECT";
+    if (k === MODE.AUTH) return "LEAD";
+    if (k === MODE.CHARM) return "CHARM";
+  } else {
+    if (k === MODE.SCOUT) return "Scout";
+    if (k === MODE.GUIDE) return "Guide";
+    if (k === MODE.CHARM) return "Charm";
+    if (k === MODE.AUTH) return "Authority";
+  }
+  return String(modeKey || "");
+}
+
+let wines = [];
+
 console.log("supabase client present:", !!supabase);
 window.__BC_SUPABASE__ = supabase;
 
