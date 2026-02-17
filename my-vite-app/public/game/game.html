@@ -716,6 +716,14 @@ function openManagerBoard() {
 
       window.__BC_ENSURE_PROG__ = ensureProgLoaded;
 
+      function getTierNow() {
+        try { return resolveTierForSession(sessionType); } catch { return 0; }
+      }
+
+      function prog() {
+        return window.__BC_ENSURE_PROG__?.() || window.PROG || null;
+      }
+
       function isModeUnlocked(modeLabel) {
         ensureProgLoaded();
         if (modeLabel === "LEAD") return !!PROG.unlocks.authorityMode;
@@ -1905,7 +1913,7 @@ function openManagerBoard() {
           deciderMode: mode,
           deciderHookText: hookMeta?.text || "",
           deciderHookType: hookMeta?.hookType || "",
-          tier: DRILL?.tier ?? 0,
+          tier: getTierNow(),
           guestStateActual: enc?.guestStateActual || "",
           modeSelected: enc?.modeSelected || "",
           hookType: hookMeta?.hookType || "",
@@ -1913,13 +1921,7 @@ function openManagerBoard() {
           resetUsed: !!enc?.resetUsed,
           firstMode: enc?.firstMode || enc?.modeSelected || "",
           powerMoveAllowed: !!prog.unlocks.powerMovePivot,
-          activeWine: {
-            fruit: enc?.wineSelected?.fruitTags || [],
-            texture: enc?.wineSelected?.textureTags || [],
-            oak: enc?.wineSelected?.oakLevel || "",
-            process: enc?.wineSelected?.process || "",
-            region: enc?.wineSelected?.region || "",
-          },
+          activeWine: enc?.wineSelected || null,
         };
 
         return checks;
@@ -2098,18 +2100,13 @@ function openManagerBoard() {
         if (currentStep === 2) {
           stepHeader.textContent = "Step 3 — Hook";
           stepContent.textContent = "Choose your opening line.";
-          const tier = resolveTierForSession("drill");
-          const starter = (DRILL && DRILL.starter) ? DRILL.starter : "manager";
 
           const wine =
             (DRILL && DRILL.activeWine) ? DRILL.activeWine :
             (currentEncounter && currentEncounter.wineSelected) ? currentEncounter.wineSelected :
             { name: "This bottle", varietal: "" };
 
-          ensureProgLoaded();
-          const prog = PROG;
-          const optsRaw = getDrillHookOptions(currentEncounter, wine, { tier, starter });
-          const opts = filterHookOptionsForProgression(optsRaw, prog);
+          const opts = getDrillHookOptions(currentEncounter, wine);
 
           const options = document.createElement("div");
           options.className = "option-grid";
@@ -4113,56 +4110,54 @@ function openManagerBoard() {
         stepContent.appendChild(wrap);
       }
 
-      function getDrillHookOptions(encounter, wine, meta = {}) {
-        const name = wine?.name || "This bottle";
-        const starter = meta.starter || "manager";
-        const tier = typeof meta.tier === "number" ? meta.tier : 0;
+      function hookPolicy() {
+        const P = prog() || { unlocks: {}, axes: {}, flags: {} };
+        const tier = getTierNow();
+        const debt = P?.flags?.resetDebt || 0;
+        const strict = (tier >= 2) || (debt >= 2);
 
-        const tone =
-          starter === "enterprise" ? "operator" :
-          starter === "group_manager" ? "standardize" :
-          "floor";
+        return {
+          tier,
+          strict,
+          unlocks: P.unlocks || {},
+          axes: P.axes || {},
+          debt
+        };
+      }
+
+      function getDrillHookOptions(encounter, wine) {
+        const safeWine = wine || {};
+        const name = safeWine.name || "This bottle";
+        const pol = hookPolicy();
 
         const leadLine =
-          tone === "operator"
-            ? `If you want the cleanest, safest choice — ${name}.`
-            : tone === "standardize"
-            ? `For something reliable and easy to sell — ${name}.`
-            : `If you want something easy and safe tonight, ${name} is a great call.`;
+          `If you want something easy and safe tonight, ${name} is a great call.`;
 
         const reflectLine =
-          "Quick one — are you leaning lighter and fresh, or richer and smooth?";
+          `Quick one — are you leaning lighter and fresh, or richer and smooth?`;
 
         const holdLine =
-          tone === "operator"
-            ? `${name} is the one that keeps the table happy — no surprises.`
-            : `${name} is the right bottle for the table.`;
+          `${name} is the right bottle for the table.`;
 
-        const base = [
+        const compressedReflect =
+          `Two words — fresh or smooth?`;
+
+        const reflectText =
+          pol.unlocks.compressedQuestions ? compressedReflect : reflectLine;
+
+        const g = String(encounter?.guestStateActual || "").toLowerCase();
+        const allowDiagnostic =
+          pol.unlocks.explorationSafeHooks || g !== "decider" || !pol.strict;
+
+        const opts = [
           { id: "hA", text: leadLine, tier: "right", hookType: "guest_centered_framing" },
-          { id: "hB", text: reflectLine, tier: "slightly", hookType: "diagnostic_question" },
+          allowDiagnostic
+            ? { id: "hB", text: reflectText, tier: "slightly", hookType: "diagnostic_question" }
+            : null,
           { id: "hC", text: holdLine, tier: "wrong", hookType: "outcome_centered_framing" },
-        ];
+        ].filter(Boolean);
 
-        if (tier >= 1) {
-          base.unshift({
-            id: "hD",
-            text: `One sentence: ${name} — ${wine?.story ? wine.story : "it’s made with a quiet, deliberate approach."}`,
-            tier: "right",
-            hookType: "story_authority"
-          });
-        }
-
-        if (tier >= 2) {
-          base.unshift({
-            id: "hE",
-            text: `If you want the “premium-feeling” option without the risk, ${name} does that.`,
-            tier: "right",
-            hookType: "value_framing"
-          });
-        }
-
-        return base;
+        return opts;
       }
 
       function filterHookOptionsForProgression(opts, prog) {
@@ -4352,12 +4347,8 @@ function openManagerBoard() {
           stepContent.appendChild(prompt);
 
           const wine = DRILL?.activeWine || { name: "This bottle" };
-          const tier = DRILL?.tier ?? 0;
-          const starter = DRILL?.starter ?? "manager";
-          ensureProgLoaded();
-          const prog = PROG;
-          const optsRaw = getDrillHookOptions(currentEncounter, wine, { tier, starter });
-          const opts = filterHookOptionsForProgression(optsRaw, prog);
+          const optsRaw = getDrillHookOptions(currentEncounter, wine);
+          const opts = optsRaw;
 
           const options = document.createElement("div");
           options.className = "option-grid";

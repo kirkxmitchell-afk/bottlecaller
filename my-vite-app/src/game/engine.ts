@@ -603,6 +603,8 @@ export function computeChainScore(checks: ReactionChecks): number {
 
   score += checks.deliveryCorrect ? 1 : -1;
 
+  if (checks.resetUsed) score -= 1;
+
   return Math.max(0, Math.min(4, score));
 }
 
