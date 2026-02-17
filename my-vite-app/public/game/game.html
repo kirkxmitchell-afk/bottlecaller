@@ -374,7 +374,7 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
   "use strict";
 
   // ===== CANONICAL MODES (MUST BE AT TOP) =====
-  var MODE = {
+  window.MODE = window.MODE ?? {
     SCOUT: "scout",
     GUIDE: "guide",
     CHARM: "charm",
@@ -766,6 +766,7 @@ function openManagerBoard() {
       }
 
       function isModeUnlocked(modeLabel) {
+        const MODE = window.MODE;
         ensureProgLoaded();
         if (modeLabel === MODE.AUTH) return !!PROG.unlocks.authorityMode;
         return true;
@@ -925,13 +926,18 @@ function openManagerBoard() {
         })();
       })();
 
-      const BC_CTX = window.__BC_CTX__ || null;
-      role = BC_CTX?.role ?? role ?? null;
-      restaurantId = BC_CTX?.restaurantId ?? restaurantId ?? null;
-      const isManager = role === "manager";
-      const isWaiter = role === "waiter";
+      (async () => {
+        await window.__BC_CTX_READY__;
+        const ctx = window.__BC_CTX__;
 
-      console.log("[BC] ctx:", { role, restaurantId });
+        role = ctx?.role ?? role ?? null;
+        restaurantId = ctx?.restaurantId ?? restaurantId ?? null;
+
+        const isManager = role === "manager";
+        const isWaiter = role === "waiter";
+
+        console.log("[BC] ctx (after READY):", { role, restaurantId, isManager, isWaiter });
+      })();
 
       // (message handlers consolidated below)
 
@@ -1451,6 +1457,7 @@ function openManagerBoard() {
       };
 
       function canonicalModeFromUi(label) {
+        const MODE = window.MODE;
         const s = String(label || "").trim().toLowerCase();
         if (s === "scout") return MODE.SCOUT;
         if (s === "guide") return MODE.GUIDE;
@@ -1466,6 +1473,7 @@ function openManagerBoard() {
       }
 
       function uiModeLabel(modeKey, uiStyle) {
+        const MODE = window.MODE;
         const k = String(modeKey || "").toLowerCase();
         if (uiStyle === "game") {
           if (k === MODE.SCOUT) return "HOLD";
@@ -1519,6 +1527,7 @@ function openManagerBoard() {
       }
 
       function getAllowedDrillModesByTier(tier) {
+        const MODE = window.MODE;
         if (tier <= 0) return [MODE.SCOUT, MODE.GUIDE];
         if (tier === 1) return [MODE.SCOUT, MODE.GUIDE, MODE.CHARM];
         return [MODE.SCOUT, MODE.GUIDE, MODE.CHARM, MODE.AUTH];
@@ -1527,6 +1536,7 @@ function openManagerBoard() {
       function getDrillModeOrderForGuest(guestStateActual, allowed) {
         const g = (guestStateActual || "").toLowerCase();
         if (g === "decider") {
+          const MODE = window.MODE;
           const rank = { [MODE.AUTH]: 0, [MODE.GUIDE]: 1, [MODE.SCOUT]: 2, [MODE.CHARM]: 3 };
           return allowed.slice().sort((a, b) => (rank[a] ?? 99) - (rank[b] ?? 99));
         }
@@ -1534,6 +1544,7 @@ function openManagerBoard() {
       }
 
       function getAllowedGameModesByTier(tier) {
+        const MODE = window.MODE;
         if (tier <= 0) return [MODE.SCOUT, MODE.GUIDE];
         if (tier === 1) return [MODE.SCOUT, MODE.GUIDE, MODE.CHARM];
         return [MODE.SCOUT, MODE.GUIDE, MODE.CHARM, MODE.AUTH];
