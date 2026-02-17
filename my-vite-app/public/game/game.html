@@ -8,6 +8,15 @@
   <link rel="stylesheet" href="/game/game.css" />
 
   <script>
+    // ---- app mode (demo/premium) ----
+    window.APP_MODE =
+      window.APP_MODE ||
+      (new URLSearchParams(location.search).get("mode") || "demo");
+    console.log("[BC] APP_MODE =", window.APP_MODE);
+
+    // ---- wines global (must exist early) ----
+    window.wines = Array.isArray(window.wines) ? window.wines : [];
+
     function bcGetMode() {
       // 1) URL param wins
       const p = new URLSearchParams(window.location.search)
@@ -19,11 +28,11 @@
       if (injected === "premium" || injected === "demo") return injected
 
       // 3) default
-      return "demo"
+      return (window.APP_MODE || "demo")
     }
 
     // Canonical mode used everywhere
-    window.__BC_MODE__ = bcGetMode()
+    window.__BC_MODE__ = window.__BC_MODE__ || window.APP_MODE || bcGetMode()
     document.documentElement.setAttribute("data-bc-mode", window.__BC_MODE__);
     console.log("[BottleCaller] MODE:", window.__BC_MODE__);
 
@@ -324,7 +333,7 @@ window.__BC_GAME_HTML_MARKER__ = "streak-debug-v1";
 console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
 ;(function () {
   function modeKey() {
-    return (window.__BC_MODE__ === "premium") ? "premium" : "demo";
+    return (window.APP_MODE === "premium") ? "premium" : "demo";
   }
 
   function k(name) {
@@ -374,7 +383,7 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
   "use strict";
 
   // ===== CANONICAL MODES (MUST BE AT TOP) =====
-  window.MODE = window.MODE ?? {
+  window.MODES = window.MODES ?? {
     SCOUT: "scout",
     GUIDE: "guide",
     CHARM: "charm",
@@ -385,6 +394,12 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
   // ===== RUNTIME STATE (MUST BE DECLARED EARLY) =====
   var wines = Array.isArray(window.wines) ? window.wines : [];
   window.wines = wines;
+  function setWines(next) {
+    const arr = Array.isArray(next) ? next : [];
+    wines = arr;
+    window.wines = arr;
+    return arr;
+  }
 
   // ---- ctx gate (single source of truth) ----
   window.__BC_CTX__ = window.__BC_CTX__ ?? null;
@@ -521,7 +536,7 @@ function openManagerBoard() {
       // ============================================================
       // ✅ MODE ENFORCEMENT (single source of truth)
       // ============================================================
-      const bcMode = (window.__BC_MODE__ === "premium") ? "premium" : "demo";
+      const bcMode = (window.APP_MODE === "premium") ? "premium" : "demo";
       const isDemo = bcMode === "demo";
       const LIMIT = isDemo ? 2 : 10;
       // --- SESSION STATE (single source of truth) ---
@@ -766,9 +781,9 @@ function openManagerBoard() {
       }
 
       function isModeUnlocked(modeLabel) {
-        const MODE = window.MODE;
+        const MODES = window.MODES;
         ensureProgLoaded();
-        if (modeLabel === MODE.AUTH) return !!PROG.unlocks.authorityMode;
+        if (modeLabel === MODES.AUTH) return !!PROG.unlocks.authorityMode;
         return true;
       }
       // ✅ DEMO_WINES fallback (iframe-local)
@@ -888,6 +903,13 @@ function openManagerBoard() {
             role = window.__BC_CTX__?.role ?? role ?? null;
             mode = window.__BC_CTX__?.mode ?? mode ?? null;
             try {
+              if (typeof bootstrapWinesFromCtx === "function") {
+                bootstrapWinesFromCtx();
+              }
+            } catch (e) {
+              console.warn("[BC] bootstrapWinesFromCtx failed", e);
+            }
+            try {
               const winesReady = (typeof window.wines !== "undefined");
               if (winesReady && typeof updateCounts === "function") updateCounts();
               if (winesReady && typeof renderWineTables === "function") renderWineTables();
@@ -933,7 +955,7 @@ function openManagerBoard() {
         // In iframe: request ctx from parent ASAP
         try {
           window.parent.postMessage(
-            { source:"BC_MSG", v:1, type:"bc_ctx_request", mode: window.__BC_MODE__ || bcMode || null },
+            { source:"BC_MSG", v:1, type:"bc_ctx_request", mode: window.APP_MODE || bcMode || null },
             "*"
           );
           console.log("[BC] bc_ctx_request sent ✅");
@@ -1197,23 +1219,23 @@ function openManagerBoard() {
 
       // ---------- Pivot (Recovery / Power Move) scenarios ----------
       const PIVOT_POOL = [
-        { text: "“Maybe… what would you pick if it was your table?”", correctMode: MODE.AUTH, why: "They’re asking you to decide. Reduce friction and commit for them." },
-        { text: "They pause, reread the wine list, then look up silently.", correctMode: MODE.SCOUT, why: "Silence = uncertainty. Create safety and lower pressure." },
-        { text: "“We’re celebrating actually… make it feel special.”", correctMode: MODE.GUIDE, why: "They want identity + vibe. Mirror the moment and match tone." },
-        { text: "“Okay… but is it worth it for the price?”", correctMode: MODE.SCOUT, why: "They want proof before committing. Slow down and reassure." },
-        { text: "They nod… but glance at their partner for approval.", correctMode: MODE.GUIDE, why: "You’re selling to the dynamic. Align both people with the choice." },
-        { text: "“I don’t want to mess this up… we’re not wine people.”", correctMode: MODE.SCOUT, why: "Remove ego-risk. Make it easy and safe to say yes." },
-        { text: "“Just tell us what to do — we’re hungry.”", correctMode: MODE.AUTH, why: "Speed matters. Give direction, not more thinking." },
-        { text: "They smile: “We usually drink lighter… not too heavy.”", correctMode: MODE.GUIDE, why: "They’re giving identity cues. Match preference and tailor." }
+        { text: "“Maybe… what would you pick if it was your table?”", correctMode: MODES.AUTH, why: "They’re asking you to decide. Reduce friction and commit for them." },
+        { text: "They pause, reread the wine list, then look up silently.", correctMode: MODES.SCOUT, why: "Silence = uncertainty. Create safety and lower pressure." },
+        { text: "“We’re celebrating actually… make it feel special.”", correctMode: MODES.GUIDE, why: "They want identity + vibe. Mirror the moment and match tone." },
+        { text: "“Okay… but is it worth it for the price?”", correctMode: MODES.SCOUT, why: "They want proof before committing. Slow down and reassure." },
+        { text: "They nod… but glance at their partner for approval.", correctMode: MODES.GUIDE, why: "You’re selling to the dynamic. Align both people with the choice." },
+        { text: "“I don’t want to mess this up… we’re not wine people.”", correctMode: MODES.SCOUT, why: "Remove ego-risk. Make it easy and safe to say yes." },
+        { text: "“Just tell us what to do — we’re hungry.”", correctMode: MODES.AUTH, why: "Speed matters. Give direction, not more thinking." },
+        { text: "They smile: “We usually drink lighter… not too heavy.”", correctMode: MODES.GUIDE, why: "They’re giving identity cues. Match preference and tailor." }
       ];
 
       // ---------- Rule maps ----------
       const modeMap = {
-        "Decider": { optimal: MODE.AUTH, neutral: MODE.SCOUT, damaging: MODE.GUIDE },
-        "Bargain-Smart": { optimal: MODE.SCOUT, neutral: MODE.AUTH, damaging: MODE.GUIDE },
-        "Fancy": { optimal: MODE.GUIDE, neutral: MODE.AUTH, damaging: MODE.SCOUT },
-        "Griever": { optimal: MODE.SCOUT, neutral: MODE.GUIDE, damaging: MODE.AUTH },
-        "Celebrator": { optimal: MODE.AUTH, neutral: MODE.GUIDE, damaging: MODE.SCOUT }
+        "Decider": { optimal: MODES.AUTH, neutral: MODES.SCOUT, damaging: MODES.GUIDE },
+        "Bargain-Smart": { optimal: MODES.SCOUT, neutral: MODES.AUTH, damaging: MODES.GUIDE },
+        "Fancy": { optimal: MODES.GUIDE, neutral: MODES.AUTH, damaging: MODES.SCOUT },
+        "Griever": { optimal: MODES.SCOUT, neutral: MODES.GUIDE, damaging: MODES.AUTH },
+        "Celebrator": { optimal: MODES.AUTH, neutral: MODES.GUIDE, damaging: MODES.SCOUT }
       };
 
       const hookMap = {
@@ -1283,7 +1305,7 @@ function openManagerBoard() {
 
         try {
           const rows = await window.WineBridge.fetchRestaurantWines(sid, rid);
-          wines = Array.isArray(rows) ? rows : [];
+          wines = setWines(rows);
           console.log("[SETUP] hydrated wines ✅", { rid, count: wines.length });
 
           renderWineTables?.();
@@ -1468,10 +1490,8 @@ function openManagerBoard() {
       })();
 
       function getWinesSafe() {
-        if (Array.isArray(wines) && wines.length) return wines;
-        if (!restaurantId) return [];
-        const list = WineStore.read(restaurantId);
-        return Array.isArray(list) ? list : [];
+        if (Array.isArray(window.wines)) return window.wines;
+        return [];
       }
 
       const GUEST_READ_MATCH = {
@@ -1483,36 +1503,36 @@ function openManagerBoard() {
       };
 
       function canonicalModeFromUi(label) {
-        const MODE = window.MODE;
+        const MODES = window.MODES;
         const s = String(label || "").trim().toLowerCase();
-        if (s === "scout") return MODE.SCOUT;
-        if (s === "guide") return MODE.GUIDE;
-        if (s === "charm") return MODE.CHARM;
-        if (s === "authority") return MODE.AUTH;
-        if (s === "closer") return MODE.CLOSER;
-        if (s === "hold") return MODE.SCOUT;
-        if (s === "reflect") return MODE.GUIDE;
-        if (s === "lead") return MODE.AUTH;
-        if (s === "close") return MODE.CLOSER;
-        if (s === MODE.SCOUT || s === MODE.GUIDE || s === MODE.CHARM || s === MODE.AUTH || s === MODE.CLOSER) return s;
+        if (s === "scout") return MODES.SCOUT;
+        if (s === "guide") return MODES.GUIDE;
+        if (s === "charm") return MODES.CHARM;
+        if (s === "authority") return MODES.AUTH;
+        if (s === "closer") return MODES.CLOSER;
+        if (s === "hold") return MODES.SCOUT;
+        if (s === "reflect") return MODES.GUIDE;
+        if (s === "lead") return MODES.AUTH;
+        if (s === "close") return MODES.CLOSER;
+        if (s === MODES.SCOUT || s === MODES.GUIDE || s === MODES.CHARM || s === MODES.AUTH || s === MODES.CLOSER) return s;
         return "";
       }
 
       function uiModeLabel(modeKey, uiStyle) {
-        const MODE = window.MODE;
+        const MODES = window.MODES;
         const k = String(modeKey || "").toLowerCase();
         if (uiStyle === "game") {
-          if (k === MODE.SCOUT) return "HOLD";
-          if (k === MODE.GUIDE) return "REFLECT";
-          if (k === MODE.AUTH) return "LEAD";
-          if (k === MODE.CHARM) return "CHARM";
-          if (k === MODE.CLOSER) return "CLOSE";
+          if (k === MODES.SCOUT) return "HOLD";
+          if (k === MODES.GUIDE) return "REFLECT";
+          if (k === MODES.AUTH) return "LEAD";
+          if (k === MODES.CHARM) return "CHARM";
+          if (k === MODES.CLOSER) return "CLOSE";
         } else {
-          if (k === MODE.SCOUT) return "Scout";
-          if (k === MODE.GUIDE) return "Guide";
-          if (k === MODE.CHARM) return "Charm";
-          if (k === MODE.AUTH) return "Authority";
-          if (k === MODE.CLOSER) return "Closer";
+          if (k === MODES.SCOUT) return "Scout";
+          if (k === MODES.GUIDE) return "Guide";
+          if (k === MODES.CHARM) return "Charm";
+          if (k === MODES.AUTH) return "Authority";
+          if (k === MODES.CLOSER) return "Closer";
         }
         return String(modeKey || "");
       }
@@ -1553,27 +1573,27 @@ function openManagerBoard() {
       }
 
       function getAllowedDrillModesByTier(tier) {
-        const MODE = window.MODE;
-        if (tier <= 0) return [MODE.SCOUT, MODE.GUIDE];
-        if (tier === 1) return [MODE.SCOUT, MODE.GUIDE, MODE.CHARM];
-        return [MODE.SCOUT, MODE.GUIDE, MODE.CHARM, MODE.AUTH];
+        const MODES = window.MODES;
+        if (tier <= 0) return [MODES.SCOUT, MODES.GUIDE];
+        if (tier === 1) return [MODES.SCOUT, MODES.GUIDE, MODES.CHARM];
+        return [MODES.SCOUT, MODES.GUIDE, MODES.CHARM, MODES.AUTH];
       }
 
       function getDrillModeOrderForGuest(guestStateActual, allowed) {
         const g = (guestStateActual || "").toLowerCase();
         if (g === "decider") {
-          const MODE = window.MODE;
-          const rank = { [MODE.AUTH]: 0, [MODE.GUIDE]: 1, [MODE.SCOUT]: 2, [MODE.CHARM]: 3 };
+          const MODES = window.MODES;
+          const rank = { [MODES.AUTH]: 0, [MODES.GUIDE]: 1, [MODES.SCOUT]: 2, [MODES.CHARM]: 3 };
           return allowed.slice().sort((a, b) => (rank[a] ?? 99) - (rank[b] ?? 99));
         }
         return allowed;
       }
 
       function getAllowedGameModesByTier(tier) {
-        const MODE = window.MODE;
-        if (tier <= 0) return [MODE.SCOUT, MODE.GUIDE];
-        if (tier === 1) return [MODE.SCOUT, MODE.GUIDE, MODE.CHARM];
-        return [MODE.SCOUT, MODE.GUIDE, MODE.CHARM, MODE.AUTH];
+        const MODES = window.MODES;
+        if (tier <= 0) return [MODES.SCOUT, MODES.GUIDE];
+        if (tier === 1) return [MODES.SCOUT, MODES.GUIDE, MODES.CHARM];
+        return [MODES.SCOUT, MODES.GUIDE, MODES.CHARM, MODES.AUTH];
       }
 
       function modeLabelForDrill(modeKey) {
@@ -1746,7 +1766,7 @@ function openManagerBoard() {
             }
           }
 
-          wines = rows.slice(0, LIMIT);
+          wines = setWines(rows.slice(0, LIMIT));
 
           try { WineStore.write(rid, wines); } catch {}
 
@@ -1828,7 +1848,7 @@ function openManagerBoard() {
             setTimeout(() => {
               const rid = window.__BC_CTX__?.restaurantId || null;
               const list = rid ? WineStore.read(rid) : [];
-              wines = Array.isArray(list) ? list : [];
+              wines = setWines(list);
 
               console.log("[BC] NAV setup -> hydrate", { rid, count: wines.length });
 
@@ -1874,7 +1894,7 @@ function openManagerBoard() {
           if (!Array.isArray(wines) || wines.length === 0) {
             try {
               await waitForRestaurantId();
-              wines = await loadWines();
+              wines = setWines(await loadWines());
               console.log("[BC] wines loaded for drill ✅", { count: wines?.length || 0, restaurantId });
             } catch (e) {
               console.warn("[BC] wines load failed before drill", e);
@@ -1915,7 +1935,7 @@ function openManagerBoard() {
             console.warn("[BC] wines_sync ignored: restaurant mismatch", { got: msg.restaurantId, want: restaurantId });
             return;
           }
-          wines = Array.isArray(msg.wines) ? msg.wines : [];
+          wines = setWines(msg.wines);
           if (restaurantId) {
             try { WineStore.write(restaurantId, wines); } catch {}
           }
@@ -1944,16 +1964,16 @@ function openManagerBoard() {
         })
       };
 
-      mode = window.__BC_MODE__ || (new URLSearchParams(location.search).get("mode") || "demo");
+      mode = window.APP_MODE || (new URLSearchParams(location.search).get("mode") || "demo");
 
       await waitForRestaurantId();
       if (!restaurantId && isDemo) restaurantId = "demo";
       if (restaurantId) {
-        wines = WineStore.migrateIfNeeded(restaurantId);
+        wines = setWines(WineStore.migrateIfNeeded(restaurantId));
       }
 
       if (isDemo) {
-        wines = DEMO_WINES.slice();
+        wines = setWines(DEMO_WINES.slice());
         if (restaurantId) WineStore.write(restaurantId, wines);
       }
 
@@ -1987,7 +2007,7 @@ function openManagerBoard() {
             const sid = window.__BC_CTX__?.scopeId || scopeId || null;
             if (!sid) throw new Error("missing_scope_id");
             const list = await window.WineBridge.fetchRestaurantWines(sid, restaurantId);
-            wines = Array.isArray(list) ? list : [];
+            wines = setWines(list);
             if (restaurantId) WineStore.write(restaurantId, wines);
             console.log("[BC] wines hydrated from DB ✅", { restaurantId, count: wines.length });
             return wines;
@@ -1997,7 +2017,7 @@ function openManagerBoard() {
         }
 
         const cached = restaurantId ? WineStore.read(restaurantId) : [];
-        wines = Array.isArray(cached) ? cached : [];
+        wines = setWines(cached);
         return wines;
       }
 
@@ -3366,7 +3386,7 @@ function openManagerBoard() {
             await window.WineBridge.deleteRestaurantWine(idToDelete);
             const list = WineStore.read(restaurantId).filter(w => w.id !== idToDelete).slice(0, LIMIT);
             WineStore.write(restaurantId, list);
-            wines = list;
+            wines = setWines(list);
             renderWineTables();
           } catch (e) {
             console.error("[BC] deleteRestaurantWine failed:", e);
@@ -3376,7 +3396,7 @@ function openManagerBoard() {
         }
 
         // demo/local fallback
-        wines = wines.filter(w => w.id !== idToDelete).slice(0, LIMIT);
+        wines = setWines(wines.filter(w => w.id !== idToDelete).slice(0, LIMIT));
         if (restaurantId) WineStore.write(restaurantId, wines);
         renderWineTables();
       }
@@ -3439,7 +3459,7 @@ function openManagerBoard() {
               story
             });
 
-            wines = await loadWines();
+            wines = setWines(await loadWines());
             renderWineTables();
             return;
           } catch (e) {
@@ -3451,11 +3471,11 @@ function openManagerBoard() {
 
         if (restaurantId) {
           list.push(wine);
-          wines = list.slice(0, LIMIT);
+          wines = setWines(list.slice(0, LIMIT));
           saveWines();
         } else if (!usedDb) {
           wines.push(wine);
-          wines = wines.slice(0, LIMIT);
+          wines = setWines(wines.slice(0, LIMIT));
         }
 
         if (nameEl) nameEl.value = "";
@@ -3549,8 +3569,8 @@ function openManagerBoard() {
           "Gentle guide: one recommendation, zero pressure."
         ];
 
-        if (mode === MODE.AUTH) return pickRandom(leadLines);
-        if (mode === MODE.GUIDE) return pickRandom(reflectLines);
+        if (mode === MODES.AUTH) return pickRandom(leadLines);
+        if (mode === MODES.GUIDE) return pickRandom(reflectLines);
         return pickRandom(holdLines);
       }
 
@@ -4728,7 +4748,7 @@ function openManagerBoard() {
             const options = document.createElement("div");
             options.className = "option-grid";
 
-            [MODE.AUTH, MODE.GUIDE, MODE.SCOUT].forEach(mode => {
+            [MODES.AUTH, MODES.GUIDE, MODES.SCOUT].forEach(mode => {
               const btn = document.createElement("button");
               btn.type = "button";
               btn.className = "option-btn" + (currentEncounter.recoveryChoice === mode ? " selected" : "");
@@ -5037,7 +5057,7 @@ function openManagerBoard() {
         }
         if (!Array.isArray(list) || list.length === 0) {
           alert("No encounters loaded. Check window.__BC_ENCOUNTERS__.");
-          console.error("[BC] No encounters available for mode:", window.__BC_MODE__, window.__BC_ENCOUNTERS__);
+          console.error("[BC] No encounters available for mode:", window.APP_MODE, window.__BC_ENCOUNTERS__);
           return;
         }
 
@@ -5283,7 +5303,7 @@ function openManagerBoard() {
           try { window.WineBridge.deleteAllRestaurantWines(scopeId, restaurantId); } catch {}
         }
 
-        wines = [];
+        wines = setWines([]);
         try { WineStore.remove(restaurantId); } catch {}
         runs = [];
         saveRuns();
@@ -5353,7 +5373,7 @@ function openManagerBoard() {
           setTimeout(() => {
             if (isDemo) {
               const list = restaurantId ? WineStore.read(restaurantId) : [];
-              wines = Array.isArray(list) ? list : [];
+              wines = setWines(list);
               console.log("[BC] setup hydrate after showScreen", { restaurantId, count: wines.length });
               if (wines.length) hydrateSetupFormFromWine(bcMode, wines[0]);
             } else {
@@ -5395,7 +5415,7 @@ function openManagerBoard() {
           localStorage.removeItem(coverKey);
           if (restaurantId) WineStore.remove(restaurantId);
 
-          wines = [];
+          wines = setWines([]);
           runs = [];
           resetEncounterIndex();
           encounterIndex = 0;
