@@ -629,15 +629,26 @@ function openManagerBoard() {
         PROG.counters.browserGood = PROG.counters.browserGood || 0;
         PROG.counters.analystGood = PROG.counters.analystGood || 0;
 
+        const tierTag = String(m?.hookMeta?.tier || "").toLowerCase();
+        const isGood = (tierTag === "right" || tierTag === "slightly");
+
+        if (g === "decider") {
+          PROG.counters.deciderGood += (isGood ? 1 : 0);
+        }
+        if (g === "browser") {
+          PROG.counters.browserGood += (isGood ? 1 : 0);
+        }
+        if (g === "analyst") {
+          PROG.counters.analystGood += (isGood ? 1 : 0);
+        }
+
         if (g === "decider") {
           if (hookType.includes("guest_centered")) {
             PROG.axes.control += 1;
             PROG.axes.compression += 0.5;
-            if (hookTier !== "wrong") PROG.counters.deciderGood += 1;
           } else if (hookType.includes("diagnostic")) {
             PROG.axes.selectivity += 1;
             PROG.axes.compression += 1;
-            if (hookTier !== "wrong") PROG.counters.deciderGood += 1;
           } else if (hookType.includes("outcome_centered")) {
             PROG.axes.control += 2;
             PROG.axes.selectivity -= 0.5;
@@ -664,13 +675,12 @@ function openManagerBoard() {
             PROG.axes.selectivity -= 0.25;
           }
 
-          if (isGoodHook) PROG.counters.browserGood += 1;
         }
 
         if (g === "analyst") {
           const chainScore = (typeof m?.chainScore === "number") ? m.chainScore : null;
           const notWrong = hookTier !== "wrong";
-          const isGood = (chainScore !== null) && (chainScore >= 3) && notWrong;
+          const isGoodAnalyst = (chainScore !== null) && (chainScore >= 3) && notWrong;
 
           if (hookType.includes("diagnostic")) {
             PROG.axes.selectivity += 0.5;
@@ -681,7 +691,9 @@ function openManagerBoard() {
             PROG.axes.selectivity -= 0.25;
           }
 
-          if (isGood) PROG.counters.analystGood += 1;
+          if (isGoodAnalyst) {
+            // no counter increment here; counters are handled by tierTag above
+          }
         }
 
         PROG.flags = PROG.flags || {};
@@ -2101,12 +2113,15 @@ function openManagerBoard() {
           stepHeader.textContent = "Step 3 — Hook";
           stepContent.textContent = "Choose your opening line.";
 
+          window.__BC_ENSURE_PROG__?.();
+          const progState = window.PROG || null;
+          const tierNow = resolveTierForSession(sessionType);
           const wine =
             (DRILL && DRILL.activeWine) ? DRILL.activeWine :
             (currentEncounter && currentEncounter.wineSelected) ? currentEncounter.wineSelected :
             { name: "This bottle", varietal: "" };
 
-          const opts = getDrillHookOptions(currentEncounter, wine);
+          const opts = hookPolicy(currentEncounter, wine, tierNow, progState);
 
           const options = document.createElement("div");
           options.className = "option-grid";
@@ -4110,54 +4125,95 @@ function openManagerBoard() {
         stepContent.appendChild(wrap);
       }
 
-      function hookPolicy() {
-        const P = prog() || { unlocks: {}, axes: {}, flags: {} };
-        const tier = getTierNow();
-        const debt = P?.flags?.resetDebt || 0;
-        const strict = (tier >= 2) || (debt >= 2);
-
-        return {
-          tier,
-          strict,
-          unlocks: P.unlocks || {},
-          axes: P.axes || {},
-          debt
-        };
-      }
-
-      function getDrillHookOptions(encounter, wine) {
-        const safeWine = wine || {};
-        const name = safeWine.name || "This bottle";
-        const pol = hookPolicy();
-
-        const leadLine =
-          `If you want something easy and safe tonight, ${name} is a great call.`;
-
-        const reflectLine =
-          `Quick one — are you leaning lighter and fresh, or richer and smooth?`;
-
-        const holdLine =
-          `${name} is the right bottle for the table.`;
-
-        const compressedReflect =
-          `Two words — fresh or smooth?`;
-
-        const reflectText =
-          pol.unlocks.compressedQuestions ? compressedReflect : reflectLine;
-
+      function hookPolicy(encounter, wine, tier, prog) {
         const g = String(encounter?.guestStateActual || "").toLowerCase();
-        const allowDiagnostic =
-          pol.unlocks.explorationSafeHooks || g !== "decider" || !pol.strict;
+        const W = wine || {};
+        const name = W.name || "This bottle";
 
-        const opts = [
-          { id: "hA", text: leadLine, tier: "right", hookType: "guest_centered_framing" },
-          allowDiagnostic
-            ? { id: "hB", text: reflectText, tier: "slightly", hookType: "diagnostic_question" }
-            : null,
-          { id: "hC", text: holdLine, tier: "wrong", hookType: "outcome_centered_framing" },
-        ].filter(Boolean);
+        const unlockedCompressed = !!prog?.unlocks?.compressedQuestions;
+        const unlockedSingleVar = !!prog?.unlocks?.singleVariableHooks;
 
-        return opts;
+        const askTwoWay = (a, b) => unlockedCompressed ? `${a} or ${b}?` : `Quick one — are you leaning ${a}, or ${b}?`;
+        const askOneVar = (q) => unlockedSingleVar ? q : `One detail — ${q}`;
+
+        const wrongLine = `${name} is the right bottle for the table.`;
+
+        if (g === "decider") {
+          const leadLine =
+            `If you want something easy and safe tonight, ${name} is a great call.`;
+
+          const reflectLine =
+            askOneVar(`are you in a rush, or settling in?`);
+
+          return [
+            { id: "hA", text: leadLine, tier: "right",    hookType: "guest_centered_framing" },
+            { id: "hB", text: reflectLine, tier: "slightly", hookType: "diagnostic_question" },
+            { id: "hC", text: wrongLine, tier: "wrong",   hookType: "outcome_centered_framing" },
+          ];
+        }
+
+        if (g === "browser") {
+          const leadLine =
+            `Want two quick, safe directions? I can keep it simple — then we land on one.`;
+
+          const reflectLine =
+            askTwoWay("lighter & fresh", "richer & smooth");
+
+          const holdLine =
+            `${name} is what you should get.`;
+
+          return [
+            { id: "hA", text: leadLine, tier: "right",    hookType: "guest_centered_framing" },
+            { id: "hB", text: reflectLine, tier: "slightly", hookType: "diagnostic_question" },
+            { id: "hC", text: holdLine, tier: "wrong",   hookType: "outcome_centered_framing" },
+          ];
+        }
+
+        if (g === "analyst") {
+          const leadLine =
+            `If you tell me one thing, I’ll nail it: do you want it more crisp, or more round?`;
+
+          const reflectLine =
+            unlockedCompressed
+              ? `Crisp or round?`
+              : `Quick one — crisp and clean, or round and textured?`;
+
+          const holdLine =
+            `Trust me — ${name} is the best choice.`;
+
+          return [
+            { id: "hA", text: leadLine, tier: "right",    hookType: "guest_centered_framing" },
+            { id: "hB", text: reflectLine, tier: "slightly", hookType: "diagnostic_question" },
+            { id: "hC", text: holdLine, tier: "wrong",   hookType: "outcome_centered_framing" },
+          ];
+        }
+
+        if (g === "celebrator") {
+          const leadLine =
+            `Alright — if we’re celebrating, I’ll make this easy. ${name} is a confident, crowd-pleasing call.`;
+
+          const reflectLine =
+            unlockedCompressed
+              ? `Bubbles or still?`
+              : `Quick one — are we doing bubbles, or still wine?`;
+
+          const holdLine =
+            `No questions — ${name}.`;
+
+          return [
+            { id: "hA", text: leadLine, tier: "right",    hookType: "guest_centered_framing" },
+            { id: "hB", text: reflectLine, tier: "slightly", hookType: "diagnostic_question" },
+            { id: "hC", text: holdLine, tier: "wrong",   hookType: "outcome_centered_framing" },
+          ];
+        }
+
+        const leadLine = `Want something safe and easy, or do you want to explore?`;
+        const reflectLine = askTwoWay("fresh", "smooth");
+        return [
+          { id: "hA", text: leadLine, tier: "right",    hookType: "guest_centered_framing" },
+          { id: "hB", text: reflectLine, tier: "slightly", hookType: "diagnostic_question" },
+          { id: "hC", text: wrongLine, tier: "wrong",   hookType: "outcome_centered_framing" },
+        ];
       }
 
       function filterHookOptionsForProgression(opts, prog) {
@@ -4346,9 +4402,11 @@ function openManagerBoard() {
           prompt.innerText = "Which sentence do you lead with?";
           stepContent.appendChild(prompt);
 
-          const wine = DRILL?.activeWine || { name: "This bottle" };
-          const optsRaw = getDrillHookOptions(currentEncounter, wine);
-          const opts = optsRaw;
+          window.__BC_ENSURE_PROG__?.();
+          const progState = window.PROG || null;
+          const tierNow = resolveTierForSession(sessionType);
+          const wine = currentEncounter?.wineSelected || {};
+          const opts = hookPolicy(currentEncounter, wine, tierNow, progState);
 
           const options = document.createElement("div");
           options.className = "option-grid";
