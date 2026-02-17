@@ -725,6 +725,7 @@ function openManagerBoard() {
         PROG.counters = PROG.counters || {};
 
         evaluateUnlocks();
+        console.log("[PROG] ensure key =", progKey());
         window.PROG = PROG;
         window.__BC_PROG__ = PROG;
 
@@ -1457,6 +1458,25 @@ function openManagerBoard() {
         return String(modeKey || "");
       }
 
+      function canonicalGuestType(raw) {
+        const g = String(raw || "").toLowerCase();
+        if (g === "browser") return "browser";
+        if (g === "make-it-easy" || g === "make_it_easy") return "make_it_easy";
+        if (g === "budget guard" || g === "budget_guard") return "budget_guard";
+        if (g === "analyst") return "analyst";
+        if (g === "alpha") return "alpha";
+        if (g === "celebrator") return "celebrator";
+        if (g === "decider") return "make_it_easy";
+        if (g === "griever") return "budget_guard";
+        if (g === "bargain-smart" || g === "bargain_smart") return "budget_guard";
+        return "browser";
+      }
+
+      function tierFromEncounter(enc) {
+        const t = enc?.meta?.tier;
+        return (typeof t === "number" ? t : 1);
+      }
+
       function isCorrectGuestRead(encounter) {
         const actual = encounter?.guestStateActual;
         const read = encounter?.guestReadSelected;
@@ -1576,6 +1596,12 @@ function openManagerBoard() {
 
         console.log("[BC] bc_ctx applied ✅", window.__BC_CTX__);
         ensureProgLoaded();
+        try {
+          window.__BC_ENSURE_PROG__?.();
+          console.log("[PROG] loaded after ctx ✅", window.PROG?.axes, "key:", (window.__BC_CTX__?.userId && window.__BC_CTX__?.restaurantId) ? `bc_prog_v1_${window.__BC_CTX__.userId}_${window.__BC_CTX__.restaurantId}` : null);
+        } catch (e) {
+          console.warn("[PROG] ensure after ctx failed", e);
+        }
         bootstrapWinesFromCtx();
         try {
           const isOnSetup = !document.getElementById("screenSetupPremium")?.classList.contains("hidden");
@@ -1965,7 +1991,7 @@ function openManagerBoard() {
           deciderMode: mode,
           deciderHookText: hookMeta?.text || "",
           deciderHookType: hookMeta?.hookType || "",
-          tier: getTierNow(),
+          tier: tierFromEncounter(enc),
           guestStateActual: enc?.guestStateActual || "",
           modeSelected: enc?.modeSelected || "",
           hookType: hookMeta?.hookType || "",
@@ -4165,94 +4191,74 @@ function openManagerBoard() {
         stepContent.appendChild(wrap);
       }
 
-      function hookPolicy(encounter, wine, tier, prog) {
-        const g = String(encounter?.guestStateActual || "").toLowerCase();
-        const W = wine || {};
-        const name = W.name || "This bottle";
-
-        const unlockedCompressed = !!prog?.unlocks?.compressedQuestions;
-        const unlockedSingleVar = !!prog?.unlocks?.singleVariableHooks;
-
-        const askTwoWay = (a, b) => unlockedCompressed ? `${a} or ${b}?` : `Quick one — are you leaning ${a}, or ${b}?`;
-        const askOneVar = (q) => unlockedSingleVar ? q : `One detail — ${q}`;
-
-        const wrongLine = `${name} is the right bottle for the table.`;
-
-        if (g === "decider") {
-          const leadLine =
-            `If you want something easy and safe tonight, ${name} is a great call.`;
-
-          const reflectLine =
-            askOneVar(`are you in a rush, or settling in?`);
-
-          return [
-            { id: "hA", text: leadLine, tier: "right",    hookType: "guest_centered_framing" },
-            { id: "hB", text: reflectLine, tier: "slightly", hookType: "diagnostic_question" },
-            { id: "hC", text: wrongLine, tier: "wrong",   hookType: "outcome_centered_framing" },
-          ];
-        }
+      function hookPolicy(encounter, wine) {
+        const w = wine || { name: "This bottle", varietal: "" };
+        const name = w.name || "This bottle";
+        const t = tierFromEncounter(encounter);
+        const g = canonicalGuestType(encounter?.guestStateActual);
+        const strict = t >= 3;
 
         if (g === "browser") {
-          const leadLine =
-            `Want two quick, safe directions? I can keep it simple — then we land on one.`;
-
-          const reflectLine =
-            askTwoWay("lighter & fresh", "richer & smooth");
-
-          const holdLine =
-            `${name} is what you should get.`;
-
+          const leadLine = `If you want something easy that won’t miss tonight, ${name} is a great call.`;
+          const reflectLine = `Quick one — are you leaning lighter and fresh, or richer and smooth?`;
+          const holdLine = `${name} is the right bottle for the table.`;
           return [
-            { id: "hA", text: leadLine, tier: "right",    hookType: "guest_centered_framing" },
+            { id: "hA", text: leadLine, tier: "right", hookType: "guest_centered_framing" },
             { id: "hB", text: reflectLine, tier: "slightly", hookType: "diagnostic_question" },
-            { id: "hC", text: holdLine, tier: "wrong",   hookType: "outcome_centered_framing" },
+            { id: "hC", text: holdLine, tier: strict ? "wrong" : "slightly", hookType: "outcome_centered_framing" },
           ];
         }
 
         if (g === "analyst") {
-          const leadLine =
-            `If you tell me one thing, I’ll nail it: do you want it more crisp, or more round?`;
-
-          const reflectLine =
-            unlockedCompressed
-              ? `Crisp or round?`
-              : `Quick one — crisp and clean, or round and textured?`;
-
-          const holdLine =
-            `Trust me — ${name} is the best choice.`;
-
+          const leadLine = `Clean pick: ${name}. Bright structure, dry finish — no surprises.`;
+          const reflectLine = `Do you want higher acidity, or more body?`;
+          const holdLine = `This is our best value bottle.`;
           return [
-            { id: "hA", text: leadLine, tier: "right",    hookType: "guest_centered_framing" },
+            { id: "hA", text: leadLine, tier: "right", hookType: "guest_centered_framing" },
             { id: "hB", text: reflectLine, tier: "slightly", hookType: "diagnostic_question" },
-            { id: "hC", text: holdLine, tier: "wrong",   hookType: "outcome_centered_framing" },
+            { id: "hC", text: holdLine, tier: "wrong", hookType: "outcome_centered_framing" },
           ];
         }
 
         if (g === "celebrator") {
-          const leadLine =
-            `Alright — if we’re celebrating, I’ll make this easy. ${name} is a confident, crowd-pleasing call.`;
-
-          const reflectLine =
-            unlockedCompressed
-              ? `Bubbles or still?`
-              : `Quick one — are we doing bubbles, or still wine?`;
-
-          const holdLine =
-            `No questions — ${name}.`;
-
+          const leadLine = `If it’s a celebration table, ${name} feels like an upgrade without getting heavy.`;
+          const reflectLine = `Are we celebrating fresh and bright, or rich and plush tonight?`;
+          const holdLine = `This is our premium bottle.`;
           return [
-            { id: "hA", text: leadLine, tier: "right",    hookType: "guest_centered_framing" },
+            { id: "hA", text: leadLine, tier: "right", hookType: "guest_centered_framing" },
             { id: "hB", text: reflectLine, tier: "slightly", hookType: "diagnostic_question" },
-            { id: "hC", text: holdLine, tier: "wrong",   hookType: "outcome_centered_framing" },
+            { id: "hC", text: holdLine, tier: strict ? "wrong" : "slightly", hookType: "outcome_centered_framing" },
           ];
         }
 
-        const leadLine = `Want something safe and easy, or do you want to explore?`;
-        const reflectLine = askTwoWay("fresh", "smooth");
+        if (g === "make_it_easy") {
+          return [
+            { id: "hA", text: `Fast, safe pick: ${name}.`, tier: "right", hookType: "guest_centered_framing" },
+            { id: "hB", text: `Want lighter and crisp, or richer and smooth?`, tier: "slightly", hookType: "diagnostic_question" },
+            { id: "hC", text: `${name} is the right bottle for the table.`, tier: "wrong", hookType: "outcome_centered_framing" },
+          ];
+        }
+
+        if (g === "budget_guard") {
+          return [
+            { id: "hA", text: `If you want great value without sacrificing quality, ${name} is the safest bet.`, tier: "right", hookType: "guest_centered_framing" },
+            { id: "hB", text: `Are we keeping it under control, or are you open to one step up?`, tier: "slightly", hookType: "diagnostic_question" },
+            { id: "hC", text: `This is what most tables choose.`, tier: "wrong", hookType: "outcome_centered_framing" },
+          ];
+        }
+
+        if (g === "alpha") {
+          return [
+            { id: "hA", text: `If you want the decisive call: ${name}.`, tier: "right", hookType: "guest_centered_framing" },
+            { id: "hB", text: `Do you want precision and dryness, or more weight and richness?`, tier: "slightly", hookType: "diagnostic_question" },
+            { id: "hC", text: `This is the top bottle.`, tier: "wrong", hookType: "outcome_centered_framing" },
+          ];
+        }
+
         return [
-          { id: "hA", text: leadLine, tier: "right",    hookType: "guest_centered_framing" },
-          { id: "hB", text: reflectLine, tier: "slightly", hookType: "diagnostic_question" },
-          { id: "hC", text: wrongLine, tier: "wrong",   hookType: "outcome_centered_framing" },
+          { id: "hA", text: `If you want something safe tonight, ${name} is a great call.`, tier: "right", hookType: "guest_centered_framing" },
+          { id: "hB", text: `Quick one — lighter or richer?`, tier: "slightly", hookType: "diagnostic_question" },
+          { id: "hC", text: `${name} is the right bottle for the table.`, tier: "wrong", hookType: "outcome_centered_framing" },
         ];
       }
 
@@ -4442,11 +4448,8 @@ function openManagerBoard() {
           prompt.innerText = "Which sentence do you lead with?";
           stepContent.appendChild(prompt);
 
-          window.__BC_ENSURE_PROG__?.();
-          const progState = window.PROG || null;
-          const tierNow = resolveTierForSession(sessionType);
           const wine = currentEncounter?.wineSelected || {};
-          const opts = hookPolicy(currentEncounter, wine, tierNow, progState);
+          const opts = hookPolicy(currentEncounter, wine);
 
           const options = document.createElement("div");
           options.className = "option-grid";
