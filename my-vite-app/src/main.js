@@ -738,7 +738,10 @@ if (!window.__BC_PARENT_BRIDGE__) {
     const p = window.__BC_PENDING_CTX_REQ__;
     if (!p) return;
 
-    const ready = !!appState?.session?.user?.id && !!appState?.profile?.role;
+    const ready =
+      !!appState?.session?.user?.id &&
+      !!appState?.profile?.role &&
+      !!getActiveRestaurantId?.();
     if (!ready) return;
 
     const bcCtx = buildBcCtx(p.mode ?? null);
@@ -766,7 +769,10 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
       // ✅ 1) ctx request MUST be handled before any event_log filtering
       if (msg.type === "bc_ctx_request") {
-        const ready = !!appState?.session?.user?.id && !!appState?.profile?.role;
+        const ready =
+          !!appState?.session?.user?.id &&
+          !!appState?.profile?.role &&
+          !!getActiveRestaurantId?.();
 
         if (!ready) {
           console.warn("[PARENT] ctx not ready — queued bc_ctx_request");
