@@ -770,7 +770,10 @@ function openManagerBoard() {
         return PROG;
       }
 
-      window.__BC_ENSURE_PROG__ = ensureProgLoaded;
+      window.__BC_ENSURE_PROG__ = async function () {
+        await window.__BC_CTX_READY__;
+        return ensureProgLoaded();
+      };
 
       function getTierNow() {
         try { return resolveTierForSession(sessionType); } catch { return 0; }
@@ -886,6 +889,20 @@ function openManagerBoard() {
         }
         window.__BC_SET_CTX__ = setCtx;
 
+        function requestCtxOnce() {
+          if (window.__BC_CTX_REQUESTED__) return;
+          window.__BC_CTX_REQUESTED__ = true;
+          try {
+            window.parent?.postMessage(
+              { source: "BC_MSG", v: 1, type: "bc_ctx_request", mode: window.APP_MODE || "premium" },
+              location.origin
+            );
+            console.log("[BC] bc_ctx_request sent ✅");
+          } catch (e) {
+            console.warn("[BC] bc_ctx_request failed", e);
+          }
+        }
+
         if (!window.__BC_CTX_LISTENER_INSTALLED__) {
           window.__BC_CTX_LISTENER_INSTALLED__ = true;
           window.addEventListener("message", (event) => {
@@ -902,13 +919,17 @@ function openManagerBoard() {
             scopeId = window.__BC_CTX__?.scopeId ?? scopeId ?? null;
             role = window.__BC_CTX__?.role ?? role ?? null;
             mode = window.__BC_CTX__?.mode ?? mode ?? null;
-            try {
-              if (typeof bootstrapWinesFromCtx === "function") {
-                bootstrapWinesFromCtx();
+            (async () => {
+              try {
+                if (typeof bootstrapWinesFromCtx === "function") {
+                  await bootstrapWinesFromCtx();
+                } else if (typeof hydrateSetupFromDbIfPossible === "function") {
+                  await hydrateSetupFromDbIfPossible(window.APP_MODE);
+                }
+              } catch (e) {
+                console.warn("[BC] wine hydrate after ctx failed", e);
               }
-            } catch (e) {
-              console.warn("[BC] bootstrapWinesFromCtx failed", e);
-            }
+            })();
             try {
               const winesReady = (typeof window.wines !== "undefined");
               if (winesReady && typeof updateCounts === "function") updateCounts();
@@ -921,7 +942,7 @@ function openManagerBoard() {
           function requestCtxAgain() {
             try {
               window.parent?.postMessage(
-                { source: "BC_MSG", v: 1, type: "bc_ctx_request", mode: (window.bcMode || "premium") },
+                { source: "BC_MSG", v: 1, type: "bc_ctx_request", mode: window.APP_MODE || "premium" },
                 location.origin
               );
               console.log("[BC] bc_ctx_request re-sent ✅");
@@ -929,6 +950,9 @@ function openManagerBoard() {
               console.warn("[BC] re-request ctx failed", e);
             }
           }
+
+          // ensure listener is installed before the first request
+          requestCtxOnce();
 
           setTimeout(() => {
             if (!window.__BC_CTX__?.userId) requestCtxAgain();
@@ -952,17 +976,8 @@ function openManagerBoard() {
           return;
         }
 
-        // In iframe: request ctx from parent ASAP
-        try {
-          window.parent.postMessage(
-            { source:"BC_MSG", v:1, type:"bc_ctx_request", mode: window.APP_MODE || bcMode || null },
-            "*"
-          );
-          console.log("[BC] bc_ctx_request sent ✅");
-        } catch (e) {
-          console.warn("[BC] bc_ctx_request failed", e);
-          window.__BC_CTX_READY_RESOLVE__?.();
-        }
+        // In iframe: request ctx from parent AFTER listener installation
+        requestCtxOnce?.();
 
         (async () => {
           try {
