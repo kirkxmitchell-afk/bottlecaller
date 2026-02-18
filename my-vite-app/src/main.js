@@ -738,9 +738,10 @@ if (!window.__BC_PARENT_BRIDGE__) {
     const p = window.__BC_PENDING_CTX_REQ__;
     if (!p) return;
 
+    const S = window.appState;
     const ready =
-      !!appState?.session?.user?.id &&
-      !!appState?.profile?.role &&
+      !!S?.session?.user?.id &&
+      !!S?.profile?.role &&
       !!getActiveRestaurantId?.();
     if (!ready) return;
 
@@ -762,7 +763,8 @@ if (!window.__BC_PARENT_BRIDGE__) {
   if (!window.__BC_RESTAURANT_WATCH__) {
     window.__BC_RESTAURANT_WATCH__ = setInterval(() => {
       if (!window.__BC_PENDING_CTX_REQ__) return;
-      if (!appState?.session?.user?.id || !appState?.profile?.role) return;
+      const S = window.appState;
+      if (!S?.session?.user?.id || !S?.profile?.role) return;
       if (!getActiveRestaurantId?.()) return;
       flushPendingCtx();
     }, 250);
@@ -778,9 +780,10 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
       // ✅ 1) ctx request MUST be handled before any event_log filtering
       if (msg.type === "bc_ctx_request") {
+        const S = window.appState;
         const ready =
-          !!appState?.session?.user?.id &&
-          !!appState?.profile?.role &&
+          !!S?.session?.user?.id &&
+          !!S?.profile?.role &&
           !!getActiveRestaurantId?.();
 
         if (!ready) {
@@ -981,17 +984,19 @@ function showScreen(id) {
 }
 
 function getActiveRestaurantId() {
+  const S = window.appState;
   return (
-    appState.activeRestaurantId ||
-    appState.profile?.restaurant_id ||
+    S?.activeRestaurantId ||
+    S?.profile?.restaurant_id ||
     null
   );
 }
 
 function buildBcCtx(requestedMode = null) {
-  const userId = appState.session?.user?.id ?? null;
-  const role = appState.profile?.role ?? null;
-  const scopeId = appState.profile?.scope_id ?? null;
+  const S = window.appState;
+  const userId = S?.session?.user?.id ?? null;
+  const role = S?.profile?.role ?? null;
+  const scopeId = S?.profile?.scope_id ?? null;
   const restaurantId = getActiveRestaurantId();
   const mode = requestedMode ?? null;
 
