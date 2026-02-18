@@ -759,6 +759,15 @@ if (!window.__BC_PARENT_BRIDGE__) {
     }
   }
 
+  if (!window.__BC_RESTAURANT_WATCH__) {
+    window.__BC_RESTAURANT_WATCH__ = setInterval(() => {
+      if (!window.__BC_PENDING_CTX_REQ__) return;
+      if (!appState?.session?.user?.id || !appState?.profile?.role) return;
+      if (!getActiveRestaurantId?.()) return;
+      flushPendingCtx();
+    }, 250);
+  }
+
   window.addEventListener("message", async (event) => {
     try {
       const msg = event?.data;
