@@ -732,6 +732,34 @@ if (!window.__BC_PARENT_BRIDGE__) {
     mountPremiumGameIframe,
   };
 
+  window.__BC_PENDING_CTX_REQ__ = window.__BC_PENDING_CTX_REQ__ || null;
+
+  function flushPendingCtx() {
+    const pending = window.__BC_PENDING_CTX_REQ__;
+    if (!pending) return;
+
+    const { source, origin, mode } = pending;
+
+    const ready = !!appState?.session?.user?.id && !!appState?.profile?.role;
+    if (!ready) return;
+
+    const bcCtx = buildBcCtx(mode ?? null);
+    if (!bcCtx?.userId || !bcCtx?.restaurantId || !bcCtx?.role) {
+      console.warn("[PARENT] refusing to send null/partial bc_ctx", bcCtx);
+      return;
+    }
+
+    source?.postMessage({ source: "BC_MSG", v: 1, type: "bc_ctx", ...bcCtx }, origin);
+    console.log("[PARENT] flushed pending bc_ctx ✅", bcCtx);
+
+    window.__BC_PENDING_CTX_REQ__ = null;
+  }
+
+  if (!window.__BC_CTX_FLUSH_TIMER__) {
+    window.__BC_CTX_FLUSH_TIMER__ = true;
+    setInterval(flushPendingCtx, 500);
+  }
+
   window.addEventListener("message", async (event) => {
     try {
       const msg = event?.data;
@@ -742,8 +770,19 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
       // ✅ 1) ctx request MUST be handled before any event_log filtering
       if (msg.type === "bc_ctx_request") {
-        if (!appState.session?.user?.id || !appState.profile?.role) {
-          console.warn("[PARENT] ctx not ready — ignoring bc_ctx_request");
+        const ready = !!appState?.session?.user?.id && !!appState?.profile?.role;
+
+        if (!ready) {
+          console.warn("[PARENT] ctx not ready — queued bc_ctx_request");
+          window.__BC_PENDING_CTX_REQ__ = {
+            source: event.source,
+            origin: event.origin,
+            mode: msg?.mode ?? null,
+            at: Date.now(),
+          };
+          setTimeout(flushPendingCtx, 50);
+          setTimeout(flushPendingCtx, 250);
+          setTimeout(flushPendingCtx, 1000);
           return;
         }
         const bcCtx = buildBcCtx(msg?.mode ?? null);
