@@ -1536,19 +1536,11 @@ function openManagerBoard() {
       function uiModeLabel(modeKey, uiStyle) {
         const MODES = window.MODES;
         const k = String(modeKey || "").toLowerCase();
-        if (uiStyle === "game") {
-          if (k === MODES.SCOUT) return "HOLD";
-          if (k === MODES.GUIDE) return "REFLECT";
-          if (k === MODES.AUTH) return "LEAD";
-          if (k === MODES.CHARM) return "CHARM";
-          if (k === MODES.CLOSER) return "CLOSE";
-        } else {
-          if (k === MODES.SCOUT) return "Scout";
-          if (k === MODES.GUIDE) return "Guide";
-          if (k === MODES.CHARM) return "Charm";
-          if (k === MODES.AUTH) return "Authority";
-          if (k === MODES.CLOSER) return "Closer";
-        }
+        if (k === MODES.SCOUT) return "Scout";
+        if (k === MODES.GUIDE) return "Guide";
+        if (k === MODES.CHARM) return "Charm";
+        if (k === MODES.AUTH) return "Authority";
+        if (k === MODES.CLOSER) return "Closer";
         return String(modeKey || "");
       }
 
