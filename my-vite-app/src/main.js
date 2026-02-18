@@ -735,29 +735,25 @@ if (!window.__BC_PARENT_BRIDGE__) {
   window.__BC_PENDING_CTX_REQ__ = window.__BC_PENDING_CTX_REQ__ || null;
 
   function flushPendingCtx() {
-    const pending = window.__BC_PENDING_CTX_REQ__;
-    if (!pending) return;
-
-    const { source, origin, mode } = pending;
+    const p = window.__BC_PENDING_CTX_REQ__;
+    if (!p) return;
 
     const ready = !!appState?.session?.user?.id && !!appState?.profile?.role;
     if (!ready) return;
 
-    const bcCtx = buildBcCtx(mode ?? null);
+    const bcCtx = buildBcCtx(p.mode ?? null);
     if (!bcCtx?.userId || !bcCtx?.restaurantId || !bcCtx?.role) {
-      console.warn("[PARENT] refusing to send null/partial bc_ctx", bcCtx);
+      console.warn("[PARENT] flushPendingCtx: refusing null/partial bc_ctx", bcCtx);
       return;
     }
 
-    source?.postMessage({ source: "BC_MSG", v: 1, type: "bc_ctx", ...bcCtx }, origin);
-    console.log("[PARENT] flushed pending bc_ctx ✅", bcCtx);
-
-    window.__BC_PENDING_CTX_REQ__ = null;
-  }
-
-  if (!window.__BC_CTX_FLUSH_TIMER__) {
-    window.__BC_CTX_FLUSH_TIMER__ = true;
-    setInterval(flushPendingCtx, 500);
+    try {
+      p.source?.postMessage({ source: "BC_MSG", v: 1, type: "bc_ctx", ...bcCtx }, p.origin);
+      console.log("[PARENT] flushPendingCtx -> sent ✅", bcCtx);
+      window.__BC_PENDING_CTX_REQ__ = null;
+    } catch (e) {
+      console.warn("[PARENT] flushPendingCtx failed", e);
+    }
   }
 
   window.addEventListener("message", async (event) => {
@@ -780,9 +776,23 @@ if (!window.__BC_PARENT_BRIDGE__) {
             mode: msg?.mode ?? null,
             at: Date.now(),
           };
-          setTimeout(flushPendingCtx, 50);
-          setTimeout(flushPendingCtx, 250);
-          setTimeout(flushPendingCtx, 1000);
+          if (!window.__BC_CTX_FLUSH_TICK__) {
+            window.__BC_CTX_FLUSH_TICK__ = setInterval(() => {
+              const p = window.__BC_PENDING_CTX_REQ__;
+              if (!p) {
+                clearInterval(window.__BC_CTX_FLUSH_TICK__);
+                window.__BC_CTX_FLUSH_TICK__ = null;
+                return;
+              }
+              if (Date.now() - p.at > 30000) {
+                console.warn("[PARENT] ctx flush timed out (30s) — still not ready");
+                clearInterval(window.__BC_CTX_FLUSH_TICK__);
+                window.__BC_CTX_FLUSH_TICK__ = null;
+                return;
+              }
+              flushPendingCtx();
+            }, 250);
+          }
           return;
         }
         const bcCtx = buildBcCtx(msg?.mode ?? null);
