@@ -1953,23 +1953,32 @@ function openManagerBoard() {
       window.__BC_MESSAGE_HANDLER_ATTACHED__ = true;
       try { window.dispatchEvent(new Event("BC_MSG_HANDLER_READY")); } catch {}
 
-      // Debug helpers (safe)
+      // Always establish app mode first
+      window.APP_MODE = window.APP_MODE || (new URLSearchParams(location.search).get("mode") || "demo");
+
+      // Prefer one local variable name; avoid MODE collisions
+      mode = window.APP_MODE;
+
+      // Ensure wines exists immediately to avoid TDZ crashes
+      window.wines = Array.isArray(window.wines) ? window.wines : [];
+      if (!Array.isArray(wines)) wines = window.wines;
+
+      // Debug helpers (safe — reads from window.* to avoid TDZ)
       window.__BC_GAME_STATE__ = {
         get: () => ({
-          restaurantId,
-          winesCount: Array.isArray(wines) ? wines.length : 0,
-          mode: bcMode,
-          limit: LIMIT,
-          sessionType,
+          restaurantId: window.__BC_CTX__?.restaurantId ?? restaurantId ?? null,
+          winesCount: Array.isArray(window.wines) ? window.wines.length : 0,
+          mode: window.APP_MODE || null,
+          limit: (typeof LIMIT !== "undefined" ? LIMIT : null),
+          sessionType: (typeof sessionType !== "undefined" ? sessionType : null),
         })
       };
-
-      mode = window.APP_MODE || (new URLSearchParams(location.search).get("mode") || "demo");
 
       await waitForRestaurantId();
       if (!restaurantId && isDemo) restaurantId = "demo";
       if (restaurantId) {
         wines = setWines(WineStore.migrateIfNeeded(restaurantId));
+        window.wines = wines;
       }
 
       if (isDemo) {
