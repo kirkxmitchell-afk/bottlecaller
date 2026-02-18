@@ -403,10 +403,11 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
 
   // ---- ctx gate (single source of truth) ----
   window.__BC_CTX__ = window.__BC_CTX__ ?? null;
-  window.__BC_CTX_READY__ = window.__BC_CTX_READY__ ?? new Promise((res) => {
-    window.__BC_CTX_READY_RESOLVE__ = res;
-    window.__BC_CTX_RESOLVE__ = res;
-  });
+  if (!window.__BC_CTX_READY__) {
+    window.__BC_CTX_READY__ = new Promise((res) => {
+      window.__BC_CTX_READY_RESOLVE__ = res;
+    });
+  }
 
   // ---------- Global safety net (never silently die) ----------
   window.addEventListener("error", (e) => {
@@ -876,16 +877,28 @@ function openManagerBoard() {
         window.__BC_CTX_BOOTSTRAPPED__ = true;
 
         function setCtx(msg) {
-          if (window.__BC_CTX__?.userId) return;
-          window.__BC_CTX__ = {
+          const next = {
             userId: msg.userId ?? null,
             restaurantId: msg.restaurantId ?? null,
             scopeId: msg.scopeId ?? null,
             role: msg.role ?? null,
             mode: msg.mode ?? null,
           };
-          window.__BC_CTX_READY_RESOLVE__?.(window.__BC_CTX__);
-          window.__BC_CTX_RESOLVE__?.(window.__BC_CTX__);
+
+          const valid = !!next.userId && !!next.restaurantId && !!next.role;
+          if (!valid) {
+            console.warn("[BC] setCtx ignored (partial ctx)", next);
+            return;
+          }
+
+          if (window.__BC_CTX__?.userId && window.__BC_CTX__?.restaurantId) return;
+
+          window.__BC_CTX__ = next;
+
+          if (window.__BC_CTX_READY_RESOLVE__) {
+            window.__BC_CTX_READY_RESOLVE__(window.__BC_CTX__);
+            window.__BC_CTX_READY_RESOLVE__ = null;
+          }
         }
         window.__BC_SET_CTX__ = setCtx;
 
@@ -972,7 +985,7 @@ function openManagerBoard() {
           if (!window.__BC_CTX__?.userId) {
             window.__BC_CTX__ = window.__BC_CTX__ ?? null;
           }
-          window.__BC_CTX_READY_RESOLVE__?.();
+          // do not resolve ctx gate without a valid ctx
           return;
         }
 
@@ -1689,7 +1702,7 @@ function openManagerBoard() {
           const isOnSetup = !document.getElementById("screenSetupPremium")?.classList.contains("hidden");
           if (isOnSetup) openSetupScreen("premium");
         } catch {}
-        try { window.__BC_CTX_RESOLVE__?.(window.__BC_CTX__); } catch {}
+        // no-op: ctx gate resolves only via setCtx when valid
       }
 
       let __BC_WINES_BOOTSTRAPPED__ = false;
