@@ -525,6 +525,30 @@ window.__BC_DEBUG__ = {
   get profile() { return appState.profile; }
 };
 
+// ---- expose appState globally (ctx bridge needs this) ----
+window.appState = window.__BC_APP_STATE__;
+
+// ---- expose restaurantId getter globally (for debug + bridge) ----
+window.getActiveRestaurantId = function getActiveRestaurantId() {
+  const S = window.appState;
+  return (
+    S?.activeRestaurantId ||
+    S?.profile?.restaurant_id ||
+    null
+  );
+};
+
+// ---- ctx builder uses the global appState ----
+window.__BC_BUILD_CTX__ = function buildBcCtx(requestedMode = null) {
+  const S = window.appState;
+  const userId = S?.session?.user?.id ?? null;
+  const role = S?.profile?.role ?? null;
+  const scopeId = S?.profile?.scope_id ?? null;
+  const restaurantId = window.getActiveRestaurantId?.() ?? null;
+  const mode = requestedMode ?? null;
+  return { userId, restaurantId, scopeId, role, mode };
+};
+
 // ====== Wine Setup (PARENT) ======
 const WINE_LIMIT = 10;
 const FRUIT_OPTS = ["Red fruit","Dark fruit","Citrus","Stone fruit","Tropical","Floral","Herbal/Green","Spicy","Earthy/Savory","Smoky"];
@@ -738,14 +762,13 @@ if (!window.__BC_PARENT_BRIDGE__) {
     const p = window.__BC_PENDING_CTX_REQ__;
     if (!p) return;
 
-    const S = window.appState;
     const ready =
-      !!S?.session?.user?.id &&
-      !!S?.profile?.role &&
-      !!getActiveRestaurantId?.();
+      !!window.appState?.session?.user?.id &&
+      !!window.appState?.profile?.role &&
+      !!window.getActiveRestaurantId?.();
     if (!ready) return;
 
-    const bcCtx = buildBcCtx(p.mode ?? null);
+    const bcCtx = window.__BC_BUILD_CTX__?.(p.mode ?? null);
     if (!bcCtx?.userId || !bcCtx?.restaurantId || !bcCtx?.role) {
       console.warn("[PARENT] flushPendingCtx: refusing null/partial bc_ctx", bcCtx);
       return;
@@ -763,9 +786,8 @@ if (!window.__BC_PARENT_BRIDGE__) {
   if (!window.__BC_RESTAURANT_WATCH__) {
     window.__BC_RESTAURANT_WATCH__ = setInterval(() => {
       if (!window.__BC_PENDING_CTX_REQ__) return;
-      const S = window.appState;
-      if (!S?.session?.user?.id || !S?.profile?.role) return;
-      if (!getActiveRestaurantId?.()) return;
+      if (!window.appState?.session?.user?.id || !window.appState?.profile?.role) return;
+      if (!window.getActiveRestaurantId?.()) return;
       flushPendingCtx();
     }, 250);
   }
@@ -780,11 +802,10 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
       // ✅ 1) ctx request MUST be handled before any event_log filtering
       if (msg.type === "bc_ctx_request") {
-        const S = window.appState;
         const ready =
-          !!S?.session?.user?.id &&
-          !!S?.profile?.role &&
-          !!getActiveRestaurantId?.();
+          !!window.appState?.session?.user?.id &&
+          !!window.appState?.profile?.role &&
+          !!window.getActiveRestaurantId?.();
 
         if (!ready) {
           console.warn("[PARENT] ctx not ready — queued bc_ctx_request");
@@ -813,7 +834,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
           }
           return;
         }
-        const bcCtx = buildBcCtx(msg?.mode ?? null);
+        const bcCtx = window.__BC_BUILD_CTX__?.(msg?.mode ?? null);
 
         console.log("[PARENT] bc_ctx_request -> reply", {
           requested: msg?.mode ?? null,
