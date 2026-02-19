@@ -2160,7 +2160,6 @@ function openManagerBoard() {
       // ============================================================
       // ✅ SESSION CONTAINER (drill vs progression)
       // ============================================================
-      function isDrill() { return sessionType === "drill"; }
       function startDrill(repTarget = 3, focus = null, starter = "manager", tier = 0) {
         DRILL = { repTarget, repDone: 0, startedAt: Date.now(), focus, starter, tier: (typeof tier === "number" ? tier : 0) };
         DRILL.activeWine = (Array.isArray(wines) && wines.length ? wines[0] : { name: "This bottle" });
