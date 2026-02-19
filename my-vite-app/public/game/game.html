@@ -4720,6 +4720,8 @@ function openManagerBoard() {
             btn.type = "button";
             btn.className = "option-btn" + (String(currentEncounter.selectedS1) === String(slot) ? " selected" : "");
             btn.innerText = slot + ": " + currentEncounter.deliverOptionsS1[slot];
+            btn.style.position = "relative";
+            btn.style.zIndex = "9999";
             btn.dataset.bc = "deliver_s1";
             btn.dataset.slot = String(slot);
             btn.addEventListener("pointerup", (e) => {
@@ -4746,6 +4748,8 @@ function openManagerBoard() {
             btn.type = "button";
             btn.className = "option-btn" + (String(currentEncounter.selectedS2) === String(slot) ? " selected" : "");
             btn.innerText = slot + ": " + currentEncounter.deliverOptionsS2[slot];
+            btn.style.position = "relative";
+            btn.style.zIndex = "9999";
             btn.dataset.bc = "deliver_s2";
             btn.dataset.slot = String(slot);
             btn.addEventListener("pointerup", (e) => {
