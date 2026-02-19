@@ -4520,8 +4520,8 @@ function openManagerBoard() {
         stepButtons.innerHTML = "";
 
         const wine = currentEncounter?.wineSelected || { name: "DRILL" };
-        const isDrill = sessionType === "drill";
-        if (isDrill) {
+        const inDrill = sessionType === "drill";
+        if (inDrill) {
           wineDisplayName.innerText = "5-Min Drill";
           wineBadges.innerText = "";
         } else {
@@ -4693,12 +4693,15 @@ function openManagerBoard() {
           opts.forEach((opt) => {
             const btn = document.createElement("button");
             btn.type = "button";
-            btn.className = "option-btn" + (currentEncounter.hookSelected === opt.id ? " selected" : "");
+            const selected =
+              (currentEncounter.hookMeta?.hookType && currentEncounter.hookMeta.hookType === opt.hookType) ||
+              (currentEncounter.hookMeta?.text && currentEncounter.hookMeta.text === opt.text);
+            btn.className = "option-btn" + (selected ? " selected" : "");
             btn.innerText = opt.text || "(missing hook text)";
 
             bindInput(btn, () => {
-              currentEncounter.hookSelected = opt.hookType || opt.id || opt.text;
               currentEncounter.hookMeta = opt;
+              currentEncounter.hookSelected = opt.hookType || opt.id || opt.text;
               renderEncounterStep();
             });
 
