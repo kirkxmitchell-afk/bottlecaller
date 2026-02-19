@@ -2638,6 +2638,13 @@ function openManagerBoard() {
         const primary = "pointerup";
 
         const fire = async (e) => {
+          const now = Date.now();
+          const isOption = el.classList?.contains("option-btn");
+          const last = el.__bcLastAt || 0;
+          const minGap = isOption ? 0 : 250;
+          if (now - last < minGap) return;
+          el.__bcLastAt = now;
+
           if (e) {
             if (e.cancelable) e.preventDefault();
             e.stopPropagation();
@@ -2671,8 +2678,11 @@ function openManagerBoard() {
           }
         };
 
-        el.addEventListener(primary, fire, { passive: false });
-        el.addEventListener("click", fire, { passive: false });
+        if (window.PointerEvent) {
+          el.addEventListener("pointerup", fire, { passive: false });
+        } else {
+          el.addEventListener("click", fire, { passive: false });
+        }
       }
 
       // ---------- Screens ----------
@@ -4720,6 +4730,7 @@ function openManagerBoard() {
               currentEncounter.selectedS1 = slot;
               currentEncounter.deliveryLine1 = currentEncounter.deliverOptionsS1[slot];
               console.log("[STEP4] S1 DIRECT ✅", slot);
+              console.log("[STEP4] S1 handler ran ✅", slot);
               renderEncounterStep();
             }, { passive: false });
             line1Options.appendChild(btn);
@@ -4748,6 +4759,7 @@ function openManagerBoard() {
               currentEncounter.selectedS2 = slot;
               currentEncounter.deliveryLine2 = currentEncounter.deliverOptionsS2[slot];
               console.log("[STEP4] S2 DIRECT ✅", slot);
+              console.log("[STEP4] S2 handler ran ✅", slot);
               renderEncounterStep();
             }, { passive: false });
             line2Options.appendChild(btn);
@@ -4755,12 +4767,15 @@ function openManagerBoard() {
           stepContent.appendChild(line2Options);
 
           const sayBtn = addStepButton("SAY IT", () => { currentStep = 5; renderEncounterStep(); }, stepButtons);
-          console.log("[STEP4] GATE CHECK", {
+          const ready =
+            (currentEncounter.selectedS1 != null) &&
+            (currentEncounter.selectedS2 != null);
+          console.log("[STEP4] READY?", ready, {
             selectedS1: currentEncounter.selectedS1,
-            selectedS2: currentEncounter.selectedS2,
+            selectedS2: currentEncounter.selectedS2
           });
-          sayBtn.disabled = (currentEncounter.selectedS1 == null || currentEncounter.selectedS2 == null);
-          if (!sayBtn.disabled) sayBtn.removeAttribute("disabled");
+          sayBtn.disabled = !ready;
+          if (ready) sayBtn.removeAttribute("disabled");
           return;
         }
 
