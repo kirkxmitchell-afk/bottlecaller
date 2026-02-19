@@ -4271,7 +4271,8 @@ function openManagerBoard() {
       }
 
       function logEncounter() {
-        if (!currentEncounter || currentEncounter.__logged) return;
+        if (!currentEncounter || currentEncounter.__logged || currentEncounter.__resolvedLogged) return;
+        currentEncounter.__resolvedLogged = true;
 
         const entry = {
           timestamp: new Date().toLocaleString(),
@@ -5163,6 +5164,9 @@ function openManagerBoard() {
           }
 
           addStepButton(inDrill ? "NEXT REP" : "NEXT ENCOUNTER", () => {
+            if (window.__NEXT_LOCK__) return;
+            window.__NEXT_LOCK__ = true;
+            setTimeout(() => { window.__NEXT_LOCK__ = false; }, 150);
             encounterIndex = (encounterIndex ?? 0) + 1;
 
             // Strict tier gating applies to premium only
