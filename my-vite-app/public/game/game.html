@@ -4708,11 +4708,12 @@ function openManagerBoard() {
           slots1.forEach(slot => {
             const btn = document.createElement("button");
             btn.type = "button";
-            btn.className = "option-btn" + (currentEncounter.selectedS1 === slot ? " selected" : "");
+            btn.className = "option-btn" + (String(currentEncounter.selectedS1) === String(slot) ? " selected" : "");
             btn.innerText = slot + ": " + currentEncounter.deliverOptionsS1[slot];
             bindInput(btn, () => {
               currentEncounter.selectedS1 = slot;
               currentEncounter.deliveryLine1 = currentEncounter.deliverOptionsS1[slot];
+              console.log("[DELIVERY PICK]", { s1: currentEncounter.selectedS1, s2: currentEncounter.selectedS2 });
               renderEncounterStep();
             });
             line1Options.appendChild(btn);
@@ -4729,11 +4730,12 @@ function openManagerBoard() {
           slots2.forEach(slot => {
             const btn = document.createElement("button");
             btn.type = "button";
-            btn.className = "option-btn" + (currentEncounter.selectedS2 === slot ? " selected" : "");
+            btn.className = "option-btn" + (String(currentEncounter.selectedS2) === String(slot) ? " selected" : "");
             btn.innerText = slot + ": " + currentEncounter.deliverOptionsS2[slot];
             bindInput(btn, () => {
               currentEncounter.selectedS2 = slot;
               currentEncounter.deliveryLine2 = currentEncounter.deliverOptionsS2[slot];
+              console.log("[DELIVERY PICK]", { s1: currentEncounter.selectedS1, s2: currentEncounter.selectedS2 });
               renderEncounterStep();
             });
             line2Options.appendChild(btn);
@@ -4741,7 +4743,7 @@ function openManagerBoard() {
           stepContent.appendChild(line2Options);
 
           const sayBtn = addStepButton("SAY IT", () => { currentStep = 5; renderEncounterStep(); }, stepButtons);
-          if (!currentEncounter.selectedS1 || !currentEncounter.selectedS2) sayBtn.disabled = true;
+          sayBtn.disabled = (currentEncounter.selectedS1 == null || currentEncounter.selectedS2 == null);
           return;
         }
 
