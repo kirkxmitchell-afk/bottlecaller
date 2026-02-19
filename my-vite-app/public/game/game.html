@@ -2662,6 +2662,8 @@ function openManagerBoard() {
                 id: el.id || null,
                 cls: el.className || null,
                 txt: (el.innerText || "").slice(0, 60),
+                bc: el.dataset?.bc || null,
+                slot: el.dataset?.slot || null,
                 at: Date.now(),
               });
             } catch (err) {
@@ -4503,8 +4505,8 @@ function openManagerBoard() {
         const wineBadges = document.getElementById("wineBadges");
         if (!stepHeader || !stepContent || !stepButtons || !wineDisplayName || !wineBadges || !currentEncounter) return;
 
-        stepContent.innerText = "";
-        stepButtons.innerText = "";
+        stepContent.innerHTML = "";
+        stepButtons.innerHTML = "";
 
         const wine = currentEncounter?.wineSelected || { name: "DRILL" };
         const isDrill = sessionType === "drill";
@@ -4718,6 +4720,8 @@ function openManagerBoard() {
             btn.type = "button";
             btn.className = "option-btn" + (String(currentEncounter.selectedS1) === String(slot) ? " selected" : "");
             btn.innerText = slot + ": " + currentEncounter.deliverOptionsS1[slot];
+            btn.dataset.bc = "deliver_s1";
+            btn.dataset.slot = String(slot);
             btn.addEventListener("pointerup", (e) => {
               if (e.cancelable) e.preventDefault();
               e.stopPropagation();
@@ -4742,6 +4746,8 @@ function openManagerBoard() {
             btn.type = "button";
             btn.className = "option-btn" + (String(currentEncounter.selectedS2) === String(slot) ? " selected" : "");
             btn.innerText = slot + ": " + currentEncounter.deliverOptionsS2[slot];
+            btn.dataset.bc = "deliver_s2";
+            btn.dataset.slot = String(slot);
             btn.addEventListener("pointerup", (e) => {
               if (e.cancelable) e.preventDefault();
               e.stopPropagation();
