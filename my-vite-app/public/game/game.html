@@ -2642,7 +2642,10 @@ function openManagerBoard() {
           const isOption = el.classList?.contains("option-btn");
           const last = el.__bcLastAt || 0;
           const minGap = isOption ? 0 : 250;
-          if (now - last < minGap) return;
+          if (now - last < minGap) {
+            console.log("[BIND] blocked by debounce ❌", { minGap, dt: now - last, cls: el.className });
+            return;
+          }
           el.__bcLastAt = now;
 
           if (e) {
@@ -2671,7 +2674,14 @@ function openManagerBoard() {
           }
 
           try {
+            console.log("[BIND] calling handler ✅", {
+              cls: el.className,
+              txt: (el.innerText || "").slice(0, 40),
+              bc: el.dataset?.bc,
+              slot: el.dataset?.slot
+            });
             await fn(e);
+            console.log("[BIND] handler returned ✅");
           } catch (err) {
             console.error("[BC] handler error", err);
             throw err;
