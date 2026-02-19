@@ -4682,7 +4682,10 @@ function openManagerBoard() {
           stepContent.appendChild(prompt);
 
           const wine = currentEncounter?.wineSelected || {};
-          const opts = hookPolicy(currentEncounter, wine);
+          if (!Array.isArray(currentEncounter.hookOptions) || currentEncounter.hookOptions.length === 0) {
+            currentEncounter.hookOptions = hookPolicy(currentEncounter, wine);
+          }
+          const opts = currentEncounter.hookOptions;
 
           const options = document.createElement("div");
           options.className = "option-grid";
@@ -4690,22 +4693,16 @@ function openManagerBoard() {
           console.log("[DRILL] hook opts", opts);
 
           opts.forEach((opt) => {
-            const key = String(opt.hookType || opt.id || opt.text || "");
+            const key = String(opt.id || opt.hookType || opt.text || "");
             const btn = document.createElement("button");
             btn.type = "button";
             const selected = String(currentEncounter.hookSelected || "") === key;
             btn.className = "option-btn" + (selected ? " selected" : "");
             btn.textContent = opt.text || "(missing hook text)";
-            btn.dataset.bc = "hook";
-            btn.dataset.slot = key;
 
             bindInput(btn, () => {
               currentEncounter.hookSelected = key;
-              currentEncounter.hookMeta = {
-                hookType: opt.hookType || opt.id || null,
-                text: opt.text || "",
-                id: opt.id || null,
-              };
+              currentEncounter.hookMeta = opt;
               renderEncounterStep();
             });
 
@@ -5342,8 +5339,17 @@ function openManagerBoard() {
           enc.id ||
           enc.encounterId ||
           `${bcMode}_${String(enc.encounterNumber ?? (encounterIndex + 1))}`;
+        function preferNonEmpty(next, prev) {
+          return (next != null && String(next).trim() !== "") ? next : prev;
+        }
+
+        const prev = currentEncounter || null;
+        const prevId = prev?.encounterId || prev?.id || null;
+        const sameEncounter = !!prevId && prevId === encounterIdStable;
+        const carry = sameEncounter ? prev : null;
+
         currentEncounter = {
-          __logged: false,
+          __logged: carry?.__logged ?? false,
           id: encounterIdStable,
           encounterId: encounterIdStable,
 
@@ -5352,9 +5358,9 @@ function openManagerBoard() {
           // ✅ KEEP META + SKILLFOCUS ON THE ENCOUNTER OBJECT
           meta: enc.meta || null,
           skillFocus: (enc.meta && enc.meta.skillFocus) ? enc.meta.skillFocus : "read",
-          guestStateActual: enc.guestStateActual || "",
-          contextLine: enc.contextLine || "",
-          guestLine: enc.guestLine || "",
+          guestStateActual: preferNonEmpty(enc.guestStateActual, carry?.guestStateActual || ""),
+          contextLine: preferNonEmpty(enc.contextLine, carry?.contextLine || ""),
+          guestLine: preferNonEmpty(enc.guestLine, carry?.guestLine || ""),
           physicalCues: Array.isArray(enc.physicalCues) ? enc.physicalCues : [],
           verbalCues: Array.isArray(enc.verbalCues) ? enc.verbalCues : [],
           toneTag: enc.toneTag || "",
@@ -5363,40 +5369,49 @@ function openManagerBoard() {
           difficulty: enc.difficulty ?? 1,
           tags: Array.isArray(enc.tags) ? enc.tags : [],
 
-          // Player choices
-          guestReadSelected: "",
-          modeSelected: "",
-          hookSelected: "",
+          // Player choices (preserve existing)
+          guestReadSelected: carry?.guestReadSelected || "",
+          modeSelected: carry?.modeSelected || "",
+          hookSelected: carry?.hookSelected || "",
+          hookMeta: carry?.hookMeta || null,
 
           // Wine
           wineSelected: wine,
 
-          // Delivery
-          deliveryLine1: "",
-          deliveryLine2: "",
-          deliverOptionsS1: null,
-          deliverOptionsS2: null,
-          selectedS1: null,
-          selectedS2: null,
-          correctSlotS1: null,
-          correctSlotS2: null,
+          // Delivery (preserve existing)
+          deliveryLine1: carry?.deliveryLine1 || "",
+          deliveryLine2: carry?.deliveryLine2 || "",
+          deliverOptionsS1: carry?.deliverOptionsS1 || null,
+          deliverOptionsS2: carry?.deliverOptionsS2 || null,
+          selectedS1: carry?.selectedS1 ?? null,
+          selectedS2: carry?.selectedS2 ?? null,
+          correctSlotS1: carry?.correctSlotS1 ?? null,
+          correctSlotS2: carry?.correctSlotS2 ?? null,
 
-          showModeHelp: false,
+          showModeHelp: carry?.showModeHelp || false,
 
           // Pivot
-          recoveryText: "",
-          recoveryCorrectMode: "",
-          recoveryWhy: "",
-          recoveryChoice: "",
-          recoveryCorrect: false,
+          recoveryText: carry?.recoveryText || "",
+          recoveryCorrectMode: carry?.recoveryCorrectMode || "",
+          recoveryWhy: carry?.recoveryWhy || "",
+          recoveryChoice: carry?.recoveryChoice || "",
+          recoveryCorrect: carry?.recoveryCorrect || false,
 
           // Engine telemetry
-          chainScore: null,
-          chainSignal: "",
-          pivotType: "",
-          resetUsed: false,
-          __reactionComputed: false
+          chainScore: carry?.chainScore ?? null,
+          chainSignal: carry?.chainSignal || "",
+          pivotType: carry?.pivotType || "",
+          resetUsed: carry?.resetUsed || false,
+          __reactionComputed: sameEncounter ? (carry?.__reactionComputed || false) : false
         };
+        console.log("[ENCOUNTER] built", {
+          id: currentEncounter.encounterId,
+          sameEncounter,
+          carriedHook: !!carry?.hookMeta,
+          hookNow: !!currentEncounter.hookMeta,
+          s1: currentEncounter.selectedS1,
+          s2: currentEncounter.selectedS2,
+        });
         window.__BC_LAST_ENCOUNTER__ = currentEncounter;
 
         currentStep = 0;
