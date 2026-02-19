@@ -4508,6 +4508,7 @@ function openManagerBoard() {
       }
 
       function renderEncounterStep() {
+        console.log("[RENDER] currentStep =", currentStep, "enc#", currentEncounter?.encounterNumber);
         const stepHeader = document.getElementById("stepHeader");
         const stepContent = document.getElementById("stepContent");
         const stepButtons = document.getElementById("stepButtons");
@@ -4696,17 +4697,19 @@ function openManagerBoard() {
             btn.innerText = opt.text || "(missing hook text)";
 
             bindInput(btn, () => {
-              currentEncounter.hookSelected = opt.id;
+              currentEncounter.hookSelected = opt.hookType || opt.id || opt.text;
               currentEncounter.hookMeta = opt;
-              renderDrillStep();
+              renderEncounterStep();
             });
 
             options.appendChild(btn);
           });
           stepContent.appendChild(options);
 
-          const contBtn = addStepButton("CONTINUE", () => { currentStep = 4; renderDrillStep(); }, stepButtons);
-          if (!currentEncounter.hookSelected) contBtn.disabled = true;
+          const contBtn = addStepButton("CONTINUE", () => { currentStep = 4; renderEncounterStep(); }, stepButtons);
+          const ready = !!currentEncounter.hookMeta;
+          contBtn.disabled = !ready;
+          if (ready) contBtn.removeAttribute("disabled");
           return;
         }
 
