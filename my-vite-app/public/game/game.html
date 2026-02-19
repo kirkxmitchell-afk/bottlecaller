@@ -556,6 +556,8 @@ function openManagerBoard() {
       let scopeId = null;
       let mode = null;
       let role = null;
+      let isManager = false;
+      let isWaiter = false;
       window.__BC_RUNTIME__ = () => ({ userId, restaurantId, scopeId, role, mode });
       console.log("[BOOT] declared", { restaurantId, role, mode, bcMode });
       // Crash becomes visible (iframe)
@@ -1783,6 +1785,10 @@ function openManagerBoard() {
         role = msg.role ?? role ?? null;
         mode = msg.mode ?? mode ?? null;
 
+        isManager = String(role || "").toLowerCase() === "manager";
+        isWaiter = String(role || "").toLowerCase() === "waiter";
+        window.__BC_ROLE__ = { isManager, isWaiter };
+
         window.__BC_CTX__ = { userId, restaurantId, scopeId, role, mode };
 
         console.log("[BC] bc_ctx applied ✅", window.__BC_CTX__);
@@ -1795,7 +1801,7 @@ function openManagerBoard() {
         }
         bootstrapWinesFromCtx();
         try {
-          const isOnSetup = !document.getElementById("screenSetupPremium")?.classList.contains("hidden");
+          const isOnSetup = document.getElementById("screenSetupPremium")?.classList.contains("active");
           if (isOnSetup) openSetupScreen("premium");
         } catch {}
         // no-op: ctx gate resolves only via setCtx when valid
@@ -3285,19 +3291,20 @@ function openManagerBoard() {
         if (isDemo) return; // demo doesn't care
         if (!restaurantId) return;
 
-        if (!isManager) {
-          // disable add + inputs (waiter should not edit restaurant wines)
-          const addBtn = document.getElementById(ids.addWineBtn);
-          if (addBtn) addBtn.disabled = true;
+        const manager = String(role || "").toLowerCase() === "manager";
+        if (manager) return;
 
-          [ids.wineName, ids.wineVarietal, ids.region, ids.story, ids.process].forEach((id) => {
-            const el = document.getElementById(id);
-            if (el) el.disabled = true;
-          });
+        // disable add + inputs (waiter should not edit restaurant wines)
+        const addBtn = document.getElementById(ids.addWineBtn);
+        if (addBtn) addBtn.disabled = true;
 
-          // Also stop selecting tags (simple block)
-          // (You can leave the UI visible but inert)
-        }
+        [ids.wineName, ids.wineVarietal, ids.region, ids.story, ids.process].forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) el.disabled = true;
+        });
+
+        // Also stop selecting tags (simple block)
+        // (You can leave the UI visible but inert)
       }
 
       // ---------- UI: counts ----------
