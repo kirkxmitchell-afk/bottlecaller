@@ -4277,7 +4277,7 @@ function openManagerBoard() {
           sessionId: sessionId || null,
 
           sessionType: sessionType || "progression",
-          repIndex: isDrill() ? (drillRepDone + 1) : null,
+          repIndex: (sessionType === "drill") ? (drillRepDone + 1) : null,
 
           encounterNumber: currentEncounter.encounterNumber ?? null,
           encounterTier: getTierFromEncounterNumber(currentEncounter.encounterNumber ?? 1),
@@ -5154,7 +5154,7 @@ function openManagerBoard() {
           // ============================================================
           // ✅ DRILL REP ACCOUNTING (3 reps then stop)
           // ============================================================
-          if (isDrill()) {
+          if (inDrill) {
             drillRepDone += 1;
             if (window.__BC_SESSION__ && window.__BC_SESSION__.type === "drill") {
               window.__BC_SESSION__.repDone = drillRepDone;
@@ -5168,7 +5168,7 @@ function openManagerBoard() {
             }
           }
 
-          addStepButton(isDrill() ? "NEXT REP" : "NEXT ENCOUNTER", () => {
+          addStepButton(inDrill ? "NEXT REP" : "NEXT ENCOUNTER", () => {
             encounterIndex = (encounterIndex ?? 0) + 1;
 
             // Strict tier gating applies to premium only
