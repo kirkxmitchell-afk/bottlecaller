@@ -2638,9 +2638,15 @@ function openManagerBoard() {
 
         const fire = async (e) => {
           const now = Date.now();
-          if (now - __BC_LAST_INPUT_AT__ < 500) return;
+          const lastEl = window.__BC_LAST_INPUT_EL__;
+          const lastAt = window.__BC_LAST_INPUT_AT__ || 0;
+          if (lastEl === el && now - lastAt < 500) return;
+          window.__BC_LAST_INPUT_EL__ = el;
+          window.__BC_LAST_INPUT_AT__ = now;
 
-          __BC_LAST_INPUT_AT__ = now;
+          const last = el.__bcLastAt || 0;
+          if (now - last < 200) return;
+          el.__bcLastAt = now;
 
           if (e) {
             if (e.cancelable) e.preventDefault();
