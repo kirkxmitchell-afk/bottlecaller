@@ -2660,6 +2660,8 @@ function openManagerBoard() {
                 v: 1,
                 kind: "ui_click",
                 id: el.id || null,
+                cls: el.className || null,
+                txt: (el.innerText || "").slice(0, 60),
                 at: Date.now(),
               });
             } catch (err) {
@@ -4716,16 +4718,14 @@ function openManagerBoard() {
             btn.type = "button";
             btn.className = "option-btn" + (String(currentEncounter.selectedS1) === String(slot) ? " selected" : "");
             btn.innerText = slot + ": " + currentEncounter.deliverOptionsS1[slot];
-            bindInput(btn, () => {
+            btn.addEventListener("pointerup", (e) => {
+              if (e.cancelable) e.preventDefault();
+              e.stopPropagation();
               currentEncounter.selectedS1 = slot;
               currentEncounter.deliveryLine1 = currentEncounter.deliverOptionsS1[slot];
-              console.log("[STEP4] S1 SET ✅", {
-                slot,
-                selectedS1: currentEncounter.selectedS1,
-                selectedS2: currentEncounter.selectedS2,
-              });
+              console.log("[STEP4] S1 DIRECT ✅", slot);
               renderEncounterStep();
-            });
+            }, { passive: false });
             line1Options.appendChild(btn);
           });
           stepContent.appendChild(line1Options);
@@ -4742,16 +4742,14 @@ function openManagerBoard() {
             btn.type = "button";
             btn.className = "option-btn" + (String(currentEncounter.selectedS2) === String(slot) ? " selected" : "");
             btn.innerText = slot + ": " + currentEncounter.deliverOptionsS2[slot];
-            bindInput(btn, () => {
+            btn.addEventListener("pointerup", (e) => {
+              if (e.cancelable) e.preventDefault();
+              e.stopPropagation();
               currentEncounter.selectedS2 = slot;
               currentEncounter.deliveryLine2 = currentEncounter.deliverOptionsS2[slot];
-              console.log("[STEP4] S2 SET ✅", {
-                slot,
-                selectedS1: currentEncounter.selectedS1,
-                selectedS2: currentEncounter.selectedS2,
-              });
+              console.log("[STEP4] S2 DIRECT ✅", slot);
               renderEncounterStep();
-            });
+            }, { passive: false });
             line2Options.appendChild(btn);
           });
           stepContent.appendChild(line2Options);
