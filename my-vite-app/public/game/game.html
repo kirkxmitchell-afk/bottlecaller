@@ -5148,6 +5148,24 @@ function openManagerBoard() {
           console.log("[BC] streakInfo", streakInfo);
           renderStreakBlock(stepContent, streakInfo);
 
+          const outcome = resolveOutcome(currentEncounter, checks);
+          console.log("[BC] outcome", outcome, currentEncounter.__tiers);
+
+          if (outcome.outcome === "pivot") {
+            const p = choosePivot(currentEncounter);
+            currentEncounter.pivotType = currentEncounter.pivotType || p.pivotType;
+            currentEncounter.nextGuestStateActual =
+              currentEncounter.nextGuestStateActual || p.next || currentEncounter.guestStateActual || "";
+          }
+
+          if (outcome.outcome === "recovery") {
+            currentEncounter.pivotType = currentEncounter.pivotType || "recovery";
+            currentEncounter.__pendingRecovery = true;
+            currentStep = 7;
+            renderEncounterStep();
+            return;
+          }
+
           logEncounter();
 
           // ============================================================
@@ -5208,6 +5226,155 @@ function openManagerBoard() {
             startEncounter();
           }, stepButtons);
 
+          return;
+        }
+
+        function tierToScore(tier) {
+          if (tier === "right") return 2;
+          if (tier === "slightly") return 1;
+          return 0;
+        }
+
+        function getReadTier(enc, checks) {
+          return checks?.guestRead ? "right" : "wrong";
+        }
+
+        function getModeTier(checks) {
+          const ms = checks?.modeStatus;
+          if (ms === true) return "right";
+          if (ms === false) return "wrong";
+          return ms || "wrong";
+        }
+
+        function getHookTier(checks) {
+          const hs = checks?.hookStatus;
+          if (hs === true) return "right";
+          if (hs === false) return "wrong";
+          return hs || "wrong";
+        }
+
+        function getDeliveryScore(enc) {
+          const s1ok =
+            enc?.deliverOptionsS1 &&
+            enc?.correctSlotS1 != null &&
+            enc?.selectedS1 != null &&
+            String(enc.selectedS1) === String(enc.correctSlotS1);
+
+          const s2ok =
+            enc?.deliverOptionsS2 &&
+            enc?.correctSlotS2 != null &&
+            enc?.selectedS2 != null &&
+            String(enc.selectedS2) === String(enc.correctSlotS2);
+
+          return (s1ok ? 1 : 0) + (s2ok ? 1 : 0);
+        }
+
+        function choosePivot(enc) {
+          const g = canonicalGuestType(enc?.guestStateActual);
+          const map = {
+            celebrator: { pivotType: "celebrator_to_alpha", next: "alpha" },
+            alpha: { pivotType: "alpha_to_analyst", next: "analyst" },
+            analyst: { pivotType: "analyst_to_budget_guard", next: "budget_guard" },
+            browser: { pivotType: "browser_to_make_it_easy", next: "make_it_easy" },
+            budget_guard: { pivotType: "budget_guard_to_browser", next: "browser" },
+            make_it_easy: { pivotType: "make_it_easy_to_alpha", next: "alpha" },
+          };
+          return map[g] || { pivotType: "pivot", next: g || "" };
+        }
+
+        function resolveOutcome(enc, checks) {
+          const readTier = getReadTier(enc, checks);
+          const hookTier = getHookTier(checks);
+          const modeTier = getModeTier(checks);
+          const delivery = getDeliveryScore(enc);
+
+          const total =
+            tierToScore(readTier) +
+            tierToScore(hookTier) +
+            tierToScore(modeTier) +
+            delivery;
+
+          enc.chainScore = total;
+          enc.__tiers = { readTier, modeTier, hookTier, delivery };
+
+          if (total >= 6) return { outcome: "clean_close", score: total };
+          if (total >= 4) return { outcome: "soft_close", score: total };
+          if (total >= 1) return { outcome: "pivot", score: total };
+          return { outcome: "recovery", score: total };
+        }
+
+        function renderRecoveryStep(stepContent, stepButtons, enc, inDrill) {
+          const title = document.createElement("h3");
+          title.innerText = "Recovery";
+          stepContent.appendChild(title);
+
+          const desc = document.createElement("div");
+          desc.className = "small-text";
+          desc.style.marginTop = "6px";
+          desc.innerText =
+            "You lost control of the table. Pick one line to regain it. One is correct.";
+          stepContent.appendChild(desc);
+
+          const choices = [
+            { id: "own_it", label: "Own it", line: "Fair — I overcomplicated it. Two quick options: fresher vs richer?" },
+            { id: "narrow", label: "Narrow", line: "If I give you two: crisp and bright vs smooth and rich — which direction?" },
+            { id: "anchor", label: "Anchor", line: `For your table, I’d go with ${enc?.wineSelected?.name || "this bottle"} because it hits comfort + balance.` },
+          ];
+
+          const g = canonicalGuestType(enc?.guestStateActual);
+          const best =
+            (g === "alpha") ? "anchor" :
+            (g === "analyst") ? "narrow" :
+            (g === "budget_guard") ? "own_it" :
+            "narrow";
+
+          enc.recoveryCorrectMode = best;
+          enc.recoveryText = enc.recoveryText || "Pressure spike — you must recover the frame.";
+
+          const card = document.createElement("div");
+          card.className = "card";
+          card.style.marginTop = "10px";
+
+          const prompt = document.createElement("div");
+          prompt.innerText = enc.recoveryText;
+          card.appendChild(prompt);
+
+          choices.forEach((c) => {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "btn btnChoice";
+            btn.style.display = "block";
+            btn.style.width = "100%";
+            btn.style.marginTop = "8px";
+            btn.innerText = `${c.label}: ${c.line}`;
+
+            btn.addEventListener("click", () => {
+              if (enc.__recoveryLocked) return;
+              enc.__recoveryLocked = true;
+
+              enc.recoveryChoice = c.id;
+              enc.recoveryWhy = "";
+              enc.recoveryCorrect = (c.id === best);
+
+              logEncounter();
+
+              addStepButton(inDrill ? "NEXT REP" : "NEXT ENCOUNTER", () => {
+                if (window.__NEXT_LOCK__) return;
+                window.__NEXT_LOCK__ = true;
+                setTimeout(() => { window.__NEXT_LOCK__ = false; }, 150);
+                encounterIndex = (encounterIndex ?? 0) + 1;
+                startEncounter();
+              }, stepButtons);
+            });
+
+            card.appendChild(btn);
+          });
+
+          stepContent.appendChild(card);
+        }
+
+        if (currentStep === 7) {
+          renderRecoveryStep(stepContent, stepButtons, currentEncounter, inDrill);
           return;
         }
       }
