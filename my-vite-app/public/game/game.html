@@ -595,7 +595,9 @@ function openManagerBoard() {
           },
           flags: { resetDebt: 0 },
           counters: { deciderGood: 0, browserGood: 0, analystGood: 0 },
-          stats: {}
+          stats: {},
+          drift: { vec: 0, ttl: 0 },
+          recovery: { type: null, step: 0, ttl: 0 }
         };
       }
 
@@ -741,6 +743,92 @@ function openManagerBoard() {
         saveProg();
       }
 
+      function commitReaction(result, enc, checks) {
+        const prog = ensureProgLoaded();
+
+        const sig =
+          (result?.chainSignal ?? result?.signal ?? result?.gradeSignal ?? "") || "";
+        const score =
+          (result?.chainScore ?? result?.score ?? result?.gradeScore ?? null);
+
+        if (sig) enc.chainSignal = String(sig).toLowerCase();
+        if (Number.isFinite(score)) enc.chainScore = score;
+
+        const pivot =
+          (result?.pivotType ?? result?.pivot ?? result?.recovery?.type ?? "");
+        if (pivot) enc.pivotType = String(pivot);
+
+        const dAxes =
+          result?.dAxes || result?.deltas || result?.axesDelta || null;
+
+        if (dAxes) {
+          if (Number.isFinite(dAxes.control)) prog.axes.control += dAxes.control;
+          if (Number.isFinite(dAxes.selectivity)) prog.axes.selectivity += dAxes.selectivity;
+          if (Number.isFinite(dAxes.compression)) prog.axes.compression += dAxes.compression;
+        }
+
+        const drift = result?.drift || result?.dDrift || result?.driftDelta || null;
+
+        if (!prog.drift) prog.drift = { vec: 0, ttl: 0 };
+
+        if (drift) {
+          if (Number.isFinite(drift.vec)) prog.drift.vec = drift.vec;
+          if (Number.isFinite(drift.ttlAdd)) {
+            prog.drift.ttl = Math.max(0, prog.drift.ttl + drift.ttlAdd);
+          } else if (Number.isFinite(drift.ttl)) {
+            prog.drift.ttl = Math.max(0, drift.ttl);
+          }
+        } else {
+          if (prog.drift.ttl > 0) prog.drift.ttl -= 1;
+          if (prog.drift.ttl <= 0) { prog.drift.ttl = 0; prog.drift.vec = 0; }
+        }
+
+        if (!prog.recovery) prog.recovery = { type: null, step: 0, ttl: 0 };
+
+        const rec = result?.recovery || null;
+
+        if (rec?.startType || result?.recoveryStart) {
+          const t = rec?.startType || result?.recoveryStart;
+          prog.recovery = { type: String(t), step: 0, ttl: 3 };
+          if (Number.isFinite(rec?.ttl)) prog.recovery.ttl = Math.max(0, rec.ttl);
+          if (Number.isFinite(rec?.ttlAdd)) {
+            prog.recovery.ttl = Math.max(0, prog.recovery.ttl + rec.ttlAdd);
+          }
+        } else if (rec?.advance || result?.recoveryAdvance) {
+          if (prog.recovery.type) {
+            prog.recovery.step += 1;
+            prog.recovery.ttl = Math.max(0, prog.recovery.ttl - 1);
+            if (prog.recovery.ttl === 0) prog.recovery = { type: null, step: 0, ttl: 0 };
+          }
+        } else if (rec?.clear || result?.recoveryClear) {
+          prog.recovery = { type: null, step: 0, ttl: 0 };
+        } else {
+          if (prog.recovery.type) {
+            prog.recovery.ttl = Math.max(0, prog.recovery.ttl - 1);
+            if (prog.recovery.ttl === 0) prog.recovery = { type: null, step: 0, ttl: 0 };
+          }
+        }
+
+        prog.counters = prog.counters || {};
+        prog.counters.encounters = (prog.counters.encounters || 0) + 1;
+
+        if (enc?.chainSignal) {
+          const k = `signal_${String(enc.chainSignal).toLowerCase()}`;
+          prog.counters[k] = (prog.counters[k] || 0) + 1;
+        }
+
+        if (checks?.resetUsed) {
+          prog.flags = prog.flags || {};
+          prog.flags.resetDebt = (prog.flags.resetDebt || 0) + 1;
+        }
+
+        clampProg();
+        evaluateUnlocks();
+        saveProg();
+
+        return prog;
+      }
+
       function ensureProgLoaded() {
         const key = progKey();
         if (!PROG) {
@@ -751,6 +839,8 @@ function openManagerBoard() {
         PROG.flags = PROG.flags || { resetDebt: 0 };
         PROG.unlocks = PROG.unlocks || {};
         PROG.counters = PROG.counters || {};
+        PROG.drift = PROG.drift || { vec: 0, ttl: 0 };
+        PROG.recovery = PROG.recovery || { type: null, step: 0, ttl: 0 };
 
         if (key && PROG.__key !== key) {
           PROG = loadProg();
@@ -2081,11 +2171,10 @@ function openManagerBoard() {
         el.textContent = `Rep ${DRILL.repDone + 1} / ${DRILL.repTarget}`;
       }
 
-      function buildReactionChecksFromEncounter(enc) {
+      function buildReactionChecksFromEncounter(enc, progOverride) {
         const mode = (enc?.modeSelected || "").toLowerCase();
         const hookMeta = enc?.hookMeta || null;
-        ensureProgLoaded();
-        const prog = PROG;
+        const prog = progOverride || ensureProgLoaded();
 
         const checks = {
           guestRead: (typeof isCorrectGuestRead === "function")
@@ -2104,6 +2193,13 @@ function openManagerBoard() {
           firstMode: enc?.firstMode || enc?.modeSelected || "",
           powerMoveAllowed: !!prog.unlocks.powerMovePivot,
           activeWine: enc?.wineSelected || null,
+          axes: { ...prog.axes },
+          driftVec: prog.drift?.vec ?? 0,
+          driftTtl: prog.drift?.ttl ?? 0,
+          recoveryType: prog.recovery?.type ?? null,
+          recoveryStep: prog.recovery?.step ?? 0,
+          recoveryTtl: prog.recovery?.ttl ?? 0,
+          chapter: enc?.chapter ?? enc?.meta?.chapter ?? null,
         };
 
         return checks;
@@ -2321,7 +2417,7 @@ function openManagerBoard() {
         if (!DRILL) return;
 
         try {
-          const checks = buildReactionChecksFromEncounter(currentEncounter);
+          const checks = buildReactionChecksFromEncounter(currentEncounter, PROG);
 
           const result = window.EngineBridge?.computeReaction
             ? window.EngineBridge.computeReaction(checks)
@@ -4675,7 +4771,7 @@ function openManagerBoard() {
           }
 
           const reactionChecks = {
-            ...buildReactionChecksFromEncounter(currentEncounter),
+            ...buildReactionChecksFromEncounter(currentEncounter, PROG),
             guestRead,
             modeStatus,
             hookStatus,
@@ -4701,6 +4797,9 @@ function openManagerBoard() {
           currentEncounter.__reactionComputed = true;
 
           const result = window.EngineBridge.computeReaction(reactionChecks);
+          // TEMP DEBUG (remove later)
+          console.log("[BC] computeReaction result =", result);
+          commitReaction(result, currentEncounter, reactionChecks);
           // Persist telemetry on encounter for history + reflection
           currentEncounter.chainScore = result.chainScore;
           currentEncounter.chainSignal = result.chainSignal;

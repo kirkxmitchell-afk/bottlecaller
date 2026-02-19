@@ -518,6 +518,31 @@ appState.progressionView = appState.progressionView || {
   note: null
 };
 appState._lastAllowedTier = appState._lastAllowedTier || 1;
+appState.runState = appState.runState || {
+  inRun: false,
+  encounterId: null,
+  level: 1,
+  chapter: 1,
+  tier: 1, // 1 Fundamental, 2 Core, 3 Pressure
+
+  // loop
+  read: null,          // inferred guest vector / signals chosen
+  mode: null,          // Scout/Guide/Authority/Charm/Closer
+  hook: null,          // hookId
+  drift: { vec: null, persist: 0 },
+
+  // physics
+  momentum: 0,
+  selectivity: 0,
+
+  // recovery / fragility
+  authority: 0,
+  recovery: null,      // { type, step, progress }
+
+  // audit
+  turn: 0,
+  log: []
+};
 let _unlockHideTimer = null;
 
 window.__BC_DEBUG__ = {
