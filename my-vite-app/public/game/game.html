@@ -1869,6 +1869,9 @@ function openManagerBoard() {
       }
 
       async function bootstrapWinesFromCtx() {
+        if (window.__BC_WINES_BOOTSTRAPPED__ || __BC_WINES_BOOTSTRAPPED__) return;
+        window.__BC_WINES_BOOTSTRAPPED__ = true;
+        __BC_WINES_BOOTSTRAPPED__ = true;
         const rid = window.__BC_CTX__?.restaurantId;
         const sid = window.__BC_CTX__?.scopeId || scopeId || null;
         if (!rid || !sid) return;
@@ -2697,7 +2700,7 @@ function openManagerBoard() {
       // ---------- Screens ----------
       function showScreen(screenId) {
         console.log("[NAV] showScreen ->", screenId);
-        console.log(new Error("[NAV] caller stack").stack);
+        console.trace("[NAV] caller stack");
 
         // If drill is active, do not allow anything to kick us back to setup/home
         if (
@@ -2705,7 +2708,7 @@ function openManagerBoard() {
           (screenId === ids.setupScreen || screenId === "screenHome" || screenId === "screenWelcome")
         ) {
           console.warn("[NAV] blocked screen switch during drill:", screenId);
-          console.log(new Error("[NAV] blocked caller stack").stack);
+          console.trace("[NAV] blocked caller stack");
           return;
         }
 
