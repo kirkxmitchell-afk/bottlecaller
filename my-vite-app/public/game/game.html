@@ -2634,23 +2634,23 @@ function openManagerBoard() {
         if (el.__bcBound) return;
         el.__bcBound = true;
 
-        const primary = getPrimaryEvent();
+        const primary = "pointerup";
 
         const fire = async (e) => {
           const now = Date.now();
           if (now - __BC_LAST_INPUT_AT__ < 500) return;
-          if (e && e.type === "click" && primary !== "click") return;
 
           __BC_LAST_INPUT_AT__ = now;
 
           if (e) {
-            if (primary !== "click" && e.cancelable) e.preventDefault();
+            if (e.cancelable) e.preventDefault();
             e.stopPropagation();
           }
 
           try {
             try {
-              bcEmitEvent(primary, {
+              const evtType = e?.type || primary;
+              bcEmitEvent(evtType, {
                 v: 1,
                 kind: "ui_click",
                 id: el.id || null,
@@ -2671,8 +2671,8 @@ function openManagerBoard() {
           }
         };
 
-        el.addEventListener(primary, fire, { passive: primary === "click" });
-        if (primary !== "click") el.addEventListener("click", fire, { passive: true });
+        el.addEventListener(primary, fire, { passive: false });
+        el.addEventListener("click", fire, { passive: false });
       }
 
       // ---------- Screens ----------
