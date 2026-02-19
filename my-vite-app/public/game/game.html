@@ -1102,6 +1102,12 @@ function openManagerBoard() {
         const isManager = role === "manager";
         const isWaiter = role === "waiter";
 
+        window.__BC_ROLE__ = window.__BC_ROLE__ || {};
+        window.__BC_ROLE__.isManager = (String(role || "").toLowerCase() === "manager");
+        window.__BC_ROLE__.isWaiter = (String(role || "").toLowerCase() === "waiter");
+        window.isManager = window.__BC_ROLE__.isManager;
+        window.isWaiter = window.__BC_ROLE__.isWaiter;
+
         console.log("[BC] ctx (after READY):", { role, restaurantId, isManager, isWaiter });
       })();
 
