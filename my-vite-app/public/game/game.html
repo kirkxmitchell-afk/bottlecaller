@@ -4375,6 +4375,9 @@ function openManagerBoard() {
           return payload;
         }
 
+        if (currentEncounter.__logged) return;
+        currentEncounter.__logged = true;
+
         const payload = buildEncounterResolvedPayloadV2();
 
         console.log("[BC] encounter_resolved required fields", {
@@ -4384,18 +4387,19 @@ function openManagerBoard() {
           hasChecks: Object.prototype.hasOwnProperty.call(payload || {}, "checks"),
         });
 
+        const hasChecks = Object.prototype.hasOwnProperty.call(payload || {}, "checks");
+
         if (
           payload?.v === 2 &&
           payload?.encounterId &&
           payload?.sessionId &&
-          payload?.checks
+          hasChecks
         ) {
           bcEmitEvent("encounter_resolved", payload);
         } else {
           console.warn("[BC] blocked encounter_resolved (invalid payload)", payload);
         }
 
-        currentEncounter.__logged = true;
         updateCounts();
       }
 
