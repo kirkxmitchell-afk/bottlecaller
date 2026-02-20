@@ -1676,9 +1676,9 @@ function openManagerBoard() {
       }
 
       function isCorrectGuestRead(encounter) {
-        const actual = encounter?.guestStateActual;
-        const read = encounter?.guestReadSelected;
-        const validReads = GUEST_READ_MATCH[actual] || [];
+        const actual = String(encounter?.guestStateActual || "");
+        const read = String(encounter?.guestReadSelected || "");
+        const validReads = GUEST_READ_MATCH?.[actual] || [];
         if (validReads.length) return validReads.includes(read);
         return read === actual;
       }
@@ -3918,26 +3918,50 @@ function openManagerBoard() {
         return "❌";
       }
 
-      function modeWhy(state) {
-        const reasons = {
-          "Decider": "They want speed + certainty. LEAD reduces friction.",
-          "Bargain-Smart": "They want proof + control. HOLD feels safe and rational.",
-          "Fancy": "They want taste + identity. REFLECT matches status + nuance.",
-          "Griever": "They want softness + space. HOLD avoids pressure.",
-          "Celebrator": "They want energy + momentum. LEAD keeps the vibe up."
-        };
-        return reasons[state] || "";
+      function modeWhy(actualGuestState) {
+        const rule = modeMap[actualGuestState];
+        if (!rule) return "No rule found for this guest type.";
+
+        const opt = rule.optimal, neu = rule.neutral, dmg = rule.damaging;
+
+        return (
+          `Optimal: ${opt} (take control & close). ` +
+          `Neutral: ${neu} (probe, then shift). ` +
+          `Damaging: ${dmg} (wrong tempo for this guest).`
+        );
       }
 
-      function hookWhy(state) {
-        const reasons = {
-          "Decider": "VALUE is fastest: simple justification and clean decision.",
-          "Bargain-Smart": "VALUE answers the real question: is it worth it?",
-          "Fancy": "STORY signals status, origin, and meaning (not just taste).",
-          "Griever": "FLAVOUR is gentle and safe — no hype, no pressure.",
-          "Celebrator": "STORY amplifies the moment and the celebration."
-        };
-        return reasons[state] || "";
+      function hookWhy(actualGuestState) {
+        const rule = hookMap[actualGuestState];
+        if (!rule) return "No hook rule found for this guest type.";
+
+        const opt = rule.optimal, neu = rule.neutral, dmg = rule.damaging;
+
+        return (
+          `Optimal: ${opt} (speaks to what they care about). ` +
+          `Neutral: ${neu} (safe but weaker). ` +
+          `Damaging: ${dmg} (pulls attention the wrong way).`
+        );
+      }
+
+      function explainModeResult(enc) {
+        const rule = modeMap[enc.guestStateActual];
+        if (!rule) return "Mode rule missing.";
+
+        const chosen = enc.modeSelected || "—";
+        if (chosen === rule.optimal) return `You matched the guest tempo: ${chosen} is optimal here.`;
+        if (chosen === rule.neutral) return `Not bad — ${chosen} is neutral here, but ${rule.optimal} would close better.`;
+        return `That felt right, but for ${enc.guestStateActual} the best is ${rule.optimal}. ${chosen} usually loses control.`;
+      }
+
+      function explainHookResult(enc) {
+        const rule = hookMap[enc.guestStateActual];
+        if (!rule) return "Hook rule missing.";
+
+        const chosen = enc.hookSelected || "—";
+        if (chosen === rule.optimal) return `Clean — ${chosen} is the best hook for this guest.`;
+        if (chosen === rule.neutral) return `Safe — ${chosen} works, but ${rule.optimal} lands harder here.`;
+        return `You pulled them the wrong direction — ${chosen} clashes with what a ${enc.guestStateActual} wants.`;
       }
 
       // ==============================
