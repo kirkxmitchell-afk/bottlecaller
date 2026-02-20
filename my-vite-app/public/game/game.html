@@ -331,54 +331,6 @@
 <script>
 window.__BC_GAME_HTML_MARKER__ = "streak-debug-v1";
 console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
-;(function () {
-  function modeKey() {
-    return (window.APP_MODE === "premium") ? "premium" : "demo";
-  }
-
-  function k(name) {
-    return `bc_${modeKey()}_${name}`;
-  }
-
-  function getInt(key, fallback = 0) {
-    const raw = localStorage.getItem(key);
-    const n = parseInt(raw, 10);
-    return Number.isFinite(n) ? n : fallback;
-  }
-
-  // Rule B: streak breaks ONLY on red. Yellow still keeps streak alive.
-  function updateStreakAfterEncounter(enc) {
-    const sig = String(enc?.chainSignal || "").toLowerCase(); // "green" | "yellow" | "red"
-    const streakKey = k("streak");
-    const bestKey = k("best_streak");
-
-    let streak = getInt(streakKey, 0);
-    let best = getInt(bestKey, 0);
-
-    // If no signal yet, don't change anything.
-    if (!sig) {
-      return { signal: sig || "none", streak, best, changed: false };
-    }
-
-    if (sig === "red") {
-      streak = 0;
-    } else {
-      streak = streak + 1;
-      if (streak > best) best = streak;
-    }
-
-    localStorage.setItem(streakKey, String(streak));
-    localStorage.setItem(bestKey, String(best));
-
-    return { signal: sig, streak, best, changed: true };
-  }
-
-  window.__BC_DEBUG__ = window.__BC_DEBUG__ || {};
-  window.__BC_DEBUG__.updateStreakAfterEncounter = updateStreakAfterEncounter;
-
-  window.__BC_STREAK_DEBUG_READY__ = true;
-  console.log("[BC] STREAK DEBUG READY ✅", { mode: modeKey() });
-})();
 ;(() => {
   "use strict";
 
@@ -2902,13 +2854,51 @@ function openManagerBoard() {
       // - streak increments only if chainSignal is green
       // - otherwise streak resets to 0
       // - bestStreak tracks max
-      function updateStreakAfterEncounter(encounter) {
-        const signal = String(encounter?.chainSignal || "").toLowerCase();
+      function streakPasses(enc, checks) {
+        const modeOK = (checks.modeStatus === "optimal" || checks.modeStatus === "neutral");
+        const hookOK = (checks.hookStatus === "optimal" || checks.hookStatus === "neutral");
+        return !!checks.guestRead && modeOK && hookOK;
+      }
 
+      function getStreakBreakReason(enc, checks) {
+        if (!checks.guestRead) {
+          return {
+            code: "READ_FAIL",
+            text: `Streak broke: wrong guest read (${enc.guestReadSelected || "—"} vs ${enc.guestStateActual || "—"}).`
+          };
+        }
+
+        if (checks.modeStatus === "damaging") {
+          const rule = modeMap[enc.guestStateActual];
+          return {
+            code: "MODE_DAMAGING",
+            text: `Streak broke: damaging mode. Best for ${enc.guestStateActual}: ${rule?.optimal || "—"}.`
+          };
+        }
+
+        if (checks.hookStatus === "damaging") {
+          const rule = hookMap[enc.guestStateActual];
+          return {
+            code: "HOOK_DAMAGING",
+            text: `Streak broke: damaging hook. Best for ${enc.guestStateActual}: ${rule?.optimal || "—"}.`
+          };
+        }
+
+        return {
+          code: "OTHER",
+          text: "Streak broke: criteria not met."
+        };
+      }
+
+      function updateStreakAfterEncounter(encounter, checksOverride) {
         let streak = loadInt(streakKey, 0);
         let best = loadInt(bestStreakKey, 0);
 
-        if (signal === "green") {
+        const checks = checksOverride || evaluateChecks();
+        const pass = streakPasses(encounter, checks);
+        const prev = streak;
+
+        if (pass) {
           streak += 1;
           if (streak > best) best = streak;
         } else {
@@ -2918,9 +2908,21 @@ function openManagerBoard() {
         localStorage.setItem(streakKey, String(streak));
         localStorage.setItem(bestStreakKey, String(best));
 
-        return { signal, streak, best, rule: "B" };
+        const reason = pass ? null : getStreakBreakReason(encounter, checks);
+
+        return {
+          signal: pass ? "kept" : "broke",
+          streak,
+          best,
+          changed: prev !== streak,
+          pass,
+          reasonCode: reason?.code || "",
+          reasonText: reason?.text || ""
+        };
       }
       window.updateStreakAfterEncounter = updateStreakAfterEncounter;
+      window.__BC_DEBUG__ = window.__BC_DEBUG__ || {};
+      window.__BC_DEBUG__.updateStreakAfterEncounter = updateStreakAfterEncounter;
 
       function renderStreakBlock(container, info) {
         if (!container || !info) return;
@@ -2932,17 +2934,81 @@ function openManagerBoard() {
         title.innerText = "Streak";
         block.appendChild(title);
 
-        const line = document.createElement("div");
-        line.className = "small-text";
-        line.innerText = "Rule B: Green = +1, Yellow/Red = reset";
-        block.appendChild(line);
-
         const stats = document.createElement("div");
         stats.style.marginTop = "8px";
-        stats.innerText = `Signal: ${String(info.signal).toUpperCase()} | Streak: ${info.streak} | Best: ${info.best}`;
+        stats.innerText = `Current: ${info.streak}  |  Best: ${info.best}`;
         block.appendChild(stats);
 
+        if (info.pass === false && info.reasonText) {
+          const why = document.createElement("div");
+          why.style.marginTop = "8px";
+          why.innerText = info.reasonText;
+          block.appendChild(why);
+        }
+
         container.appendChild(block);
+      }
+
+      function scoreEncounterForGuard(enc, checks) {
+        let pts = 0;
+        pts += checks.guestRead ? 1 : 0;
+        pts += (checks.modeStatus === "optimal") ? 2 : (checks.modeStatus === "neutral" ? 1 : 0);
+        pts += (checks.hookStatus === "optimal") ? 2 : (checks.hookStatus === "neutral" ? 1 : 0);
+        pts += checks.deliveryCorrect ? 2 : 0;
+
+        let outcome =
+          pts >= 6 ? "clean" :
+          pts >= 4 ? "ok" :
+          pts >= 2 ? "shaky" : "break";
+
+        let damage =
+          (checks.modeStatus === "damaging" ? 1 : 0) +
+          (checks.hookStatus === "damaging" ? 1 : 0) +
+          (!checks.deliveryCorrect ? 1 : 0);
+
+        return { pts, outcome, damage, modeStatus: checks.modeStatus, hookStatus: checks.hookStatus, deliveryCorrect: checks.deliveryCorrect };
+      }
+
+      function computeSignalFromWindow(window3) {
+        const cleanCount = window3.filter(x => x.outcome === "clean").length;
+        const breakCount = window3.filter(x => x.outcome === "break").length;
+        const damageCount = window3.reduce((a, x) => a + x.damage, 0);
+
+        const signal =
+          (breakCount >= 2 || damageCount >= 5) ? "bad" :
+          (cleanCount >= 2 && breakCount === 0) ? "good" :
+          "neutral";
+
+        return { signal, cleanCount, breakCount, damageCount };
+      }
+
+      function progressionGuard({ tier, streakValue, last3 }) {
+        const { signal, cleanCount, breakCount, damageCount } = computeSignalFromWindow(last3);
+
+        const modeDamagingCount = last3.filter(x => x.modeStatus === "damaging").length;
+        const hookDamagingCount = last3.filter(x => x.hookStatus === "damaging").length;
+        const deliveryFailCount = last3.filter(x => !x.deliveryCorrect).length;
+
+        if (modeDamagingCount >= 2) return { action:"intervention", focus:"mode", reasons:["I_MODE_DAMAGING_LOOP"], signal };
+        if (hookDamagingCount >= 2) return { action:"intervention", focus:"hook", reasons:["I_HOOK_DAMAGING_LOOP"], signal };
+        if (deliveryFailCount >= 2) return { action:"intervention", focus:"delivery", reasons:["I_DELIVERY_LOOP"], signal };
+
+        if (breakCount >= 2 || damageCount >= 5) {
+          return { action:"deload", reasons:["D_HIGH_DAMAGE"], signal };
+        }
+
+        const eligibleByWindow = (cleanCount >= 2 && breakCount === 0);
+        const eligibleByStreak = (streakValue >= 3 && breakCount === 0);
+
+        if ((eligibleByWindow || eligibleByStreak) && damageCount <= 2) {
+          return { action:"escalate", reasons:[eligibleByStreak ? "E_STREAK" : "E_GRADE", "E_LOW_DAMAGE"], signal };
+        }
+
+        return { action:"hold", reasons:["H_DEFAULT"], signal };
+      }
+
+      function baseDifficultyFromTier(tier) {
+        return Math.max(1, Math.min(4, 1 + Math.floor((tier - 1) / 2)));
       }
 
       function getDrillRep() {
@@ -3962,6 +4028,60 @@ function openManagerBoard() {
         if (chosen === rule.optimal) return `Clean — ${chosen} is the best hook for this guest.`;
         if (chosen === rule.neutral) return `Safe — ${chosen} works, but ${rule.optimal} lands harder here.`;
         return `You pulled them the wrong direction — ${chosen} clashes with what a ${enc.guestStateActual} wants.`;
+      }
+
+      function getCoachLine(enc, checks) {
+        const failures = [];
+        if (!checks.guestRead) failures.push("read");
+        if (checks.modeStatus !== "optimal") failures.push("mode");
+        if (checks.hookStatus !== "optimal") failures.push("hook");
+        if (!checks.deliveryCorrect) failures.push("delivery");
+
+        if (failures.length === 0) {
+          return "Coach: Clean rep. Don’t speed up — keep the same tempo and stack another perfect one.";
+        }
+
+        const primary = failures[0];
+
+        const actual = enc?.guestStateActual || "this guest";
+        const chosenRead = enc?.guestReadSelected || "—";
+        const chosenMode = enc?.modeSelected || "—";
+        const chosenHook = enc?.hookSelected || "—";
+
+        switch (primary) {
+          case "read":
+            return `Coach: Your first job is the READ. You chose “${chosenRead}”, but this was “${actual}”. Slow down and name the pressure cue before you act.`;
+          case "mode": {
+            const rule = modeMap[actual];
+            const best = rule?.optimal || "—";
+            return `Coach: You read the guest, but you played the wrong MODE. For “${actual}”, best is ${best} — you chose ${chosenMode}. Match the tempo before you sell.`;
+          }
+          case "hook": {
+            const rule = hookMap[actual];
+            const best = rule?.optimal || "—";
+            return `Coach: Your HOOK didn’t match what “${actual}” cares about. Best is ${best} — you chose ${chosenHook}. Change the frame, not the facts.`;
+          }
+          case "delivery":
+            return "Coach: Your decision was fine — your DELIVERY pairing broke the rep. Slow down and lock S1 + S2 like a combo.";
+          default:
+            return "Coach: Good rep. Focus on one improvement next encounter.";
+        }
+      }
+
+      function renderCoachLineBlock(stepContent, enc, checks) {
+        const block = document.createElement("div");
+        block.className = "card";
+
+        const title = document.createElement("strong");
+        title.innerText = "Coach";
+        block.appendChild(title);
+
+        const line = document.createElement("div");
+        line.style.marginTop = "8px";
+        line.innerText = getCoachLine(enc, checks);
+        block.appendChild(line);
+
+        stepContent.appendChild(block);
       }
 
       // ==============================
@@ -5176,6 +5296,7 @@ function openManagerBoard() {
           const gradeObj = computePerformanceGrade(currentEncounter, checks);
           currentEncounter.performanceGrade = gradeObj.grade;
           renderPerformanceGradeBlock(stepContent, gradeObj);
+          renderCoachLineBlock(stepContent, currentEncounter, checks);
 
           // ============================================================
           // ✅ Strength + Fix (Mastery snapshot)
@@ -5212,11 +5333,37 @@ function openManagerBoard() {
 
           // ✅ STREAK (Rule B) — update after reflection only
           const streakInfo = window.__BC_DEBUG__?.updateStreakAfterEncounter
-            ? window.__BC_DEBUG__.updateStreakAfterEncounter(currentEncounter)
+            ? window.__BC_DEBUG__.updateStreakAfterEncounter(currentEncounter, checks)
             : { signal: "missing", streak: 0, best: 0, changed: false };
 
           console.log("[BC] streakInfo", streakInfo);
           renderStreakBlock(stepContent, streakInfo);
+
+          const guardState = window.__BC_GUARD__ || { last3: [], pressureLevel: 0 };
+          const tierNow = resolveTierForSession(sessionType);
+          const scored = scoreEncounterForGuard(currentEncounter, checks);
+          guardState.last3.push(scored);
+          if (guardState.last3.length > 3) guardState.last3 = guardState.last3.slice(-3);
+
+          const decision = progressionGuard({
+            tier: tierNow,
+            streakValue: streakInfo?.streak || 0,
+            last3: guardState.last3
+          });
+
+          if (decision.action === "escalate") guardState.pressureLevel += 1;
+          else if (decision.action === "deload") guardState.pressureLevel -= 1;
+
+          const baseDiff = baseDifficultyFromTier(tierNow);
+          const nextDiff = Math.max(1, Math.min(4, baseDiff + guardState.pressureLevel));
+          currentEncounter.nextEncounterDifficulty = nextDiff;
+          window.__BC_GUARD__ = guardState;
+
+          console.log("[GUARD]", decision.action, decision.signal, decision.reasons, {
+            tier: tierNow,
+            difficulty: nextDiff,
+            pressureLevel: guardState.pressureLevel
+          });
 
           const outcome = resolveOutcome(currentEncounter, checks);
           console.log("[BC] outcome", outcome, currentEncounter.__tiers);
