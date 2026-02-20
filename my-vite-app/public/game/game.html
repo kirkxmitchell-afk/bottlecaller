@@ -5047,6 +5047,19 @@ function openManagerBoard() {
           const checks = evaluateChecks();
           const chain = resolveChainFromChecks(currentEncounter, checks);
           console.log("[BC] chain", chain);
+          console.log("[BC][CHECKS]", {
+            enc: currentEncounter.encounterNumber,
+            guestActual: currentEncounter.guestStateActual,
+            guestRead: currentEncounter.guestReadSelected,
+            mode: currentEncounter.modeSelected,
+            hook: currentEncounter.hookSelected,
+            readCorrect: currentEncounter.readCorrect,
+            modeStatus: currentEncounter.modeStatus,
+            hookStatus: currentEncounter.hookStatus,
+            deliveryCorrect: currentEncounter.deliveryCorrect,
+            chainScore: currentEncounter.chainScore,
+            chainSignal: currentEncounter.chainSignal
+          });
           // Make the last encounter available for console checks
           window.__BC_LAST_ENCOUNTER__ = currentEncounter;
           // ✅ Update mastery for this encounter's skillFocus
