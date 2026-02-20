@@ -3869,7 +3869,38 @@ function openManagerBoard() {
           currentEncounter.selectedS1 === currentEncounter.correctSlotS1 &&
           currentEncounter.selectedS2 === currentEncounter.correctSlotS2;
 
+        // ✅ writeback for logging + DB
+        currentEncounter.readCorrect = !!guestRead;
+        currentEncounter.modeStatus = modeStatus;
+        currentEncounter.hookStatus = hookStatus;
+        currentEncounter.deliveryCorrect = !!deliveryCorrect;
+
         return { guestRead, modeStatus, hookStatus, deliveryCorrect };
+      }
+
+      function statusToScore(s) {
+        if (s === "optimal") return 2;
+        if (s === "neutral") return 1;
+        return 0;
+      }
+
+      function resolveChainFromChecks(enc, checks) {
+        const read = checks.guestRead ? 2 : 0;
+        const mode = statusToScore(checks.modeStatus);
+        const hook = statusToScore(checks.hookStatus);
+        const delivery = checks.deliveryCorrect ? 2 : 0;
+
+        const total = read + mode + hook + delivery;
+        enc.chainScore = total;
+
+        let signal = "loss";
+        if (total >= 7) signal = "clean_close";
+        else if (total >= 5) signal = "soft_close";
+        else if (total >= 2) signal = "pivot";
+        else signal = "recovery";
+
+        enc.chainSignal = signal;
+        return { total, signal };
       }
 
       function addStepButton(label, handler, container) {
@@ -4387,7 +4418,7 @@ function openManagerBoard() {
           hasChecks: Object.prototype.hasOwnProperty.call(payload || {}, "checks"),
         });
 
-        const hasChecks = Object.prototype.hasOwnProperty.call(payload || {}, "checks");
+        const hasChecks = !!payload?.checks;
 
         if (
           payload?.v === 2 &&
@@ -5014,6 +5045,8 @@ function openManagerBoard() {
 
         if (currentStep === 6) {
           const checks = evaluateChecks();
+          const chain = resolveChainFromChecks(currentEncounter, checks);
+          console.log("[BC] chain", chain);
           // Make the last encounter available for console checks
           window.__BC_LAST_ENCOUNTER__ = currentEncounter;
           // ✅ Update mastery for this encounter's skillFocus
