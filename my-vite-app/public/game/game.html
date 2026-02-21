@@ -5727,6 +5727,7 @@ function openManagerBoard() {
             streakValue: streakInfo?.streak || 0,
             last3: guardState.last3
           });
+          console.log("[GUARD] decision", decision);
 
           if ((guardState.graceNext || 0) > 0 && decision.action === "escalate") {
             decision.action = "hold";
@@ -5743,6 +5744,12 @@ function openManagerBoard() {
           const baseDiff = baseDifficultyFromTier(tierNow);
           const finalDifficulty = computeFinalDifficulty({ tier: tierNow, pressureLevel: guardState.pressureLevel });
           currentEncounter.nextEncounterDifficulty = finalDifficulty;
+          console.log("[GUARD] tier/base/pressure/final", {
+            tierNow,
+            baseDiff,
+            pressure: guardState.pressureLevel,
+            finalDifficulty
+          });
           updateDifficultyBadge(finalDifficulty);
           guardState.nextDifficulty = finalDifficulty;
 
@@ -5762,6 +5769,7 @@ function openManagerBoard() {
           window.__BC_GUARD__ = guardState;
 
           const done = isSessionComplete({ tier: tierNow, guardState });
+          console.log("[SESSION] completionCheck", done);
           if (done.done) {
             renderSessionComplete(stepContent, {
               reason: done.reason,
