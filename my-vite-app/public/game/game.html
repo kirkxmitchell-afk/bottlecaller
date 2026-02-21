@@ -1267,12 +1267,16 @@ function openManagerBoard() {
         saveEncounterIndex(0);
       }
 
-      function resetProgressToStart() {
+      function replayFromStage1() {
         encounterIndex = 0;
-        saveEncounterIndex(0);
-        alert("Progress reset: starting from Encounter 1.");
-        resetNavState();
+        saveEncounterIndex(encounterIndex);
+        currentEncounter = null;
+        currentStep = 0;
         showScreen("screenHome");
+      }
+
+      function resetProgressToStart() {
+        replayFromStage1();
       }
 
       function guardKey() {
@@ -2912,6 +2916,18 @@ function openManagerBoard() {
         const raw = localStorage.getItem(key);
         const n = parseInt(raw, 10);
         return Number.isFinite(n) ? n : fallback;
+      }
+
+      function getAccountDifficulty() {
+        return (
+          window.__BC_GUARD__?.finalDifficulty ??
+          window.__BC_DIFFICULTY__?.d ??
+          loadInt("bc_account_difficulty", 1)
+        );
+      }
+
+      function saveAccountDifficulty(d) {
+        localStorage.setItem("bc_account_difficulty", String(d));
       }
 
 
@@ -5894,6 +5910,7 @@ function openManagerBoard() {
           });
           updateDifficultyBadge(finalDifficulty);
           guardState.nextDifficulty = finalDifficulty;
+          saveAccountDifficulty(finalDifficulty);
 
           guardState.lastDecision = decision;
           guardState.tier = tierNow;
@@ -6318,7 +6335,11 @@ function openManagerBoard() {
         const guardState = loadGuardState();
         const tierNow = resolveTierForSession(sessionType);
         const finalDifficulty = computeFinalDifficulty({ tier: tierNow, pressureLevel: guardState.pressureLevel });
-        enc.difficulty = enc.difficulty ?? finalDifficulty;
+        const policySeed =
+          sameEncounter
+            ? carry?.difficulty
+            : getAccountDifficulty();
+        enc.difficulty = enc.difficulty ?? policySeed ?? finalDifficulty;
         const policy = difficultyPolicy(enc.difficulty);
         window.__BC_DIFFICULTY__ = { ...policy, tier: tierNow, pressure: guardState.pressureLevel };
         const pivotPlanned = sameEncounter
@@ -6347,7 +6368,7 @@ function openManagerBoard() {
           toneTag: enc.toneTag || "",
 
           // Metadata
-          difficulty: policy.d ?? (enc.difficulty ?? 1),
+          difficulty: enc.difficulty,
           tags: Array.isArray(enc.tags) ? enc.tags : [],
           policy,
           showStrictBadge: (policy.d ?? enc.difficulty ?? 1) >= 4,
