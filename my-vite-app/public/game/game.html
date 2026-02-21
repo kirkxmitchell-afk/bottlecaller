@@ -92,6 +92,13 @@
         <strong>Demo</strong>
         <div class="score-row">Wines saved: <span id="homeDemoCount">0 / 2</span></div>
         <div class="score-row">Runs saved: <span id="homeDemoRuns">0</span></div>
+        <div class="card" style="margin-top:10px;">
+          <strong>Progress</strong>
+          <div class="small-text">Level: <span id="progressNameDemo">—</span></div>
+          <div class="small-text">Focus: <span id="progressFocusDemo">—</span></div>
+          <div class="small-text">Next: <span id="progressNextDemo">—</span></div>
+          <div class="small-text">Points: <span id="progressPointsDemo">0</span></div>
+        </div>
         <div class="button-row" id="demoButtons">
           <button id="btnGoDemo" type="button">Setup</button>
           <button id="btnStartDrillDemo" type="button">5-Minute Drill</button>
@@ -107,6 +114,13 @@
         <strong>Premium</strong>
         <div class="score-row">Wines saved: <span id="homePremiumCount">0 / 10</span></div>
         <div class="score-row">Runs saved: <span id="homePremiumRuns">0</span></div>
+        <div class="card" style="margin-top:10px;">
+          <strong>Progress</strong>
+          <div class="small-text">Level: <span id="progressNamePremium">—</span></div>
+          <div class="small-text">Focus: <span id="progressFocusPremium">—</span></div>
+          <div class="small-text">Next: <span id="progressNextPremium">—</span></div>
+          <div class="small-text">Points: <span id="progressPointsPremium">0</span></div>
+        </div>
         <div class="button-row" id="premiumButtons">
           <button id="btnGoPremium" type="button">Setup</button>
           <button id="btnViewHistoryPremium" type="button">View History</button>
@@ -873,6 +887,9 @@ function openManagerBoard() {
         progressPercent: "progressPercentDemo",
         progressBar: "progressBarDemo",
         progressNotice: "progressNoticeDemo",
+        progressFocus: "progressFocusDemo",
+        progressNext: "progressNextDemo",
+        progressPoints: "progressPointsDemo",
       } : {
         cardCount: "homePremiumCount",
         cardRuns: "homePremiumRuns",
@@ -901,6 +918,9 @@ function openManagerBoard() {
         progressPercent: "progressPercentPremium",
         progressBar: "progressBarPremium",
         progressNotice: "progressNoticePremium",
+        progressFocus: "progressFocusPremium",
+        progressNext: "progressNextPremium",
+        progressPoints: "progressPointsPremium",
       }));
       function resolveSetupIdsForMode(mode) {
         const isPremium = mode === "premium";
@@ -3205,6 +3225,35 @@ function openManagerBoard() {
         stepContent.appendChild(badge);
       }
 
+      function pointsFromEncounter({ checks, gradeObj, difficulty }) {
+        const d = Math.max(1, Math.min(7, difficulty || 1));
+
+        const s =
+          (checks.guestRead ? 0.20 : 0) +
+          (checks.modeStatus === "optimal" ? 0.25 : checks.modeStatus === "neutral" ? 0.12 : 0) +
+          (checks.hookStatus === "optimal" ? 0.25 : checks.hookStatus === "neutral" ? 0.12 : 0) +
+          (checks.deliveryCorrect ? 0.30 : 0);
+
+        const mult =
+          d <= 2 ? 0.6 :
+          d <= 4 ? 1.0 :
+          d <= 6 ? 1.35 : 1.6;
+
+        const base = 10;
+
+        const pts = Math.round(base * s * mult);
+        return { pts, quality: s, mult };
+      }
+
+      function awardProgressionPoints(pts) {
+        const prog = ensureProgLoaded();
+        prog.stats = prog.stats || {};
+        prog.stats.points = (prog.stats.points || 0) + (Number(pts) || 0);
+        saveProg();
+        renderProgressStatusWindow();
+        return prog.stats.points;
+      }
+
       function applyDifficultyToEncounter(enc, policy) {
         const d = Number(policy?.d ?? enc?.difficulty ?? 1);
 
@@ -3769,9 +3818,35 @@ function openManagerBoard() {
         const wineCountEl = document.getElementById(ids.wineCount);
         if (wineCountEl) wineCountEl.innerText = W.length + " / " + LIMIT;
         renderHomeCounts();
+        renderProgressStatusWindow();
 
         const btnContinue = document.getElementById(ids.btnContinue);
         if (btnContinue) btnContinue.disabled = !isUnlocked();
+      }
+
+      function renderProgressStatusWindow() {
+        if (!ids) return;
+        const nameEl = document.getElementById(ids.progressName);
+        const focusEl = document.getElementById(ids.progressFocus);
+        const nextEl = document.getElementById(ids.progressNext);
+        const pointsEl = document.getElementById(ids.progressPoints);
+        if (!nameEl && !focusEl && !nextEl && !pointsEl) return;
+
+        const ctxReady = !!(window.__BC_CTX__?.userId && window.__BC_CTX__?.restaurantId);
+        const tierAllowed = getUnlockedTierStrict();
+        const runtime = {
+          ctxStatus: ctxReady ? "hydrated" : "anon",
+          progression: { tierAllowed, reasonsHuman: [] }
+        };
+        const view = getPlayerProgressionView(runtime);
+
+        if (nameEl) nameEl.innerText = view?.level || "—";
+        if (focusEl) focusEl.innerText = view?.focus || "—";
+        if (nextEl) nextEl.innerText = view?.next || "—";
+
+        const prog = ensureProgLoaded();
+        const points = prog?.stats?.points || 0;
+        if (pointsEl) pointsEl.innerText = String(points);
       }
 
       // ---------- Setup selection helpers ----------
@@ -5727,6 +5802,10 @@ function openManagerBoard() {
           currentEncounter.performanceGrade = gradeObj.grade;
           renderPerformanceGradeBlock(stepContent, gradeObj);
           renderCoachLineBlock(stepContent, currentEncounter, checks);
+          const d = (window.__BC_GUARD__?.finalDifficulty ?? currentEncounter?.difficulty ?? 1);
+          const earn = pointsFromEncounter({ checks, gradeObj, difficulty: d });
+          awardProgressionPoints(earn.pts);
+          console.log("[PROG] earned", earn);
 
           // ============================================================
           // ✅ Strength + Fix (Mastery snapshot)
