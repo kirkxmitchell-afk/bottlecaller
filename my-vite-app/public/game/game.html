@@ -3217,6 +3217,35 @@ function openManagerBoard() {
         else badge.classList.add("hidden");
       }
 
+      function shouldShowStrictBadge() {
+        const d =
+          window.__BC_GUARD__?.finalDifficulty ??
+          window.__BC_DIFFICULTY__?.d ??
+          window.__BC_LAST_ENCOUNTER__?.difficulty ??
+          currentEncounter?.difficulty ??
+          1;
+        return d >= 4;
+      }
+
+      function renderStrictBadge(stepContent) {
+        stepContent.querySelectorAll("[data-bc-strict-badge]").forEach(n => n.remove());
+        if (!shouldShowStrictBadge()) return;
+
+        const badge = document.createElement("span");
+        badge.setAttribute("data-bc-strict-badge", "1");
+        badge.textContent = "⚠ stricter rules";
+        badge.className = "small-text";
+        badge.style.display = "inline-block";
+        badge.style.margin = "6px 0";
+        badge.style.padding = "4px 8px";
+        badge.style.borderRadius = "999px";
+        badge.style.fontSize = "12px";
+        badge.style.border = "1px solid rgba(255,255,255,0.25)";
+        badge.style.opacity = "0.9";
+
+        stepContent.prepend(badge);
+      }
+
       function isSessionComplete({ tier, guardState }) {
         const signal = guardState?.lastDecision?.signal || guardState?.signal || "neutral";
         if (tier >= 5 && signal === "good") return { done: true, reason: "WIN_T5_GOOD" };
@@ -5589,6 +5618,7 @@ function openManagerBoard() {
           const reflectionTitle = document.createElement("h3");
           reflectionTitle.innerText = "Reflection";
           stepContent.appendChild(reflectionTitle);
+          renderStrictBadge(stepContent);
 
           const anchor = document.createElement("div");
           anchor.className = "small-text";
@@ -5727,7 +5757,16 @@ function openManagerBoard() {
             streakValue: streakInfo?.streak || 0,
             last3: guardState.last3
           });
-          console.log("[GUARD] decision", decision);
+          console.log("[GUARD] scored last3", guardState.last3.map(x => ({
+            pts: x.pts, outcome: x.outcome, damage: x.damage,
+            mode: x.modeStatus, hook: x.hookStatus, delivery: x.deliveryCorrect
+          })));
+          console.log("[GUARD] decision", {
+            action: decision.action,
+            focus: decision.focus,
+            reasons: decision.reasons,
+            signal: decision.signal
+          });
 
           if ((guardState.graceNext || 0) > 0 && decision.action === "escalate") {
             decision.action = "hold";
@@ -5747,7 +5786,8 @@ function openManagerBoard() {
           console.log("[GUARD] tier/base/pressure/final", {
             tierNow,
             baseDiff,
-            pressure: guardState.pressureLevel,
+            pressureBefore,
+            pressureAfter: guardState.pressureLevel,
             finalDifficulty
           });
           updateDifficultyBadge(finalDifficulty);
@@ -5767,6 +5807,7 @@ function openManagerBoard() {
           };
           window.__BC_DIFFICULTY__ = { ...policy, tier: tierNow, pressure: guardState.pressureLevel, lastDecision: decision };
           window.__BC_GUARD__ = guardState;
+          console.log("[GUARD] policy", window.__BC_DIFFICULTY__);
 
           const done = isSessionComplete({ tier: tierNow, guardState });
           console.log("[SESSION] completionCheck", done);
@@ -5781,32 +5822,6 @@ function openManagerBoard() {
           }
 
           console.log("[BC] DIFF", describeDifficultyState());
-          console.log("[BC][GUARD] decision", decision, {
-            tierNow,
-            pressureBefore,
-            pressureAfter: guardState.pressureLevel,
-            baseDiff,
-            finalDifficulty,
-            streakRules: guardState.streakRules
-          });
-
-          console.log("[GUARD]", {
-            tierNow,
-            last3: guardState.last3,
-            signal: decision.signal,
-            action: decision.action,
-            reasons: decision.reasons,
-            pressureBefore,
-            pressureAfter: guardState.pressureLevel,
-            baseDiff,
-            finalDifficulty,
-            cleanCount: decision.cleanCount,
-            breakCount: decision.breakCount,
-            damageCount: decision.damageCount,
-            modeDamagingCount: decision.modeDamagingCount,
-            hookDamagingCount: decision.hookDamagingCount,
-            deliveryFailCount: decision.deliveryFailCount
-          });
 
           const outcome = resolveOutcome(currentEncounter, checks);
           console.log("[BC] outcome", outcome, currentEncounter.__tiers);
