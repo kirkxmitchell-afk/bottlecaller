@@ -296,7 +296,10 @@
 
       <div id="encounterPanel" class="encounter-panel">
         <div class="step-header" id="stepHeader"></div>
-        <div class="score-row"><strong id="wineDisplayName">Session:</strong></div>
+        <div class="score-row">
+          <strong id="wineDisplayName">Session:</strong>
+          <div id="difficultyBadge" class="difficulty-badge hidden">⚠ stricter rules</div>
+        </div>
         <div id="wineBadges"></div>
         <div id="stepContent" style="margin-top:10px;"></div>
         <div id="bcFeedbackLine" style="margin-top:10px; opacity:0.85;"></div>
@@ -2240,6 +2243,21 @@ function openManagerBoard() {
 
         if (typeof encounterIndex !== "number") encounterIndex = 0;
         const enc = list[encounterIndex % list.length];
+        const guard = window.__BC_GUARD__ || {};
+        const guardSeed =
+          Number.isFinite(guard.nextDifficulty) ? guard.nextDifficulty :
+          Number.isFinite(guard.finalDifficulty) ? guard.finalDifficulty :
+          null;
+        const policySeed =
+          Number.isFinite(guardSeed) ? guardSeed :
+          (window.__BC_DIFFICULTY__ && Number.isFinite(window.__BC_DIFFICULTY__.d)) ? window.__BC_DIFFICULTY__.d :
+          (enc.difficulty ?? 1);
+        const policy = window.__BC_DIFFICULTY__ || difficultyPolicy(policySeed);
+        const pivotPlanned = Math.random() < (policy.pivotChance ?? 0);
+        const pivotBias =
+          policy.d >= 6 ? "hard" :
+          policy.d >= 4 ? "medium" :
+          "soft";
 
         currentEncounter = {
           __logged: false,
@@ -2253,8 +2271,11 @@ function openManagerBoard() {
           physicalCues: Array.isArray(enc.physicalCues) ? enc.physicalCues : [],
           verbalCues: Array.isArray(enc.verbalCues) ? enc.verbalCues : [],
           toneTag: enc.toneTag || "",
-          difficulty: enc.difficulty ?? 1,
+          difficulty: policy.d ?? (enc.difficulty ?? 1),
           tags: Array.isArray(enc.tags) ? enc.tags : [],
+          policy,
+          pivotPlanned,
+          pivotBias,
 
           guestReadSelected: "",
           modeSelected: "",
@@ -2850,17 +2871,37 @@ function openManagerBoard() {
         return Number.isFinite(n) ? n : fallback;
       }
 
+
       // Rule B:
       // - streak increments only if chainSignal is green
       // - otherwise streak resets to 0
       // - bestStreak tracks max
-      function streakPasses(enc, checks) {
-        const modeOK = (checks.modeStatus === "optimal" || checks.modeStatus === "neutral");
-        const hookOK = (checks.hookStatus === "optimal" || checks.hookStatus === "neutral");
-        return !!checks.guestRead && modeOK && hookOK;
+      function streakPasses(enc, checks, policy) {
+        const gate = policy?.streakGate || "relaxed";
+        if (!checks.guestRead) return false;
+
+        if (gate === "relaxed") {
+          const modeOK = (checks.modeStatus === "optimal" || checks.modeStatus === "neutral");
+          const hookOK = (checks.hookStatus === "optimal" || checks.hookStatus === "neutral");
+          return modeOK && hookOK;
+        }
+
+        if (gate === "strict") {
+          const modeOK = (checks.modeStatus === "optimal");
+          const hookOK = (checks.hookStatus === "optimal");
+          return modeOK && hookOK;
+        }
+
+        const modeOK = (checks.modeStatus === "optimal");
+        const hookOK = (checks.hookStatus === "optimal");
+        const deliveryOK = !!checks.deliveryCorrect;
+        return modeOK && hookOK && deliveryOK;
       }
 
-      function getStreakBreakReason(enc, checks) {
+      function getStreakBreakReason(enc, checks, policy) {
+        const gate = policy?.streakGate || "relaxed";
+        const diff = policy?.d ?? enc?.difficulty ?? 1;
+
         if (!checks.guestRead) {
           return {
             code: "READ_FAIL",
@@ -2875,12 +2916,33 @@ function openManagerBoard() {
             text: `Streak broke: damaging mode. Best for ${enc.guestStateActual}: ${rule?.optimal || "—"}.`
           };
         }
+        if (gate !== "relaxed" && checks.modeStatus === "neutral") {
+          const rule = modeMap[enc.guestStateActual];
+          return {
+            code: "MODE_NEUTRAL_DISALLOWED",
+            text: `Streak broke: neutral mode doesn’t hold at difficulty ${diff}. Best for ${enc.guestStateActual}: ${rule?.optimal || "—"}.`
+          };
+        }
 
         if (checks.hookStatus === "damaging") {
           const rule = hookMap[enc.guestStateActual];
           return {
             code: "HOOK_DAMAGING",
             text: `Streak broke: damaging hook. Best for ${enc.guestStateActual}: ${rule?.optimal || "—"}.`
+          };
+        }
+        if (gate !== "relaxed" && checks.hookStatus === "neutral") {
+          const rule = hookMap[enc.guestStateActual];
+          return {
+            code: "HOOK_NEUTRAL_DISALLOWED",
+            text: `Streak broke: neutral hook doesn’t hold at difficulty ${diff}. Best for ${enc.guestStateActual}: ${rule?.optimal || "—"}.`
+          };
+        }
+
+        if ((policy?.deliveryStrict || gate === "strict_plus_delivery") && !checks.deliveryCorrect) {
+          return {
+            code: "DELIVERY_FAIL",
+            text: "Streak broke: delivery missed under strict rules."
           };
         }
 
@@ -2894,8 +2956,12 @@ function openManagerBoard() {
         let streak = loadInt(streakKey, 0);
         let best = loadInt(bestStreakKey, 0);
 
+        const policy =
+          encounter?.policy ||
+          window.__BC_DIFFICULTY__ ||
+          difficultyPolicy(encounter?.difficulty ?? 1);
         const checks = checksOverride || evaluateChecks();
-        const pass = streakPasses(encounter, checks);
+        const pass = streakPasses(encounter, checks, policy);
         const prev = streak;
 
         if (pass) {
@@ -2908,7 +2974,7 @@ function openManagerBoard() {
         localStorage.setItem(streakKey, String(streak));
         localStorage.setItem(bestStreakKey, String(best));
 
-        const reason = pass ? null : getStreakBreakReason(encounter, checks);
+        const reason = pass ? null : getStreakBreakReason(encounter, checks, policy);
 
         return {
           signal: pass ? "kept" : "broke",
@@ -2916,6 +2982,7 @@ function openManagerBoard() {
           best,
           changed: prev !== streak,
           pass,
+          diff: policy?.d ?? encounter?.difficulty ?? 1,
           reasonCode: reason?.code || "",
           reasonText: reason?.text || ""
         };
@@ -2972,7 +3039,7 @@ function openManagerBoard() {
       function computeSignalFromWindow(window3) {
         const cleanCount = window3.filter(x => x.outcome === "clean").length;
         const breakCount = window3.filter(x => x.outcome === "break").length;
-        const damageCount = window3.reduce((a, x) => a + x.damage, 0);
+        const damageCount = window3.reduce((a, x) => a + (x.damage || 0), 0);
 
         const signal =
           (breakCount >= 2 || damageCount >= 5) ? "bad" :
@@ -2989,26 +3056,263 @@ function openManagerBoard() {
         const hookDamagingCount = last3.filter(x => x.hookStatus === "damaging").length;
         const deliveryFailCount = last3.filter(x => !x.deliveryCorrect).length;
 
-        if (modeDamagingCount >= 2) return { action:"intervention", focus:"mode", reasons:["I_MODE_DAMAGING_LOOP"], signal };
-        if (hookDamagingCount >= 2) return { action:"intervention", focus:"hook", reasons:["I_HOOK_DAMAGING_LOOP"], signal };
-        if (deliveryFailCount >= 2) return { action:"intervention", focus:"delivery", reasons:["I_DELIVERY_LOOP"], signal };
+        if (modeDamagingCount >= 2) {
+          return { action:"intervention", focus:"mode", reasons:["I_MODE_DAMAGING_LOOP"], signal, cleanCount, breakCount, damageCount, modeDamagingCount, hookDamagingCount, deliveryFailCount };
+        }
+
+        if (hookDamagingCount >= 2) {
+          return { action:"intervention", focus:"hook", reasons:["I_HOOK_DAMAGING_LOOP"], signal, cleanCount, breakCount, damageCount, modeDamagingCount, hookDamagingCount, deliveryFailCount };
+        }
+
+        const deliveryLoop =
+          (deliveryFailCount >= 2 && (modeDamagingCount + hookDamagingCount) >= 1) ||
+          (deliveryFailCount === 3);
+
+        if (deliveryLoop) {
+          return { action:"intervention", focus:"delivery", reasons:["I_DELIVERY_LOOP"], signal, cleanCount, breakCount, damageCount, modeDamagingCount, hookDamagingCount, deliveryFailCount };
+        }
 
         if (breakCount >= 2 || damageCount >= 5) {
-          return { action:"deload", reasons:["D_HIGH_DAMAGE"], signal };
+          return { action:"deload", reasons:["D_HIGH_DAMAGE"], signal, cleanCount, breakCount, damageCount, modeDamagingCount, hookDamagingCount, deliveryFailCount };
         }
 
         const eligibleByWindow = (cleanCount >= 2 && breakCount === 0);
         const eligibleByStreak = (streakValue >= 3 && breakCount === 0);
+        const lowDamageGate = (damageCount <= 2);
 
-        if ((eligibleByWindow || eligibleByStreak) && damageCount <= 2) {
-          return { action:"escalate", reasons:[eligibleByStreak ? "E_STREAK" : "E_GRADE", "E_LOW_DAMAGE"], signal };
+        if ((eligibleByWindow || eligibleByStreak) && lowDamageGate) {
+          return {
+            action:"escalate",
+            reasons:[eligibleByStreak ? "E_STREAK" : "E_WINDOW", "E_LOW_DAMAGE"],
+            signal,
+            cleanCount,
+            breakCount,
+            damageCount,
+            modeDamagingCount,
+            hookDamagingCount,
+            deliveryFailCount
+          };
         }
 
-        return { action:"hold", reasons:["H_DEFAULT"], signal };
+        return { action:"hold", reasons:["H_DEFAULT"], signal, cleanCount, breakCount, damageCount, modeDamagingCount, hookDamagingCount, deliveryFailCount };
       }
 
       function baseDifficultyFromTier(tier) {
-        return Math.max(1, Math.min(4, 1 + Math.floor((tier - 1) / 2)));
+        if (tier <= 1) return 1;
+        if (tier === 2) return 2;
+        if (tier === 3) return 3;
+        if (tier === 4) return 4;
+        return 5;
+      }
+
+      function pressureDeltaFromSignal(signal) {
+        switch (signal) {
+          case "good": return +1;
+          case "neutral": return 0;
+          case "bad": return -1;
+          default: return 0;
+        }
+      }
+
+      function maxPressureByTier(tier) {
+        if (tier <= 1) return 0;
+        if (tier === 2) return 1;
+        if (tier === 3) return 1;
+        if (tier === 4) return 2;
+        return 2;
+      }
+
+      function clampPressureByTier(tier, pressure) {
+        const cap = maxPressureByTier(tier);
+        return Math.max(-cap, Math.min(cap, pressure));
+      }
+
+      function computeFinalDifficulty({ tier, pressureLevel }) {
+        const base = baseDifficultyFromTier(tier);
+        const cap = maxPressureByTier(tier);
+        const p = Math.max(-cap, Math.min(cap, pressureLevel));
+        return Math.max(1, Math.min(7, base + p));
+      }
+
+      function difficultyOf(encounter) {
+        return Number(encounter?.policy?.d ?? encounter?.difficulty ?? 1);
+      }
+
+      function hookStrictnessFromDifficulty(d) {
+        return d >= 4;
+      }
+
+      function debugHookStrictness(encounter) {
+        const d = Number(encounter?.policy?.d ?? encounter?.difficulty ?? 1);
+        const strict = hookStrictnessFromDifficulty(d);
+        console.log(
+          "%c[HOOK_POLICY]",
+          "color:#9b59b6;font-weight:bold",
+          {
+            difficulty: d,
+            strict,
+            guest: encounter?.guestStateActual,
+            encounter: encounter?.encounterNumber
+          }
+        );
+      }
+
+      function renderStrictRulesBadge(stepContent, encounter) {
+        const d = Number(encounter?.policy?.d ?? encounter?.difficulty ?? 1);
+        const strictHook = d >= 4;
+        const strictDelivery = d >= 6;
+
+        if (!strictHook && !strictDelivery) return;
+
+        const badge = document.createElement("div");
+        badge.className = "bc-badge-strict";
+        badge.textContent = strictDelivery ? "⚠ stricter rules (hook + delivery)" : "⚠ stricter rules (hook)";
+
+        badge.style.marginTop = "6px";
+        badge.style.display = "inline-flex";
+        badge.style.alignItems = "center";
+        badge.style.gap = "6px";
+        badge.style.fontSize = "12px";
+        badge.style.padding = "4px 8px";
+        badge.style.borderRadius = "999px";
+        badge.style.border = "1px solid rgba(255,255,255,0.18)";
+        badge.style.background = "rgba(255,255,255,0.06)";
+        badge.style.opacity = "0.92";
+
+        stepContent.appendChild(badge);
+      }
+
+      function applyDifficultyToEncounter(enc, policy) {
+        const d = Number(policy?.d ?? enc?.difficulty ?? 1);
+
+        enc.cueNoise =
+          d <= 2 ? 0 :
+          d <= 4 ? 1 :
+          d <= 6 ? 2 : 3;
+
+        enc.allowSecondChance = (d <= 3);
+        enc.pivotBias = (d >= 6) ? "hard" : (enc.pivotBias || "soft");
+        enc.infoCompression =
+          d <= 2 ? "full" :
+          d <= 4 ? "normal" :
+          d <= 6 ? "compressed" : "minimal";
+
+        return enc;
+      }
+
+      function sliceCuesByNoise(arr, cueNoise) {
+        if (!Array.isArray(arr)) return [];
+        if (cueNoise <= 0) return arr;
+        const keep =
+          cueNoise === 1 ? Math.max(1, Math.ceil(arr.length * 0.75)) :
+          cueNoise === 2 ? Math.max(1, Math.ceil(arr.length * 0.55)) :
+          Math.max(1, Math.ceil(arr.length * 0.35));
+        return arr.slice(0, keep);
+      }
+
+      function updateDifficultyBadge(finalDifficulty) {
+        const badge = document.getElementById("difficultyBadge");
+        if (!badge) return;
+        if (finalDifficulty >= 4) badge.classList.remove("hidden");
+        else badge.classList.add("hidden");
+      }
+
+      function isSessionComplete({ tier, guardState }) {
+        const signal = guardState?.lastDecision?.signal || guardState?.signal || "neutral";
+        if (tier >= 5 && signal === "good") return { done: true, reason: "WIN_T5_GOOD" };
+        if (tier >= 6 && signal === "bad") return { done: true, reason: "FAIL_T6_BAD" };
+        return { done: false, reason: "" };
+      }
+
+      function renderSessionComplete(root, { reason, tier, difficulty, guardState }) {
+        const mastery = loadMastery();
+        const sf = getStrengthAndFix(mastery);
+
+        const card = document.createElement("div");
+        card.className = "card";
+
+        const title = document.createElement("strong");
+        title.innerText = reason.startsWith("WIN") ? "Session Complete" : "Session Ended";
+        card.appendChild(title);
+
+        const line1 = document.createElement("div");
+        line1.className = "small-text";
+        line1.style.marginTop = "6px";
+        line1.innerText = `Tier reached: ${tier}  •  Difficulty: ${difficulty}`;
+        card.appendChild(line1);
+
+        const line2 = document.createElement("div");
+        line2.className = "small-text";
+        line2.style.marginTop = "6px";
+        line2.innerText = `Strength: ${sf.strongest.toUpperCase()} (${sf.strongestPct}%)  |  Fix: ${sf.weakest.toUpperCase()} (${sf.weakestPct}%)`;
+        card.appendChild(line2);
+
+        const next = document.createElement("div");
+        next.style.marginTop = "10px";
+        next.innerText = sf.fixText;
+        card.appendChild(next);
+
+        if (guardState?.lastDecision?.action) {
+          const gd = document.createElement("div");
+          gd.className = "small-text";
+          gd.style.marginTop = "10px";
+          gd.innerText = `Guard: ${guardState.lastDecision.action.toUpperCase()} (${(guardState.lastDecision.reasons || []).join(", ")})`;
+          card.appendChild(gd);
+        }
+
+        root.appendChild(card);
+
+        const btnWrap = document.createElement("div");
+        btnWrap.className = "step-buttons";
+
+        const btn = document.createElement("button");
+        btn.className = "primary-btn";
+        btn.innerText = "BACK TO HOME";
+        btn.onclick = () => showScreen("screenHome");
+        btnWrap.appendChild(btn);
+
+        root.appendChild(btnWrap);
+      }
+
+      function difficultyPolicy(d) {
+        d = Math.max(1, Math.min(7, d));
+        const hookStrict = d >= 4;
+        const deliveryStrict = d >= 6;
+
+        return {
+          d,
+          pivotChance:
+            d <= 2 ? 0.10 :
+            d <= 4 ? 0.20 :
+            d <= 6 ? 0.35 : 0.45,
+          hookStrictness:
+            d <= 2 ? "lenient" :
+            d <= 4 ? "normal" :
+            d <= 6 ? "strict" : "hard",
+          hookStrict,
+          deliveryStrict,
+          deliveryNoise:
+            d <= 2 ? 0 :
+            d <= 4 ? 1 :
+            d <= 6 ? 2 : 3,
+          timeLimitSec:
+            d <= 2 ? null :
+            d <= 4 ? 20 :
+            d <= 6 ? 14 : 10,
+          streakGate:
+            d <= 3 ? "relaxed" :
+            d <= 5 ? "strict" :
+            "strict_plus_delivery",
+          streakPenaltyMultiplier:
+            d <= 3 ? 1 :
+            d <= 5 ? 1.25 : 1.5
+        };
+      }
+
+      function describeDifficultyState() {
+        const s = window.__BC_DIFFICULTY__;
+        if (!s) return "no difficulty state";
+        return `tier=${s.tier} pressure=${s.pressure} d=${s.d} pivotChance=${s.pivotChance} hook=${s.hookStrictness} noise=${s.deliveryNoise} time=${s.timeLimitSec ?? "none"}`;
       }
 
       function getDrillRep() {
@@ -3849,8 +4153,46 @@ function openManagerBoard() {
         return filtered.length ? pickRandom(filtered) : pickRandom(arr);
       }
 
+      function tokenizeWords(s) {
+        return String(s || "")
+          .toLowerCase()
+          .replace(/[^a-z0-9\s]/g, " ")
+          .split(/\s+/)
+          .filter(Boolean);
+      }
+
+      function wordOverlapScore(a, b) {
+        const aSet = new Set(tokenizeWords(a));
+        let score = 0;
+        tokenizeWords(b).forEach((w) => {
+          if (aSet.has(w)) score += 1;
+        });
+        return score;
+      }
+
+      function pickWrongPairByNoise(wrongs, correct, noise) {
+        const list = Array.isArray(wrongs) ? wrongs.slice() : [];
+        if (list.length <= 1) return [list[0] || "", list[1] || ""];
+
+        const scored = list.map(w => ({ w, score: wordOverlapScore(w, correct) }));
+        scored.sort((a, b) => a.score - b.score);
+
+        const n = scored.length;
+        if (noise <= 0) return [scored[0].w, scored[1].w];
+        if (noise === 1) {
+          const mid1 = Math.max(0, Math.floor((n - 1) / 2));
+          const mid2 = Math.min(n - 1, Math.ceil((n - 1) / 2));
+          return [scored[mid1].w, scored[mid2].w];
+        }
+        return [scored[n - 1].w, scored[n - 2].w];
+      }
+
       function initDeliverOptions(encounter) {
-        const diff = encounter.difficulty ?? 1;
+        if (encounter.deliverOptionsS1 && encounter.deliverOptionsS2) return;
+        const d = encounter?.policy?.d ?? encounter?.difficulty ?? 1;
+        const policy = encounter.policy || window.__BC_DIFFICULTY__ || difficultyPolicy(d);
+        const noise = policy?.deliveryNoise ?? 0;
+        const diff = d;
 
         // Difficulty ramp:
         // 1-2: AB / AB
@@ -3864,13 +4206,11 @@ function openManagerBoard() {
 
         const correct1 = buildSentence1Correct(encounter);
         const wrongs1 = buildSentence1Wrong();
-        const wrong1a = pickRandom(wrongs1);
-        const wrong1b = pickDifferent(wrongs1, wrong1a);
+        const [wrong1a, wrong1b] = pickWrongPairByNoise(wrongs1, correct1, noise);
 
         const correct2 = buildSentence2Correct(encounter);
         const wrongs2 = buildSentence2Wrong();
-        const wrong2a = pickRandom(wrongs2);
-        const wrong2b = pickDifferent(wrongs2, wrong2a);
+        const [wrong2a, wrong2b] = pickWrongPairByNoise(wrongs2, correct2, noise);
 
         // Choose which slot is correct
         encounter.correctSlotS1 = slots1[Math.floor(Math.random() * slots1.length)];
@@ -3909,22 +4249,44 @@ function openManagerBoard() {
         if (!slots2.includes(encounter.selectedS2)) encounter.selectedS2 = null;
       }
 
-      function evaluateChecks() {
-        const guestRead = isCorrectGuestRead(currentEncounter);
+      function evaluateChecks(encounterOverride) {
+        const encounter = encounterOverride || currentEncounter;
+        const policy =
+          encounter?.policy ||
+          window.__BC_DIFFICULTY__ ||
+          difficultyPolicy(encounter?.difficulty ?? 1);
+        const strictness = policy?.hookStrictness || "normal";
+        const guestRead = isCorrectGuestRead(encounter);
 
-        const modeRule = modeMap[currentEncounter.guestStateActual];
-        const hookRule = hookMap[currentEncounter.guestStateActual];
+        const modeRule = modeMap[encounter.guestStateActual];
+        const hookRule = hookMap[encounter.guestStateActual];
 
           const modeStatus =
-            currentEncounter.modeSelected === modeRule.optimal ? "optimal" :
-            currentEncounter.modeSelected === modeRule.neutral ? "neutral" : "damaging";
+            encounter.modeSelected === modeRule.optimal ? "optimal" :
+            encounter.modeSelected === modeRule.neutral ? "neutral" : "damaging";
 
         let hookStatus = "damaging";
-        const hookId = currentEncounter.hookSelected;
-        const hookTier = currentEncounter.hookMeta?.tier || "neutral";
-        if (currentEncounter.hookMeta) {
-          hookStatus = hookTier === "right" ? "optimal" :
-            hookTier === "slightly" ? "neutral" : "damaging";
+        const hookId = encounter.hookSelected;
+
+        if (encounter.hookMeta) {
+          const hookTier = encounter.hookMeta.tier || "neutral";
+
+          const base =
+            hookTier === "right" ? "optimal" :
+            hookTier === "slightly" ? "neutral" :
+            "damaging";
+
+          if (strictness === "lenient") {
+            hookStatus = (hookTier === "slightly") ? "optimal" : base;
+          } else if (strictness === "normal") {
+            hookStatus = base;
+          } else if (strictness === "strict") {
+            hookStatus = (hookTier === "slightly") ? "damaging" : base;
+          } else if (strictness === "hard") {
+            hookStatus = (hookTier === "right") ? "optimal" : "damaging";
+          } else {
+            hookStatus = base;
+          }
         } else {
           hookStatus =
             hookId === hookRule.optimal ? "optimal" :
@@ -3932,14 +4294,14 @@ function openManagerBoard() {
         }
 
         const deliveryCorrect =
-          currentEncounter.selectedS1 === currentEncounter.correctSlotS1 &&
-          currentEncounter.selectedS2 === currentEncounter.correctSlotS2;
+          encounter.selectedS1 === encounter.correctSlotS1 &&
+          encounter.selectedS2 === encounter.correctSlotS2;
 
         // ✅ writeback for logging + DB
-        currentEncounter.readCorrect = !!guestRead;
-        currentEncounter.modeStatus = modeStatus;
-        currentEncounter.hookStatus = hookStatus;
-        currentEncounter.deliveryCorrect = !!deliveryCorrect;
+        encounter.readCorrect = !!guestRead;
+        encounter.modeStatus = modeStatus;
+        encounter.hookStatus = hookStatus;
+        encounter.deliveryCorrect = !!deliveryCorrect;
 
         return { guestRead, modeStatus, hookStatus, deliveryCorrect };
       }
@@ -4609,9 +4971,9 @@ function openManagerBoard() {
       function hookPolicy(encounter, wine) {
         const w = wine || { name: "This bottle", varietal: "" };
         const name = w.name || "This bottle";
-        const t = tierFromEncounter(encounter);
+        const d = difficultyOf(encounter);
         const g = canonicalGuestType(encounter?.guestStateActual);
-        const strict = t >= 3;
+        const strict = hookStrictnessFromDifficulty(d);
 
         if (g === "browser") {
           const leadLine = `If you want something easy that won’t miss tonight, ${name} is a great call.`;
@@ -4739,6 +5101,7 @@ function openManagerBoard() {
         stepHeader.innerText =
           "Step " + (currentStep + 1) + " of 7: " + stepLabels[currentStep] +
           (chipParts.length ? "\n" + chipParts.join(" • ") : "");
+        updateDifficultyBadge(currentEncounter?.difficulty ?? 1);
 
         // ---- in-game Progression Status UI DISABLED (parent owns progression UX) ----
         if (true) { /* intentionally disabled */ }
@@ -4765,14 +5128,18 @@ function openManagerBoard() {
           cueTitle.innerText = "Cues";
           cuePanel.appendChild(cueTitle);
 
+          const cuesNoise = currentEncounter.cueNoise ?? 0;
+          const physical = sliceCuesByNoise(currentEncounter.physicalCues, cuesNoise);
+          const verbal = sliceCuesByNoise(currentEncounter.verbalCues, cuesNoise);
+
           const phys = document.createElement("div");
           phys.className = "small-text";
-          phys.innerText = "Physical: " + (currentEncounter.physicalCues || []).join(", ");
+          phys.innerText = "Physical: " + (physical || []).join(", ");
           cuePanel.appendChild(phys);
 
           const verb = document.createElement("div");
           verb.className = "small-text";
-          verb.innerText = "Verbal: " + (currentEncounter.verbalCues || []).join(", ");
+          verb.innerText = "Verbal: " + (verbal || []).join(", ");
           cuePanel.appendChild(verb);
 
           stepContent.appendChild(cuePanel);
@@ -4860,9 +5227,11 @@ function openManagerBoard() {
         }
 
         if (currentStep === 3) {
+          debugHookStrictness(currentEncounter);
           const prompt = document.createElement("p");
           prompt.textContent = "Which sentence do you lead with?";
           stepContent.appendChild(prompt);
+          renderStrictRulesBadge(stepContent, currentEncounter);
 
           const wine = currentEncounter?.wineSelected || {};
           if (!Array.isArray(currentEncounter.hookOptions) || currentEncounter.hookOptions.length === 0) {
@@ -4876,7 +5245,14 @@ function openManagerBoard() {
           console.log("[DRILL] hook opts", opts);
 
           opts.forEach((opt) => {
-            const key = String(opt.id || opt.hookType || opt.text || "");
+            console.log(
+              "[HOOK_OPTION]",
+              opt.id,
+              opt.hookType,
+              "tier:",
+              opt.tier
+            );
+            const key = String(opt.id || "") + "::" + String(opt.hookType || "");
             const btn = document.createElement("button");
             btn.type = "button";
             const selected = String(currentEncounter.hookSelected || "") === key;
@@ -5034,6 +5410,7 @@ function openManagerBoard() {
           currentEncounter.__reactionComputed = true;
 
           const result = window.EngineBridge.computeReaction(reactionChecks);
+          result.pivotUnlocked = !!currentEncounter.pivotPlanned && result.pivotUnlocked;
           // TEMP DEBUG (remove later)
           console.log("[BC] computeReaction result =", result);
           commitReaction(result, currentEncounter, reactionChecks);
@@ -5351,25 +5728,83 @@ function openManagerBoard() {
             last3: guardState.last3
           });
 
+          if ((guardState.graceNext || 0) > 0 && decision.action === "escalate") {
+            decision.action = "hold";
+            decision.reasons = [...(decision.reasons || []), "H_GRACE_NEXT"];
+          }
+          guardState.graceNext = Math.max(0, (guardState.graceNext || 0) - 1);
+
+          const pressureBefore = guardState.pressureLevel;
           if (decision.action === "escalate") guardState.pressureLevel += 1;
           else if (decision.action === "deload") guardState.pressureLevel -= 1;
+          else if (decision.action === "intervention") guardState.pressureLevel = Math.min(guardState.pressureLevel, 0);
+          guardState.pressureLevel = clampPressureByTier(tierNow, guardState.pressureLevel);
 
           const baseDiff = baseDifficultyFromTier(tierNow);
-          const nextDiff = Math.max(1, Math.min(4, baseDiff + guardState.pressureLevel));
-          currentEncounter.nextEncounterDifficulty = nextDiff;
+          const finalDifficulty = computeFinalDifficulty({ tier: tierNow, pressureLevel: guardState.pressureLevel });
+          currentEncounter.nextEncounterDifficulty = finalDifficulty;
+          updateDifficultyBadge(finalDifficulty);
+          guardState.nextDifficulty = finalDifficulty;
+
+          guardState.lastDecision = decision;
+          guardState.tier = tierNow;
+          guardState.baseDiff = baseDiff;
+          guardState.finalDifficulty = finalDifficulty;
+          guardState.graceNext = (decision.action === "escalate") ? 1 : guardState.graceNext;
+
+          const policy = difficultyPolicy(finalDifficulty);
+          guardState.streakRules = {
+            gate: policy.streakGate,
+            hookStrict: policy.hookStrict,
+            deliveryStrict: policy.deliveryStrict
+          };
+          window.__BC_DIFFICULTY__ = { ...policy, tier: tierNow, pressure: guardState.pressureLevel, lastDecision: decision };
           window.__BC_GUARD__ = guardState;
 
-          console.log("[GUARD]", decision.action, decision.signal, decision.reasons, {
-            tier: tierNow,
-            difficulty: nextDiff,
-            pressureLevel: guardState.pressureLevel
+          const done = isSessionComplete({ tier: tierNow, guardState });
+          if (done.done) {
+            renderSessionComplete(stepContent, {
+              reason: done.reason,
+              tier: tierNow,
+              difficulty: guardState?.finalDifficulty ?? currentEncounter?.difficulty ?? 1,
+              guardState
+            });
+            return;
+          }
+
+          console.log("[BC] DIFF", describeDifficultyState());
+          console.log("[BC][GUARD] decision", decision, {
+            tierNow,
+            pressureBefore,
+            pressureAfter: guardState.pressureLevel,
+            baseDiff,
+            finalDifficulty,
+            streakRules: guardState.streakRules
+          });
+
+          console.log("[GUARD]", {
+            tierNow,
+            last3: guardState.last3,
+            signal: decision.signal,
+            action: decision.action,
+            reasons: decision.reasons,
+            pressureBefore,
+            pressureAfter: guardState.pressureLevel,
+            baseDiff,
+            finalDifficulty,
+            cleanCount: decision.cleanCount,
+            breakCount: decision.breakCount,
+            damageCount: decision.damageCount,
+            modeDamagingCount: decision.modeDamagingCount,
+            hookDamagingCount: decision.hookDamagingCount,
+            deliveryFailCount: decision.deliveryFailCount
           });
 
           const outcome = resolveOutcome(currentEncounter, checks);
           console.log("[BC] outcome", outcome, currentEncounter.__tiers);
 
           if (outcome.outcome === "pivot") {
-            const p = choosePivot(currentEncounter);
+            const p = choosePivot(currentEncounter, currentEncounter.policy);
             currentEncounter.pivotType = currentEncounter.pivotType || p.pivotType;
             currentEncounter.nextGuestStateActual =
               currentEncounter.nextGuestStateActual || p.next || currentEncounter.guestStateActual || "";
@@ -5486,7 +5921,12 @@ function openManagerBoard() {
           return (s1ok ? 1 : 0) + (s2ok ? 1 : 0);
         }
 
-        function choosePivot(enc) {
+        function choosePivot(enc, policyOverride) {
+          const policy =
+            policyOverride ||
+            enc?.policy ||
+            window.__BC_DIFFICULTY__ ||
+            difficultyPolicy(enc?.difficulty ?? 1);
           const g = canonicalGuestType(enc?.guestStateActual);
           const map = {
             celebrator: { pivotType: "celebrator_to_alpha", next: "alpha" },
@@ -5496,10 +5936,22 @@ function openManagerBoard() {
             budget_guard: { pivotType: "budget_guard_to_browser", next: "browser" },
             make_it_easy: { pivotType: "make_it_easy_to_alpha", next: "alpha" },
           };
-          return map[g] || { pivotType: "pivot", next: g || "" };
+          const base = map[g] || { pivotType: "pivot", next: g || "" };
+          const d = policy?.d ?? 1;
+          if (d >= 6) return { ...base, pivotType: `hard_${base.pivotType}` };
+          if (d >= 4) return { ...base, pivotType: `push_${base.pivotType}` };
+          return base;
         }
 
         function resolveOutcome(enc, checks) {
+          const policy =
+            enc?.policy ||
+            window.__BC_DIFFICULTY__ ||
+            difficultyPolicy(enc?.difficulty ?? 1);
+          const pivotPlanned =
+            (enc?.pivotPlanned != null)
+              ? enc.pivotPlanned
+              : (Math.random() < (policy?.pivotChance ?? 0));
           const readTier = getReadTier(enc, checks);
           const hookTier = getHookTier(checks);
           const modeTier = getModeTier(checks);
@@ -5516,7 +5968,11 @@ function openManagerBoard() {
 
           if (total >= 6) return { outcome: "clean_close", score: total };
           if (total >= 4) return { outcome: "soft_close", score: total };
-          if (total >= 1) return { outcome: "pivot", score: total };
+          if (total >= 1) {
+            return pivotPlanned
+              ? { outcome: "pivot", score: total }
+              : { outcome: "soft_close", score: total };
+          }
           return { outcome: "recovery", score: total };
         }
 
@@ -5733,6 +6189,19 @@ function openManagerBoard() {
         const sameEncounter = !!prevId && prevId === encounterIdStable;
         const carry = sameEncounter ? prev : null;
 
+        const policySeed =
+          (window.__BC_DIFFICULTY__ && Number.isFinite(window.__BC_DIFFICULTY__.d))
+            ? window.__BC_DIFFICULTY__.d
+            : (enc.difficulty ?? 1);
+        const policy = window.__BC_DIFFICULTY__ || difficultyPolicy(policySeed);
+        const pivotPlanned = sameEncounter
+          ? (carry?.pivotPlanned ?? false)
+          : (Math.random() < (policy.pivotChance ?? 0));
+        const pivotBias =
+          policy.d >= 6 ? "hard" :
+          policy.d >= 4 ? "medium" :
+          "soft";
+
         currentEncounter = {
           __logged: carry?.__logged ?? false,
           id: encounterIdStable,
@@ -5751,8 +6220,12 @@ function openManagerBoard() {
           toneTag: enc.toneTag || "",
 
           // Metadata
-          difficulty: enc.difficulty ?? 1,
+          difficulty: policy.d ?? (enc.difficulty ?? 1),
           tags: Array.isArray(enc.tags) ? enc.tags : [],
+          policy,
+          showStrictBadge: (policy.d ?? (enc.difficulty ?? 1)) >= 4,
+          pivotPlanned,
+          pivotBias,
 
           // Player choices (preserve existing)
           guestReadSelected: carry?.guestReadSelected || "",
@@ -5789,6 +6262,7 @@ function openManagerBoard() {
           resetUsed: carry?.resetUsed || false,
           __reactionComputed: sameEncounter ? (carry?.__reactionComputed || false) : false
         };
+        currentEncounter = applyDifficultyToEncounter(currentEncounter, policy);
         console.log("[ENCOUNTER] built", {
           id: currentEncounter.encounterId,
           sameEncounter,
