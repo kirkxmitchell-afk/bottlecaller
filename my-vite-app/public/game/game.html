@@ -1255,6 +1255,29 @@ function openManagerBoard() {
         showScreen("screenHome");
       }
 
+      function guardKey() {
+        const uid = window.__BC_CTX__?.userId || userId || "anon";
+        const rid = window.__BC_CTX__?.restaurantId || restaurantId || "no_restaurant";
+        return `bc_guard_v1_${uid}_${rid}`;
+      }
+
+      function loadGuardState() {
+        try {
+          const raw = localStorage.getItem(guardKey());
+          const parsed = raw ? JSON.parse(raw) : null;
+          const base = parsed && typeof parsed === "object" ? parsed : {};
+          if (!Array.isArray(base.last3)) base.last3 = [];
+          if (!Number.isFinite(base.pressureLevel)) base.pressureLevel = 0;
+          return base;
+        } catch {
+          return { last3: [], pressureLevel: 0 };
+        }
+      }
+
+      function saveGuardState(state) {
+        localStorage.setItem(guardKey(), JSON.stringify(state));
+      }
+
       const ENCOUNTERS_BY_MODE = (window.__BC_ENCOUNTERS__ || {});
       const ENCOUNTERS = Array.isArray(ENCOUNTERS_BY_MODE[bcMode]) ? ENCOUNTERS_BY_MODE[bcMode] : [];
       const ENCOUNTER_COUNT = ENCOUNTERS.length;
@@ -2271,7 +2294,7 @@ function openManagerBoard() {
           physicalCues: Array.isArray(enc.physicalCues) ? enc.physicalCues : [],
           verbalCues: Array.isArray(enc.verbalCues) ? enc.verbalCues : [],
           toneTag: enc.toneTag || "",
-          difficulty: policy.d ?? (enc.difficulty ?? 1),
+          difficulty: enc.difficulty,
           tags: Array.isArray(enc.tags) ? enc.tags : [],
           policy,
           pivotPlanned,
@@ -5746,7 +5769,7 @@ function openManagerBoard() {
           console.log("[BC] streakInfo", streakInfo);
           renderStreakBlock(stepContent, streakInfo);
 
-          const guardState = window.__BC_GUARD__ || { last3: [], pressureLevel: 0 };
+          const guardState = loadGuardState();
           const tierNow = resolveTierForSession(sessionType);
           const scored = scoreEncounterForGuard(currentEncounter, checks);
           guardState.last3.push(scored);
@@ -5806,6 +5829,7 @@ function openManagerBoard() {
             deliveryStrict: policy.deliveryStrict
           };
           window.__BC_DIFFICULTY__ = { ...policy, tier: tierNow, pressure: guardState.pressureLevel, lastDecision: decision };
+          saveGuardState(guardState);
           window.__BC_GUARD__ = guardState;
           console.log("[GUARD] policy", window.__BC_DIFFICULTY__);
 
@@ -6212,11 +6236,12 @@ function openManagerBoard() {
         const sameEncounter = !!prevId && prevId === encounterIdStable;
         const carry = sameEncounter ? prev : null;
 
-        const policySeed =
-          (window.__BC_DIFFICULTY__ && Number.isFinite(window.__BC_DIFFICULTY__.d))
-            ? window.__BC_DIFFICULTY__.d
-            : (enc.difficulty ?? 1);
-        const policy = window.__BC_DIFFICULTY__ || difficultyPolicy(policySeed);
+        const guardState = loadGuardState();
+        const tierNow = resolveTierForSession(sessionType);
+        const finalDifficulty = computeFinalDifficulty({ tier: tierNow, pressureLevel: guardState.pressureLevel });
+        enc.difficulty = enc.difficulty ?? finalDifficulty;
+        const policy = difficultyPolicy(enc.difficulty);
+        window.__BC_DIFFICULTY__ = { ...policy, tier: tierNow, pressure: guardState.pressureLevel };
         const pivotPlanned = sameEncounter
           ? (carry?.pivotPlanned ?? false)
           : (Math.random() < (policy.pivotChance ?? 0));
@@ -6246,7 +6271,7 @@ function openManagerBoard() {
           difficulty: policy.d ?? (enc.difficulty ?? 1),
           tags: Array.isArray(enc.tags) ? enc.tags : [],
           policy,
-          showStrictBadge: (policy.d ?? (enc.difficulty ?? 1)) >= 4,
+          showStrictBadge: (policy.d ?? enc.difficulty ?? 1) >= 4,
           pivotPlanned,
           pivotBias,
 
