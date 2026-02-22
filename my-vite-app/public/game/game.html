@@ -830,6 +830,7 @@ function openManagerBoard() {
           return { ...base, PROG };
         };
 
+        syncUnlocksFromProg();
         return PROG;
       }
 
@@ -1242,13 +1243,6 @@ function openManagerBoard() {
       }
 
       const guestStates = ["Decider", "Fancy", "Griever", "Celebrator", "Bargain-Smart"];
-      const GUEST_UNLOCK_LADDER = [
-        "Decider",
-        "Bargain-Smart",
-        "Griever",
-        "Fancy",
-        "Celebrator"
-      ];
 
       function getAllowedGuestTypesByTier(tier) {
         const t = Number(tier);
@@ -1258,11 +1252,7 @@ function openManagerBoard() {
       }
 
       function resolveAllowedGuestTypes(encounter) {
-        const unlocks = loadGuestUnlocks();
-        const base = ["Decider", "Bargain-Smart", "Griever"];
-        if (unlocks?.Fancy) base.push("Fancy");
-        if (unlocks?.Celebrator) base.push("Celebrator");
-        return base;
+        return getAllowedGuestTypes();
       }
 
       function resolveSafeGuestType(encounter) {
@@ -1307,34 +1297,32 @@ function openManagerBoard() {
         replayFromStage1();
       }
 
-      function guestUnlockKey() {
-        const uid = window.__BC_CTX__?.userId || userId || "anon";
-        const rid = window.__BC_CTX__?.restaurantId || restaurantId || "no_restaurant";
-        return `bc_unlocks_v1_${uid}_${rid}`;
-      }
-
       function unlockKey() {
-        const uid = (window.__BC_CTX__?.userId || window.bcCtx?.userId || "anon");
-        const rid = (window.__BC_CTX__?.restaurantId || window.bcCtx?.restaurantId || "local");
-        return `bc_unlocks_v1_${uid}_${rid}`;
+        const ctx = window.__BC_CTX__ || {};
+        const userId = ctx.userId || ctx.uid || null;
+        const restaurantId = ctx.restaurantId || null;
+        if (!userId || !restaurantId) return null;
+        return `bc_unlocks_v1_${userId}_${restaurantId}`;
       }
 
       function defaultUnlocks() {
         return {
-          v: 1,
-          Decider: true,
-          "Bargain-Smart": true,
-          Griever: true,
-          Fancy: false,
-          Celebrator: false,
-          unlockedAt: { Fancy: null, Celebrator: null },
-          lastEvalAtMs: 0
+          fancyAt: 5,
+          celebratorAt: 10,
+          unlocked: {
+            Fancy: false,
+            Celebrator: false,
+          },
+          totalPoints: 0,
+          updatedAtMs: 0,
         };
       }
 
       function loadUnlocks() {
+        const key = unlockKey();
+        if (!key) return defaultUnlocks();
         try {
-          const raw = localStorage.getItem(unlockKey());
+          const raw = localStorage.getItem(key);
           return raw ? { ...defaultUnlocks(), ...JSON.parse(raw) } : defaultUnlocks();
         } catch {
           return defaultUnlocks();
@@ -1342,182 +1330,41 @@ function openManagerBoard() {
       }
 
       function saveUnlocks(u) {
-        localStorage.setItem(unlockKey(), JSON.stringify(u));
+        const key = unlockKey();
+        if (!key) return;
+        localStorage.setItem(key, JSON.stringify(u));
+      }
+
+      function totalProgressPoints(prog) {
+        const p = prog || loadProg();
+        const c = Number(p?.axes?.control || p?.control || 0);
+        const s = Number(p?.axes?.selectivity || p?.selectivity || 0);
+        const m = Number(p?.axes?.compression || p?.compression || 0);
+        return c + s + m;
       }
 
       function getAllowedGuestTypes() {
+        const prog = loadProg();
+        const points = totalProgressPoints(prog);
+        const allowed = ["Decider", "Bargain-Smart", "Griever"];
+        if (points >= 5) allowed.push("Fancy");
+        if (points >= 10) allowed.push("Celebrator");
+        return allowed;
+      }
+
+      function syncUnlocksFromProg() {
+        const prog = loadProg();
+        const points = totalProgressPoints(prog);
+
         const u = loadUnlocks();
-        const out = ["Decider", "Bargain-Smart", "Griever"];
-        if (u.Fancy) out.push("Fancy");
-        if (u.Celebrator) out.push("Celebrator");
-        return out;
-      }
-
-      function loadGuestUnlocks() {
-        try {
-          const raw = localStorage.getItem(guestUnlockKey());
-          const parsed = raw ? JSON.parse(raw) : null;
-          return {
-            v: 1,
-            Decider: true,
-            "Bargain-Smart": true,
-            Griever: true,
-            Fancy: !!parsed?.Fancy,
-            Celebrator: !!parsed?.Celebrator,
-            unlockedAt: {
-              Fancy: parsed?.unlockedAt?.Fancy ?? null,
-              Celebrator: parsed?.unlockedAt?.Celebrator ?? null
-            },
-            lastEvalAtMs: parsed?.lastEvalAtMs || 0
-          };
-        } catch {
-          return {
-            v: 1,
-            Decider: true,
-            "Bargain-Smart": true,
-            Griever: true,
-            Fancy: false,
-            Celebrator: false,
-            unlockedAt: { Fancy: null, Celebrator: null },
-            lastEvalAtMs: 0
-          };
-        }
-      }
-
-      function saveGuestUnlocks(state) {
-        localStorage.setItem(guestUnlockKey(), JSON.stringify(state));
-      }
-
-      function unlockHistoryKey() {
-        const uid = window.__BC_CTX__?.userId || userId || "anon";
-        const rid = window.__BC_CTX__?.restaurantId || restaurantId || "no_restaurant";
-        return `bc_unlock_history_v1_${uid}_${rid}`;
-      }
-
-      function loadUnlockHistory() {
-        try {
-          const raw = localStorage.getItem(unlockHistoryKey());
-          const parsed = raw ? JSON.parse(raw) : null;
-          return Array.isArray(parsed) ? parsed : [];
-        } catch {
-          return [];
-        }
-      }
-
-      function saveUnlockHistory(list) {
-        localStorage.setItem(unlockHistoryKey(), JSON.stringify(list));
-      }
-
-      function updateGuestUnlocksFromHistory() {
-        const unlocks = loadGuestUnlocks();
-        const history = loadUnlockHistory();
-        const unlockedNow = [];
-
-        if (!unlocks.Fancy) {
-          const last5 = history.slice(-5);
-          const countD4 = last5.filter(x => (x?.finalDifficulty ?? 0) >= 4).length;
-          const breakCount = last5.filter(x => x?.outcome === "break").length;
-          const modeDamagingCount = last5.filter(x => x?.modeStatus === "damaging").length;
-          if (countD4 >= 3 && breakCount <= 1 && modeDamagingCount <= 2) {
-            unlocks.Fancy = true;
-            unlocks.unlockedAt.Fancy = Date.now();
-            unlockedNow.push("Fancy");
-          }
-        }
-
-        if (!unlocks.Celebrator) {
-          const last7 = history.slice(-7);
-          const countD6 = last7.filter(x => (x?.finalDifficulty ?? 0) >= 6).length;
-          const breakCount = last7.filter(x => x?.outcome === "break").length;
-          const deliveryFailCount = last7.filter(x => x?.deliveryCorrect === false).length;
-          const last10 = history.slice(-10);
-          const pivotSuccessCount = last10.filter(x => x?.pivotSuccess || x?.recoveryCorrect).length;
-
-          if (countD6 >= 3 && breakCount === 0 && deliveryFailCount <= 1 && pivotSuccessCount >= 1) {
-            unlocks.Celebrator = true;
-            unlocks.unlockedAt.Celebrator = Date.now();
-            unlockedNow.push("Celebrator");
-          }
-        }
-
-        unlocks.lastEvalAtMs = Date.now();
-        saveGuestUnlocks(unlocks);
-        return { unlocks, unlockedNow, history };
-      }
-
-      function evaluateGuestTypeUnlocksFromRuns(meta) {
-        if (!meta) return { unlocks: loadGuestUnlocks(), unlockedNow: [], history: loadUnlockHistory() };
-
-        const unlockHistory = loadUnlockHistory();
-        unlockHistory.push(meta);
-        saveUnlockHistory(unlockHistory.slice(-20));
-
-        const unlockEval = updateGuestUnlocksFromHistory();
-        window.__BC_GUEST_UNLOCKS__ = unlockEval.unlocks;
-        window.__BC_UNLOCKED_THIS_ENCOUNTER__ = "";
-
-        if (unlockEval.unlockedNow && unlockEval.unlockedNow.length) {
-          unlockEval.unlockedNow.forEach((guestType) => {
-            const isFancy = guestType === "Fancy";
-            const thresholds = isFancy
-              ? {
-                  targetDifficulty: 4,
-                  windowSize: 5,
-                  minHighDiffCount: 3,
-                  maxBreaks: 1,
-                  maxModeDamaging: 2,
-                  maxDeliveryFails: null,
-                  requiresPivotSuccess: false
-                }
-              : {
-                  targetDifficulty: 6,
-                  windowSize: 7,
-                  minHighDiffCount: 3,
-                  maxBreaks: 0,
-                  maxModeDamaging: null,
-                  maxDeliveryFails: 1,
-                  requiresPivotSuccess: true
-                };
-
-            const lastN = (isFancy ? unlockEval.history.slice(-5) : unlockEval.history.slice(-7))
-              .map(x => ({
-                d: x.finalDifficulty,
-                outcome: x.outcome,
-                modeStatus: x.modeStatus,
-                hookStatus: x.hookStatus,
-                deliveryCorrect: x.deliveryCorrect,
-                pivotSuccess: !!x.pivotSuccess,
-                recoveryCorrect: !!x.recoveryCorrect
-              }));
-
-            const milestonePointsAwarded = isFancy ? 50 : 100;
-            awardProgressionPoints(milestonePointsAwarded);
-
-            window.__BC_UNLOCKED_THIS_ENCOUNTER__ = guestType;
-
-            bcEmitEvent("guest_type_unlocked", {
-              v: 1,
-              mode: bcMode,
-              sessionId: sessionId || null,
-              userId: window.__BC_CTX__?.userId || userId || null,
-              restaurantId: window.__BC_CTX__?.restaurantId || restaurantId || null,
-              scopeId: window.__BC_CTX__?.scopeId || scopeId || null,
-              guestType,
-              unlocked: true,
-              ruleVersion: "unlock_v1",
-              thresholds,
-              evidence: {
-                evaluatedFrom: "runs_lastN",
-                finalDifficultyNow: meta.finalDifficulty,
-                lastN
-              },
-              milestonePointsAwarded,
-              occurredAtMs: Date.now()
-            });
-          });
-        }
-
-        return unlockEval;
+        u.totalPoints = points;
+        u.unlocked = {
+          Fancy: points >= u.fancyAt,
+          Celebrator: points >= u.celebratorAt,
+        };
+        u.updatedAtMs = Date.now();
+        saveUnlocks(u);
+        return u;
       }
 
       function guardKey() {
@@ -5318,9 +5165,6 @@ function openManagerBoard() {
         runs.push(entry);
         saveRuns();
 
-        const unlockMeta = currentEncounter?.__unlockMeta || null;
-        evaluateGuestTypeUnlocksFromRuns(unlockMeta);
-
         function buildEncounterResolvedPayloadV2() {
           const encounterId =
             currentEncounter?.id ||
@@ -5374,11 +5218,23 @@ function openManagerBoard() {
               currentEncounter?.policy?.d ??
               currentEncounter?.difficulty ??
               1,
-            guestTypeUnlockedThisEncounter: window.__BC_UNLOCKED_THIS_ENCOUNTER__ || "",
-            unlockState: {
-              Fancy: !!window.__BC_GUEST_UNLOCKS__?.Fancy,
-              Celebrator: !!window.__BC_GUEST_UNLOCKS__?.Celebrator
-            },
+            progress: (() => {
+              const prog = loadProg();
+              const points = totalProgressPoints(prog);
+              const unlocks = syncUnlocksFromProg();
+              return {
+                pointsTotal: points,
+                dims: {
+                  control: prog?.axes?.control || prog?.control || 0,
+                  selectivity: prog?.axes?.selectivity || prog?.selectivity || 0,
+                  compression: prog?.axes?.compression || prog?.compression || 0,
+                },
+                guestUnlocks: {
+                  Fancy: !!unlocks.unlocked?.Fancy,
+                  Celebrator: !!unlocks.unlocked?.Celebrator
+                }
+              };
+            })(),
             occurredAtMs: Date.now(),
           };
 
@@ -6171,6 +6027,7 @@ function openManagerBoard() {
           const d = (window.__BC_GUARD__?.finalDifficulty ?? currentEncounter?.difficulty ?? 1);
           const earn = pointsFromEncounter({ checks, gradeObj, difficulty: d });
           awardProgressionPoints(earn.pts);
+          syncUnlocksFromProg();
           console.log("[PROG] earned", earn);
 
           // ============================================================
@@ -6267,15 +6124,7 @@ function openManagerBoard() {
           guardState.nextDifficulty = finalDifficulty;
           saveAccountDifficulty(finalDifficulty);
 
-          currentEncounter.__unlockMeta = {
-            finalDifficulty,
-            outcome: scored?.outcome || "",
-            modeStatus: checks?.modeStatus || "",
-            hookStatus: checks?.hookStatus || "",
-            deliveryCorrect: !!checks?.deliveryCorrect,
-            pivotSuccess: !!currentEncounter?.pivotSuccess,
-            recoveryCorrect: !!currentEncounter?.recoveryCorrect
-          };
+          // unlocks are derived from progression points; no per-encounter unlock meta required
 
           guardState.lastDecision = decision;
           guardState.tier = tierNow;
