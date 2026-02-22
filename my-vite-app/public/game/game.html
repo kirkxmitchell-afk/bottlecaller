@@ -5392,17 +5392,18 @@ function openManagerBoard() {
           const options = document.createElement("div");
           options.className = "option-grid";
           const rawN = currentEncounter?.encounterNumber;
-          const n = Number.isFinite(rawN)
-            ? rawN
-            : (Number.isFinite(encounterIndex) ? (encounterIndex + 1) : 1);
+          const n = Number.isFinite(Number(rawN))
+            ? Number(rawN)
+            : (Number.isFinite(Number(encounterIndex)) ? (Number(encounterIndex) + 1) : 1);
           const tier = getTierFromEncounterNumber(n);
           const allowedReads = getAllowedGuestTypesByTier(tier);
-          console.log("[GUEST_UNLOCK_DEBUG]", {
+          console.log("[BC][GUEST_UNLOCK]", {
             encounterIndex,
             encounterNumber: currentEncounter?.encounterNumber,
             n,
             tier,
             allowedReads,
+            allowedCount: allowedReads?.length
           });
           if (currentEncounter.guestReadSelected && !allowedReads.includes(currentEncounter.guestReadSelected)) {
             currentEncounter.guestReadSelected = "";
