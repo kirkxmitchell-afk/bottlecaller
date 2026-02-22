@@ -930,6 +930,7 @@ function openManagerBoard() {
           PROG = defaultProg();
         }
 
+        PROG = ensureProgShape(PROG);
         PROG.axes = PROG.axes || { control: 0, selectivity: 0, compression: 0 };
         PROG.flags = PROG.flags || { resetDebt: 0 };
         PROG.unlocks = PROG.unlocks || {};
@@ -942,10 +943,15 @@ function openManagerBoard() {
           PROG.__key = key;
         }
 
+        PROG = ensureProgShape(PROG);
         evaluateUnlocks();
         console.log("[PROG] ensure key =", progKey());
         window.PROG = PROG;
         window.__BC_PROG__ = PROG;
+        window.loadProg = loadProg;
+        window.saveProg = saveProg;
+        window.evaluateUnlocks = evaluateUnlocks;
+        window.getAllowedGuestTypes = getAllowedGuestTypes;
 
         const prev = window.__BC_DEBUG__;
         window.__BC_DEBUG__ = () => {
