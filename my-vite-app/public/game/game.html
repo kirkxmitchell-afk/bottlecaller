@@ -641,6 +641,18 @@ function openManagerBoard() {
         }
       }
 
+      // Boot PROG immediately for console/UI access
+      PROG = ensureProgShape(loadProg());
+      evaluateUnlocks();
+      saveProg();
+
+      // expose for console + UI
+      window.PROG = PROG;
+      window.loadProg = loadProg;
+      window.saveProg = saveProg;
+      window.evaluateUnlocks = evaluateUnlocks;
+      window.getAllowedGuestTypes = getAllowedGuestTypes;
+
       function saveProg() {
         const key = progKey();
         if (!key || !PROG) return;
