@@ -1406,13 +1406,6 @@ function openManagerBoard() {
 
       const guestStates = ["Decider", "Fancy", "Griever", "Celebrator", "Bargain-Smart"];
 
-      function getAllowedGuestTypesByTier(tier) {
-        const t = Number(tier);
-        if (t <= 1) return ["Decider", "Bargain-Smart", "Griever"];
-        if (t === 2) return ["Decider", "Bargain-Smart", "Griever", "Fancy"];
-        return ["Decider", "Bargain-Smart", "Griever", "Fancy", "Celebrator"];
-      }
-
       function resolveAllowedGuestTypes(encounter) {
         return getAllowedGuestTypes();
       }
