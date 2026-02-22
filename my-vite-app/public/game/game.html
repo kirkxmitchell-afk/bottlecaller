@@ -658,6 +658,7 @@ function openManagerBoard() {
         if (typeof PROG.unlocks.guestFancy !== "boolean") PROG.unlocks.guestFancy = false;
         if (typeof PROG.unlocks.guestCelebrator !== "boolean") PROG.unlocks.guestCelebrator = false;
         evaluateUnlocks();
+        updateTierFromPoints();
         saveProg();
       } catch (e) {
         console.error("[BC] FATAL BOOT ERROR", e);
@@ -690,6 +691,46 @@ function openManagerBoard() {
         PROG.axes.selectivity = clamp(PROG.axes.selectivity, 0, 12);
         PROG.axes.compression = clamp(PROG.axes.compression, 0, 12);
         PROG.flags.resetDebt = clamp(PROG.flags.resetDebt, 0, 6);
+      }
+
+      function tierFromPoints(pointsTotal) {
+        const p = Number(pointsTotal || 0);
+        if (p >= 10) return 3;
+        if (p >= 5) return 2;
+        return 1;
+      }
+
+      function baseDifficultyFromUnlockedTier(tierUnlocked) {
+        if (tierUnlocked <= 1) return 1;
+        if (tierUnlocked === 2) return 3;
+        return 5;
+      }
+
+      function ensureProgMeta() {
+        PROG = PROG || {};
+        PROG.meta = PROG.meta || {};
+        if (!Number.isFinite(PROG.meta.pointsTotal)) PROG.meta.pointsTotal = 0;
+        if (!Number.isFinite(PROG.meta.tierUnlocked)) PROG.meta.tierUnlocked = 1;
+        PROG.guard = PROG.guard || { pressureLevel: 0, finalDifficulty: 1, last3: [] };
+        PROG.unlocks = PROG.unlocks || {};
+        if (typeof PROG.unlocks.guestFancy !== "boolean") PROG.unlocks.guestFancy = false;
+        if (typeof PROG.unlocks.guestCelebrator !== "boolean") PROG.unlocks.guestCelebrator = false;
+      }
+
+      function updateTierFromPoints() {
+        ensureProgMeta();
+        const t = tierFromPoints(PROG.meta.pointsTotal);
+        if (t > PROG.meta.tierUnlocked) PROG.meta.tierUnlocked = t;
+      }
+
+      function getPolicySeedFromProgression(enc) {
+        ensureProgMeta();
+        updateTierFromPoints();
+        const tierUnlocked = PROG.meta.tierUnlocked || 1;
+        const base = baseDifficultyFromUnlockedTier(tierUnlocked);
+        const pressure = Number(PROG.guard?.pressureLevel || 0);
+        const d = Math.max(1, Math.min(7, base + pressure));
+        return d;
       }
 
       function evaluateUnlocks() {
@@ -824,6 +865,7 @@ function openManagerBoard() {
           !resetUsed;
         if (pass) PROG.meta.pointsTotal += 1;
         if (pass) PROG.meta.encountersCleared += 1;
+        if (pass) updateTierFromPoints();
 
         clampProg();
         evaluateUnlocks();
@@ -865,6 +907,7 @@ function openManagerBoard() {
         if (outcome === "clean" || outcome === "ok") {
           PROG.meta.pointsTotal = Number(PROG.meta.pointsTotal || 0) + 1;
           PROG.meta.encountersCleared = Number(PROG.meta.encountersCleared || 0) + 1;
+          updateTierFromPoints();
         }
       }
 
@@ -961,6 +1004,7 @@ function openManagerBoard() {
         }
 
         PROG = ensureProgShape(PROG);
+        ensureProgMeta();
         PROG.axes = PROG.axes || { control: 0, selectivity: 0, compression: 0 };
         PROG.flags = PROG.flags || { resetDebt: 0 };
         PROG.unlocks = PROG.unlocks || {};
@@ -976,9 +1020,11 @@ function openManagerBoard() {
         }
 
         PROG = ensureProgShape(PROG);
+        ensureProgMeta();
         if (typeof PROG.unlocks.guestFancy !== "boolean") PROG.unlocks.guestFancy = false;
         if (typeof PROG.unlocks.guestCelebrator !== "boolean") PROG.unlocks.guestCelebrator = false;
         evaluateUnlocks();
+        updateTierFromPoints();
         console.log("[PROG] ensure key =", progKey());
         window.PROG = PROG;
         window.__BC_PROG__ = PROG;
@@ -1445,6 +1491,23 @@ function openManagerBoard() {
         saveEncounterIndex(encounterIndex);
         currentEncounter = null;
         currentStep = 0;
+        if (window.PROG) {
+          ensureProgMeta();
+          updateTierFromPoints();
+          const d = Math.max(
+            1,
+            Math.min(
+              7,
+              baseDifficultyFromUnlockedTier(PROG.meta.tierUnlocked) +
+              (PROG.guard?.pressureLevel || 0)
+            )
+          );
+          window.__BC_DIFFICULTY__ = {
+            ...difficultyPolicy(d),
+            tierUnlocked: PROG.meta.tierUnlocked,
+            pressure: PROG.guard?.pressureLevel || 0
+          };
+        }
         showScreen("screenHome");
       }
 
@@ -6240,6 +6303,12 @@ function openManagerBoard() {
           window.__BC_DIFFICULTY__ = { ...policy, tier: tierNow, pressure: guardState.pressureLevel, lastDecision: decision };
           saveGuardState(guardState);
           window.__BC_GUARD__ = guardState;
+          ensureProgLoaded();
+          ensureProgMeta();
+          PROG.guard.pressureLevel = guardState.pressureLevel;
+          PROG.guard.finalDifficulty = finalDifficulty;
+          PROG.guard.last3 = guardState.last3;
+          saveProg();
           console.log("[GUARD] policy", window.__BC_DIFFICULTY__);
 
           const done = isSessionComplete({ tier: tierNow, guardState });
@@ -6646,16 +6715,18 @@ function openManagerBoard() {
         const sameEncounter = !!prevId && prevId === encounterIdStable;
         const carry = sameEncounter ? prev : null;
 
-        const guardState = loadGuardState();
-        const tierNow = resolveTierForSession(sessionType);
-        const finalDifficulty = computeFinalDifficulty({ tier: tierNow, pressureLevel: guardState.pressureLevel });
+        ensureProgLoaded();
         const policySeed =
           sameEncounter
             ? carry?.difficulty
-            : getAccountDifficulty();
-        enc.difficulty = enc.difficulty ?? policySeed ?? finalDifficulty;
+            : getPolicySeedFromProgression(enc);
+        enc.difficulty = enc.difficulty ?? policySeed ?? 1;
         const policy = difficultyPolicy(enc.difficulty);
-        window.__BC_DIFFICULTY__ = { ...policy, tier: tierNow, pressure: guardState.pressureLevel };
+        window.__BC_DIFFICULTY__ = {
+          ...policy,
+          tierUnlocked: PROG?.meta?.tierUnlocked || 1,
+          pressure: PROG?.guard?.pressureLevel || 0
+        };
         const pivotPlanned = sameEncounter
           ? (carry?.pivotPlanned ?? false)
           : (Math.random() < (policy.pivotChance ?? 0));
