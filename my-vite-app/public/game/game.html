@@ -595,6 +595,12 @@ function openManagerBoard() {
             pointsTotal: 0,
             encountersCleared: 0,
             lastUpdatedMs: 0,
+            tierUnlocked: 1,
+          },
+          guard: {
+            pressureLevel: 0,
+            finalDifficulty: 1,
+            last3: [],
           },
           axes: { control: 0, selectivity: 0, compression: 0 },
           counters: { deciderGood: 0, browserGood: 0, analystGood: 0 },
@@ -623,8 +629,10 @@ function openManagerBoard() {
 
       function ensureProgShape(p) {
         const base = defaultProg();
-        const out = { ...base, ...(p || {}) };
+        const src = (typeof p === "undefined") ? (window.PROG || {}) : (p || {});
+        const out = { ...base, ...src };
         out.meta = { ...base.meta, ...(out.meta || {}) };
+        out.guard = { ...base.guard, ...(out.guard || {}) };
         out.axes = { ...base.axes, ...(out.axes || {}) };
         out.counters = { ...base.counters, ...(out.counters || {}) };
         out.flags = { ...base.flags, ...(out.flags || {}) };
@@ -633,6 +641,9 @@ function openManagerBoard() {
         Object.keys(base.guestRanks).forEach((k) => {
           out.guestRanks[k] = { ...base.guestRanks[k], ...(out.guestRanks[k] || {}) };
         });
+        if (typeof p === "undefined") {
+          window.PROG = out;
+        }
         return out;
       }
 
@@ -658,7 +669,7 @@ function openManagerBoard() {
         if (typeof PROG.unlocks.guestFancy !== "boolean") PROG.unlocks.guestFancy = false;
         if (typeof PROG.unlocks.guestCelebrator !== "boolean") PROG.unlocks.guestCelebrator = false;
         evaluateUnlocks();
-        updateTierFromPoints();
+        refreshTierUnlocksFromPoints();
         saveProg();
       } catch (e) {
         console.error("[BC] FATAL BOOT ERROR", e);
@@ -723,13 +734,23 @@ function openManagerBoard() {
         if (t > PROG.meta.tierUnlocked) PROG.meta.tierUnlocked = t;
       }
 
-      function getPolicySeedFromProgression(enc) {
-        ensureProgMeta();
-        updateTierFromPoints();
-        const tierUnlocked = PROG.meta.tierUnlocked || 1;
-        const base = baseDifficultyFromUnlockedTier(tierUnlocked);
-        const pressure = Number(PROG.guard?.pressureLevel || 0);
+      function refreshTierUnlocksFromPoints() {
+        ensureProgShape();
+        const next = tierFromPoints(window.PROG.meta.pointsTotal);
+        if (next > window.PROG.meta.tierUnlocked) {
+          window.PROG.meta.tierUnlocked = next;
+        }
+        window.PROG.unlocks.fancy = window.PROG.meta.pointsTotal >= 5;
+        window.PROG.unlocks.celebrator = window.PROG.meta.pointsTotal >= 10;
+      }
+
+      function difficultyFromProgSpine() {
+        ensureProgShape();
+        refreshTierUnlocksFromPoints();
+        const base = baseDifficultyFromUnlockedTier(window.PROG.meta.tierUnlocked);
+        const pressure = Number(window.PROG.guard.pressureLevel || 0);
         const d = Math.max(1, Math.min(7, base + pressure));
+        window.PROG.guard.finalDifficulty = d;
         return d;
       }
 
@@ -865,7 +886,7 @@ function openManagerBoard() {
           !resetUsed;
         if (pass) PROG.meta.pointsTotal += 1;
         if (pass) PROG.meta.encountersCleared += 1;
-        if (pass) updateTierFromPoints();
+        if (pass) refreshTierUnlocksFromPoints();
 
         clampProg();
         evaluateUnlocks();
@@ -907,7 +928,7 @@ function openManagerBoard() {
         if (outcome === "clean" || outcome === "ok") {
           PROG.meta.pointsTotal = Number(PROG.meta.pointsTotal || 0) + 1;
           PROG.meta.encountersCleared = Number(PROG.meta.encountersCleared || 0) + 1;
-          updateTierFromPoints();
+          refreshTierUnlocksFromPoints();
         }
       }
 
@@ -1024,7 +1045,7 @@ function openManagerBoard() {
         if (typeof PROG.unlocks.guestFancy !== "boolean") PROG.unlocks.guestFancy = false;
         if (typeof PROG.unlocks.guestCelebrator !== "boolean") PROG.unlocks.guestCelebrator = false;
         evaluateUnlocks();
-        updateTierFromPoints();
+        refreshTierUnlocksFromPoints();
         console.log("[PROG] ensure key =", progKey());
         window.PROG = PROG;
         window.__BC_PROG__ = PROG;
@@ -1493,15 +1514,8 @@ function openManagerBoard() {
         currentStep = 0;
         if (window.PROG) {
           ensureProgMeta();
-          updateTierFromPoints();
-          const d = Math.max(
-            1,
-            Math.min(
-              7,
-              baseDifficultyFromUnlockedTier(PROG.meta.tierUnlocked) +
-              (PROG.guard?.pressureLevel || 0)
-            )
-          );
+          refreshTierUnlocksFromPoints();
+          const d = difficultyFromProgSpine();
           window.__BC_DIFFICULTY__ = {
             ...difficultyPolicy(d),
             tierUnlocked: PROG.meta.tierUnlocked,
@@ -1516,12 +1530,10 @@ function openManagerBoard() {
       }
 
       function getAllowedGuestTypesByTier(tier) {
-        evaluateUnlocks();
         const t = Number(tier) || 1;
-        const base = ["Decider", "Bargain-Smart", "Griever"];
-        if (t >= 2 && PROG.unlocks.guestFancy) base.push("Fancy");
-        if (t >= 3 && PROG.unlocks.guestCelebrator) base.push("Celebrator");
-        return base;
+        if (t <= 1) return ["Decider", "Bargain-Smart", "Griever"];
+        if (t === 2) return ["Decider", "Bargain-Smart", "Griever", "Fancy"];
+        return ["Decider", "Bargain-Smart", "Griever", "Fancy", "Celebrator"];
       }
 
       function getAllowedGuestTypes(tierOverride) {
@@ -5642,17 +5654,14 @@ function openManagerBoard() {
 
           const options = document.createElement("div");
           options.className = "option-grid";
-          const rawN = currentEncounter?.encounterNumber;
-          const n = Number.isFinite(Number(rawN))
-            ? Number(rawN)
-            : (Number.isFinite(Number(encounterIndex)) ? (Number(encounterIndex) + 1) : 1);
-          const tier = getTierFromEncounterNumber(n);
-          const allowedReads = getAllowedGuestTypes();
+          ensureProgShape();
+          refreshTierUnlocksFromPoints();
+          const tierUnlocked = window.PROG?.meta?.tierUnlocked || 1;
+          const allowedReads = getAllowedGuestTypesByTier(tierUnlocked);
           console.log("[BC][GUEST_UNLOCK]", {
             encounterIndex,
             encounterNumber: currentEncounter?.encounterNumber,
-            n,
-            tier,
+            tierUnlocked,
             allowedReads,
             allowedCount: allowedReads?.length
           });
@@ -6719,7 +6728,7 @@ function openManagerBoard() {
         const policySeed =
           sameEncounter
             ? carry?.difficulty
-            : getPolicySeedFromProgression(enc);
+            : difficultyFromProgSpine();
         enc.difficulty = enc.difficulty ?? policySeed ?? 1;
         const policy = difficultyPolicy(enc.difficulty);
         window.__BC_DIFFICULTY__ = {
