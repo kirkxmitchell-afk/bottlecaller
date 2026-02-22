@@ -1242,11 +1242,20 @@ function openManagerBoard() {
       }
 
       const guestStates = ["Decider", "Fancy", "Griever", "Celebrator", "Bargain-Smart"];
-      const GUEST_POOL_BY_TIER = {
-        1: ["Decider", "Bargain-Smart", "Celebrator"],
-        2: ["Decider", "Bargain-Smart", "Celebrator", "Fancy"],
-        3: ["Decider", "Bargain-Smart", "Celebrator", "Fancy", "Griever"],
-      };
+      const GUEST_UNLOCK_LADDER = [
+        "Decider",
+        "Bargain-Smart",
+        "Griever",
+        "Fancy",
+        "Celebrator"
+      ];
+
+      function getAllowedGuestTypesByTier(tier) {
+        const t = Number(tier);
+        if (t <= 1) return ["Decider", "Bargain-Smart", "Griever"];
+        if (t === 2) return ["Decider", "Bargain-Smart", "Griever", "Fancy"];
+        return ["Decider", "Bargain-Smart", "Griever", "Fancy", "Celebrator"];
+      }
 
       // ============================================================
       // ✅ ENCOUNTERS (from gameEntry.ts -> window.__BC_ENCOUNTERS__)
@@ -2564,6 +2573,8 @@ function openManagerBoard() {
       // ==============================
 
       function getTierFromEncounterNumber(n) {
+        n = Number(n);
+        if (!Number.isFinite(n)) return 1;
         if (n >= 1 && n <= 5) return 1;
         if (n >= 6 && n <= 12) return 2;
         return 3; // 13–20
@@ -2577,13 +2588,6 @@ function openManagerBoard() {
         if (pts >= 30) return 3;
         if (pts >= 10) return 2;
         return 1;
-      }
-
-      function resolveEffectiveTier(encounterNumber) {
-        const byEncounter = getTierFromEncounterNumber(encounterNumber);
-        const prog = loadProg();
-        const byPoints = unlockedTierFromProg(prog);
-        return Math.min(byEncounter, byPoints);
       }
 
       function getTierBounds(tier) {
@@ -2603,8 +2607,8 @@ function openManagerBoard() {
 
       function enforceGuestPoolByTier(enc) {
         const n = enc.encounterNumber ?? (encounterIndex + 1);
-        const tier = resolveEffectiveTier(n);
-        const allowed = GUEST_POOL_BY_TIER[tier] || GUEST_POOL_BY_TIER[1];
+        const tier = getTierFromEncounterNumber(n);
+        const allowed = getAllowedGuestTypesByTier(tier);
         const actual = enc.guestStateActual;
         if (allowed.includes(actual)) return enc;
 
@@ -5387,7 +5391,23 @@ function openManagerBoard() {
 
           const options = document.createElement("div");
           options.className = "option-grid";
-          guestStates.forEach(state => {
+          const rawN = currentEncounter?.encounterNumber;
+          const n = Number.isFinite(rawN)
+            ? rawN
+            : (Number.isFinite(encounterIndex) ? (encounterIndex + 1) : 1);
+          const tier = getTierFromEncounterNumber(n);
+          const allowedReads = getAllowedGuestTypesByTier(tier);
+          console.log("[GUEST_UNLOCK_DEBUG]", {
+            encounterIndex,
+            encounterNumber: currentEncounter?.encounterNumber,
+            n,
+            tier,
+            allowedReads,
+          });
+          if (currentEncounter.guestReadSelected && !allowedReads.includes(currentEncounter.guestReadSelected)) {
+            currentEncounter.guestReadSelected = "";
+          }
+          allowedReads.forEach(state => {
             const btn = document.createElement("button");
             btn.type = "button";
             btn.className = "option-btn" + (currentEncounter.guestReadSelected === state ? " selected" : "");
