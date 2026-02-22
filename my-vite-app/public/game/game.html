@@ -1242,6 +1242,11 @@ function openManagerBoard() {
       }
 
       const guestStates = ["Decider", "Fancy", "Griever", "Celebrator", "Bargain-Smart"];
+      const GUEST_POOL_BY_TIER = {
+        1: ["Decider", "Bargain-Smart", "Celebrator"],
+        2: ["Decider", "Bargain-Smart", "Celebrator", "Fancy"],
+        3: ["Decider", "Bargain-Smart", "Celebrator", "Fancy", "Griever"],
+      };
 
       // ============================================================
       // ✅ ENCOUNTERS (from gameEntry.ts -> window.__BC_ENCOUNTERS__)
@@ -1686,11 +1691,25 @@ function openManagerBoard() {
       }
 
       // --------- Tier → allowed modes ---------
-      function resolveTierForSession(sessionType) {
-        if (sessionType === "drill" && typeof DRILL !== "undefined" && DRILL && typeof DRILL.tier === "number") {
-          return DRILL.tier;
+      function clampTier(t) {
+        t = Number(t) || 1;
+        return Math.max(1, Math.min(5, t));
+      }
+
+      function resolveTierForSession(sessionType, encounterNumber) {
+        if (
+          sessionType === "drill" &&
+          typeof DRILL !== "undefined" &&
+          DRILL &&
+          typeof DRILL.tier === "number"
+        ) {
+          return clampTier(DRILL.tier);
         }
-        return 0;
+
+        const n = Number.isFinite(encounterNumber)
+          ? encounterNumber
+          : (currentEncounter?.encounterNumber ?? (encounterIndex + 1));
+        return clampTier(getTierFromEncounterNumber(n));
       }
 
       function getAllowedDrillModesByTier(tier) {
@@ -2550,6 +2569,23 @@ function openManagerBoard() {
         return 3; // 13–20
       }
 
+      function unlockedTierFromProg(prog) {
+        const pts =
+          (prog?.axes?.control || 0) +
+          (prog?.axes?.selectivity || 0) +
+          (prog?.axes?.compression || 0);
+        if (pts >= 30) return 3;
+        if (pts >= 10) return 2;
+        return 1;
+      }
+
+      function resolveEffectiveTier(encounterNumber) {
+        const byEncounter = getTierFromEncounterNumber(encounterNumber);
+        const prog = loadProg();
+        const byPoints = unlockedTierFromProg(prog);
+        return Math.min(byEncounter, byPoints);
+      }
+
       function getTierBounds(tier) {
         if (tier === 1) return { min: 1, max: 5 };
         if (tier === 2) return { min: 6, max: 12 };
@@ -2563,6 +2599,19 @@ function openManagerBoard() {
         if (!Number.isFinite(idx)) return start;
         if (idx < start || idx > end) return start;
         return idx;
+      }
+
+      function enforceGuestPoolByTier(enc) {
+        const n = enc.encounterNumber ?? (encounterIndex + 1);
+        const tier = resolveEffectiveTier(n);
+        const allowed = GUEST_POOL_BY_TIER[tier] || GUEST_POOL_BY_TIER[1];
+        const actual = enc.guestStateActual;
+        if (allowed.includes(actual)) return enc;
+
+        enc.guestStateActual = allowed[Math.floor(Math.random() * allowed.length)];
+        enc.tags = Array.isArray(enc.tags) ? enc.tags : [];
+        enc.tags.push("guest_pool_substitution");
+        return enc;
       }
 
       function tierStartIndex(tier) {
@@ -2918,16 +2967,27 @@ function openManagerBoard() {
         return Number.isFinite(n) ? n : fallback;
       }
 
+      const unlockTierKey = "bc_unlock_tier_v1";
+      const accountDifficultyKey = "bc_account_difficulty_v1";
+
+      function getMaxUnlockedTier() {
+        return Math.max(1, Math.min(5, loadInt(unlockTierKey, 1)));
+      }
+
+      function setMaxUnlockedTier(t) {
+        localStorage.setItem(unlockTierKey, String(Math.max(1, Math.min(5, Number(t) || 1))));
+      }
+
       function getAccountDifficulty() {
-        return (
+        const d =
           window.__BC_GUARD__?.finalDifficulty ??
           window.__BC_DIFFICULTY__?.d ??
-          loadInt("bc_account_difficulty", 1)
-        );
+          loadInt(accountDifficultyKey, 1);
+        return Math.max(1, Math.min(7, Number(d) || 1));
       }
 
       function saveAccountDifficulty(d) {
-        localStorage.setItem("bc_account_difficulty", String(d));
+        localStorage.setItem(accountDifficultyKey, String(Math.max(1, Math.min(7, Number(d) || 1))));
       }
 
 
@@ -3332,6 +3392,40 @@ function openManagerBoard() {
         badge.style.opacity = "0.9";
 
         stepContent.prepend(badge);
+      }
+
+      function totalProgPoints(prog) {
+        return (prog?.axes?.control || 0) + (prog?.axes?.selectivity || 0) + (prog?.axes?.compression || 0);
+      }
+
+      function tierUnlockRules() {
+        return {
+          2: { totalPoints: 6, bestStreak: 3 },
+          3: { totalPoints: 16, bestStreak: 5 },
+          4: { totalPoints: 30, bestStreak: 7 },
+          5: { totalPoints: 50, bestStreak: 10 },
+        };
+      }
+
+      function tryUnlockNextTier() {
+        const prog = loadProg();
+        const best = loadInt(bestStreakKey, 0);
+
+        const currentMax = getMaxUnlockedTier();
+        const nextTier = currentMax + 1;
+
+        const rule = tierUnlockRules()[nextTier];
+        if (!rule) return { unlocked: false };
+
+        const ok =
+          totalProgPoints(prog) >= rule.totalPoints &&
+          best >= rule.bestStreak;
+
+        if (ok) {
+          setMaxUnlockedTier(nextTier);
+          return { unlocked: true, tier: nextTier };
+        }
+        return { unlocked: false };
       }
 
       function isSessionComplete({ tier, guardState }) {
@@ -5863,9 +5957,14 @@ function openManagerBoard() {
 
           console.log("[BC] streakInfo", streakInfo);
           renderStreakBlock(stepContent, streakInfo);
+          const unlock = tryUnlockNextTier();
+          if (unlock.unlocked) {
+            console.log("[BC] Tier unlocked ✅", unlock.tier);
+          }
 
           const guardState = loadGuardState();
-          const tierNow = resolveTierForSession(sessionType);
+          const rawTier = resolveTierForSession(sessionType, currentEncounter?.encounterNumber);
+          const tierNow = Math.min(rawTier, getMaxUnlockedTier());
           const scored = scoreEncounterForGuard(currentEncounter, checks);
           guardState.last3.push(scored);
           if (guardState.last3.length > 3) guardState.last3 = guardState.last3.slice(-3);
@@ -6309,6 +6408,7 @@ function openManagerBoard() {
         // ----------------------------
         enc = enc || {};
         enc.encounterNumber = enc.encounterNumber ?? (encounterIndex + 1);
+        enc = enforceGuestPoolByTier(enc);
         enc.contextLine = enc.contextLine ?? "";
         enc.guestLine = enc.guestLine ?? "";
         enc.physicalCues = Array.isArray(enc.physicalCues) ? enc.physicalCues : [];
