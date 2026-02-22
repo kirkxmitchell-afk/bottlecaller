@@ -516,7 +516,7 @@ function openManagerBoard() {
       let drillRepTarget = 3;
       let drillRepDone = 0;
       // ---------- PROGRESSION STATE (iframe-local, per waiter + restaurant) ----------
-      let PROG = null;
+      let PROG = loadProg();
       // ---------- ENCOUNTER STATE (declare once, before any use) ----------
       let currentEncounter = null;
       let currentStep = 0;
@@ -554,23 +554,79 @@ function openManagerBoard() {
         return `bc_prog_v1_${uid}_${rid}`;
       }
 
+      // ----------------------------
+      // PROGRESSION SHAPE (LOCKED)
+      // ----------------------------
+      const UNLOCK_THRESHOLDS = {
+        fancy: 5,
+        celebrator: 10,
+      };
+
+      function makeGuestRank() {
+        return {
+          seen: 0,
+          attempts: 0,
+          readCorrect: 0,
+          modeOptimal: 0,
+          modeNeutral: 0,
+          modeDamaging: 0,
+          hookOptimal: 0,
+          hookNeutral: 0,
+          hookDamaging: 0,
+          deliveryCorrect: 0,
+          clean: 0,
+          ok: 0,
+          shaky: 0,
+          break: 0,
+        };
+      }
+
       function defaultProg() {
         return {
           v: 1,
+          meta: {
+            pointsTotal: 0,
+            encountersCleared: 0,
+            lastUpdatedMs: 0,
+          },
           axes: { control: 0, selectivity: 0, compression: 0 },
+          counters: { deciderGood: 0, browserGood: 0, analystGood: 0 },
+          flags: { resetDebt: 0 },
           unlocks: {
             authorityMode: false,
             compressedQuestions: false,
             powerMovePivot: false,
             explorationSafeHooks: false,
             singleVariableHooks: false,
+            fancy: false,
+            celebrator: false,
           },
-          flags: { resetDebt: 0 },
-          counters: { deciderGood: 0, browserGood: 0, analystGood: 0 },
           stats: {},
           drift: { vec: 0, ttl: 0 },
-          recovery: { type: null, step: 0, ttl: 0 }
+          recovery: { type: null, step: 0, ttl: 0 },
+          guestRanks: {
+            "Decider": makeGuestRank(),
+            "Bargain-Smart": makeGuestRank(),
+            "Griever": makeGuestRank(),
+            "Fancy": makeGuestRank(),
+            "Celebrator": makeGuestRank(),
+          },
         };
+      }
+
+      function ensureProgShape(p) {
+        const base = defaultProg();
+        const out = { ...base, ...(p || {}) };
+        out.meta = { ...base.meta, ...(out.meta || {}) };
+        out.axes = { ...base.axes, ...(out.axes || {}) };
+        out.counters = { ...base.counters, ...(out.counters || {}) };
+        out.flags = { ...base.flags, ...(out.flags || {}) };
+        out.unlocks = { ...base.unlocks, ...(out.unlocks || {}) };
+        out.guestRanks = { ...base.guestRanks, ...(out.guestRanks || {}) };
+        Object.keys(base.guestRanks).forEach((k) => {
+          out.guestRanks[k] = { ...base.guestRanks[k], ...(out.guestRanks[k] || {}) };
+        });
+        return out;
       }
 
       function loadProg() {
@@ -578,7 +634,8 @@ function openManagerBoard() {
         if (!key) return defaultProg();
         try {
           const raw = localStorage.getItem(key);
-          return raw ? { ...defaultProg(), ...JSON.parse(raw) } : defaultProg();
+          const parsed = raw ? JSON.parse(raw) : null;
+          return ensureProgShape(parsed);
         } catch {
           return defaultProg();
         }
@@ -587,6 +644,7 @@ function openManagerBoard() {
       function saveProg() {
         const key = progKey();
         if (!key || !PROG) return;
+        PROG.meta.lastUpdatedMs = Date.now();
         try { localStorage.setItem(key, JSON.stringify(PROG)); } catch {}
       }
 
@@ -628,11 +686,8 @@ function openManagerBoard() {
         }
 
         const pts = Number(PROG.meta.pointsTotal || 0);
-        PROG.unlocks.fancyAt = 5;
-        PROG.unlocks.celebratorAt = 10;
-        PROG.unlocks.fancyUnlocked = pts >= PROG.unlocks.fancyAt;
-        PROG.unlocks.celebratorUnlocked = pts >= PROG.unlocks.celebratorAt;
-        PROG.unlocks.summary = `pts=${pts} fancy=${PROG.unlocks.fancyUnlocked} celebrator=${PROG.unlocks.celebratorUnlocked}`;
+        PROG.unlocks.fancy = pts >= UNLOCK_THRESHOLDS.fancy;
+        PROG.unlocks.celebrator = pts >= UNLOCK_THRESHOLDS.celebrator;
       }
 
       function applyDrillPickToProg(m) {
@@ -720,15 +775,55 @@ function openManagerBoard() {
 
         PROG.meta = PROG.meta || {};
         PROG.meta.pointsTotal = Number(PROG.meta.pointsTotal || 0);
+        PROG.meta.encountersCleared = Number(PROG.meta.encountersCleared || 0);
         const pass =
           (String(m?.hookMeta?.tier || "").toLowerCase() === "right") &&
           (String(m?.modeSelected || "").trim() !== "") &&
           !resetUsed;
         if (pass) PROG.meta.pointsTotal += 1;
+        if (pass) PROG.meta.encountersCleared += 1;
 
         clampProg();
         evaluateUnlocks();
         saveProg();
+      }
+
+      function updateGuestRankFromEncounter(enc, checks, guardScore) {
+        const actual = enc?.guestStateActual;
+        if (!actual || !PROG?.guestRanks?.[actual]) return;
+
+        const gr = PROG.guestRanks[actual];
+        gr.seen += 1;
+
+        if (enc?.guestReadSelected) {
+          gr.attempts += 1;
+          if (!!checks?.guestRead) gr.readCorrect += 1;
+        }
+
+        if (checks?.modeStatus === "optimal") gr.modeOptimal += 1;
+        else if (checks?.modeStatus === "neutral") gr.modeNeutral += 1;
+        else if (checks?.modeStatus === "damaging") gr.modeDamaging += 1;
+
+        if (checks?.hookStatus === "optimal") gr.hookOptimal += 1;
+        else if (checks?.hookStatus === "neutral") gr.hookNeutral += 1;
+        else if (checks?.hookStatus === "damaging") gr.hookDamaging += 1;
+
+        if (!!checks?.deliveryCorrect) gr.deliveryCorrect += 1;
+
+        const outcome = guardScore?.outcome || enc?.__guardOutcome || "";
+        if (outcome === "clean") gr.clean += 1;
+        else if (outcome === "ok") gr.ok += 1;
+        else if (outcome === "shaky") gr.shaky += 1;
+        else if (outcome === "break") gr.break += 1;
+      }
+
+      function awardPointsFromGuardScore(scored) {
+        if (!scored || !PROG?.meta) return;
+        const outcome = scored.outcome || "";
+        if (outcome === "clean" || outcome === "ok") {
+          PROG.meta.pointsTotal = Number(PROG.meta.pointsTotal || 0) + 1;
+          PROG.meta.encountersCleared = Number(PROG.meta.encountersCleared || 0) + 1;
+        }
       }
 
       function commitReaction(result, enc, checks) {
@@ -846,7 +941,6 @@ function openManagerBoard() {
           return { ...base, PROG };
         };
 
-        syncUnlocksFromProg();
         return PROG;
       }
 
@@ -1313,74 +1407,12 @@ function openManagerBoard() {
         replayFromStage1();
       }
 
-      function unlockKey() {
-        const ctx = window.__BC_CTX__ || {};
-        const userId = ctx.userId || ctx.uid || null;
-        const restaurantId = ctx.restaurantId || null;
-        if (!userId || !restaurantId) return null;
-        return `bc_unlocks_v1_${userId}_${restaurantId}`;
-      }
-
-      function defaultUnlocks() {
-        return {
-          fancyAt: 5,
-          celebratorAt: 10,
-          unlocked: {
-            Fancy: false,
-            Celebrator: false,
-          },
-          totalPoints: 0,
-          updatedAtMs: 0,
-        };
-      }
-
-      function loadUnlocks() {
-        const key = unlockKey();
-        if (!key) return defaultUnlocks();
-        try {
-          const raw = localStorage.getItem(key);
-          return raw ? { ...defaultUnlocks(), ...JSON.parse(raw) } : defaultUnlocks();
-        } catch {
-          return defaultUnlocks();
-        }
-      }
-
-      function saveUnlocks(u) {
-        const key = unlockKey();
-        if (!key) return;
-        localStorage.setItem(key, JSON.stringify(u));
-      }
-
-      function totalProgressPoints(prog) {
-        const p = prog || loadProg();
-        const c = Number(p?.axes?.control || p?.control || 0);
-        const s = Number(p?.axes?.selectivity || p?.selectivity || 0);
-        const m = Number(p?.axes?.compression || p?.compression || 0);
-        return c + s + m;
-      }
-
       function getAllowedGuestTypes() {
-        const prog = loadProg();
-        const pts = Number(prog?.meta?.pointsTotal || 0);
+        const prog = ensureProgLoaded();
         const base = ["Decider", "Bargain-Smart", "Griever"];
-        if (pts >= 5) base.push("Fancy");
-        if (pts >= 10) base.push("Celebrator");
+        if (prog?.unlocks?.fancy) base.push("Fancy");
+        if (prog?.unlocks?.celebrator) base.push("Celebrator");
         return base;
-      }
-
-      function syncUnlocksFromProg() {
-        const prog = loadProg();
-        const points = totalProgressPoints(prog);
-
-        const u = loadUnlocks();
-        u.totalPoints = points;
-        u.unlocked = {
-          Fancy: points >= u.fancyAt,
-          Celebrator: points >= u.celebratorAt,
-        };
-        u.updatedAtMs = Date.now();
-        saveUnlocks(u);
-        return u;
       }
 
       function guardKey() {
@@ -3409,11 +3441,11 @@ function openManagerBoard() {
 
       function awardProgressionPoints(pts) {
         const prog = ensureProgLoaded();
-        prog.stats = prog.stats || {};
-        prog.stats.points = (prog.stats.points || 0) + (Number(pts) || 0);
+        prog.meta = prog.meta || {};
+        prog.meta.pointsTotal = Number(prog.meta.pointsTotal || 0) + (Number(pts) || 0);
         saveProg();
         renderProgressStatusWindow();
-        return prog.stats.points;
+        return prog.meta.pointsTotal;
       }
 
       function applyDifficultyToEncounter(enc, policy) {
@@ -4041,7 +4073,7 @@ function openManagerBoard() {
         if (nextEl) nextEl.innerText = view?.next || "—";
 
         const prog = ensureProgLoaded();
-        const points = prog?.stats?.points || 0;
+        const points = prog?.meta?.pointsTotal || 0;
         if (pointsEl) pointsEl.innerText = String(points);
       }
 
@@ -5236,8 +5268,7 @@ function openManagerBoard() {
               1,
             progress: (() => {
               const prog = loadProg();
-              const points = totalProgressPoints(prog);
-              const unlocks = syncUnlocksFromProg();
+              const points = Number(prog?.meta?.pointsTotal || 0);
               return {
                 pointsTotal: points,
                 dims: {
@@ -5246,8 +5277,8 @@ function openManagerBoard() {
                   compression: prog?.axes?.compression || prog?.compression || 0,
                 },
                 guestUnlocks: {
-                  Fancy: !!unlocks.unlocked?.Fancy,
-                  Celebrator: !!unlocks.unlocked?.Celebrator
+                  Fancy: !!prog?.unlocks?.fancy,
+                  Celebrator: !!prog?.unlocks?.celebrator
                 }
               };
             })(),
@@ -6040,11 +6071,14 @@ function openManagerBoard() {
           currentEncounter.performanceGrade = gradeObj.grade;
           renderPerformanceGradeBlock(stepContent, gradeObj);
           renderCoachLineBlock(stepContent, currentEncounter, checks);
-          const d = (window.__BC_GUARD__?.finalDifficulty ?? currentEncounter?.difficulty ?? 1);
-          const earn = pointsFromEncounter({ checks, gradeObj, difficulty: d });
-          awardProgressionPoints(earn.pts);
-          syncUnlocksFromProg();
-          console.log("[PROG] earned", earn);
+          ensureProgLoaded();
+          const scored = scoreEncounterForGuard(currentEncounter, checks);
+          awardPointsFromGuardScore(scored);
+          updateGuestRankFromEncounter(currentEncounter, checks, scored);
+          evaluateUnlocks();
+          saveProg();
+          renderProgressStatusWindow();
+          console.log("[PROG] earned", { pointsTotal: PROG?.meta?.pointsTotal || 0 });
 
           // ============================================================
           // ✅ Strength + Fix (Mastery snapshot)
@@ -6094,7 +6128,6 @@ function openManagerBoard() {
           const guardState = loadGuardState();
           const rawTier = resolveTierForSession(sessionType, currentEncounter?.encounterNumber);
           const tierNow = Math.min(rawTier, getMaxUnlockedTier());
-          const scored = scoreEncounterForGuard(currentEncounter, checks);
           guardState.last3.push(scored);
           if (guardState.last3.length > 3) guardState.last3 = guardState.last3.slice(-3);
 
