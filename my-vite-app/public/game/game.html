@@ -548,10 +548,17 @@ function openManagerBoard() {
       }
 
       function progKey() {
-        const uid = window.__BC_CTX__?.userId;
-        const rid = window.__BC_CTX__?.restaurantId;
-        if (!uid || !rid) return null;
-        return `bc_prog_v1_${uid}_${rid}`;
+        const uid =
+          window?.BC_CTX?.userId ||
+          window?.__BC_CTX__?.userId ||
+          window?.bcCtx?.userId;
+        const rid =
+          window?.BC_CTX?.restaurantId ||
+          window?.__BC_CTX__?.restaurantId ||
+          window?.bcCtx?.restaurantId;
+        if (uid && rid) return `bc_prog_v1_${uid}_${rid}`;
+        const mode = (new URLSearchParams(location.search).get("mode")) || "unknown";
+        return `bc_prog_v1_fallback_${mode}`;
       }
 
       // ----------------------------
@@ -643,6 +650,12 @@ function openManagerBoard() {
 
       // Boot PROG immediately for console/UI access
       PROG = ensureProgShape(loadProg());
+      PROG = PROG || {};
+      PROG.meta = PROG.meta || {};
+      if (!Number.isFinite(PROG.meta.pointsTotal)) PROG.meta.pointsTotal = 0;
+      PROG.unlocks = PROG.unlocks || {};
+      if (typeof PROG.unlocks.guestFancy !== "boolean") PROG.unlocks.guestFancy = false;
+      if (typeof PROG.unlocks.guestCelebrator !== "boolean") PROG.unlocks.guestCelebrator = false;
       evaluateUnlocks();
       saveProg();
 
@@ -672,6 +685,7 @@ function openManagerBoard() {
         PROG.unlocks = PROG.unlocks || {};
         PROG.counters = PROG.counters || {};
         PROG.meta = PROG.meta || {};
+        if (!Number.isFinite(PROG.meta.pointsTotal)) PROG.meta.pointsTotal = 0;
 
         if (!PROG.unlocks.authorityMode) {
           const dec = PROG.counters.deciderGood || 0;
@@ -698,8 +712,13 @@ function openManagerBoard() {
         }
 
         const pts = Number(PROG.meta.pointsTotal || 0);
-        PROG.unlocks.fancy = pts >= UNLOCK_THRESHOLDS.fancy;
-        PROG.unlocks.celebrator = pts >= UNLOCK_THRESHOLDS.celebrator;
+        const fancyUnlocked = pts >= UNLOCK_THRESHOLDS.fancy;
+        const celebratorUnlocked = pts >= UNLOCK_THRESHOLDS.celebrator;
+        PROG.unlocks.fancy = fancyUnlocked;
+        PROG.unlocks.celebrator = celebratorUnlocked;
+        PROG.unlocks.guestFancy = fancyUnlocked;
+        PROG.unlocks.guestCelebrator = celebratorUnlocked;
+        return PROG.unlocks;
       }
 
       function applyDrillPickToProg(m) {
@@ -934,6 +953,8 @@ function openManagerBoard() {
         PROG.axes = PROG.axes || { control: 0, selectivity: 0, compression: 0 };
         PROG.flags = PROG.flags || { resetDebt: 0 };
         PROG.unlocks = PROG.unlocks || {};
+        if (typeof PROG.unlocks.guestFancy !== "boolean") PROG.unlocks.guestFancy = false;
+        if (typeof PROG.unlocks.guestCelebrator !== "boolean") PROG.unlocks.guestCelebrator = false;
         PROG.counters = PROG.counters || {};
         PROG.drift = PROG.drift || { vec: 0, ttl: 0 };
         PROG.recovery = PROG.recovery || { type: null, step: 0, ttl: 0 };
@@ -944,6 +965,8 @@ function openManagerBoard() {
         }
 
         PROG = ensureProgShape(PROG);
+        if (typeof PROG.unlocks.guestFancy !== "boolean") PROG.unlocks.guestFancy = false;
+        if (typeof PROG.unlocks.guestCelebrator !== "boolean") PROG.unlocks.guestCelebrator = false;
         evaluateUnlocks();
         console.log("[PROG] ensure key =", progKey());
         window.PROG = PROG;
@@ -1425,12 +1448,17 @@ function openManagerBoard() {
         replayFromStage1();
       }
 
-      function getAllowedGuestTypes() {
-        const prog = ensureProgLoaded();
+      function getAllowedGuestTypesByTier(tier) {
+        evaluateUnlocks();
+        const t = Number(tier) || 1;
         const base = ["Decider", "Bargain-Smart", "Griever"];
-        if (prog?.unlocks?.fancy) base.push("Fancy");
-        if (prog?.unlocks?.celebrator) base.push("Celebrator");
+        if (t >= 2 && PROG.unlocks.guestFancy) base.push("Fancy");
+        if (t >= 3 && PROG.unlocks.guestCelebrator) base.push("Celebrator");
         return base;
+      }
+
+      function getAllowedGuestTypes(tierOverride) {
+        return getAllowedGuestTypesByTier(tierOverride ?? 1);
       }
 
       function guardKey() {
