@@ -648,16 +648,27 @@ function openManagerBoard() {
         }
       }
 
-      // Boot PROG immediately for console/UI access
-      PROG = ensureProgShape(loadProg());
-      PROG = PROG || {};
-      PROG.meta = PROG.meta || {};
-      if (!Number.isFinite(PROG.meta.pointsTotal)) PROG.meta.pointsTotal = 0;
-      PROG.unlocks = PROG.unlocks || {};
-      if (typeof PROG.unlocks.guestFancy !== "boolean") PROG.unlocks.guestFancy = false;
-      if (typeof PROG.unlocks.guestCelebrator !== "boolean") PROG.unlocks.guestCelebrator = false;
-      evaluateUnlocks();
-      saveProg();
+      // Boot PROG immediately for console/UI access (guarded)
+      try {
+        PROG = ensureProgShape(loadProg());
+        PROG = PROG || {};
+        PROG.meta = PROG.meta || {};
+        if (!Number.isFinite(PROG.meta.pointsTotal)) PROG.meta.pointsTotal = 0;
+        PROG.unlocks = PROG.unlocks || {};
+        if (typeof PROG.unlocks.guestFancy !== "boolean") PROG.unlocks.guestFancy = false;
+        if (typeof PROG.unlocks.guestCelebrator !== "boolean") PROG.unlocks.guestCelebrator = false;
+        evaluateUnlocks();
+        saveProg();
+      } catch (e) {
+        console.error("[BC] FATAL BOOT ERROR", e);
+        document.body.innerHTML = `
+          <div style="padding:16px;font-family:system-ui">
+            <h2>BottleCaller boot error</h2>
+            <pre>${String(e && (e.stack || e.message || e))}</pre>
+          </div>
+        `;
+        PROG = defaultProg();
+      }
 
       // expose for console + UI
       window.PROG = PROG;
