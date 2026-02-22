@@ -601,6 +601,7 @@ function openManagerBoard() {
       function evaluateUnlocks() {
         PROG.unlocks = PROG.unlocks || {};
         PROG.counters = PROG.counters || {};
+        PROG.meta = PROG.meta || {};
 
         if (!PROG.unlocks.authorityMode) {
           const dec = PROG.counters.deciderGood || 0;
@@ -625,6 +626,13 @@ function openManagerBoard() {
         if (!PROG.unlocks.singleVariableHooks) {
           PROG.unlocks.singleVariableHooks = PROG.axes.compression >= 4;
         }
+
+        const pts = Number(PROG.meta.pointsTotal || 0);
+        PROG.unlocks.fancyAt = 5;
+        PROG.unlocks.celebratorAt = 10;
+        PROG.unlocks.fancyUnlocked = pts >= PROG.unlocks.fancyAt;
+        PROG.unlocks.celebratorUnlocked = pts >= PROG.unlocks.celebratorAt;
+        PROG.unlocks.summary = `pts=${pts} fancy=${PROG.unlocks.fancyUnlocked} celebrator=${PROG.unlocks.celebratorUnlocked}`;
       }
 
       function applyDrillPickToProg(m) {
@@ -709,6 +717,14 @@ function openManagerBoard() {
         PROG.flags = PROG.flags || {};
         PROG.flags.resetDebt = PROG.flags.resetDebt || 0;
         if (resetUsed) PROG.flags.resetDebt += 1;
+
+        PROG.meta = PROG.meta || {};
+        PROG.meta.pointsTotal = Number(PROG.meta.pointsTotal || 0);
+        const pass =
+          (String(m?.hookMeta?.tier || "").toLowerCase() === "right") &&
+          (String(m?.modeSelected || "").trim() !== "") &&
+          !resetUsed;
+        if (pass) PROG.meta.pointsTotal += 1;
 
         clampProg();
         evaluateUnlocks();
@@ -1345,11 +1361,11 @@ function openManagerBoard() {
 
       function getAllowedGuestTypes() {
         const prog = loadProg();
-        const points = totalProgressPoints(prog);
-        const allowed = ["Decider", "Bargain-Smart", "Griever"];
-        if (points >= 5) allowed.push("Fancy");
-        if (points >= 10) allowed.push("Celebrator");
-        return allowed;
+        const pts = Number(prog?.meta?.pointsTotal || 0);
+        const base = ["Decider", "Bargain-Smart", "Griever"];
+        if (pts >= 5) base.push("Fancy");
+        if (pts >= 10) base.push("Celebrator");
+        return base;
       }
 
       function syncUnlocksFromProg() {
