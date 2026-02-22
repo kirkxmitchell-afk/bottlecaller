@@ -1257,6 +1257,18 @@ function openManagerBoard() {
         return ["Decider", "Bargain-Smart", "Griever", "Fancy", "Celebrator"];
       }
 
+      function resolveAllowedGuestTypes(encounter) {
+        const n = encounter?.encounterNumber ?? 1;
+        const tier = getTierFromEncounterNumber(n);
+        return getAllowedGuestTypesByTier(tier);
+      }
+
+      function resolveSafeGuestType(encounter) {
+        const allowed = resolveAllowedGuestTypes(encounter);
+        const actual = canonicalGuestType(encounter?.guestStateActual);
+        return allowed.includes(actual) ? actual : allowed[0];
+      }
+
       // ============================================================
       // ✅ ENCOUNTERS (from gameEntry.ts -> window.__BC_ENCOUNTERS__)
       // ============================================================
@@ -5213,10 +5225,13 @@ function openManagerBoard() {
         const w = wine || { name: "This bottle", varietal: "" };
         const name = w.name || "This bottle";
         const d = difficultyOf(encounter);
+        const allowed = resolveAllowedGuestTypes(encounter);
         const g = canonicalGuestType(encounter?.guestStateActual);
+        const safeGuest = allowed.includes(g) ? g : allowed[0];
+        if (safeGuest !== g) console.warn("[BC] guest type not unlocked yet:", g);
         const strict = hookStrictnessFromDifficulty(d);
 
-        if (g === "browser") {
+        if (safeGuest === "browser") {
           const leadLine = `If you want something easy that won’t miss tonight, ${name} is a great call.`;
           const reflectLine = `Quick one — are you leaning lighter and fresh, or richer and smooth?`;
           const holdLine = `${name} is the right bottle for the table.`;
@@ -5227,7 +5242,7 @@ function openManagerBoard() {
           ];
         }
 
-        if (g === "analyst") {
+        if (safeGuest === "analyst") {
           const leadLine = `Clean pick: ${name}. Bright structure, dry finish — no surprises.`;
           const reflectLine = `Do you want higher acidity, or more body?`;
           const holdLine = `This is our best value bottle.`;
@@ -5238,7 +5253,7 @@ function openManagerBoard() {
           ];
         }
 
-        if (g === "celebrator") {
+        if (safeGuest === "celebrator") {
           const leadLine = `If it’s a celebration table, ${name} feels like an upgrade without getting heavy.`;
           const reflectLine = `Are we celebrating fresh and bright, or rich and plush tonight?`;
           const holdLine = `This is our premium bottle.`;
@@ -5249,7 +5264,7 @@ function openManagerBoard() {
           ];
         }
 
-        if (g === "make_it_easy") {
+        if (safeGuest === "make_it_easy") {
           return [
             { id: "hA", text: `Fast, safe pick: ${name}.`, tier: "right", hookType: "guest_centered_framing" },
             { id: "hB", text: `Want lighter and crisp, or richer and smooth?`, tier: "slightly", hookType: "diagnostic_question" },
@@ -5257,7 +5272,7 @@ function openManagerBoard() {
           ];
         }
 
-        if (g === "budget_guard") {
+        if (safeGuest === "budget_guard") {
           return [
             { id: "hA", text: `If you want great value without sacrificing quality, ${name} is the safest bet.`, tier: "right", hookType: "guest_centered_framing" },
             { id: "hB", text: `Are we keeping it under control, or are you open to one step up?`, tier: "slightly", hookType: "diagnostic_question" },
@@ -5265,7 +5280,7 @@ function openManagerBoard() {
           ];
         }
 
-        if (g === "alpha") {
+        if (safeGuest === "alpha") {
           return [
             { id: "hA", text: `If you want the decisive call: ${name}.`, tier: "right", hookType: "guest_centered_framing" },
             { id: "hB", text: `Do you want precision and dryness, or more weight and richness?`, tier: "slightly", hookType: "diagnostic_question" },
@@ -6190,7 +6205,7 @@ function openManagerBoard() {
             enc?.policy ||
             window.__BC_DIFFICULTY__ ||
             difficultyPolicy(enc?.difficulty ?? 1);
-          const g = canonicalGuestType(enc?.guestStateActual);
+          const g = resolveSafeGuestType(enc);
           const map = {
             celebrator: { pivotType: "celebrator_to_alpha", next: "alpha" },
             alpha: { pivotType: "alpha_to_analyst", next: "analyst" },
@@ -6257,7 +6272,7 @@ function openManagerBoard() {
             { id: "anchor", label: "Anchor", line: `For your table, I’d go with ${enc?.wineSelected?.name || "this bottle"} because it hits comfort + balance.` },
           ];
 
-          const g = canonicalGuestType(enc?.guestStateActual);
+          const g = resolveSafeGuestType(enc);
           const best =
             (g === "alpha") ? "anchor" :
             (g === "analyst") ? "narrow" :
