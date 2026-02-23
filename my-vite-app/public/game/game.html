@@ -559,7 +559,12 @@ function openManagerBoard() {
       }
 
       function tryGetProgressionSpine() {
-        try { return getProgressionSpine(); } catch { return null; }
+        const host =
+          (window.top && window.top.BottleCaller) ? window.top :
+          (window.parent && window.parent.BottleCaller) ? window.parent :
+          window;
+
+        return host?.BottleCaller?.progression || null;
       }
 
       function progKey() {
@@ -1589,16 +1594,16 @@ function openManagerBoard() {
         return ["Decider", "Bargain-Smart", "Griever", "Fancy", "Celebrator"];
       };
 
-      window.getAllowedGuestTypes = window.getAllowedGuestTypes || function getAllowedGuestTypes() {
+      window.getAllowedGuestTypes = function getAllowedGuestTypes() {
         const spine = tryGetProgressionSpine();
         if (spine?.selectors?.guestTypes) return spine.selectors.guestTypes();
-        const tier = window.PROG?.meta?.tierUnlocked || 1;
-        return window.getAllowedGuestTypesByTier(tier);
+        throw new Error("Progression spine unavailable: guestTypes cannot be derived from fallback state.");
       };
 
-      window.getTierUnlocked = window.getTierUnlocked || function getTierUnlocked() {
-        const t = Number(window.PROG?.meta?.tierUnlocked || 1);
-        return Number.isFinite(t) && t >= 1 ? t : 1;
+      window.getTierUnlocked = function getTierUnlocked() {
+        const spine = tryGetProgressionSpine();
+        if (spine?.selectors?.tier) return spine.selectors.tier();
+        throw new Error("Progression spine unavailable: tier cannot be derived from fallback state.");
       };
 
       function ensureProgKeyAfterCtx() {
@@ -5754,10 +5759,9 @@ function openManagerBoard() {
 
           const options = document.createElement("div");
           options.className = "option-grid";
-          ensureProgShape();
-          refreshTierUnlocksFromPoints();
-          const tierUnlocked = window.getTierUnlocked ? window.getTierUnlocked() : (window.PROG?.meta?.tierUnlocked || 1);
-          const allowedReads = window.getAllowedGuestTypes();
+          const spine = getProgressionSpine();
+          const tierUnlocked = spine.selectors.tier();
+          const allowedReads = spine.selectors.guestTypes();
           console.log("[BC][GUEST_UNLOCK]", {
             encounterIndex,
             encounterNumber: currentEncounter?.encounterNumber,
@@ -5775,6 +5779,9 @@ function openManagerBoard() {
             btn.innerText = state;
             bindInput(btn, () => {
               currentEncounter.guestReadSelected = state;
+              try {
+                getProgressionSpine().actions.setSessionSelection({ guestType: state });
+              } catch {}
               renderEncounterStep();
             });
             options.appendChild(btn);
