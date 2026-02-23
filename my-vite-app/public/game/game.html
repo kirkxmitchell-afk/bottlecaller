@@ -567,6 +567,79 @@ function openManagerBoard() {
         return host?.BottleCaller?.progression || null;
       }
 
+      // ===============================
+      // BC PROGRESS HUD + TOAST (v1)
+      // ===============================
+      function bcGetSpineHost() {
+        try { return getProgressionSpine(); } catch { return null; }
+      }
+
+      function bcSnapshot() {
+        const spine = bcGetSpineHost();
+        let points = null, tier = null, guests = null;
+
+        try { points = spine?.selectors?.points?.(); } catch {}
+        try { tier = spine?.selectors?.tier?.(); } catch {}
+        try { guests = spine?.selectors?.guestTypes?.(); } catch {}
+
+        const d = window.__BC_DIFFICULTY__ || null;
+
+        const encNum = (typeof currentEncounter !== "undefined" && currentEncounter?.encounterNumber)
+          ? currentEncounter.encounterNumber
+          : (typeof encounterIndex !== "undefined" ? (encounterIndex + 1) : null);
+
+        const step = (typeof currentStep !== "undefined") ? currentStep : null;
+
+        return {
+          points,
+          tier,
+          guests,
+          difficulty: d ? { d: d.d, pressure: d.pressure } : null,
+          encounterNumber: encNum,
+          step
+        };
+      }
+
+      function bcEnsureHud() {
+        let hud = document.getElementById("bcProgressHud");
+        if (!hud) {
+          hud = document.createElement("div");
+          hud.id = "bcProgressHud";
+          hud.style.cssText =
+            "position:fixed;top:10px;right:10px;z-index:99999;max-width:420px;" +
+            "padding:10px;border:1px solid #333;background:#111;color:#ddd;font:12px/1.35 monospace;opacity:0.95";
+          document.body.appendChild(hud);
+        }
+        return hud;
+      }
+
+      function bcRenderHud(label = "") {
+        const s = bcSnapshot();
+        const hud = bcEnsureHud();
+        hud.textContent =
+          `BottleCaller Status ${label ? "— " + label : ""}\n` +
+          `enc=${s.encounterNumber} step=${s.step}\n` +
+          `points=${s.points} tier=${s.tier}\n` +
+          `guests=${Array.isArray(s.guests) ? s.guests.join(",") : s.guests}\n` +
+          `difficulty=${s.difficulty ? `d=${s.difficulty.d} pressure=${s.difficulty.pressure}` : "none"}`;
+        return s;
+      }
+
+      function bcToast(msg) {
+        let t = document.getElementById("bcToast");
+        if (!t) {
+          t = document.createElement("div");
+          t.id = "bcToast";
+          t.style.cssText =
+            "position:fixed;bottom:10px;left:10px;z-index:99999;max-width:520px;" +
+            "padding:10px 12px;border:1px solid #333;background:#111;color:#ddd;font:13px/1.35 system-ui;opacity:0.98";
+          document.body.appendChild(t);
+        }
+        t.textContent = msg;
+        clearTimeout(window.__bcToastT);
+        window.__bcToastT = setTimeout(() => { try { t.remove(); } catch {} }, 2500);
+      }
+
       function progKey() {
         const uid =
           window?.BC_CTX?.userId ||
@@ -1579,20 +1652,23 @@ function openManagerBoard() {
         replayFromStage1();
       }
 
-      async function resetRunToEncounter1() {
-        try {
-          getProgressionSpine().actions.resetEncounterFlow();
-        } catch (e) {
-          console.warn("[PROG] resetEncounterFlow failed", e);
-        }
+      async function startFromEncounter1_GRIND() {
+        const before = bcRenderHud("before grind reset");
 
-        try {
-          await startEncounterNumber(1);
-        } catch (e) {
-          console.warn("[BC] startEncounterNumber(1) failed", e);
-        }
+        try { getProgressionSpine().actions.resetEncounterFlow(); } catch {}
+        try { getProgressionSpine().actions.resetRunScoring(); } catch {}
 
-        try { renderProgressStatusWindow(); } catch {}
+        encounterIndex = 0;
+        currentStep = 0;
+        try { saveEncounterIndex(encounterIndex); } catch {}
+
+        await startEncounter();
+
+        const after = bcRenderHud("after grind reset");
+        bcToast(
+          `Restarted at Encounter 1 (GRIND).\n` +
+          `Progress kept: points ${before.points} → ${after.points}, tier ${before.tier} → ${after.tier}.`
+        );
       }
 
       // ✅ define once, even across hot reloads / injected patches
@@ -6345,6 +6421,8 @@ function openManagerBoard() {
             console.warn("[PROG] applyEncounterResult failed", e);
           }
           updateGuestRankFromEncounter(currentEncounter, checks, scored);
+          bcRenderHud("encounter resolved");
+          bcToast("Encounter resolved");
           renderProgressStatusWindow();
           console.log("[PROG] earned", { pointsTotal: getProgressionSpine().selectors.points() });
 
@@ -6775,6 +6853,8 @@ function openManagerBoard() {
           return;
         }
 
+        bcRenderHud("start");
+
         try {
           const spine = getProgressionSpine();
           const [minE, maxE] = spine.selectors.encounterRange();
@@ -7056,20 +7136,7 @@ function openManagerBoard() {
       }
 
       async function resetRunsOnly() {
-        try {
-          getProgressionSpine().actions.resetEncounterFlow();
-        } catch (e) {
-          console.warn("[PROG] resetEncounterFlow failed", e);
-        }
-
-        encounterIndex = 0;
-        try { saveEncounterIndex(encounterIndex); } catch {}
-
-        try {
-          await startEncounter();
-        } catch (e) {
-          console.warn("[BC] startEncounter failed after resetRunsOnly", e);
-        }
+        await startFromEncounter1_GRIND();
       }
 
       function resetWinesOnly() {
@@ -7303,9 +7370,9 @@ function openManagerBoard() {
           startDrill(3);
         });
 
-        bindInput(btnResetRuns, () => resetRunsOnly());
+        bindInput(btnResetRuns, () => startFromEncounter1_GRIND());
         bindInput(btnResetWines, () => resetWinesOnly());
-        bindInput(btnResetProgress, () => { resetRunToEncounter1(); });
+        bindInput(btnResetProgress, () => startFromEncounter1_GRIND());
 
         const addWineBtn = document.getElementById(ids.addWineBtn);
         bindInput(addWineBtn, () => addWineFromForm());

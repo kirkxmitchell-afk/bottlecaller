@@ -60,6 +60,10 @@ export function createProgressionStore(storage = window.localStorage) {
         guestTypeSelected: "Decider",
         runEase: 1.0,
         runEaseRemaining: 0
+      },
+      run: {
+        runId: 0,
+        scoredThisRun: {}
       }
     };
   }
@@ -86,6 +90,10 @@ export function createProgressionStore(storage = window.localStorage) {
     s.session.guestTypeSelected = typeof s.session.guestTypeSelected === "string" ? s.session.guestTypeSelected : "Decider";
     if (!Number.isFinite(s.session.runEase)) s.session.runEase = 1.0;
     if (!Number.isFinite(s.session.runEaseRemaining)) s.session.runEaseRemaining = 0;
+
+    s.run = s.run || {};
+    s.run.runId = Number.isFinite(s.run.runId) ? s.run.runId : 0;
+    s.run.scoredThisRun = s.run.scoredThisRun && typeof s.run.scoredThisRun === "object" ? s.run.scoredThisRun : {};
 
     // clamp to allowed by tier/points
     s.session.currentEncounterId = clampEncounterByTier(s.session.currentEncounterId, s.points);
@@ -126,6 +134,14 @@ export function createProgressionStore(storage = window.localStorage) {
     emit();
   }
 
+  function resetRunScoring() {
+    state.run = state.run || {};
+    state.run.scoredThisRun = {};
+    state.run.runId = (state.run.runId || 0) + 1;
+    save();
+    emit();
+  }
+
   function setSessionSelection({ encounterId, mode, guestType }) {
     if (encounterId != null) {
       state.session.currentEncounterId = clampEncounterByTier(encounterId, state.points);
@@ -145,6 +161,9 @@ export function createProgressionStore(storage = window.localStorage) {
   function applyEncounterResult({ encounterId, success, pointEligible }) {
     const now = Date.now();
     state.difficulty.lastUpdatedAt = now;
+    state.run = state.run || {};
+    state.run.scoredThisRun = state.run.scoredThisRun || {};
+    const encId = String(encounterId ?? "");
 
     if (success) {
       state.history.successCount += 1;
@@ -153,8 +172,9 @@ export function createProgressionStore(storage = window.localStorage) {
         state.history.completedEncounterIds.push(encounterId);
       }
 
-      if (pointEligible) {
+      if (pointEligible && !state.run.scoredThisRun[encId]) {
         state.points += 1; // points drive tier unlocks
+        state.run.scoredThisRun[encId] = true;
       }
 
       // boring difficulty update (don’t tune yet)
@@ -200,7 +220,7 @@ export function createProgressionStore(storage = window.localStorage) {
           return tier === 1 ? [1, 5] : tier === 2 ? [1, 12] : [1, 20];
         }
       },
-      actions: { resetEncounterFlow, setSessionSelection, applyEncounterResult }
+      actions: { resetEncounterFlow, resetRunScoring, setSessionSelection, applyEncounterResult }
     };
   }
 
