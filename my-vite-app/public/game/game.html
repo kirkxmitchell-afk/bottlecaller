@@ -1579,6 +1579,22 @@ function openManagerBoard() {
         replayFromStage1();
       }
 
+      async function resetRunToEncounter1() {
+        try {
+          getProgressionSpine().actions.resetEncounterFlow();
+        } catch (e) {
+          console.warn("[PROG] resetEncounterFlow failed", e);
+        }
+
+        try {
+          await startEncounterNumber(1);
+        } catch (e) {
+          console.warn("[BC] startEncounterNumber(1) failed", e);
+        }
+
+        try { renderProgressStatusWindow(); } catch {}
+      }
+
       // ✅ define once, even across hot reloads / injected patches
       window.getAllowedGuestTypesByTier = window.getAllowedGuestTypesByTier || function getAllowedGuestTypesByTier(tier) {
         const t = Number(tier);
@@ -6751,6 +6767,14 @@ function openManagerBoard() {
           return;
         }
 
+        try {
+          const spine = getProgressionSpine();
+          const [minE, maxE] = spine.selectors.encounterRange();
+          const encounterNumber = encounterIndex + 1;
+          if (encounterNumber < minE) encounterIndex = minE - 1;
+          if (encounterNumber > maxE) encounterIndex = maxE - 1;
+        } catch {}
+
         // ----------------------------
         // Index rules (progression)
         // ----------------------------
@@ -6943,6 +6967,14 @@ function openManagerBoard() {
 
         currentStep = 0;
         renderEncounterStep();
+      }
+
+      async function startEncounterNumber(n) {
+        const idx = Math.max(1, Number(n || 1)) - 1;
+        encounterIndex = idx;
+        try { currentStep = 1; } catch {}
+        try { currentEncounter = null; } catch {}
+        return await startEncounter();
       }
 
       function renderHistory() {
@@ -7266,7 +7298,7 @@ function openManagerBoard() {
 
         bindInput(btnResetRuns, () => resetRunsOnly());
         bindInput(btnResetWines, () => resetWinesOnly());
-        bindInput(btnResetProgress, () => resetProgressToStart());
+        bindInput(btnResetProgress, () => { resetRunToEncounter1(); });
 
         const addWineBtn = document.getElementById(ids.addWineBtn);
         bindInput(addWineBtn, () => addWineFromForm());
