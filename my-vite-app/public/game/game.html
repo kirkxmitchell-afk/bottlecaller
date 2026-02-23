@@ -692,7 +692,9 @@ function openManagerBoard() {
       window.saveProg = saveProg;
       window.computeTierUnlocked = tierFromPoints;
       window.evaluateUnlocks = evaluateUnlocks;
-      window.getAllowedGuestTypesByTier = getAllowedGuestTypesByTier;
+      if (!window.getAllowedGuestTypesByTier) {
+        window.getAllowedGuestTypesByTier = getAllowedGuestTypesByTier;
+      }
       window.getAllowedGuestTypes = getAllowedGuestTypes;
 
       function saveProg() {
@@ -1070,7 +1072,9 @@ function openManagerBoard() {
       window.saveProg = saveProg;
       window.computeTierUnlocked = tierFromPoints;
       window.evaluateUnlocks = evaluateUnlocks;
-      window.getAllowedGuestTypesByTier = getAllowedGuestTypesByTier;
+      if (!window.getAllowedGuestTypesByTier) {
+        window.getAllowedGuestTypesByTier = getAllowedGuestTypesByTier;
+      }
       window.getAllowedGuestTypes = getAllowedGuestTypes;
 
         const prev = window.__BC_DEBUG__;
