@@ -692,10 +692,7 @@ function openManagerBoard() {
       window.saveProg = saveProg;
       window.computeTierUnlocked = tierFromPoints;
       window.evaluateUnlocks = evaluateUnlocks;
-      if (!window.getAllowedGuestTypesByTier) {
-        window.getAllowedGuestTypesByTier = getAllowedGuestTypesByTier;
-      }
-      window.getAllowedGuestTypes = getAllowedGuestTypes;
+      // getAllowedGuestTypes* are defined on window directly (idempotent)
       window.ensureProgKeyAfterCtx = ensureProgKeyAfterCtx;
 
       function saveProg() {
@@ -1073,10 +1070,7 @@ function openManagerBoard() {
       window.saveProg = saveProg;
       window.computeTierUnlocked = tierFromPoints;
       window.evaluateUnlocks = evaluateUnlocks;
-      if (!window.getAllowedGuestTypesByTier) {
-        window.getAllowedGuestTypesByTier = getAllowedGuestTypesByTier;
-      }
-      window.getAllowedGuestTypes = getAllowedGuestTypes;
+      // getAllowedGuestTypes* are defined on window directly (idempotent)
       window.ensureProgKeyAfterCtx = ensureProgKeyAfterCtx;
 
         const prev = window.__BC_DEBUG__;
@@ -1499,7 +1493,7 @@ function openManagerBoard() {
       const guestStates = ["Decider", "Fancy", "Griever", "Celebrator", "Bargain-Smart"];
 
       function resolveAllowedGuestTypes(encounter) {
-        return getAllowedGuestTypes();
+        return window.getAllowedGuestTypes();
       }
 
       function resolveSafeGuestType(encounter) {
@@ -1554,33 +1548,46 @@ function openManagerBoard() {
         replayFromStage1();
       }
 
-      function getAllowedGuestTypesByTier(tier) {
-        const t = Number(tier) || 1;
+      // ✅ define once, even across hot reloads / injected patches
+      window.getAllowedGuestTypesByTier = window.getAllowedGuestTypesByTier || function getAllowedGuestTypesByTier(tier) {
+        const t = Number(tier);
         if (t <= 1) return ["Decider", "Bargain-Smart", "Griever"];
         if (t === 2) return ["Decider", "Bargain-Smart", "Griever", "Fancy"];
         return ["Decider", "Bargain-Smart", "Griever", "Fancy", "Celebrator"];
-      }
+      };
 
-      function getAllowedGuestTypes(tierOverride) {
-        return getAllowedGuestTypesByTier(tierOverride ?? 1);
-      }
+      window.getAllowedGuestTypes = window.getAllowedGuestTypes || function getAllowedGuestTypes() {
+        const tier = window.PROG?.meta?.tierUnlocked || 1;
+        return window.getAllowedGuestTypesByTier(tier);
+      };
 
-      function ensureProgKeyAfterCtx() {
-        const realKey = progKey();
-        if (!realKey) return;
-        const fallbackKey = `bc_prog_v1_fallback_${(new URLSearchParams(location.search).get("mode")) || "unknown"}`;
-        if (localStorage.getItem(fallbackKey) && !localStorage.getItem(realKey)) {
-          try {
-            localStorage.setItem(realKey, localStorage.getItem(fallbackKey));
-            console.log("[PROG] migrated fallback -> real key", { fallbackKey, realKey });
-          } catch (e) {
-            console.warn("[PROG] migrate failed", e);
-          }
+      window.ensureProgKeyAfterCtx = window.ensureProgKeyAfterCtx || function ensureProgKeyAfterCtx() {
+        const uid =
+          window?.BC_CTX?.userId ||
+          window?.__BC_CTX__?.userId ||
+          window?.bcCtx?.userId;
+        const rid =
+          window?.BC_CTX?.restaurantId ||
+          window?.__BC_CTX__?.restaurantId ||
+          window?.bcCtx?.restaurantId;
+
+        if (!uid || !rid) {
+          console.warn("[PROG] ctx missing -> staying on fallback key");
+          return;
         }
+
+        const realKey = `bc_prog_v1_${uid}_${rid}`;
+        const mode = (new URLSearchParams(location.search).get("mode")) || "unknown";
+        const fallbackKey = `bc_prog_v1_fallback_${mode}`;
+
+        if (localStorage.getItem(fallbackKey) && !localStorage.getItem(realKey)) {
+          localStorage.setItem(realKey, localStorage.getItem(fallbackKey));
+          console.log("[PROG] migrated fallback -> real key", { fallbackKey, realKey });
+        }
+
         window.PROG = loadProg();
-        ensureProgMeta();
-        console.log("[PROG] loaded under real key", { key: realKey, meta: window.PROG?.meta });
-      }
+        console.log("[PROG] active key", realKey, "points:", window.PROG?.meta?.pointsTotal);
+      };
 
       function guardKey() {
         const uid = window.__BC_CTX__?.userId || userId || "anon";
@@ -2105,7 +2112,7 @@ function openManagerBoard() {
 
         console.log("[BC] bc_ctx applied ✅", window.__BC_CTX__);
         ensureProgLoaded();
-        ensureProgKeyAfterCtx();
+        window.ensureProgKeyAfterCtx?.();
         try {
           window.__BC_ENSURE_PROG__?.();
           console.log("[PROG] loaded after ctx ✅", window.PROG?.axes, "key:", (window.__BC_CTX__?.userId && window.__BC_CTX__?.restaurantId) ? `bc_prog_v1_${window.__BC_CTX__.userId}_${window.__BC_CTX__.restaurantId}` : null);
@@ -2890,7 +2897,7 @@ function openManagerBoard() {
       function enforceGuestPoolByTier(enc) {
         const n = enc.encounterNumber ?? (encounterIndex + 1);
         const tier = getTierFromEncounterNumber(n);
-        const allowed = getAllowedGuestTypesByTier(tier);
+        const allowed = window.getAllowedGuestTypesByTier(tier);
         const actual = enc.guestStateActual;
         if (allowed.includes(actual)) return enc;
 
@@ -5700,7 +5707,7 @@ function openManagerBoard() {
           ensureProgShape();
           refreshTierUnlocksFromPoints();
           const tierUnlocked = window.PROG?.meta?.tierUnlocked || 1;
-          const allowedReads = getAllowedGuestTypesByTier(tierUnlocked);
+          const allowedReads = window.getAllowedGuestTypesByTier(tierUnlocked);
           console.log("[BC][GUEST_UNLOCK]", {
             encounterIndex,
             encounterNumber: currentEncounter?.encounterNumber,
