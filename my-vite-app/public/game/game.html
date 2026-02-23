@@ -1561,33 +1561,38 @@ function openManagerBoard() {
         return window.getAllowedGuestTypesByTier(tier);
       };
 
-      window.ensureProgKeyAfterCtx = window.ensureProgKeyAfterCtx || function ensureProgKeyAfterCtx() {
-        const uid =
-          window?.BC_CTX?.userId ||
-          window?.__BC_CTX__?.userId ||
-          window?.bcCtx?.userId;
-        const rid =
-          window?.BC_CTX?.restaurantId ||
-          window?.__BC_CTX__?.restaurantId ||
-          window?.bcCtx?.restaurantId;
+      function ensureProgKeyAfterCtx() {
+        try {
+          const uid = window.__BC_CTX__?.userId;
+          const rid = window.__BC_CTX__?.restaurantId;
 
-        if (!uid || !rid) {
-          console.warn("[PROG] ctx missing -> staying on fallback key");
-          return;
+          if (!uid || !rid) return { ok: true, migrated: false, reason: "no_ctx" };
+
+          const realKey = `bc_prog_v1_${uid}_${rid}`;
+          const fallbackMode = (new URLSearchParams(location.search).get("mode")) || "unknown";
+          const fallbackKey = `bc_prog_v1_fallback_${fallbackMode}`;
+
+          const hasReal = !!localStorage.getItem(realKey);
+          const hasFallback = !!localStorage.getItem(fallbackKey);
+
+          if (!hasReal && hasFallback) {
+            localStorage.setItem(realKey, localStorage.getItem(fallbackKey));
+            console.log("[PROG] migrated fallback -> real ✅", { fallbackKey, realKey });
+          }
+
+          ensureProgLoaded?.();
+          window.__BC_ENSURE_PROG__?.();
+
+          return { ok: true, migrated: (!hasReal && hasFallback) };
+        } catch (e) {
+          console.warn("[PROG] ensureProgKeyAfterCtx failed (non-fatal)", e);
+          return { ok: false, err: String(e?.message || e) };
         }
+      }
 
-        const realKey = `bc_prog_v1_${uid}_${rid}`;
-        const mode = (new URLSearchParams(location.search).get("mode")) || "unknown";
-        const fallbackKey = `bc_prog_v1_fallback_${mode}`;
-
-        if (localStorage.getItem(fallbackKey) && !localStorage.getItem(realKey)) {
-          localStorage.setItem(realKey, localStorage.getItem(fallbackKey));
-          console.log("[PROG] migrated fallback -> real key", { fallbackKey, realKey });
-        }
-
-        window.PROG = loadProg();
-        console.log("[PROG] active key", realKey, "points:", window.PROG?.meta?.pointsTotal);
-      };
+      if (!window.ensureProgKeyAfterCtx) {
+        window.ensureProgKeyAfterCtx = ensureProgKeyAfterCtx;
+      }
 
       function guardKey() {
         const uid = window.__BC_CTX__?.userId || userId || "anon";
@@ -2112,7 +2117,7 @@ function openManagerBoard() {
 
         console.log("[BC] bc_ctx applied ✅", window.__BC_CTX__);
         ensureProgLoaded();
-        window.ensureProgKeyAfterCtx?.();
+        if (typeof ensureProgKeyAfterCtx === "function") ensureProgKeyAfterCtx();
         try {
           window.__BC_ENSURE_PROG__?.();
           console.log("[PROG] loaded after ctx ✅", window.PROG?.axes, "key:", (window.__BC_CTX__?.userId && window.__BC_CTX__?.restaurantId) ? `bc_prog_v1_${window.__BC_CTX__.userId}_${window.__BC_CTX__.restaurantId}` : null);
@@ -3079,6 +3084,12 @@ function openManagerBoard() {
         if (!target) return;
         target.classList.add("active");
       }
+
+      window.__BC_UI__ = {
+        showScreen,
+        getCurrentStep: () => currentStep,
+        getEncounter: () => (window.__BC_LAST_ENCOUNTER__ || window.currentEncounter || null),
+      };
 
       // ============================================================
       // ✅ NAV ENTRY POINTS (called from parent/topbar)
