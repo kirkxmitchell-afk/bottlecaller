@@ -6744,27 +6744,26 @@ function openManagerBoard() {
           const idx = (encounterIndex % list.length);
           enc = list[idx];
         } else {
-          // PREMIUM: tier guard + tier-bounded play (deterministic)
-          const nextEncounterNumber = list[encounterIndex]?.encounterNumber ?? (encounterIndex + 1);
-          const desiredTier = getTierFromEncounterNumber(nextEncounterNumber);
+          // PREMIUM: tierUnlocked drives allowed guest types (points unlocks 5/10)
+          const tierUnlocked =
+            (typeof window.getTierUnlocked === "function")
+              ? window.getTierUnlocked()
+              : (window.PROG?.meta?.tierUnlocked || 1);
 
-          const allowedTier = await guardTier(desiredTier);
-          const allowedTierFinal = allowedTier || desiredTier;
+          const allowedTypes =
+            (typeof window.getAllowedGuestTypesByTier === "function")
+              ? window.getAllowedGuestTypesByTier(tierUnlocked)
+              : ["Decider", "Bargain-Smart", "Griever"];
 
-          // 1) clamp encounterIndex into the allowed tier band
-          encounterIndex = clampEncounterIndexToTier(allowedTierFinal, encounterIndex);
-          saveEncounterIndex(encounterIndex);
+          const filtered = (Array.isArray(list) ? list : []).filter(e =>
+            allowedTypes.includes(e?.guestStateActual)
+          );
 
-          // 2) serve encounterIndex directly (no random pick)
-          enc = list[encounterIndex];
+          const src = filtered.length ? filtered : list;
+          const idx = (Number.isFinite(encounterIndex) ? encounterIndex : 0) % src.length;
+          enc = src[idx];
 
-          // 3) safety: if data oddness happens, hard-fallback to tier start
-          if (!enc) {
-            const startIdx = tierStartIndex(allowedTierFinal);
-            encounterIndex = startIdx;
-            saveEncounterIndex(encounterIndex);
-            enc = list[encounterIndex];
-          }
+          if (!enc) enc = (list && list[0]) ? list[0] : null;
         }
 
         // DRILL: deterministic encounter selection (no tier logic, no wine deps)
@@ -6793,15 +6792,6 @@ function openManagerBoard() {
             alert("No wine available. Please add wines first.");
             return;
           }
-        }
-
-        const tierUnlocked = window.getTierUnlocked ? window.getTierUnlocked() : (window.PROG?.meta?.tierUnlocked || 1);
-        const pool = getEncounterPoolForTier(bcMode, tierUnlocked);
-        if (pool.length) {
-          const idx = Number.isFinite(encounterIndex) ? encounterIndex : 0;
-          enc = pool[idx % pool.length];
-        } else {
-          console.warn("[BC] No encounters for tierUnlocked=", tierUnlocked, "falling back to full set");
         }
 
         // ----------------------------
