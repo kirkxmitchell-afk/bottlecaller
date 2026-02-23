@@ -3881,7 +3881,8 @@ function openManagerBoard() {
       function describeDifficultyState() {
         const s = window.__BC_DIFFICULTY__;
         if (!s) return "no difficulty state";
-        return `tier=${s.tier} pressure=${s.pressure} d=${s.d} pivotChance=${s.pivotChance} hook=${s.hookStrictness} noise=${s.deliveryNoise} time=${s.timeLimitSec ?? "none"}`;
+        const tier = getProgressionSpine().selectors.tier();
+        return `tier=${tier} pressure=${s.pressure} d=${s.d} pivotChance=${s.pivotChance} hook=${s.hookStrictness} noise=${s.deliveryNoise} time=${s.timeLimitSec ?? "none"}`;
       }
 
       function getDrillRep() {
@@ -5785,7 +5786,14 @@ function openManagerBoard() {
             const btn = document.createElement("button");
             btn.type = "button";
             btn.className = "option-btn" + (currentEncounter.guestReadSelected === state ? " selected" : "");
-            btn.innerText = state;
+            const LABELS = {
+              decider: "Decider",
+              bargain_smart: "Bargain-Smart",
+              griever: "Griever",
+              budget_guard: "Fancy",
+              make_it_easy: "Celebrator",
+            };
+            btn.innerText = LABELS[state] || state;
             bindInput(btn, () => {
               currentEncounter.guestReadSelected = state;
               try {
@@ -7047,22 +7055,21 @@ function openManagerBoard() {
         });
       }
 
-      function resetRunsOnly() {
-        if (!confirm("This will clear saved encounters but keep wines.")) return;
-        runs = [];
-        saveRuns();
-        mastery = { ...DEFAULT_MASTERY };
-        saveMastery(mastery);
-        localStorage.setItem(streakKey, "0");
-        localStorage.setItem(bestStreakKey, "0");
-        // Reset progression for current mode
-        saveEncounterIndex(0);
+      async function resetRunsOnly() {
+        try {
+          getProgressionSpine().actions.resetEncounterFlow();
+        } catch (e) {
+          console.warn("[PROG] resetEncounterFlow failed", e);
+        }
+
         encounterIndex = 0;
+        try { saveEncounterIndex(encounterIndex); } catch {}
 
-        // Clear any in-memory encounter/navigation state
-        resetNavState();
-
-        updateCounts();
+        try {
+          await startEncounter();
+        } catch (e) {
+          console.warn("[BC] startEncounter failed after resetRunsOnly", e);
+        }
       }
 
       function resetWinesOnly() {

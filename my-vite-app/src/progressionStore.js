@@ -23,10 +23,11 @@ export function createProgressionStore(storage = window.localStorage) {
   }
 
   function unlockedGuestTypes(points) {
-    const tier = deriveTier(points);
-    const base = ["Decider", "Bargain-Smart", "Griever"];
-    if (tier >= 2) base.push("Fancy");
-    if (tier >= 3) base.push("Celebrator");
+    const pts = Number(points || 0);
+    const tier = pts >= 10 ? 3 : pts >= 5 ? 2 : 1;
+    const base = ["decider", "bargain_smart", "griever"];
+    if (tier >= 2) base.push("budget_guard");
+    if (tier >= 3) base.push("make_it_easy");
     return base;
   }
 
