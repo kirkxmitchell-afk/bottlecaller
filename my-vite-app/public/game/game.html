@@ -1519,6 +1519,15 @@ function openManagerBoard() {
         return window.getAllowedGuestTypes();
       }
 
+      function pruneGuestReadButtons(optionsEl, allowedReads) {
+        if (!optionsEl || !Array.isArray(allowedReads)) return;
+        const allowedSet = new Set(allowedReads.map(String));
+        [...optionsEl.querySelectorAll("button.option-btn")].forEach(btn => {
+          const label = String(btn.innerText || "").trim();
+          if (!allowedSet.has(label)) btn.remove();
+        });
+      }
+
       function resolveSafeGuestType(encounter) {
         const allowed = resolveAllowedGuestTypes(encounter);
         const actual = canonicalGuestType(encounter?.guestStateActual);
@@ -5780,6 +5789,11 @@ function openManagerBoard() {
             options.appendChild(btn);
           });
           stepContent.appendChild(options);
+          // ✅ Hard-enforce tier guest read availability (even if another path rendered extra buttons)
+          pruneGuestReadButtons(options, allowedReads);
+          if (currentEncounter.guestReadSelected && !allowedReads.includes(currentEncounter.guestReadSelected)) {
+            currentEncounter.guestReadSelected = "";
+          }
 
           const lockInBtn = addStepButton("LOCK IN", () => { currentStep = 2; renderEncounterStep(); }, stepButtons);
           if (!currentEncounter.guestReadSelected) lockInBtn.disabled = true;
