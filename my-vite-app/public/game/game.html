@@ -6824,7 +6824,26 @@ function openManagerBoard() {
         }
 
         if (currentStep === 7) {
-          renderRecoveryStep(stepContent, stepButtons, currentEncounter, inDrill);
+          try {
+            renderRecoveryStep(stepContent, stepButtons, currentEncounter, inDrill);
+          } catch (e) {
+            console.error("[BC] renderRecoveryStep crashed", e);
+
+            stepContent.innerHTML = "";
+            const p = document.createElement("p");
+            p.innerText = "Recovery step failed to render (rule lookup missing). You can still continue.";
+            stepContent.appendChild(p);
+
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "primary";
+            btn.innerText = "FINISH ENCOUNTER";
+            btn.onclick = () => {
+              currentStep = 6;
+              renderEncounterStep();
+            };
+            stepButtons.appendChild(btn);
+          }
           return;
         }
       }
