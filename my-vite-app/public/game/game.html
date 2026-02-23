@@ -1596,7 +1596,8 @@ function openManagerBoard() {
       };
 
       window.getTierUnlocked = window.getTierUnlocked || function getTierUnlocked() {
-        return window.PROG?.meta?.tierUnlocked || 1;
+        const t = Number(window.PROG?.meta?.tierUnlocked || 1);
+        return Number.isFinite(t) && t >= 1 ? t : 1;
       };
 
       function ensureProgKeyAfterCtx() {
@@ -6843,6 +6844,11 @@ function openManagerBoard() {
           tierUnlocked: PROG?.meta?.tierUnlocked || 1,
           pressure: PROG?.guard?.pressureLevel || 0
         };
+        if (window.PROG?.meta) {
+          window.PROG.meta.difficultySeed = policy.d;
+          window.PROG.meta.lastUpdatedMs = Date.now();
+          saveProg();
+        }
         const pivotPlanned = sameEncounter
           ? (carry?.pivotPlanned ?? false)
           : (Math.random() < (policy.pivotChance ?? 0));
