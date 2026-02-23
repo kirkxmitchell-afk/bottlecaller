@@ -628,6 +628,34 @@ function openManagerBoard() {
         };
       }
 
+      function normalizeProg(p) {
+        p = p || {};
+        p.v = p.v || 1;
+
+        p.meta = p.meta || {};
+        if (!Number.isFinite(p.meta.pointsTotal)) p.meta.pointsTotal = 0;
+        if (!Number.isFinite(p.meta.encountersCleared)) p.meta.encountersCleared = 0;
+        if (!Number.isFinite(p.meta.lastUpdatedMs)) p.meta.lastUpdatedMs = 0;
+        if (!Number.isFinite(p.meta.difficultySeed)) p.meta.difficultySeed = 1;
+        if (!Number.isFinite(p.meta.tierUnlocked)) p.meta.tierUnlocked = 1;
+
+        p.guard = p.guard || { pressureLevel: 0, finalDifficulty: 1, last3: [] };
+        if (!Number.isFinite(p.guard.pressureLevel)) p.guard.pressureLevel = 0;
+        if (!Number.isFinite(p.guard.finalDifficulty)) p.guard.finalDifficulty = 1;
+        if (!Array.isArray(p.guard.last3)) p.guard.last3 = [];
+
+        p.unlocks = p.unlocks || {};
+        if (typeof p.unlocks.guestFancy !== "boolean") p.unlocks.guestFancy = false;
+        if (typeof p.unlocks.guestCelebrator !== "boolean") p.unlocks.guestCelebrator = false;
+
+        p.guestRanks = p.guestRanks || {};
+        ["Decider","Bargain-Smart","Griever","Fancy","Celebrator"].forEach((k) => {
+          if (!p.guestRanks[k]) p.guestRanks[k] = makeGuestRank();
+        });
+
+        return p;
+      }
+
       function ensureProgShape(p) {
         const base = defaultProg();
         const src = (typeof p === "undefined") ? (window.PROG || {}) : (p || {});
@@ -650,26 +678,19 @@ function openManagerBoard() {
 
       function loadProg() {
         const key = progKey();
-        if (!key) return defaultProg();
         try {
           const raw = localStorage.getItem(key);
-          const parsed = raw ? JSON.parse(raw) : null;
-          return ensureProgShape(parsed);
+          const parsed = raw ? JSON.parse(raw) : defaultProg();
+          return normalizeProg({ ...defaultProg(), ...parsed });
         } catch {
-          return defaultProg();
+          return normalizeProg(defaultProg());
         }
       }
 
       // Boot PROG immediately for console/UI access (guarded)
       try {
-        PROG = ensureProgShape(loadProg());
-        PROG = PROG || {};
+        PROG = normalizeProg(loadProg());
         ensureProgMeta();
-        PROG.meta = PROG.meta || {};
-        if (!Number.isFinite(PROG.meta.pointsTotal)) PROG.meta.pointsTotal = 0;
-        PROG.unlocks = PROG.unlocks || {};
-        if (typeof PROG.unlocks.guestFancy !== "boolean") PROG.unlocks.guestFancy = false;
-        if (typeof PROG.unlocks.guestCelebrator !== "boolean") PROG.unlocks.guestCelebrator = false;
         evaluateUnlocks();
         refreshTierUnlocksFromPoints();
         saveProg();
@@ -685,7 +706,7 @@ function openManagerBoard() {
       }
 
       // expose for console + UI
-      window.PROG = PROG;
+      window.PROG = normalizeProg(PROG);
       window.progKey = progKey;
       window.defaultProg = defaultProg;
       window.loadProg = loadProg;
@@ -800,6 +821,8 @@ function openManagerBoard() {
         PROG.unlocks.guestFancy = fancyUnlocked;
         PROG.unlocks.guestCelebrator = celebratorUnlocked;
         PROG.meta.tierUnlocked = tierFromPoints(pts);
+        PROG.meta.lastUpdatedMs = Date.now();
+        saveProg();
         return PROG.unlocks;
       }
 
@@ -1502,6 +1525,14 @@ function openManagerBoard() {
         return allowed.includes(actual) ? actual : allowed[0];
       }
 
+      function getEncounterPoolForTier(mode, tierUnlocked) {
+        const all = (mode === "premium")
+          ? (window.ENCOUNTERS_PREMIUM || [])
+          : (window.ENCOUNTERS_DEMO || []);
+        const allowed = window.getAllowedGuestTypesByTier(tierUnlocked);
+        return all.filter(e => allowed.includes(e.guestStateActual));
+      }
+
       // ============================================================
       // ✅ ENCOUNTERS (from gameEntry.ts -> window.__BC_ENCOUNTERS__)
       // ============================================================
@@ -1562,6 +1593,10 @@ function openManagerBoard() {
       window.getAllowedGuestTypes = window.getAllowedGuestTypes || function getAllowedGuestTypes() {
         const tier = window.PROG?.meta?.tierUnlocked || 1;
         return window.getAllowedGuestTypesByTier(tier);
+      };
+
+      window.getTierUnlocked = window.getTierUnlocked || function getTierUnlocked() {
+        return window.PROG?.meta?.tierUnlocked || 1;
       };
 
       function ensureProgKeyAfterCtx() {
@@ -5720,8 +5755,8 @@ function openManagerBoard() {
           options.className = "option-grid";
           ensureProgShape();
           refreshTierUnlocksFromPoints();
-          const tierUnlocked = window.PROG?.meta?.tierUnlocked || 1;
-          const allowedReads = window.getAllowedGuestTypesByTier(tierUnlocked);
+          const tierUnlocked = window.getTierUnlocked ? window.getTierUnlocked() : (window.PROG?.meta?.tierUnlocked || 1);
+          const allowedReads = window.getAllowedGuestTypes();
           console.log("[BC][GUEST_UNLOCK]", {
             encounterIndex,
             encounterNumber: currentEncounter?.encounterNumber,
@@ -6760,6 +6795,15 @@ function openManagerBoard() {
           }
         }
 
+        const tierUnlocked = window.getTierUnlocked ? window.getTierUnlocked() : (window.PROG?.meta?.tierUnlocked || 1);
+        const pool = getEncounterPoolForTier(bcMode, tierUnlocked);
+        if (pool.length) {
+          const idx = Number.isFinite(encounterIndex) ? encounterIndex : 0;
+          enc = pool[idx % pool.length];
+        } else {
+          console.warn("[BC] No encounters for tierUnlocked=", tierUnlocked, "falling back to full set");
+        }
+
         // ----------------------------
         // Normalize encounter -> UI state
         // ----------------------------
@@ -6790,10 +6834,18 @@ function openManagerBoard() {
         const carry = sameEncounter ? prev : null;
 
         ensureProgLoaded();
+        const seedFromProg =
+          (window.PROG?.meta && Number.isFinite(window.PROG.meta.difficultySeed))
+            ? window.PROG.meta.difficultySeed
+            : 1;
         const policySeed =
-          sameEncounter
-            ? carry?.difficulty
-            : difficultyFromProgSpine();
+          (window.__BC_GUARD__ && Number.isFinite(window.__BC_GUARD__.finalDifficulty))
+            ? window.__BC_GUARD__.finalDifficulty
+            : ((window.__BC_DIFFICULTY__ && Number.isFinite(window.__BC_DIFFICULTY__.d))
+                ? window.__BC_DIFFICULTY__.d
+                : (Number.isFinite(seedFromProg)
+                    ? seedFromProg
+                    : (enc.difficulty ?? 1)));
         enc.difficulty = enc.difficulty ?? policySeed ?? 1;
         const policy = difficultyPolicy(enc.difficulty);
         window.__BC_DIFFICULTY__ = {
