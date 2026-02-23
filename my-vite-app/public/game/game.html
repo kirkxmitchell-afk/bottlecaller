@@ -6806,7 +6806,12 @@ function openManagerBoard() {
               enc.recoveryWhy = "";
               enc.recoveryCorrect = (c.id === best);
 
-              logEncounter();
+              try {
+                logEncounter();
+              } catch (e) {
+                console.error("[BC] logEncounter crashed in Recovery step", e);
+                // Do not crash the game because logging/scoring failed
+              }
 
               addStepButton(inDrill ? "NEXT REP" : "NEXT ENCOUNTER", () => {
                 if (window.__NEXT_LOCK__) return;
