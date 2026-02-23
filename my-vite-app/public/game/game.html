@@ -5845,13 +5845,26 @@ function openManagerBoard() {
 
           const options = document.createElement("div");
           options.className = "option-grid";
-          const spine = getProgressionSpine();
-          const tierUnlocked = spine.selectors.tier();
-          const allowedReads = spine.selectors.guestTypes();
+          let allowedReads = null;
+
+          try {
+            allowedReads = window.getAllowedGuestTypes?.();
+          } catch (e) {
+            console.warn("[BC] getAllowedGuestTypes threw", e);
+          }
+
+          if (!Array.isArray(allowedReads) || allowedReads.length === 0) {
+            // HARD FALLBACK: UI must never go blank
+            allowedReads = ["Decider", "Bargain-Smart", "Griever"];
+            console.warn("[BC] allowedReads missing -> forcing Tier1 fallback");
+          }
+
+          allowedReads = normalizeGuestTypes(allowedReads);
+
           console.log("[BC][GUEST_UNLOCK]", {
             encounterIndex,
             encounterNumber: currentEncounter?.encounterNumber,
-            tierUnlocked,
+            tierUnlocked: (typeof window.getTierUnlocked === "function" ? window.getTierUnlocked() : null),
             allowedReads,
             allowedCount: allowedReads?.length
           });
@@ -5862,26 +5875,16 @@ function openManagerBoard() {
             const btn = document.createElement("button");
             btn.type = "button";
             btn.className = "option-btn" + (currentEncounter.guestReadSelected === state ? " selected" : "");
-            const LABELS = {
-              decider: "Decider",
-              bargain_smart: "Bargain-Smart",
-              griever: "Griever",
-              budget_guard: "Fancy",
-              make_it_easy: "Celebrator",
-            };
-            btn.innerText = LABELS[state] || state;
+            btn.innerText = state;
             bindInput(btn, () => {
               currentEncounter.guestReadSelected = state;
-              try {
-                getProgressionSpine().actions.setSessionSelection({ guestType: state });
-              } catch {}
               renderEncounterStep();
             });
             options.appendChild(btn);
           });
           stepContent.appendChild(options);
           // ✅ Hard-enforce tier guest read availability (even if another path rendered extra buttons)
-          pruneGuestReadButtons(options, allowedReads);
+          try { pruneGuestReadButtons(options, allowedReads); } catch {}
           if (currentEncounter.guestReadSelected && !allowedReads.includes(currentEncounter.guestReadSelected)) {
             currentEncounter.guestReadSelected = "";
           }
