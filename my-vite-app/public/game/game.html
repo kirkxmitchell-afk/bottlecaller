@@ -712,11 +712,11 @@ function openManagerBoard() {
           drift: { vec: 0, ttl: 0 },
           recovery: { type: null, step: 0, ttl: 0 },
           guestRanks: {
-            "Decider": makeGuestRank(),
-            "Bargain-Smart": makeGuestRank(),
-            "Griever": makeGuestRank(),
-            "Fancy": makeGuestRank(),
-            "Celebrator": makeGuestRank(),
+            [GUEST.DECIDER]: makeGuestRank(),
+            [GUEST.BARGAIN_SMART]: makeGuestRank(),
+            [GUEST.GRIEVER]: makeGuestRank(),
+            [GUEST.FANCY]: makeGuestRank(),
+            [GUEST.CELEBRATOR]: makeGuestRank(),
           },
         };
       }
@@ -742,7 +742,7 @@ function openManagerBoard() {
         if (typeof p.unlocks.guestCelebrator !== "boolean") p.unlocks.guestCelebrator = false;
 
         p.guestRanks = p.guestRanks || {};
-        ["Decider","Bargain-Smart","Griever","Fancy","Celebrator"].forEach((k) => {
+        [GUEST.DECIDER, GUEST.BARGAIN_SMART, GUEST.GRIEVER, GUEST.FANCY, GUEST.CELEBRATOR].forEach((k) => {
           if (!p.guestRanks[k]) p.guestRanks[k] = makeGuestRank();
         });
 
@@ -1586,10 +1586,74 @@ function openManagerBoard() {
         saveMastery(mastery);
       }
 
-      const guestStates = ["Decider", "Fancy", "Griever", "Celebrator", "Bargain-Smart"];
+      const GUEST = {
+        DECIDER: "decider",
+        FANCY: "fancy",
+        GRIEVER: "griever",
+        CELEBRATOR: "celebrator",
+        BARGAIN_SMART: "bargain_smart",
+      };
+
+      function normalizeGuestType(raw) {
+        if (!raw) return "";
+        return String(raw)
+          .toLowerCase()
+          .replace(/[\s-]/g, "_");
+      }
+
+      const TIER_GUESTS = {
+        1: [
+          GUEST.DECIDER,
+          GUEST.GRIEVER,
+        ],
+        2: [
+          GUEST.DECIDER,
+          GUEST.GRIEVER,
+          GUEST.BARGAIN_SMART,
+        ],
+        3: [
+          GUEST.DECIDER,
+          GUEST.GRIEVER,
+          GUEST.BARGAIN_SMART,
+          GUEST.FANCY,
+        ],
+        4: [
+          GUEST.DECIDER,
+          GUEST.GRIEVER,
+          GUEST.BARGAIN_SMART,
+          GUEST.FANCY,
+          GUEST.CELEBRATOR,
+        ],
+      };
+
+      function tierFromPoints(points) {
+        if (points >= 20) return 4;
+        if (points >= 10) return 3;
+        if (points >= 5) return 2;
+        return 1;
+      }
+
+      function allowedGuestTypes(points) {
+        const tier = tierFromPoints(points);
+        return TIER_GUESTS[tier] || TIER_GUESTS[1];
+      }
+
+      const guestStates = [
+        GUEST.DECIDER,
+        GUEST.FANCY,
+        GUEST.GRIEVER,
+        GUEST.CELEBRATOR,
+        GUEST.BARGAIN_SMART,
+      ];
 
       function resolveAllowedGuestTypes(encounter) {
-        return window.getAllowedGuestTypes();
+        try {
+          const spine = getProgressionSpine();
+          const points = spine.selectors.points();
+          return allowedGuestTypes(points);
+        } catch {
+          return TIER_GUESTS[1];
+        }
       }
 
       function pruneGuestReadButtons(optionsEl, allowedReads) {
@@ -1807,19 +1871,19 @@ function openManagerBoard() {
 
       // ---------- Rule maps ----------
       const modeMap = {
-        "Decider": { optimal: MODES.AUTH, neutral: MODES.SCOUT, damaging: MODES.GUIDE },
-        "Bargain-Smart": { optimal: MODES.SCOUT, neutral: MODES.AUTH, damaging: MODES.GUIDE },
-        "Fancy": { optimal: MODES.GUIDE, neutral: MODES.AUTH, damaging: MODES.SCOUT },
-        "Griever": { optimal: MODES.SCOUT, neutral: MODES.GUIDE, damaging: MODES.AUTH },
-        "Celebrator": { optimal: MODES.AUTH, neutral: MODES.GUIDE, damaging: MODES.SCOUT }
+        [GUEST.DECIDER]: { optimal: MODES.AUTH, neutral: MODES.SCOUT, damaging: MODES.GUIDE },
+        [GUEST.BARGAIN_SMART]: { optimal: MODES.SCOUT, neutral: MODES.AUTH, damaging: MODES.GUIDE },
+        [GUEST.FANCY]: { optimal: MODES.GUIDE, neutral: MODES.AUTH, damaging: MODES.SCOUT },
+        [GUEST.GRIEVER]: { optimal: MODES.SCOUT, neutral: MODES.GUIDE, damaging: MODES.AUTH },
+        [GUEST.CELEBRATOR]: { optimal: MODES.AUTH, neutral: MODES.GUIDE, damaging: MODES.SCOUT }
       };
 
       const hookMap = {
-        "Decider": { optimal: "VALUE", neutral: "FLAVOUR", damaging: "STORY" },
-        "Bargain-Smart": { optimal: "VALUE", neutral: "FLAVOUR", damaging: "STORY" },
-        "Fancy": { optimal: "STORY", neutral: "FLAVOUR", damaging: "VALUE" },
-        "Griever": { optimal: "FLAVOUR", neutral: "STORY", damaging: "VALUE" },
-        "Celebrator": { optimal: "STORY", neutral: "VALUE", damaging: "FLAVOUR" }
+        [GUEST.DECIDER]: { optimal: "VALUE", neutral: "FLAVOUR", damaging: "STORY" },
+        [GUEST.BARGAIN_SMART]: { optimal: "VALUE", neutral: "FLAVOUR", damaging: "STORY" },
+        [GUEST.FANCY]: { optimal: "STORY", neutral: "FLAVOUR", damaging: "VALUE" },
+        [GUEST.GRIEVER]: { optimal: "FLAVOUR", neutral: "STORY", damaging: "VALUE" },
+        [GUEST.CELEBRATOR]: { optimal: "STORY", neutral: "VALUE", damaging: "FLAVOUR" }
       };
 
       // ---------- Setup options ----------
@@ -2071,11 +2135,11 @@ function openManagerBoard() {
       }
 
       const GUEST_READ_MATCH = {
-        Decider: ["make_it_easy", "alpha"],
-        Browser: ["browser"],
-        Guarded: ["budget_guard"],
-        Celebrator: ["celebrator"],
-        Analyzer: ["analyst"],
+        [GUEST.DECIDER]: [GUEST.DECIDER],
+        [GUEST.GRIEVER]: [GUEST.GRIEVER],
+        [GUEST.BARGAIN_SMART]: [GUEST.BARGAIN_SMART],
+        [GUEST.FANCY]: [GUEST.FANCY],
+        [GUEST.CELEBRATOR]: [GUEST.CELEBRATOR],
       };
 
       function canonicalModeFromUi(label) {
@@ -2106,17 +2170,11 @@ function openManagerBoard() {
       }
 
       function canonicalGuestType(raw) {
-        const g = String(raw || "").toLowerCase();
-        if (g === "browser") return "browser";
-        if (g === "make-it-easy" || g === "make_it_easy") return "make_it_easy";
-        if (g === "budget guard" || g === "budget_guard") return "budget_guard";
-        if (g === "analyst") return "analyst";
-        if (g === "alpha") return "alpha";
-        if (g === "celebrator") return "celebrator";
-        if (g === "decider") return "make_it_easy";
-        if (g === "griever") return "budget_guard";
-        if (g === "bargain-smart" || g === "bargain_smart") return "budget_guard";
-        return "browser";
+        const g = normalizeGuestType(raw);
+        if (g === "budget_guard") return GUEST.FANCY;
+        if (g === "make_it_easy") return GUEST.CELEBRATOR;
+        if (g === "browser" || g === "analyst" || g === "alpha") return GUEST.DECIDER;
+        return g;
       }
 
       function tierFromEncounter(enc) {
@@ -2125,8 +2183,8 @@ function openManagerBoard() {
       }
 
       function isCorrectGuestRead(encounter) {
-        const actual = String(encounter?.guestStateActual || "");
-        const read = String(encounter?.guestReadSelected || "");
+        const actual = canonicalGuestType(encounter?.guestStateActual || "");
+        const read = canonicalGuestType(encounter?.guestReadSelected || "");
         const validReads = GUEST_READ_MATCH?.[actual] || [];
         if (validReads.length) return validReads.includes(read);
         return read === actual;
@@ -4759,11 +4817,11 @@ function openManagerBoard() {
         const mode = encounter.modeSelected;
 
         const tone = {
-          "Decider": ["direct", "decisive", "clean"],
-          "Bargain-Smart": ["measured", "grounded", "practical"],
-          "Fancy": ["refined", "polished", "elegant"],
-          "Griever": ["gentle", "soft", "patient"],
-          "Celebrator": ["upbeat", "energetic", "playful"]
+          [GUEST.DECIDER]: ["direct", "decisive", "clean"],
+          [GUEST.BARGAIN_SMART]: ["measured", "grounded", "practical"],
+          [GUEST.FANCY]: ["refined", "polished", "elegant"],
+          [GUEST.GRIEVER]: ["gentle", "soft", "patient"],
+          [GUEST.CELEBRATOR]: ["upbeat", "energetic", "playful"]
         };
 
         const t = pickRandom(tone[encounter.guestStateActual] || ["confident"]);
@@ -5970,7 +6028,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
           // HARD FALLBACK: never blank, never crash
           if (!Array.isArray(allowedReads) || allowedReads.length === 0) {
-            allowedReads = ["Decider", "Bargain-Smart", "Griever"];
+            allowedReads = [GUEST.DECIDER, GUEST.BARGAIN_SMART, GUEST.GRIEVER];
           }
 
           console.log("[BC][GUEST_UNLOCK]", {
@@ -7027,13 +7085,26 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         } else {
           // PREMIUM: tierUnlocked drives allowed guest types (points unlocks 5/10)
           const spine = getProgressionSpine();
-          const allowedTypes = spine.selectors.guestTypes();
+          const points = spine.selectors.points();
+          const allowed = allowedGuestTypes(points);
 
           const filtered = (Array.isArray(list) ? list : []).filter(e =>
-            allowedTypes.includes(e?.guestStateActual)
+            allowed.includes(normalizeGuestType(e?.guestStateActual))
           );
 
-          const src = filtered.length ? filtered : list;
+          if (!filtered.length) {
+            console.error("[BC] EMPTY POOL — CONTENT ERROR", {
+              tier: tierFromPoints(points),
+              allowed,
+              encounters: list.map(e => e?.guestStateActual)
+            });
+            alert("No encounters available for your current tier.");
+            resetNavState();
+            showScreen("screenHome");
+            return;
+          }
+
+          const src = filtered;
           const idx = (Number.isFinite(encounterIndex) ? encounterIndex : 0) % src.length;
           enc = src[idx];
 
@@ -7073,6 +7144,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         // ----------------------------
         enc = enc || {};
         enc.encounterNumber = enc.encounterNumber ?? (encounterIndex + 1);
+        enc.guestStateActual = normalizeGuestType(enc.guestStateActual);
         enc = enforceGuestPoolByTier(enc);
         enc.contextLine = enc.contextLine ?? "";
         enc.guestLine = enc.guestLine ?? "";
