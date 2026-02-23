@@ -4929,13 +4929,28 @@ function openManagerBoard() {
         const strictness = policy?.hookStrictness || "normal";
         const guestRead = isCorrectGuestRead(encounter);
 
-        const modeKey = String(encounter?.guestStateActual ?? "").trim();
-        const modeRule = (modeMap && modeKey) ? modeMap[modeKey] : null;
-        const hookRule = (hookMap && modeKey) ? hookMap[modeKey] : null;
+        const modeKey = String(
+          encounter?.guestStateActual ??
+          encounter?.guestReadSelected ??
+          encounter?.guestRead ??
+          "decider"
+        ).trim().toLowerCase();
+
+        const modeRule = (typeof modeMap === "object" && modeMap && modeKey) ? modeMap[modeKey] : null;
+        const hookRule = (typeof hookMap === "object" && hookMap && modeKey) ? hookMap[modeKey] : null;
+        if (!modeRule) console.warn("[BC] modeRule missing for key:", modeKey, { encounter: encounter?.encounterNumber });
+        if (!hookRule) console.warn("[BC] hookRule missing for key:", modeKey, { encounter: encounter?.encounterNumber });
+
+        const modeOptimal = modeRule?.optimal ?? null;
+        const modeNeutral = modeRule?.neutral ?? null;
+
+        const hookOptimal = hookRule?.optimal ?? null;
+        const hookNeutral = hookRule?.neutral ?? null;
 
         const modeStatus =
-          encounter.modeSelected === (modeRule && modeRule.optimal) ? "optimal" :
-          encounter.modeSelected === (modeRule && modeRule.neutral) ? "neutral" : "damaging";
+          encounter.modeSelected && modeOptimal && encounter.modeSelected === modeOptimal ? "optimal" :
+          encounter.modeSelected && modeNeutral && encounter.modeSelected === modeNeutral ? "neutral" :
+          "damaging";
 
         let hookStatus = "damaging";
         const hookId = encounter.hookSelected;
@@ -4961,8 +4976,9 @@ function openManagerBoard() {
           }
         } else {
           hookStatus =
-            hookId === (hookRule && hookRule.optimal) ? "optimal" :
-            hookId === (hookRule && hookRule.neutral) ? "neutral" : "damaging";
+            hookId && hookOptimal && hookId === hookOptimal ? "optimal" :
+            hookId && hookNeutral && hookId === hookNeutral ? "neutral" :
+            "damaging";
         }
 
         const deliveryCorrect =
