@@ -1652,23 +1652,25 @@ function openManagerBoard() {
         replayFromStage1();
       }
 
-      async function startFromEncounter1_GRIND() {
-        const before = bcRenderHud("before grind reset");
+      function startFromEncounter1_GRIND() {
+        // 1) hard reset runtime
+        window.__NEXT_LOCK__ = false;
 
-        try { getProgressionSpine().actions.resetEncounterFlow(); } catch {}
-        try { getProgressionSpine().actions.resetRunScoring(); } catch {}
+        currentStep = 0;
+        currentEncounter = null;
 
         encounterIndex = 0;
-        currentStep = 0;
-        try { saveEncounterIndex(encounterIndex); } catch {}
+        saveEncounterIndex(encounterIndex);
 
-        await startEncounter();
+        // Optional: clear any per-encounter caches
+        window.__BC_GUARD__ = window.__BC_GUARD__ || {};
+        window.__BC_GUARD__.lastDecision = null;
 
-        const after = bcRenderHud("after grind reset");
-        bcToast(
-          `Restarted at Encounter 1 (GRIND).\n` +
-          `Progress kept: points ${before.points} → ${after.points}, tier ${before.tier} → ${after.tier}.`
-        );
+        // 2) rebuild UI clean
+        showScreen("screenPlay");
+
+        // 3) start fresh
+        startEncounter();
       }
 
       // ✅ define once, even across hot reloads / injected patches
@@ -2788,6 +2790,11 @@ function openManagerBoard() {
           resetUsed: false,
           __reactionComputed: false
         };
+        currentEncounter.__uxSummaryBuilt = false;
+        currentEncounter.__recoveryLocked = false;
+        currentEncounter.__logged = false;
+        currentEncounter.__resolvedLogged = false;
+        currentEncounter.__reaction = null;
         window.currentEncounter = currentEncounter;
 
         window.__BC_PARENT_LAST_ENCOUNTER__ = currentEncounter;
@@ -5034,13 +5041,38 @@ function openManagerBoard() {
         return { total, signal };
       }
 
-      function addStepButton(label, handler, container) {
+      function ensureStepButtonsContainer() {
+        const screen = document.getElementById("screenPlay") || document.body;
+        let bar =
+          screen.querySelector(".step-buttons") ||
+          screen.querySelector("#stepButtons") ||
+          screen.querySelector(".buttons");
+
+        if (!bar) {
+          bar = document.createElement("div");
+          bar.className = "step-buttons";
+          bar.id = "stepButtons";
+          bar.style.marginTop = "12px";
+          screen.appendChild(bar);
+        }
+        return bar;
+      }
+
+      function addStepButton(label, handler, stepButtons) {
+        const bar = stepButtons || ensureStepButtonsContainer();
         const btn = document.createElement("button");
         btn.type = "button";
+        btn.className = "btn";
         btn.innerText = label;
-        bindInput(btn, handler);
-        container.appendChild(btn);
+        if (typeof bindInput === "function") bindInput(btn, handler);
+        else btn.addEventListener("click", handler);
+        bar.appendChild(btn);
         return btn;
+      }
+
+      function goToStep(n) {
+        currentStep = n;
+        renderEncounterStep();
       }
 
       function scoreSymbol(status) {
@@ -5778,17 +5810,67 @@ function openManagerBoard() {
         return out;
       }
 
+      function renderDebugStateBox() {
+        let box = document.getElementById("bcDebugState");
+        if (!box) {
+          box = document.createElement("pre");
+          box.id = "bcDebugState";
+          box.style.whiteSpace = "pre-wrap";
+          box.style.fontSize = "12px";
+          box.style.opacity = "0.85";
+          box.style.border = "1px solid rgba(255,255,255,0.15)";
+          box.style.padding = "10px";
+          box.style.marginTop = "10px";
+          box.style.borderRadius = "10px";
+          const root = document.getElementById("screenPlay") || document.body;
+          root.appendChild(box);
+        }
+
+        const enc = currentEncounter;
+        const diff = window.__BC_DIFFICULTY__;
+        const checks = (typeof window.evaluateChecks === "function") ? window.evaluateChecks(enc) : null;
+
+        box.textContent =
+`BC STATE
+step=${currentStep}
+encounterIndex=${encounterIndex}
+encounterNumber=${enc?.encounterNumber ?? "—"}
+encounterId=${enc?.id ?? "—"}
+guestActual=${enc?.guestStateActual ?? "—"}
+modeSelected=${enc?.modeSelected ?? "—"}
+hookSelected=${enc?.hookSelected ?? "—"}
+delivery=${enc?.selectedS1 ?? "—"} / ${enc?.selectedS2 ?? "—"}
+
+DIFFICULTY
+d=${diff?.d ?? "—"} pressure=${diff?.pressure ?? "—"} hookStrict=${diff?.hookStrictness ?? "—"}
+
+CHECKS
+${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
+`;
+      }
+
+      function clearStepHighlights() {
+        const root = document.getElementById("screenPlay") || document.body;
+        root.querySelectorAll(".selected, .active, .is-selected, .btnSelected")
+          .forEach(el => {
+            el.classList.remove("selected", "active", "is-selected", "btnSelected");
+          });
+      }
+
       function renderEncounterStep() {
+        clearStepHighlights();
         console.log("[RENDER] currentStep =", currentStep, "enc#", currentEncounter?.encounterNumber);
         const stepHeader = document.getElementById("stepHeader");
         const stepContent = document.getElementById("stepContent");
-        const stepButtons = document.getElementById("stepButtons");
+        const stepButtons = ensureStepButtonsContainer();
         const wineDisplayName = document.getElementById("wineDisplayName");
         const wineBadges = document.getElementById("wineBadges");
-        if (!stepHeader || !stepContent || !stepButtons || !wineDisplayName || !wineBadges || !currentEncounter) return;
+        if (!stepHeader || !stepContent || !wineDisplayName || !wineBadges || !currentEncounter) return;
 
         stepContent.innerHTML = "";
         stepButtons.innerHTML = "";
+
+        renderDebugStateBox();
 
         const wine = currentEncounter?.wineSelected || { name: "DRILL" };
         const inDrill = sessionType === "drill";
@@ -6105,6 +6187,9 @@ function openManagerBoard() {
         // STEP 5: Reaction (driven by EngineBridge)
         // ============================================================
         if (currentStep === 5) {
+          const bar = ensureStepButtonsContainer();
+          bar.innerHTML = "";
+
           const checksRaw = window.evaluateChecks(window.currentEncounter || currentEncounter);
 
           const rep = getDrillRep(); // null if not in drill
@@ -6159,17 +6244,18 @@ function openManagerBoard() {
             );
           }
 
-          if (currentEncounter.__reactionComputed) {
-            console.log("[BC] Reaction already computed for this step (skipping) ✅");
-            return;
+          let result = currentEncounter.__reaction;
+          if (!currentEncounter.__reactionComputed || !result) {
+            currentEncounter.__reactionComputed = true;
+            result = window.EngineBridge.computeReaction(reactionChecks);
+            currentEncounter.__reaction = result;
+            result.pivotUnlocked = !!currentEncounter.pivotPlanned && result.pivotUnlocked;
+            // TEMP DEBUG (remove later)
+            console.log("[BC] computeReaction result =", result);
+            commitReaction(result, currentEncounter, reactionChecks);
+          } else {
+            console.log("[BC] Reaction already computed for this step (skipping compute) ✅");
           }
-          currentEncounter.__reactionComputed = true;
-
-          const result = window.EngineBridge.computeReaction(reactionChecks);
-          result.pivotUnlocked = !!currentEncounter.pivotPlanned && result.pivotUnlocked;
-          // TEMP DEBUG (remove later)
-          console.log("[BC] computeReaction result =", result);
-          commitReaction(result, currentEncounter, reactionChecks);
           // Persist telemetry on encounter for history + reflection
           currentEncounter.chainScore = result.chainScore;
           currentEncounter.chainSignal = result.chainSignal;
@@ -6204,7 +6290,8 @@ function openManagerBoard() {
             const upgraded = (result.chainSignal === "green") && (Math.random() < 0.35);
             stepContent.appendChild(document.createTextNode(upgraded ? "✅ Upgrade. “Nice — that’s the move.”" : "✅ Nod. “Perfect.”"));
             appendFeedbackLine(stepContent, bcFeedbackFromOutcome(reactionChecks, result));
-            addStepButton("REFLECT", () => { currentStep = 6; renderEncounterStep(); }, stepButtons);
+            addStepButton("REFLECT", () => { goToStep(6); }, bar);
+            addStepButton("NEXT", () => { goToStep(6); }, bar);
             return;
           }
 
@@ -6293,7 +6380,7 @@ function openManagerBoard() {
 
               currentStep = 1;
               renderEncounterStep();
-            }, stepButtons);
+            }, bar);
 
             if (!resetAllowed) resetBtn.disabled = true;
 
@@ -6308,15 +6395,17 @@ function openManagerBoard() {
 
             appendFeedbackLine(stepContent, bcFeedbackFromOutcome(reactionChecks, result));
 
-            const cont = addStepButton("CONTINUE TO REFLECTION", () => { currentStep = 6; renderEncounterStep(); }, stepButtons);
+            const cont = addStepButton("CONTINUE TO REFLECTION", () => { goToStep(6); }, bar);
             if (!currentEncounter.recoveryChoice && !currentEncounter.resetUsed) cont.disabled = true;
 
+            addStepButton("NEXT", () => { goToStep(6); }, bar);
             return;
           }
 
           stepContent.innerText = "❌ “We’ll choose, thanks.”";
           appendFeedbackLine(stepContent, bcFeedbackFromOutcome(reactionChecks, result));
-          addStepButton("REFLECT", () => { currentStep = 6; renderEncounterStep(); }, stepButtons);
+          addStepButton("REFLECT", () => { goToStep(6); }, bar);
+          addStepButton("NEXT", () => { goToStep(6); }, bar);
           return;
         }
 
@@ -7099,6 +7188,14 @@ function openManagerBoard() {
           resetUsed: carry?.resetUsed || false,
           __reactionComputed: sameEncounter ? (carry?.__reactionComputed || false) : false
         };
+        if (!sameEncounter) {
+          currentEncounter.__reactionComputed = false;
+          currentEncounter.__uxSummaryBuilt = false;
+          currentEncounter.__recoveryLocked = false;
+          currentEncounter.__logged = false;
+          currentEncounter.__resolvedLogged = false;
+          currentEncounter.__reaction = null;
+        }
         window.currentEncounter = currentEncounter;
         currentEncounter = applyDifficultyToEncounter(currentEncounter, policy);
         console.log("[ENCOUNTER] built", {
@@ -7509,44 +7606,50 @@ function openManagerBoard() {
       // HARD OVERRIDE: single evaluateChecks authority
       // ===============================
       window.evaluateChecks = function evaluateChecksHard(encounterOverride) {
-        const encounter = encounterOverride || window.currentEncounter;
+        const encounter = encounterOverride || currentEncounter;
+
+        // Never throw here. If no encounter, return a safe object.
         if (!encounter) {
-          console.error("[BC] evaluateChecks called without encounter");
-          console.trace("[BC] evaluateChecks caller trace");
-          return { guestRead: false, modeStatus: "damaging", hookStatus: "damaging", deliveryCorrect: false };
+          return { guestRead: false, modeStatus: "neutral", hookStatus: "neutral", deliveryCorrect: false };
         }
+
         const policy =
           encounter?.policy ||
           window.__BC_DIFFICULTY__ ||
-          (typeof difficultyPolicy === "function" ? difficultyPolicy(encounter?.difficulty ?? 1) : null);
+          difficultyPolicy(encounter?.difficulty ?? 1);
 
         const strictness = policy?.hookStrictness || "normal";
+        const guestRead = isCorrectGuestRead(encounter);
 
-        // Guest read
-        const guestRead = (typeof isCorrectGuestRead === "function") ? isCorrectGuestRead(encounter) : false;
-
-        // Safe map lookups (keys drift, casing drift, missing keys happen)
         const modeKey = String(encounter?.guestStateActual ?? "").trim();
+
+        // Safe rule getters (never undefined shapes)
         const safeGetRule = (map, key) => {
-          if (!map || !key) return null;
-          const k = String(key).trim();
-          return map[k] || map[k.toLowerCase()] || null;
+          if (!map || typeof map !== "object") return null;
+          const r = map[key];
+          if (!r || typeof r !== "object") return null;
+          // normalize keys, but tolerate missing ones
+          return {
+            optimal: r.optimal ?? null,
+            neutral: r.neutral ?? null,
+            damaging: r.damaging ?? null,
+          };
         };
 
-        const modeRule = safeGetRule(window.modeMap, modeKey);
-        const hookRule = safeGetRule(window.hookMap, modeKey);
+        const modeRule = safeGetRule(window.modeMap || modeMap, modeKey);
+        const hookRule = safeGetRule(window.hookMap || hookMap, modeKey);
 
-        const modeSelected = encounter?.modeSelected ?? "";
-        const hookId = encounter?.hookSelected ?? "";
+        // Mode status (if we don't know the rule, don't crash—grade neutral)
+        let modeStatus = "neutral";
+        if (modeRule?.optimal && encounter.modeSelected === modeRule.optimal) modeStatus = "optimal";
+        else if (modeRule?.neutral && encounter.modeSelected === modeRule.neutral) modeStatus = "neutral";
+        else if (encounter.modeSelected) modeStatus = "damaging";
 
-        // ✅ NEVER touch rule.optimal unless rule exists
-        const modeStatus =
-          (modeRule && modeSelected === modeRule.optimal) ? "optimal" :
-          (modeRule && modeSelected === modeRule.neutral) ? "neutral" :
-          "damaging";
+        // Hook status
+        let hookStatus = "neutral";
+        const hookId = encounter.hookSelected;
 
-        let hookStatus = "damaging";
-        if (encounter?.hookMeta) {
+        if (encounter.hookMeta) {
           const hookTier = encounter.hookMeta.tier || "neutral";
           const base =
             hookTier === "right" ? "optimal" :
@@ -7559,23 +7662,22 @@ function openManagerBoard() {
           else if (strictness === "hard") hookStatus = (hookTier === "right") ? "optimal" : "damaging";
           else hookStatus = base;
         } else {
-          hookStatus =
-            (hookRule && hookId === hookRule.optimal) ? "optimal" :
-            (hookRule && hookId === hookRule.neutral) ? "neutral" :
-            "damaging";
+          // If no hook rule, neutral unless the user picked something clearly wrong per known rule
+          if (hookRule?.optimal && hookId === hookRule.optimal) hookStatus = "optimal";
+          else if (hookRule?.neutral && hookId === hookRule.neutral) hookStatus = "neutral";
+          else if (hookId) hookStatus = "damaging";
+          else hookStatus = "neutral";
         }
 
         const deliveryCorrect =
-          encounter?.selectedS1 === encounter?.correctSlotS1 &&
-          encounter?.selectedS2 === encounter?.correctSlotS2;
+          encounter.selectedS1 === encounter.correctSlotS1 &&
+          encounter.selectedS2 === encounter.correctSlotS2;
 
-        // writeback (so DB payload + scoring stay consistent)
-        if (encounter) {
-          encounter.readCorrect = !!guestRead;
-          encounter.modeStatus = modeStatus;
-          encounter.hookStatus = hookStatus;
-          encounter.deliveryCorrect = !!deliveryCorrect;
-        }
+        // Writeback
+        encounter.readCorrect = !!guestRead;
+        encounter.modeStatus = modeStatus;
+        encounter.hookStatus = hookStatus;
+        encounter.deliveryCorrect = !!deliveryCorrect;
 
         return { guestRead, modeStatus, hookStatus, deliveryCorrect };
       };
