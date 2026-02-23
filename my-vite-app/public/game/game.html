@@ -2788,6 +2788,7 @@ function openManagerBoard() {
           resetUsed: false,
           __reactionComputed: false
         };
+        window.currentEncounter = currentEncounter;
 
         window.__BC_PARENT_LAST_ENCOUNTER__ = currentEncounter;
         window.__BC_LAST_ENCOUNTER__ = currentEncounter;
@@ -3513,7 +3514,7 @@ function openManagerBoard() {
           encounter?.policy ||
           window.__BC_DIFFICULTY__ ||
           difficultyPolicy(encounter?.difficulty ?? 1);
-        const checks = checksOverride || evaluateChecks();
+        const checks = checksOverride || window.evaluateChecks(encounter);
         const pass = streakPasses(encounter, checks, policy);
         const prev = streak;
 
@@ -4359,14 +4360,24 @@ function openManagerBoard() {
           console.warn("[BC] updateCounts skipped: ids not ready");
           return;
         }
+
         const W = getWinesSafe();
         const wineCountEl = document.getElementById(ids.wineCount);
         if (wineCountEl) wineCountEl.innerText = W.length + " / " + LIMIT;
-        renderHomeCounts();
-        renderProgressStatusWindow();
+
+        try { renderHomeCounts(); }
+        catch (e) { console.error("[BC] renderHomeCounts crashed", e); }
+
+        try { renderProgressStatusWindow(); }
+        catch (e) { console.error("[BC] renderProgressStatusWindow crashed", e); }
 
         const btnContinue = document.getElementById(ids.btnContinue);
-        if (btnContinue) btnContinue.disabled = !isUnlocked();
+        if (btnContinue) {
+          let ok = false;
+          try { ok = !!isUnlocked(); }
+          catch (e) { console.error("[BC] isUnlocked crashed", e); ok = false; }
+          btnContinue.disabled = !ok;
+        }
       }
 
       function renderProgressStatusWindow() {
@@ -4576,7 +4587,11 @@ function openManagerBoard() {
       function renderWineTables() {
         renderWineCards();
         renderWineTable();
-        updateCounts();
+        try {
+          updateCounts();
+        } catch (e) {
+          console.error("[BC] updateCounts crashed (ignored to keep gameplay running)", e);
+        }
       }
 
       async function deleteWine(idToDelete) {
@@ -6090,7 +6105,7 @@ function openManagerBoard() {
         // STEP 5: Reaction (driven by EngineBridge)
         // ============================================================
         if (currentStep === 5) {
-          const checksRaw = evaluateChecks();
+          const checksRaw = window.evaluateChecks(window.currentEncounter || currentEncounter);
 
           const rep = getDrillRep(); // null if not in drill
 
@@ -6306,7 +6321,7 @@ function openManagerBoard() {
         }
 
         if (currentStep === 6) {
-          const checks = evaluateChecks();
+          const checks = window.evaluateChecks(window.currentEncounter || currentEncounter);
           const chain = resolveChainFromChecks(currentEncounter, checks);
           console.log("[BC] chain", chain);
           console.log("[BC][CHECKS]", {
@@ -7084,6 +7099,7 @@ function openManagerBoard() {
           resetUsed: carry?.resetUsed || false,
           __reactionComputed: sameEncounter ? (carry?.__reactionComputed || false) : false
         };
+        window.currentEncounter = currentEncounter;
         currentEncounter = applyDifficultyToEncounter(currentEncounter, policy);
         console.log("[ENCOUNTER] built", {
           id: currentEncounter.encounterId,
@@ -7488,6 +7504,81 @@ function openManagerBoard() {
         wineStoreRead: (rid) => (typeof WineStore !== "undefined" ? WineStore.read(rid) : null),
         winesLen: (typeof wines !== "undefined" && Array.isArray(wines) ? wines.length : null),
       });
+
+      // ===============================
+      // HARD OVERRIDE: single evaluateChecks authority
+      // ===============================
+      window.evaluateChecks = function evaluateChecksHard(encounterOverride) {
+        const encounter = encounterOverride || window.currentEncounter;
+        if (!encounter) {
+          console.error("[BC] evaluateChecks called without encounter");
+          console.trace("[BC] evaluateChecks caller trace");
+          return { guestRead: false, modeStatus: "damaging", hookStatus: "damaging", deliveryCorrect: false };
+        }
+        const policy =
+          encounter?.policy ||
+          window.__BC_DIFFICULTY__ ||
+          (typeof difficultyPolicy === "function" ? difficultyPolicy(encounter?.difficulty ?? 1) : null);
+
+        const strictness = policy?.hookStrictness || "normal";
+
+        // Guest read
+        const guestRead = (typeof isCorrectGuestRead === "function") ? isCorrectGuestRead(encounter) : false;
+
+        // Safe map lookups (keys drift, casing drift, missing keys happen)
+        const modeKey = String(encounter?.guestStateActual ?? "").trim();
+        const safeGetRule = (map, key) => {
+          if (!map || !key) return null;
+          const k = String(key).trim();
+          return map[k] || map[k.toLowerCase()] || null;
+        };
+
+        const modeRule = safeGetRule(window.modeMap, modeKey);
+        const hookRule = safeGetRule(window.hookMap, modeKey);
+
+        const modeSelected = encounter?.modeSelected ?? "";
+        const hookId = encounter?.hookSelected ?? "";
+
+        // ✅ NEVER touch rule.optimal unless rule exists
+        const modeStatus =
+          (modeRule && modeSelected === modeRule.optimal) ? "optimal" :
+          (modeRule && modeSelected === modeRule.neutral) ? "neutral" :
+          "damaging";
+
+        let hookStatus = "damaging";
+        if (encounter?.hookMeta) {
+          const hookTier = encounter.hookMeta.tier || "neutral";
+          const base =
+            hookTier === "right" ? "optimal" :
+            hookTier === "slightly" ? "neutral" :
+            "damaging";
+
+          if (strictness === "lenient") hookStatus = (hookTier === "slightly") ? "optimal" : base;
+          else if (strictness === "normal") hookStatus = base;
+          else if (strictness === "strict") hookStatus = (hookTier === "slightly") ? "damaging" : base;
+          else if (strictness === "hard") hookStatus = (hookTier === "right") ? "optimal" : "damaging";
+          else hookStatus = base;
+        } else {
+          hookStatus =
+            (hookRule && hookId === hookRule.optimal) ? "optimal" :
+            (hookRule && hookId === hookRule.neutral) ? "neutral" :
+            "damaging";
+        }
+
+        const deliveryCorrect =
+          encounter?.selectedS1 === encounter?.correctSlotS1 &&
+          encounter?.selectedS2 === encounter?.correctSlotS2;
+
+        // writeback (so DB payload + scoring stay consistent)
+        if (encounter) {
+          encounter.readCorrect = !!guestRead;
+          encounter.modeStatus = modeStatus;
+          encounter.hookStatus = hookStatus;
+          encounter.deliveryCorrect = !!deliveryCorrect;
+        }
+
+        return { guestRead, modeStatus, hookStatus, deliveryCorrect };
+      };
 
     } catch (err) {
       alert("App error: " + err.message);
