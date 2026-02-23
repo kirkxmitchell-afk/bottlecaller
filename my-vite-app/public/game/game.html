@@ -547,6 +547,21 @@ function openManagerBoard() {
         window.ProgressionBridge = window.parent.ProgressionBridge;
       }
 
+      function getProgressionSpine() {
+        const host =
+          (window.top && window.top.BottleCaller) ? window.top :
+          (window.parent && window.parent.BottleCaller) ? window.parent :
+          window;
+
+        const spine = host?.BottleCaller?.progression;
+        if (!spine) throw new Error("Progression spine not found from iframe context.");
+        return spine;
+      }
+
+      function tryGetProgressionSpine() {
+        try { return getProgressionSpine(); } catch { return null; }
+      }
+
       function progKey() {
         const uid =
           window?.BC_CTX?.userId ||
@@ -1567,24 +1582,11 @@ function openManagerBoard() {
       }
 
       function replayFromStage1() {
-        encounterIndex = 0;
-        saveEncounterIndex(encounterIndex);
-        currentEncounter = null;
-        currentStep = 0;
-        if (window.PROG) {
-          ensureProgMeta();
-          refreshTierUnlocksFromPoints();
-          const d = difficultyFromProgSpine();
-          window.__BC_DIFFICULTY__ = {
-            ...difficultyPolicy(d),
-            tierUnlocked: PROG.meta.tierUnlocked,
-            pressure: PROG.guard?.pressureLevel || 0
-          };
-        } else {
-          const d = 1;
-          window.__BC_DIFFICULTY__ = { ...difficultyPolicy(d) };
+        try {
+          getProgressionSpine().actions.resetEncounterFlow();
+        } catch (e) {
+          console.warn("[PROG] resetEncounterFlow failed", e);
         }
-        showScreen("screenHome");
       }
 
       function resetProgressToStart() {
@@ -1600,6 +1602,8 @@ function openManagerBoard() {
       };
 
       window.getAllowedGuestTypes = window.getAllowedGuestTypes || function getAllowedGuestTypes() {
+        const spine = tryGetProgressionSpine();
+        if (spine?.selectors?.guestTypes) return spine.selectors.guestTypes();
         const tier = window.PROG?.meta?.tierUnlocked || 1;
         return window.getAllowedGuestTypesByTier(tier);
       };
@@ -6309,7 +6313,20 @@ function openManagerBoard() {
           renderCoachLineBlock(stepContent, currentEncounter, checks);
           ensureProgLoaded();
           const scored = scoreEncounterForGuard(currentEncounter, checks);
-          awardPointsForEncounter(currentEncounter, checks);
+          try {
+            const didWin =
+              !!checks.guestRead &&
+              checks.modeStatus !== "damaging" &&
+              checks.hookStatus !== "damaging" &&
+              !!checks.deliveryCorrect;
+            getProgressionSpine().actions.applyEncounterResult({
+              encounterId: currentEncounter?.encounterId || currentEncounter?.id || currentEncounter?.encounterNumber,
+              success: didWin,
+              pointEligible: didWin
+            });
+          } catch (e) {
+            console.warn("[PROG] applyEncounterResult failed", e);
+          }
           updateGuestRankFromEncounter(currentEncounter, checks, scored);
           evaluateUnlocks();
           saveProg();

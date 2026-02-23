@@ -2,6 +2,12 @@
 import "./style.css";
 import { supabase, signIn, signUp, signOut, getSession } from "./lib/supabaseClient.js";
 import { decideAllowedTier } from "./game/progressionBridge";
+import { createProgressionStore } from "./progressionStore.js";
+
+if (window.__BOTTLECALLER_BOOTED__) {
+  throw new Error("BottleCaller boot attempted twice.");
+}
+window.__BOTTLECALLER_BOOTED__ = true;
 
 // ===== CANONICAL MODES =====
 const MODE = {
@@ -552,6 +558,24 @@ window.__BC_DEBUG__ = {
 
 // ---- expose appState globally (ctx bridge needs this) ----
 window.appState = window.__BC_APP_STATE__;
+
+const progressionStore = createProgressionStore();
+let progressionSpine = null;
+
+function initProgressionSpineFromState() {
+  if (progressionSpine) return progressionSpine;
+  const email = appState.session?.user?.email || null;
+  const license =
+    appState.restaurant?.code ||
+    appState.profile?.restaurant_id ||
+    null;
+  const groupId = appState.profile?.scope_id || null;
+  if (!email || !license) return null;
+  progressionSpine = progressionStore.init({ email, license, groupId });
+  window.BottleCaller = window.BottleCaller || {};
+  window.BottleCaller.progression = progressionSpine;
+  return progressionSpine;
+}
 
 // ---- expose restaurantId getter globally (for debug + bridge) ----
 window.getActiveRestaurantId = function getActiveRestaurantId() {
@@ -2273,6 +2297,7 @@ async function loadAuthedState(reason = "manual") {
   }
 
   if (appMode === "premium") refreshParentProgressionFromDb();
+  initProgressionSpineFromState();
 
   setDebug({
     step: "authedState.loaded",
