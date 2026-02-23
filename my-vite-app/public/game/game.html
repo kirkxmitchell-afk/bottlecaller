@@ -4315,6 +4315,24 @@ function openManagerBoard() {
         if (pointsEl) pointsEl.innerText = String(points);
       }
 
+      function renderProgressStatusWindowFromSpine() {
+        if (!ids) return;
+        const nameEl = document.getElementById(ids.progressName);
+        const focusEl = document.getElementById(ids.progressFocus);
+        const nextEl = document.getElementById(ids.progressNext);
+        const pointsEl = document.getElementById(ids.progressPoints);
+        if (!nameEl && !focusEl && !nextEl && !pointsEl) return;
+
+        const spine = getProgressionSpine();
+        const points = spine.selectors.points();
+        const tier = spine.selectors.tier();
+
+        if (nameEl) nameEl.innerText = `Tier ${tier}`;
+        if (focusEl) focusEl.innerText = "Progression";
+        if (nextEl) nextEl.innerText = "";
+        if (pointsEl) pointsEl.innerText = String(points);
+      }
+
       // ---------- Setup selection helpers ----------
       function collectSelectedOptions(containerId) {
         const container = document.getElementById(containerId);
@@ -6319,8 +6337,14 @@ function openManagerBoard() {
               checks.modeStatus !== "damaging" &&
               checks.hookStatus !== "damaging" &&
               !!checks.deliveryCorrect;
+            const encounterIdRaw =
+              currentEncounter?.encounterId ??
+              currentEncounter?.id ??
+              currentEncounter?.encounterNumber;
+            if (encounterIdRaw == null) throw new Error("Missing encounterId on currentEncounter");
+            const encounterId = String(encounterIdRaw);
             getProgressionSpine().actions.applyEncounterResult({
-              encounterId: currentEncounter?.encounterId || currentEncounter?.id || currentEncounter?.encounterNumber,
+              encounterId,
               success: didWin,
               pointEligible: didWin
             });
@@ -6328,10 +6352,8 @@ function openManagerBoard() {
             console.warn("[PROG] applyEncounterResult failed", e);
           }
           updateGuestRankFromEncounter(currentEncounter, checks, scored);
-          evaluateUnlocks();
-          saveProg();
-          renderProgressStatusWindow();
-          console.log("[PROG] earned", { pointsTotal: PROG?.meta?.pointsTotal || 0 });
+          renderProgressStatusWindowFromSpine();
+          console.log("[PROG] earned", { pointsTotal: getProgressionSpine().selectors.points() });
 
           // ============================================================
           // ✅ Strength + Fix (Mastery snapshot)
