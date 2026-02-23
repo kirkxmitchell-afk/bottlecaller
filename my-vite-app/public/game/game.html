@@ -7056,7 +7056,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         } else {
           if (isDemo) {
             // Demo: wine matches encounter index (same pacing)
-            wine = wines[(encounterIndex % list.length)] || wines[0] || null;
+            wine = wines[(encounterIndex % wines.length)] || wines[0] || null;
           } else {
             // Premium: rotate through wines
             wine = wines[(encounterIndex % wines.length)] || wines[0] || null;
@@ -7092,9 +7092,13 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           return (next != null && String(next).trim() !== "") ? next : prev;
         }
 
+        // NEW: run-unique id so "NEXT ENCOUNTER" is always a fresh attempt,
+        // even if the same template repeats due to tier filtering.
+        const runIndex = Number.isFinite(encounterIndex) ? encounterIndex : 0;
+        const encounterRunId = `${encounterIdStable}::i_${runIndex}`;
+
         const prev = currentEncounter || null;
-        const prevId = prev?.encounterId || prev?.id || null;
-        const sameEncounter = !!prevId && prevId === encounterIdStable;
+        const sameEncounter = !!prev?.runId && prev.runId === encounterRunId;
         const carry = sameEncounter ? prev : null;
 
         ensureProgLoaded();
@@ -7129,6 +7133,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           "soft";
 
         currentEncounter = {
+          runId: encounterRunId,
           __logged: carry?.__logged ?? false,
           id: encounterIdStable,
           encounterId: encounterIdStable,
@@ -7200,6 +7205,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         currentEncounter = applyDifficultyToEncounter(currentEncounter, policy);
         console.log("[ENCOUNTER] built", {
           id: currentEncounter.encounterId,
+          runId: currentEncounter.runId,
           sameEncounter,
           carriedHook: !!carry?.hookMeta,
           hookNow: !!currentEncounter.hookMeta,
