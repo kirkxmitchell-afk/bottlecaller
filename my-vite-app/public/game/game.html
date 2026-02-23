@@ -7206,6 +7206,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         console.log("[ENCOUNTER] built", {
           id: currentEncounter.encounterId,
           runId: currentEncounter.runId,
+          encounterIndex,
           sameEncounter,
           carriedHook: !!carry?.hookMeta,
           hookNow: !!currentEncounter.hookMeta,
