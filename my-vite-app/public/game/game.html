@@ -696,6 +696,7 @@ function openManagerBoard() {
         window.getAllowedGuestTypesByTier = getAllowedGuestTypesByTier;
       }
       window.getAllowedGuestTypes = getAllowedGuestTypes;
+      window.ensureProgKeyAfterCtx = ensureProgKeyAfterCtx;
 
       function saveProg() {
         const key = progKey();
@@ -1076,6 +1077,7 @@ function openManagerBoard() {
         window.getAllowedGuestTypesByTier = getAllowedGuestTypesByTier;
       }
       window.getAllowedGuestTypes = getAllowedGuestTypes;
+      window.ensureProgKeyAfterCtx = ensureProgKeyAfterCtx;
 
         const prev = window.__BC_DEBUG__;
         window.__BC_DEBUG__ = () => {
@@ -1561,6 +1563,23 @@ function openManagerBoard() {
 
       function getAllowedGuestTypes(tierOverride) {
         return getAllowedGuestTypesByTier(tierOverride ?? 1);
+      }
+
+      function ensureProgKeyAfterCtx() {
+        const realKey = progKey();
+        if (!realKey) return;
+        const fallbackKey = `bc_prog_v1_fallback_${(new URLSearchParams(location.search).get("mode")) || "unknown"}`;
+        if (localStorage.getItem(fallbackKey) && !localStorage.getItem(realKey)) {
+          try {
+            localStorage.setItem(realKey, localStorage.getItem(fallbackKey));
+            console.log("[PROG] migrated fallback -> real key", { fallbackKey, realKey });
+          } catch (e) {
+            console.warn("[PROG] migrate failed", e);
+          }
+        }
+        window.PROG = loadProg();
+        ensureProgMeta();
+        console.log("[PROG] loaded under real key", { key: realKey, meta: window.PROG?.meta });
       }
 
       function guardKey() {
@@ -2086,6 +2105,7 @@ function openManagerBoard() {
 
         console.log("[BC] bc_ctx applied ✅", window.__BC_CTX__);
         ensureProgLoaded();
+        ensureProgKeyAfterCtx();
         try {
           window.__BC_ENSURE_PROG__?.();
           console.log("[PROG] loaded after ctx ✅", window.PROG?.axes, "key:", (window.__BC_CTX__?.userId && window.__BC_CTX__?.restaurantId) ? `bc_prog_v1_${window.__BC_CTX__.userId}_${window.__BC_CTX__.restaurantId}` : null);
