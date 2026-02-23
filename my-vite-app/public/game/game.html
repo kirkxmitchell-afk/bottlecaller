@@ -1540,6 +1540,9 @@ function openManagerBoard() {
             tierUnlocked: PROG.meta.tierUnlocked,
             pressure: PROG.guard?.pressureLevel || 0
           };
+        } else {
+          const d = 1;
+          window.__BC_DIFFICULTY__ = { ...difficultyPolicy(d) };
         }
         showScreen("screenHome");
       }
