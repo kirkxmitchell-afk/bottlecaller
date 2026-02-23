@@ -5035,10 +5035,10 @@ function openManagerBoard() {
       }
 
       function modeWhy(actualGuestState) {
-        const rule = modeMap[actualGuestState];
+        const rule = modeMap ? modeMap[actualGuestState] : null;
         if (!rule) return "No rule found for this guest type.";
 
-        const opt = rule.optimal, neu = rule.neutral, dmg = rule.damaging;
+        const opt = rule?.optimal, neu = rule?.neutral, dmg = rule?.damaging;
 
         return (
           `Optimal: ${opt} (take control & close). ` +
@@ -5048,10 +5048,10 @@ function openManagerBoard() {
       }
 
       function hookWhy(actualGuestState) {
-        const rule = hookMap[actualGuestState];
+        const rule = hookMap ? hookMap[actualGuestState] : null;
         if (!rule) return "No hook rule found for this guest type.";
 
-        const opt = rule.optimal, neu = rule.neutral, dmg = rule.damaging;
+        const opt = rule?.optimal, neu = rule?.neutral, dmg = rule?.damaging;
 
         return (
           `Optimal: ${opt} (speaks to what they care about). ` +
@@ -5061,22 +5061,22 @@ function openManagerBoard() {
       }
 
       function explainModeResult(enc) {
-        const rule = modeMap[enc.guestStateActual];
+        const rule = modeMap ? modeMap[enc.guestStateActual] : null;
         if (!rule) return "Mode rule missing.";
 
         const chosen = enc.modeSelected || "—";
-        if (chosen === rule.optimal) return `You matched the guest tempo: ${chosen} is optimal here.`;
-        if (chosen === rule.neutral) return `Not bad — ${chosen} is neutral here, but ${rule.optimal} would close better.`;
-        return `That felt right, but for ${enc.guestStateActual} the best is ${rule.optimal}. ${chosen} usually loses control.`;
+        if (chosen === rule?.optimal) return `You matched the guest tempo: ${chosen} is optimal here.`;
+        if (chosen === rule?.neutral) return `Not bad — ${chosen} is neutral here, but ${rule?.optimal} would close better.`;
+        return `That felt right, but for ${enc.guestStateActual} the best is ${rule?.optimal}. ${chosen} usually loses control.`;
       }
 
       function explainHookResult(enc) {
-        const rule = hookMap[enc.guestStateActual];
+        const rule = hookMap ? hookMap[enc.guestStateActual] : null;
         if (!rule) return "Hook rule missing.";
 
         const chosen = enc.hookSelected || "—";
-        if (chosen === rule.optimal) return `Clean — ${chosen} is the best hook for this guest.`;
-        if (chosen === rule.neutral) return `Safe — ${chosen} works, but ${rule.optimal} lands harder here.`;
+        if (chosen === rule?.optimal) return `Clean — ${chosen} is the best hook for this guest.`;
+        if (chosen === rule?.neutral) return `Safe — ${chosen} works, but ${rule?.optimal} lands harder here.`;
         return `You pulled them the wrong direction — ${chosen} clashes with what a ${enc.guestStateActual} wants.`;
       }
 
@@ -5147,11 +5147,11 @@ function openManagerBoard() {
       }
 
       function bestModeFor(state) {
-        return (modeMap[state] && modeMap[state].optimal) ? uiModeLabel(modeMap[state].optimal, "game") : "";
+        return (modeMap && modeMap[state] && modeMap[state].optimal) ? uiModeLabel(modeMap[state].optimal, "game") : "";
       }
 
       function bestHookFor(state) {
-        return (hookMap[state] && hookMap[state].optimal) ? hookMap[state].optimal : "";
+        return (hookMap && hookMap[state] && hookMap[state].optimal) ? hookMap[state].optimal : "";
       }
 
       function buildStrengthFixSummary(checks, result, enc) {
@@ -6362,14 +6362,14 @@ function openManagerBoard() {
             stepContent,
             "Mode",
             scoreSymbol(checks.modeStatus),
-            "Best: " + modeMap[currentEncounter.guestStateActual].optimal + " — " + modeWhy(currentEncounter.guestStateActual)
+            "Best: " + (modeMap && modeMap[currentEncounter.guestStateActual] ? (modeMap[currentEncounter.guestStateActual].optimal || "—") : "—") + " — " + modeWhy(currentEncounter.guestStateActual)
           );
 
           addReflectionBlock(
             stepContent,
             "Hook",
             scoreSymbol(checks.hookStatus),
-            "Best: " + hookMap[currentEncounter.guestStateActual].optimal + " — " + hookWhy(currentEncounter.guestStateActual)
+            "Best: " + (hookMap && hookMap[currentEncounter.guestStateActual] ? (hookMap[currentEncounter.guestStateActual].optimal || "—") : "—") + " — " + hookWhy(currentEncounter.guestStateActual)
           );
 
           const correctS1 = currentEncounter.deliverOptionsS1[currentEncounter.correctSlotS1];
