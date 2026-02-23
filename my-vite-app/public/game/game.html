@@ -786,7 +786,7 @@ function openManagerBoard() {
 
       function difficultyFromProgSpine() {
         const spine = getProgressionSpine();
-        const d = Number(spine.selectors.difficultySeed());
+        const d = Number(spine.selectors.effectiveDifficultySeed());
         return Number.isFinite(d) ? d : 1;
       }
 
@@ -6841,7 +6841,7 @@ function openManagerBoard() {
 
         ensureProgLoaded();
         const spine = getProgressionSpine();
-        const seedFromProg = Number(spine.selectors.difficultySeed());
+        const seedFromProg = Number(spine.selectors.effectiveDifficultySeed());
         const policySeed =
           (window.__BC_GUARD__ && Number.isFinite(window.__BC_GUARD__.finalDifficulty))
             ? window.__BC_GUARD__.finalDifficulty

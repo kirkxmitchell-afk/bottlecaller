@@ -53,7 +53,13 @@ export function createProgressionStore(storage = window.localStorage) {
       points: 0,
       difficulty: { seed: 1.0, lastUpdatedAt: Date.now() },
       history: { completedEncounterIds: [], successCount: 0, failCount: 0 },
-      session: { currentEncounterId: 1, mode: "standard", guestTypeSelected: "Decider" }
+      session: {
+        currentEncounterId: 1,
+        mode: "standard",
+        guestTypeSelected: "Decider",
+        runEase: 1.0,
+        runEaseRemaining: 0
+      }
     };
   }
 
@@ -77,6 +83,8 @@ export function createProgressionStore(storage = window.localStorage) {
     s.session.currentEncounterId = Number.isFinite(s.session.currentEncounterId) ? s.session.currentEncounterId : 1;
     s.session.mode = typeof s.session.mode === "string" ? s.session.mode : "standard";
     s.session.guestTypeSelected = typeof s.session.guestTypeSelected === "string" ? s.session.guestTypeSelected : "Decider";
+    if (!Number.isFinite(s.session.runEase)) s.session.runEase = 1.0;
+    if (!Number.isFinite(s.session.runEaseRemaining)) s.session.runEaseRemaining = 0;
 
     // clamp to allowed by tier/points
     s.session.currentEncounterId = clampEncounterByTier(s.session.currentEncounterId, s.points);
@@ -111,6 +119,8 @@ export function createProgressionStore(storage = window.localStorage) {
   function resetEncounterFlow() {
     // ONLY reset gameplay flow, not progression
     state.session.currentEncounterId = 1;
+    state.session.runEase = 0.75;
+    state.session.runEaseRemaining = 3;
     save();
     emit();
   }
@@ -153,6 +163,14 @@ export function createProgressionStore(storage = window.localStorage) {
       state.difficulty.seed = Math.max(1, state.difficulty.seed - 0.02);
     }
 
+    if (success && (state.session.runEaseRemaining || 0) > 0) {
+      state.session.runEaseRemaining -= 1;
+      if (state.session.runEaseRemaining <= 0) {
+        state.session.runEase = 1.0;
+        state.session.runEaseRemaining = 0;
+      }
+    }
+
     // clamp session state after mutation
     state.session.currentEncounterId = clampEncounterByTier(state.session.currentEncounterId, state.points);
 
@@ -171,6 +189,9 @@ export function createProgressionStore(storage = window.localStorage) {
         tier: () => deriveTier(state.points),
         points: () => state.points,
         difficultySeed: () => state.difficulty.seed,
+        effectiveDifficultySeed: () => state.difficulty.seed * (state.session.runEase || 1.0),
+        runEase: () => state.session.runEase || 1.0,
+        runEaseRemaining: () => state.session.runEaseRemaining || 0,
         guestTypes: () => unlockedGuestTypes(state.points),
         modes: () => unlockedModes(state.points),
         encounterRange: () => {
