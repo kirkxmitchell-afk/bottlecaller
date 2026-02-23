@@ -5845,21 +5845,19 @@ function openManagerBoard() {
 
           const options = document.createElement("div");
           options.className = "option-grid";
-          let allowedReads = null;
+          let allowedReads;
 
           try {
             allowedReads = window.getAllowedGuestTypes?.();
           } catch (e) {
             console.warn("[BC] getAllowedGuestTypes threw", e);
+            allowedReads = null;
           }
 
+          // HARD FALLBACK: never blank, never crash
           if (!Array.isArray(allowedReads) || allowedReads.length === 0) {
-            // HARD FALLBACK: UI must never go blank
             allowedReads = ["Decider", "Bargain-Smart", "Griever"];
-            console.warn("[BC] allowedReads missing -> forcing Tier1 fallback");
           }
-
-          allowedReads = normalizeGuestTypes(allowedReads);
 
           console.log("[BC][GUEST_UNLOCK]", {
             encounterIndex,
