@@ -772,19 +772,11 @@ function openManagerBoard() {
       }
 
       function updateTierFromPoints() {
-        ensureProgMeta();
-        const t = tierFromPoints(PROG.meta.pointsTotal);
-        if (t > PROG.meta.tierUnlocked) PROG.meta.tierUnlocked = t;
+        evaluateUnlocks();
       }
 
       function refreshTierUnlocksFromPoints() {
-        ensureProgShape();
-        const next = tierFromPoints(window.PROG.meta.pointsTotal);
-        if (next > window.PROG.meta.tierUnlocked) {
-          window.PROG.meta.tierUnlocked = next;
-        }
-        window.PROG.unlocks.fancy = window.PROG.meta.pointsTotal >= 5;
-        window.PROG.unlocks.celebrator = window.PROG.meta.pointsTotal >= 10;
+        evaluateUnlocks();
       }
 
       function difficultyFromProgSpine() {
@@ -802,7 +794,8 @@ function openManagerBoard() {
         PROG.unlocks = PROG.unlocks || {};
         PROG.counters = PROG.counters || {};
         PROG.meta = PROG.meta || {};
-        if (!Number.isFinite(PROG.meta.pointsTotal)) PROG.meta.pointsTotal = 0;
+        PROG.axes = PROG.axes || {};
+        PROG.flags = PROG.flags || {};
 
         if (!PROG.unlocks.authorityMode) {
           const dec = PROG.counters.deciderGood || 0;
@@ -828,16 +821,18 @@ function openManagerBoard() {
           PROG.unlocks.singleVariableHooks = PROG.axes.compression >= 4;
         }
 
-        const pts = Number(PROG.meta.pointsTotal || 0);
-        const fancyUnlocked = pts >= UNLOCK_THRESHOLDS.fancy;
-        const celebratorUnlocked = pts >= UNLOCK_THRESHOLDS.celebrator;
+        const spine = getProgressionSpine();
+        const pts = spine.selectors.points();
+        const tier = spine.selectors.tier();
+        const fancyUnlocked = tier >= 2;
+        const celebratorUnlocked = tier >= 3;
         PROG.unlocks.fancy = fancyUnlocked;
         PROG.unlocks.celebrator = celebratorUnlocked;
         PROG.unlocks.guestFancy = fancyUnlocked;
         PROG.unlocks.guestCelebrator = celebratorUnlocked;
-        PROG.meta.tierUnlocked = tierFromPoints(pts);
+        PROG.meta.pointsTotal = pts;
+        PROG.meta.tierUnlocked = tier;
         PROG.meta.lastUpdatedMs = Date.now();
-        saveProg();
         return PROG.unlocks;
       }
 
@@ -924,15 +919,10 @@ function openManagerBoard() {
         PROG.flags.resetDebt = PROG.flags.resetDebt || 0;
         if (resetUsed) PROG.flags.resetDebt += 1;
 
-        PROG.meta = PROG.meta || {};
-        PROG.meta.pointsTotal = Number(PROG.meta.pointsTotal || 0);
-        PROG.meta.encountersCleared = Number(PROG.meta.encountersCleared || 0);
         const pass =
           (String(m?.hookMeta?.tier || "").toLowerCase() === "right") &&
           (String(m?.modeSelected || "").trim() !== "") &&
           !resetUsed;
-        if (pass) PROG.meta.pointsTotal += 1;
-        if (pass) PROG.meta.encountersCleared += 1;
         if (pass) refreshTierUnlocksFromPoints();
 
         clampProg();
@@ -970,17 +960,15 @@ function openManagerBoard() {
       }
 
       function awardPointsForEncounter(enc, checks) {
-        if (!checks || !PROG?.meta) return 0;
+        if (!checks) return 0;
         const cleared =
           !!checks.guestRead &&
           checks.modeStatus !== "damaging" &&
           checks.hookStatus !== "damaging" &&
           !!checks.deliveryCorrect;
         if (!cleared) return 0;
-        const d = Number(enc?.difficulty || enc?.policy?.d || PROG?.meta?.difficultySeed || 1);
+        const d = Number(enc?.difficulty || enc?.policy?.d || 1);
         const pts = d <= 2 ? 1 : d <= 4 ? 2 : 3;
-        PROG.meta.pointsTotal = Number(PROG.meta.pointsTotal || 0) + pts;
-        PROG.meta.encountersCleared = Number(PROG.meta.encountersCleared || 0) + 1;
         refreshTierUnlocksFromPoints();
         return pts;
       }
