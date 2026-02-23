@@ -4929,12 +4929,13 @@ function openManagerBoard() {
         const strictness = policy?.hookStrictness || "normal";
         const guestRead = isCorrectGuestRead(encounter);
 
-        const modeRule = modeMap[encounter.guestStateActual];
-        const hookRule = hookMap[encounter.guestStateActual];
+        const modeKey = String(encounter?.guestStateActual ?? "").trim();
+        const modeRule = (modeMap && modeKey) ? modeMap[modeKey] : null;
+        const hookRule = (hookMap && modeKey) ? hookMap[modeKey] : null;
 
-          const modeStatus =
-            encounter.modeSelected === modeRule.optimal ? "optimal" :
-            encounter.modeSelected === modeRule.neutral ? "neutral" : "damaging";
+        const modeStatus =
+          encounter.modeSelected === (modeRule && modeRule.optimal) ? "optimal" :
+          encounter.modeSelected === (modeRule && modeRule.neutral) ? "neutral" : "damaging";
 
         let hookStatus = "damaging";
         const hookId = encounter.hookSelected;
@@ -4960,8 +4961,8 @@ function openManagerBoard() {
           }
         } else {
           hookStatus =
-            hookId === hookRule.optimal ? "optimal" :
-            hookId === hookRule.neutral ? "neutral" : "damaging";
+            hookId === (hookRule && hookRule.optimal) ? "optimal" :
+            hookId === (hookRule && hookRule.neutral) ? "neutral" : "damaging";
         }
 
         const deliveryCorrect =
