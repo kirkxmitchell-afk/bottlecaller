@@ -4298,39 +4298,20 @@ function openManagerBoard() {
         const pointsEl = document.getElementById(ids.progressPoints);
         if (!nameEl && !focusEl && !nextEl && !pointsEl) return;
 
-        const ctxReady = !!(window.__BC_CTX__?.userId && window.__BC_CTX__?.restaurantId);
-        const tierAllowed = getUnlockedTierStrict();
-        const runtime = {
-          ctxStatus: ctxReady ? "hydrated" : "anon",
-          progression: { tierAllowed, reasonsHuman: [] }
-        };
-        const view = getPlayerProgressionView(runtime);
-
-        if (nameEl) nameEl.innerText = view?.level || "—";
-        if (focusEl) focusEl.innerText = view?.focus || "—";
-        if (nextEl) nextEl.innerText = view?.next || "—";
-
-        const prog = ensureProgLoaded();
-        const points = prog?.meta?.pointsTotal || 0;
-        if (pointsEl) pointsEl.innerText = String(points);
-      }
-
-      function renderProgressStatusWindowFromSpine() {
-        if (!ids) return;
-        const nameEl = document.getElementById(ids.progressName);
-        const focusEl = document.getElementById(ids.progressFocus);
-        const nextEl = document.getElementById(ids.progressNext);
-        const pointsEl = document.getElementById(ids.progressPoints);
-        if (!nameEl && !focusEl && !nextEl && !pointsEl) return;
-
-        const spine = getProgressionSpine();
-        const points = spine.selectors.points();
-        const tier = spine.selectors.tier();
-
-        if (nameEl) nameEl.innerText = `Tier ${tier}`;
-        if (focusEl) focusEl.innerText = "Progression";
-        if (nextEl) nextEl.innerText = "";
-        if (pointsEl) pointsEl.innerText = String(points);
+        try {
+          const spine = getProgressionSpine();
+          const points = spine.selectors.points();
+          const tier = spine.selectors.tier();
+          if (nameEl) nameEl.innerText = `Tier ${tier}`;
+          if (focusEl) focusEl.innerText = "Progression";
+          if (nextEl) nextEl.innerText = "";
+          if (pointsEl) pointsEl.innerText = String(points);
+        } catch (e) {
+          if (nameEl) nameEl.innerText = "—";
+          if (focusEl) focusEl.innerText = "—";
+          if (nextEl) nextEl.innerText = "—";
+          if (pointsEl) pointsEl.innerText = "0";
+        }
       }
 
       // ---------- Setup selection helpers ----------
@@ -6352,7 +6333,7 @@ function openManagerBoard() {
             console.warn("[PROG] applyEncounterResult failed", e);
           }
           updateGuestRankFromEncounter(currentEncounter, checks, scored);
-          renderProgressStatusWindowFromSpine();
+          renderProgressStatusWindow();
           console.log("[PROG] earned", { pointsTotal: getProgressionSpine().selectors.points() });
 
           // ============================================================
