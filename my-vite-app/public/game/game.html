@@ -663,6 +663,7 @@ function openManagerBoard() {
       try {
         PROG = ensureProgShape(loadProg());
         PROG = PROG || {};
+        ensureProgMeta();
         PROG.meta = PROG.meta || {};
         if (!Number.isFinite(PROG.meta.pointsTotal)) PROG.meta.pointsTotal = 0;
         PROG.unlocks = PROG.unlocks || {};
