@@ -823,13 +823,6 @@ function openManagerBoard() {
         PROG.flags.resetDebt = clamp(PROG.flags.resetDebt, 0, 6);
       }
 
-      function tierFromPoints(pointsTotal) {
-        const p = Number(pointsTotal || 0);
-        if (p >= 10) return 3;
-        if (p >= 5) return 2;
-        return 1;
-      }
-
       function baseDifficultyFromUnlockedTier(tierUnlocked) {
         if (tierUnlocked <= 1) return 1;
         if (tierUnlocked === 2) return 3;
