@@ -366,19 +366,35 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
     FANCY: "fancy",
     GRIEVER: "griever",
     CELEBRATOR: "celebrator",
-    BARGAIN: "bargain_smart",
+    BARGAIN_SMART: "bargain_smart",
+  };
+
+  // --- Optional display labels ---
+  window.GUEST_LABELS = window.GUEST_LABELS || {
+    decider: "Decider",
+    fancy: "Fancy",
+    griever: "Griever",
+    celebrator: "Celebrator",
+    bargain_smart: "Bargain-Smart",
+  };
+
+  // --- Normalizer ---
+  window.normalizeGuestType = window.normalizeGuestType || function normalizeGuestType(raw) {
+    if (!raw) return "";
+    return String(raw).trim().toLowerCase().replace(/[\s-]+/g, "_");
   };
 
   // --- Tier guest table + unlocks (must exist before any usage) ---
   window.TIER_GUESTS = window.TIER_GUESTS || {
-    1: [window.GUEST.DECIDER, window.GUEST.GRIEVER, window.GUEST.BARGAIN],
-    2: [window.GUEST.DECIDER, window.GUEST.GRIEVER, window.GUEST.BARGAIN, window.GUEST.FANCY],
-    3: [window.GUEST.DECIDER, window.GUEST.GRIEVER, window.GUEST.BARGAIN, window.GUEST.FANCY, window.GUEST.CELEBRATOR],
+    1: [window.GUEST.DECIDER, window.GUEST.BARGAIN_SMART, window.GUEST.GRIEVER],
+    2: [window.GUEST.DECIDER, window.GUEST.BARGAIN_SMART, window.GUEST.GRIEVER, window.GUEST.FANCY],
+    3: [window.GUEST.DECIDER, window.GUEST.BARGAIN_SMART, window.GUEST.GRIEVER, window.GUEST.FANCY, window.GUEST.CELEBRATOR],
   };
 
   window.tierFromPoints = window.tierFromPoints || function tierFromPoints(points) {
-    if (points >= 10) return 3;
-    if (points >= 5) return 2;
+    const p = Number(points) || 0;
+    if (p >= 10) return 3;
+    if (p >= 5) return 2;
     return 1;
   };
 
@@ -740,7 +756,7 @@ function openManagerBoard() {
           recovery: { type: null, step: 0, ttl: 0 },
           guestRanks: {
             [window.GUEST.DECIDER]: makeGuestRank(),
-            [window.GUEST.BARGAIN]: makeGuestRank(),
+            [window.GUEST.BARGAIN_SMART]: makeGuestRank(),
             [window.GUEST.GRIEVER]: makeGuestRank(),
             [window.GUEST.FANCY]: makeGuestRank(),
             [window.GUEST.CELEBRATOR]: makeGuestRank(),
@@ -769,7 +785,7 @@ function openManagerBoard() {
         if (typeof p.unlocks.guestCelebrator !== "boolean") p.unlocks.guestCelebrator = false;
 
         p.guestRanks = p.guestRanks || {};
-        [window.GUEST.DECIDER, window.GUEST.BARGAIN, window.GUEST.GRIEVER, window.GUEST.FANCY, window.GUEST.CELEBRATOR].forEach((k) => {
+        [window.GUEST.DECIDER, window.GUEST.BARGAIN_SMART, window.GUEST.GRIEVER, window.GUEST.FANCY, window.GUEST.CELEBRATOR].forEach((k) => {
           if (!p.guestRanks[k]) p.guestRanks[k] = makeGuestRank();
         });
 
@@ -1605,19 +1621,14 @@ function openManagerBoard() {
         saveMastery(mastery);
       }
 
-      function normalizeGuestType(raw) {
-        if (!raw) return "";
-        return String(raw)
-          .toLowerCase()
-          .replace(/[\s-]/g, "_");
-      }
+      const normalizeGuestType = window.normalizeGuestType;
 
       const guestStates = [
         window.GUEST.DECIDER,
         window.GUEST.FANCY,
         window.GUEST.GRIEVER,
         window.GUEST.CELEBRATOR,
-        window.GUEST.BARGAIN,
+        window.GUEST.BARGAIN_SMART,
       ];
 
       function resolveAllowedGuestTypes(encounter) {
@@ -1845,7 +1856,7 @@ function openManagerBoard() {
       // ---------- Rule maps ----------
       const modeMap = {
         [window.GUEST.DECIDER]: { optimal: MODES.AUTH, neutral: MODES.SCOUT, damaging: MODES.GUIDE },
-        [window.GUEST.BARGAIN]: { optimal: MODES.SCOUT, neutral: MODES.AUTH, damaging: MODES.GUIDE },
+        [window.GUEST.BARGAIN_SMART]: { optimal: MODES.SCOUT, neutral: MODES.AUTH, damaging: MODES.GUIDE },
         [window.GUEST.FANCY]: { optimal: MODES.GUIDE, neutral: MODES.AUTH, damaging: MODES.SCOUT },
         [window.GUEST.GRIEVER]: { optimal: MODES.SCOUT, neutral: MODES.GUIDE, damaging: MODES.AUTH },
         [window.GUEST.CELEBRATOR]: { optimal: MODES.AUTH, neutral: MODES.GUIDE, damaging: MODES.SCOUT }
@@ -1853,7 +1864,7 @@ function openManagerBoard() {
 
       const hookMap = {
         [window.GUEST.DECIDER]: { optimal: "VALUE", neutral: "FLAVOUR", damaging: "STORY" },
-        [window.GUEST.BARGAIN]: { optimal: "VALUE", neutral: "FLAVOUR", damaging: "STORY" },
+        [window.GUEST.BARGAIN_SMART]: { optimal: "VALUE", neutral: "FLAVOUR", damaging: "STORY" },
         [window.GUEST.FANCY]: { optimal: "STORY", neutral: "FLAVOUR", damaging: "VALUE" },
         [window.GUEST.GRIEVER]: { optimal: "FLAVOUR", neutral: "STORY", damaging: "VALUE" },
         [window.GUEST.CELEBRATOR]: { optimal: "STORY", neutral: "VALUE", damaging: "FLAVOUR" }
@@ -2110,7 +2121,7 @@ function openManagerBoard() {
       const GUEST_READ_MATCH = {
         [window.GUEST.DECIDER]: [window.GUEST.DECIDER],
         [window.GUEST.GRIEVER]: [window.GUEST.GRIEVER],
-        [window.GUEST.BARGAIN]: [window.GUEST.BARGAIN],
+        [window.GUEST.BARGAIN_SMART]: [window.GUEST.BARGAIN_SMART],
         [window.GUEST.FANCY]: [window.GUEST.FANCY],
         [window.GUEST.CELEBRATOR]: [window.GUEST.CELEBRATOR],
       };
@@ -2146,7 +2157,7 @@ function openManagerBoard() {
         const g = normalizeGuestType(raw);
         if (g === "budget_guard") return window.GUEST.FANCY;
         if (g === "make_it_easy") return window.GUEST.CELEBRATOR;
-        if (g === "analyst") return window.GUEST.BARGAIN;
+        if (g === "analyst") return window.GUEST.BARGAIN_SMART;
         if (g === "browser" || g === "alpha") return window.GUEST.DECIDER;
         return g;
       }
@@ -2859,7 +2870,7 @@ function openManagerBoard() {
                 "Budget Guard": window.GUEST.FANCY,
                 "Celebrator": window.GUEST.CELEBRATOR,
                 "Alpha": window.GUEST.DECIDER,
-                "Analyst": window.GUEST.BARGAIN,
+                "Analyst": window.GUEST.BARGAIN_SMART,
                 "Make-It-Easy": window.GUEST.CELEBRATOR,
               }[label];
               currentEncounter.guestReadSelected = guestKey;
@@ -4792,7 +4803,7 @@ function openManagerBoard() {
 
         const tone = {
           [window.GUEST.DECIDER]: ["direct", "decisive", "clean"],
-          [window.GUEST.BARGAIN]: ["measured", "grounded", "practical"],
+          [window.GUEST.BARGAIN_SMART]: ["measured", "grounded", "practical"],
           [window.GUEST.FANCY]: ["refined", "polished", "elegant"],
           [window.GUEST.GRIEVER]: ["gentle", "soft", "patient"],
           [window.GUEST.CELEBRATOR]: ["upbeat", "energetic", "playful"]
@@ -5777,7 +5788,7 @@ function openManagerBoard() {
           ];
         }
 
-        if (safeGuest === window.GUEST.BARGAIN || safeGuest === "analyst") {
+        if (safeGuest === window.GUEST.BARGAIN_SMART || safeGuest === "analyst") {
           const leadLine = `Clean pick: ${name}. Bright structure, dry finish — no surprises.`;
           const reflectLine = `Do you want higher acidity, or more body?`;
           const holdLine = `This is our best value bottle.`;
@@ -6024,7 +6035,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
           // HARD FALLBACK: never blank, never crash
           if (!Array.isArray(allowedReads) || allowedReads.length === 0) {
-            allowedReads = [window.GUEST.DECIDER, window.GUEST.BARGAIN, window.GUEST.GRIEVER];
+            allowedReads = [window.GUEST.DECIDER, window.GUEST.BARGAIN_SMART, window.GUEST.GRIEVER];
           }
 
           console.log("[BC][GUEST_UNLOCK]", {
