@@ -273,44 +273,6 @@ document.querySelector("#app").innerHTML = `
         </div>
       </div>
 
-      <div class="card">
-        <div class="score-row">Restaurant: <span id="mbRestName">-</span></div>
-        <div class="score-row">Total runs: <span id="mbRunsTotal">-</span></div>
-        <div class="score-row">Total drills: <span id="mbDrillsTotal">-</span></div>
-      </div>
-
-      <div id="mbBillingAccess" class="card" style="margin-top:12px;">
-        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
-          <strong>Billing & Access</strong>
-          <span id="mbSeatStatus" class="badge">Seats: —</span>
-        </div>
-
-        <div class="small-text" id="mbSeatDetail" style="margin-top:6px;">
-          Loading seat usage…
-        </div>
-
-        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
-          <button id="mbSeat15" class="btn-ghost" type="button">Set seats: 15</button>
-          <button id="mbSeat30" class="btn-ghost" type="button">Set seats: 30</button>
-          <button id="mbSeat60" class="btn-ghost" type="button">Set seats: 60</button>
-          <button id="mbRefreshSeats" class="btn-ghost" type="button">Refresh</button>
-        </div>
-
-        <hr style="opacity:.2; margin:12px 0;" />
-
-        <strong>Enterprise Signup</strong>
-        <div class="small-text" style="margin-top:6px;">
-          Paste an Enterprise manager_setup code to upgrade this manager scope.
-        </div>
-
-        <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
-          <input id="mbEnterpriseCode" type="text" placeholder="ENTERPRISE_XXXXX" style="flex:1; min-width:220px;" />
-          <button id="mbRedeemEnterprise" class="btn-primary" type="button">Redeem</button>
-        </div>
-
-        <div id="mbEnterpriseMsg" class="small-text" style="margin-top:8px;"></div>
-      </div>
-
       <div id="groupRestaurantPicker" class="card" style="display:none; margin-top:10px;">
         <strong>Active Restaurant</strong>
         <div class="small-text" style="margin-top:6px;">
@@ -325,19 +287,90 @@ document.querySelector("#app").innerHTML = `
         <div id="activeRestaurantHint" class="small-text" style="margin-top:8px;"></div>
       </div>
 
-      <div style="margin-top:12px;">
-        <div style="font-weight:600; margin-bottom:6px;">Best streaks</div>
-        <div id="mbBestStreaks" style="opacity:.9;">-</div>
+      <div id="mbMenu" class="card" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <button class="btn" type="button" data-mbtab="overview">Overview</button>
+        <button class="btn" type="button" data-mbtab="staff">Staff</button>
+        <button class="btn" type="button" data-mbtab="insights">Insights</button>
+        <button class="btn" type="button" data-mbtab="billing">Billing</button>
+        <button class="btn" type="button" data-mbtab="provision">Provision</button>
       </div>
 
-      <div style="margin-top:12px;">
-        <div style="font-weight:600; margin-bottom:6px;">Needs coaching</div>
-        <div id="mbNeedsCoaching" style="opacity:.9;">-</div>
-      </div>
+      <div id="mbPanels">
+        <div id="mbTab_overview" class="mbTab">
+          <div class="card">
+            <div class="score-row">Restaurant: <span id="mbRestName">-</span></div>
+            <div class="score-row">Total runs: <span id="mbRunsTotal">-</span></div>
+            <div class="score-row">Total drills: <span id="mbDrillsTotal">-</span></div>
+          </div>
 
-      <div class="card">
-        <h3 style="margin:0 0 8px 0;">Recent activity</h3>
-        <div id="mbRecent" class="small" style="opacity:.9;">Loading…</div>
+          <div style="margin-top:12px;">
+            <div style="font-weight:600; margin-bottom:6px;">Best streaks</div>
+            <div id="mbBestStreaks" style="opacity:.9;">-</div>
+          </div>
+
+          <div style="margin-top:12px;">
+            <div style="font-weight:600; margin-bottom:6px;">Needs coaching</div>
+            <div id="mbNeedsCoaching" style="opacity:.9;">-</div>
+          </div>
+
+          <div class="card">
+            <h3 style="margin:0 0 8px 0;">Recent activity</h3>
+            <div id="mbRecent" class="small" style="opacity:.9;">Loading…</div>
+          </div>
+        </div>
+
+        <div id="mbTab_staff" class="mbTab" style="display:none;"></div>
+        <div id="mbTab_insights" class="mbTab" style="display:none;"></div>
+
+        <div id="mbTab_billing" class="mbTab" style="display:none;">
+          <div id="mbBillingAccess" class="card" style="margin-top:12px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+              <strong>Billing & Access</strong>
+              <span id="mbSeatStatus" class="badge">Seats: —</span>
+            </div>
+
+            <div class="small-text" id="mbSeatDetail" style="margin-top:6px;">
+              Loading seat usage…
+            </div>
+
+            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
+              <button id="mbSeat15" class="btn-ghost" type="button">Set seats: 15</button>
+              <button id="mbSeat30" class="btn-ghost" type="button">Set seats: 30</button>
+              <button id="mbSeat60" class="btn-ghost" type="button">Set seats: 60</button>
+              <button id="mbRefreshSeats" class="btn-ghost" type="button">Refresh</button>
+            </div>
+
+            <hr style="opacity:.2; margin:12px 0;" />
+
+            <strong>Enterprise Signup</strong>
+            <div class="small-text" style="margin-top:6px;">
+              Paste an Enterprise manager_setup code to upgrade this manager scope.
+            </div>
+
+            <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+              <input id="mbEnterpriseCode" type="text" placeholder="ENTERPRISE_XXXXX" style="flex:1; min-width:220px;" />
+              <button id="mbRedeemEnterprise" class="btn-primary" type="button">Redeem</button>
+            </div>
+
+            <div id="mbEnterpriseMsg" class="small-text" style="margin-top:8px;"></div>
+          </div>
+        </div>
+
+        <div id="mbTab_provision" class="mbTab" style="display:none;">
+          <div class="card" style="margin-top:12px;">
+            <strong>Group Manager Signup</strong>
+            <div class="small-text" style="margin-top:6px;">
+              Paste a GROUP manager_setup code to create/upgrade a manager scope for multi-restaurant control.
+            </div>
+
+            <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+              <input id="mbGroupSetupCode" type="text" placeholder="GROUP_XXXXX" style="flex:1; min-width:220px;" />
+              <button id="mbRedeemGroupSetup" class="btn-primary" type="button">Redeem</button>
+            </div>
+
+            <div id="mbGroupSetupMsg" class="small-text" style="margin-top:8px;"></div>
+          </div>
+        </div>
       </div>
 
       <div id="mbMsg" class="small"></div>
@@ -1950,6 +1983,41 @@ async function redeemEnterpriseManagerSetupCode() {
   if (msg) msg.textContent = "✅ Enterprise upgrade applied (if code was enterprise).";
 }
 
+async function redeemGroupSetupCode() {
+  const input = document.getElementById("mbGroupSetupCode");
+  const msg = document.getElementById("mbGroupSetupMsg");
+  const code = (input?.value || "").trim().toUpperCase();
+
+  if (!code) return;
+
+  if (msg) msg.textContent = "Redeeming…";
+
+  const { data, error } = await supabase.rpc("redeem_code", { p_code: code });
+
+  if (error) { if (msg) msg.textContent = "Failed: " + error.message; return; }
+  if (data?.ok === false) { if (msg) msg.textContent = "Failed: " + (data?.error || "unknown"); return; }
+
+  if (msg) msg.textContent = "✅ Redeemed. Reloading profile…";
+
+  try {
+    const session = window.appState?.session;
+    if (session?.user?.id) {
+      window.appState.profile = await loadProfile(session.user.id);
+    }
+  } catch {}
+
+  try { await initRestaurantContextAfterAuth(); } catch {}
+  try { applyManagerBoardVisibility(); } catch {}
+  if (msg) msg.textContent = "✅ Group manager scope applied.";
+}
+
+function wireGroupSetupRedeem() {
+  const btn = document.getElementById("mbRedeemGroupSetup");
+  if (!btn || btn.__wired) return;
+  btn.__wired = true;
+  btn.addEventListener("click", redeemGroupSetupCode);
+}
+
 function wireManagerBoardBillingAccess() {
   const isMgr = appState.profile?.role === "manager";
   const b15 = document.getElementById("mbSeat15");
@@ -1976,6 +2044,28 @@ function wireManagerBoardBillingAccess() {
   loadManagerBoardSeats();
 }
 
+function mbShowTab(tab) {
+  document.querySelectorAll("#mbPanels .mbTab").forEach((el) => {
+    el.style.display = "none";
+  });
+  const el = document.getElementById(`mbTab_${tab}`);
+  if (el) el.style.display = "block";
+}
+
+function wireManagerBoardMenu() {
+  const menu = document.getElementById("mbMenu");
+  if (!menu || menu.__wired) return;
+  menu.__wired = true;
+
+  menu.addEventListener("click", (e) => {
+    const btn = e.target?.closest?.("[data-mbtab]");
+    if (!btn) return;
+    mbShowTab(btn.getAttribute("data-mbtab"));
+  });
+
+  mbShowTab("overview");
+}
+
 function applyManagerBoardVisibility() {
   const p = appState.profile || {};
   const role = String(p.role || "").toLowerCase();
@@ -1986,6 +2076,14 @@ function applyManagerBoardVisibility() {
     const show = role === "manager" && scopeType === "group" && !!p.scope_id;
     picker.style.display = show ? "block" : "none";
   }
+
+  const provisionBtn = document.querySelector('#mbMenu [data-mbtab="provision"]');
+  if (provisionBtn) {
+    provisionBtn.style.display = (scopeType === "group" || scopeType === "enterprise") ? "" : "none";
+  }
+
+  const billingBtn = document.querySelector('#mbMenu [data-mbtab="billing"]');
+  if (billingBtn) billingBtn.style.display = "";
 }
 
 async function loadGroupRestaurantsForPicker() {
@@ -2668,6 +2766,8 @@ async function routeManagerBoard(reason = "manual") {
   unmountDemoGame();
   showScreen("screenManagerBoard");
   applyManagerBoardVisibility();
+  wireManagerBoardMenu();
+  wireGroupSetupRedeem();
   await loadManagerBoardData();
   wireManagerBoardBillingAccess();
   await loadGroupRestaurantsForPicker();
