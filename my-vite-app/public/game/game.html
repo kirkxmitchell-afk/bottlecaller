@@ -7021,8 +7021,23 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           sessionType,
           encounterIndex: (typeof encounterIndex !== "undefined") ? encounterIndex : "UNDEFINED"
         });
+        console.log("[DEBUG] before ensureProgLoaded");
         ensureProgLoaded();
-        if (sessionType !== "drill" && !isUnlocked()) return;
+        console.log("[DEBUG] after ensureProgLoaded", {
+          sessionType,
+          bcMode,
+          encounterIndex,
+          typeofEncounterIndex: typeof encounterIndex,
+          PROG_meta: window.PROG?.meta || null
+        });
+
+        const unlocked = isUnlocked();
+        console.log("[DEBUG] isUnlocked()", unlocked);
+
+        if (sessionType !== "drill" && !unlocked) {
+          console.warn("[DEBUG] BLOCKED BY isUnlocked GUARD");
+          return;
+        }
 
         if (!sessionId) {
           sessionId = crypto.randomUUID();
@@ -7049,14 +7064,11 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           return;
         }
         if (typeof encounterIndex !== "number") {
-          alert("encounterIndex not set. Drill cannot start.");
-          return;
+          const n = Number(encounterIndex);
+          encounterIndex = Number.isFinite(n) ? n : 0;
+          console.log("[ENCOUNTER] coerced encounterIndex", { raw: encounterIndex, n: encounterIndex });
         }
-        if (!Array.isArray(list) || list.length === 0) {
-          alert("No encounters loaded. Check window.__BC_ENCOUNTERS__.");
-          console.error("[BC] No encounters available for mode:", window.APP_MODE, window.__BC_ENCOUNTERS__);
-          return;
-        }
+        // duplicate list check removed (handled above)
 
         bcRenderHud("start");
 
