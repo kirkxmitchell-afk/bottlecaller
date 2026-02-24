@@ -549,19 +549,19 @@ const appState = {
   invites: [],
 };
 // --- storage key should be per-scope (group/enterprise) ---
-function activeRestaurantStorageKey() {
-  const S = window.appState;
-  const scopeId = S?.profile?.scope_id || "noscope";
-  return `bc_active_restaurant_id:${scopeId}`;
+function activeRestaurantStorageKey(scopeId) {
+  return `bc_active_restaurant_id::${scopeId || "noscope"}`;
 }
 
 function getStoredActiveRestaurantId() {
-  try { return localStorage.getItem(activeRestaurantStorageKey()) || null; }
+  const scopeId = appState?.profile?.scope_id || null;
+  try { return localStorage.getItem(activeRestaurantStorageKey(scopeId)) || null; }
   catch { return null; }
 }
 
 function setStoredActiveRestaurantId(rid) {
-  try { localStorage.setItem(activeRestaurantStorageKey(), rid); } catch {}
+  const scopeId = appState?.profile?.scope_id || null;
+  try { localStorage.setItem(activeRestaurantStorageKey(scopeId), rid); } catch {}
 }
 
 appState.activeRestaurantId = getStoredActiveRestaurantId();
@@ -2145,11 +2145,15 @@ async function loadGroupRestaurantsForPicker() {
 }
 
 async function assertRestaurantAllowedForScope(scopeId, restaurantId) {
+  const sid = String(scopeId || "");
+  const rid = String(restaurantId || "");
+  if (!sid || !rid) return false;
+
   const { data, error } = await supabase
     .from("bc_scope_restaurants")
     .select("restaurant_id")
-    .eq("scope_id", scopeId)
-    .eq("restaurant_id", restaurantId)
+    .eq("scope_id", sid)
+    .eq("restaurant_id", rid)
     .maybeSingle();
 
   if (error) throw error;
@@ -2258,51 +2262,43 @@ async function setActiveRestaurantForGroup(restaurantId) {
   }
   if (!restaurantId) throw new Error("No restaurant selected.");
 
+  // 0) hard allow-check
   const ok = await assertRestaurantAllowedForScope(scopeId, restaurantId);
   if (!ok) throw new Error("Restaurant not allowed for this scope.");
 
-  // 1) persist selection
-  const uid = appState.profile?.user_id;
-  if (!uid) return;
-
+  // 1) persist selection (LOCAL preference only)
   appState.activeRestaurantId = restaurantId;
   try { setStoredActiveRestaurantId(restaurantId); } catch {}
 
   const hint = document.getElementById("activeRestaurantHint");
   if (hint) hint.textContent = `Active: ${String(restaurantId).slice(0, 8)}…`;
 
-  const { error } = await supabase
-    .from("profiles")
-    .update({ restaurant_id: restaurantId })
-    .eq("user_id", uid);
-
-  if (error) {
-    console.error("[BC] setActiveRestaurantForGroup update error", error);
-    return;
+  // 2) hydrate restaurant into parent state
+  try {
+    const restaurant = await loadRestaurant(restaurantId);
+    appState.restaurant = restaurant;
+    window.__BC_APP_STATE__ = window.__BC_APP_STATE__ || {};
+    window.__BC_APP_STATE__.restaurant = restaurant;
+  } catch (e) {
+    console.warn("[BC] loadRestaurant failed after switch", e);
   }
 
-  // 2) hydrate parent state
-  const profile = await loadProfile(uid);
-  window.__BC_APP_STATE__ = window.__BC_APP_STATE__ || {};
-  window.__BC_APP_STATE__.profile = profile;
-  appState.profile = profile;
+  // 3) DO NOT mutate profiles.restaurant_id for group/enterprise
+  // profile.restaurant_id is not authoritative in multi-restaurant scopes.
+  // Keep the profile stable (scope_id + scope_type define membership).
 
-  if (profile?.restaurant_id) {
-    try {
-      window.__BC_APP_STATE__.restaurant = await loadRestaurant(profile.restaurant_id);
-      appState.restaurant = window.__BC_APP_STATE__.restaurant;
-    } catch (e) {
-      console.warn("[BC] loadRestaurant failed after switch", e);
-    }
-  }
-
-  console.log("[BC] active restaurant set", {
-    restaurant_id: window.__BC_APP_STATE__?.profile?.restaurant_id,
-    restaurant: window.__BC_APP_STATE__?.restaurant
+  console.log("[BC] active restaurant set (group/enterprise)", {
+    scopeId,
+    restaurantId,
+    restaurant: appState.restaurant ? { id: appState.restaurant.id, name: appState.restaurant.name } : null
   });
 
-  // 3) mount premium game (and clear any old iframe)
-  mountPremiumGameIframe();
+  // 4) optional: only remount game if it's currently mounted/visible
+  // (prevents random iframe reloads if you switch while staying in Manager Board)
+  try {
+    const playScreenVisible = !document.getElementById("screenPlay")?.classList.contains("hidden");
+    if (playScreenVisible) mountPremiumGameIframe();
+  } catch {}
 }
 
 async function loadManagerBoardData() {
