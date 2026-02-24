@@ -382,7 +382,7 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
     return 1;
   };
 
-  window.allowedGuestTypes = window.allowedGuestTypes || function window.allowedGuestTypes(points) {
+  window.allowedGuestTypes = window.allowedGuestTypes || function allowedGuestTypes(points) {
     const tier = window.tierFromPoints(points);
     return window.TIER_GUESTS[tier] || window.TIER_GUESTS[1];
   };
