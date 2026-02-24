@@ -627,14 +627,16 @@ function initProgressionSpineFromState() {
 }
 
 // ---- expose restaurantId getter globally (for debug + bridge) ----
-window.getActiveRestaurantId = function window.getActiveRestaurantId() {
-  const S = window.appState;
-  return (
-    S?.activeRestaurantId ||
-    S?.profile?.restaurant_id ||
-    null
-  );
-};
+window.getActiveRestaurantId =
+  window.getActiveRestaurantId ||
+  function getActiveRestaurantId() {
+    const S = window.appState;
+    return (
+      S?.activeRestaurantId ||
+      S?.profile?.restaurant_id ||
+      null
+    );
+  };
 
 // --- Fetch allowed restaurants for current scope ---
 async function fetchAllowedRestaurantsForScope(scopeId) {
@@ -2121,9 +2123,8 @@ async function loadGroupRestaurantsForPicker() {
   });
 
   // Optional: preselect active restaurant if already set
-  if (appState.profile?.restaurant_id) {
-    sel.value = appState.profile.restaurant_id;
-  }
+  const active = window.getActiveRestaurantId?.();
+  if (active) sel.value = active;
 
   console.log("[BC] group picker hydrated", { scopeId, count: rows.length, rows });
 }
