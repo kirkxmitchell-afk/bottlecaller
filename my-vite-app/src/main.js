@@ -2160,55 +2160,6 @@ async function assertRestaurantAllowedForScope(scopeId, restaurantId) {
   return !!data;
 }
 
-async function resolveAndSetActiveRestaurantFromScope(profile) {
-  const p = profile || {};
-  const scopeType = String(p.scope_type || "").toLowerCase();
-  const scopeId = p.scope_id || null;
-  const isMulti = (scopeType === "group" || scopeType === "enterprise") && !!scopeId;
-
-  const stored = getStoredActiveRestaurantId();
-
-  // Single-scope: use profile.restaurant_id
-  if (!isMulti) {
-    const rid = p.restaurant_id || null;
-    appState.activeRestaurantId = rid;
-    if (rid) {
-      try { setStoredActiveRestaurantId(rid); } catch {}
-    }
-    return rid;
-  }
-
-  // Multi-scope: validate stored
-  if (stored) {
-    const ok = await assertRestaurantAllowedForScope(scopeId, stored);
-    if (ok) {
-      appState.activeRestaurantId = stored;
-      return stored;
-    }
-  }
-
-  // No valid stored => pick first allowed
-  const { data, error } = await supabase
-    .from("bc_scope_restaurants")
-    .select("restaurant_id")
-    .eq("scope_id", scopeId)
-    .order("created_at", { ascending: true })
-    .limit(1);
-
-  if (error) throw error;
-
-  const first = data?.[0]?.restaurant_id || null;
-  appState.activeRestaurantId = first;
-
-  if (first) {
-    try { setStoredActiveRestaurantId(first); } catch {}
-  } else {
-    try { localStorage.removeItem(activeRestaurantStorageKey()); } catch {}
-  }
-
-  return first;
-}
-
 function pushCtxToPremiumIframe(source = "manual") {
   const iframe = document.querySelector("#premiumRoot iframe");
   if (!iframe || !iframe.contentWindow) return;
@@ -2555,24 +2506,55 @@ async function loadAuthedState(reason = "manual") {
   const profile = await loadProfile(session.user.id);
   appState.profile = profile;
 
-  // ✅ Resolve active restaurant deterministically (single OR group/enterprise)
-  let activeRid = null;
-  try {
-    activeRid = await resolveAndSetActiveRestaurantFromScope(profile);
-  } catch (e) {
-    console.warn("[BC] resolve active restaurant failed", e);
-    activeRid = null;
+  // Decide authoritative restaurant context
+  const scopeType = String(profile?.scope_type || "").toLowerCase();
+  const isMulti =
+    scopeType === "group" || scopeType === "enterprise";
+
+  // For group/enterprise: prefer stored activeRestaurantId (scoped)
+  // For single: use profile.restaurant_id
+  let activeRestaurantId = null;
+
+  if (isMulti) {
+    activeRestaurantId = getStoredActiveRestaurantId();
+
+    // If none stored yet, pick the first allowed restaurant from bc_scope_restaurants
+    if (!activeRestaurantId && profile?.scope_id) {
+      const { data, error } = await supabase
+        .from("bc_scope_restaurants")
+        .select("restaurant_id, created_at")
+        .eq("scope_id", profile.scope_id)
+        .order("created_at", { ascending: true })
+        .limit(1);
+
+      if (error) {
+        console.warn("[BC] bc_scope_restaurants lookup failed", error);
+      } else {
+        activeRestaurantId = data?.[0]?.restaurant_id || null;
+        if (activeRestaurantId) {
+          appState.activeRestaurantId = activeRestaurantId;
+          try { setStoredActiveRestaurantId(activeRestaurantId); } catch {}
+        }
+      }
+    }
+
+    // set runtime active id (even if null)
+    appState.activeRestaurantId = activeRestaurantId || null;
+
+  } else {
+    // Single restaurant accounts: profile.restaurant_id is authoritative
+    activeRestaurantId = profile?.restaurant_id || null;
+    appState.activeRestaurantId = null; // not used
   }
 
-  if (activeRid) {
+  // Hydrate restaurant object from the authoritative id
+  appState.restaurant = null;
+  if (activeRestaurantId) {
     try {
-      appState.restaurant = await loadRestaurant(activeRid);
+      appState.restaurant = await loadRestaurant(activeRestaurantId);
     } catch (e) {
       console.warn("[BC] loadRestaurant failed", e);
-      appState.restaurant = null;
     }
-  } else {
-    appState.restaurant = null;
   }
 
   if (appMode === "premium") refreshParentProgressionFromDb();
