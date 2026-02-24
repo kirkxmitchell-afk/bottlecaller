@@ -2531,26 +2531,37 @@ async function ensureActiveRestaurantReady() {
 }
 
 function getManagerBoardFilter() {
-  const p = appState.profile || {};
+  const p = window.appState?.profile || {};
+  const role = String(p.role || "").toLowerCase();
   const scopeType = String(p.scope_type || "").toLowerCase();
   const scopeId = p.scope_id || null;
 
   const restaurantId = window.getActiveRestaurantId?.() || null;
-  if (!restaurantId) throw new Error("Active restaurant not set.");
 
-  const isGroupish = scopeType === "group" || scopeType === "enterprise";
+  const isGroupish =
+    role === "manager" &&
+    (scopeType === "group" || scopeType === "enterprise") &&
+    !!scopeId;
 
-  if (isGroupish && !scopeId) throw new Error("Missing scope_id for group/enterprise.");
-
-  return { restaurantId, scopeId, scopeType, isGroupish };
+  return { restaurantId, scopeId, isGroupish };
 }
 
 async function loadManagerBoardData() {
   try {
-    const r = appState.restaurant;
     const { restaurantId, scopeId, isGroupish } = getManagerBoardFilter();
+    if (!restaurantId) throw new Error("Active restaurant not set.");
 
-    document.getElementById("mbRestName").textContent = r?.name || "-";
+    let r = appState.restaurant || null;
+
+    // Always hydrate from restaurantId (source of truth)
+    try {
+      r = await loadRestaurant(restaurantId);
+      appState.restaurant = r;
+    } catch (e) {
+      console.warn("[MB] loadRestaurant failed", e);
+    }
+
+    document.getElementById("mbRestName").textContent = r?.name || (String(restaurantId).slice(0, 8) + "…");
     document.getElementById("mbMsg").textContent = "";
 
     // Views you actually have
@@ -2704,12 +2715,16 @@ async function loadManagerBoardData() {
     // Needs coaching (ranked, not binary)
     // Uses bc_user_latest_v1 so it works even when sessions are sparse
     // -----------------------------
-    const latestRes = await supabase
+    let latestQ = supabase
       .from("bc_user_latest_v1")
       .select("user_id, last10_count, last10_greens, last10_yellows, last10_reds, last10_avg_chain_score, latest_chain_signal, latest_tier, latest_grade, latest_occurred_at")
       .eq("restaurant_id", restaurantId)
       .order("latest_occurred_at", { ascending: false })
       .limit(200);
+
+    if (isGroupish && scopeId) latestQ = latestQ.eq("scope_id", scopeId);
+
+    const latestRes = await latestQ;
 
     if (latestRes.error) throw latestRes.error;
 
