@@ -554,13 +554,13 @@ function activeRestaurantStorageKey(scopeId) {
 }
 
 function getStoredActiveRestaurantId() {
-  const scopeId = appState?.profile?.scope_id || null;
+  const scopeId = window.appState?.profile?.scope_id || null;
   try { return localStorage.getItem(activeRestaurantStorageKey(scopeId)) || null; }
   catch { return null; }
 }
 
 function setStoredActiveRestaurantId(rid) {
-  const scopeId = appState?.profile?.scope_id || null;
+  const scopeId = window.appState?.profile?.scope_id || null;
   try { localStorage.setItem(activeRestaurantStorageKey(scopeId), rid); } catch {}
 }
 
@@ -2216,9 +2216,7 @@ async function loadGroupRestaurantsForPicker() {
   const scopeId = appState.profile?.scope_id || null;
 
   // Only show picker for group / enterprise
-  if (!scopeId || (scopeType !== "group" && scopeType !== "enterprise")) {
-    return;
-  }
+  if (!scopeId || (scopeType !== "group" && scopeType !== "enterprise")) return;
 
   // IMPORTANT: this must read from bc_scope_restaurants, not profiles.restaurant_id
   const { data, error } = await supabase
@@ -2233,6 +2231,14 @@ async function loadGroupRestaurantsForPicker() {
   }
 
   const rows = Array.isArray(data) ? data : [];
+
+  // If group scope has no restaurants, surface it
+  if (!rows.length) {
+    const hint = document.getElementById("activeRestaurantHint");
+    if (hint) hint.textContent = "⚠️ No restaurants attached to this scope yet.";
+    console.warn("[BC] group picker: scope has 0 restaurants", { scopeId });
+    return;
+  }
 
   // Render options
   for (const row of rows) {
@@ -2250,12 +2256,15 @@ async function loadGroupRestaurantsForPicker() {
   if (stored) {
     try {
       const ok = await assertRestaurantAllowedForScope(scopeId, stored);
-      if (!ok) {
+      const inRows = rows.some(r => r.restaurant_id === stored);
+
+      if (!ok || !inRows) {
+        const bad = stored;
         // Clear invalid stored restaurant for this scope
         appState.activeRestaurantId = null;
         try { localStorage.removeItem(activeRestaurantStorageKey(scopeId)); } catch {}
         stored = null;
-        console.warn("[BC] cleared invalid stored activeRestaurantId", stored);
+        console.warn("[BC] cleared invalid stored activeRestaurantId", { bad, ok, inRows, scopeId });
       }
     } catch (e) {
       console.warn("[BC] active restaurant validation failed", e);
@@ -2264,29 +2273,35 @@ async function loadGroupRestaurantsForPicker() {
   }
 
   // --- Preselect / auto-select ---
-  const active = window.getActiveRestaurantId?.() || stored || null;
+  // Priority: appState.activeRestaurantId (if set) -> stored -> first row
+  const desired =
+    appState.activeRestaurantId ||
+    stored ||
+    rows[0].restaurant_id;
 
-  if (active) {
-    sel.value = active;
-    appState.activeRestaurantId = active; // keep parent state coherent
-  } else if (rows.length) {
-    // First-time group scope: choose first allowed restaurant
-    const first = rows[0].restaurant_id;
-    sel.value = first;
+  sel.value = desired;
 
-    try {
-      await setActiveRestaurantForGroup(first); // will store per-scope + hydrate restaurant
-    } catch (e) {
-      console.warn("[BC] failed to auto-set first restaurant", e);
+  // Ensure parent state + storage are coherent
+  try {
+    // If user already has an active selection in state/storage, keep it.
+    // If not, setActiveRestaurantForGroup will store per-scope + hydrate restaurant.
+    if (!appState.activeRestaurantId && !stored) {
+      await setActiveRestaurantForGroup(desired);
+    } else {
+      appState.activeRestaurantId = desired;
     }
+  } catch (e) {
+    console.warn("[BC] failed to set desired restaurant", { desired, e });
+    const hint = document.getElementById("activeRestaurantHint");
+    if (hint) hint.textContent = `⚠️ Failed to set active restaurant`;
   }
 
   console.log("[BC] group picker hydrated", {
     scopeId,
     count: rows.length,
-    active: window.getActiveRestaurantId?.() || null,
+    desired,
     stored,
-    rows,
+    rows: rows.map(r => ({ restaurant_id: r.restaurant_id, name: r.restaurants?.name || "" })),
   });
 }
 
@@ -2304,6 +2319,59 @@ async function assertRestaurantAllowedForScope(scopeId, restaurantId) {
 
   if (error) throw error;
   return !!data;
+}
+
+async function resolveInitialRestaurantForScope(profile) {
+  const role = String(profile?.role || "").toLowerCase();
+  const scopeType = String(profile?.scope_type || "").toLowerCase();
+  const scopeId = profile?.scope_id || null;
+
+  // Restaurant scope (single-restaurant): authoritative is profile.restaurant_id
+  if (scopeType !== "group" && scopeType !== "enterprise") {
+    return profile?.restaurant_id || null;
+  }
+
+  // Group/enterprise: choose active per-scope (storage -> first allowed)
+  if (role !== "manager") return null; // only managers switch restaurants
+  if (!scopeId) return null;
+
+  // 1) try stored
+  let stored = null;
+  try { stored = getStoredActiveRestaurantId(); } catch {}
+
+  if (stored) {
+    try {
+      const ok = await assertRestaurantAllowedForScope(scopeId, stored);
+      if (ok) return stored;
+
+      // stored is invalid for this scope — clear it
+      try { localStorage.removeItem(activeRestaurantStorageKey(scopeId)); } catch {}
+      stored = null;
+    } catch {
+      // if DB check fails, don't wipe selection; still attempt to use stored
+      return stored;
+    }
+  }
+
+  // 2) fallback: first allowed from bc_scope_restaurants
+  const { data, error } = await supabase
+    .from("bc_scope_restaurants")
+    .select("restaurant_id")
+    .eq("scope_id", scopeId)
+    .order("created_at", { ascending: true })
+    .limit(1);
+
+  if (error) {
+    console.warn("[BC] resolveInitialRestaurantForScope failed", error);
+    return null;
+  }
+
+  const first = data?.[0]?.restaurant_id || null;
+  if (!first) return null;
+
+  // persist per-scope so future loads are instant
+  try { setStoredActiveRestaurantId(first); } catch {}
+  return first;
 }
 
 function pushCtxToPremiumIframe(source = "manual") {
@@ -2446,11 +2514,41 @@ async function setActiveRestaurantForGroup(restaurantId) {
   }
 }
 
+async function ensureActiveRestaurantReady() {
+  const p = appState.profile || {};
+  const scopeType = String(p.scope_type || "").toLowerCase();
+
+  // group/enterprise: must have active restaurant chosen & allowed
+  if (scopeType === "group" || scopeType === "enterprise") {
+    const rid = window.getActiveRestaurantId?.() || null;
+    if (!rid) {
+      await loadGroupRestaurantsForPicker();
+    }
+  } else {
+    // restaurant scope: must have profile.restaurant_id
+    if (!p.restaurant_id) throw new Error("Profile missing restaurant_id.");
+  }
+}
+
+function getManagerBoardFilter() {
+  const p = appState.profile || {};
+  const scopeType = String(p.scope_type || "").toLowerCase();
+  const scopeId = p.scope_id || null;
+
+  const restaurantId = window.getActiveRestaurantId?.() || null;
+  if (!restaurantId) throw new Error("Active restaurant not set.");
+
+  const isGroupish = scopeType === "group" || scopeType === "enterprise";
+
+  if (isGroupish && !scopeId) throw new Error("Missing scope_id for group/enterprise.");
+
+  return { restaurantId, scopeId, scopeType, isGroupish };
+}
+
 async function loadManagerBoardData() {
   try {
     const r = appState.restaurant;
-    const activeRestaurantId = window.getActiveRestaurantId?.() || null;
-    if (!activeRestaurantId) throw new Error("Active restaurant not set.");
+    const { restaurantId, scopeId, isGroupish } = getManagerBoardFilter();
 
     document.getElementById("mbRestName").textContent = r?.name || "-";
     document.getElementById("mbMsg").textContent = "";
@@ -2466,12 +2564,12 @@ async function loadManagerBoardData() {
     const runsRes = await supabase
       .from(RUNS_TABLE)
       .select("session_id", { count: "exact", head: true })
-      .eq("restaurant_id", activeRestaurantId);
+      .eq("restaurant_id", restaurantId);
 
     const drillsRes = await supabase
       .from(DRILLS_TABLE)
       .select("event_id", { count: "exact", head: true })
-      .eq("restaurant_id", activeRestaurantId)
+      .eq("restaurant_id", restaurantId)
       .eq("event_type", "drill_completed");
 
     if (runsRes.error) throw runsRes.error;
@@ -2486,14 +2584,14 @@ async function loadManagerBoardData() {
     const recentRuns = await supabase
       .from(RUNS_TABLE)
       .select("session_start, user_id, encounters_resolved, avg_chain_score, greens, yellows, reds")
-      .eq("restaurant_id", activeRestaurantId)
+      .eq("restaurant_id", restaurantId)
       .order("session_start", { ascending: false })
       .limit(5);
 
     const recentDrills = await supabase
       .from(DRILLS_TABLE)
       .select("occurred_at, user_id, payload")
-      .eq("restaurant_id", activeRestaurantId)
+      .eq("restaurant_id", restaurantId)
       .eq("event_type", "drill_completed")
       .order("occurred_at", { ascending: false })
       .limit(5);
@@ -2539,7 +2637,7 @@ async function loadManagerBoardData() {
     const streakRes = await supabase
       .from(STREAK_TABLE)
       .select("user_id, occurred_at, chain_signal")
-      .eq("restaurant_id", activeRestaurantId)
+      .eq("restaurant_id", restaurantId)
       .order("occurred_at", { ascending: false })
       .limit(STREAK_LIMIT);
 
@@ -2609,7 +2707,7 @@ async function loadManagerBoardData() {
     const latestRes = await supabase
       .from("bc_user_latest_v1")
       .select("user_id, last10_count, last10_greens, last10_yellows, last10_reds, last10_avg_chain_score, latest_chain_signal, latest_tier, latest_grade, latest_occurred_at")
-      .eq("restaurant_id", activeRestaurantId)
+      .eq("restaurant_id", restaurantId)
       .order("latest_occurred_at", { ascending: false })
       .limit(200);
 
@@ -2668,7 +2766,7 @@ async function loadManagerBoardData() {
 
     setDebug({
       step: "managerBoard.loaded",
-      restaurant_id: activeRestaurantId,
+      restaurant_id: restaurantId,
       runs: runsRes.count,
       drills: drillsRes.count,
       streakUsers: topStreaks.length,
@@ -2683,7 +2781,10 @@ async function loadManagerBoardData() {
 
 async function loadAuthedState(reason = "manual") {
   const { session, error: sErr } = await withTimeout(getSession(), 8000, "getSession");
-  if (sErr) throw sErr;
+  if (sErr) {
+    console.warn("[AUTH] getSession error", sErr);
+    throw sErr;
+  }
 
   appState.session = session || null;
   appState.profile = null;
@@ -2699,57 +2800,25 @@ async function loadAuthedState(reason = "manual") {
 
   const profile = await loadProfile(session.user.id);
   appState.profile = profile;
-  appState.activeRestaurantId = getStoredActiveRestaurantId();
 
-  // Decide authoritative restaurant context
-  const scopeType = String(profile?.scope_type || "").toLowerCase();
-  const isMulti =
-    scopeType === "group" || scopeType === "enterprise";
+  // ✅ Determine correct active restaurant for this scope
+  try {
+    const rid = await resolveInitialRestaurantForScope(profile);
 
-  // For group/enterprise: prefer stored activeRestaurantId (scoped)
-  // For single: use profile.restaurant_id
-  let activeRestaurantId = null;
-
-  if (isMulti) {
-    activeRestaurantId = getStoredActiveRestaurantId();
-
-    // If none stored yet, pick the first allowed restaurant from bc_scope_restaurants
-    if (!activeRestaurantId && profile?.scope_id) {
-      const { data, error } = await supabase
-        .from("bc_scope_restaurants")
-        .select("restaurant_id, created_at")
-        .eq("scope_id", profile.scope_id)
-        .order("created_at", { ascending: true })
-        .limit(1);
-
-      if (error) {
-        console.warn("[BC] bc_scope_restaurants lookup failed", error);
-      } else {
-        activeRestaurantId = data?.[0]?.restaurant_id || null;
-        if (activeRestaurantId) {
-          appState.activeRestaurantId = activeRestaurantId;
-          try { setStoredActiveRestaurantId(activeRestaurantId); } catch {}
-        }
-      }
+    // group/enterprise uses activeRestaurantId; restaurant scope locks to profile.restaurant_id
+    const scopeType = String(profile?.scope_type || "").toLowerCase();
+    if (scopeType === "group" || scopeType === "enterprise") {
+      appState.activeRestaurantId = rid;
     }
 
-    // set runtime active id (even if null)
-    appState.activeRestaurantId = activeRestaurantId || null;
-
-  } else {
-    // Single restaurant accounts: profile.restaurant_id is authoritative
-    activeRestaurantId = profile?.restaurant_id || null;
-    appState.activeRestaurantId = null; // not used
-  }
-
-  // Hydrate restaurant object from the authoritative id
-  appState.restaurant = null;
-  if (activeRestaurantId) {
-    try {
-      appState.restaurant = await loadRestaurant(activeRestaurantId);
-    } catch (e) {
-      console.warn("[BC] loadRestaurant failed", e);
+    if (rid) {
+      appState.restaurant = await loadRestaurant(rid);
+    } else {
+      appState.restaurant = null;
     }
+  } catch (e) {
+    console.warn("[BC] loadAuthedState: resolve/load restaurant failed", e);
+    appState.restaurant = null;
   }
 
   if (appMode === "premium") refreshParentProgressionFromDb();
@@ -2763,6 +2832,13 @@ async function loadAuthedState(reason = "manual") {
     profile,
     activeRestaurantId: appState.activeRestaurantId || null,
     restaurant: appState.restaurant ? { id: appState.restaurant.id, name: appState.restaurant.name, code: appState.restaurant.code } : null,
+  });
+
+  console.log("[BC] active restaurant resolved", {
+    scope_type: appState.profile?.scope_type,
+    scope_id: appState.profile?.scope_id,
+    activeRestaurantId: appState.activeRestaurantId,
+    restaurant: appState.restaurant?.id
   });
 
   wireManagerBoardButton();
@@ -3038,7 +3114,6 @@ async function routeManagerBoard(reason = "manual") {
   closeHud();
 
   await loadAuthedState(`routeManagerBoard:${reason}`);
-  await initRestaurantContextAfterAuth();
 
   const role = String(appState.profile?.role || "").toLowerCase();
   if (role !== "manager") {
@@ -3053,9 +3128,9 @@ async function routeManagerBoard(reason = "manual") {
   applyManagerBoardVisibility();
   wireManagerBoardMenu();
   wireGroupSetupRedeem();
+  await ensureActiveRestaurantReady();
   await loadManagerBoardData();
   wireManagerBoardBillingAccess();
-  await loadGroupRestaurantsForPicker();
 
   const btn = document.getElementById("btnSetActiveRestaurant");
   const sel = document.getElementById("selActiveRestaurant");
@@ -3067,6 +3142,8 @@ async function routeManagerBoard(reason = "manual") {
         await setActiveRestaurantForGroup(rid);
         const hint = document.getElementById("activeRestaurantHint");
         if (hint) hint.textContent = `✅ Active set: ${String(rid).slice(0, 8)}…`;
+        const restName = document.getElementById("mbRestName");
+        if (restName) restName.textContent = appState.restaurant?.name || "-";
         await loadManagerBoardData(); // refresh board for new restaurant
       } catch (e) {
         console.error("[BC] set active restaurant failed", e);
