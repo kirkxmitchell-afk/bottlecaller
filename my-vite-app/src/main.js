@@ -914,6 +914,105 @@ if (!window.__BC_PARENT_TRACE__) {
 // - bc_ctx_request (iframe asks for context)
 // - event_log (iframe emits telemetry)
 // ------------------------------------------------------------
+async function assertRestaurantAllowedForCtx(profile, restaurantId) {
+  const role = String(profile?.role || "").toLowerCase();
+  const scopeType = String(profile?.scope_type || "").toLowerCase();
+  const scopeId = profile?.scope_id || null;
+
+  if (!restaurantId) return { ok: false, reason: "missing_restaurant" };
+  if (!role) return { ok: false, reason: "missing_role" };
+
+  // Managers + group/enterprise: must be in bc_scope_restaurants
+  if (role === "manager" && (scopeType === "group" || scopeType === "enterprise")) {
+    if (!scopeId) return { ok: false, reason: "missing_scope_id" };
+
+    const { data, error } = await supabase
+      .from("bc_scope_restaurants")
+      .select("restaurant_id")
+      .eq("scope_id", scopeId)
+      .eq("restaurant_id", restaurantId)
+      .maybeSingle();
+
+    if (error) return { ok: false, reason: "db_error:" + error.message };
+    return { ok: !!data, reason: data ? "" : "not_in_scope" };
+  }
+
+  // ✅ Explicit “restaurant scope” expectation
+  if (scopeType && scopeType !== "restaurant") {
+    return { ok: false, reason: `invalid_scope_type_for_role:${scopeType}` };
+  }
+
+  // Restaurant scope (waiter or manager single-restaurant): lock to profile.restaurant_id
+  const pid = profile?.restaurant_id || null;
+  if (!pid) return { ok: false, reason: "profile_missing_restaurant_id" };
+  return { ok: pid === restaurantId, reason: pid === restaurantId ? "" : "restaurant_mismatch" };
+}
+
+async function getFirstAllowedRestaurantForScope(scopeId) {
+  const { data, error } = await supabase
+    .from("bc_scope_restaurants")
+    .select("restaurant_id, created_at")
+    .eq("scope_id", scopeId)
+    .order("created_at", { ascending: true })
+    .limit(1);
+
+  if (error) throw error;
+  return data?.[0]?.restaurant_id || null;
+}
+
+async function buildBcCtxSafe(requestedMode = null) {
+  const S = window.appState;
+  const userId = S?.session?.user?.id ?? null;
+  const profile = S?.profile ?? null;
+
+  if (!userId || !profile?.role) return null;
+
+  let restaurantId = window.getActiveRestaurantId?.() ?? null;
+  if (!restaurantId) return null;
+
+  const allowed = await assertRestaurantAllowedForCtx(profile, restaurantId);
+
+  if (!allowed.ok) {
+    console.warn("[CTX] restaurant not allowed", { restaurantId, allowed });
+
+    const role = String(profile?.role || "").toLowerCase();
+    const st = String(profile?.scope_type || "").toLowerCase();
+    const scopeId = profile?.scope_id || null;
+
+    if (role === "manager" && (st === "group" || st === "enterprise") && scopeId) {
+      try {
+        const fallback = await getFirstAllowedRestaurantForScope(scopeId);
+        if (fallback && fallback !== restaurantId) {
+          console.warn("[CTX] auto-heal -> switching active restaurant", fallback);
+          await setActiveRestaurantForGroup(fallback);
+          restaurantId = fallback;
+
+          const allowed2 = await assertRestaurantAllowedForCtx(profile, restaurantId);
+          if (!allowed2.ok) return null;
+        } else {
+          return null;
+        }
+      } catch (e) {
+        console.warn("[CTX] auto-heal failed", e);
+        return null;
+      }
+    } else {
+      return null;
+    }
+  }
+
+  const scopeId = profile?.scope_id ?? null;
+  const role = profile?.role ?? null;
+
+  return {
+    userId,
+    restaurantId,
+    scopeId,
+    role,
+    mode: requestedMode ?? null,
+  };
+}
+
 if (!window.__BC_PARENT_BRIDGE__) {
   window.__BC_PARENT_BRIDGE__ = {
     loadGroupRestaurantsForPicker,
@@ -921,11 +1020,20 @@ if (!window.__BC_PARENT_BRIDGE__) {
     mountPremiumGameIframe,
   };
 
+  window.__BC_BUILD_CTX_SAFE__ = buildBcCtxSafe;
+
   window.__BC_PENDING_CTX_REQ__ = window.__BC_PENDING_CTX_REQ__ || null;
 
-  function flushPendingCtx() {
+  async function flushPendingCtx() {
     const p = window.__BC_PENDING_CTX_REQ__;
     if (!p) return;
+
+    // ✅ same-origin only
+    if (p.origin !== window.location.origin) {
+      console.warn("[PARENT] flushPendingCtx blocked: origin mismatch", { origin: p.origin });
+      window.__BC_PENDING_CTX_REQ__ = null;
+      return;
+    }
 
     const ready =
       !!window.appState?.session?.user?.id &&
@@ -933,7 +1041,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
       !!window.getActiveRestaurantId?.();
     if (!ready) return;
 
-    const bcCtx = window.__BC_BUILD_CTX__?.(p.mode ?? null);
+    const bcCtx = await buildBcCtxSafe(p.mode ?? null);
     if (!bcCtx?.userId || !bcCtx?.restaurantId || !bcCtx?.role) {
       console.warn("[PARENT] flushPendingCtx: refusing null/partial bc_ctx", bcCtx);
       return;
@@ -999,7 +1107,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
           }
           return;
         }
-        const bcCtx = window.__BC_BUILD_CTX__?.(msg?.mode ?? null);
+        const bcCtx = await buildBcCtxSafe(msg?.mode ?? null);
 
         console.log("[PARENT] bc_ctx_request -> reply", {
           requested: msg?.mode ?? null,
@@ -1011,6 +1119,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
           return;
         }
 
+        // ✅ OK: send ctx
         event.source?.postMessage(
           { source: "BC_MSG", v: 1, type: "bc_ctx", ...bcCtx },
           event.origin
