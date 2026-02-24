@@ -713,7 +713,7 @@ function openManagerBoard() {
           recovery: { type: null, step: 0, ttl: 0 },
           guestRanks: {
             [GUEST.DECIDER]: makeGuestRank(),
-            [GUEST.BARGAIN_SMART]: makeGuestRank(),
+            [GUEST.BARGAIN]: makeGuestRank(),
             [GUEST.GRIEVER]: makeGuestRank(),
             [GUEST.FANCY]: makeGuestRank(),
             [GUEST.CELEBRATOR]: makeGuestRank(),
@@ -742,7 +742,7 @@ function openManagerBoard() {
         if (typeof p.unlocks.guestCelebrator !== "boolean") p.unlocks.guestCelebrator = false;
 
         p.guestRanks = p.guestRanks || {};
-        [GUEST.DECIDER, GUEST.BARGAIN_SMART, GUEST.GRIEVER, GUEST.FANCY, GUEST.CELEBRATOR].forEach((k) => {
+        [GUEST.DECIDER, GUEST.BARGAIN, GUEST.GRIEVER, GUEST.FANCY, GUEST.CELEBRATOR].forEach((k) => {
           if (!p.guestRanks[k]) p.guestRanks[k] = makeGuestRank();
         });
 
@@ -1591,7 +1591,7 @@ function openManagerBoard() {
         FANCY: "fancy",
         GRIEVER: "griever",
         CELEBRATOR: "celebrator",
-        BARGAIN_SMART: "bargain_smart",
+        BARGAIN: "bargain_smart",
       };
 
       function normalizeGuestType(raw) {
@@ -1602,32 +1602,12 @@ function openManagerBoard() {
       }
 
       const TIER_GUESTS = {
-        1: [
-          GUEST.DECIDER,
-          GUEST.GRIEVER,
-        ],
-        2: [
-          GUEST.DECIDER,
-          GUEST.GRIEVER,
-          GUEST.BARGAIN_SMART,
-        ],
-        3: [
-          GUEST.DECIDER,
-          GUEST.GRIEVER,
-          GUEST.BARGAIN_SMART,
-          GUEST.FANCY,
-        ],
-        4: [
-          GUEST.DECIDER,
-          GUEST.GRIEVER,
-          GUEST.BARGAIN_SMART,
-          GUEST.FANCY,
-          GUEST.CELEBRATOR,
-        ],
+        1: [GUEST.DECIDER, GUEST.GRIEVER, GUEST.BARGAIN],
+        2: [GUEST.DECIDER, GUEST.GRIEVER, GUEST.BARGAIN, GUEST.FANCY],
+        3: [GUEST.DECIDER, GUEST.GRIEVER, GUEST.BARGAIN, GUEST.FANCY, GUEST.CELEBRATOR],
       };
 
       function tierFromPoints(points) {
-        if (points >= 20) return 4;
         if (points >= 10) return 3;
         if (points >= 5) return 2;
         return 1;
@@ -1643,7 +1623,7 @@ function openManagerBoard() {
         GUEST.FANCY,
         GUEST.GRIEVER,
         GUEST.CELEBRATOR,
-        GUEST.BARGAIN_SMART,
+        GUEST.BARGAIN,
       ];
 
       function resolveAllowedGuestTypes(encounter) {
@@ -1739,10 +1719,8 @@ function openManagerBoard() {
 
       // ✅ define once, even across hot reloads / injected patches
       window.getAllowedGuestTypesByTier = window.getAllowedGuestTypesByTier || function getAllowedGuestTypesByTier(tier) {
-        const t = Number(tier);
-        if (t <= 1) return ["Decider", "Bargain-Smart", "Griever"];
-        if (t === 2) return ["Decider", "Bargain-Smart", "Griever", "Fancy"];
-        return ["Decider", "Bargain-Smart", "Griever", "Fancy", "Celebrator"];
+        const t = Number(tier) || 1;
+        return TIER_GUESTS[t] || TIER_GUESTS[1];
       };
 
       window.getAllowedGuestTypes = function getAllowedGuestTypes() {
@@ -1872,7 +1850,7 @@ function openManagerBoard() {
       // ---------- Rule maps ----------
       const modeMap = {
         [GUEST.DECIDER]: { optimal: MODES.AUTH, neutral: MODES.SCOUT, damaging: MODES.GUIDE },
-        [GUEST.BARGAIN_SMART]: { optimal: MODES.SCOUT, neutral: MODES.AUTH, damaging: MODES.GUIDE },
+        [GUEST.BARGAIN]: { optimal: MODES.SCOUT, neutral: MODES.AUTH, damaging: MODES.GUIDE },
         [GUEST.FANCY]: { optimal: MODES.GUIDE, neutral: MODES.AUTH, damaging: MODES.SCOUT },
         [GUEST.GRIEVER]: { optimal: MODES.SCOUT, neutral: MODES.GUIDE, damaging: MODES.AUTH },
         [GUEST.CELEBRATOR]: { optimal: MODES.AUTH, neutral: MODES.GUIDE, damaging: MODES.SCOUT }
@@ -1880,7 +1858,7 @@ function openManagerBoard() {
 
       const hookMap = {
         [GUEST.DECIDER]: { optimal: "VALUE", neutral: "FLAVOUR", damaging: "STORY" },
-        [GUEST.BARGAIN_SMART]: { optimal: "VALUE", neutral: "FLAVOUR", damaging: "STORY" },
+        [GUEST.BARGAIN]: { optimal: "VALUE", neutral: "FLAVOUR", damaging: "STORY" },
         [GUEST.FANCY]: { optimal: "STORY", neutral: "FLAVOUR", damaging: "VALUE" },
         [GUEST.GRIEVER]: { optimal: "FLAVOUR", neutral: "STORY", damaging: "VALUE" },
         [GUEST.CELEBRATOR]: { optimal: "STORY", neutral: "VALUE", damaging: "FLAVOUR" }
@@ -2137,7 +2115,7 @@ function openManagerBoard() {
       const GUEST_READ_MATCH = {
         [GUEST.DECIDER]: [GUEST.DECIDER],
         [GUEST.GRIEVER]: [GUEST.GRIEVER],
-        [GUEST.BARGAIN_SMART]: [GUEST.BARGAIN_SMART],
+        [GUEST.BARGAIN]: [GUEST.BARGAIN],
         [GUEST.FANCY]: [GUEST.FANCY],
         [GUEST.CELEBRATOR]: [GUEST.CELEBRATOR],
       };
@@ -2173,7 +2151,8 @@ function openManagerBoard() {
         const g = normalizeGuestType(raw);
         if (g === "budget_guard") return GUEST.FANCY;
         if (g === "make_it_easy") return GUEST.CELEBRATOR;
-        if (g === "browser" || g === "analyst" || g === "alpha") return GUEST.DECIDER;
+        if (g === "analyst") return GUEST.BARGAIN;
+        if (g === "browser" || g === "alpha") return GUEST.DECIDER;
         return g;
       }
 
@@ -2824,7 +2803,7 @@ function openManagerBoard() {
           encounterNumber: enc.encounterNumber ?? (encounterIndex + 1),
           meta: enc.meta || null,
           skillFocus: (enc.meta && enc.meta.skillFocus) ? enc.meta.skillFocus : "read",
-          guestStateActual: enc.guestStateActual || "",
+          guestStateActual: normalizeGuestType(enc.guestStateActual || ""),
           contextLine: enc.contextLine || "",
           guestLine: enc.guestLine || "",
           physicalCues: Array.isArray(enc.physicalCues) ? enc.physicalCues : [],
@@ -2881,12 +2860,12 @@ function openManagerBoard() {
             b.textContent = label;
             b.onclick = () => {
               const guestKey = {
-                "Browser": "browser",
-                "Budget Guard": "budget_guard",
-                "Celebrator": "celebrator",
-                "Alpha": "alpha",
-                "Analyst": "analyst",
-                "Make-It-Easy": "make_it_easy",
+                "Browser": GUEST.DECIDER,
+                "Budget Guard": GUEST.FANCY,
+                "Celebrator": GUEST.CELEBRATOR,
+                "Alpha": GUEST.DECIDER,
+                "Analyst": GUEST.BARGAIN,
+                "Make-It-Easy": GUEST.CELEBRATOR,
               }[label];
               currentEncounter.guestReadSelected = guestKey;
               currentStep = 1;
@@ -4818,7 +4797,7 @@ function openManagerBoard() {
 
         const tone = {
           [GUEST.DECIDER]: ["direct", "decisive", "clean"],
-          [GUEST.BARGAIN_SMART]: ["measured", "grounded", "practical"],
+          [GUEST.BARGAIN]: ["measured", "grounded", "practical"],
           [GUEST.FANCY]: ["refined", "polished", "elegant"],
           [GUEST.GRIEVER]: ["gentle", "soft", "patient"],
           [GUEST.CELEBRATOR]: ["upbeat", "energetic", "playful"]
@@ -5803,7 +5782,7 @@ function openManagerBoard() {
           ];
         }
 
-        if (safeGuest === GUEST.BARGAIN_SMART || safeGuest === "analyst") {
+        if (safeGuest === GUEST.BARGAIN || safeGuest === "analyst") {
           const leadLine = `Clean pick: ${name}. Bright structure, dry finish — no surprises.`;
           const reflectLine = `Do you want higher acidity, or more body?`;
           const holdLine = `This is our best value bottle.`;
@@ -6050,7 +6029,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
           // HARD FALLBACK: never blank, never crash
           if (!Array.isArray(allowedReads) || allowedReads.length === 0) {
-            allowedReads = [GUEST.DECIDER, GUEST.BARGAIN_SMART, GUEST.GRIEVER];
+            allowedReads = [GUEST.DECIDER, GUEST.BARGAIN, GUEST.GRIEVER];
           }
 
           console.log("[BC][GUEST_UNLOCK]", {
@@ -7108,25 +7087,15 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           // PREMIUM: tierUnlocked drives allowed guest types (points unlocks 5/10)
           const spine = getProgressionSpine();
           const points = spine.selectors.points();
-          const allowed = allowedGuestTypes(points);
+          const allowedTypes = allowedGuestTypes(points);
 
-          const filtered = (Array.isArray(list) ? list : []).filter(e =>
-            allowed.includes(normalizeGuestType(e?.guestStateActual))
+          const filtered = (Array.isArray(list) ? list : []).filter(enc =>
+            allowedTypes.includes(normalizeGuestType(enc?.guestStateActual))
           );
 
-          if (!filtered.length) {
-            console.error("[BC] EMPTY POOL — CONTENT ERROR", {
-              tier: tierFromPoints(points),
-              allowed,
-              encounters: list.map(e => e?.guestStateActual)
-            });
-            alert("No encounters available for your current tier.");
-            resetNavState();
-            showScreen("screenHome");
-            return;
-          }
-
-          const src = filtered;
+          const pool = filtered.length ? filtered : list;
+          const idx = (Number.isFinite(encounterIndex) ? encounterIndex : 0) % pool.length;
+          enc = pool[idx];
           const idx = (Number.isFinite(encounterIndex) ? encounterIndex : 0) % src.length;
           enc = src[idx];
 
