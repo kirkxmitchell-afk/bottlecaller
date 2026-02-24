@@ -5792,7 +5792,7 @@ function openManagerBoard() {
         if (safeGuest !== g) console.warn("[BC] guest type not unlocked yet:", g);
         const strict = hookStrictnessFromDifficulty(d);
 
-        if (safeGuest === "browser") {
+        if (safeGuest === GUEST.DECIDER || safeGuest === "browser") {
           const leadLine = `If you want something easy that won’t miss tonight, ${name} is a great call.`;
           const reflectLine = `Quick one — are you leaning lighter and fresh, or richer and smooth?`;
           const holdLine = `${name} is the right bottle for the table.`;
@@ -5803,7 +5803,7 @@ function openManagerBoard() {
           ];
         }
 
-        if (safeGuest === "analyst") {
+        if (safeGuest === GUEST.BARGAIN_SMART || safeGuest === "analyst") {
           const leadLine = `Clean pick: ${name}. Bright structure, dry finish — no surprises.`;
           const reflectLine = `Do you want higher acidity, or more body?`;
           const holdLine = `This is our best value bottle.`;
@@ -5814,7 +5814,29 @@ function openManagerBoard() {
           ];
         }
 
-        if (safeGuest === "celebrator") {
+        if (safeGuest === GUEST.GRIEVER) {
+          const leadLine = `Gentle pick: ${name}. Soft and calm, no sharp edges.`;
+          const reflectLine = `Do you want something softer and gentle, or a bit richer and warm?`;
+          const holdLine = `This is the safest, most comforting bottle on the list.`;
+          return [
+            { id: "hA", text: leadLine, tier: "right", hookType: "guest_centered_framing" },
+            { id: "hB", text: reflectLine, tier: "slightly", hookType: "diagnostic_question" },
+            { id: "hC", text: holdLine, tier: strict ? "wrong" : "slightly", hookType: "outcome_centered_framing" },
+          ];
+        }
+
+        if (safeGuest === GUEST.FANCY) {
+          const leadLine = `If you want something refined and elevated, ${name} is the move.`;
+          const reflectLine = `Are you leaning elegant and fresh, or rich and plush tonight?`;
+          const holdLine = `This is our premium bottle.`;
+          return [
+            { id: "hA", text: leadLine, tier: "right", hookType: "guest_centered_framing" },
+            { id: "hB", text: reflectLine, tier: "slightly", hookType: "diagnostic_question" },
+            { id: "hC", text: holdLine, tier: strict ? "wrong" : "slightly", hookType: "outcome_centered_framing" },
+          ];
+        }
+
+        if (safeGuest === GUEST.CELEBRATOR || safeGuest === "celebrator") {
           const leadLine = `If it’s a celebration table, ${name} feels like an upgrade without getting heavy.`;
           const reflectLine = `Are we celebrating fresh and bright, or rich and plush tonight?`;
           const holdLine = `This is our premium bottle.`;
