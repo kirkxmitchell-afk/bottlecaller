@@ -7078,34 +7078,27 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           return;
         }
 
-        let enc;
-        // DEMO: loop, no tiers
-        if (isDemo) {
-          const idx = (encounterIndex % list.length);
+        let idx = 0;
+        let enc = null;
+
+        if (sessionType === "drill") {
+          idx = (typeof encounterIndex === "number" ? encounterIndex : 0) % list.length;
+          enc = list[idx];
+        } else if (isDemo) {
+          idx = (encounterIndex % list.length);
           enc = list[idx];
         } else {
           // PREMIUM: tierUnlocked drives allowed guest types (points unlocks 5/10)
           const spine = getProgressionSpine();
           const points = spine.selectors.points();
           const allowedTypes = allowedGuestTypes(points);
-
-          const filtered = (Array.isArray(list) ? list : []).filter(enc =>
-            allowedTypes.includes(normalizeGuestType(enc?.guestStateActual))
+          const filtered = (Array.isArray(list) ? list : []).filter(e =>
+            allowedTypes.includes(normalizeGuestType(e?.guestStateActual))
           );
+          const src = filtered.length ? filtered : list;
 
-          const pool = filtered.length ? filtered : list;
-          const idx = (Number.isFinite(encounterIndex) ? encounterIndex : 0) % pool.length;
-          enc = pool[idx];
-          const idx = (Number.isFinite(encounterIndex) ? encounterIndex : 0) % src.length;
-          enc = src[idx];
-
-          if (!enc) enc = (list && list[0]) ? list[0] : null;
-        }
-
-        // DRILL: deterministic encounter selection (no tier logic, no wine deps)
-        if (sessionType === "drill") {
-          const idx = (typeof encounterIndex === "number" ? encounterIndex : 0) % list.length;
-          enc = list[idx];
+          idx = (Number.isFinite(encounterIndex) ? encounterIndex : 0) % src.length;
+          enc = src[idx] || list[0] || null;
         }
 
         // ----------------------------
