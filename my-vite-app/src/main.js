@@ -631,11 +631,19 @@ window.getActiveRestaurantId =
   window.getActiveRestaurantId ||
   function getActiveRestaurantId() {
     const S = window.appState;
-    return (
-      S?.activeRestaurantId ||
-      S?.profile?.restaurant_id ||
-      null
-    );
+    const scopeType = String(S?.profile?.scope_type || "").toLowerCase();
+
+    // Group/enterprise: active restaurant is stored per-scope
+    if (scopeType === "group" || scopeType === "enterprise") {
+      return (
+        S?.activeRestaurantId ||
+        getStoredActiveRestaurantId() ||
+        null
+      );
+    }
+
+    // Restaurant scope: lock to profile.restaurant_id
+    return S?.profile?.restaurant_id || null;
   };
 
 // --- Fetch allowed restaurants for current scope ---
@@ -1055,6 +1063,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
       console.warn("[PARENT] flushPendingCtx failed", e);
     }
   }
+  window.__BC_PARENT_BRIDGE__.flushPendingCtx = flushPendingCtx;
 
   if (!window.__BC_RESTAURANT_WATCH__) {
     window.__BC_RESTAURANT_WATCH__ = setInterval(() => {
@@ -2203,8 +2212,8 @@ async function loadGroupRestaurantsForPicker() {
 
   sel.innerHTML = "";
 
-  const scopeType = String(appState.profile?.scope_type || "");
-  const scopeId = appState.profile?.scope_id;
+  const scopeType = String(appState.profile?.scope_type || "").toLowerCase();
+  const scopeId = appState.profile?.scope_id || null;
 
   // Only show picker for group / enterprise
   if (!scopeId || (scopeType !== "group" && scopeType !== "enterprise")) {
@@ -2224,33 +2233,61 @@ async function loadGroupRestaurantsForPicker() {
   }
 
   const rows = Array.isArray(data) ? data : [];
-  rows.forEach((row) => {
+
+  // Render options
+  for (const row of rows) {
     const opt = document.createElement("option");
     opt.value = row.restaurant_id;
     opt.textContent = row.restaurants?.name || row.restaurant_id;
     sel.appendChild(opt);
-  });
+  }
 
-  // Optional: preselect active restaurant if already set
-  const current = appState.activeRestaurantId || appState.profile?.restaurant_id || null;
-  if (current) sel.value = current;
+  // --- Validate stored active restaurant (per-scope) ---
+  // Source of truth: localStorage per scope, not profile.restaurant_id
+  let stored = null;
+  try { stored = getStoredActiveRestaurantId(); } catch {}
 
-  console.log("[BC] group picker hydrated", { scopeId, count: rows.length, rows });
-
-  // Validate stored activeRestaurantId
-  const stored = appState.activeRestaurantId;
   if (stored) {
     try {
       const ok = await assertRestaurantAllowedForScope(scopeId, stored);
       if (!ok) {
+        // Clear invalid stored restaurant for this scope
         appState.activeRestaurantId = null;
-        try { localStorage.removeItem(activeRestaurantStorageKey()); } catch {}
+        try { localStorage.removeItem(activeRestaurantStorageKey(scopeId)); } catch {}
+        stored = null;
         console.warn("[BC] cleared invalid stored activeRestaurantId", stored);
       }
     } catch (e) {
       console.warn("[BC] active restaurant validation failed", e);
+      // If validation fails (DB issue), don't wipe the user's selection.
     }
   }
+
+  // --- Preselect / auto-select ---
+  const active = window.getActiveRestaurantId?.() || stored || null;
+
+  if (active) {
+    sel.value = active;
+    appState.activeRestaurantId = active; // keep parent state coherent
+  } else if (rows.length) {
+    // First-time group scope: choose first allowed restaurant
+    const first = rows[0].restaurant_id;
+    sel.value = first;
+
+    try {
+      await setActiveRestaurantForGroup(first); // will store per-scope + hydrate restaurant
+    } catch (e) {
+      console.warn("[BC] failed to auto-set first restaurant", e);
+    }
+  }
+
+  console.log("[BC] group picker hydrated", {
+    scopeId,
+    count: rows.length,
+    active: window.getActiveRestaurantId?.() || null,
+    stored,
+    rows,
+  });
 }
 
 async function assertRestaurantAllowedForScope(scopeId, restaurantId) {
@@ -2322,43 +2359,91 @@ async function setActiveRestaurantForGroup(restaurantId) {
   }
   if (!restaurantId) throw new Error("No restaurant selected.");
 
-  // 0) hard allow-check
-  const ok = await assertRestaurantAllowedForScope(scopeId, restaurantId);
-  if (!ok) throw new Error("Restaurant not allowed for this scope.");
+  // Prevent double-click / race conditions
+  if (window.__BC_SWITCHING_RESTAURANT__) return;
+  window.__BC_SWITCHING_RESTAURANT__ = true;
 
-  // 1) persist selection (LOCAL preference only)
-  appState.activeRestaurantId = restaurantId;
-  try { setStoredActiveRestaurantId(restaurantId); } catch {}
+  const prev = {
+    activeRestaurantId: appState.activeRestaurantId || null,
+    restaurant: appState.restaurant || null,
+    stored: null
+  };
 
-  const hint = document.getElementById("activeRestaurantHint");
-  if (hint) hint.textContent = `Active: ${String(restaurantId).slice(0, 8)}…`;
-
-  // 2) hydrate restaurant into parent state
+  // UI lock (optional but recommended)
+  const btn = document.getElementById("btnSetActiveRestaurant");
+  const sel = document.getElementById("selActiveRestaurant");
   try {
+    if (btn) btn.disabled = true;
+    if (sel) sel.disabled = true;
+  } catch {}
+
+  try {
+    // 0) hard allow-check
+    const ok = await assertRestaurantAllowedForScope(scopeId, restaurantId);
+    if (!ok) throw new Error("Restaurant not allowed for this scope.");
+
+    // 1) persist selection (LOCAL preference only)
+    appState.activeRestaurantId = restaurantId;
+    try {
+      prev.stored = getStoredActiveRestaurantId();
+      setStoredActiveRestaurantId(restaurantId);
+    } catch {}
+
+    const hint = document.getElementById("activeRestaurantHint");
+    if (hint) hint.textContent = `Active: ${String(restaurantId).slice(0, 8)}…`;
+
+    // 2) hydrate restaurant into parent state (authoritative for UI + ctx)
     const restaurant = await loadRestaurant(restaurantId);
     appState.restaurant = restaurant;
+
     window.__BC_APP_STATE__ = window.__BC_APP_STATE__ || {};
     window.__BC_APP_STATE__.restaurant = restaurant;
+
+    console.log("[BC] active restaurant set (group/enterprise)", {
+      scopeId,
+      restaurantId,
+      restaurant: restaurant ? { id: restaurant.id, name: restaurant.name } : null
+    });
+
+    // 3) If a ctx request was waiting, flush immediately now that restaurant is valid
+    try {
+      if (window.__BC_PENDING_CTX_REQ__ && window.__BC_PARENT_BRIDGE__?.flushPendingCtx) {
+        await window.__BC_PARENT_BRIDGE__.flushPendingCtx();
+      }
+    } catch (e) {
+      console.warn("[BC] flushPendingCtx failed after switch", e);
+    }
+
+    // 4) optional: only remount game if play screen visible
+    try {
+      const playVisible = !document.getElementById("screenPlay")?.classList.contains("hidden");
+      if (playVisible) mountPremiumGameIframe();
+    } catch {}
+
   } catch (e) {
-    console.warn("[BC] loadRestaurant failed after switch", e);
+    // rollback (so you can't end up in a broken/bogus state)
+    appState.activeRestaurantId = prev.activeRestaurantId;
+    appState.restaurant = prev.restaurant;
+
+    try {
+      if (prev.activeRestaurantId) setStoredActiveRestaurantId(prev.activeRestaurantId);
+      else localStorage.removeItem(activeRestaurantStorageKey(appState?.profile?.scope_id || null));
+    } catch {}
+
+    const hint = document.getElementById("activeRestaurantHint");
+    if (hint) hint.textContent = prev.activeRestaurantId
+      ? `Active: ${String(prev.activeRestaurantId).slice(0, 8)}…`
+      : "";
+
+    console.error("[BC] setActiveRestaurantForGroup failed (rolled back)", e);
+    throw e;
+  } finally {
+    window.__BC_SWITCHING_RESTAURANT__ = false;
+    try {
+      if (btn) btn.disabled = false;
+      if (sel) sel.disabled = false;
+    } catch {}
   }
-
-  // 3) DO NOT mutate profiles.restaurant_id for group/enterprise
-  // profile.restaurant_id is not authoritative in multi-restaurant scopes.
-  // Keep the profile stable (scope_id + scope_type define membership).
-
-  console.log("[BC] active restaurant set (group/enterprise)", {
-    scopeId,
-    restaurantId,
-    restaurant: appState.restaurant ? { id: appState.restaurant.id, name: appState.restaurant.name } : null
-  });
-
-  // 4) optional: only remount game if it's currently mounted/visible
-  // (prevents random iframe reloads if you switch while staying in Manager Board)
-  try {
-    const playScreenVisible = !document.getElementById("screenPlay")?.classList.contains("hidden");
-    if (playScreenVisible) mountPremiumGameIframe();
-  } catch {}
 }
 
 async function loadManagerBoardData() {
@@ -2614,6 +2699,7 @@ async function loadAuthedState(reason = "manual") {
 
   const profile = await loadProfile(session.user.id);
   appState.profile = profile;
+  appState.activeRestaurantId = getStoredActiveRestaurantId();
 
   // Decide authoritative restaurant context
   const scopeType = String(profile?.scope_type || "").toLowerCase();
@@ -2979,6 +3065,8 @@ async function routeManagerBoard(reason = "manual") {
       const rid = sel.value;
       try {
         await setActiveRestaurantForGroup(rid);
+        const hint = document.getElementById("activeRestaurantHint");
+        if (hint) hint.textContent = `✅ Active set: ${String(rid).slice(0, 8)}…`;
         await loadManagerBoardData(); // refresh board for new restaurant
       } catch (e) {
         console.error("[BC] set active restaurant failed", e);
