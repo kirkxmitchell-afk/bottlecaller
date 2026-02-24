@@ -2212,9 +2212,10 @@ async function setActiveRestaurantForGroup(restaurantId) {
 async function loadManagerBoardData() {
   try {
     const r = appState.restaurant;
-    if (!r?.id) throw new Error("Restaurant not loaded.");
+    const activeRestaurantId = window.getActiveRestaurantId?.() || null;
+    if (!activeRestaurantId) throw new Error("Active restaurant not set.");
 
-    document.getElementById("mbRestName").textContent = r.name || "-";
+    document.getElementById("mbRestName").textContent = r?.name || "-";
     document.getElementById("mbMsg").textContent = "";
 
     // Views you actually have
@@ -2228,12 +2229,12 @@ async function loadManagerBoardData() {
     const runsRes = await supabase
       .from(RUNS_TABLE)
       .select("session_id", { count: "exact", head: true })
-      .eq("restaurant_id", r.id);
+      .eq("restaurant_id", activeRestaurantId);
 
     const drillsRes = await supabase
       .from(DRILLS_TABLE)
       .select("event_id", { count: "exact", head: true })
-      .eq("restaurant_id", r.id)
+      .eq("restaurant_id", activeRestaurantId)
       .eq("event_type", "drill_completed");
 
     if (runsRes.error) throw runsRes.error;
@@ -2248,14 +2249,14 @@ async function loadManagerBoardData() {
     const recentRuns = await supabase
       .from(RUNS_TABLE)
       .select("session_start, user_id, encounters_resolved, avg_chain_score, greens, yellows, reds")
-      .eq("restaurant_id", r.id)
+      .eq("restaurant_id", activeRestaurantId)
       .order("session_start", { ascending: false })
       .limit(5);
 
     const recentDrills = await supabase
       .from(DRILLS_TABLE)
       .select("occurred_at, user_id, payload")
-      .eq("restaurant_id", r.id)
+      .eq("restaurant_id", activeRestaurantId)
       .eq("event_type", "drill_completed")
       .order("occurred_at", { ascending: false })
       .limit(5);
@@ -2301,7 +2302,7 @@ async function loadManagerBoardData() {
     const streakRes = await supabase
       .from(STREAK_TABLE)
       .select("user_id, occurred_at, chain_signal")
-      .eq("restaurant_id", r.id)
+      .eq("restaurant_id", activeRestaurantId)
       .order("occurred_at", { ascending: false })
       .limit(STREAK_LIMIT);
 
@@ -2371,7 +2372,7 @@ async function loadManagerBoardData() {
     const latestRes = await supabase
       .from("bc_user_latest_v1")
       .select("user_id, last10_count, last10_greens, last10_yellows, last10_reds, last10_avg_chain_score, latest_chain_signal, latest_tier, latest_grade, latest_occurred_at")
-      .eq("restaurant_id", r.id)
+      .eq("restaurant_id", activeRestaurantId)
       .order("latest_occurred_at", { ascending: false })
       .limit(200);
 
@@ -2430,7 +2431,7 @@ async function loadManagerBoardData() {
 
     setDebug({
       step: "managerBoard.loaded",
-      restaurant_id: r.id,
+      restaurant_id: activeRestaurantId,
       runs: runsRes.count,
       drills: drillsRes.count,
       streakUsers: topStreaks.length,
