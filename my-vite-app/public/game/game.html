@@ -1826,16 +1826,23 @@ function openManagerBoard() {
         return ENCOUNTERS[idx];
       }
 
+      function normalizeEncounterGuestStates(list) {
+        return (Array.isArray(list) ? list : []).map(e => ({
+          ...e,
+          guestStateActual: window.normalizeGuestType(e?.guestStateActual),
+        }));
+      }
+
       function getEncounterListForMode() {
         const mode = (typeof bcMode !== "undefined" && bcMode) ? bcMode : (window.__BC_CTX__?.mode || "premium");
 
         const bundle = window.__BC_ENCOUNTERS__ || (typeof encounters !== "undefined" ? encounters : null);
 
-        if (Array.isArray(bundle)) return bundle;
+        if (Array.isArray(bundle)) return normalizeEncounterGuestStates(bundle);
 
         if (bundle && typeof bundle === "object") {
           const list = bundle[mode] || bundle.premium || bundle.demo || [];
-          return Array.isArray(list) ? list : [];
+          return normalizeEncounterGuestStates(list);
         }
 
         return [];
@@ -7217,7 +7224,9 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           // ✅ KEEP META + SKILLFOCUS ON THE ENCOUNTER OBJECT
           meta: enc.meta || null,
           skillFocus: (enc.meta && enc.meta.skillFocus) ? enc.meta.skillFocus : "read",
-          guestStateActual: preferNonEmpty(enc.guestStateActual, carry?.guestStateActual || ""),
+          guestStateActual: window.normalizeGuestType(
+            preferNonEmpty(enc.guestStateActual, carry?.guestStateActual || "")
+          ),
           contextLine: preferNonEmpty(enc.contextLine, carry?.contextLine || ""),
           guestLine: preferNonEmpty(enc.guestLine, carry?.guestLine || ""),
           physicalCues: Array.isArray(enc.physicalCues) ? enc.physicalCues : [],
