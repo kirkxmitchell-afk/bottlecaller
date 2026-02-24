@@ -515,7 +515,23 @@ const appState = {
   restaurant: null,
   invites: [],
 };
-appState.activeRestaurantId = localStorage.getItem("bc_active_restaurant_id") || null;
+// --- storage key should be per-scope (group/enterprise) ---
+function activeRestaurantStorageKey() {
+  const S = window.appState;
+  const scopeId = S?.profile?.scope_id || "noscope";
+  return `bc_active_restaurant_id:${scopeId}`;
+}
+
+function getStoredActiveRestaurantId() {
+  try { return localStorage.getItem(activeRestaurantStorageKey()) || null; }
+  catch { return null; }
+}
+
+function setStoredActiveRestaurantId(rid) {
+  try { localStorage.setItem(activeRestaurantStorageKey(), rid); } catch {}
+}
+
+appState.activeRestaurantId = getStoredActiveRestaurantId();
 window.__BC_APP_STATE__ = appState;
 appState.progressionView = appState.progressionView || {
   level: "Building recognition",
@@ -578,7 +594,7 @@ function initProgressionSpineFromState() {
 }
 
 // ---- expose restaurantId getter globally (for debug + bridge) ----
-window.getActiveRestaurantId = function getActiveRestaurantId() {
+window.getActiveRestaurantId = function window.getActiveRestaurantId() {
   const S = window.appState;
   return (
     S?.activeRestaurantId ||
@@ -586,6 +602,71 @@ window.getActiveRestaurantId = function getActiveRestaurantId() {
     null
   );
 };
+
+// --- Fetch allowed restaurants for current scope ---
+async function fetchAllowedRestaurantsForScope(scopeId) {
+  if (!scopeId) return [];
+  const { data, error } = await supabase
+    .from("bc_scope_restaurants")
+    .select("restaurant_id, restaurants:restaurants(id,name,code,seat_limit,require_invite)")
+    .eq("scope_id", scopeId);
+
+  if (error) {
+    console.warn("[MB] fetchAllowedRestaurantsForScope failed", error);
+    return [];
+  }
+
+  return (data || [])
+    .map(r => r.restaurants)
+    .filter(Boolean);
+}
+
+// --- Ensure active restaurant is valid for this scope ---
+async function ensureActiveRestaurantValid() {
+  const S = window.appState;
+  const scopeId = S?.profile?.scope_id || null;
+
+  const scopeType = String(S?.profile?.scope_type || "").toLowerCase();
+  if (scopeType !== "group" && scopeType !== "enterprise") {
+    S.activeRestaurantId = S?.profile?.restaurant_id || null;
+    return { ok: true, activeRestaurantId: S.activeRestaurantId, allowed: [] };
+  }
+
+  const allowed = await fetchAllowedRestaurantsForScope(scopeId);
+  const allowedIds = new Set(allowed.map(r => r.id));
+
+  const stored = getStoredActiveRestaurantId();
+  const candidate =
+    stored ||
+    S.activeRestaurantId ||
+    S?.profile?.restaurant_id ||
+    null;
+
+  let next = candidate;
+  if (!next || !allowedIds.has(next)) {
+    next = allowed[0]?.id || null;
+  }
+
+  S.activeRestaurantId = next;
+  if (next) setStoredActiveRestaurantId(next);
+
+  return { ok: !!next, activeRestaurantId: next, allowed };
+}
+
+// --- Call this after login/profile load, BEFORE board/game boot ---
+async function initRestaurantContextAfterAuth() {
+  const res = await ensureActiveRestaurantValid();
+  console.log("[MB] active restaurant resolved", res);
+
+  if (!res.ok) {
+    return;
+  }
+
+  if (document.getElementById("screenManagerBoard") &&
+      !document.getElementById("screenManagerBoard").classList.contains("hidden")) {
+    await loadManagerBoardData();
+  }
+}
 
 // ---- ctx builder uses the global appState ----
 window.__BC_BUILD_CTX__ = function buildBcCtx(requestedMode = null) {
@@ -1053,21 +1134,14 @@ function showScreen(id) {
   document.getElementById(id)?.classList.remove("hidden");
 }
 
-function getActiveRestaurantId() {
-  const S = window.appState;
-  return (
-    S?.activeRestaurantId ||
-    S?.profile?.restaurant_id ||
-    null
-  );
-}
+// (removed duplicate getActiveRestaurantId; use window.getActiveRestaurantId)
 
 function buildBcCtx(requestedMode = null) {
   const S = window.appState;
   const userId = S?.session?.user?.id ?? null;
   const role = S?.profile?.role ?? null;
   const scopeId = S?.profile?.scope_id ?? null;
-  const restaurantId = getActiveRestaurantId();
+  const restaurantId = window.getActiveRestaurantId();
   const mode = requestedMode ?? null;
 
   return { userId, restaurantId, scopeId, role, mode };
@@ -1275,7 +1349,7 @@ function postToGame(type, payload = {}) {
 }
 
 async function fetchAndSendWines(targetWindow = null) {
-  const restaurantId = getActiveRestaurantId();
+  const restaurantId = window.getActiveRestaurantId();
   const scopeId = appState.profile?.scope_id || null;
   if (!restaurantId || !scopeId) {
     console.warn("[PARENT] wines_request blocked: missing scope/restaurant", { scopeId, restaurantId });
@@ -2480,6 +2554,7 @@ async function routePremium(reason = "manual") {
   try {
     clearMsgs();
     await loadAuthedState(`routePremium:${reason}`);
+    await initRestaurantContextAfterAuth();
 
     if (!appState.session?.user) {
       closeHud();
@@ -2580,6 +2655,7 @@ async function routeManagerBoard(reason = "manual") {
   closeHud();
 
   await loadAuthedState(`routeManagerBoard:${reason}`);
+  await initRestaurantContextAfterAuth();
 
   const role = String(appState.profile?.role || "").toLowerCase();
   if (role !== "manager") {
@@ -2605,7 +2681,7 @@ async function routeManagerBoard(reason = "manual") {
       await setActiveRestaurantForGroup(rid);
 
       appState.activeRestaurantId = rid;
-      try { localStorage.setItem("bc_active_restaurant_id", rid); } catch {}
+      setStoredActiveRestaurantId(rid);
       await loadManagerBoardData(); // refresh board for new restaurant
     });
   }
@@ -2616,6 +2692,7 @@ async function decideRoute(reason = "decideRoute") {
 
   try {
     await loadAuthedState(reason);
+    await initRestaurantContextAfterAuth();
 
     // 1) Logged out => Home
     if (!appState.session?.user) {
