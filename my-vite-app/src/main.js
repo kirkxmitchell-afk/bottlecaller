@@ -2075,7 +2075,7 @@ function applyManagerBoardVisibility() {
 
   const picker = document.getElementById("groupRestaurantPicker");
   if (picker) {
-    const show = role === "manager" && scopeType === "group" && !!p.scope_id;
+    const show = role === "manager" && (scopeType === "group" || scopeType === "enterprise") && !!p.scope_id;
     picker.style.display = show ? "block" : "none";
   }
 
@@ -2123,10 +2123,86 @@ async function loadGroupRestaurantsForPicker() {
   });
 
   // Optional: preselect active restaurant if already set
-  const active = window.getActiveRestaurantId?.();
-  if (active) sel.value = active;
+  const current = appState.activeRestaurantId || appState.profile?.restaurant_id || null;
+  if (current) sel.value = current;
 
   console.log("[BC] group picker hydrated", { scopeId, count: rows.length, rows });
+
+  // Validate stored activeRestaurantId
+  const stored = appState.activeRestaurantId;
+  if (stored) {
+    try {
+      const ok = await assertRestaurantAllowedForScope(scopeId, stored);
+      if (!ok) {
+        appState.activeRestaurantId = null;
+        try { localStorage.removeItem(activeRestaurantStorageKey()); } catch {}
+        console.warn("[BC] cleared invalid stored activeRestaurantId", stored);
+      }
+    } catch (e) {
+      console.warn("[BC] active restaurant validation failed", e);
+    }
+  }
+}
+
+async function assertRestaurantAllowedForScope(scopeId, restaurantId) {
+  const { data, error } = await supabase
+    .from("bc_scope_restaurants")
+    .select("restaurant_id")
+    .eq("scope_id", scopeId)
+    .eq("restaurant_id", restaurantId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return !!data;
+}
+
+async function resolveAndSetActiveRestaurantFromScope(profile) {
+  const p = profile || {};
+  const scopeType = String(p.scope_type || "").toLowerCase();
+  const scopeId = p.scope_id || null;
+  const isMulti = (scopeType === "group" || scopeType === "enterprise") && !!scopeId;
+
+  const stored = getStoredActiveRestaurantId();
+
+  // Single-scope: use profile.restaurant_id
+  if (!isMulti) {
+    const rid = p.restaurant_id || null;
+    appState.activeRestaurantId = rid;
+    if (rid) {
+      try { setStoredActiveRestaurantId(rid); } catch {}
+    }
+    return rid;
+  }
+
+  // Multi-scope: validate stored
+  if (stored) {
+    const ok = await assertRestaurantAllowedForScope(scopeId, stored);
+    if (ok) {
+      appState.activeRestaurantId = stored;
+      return stored;
+    }
+  }
+
+  // No valid stored => pick first allowed
+  const { data, error } = await supabase
+    .from("bc_scope_restaurants")
+    .select("restaurant_id")
+    .eq("scope_id", scopeId)
+    .order("created_at", { ascending: true })
+    .limit(1);
+
+  if (error) throw error;
+
+  const first = data?.[0]?.restaurant_id || null;
+  appState.activeRestaurantId = first;
+
+  if (first) {
+    try { setStoredActiveRestaurantId(first); } catch {}
+  } else {
+    try { localStorage.removeItem(activeRestaurantStorageKey()); } catch {}
+  }
+
+  return first;
 }
 
 function pushCtxToPremiumIframe(source = "manual") {
@@ -2170,11 +2246,30 @@ function mountPremiumGameIframe() {
 }
 
 async function setActiveRestaurantForGroup(restaurantId) {
-  if (!restaurantId) return;
+  const p = appState.profile || {};
+  const role = String(p.role || "").toLowerCase();
+  const scopeType = String(p.scope_type || "").toLowerCase();
+  const scopeId = p.scope_id || null;
+
+  if (role !== "manager") throw new Error("Only managers can switch restaurants.");
+  if (!scopeId) throw new Error("Missing scope_id on profile.");
+  if (scopeType !== "group" && scopeType !== "enterprise") {
+    throw new Error("Restaurant switching only allowed for group/enterprise scopes.");
+  }
+  if (!restaurantId) throw new Error("No restaurant selected.");
+
+  const ok = await assertRestaurantAllowedForScope(scopeId, restaurantId);
+  if (!ok) throw new Error("Restaurant not allowed for this scope.");
 
   // 1) persist selection
   const uid = appState.profile?.user_id;
   if (!uid) return;
+
+  appState.activeRestaurantId = restaurantId;
+  try { setStoredActiveRestaurantId(restaurantId); } catch {}
+
+  const hint = document.getElementById("activeRestaurantHint");
+  if (hint) hint.textContent = `Active: ${String(restaurantId).slice(0, 8)}…`;
 
   const { error } = await supabase
     .from("profiles")
@@ -2464,10 +2559,24 @@ async function loadAuthedState(reason = "manual") {
   const profile = await loadProfile(session.user.id);
   appState.profile = profile;
 
-  if (profile?.restaurant_id) {
+  // ✅ Resolve active restaurant deterministically (single OR group/enterprise)
+  let activeRid = null;
+  try {
+    activeRid = await resolveAndSetActiveRestaurantFromScope(profile);
+  } catch (e) {
+    console.warn("[BC] resolve active restaurant failed", e);
+    activeRid = null;
+  }
+
+  if (activeRid) {
     try {
-      appState.restaurant = await loadRestaurant(profile.restaurant_id);
-    } catch {}
+      appState.restaurant = await loadRestaurant(activeRid);
+    } catch (e) {
+      console.warn("[BC] loadRestaurant failed", e);
+      appState.restaurant = null;
+    }
+  } else {
+    appState.restaurant = null;
   }
 
   if (appMode === "premium") refreshParentProgressionFromDb();
@@ -2479,6 +2588,7 @@ async function loadAuthedState(reason = "manual") {
     reason,
     user: { id: session.user.id, email: session.user.email },
     profile,
+    activeRestaurantId: appState.activeRestaurantId || null,
     restaurant: appState.restaurant ? { id: appState.restaurant.id, name: appState.restaurant.name, code: appState.restaurant.code } : null,
   });
 
@@ -2780,11 +2890,14 @@ async function routeManagerBoard(reason = "manual") {
     btn.__bcBound = true;
     btn.addEventListener("click", async () => {
       const rid = sel.value;
-      await setActiveRestaurantForGroup(rid);
-
-      appState.activeRestaurantId = rid;
-      setStoredActiveRestaurantId(rid);
-      await loadManagerBoardData(); // refresh board for new restaurant
+      try {
+        await setActiveRestaurantForGroup(rid);
+        await loadManagerBoardData(); // refresh board for new restaurant
+      } catch (e) {
+        console.error("[BC] set active restaurant failed", e);
+        const hint = document.getElementById("activeRestaurantHint");
+        if (hint) hint.textContent = `⚠️ ${e?.message || "Failed to set restaurant"}`;
+      }
     });
   }
 }

@@ -5721,11 +5721,26 @@ function openManagerBoard() {
         if (currentEncounter.__logged) return;
         currentEncounter.__logged = true;
 
-        const payload = buildEncounterResolvedPayloadV2();
+          const payload = buildEncounterResolvedPayloadV2();
 
-        console.log("[BC] encounter_resolved required fields", {
-          v: payload?.v,
-          encounterId: payload?.encounterId,
+          // Normalize guest types for stable analytics
+          try {
+            const norm = window.normalizeGuestType || normalizeGuestType;
+            if (typeof norm === "function") {
+              const actualRaw = payload?.actual?.guestType || payload?.actual?.guest_actual || "";
+              const chosenRaw = payload?.chosen?.guestType || "";
+              const guestActualNorm = norm(actualRaw);
+              const guestChosenNorm = norm(chosenRaw);
+              payload.actual = payload.actual || {};
+              payload.chosen = payload.chosen || {};
+              payload.actual.guestTypeNorm = guestActualNorm;
+              payload.chosen.guestTypeNorm = guestChosenNorm;
+            }
+          } catch {}
+
+          console.log("[BC] encounter_resolved required fields", {
+            v: payload?.v,
+            encounterId: payload?.encounterId,
           sessionId: payload?.sessionId,
           hasChecks: Object.prototype.hasOwnProperty.call(payload || {}, "checks"),
         });
