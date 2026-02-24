@@ -1600,11 +1600,11 @@ function openManagerBoard() {
         3: [GUEST.DECIDER, GUEST.GRIEVER, GUEST.BARGAIN, GUEST.FANCY, GUEST.CELEBRATOR],
       };
 
-      function tierFromPoints(points) {
+      window.tierFromPoints = window.tierFromPoints || function tierFromPoints(points) {
         if (points >= 10) return 3;
         if (points >= 5) return 2;
         return 1;
-      }
+      };
 
       function allowedGuestTypes(points) {
         const tier = tierFromPoints(points);
