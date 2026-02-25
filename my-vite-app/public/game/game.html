@@ -575,7 +575,8 @@ function getDrillConfig() {
 
 function getDrillGuestOptions() {
   const drill = getDrillConfig();
-  return drill.pool;
+  if (Array.isArray(drill.pool) && drill.pool.length) return drill.pool;
+  return (Array.isArray(guestStates) ? guestStates : []);
 }
 
 
@@ -2496,8 +2497,18 @@ function getDrillGuestOptions() {
         if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
 
         if (msg.type === "bc_ctx") {
+          console.log("[IFRAME] received bc_ctx", {
+            hasDrill: !!msg.drill,
+            drill: msg.drill
+          });
           applyBcCtx(msg);
           bootstrapWinesFromCtx();
+          return;
+        }
+
+        if (msg.type === "drill_config") {
+          window.__BC_DRILL_CONFIG__ = msg.drill || null;
+          console.log("[BC] drill_config applied ✅", window.__BC_DRILL_CONFIG__);
           return;
         }
 

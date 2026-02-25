@@ -64,6 +64,19 @@ window.setDefaultDrillConfig =
     return window.__BC_DRILL_CONFIG__;
   };
 
+function sendDrillConfigToIframe() {
+  const iframe = document.querySelector("#premiumRoot iframe");
+  const win = iframe?.contentWindow;
+  if (!win) return;
+
+  const drill = window.__BC_DRILL_CONFIG__ || null;
+  win.postMessage(
+    { source: "BC_MSG", v: 1, type: "drill_config", drill },
+    window.location.origin
+  );
+  console.log("[PARENT] drill_config -> sent ✅", drill);
+}
+
 // ------------------------------------------------------------
 // UI
 // ------------------------------------------------------------
@@ -1071,6 +1084,11 @@ if (!window.__BC_PARENT_BRIDGE__) {
     }
 
     try {
+      console.log("[PARENT] sending bc_ctx (flush path)", {
+        hasDrill: !!bcCtx?.drill,
+        drill: bcCtx?.drill,
+        to: p.origin
+      });
       p.source?.postMessage({ source: "BC_MSG", v: 1, type: "bc_ctx", ...bcCtx }, p.origin);
       console.log("[PARENT] flushPendingCtx -> sent ✅", bcCtx);
       window.__BC_PENDING_CTX_REQ__ = null;
@@ -1143,6 +1161,12 @@ if (!window.__BC_PARENT_BRIDGE__) {
           console.warn("[PARENT] refusing to send null/partial bc_ctx", bcCtx);
           return;
         }
+
+        console.log("[PARENT] sending bc_ctx (request path)", {
+          hasDrill: !!bcCtx?.drill,
+          drill: bcCtx?.drill,
+          to: event.origin
+        });
 
         // ✅ OK: send ctx
         event.source?.postMessage(
@@ -2448,6 +2472,7 @@ function wireInsightsCTAs(plan) {
       showScreen("screenPlay");
       window.setDefaultDrillConfig({ focus: plan?.weakest || "read" });
       mountPremiumGameIframe({ showBack: true, backTo: "screenManagerBoard" });
+      setTimeout(sendDrillConfigToIframe, 300);
       console.log("[INSIGHTS] start drill requested", plan);
     };
   }
