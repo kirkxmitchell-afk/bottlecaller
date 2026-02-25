@@ -2532,53 +2532,160 @@ async function loadManagerInsights() {
 
   if (msgEl) msgEl.textContent = "Loading insights…";
 
-  const guestRes = await supabase
+  const DRILL_POOL_T1 = ["decider", "bargain_smart", "griever"];
+
+  const baseRes = await supabase
     .from("bc_encounter_resolutions_v2")
-    .select("actual_guest_type_norm, chain_score, is_green, is_red, read_correct, delivery_correct, mode_optimal, hook_optimal")
-    .eq("restaurant_id", restaurantId);
-
-  if (guestRes.error) {
-    if (msgEl) msgEl.textContent = "Failed: " + guestRes.error.message;
-    return;
-  }
-
-  const weakRes = await supabase
-    .from("bc_encounter_resolutions_v2")
-    .select("read_correct, delivery_correct, mode_optimal, hook_optimal")
-    .eq("restaurant_id", restaurantId)
-    .limit(2000);
-
-  if (weakRes.error) {
-    if (msgEl) msgEl.textContent = "Failed: " + weakRes.error.message;
-    return;
-  }
-
-  const trendRes = await supabase
-    .from("bc_encounter_resolutions_v2")
-    .select("occurred_at, chain_score, is_green")
+    .select([
+      "user_id",
+      "occurred_at",
+      "actual_guest_type_norm",
+      "chain_score",
+      "is_green",
+      "is_red",
+      "read_correct",
+      "delivery_correct",
+      "mode_optimal",
+      "hook_optimal",
+      "mode_status",
+      "hook_status",
+      "chain_signal",
+      "performance_grade",
+      "tier",
+      "encounter_number",
+      "session_id",
+    ].join(","))
     .eq("restaurant_id", restaurantId)
     .order("occurred_at", { ascending: false })
     .limit(2000);
 
-  if (trendRes.error) {
-    if (msgEl) msgEl.textContent = "Failed: " + trendRes.error.message;
+  if (baseRes.error) {
+    if (msgEl) msgEl.textContent = "Failed: " + baseRes.error.message;
     return;
   }
 
-  const guestRows = guestRes.data || [];
-  const weakRows = weakRes.data || [];
-  const trendRows = trendRes.data || [];
+  const rows = baseRes.data || [];
 
-  const plan = buildRecommendedDrillPlan({ guestRows, weakRows });
+  const byUser = new Map();
+  for (const r of rows) {
+    const uid = r?.user_id || null;
+    if (!uid) continue;
+    const arr = byUser.get(uid) || [];
+    arr.push(r);
+    byUser.set(uid, arr);
+  }
 
-  if (whyEl) whyEl.textContent = plan.why;
+  const userIds = [...byUser.keys()];
+  const nameMap = await mapUserIdsToNames(userIds);
 
-  if (guestEl) guestEl.innerHTML = renderGuestInsightsTable(guestRows);
-  if (trendEl) trendEl.innerHTML = renderTrendTable(trendRows);
+  const plans = [];
+  for (const [uid, urows] of byUser.entries()) {
+    const plan = buildRecommendedDrillPlan({ guestRows: urows, weakRows: urows });
+    plans.push({
+      user_id: uid,
+      name: nameMap.get(uid) || String(uid).slice(0, 8),
+      guestRows: urows,
+      weakRows: urows,
+      trendRows: urows,
+      plan,
+    });
+  }
 
-  wireInsightsCTAs(plan);
+  plans.sort((a, b) => (b.guestRows.length - a.guestRows.length));
 
-  if (msgEl) msgEl.textContent = `✅ Loaded • ${guestRows.length} resolves`;
+  if (whyEl) whyEl.textContent = plans[0]?.plan?.why || "";
+
+  if (guestEl) {
+    guestEl.innerHTML = plans.length
+      ? plans.map((p) => `
+          <div class="card" style="margin-top:10px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+              <div>
+                <b>${escapeHtml(p.name)}</b>
+                <div style="opacity:.7; font-size:12px;">
+                  ${escapeHtml(String(p.user_id).slice(0, 8))} • ${p.guestRows.length} resolves
+                </div>
+              </div>
+              <button class="btn" type="button" data-insights-drill-user="${escapeHtml(p.user_id)}">
+                Start 5-min drill
+              </button>
+            </div>
+
+            <div style="margin-top:10px; opacity:.9;">
+              <div style="font-weight:600;">Recommended focus</div>
+              <div style="opacity:.8; font-size:13px; margin-top:4px;">
+                ${escapeHtml(p.plan?.why || "")}
+              </div>
+            </div>
+
+            <div style="margin-top:10px;">
+              ${renderGuestInsightsTable(p.guestRows)}
+            </div>
+          </div>
+        `).join("")
+      : `<div style="opacity:.8;">No data yet.</div>`;
+  }
+
+  if (trendEl) {
+    trendEl.innerHTML = plans.length
+      ? plans.map((p) => `
+          <div class="card" style="margin-top:10px;">
+            <b>${escapeHtml(p.name)}</b>
+            <div style="margin-top:10px;">
+              ${renderTrendTable(p.trendRows)}
+            </div>
+          </div>
+        `).join("")
+      : `<div style="opacity:.8;">No data yet.</div>`;
+  }
+
+  if (guestEl && !guestEl.__bcBound) {
+    guestEl.__bcBound = true;
+    guestEl.addEventListener("click", (e) => {
+      const btn = e.target?.closest?.("[data-insights-drill-user]");
+      if (!btn) return;
+
+      const uid = btn.getAttribute("data-insights-drill-user");
+      const entry = plans.find((x) => String(x.user_id) === String(uid));
+      if (!entry) return;
+
+      window.setDefaultDrillConfig?.({
+        focus: entry.plan?.weakest || "read",
+        pool: DRILL_POOL_T1,
+        durationSec: 300,
+      });
+
+      showScreen("screenPlay");
+      mountPremiumGameIframe({ showBack: true, backTo: "screenManagerBoard" });
+
+      try {
+        postToGame?.({
+          source: "BC_MSG",
+          v: 1,
+          type: "start_drill",
+          repTarget: 3,
+          focus: entry.plan?.weakest || "read",
+          pool: DRILL_POOL_T1,
+          durationSec: 300,
+          starter: "manager",
+          tier: 1,
+        });
+      } catch (err) {
+        console.warn("[INSIGHTS] postToGame start_drill failed", err);
+      }
+    });
+  }
+
+  if (msgEl) msgEl.textContent = `✅ Loaded • ${rows.length} resolves • ${plans.length} user(s)`;
+}
+
+function escapeHtml(s) {
+  return String(s ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 async function loadGroupRestaurantsForPicker() {
