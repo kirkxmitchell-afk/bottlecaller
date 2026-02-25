@@ -51,6 +51,19 @@ let wines = [];
 console.log("supabase client present:", !!supabase);
 window.__BC_SUPABASE__ = supabase;
 
+window.setDefaultDrillConfig =
+  window.setDefaultDrillConfig ||
+  function setDefaultDrillConfig(overrides = {}) {
+    const base = {
+      focus: "read",
+      pool: ["decider", "bargain_smart", "griever"],
+      durationSec: 300,
+    };
+    window.__BC_DRILL_CONFIG__ = { ...base, ...overrides };
+    console.log("[PARENT] __BC_DRILL_CONFIG__ set ✅", window.__BC_DRILL_CONFIG__);
+    return window.__BC_DRILL_CONFIG__;
+  };
+
 // ------------------------------------------------------------
 // UI
 // ------------------------------------------------------------
@@ -2211,16 +2224,6 @@ function applyManagerBoardVisibility() {
   if (billingBtn) billingBtn.style.display = "";
 }
 
-function setDefaultDrillConfig() {
-  // Tier 1 default pool
-  window.__BC_DRILL_CONFIG__ = {
-    focus: "read",
-    pool: ["decider", "bargain_smart", "griever"],
-    durationSec: 300,
-  };
-  console.log("[PARENT] __BC_DRILL_CONFIG__ set ✅", window.__BC_DRILL_CONFIG__);
-}
-
 async function mapUserIdsToNames(userIds) {
   const ids = Array.from(new Set((userIds || []).filter(Boolean)));
   if (!ids.length) return new Map();
@@ -2442,8 +2445,7 @@ function wireInsightsCTAs(plan) {
     bStart.__bcBound = true;
     bStart.onclick = () => {
       showScreen("screenPlay");
-      setDefaultDrillConfig();
-      window.__BC_DRILL_CONFIG__.focus = plan.weakest;
+      window.setDefaultDrillConfig({ focus: plan?.weakest || "read" });
       mountPremiumGameIframe({ showBack: true, backTo: "screenManagerBoard" });
       console.log("[INSIGHTS] start drill requested", plan);
     };
