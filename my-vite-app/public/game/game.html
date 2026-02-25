@@ -22,6 +22,12 @@
         return String(window.__BC_SESSION_TYPE__ || "").toLowerCase() === "drill";
       };
 
+    window.__BC_DRILL_CONFIG__ = window.__BC_DRILL_CONFIG__ || {
+      focus: "read",
+      pool: ["decider", "bargain_smart", "griever"],
+      durationSec: 300,
+    };
+
     // ---- optional back button (drill -> manager board) ----
     (function initBackButtonFromParams() {
       try {
@@ -2593,6 +2599,7 @@ function ensureProgLoaded() {
         if (ev.origin !== location.origin) return;
         const msg = ev.data;
         if (!msg) return;
+        console.log("[IFRAME] message received", msg?.type, msg);
 
         // BC_APP NAV (parent button routing)
         if (msg.source === "BC_APP" && msg.type === "NAV") {
@@ -2698,25 +2705,34 @@ function ensureProgLoaded() {
             }
           } catch {}
 
-          // ✅ hydrate drill config for this iframe session
-          window.__BC_DRILL_CONFIG__ = window.__BC_DRILL_CONFIG__ || {};
-          if (!window.__BC_DRILL_CONFIG__.durationSec) window.__BC_DRILL_CONFIG__.durationSec = 300;
-          if (!window.__BC_DRILL_CONFIG__.focus) window.__BC_DRILL_CONFIG__.focus = "read";
+          // ✅ hydrate drill config for this iframe session (merge, never replace)
+          const cfg = (window.__BC_DRILL_CONFIG__ = window.__BC_DRILL_CONFIG__ || {});
+          if (!cfg.durationSec) cfg.durationSec = 300;
+          if (!cfg.focus) cfg.focus = "read";
+
           const normalize = (x) => {
-            try { return normalizeGuestType(x); } catch { return String(x || "").trim().toLowerCase().replace(/[\s-]+/g, "_"); }
+            try { return normalizeGuestType(x); }
+            catch { return String(x || "").trim().toLowerCase().replace(/[\s-]+/g, "_"); }
           };
-          if (Array.isArray(msg.pool)) window.__BC_DRILL_CONFIG__.pool = msg.pool;
-          if (msg.focus != null) window.__BC_DRILL_CONFIG__.focus = msg.focus;
-          if (typeof msg.durationSec === "number") window.__BC_DRILL_CONFIG__.durationSec = msg.durationSec;
-          if (msg.drill) {
-            window.__BC_DRILL_CONFIG__ = msg.drill;
+
+          if (Array.isArray(msg.pool)) cfg.pool = msg.pool;
+          if (msg.focus != null) cfg.focus = msg.focus;
+          if (typeof msg.durationSec === "number") cfg.durationSec = msg.durationSec;
+
+          // If parent sends msg.drill, MERGE it (do not replace cfg object)
+          if (msg.drill && typeof msg.drill === "object") {
+            Object.assign(cfg, msg.drill);
           }
-          if (Array.isArray(window.__BC_DRILL_CONFIG__?.pool)) {
-            window.__BC_DRILL_CONFIG__.pool = window.__BC_DRILL_CONFIG__.pool
-              .map((x) => normalize(x))
-              .filter(Boolean);
+
+          if (Array.isArray(cfg.pool)) {
+            cfg.pool = cfg.pool.map(normalize).filter(Boolean);
           }
-          console.log("[BC] drill_config applied via start_drill ✅", window.__BC_DRILL_CONFIG__);
+
+          if (!Array.isArray(cfg.pool) || !cfg.pool.length) {
+            cfg.pool = ["decider", "bargain_smart", "griever"];
+          }
+
+          console.log("[BC] drill_config (final) ✅", cfg);
 
           // Ensure wines are loaded before drill begins (non-fatal)
           if (!Array.isArray(wines) || wines.length === 0) {

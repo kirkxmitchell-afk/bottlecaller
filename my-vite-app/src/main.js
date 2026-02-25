@@ -4,13 +4,20 @@ import { supabase, signIn, signUp, signOut, getSession } from "./lib/supabaseCli
 import { decideAllowedTier } from "./game/progressionBridge";
 import { createProgressionStore } from "./progressionStore.js";
 
-const escapeHtml = (s = "") =>
-  String(s)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
+// Avoid redeclare crash (no sweep needed)
+window.escapeHtml =
+  window.escapeHtml ||
+  function escapeHtml(s = "") {
+    return String(s)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#39;");
+  };
+
+// Keep existing calls working: escapeHtml("x")
+var escapeHtml = window.escapeHtml;
 
 if (window.__BOTTLECALLER_BOOTED__) {
   throw new Error("BottleCaller boot attempted twice.");
@@ -1537,6 +1544,38 @@ function postToGame(typeOrMsg, payload = {}) {
   return true;
 }
 
+function postToGameAfterLoad(msg) {
+  const frame = getPremiumFrame();
+  if (!frame) return false;
+
+  // If the iframe already loaded, send immediately
+  try {
+    frame.contentWindow?.postMessage(
+      { source: "BC_MSG", v: 1, ...(msg || {}) },
+      window.location.origin
+    );
+    return true;
+  } catch {}
+
+  // Otherwise, wait for load then send
+  frame.addEventListener(
+    "load",
+    () => {
+      try {
+        frame.contentWindow?.postMessage(
+          { source: "BC_MSG", v: 1, ...(msg || {}) },
+          window.location.origin
+        );
+      } catch (e) {
+        console.warn("[PARENT] postToGameAfterLoad failed", e);
+      }
+    },
+    { once: true }
+  );
+
+  return true;
+}
+
 async function fetchAndSendWines(targetWindow = null) {
   const restaurantId = window.getActiveRestaurantId();
   const scopeId = appState.profile?.scope_id || null;
@@ -2475,34 +2514,42 @@ function renderTrendTable(rows) {
   return header + body;
 }
 
+function startManagerDrill({ focus = "read", pool = ["decider", "bargain_smart", "griever"], repTarget = 3, durationSec = 300, tier = 1 } = {}) {
+  // ensure parent config exists
+  window.setDefaultDrillConfig?.({ focus, pool, durationSec });
+
+  // queue drill start payload for the iframe load handler
+  window.__BC_PENDING_START_DRILL__ = {
+    repTarget,
+    focus,
+    pool,
+    durationSec,
+    starter: "manager",
+    tier,
+  };
+
+  showScreen("screenPlay");
+  mountPremiumGameIframe({ showBack: true, backTo: "screenManagerBoard" });
+}
+
 function wireInsightsCTAs(plan) {
   const bStart = document.getElementById("mbInsightsStartDrill");
   const bCopy = document.getElementById("mbInsightsCopyPlan");
 
-if (bStart && !bStart.__bcBound) {
-  bStart.__bcBound = true;
-  bStart.onclick = () => {
-    showScreen("screenPlay");
-
-    // 1) Decide drill plan (3 guests only, focus from plan)
-    const focus = plan?.weakest || "read";
-    window.setDefaultDrillConfig({ focus });
-
-    // 2) Queue a start payload for when the iframe is definitely ready
-    window.__BC_PENDING_START_DRILL__ = {
-      repTarget: 3,
-      focus,
-      pool: ["decider", "bargain_smart", "griever"],
-      starter: "manager",
-      tier: 0,
+  if (bStart && !bStart.__bcBound) {
+    bStart.__bcBound = true;
+    bStart.onclick = () => {
+      const focus = plan?.weakest || "read";
+      startManagerDrill({
+        focus,
+        pool: ["decider", "bargain_smart", "griever"],
+        repTarget: 3,
+        durationSec: 300,
+        tier: 1,
+      });
+      console.log("[INSIGHTS] start drill requested", { focus, plan });
     };
-
-    // 3) Mount iframe (load handler will push ctx + drill + start)
-    mountPremiumGameIframe({ showBack: true, backTo: "screenManagerBoard" });
-
-    console.log("[INSIGHTS] start drill requested", { focus, plan });
-  };
-}
+  }
 
   if (bCopy && !bCopy.__bcBound) {
     bCopy.__bcBound = true;
@@ -2661,21 +2708,18 @@ async function loadManagerInsights() {
       showScreen("screenPlay");
       mountPremiumGameIframe({ showBack: true, backTo: "screenManagerBoard" });
 
-      try {
-        postToGame?.({
-          source: "BC_MSG",
-          v: 1,
-          type: "start_drill",
-          repTarget: 3,
-          focus: entry.plan?.weakest || "read",
-          pool: DRILL_POOL_T1,
-          durationSec: 300,
-          starter: "manager",
-          tier: 1,
-        });
-      } catch (err) {
-        console.warn("[INSIGHTS] postToGame start_drill failed", err);
-      }
+      const drillMsg = {
+        type: "start_drill",
+        repTarget: 3,
+        focus: entry.plan?.weakest || "read",
+        pool: DRILL_POOL_T1,
+        durationSec: 300,
+        starter: "manager",
+        tier: 1,
+      };
+
+      postToGameAfterLoad({ type: "drill_config", drill: window.__BC_DRILL_CONFIG__ || null });
+      postToGameAfterLoad(drillMsg);
     });
   }
 
@@ -2868,6 +2912,9 @@ function mountPremiumGameIframe({ showBack = false, backTo = "screenManagerBoard
     }
 
     // 2) push drill config (pool + focus)
+    if (!window.__BC_DRILL_CONFIG__ && window.setDefaultDrillConfig) {
+      window.setDefaultDrillConfig();
+    }
     postToGame("drill_config", { drill: window.__BC_DRILL_CONFIG__ || null });
 
     // 3) start drill (if queued)
