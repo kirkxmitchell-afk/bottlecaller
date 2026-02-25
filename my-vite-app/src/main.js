@@ -2752,14 +2752,23 @@ async function loadManagerInsights() {
 
 async function loadGroupRestaurantsForPicker() {
   const sel = document.getElementById("selActiveRestaurant");
+  const hint = document.getElementById("activeRestaurantHint");
   if (!sel) return;
+
   sel.innerHTML = "";
+  if (hint) hint.textContent = "Loading restaurants…";
 
-  const scopeType = String(appState.profile?.scope_type || "").toLowerCase();
-  const scopeId = appState.profile?.scope_id || null;
-  if (!scopeId || (scopeType !== "group" && scopeType !== "enterprise")) return;
+  const p = appState.profile || {};
+  const scopeType = String(p.scope_type || "").toLowerCase();
+  const scopeId = p.scope_id || null;
 
-  // 1) allowed restaurant ids
+  if (!scopeId || (scopeType !== "group" && scopeType !== "enterprise")) {
+    if (hint) hint.textContent = "Picker disabled (not group/enterprise or missing scope_id).";
+    console.warn("[BC] picker disabled", { scopeType, scopeId });
+    return;
+  }
+
+  // 1) Fetch allowed restaurant ids
   const a = await supabase
     .from("bc_scope_restaurants")
     .select("restaurant_id, created_at")
@@ -2768,54 +2777,54 @@ async function loadGroupRestaurantsForPicker() {
 
   if (a.error) {
     console.error("[BC] scope restaurants fetch failed", a.error);
+    if (hint) hint.textContent = `⚠️ Failed to load scope restaurants: ${a.error.message}`;
     return;
   }
 
   const ids = (a.data || []).map(r => r.restaurant_id).filter(Boolean);
-  console.log("[BC] picker scope", { scopeId, scopeType, idsCount: ids.length, ids });
+
   if (!ids.length) {
-    const hint = document.getElementById("activeRestaurantHint");
-    if (hint) hint.textContent = "⚠️ No restaurants attached to this scope yet.";
-    console.warn("[BC] group picker: scope has 0 restaurants", { scopeId });
+    if (hint) hint.textContent = "⚠️ No restaurants attached to this manager scope yet.";
+    console.warn("[BC] picker empty: scope has 0 restaurants", { scopeId });
     return;
   }
 
-  // 2) names
-  const b = await supabase
-    .from("restaurants")
-    .select("id, name")
-    .in("id", ids);
+  // 2) Fetch restaurant names (don’t fail the whole picker if this fails)
+  let nameById = new Map();
+  const b = await supabase.from("restaurants").select("id, name").in("id", ids);
 
   if (b.error) {
-    console.error("[BC] restaurants fetch failed", b.error);
+    console.warn("[BC] restaurants name fetch failed (falling back to ids)", b.error);
+    if (hint) hint.textContent = "Loaded restaurants (names unavailable).";
+  } else {
+    nameById = new Map((b.data || []).map(r => [r.id, r.name]));
+    if (hint) hint.textContent = `Loaded ${ids.length} restaurant(s).`;
   }
 
-  const nameById = new Map((b.data || []).map(r => [r.id, r.name]));
-
+  // 3) Render options
   for (const rid of ids) {
     const opt = document.createElement("option");
     opt.value = rid;
-    opt.textContent = nameById.get(rid) || rid;
+    opt.textContent = nameById.get(rid) || rid.slice(0, 8) + "…";
     sel.appendChild(opt);
   }
 
-  // 3) choose active (must be one of ids)
-  const stored = (typeof getStoredActiveRestaurantId === "function")
-    ? (getStoredActiveRestaurantId() || null)
-    : null;
-  let active = appState.activeRestaurantId || stored || ids[0];
-  if (!ids.includes(active)) active = ids[0];
-
+  // 4) Select active/stored
+  const stored = (typeof getStoredActiveRestaurantId === "function") ? getStoredActiveRestaurantId() : null;
+  const active = appState.activeRestaurantId || stored || ids[0];
   sel.value = active;
 
-  // 4) align state only if needed
-  const already = window.getActiveRestaurantId?.() || null;
-  if (already !== active) {
-    try { await setActiveRestaurantForGroup(active); }
-    catch (e) { console.warn("[BC] failed to set active restaurant during hydrate", e); }
+  // Optional: don’t auto-switch here unless you want it
+  // If you do want it, keep it, but show failures:
+  try {
+    await setActiveRestaurantForGroup(active);
+    if (hint) hint.textContent = `✅ Active: ${String(active).slice(0, 8)}…`;
+  } catch (e) {
+    console.warn("[BC] setActiveRestaurantForGroup failed during hydrate", e);
+    if (hint) hint.textContent = `⚠️ Could not set active: ${e?.message || e}`;
   }
 
-  console.log("[BC] picker hydrated", { scopeId, ids, active });
+  console.log("[BC] picker hydrated", { scopeId, ids, active, stored });
 }
 
 async function assertRestaurantAllowedForScope(scopeId, restaurantId) {
