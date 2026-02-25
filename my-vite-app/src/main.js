@@ -1761,7 +1761,14 @@ function wireParentButtons() {
     btnFiveMinRep.__bcBound = true;
     btnFiveMinRep.addEventListener("click", () => {
       const tier = 0;
-      postToGame("start_drill", { repTarget: 3, focus: null, starter: "manager", tier });
+      const drill = window.__BC_DRILL_CONFIG__ || null;
+      postToGame("start_drill", {
+        repTarget: drill?.repTarget ?? 3,
+        focus: drill?.focus ?? null,
+        tier: drill?.tier ?? 0,
+        drill,
+        starter: "manager"
+      });
     });
   }
 
@@ -1860,17 +1867,22 @@ async function startPremiumDrillFromParent(repTarget = 3) {
     return;
   }
 
+  const drill = window.__BC_DRILL_CONFIG__ || null;
   win.postMessage(
     {
       source: "BC_MSG",
       v: 1,
       type: "start_drill",
-      repTarget
+      repTarget: drill?.repTarget ?? repTarget,
+      focus: drill?.focus ?? null,
+      tier: drill?.tier ?? 0,
+      drill,
+      starter: "manager"
     },
     window.location.origin
   );
 
-  console.log("[PARENT] start_drill sent ✅", { repTarget });
+  console.log("[PARENT] start_drill sent ✅", { repTarget: drill?.repTarget ?? repTarget });
 }
 
 function wireManagerBoardButton() {

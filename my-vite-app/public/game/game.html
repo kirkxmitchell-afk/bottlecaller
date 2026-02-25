@@ -574,9 +574,17 @@ function getDrillConfig() {
 }
 
 function getDrillGuestOptions() {
-  const drill = getDrillConfig();
-  if (Array.isArray(drill.pool) && drill.pool.length) return drill.pool;
-  return (Array.isArray(guestStates) ? guestStates : []);
+  const cfg = window.__BC_DRILL_CONFIG__ || null;
+  const pool = Array.isArray(cfg?.pool) ? cfg.pool : null;
+  if (pool && pool.length) return pool;
+
+  return [
+    window.GUEST?.DECIDER,
+    window.GUEST?.BARGAIN_SMART,
+    window.GUEST?.GRIEVER,
+    window.GUEST?.FANCY,
+    window.GUEST?.CELEBRATOR,
+  ].filter(Boolean);
 }
 
 
@@ -2569,6 +2577,12 @@ function getDrillGuestOptions() {
         if (msg.type === "start_drill") {
           await window.__BC_CTX_READY__;
 
+          // ✅ hydrate drill config for this iframe session
+          if (msg.drill) {
+            window.__BC_DRILL_CONFIG__ = msg.drill;
+            console.log("[BC] drill_config applied via start_drill ✅", window.__BC_DRILL_CONFIG__);
+          }
+
           // Ensure wines are loaded before drill begins
           if (!Array.isArray(wines) || wines.length === 0) {
             try {
@@ -2601,9 +2615,9 @@ function getDrillGuestOptions() {
           console.log("[BC] start_drill received, sessionType currently =", sessionType);
           startDrill(
             Number(msg.repTarget || 3),
-            msg.focus || null,
-            msg.starter || "manager",
-            typeof msg.tier === "number" ? msg.tier : 0
+            msg.focus ?? msg.drill?.focus ?? null,
+            msg.starter ?? "manager",
+            typeof msg.tier === "number" ? msg.tier : (msg.drill?.tier ?? 0)
           );
           console.log("[BC] drill started ✅", DRILL);
           return;
