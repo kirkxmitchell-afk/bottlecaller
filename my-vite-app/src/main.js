@@ -1183,6 +1183,13 @@ if (!window.__BC_PARENT_BRIDGE__) {
         return;
       }
 
+      if (msg.type === "nav" && msg.target) {
+        if (String(msg.target).startsWith("screen")) {
+          showScreen(msg.target);
+          return;
+        }
+      }
+
       if (msg.type === "drill_pick") {
         window.__BC_PARENT_LAST_ENCOUNTER__ = msg;
         console.log("[PARENT] drill_pick stored ✅", msg);
@@ -2316,8 +2323,16 @@ async function mapUserIdsToNames(userIds) {
   }
 
   const m = new Map();
-  for (const row of data || []) m.set(row.user_id, (row.display_name || "").trim());
+  for (const row of data || []) {
+    const name = String(row?.display_name || "").trim();
+    if (name) m.set(row.user_id, name);
+  }
   return m;
+}
+
+function userLabel(userId, nameMap) {
+  const n = nameMap?.get?.(userId);
+  return (n && String(n).trim()) ? n : String(userId || "-").slice(0, 8);
 }
 
 function ensureInsightsShell() {
@@ -2351,6 +2366,7 @@ function ensureInsightsShell() {
 
       <div class="card" style="margin-top:12px;">
         <div style="font-weight:700;">Guest Type Breakdown</div>
+        <div id="mbInsightsLegend" class="small-text" style="margin-top:6px; opacity:.8;"></div>
         <div id="mbInsightsGuestTable" style="margin-top:10px;"></div>
       </div>
 
@@ -2573,6 +2589,7 @@ async function loadManagerInsights() {
   const whyEl = document.getElementById("mbInsightsDrillWhy");
   const guestEl = document.getElementById("mbInsightsGuestTable");
   const trendEl = document.getElementById("mbInsightsTrendTable");
+  const legendEl = document.getElementById("mbInsightsLegend");
 
   const restaurantId = window.getActiveRestaurantId?.() || null;
   if (!restaurantId) {
@@ -2581,6 +2598,10 @@ async function loadManagerInsights() {
   }
 
   if (msgEl) msgEl.textContent = "Loading insights…";
+  if (legendEl) {
+    legendEl.textContent =
+      "avg = average chain_score. green/red = outcome flags. read/delivery/mode/hook = % correct/optimal on that step.";
+  }
 
   const DRILL_POOL_T1 = ["decider", "bargain_smart", "griever"];
 
@@ -3123,15 +3144,16 @@ async function loadManagerBoardData() {
       ...(recentDrills.data || []).map(x => x.user_id).filter(Boolean),
     ];
     const nameMap = await mapUserIdsToNames(userIds);
+    console.log("[MB] nameMap", { requested: userIds.length, resolved: nameMap.size });
 
     const items = [
       ...(recentRuns.data || []).map((x) => ({
         t: x.session_start,
-        line: `Session • ${nameMap.get(x.user_id) || String(x.user_id || "-").slice(0, 8)} • ${x.encounters_resolved ?? 0} res • avg ${(Number(x.avg_chain_score ?? 0)).toFixed(2)} • G/Y/R ${x.greens ?? 0}/${x.yellows ?? 0}/${x.reds ?? 0}`,
+        line: `Session • ${userLabel(x.user_id, nameMap)} • ${x.encounters_resolved ?? 0} res • avg ${(Number(x.avg_chain_score ?? 0)).toFixed(2)} • G/Y/R ${x.greens ?? 0}/${x.yellows ?? 0}/${x.reds ?? 0}`,
       })),
       ...(recentDrills.data || []).map((x) => ({
         t: x.occurred_at,
-        line: `Drill • ${nameMap.get(x.user_id) || x.user_id?.slice(0, 8) || "-"} • reps ${x.payload?.repDone ?? "-"} / ${x.payload?.repTarget ?? "-"}`,
+        line: `Drill • ${userLabel(x.user_id, nameMap)} • reps ${x.payload?.repDone ?? "-"} / ${x.payload?.repTarget ?? "-"}`,
       })),
     ]
       .filter((i) => i.t)
@@ -3217,7 +3239,7 @@ async function loadManagerBoardData() {
       streakEl.innerHTML = topStreaks.length
         ? topStreaks
             .map((x) => {
-              const u = streakNameMap.get(x.userId) || String(x.userId).slice(0, 8);
+              const u = userLabel(x.userId, streakNameMap);
               return `<div style="padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.08);">
                         <div><b>${u}</b> • best <b>${x.best}</b> • current <b>${x.current}</b></div>
                         <div style="opacity:.6; font-size:12px;">sampled last ${x.sampleN} resolves</div>
@@ -3278,7 +3300,7 @@ async function loadManagerBoardData() {
       coachEl.innerHTML = coaching.length
         ? coaching
             .map((x) => {
-              const u = coachingNameMap.get(x.user_id) || String(x.user_id).slice(0, 8);
+              const u = userLabel(x.user_id, coachingNameMap);
               const reasons = [
                 x.reds > 0 ? `${x.reds} red(s) in last10` : null,
                 Number.isFinite(x.avg) ? `avg ${x.avg.toFixed(2)}` : null,
