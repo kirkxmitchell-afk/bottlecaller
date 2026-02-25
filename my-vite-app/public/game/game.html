@@ -648,7 +648,6 @@ function getDrillGuestOptions() {
 }
 
 function isDrillMode() {
-  // Don’t reference sessionType (it’s not guaranteed global)
   return window.__BC_SESSION_TYPE__ === "drill";
 }
 
@@ -1009,7 +1008,8 @@ function isDrillMode() {
 
       function evaluateUnlocks() {
         // Route A: drill ignores progression entirely
-        if (window.__BC_SESSION_TYPE__ === "drill" || sessionType === "drill") return;
+        if (isDrillMode()) return;
+
         let spine = null;
         try {
           spine = getProgressionSpine();
@@ -1017,10 +1017,12 @@ function isDrillMode() {
           console.warn("[PROG] evaluateUnlocks skipped: no spine", e);
           return;
         }
+
         if (!spine || !spine.selectors) {
           console.warn("[PROG] evaluateUnlocks skipped: spine missing selectors");
           return;
         }
+
         PROG.unlocks = PROG.unlocks || {};
         PROG.counters = PROG.counters || {};
         PROG.meta = PROG.meta || {};
@@ -1288,53 +1290,53 @@ function isDrillMode() {
 
 function ensureProgLoaded() {
   // Route A: drill is ctx-only. Do NOT touch progression spine.
-  if (window.__BC_SESSION_TYPE__ === "drill" || sessionType === "drill") return;
+  if (isDrillMode()) return null;
+
   const key = progKey();
-  if (!PROG) {
-    PROG = defaultProg();
+  if (!PROG) PROG = defaultProg();
+
+  PROG = ensureProgShape(PROG);
+  ensureProgMeta();
+  PROG.axes = PROG.axes || { control: 0, selectivity: 0, compression: 0 };
+  PROG.flags = PROG.flags || { resetDebt: 0 };
+  PROG.unlocks = PROG.unlocks || {};
+  if (typeof PROG.unlocks.guestFancy !== "boolean") PROG.unlocks.guestFancy = false;
+  if (typeof PROG.unlocks.guestCelebrator !== "boolean") PROG.unlocks.guestCelebrator = false;
+  PROG.counters = PROG.counters || {};
+  PROG.drift = PROG.drift || { vec: 0, ttl: 0 };
+  PROG.recovery = PROG.recovery || { type: null, step: 0, ttl: 0 };
+
+  if (key && PROG.__key !== key) {
+    PROG = loadProg();
+    PROG.__key = key;
   }
 
-        PROG = ensureProgShape(PROG);
-        ensureProgMeta();
-        PROG.axes = PROG.axes || { control: 0, selectivity: 0, compression: 0 };
-        PROG.flags = PROG.flags || { resetDebt: 0 };
-        PROG.unlocks = PROG.unlocks || {};
-        if (typeof PROG.unlocks.guestFancy !== "boolean") PROG.unlocks.guestFancy = false;
-        if (typeof PROG.unlocks.guestCelebrator !== "boolean") PROG.unlocks.guestCelebrator = false;
-        PROG.counters = PROG.counters || {};
-        PROG.drift = PROG.drift || { vec: 0, ttl: 0 };
-        PROG.recovery = PROG.recovery || { type: null, step: 0, ttl: 0 };
+  PROG = ensureProgShape(PROG);
+  ensureProgMeta();
+  if (typeof PROG.unlocks.guestFancy !== "boolean") PROG.unlocks.guestFancy = false;
+  if (typeof PROG.unlocks.guestCelebrator !== "boolean") PROG.unlocks.guestCelebrator = false;
 
-        if (key && PROG.__key !== key) {
-          PROG = loadProg();
-          PROG.__key = key;
-        }
+  evaluateUnlocks();
 
-        PROG = ensureProgShape(PROG);
-        ensureProgMeta();
-        if (typeof PROG.unlocks.guestFancy !== "boolean") PROG.unlocks.guestFancy = false;
-        if (typeof PROG.unlocks.guestCelebrator !== "boolean") PROG.unlocks.guestCelebrator = false;
-        evaluateUnlocks();
-        console.log("[PROG] ensure key =", progKey());
-      window.PROG = PROG;
-      window.__BC_PROG__ = PROG;
-      window.progKey = progKey;
-      window.defaultProg = defaultProg;
-      window.loadProg = loadProg;
-      window.saveProg = saveProg;
-      window.computeTierUnlocked = window.tierFromPoints;
-      window.evaluateUnlocks = evaluateUnlocks;
-      // getAllowedGuestTypes* are defined on window directly (idempotent)
-      window.ensureProgKeyAfterCtx = ensureProgKeyAfterCtx;
+  console.log("[PROG] ensure key =", progKey());
+  window.PROG = PROG;
+  window.__BC_PROG__ = PROG;
+  window.progKey = progKey;
+  window.defaultProg = defaultProg;
+  window.loadProg = loadProg;
+  window.saveProg = saveProg;
+  window.computeTierUnlocked = window.tierFromPoints;
+  window.evaluateUnlocks = evaluateUnlocks;
+  window.ensureProgKeyAfterCtx = ensureProgKeyAfterCtx;
 
-        const prev = window.__BC_DEBUG__;
-        window.__BC_DEBUG__ = () => {
-          const base = (typeof prev === "function") ? prev() : {};
-          return { ...base, PROG };
-        };
+  const prev = window.__BC_DEBUG__;
+  window.__BC_DEBUG__ = () => {
+    const base = (typeof prev === "function") ? prev() : {};
+    return { ...base, PROG };
+  };
 
-        return PROG;
-      }
+  return PROG;
+}
 
       window.__BC_ENSURE_PROG__ = async function () {
         await window.__BC_CTX_READY__;
@@ -2675,7 +2677,6 @@ function ensureProgLoaded() {
         if (msg.type === "start_drill") {
           // HARD DRILL MODE: set immediately so nothing touches progression
           window.__BC_SESSION_TYPE__ = "drill";
-          try { sessionType = "drill"; } catch {}
 
           // Route A: drill must not block on ctx. Try briefly, never block.
           try {
@@ -3113,12 +3114,9 @@ function ensureProgLoaded() {
           stepContent.textContent = "Pick your control strategy.";
 
           const tier = resolveTierForSession("drill");
-          if (!isDrillMode()) ensureProgLoaded();
-          const prog = PROG || {};
           let allowed = getAllowedDrillModesByTier(tier);
-          if (prog.unlocks && prog.unlocks.authorityMode === false) {
-            allowed = allowed.filter(m => m !== "authority");
-          }
+          // Drill mode: never call progression; hide authority by default
+          allowed = allowed.filter(m => m !== "authority");
           const ordered = getDrillModeOrderForGuest(currentEncounter.guestStateActual, allowed);
 
           ordered.forEach((modeKey) => {
@@ -3143,9 +3141,8 @@ function ensureProgLoaded() {
           stepHeader.textContent = "Step 3 — Hook";
           stepContent.textContent = "Choose your opening line.";
 
-          if (!isDrillMode()) window.__BC_ENSURE_PROG__?.();
-          const progState = isDrillMode() ? null : (window.PROG || null);
-          const tierNow = resolveTierForSession(sessionType);
+          const progState = null; // drill ignores progression
+          const tierNow = resolveTierForSession("drill");
           const wine =
             (DRILL && DRILL.activeWine) ? DRILL.activeWine :
             (currentEncounter && currentEncounter.wineSelected) ? currentEncounter.wineSelected :
