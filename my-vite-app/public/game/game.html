@@ -14,6 +14,9 @@
       (new URLSearchParams(location.search).get("mode") || "demo");
     console.log("[BC] APP_MODE =", window.APP_MODE);
 
+    // ---- session type (iframe-wide) ----
+    window.__BC_SESSION_TYPE__ = window.__BC_SESSION_TYPE__ || "play";
+
     // ---- optional back button (drill -> manager board) ----
     (function initBackButtonFromParams() {
       try {
@@ -2677,6 +2680,7 @@ function ensureProgLoaded() {
         if (msg.type === "start_drill") {
           // HARD DRILL MODE: set immediately so nothing touches progression
           window.__BC_SESSION_TYPE__ = "drill";
+          try { sessionType = "drill"; } catch {}
 
           // Route A: drill must not block on ctx. Try briefly, never block.
           try {
@@ -2872,7 +2876,7 @@ function ensureProgLoaded() {
         const pool = Array.isArray(cfg.pool) ? cfg.pool : null;
         // HARD DRILL MODE (safety)
         window.__BC_SESSION_TYPE__ = "drill";
-        sessionType = "drill";
+        try { sessionType = "drill"; } catch {}
         DRILL = { repTarget, repDone: 0, startedAt: Date.now(), focus: drillFocus, starter, tier: (typeof tier === "number" ? tier : 0), pool };
         DRILL.activeWine = (Array.isArray(wines) && wines.length ? wines[0] : { name: "This bottle" });
         if (!DRILL.activeWine) {
