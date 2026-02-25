@@ -1532,18 +1532,20 @@ function getPremiumFrame() {
   return document.getElementById("premiumRootFrame") || document.querySelector("#premiumRoot iframe");
 }
 
-function postToGame(type, payload = {}) {
+function postToGame(typeOrMsg, payload = {}) {
   const frame = getPremiumFrame();
   const win = frame?.contentWindow;
   if (!win) {
-    setDebug({ step: "postToGame.no_frame", type, payload });
+    setDebug({ step: "postToGame.no_frame", type: typeOrMsg, payload });
     return false;
   }
 
-  win.postMessage(
-    { source: "BC_MSG", v: 1, type, ...payload },
-    window.location.origin
-  );
+  const msg =
+    typeof typeOrMsg === "string"
+      ? { source: "BC_MSG", v: 1, type: typeOrMsg, ...payload }
+      : { source: "BC_MSG", v: 1, ...(typeOrMsg || {}) };
+
+  win.postMessage(msg, window.location.origin);
 
   return true;
 }
@@ -2855,12 +2857,17 @@ function mountPremiumGameIframe({ showBack = false, backTo = "screenManagerBoard
   root.innerHTML = "";
 
   const iframe = document.createElement("iframe");
+  iframe.id = "premiumRootFrame";
   const showBackParam = showBack ? 1 : 0;
   const backToParam = encodeURIComponent(backTo || "");
   iframe.src = `/game/game.html?mode=premium&v=${Date.now()}&showBack=${showBackParam}&backTo=${backToParam}`;
   iframe.style.width = "100%";
   iframe.style.height = "78vh";
   iframe.style.border = "0";
+  iframe.addEventListener("load", () => {
+    try { sendDrillConfigToIframe(); } catch {}
+    console.log("[PARENT] premium iframe loaded ✅");
+  });
   root.appendChild(iframe);
 
   console.log("[BC] mounted premium iframe", iframe.src);

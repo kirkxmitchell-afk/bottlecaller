@@ -3099,10 +3099,10 @@ function getDrillGuestOptions() {
           stepContent.textContent = "Pick your control strategy.";
 
           const tier = resolveTierForSession("drill");
-          ensureProgLoaded();
-          const prog = PROG;
+          if (sessionType !== "drill") ensureProgLoaded();
+          const prog = PROG || {};
           let allowed = getAllowedDrillModesByTier(tier);
-          if (!prog.unlocks.authorityMode) {
+          if (prog.unlocks && prog.unlocks.authorityMode === false) {
             allowed = allowed.filter(m => m !== "authority");
           }
           const ordered = getDrillModeOrderForGuest(currentEncounter.guestStateActual, allowed);
