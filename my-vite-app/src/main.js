@@ -365,20 +365,6 @@ document.querySelector("#app").innerHTML = `
               <button id="mbSeat60" class="btn-ghost" type="button">Set seats: 60</button>
               <button id="mbRefreshSeats" class="btn-ghost" type="button">Refresh</button>
             </div>
-
-            <hr style="opacity:.2; margin:12px 0;" />
-
-            <strong>Enterprise Signup</strong>
-            <div class="small-text" style="margin-top:6px;">
-              Paste an Enterprise manager_setup code to upgrade this manager scope.
-            </div>
-
-            <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
-              <input id="mbEnterpriseCode" type="text" placeholder="ENTERPRISE_XXXXX" style="flex:1; min-width:220px;" />
-              <button id="mbRedeemEnterprise" class="btn-primary" type="button">Redeem</button>
-            </div>
-
-            <div id="mbEnterpriseMsg" class="small-text" style="margin-top:8px;"></div>
           </div>
         </div>
 
@@ -395,6 +381,20 @@ document.querySelector("#app").innerHTML = `
             </div>
 
             <div id="mbGroupSetupMsg" class="small-text" style="margin-top:8px;"></div>
+          </div>
+
+          <div id="mbProvisionAccess" class="card" style="margin-top:12px;">
+            <strong>Enterprise Signup</strong>
+            <div class="small-text" style="margin-top:6px;">
+              Paste an Enterprise manager_setup code to upgrade this manager scope.
+            </div>
+
+            <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+              <input id="mbEnterpriseCode" type="text" placeholder="ENTERPRISE_XXXXX" style="flex:1; min-width:220px;" />
+              <button id="mbRedeemEnterprise" class="btn-primary" type="button">Redeem</button>
+            </div>
+
+            <div id="mbEnterpriseMsg" class="small-text" style="margin-top:8px;"></div>
           </div>
         </div>
       </div>
@@ -1182,6 +1182,13 @@ if (!window.__BC_PARENT_BRIDGE__) {
         return;
       }
 
+      if (msg.type === "nav_back") {
+        const to = msg.to || "screenManagerBoard";
+        console.log("[PARENT] nav_back ->", to);
+        showScreen(to);
+        return;
+      }
+
       if (msg.type === "drill_pick") {
         window.__BC_PARENT_LAST_ENCOUNTER__ = msg;
         console.log("[PARENT] drill_pick stored ✅", msg);
@@ -1765,6 +1772,8 @@ function wireParentButtons() {
       postToGame("start_drill", {
         repTarget: drill?.repTarget ?? 3,
         focus: drill?.focus ?? null,
+        pool: drill?.pool ?? null,
+        durationSec: drill?.durationSec ?? 300,
         tier: drill?.tier ?? 0,
         drill,
         starter: "manager"
@@ -1875,6 +1884,8 @@ async function startPremiumDrillFromParent(repTarget = 3) {
       type: "start_drill",
       repTarget: drill?.repTarget ?? repTarget,
       focus: drill?.focus ?? null,
+      pool: drill?.pool ?? null,
+      durationSec: drill?.durationSec ?? 300,
       tier: drill?.tier ?? 0,
       drill,
       starter: "manager"
@@ -2235,6 +2246,7 @@ function wireManagerBoardMenu() {
 
     if (tab === "insights") await loadManagerInsights();
     if (tab === "billing") await loadManagerBoardSeats?.();
+    if (tab === "provision") wireGroupSetupRedeem?.();
     if (tab === "overview") await loadManagerBoardData();
   });
 
@@ -2723,25 +2735,10 @@ function mountPremiumGameIframe({ showBack = false, backTo = "screenManagerBoard
 
   root.innerHTML = "";
 
-  if (showBack) {
-    const bar = document.createElement("div");
-    bar.style.display = "flex";
-    bar.style.gap = "8px";
-    bar.style.alignItems = "center";
-    bar.style.margin = "8px 0";
-
-    const btn = document.createElement("button");
-    btn.className = "btn";
-    btn.type = "button";
-    btn.textContent = "← Back";
-    btn.onclick = () => showScreen(backTo);
-
-    bar.appendChild(btn);
-    root.appendChild(bar);
-  }
-
   const iframe = document.createElement("iframe");
-  iframe.src = `/game/game.html?mode=premium&v=${Date.now()}`;
+  const showBackParam = showBack ? 1 : 0;
+  const backToParam = encodeURIComponent(backTo || "");
+  iframe.src = `/game/game.html?mode=premium&v=${Date.now()}&showBack=${showBackParam}&backTo=${backToParam}`;
   iframe.style.width = "100%";
   iframe.style.height = "78vh";
   iframe.style.border = "0";
@@ -3030,12 +3027,14 @@ async function loadManagerBoardData() {
     streakRows.sort((a, b) => (b.best - a.best) || (b.current - a.current));
     const topStreaks = streakRows.slice(0, 5);
 
+    const streakNameMap = await mapUserIdsToNames(topStreaks.map((x) => x.userId));
+
     const streakEl = document.getElementById("mbBestStreaks");
     if (streakEl) {
       streakEl.innerHTML = topStreaks.length
         ? topStreaks
             .map((x) => {
-              const u = String(x.userId).slice(0, 8);
+              const u = streakNameMap.get(x.userId) || String(x.userId).slice(0, 8);
               return `<div style="padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.08);">
                         <div><b>${u}</b> • best <b>${x.best}</b> • current <b>${x.current}</b></div>
                         <div style="opacity:.6; font-size:12px;">sampled last ${x.sampleN} resolves</div>

@@ -14,6 +14,35 @@
       (new URLSearchParams(location.search).get("mode") || "demo");
     console.log("[BC] APP_MODE =", window.APP_MODE);
 
+    // ---- optional back button (drill -> manager board) ----
+    (function initBackButtonFromParams() {
+      try {
+        const params = new URLSearchParams(location.search);
+        const showBack = params.get("showBack") === "1";
+        const backTo = params.get("backTo") || "screenManagerBoard";
+        if (!showBack) return;
+
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = "← Back";
+        btn.style.cssText =
+          "position:fixed;top:12px;left:12px;z-index:999999;" +
+          "padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.2);" +
+          "background:rgba(0,0,0,.55);color:white;cursor:pointer;";
+
+        btn.onclick = () => {
+          window.parent?.postMessage(
+            { source: "BC_MSG", v: 1, type: "nav_back", to: backTo },
+            location.origin
+          );
+        };
+
+        document.body.appendChild(btn);
+      } catch (e) {
+        console.warn("[BC] back button init failed", e);
+      }
+    })();
+
     // ---- wines global (must exist early) ----
     window.wines = Array.isArray(window.wines) ? window.wines : [];
 
@@ -574,16 +603,47 @@ function getDrillConfig() {
 }
 
 function getDrillGuestOptions() {
-  const cfg = window.__BC_DRILL_CONFIG__ || null;
-  const pool = Array.isArray(cfg?.pool) ? cfg.pool : null;
-  if (pool && pool.length) return pool;
+  // Normalize everything to canonical form: "decider", "bargain_smart", etc.
+  const norm = (x) => {
+    if (!x) return "";
+    try {
+      return window.normalizeGuestType
+        ? window.normalizeGuestType(x)
+        : String(x).trim().toLowerCase().replace(/[\s-]+/g, "_");
+    } catch {
+      return String(x).trim().toLowerCase().replace(/[\s-]+/g, "_");
+    }
+  };
 
+  // Pool priority:
+  // 1) DRILL.pool (runtime)
+  // 2) window.__BC_DRILL_CONFIG__.pool (ctx / parent-provided)
+  const rawPool = DRILL?.pool || window.__BC_DRILL_CONFIG__?.pool || null;
+
+  if (Array.isArray(rawPool) && rawPool.length) {
+    const mapped = rawPool
+      .map(norm)
+      .map((g) => {
+        const G = window.GUEST || {};
+        const rev = {
+          decider: G.DECIDER,
+          bargain_smart: G.BARGAIN_SMART,
+          griever: G.GRIEVER,
+          fancy: G.FANCY,
+          celebrator: G.CELEBRATOR,
+        };
+        return rev[g] || g;
+      })
+      .filter(Boolean);
+
+    return Array.from(new Set(mapped));
+  }
+
+  // Default fallback (Route A): tier 1 pool
   return [
     window.GUEST?.DECIDER,
     window.GUEST?.BARGAIN_SMART,
     window.GUEST?.GRIEVER,
-    window.GUEST?.FANCY,
-    window.GUEST?.CELEBRATOR,
   ].filter(Boolean);
 }
 
@@ -631,14 +691,23 @@ function getDrillGuestOptions() {
         window.ProgressionBridge = window.parent.ProgressionBridge;
       }
 
-      function getProgressionSpine() {
+      function getProgressionSpine({ allowNull = false } = {}) {
+        // If we're in drill, we do NOT require a progression spine at all.
+        // Drill is ctx-driven (pool/focus) and should work without parent progression.
+        if (sessionType === "drill") return null;
+
         const host =
           (window.top && window.top.BottleCaller) ? window.top :
           (window.parent && window.parent.BottleCaller) ? window.parent :
-          window;
+          null;
 
-        const spine = host?.BottleCaller?.progression;
-        if (!spine) throw new Error("Progression spine not found from iframe context.");
+        const spine = host?.BottleCaller?.progression || null;
+
+        if (!spine) {
+          if (allowNull) return null;
+          throw new Error("Progression spine not found from iframe context.");
+        }
+
         return spine;
       }
 
@@ -864,20 +933,14 @@ function getDrillGuestOptions() {
         }
       }
 
-      // Boot PROG immediately for console/UI access (guarded)
+      // Boot PROG immediately for console/UI access (safe; no unlock evaluation yet)
       try {
         PROG = normalizeProg(loadProg());
         ensureProgMeta();
-        evaluateUnlocks();
+        // ❌ DO NOT call evaluateUnlocks() here (requires parent spine and/or ctx)
         saveProg();
       } catch (e) {
-        console.error("[BC] FATAL BOOT ERROR", e);
-        document.body.innerHTML = `
-          <div style="padding:16px;font-family:system-ui">
-            <h2>BottleCaller boot error</h2>
-            <pre>${String(e && (e.stack || e.message || e))}</pre>
-          </div>
-        `;
+        console.warn("[BC] boot: PROG init failed (non-fatal)", e);
         PROG = defaultProg();
       }
 
@@ -940,6 +1003,19 @@ function getDrillGuestOptions() {
       }
 
       function evaluateUnlocks() {
+        // Route A: drill ignores progression entirely
+        if (sessionType === "drill") return;
+        let spine = null;
+        try {
+          spine = getProgressionSpine();
+        } catch (e) {
+          console.warn("[PROG] evaluateUnlocks skipped: no spine", e);
+          return;
+        }
+        if (!spine || !spine.selectors) {
+          console.warn("[PROG] evaluateUnlocks skipped: spine missing selectors");
+          return;
+        }
         PROG.unlocks = PROG.unlocks || {};
         PROG.counters = PROG.counters || {};
         PROG.meta = PROG.meta || {};
@@ -970,7 +1046,6 @@ function getDrillGuestOptions() {
           PROG.unlocks.singleVariableHooks = PROG.axes.compression >= 4;
         }
 
-        const spine = getProgressionSpine();
         const pts = spine.selectors.points();
         const tier = spine.selectors.tier();
         const fancyUnlocked = tier >= 2;
@@ -1207,6 +1282,8 @@ function getDrillGuestOptions() {
       }
 
       function ensureProgLoaded() {
+        // Route A: drill is ctx-only. Do NOT touch progression spine.
+        if (sessionType === "drill") return;
         const key = progKey();
         if (!PROG) {
           PROG = defaultProg();
@@ -2343,13 +2420,29 @@ function getDrillGuestOptions() {
         }
 
         console.log("[BC] bc_ctx applied ✅", window.__BC_CTX__);
-        ensureProgLoaded();
+        // Always set key after ctx (safe)
         if (typeof ensureProgKeyAfterCtx === "function") ensureProgKeyAfterCtx();
-        try {
-          window.__BC_ENSURE_PROG__?.();
-          console.log("[PROG] loaded after ctx ✅", window.PROG?.axes, "key:", (window.__BC_CTX__?.userId && window.__BC_CTX__?.restaurantId) ? `bc_prog_v1_${window.__BC_CTX__.userId}_${window.__BC_CTX__.restaurantId}` : null);
-        } catch (e) {
-          console.warn("[PROG] ensure after ctx failed", e);
+
+        // ✅ Route A: drill skips progression entirely
+        if (sessionType === "drill") {
+          console.log("[BC] drill mode: skipping progression unlock evaluation ✅");
+        } else {
+          // Premium/session progression path
+          try {
+            ensureProgLoaded();
+            evaluateUnlocks();
+            window.__BC_ENSURE_PROG__?.();
+            console.log(
+              "[PROG] loaded after ctx ✅",
+              window.PROG?.axes,
+              "key:",
+              (window.__BC_CTX__?.userId && window.__BC_CTX__?.restaurantId)
+                ? `bc_prog_v1_${window.__BC_CTX__.userId}_${window.__BC_CTX__.restaurantId}`
+                : null
+            );
+          } catch (e) {
+            console.warn("[PROG] ensure/evaluate after ctx failed (non-fatal)", e);
+          }
         }
         bootstrapWinesFromCtx();
         try {
@@ -2575,23 +2668,53 @@ function getDrillGuestOptions() {
         }
 
         if (msg.type === "start_drill") {
-          await window.__BC_CTX_READY__;
+          // Route A: drill must not block on ctx. Try briefly, never block.
+          try {
+            if (window.__BC_CTX_READY__) {
+              await Promise.race([
+                window.__BC_CTX_READY__,
+                new Promise((r) => setTimeout(r, 250))
+              ]);
+            }
+          } catch {}
 
           // ✅ hydrate drill config for this iframe session
+          window.__BC_DRILL_CONFIG__ = window.__BC_DRILL_CONFIG__ || {};
+          if (!window.__BC_DRILL_CONFIG__.durationSec) window.__BC_DRILL_CONFIG__.durationSec = 300;
+          if (!window.__BC_DRILL_CONFIG__.focus) window.__BC_DRILL_CONFIG__.focus = "read";
+          const normalize = (x) => {
+            try { return normalizeGuestType(x); } catch { return String(x || "").trim().toLowerCase().replace(/[\s-]+/g, "_"); }
+          };
+          if (Array.isArray(msg.pool)) window.__BC_DRILL_CONFIG__.pool = msg.pool;
+          if (msg.focus != null) window.__BC_DRILL_CONFIG__.focus = msg.focus;
+          if (typeof msg.durationSec === "number") window.__BC_DRILL_CONFIG__.durationSec = msg.durationSec;
           if (msg.drill) {
             window.__BC_DRILL_CONFIG__ = msg.drill;
-            console.log("[BC] drill_config applied via start_drill ✅", window.__BC_DRILL_CONFIG__);
           }
+          if (Array.isArray(window.__BC_DRILL_CONFIG__?.pool)) {
+            window.__BC_DRILL_CONFIG__.pool = window.__BC_DRILL_CONFIG__.pool
+              .map((x) => normalize(x))
+              .filter(Boolean);
+          }
+          console.log("[BC] drill_config applied via start_drill ✅", window.__BC_DRILL_CONFIG__);
 
-          // Ensure wines are loaded before drill begins
+          // Ensure wines are loaded before drill begins (non-fatal)
           if (!Array.isArray(wines) || wines.length === 0) {
             try {
-              await waitForRestaurantId();
-              wines = setWines(await loadWines());
-              console.log("[BC] wines loaded for drill ✅", { count: wines?.length || 0, restaurantId });
+              await Promise.race([
+                waitForRestaurantId(),
+                new Promise((r) => setTimeout(r, 400))
+              ]);
+              if (restaurantId) {
+                wines = setWines(await loadWines());
+                console.log("[BC] wines loaded for drill ✅", { count: wines?.length || 0, restaurantId });
+              }
             } catch (e) {
-              console.warn("[BC] wines load failed before drill", e);
+              console.warn("[BC] wines load skipped/failed before drill (non-fatal)", e);
             }
+          }
+          if (!Array.isArray(wines) || wines.length === 0) {
+            wines = [{ id: "DRILL", name: "This bottle", varietal: "", region: "", story: "" }];
           }
 
           let chosen = null;
@@ -2615,7 +2738,7 @@ function getDrillGuestOptions() {
           console.log("[BC] start_drill received, sessionType currently =", sessionType);
           startDrill(
             Number(msg.repTarget || 3),
-            msg.focus ?? msg.drill?.focus ?? null,
+            msg.focus ?? window.__BC_DRILL_CONFIG__?.focus ?? msg.drill?.focus ?? null,
             msg.starter ?? "manager",
             typeof msg.tier === "number" ? msg.tier : (msg.drill?.tier ?? 0)
           );
@@ -2731,9 +2854,10 @@ function getDrillGuestOptions() {
       // ✅ SESSION CONTAINER (drill vs progression)
       // ============================================================
       function startDrill(repTarget = 3, focus = null, starter = "manager", tier = 0) {
-        const cfg = window.__BC_DRILL_CONFIG__ || null;
-        const drillFocus = focus || cfg?.focus || null;
-        DRILL = { repTarget, repDone: 0, startedAt: Date.now(), focus: drillFocus, starter, tier: (typeof tier === "number" ? tier : 0) };
+        const cfg = window.__BC_DRILL_CONFIG__ || {};
+        const drillFocus = focus || cfg.focus || null;
+        const pool = Array.isArray(cfg.pool) ? cfg.pool : null;
+        DRILL = { repTarget, repDone: 0, startedAt: Date.now(), focus: drillFocus, starter, tier: (typeof tier === "number" ? tier : 0), pool };
         DRILL.activeWine = (Array.isArray(wines) && wines.length ? wines[0] : { name: "This bottle" });
         if (!DRILL.activeWine) {
           DRILL.activeWine = (Array.isArray(wines) && wines.length) ? wines[0] : { name: "This bottle", varietal: "" };
