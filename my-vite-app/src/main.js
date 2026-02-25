@@ -72,19 +72,6 @@ window.setDefaultDrillConfig =
     return window.__BC_DRILL_CONFIG__;
   };
 
-function sendDrillConfigToIframe() {
-  const iframe = document.querySelector("#premiumRoot iframe");
-  const win = iframe?.contentWindow;
-  if (!win) return;
-
-  const drill = window.__BC_DRILL_CONFIG__ || null;
-  win.postMessage(
-    { source: "BC_MSG", v: 1, type: "drill_config", drill },
-    window.location.origin
-  );
-  console.log("[PARENT] drill_config -> sent ✅", drill);
-}
-
 // ------------------------------------------------------------
 // UI
 // ------------------------------------------------------------
@@ -2498,7 +2485,9 @@ function wireInsightsCTAs(plan) {
       showScreen("screenPlay");
       window.setDefaultDrillConfig({ focus: plan?.weakest || "read" });
       mountPremiumGameIframe({ showBack: true, backTo: "screenManagerBoard" });
-      setTimeout(sendDrillConfigToIframe, 300);
+      setTimeout(() => {
+        postToGame("drill_config", { drill: window.__BC_DRILL_CONFIG__ || null });
+      }, 300);
       console.log("[INSIGHTS] start drill requested", plan);
     };
   }
@@ -2856,8 +2845,18 @@ function mountPremiumGameIframe({ showBack = false, backTo = "screenManagerBoard
   iframe.style.height = "78vh";
   iframe.style.border = "0";
   iframe.addEventListener("load", () => {
-    try { sendDrillConfigToIframe(); } catch {}
-    console.log("[PARENT] premium iframe loaded ✅");
+    // push any current drill config into the iframe (safe even if null)
+    postToGame("drill_config", { drill: window.__BC_DRILL_CONFIG__ || null });
+
+    // optional: push ctx immediately (no handshake wait)
+    try {
+      const ctx = window.__BC_BUILD_CTX__?.(null) || window.__BC_BUILD_CTX__?.("premium");
+      if (ctx?.userId && ctx?.restaurantId && ctx?.role) {
+        postToGame("bc_ctx", { ...ctx, drill: window.__BC_DRILL_CONFIG__ || null });
+      }
+    } catch {}
+
+    console.log("[PARENT] premium iframe loaded ✅ (drill_config pushed)");
   });
   root.appendChild(iframe);
 
