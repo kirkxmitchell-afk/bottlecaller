@@ -2268,7 +2268,7 @@ function wireManagerBoardMenu() {
   menu.__bcBound = true;
 
   function showTab(name) {
-    document.querySelectorAll(".mbTab").forEach((el) => el.classList.add("hidden"));
+    document.querySelectorAll("#mbPanels .mbTab").forEach((el) => el.classList.add("hidden"));
     document.getElementById(`mbTab_${name}`)?.classList.remove("hidden");
   }
 
@@ -2279,10 +2279,13 @@ function wireManagerBoardMenu() {
 
     showTab(tab);
 
-    if (tab === "insights") await loadManagerInsights();
-    if (tab === "billing") await loadManagerBoardSeats?.();
-    if (tab === "provision") wireGroupSetupRedeem?.();
     if (tab === "overview") await loadManagerBoardData();
+    if (tab === "billing") await loadManagerBoardSeats?.();
+    if (tab === "provision") {
+      wireGroupSetupRedeem?.();
+      wireManagerBoardBillingAccess?.();
+    }
+    if (tab === "insights") await loadManagerInsights();
   });
 
   showTab("overview");
@@ -2769,6 +2772,7 @@ async function loadGroupRestaurantsForPicker() {
   }
 
   const ids = (a.data || []).map(r => r.restaurant_id).filter(Boolean);
+  console.log("[BC] picker scope", { scopeId, scopeType, idsCount: ids.length, ids });
   if (!ids.length) {
     const hint = document.getElementById("activeRestaurantHint");
     if (hint) hint.textContent = "⚠️ No restaurants attached to this scope yet.";
@@ -3149,7 +3153,7 @@ async function loadManagerBoardData() {
     const items = [
       ...(recentRuns.data || []).map((x) => ({
         t: x.session_start,
-        line: `Session • ${userLabel(x.user_id, nameMap)} • ${x.encounters_resolved ?? 0} res • avg ${(Number(x.avg_chain_score ?? 0)).toFixed(2)} • G/Y/R ${x.greens ?? 0}/${x.yellows ?? 0}/${x.reds ?? 0}`,
+        line: `Session • ${userLabel(x.user_id, nameMap)} • ${x.encounters_resolved ?? 0} resolved • avg chain score ${(Number(x.avg_chain_score ?? 0)).toFixed(2)} • G/Y/R ${x.greens ?? 0}/${x.yellows ?? 0}/${x.reds ?? 0}`,
       })),
       ...(recentDrills.data || []).map((x) => ({
         t: x.occurred_at,
