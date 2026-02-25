@@ -2534,34 +2534,26 @@ function getManagerBoardFilter() {
   const p = window.appState?.profile || {};
   const role = String(p.role || "").toLowerCase();
   const scopeType = String(p.scope_type || "").toLowerCase();
-  const scopeId = p.scope_id || null;
-
   const restaurantId = window.getActiveRestaurantId?.() || null;
 
-  const isGroupish =
-    role === "manager" &&
-    (scopeType === "group" || scopeType === "enterprise") &&
-    !!scopeId;
+  const isManager = role === "manager";
+  const isGroupish = isManager && (scopeType === "group" || scopeType === "enterprise");
 
-  return { restaurantId, scopeId, isGroupish };
+  return { restaurantId, isManager, isGroupish };
 }
 
 async function loadManagerBoardData() {
   try {
-    const { restaurantId, scopeId, isGroupish } = getManagerBoardFilter();
-    if (!restaurantId) throw new Error("Active restaurant not set.");
+    const { restaurantId, isManager, isGroupish } = getManagerBoardFilter();
+    if (!isManager) throw new Error("Manager only");
+    if (!restaurantId) throw new Error("Active restaurant not set");
 
-    let r = appState.restaurant || null;
-
-    // Always hydrate from restaurantId (source of truth)
-    try {
-      r = await loadRestaurant(restaurantId);
-      appState.restaurant = r;
-    } catch (e) {
-      console.warn("[MB] loadRestaurant failed", e);
+    if (!appState.restaurant || appState.restaurant.id !== restaurantId) {
+      try { appState.restaurant = await loadRestaurant(restaurantId); } catch {}
     }
 
-    document.getElementById("mbRestName").textContent = r?.name || (String(restaurantId).slice(0, 8) + "…");
+    document.getElementById("mbRestName").textContent =
+      appState.restaurant?.name || (String(restaurantId).slice(0, 8) + "…");
     document.getElementById("mbMsg").textContent = "";
 
     // Views you actually have
@@ -2721,8 +2713,6 @@ async function loadManagerBoardData() {
       .eq("restaurant_id", restaurantId)
       .order("latest_occurred_at", { ascending: false })
       .limit(200);
-
-    if (isGroupish && scopeId) latestQ = latestQ.eq("scope_id", scopeId);
 
     const latestRes = await latestQ;
 
