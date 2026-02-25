@@ -14,8 +14,13 @@
       (new URLSearchParams(location.search).get("mode") || "demo");
     console.log("[BC] APP_MODE =", window.APP_MODE);
 
-    // ---- session type (iframe-wide) ----
+    // ---- Drill session flag (iframe-wide) ----
     window.__BC_SESSION_TYPE__ = window.__BC_SESSION_TYPE__ || "play";
+    window.isDrillMode =
+      window.isDrillMode ||
+      function isDrillMode() {
+        return String(window.__BC_SESSION_TYPE__ || "").toLowerCase() === "drill";
+      };
 
     // ---- optional back button (drill -> manager board) ----
     (function initBackButtonFromParams() {
@@ -651,7 +656,7 @@ function getDrillGuestOptions() {
 }
 
 function isDrillMode() {
-  return window.__BC_SESSION_TYPE__ === "drill";
+  return String(window.__BC_SESSION_TYPE__ || "").toLowerCase() === "drill";
 }
 
 
@@ -1011,7 +1016,7 @@ function isDrillMode() {
 
       function evaluateUnlocks() {
         // Route A: drill ignores progression entirely
-        if (isDrillMode()) return;
+        if (window.isDrillMode && window.isDrillMode()) return;
 
         let spine = null;
         try {
@@ -1293,7 +1298,7 @@ function isDrillMode() {
 
 function ensureProgLoaded() {
   // Route A: drill is ctx-only. Do NOT touch progression spine.
-  if (isDrillMode()) return null;
+  if (window.isDrillMode && window.isDrillMode()) return null;
 
   const key = progKey();
   if (!PROG) PROG = defaultProg();
@@ -2680,6 +2685,7 @@ function ensureProgLoaded() {
         if (msg.type === "start_drill") {
           // HARD DRILL MODE: set immediately so nothing touches progression
           window.__BC_SESSION_TYPE__ = "drill";
+          console.log("[BC] session type set ->", window.__BC_SESSION_TYPE__);
           try { sessionType = "drill"; } catch {}
 
           // Route A: drill must not block on ctx. Try briefly, never block.
