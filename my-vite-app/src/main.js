@@ -2177,10 +2177,14 @@ function wireManagerBoardMenu() {
   if (!menu || menu.__wired) return;
   menu.__wired = true;
 
-  menu.addEventListener("click", (e) => {
+  menu.addEventListener("click", async (e) => {
     const btn = e.target?.closest?.("[data-mbtab]");
     if (!btn) return;
-    mbShowTab(btn.getAttribute("data-mbtab"));
+    const tab = btn.getAttribute("data-mbtab");
+    mbShowTab(tab);
+    if (tab === "insights") {
+      try { await loadManagerInsights(); } catch (err) { console.warn("[MB] loadManagerInsights failed", err); }
+    }
   });
 
   mbShowTab("overview");
@@ -2204,6 +2208,293 @@ function applyManagerBoardVisibility() {
 
   const billingBtn = document.querySelector('#mbMenu [data-mbtab="billing"]');
   if (billingBtn) billingBtn.style.display = "";
+}
+
+function ensureInsightsShell() {
+  const host = document.getElementById("mbTab_insights");
+  if (!host) return null;
+
+  if (!host.__bcInit) {
+    host.__bcInit = true;
+    host.innerHTML = `
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; gap:12px; align-items:center;">
+          <div>
+            <div style="font-weight:700;">Insights</div>
+            <div class="small-text" style="opacity:.8;">What breaks under pressure — and what drill fixes it.</div>
+          </div>
+          <button id="mbInsightsRefresh" class="btn" type="button">Refresh</button>
+        </div>
+
+        <div id="mbInsightsMsg" class="small-text" style="margin-top:10px;"></div>
+      </div>
+
+      <div class="card" style="margin-top:12px;">
+        <div style="font-weight:700;">Recommended Drill</div>
+        <div id="mbInsightsDrillWhy" class="small-text" style="margin-top:6px; opacity:.85;"></div>
+
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
+          <button id="mbInsightsStartDrill" class="btn-primary" type="button">Start 5-min Drill</button>
+          <button id="mbInsightsCopyPlan" class="btn" type="button">Copy Plan</button>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:12px;">
+        <div style="font-weight:700;">Guest Type Breakdown</div>
+        <div id="mbInsightsGuestTable" style="margin-top:10px;"></div>
+      </div>
+
+      <div class="card" style="margin-top:12px;">
+        <div style="font-weight:700;">Trend (14 days)</div>
+        <div id="mbInsightsTrendTable" style="margin-top:10px;"></div>
+      </div>
+    `;
+
+    const b = document.getElementById("mbInsightsRefresh");
+    if (b && !b.__bcBound) {
+      b.__bcBound = true;
+      b.onclick = () => loadManagerInsights();
+    }
+  }
+
+  return host;
+}
+
+function rate(passed, total) {
+  if (!total) return 0;
+  return passed / total;
+}
+
+function buildRecommendedDrillPlan({ guestRows, weakRows }) {
+  const n = weakRows.length || 0;
+
+  let readOk = 0, delOk = 0, modeOk = 0, hookOk = 0;
+  for (const r of weakRows) {
+    if (r.read_correct) readOk++;
+    if (r.delivery_correct) delOk++;
+    if (r.mode_optimal) modeOk++;
+    if (r.hook_optimal) hookOk++;
+  }
+
+  const scores = [
+    { skill: "read", success: rate(readOk, n) },
+    { skill: "delivery", success: rate(delOk, n) },
+    { skill: "mode", success: rate(modeOk, n) },
+    { skill: "hook", success: rate(hookOk, n) },
+  ].sort((a, b) => a.success - b.success);
+
+  const weakest = scores[0]?.skill || "read";
+
+  const map = {
+    read: {
+      title: "Read under pressure",
+      script: "For 5 minutes: pause 1 beat, name 2 cues (1 physical + 1 verbal), then choose the guest type out loud.",
+      why: "Most losses start with misreading the guest. Fix the read, everything downstream improves."
+    },
+    mode: {
+      title: "Mode discipline",
+      script: "For 5 minutes: pick ONE mode (lead/charm/consult/etc) and refuse to switch. Say it before each attempt.",
+      why: "Your mode collapses under pressure. This drill builds stability and stops spirals."
+    },
+    hook: {
+      title: "Hook precision",
+      script: "For 5 minutes: deliver a hook in one sentence: outcome + constraint + confidence (no extra info).",
+      why: "Hooks are landing inconsistently. This tightens framing and stops rambling."
+    },
+    delivery: {
+      title: "Delivery lock",
+      script: "For 5 minutes: deliver 2 lines max (line1: recommendation, line2: reassurance). Then stop talking.",
+      why: "Delivery is leaking. This drill forces clean, confident closure."
+    }
+  };
+
+  const chosen = map[weakest] || map.read;
+
+  return {
+    weakest,
+    title: chosen.title,
+    script: chosen.script,
+    why: chosen.why,
+  };
+}
+
+function renderGuestInsightsTable(rows) {
+  const by = new Map();
+
+  for (const r of rows) {
+    const g = String(r.actual_guest_type_norm || "unknown");
+    const s = by.get(g) || { g, n: 0, avg: 0, greens: 0, reds: 0, readOk: 0, delOk: 0, modeOk: 0, hookOk: 0, sum: 0 };
+    s.n++;
+    s.sum += Number(r.chain_score || 0);
+    if (r.is_green) s.greens++;
+    if (r.is_red) s.reds++;
+    if (r.read_correct) s.readOk++;
+    if (r.delivery_correct) s.delOk++;
+    if (r.mode_optimal) s.modeOk++;
+    if (r.hook_optimal) s.hookOk++;
+    by.set(g, s);
+  }
+
+  const list = Array.from(by.values()).map(x => ({
+    ...x,
+    avg: x.n ? (x.sum / x.n) : 0,
+    greenPct: x.n ? (100 * x.greens / x.n) : 0,
+    readPct: x.n ? (100 * x.readOk / x.n) : 0,
+    delPct: x.n ? (100 * x.delOk / x.n) : 0,
+    modePct: x.n ? (100 * x.modeOk / x.n) : 0,
+    hookPct: x.n ? (100 * x.hookOk / x.n) : 0,
+  })).sort((a, b) => b.n - a.n);
+
+  if (!list.length) return `<div class="small-text" style="opacity:.8;">No encounter data yet.</div>`;
+
+  const header = `
+    <div style="display:grid; grid-template-columns: 1.2fr .6fr .6fr .7fr .7fr .7fr .7fr; gap:8px; font-weight:700; opacity:.9;">
+      <div>Guest</div><div>Attempts</div><div>Avg</div><div>Green%</div><div>Read%</div><div>Mode%</div><div>Hook%</div>
+    </div>
+  `;
+
+  const body = list.map(x => `
+    <div style="display:grid; grid-template-columns: 1.2fr .6fr .6fr .7fr .7fr .7fr .7fr; gap:8px; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.08);">
+      <div>${x.g}</div>
+      <div>${x.n}</div>
+      <div>${x.avg.toFixed(2)}</div>
+      <div>${x.greenPct.toFixed(1)}</div>
+      <div>${x.readPct.toFixed(1)}</div>
+      <div>${x.modePct.toFixed(1)}</div>
+      <div>${x.hookPct.toFixed(1)}</div>
+    </div>
+  `).join("");
+
+  return header + body;
+}
+
+function renderTrendTable(rows) {
+  const byDay = new Map();
+  for (const r of rows) {
+    const d = (r.occurred_at ? String(r.occurred_at).slice(0, 10) : "unknown");
+    const s = byDay.get(d) || { day: d, n: 0, sum: 0, greens: 0 };
+    s.n++;
+    s.sum += Number(r.chain_score || 0);
+    if (r.is_green) s.greens++;
+    byDay.set(d, s);
+  }
+
+  const list = Array.from(byDay.values())
+    .map(x => ({ ...x, avg: x.n ? x.sum / x.n : 0, greenPct: x.n ? 100 * x.greens / x.n : 0 }))
+    .sort((a, b) => (a.day < b.day ? 1 : -1))
+    .slice(0, 14);
+
+  if (!list.length) return `<div class="small-text" style="opacity:.8;">No trend data yet.</div>`;
+
+  const header = `
+    <div style="display:grid; grid-template-columns: 1fr .7fr .7fr .7fr; gap:8px; font-weight:700; opacity:.9;">
+      <div>Day</div><div>Attempts</div><div>Avg</div><div>Green%</div>
+    </div>
+  `;
+
+  const body = list.map(x => `
+    <div style="display:grid; grid-template-columns: 1fr .7fr .7fr .7fr; gap:8px; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.08);">
+      <div>${x.day}</div>
+      <div>${x.n}</div>
+      <div>${x.avg.toFixed(2)}</div>
+      <div>${x.greenPct.toFixed(1)}</div>
+    </div>
+  `).join("");
+
+  return header + body;
+}
+
+function wireInsightsCTAs(plan) {
+  const bStart = document.getElementById("mbInsightsStartDrill");
+  const bCopy = document.getElementById("mbInsightsCopyPlan");
+
+  if (bStart && !bStart.__bcBound) {
+    bStart.__bcBound = true;
+    bStart.onclick = () => {
+      showScreen("screenPlay");
+      mountPremiumGameIframe();
+      console.log("[INSIGHTS] start drill requested", plan);
+    };
+  }
+
+  if (bCopy && !bCopy.__bcBound) {
+    bCopy.__bcBound = true;
+    bCopy.onclick = async () => {
+      const text = `Recommended Drill: ${plan.title}\nWhy: ${plan.why}\nScript: ${plan.script}`;
+      try {
+        await navigator.clipboard.writeText(text);
+        const msgEl = document.getElementById("mbInsightsMsg");
+        if (msgEl) msgEl.textContent = "✅ Copied drill plan.";
+      } catch {
+        alert(text);
+      }
+    };
+  }
+}
+
+async function loadManagerInsights() {
+  ensureInsightsShell();
+
+  const msgEl = document.getElementById("mbInsightsMsg");
+  const whyEl = document.getElementById("mbInsightsDrillWhy");
+  const guestEl = document.getElementById("mbInsightsGuestTable");
+  const trendEl = document.getElementById("mbInsightsTrendTable");
+
+  const restaurantId = window.getActiveRestaurantId?.() || null;
+  if (!restaurantId) {
+    if (msgEl) msgEl.textContent = "Active restaurant not set.";
+    return;
+  }
+
+  if (msgEl) msgEl.textContent = "Loading insights…";
+
+  const guestRes = await supabase
+    .from("bc_encounter_resolutions_v2")
+    .select("actual_guest_type_norm, chain_score, is_green, is_red, read_correct, delivery_correct, mode_optimal, hook_optimal")
+    .eq("restaurant_id", restaurantId);
+
+  if (guestRes.error) {
+    if (msgEl) msgEl.textContent = "Failed: " + guestRes.error.message;
+    return;
+  }
+
+  const weakRes = await supabase
+    .from("bc_encounter_resolutions_v2")
+    .select("read_correct, delivery_correct, mode_optimal, hook_optimal")
+    .eq("restaurant_id", restaurantId)
+    .limit(2000);
+
+  if (weakRes.error) {
+    if (msgEl) msgEl.textContent = "Failed: " + weakRes.error.message;
+    return;
+  }
+
+  const trendRes = await supabase
+    .from("bc_encounter_resolutions_v2")
+    .select("occurred_at, chain_score, is_green")
+    .eq("restaurant_id", restaurantId)
+    .order("occurred_at", { ascending: false })
+    .limit(2000);
+
+  if (trendRes.error) {
+    if (msgEl) msgEl.textContent = "Failed: " + trendRes.error.message;
+    return;
+  }
+
+  const guestRows = guestRes.data || [];
+  const weakRows = weakRes.data || [];
+  const trendRows = trendRes.data || [];
+
+  const plan = buildRecommendedDrillPlan({ guestRows, weakRows });
+
+  if (whyEl) whyEl.textContent = plan.why;
+
+  if (guestEl) guestEl.innerHTML = renderGuestInsightsTable(guestRows);
+  if (trendEl) trendEl.innerHTML = renderTrendTable(trendRows);
+
+  wireInsightsCTAs(plan);
+
+  if (msgEl) msgEl.textContent = `✅ Loaded • ${guestRows.length} resolves`;
 }
 
 async function loadGroupRestaurantsForPicker() {
