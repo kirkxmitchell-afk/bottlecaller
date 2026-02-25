@@ -4,6 +4,14 @@ import { supabase, signIn, signUp, signOut, getSession } from "./lib/supabaseCli
 import { decideAllowedTier } from "./game/progressionBridge";
 import { createProgressionStore } from "./progressionStore.js";
 
+const escapeHtml = (s = "") =>
+  String(s)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+
 if (window.__BOTTLECALLER_BOOTED__) {
   throw new Error("BottleCaller boot attempted twice.");
 }
@@ -881,14 +889,6 @@ function renderWineTable(wines) {
       cards.appendChild(div);
     }
   });
-}
-
-function escapeHtml(s) {
-  return String(s ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
 }
 
 function buildReactionChecksFromDrillPick(msg) {
@@ -2679,15 +2679,6 @@ async function loadManagerInsights() {
   }
 
   if (msgEl) msgEl.textContent = `✅ Loaded • ${rows.length} resolves • ${plans.length} user(s)`;
-}
-
-function escapeHtml(s) {
-  return String(s ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
 }
 
 async function loadGroupRestaurantsForPicker() {
