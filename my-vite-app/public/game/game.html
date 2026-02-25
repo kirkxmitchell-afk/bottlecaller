@@ -647,6 +647,11 @@ function getDrillGuestOptions() {
   ].filter(Boolean);
 }
 
+function isDrillMode() {
+  // Don’t reference sessionType (it’s not guaranteed global)
+  return window.__BC_SESSION_TYPE__ === "drill";
+}
+
 
       // ============================================================
       // ✅ MODE ENFORCEMENT (single source of truth)
@@ -1004,7 +1009,7 @@ function getDrillGuestOptions() {
 
       function evaluateUnlocks() {
         // Route A: drill ignores progression entirely
-        if (sessionType === "drill") return;
+        if (window.__BC_SESSION_TYPE__ === "drill" || sessionType === "drill") return;
         let spine = null;
         try {
           spine = getProgressionSpine();
@@ -1281,13 +1286,13 @@ function getDrillGuestOptions() {
         return prog;
       }
 
-      function ensureProgLoaded() {
-        // Route A: drill is ctx-only. Do NOT touch progression spine.
-        if (sessionType === "drill") return;
-        const key = progKey();
-        if (!PROG) {
-          PROG = defaultProg();
-        }
+function ensureProgLoaded() {
+  // Route A: drill is ctx-only. Do NOT touch progression spine.
+  if (window.__BC_SESSION_TYPE__ === "drill" || sessionType === "drill") return;
+  const key = progKey();
+  if (!PROG) {
+    PROG = defaultProg();
+  }
 
         PROG = ensureProgShape(PROG);
         ensureProgMeta();
@@ -2668,6 +2673,10 @@ function getDrillGuestOptions() {
         }
 
         if (msg.type === "start_drill") {
+          // HARD DRILL MODE: set immediately so nothing touches progression
+          window.__BC_SESSION_TYPE__ = "drill";
+          try { sessionType = "drill"; } catch {}
+
           // Route A: drill must not block on ctx. Try briefly, never block.
           try {
             if (window.__BC_CTX_READY__) {
@@ -2736,6 +2745,9 @@ function getDrillGuestOptions() {
           console.log("[MSG] start_drill received", msg);
           console.log("[BC] start_drill RECEIVED ✅", msg);
           console.log("[BC] start_drill received, sessionType currently =", sessionType);
+          if (!Array.isArray(window.__BC_DRILL_CONFIG__?.pool) || !window.__BC_DRILL_CONFIG__.pool.length) {
+            window.__BC_DRILL_CONFIG__.pool = ["decider", "bargain_smart", "griever"];
+          }
           startDrill(
             Number(msg.repTarget || 3),
             msg.focus ?? window.__BC_DRILL_CONFIG__?.focus ?? msg.drill?.focus ?? null,
@@ -2857,12 +2869,14 @@ function getDrillGuestOptions() {
         const cfg = window.__BC_DRILL_CONFIG__ || {};
         const drillFocus = focus || cfg.focus || null;
         const pool = Array.isArray(cfg.pool) ? cfg.pool : null;
+        // HARD DRILL MODE (safety)
+        window.__BC_SESSION_TYPE__ = "drill";
+        sessionType = "drill";
         DRILL = { repTarget, repDone: 0, startedAt: Date.now(), focus: drillFocus, starter, tier: (typeof tier === "number" ? tier : 0), pool };
         DRILL.activeWine = (Array.isArray(wines) && wines.length ? wines[0] : { name: "This bottle" });
         if (!DRILL.activeWine) {
           DRILL.activeWine = (Array.isArray(wines) && wines.length) ? wines[0] : { name: "This bottle", varietal: "" };
         }
-        sessionType = "drill";
         drillRepTarget = repTarget;
         drillRepDone = 0;
         sessionId = sessionId || crypto.randomUUID();
@@ -3099,7 +3113,7 @@ function getDrillGuestOptions() {
           stepContent.textContent = "Pick your control strategy.";
 
           const tier = resolveTierForSession("drill");
-          if (sessionType !== "drill") ensureProgLoaded();
+          if (!isDrillMode()) ensureProgLoaded();
           const prog = PROG || {};
           let allowed = getAllowedDrillModesByTier(tier);
           if (prog.unlocks && prog.unlocks.authorityMode === false) {
@@ -3129,8 +3143,8 @@ function getDrillGuestOptions() {
           stepHeader.textContent = "Step 3 — Hook";
           stepContent.textContent = "Choose your opening line.";
 
-          window.__BC_ENSURE_PROG__?.();
-          const progState = window.PROG || null;
+          if (!isDrillMode()) window.__BC_ENSURE_PROG__?.();
+          const progState = isDrillMode() ? null : (window.PROG || null);
           const tierNow = resolveTierForSession(sessionType);
           const wine =
             (DRILL && DRILL.activeWine) ? DRILL.activeWine :
@@ -5994,7 +6008,9 @@ function getDrillGuestOptions() {
         stepContent.appendChild(wrap);
       }
 
-      function hookPolicy(encounter, wine) {
+      function hookPolicy(encounter, wine, tierNow, progState) {
+        progState = progState || {};
+        progState.unlocks = progState.unlocks || {};
         const w = wine || { name: "This bottle", varietal: "" };
         const name = w.name || "This bottle";
         const d = difficultyOf(encounter);

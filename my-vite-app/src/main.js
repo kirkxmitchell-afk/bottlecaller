@@ -2479,18 +2479,30 @@ function wireInsightsCTAs(plan) {
   const bStart = document.getElementById("mbInsightsStartDrill");
   const bCopy = document.getElementById("mbInsightsCopyPlan");
 
-  if (bStart && !bStart.__bcBound) {
-    bStart.__bcBound = true;
-    bStart.onclick = () => {
-      showScreen("screenPlay");
-      window.setDefaultDrillConfig({ focus: plan?.weakest || "read" });
-      mountPremiumGameIframe({ showBack: true, backTo: "screenManagerBoard" });
-      setTimeout(() => {
-        postToGame("drill_config", { drill: window.__BC_DRILL_CONFIG__ || null });
-      }, 300);
-      console.log("[INSIGHTS] start drill requested", plan);
+if (bStart && !bStart.__bcBound) {
+  bStart.__bcBound = true;
+  bStart.onclick = () => {
+    showScreen("screenPlay");
+
+    // 1) Decide drill plan (3 guests only, focus from plan)
+    const focus = plan?.weakest || "read";
+    window.setDefaultDrillConfig({ focus });
+
+    // 2) Queue a start payload for when the iframe is definitely ready
+    window.__BC_PENDING_START_DRILL__ = {
+      repTarget: 3,
+      focus,
+      pool: ["decider", "bargain_smart", "griever"],
+      starter: "manager",
+      tier: 0,
     };
-  }
+
+    // 3) Mount iframe (load handler will push ctx + drill + start)
+    mountPremiumGameIframe({ showBack: true, backTo: "screenManagerBoard" });
+
+    console.log("[INSIGHTS] start drill requested", { focus, plan });
+  };
+}
 
   if (bCopy && !bCopy.__bcBound) {
     bCopy.__bcBound = true;
@@ -2845,18 +2857,26 @@ function mountPremiumGameIframe({ showBack = false, backTo = "screenManagerBoard
   iframe.style.height = "78vh";
   iframe.style.border = "0";
   iframe.addEventListener("load", () => {
-    // push any current drill config into the iframe (safe even if null)
-    postToGame("drill_config", { drill: window.__BC_DRILL_CONFIG__ || null });
-
-    // optional: push ctx immediately (no handshake wait)
+    // 1) push ctx (so restaurantId/userId exist inside iframe)
     try {
       const ctx = window.__BC_BUILD_CTX__?.(null) || window.__BC_BUILD_CTX__?.("premium");
       if (ctx?.userId && ctx?.restaurantId && ctx?.role) {
         postToGame("bc_ctx", { ...ctx, drill: window.__BC_DRILL_CONFIG__ || null });
       }
-    } catch {}
+    } catch (e) {
+      console.warn("[PARENT] bc_ctx push failed", e);
+    }
 
-    console.log("[PARENT] premium iframe loaded ✅ (drill_config pushed)");
+    // 2) push drill config (pool + focus)
+    postToGame("drill_config", { drill: window.__BC_DRILL_CONFIG__ || null });
+
+    // 3) start drill (if queued)
+    if (window.__BC_PENDING_START_DRILL__) {
+      postToGame("start_drill", window.__BC_PENDING_START_DRILL__);
+      window.__BC_PENDING_START_DRILL__ = null;
+    }
+
+    console.log("[PARENT] premium iframe loaded ✅ (ctx + drill_config + start_drill)");
   });
   root.appendChild(iframe);
 
