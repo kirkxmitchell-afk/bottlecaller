@@ -1064,6 +1064,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
     if (!ready) return;
 
     const bcCtx = await buildBcCtxSafe(p.mode ?? null);
+    if (bcCtx) bcCtx.drill = window.__BC_DRILL_CONFIG__ || null;
     if (!bcCtx?.userId || !bcCtx?.restaurantId || !bcCtx?.role) {
       console.warn("[PARENT] flushPendingCtx: refusing null/partial bc_ctx", bcCtx);
       return;
