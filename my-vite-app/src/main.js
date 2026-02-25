@@ -319,10 +319,10 @@ document.querySelector("#app").innerHTML = `
           </div>
         </div>
 
-        <div id="mbTab_staff" class="mbTab" style="display:none;"></div>
-        <div id="mbTab_insights" class="mbTab" style="display:none;"></div>
+        <div id="mbTab_staff" class="mbTab hidden"></div>
+        <div id="mbTab_insights" class="mbTab hidden"></div>
 
-        <div id="mbTab_billing" class="mbTab" style="display:none;">
+        <div id="mbTab_billing" class="mbTab hidden">
           <div id="mbBillingAccess" class="card" style="margin-top:12px;">
             <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
               <strong>Billing & Access</strong>
@@ -356,7 +356,7 @@ document.querySelector("#app").innerHTML = `
           </div>
         </div>
 
-        <div id="mbTab_provision" class="mbTab" style="display:none;">
+        <div id="mbTab_provision" class="mbTab hidden">
           <div class="card" style="margin-top:12px;">
             <strong>Group Manager Signup</strong>
             <div class="small-text" style="margin-top:6px;">
@@ -1018,6 +1018,7 @@ async function buildBcCtxSafe(requestedMode = null) {
     scopeId,
     role,
     mode: requestedMode ?? null,
+    drill: window.__BC_DRILL_CONFIG__ || null,
   };
 }
 
@@ -1117,6 +1118,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
           return;
         }
         const bcCtx = await buildBcCtxSafe(msg?.mode ?? null);
+        if (bcCtx) bcCtx.drill = window.__BC_DRILL_CONFIG__ || null;
 
         console.log("[PARENT] bc_ctx_request -> reply", {
           requested: msg?.mode ?? null,
@@ -2164,30 +2166,29 @@ function wireManagerBoardBillingAccess() {
   loadManagerBoardSeats();
 }
 
-function mbShowTab(tab) {
-  document.querySelectorAll("#mbPanels .mbTab").forEach((el) => {
-    el.style.display = "none";
-  });
-  const el = document.getElementById(`mbTab_${tab}`);
-  if (el) el.style.display = "block";
-}
-
 function wireManagerBoardMenu() {
   const menu = document.getElementById("mbMenu");
-  if (!menu || menu.__wired) return;
-  menu.__wired = true;
+  if (!menu || menu.__bcBound) return;
+  menu.__bcBound = true;
+
+  function showTab(name) {
+    document.querySelectorAll(".mbTab").forEach((el) => el.classList.add("hidden"));
+    document.getElementById(`mbTab_${name}`)?.classList.remove("hidden");
+  }
 
   menu.addEventListener("click", async (e) => {
     const btn = e.target?.closest?.("[data-mbtab]");
     if (!btn) return;
     const tab = btn.getAttribute("data-mbtab");
-    mbShowTab(tab);
-    if (tab === "insights") {
-      try { await loadManagerInsights(); } catch (err) { console.warn("[MB] loadManagerInsights failed", err); }
-    }
+
+    showTab(tab);
+
+    if (tab === "insights") await loadManagerInsights();
+    if (tab === "billing") await loadManagerBoardSeats?.();
+    if (tab === "overview") await loadManagerBoardData();
   });
 
-  mbShowTab("overview");
+  showTab("overview");
 }
 
 function applyManagerBoardVisibility() {
@@ -2208,6 +2209,35 @@ function applyManagerBoardVisibility() {
 
   const billingBtn = document.querySelector('#mbMenu [data-mbtab="billing"]');
   if (billingBtn) billingBtn.style.display = "";
+}
+
+function setDefaultDrillConfig() {
+  // Tier 1 default pool
+  window.__BC_DRILL_CONFIG__ = {
+    focus: "read",
+    pool: ["decider", "bargain_smart", "griever"],
+    durationSec: 300,
+  };
+  console.log("[PARENT] __BC_DRILL_CONFIG__ set ✅", window.__BC_DRILL_CONFIG__);
+}
+
+async function mapUserIdsToNames(userIds) {
+  const ids = Array.from(new Set((userIds || []).filter(Boolean)));
+  if (!ids.length) return new Map();
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("user_id, display_name")
+    .in("user_id", ids);
+
+  if (error) {
+    console.warn("[BC] mapUserIdsToNames failed", error);
+    return new Map();
+  }
+
+  const m = new Map();
+  for (const row of data || []) m.set(row.user_id, row.display_name || row.user_id?.slice(0, 8));
+  return m;
 }
 
 function ensureInsightsShell() {
@@ -2412,7 +2442,9 @@ function wireInsightsCTAs(plan) {
     bStart.__bcBound = true;
     bStart.onclick = () => {
       showScreen("screenPlay");
-      mountPremiumGameIframe();
+      setDefaultDrillConfig();
+      window.__BC_DRILL_CONFIG__.focus = plan.weakest;
+      mountPremiumGameIframe({ showBack: true, backTo: "screenManagerBoard" });
       console.log("[INSIGHTS] start drill requested", plan);
     };
   }
@@ -2500,100 +2532,56 @@ async function loadManagerInsights() {
 async function loadGroupRestaurantsForPicker() {
   const sel = document.getElementById("selActiveRestaurant");
   if (!sel) return;
-
   sel.innerHTML = "";
 
   const scopeType = String(appState.profile?.scope_type || "").toLowerCase();
   const scopeId = appState.profile?.scope_id || null;
-
-  // Only show picker for group / enterprise
   if (!scopeId || (scopeType !== "group" && scopeType !== "enterprise")) return;
 
-  // IMPORTANT: this must read from bc_scope_restaurants, not profiles.restaurant_id
-  const { data, error } = await supabase
+  // 1) fetch allowed restaurant ids
+  const a = await supabase
     .from("bc_scope_restaurants")
-    .select("restaurant_id, restaurants!inner(name)")
+    .select("restaurant_id, created_at")
     .eq("scope_id", scopeId)
     .order("created_at", { ascending: true });
 
-  if (error) {
-    console.error("[BC] loadGroupRestaurantsForPicker error", error);
+  if (a.error) {
+    console.error("[BC] scope restaurants fetch failed", a.error);
     return;
   }
 
-  const rows = Array.isArray(data) ? data : [];
-
-  // If group scope has no restaurants, surface it
-  if (!rows.length) {
+  const ids = (a.data || []).map(r => r.restaurant_id).filter(Boolean);
+  if (!ids.length) {
     const hint = document.getElementById("activeRestaurantHint");
     if (hint) hint.textContent = "⚠️ No restaurants attached to this scope yet.";
     console.warn("[BC] group picker: scope has 0 restaurants", { scopeId });
     return;
   }
 
-  // Render options
-  for (const row of rows) {
+  // 2) fetch names
+  const b = await supabase
+    .from("restaurants")
+    .select("id, name")
+    .in("id", ids);
+
+  const nameById = new Map((b.data || []).map(r => [r.id, r.name]));
+
+  for (const rid of ids) {
     const opt = document.createElement("option");
-    opt.value = row.restaurant_id;
-    opt.textContent = row.restaurants?.name || row.restaurant_id;
+    opt.value = rid;
+    opt.textContent = nameById.get(rid) || rid;
     sel.appendChild(opt);
   }
 
-  // --- Validate stored active restaurant (per-scope) ---
-  // Source of truth: localStorage per scope, not profile.restaurant_id
-  let stored = null;
-  try { stored = getStoredActiveRestaurantId(); } catch {}
+  // preselect stored/active
+  const stored = getStoredActiveRestaurantId?.() || null;
+  const active = appState.activeRestaurantId || stored || ids[0];
+  sel.value = active;
 
-  if (stored) {
-    try {
-      const ok = await assertRestaurantAllowedForScope(scopeId, stored);
-      const inRows = rows.some(r => r.restaurant_id === stored);
+  // ensure state is aligned
+  try { await setActiveRestaurantForGroup(active); } catch {}
 
-      if (!ok || !inRows) {
-        const bad = stored;
-        // Clear invalid stored restaurant for this scope
-        appState.activeRestaurantId = null;
-        try { localStorage.removeItem(activeRestaurantStorageKey(scopeId)); } catch {}
-        stored = null;
-        console.warn("[BC] cleared invalid stored activeRestaurantId", { bad, ok, inRows, scopeId });
-      }
-    } catch (e) {
-      console.warn("[BC] active restaurant validation failed", e);
-      // If validation fails (DB issue), don't wipe the user's selection.
-    }
-  }
-
-  // --- Preselect / auto-select ---
-  // Priority: appState.activeRestaurantId (if set) -> stored -> first row
-  const desired =
-    appState.activeRestaurantId ||
-    stored ||
-    rows[0].restaurant_id;
-
-  sel.value = desired;
-
-  // Ensure parent state + storage are coherent
-  try {
-    // If user already has an active selection in state/storage, keep it.
-    // If not, setActiveRestaurantForGroup will store per-scope + hydrate restaurant.
-    if (!appState.activeRestaurantId && !stored) {
-      await setActiveRestaurantForGroup(desired);
-    } else {
-      appState.activeRestaurantId = desired;
-    }
-  } catch (e) {
-    console.warn("[BC] failed to set desired restaurant", { desired, e });
-    const hint = document.getElementById("activeRestaurantHint");
-    if (hint) hint.textContent = `⚠️ Failed to set active restaurant`;
-  }
-
-  console.log("[BC] group picker hydrated", {
-    scopeId,
-    count: rows.length,
-    desired,
-    stored,
-    rows: rows.map(r => ({ restaurant_id: r.restaurant_id, name: r.restaurants?.name || "" })),
-  });
+  console.log("[BC] picker hydrated", { scopeId, ids });
 }
 
 async function assertRestaurantAllowedForScope(scopeId, restaurantId) {
@@ -2689,11 +2677,28 @@ function pushCtxToPremiumIframe(source = "manual") {
   );
 }
 
-function mountPremiumGameIframe() {
+function mountPremiumGameIframe({ showBack = false, backTo = "screenManagerBoard" } = {}) {
   const root = document.getElementById("premiumRoot");
   if (!root) return;
 
   root.innerHTML = "";
+
+  if (showBack) {
+    const bar = document.createElement("div");
+    bar.style.display = "flex";
+    bar.style.gap = "8px";
+    bar.style.alignItems = "center";
+    bar.style.margin = "8px 0";
+
+    const btn = document.createElement("button");
+    btn.className = "btn";
+    btn.type = "button";
+    btn.textContent = "← Back";
+    btn.onclick = () => showScreen(backTo);
+
+    bar.appendChild(btn);
+    root.appendChild(bar);
+  }
 
   const iframe = document.createElement("iframe");
   iframe.src = `/game/game.html?mode=premium&v=${Date.now()}`;
@@ -2893,14 +2898,20 @@ async function loadManagerBoardData() {
     if (recentRuns.error) throw recentRuns.error;
     if (recentDrills.error) throw recentDrills.error;
 
+    const userIds = [
+      ...(recentRuns.data || []).map(x => x.user_id),
+      ...(recentDrills.data || []).map(x => x.user_id),
+    ];
+    const nameMap = await mapUserIdsToNames(userIds);
+
     const items = [
       ...(recentRuns.data || []).map((x) => ({
         t: x.session_start,
-        line: `Session • ${String(x.user_id || "-").slice(0, 8)} • ${x.encounters_resolved ?? 0} res • avg ${(Number(x.avg_chain_score ?? 0)).toFixed(2)} • G/Y/R ${x.greens ?? 0}/${x.yellows ?? 0}/${x.reds ?? 0}`,
+        line: `Session • ${nameMap.get(x.user_id) || String(x.user_id || "-").slice(0, 8)} • ${x.encounters_resolved ?? 0} res • avg ${(Number(x.avg_chain_score ?? 0)).toFixed(2)} • G/Y/R ${x.greens ?? 0}/${x.yellows ?? 0}/${x.reds ?? 0}`,
       })),
       ...(recentDrills.data || []).map((x) => ({
         t: x.occurred_at,
-        line: `Drill • ${x.user_id?.slice(0, 8) || "-"} • reps ${x.payload?.repDone ?? "-"} / ${x.payload?.repTarget ?? "-"}`,
+        line: `Drill • ${nameMap.get(x.user_id) || x.user_id?.slice(0, 8) || "-"} • reps ${x.payload?.repDone ?? "-"} / ${x.payload?.repTarget ?? "-"}`,
       })),
     ]
       .filter((i) => i.t)

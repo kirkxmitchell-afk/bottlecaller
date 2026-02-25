@@ -546,6 +546,38 @@ function openManagerBoard() {
   console.warn("[BC] openManagerBoard: no known entry point found");
 }
 
+function getDrillConfig() {
+  const d = window.__BC_DRILL_CONFIG__ || null;
+
+  const fallback = {
+    focus: "mode",
+    pool: ["decider", "bargain_smart", "griever"],
+    durationSec: 300,
+  };
+
+  if (!d || typeof d !== "object") return fallback;
+
+  const focus = ["mode", "read", "hook", "delivery"].includes(String(d.focus))
+    ? String(d.focus)
+    : fallback.focus;
+
+  const poolRaw = Array.isArray(d.pool) ? d.pool : fallback.pool;
+  const pool = poolRaw
+    .map((x) => normalizeGuestType(x))
+    .filter(Boolean);
+
+  return {
+    focus,
+    pool: pool.length ? pool : fallback.pool,
+    durationSec: Number.isFinite(Number(d.durationSec)) ? Number(d.durationSec) : fallback.durationSec,
+  };
+}
+
+function getDrillGuestOptions() {
+  const drill = getDrillConfig();
+  return drill.pool;
+}
+
 
       // ============================================================
       // ✅ MODE ENFORCEMENT (single source of truth)
@@ -2297,6 +2329,10 @@ function openManagerBoard() {
 
         window.__BC_CTX__ = { userId, restaurantId, scopeId, role, mode };
 
+        if (msg.drill) {
+          window.__BC_DRILL_CONFIG__ = msg.drill;
+        }
+
         console.log("[BC] bc_ctx applied ✅", window.__BC_CTX__);
         ensureProgLoaded();
         if (typeof ensureProgKeyAfterCtx === "function") ensureProgKeyAfterCtx();
@@ -2670,7 +2706,9 @@ function openManagerBoard() {
       // ✅ SESSION CONTAINER (drill vs progression)
       // ============================================================
       function startDrill(repTarget = 3, focus = null, starter = "manager", tier = 0) {
-        DRILL = { repTarget, repDone: 0, startedAt: Date.now(), focus, starter, tier: (typeof tier === "number" ? tier : 0) };
+        const cfg = window.__BC_DRILL_CONFIG__ || null;
+        const drillFocus = focus || cfg?.focus || null;
+        DRILL = { repTarget, repDone: 0, startedAt: Date.now(), focus: drillFocus, starter, tier: (typeof tier === "number" ? tier : 0) };
         DRILL.activeWine = (Array.isArray(wines) && wines.length ? wines[0] : { name: "This bottle" });
         if (!DRILL.activeWine) {
           DRILL.activeWine = (Array.isArray(wines) && wines.length) ? wines[0] : { name: "This bottle", varietal: "" };
@@ -2786,10 +2824,34 @@ function openManagerBoard() {
       };
 
       async function startEncounterForDrill() {
-        const list = getEncounterListForMode();
+        let list = getEncounterListForMode();
         if (!Array.isArray(list) || list.length === 0) {
           alert("No encounters loaded. Drill cannot start.");
           return;
+        }
+
+        const drillCfg = window.__BC_DRILL_CONFIG__ || null;
+        if (drillCfg && (drillCfg.focus || Array.isArray(drillCfg.pool))) {
+          const norm = window.normalizeGuestType || normalizeGuestType;
+          const pool = Array.isArray(drillCfg.pool) ? drillCfg.pool.map(x => String(x)) : null;
+
+          const filtered = list.filter((e) => {
+            let ok = true;
+            if (pool && pool.length) {
+              const g = norm ? norm(e?.guestStateActual || "") : String(e?.guestStateActual || "");
+              ok = ok && pool.includes(g);
+            }
+            if (drillCfg.focus) {
+              const f = String(drillCfg.focus || "").toLowerCase();
+              const ef = String(e?.meta?.skillFocus || e?.skillFocus || "").toLowerCase();
+              ok = ok && (!!ef && ef.includes(f));
+            }
+            return ok;
+          });
+
+          if (filtered.length) {
+            list = filtered;
+          }
         }
 
         if (typeof encounterIndex !== "number") encounterIndex = 0;
@@ -2867,20 +2929,14 @@ function openManagerBoard() {
             `${currentEncounter.contextLine}\n\n` +
             `${currentEncounter.guestLine}`;
 
-          ["Browser","Budget Guard","Celebrator","Alpha","Analyst","Make-It-Easy"].forEach(label=>{
+          const options = getDrillGuestOptions();
+          options.forEach((opt) => {
+            const label = window.GUEST_LABELS?.[opt] || opt;
             const b = document.createElement("button");
             b.type = "button";
             b.textContent = label;
             b.onclick = () => {
-              const guestKey = {
-                "Browser": window.GUEST.DECIDER,
-                "Budget Guard": window.GUEST.FANCY,
-                "Celebrator": window.GUEST.CELEBRATOR,
-                "Alpha": window.GUEST.DECIDER,
-                "Analyst": window.GUEST.BARGAIN_SMART,
-                "Make-It-Easy": window.GUEST.CELEBRATOR,
-              }[label];
-              currentEncounter.guestReadSelected = guestKey;
+              currentEncounter.guestReadSelected = opt;
               currentStep = 1;
               renderDrillStep();
             };
@@ -7122,8 +7178,14 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         let enc = null;
 
         if (sessionType === "drill") {
-          idx = (typeof encounterIndex === "number" ? encounterIndex : 0) % list.length;
-          enc = list[idx];
+          const drill = getDrillConfig();
+          const src = (Array.isArray(list) ? list : []).filter((e) => {
+            const g = normalizeGuestType(e?.guestStateActual);
+            return drill.pool.includes(g);
+          });
+          const use = src.length ? src : list;
+          idx = (typeof encounterIndex === "number" ? encounterIndex : 0) % use.length;
+          enc = use[idx];
         } else if (isDemo) {
           idx = (encounterIndex % list.length);
           enc = list[idx];
