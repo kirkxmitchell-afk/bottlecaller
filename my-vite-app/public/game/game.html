@@ -32,7 +32,7 @@
 
         btn.onclick = () => {
           window.parent?.postMessage(
-            { source: "BC_MSG", v: 1, type: "nav_back", to: backTo },
+            { source: "BC_MSG", v: 1, type: "nav_back", backTo, to: backTo },
             location.origin
           );
         };

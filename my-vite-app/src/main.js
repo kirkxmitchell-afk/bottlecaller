@@ -1183,7 +1183,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
       }
 
       if (msg.type === "nav_back") {
-        const to = msg.to || "screenManagerBoard";
+        const to = msg.backTo || msg.to || "screenManagerBoard";
         console.log("[PARENT] nav_back ->", to);
         showScreen(to);
         return;
@@ -2288,7 +2288,7 @@ async function mapUserIdsToNames(userIds) {
   }
 
   const m = new Map();
-  for (const row of data || []) m.set(row.user_id, row.display_name || row.user_id?.slice(0, 8));
+  for (const row of data || []) m.set(row.user_id, (row.display_name || "").trim());
   return m;
 }
 
@@ -2590,7 +2590,7 @@ async function loadGroupRestaurantsForPicker() {
   const scopeId = appState.profile?.scope_id || null;
   if (!scopeId || (scopeType !== "group" && scopeType !== "enterprise")) return;
 
-  // 1) fetch allowed restaurant ids
+  // 1) allowed restaurant ids
   const a = await supabase
     .from("bc_scope_restaurants")
     .select("restaurant_id, created_at")
@@ -2610,11 +2610,15 @@ async function loadGroupRestaurantsForPicker() {
     return;
   }
 
-  // 2) fetch names
+  // 2) names
   const b = await supabase
     .from("restaurants")
     .select("id, name")
     .in("id", ids);
+
+  if (b.error) {
+    console.error("[BC] restaurants fetch failed", b.error);
+  }
 
   const nameById = new Map((b.data || []).map(r => [r.id, r.name]));
 
@@ -2625,15 +2629,23 @@ async function loadGroupRestaurantsForPicker() {
     sel.appendChild(opt);
   }
 
-  // preselect stored/active
-  const stored = getStoredActiveRestaurantId?.() || null;
-  const active = appState.activeRestaurantId || stored || ids[0];
+  // 3) choose active (must be one of ids)
+  const stored = (typeof getStoredActiveRestaurantId === "function")
+    ? (getStoredActiveRestaurantId() || null)
+    : null;
+  let active = appState.activeRestaurantId || stored || ids[0];
+  if (!ids.includes(active)) active = ids[0];
+
   sel.value = active;
 
-  // ensure state is aligned
-  try { await setActiveRestaurantForGroup(active); } catch {}
+  // 4) align state only if needed
+  const already = window.getActiveRestaurantId?.() || null;
+  if (already !== active) {
+    try { await setActiveRestaurantForGroup(active); }
+    catch (e) { console.warn("[BC] failed to set active restaurant during hydrate", e); }
+  }
 
-  console.log("[BC] picker hydrated", { scopeId, ids });
+  console.log("[BC] picker hydrated", { scopeId, ids, active });
 }
 
 async function assertRestaurantAllowedForScope(scopeId, restaurantId) {
@@ -2936,8 +2948,8 @@ async function loadManagerBoardData() {
     if (recentDrills.error) throw recentDrills.error;
 
     const userIds = [
-      ...(recentRuns.data || []).map(x => x.user_id),
-      ...(recentDrills.data || []).map(x => x.user_id),
+      ...(recentRuns.data || []).map(x => x.user_id).filter(Boolean),
+      ...(recentDrills.data || []).map(x => x.user_id).filter(Boolean),
     ];
     const nameMap = await mapUserIdsToNames(userIds);
 
@@ -3088,12 +3100,14 @@ async function loadManagerBoardData() {
       .sort((a, b) => (b.attention - a.attention) || (b.reds - a.reds) || (a.avg - b.avg))
       .slice(0, 5);
 
+    const coachingNameMap = await mapUserIdsToNames(coaching.map(x => x.user_id));
+
     const coachEl = document.getElementById("mbNeedsCoaching");
     if (coachEl) {
       coachEl.innerHTML = coaching.length
         ? coaching
             .map((x) => {
-              const u = String(x.user_id).slice(0, 8);
+              const u = coachingNameMap.get(x.user_id) || String(x.user_id).slice(0, 8);
               const reasons = [
                 x.reds > 0 ? `${x.reds} red(s) in last10` : null,
                 Number.isFinite(x.avg) ? `avg ${x.avg.toFixed(2)}` : null,
