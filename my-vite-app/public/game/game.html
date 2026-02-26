@@ -4767,8 +4767,14 @@ function ensureProgLoaded() {
         return Array.isArray(list) ? list.length : 0;
       }
 
+      function canPlay() {
+        if (Array.isArray(wines) && wines.length > 0) return true;
+        if (typeof getWineCount === "function") return (getWineCount() || 0) > 0;
+        return false;
+      }
+
       function isUnlocked() {
-        return getWineCount() >= LIMIT;
+        return canPlay();
       }
 
       async function waitForCtxAndWines(timeoutMs = 1200) {
@@ -4808,7 +4814,7 @@ function ensureProgLoaded() {
 
       async function isUnlockedAsync() {
         await ensureWinesLoadedReadOnly();
-        return getWineCount() >= LIMIT;
+        return canPlay();
       }
 
       async function assertWinesReadyOrExplain() {
@@ -6247,7 +6253,7 @@ function ensureProgLoaded() {
           payload?.sessionId &&
           hasChecks
         ) {
-          console.log("[EMIT] encounter_resolved", {
+          console.log("[EMIT] encounter_resolved ✅", {
             user: window.__BC_CTX__?.userId,
             rid: window.__BC_CTX__?.restaurantId,
             sessionId: payload?.sessionId,
@@ -7566,17 +7572,21 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
         const g = await waitForCtxAndWines(1500);
         console.log("[START][GATE]", g);
+        if (!g.ok) {
+          console.warn("[START] blocked: ctx/wines not ready yet");
+          return;
+        }
 
-        const unlocked = isUnlocked();
+        const okPlay = canPlay();
         console.log(
-          `[UNLOCK] role=${isManager ? "manager" : (isWaiter ? "waiter" : "?")}` +
+          `[PLAY] ok=${okPlay}` +
+          ` role=${isManager ? "manager" : (isWaiter ? "waiter" : "?")}` +
           ` rid=${restaurantId || "?"}` +
-          ` wines=${getWineCount?.() ?? "?"}/${LIMIT}` +
-          ` unlocked=${unlocked}` +
+          ` wines=${wines?.length ?? "?"}` +
           ` sessionType=${sessionType || "null"}`
         );
-        if (sessionType !== "drill" && !unlocked) {
-          console.warn("[UNLOCK] BLOCKED (needs wines)");
+        if (sessionType !== "drill" && !okPlay) {
+          console.warn("[PLAY] BLOCKED (needs wines)");
           return;
         }
 
