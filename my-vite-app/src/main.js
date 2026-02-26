@@ -1953,10 +1953,17 @@ function setHudOpen(isOpen) {
   if (root) root.style.pointerEvents = isOpen ? "none" : "auto";
 }
 
+function isPremiumPlayVisible() {
+  const play = document.getElementById("screenPlay");
+  const prem = document.getElementById("screenPremiumApp");
+  const playVisible = play && !play.classList.contains("hidden");
+  const premVisible = prem && !prem.classList.contains("hidden");
+  return !!(playVisible || premVisible);
+}
+
 function unmountDemoGame(reason = "") {
-  const playVisible = !document.getElementById("screenPlay")?.classList.contains("hidden");
-  if (playVisible) {
-    console.warn("[BC] unmount blocked (screenPlay active)", reason);
+  if (isPremiumPlayVisible()) {
+    console.warn("[BC] unmount blocked (play active)", reason);
     return;
   }
 
@@ -3747,6 +3754,8 @@ async function demoJoinRestaurantByCode() {
 // Routing rules (restaurant-first)
 // ------------------------------------------------------------
 let authRouteTimer = null;
+let __BC_LAST_ROUTE_KEY__ = "";
+let __BC_ROUTE_INFLIGHT__ = false;
 
 async function routeDemo(reason = "manual") {
   clearMsgs();
@@ -3983,6 +3992,29 @@ async function decideRoute(reason = "decideRoute") {
       reason,
       error: e?.message || String(e),
     });
+  }
+}
+
+function getRouteKey() {
+  const s = window.appState || {};
+  const userId = s.session?.user?.id || "";
+  const role = s.profile?.role || "";
+  const rest = window.getActiveRestaurantId?.() || s.profile?.restaurant_id || "";
+  return [userId, role, rest].join("|");
+}
+
+async function decideRouteGuarded(reason = "") {
+  if (__BC_ROUTE_INFLIGHT__) return;
+  const key = getRouteKey();
+
+  if (key && key === __BC_LAST_ROUTE_KEY__) return;
+
+  __BC_LAST_ROUTE_KEY__ = key;
+  __BC_ROUTE_INFLIGHT__ = true;
+  try {
+    await decideRoute(reason);
+  } finally {
+    __BC_ROUTE_INFLIGHT__ = false;
   }
 }
 
@@ -4469,7 +4501,7 @@ supabase.auth.onAuthStateChange((event) => {
         await loadAuthedState(`auth.refresh:${event}`);
         return; // do not call decideRoute here (prevents iframe reset)
       }
-      await decideRoute(`auth.change:${event}`);
+      await decideRouteGuarded("auth_subscriber");
     } catch {
       closeHud();
       showScreen("screenHome");
