@@ -76,11 +76,13 @@ function showPremiumPlayOverlay() {
 
 function setPremiumOverlayActive(isActive) {
   const root = document.getElementById("premiumRoot");
+  const frame = document.getElementById("premiumRootFrame");
+
   if (root) {
+    root.classList.toggle("hidden", !isActive);
     root.style.display = isActive ? "" : "none";
     root.style.pointerEvents = isActive ? "auto" : "none";
   }
-  const frame = document.getElementById("premiumRootFrame");
   if (frame) frame.style.pointerEvents = isActive ? "auto" : "none";
 }
 
@@ -1357,8 +1359,8 @@ function showScreen(id) {
 }
 
 function onScreenChanged(screenId) {
-  if (screenId === "screenPlay") showPremiumPlayOverlay();
-  else hidePremiumPlayOverlay();
+  console.log("[NAV] parent onScreenChanged ->", screenId);
+  setPremiumOverlayActive(screenId === "screenPlay");
 }
 
 function shouldIgnoreDuplicateNav(msg) {
@@ -1945,11 +1947,16 @@ function setHudOpen(isOpen) {
   if (root) root.style.pointerEvents = isOpen ? "none" : "auto";
 }
 
-function unmountDemoGame() {
-  const demoRoot = document.getElementById("gameRootDemo");
-  if (!demoRoot) return;
-  demoRoot.innerHTML = "";
-  console.log("[BC] demo game unmounted ✅");
+function unmountDemoGame(reason = "") {
+  const playVisible = !document.getElementById("screenPlay")?.classList.contains("hidden");
+  if (playVisible) {
+    console.warn("[BC] unmount blocked (screenPlay active)", reason);
+    return;
+  }
+
+  console.log("[BC] demo game unmounted ✅", reason);
+  const root = document.getElementById("premiumRoot");
+  if (root) root.innerHTML = "";
 }
 
 async function startPremiumDrillFromParent(repTarget = 3) {
@@ -3820,7 +3827,7 @@ async function routePremium(reason = "manual") {
 
       if (was !== "premium") forceRemountForModeSwitch("premium");
 
-      unmountDemoGame();
+      unmountDemoGame("decideRoute:restaurant-member->premium");
       showScreen("screenPremiumApp");
       const p = window.__BC_APP_STATE__?.profile;
       const isPremium = String(p?.access_tier || "").toLowerCase().startsWith("premium");
@@ -3863,7 +3870,7 @@ async function routePremium(reason = "manual") {
 
     if (was !== "premium") forceRemountForModeSwitch("premium");
 
-    unmountDemoGame();
+    unmountDemoGame("decideRoute:premium-entitled");
     showScreen("screenPremiumApp");
     wireParentButtons();
     const p = window.__BC_APP_STATE__?.profile;
@@ -3902,7 +3909,7 @@ async function routeManagerBoard(reason = "manual") {
     return;
   }
 
-  unmountDemoGame();
+  unmountDemoGame("routeManagerBoard");
   showScreen("screenManagerBoard");
   applyManagerBoardVisibility();
   wireManagerBoardMenu();
