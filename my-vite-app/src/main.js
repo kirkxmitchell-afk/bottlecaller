@@ -488,6 +488,10 @@ document.querySelector("#app").innerHTML = `
     style="
       position:fixed; right: 12px; top: 12px;
       width: min(520px, 92vw);
+      max-height: calc(100vh - 24px);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-gutter: stable;
       z-index: 2147483000;
       pointer-events: auto;
       background: #0b0d0f; color: #fff;
@@ -1188,13 +1192,11 @@ if (!window.__BC_PARENT_BRIDGE__) {
       }
 
       if (msg.type === "nav_back" || msg.type === "nav") {
+        if (shouldIgnoreDuplicateNav(msg)) return;
         const dest = msg.to || msg.target || msg.backTo || "screenHome";
         console.log("[PARENT] nav ->", dest, msg);
 
         if (String(dest).startsWith("screen")) {
-          if (dest !== "screenPlay") hidePremiumPlayOverlay();
-          else showPremiumPlayOverlay();
-
           showScreen(dest);
 
           if (dest === "screenManagerBoard") {
@@ -1352,6 +1354,21 @@ window.__BC_GET_PROGRESSION_SNAPSHOT__ = async ({ userId, restaurantId }) => {
 function showScreen(id) {
   document.querySelectorAll(".screen").forEach((s) => s.classList.add("hidden"));
   document.getElementById(id)?.classList.remove("hidden");
+  onScreenChanged(id);
+}
+
+function onScreenChanged(screenId) {
+  if (screenId === "screenPlay") showPremiumPlayOverlay();
+  else hidePremiumPlayOverlay();
+}
+
+function shouldIgnoreDuplicateNav(msg) {
+  if (!msg || (msg.type !== "nav" && msg.type !== "nav_back")) return false;
+  window.__BC_LAST_NAV_AT__ = window.__BC_LAST_NAV_AT__ || 0;
+  const now = Date.now();
+  if (now - window.__BC_LAST_NAV_AT__ < 250) return true;
+  window.__BC_LAST_NAV_AT__ = now;
+  return false;
 }
 
 // (removed duplicate getActiveRestaurantId; use window.getActiveRestaurantId)
@@ -1903,8 +1920,7 @@ function setAuthIntent(next) {
 // HUD
 // ------------------------------------------------------------
 function openHud() {
-  document.getElementById("hudBackdrop").classList.remove("hidden");
-  document.getElementById("hudPanel").classList.remove("hidden");
+  setHudOpen(true);
   mountManagerSetupIntoHud?.();
   moveRestaurantPickerIntoHud?.();
   if (!openHud.__loadedPickerOnce) {
@@ -1914,8 +1930,20 @@ function openHud() {
   renderHud();
 }
 function closeHud() {
-  document.getElementById("hudBackdrop").classList.add("hidden");
-  document.getElementById("hudPanel").classList.add("hidden");
+  setHudOpen(false);
+}
+
+function setHudOpen(isOpen) {
+  const hud = document.getElementById("hudPanel");
+  const back = document.getElementById("hudBackdrop");
+  const frame = document.getElementById("premiumRootFrame");
+  const root = document.getElementById("premiumRoot");
+
+  if (hud) hud.classList.toggle("hidden", !isOpen);
+  if (back) back.classList.toggle("hidden", !isOpen);
+
+  if (frame) frame.style.pointerEvents = isOpen ? "none" : "auto";
+  if (root) root.style.pointerEvents = isOpen ? "none" : "auto";
 }
 
 function unmountDemoGame() {
@@ -4455,6 +4483,7 @@ window.addEventListener("message", (e) => {
   const msg = e?.data;
   if (!msg || msg.source !== "BC_MSG") return;
   if (msg.type === "nav_back" || msg.type === "nav") {
+    if (shouldIgnoreDuplicateNav(msg)) return;
     const to = msg.to || "screenManagerBoard";
     if (String(to).startsWith("screen")) {
       showScreen(to);
