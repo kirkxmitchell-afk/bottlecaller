@@ -1692,30 +1692,34 @@ function postToGameAfterLoad(msg) {
 }
 
 async function fetchAndSendWines(targetWindow = null) {
-  const restaurantId = window.getActiveRestaurantId();
-  const scopeId = appState.profile?.scope_id || null;
-  if (!restaurantId || !scopeId) {
-    console.warn("[PARENT] wines_request blocked: missing scope/restaurant", { scopeId, restaurantId });
+  const restaurantId =
+    window.getActiveRestaurantId?.() ||
+    appState.activeRestaurantId ||
+    appState.profile?.restaurant_id ||
+    null;
+
+  if (!restaurantId) {
     return;
   }
 
   try {
-    const { data, error } = await supabase
+    const res = await supabase
       .from("bc_wines")
-      .select("*")
-      .eq("scope_id", scopeId)
+      .select("id, restaurant_id, name, varietal, price, notes, fruit_tags, texture_tags, oak_level, process, region, story, created_at, updated_at")
       .eq("restaurant_id", restaurantId)
       .order("created_at", { ascending: true });
 
-    if (error) throw error;
+    if (res.error) {
+      console.warn("[PARENT] bc_wines fetch failed", res.error);
+    }
 
-    const wines = Array.isArray(data) ? data : [];
+    const wines = Array.isArray(res.data) ? res.data : [];
     const win = targetWindow || getPremiumFrame()?.contentWindow;
     win?.postMessage(
-      { source: "BC_MSG", v: 1, type: "wines_set", wines },
+      { source: "BC_MSG", v: 1, type: "wines_report", mode: "premium", wines },
       window.location.origin
     );
-    console.log("[PARENT] wines_set -> iframe ✅", { count: wines.length, restaurantId });
+    console.log("[PARENT] wines_report -> iframe ✅", { count: wines.length, restaurantId });
   } catch (e) {
     console.warn("[PARENT] fetchAndSendWines failed", e);
   }
