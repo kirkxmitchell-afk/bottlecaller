@@ -64,7 +64,8 @@ function uiModeLabel(modeKey, uiStyle) {
 let wines = [];
 
 console.log("supabase client present:", !!supabase);
-  window.__BC_SUPABASE__ = supabase;
+window.supabase = supabase;
+window.__BC_SUPABASE__ = supabase;
 
 function hidePremiumPlayOverlay() {
   setPremiumOverlayActive(false);
@@ -2648,24 +2649,55 @@ function wireActiveRestaurantPicker() {
 
 async function mapUserIdsToNames(userIds) {
   const ids = Array.from(new Set((userIds || []).filter(Boolean)));
-  if (!ids.length) return new Map();
+  const out = new Map();
+  if (!ids.length) return out;
 
-  const { data, error } = await supabase
+  const sb = window.supabase || window.__BC_SUPABASE__;
+  if (!sb) return out;
+
+  const { data, error } = await sb
     .from("profiles")
-    .select("user_id, display_name")
-    .in("user_id", ids);
+    .select("user_id, display_name, role")
+    .in("user_id", ids)
+    .limit(500);
 
   if (error) {
-    console.warn("[BC] mapUserIdsToNames failed", error);
-    return new Map();
+    console.warn("[MB] mapUserIdsToNames failed", error);
+    ids.forEach((uid) => out.set(uid, String(uid).slice(0, 8)));
+    return out;
   }
 
-  const m = new Map();
+  ids.forEach((uid) => out.set(uid, String(uid).slice(0, 8)));
   for (const row of data || []) {
     const name = String(row?.display_name || "").trim();
-    if (name) m.set(row.user_id, name);
+    if (row?.user_id && name) out.set(row.user_id, name);
   }
-  return m;
+  return out;
+}
+
+async function ensureProfileDisplayName() {
+  try {
+    const sb = window.supabase || window.__BC_SUPABASE__;
+    const uid = appState?.session?.user?.id;
+    if (!sb || !uid) return;
+
+    const candidate =
+      appState?.session?.user?.user_metadata?.display_name ||
+      appState?.session?.user?.user_metadata?.full_name ||
+      (appState?.session?.user?.email ? String(appState.session.user.email).split("@")[0] : "") ||
+      "";
+
+    const display_name = String(candidate || "").trim();
+    if (!display_name) return;
+
+    const { error } = await sb
+      .from("profiles")
+      .upsert({ user_id: uid, display_name }, { onConflict: "user_id" });
+
+    if (error) console.warn("[BC] ensureProfileDisplayName failed", error);
+  } catch (e) {
+    console.warn("[BC] ensureProfileDisplayName crashed", e);
+  }
 }
 
 function userLabel(userId, nameMap) {
@@ -3712,6 +3744,7 @@ async function loadAuthedState(reason = "manual") {
 
   const profile = await loadProfile(session.user.id);
   appState.profile = profile;
+  await ensureProfileDisplayName();
 
   // ✅ Determine correct active restaurant for this scope
   try {
@@ -3853,6 +3886,7 @@ async function demoJoinRestaurantByCode() {
     setDebug({ step: "demo.join.ok", time: new Date().toISOString(), restaurant_id: rpc.data.restaurant_id });
 
     await loadAuthedState("demo.join.refresh");
+    await ensureProfileDisplayName();
     renderDemoJoinBlock();
 
     if (appState.profile?.restaurant_id) {
