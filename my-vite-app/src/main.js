@@ -334,20 +334,6 @@ document.querySelector("#app").innerHTML = `
         </div>
       </div>
 
-      <div id="groupRestaurantPicker" class="card" style="display:none; margin-top:10px;">
-        <strong>Active Restaurant</strong>
-        <div class="small-text" style="margin-top:6px;">
-          Group managers switch which restaurant they’re managing right now.
-        </div>
-
-        <div style="display:flex; gap:8px; margin-top:10px; align-items:center;">
-          <select id="selActiveRestaurant" class="input" style="flex:1;"></select>
-          <button id="btnSetActiveRestaurant" class="btn" type="button">Set</button>
-        </div>
-
-        <div id="activeRestaurantHint" class="small-text" style="margin-top:8px;"></div>
-      </div>
-
       <div id="mbMenu" class="card" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
         <button class="btn" type="button" data-mbtab="overview">Overview</button>
         <button class="btn" type="button" data-mbtab="staff">Staff</button>
@@ -2558,16 +2544,18 @@ async function loadRestaurantsForHudPicker() {
 
 function applyManagerBoardVisibility() {
   const p = appState.profile || {};
-  const role = String(p.role || "").toLowerCase();
-
-  const picker = document.getElementById("groupRestaurantPicker");
-  if (picker) picker.style.display = (role === "manager") ? "block" : "none";
-
-  const billingBtn = document.querySelector('#mbMenu [data-mbtab="billing"]');
-  if (billingBtn) billingBtn.style.display = "";
+  const scopeType = String(p.scope_type || "").toLowerCase();
 
   const provisionBtn = document.querySelector('#mbMenu [data-mbtab="provision"]');
-  if (provisionBtn) provisionBtn.style.display = "none";
+  if (provisionBtn) {
+    provisionBtn.style.display =
+      (scopeType === "group" || scopeType === "enterprise") ? "" : "none";
+  }
+
+  const listingBtn = document.querySelector('#mbMenu [data-mbtab="listing"]');
+  if (listingBtn) listingBtn.style.display = "";
+  const billingBtn = document.querySelector('#mbMenu [data-mbtab="billing"]');
+  if (billingBtn) billingBtn.style.display = "";
 }
 
 async function mapUserIdsToNames(userIds) {
@@ -3360,7 +3348,7 @@ async function ensureActiveRestaurantReady() {
   if (scopeType === "group" || scopeType === "enterprise") {
     const rid = window.getActiveRestaurantId?.() || null;
     if (!rid) {
-      await loadGroupRestaurantsForPicker();
+      throw new Error("Active restaurant not set.");
     }
   } else {
     // restaurant scope: must have profile.restaurant_id
@@ -3988,27 +3976,6 @@ async function routeManagerBoard(reason = "manual") {
   await ensureActiveRestaurantReady();
   await loadManagerBoardData();
   wireManagerBoardBillingAccess();
-
-  const btn = document.getElementById("btnSetActiveRestaurant");
-  const sel = document.getElementById("selActiveRestaurant");
-  if (btn && sel && !btn.__bcBound) {
-    btn.__bcBound = true;
-    btn.addEventListener("click", async () => {
-      const rid = sel.value;
-      try {
-        await setActiveRestaurantForGroup(rid);
-        const hint = document.getElementById("activeRestaurantHint");
-        if (hint) hint.textContent = `✅ Active set: ${String(rid).slice(0, 8)}…`;
-        const restName = document.getElementById("mbRestName");
-        if (restName) restName.textContent = appState.restaurant?.name || "-";
-        await loadManagerBoardData(); // refresh board for new restaurant
-      } catch (e) {
-        console.error("[BC] set active restaurant failed", e);
-        const hint = document.getElementById("activeRestaurantHint");
-        if (hint) hint.textContent = `⚠️ ${e?.message || "Failed to set restaurant"}`;
-      }
-    });
-  }
 }
 
 async function decideRoute(reason = "decideRoute") {
