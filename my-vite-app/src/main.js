@@ -720,6 +720,19 @@ window.getActiveRestaurantId =
     );
   };
 
+window.__BC_ACTIVE_REST_READY__ =
+  window.__BC_ACTIVE_REST_READY__ ||
+  new Promise((resolve) => {
+    window.__BC_RESOLVE_ACTIVE_REST_READY__ = resolve;
+  });
+
+function markActiveRestaurantReady() {
+  if (window.__BC_RESOLVE_ACTIVE_REST_READY__) {
+    window.__BC_RESOLVE_ACTIVE_REST_READY__();
+    window.__BC_RESOLVE_ACTIVE_REST_READY__ = null;
+  }
+}
+
 // --- Fetch allowed restaurants for current scope ---
 async function fetchAllowedRestaurantsForScope(scopeId) {
   if (!scopeId) return [];
@@ -778,6 +791,8 @@ async function initRestaurantContextAfterAuth() {
   if (!res.ok) {
     return;
   }
+
+  markActiveRestaurantReady();
 
   if (document.getElementById("screenManagerBoard") &&
       !document.getElementById("screenManagerBoard").classList.contains("hidden")) {
@@ -1075,10 +1090,20 @@ if (!window.__BC_PARENT_BRIDGE__) {
       return;
     }
 
+    try {
+      if (window.__BC_ACTIVE_REST_READY__) {
+        await Promise.race([
+          window.__BC_ACTIVE_REST_READY__,
+          new Promise((r) => setTimeout(r, 600))
+        ]);
+      }
+    } catch {}
+
+    const rid = window.getActiveRestaurantId?.();
     const ready =
       !!window.appState?.session?.user?.id &&
       !!window.appState?.profile?.role &&
-      !!window.getActiveRestaurantId?.();
+      !!rid;
     if (!ready) return;
 
     const bcCtx = await buildBcCtxSafe(p.mode ?? null);
@@ -1126,10 +1151,20 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
       // ✅ 1) ctx request MUST be handled before any event_log filtering
       if (msg.type === "bc_ctx_request") {
+        try {
+          if (window.__BC_ACTIVE_REST_READY__) {
+            await Promise.race([
+              window.__BC_ACTIVE_REST_READY__,
+              new Promise((r) => setTimeout(r, 600))
+            ]);
+          }
+        } catch {}
+
+        const rid = window.getActiveRestaurantId?.();
         const ready =
           !!window.appState?.session?.user?.id &&
           !!window.appState?.profile?.role &&
-          !!window.getActiveRestaurantId?.();
+          !!rid;
 
         if (!ready) {
           console.warn("[PARENT] ctx not ready — queued bc_ctx_request");
@@ -2494,17 +2529,9 @@ async function loadRestaurantsForHudPicker() {
 
     const full = rows.find(x => x.id === id) || null;
     appState.restaurant = full;
+    markActiveRestaurantReady();
 
     renderHud();
-
-    try {
-      const ctx = await buildBcCtxSafe?.(null);
-      if (ctx?.userId && ctx?.restaurantId && ctx?.role) {
-        postToGame("bc_ctx", { ...ctx });
-      }
-    } catch (e) {
-      console.warn("[BC] ctx push after restaurant switch failed", e);
-    }
 
     try {
       await loadManagerBoardData?.();
@@ -3040,6 +3067,9 @@ async function loadGroupRestaurantsForPicker() {
   async function setActiveRestaurant(id) {
     appState.activeRestaurantId = id;
     localStorage.setItem("BC_ACTIVE_RESTAURANT_ID", id);
+    const full = rows.find(x => x.id === id) || null;
+    if (full) appState.restaurant = full;
+    markActiveRestaurantReady();
 
     if (hint) {
       const name = rows.find(x => x.id === id)?.name;
@@ -3161,24 +3191,15 @@ function pushCtxToPremiumIframe(source = "manual") {
 }
 
 function pushPremiumCtxAndDrill() {
-  // 1) ctx
-  try {
-    const ctx = window.__BC_BUILD_CTX__?.(null) || window.__BC_BUILD_CTX__?.("premium");
-    if (ctx?.userId && ctx?.restaurantId && ctx?.role) {
-      postToGame("bc_ctx", { ...ctx });
-    }
-  } catch (e) {
-    console.warn("[PARENT] bc_ctx push failed", e);
-  }
-
-  // 2) drill config
+  // ctx is delivered only via bc_ctx_request reply from the iframe
+  // 1) drill config
   if (!window.__BC_DRILL_CONFIG__ && window.setDefaultDrillConfig) {
     window.setDefaultDrillConfig();
   }
   const drillCfg = window.__BC_DRILL_CONFIG__ || window.BC_DRILL_CONFIG || null;
   postToGame("drill_config", { drill: drillCfg });
 
-  // 3) start drill (if queued)
+  // 2) start drill (if queued)
   const pending = window.__BC_PENDING_START_DRILL__ || window.BC_PENDING_START_DRILL;
   if (pending) {
     postToGame("start_drill", pending);
@@ -3213,7 +3234,7 @@ function mountPremiumGameIframe({ showBack = false, backTo = "screenManagerBoard
 
   iframe.addEventListener("load", () => {
     pushPremiumCtxAndDrill();
-    console.log("[PARENT] premium iframe loaded ✅ (ctx + drill_config + start_drill)");
+    console.log("[PARENT] premium iframe loaded ✅ (drill_config + start_drill)");
   });
 
   root.appendChild(iframe);
@@ -3269,6 +3290,7 @@ async function setActiveRestaurantForGroup(restaurantId) {
     // 2) hydrate restaurant into parent state (authoritative for UI + ctx)
     const restaurant = await loadRestaurant(restaurantId);
     appState.restaurant = restaurant;
+    markActiveRestaurantReady();
 
     window.__BC_APP_STATE__ = window.__BC_APP_STATE__ || {};
     window.__BC_APP_STATE__.restaurant = restaurant;
@@ -3638,6 +3660,7 @@ async function loadAuthedState(reason = "manual") {
     } else {
       appState.restaurant = null;
     }
+    markActiveRestaurantReady();
   } catch (e) {
     console.warn("[BC] loadAuthedState: resolve/load restaurant failed", e);
     appState.restaurant = null;
