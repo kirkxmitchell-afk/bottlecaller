@@ -2408,6 +2408,13 @@ function ensureProgLoaded() {
         return !!restaurantId;
       }
 
+      (function initCtxReady() {
+        if (window.__BC_CTX_READY__) return;
+        let _resolve;
+        window.__BC_CTX_READY__ = new Promise((res) => (_resolve = res));
+        window.__BC_RESOLVE_CTX_READY__ = () => { try { _resolve?.(); } catch {} };
+      })();
+
       function applyBcCtx(msg) {
         const hasIdentity =
           msg.userId != null ||
@@ -2441,6 +2448,7 @@ function ensureProgLoaded() {
         }
 
         console.log("[BC] bc_ctx applied ✅", window.__BC_CTX__);
+        window.__BC_RESOLVE_CTX_READY__?.();
         // Always set key after ctx (safe)
         if (typeof ensureProgKeyAfterCtx === "function") ensureProgKeyAfterCtx();
 

@@ -66,6 +66,18 @@ let wines = [];
 console.log("supabase client present:", !!supabase);
 window.__BC_SUPABASE__ = supabase;
 
+function setDrillConfig(cfg) {
+  window.__BC_DRILL_CONFIG__ = cfg;
+  window.BC_DRILL_CONFIG = cfg;
+  return cfg;
+}
+
+function setPendingStartDrill(payload) {
+  window.__BC_PENDING_START_DRILL__ = payload;
+  window.BC_PENDING_START_DRILL = payload;
+  return payload;
+}
+
 window.setDefaultDrillConfig =
   window.setDefaultDrillConfig ||
   function setDefaultDrillConfig(overrides = {}) {
@@ -74,7 +86,8 @@ window.setDefaultDrillConfig =
       pool: ["decider", "bargain_smart", "griever"],
       durationSec: 300,
     };
-    window.__BC_DRILL_CONFIG__ = { ...base, ...overrides };
+    const cfg = { ...base, ...overrides };
+    setDrillConfig(cfg);
     console.log("[PARENT] __BC_DRILL_CONFIG__ set ✅", window.__BC_DRILL_CONFIG__);
     return window.__BC_DRILL_CONFIG__;
   };
@@ -1045,7 +1058,7 @@ async function buildBcCtxSafe(requestedMode = null) {
     scopeId,
     role,
     mode: requestedMode ?? null,
-    drill: window.__BC_DRILL_CONFIG__ || null,
+    drill: window.__BC_DRILL_CONFIG__ || window.BC_DRILL_CONFIG || null,
   };
 }
 
@@ -1078,7 +1091,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
     if (!ready) return;
 
     const bcCtx = await buildBcCtxSafe(p.mode ?? null);
-    if (bcCtx) bcCtx.drill = window.__BC_DRILL_CONFIG__ || null;
+    if (bcCtx) bcCtx.drill = window.__BC_DRILL_CONFIG__ || window.BC_DRILL_CONFIG || null;
     if (!bcCtx?.userId || !bcCtx?.restaurantId || !bcCtx?.role) {
       console.warn("[PARENT] flushPendingCtx: refusing null/partial bc_ctx", bcCtx);
       return;
@@ -1151,7 +1164,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
           return;
         }
         const bcCtx = await buildBcCtxSafe(msg?.mode ?? null);
-        if (bcCtx) bcCtx.drill = window.__BC_DRILL_CONFIG__ || null;
+        if (bcCtx) bcCtx.drill = window.__BC_DRILL_CONFIG__ || window.BC_DRILL_CONFIG || null;
 
         console.log("[PARENT] bc_ctx_request -> reply", {
           requested: msg?.mode ?? null,
@@ -1810,7 +1823,7 @@ function wireParentButtons() {
     btnFiveMinRep.__bcBound = true;
     btnFiveMinRep.addEventListener("click", () => {
       const tier = 0;
-      const drill = window.__BC_DRILL_CONFIG__ || null;
+      const drill = window.__BC_DRILL_CONFIG__ || window.BC_DRILL_CONFIG || null;
       postToGame("start_drill", {
         repTarget: drill?.repTarget ?? 3,
         focus: drill?.focus ?? null,
@@ -1918,7 +1931,7 @@ async function startPremiumDrillFromParent(repTarget = 3) {
     return;
   }
 
-  const drill = window.__BC_DRILL_CONFIG__ || null;
+  const drill = window.__BC_DRILL_CONFIG__ || window.BC_DRILL_CONFIG || null;
   win.postMessage(
     {
       source: "BC_MSG",
@@ -2482,34 +2495,42 @@ function buildRecommendedDrillPlan({ guestRows, weakRows }) {
   };
 }
 
-function renderGuestInsightsTable(rows) {
-  const by = new Map();
+function renderGuestInsightsTable(rows, nameMap = new Map()) {
+  const normalizeGuest = (x) =>
+    String(x || "unknown").trim().toLowerCase().replace(/[\s-]+/g, "_");
 
-  for (const r of rows) {
-    const g = String(r.actual_guest_type_norm || "unknown");
-    const s = by.get(g) || { g, n: 0, avg: 0, greens: 0, reds: 0, readOk: 0, delOk: 0, modeOk: 0, hookOk: 0, sum: 0 };
+  const byUser = new Map();
+
+  for (const r of rows || []) {
+    const uid = r.user_id || "unknown";
+    const display = nameMap.get(uid) || uid;
+    const guest = normalizeGuest(r.actual_guest_type_norm);
+
+    if (!byUser.has(uid)) byUser.set(uid, { uid, display, byGuest: new Map() });
+    const u = byUser.get(uid);
+
+    const s =
+      u.byGuest.get(guest) ||
+      { guest, n: 0, greens: 0, reds: 0, readOk: 0, modeOk: 0, hookOk: 0, sum: 0 };
+
     s.n++;
     s.sum += Number(r.chain_score || 0);
     if (r.is_green) s.greens++;
     if (r.is_red) s.reds++;
     if (r.read_correct) s.readOk++;
-    if (r.delivery_correct) s.delOk++;
     if (r.mode_optimal) s.modeOk++;
     if (r.hook_optimal) s.hookOk++;
-    by.set(g, s);
+
+    u.byGuest.set(guest, s);
   }
 
-  const list = Array.from(by.values()).map(x => ({
-    ...x,
-    avg: x.n ? (x.sum / x.n) : 0,
-    greenPct: x.n ? (100 * x.greens / x.n) : 0,
-    readPct: x.n ? (100 * x.readOk / x.n) : 0,
-    delPct: x.n ? (100 * x.delOk / x.n) : 0,
-    modePct: x.n ? (100 * x.modeOk / x.n) : 0,
-    hookPct: x.n ? (100 * x.hookOk / x.n) : 0,
-  })).sort((a, b) => b.n - a.n);
+  const users = Array.from(byUser.values()).sort((a, b) =>
+    String(a.display).localeCompare(String(b.display))
+  );
 
-  if (!list.length) return `<div class="small-text" style="opacity:.8;">No encounter data yet.</div>`;
+  if (!users.length) return `<div class="small-text" style="opacity:.8;">No encounter data yet.</div>`;
+
+  const guestOrder = ["decider", "bargain_smart", "griever"];
 
   const header = `
     <div style="display:grid; grid-template-columns: 1.2fr .6fr .6fr .7fr .7fr .7fr .7fr; gap:8px; font-weight:700; opacity:.9;">
@@ -2517,38 +2538,76 @@ function renderGuestInsightsTable(rows) {
     </div>
   `;
 
-  const body = list.map(x => `
-    <div style="display:grid; grid-template-columns: 1.2fr .6fr .6fr .7fr .7fr .7fr .7fr; gap:8px; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.08);">
-      <div>${x.g}</div>
-      <div>${x.n}</div>
-      <div>${x.avg.toFixed(2)}</div>
-      <div>${x.greenPct.toFixed(1)}</div>
-      <div>${x.readPct.toFixed(1)}</div>
-      <div>${x.modePct.toFixed(1)}</div>
-      <div>${x.hookPct.toFixed(1)}</div>
-    </div>
-  `).join("");
+  const blocks = users
+    .map((u) => {
+      const list = Array.from(u.byGuest.values())
+        .map((x) => ({
+          ...x,
+          avg: x.n ? x.sum / x.n : 0,
+          greenPct: x.n ? 100 * x.greens / x.n : 0,
+          readPct: x.n ? 100 * x.readOk / x.n : 0,
+          modePct: x.n ? 100 * x.modeOk / x.n : 0,
+          hookPct: x.n ? 100 * x.hookOk / x.n : 0,
+        }))
+        .sort((a, b) => (guestOrder.indexOf(a.guest) - guestOrder.indexOf(b.guest)));
 
-  return header + body;
+      const body = list
+        .map(
+          (x) => `
+        <div style="display:grid; grid-template-columns: 1.2fr .6fr .6fr .7fr .7fr .7fr .7fr; gap:8px; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.08);">
+          <div>${x.guest}</div>
+          <div>${x.n}</div>
+          <div>${x.avg.toFixed(2)}</div>
+          <div>${x.greenPct.toFixed(1)}</div>
+          <div>${x.readPct.toFixed(1)}</div>
+          <div>${x.modePct.toFixed(1)}</div>
+          <div>${x.hookPct.toFixed(1)}</div>
+        </div>
+      `
+        )
+        .join("");
+
+      return `
+        <div class="card" style="margin-top:12px;">
+          <strong>${u.display}</strong>
+          <div style="margin-top:8px;">${header}${body}</div>
+        </div>
+      `;
+    })
+    .join("");
+
+  return blocks;
 }
 
-function renderTrendTable(rows) {
-  const byDay = new Map();
-  for (const r of rows) {
-    const d = (r.occurred_at ? String(r.occurred_at).slice(0, 10) : "unknown");
-    const s = byDay.get(d) || { day: d, n: 0, sum: 0, greens: 0 };
+function renderTrendTable(rows, nameMap = new Map()) {
+  const byUserDay = new Map();
+
+  for (const r of rows || []) {
+    const uid = r.user_id || "unknown";
+    const day = r.occurred_at ? String(r.occurred_at).slice(0, 10) : "unknown";
+
+    if (!byUserDay.has(uid)) byUserDay.set(uid, new Map());
+    const byDay = byUserDay.get(uid);
+
+    const s = byDay.get(day) || { day, n: 0, sum: 0, greens: 0 };
     s.n++;
     s.sum += Number(r.chain_score || 0);
     if (r.is_green) s.greens++;
-    byDay.set(d, s);
+    byDay.set(day, s);
   }
 
-  const list = Array.from(byDay.values())
-    .map(x => ({ ...x, avg: x.n ? x.sum / x.n : 0, greenPct: x.n ? 100 * x.greens / x.n : 0 }))
-    .sort((a, b) => (a.day < b.day ? 1 : -1))
-    .slice(0, 14);
+  const users = Array.from(byUserDay.entries())
+    .map(([uid, byDay]) => ({
+      uid,
+      display: nameMap.get(uid) || uid,
+      days: Array.from(byDay.values())
+        .map((x) => ({ ...x, avg: x.n ? x.sum / x.n : 0, greenPct: x.n ? 100 * x.greens / x.n : 0 }))
+        .sort((a, b) => (a.day < b.day ? 1 : -1))
+        .slice(0, 14),
+    }))
+    .sort((a, b) => String(a.display).localeCompare(String(b.display)));
 
-  if (!list.length) return `<div class="small-text" style="opacity:.8;">No trend data yet.</div>`;
+  if (!users.length) return `<div class="small-text" style="opacity:.8;">No trend data yet.</div>`;
 
   const header = `
     <div style="display:grid; grid-template-columns: 1fr .7fr .7fr .7fr; gap:8px; font-weight:700; opacity:.9;">
@@ -2556,16 +2615,30 @@ function renderTrendTable(rows) {
     </div>
   `;
 
-  const body = list.map(x => `
-    <div style="display:grid; grid-template-columns: 1fr .7fr .7fr .7fr; gap:8px; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.08);">
-      <div>${x.day}</div>
-      <div>${x.n}</div>
-      <div>${x.avg.toFixed(2)}</div>
-      <div>${x.greenPct.toFixed(1)}</div>
-    </div>
-  `).join("");
+  return users
+    .map((u) => {
+      if (!u.days.length) return "";
+      const body = u.days
+        .map(
+          (x) => `
+        <div style="display:grid; grid-template-columns: 1fr .7fr .7fr .7fr; gap:8px; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.08);">
+          <div>${x.day}</div>
+          <div>${x.n}</div>
+          <div>${x.avg.toFixed(2)}</div>
+          <div>${x.greenPct.toFixed(1)}</div>
+        </div>
+      `
+        )
+        .join("");
 
-  return header + body;
+      return `
+        <div class="card" style="margin-top:12px;">
+          <strong>${u.display}</strong>
+          <div style="margin-top:8px;">${header}${body}</div>
+        </div>
+      `;
+    })
+    .join("");
 }
 
 function startManagerDrill({ focus = "read", pool = ["decider", "bargain_smart", "griever"], repTarget = 3, durationSec = 300, tier = 1 } = {}) {
@@ -2573,14 +2646,14 @@ function startManagerDrill({ focus = "read", pool = ["decider", "bargain_smart",
   window.setDefaultDrillConfig?.({ focus, pool, durationSec });
 
   // queue drill start payload for the iframe load handler
-  window.__BC_PENDING_START_DRILL__ = {
+  setPendingStartDrill({
     repTarget,
     focus,
     pool,
     durationSec,
     starter: "manager",
     tier,
-  };
+  });
 
   showScreen("screenPlay");
   mountPremiumGameIframe({ showBack: true, backTo: "screenManagerBoard" });
@@ -2706,47 +2779,11 @@ async function loadManagerInsights() {
   if (whyEl) whyEl.textContent = plans[0]?.plan?.why || "";
 
   if (guestEl) {
-    guestEl.innerHTML = plans.length
-      ? plans.map((p) => `
-          <div class="card" style="margin-top:10px;">
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-              <div>
-                <b>${escapeHtml(p.name)}</b>
-                <div style="opacity:.7; font-size:12px;">
-                  ${escapeHtml(String(p.user_id).slice(0, 8))} • ${p.guestRows.length} resolves
-                </div>
-              </div>
-              <button class="btn" type="button" data-insights-drill-user="${escapeHtml(p.user_id)}">
-                Start 5-min drill
-              </button>
-            </div>
-
-            <div style="margin-top:10px; opacity:.9;">
-              <div style="font-weight:600;">Recommended focus</div>
-              <div style="opacity:.8; font-size:13px; margin-top:4px;">
-                ${escapeHtml(p.plan?.why || "")}
-              </div>
-            </div>
-
-            <div style="margin-top:10px;">
-              ${renderGuestInsightsTable(p.guestRows)}
-            </div>
-          </div>
-        `).join("")
-      : `<div style="opacity:.8;">No data yet.</div>`;
+    guestEl.innerHTML = renderGuestInsightsTable(rows, nameMap);
   }
 
   if (trendEl) {
-    trendEl.innerHTML = plans.length
-      ? plans.map((p) => `
-          <div class="card" style="margin-top:10px;">
-            <b>${escapeHtml(p.name)}</b>
-            <div style="margin-top:10px;">
-              ${renderTrendTable(p.trendRows)}
-            </div>
-          </div>
-        `).join("")
-      : `<div style="opacity:.8;">No data yet.</div>`;
+    trendEl.innerHTML = renderTrendTable(rows, nameMap);
   }
 
   if (guestEl && !guestEl.__bcBound) {
@@ -2778,7 +2815,7 @@ async function loadManagerInsights() {
         tier: 1,
       };
 
-      postToGameAfterLoad({ type: "drill_config", drill: window.__BC_DRILL_CONFIG__ || null });
+      postToGameAfterLoad({ type: "drill_config", drill: window.__BC_DRILL_CONFIG__ || window.BC_DRILL_CONFIG || null });
       postToGameAfterLoad(drillMsg);
     });
   }
@@ -2970,12 +3007,14 @@ function pushPremiumCtxAndDrill() {
   if (!window.__BC_DRILL_CONFIG__ && window.setDefaultDrillConfig) {
     window.setDefaultDrillConfig();
   }
-  postToGame("drill_config", { drill: window.__BC_DRILL_CONFIG__ || null });
+  const drillCfg = window.__BC_DRILL_CONFIG__ || window.BC_DRILL_CONFIG || null;
+  postToGame("drill_config", { drill: drillCfg });
 
   // 3) start drill (if queued)
-  if (window.__BC_PENDING_START_DRILL__) {
-    postToGame("start_drill", window.__BC_PENDING_START_DRILL__);
-    window.__BC_PENDING_START_DRILL__ = null;
+  const pending = window.__BC_PENDING_START_DRILL__ || window.BC_PENDING_START_DRILL;
+  if (pending) {
+    postToGame("start_drill", pending);
+    setPendingStartDrill(null);
   }
 }
 
