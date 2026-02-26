@@ -2458,7 +2458,7 @@ function ensureProgLoaded() {
         }
 
         console.log("[BC] bc_ctx applied ✅", window.__BC_CTX__);
-        bindWaiterStart();
+        applyRoleTemplate();
         window.__BC_RESOLVE_CTX_READY__?.();
         // Always set key after ctx (safe)
         if (typeof ensureProgKeyAfterCtx === "function") ensureProgKeyAfterCtx();
@@ -7961,6 +7961,51 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         console.log("[WAITER] Play button wired ✅");
       }
 
+      function applyRoleTemplate() {
+        const roleNow = String(window.__BC_CTX__?.role || "").toLowerCase();
+        const isWaiterNow = roleNow === "waiter";
+        const btnWelcomeBackToSetup = document.getElementById("btnWelcomeBackToSetup");
+        const btnGoPremium = document.getElementById("btnGoPremium");
+
+        if (isWaiterNow) {
+          btnWelcomeBackToSetup?.classList.add("hidden");
+          bindWaiterStart();
+
+          if (btnGoPremium) {
+            btnGoPremium.textContent = "Play";
+            btnGoPremium.classList.remove("hidden");
+            btnGoPremium.disabled = false;
+            btnGoPremium.onclick = null;
+            btnGoPremium.__bcBound = false;
+            bindInput(btnGoPremium, async () => {
+              resetNavState();
+              await startPlayWithReadyGate();
+            });
+          }
+
+          document.querySelectorAll('[data-role="manager"]').forEach((el) => el.classList.add("hidden"));
+          document.querySelectorAll('[data-nav="screenSetupPremium"]').forEach((el) => {
+            el.classList.add("hidden");
+            el.style.pointerEvents = "none";
+          });
+          document.getElementById("screenSetupPremium")?.classList.add("hidden");
+          return;
+        }
+
+        btnWelcomeBackToSetup?.classList.remove("hidden");
+        if (btnGoPremium) btnGoPremium.textContent = "Setup";
+      }
+
+      function exitDrillState() {
+        sessionType = null;
+        try { drillRepDone = 0; } catch {}
+        try { window.__BC_DRILL_ACTIVE__ = false; } catch {}
+        try { clearInterval(window.__BC_DRILL_TICK__); window.__BC_DRILL_TICK__ = null; } catch {}
+        try { clearTimeout(window.__BC_DRILL_TIMEOUT__); window.__BC_DRILL_TIMEOUT__ = null; } catch {}
+        try { DRILL = null; } catch {}
+        document.getElementById("hudPanel")?.classList.add("hidden");
+      }
+
       function wireDrillBack() {
         ["btnBackToPremium", "btnExitDrill", "btnBackHomeFromDrillSummary"].forEach((id) => {
           const btn = document.getElementById(id);
@@ -7970,7 +8015,15 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           btn.__bcBound = false;
 
           bindInput(btn, () => {
+            const roleNow = String(window.__BC_CTX__?.role || "").toLowerCase();
+            const isWaiterNow = roleNow === "waiter";
             const backTo = getBackToParam();
+            exitDrillState();
+            resetNavState();
+            if (isWaiterNow) {
+              showScreen("screenHome");
+              return;
+            }
             if (window.parent && backTo) {
               window.parent.postMessage(
                 { source: "BC_MSG", v: 1, type: "nav_back", backTo },
@@ -7978,7 +8031,6 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
               );
               return;
             }
-            resetNavState();
             showScreen("screenHome");
           });
         });
@@ -8039,7 +8091,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         const isWaiter = roleNow === "waiter";
 
         if (isWaiter) {
-          ["btnGoPremium", "btnWelcomeBackToSetup", "btnGoSetup", "btnSetupWines"].forEach((id) => {
+          ["btnWelcomeBackToSetup", "btnGoSetup", "btnSetupWines"].forEach((id) => {
             document.getElementById(id)?.classList.add("hidden");
           });
           document.getElementById("screenSetupPremium")?.classList.add("hidden");
@@ -8047,10 +8099,10 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             el.classList.add("hidden");
             el.style.pointerEvents = "none";
           });
-          bindWaiterStart();
         }
 
         wireDrillBack();
+        applyRoleTemplate();
 
         const IS_IFRAME = !!window.frameElement;
         if (IS_IFRAME && btnGoSetup && !isWaiter) {
