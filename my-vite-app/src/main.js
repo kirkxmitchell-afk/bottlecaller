@@ -64,7 +64,27 @@ function uiModeLabel(modeKey, uiStyle) {
 let wines = [];
 
 console.log("supabase client present:", !!supabase);
-window.__BC_SUPABASE__ = supabase;
+  window.__BC_SUPABASE__ = supabase;
+
+function hidePremiumPlayOverlay() {
+  const root = document.getElementById("premiumRoot");
+  if (root) {
+    root.style.display = "none";
+    root.style.pointerEvents = "none";
+  }
+  const frame = document.getElementById("premiumRootFrame");
+  if (frame) frame.style.pointerEvents = "none";
+}
+
+function showPremiumPlayOverlay() {
+  const root = document.getElementById("premiumRoot");
+  if (root) {
+    root.style.display = "";
+    root.style.pointerEvents = "auto";
+  }
+  const frame = document.getElementById("premiumRootFrame");
+  if (frame) frame.style.pointerEvents = "auto";
+}
 
 function setDrillConfig(cfg) {
   window.__BC_DRILL_CONFIG__ = cfg;
@@ -522,6 +542,14 @@ document.querySelector("#app").innerHTML = `
         Redeem Group / Enterprise manager_setup codes.
       </div>
       <div id="hudManagerSetupHost" style="margin-top:10px;"></div>
+
+      <hr style="opacity:.25; margin:12px 0;" />
+      <h3 style="margin:0;">Active restaurant</h3>
+      <div class="small-text" style="margin-top:6px; opacity:.9;">
+        Switch which restaurant you’re managing right now.
+      </div>
+      <div id="hudRestaurantPickerHost" style="margin-top:10px;"></div>
+      <div id="hudRestaurantPickerMsg" class="small-text" style="margin-top:8px;"></div>
 
       <hr style="opacity:.25; margin:12px 0;" />
 
@@ -1197,24 +1225,22 @@ if (!window.__BC_PARENT_BRIDGE__) {
         return;
       }
 
-      if (msg.type === "nav_back") {
-        const to = msg.backTo || msg.to || "screenManagerBoard";
-        console.log("[PARENT] nav_back ->", to);
-        showScreen(to);
-        return;
-      }
+      if (msg.type === "nav_back" || msg.type === "nav") {
+        const dest = msg.to || msg.target || msg.backTo || "screenHome";
+        console.log("[PARENT] nav ->", dest, msg);
 
-      if (msg.type === "nav" && msg.target) {
-        if (String(msg.target).startsWith("screen")) {
-          showScreen(msg.target);
+        if (String(dest).startsWith("screen")) {
+          if (dest !== "screenPlay") hidePremiumPlayOverlay();
+          else showPremiumPlayOverlay();
+
+          showScreen(dest);
+
+          if (dest === "screenManagerBoard") {
+            wireManagerBoardMenu?.();
+            if (msg.mbTab) window.__BC_MB_SHOWTAB__?.(msg.mbTab);
+          }
           return;
         }
-      }
-      if (msg.type === "nav" && msg.to === "screenManagerBoard") {
-        showScreen("screenManagerBoard");
-        wireManagerBoardMenu?.();
-        if (msg.mbTab) window.__BC_MB_SHOWTAB__?.(msg.mbTab);
-        return;
       }
 
       if (msg.type === "drill_pick") {
@@ -1230,7 +1256,11 @@ if (!window.__BC_PARENT_BRIDGE__) {
       if (!eventType) return;
 
       const userId = appState.session?.user?.id || null;
-      const restaurantId = appState.profile?.restaurant_id || null;
+      const restaurantId =
+        getActiveRestaurantId?.() ||
+        appState.activeRestaurantId ||
+        appState.profile?.restaurant_id ||
+        null;
 
       // If not authed, ignore
       if (!userId) return;
@@ -2351,6 +2381,87 @@ function mountManagerSetupIntoHud() {
   // Wire existing handlers (id-based so they still work)
   wireGroupSetupRedeem?.();
   wireManagerBoardBillingAccess?.();
+}
+
+function moveRestaurantPickerIntoHud() {
+  const picker = document.getElementById("groupRestaurantPicker");
+  const host = document.getElementById("hudRestaurantPickerHost");
+  if (!picker || !host) return;
+  host.appendChild(picker);
+  picker.style.display = "block";
+}
+
+async function loadRestaurantsForHudPicker() {
+  const sel = document.getElementById("selActiveRestaurant");
+  const btn = document.getElementById("btnSetActiveRestaurant");
+  const hint = document.getElementById("activeRestaurantHint");
+  const msg = document.getElementById("hudRestaurantPickerMsg");
+
+  if (!sel || !btn) return;
+
+  sel.innerHTML = "";
+  if (hint) hint.textContent = "Loading…";
+  if (msg) msg.textContent = "";
+
+  const res = await supabase
+    .from("restaurants")
+    .select("id,name,code,seat_limit,require_invite")
+    .order("name", { ascending: true });
+
+  if (res.error) {
+    if (hint) hint.textContent = "⚠️ Failed to load restaurants.";
+    console.warn("[BC] restaurants load failed", res.error);
+    return;
+  }
+
+  const rows = res.data || [];
+  if (!rows.length) {
+    if (hint) hint.textContent = "No restaurants found.";
+    return;
+  }
+
+  for (const r of rows) {
+    const opt = document.createElement("option");
+    opt.value = r.id;
+    opt.textContent = r.name || r.id.slice(0, 8) + "…";
+    sel.appendChild(opt);
+  }
+
+  const stored = localStorage.getItem("BC_ACTIVE_RESTAURANT_ID");
+  const current = appState.activeRestaurantId || stored || rows[0].id;
+  sel.value = current;
+
+  async function applyRestaurant(id) {
+    appState.activeRestaurantId = id;
+    localStorage.setItem("BC_ACTIVE_RESTAURANT_ID", id);
+
+    const full = rows.find(x => x.id === id) || null;
+    appState.restaurant = full;
+
+    renderHud();
+
+    try {
+      const ctx = await buildBcCtxSafe?.(null);
+      if (ctx?.userId && ctx?.restaurantId && ctx?.role) {
+        postToGame("bc_ctx", { ...ctx });
+      }
+    } catch (e) {
+      console.warn("[BC] ctx push after restaurant switch failed", e);
+    }
+
+    try {
+      await loadManagerBoardData?.();
+      await loadManagerInsights?.();
+    } catch (e) {
+      console.warn("[BC] refresh after restaurant switch failed", e);
+    }
+
+    if (hint) hint.textContent = `✅ Active: ${full?.name || id}`;
+  }
+
+  await applyRestaurant(current);
+
+  btn.onclick = () => applyRestaurant(sel.value);
 }
 
 function applyManagerBoardVisibility() {
@@ -3946,6 +4057,8 @@ function renderHud() {
 
   renderInvitesList();
   mountManagerSetupIntoHud();
+  moveRestaurantPickerIntoHud();
+  loadRestaurantsForHudPicker();
 }
 
 // ------------------------------------------------------------
@@ -4296,7 +4409,11 @@ document.getElementById("btnOpenHud").addEventListener("click", () => {
   openHud();
 });
 
-document.getElementById("btnCloseHud").addEventListener("click", closeHud);
+document.getElementById("btnCloseHud").addEventListener("click", () => {
+  document.getElementById("hudPanel")?.classList.add("hidden");
+  hidePremiumPlayOverlay();
+  showScreen("screenHome");
+});
 document.getElementById("hudBackdrop").addEventListener("click", closeHud);
 document.getElementById("btnBackToPremium")?.addEventListener("click", () => {
   showScreen("screenPremiumApp");
