@@ -2088,6 +2088,12 @@ function ensureProgLoaded() {
       }
 
       async function openSetupScreen(mode) {
+        const roleNow = String(window.__BC_CTX__?.role || "").toLowerCase();
+        if (roleNow === "waiter") {
+          console.warn("[NAV] setup blocked: waiter role");
+          window.showToast?.("Only managers can edit the wine list.");
+          return;
+        }
         initSetupTemplate(mode);
         showScreen("screenSetupPremium");
         await hydrateSetupFromDbIfPossible(mode);
@@ -2577,6 +2583,36 @@ function ensureProgLoaded() {
         }
       }
 
+      async function ensureWinesLoadedReadOnly() {
+        if (Array.isArray(wines) && wines.length) return true;
+
+        if (!restaurantId) {
+          try {
+            await Promise.race([waitForRestaurantId(), new Promise((r) => setTimeout(r, 500))]);
+          } catch {}
+        }
+        if (!restaurantId) return false;
+
+        try {
+          const w = await loadWines();
+          wines = setWines(w || []);
+          console.log("[BC] wines loaded (read-only) ✅", { rid: restaurantId, count: wines.length });
+          return wines.length > 0;
+        } catch (e) {
+          console.warn("[BC] loadWines failed (read-only)", e);
+        }
+
+        try {
+          window.parent?.postMessage(
+            { source: "BC_MSG", v: 1, type: "wines_request", mode: "premium", restaurantId },
+            window.location.origin
+          );
+          await new Promise((r) => setTimeout(r, 350));
+        } catch {}
+
+        return Array.isArray(wines) && wines.length > 0;
+      }
+
       // wines declared at top-level (avoid TDZ)
       let runs = loadRuns();
       let mastery = loadMastery();
@@ -2675,7 +2711,16 @@ function ensureProgLoaded() {
             drill: msg.drill
           });
           applyBcCtx(msg);
-          bootstrapWinesFromCtx();
+          await ensureWinesLoadedReadOnly();
+          return;
+        }
+
+        if (msg.type === "wines_report") {
+          const list = Array.isArray(msg.wines) ? msg.wines : [];
+          wines = setWines(list);
+          renderWineTables?.();
+          updateCounts?.();
+          console.log("[BC] wines_report applied ✅", { count: wines.length });
           return;
         }
 
@@ -4669,6 +4714,28 @@ function ensureProgLoaded() {
 
       function isUnlocked() {
         return getWineCount() >= LIMIT;
+      }
+
+      async function isUnlockedAsync() {
+        await ensureWinesLoadedReadOnly();
+        return getWineCount() >= LIMIT;
+      }
+
+      async function assertWinesReadyOrExplain() {
+        try { await ensureWinesLoadedReadOnly?.(); } catch {}
+
+        const n = getWineCount?.() ?? (Array.isArray(wines) ? wines.length : 0);
+        if (n > 0) return true;
+
+        const roleNow = String(window.__BC_CTX__?.role || "").toLowerCase();
+        if (roleNow === "manager") {
+          showScreen("screenSetupPremium");
+          window.showToast?.("Add at least 1 wine to start play.");
+        } else {
+          window.showToast?.("Waiting for manager to add wines for this restaurant.");
+          showScreen("screenHome");
+        }
+        return false;
       }
 
       function pickRandom(arr) {
@@ -7354,12 +7421,9 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           PROG_meta: window.PROG?.meta || null
         });
 
-        const unlocked = isUnlocked();
-        console.log("[DEBUG] isUnlocked()", unlocked);
-
-        if (sessionType !== "drill" && !unlocked) {
-          console.warn("[DEBUG] BLOCKED BY isUnlocked GUARD");
-          return;
+        if (sessionType !== "drill") {
+          const ok = await assertWinesReadyOrExplain();
+          if (!ok) return;
         }
 
         if (!sessionId) {
@@ -7751,6 +7815,14 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         const btnExitDrill = document.getElementById("btnExitDrill");
         const btnStartAnotherDrill = document.getElementById("btnStartAnotherDrill");
         const btnFiveMinDrill = document.getElementById("btnFiveMinDrill");
+        const roleNow = String(window.__BC_CTX__?.role || "").toLowerCase();
+        const isWaiter = roleNow === "waiter";
+
+        if (isWaiter) {
+          document.getElementById("btnGoPremium")?.classList.add("hidden");
+          document.getElementById("btnWelcomeBackToSetup")?.classList.add("hidden");
+          document.getElementById("btnGoSetup")?.classList.add("hidden");
+        }
 
         const IS_IFRAME = !!window.frameElement;
         if (IS_IFRAME && btnGoSetup) {
@@ -7829,8 +7901,8 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           showScreen("screenWelcome");
         });
 
-        bindInput(btnContinue, () => {
-          if (!isUnlocked()) { alert("Add " + LIMIT + " wines to start."); return; }
+        bindInput(btnContinue, async () => {
+          if (!(await assertWinesReadyOrExplain())) return;
           resetNavState();
 
           // Start fresh runs at the first encounter
