@@ -1271,10 +1271,19 @@ if (!window.__BC_PARENT_BRIDGE__) {
       if (!eventType) return;
 
       const userId = appState.session?.user?.id || null;
+      try {
+        if (window.__BC_ACTIVE_REST_READY__) {
+          await Promise.race([
+            window.__BC_ACTIVE_REST_READY__,
+            new Promise((r) => setTimeout(r, 600)),
+          ]);
+        }
+      } catch {}
+
+      // Always write telemetry to the active restaurant boundary.
       const restaurantId =
-        getActiveRestaurantId?.() ||
+        (typeof getActiveRestaurantId === "function" ? getActiveRestaurantId() : null) ||
         appState.activeRestaurantId ||
-        appState.profile?.restaurant_id ||
         null;
 
       // If not authed, ignore

@@ -513,6 +513,7 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
               payload: {
                 eventId: payload?.eventId || crypto.randomUUID(),
                 ...(payload || {}),
+                sessionType: window.__BC_SESSION_TYPE__ || null,
                 // add these two so parent can validate/debug
                 restaurantId: ctx?.restaurantId || null,
                 role: ctx?.role || null,
