@@ -1226,10 +1226,11 @@ if (!window.__BC_PARENT_BRIDGE__) {
         if (shouldIgnoreDuplicateNav(msg)) return;
         const roleNow = String(appState?.profile?.role || "").toLowerCase();
         if (msg.type === "nav_back") {
-          const to = msg.backTo || msg.to || "screenPremiumApp";
+          const to = msg.backTo || msg.to || "screenHome";
           console.log("[PARENT] NAV_BACK ->", to, msg);
 
-          setPremiumOverlayActive(to === "screenPlay" || to === "screenPremiumApp");
+          try { destroyPremiumIframe("nav_back"); } catch {}
+          try { setPremiumOverlayActive(false); } catch {}
           showScreen(to);
 
           if (to === "screenManagerBoard") {

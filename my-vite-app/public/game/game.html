@@ -3042,14 +3042,16 @@ function ensureProgLoaded() {
       // ============================================================
       // ✅ SESSION CONTAINER (drill vs progression)
       // ============================================================
-      function startDrill(repTarget = 3, focus = null, starter = "manager", tier = 0) {
+      function startDrill(repTarget = 3, focus = null, starter = null, tier = 0) {
         const cfg = window.__BC_DRILL_CONFIG__ || {};
         const drillFocus = focus || cfg.focus || null;
+        const roleNow = String(window.__BC_CTX__?.role || "").toLowerCase();
+        const resolvedStarter = starter || (roleNow === "waiter" ? "waiter" : "manager");
         const pool = Array.isArray(cfg.pool) ? cfg.pool : null;
         // HARD DRILL MODE (safety)
         window.__BC_SESSION_TYPE__ = "drill";
         try { sessionType = "drill"; } catch {}
-        DRILL = { repTarget, repDone: 0, startedAt: Date.now(), focus: drillFocus, starter, tier: (typeof tier === "number" ? tier : 0), pool };
+        DRILL = { repTarget, repDone: 0, startedAt: Date.now(), focus: drillFocus, starter: resolvedStarter, tier: (typeof tier === "number" ? tier : 0), pool };
         DRILL.activeWine = (Array.isArray(wines) && wines.length ? wines[0] : { name: "This bottle" });
         if (!DRILL.activeWine) {
           DRILL.activeWine = (Array.isArray(wines) && wines.length) ? wines[0] : { name: "This bottle", varietal: "" };
