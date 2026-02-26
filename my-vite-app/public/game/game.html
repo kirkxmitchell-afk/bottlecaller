@@ -2935,6 +2935,35 @@ function ensureProgLoaded() {
         })
       };
 
+      window.__BC_DEBUG_WINES__ = function __BC_DEBUG_WINES__() {
+        const rid =
+          window.restaurantId ||
+          window.__BC_CTX__?.restaurantId ||
+          window.restaurant_id ||
+          null;
+
+        const count =
+          (Array.isArray(window.wines) ? window.wines.length : 0) ||
+          (typeof window.getWineCount === "function" ? window.getWineCount() : null);
+
+        const isMgr = !!window.isManager;
+        const isWait = !!window.isWaiter;
+
+        const out = {
+          role: isMgr ? "manager" : (isWait ? "waiter" : "unknown"),
+          restaurantId: rid,
+          winesArrayLen: Array.isArray(window.wines) ? window.wines.length : null,
+          getWineCount: typeof window.getWineCount === "function" ? window.getWineCount() : null,
+          LIMIT: typeof window.LIMIT !== "undefined" ? window.LIMIT : null,
+          unlocked: typeof window.isUnlocked === "function" ? window.isUnlocked() : null,
+          sessionType: window.__BC_SESSION_TYPE__ || null,
+          bcMode: window.bcMode || null,
+        };
+
+        console.log("[BC][DEBUG_WINES]", out);
+        return out;
+      };
+
       await waitForRestaurantId();
       if (!restaurantId && isDemo) restaurantId = "demo";
       if (restaurantId) {
@@ -7475,7 +7504,10 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           PROG_meta: window.PROG?.meta || null
         });
 
-        if (sessionType !== "drill") {
+        const unlocked = isUnlocked();
+        console.log(`[UNLOCK] role=${isManager ? "manager" : (isWaiter ? "waiter" : "?")} rid=${restaurantId || "?"} wines=${getWineCount?.() ?? "?"}/${LIMIT} unlocked=${unlocked} sessionType=${sessionType || "null"}`);
+        if (sessionType !== "drill" && !unlocked) {
+          console.warn("[UNLOCK] BLOCKED (needs wines)");
           const ok = await assertWinesReadyOrExplain();
           if (!ok) return;
         }
