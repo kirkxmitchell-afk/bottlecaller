@@ -1329,6 +1329,56 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
       if (ins.error) throw ins.error;
 
+      if (eventType === "encounter_resolved") {
+        const p = payload || {};
+
+        const normGuest = (x) => {
+          try { return normalizeGuestType(x); }
+          catch { return String(x || "unknown").trim().toLowerCase().replace(/[\s-]+/g, "_"); }
+        };
+
+        const resolvedRow = {
+          restaurant_id: restaurantId,
+          user_id: userId,
+          occurred_at: p.occurredAt || new Date().toISOString(),
+          actual_guest_type_norm: normGuest(
+            p.actualGuestTypeNorm ||
+            p.actual_guest_type_norm ||
+            p.guestType ||
+            p.guest_type ||
+            p?.actual?.guestType
+          ),
+          chain_score: Number(p.chainScore ?? p.chain_score ?? 0),
+          is_green: !!(p.isGreen ?? p.is_green),
+          is_red: !!(p.isRed ?? p.is_red),
+          read_correct: !!(p.readCorrect ?? p.read_correct ?? p?.checks?.readCorrect),
+          delivery_correct: !!(p.deliveryCorrect ?? p.delivery_correct ?? p?.checks?.deliveryCorrect),
+          mode_optimal: !!(p.modeOptimal ?? p.mode_optimal),
+          hook_optimal: !!(p.hookOptimal ?? p.hook_optimal),
+          mode_status: p.modeStatus ?? p.mode_status ?? p?.checks?.modeStatus ?? null,
+          hook_status: p.hookStatus ?? p.hook_status ?? p?.checks?.hookStatus ?? null,
+          chain_signal: p.chainSignal ?? p.chain_signal ?? null,
+          performance_grade: p.performanceGrade ?? p.performance_grade ?? null,
+          tier: Number.isFinite(p.tier) ? p.tier : (Number(p.tier ?? 0) || 0),
+          encounter_number: Number(p.encounterNumber ?? p.encounter_number ?? 0) || 0,
+          session_id: p.sessionId ?? p.session_id ?? null,
+        };
+
+        if (p.encounterId) resolvedRow.encounter_id = p.encounterId;
+
+        console.log("[BC] upserting bc_encounter_resolutions_v2 ✅", resolvedRow);
+
+        const ins2 = await supabase
+          .from("bc_encounter_resolutions_v2")
+          .upsert(resolvedRow, {
+            onConflict: resolvedRow.encounter_id ? "encounter_id" : "session_id,encounter_number",
+          });
+
+        if (ins2.error) {
+          console.warn("[BC] bc_encounter_resolutions_v2 upsert failed ❌", ins2.error);
+        }
+      }
+
       // reply ack (optional)
       event.source?.postMessage(
         { source: "BC_MSG", v: 1, type: "event_log_ack", ok: true, eventType },
