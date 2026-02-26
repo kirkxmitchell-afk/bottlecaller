@@ -2293,9 +2293,14 @@ function wireManagerBoardMenu() {
 
     if (tab === "overview") await loadManagerBoardData();
     if (tab === "billing") await loadManagerBoardSeats?.();
-    if (tab === "provision" || tab === "menu") {
+    // ✅ Setup lives under Menu now
+    if (tab === "menu") {
       wireGroupSetupRedeem?.();
       wireManagerBoardBillingAccess?.();
+    }
+    // ✅ Provision reserved for later gifts (do nothing for now)
+    if (tab === "provision") {
+      // intentionally blank
     }
     if (tab === "insights") await loadManagerInsights();
   });
@@ -2307,25 +2312,17 @@ function moveSignupCardsIntoMenuPanel() {
   const provisionTab = document.getElementById("mbTab_provision");
   const menuHost = document.getElementById("mbMenuSetupHost");
 
-  if (!provisionTab || !menuHost) {
-    console.warn("[BC] moveSignupCardsIntoMenuPanel: missing provisionTab or menuHost");
-    return;
-  }
+  if (!provisionTab || !menuHost) return;
 
+  // ✅ Group card is the first .card inside provision tab
   const groupCard = provisionTab.querySelector(".card");
+  // ✅ Enterprise card has a stable id
   const enterpriseCard = document.getElementById("mbProvisionAccess");
-
-  if (!groupCard && !enterpriseCard) {
-    console.warn("[BC] moveSignupCardsIntoMenuPanel: no cards found to move");
-    return;
-  }
 
   if (groupCard) menuHost.appendChild(groupCard);
   if (enterpriseCard) menuHost.appendChild(enterpriseCard);
 
-  provisionTab.classList.add("hidden");
-
-  console.log("[BC] Signup cards moved to Menu panel ✅");
+  console.log("[BC] Signup cards moved to Menu ✅");
 }
 
 function applyManagerBoardVisibility() {
