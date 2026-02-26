@@ -6261,6 +6261,13 @@ function ensureProgLoaded() {
           payload?.sessionId &&
           hasChecks
         ) {
+          console.log("[WAITERCHECK] about to emit encounter_resolved", {
+            role: window.__BC_CTX__?.role,
+            rid: window.__BC_CTX__?.restaurantId,
+            hasChecks,
+            encounterId: payload?.encounterId,
+            sessionId: payload?.sessionId
+          });
           console.log("[EMIT] encounter_resolved ✅", {
             user: window.__BC_CTX__?.userId,
             rid: window.__BC_CTX__?.restaurantId,
@@ -7326,6 +7333,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           }
 
           addStepButton(inDrill ? "NEXT REP" : "NEXT ENCOUNTER", () => {
+            try { logEncounter(); } catch (e) { console.warn("[BC] logEncounter failed", e); }
             if (window.__NEXT_LOCK__) return;
             window.__NEXT_LOCK__ = true;
             setTimeout(() => { window.__NEXT_LOCK__ = false; }, 150);
