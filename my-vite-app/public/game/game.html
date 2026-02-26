@@ -6093,8 +6093,18 @@ function ensureProgLoaded() {
       }
 
       function logEncounter() {
+        console.log("[LOG] logEncounter() called", {
+          user: window.__BC_CTX__?.userId,
+          role: window.__BC_CTX__?.role,
+          rid: window.__BC_CTX__?.restaurantId,
+          step: window.currentStep,
+          sessionId,
+          encounterId: currentEncounter?.encounterId || currentEncounter?.id,
+        });
+
         if (!currentEncounter || currentEncounter.__logged || currentEncounter.__resolvedLogged) return;
         currentEncounter.__resolvedLogged = true;
+        if (!sessionId) sessionId = crypto.randomUUID();
 
         const entry = {
           timestamp: new Date().toLocaleString(),
@@ -6851,6 +6861,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             // TEMP DEBUG (remove later)
             console.log("[BC] computeReaction result =", result);
             commitReaction(result, currentEncounter, reactionChecks);
+            try { logEncounter(); } catch (e) { console.warn("[BC] logEncounter failed", e); }
           } else {
             console.log("[BC] Reaction already computed for this step (skipping compute) ✅");
           }
@@ -8004,6 +8015,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           ["btnGoPremium", "btnWelcomeBackToSetup", "btnGoSetup", "btnSetupWines"].forEach((id) => {
             document.getElementById(id)?.classList.add("hidden");
           });
+          document.getElementById("screenSetupPremium")?.classList.add("hidden");
           document.querySelectorAll('[data-nav="screenSetupPremium"]').forEach((el) => {
             el.classList.add("hidden");
             el.style.pointerEvents = "none";
