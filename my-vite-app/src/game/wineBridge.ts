@@ -41,11 +41,10 @@ function toUiWine(r: WineRow) {
   };
 }
 
-export async function fetchRestaurantWines(scopeId: string, restaurantId: string) {
+export async function fetchRestaurantWines(scopeId: string | null, restaurantId: string) {
   const { data, error } = await supabase
     .from("bc_wines")
     .select("*")
-    .eq("scope_id", scopeId)
     .eq("restaurant_id", restaurantId)
     .order("created_at", { ascending: true });
 
@@ -53,7 +52,7 @@ export async function fetchRestaurantWines(scopeId: string, restaurantId: string
   return (data || []).map(toUiWine);
 }
 
-export async function addRestaurantWine(scopeId: string, restaurantId: string, wine: WineInput) {
+export async function addRestaurantWine(scopeId: string | null, restaurantId: string, wine: WineInput) {
   const { data: userRes, error: uErr } = await supabase.auth.getUser();
   if (uErr) throw uErr;
 
@@ -61,7 +60,7 @@ export async function addRestaurantWine(scopeId: string, restaurantId: string, w
   if (!userId) throw new Error("not_authenticated");
 
   const row = {
-    scope_id: scopeId,
+    scope_id: scopeId || null,
     restaurant_id: restaurantId,
     created_by: userId,
     name: wine.name,
@@ -78,16 +77,43 @@ export async function addRestaurantWine(scopeId: string, restaurantId: string, w
   if (error) throw error;
 }
 
+export async function upsertRestaurantWine(scopeId: string | null, restaurantId: string, wine: any) {
+  const { data: userRes, error: uErr } = await supabase.auth.getUser();
+  if (uErr) throw uErr;
+
+  const userId = userRes?.user?.id;
+  if (!userId) throw new Error("not_authenticated");
+
+  const row = {
+    id: wine?.id || undefined,
+    scope_id: scopeId || null,
+    restaurant_id: restaurantId,
+    created_by: userId,
+    name: wine?.name || "",
+    varietal: wine?.varietal || "",
+    fruit_tags: wine?.fruitTags || wine?.fruit_tags || wine?.fruit || [],
+    texture_tags: wine?.textureTags || wine?.texture_tags || wine?.texture || [],
+    oak_level: wine?.oakLevel || wine?.oak_level || wine?.oak || "",
+    process: wine?.process || "",
+    region: wine?.region || "",
+    story: wine?.story || "",
+  };
+
+  const { error } = await supabase
+    .from("bc_wines")
+    .upsert(row, { onConflict: "id" });
+  if (error) throw error;
+}
+
 export async function deleteRestaurantWine(wineId: string) {
   const { error } = await supabase.from("bc_wines").delete().eq("id", wineId);
   if (error) throw error;
 }
 
-export async function deleteAllRestaurantWines(scopeId: string, restaurantId: string) {
+export async function deleteAllRestaurantWines(scopeId: string | null, restaurantId: string) {
   const { error } = await supabase
     .from("bc_wines")
     .delete()
-    .eq("scope_id", scopeId)
     .eq("restaurant_id", restaurantId);
   if (error) throw error;
   return true;
