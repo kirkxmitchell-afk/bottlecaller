@@ -726,6 +726,12 @@ window.__BC_ACTIVE_REST_READY__ =
     window.__BC_RESOLVE_ACTIVE_REST_READY__ = resolve;
   });
 
+function armActiveRestaurantReadyPromise() {
+  window.__BC_ACTIVE_REST_READY__ = new Promise((resolve) => {
+    window.__BC_RESOLVE_ACTIVE_REST_READY__ = resolve;
+  });
+}
+
 function markActiveRestaurantReady() {
   if (window.__BC_RESOLVE_ACTIVE_REST_READY__) {
     window.__BC_RESOLVE_ACTIVE_REST_READY__();
@@ -3254,6 +3260,8 @@ async function setActiveRestaurantForGroup(restaurantId) {
   }
   if (!restaurantId) throw new Error("No restaurant selected.");
 
+  armActiveRestaurantReadyPromise();
+
   // Prevent double-click / race conditions
   if (window.__BC_SWITCHING_RESTAURANT__) return;
   window.__BC_SWITCHING_RESTAURANT__ = true;
@@ -3312,7 +3320,9 @@ async function setActiveRestaurantForGroup(restaurantId) {
 
     // 4) optional: only remount game if play screen visible
     try {
-      const playVisible = !document.getElementById("screenPlay")?.classList.contains("hidden");
+      const playVisible =
+        !document.getElementById("screenPlay")?.classList.contains("hidden") ||
+        !document.getElementById("screenPremiumApp")?.classList.contains("hidden");
       if (playVisible) mountPremiumGameIframe();
     } catch {}
 
