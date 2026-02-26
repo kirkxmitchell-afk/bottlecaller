@@ -2398,7 +2398,7 @@ function ensureInsightsShell() {
 
         <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
           <button id="mbInsightsStartDrill" class="btn-primary" type="button">Start 5-min Drill</button>
-          <button id="mbInsightsCopyPlan" class="btn" type="button">Copy Plan</button>
+          
         </div>
       </div>
 
@@ -3208,7 +3208,7 @@ async function loadManagerBoardData() {
     const items = [
       ...(recentRuns.data || []).map((x) => ({
         t: x.session_start,
-        line: `Session • ${userLabel(x.user_id, nameMap)} • ${x.encounters_resolved ?? 0} resolved • avg chain score ${(Number(x.avg_chain_score ?? 0)).toFixed(2)} • G/Y/R ${x.greens ?? 0}/${x.yellows ?? 0}/${x.reds ?? 0}`,
+        line: `Session • ${userLabel(x.user_id, nameMap)} • ${x.encounters_resolved ?? 0} resolved • avg chain score ${(Number(x.avg_chain_score ?? 0)).toFixed(2)} • G/Y/R ratio: ${x.greens ?? 0}/${x.yellows ?? 0}/${x.reds ?? 0}`,
       })),
       ...(recentDrills.data || []).map((x) => ({
         t: x.occurred_at,
@@ -4314,5 +4314,17 @@ supabase.auth.onAuthStateChange((event) => {
 window.addEventListener("message", (event) => {
   if (event?.data?.source === "BC_MSG") {
     console.log("[PARENT] got BC_MSG:", event.data, "origin:", event.origin);
+  }
+});
+
+window.addEventListener("message", (e) => {
+  const msg = e?.data;
+  if (!msg || msg.source !== "BC_MSG") return;
+  if (msg.type === "nav_back" || msg.type === "nav") {
+    const to = msg.to || "screenManagerBoard";
+    if (String(to).startsWith("screen")) {
+      showScreen(to);
+      return;
+    }
   }
 });

@@ -2593,6 +2593,52 @@ function ensureProgLoaded() {
         };
       };
 
+      function ensureDrillBackButton(backToDefault = "screenManagerBoard") {
+        if (document.getElementById("__BC_DRILL_BACK__")) return;
+
+        const params = new URLSearchParams(window.location.search);
+        const showBack = params.get("showBack") === "1";
+        const backTo = params.get("backTo") || backToDefault;
+
+        if (!showBack) {
+          console.warn("[BC] showBack not enabled, but forcing back button for drill safety.");
+        }
+
+        const btn = document.createElement("button");
+        btn.id = "__BC_DRILL_BACK__";
+        btn.type = "button";
+        btn.textContent = "← Back";
+        btn.style.position = "fixed";
+        btn.style.top = "12px";
+        btn.style.left = "12px";
+        btn.style.zIndex = "2147483647";
+        btn.style.pointerEvents = "auto";
+        btn.style.padding = "10px 12px";
+        btn.style.borderRadius = "12px";
+        btn.style.border = "1px solid rgba(255,255,255,0.22)";
+        btn.style.background = "rgba(0,0,0,0.65)";
+        btn.style.color = "#fff";
+        btn.style.fontWeight = "600";
+        btn.style.cursor = "pointer";
+
+        function postBack() {
+          try {
+            window.parent.postMessage({ source: "BC_MSG", v: 1, type: "nav_back", to: backTo }, window.location.origin);
+            window.parent.postMessage({ source: "BC_MSG", v: 1, type: "nav", to: backTo }, window.location.origin);
+          } catch (e) {
+            console.warn("[BC] back postMessage failed", e);
+          }
+        }
+
+        btn.addEventListener("click", postBack);
+        window.addEventListener("keydown", (e) => {
+          if (e.key === "Escape") postBack();
+        });
+
+        document.body.appendChild(btn);
+        console.log("[BC] Drill back button injected ✅", { backTo, showBack });
+      }
+
       // Single message handler (iframe)
       console.log("[BC] start_drill listener loaded ✅");
       window.addEventListener("message", async (ev) => {
@@ -2692,6 +2738,7 @@ function ensureProgLoaded() {
         if (msg.type === "start_drill") {
           // HARD DRILL MODE: set immediately so nothing touches progression
           window.__BC_SESSION_TYPE__ = "drill";
+          ensureDrillBackButton("screenManagerBoard");
           console.log("[BC] session type set ->", window.__BC_SESSION_TYPE__);
           try { sessionType = "drill"; } catch {}
 
