@@ -1196,8 +1196,21 @@ if (!window.__BC_PARENT_BRIDGE__) {
         const dest = msg.to || msg.target || msg.backTo || "screenHome";
         console.log("[PARENT] NAV ->", dest, msg);
 
+        if (msg.type === "nav" && msg.to === "screenManagerBoard") {
+          showScreen("screenManagerBoard");
+          wireManagerBoardMenu?.();
+
+          if (msg.mbTab) window.__BC_MB_SHOWTAB__?.(msg.mbTab);
+
+          destroyPremiumIframe("exit drill -> managerboard");
+          setPremiumOverlayActive(false);
+
+          if (msg.mbTab === "insights") await loadManagerInsights();
+          return;
+        }
+
         if (String(dest).startsWith("screen")) {
-          setPremiumOverlayActive(dest === "screenPlay");
+          setPremiumOverlayActive(dest === "screenPlay" || dest === "screenPremiumApp");
           showScreen(dest);
 
           if (dest === "screenManagerBoard") {
@@ -1367,10 +1380,16 @@ function showScreen(id) {
 function onScreenChanged(id) {
   console.log("[NAV] parent onScreenChanged ->", id);
 
-  const isPremiumScreen = id === "screenPlay" || id === "screenPremiumApp";
-  setPremiumOverlayActive(isPremiumScreen);
+  const isPremium = id === "screenPremiumApp" || id === "screenPlay";
+  setPremiumOverlayActive(isPremium);
 
-  if (!isPremiumScreen) {
+  if (isPremium) {
+    if (!document.getElementById("premiumRootFrame")) {
+      mountPremiumGameIframe({ showBack: true, backTo: "screenManagerBoard" });
+    }
+  }
+
+  if (!isPremium) {
     document.getElementById("hudPanel")?.classList.add("hidden");
   }
 }
@@ -1976,6 +1995,14 @@ function unmountDemoGame(reason = "") {
   console.log("[BC] demo game unmounted ✅", reason);
   const root = document.getElementById("premiumRoot");
   if (root) root.innerHTML = "";
+}
+
+function destroyPremiumIframe(reason = "") {
+  console.log("[BC] destroyPremiumIframe", reason);
+  const root = document.getElementById("premiumRoot");
+  if (root) root.innerHTML = "";
+  window.__BC_PENDING_START_DRILL__ = null;
+  window.BC_PENDING_START_DRILL = null;
 }
 
 async function startPremiumDrillFromParent(repTarget = 3) {
@@ -4459,8 +4486,7 @@ document.getElementById("btnOpenHud").addEventListener("click", () => {
 
 document.getElementById("btnCloseHud").addEventListener("click", () => {
   document.getElementById("hudPanel")?.classList.add("hidden");
-  hidePremiumPlayOverlay();
-  showScreen("screenHome");
+  showScreen("screenPremiumApp");
 });
 document.getElementById("hudBackdrop").addEventListener("click", closeHud);
 document.getElementById("btnBackToPremium")?.addEventListener("click", () => {
@@ -4531,16 +4557,3 @@ window.addEventListener("message", (event) => {
     console.log("[PARENT] got BC_MSG:", event.data, "origin:", event.origin);
   }
 });
-
-window.__BC_OVERLAY_DBG_TICK__ =
-  window.__BC_OVERLAY_DBG_TICK__ ||
-  setInterval(() => {
-    const root = document.getElementById("premiumRoot");
-    const frame = document.getElementById("premiumRootFrame");
-    if (!root) return;
-    console.log("[DBG] premiumRoot", {
-      display: root.style.display,
-      pe: root.style.pointerEvents,
-      framePE: frame?.style.pointerEvents
-    });
-  }, 2000);
