@@ -45,8 +45,9 @@
           "background:rgba(0,0,0,.55);color:white;cursor:pointer;";
 
         btn.onclick = () => {
+          btn.remove();
           window.parent?.postMessage(
-            { source: "BC_MSG", v: 1, type: "nav_back", backTo, to: backTo },
+            { source: "BC_MSG", v: 1, type: "nav", to: backTo },
             location.origin
           );
         };

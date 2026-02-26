@@ -67,23 +67,21 @@ console.log("supabase client present:", !!supabase);
   window.__BC_SUPABASE__ = supabase;
 
 function hidePremiumPlayOverlay() {
-  const root = document.getElementById("premiumRoot");
-  if (root) {
-    root.style.display = "none";
-    root.style.pointerEvents = "none";
-  }
-  const frame = document.getElementById("premiumRootFrame");
-  if (frame) frame.style.pointerEvents = "none";
+  setPremiumOverlayActive(false);
 }
 
 function showPremiumPlayOverlay() {
+  setPremiumOverlayActive(true);
+}
+
+function setPremiumOverlayActive(isActive) {
   const root = document.getElementById("premiumRoot");
   if (root) {
-    root.style.display = "";
-    root.style.pointerEvents = "auto";
+    root.style.display = isActive ? "" : "none";
+    root.style.pointerEvents = isActive ? "auto" : "none";
   }
   const frame = document.getElementById("premiumRootFrame");
-  if (frame) frame.style.pointerEvents = "auto";
+  if (frame) frame.style.pointerEvents = isActive ? "auto" : "none";
 }
 
 function setDrillConfig(cfg) {
@@ -1194,9 +1192,10 @@ if (!window.__BC_PARENT_BRIDGE__) {
       if (msg.type === "nav_back" || msg.type === "nav") {
         if (shouldIgnoreDuplicateNav(msg)) return;
         const dest = msg.to || msg.target || msg.backTo || "screenHome";
-        console.log("[PARENT] nav ->", dest, msg);
+        console.log("[PARENT] NAV ->", dest, msg);
 
         if (String(dest).startsWith("screen")) {
+          setPremiumOverlayActive(dest === "screenPlay");
           showScreen(dest);
 
           if (dest === "screenManagerBoard") {
@@ -4411,7 +4410,8 @@ document.getElementById("btnCloseHud").addEventListener("click", () => {
 });
 document.getElementById("hudBackdrop").addEventListener("click", closeHud);
 document.getElementById("btnBackToPremium")?.addEventListener("click", () => {
-  showScreen("screenPremiumApp");
+  setPremiumOverlayActive(false);
+  showScreen("screenHome");
 });
 document.getElementById("btnLogoutManagerBoard")?.addEventListener("click", () => logoutAll("managerBoard.logout"));
 
@@ -4479,15 +4479,15 @@ window.addEventListener("message", (event) => {
   }
 });
 
-window.addEventListener("message", (e) => {
-  const msg = e?.data;
-  if (!msg || msg.source !== "BC_MSG") return;
-  if (msg.type === "nav_back" || msg.type === "nav") {
-    if (shouldIgnoreDuplicateNav(msg)) return;
-    const to = msg.to || "screenManagerBoard";
-    if (String(to).startsWith("screen")) {
-      showScreen(to);
-      return;
-    }
-  }
-});
+window.__BC_OVERLAY_DBG_TICK__ =
+  window.__BC_OVERLAY_DBG_TICK__ ||
+  setInterval(() => {
+    const root = document.getElementById("premiumRoot");
+    const frame = document.getElementById("premiumRootFrame");
+    if (!root) return;
+    console.log("[DBG] premiumRoot", {
+      display: root.style.display,
+      pe: root.style.pointerEvents,
+      framePE: frame?.style.pointerEvents
+    });
+  }, 2000);
