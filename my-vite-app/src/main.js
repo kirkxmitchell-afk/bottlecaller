@@ -2584,16 +2584,6 @@ function ensureInsightsShell() {
       </div>
 
       <div class="card" style="margin-top:12px;">
-        <div style="font-weight:700;">Recommended Drill</div>
-        <div id="mbInsightsDrillWhy" class="small-text" style="margin-top:6px; opacity:.85;"></div>
-
-        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
-          <button id="mbInsightsStartDrill" class="btn-primary" type="button">Start 5-min Drill</button>
-          
-        </div>
-      </div>
-
-      <div class="card" style="margin-top:12px;">
         <div style="font-weight:700;">Guest Type Breakdown</div>
         <div id="mbInsightsLegend" class="small-text" style="margin-top:6px; opacity:.8;"></div>
         <div id="mbInsightsGuestTable" style="margin-top:10px;"></div>
@@ -2876,7 +2866,6 @@ async function loadManagerInsights() {
   ensureInsightsShell();
 
   const msgEl = document.getElementById("mbInsightsMsg");
-  const whyEl = document.getElementById("mbInsightsDrillWhy");
   const guestEl = document.getElementById("mbInsightsGuestTable");
   const trendEl = document.getElementById("mbInsightsTrendTable");
   const legendEl = document.getElementById("mbInsightsLegend");
@@ -2956,8 +2945,6 @@ async function loadManagerInsights() {
   }
 
   plans.sort((a, b) => (b.guestRows.length - a.guestRows.length));
-
-  if (whyEl) whyEl.textContent = plans[0]?.plan?.why || "";
 
   if (guestEl) {
     guestEl.innerHTML = renderGuestInsightsTable(rows, nameMap);
