@@ -316,11 +316,10 @@ document.querySelector("#app").innerHTML = `
       </div>
 
       <div id="mbMenu" class="card" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-        <button class="btn" type="button" data-mbtab="menu">Menu</button>
         <button class="btn" type="button" data-mbtab="overview">Overview</button>
         <button class="btn" type="button" data-mbtab="staff">Staff</button>
         <button class="btn" type="button" data-mbtab="insights">Insights</button>
-        <button class="btn" type="button" data-mbtab="billing">Billing</button>
+        <button class="btn" type="button" data-mbtab="billing">Listing</button>
         <button class="btn" type="button" data-mbtab="provision">Provision</button>
       </div>
 
@@ -350,15 +349,6 @@ document.querySelector("#app").innerHTML = `
 
         <div id="mbTab_staff" class="mbTab hidden"></div>
         <div id="mbTab_insights" class="mbTab hidden"></div>
-        <div id="mbTab_menu" class="mbTab hidden">
-          <div class="card" style="margin-top:12px;">
-            <strong>Manager Setup</strong>
-            <div class="small-text" style="margin-top:6px;">
-              Create group manager access or enterprise access.
-            </div>
-            <div id="mbMenuSetupHost" style="margin-top:10px;"></div>
-          </div>
-        </div>
 
         <div id="mbTab_billing" class="mbTab hidden">
           <div id="mbBillingAccess" class="card" style="margin-top:12px;">
@@ -2298,14 +2288,8 @@ function wireManagerBoardMenu() {
 
     if (tab === "overview") await loadManagerBoardData();
     if (tab === "billing") await loadManagerBoardSeats?.();
-    // ✅ Setup lives under Menu now
-    if (tab === "menu") {
-      wireGroupSetupRedeem?.();
-      wireManagerBoardBillingAccess?.();
-    }
-    // ✅ Provision reserved for later gifts (do nothing for now)
     if (tab === "provision") {
-      // intentionally blank
+      // reserved for later gifts
     }
     if (tab === "insights") await loadManagerInsights();
   });
@@ -2360,9 +2344,6 @@ function applyManagerBoardVisibility() {
 
   const provisionBtn = document.querySelector('#mbMenu [data-mbtab="provision"]');
   if (provisionBtn) provisionBtn.style.display = "none";
-
-  const menuBtn = document.querySelector('#mbMenu [data-mbtab="menu"]');
-  if (menuBtn) menuBtn.style.display = "";
 }
 
 async function mapUserIdsToNames(userIds) {
