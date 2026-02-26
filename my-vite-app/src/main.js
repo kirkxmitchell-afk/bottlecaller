@@ -708,19 +708,12 @@ window.getActiveRestaurantId =
   window.getActiveRestaurantId ||
   function getActiveRestaurantId() {
     const S = window.appState;
-    const scopeType = String(S?.profile?.scope_type || "").toLowerCase();
-
-    // Group/enterprise: active restaurant is stored per-scope
-    if (scopeType === "group" || scopeType === "enterprise") {
-      return (
-        S?.activeRestaurantId ||
-        getStoredActiveRestaurantId() ||
-        null
-      );
-    }
-
-    // Restaurant scope: lock to profile.restaurant_id
-    return S?.profile?.restaurant_id || null;
+    return (
+      S?.activeRestaurantId ||
+      getStoredActiveRestaurantId?.() ||
+      S?.profile?.restaurant_id ||
+      null
+    );
   };
 
 // --- Fetch allowed restaurants for current scope ---
@@ -1041,51 +1034,16 @@ async function buildBcCtxSafe(requestedMode = null) {
   const S = window.appState;
   const userId = S?.session?.user?.id ?? null;
   const profile = S?.profile ?? null;
-
   if (!userId || !profile?.role) return null;
 
-  let restaurantId = window.getActiveRestaurantId?.() ?? null;
+  const restaurantId = window.getActiveRestaurantId?.() ?? null;
   if (!restaurantId) return null;
-
-  const allowed = await assertRestaurantAllowedForCtx(profile, restaurantId);
-
-  if (!allowed.ok) {
-    console.warn("[CTX] restaurant not allowed", { restaurantId, allowed });
-
-    const role = String(profile?.role || "").toLowerCase();
-    const st = String(profile?.scope_type || "").toLowerCase();
-    const scopeId = profile?.scope_id || null;
-
-    if (role === "manager" && (st === "group" || st === "enterprise") && scopeId) {
-      try {
-        const fallback = await getFirstAllowedRestaurantForScope(scopeId);
-        if (fallback && fallback !== restaurantId) {
-          console.warn("[CTX] auto-heal -> switching active restaurant", fallback);
-          await setActiveRestaurantForGroup(fallback);
-          restaurantId = fallback;
-
-          const allowed2 = await assertRestaurantAllowedForCtx(profile, restaurantId);
-          if (!allowed2.ok) return null;
-        } else {
-          return null;
-        }
-      } catch (e) {
-        console.warn("[CTX] auto-heal failed", e);
-        return null;
-      }
-    } else {
-      return null;
-    }
-  }
-
-  const scopeId = profile?.scope_id ?? null;
-  const role = profile?.role ?? null;
 
   return {
     userId,
     restaurantId,
-    scopeId,
-    role,
+    scopeId: profile?.scope_id ?? null,
+    role: profile?.role ?? null,
     mode: requestedMode ?? null,
     drill: window.__BC_DRILL_CONFIG__ || window.BC_DRILL_CONFIG || null,
   };
@@ -1135,6 +1093,10 @@ if (!window.__BC_PARENT_BRIDGE__) {
       p.source?.postMessage({ source: "BC_MSG", v: 1, type: "bc_ctx", ...bcCtx }, p.origin);
       console.log("[PARENT] flushPendingCtx -> sent ✅", bcCtx);
       window.__BC_PENDING_CTX_REQ__ = null;
+      if (window.__BC_CTX_FLUSH_TICK__) {
+        clearInterval(window.__BC_CTX_FLUSH_TICK__);
+        window.__BC_CTX_FLUSH_TICK__ = null;
+      }
     } catch (e) {
       console.warn("[PARENT] flushPendingCtx failed", e);
     }
@@ -1943,6 +1905,13 @@ function setAuthIntent(next) {
 function openHud() {
   document.getElementById("hudBackdrop").classList.remove("hidden");
   document.getElementById("hudPanel").classList.remove("hidden");
+  mountManagerSetupIntoHud?.();
+  moveRestaurantPickerIntoHud?.();
+  if (!openHud.__loadedPickerOnce) {
+    openHud.__loadedPickerOnce = true;
+    loadRestaurantsForHudPicker?.();
+  }
+  renderHud();
 }
 function closeHud() {
   document.getElementById("hudBackdrop").classList.add("hidden");
@@ -2392,12 +2361,18 @@ function moveRestaurantPickerIntoHud() {
 }
 
 async function loadRestaurantsForHudPicker() {
+  if (loadRestaurantsForHudPicker.__inflight) return;
+  if (loadRestaurantsForHudPicker.__loadedOnce) return;
+  loadRestaurantsForHudPicker.__inflight = true;
   const sel = document.getElementById("selActiveRestaurant");
   const btn = document.getElementById("btnSetActiveRestaurant");
   const hint = document.getElementById("activeRestaurantHint");
   const msg = document.getElementById("hudRestaurantPickerMsg");
 
-  if (!sel || !btn) return;
+  if (!sel || !btn) {
+    loadRestaurantsForHudPicker.__inflight = false;
+    return;
+  }
 
   sel.innerHTML = "";
   if (hint) hint.textContent = "Loading…";
@@ -2411,12 +2386,14 @@ async function loadRestaurantsForHudPicker() {
   if (res.error) {
     if (hint) hint.textContent = "⚠️ Failed to load restaurants.";
     console.warn("[BC] restaurants load failed", res.error);
+    loadRestaurantsForHudPicker.__inflight = false;
     return;
   }
 
   const rows = res.data || [];
   if (!rows.length) {
     if (hint) hint.textContent = "No restaurants found.";
+    loadRestaurantsForHudPicker.__inflight = false;
     return;
   }
 
@@ -2462,6 +2439,8 @@ async function loadRestaurantsForHudPicker() {
   await applyRestaurant(current);
 
   btn.onclick = () => applyRestaurant(sel.value);
+  loadRestaurantsForHudPicker.__loadedOnce = true;
+  loadRestaurantsForHudPicker.__inflight = false;
 }
 
 function applyManagerBoardVisibility() {
@@ -4027,10 +4006,7 @@ function renderHud() {
   document.getElementById("hudRequireInvite").textContent = r ? (r.require_invite ? "Yes" : "No") : "-";
 
   const mgrBtn = document.getElementById("btnManagerBoard");
-  if (mgrBtn) {
-    if (role === "manager") mgrBtn.classList.remove("hidden");
-    else mgrBtn.classList.add("hidden");
-  }
+  if (mgrBtn) mgrBtn.classList.toggle("hidden", role !== "manager");
 
   const badge = document.getElementById("premiumBadge");
   if (badge) badge.textContent = `PREMIUM • ${String(role).toUpperCase()}`;
@@ -4039,15 +4015,10 @@ function renderHud() {
   const joinRow = document.getElementById("hudJoinRow");
   const copyRow = document.getElementById("hudCopyRow");
 
-  if (role === "manager") {
-    managerBlock.classList.remove("hidden");
-    joinRow.classList.remove("hidden");
-    copyRow.classList.remove("hidden");
-  } else {
-    managerBlock.classList.add("hidden");
-    joinRow.classList.add("hidden");
-    copyRow.classList.add("hidden");
-  }
+  const isMgr = role === "manager";
+  managerBlock?.classList.toggle("hidden", !isMgr);
+  joinRow?.classList.toggle("hidden", !isMgr);
+  copyRow?.classList.toggle("hidden", !isMgr);
 
   const toggle = document.getElementById("toggleRequireInvite");
   if (toggle && r) toggle.checked = !!r.require_invite;
@@ -4056,9 +4027,6 @@ function renderHud() {
   if (seatInput && r) seatInput.value = String(r.seat_limit ?? "");
 
   renderInvitesList();
-  mountManagerSetupIntoHud();
-  moveRestaurantPickerIntoHud();
-  loadRestaurantsForHudPicker();
 }
 
 // ------------------------------------------------------------
@@ -4405,7 +4373,6 @@ document.getElementById("btnEnterPremium").addEventListener("click", () => decid
 document.getElementById("btnLogoutPremium").addEventListener("click", () => logoutAll("premium.logout"));
 wireManagerBoardButton();
 document.getElementById("btnOpenHud").addEventListener("click", () => {
-  renderHud();
   openHud();
 });
 
