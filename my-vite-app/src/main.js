@@ -1224,11 +1224,22 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
       if (msg.type === "nav_back" || msg.type === "nav") {
         if (shouldIgnoreDuplicateNav(msg)) return;
-        const dest =
-          msg.type === "nav_back"
-            ? (msg.backTo || msg.to || "screenPremiumApp")
-            : (msg.to || msg.target || msg.backTo || "screenHome");
         const roleNow = String(appState?.profile?.role || "").toLowerCase();
+        if (msg.type === "nav_back") {
+          const to = msg.backTo || msg.to || "screenPremiumApp";
+          console.log("[PARENT] NAV_BACK ->", to, msg);
+
+          setPremiumOverlayActive(to === "screenPlay" || to === "screenPremiumApp");
+          showScreen(to);
+
+          if (to === "screenManagerBoard") {
+            wireManagerBoardMenu?.();
+            if (msg.mbTab) window.__BC_MB_SHOWTAB__?.(msg.mbTab);
+            if (msg.mbTab === "insights") await loadManagerInsights();
+          }
+          return;
+        }
+        const dest = msg.to || msg.target || msg.backTo || "screenHome";
         console.log("[PARENT] NAV ->", dest, msg);
 
         if (msg.type === "nav" && msg.to === "screenManagerBoard") {
@@ -2989,6 +3000,7 @@ async function loadManagerInsights() {
   }
 
   const DRILL_POOL_T1 = ["decider", "bargain_smart", "griever"];
+  const sinceIso = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
 
   const baseRes = await supabase
     .from("bc_encounter_resolutions_v2")
@@ -3012,6 +3024,7 @@ async function loadManagerInsights() {
       "session_id",
     ].join(","))
     .eq("restaurant_id", restaurantId)
+    .gte("occurred_at", sinceIso)
     .order("occurred_at", { ascending: false })
     .limit(2000);
 
@@ -3021,6 +3034,8 @@ async function loadManagerInsights() {
   }
 
   const rows = baseRes.data || [];
+  const resolves = rows.length;
+  const users = new Set(rows.map((r) => r?.user_id).filter(Boolean)).size;
 
   const byUser = new Map();
   for (const r of rows) {
@@ -3091,7 +3106,7 @@ async function loadManagerInsights() {
     });
   }
 
-  if (msgEl) msgEl.textContent = `✅ Loaded • ${rows.length} resolves • ${plans.length} user(s)`;
+  if (msgEl) msgEl.textContent = `✅ Loaded • ${resolves} resolves • ${users} user(s)`;
 }
 
 async function loadGroupRestaurantsForPicker() {

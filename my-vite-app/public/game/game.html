@@ -8035,16 +8035,16 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           exitDrillState();
           resetNavState();
 
-          if (isWaiterNow) {
-            showScreen("screenHome");
+          if (window.parent) {
+            const backTo = isWaiterNow ? "screenPremiumApp" : "screenManagerBoard";
+            window.parent.postMessage(
+              { source: "BC_MSG", v: 1, type: "nav_back", backTo, mbTab: "insights" },
+              window.location.origin
+            );
             return;
           }
 
-          const backTo = getBackToParam() || "screenManagerBoard";
-          window.parent?.postMessage(
-            { source: "BC_MSG", v: 1, type: "nav_back", backTo },
-            window.location.origin
-          );
+          showScreen("screenHome");
         };
 
         hardRebindButton("btnBackToPremium", bindBack);
