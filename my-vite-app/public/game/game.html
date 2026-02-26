@@ -7998,42 +7998,54 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
       function exitDrillState() {
         sessionType = null;
-        try { drillRepDone = 0; } catch {}
         try { window.__BC_DRILL_ACTIVE__ = false; } catch {}
         try { clearInterval(window.__BC_DRILL_TICK__); window.__BC_DRILL_TICK__ = null; } catch {}
         try { clearTimeout(window.__BC_DRILL_TIMEOUT__); window.__BC_DRILL_TIMEOUT__ = null; } catch {}
-        try { DRILL = null; } catch {}
         document.getElementById("hudPanel")?.classList.add("hidden");
       }
 
-      function wireDrillBack() {
-        ["btnBackToPremium", "btnExitDrill", "btnBackHomeFromDrillSummary"].forEach((id) => {
-          const btn = document.getElementById(id);
-          if (!btn) return;
+      function hardRebindButton(id, onClick) {
+        const btn = document.getElementById(id);
+        if (!btn || !btn.parentNode) return null;
 
-          btn.onclick = null;
-          btn.__bcBound = false;
+        const clone = btn.cloneNode(true);
+        btn.parentNode.replaceChild(clone, btn);
 
-          bindInput(btn, () => {
-            const roleNow = String(window.__BC_CTX__?.role || "").toLowerCase();
-            const isWaiterNow = roleNow === "waiter";
-            const backTo = getBackToParam();
-            exitDrillState();
-            resetNavState();
-            if (isWaiterNow) {
-              showScreen("screenHome");
-              return;
-            }
-            if (window.parent && backTo) {
-              window.parent.postMessage(
-                { source: "BC_MSG", v: 1, type: "nav_back", backTo },
-                window.location.origin
-              );
-              return;
-            }
+        clone.onclick = null;
+        clone.__bcBound = false;
+        bindInput(clone, onClick);
+        return clone;
+      }
+
+      function wireDrillBack_FIXED() {
+        const bindBack = () => {
+          const roleNow = String(window.__BC_CTX__?.role || "").toLowerCase();
+          const isWaiterNow = roleNow === "waiter";
+
+          console.log("[DRILL_BACK] clicked", { role: roleNow, sessionType });
+
+          exitDrillState();
+          resetNavState();
+
+          if (isWaiterNow) {
             showScreen("screenHome");
-          });
-        });
+            return;
+          }
+
+          const backTo = getBackToParam() || "screenManagerBoard";
+          window.parent?.postMessage(
+            { source: "BC_MSG", v: 1, type: "nav_back", backTo },
+            window.location.origin
+          );
+        };
+
+        hardRebindButton("btnBackToPremium", bindBack);
+        hardRebindButton("btnExitDrill", bindBack);
+        hardRebindButton("btnBackHomeFromDrillSummary", bindBack);
+      }
+
+      function wireDrillBack() {
+        wireDrillBack_FIXED();
       }
 
       function resetWinesOnly() {
@@ -8275,17 +8287,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           startDrill(3);
         });
 
-        bindInput(btnBackHomeFromDrillSummary, () => {
-          sessionType = null;
-          resetNavState();
-          showScreen(isDemo ? "screenHome" : "screenWelcome");
-        });
-
-        bindInput(btnExitDrill, () => {
-          DRILL = null;
-          sessionType = null;
-          showScreen("screenHome");
-        });
+        // Drill back/exit is hard-bound by wireDrillBack_FIXED().
 
         bindInput(btnStartAnotherDrill, () => {
           startDrill(3);
