@@ -468,7 +468,8 @@ document.querySelector("#app").innerHTML = `
     style="
       position:fixed; right: 12px; top: 12px;
       width: min(520px, 92vw);
-      z-index: 99999;
+      z-index: 2147483000;
+      pointer-events: auto;
       background: #0b0d0f; color: #fff;
       border-radius: 14px;
       padding: 12px;
@@ -1208,6 +1209,12 @@ if (!window.__BC_PARENT_BRIDGE__) {
           showScreen(msg.target);
           return;
         }
+      }
+      if (msg.type === "nav" && msg.to === "screenManagerBoard") {
+        showScreen("screenManagerBoard");
+        wireManagerBoardMenu?.();
+        if (msg.mbTab) window.__BC_MB_SHOWTAB__?.(msg.mbTab);
+        return;
       }
 
       if (msg.type === "drill_pick") {
@@ -2291,6 +2298,7 @@ function wireManagerBoardMenu() {
     document.querySelectorAll("#mbPanels .mbTab").forEach((el) => el.classList.add("hidden"));
     document.getElementById(`mbTab_${name}`)?.classList.remove("hidden");
   }
+  window.__BC_MB_SHOWTAB__ = showTab;
 
   menu.addEventListener("click", async (e) => {
     const btn = e.target?.closest?.("[data-mbtab]");
@@ -3039,6 +3047,9 @@ function mountPremiumGameIframe({ showBack = false, backTo = "screenManagerBoard
   iframe.style.width = "100%";
   iframe.style.height = "78vh";
   iframe.style.border = "0";
+  iframe.style.position = "relative";
+  iframe.style.zIndex = "1";
+  iframe.style.pointerEvents = "auto";
 
   iframe.addEventListener("load", () => {
     pushPremiumCtxAndDrill();
