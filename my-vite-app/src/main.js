@@ -339,7 +339,6 @@ document.querySelector("#app").innerHTML = `
         <button class="btn" type="button" data-mbtab="staff">Staff</button>
         <button class="btn" type="button" data-mbtab="insights">Insights</button>
         <button class="btn" type="button" data-mbtab="billing">Listing</button>
-        <button class="btn" type="button" data-mbtab="provision">Provision</button>
       </div>
 
       <div id="mbPanels">
@@ -389,35 +388,6 @@ document.querySelector("#app").innerHTML = `
           </div>
         </div>
 
-        <div id="mbTab_provision" class="mbTab hidden">
-          <div class="card" style="margin-top:12px;">
-            <strong>Group Manager Signup</strong>
-            <div class="small-text" style="margin-top:6px;">
-              Paste a GROUP manager_setup code to create/upgrade a manager scope for multi-restaurant control.
-            </div>
-
-            <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
-              <input id="mbGroupSetupCode" type="text" placeholder="GROUP_XXXXX" style="flex:1; min-width:220px;" />
-              <button id="mbRedeemGroupSetup" class="btn-primary" type="button">Redeem</button>
-            </div>
-
-            <div id="mbGroupSetupMsg" class="small-text" style="margin-top:8px;"></div>
-          </div>
-
-          <div id="mbProvisionAccess" class="card" style="margin-top:12px;">
-            <strong>Enterprise Signup</strong>
-            <div class="small-text" style="margin-top:6px;">
-              Paste an Enterprise manager_setup code to upgrade this manager scope.
-            </div>
-
-            <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
-              <input id="mbEnterpriseCode" type="text" placeholder="ENTERPRISE_XXXXX" style="flex:1; min-width:220px;" />
-              <button id="mbRedeemEnterprise" class="btn-primary" type="button">Redeem</button>
-            </div>
-
-            <div id="mbEnterpriseMsg" class="small-text" style="margin-top:8px;"></div>
-          </div>
-        </div>
       </div>
 
       <div id="mbMsg" class="small"></div>
@@ -531,14 +501,48 @@ document.querySelector("#app").innerHTML = `
       <div class="small-text" style="margin-top:6px; opacity:.9;">
         Redeem Group / Enterprise manager_setup codes.
       </div>
-      <div id="hudManagerSetupHost" style="margin-top:10px;"></div>
+      <div class="card" style="margin-top:10px;">
+        <strong>Group Manager Signup</strong>
+        <div class="small-text" style="margin-top:6px;">
+          Paste a GROUP manager_setup code to create/upgrade a manager scope for multi-restaurant control.
+        </div>
+
+        <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+          <input id="mbGroupSetupCode" type="text" placeholder="GROUP_XXXXX" style="flex:1; min-width:220px;" />
+          <button id="mbRedeemGroupSetup" class="btn-primary" type="button">Redeem</button>
+        </div>
+
+        <div id="mbGroupSetupMsg" class="small-text" style="margin-top:8px;"></div>
+      </div>
+
+      <div id="mbProvisionAccess" class="card" style="margin-top:12px;">
+        <strong>Enterprise Signup</strong>
+        <div class="small-text" style="margin-top:6px;">
+          Paste an Enterprise manager_setup code to upgrade this manager scope.
+        </div>
+
+        <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+          <input id="mbEnterpriseCode" type="text" placeholder="ENTERPRISE_XXXXX" style="flex:1; min-width:220px;" />
+          <button id="mbRedeemEnterprise" class="btn-primary" type="button">Redeem</button>
+        </div>
+
+        <div id="mbEnterpriseMsg" class="small-text" style="margin-top:8px;"></div>
+      </div>
 
       <hr style="opacity:.25; margin:12px 0;" />
-      <h3 style="margin:0;">Active restaurant</h3>
-      <div class="small-text" style="margin-top:6px; opacity:.9;">
-        Switch which restaurant you’re managing right now.
+      <div id="premiumActiveRestaurantCard" class="card" style="margin-top:12px;">
+        <strong>Active Restaurant</strong>
+        <div class="small-text" style="margin-top:6px;">
+          Switch which restaurant you’re managing right now.
+        </div>
+
+        <div style="display:flex; gap:8px; margin-top:10px; align-items:center;">
+          <select id="selActiveRestaurant" class="input" style="flex:1;"></select>
+          <button id="btnSetActiveRestaurant" class="btn" type="button">Set</button>
+        </div>
+
+        <div id="activeRestaurantHint" class="small-text" style="margin-top:8px;"></div>
       </div>
-      <div id="hudRestaurantPickerHost" style="margin-top:10px;"></div>
       <div id="hudRestaurantPickerMsg" class="small-text" style="margin-top:8px;"></div>
 
       <hr style="opacity:.25; margin:12px 0;" />
@@ -1980,12 +1984,10 @@ function setAuthIntent(next) {
 // ------------------------------------------------------------
 function openHud() {
   setHudOpen(true);
-  mountManagerSetupIntoHud?.();
-  moveRestaurantPickerIntoHud?.();
-  if (!openHud.__loadedPickerOnce) {
-    openHud.__loadedPickerOnce = true;
-    loadRestaurantsForHudPicker?.();
-  }
+  wireGroupSetupRedeem?.();
+  wireManagerBoardBillingAccess?.();
+  loadGroupRestaurantsForPicker?.();
+  wireActiveRestaurantPicker?.();
   renderHud();
 }
 function closeHud() {
@@ -2414,57 +2416,11 @@ function wireManagerBoardMenu() {
     showTab(tab);
 
     if (tab === "overview") await loadManagerBoardData();
-    if (tab === "billing") await loadManagerBoardSeats?.();
-    if (tab === "provision") {
-      // reserved for later gifts
-    }
+    if (tab === "listing" || tab === "billing") await loadManagerBoardSeats?.();
     if (tab === "insights") await loadManagerInsights();
   });
 
   showTab("overview");
-}
-
-function moveSignupCardsIntoMenuPanel() {
-  const provisionTab = document.getElementById("mbTab_provision");
-  const menuHost = document.getElementById("mbMenuSetupHost");
-
-  if (!provisionTab || !menuHost) return;
-
-  // ✅ Group card is the first .card inside provision tab
-  const groupCard = provisionTab.querySelector(".card");
-  // ✅ Enterprise card has a stable id
-  const enterpriseCard = document.getElementById("mbProvisionAccess");
-
-  if (groupCard) menuHost.appendChild(groupCard);
-  if (enterpriseCard) menuHost.appendChild(enterpriseCard);
-
-  console.log("[BC] Signup cards moved to Menu ✅");
-}
-
-function mountManagerSetupIntoHud() {
-  const host = document.getElementById("hudManagerSetupHost");
-  const provisionTab = document.getElementById("mbTab_provision"); // where the cards currently live
-  if (!host || !provisionTab) return;
-
-  // Move Group Manager card (first card in provision tab)
-  const groupCard = provisionTab.querySelector(".card");
-  // Move Enterprise card (stable id)
-  const enterpriseCard = document.getElementById("mbProvisionAccess");
-
-  if (groupCard) host.appendChild(groupCard);
-  if (enterpriseCard) host.appendChild(enterpriseCard);
-
-  // Wire existing handlers (id-based so they still work)
-  wireGroupSetupRedeem?.();
-  wireManagerBoardBillingAccess?.();
-}
-
-function moveRestaurantPickerIntoHud() {
-  const picker = document.getElementById("groupRestaurantPicker");
-  const host = document.getElementById("hudRestaurantPickerHost");
-  if (!picker || !host) return;
-  host.appendChild(picker);
-  picker.style.display = "block";
 }
 
 async function loadRestaurantsForHudPicker() {
@@ -2544,18 +2500,24 @@ async function loadRestaurantsForHudPicker() {
 
 function applyManagerBoardVisibility() {
   const p = appState.profile || {};
-  const scopeType = String(p.scope_type || "").toLowerCase();
-
-  const provisionBtn = document.querySelector('#mbMenu [data-mbtab="provision"]');
-  if (provisionBtn) {
-    provisionBtn.style.display =
-      (scopeType === "group" || scopeType === "enterprise") ? "" : "none";
-  }
-
+  
   const listingBtn = document.querySelector('#mbMenu [data-mbtab="listing"]');
   if (listingBtn) listingBtn.style.display = "";
   const billingBtn = document.querySelector('#mbMenu [data-mbtab="billing"]');
   if (billingBtn) billingBtn.style.display = "";
+}
+
+function wireActiveRestaurantPicker() {
+  const btn = document.getElementById("btnSetActiveRestaurant");
+  if (!btn || btn.__wired) return;
+  btn.__wired = true;
+
+  btn.addEventListener("click", async () => {
+    const sel = document.getElementById("selActiveRestaurant");
+    const rid = sel?.value || null;
+    if (!rid) return;
+    await setActiveRestaurantForGroup(rid);
+  });
 }
 
 async function mapUserIdsToNames(userIds) {
@@ -3015,12 +2977,7 @@ async function loadManagerInsights() {
 async function loadGroupRestaurantsForPicker() {
   const sel = document.getElementById("selActiveRestaurant");
   const hint = document.getElementById("activeRestaurantHint");
-  const card = document.getElementById("groupRestaurantPicker");
-  const btn = document.getElementById("btnSetActiveRestaurant");
-  if (!sel || !card) return;
-
-  // ✅ Always allow picker for manager UI (no scope gating)
-  card.style.display = "";
+  if (!sel) return;
 
   sel.innerHTML = "";
   if (hint) hint.textContent = "Loading restaurants…";
@@ -3057,36 +3014,12 @@ async function loadGroupRestaurantsForPicker() {
 
   const active = appState.activeRestaurantId || stored || rows[0].id;
   sel.value = active;
-
-  async function setActiveRestaurant(id) {
-    appState.activeRestaurantId = id;
-    localStorage.setItem("BC_ACTIVE_RESTAURANT_ID", id);
-    const full = rows.find(x => x.id === id) || null;
-    if (full) appState.restaurant = full;
-    markActiveRestaurantReady();
-
-    if (hint) {
-      const name = rows.find(x => x.id === id)?.name;
-      hint.textContent = `✅ Active: ${name || String(id).slice(0, 8) + "…"}`;
-    }
-
-    // ✅ hard refresh the manager board data
-    if (typeof refreshManagerBoardForRestaurant === "function") {
-      await refreshManagerBoardForRestaurant(id);
-    } else if (typeof routeManagerBoard === "function") {
-      // fallback: re-enter screen (keeps your current plumbing)
-      routeManagerBoard();
-    } else {
-      console.warn("[BC] No refresh hook found. Active restaurant set only.", id);
-    }
-  }
-
-  // hydrate active immediately
-  await setActiveRestaurant(active);
-
-  if (btn) {
-    btn.onclick = () => setActiveRestaurant(sel.value);
-  }
+  appState.activeRestaurantId = active;
+  localStorage.setItem("BC_ACTIVE_RESTAURANT_ID", active);
+  const activeRow = rows.find((x) => x.id === active) || null;
+  if (activeRow && !appState.restaurant) appState.restaurant = activeRow;
+  markActiveRestaurantReady();
+  if (hint) hint.textContent = `✅ Active: ${activeRow?.name || String(active).slice(0, 8) + "…"}`;
 
   console.log("[BC] picker hydrated (no scope)", { active });
 }
