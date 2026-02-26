@@ -4775,6 +4775,20 @@ function ensureProgLoaded() {
         return getWineCount() >= LIMIT;
       }
 
+      async function waitForCtxAndWines(timeoutMs = 800) {
+        const t0 = Date.now();
+        while (Date.now() - t0 < timeoutMs) {
+          const rid = restaurantId || window.__BC_CTX__?.restaurantId || null;
+          const wc = (typeof getWineCount === "function") ? getWineCount() : null;
+          if (rid && typeof wc === "number") return { rid, wc };
+          await new Promise((r) => setTimeout(r, 50));
+        }
+        return {
+          rid: restaurantId || window.__BC_CTX__?.restaurantId || null,
+          wc: (typeof getWineCount === "function") ? getWineCount() : null,
+        };
+      }
+
       async function isUnlockedAsync() {
         await ensureWinesLoadedReadOnly();
         return getWineCount() >= LIMIT;
@@ -7524,6 +7538,9 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           PROG_meta: window.PROG?.meta || null
         });
 
+        const { rid, wc } = await waitForCtxAndWines(1000);
+        console.log("[START] ctx/wines gate", { rid, wc, LIMIT, role, sessionType });
+
         const unlocked = isUnlocked();
         console.log(
           `[UNLOCK] role=${isManager ? "manager" : (isWaiter ? "waiter" : "?")}` +
@@ -7533,7 +7550,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           ` sessionType=${sessionType || "null"}`
         );
         if (sessionType !== "drill" && !unlocked) {
-          console.warn("[UNLOCK] BLOCKED (needs wines)");
+          console.warn("[UNLOCK] BLOCKED (needs wines)", { rid, wc, LIMIT });
           return;
         }
 
