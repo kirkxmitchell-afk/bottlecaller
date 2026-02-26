@@ -1340,51 +1340,62 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
       if (eventType === "encounter_resolved") {
         const p = payload || {};
+        const nowIso = new Date().toISOString();
+        const evId = String(p.eventId || payload?.eventId || crypto.randomUUID());
 
-        const normGuest = (x) => {
-          try { return normalizeGuestType(x); }
-          catch { return String(x || "unknown").trim().toLowerCase().replace(/[\s-]+/g, "_"); }
-        };
-
-        const resolvedRow = {
-          restaurant_id: restaurantId,
+        const resRow = {
+          event_id: evId,
           user_id: userId,
-          occurred_at: p.occurredAt || new Date().toISOString(),
-          actual_guest_type_norm: normGuest(
-            p.actualGuestTypeNorm ||
-            p.actual_guest_type_norm ||
-            p.guestType ||
-            p.guest_type ||
-            p?.actual?.guestType
-          ),
-          chain_score: Number(p.chainScore ?? p.chain_score ?? 0),
-          is_green: !!(p.isGreen ?? p.is_green),
-          is_red: !!(p.isRed ?? p.is_red),
-          read_correct: !!(p.readCorrect ?? p.read_correct ?? p?.checks?.readCorrect),
-          delivery_correct: !!(p.deliveryCorrect ?? p.delivery_correct ?? p?.checks?.deliveryCorrect),
-          mode_optimal: !!(p.modeOptimal ?? p.mode_optimal),
-          hook_optimal: !!(p.hookOptimal ?? p.hook_optimal),
-          mode_status: p.modeStatus ?? p.mode_status ?? p?.checks?.modeStatus ?? null,
-          hook_status: p.hookStatus ?? p.hook_status ?? p?.checks?.hookStatus ?? null,
+          restaurant_id: restaurantId,
+          occurred_at: p.occurredAt || p.occurred_at || nowIso,
+
+          v: p.v ?? 1,
+          mode: p.mode ?? p.bcMode ?? null,
+          session_id: p.sessionId ?? p.session_id ?? null,
+          seq: p.seq ?? null,
+
+          encounter_id: p.encounterId ?? p.encounter_id ?? null,
+          encounter_number: p.encounterNumber ?? p.encounter_number ?? null,
+          tier: p.tier ?? null,
+
+          chain_score: p.chainScore ?? p.chain_score ?? null,
           chain_signal: p.chainSignal ?? p.chain_signal ?? null,
           performance_grade: p.performanceGrade ?? p.performance_grade ?? null,
-          tier: Number.isFinite(p.tier) ? p.tier : (Number(p.tier ?? 0) || 0),
-          encounter_number: Number(p.encounterNumber ?? p.encounter_number ?? 0) || 0,
-          session_id: p.sessionId ?? p.session_id ?? null,
+          final_difficulty: p.finalDifficulty ?? p.final_difficulty ?? null,
+
+          chosen_guest_type: p.chosenGuestType ?? p.chosen_guest_type ?? null,
+          chosen_mode: p.chosenMode ?? p.chosen_mode ?? null,
+          chosen_hook: p.chosenHook ?? p.chosen_hook ?? null,
+          actual_guest_type: p.actualGuestType ?? p.actual_guest_type ?? null,
+
+          chosen_guest_type_norm: p.chosenGuestTypeNorm ?? p.chosen_guest_type_norm ?? null,
+          actual_guest_type_norm: p.actualGuestTypeNorm ?? p.actual_guest_type_norm ?? null,
+
+          pivot_type: p.pivotType ?? p.pivot_type ?? null,
+          pivot_taken: p.pivotTaken ?? p.pivot_taken ?? null,
+          pivot_success: p.pivotSuccess ?? p.pivot_success ?? null,
+
+          read_correct: p.readCorrect ?? p.read_correct ?? null,
+          delivery_correct: p.deliveryCorrect ?? p.delivery_correct ?? null,
+
+          mode_status: p.modeStatus ?? p.mode_status ?? null,
+          hook_status: p.hookStatus ?? p.hook_status ?? null,
+
+          is_green: p.isGreen ?? p.is_green ?? null,
+          is_red: p.isRed ?? p.is_red ?? null,
+
+          mode_optimal: p.modeOptimal ?? p.mode_optimal ?? null,
+          hook_optimal: p.hookOptimal ?? p.hook_optimal ?? null,
         };
 
-        if (p.encounterId) resolvedRow.encounter_id = p.encounterId;
-
-        console.log("[BC] upserting bc_encounter_resolutions_v2 ✅", resolvedRow);
-
-        const ins2 = await supabase
+        const up = await supabase
           .from("bc_encounter_resolutions_v2")
-          .upsert(resolvedRow, {
-            onConflict: resolvedRow.encounter_id ? "encounter_id" : "session_id,encounter_number",
-          });
+          .upsert(resRow, { onConflict: "event_id" });
 
-        if (ins2.error) {
-          console.warn("[BC] bc_encounter_resolutions_v2 upsert failed ❌", ins2.error);
+        if (up.error) {
+          console.warn("[BC] encounter_resolutions upsert failed", up.error);
+        } else {
+          console.log("[BC] encounter_resolutions upsert ✅", { event_id: evId, userId, restaurantId });
         }
       }
 
