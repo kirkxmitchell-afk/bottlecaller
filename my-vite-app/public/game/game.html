@@ -39,7 +39,7 @@
         const params = new URLSearchParams(location.search);
         const showBack = params.get("showBack") === "1";
         if (!showBack) return;
-        const backTo = getBackToParam() || "screenManagerBoard";
+        const backTo = getBackToParam() || "screenHome";
 
         const btn = document.createElement("button");
         btn.type = "button";
@@ -8030,7 +8030,6 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
       function wireDrillBack_FIXED() {
         const bindBack = () => {
           const roleNow = String(window.__BC_CTX__?.role || "").toLowerCase();
-          const isWaiterNow = roleNow === "waiter";
 
           console.log("[DRILL_BACK] clicked", { role: roleNow, sessionType });
 
@@ -8038,9 +8037,9 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           resetNavState();
 
           if (window.parent) {
-            const backTo = isWaiterNow ? "screenPremiumApp" : "screenManagerBoard";
+            const backTo = getBackToParam() || "screenHome";
             window.parent.postMessage(
-              { source: "BC_MSG", v: 1, type: "nav_back", backTo, mbTab: "insights" },
+              { source: "BC_MSG", v: 1, type: "nav_back", backTo },
               window.location.origin
             );
             return;

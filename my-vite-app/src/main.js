@@ -1232,12 +1232,6 @@ if (!window.__BC_PARENT_BRIDGE__) {
           try { destroyPremiumIframe("nav_back"); } catch {}
           try { setPremiumOverlayActive(false); } catch {}
           showScreen(to);
-
-          if (to === "screenManagerBoard") {
-            wireManagerBoardMenu?.();
-            if (msg.mbTab) window.__BC_MB_SHOWTAB__?.(msg.mbTab);
-            if (msg.mbTab === "insights") await loadManagerInsights();
-          }
           return;
         }
         const dest = msg.to || msg.target || msg.backTo || "screenHome";
@@ -3037,6 +3031,11 @@ async function loadManagerInsights() {
   const rows = baseRes.data || [];
   const resolves = rows.length;
   const users = new Set(rows.map((r) => r?.user_id).filter(Boolean)).size;
+  console.log("[MB] insights query stats", {
+    restaurantId,
+    resolves,
+    users,
+  });
 
   const byUser = new Map();
   for (const r of rows) {
@@ -3287,7 +3286,7 @@ function mountPremiumGameIframe({ showBack = false, backTo = "screenManagerBoard
   iframe.id = "premiumRootFrame";
   const showBackParam = showBack ? 1 : 0;
   const roleNow = String(appState?.profile?.role || "").toLowerCase();
-  const resolvedBackTo = roleNow === "waiter" ? "screenPremiumApp" : (backTo || "screenManagerBoard");
+  const resolvedBackTo = roleNow === "waiter" ? "screenHome" : (backTo || "screenManagerBoard");
   const backToParam = encodeURIComponent(resolvedBackTo);
   iframe.src = `/game/game.html?mode=premium&showBack=${showBackParam}&backTo=${backToParam}&v=${Date.now()}`;
   iframe.style.width = "100%";
