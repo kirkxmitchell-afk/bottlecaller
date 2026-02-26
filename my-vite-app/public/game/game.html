@@ -2731,12 +2731,22 @@ function ensureProgLoaded() {
         }
 
         if (msg.type === "nav") {
+          const roleNow = String(window.__BC_CTX__?.role || "").toLowerCase();
+          const isWaiterNow = roleNow === "waiter";
           if (msg.target === "setup_premium" || msg.action === "setup_premium") {
+            if (isWaiterNow) {
+              window.showToast?.("Only managers can edit the wine list.");
+              return;
+            }
             resetNavState?.();
             showScreen("screenSetupPremium");
             return;
           }
           if (msg.action === "setup" || msg.target === "setup") {
+            if (isWaiterNow) {
+              window.showToast?.("Only managers can edit the wine list.");
+              return;
+            }
             // go to setup screen inside iframe
             resetNavState();
             showScreen(ids.setupScreen); // should be "screenSetupPremium" in premium mode
@@ -4759,8 +4769,9 @@ function ensureProgLoaded() {
           if (el) el.disabled = true;
         });
 
-        // Also stop selecting tags (simple block)
-        // (You can leave the UI visible but inert)
+        // Hide premium setup editing UI for waiter (presentation only).
+        document.getElementById("wineAdminPanel")?.classList.add("hidden");
+        document.getElementById("premiumWineAdvanced")?.classList.add("hidden");
       }
 
       // ---------- UI: counts ----------
@@ -7868,7 +7879,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         }
 
         const IS_IFRAME = !!window.frameElement;
-        if (IS_IFRAME && btnGoSetup) {
+        if (IS_IFRAME && btnGoSetup && !isWaiter) {
           btnGoSetup.textContent = "Start";
           btnGoSetup.onclick = null;
           btnGoSetup.__bcBound = false;
