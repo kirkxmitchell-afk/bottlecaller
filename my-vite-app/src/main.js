@@ -1358,9 +1358,15 @@ function showScreen(id) {
   onScreenChanged(id);
 }
 
-function onScreenChanged(screenId) {
-  console.log("[NAV] parent onScreenChanged ->", screenId);
-  setPremiumOverlayActive(screenId === "screenPlay");
+function onScreenChanged(id) {
+  console.log("[NAV] parent onScreenChanged ->", id);
+
+  const isPremiumScreen = id === "screenPlay" || id === "screenPremiumApp";
+  setPremiumOverlayActive(isPremiumScreen);
+
+  if (!isPremiumScreen) {
+    document.getElementById("hudPanel")?.classList.add("hidden");
+  }
 }
 
 function shouldIgnoreDuplicateNav(msg) {
