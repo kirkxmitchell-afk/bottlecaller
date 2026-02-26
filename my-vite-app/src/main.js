@@ -513,6 +513,13 @@ document.querySelector("#app").innerHTML = `
       </div>
 
       <hr style="opacity:.25; margin:12px 0;" />
+      <h3 style="margin:0;">Manager setup codes</h3>
+      <div class="small-text" style="margin-top:6px; opacity:.9;">
+        Redeem Group / Enterprise manager_setup codes.
+      </div>
+      <div id="hudManagerSetupHost" style="margin-top:10px;"></div>
+
+      <hr style="opacity:.25; margin:12px 0;" />
 
       <h3 style="margin:0;">Invite emails</h3>
       <div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
@@ -543,8 +550,6 @@ document.querySelector("#app").innerHTML = `
       font-size: 12px;
     "></pre>
 `;
-
-moveSignupCardsIntoMenuPanel();
 
 // ------------------------------------------------------------
 // Debug + global crash catcher
@@ -2325,6 +2330,24 @@ function moveSignupCardsIntoMenuPanel() {
   console.log("[BC] Signup cards moved to Menu ✅");
 }
 
+function mountManagerSetupIntoHud() {
+  const host = document.getElementById("hudManagerSetupHost");
+  const provisionTab = document.getElementById("mbTab_provision"); // where the cards currently live
+  if (!host || !provisionTab) return;
+
+  // Move Group Manager card (first card in provision tab)
+  const groupCard = provisionTab.querySelector(".card");
+  // Move Enterprise card (stable id)
+  const enterpriseCard = document.getElementById("mbProvisionAccess");
+
+  if (groupCard) host.appendChild(groupCard);
+  if (enterpriseCard) host.appendChild(enterpriseCard);
+
+  // Wire existing handlers (id-based so they still work)
+  wireGroupSetupRedeem?.();
+  wireManagerBoardBillingAccess?.();
+}
+
 function applyManagerBoardVisibility() {
   const p = appState.profile || {};
   const role = String(p.role || "").toLowerCase();
@@ -3891,6 +3914,7 @@ function renderHud() {
   if (seatInput && r) seatInput.value = String(r.seat_limit ?? "");
 
   renderInvitesList();
+  mountManagerSetupIntoHud();
 }
 
 // ------------------------------------------------------------
