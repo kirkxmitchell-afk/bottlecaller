@@ -34,6 +34,7 @@
         const params = new URLSearchParams(location.search);
         const showBack = params.get("showBack") === "1";
         if (!showBack) return;
+        const backTo = params.get("backTo") || "screenManagerBoard";
 
         const btn = document.createElement("button");
         btn.type = "button";
@@ -45,8 +46,15 @@
 
         btn.onclick = () => {
           btn.remove();
+          const payload = {
+            source: "BC_MSG",
+            v: 1,
+            type: "nav",
+            to: backTo,
+          };
+          if (backTo === "screenManagerBoard") payload.mbTab = "insights";
           window.parent.postMessage(
-            { source: "BC_MSG", v: 1, type: "nav", to: "screenManagerBoard", mbTab: "insights" },
+            payload,
             window.location.origin
           );
         };
@@ -2455,6 +2463,7 @@ function ensureProgLoaded() {
         }
 
         console.log("[BC] bc_ctx applied ✅", window.__BC_CTX__);
+        bindWaiterStart();
         window.__BC_RESOLVE_CTX_READY__?.();
         // Always set key after ctx (safe)
         if (typeof ensureProgKeyAfterCtx === "function") ensureProgKeyAfterCtx();
@@ -7866,6 +7875,25 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         await startFromEncounter1_GRIND();
       }
 
+      function bindWaiterStart() {
+        const roleNow = String(window.__BC_CTX__?.role || "").toLowerCase();
+        if (roleNow !== "waiter") return;
+
+        const btn = document.getElementById("btnWelcomeStart");
+        if (!btn) return;
+
+        btn.classList.remove("hidden");
+        btn.textContent = "Start";
+        btn.onclick = null;
+        btn.__bcBound = false;
+
+        bindInput(btn, async () => {
+          resetNavState();
+          showScreen("screenPlay");
+          startEncounter();
+        });
+      }
+
       function resetWinesOnly() {
         if (!confirm("Reset wines for this restaurant? This can’t be undone.")) return;
         if (!isDemo && restaurantId) {
@@ -7921,9 +7949,14 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         const isWaiter = roleNow === "waiter";
 
         if (isWaiter) {
-          document.getElementById("btnGoPremium")?.classList.add("hidden");
-          document.getElementById("btnWelcomeBackToSetup")?.classList.add("hidden");
-          document.getElementById("btnGoSetup")?.classList.add("hidden");
+          ["btnGoPremium", "btnWelcomeBackToSetup", "btnGoSetup", "btnSetupWines"].forEach((id) => {
+            document.getElementById(id)?.classList.add("hidden");
+          });
+          document.querySelectorAll('[data-nav="screenSetupPremium"]').forEach((el) => {
+            el.classList.add("hidden");
+            el.style.pointerEvents = "none";
+          });
+          bindWaiterStart();
         }
 
         const IS_IFRAME = !!window.frameElement;
@@ -7944,42 +7977,48 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
         console.log("[SETUP] btnWelcomeStart element =", btnWelcomeStart);
         console.log("[SETUP] btnWelcomeStart id/class =", btnWelcomeStart?.id, btnWelcomeStart?.className);
-        bindInput(btnWelcomeStart, () => {
-          if (sessionType === "drill") {
-            console.warn("[NAV] setup blocked: drill active");
-            return;
-          }
-          localStorage.setItem(coverKey, "true");
-          resetNavState();
-          showScreen(isDemo ? "screenHome" : ids.setupScreen);
-          setTimeout(() => {
-            if (isDemo) {
-              const list = restaurantId ? WineStore.read(restaurantId) : [];
-              wines = setWines(list);
-              console.log("[BC] setup hydrate after showScreen", { restaurantId, count: wines.length });
-              if (wines.length) hydrateSetupFormFromWine(bcMode, wines[0]);
-            } else {
-              requestWinesFromParent();
+        if (!isWaiter) {
+          bindInput(btnWelcomeStart, () => {
+            if (sessionType === "drill") {
+              console.warn("[NAV] setup blocked: drill active");
+              return;
             }
-          }, 0);
-        });
+            localStorage.setItem(coverKey, "true");
+            resetNavState();
+            showScreen(isDemo ? "screenHome" : ids.setupScreen);
+            setTimeout(() => {
+              if (isDemo) {
+                const list = restaurantId ? WineStore.read(restaurantId) : [];
+                wines = setWines(list);
+                console.log("[BC] setup hydrate after showScreen", { restaurantId, count: wines.length });
+                if (wines.length) hydrateSetupFormFromWine(bcMode, wines[0]);
+              } else {
+                requestWinesFromParent();
+              }
+            }, 0);
+          });
+        }
 
-        bindInput(btnBackToSetup, () => {
-          if (sessionType === "drill") return;
-          resetNavState();
-          showScreen(ids.setupScreen);
-        });
+        if (!isWaiter) {
+          bindInput(btnBackToSetup, () => {
+            if (sessionType === "drill") return;
+            resetNavState();
+            showScreen(ids.setupScreen);
+          });
+        }
 
         console.log("[SETUP] btnGoSetup element =", btnGoSetup);
         console.log("[SETUP] btnGoSetup id/class =", btnGoSetup?.id, btnGoSetup?.className);
-        bindInput(btnGoSetup, async () => {
-          if (sessionType === "drill") {
-            console.warn("[NAV] setup blocked: drill active");
-            return;
-          }
-          resetNavState();
-          await openSetupScreen("premium");
-        });
+        if (!isWaiter) {
+          bindInput(btnGoSetup, async () => {
+            if (sessionType === "drill") {
+              console.warn("[NAV] setup blocked: drill active");
+              return;
+            }
+            resetNavState();
+            await openSetupScreen("premium");
+          });
+        }
 
         bindInput(btnResetApp, () => {
           if (!confirm("Reset app? This clears wines and runs.")) return;

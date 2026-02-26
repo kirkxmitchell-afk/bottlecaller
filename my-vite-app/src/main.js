@@ -1225,9 +1225,14 @@ if (!window.__BC_PARENT_BRIDGE__) {
       if (msg.type === "nav_back" || msg.type === "nav") {
         if (shouldIgnoreDuplicateNav(msg)) return;
         const dest = msg.to || msg.target || msg.backTo || "screenHome";
+        const roleNow = String(appState?.profile?.role || "").toLowerCase();
         console.log("[PARENT] NAV ->", dest, msg);
 
         if (msg.type === "nav" && msg.to === "screenManagerBoard") {
+          if (roleNow === "waiter") {
+            showScreen("screenHome");
+            return;
+          }
           showScreen("screenManagerBoard");
           wireManagerBoardMenu?.();
 
@@ -1241,6 +1246,10 @@ if (!window.__BC_PARENT_BRIDGE__) {
         }
 
         if (String(dest).startsWith("screen")) {
+          if (roleNow === "waiter" && dest === "screenManagerBoard") {
+            showScreen("screenHome");
+            return;
+          }
           setPremiumOverlayActive(dest === "screenPlay" || dest === "screenPremiumApp");
           showScreen(dest);
 
@@ -1464,6 +1473,7 @@ window.__BC_GET_PROGRESSION_SNAPSHOT__ = async ({ userId, restaurantId }) => {
 function showScreen(id) {
   document.querySelectorAll(".screen").forEach((s) => s.classList.add("hidden"));
   document.getElementById(id)?.classList.remove("hidden");
+  applyWaiterTemplateGates();
   onScreenChanged(id);
 }
 
@@ -1491,6 +1501,29 @@ function shouldIgnoreDuplicateNav(msg) {
   if (now - window.__BC_LAST_NAV_AT__ < 250) return true;
   window.__BC_LAST_NAV_AT__ = now;
   return false;
+}
+
+function applyWaiterTemplateGates() {
+  const role = String(appState?.profile?.role || "").toLowerCase();
+  const isWaiter = role === "waiter";
+
+  const wineSetupBtns = [
+    "btnWineSetup",
+    "btnGoSetup",
+    "btnSetupWines",
+    "btnOpenSetup",
+    "btnGoSetupPremium",
+  ];
+
+  wineSetupBtns.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = isWaiter ? "none" : "";
+  });
+
+  document.querySelectorAll('[data-nav="screenSetupPremium"]').forEach((el) => {
+    el.style.display = isWaiter ? "none" : "";
+    el.style.pointerEvents = isWaiter ? "none" : "";
+  });
 }
 
 // (removed duplicate getActiveRestaurantId; use window.getActiveRestaurantId)
@@ -1949,6 +1982,8 @@ function wireParentButtons() {
   if (btnSetup && !btnSetup.__bcBound) {
     btnSetup.__bcBound = true;
     btnSetup.addEventListener("click", () => {
+      const roleNow = String(appState?.profile?.role || "").toLowerCase();
+      if (roleNow === "waiter") return;
       showScreen("screenPremiumApp");
       postToGame("nav", { target: "setup_premium" });
     });
@@ -2568,6 +2603,8 @@ function applyManagerBoardVisibility() {
   if (listingBtn) listingBtn.style.display = "";
   const billingBtn = document.querySelector('#mbMenu [data-mbtab="billing"]');
   if (billingBtn) billingBtn.style.display = "";
+  const provisionBtn = document.querySelector('#mbMenu [data-mbtab="provision"]');
+  if (provisionBtn) provisionBtn.style.display = "none";
 }
 
 function wireActiveRestaurantPicker() {
@@ -3213,8 +3250,10 @@ function mountPremiumGameIframe({ showBack = false, backTo = "screenManagerBoard
   iframe = document.createElement("iframe");
   iframe.id = "premiumRootFrame";
   const showBackParam = showBack ? 1 : 0;
-  const backToParam = encodeURIComponent(backTo || "");
-  iframe.src = `/game/game.html?mode=premium&showBack=${showBackParam}&backTo=${backToParam}`;
+  const roleNow = String(appState?.profile?.role || "").toLowerCase();
+  const resolvedBackTo = roleNow === "waiter" ? "screenHome" : (backTo || "screenManagerBoard");
+  const backToParam = encodeURIComponent(resolvedBackTo);
+  iframe.src = `/game/game.html?mode=premium&showBack=${showBackParam}&backTo=${backToParam}&v=${Date.now()}`;
   iframe.style.width = "100%";
   iframe.style.height = "78vh";
   iframe.style.border = "0";
@@ -3681,6 +3720,7 @@ async function loadAuthedState(reason = "manual") {
   });
 
   wireManagerBoardButton();
+  applyWaiterTemplateGates();
 
   // (ctx push removed here; only iframe onload + bc_ctx_request reply are allowed)
 }
