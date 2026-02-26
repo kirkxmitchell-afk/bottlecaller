@@ -1484,7 +1484,7 @@ window.__BC_GET_PROGRESSION_SNAPSHOT__ = async ({ userId, restaurantId }) => {
 function showScreen(id) {
   document.querySelectorAll(".screen").forEach((s) => s.classList.add("hidden"));
   document.getElementById(id)?.classList.remove("hidden");
-  applyWaiterTemplateGates();
+  applyRoleTemplateGates();
   onScreenChanged(id);
 }
 
@@ -1514,19 +1514,21 @@ function shouldIgnoreDuplicateNav(msg) {
   return false;
 }
 
-function applyWaiterTemplateGates() {
+function applyRoleTemplateGates() {
   const role = String(appState?.profile?.role || "").toLowerCase();
   const isWaiter = role === "waiter";
 
-  const wineSetupBtns = [
+  const idsToHideForWaiter = [
     "btnWineSetup",
     "btnGoSetup",
     "btnSetupWines",
     "btnOpenSetup",
     "btnGoSetupPremium",
+    "btnContinuePremium",
+    "btnBackHomeFromSetupPremium",
   ];
 
-  wineSetupBtns.forEach((id) => {
+  idsToHideForWaiter.forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.style.display = isWaiter ? "none" : "";
   });
@@ -1535,6 +1537,10 @@ function applyWaiterTemplateGates() {
     el.style.display = isWaiter ? "none" : "";
     el.style.pointerEvents = isWaiter ? "none" : "";
   });
+}
+
+function applyWaiterTemplateGates() {
+  applyRoleTemplateGates();
 }
 
 // (removed duplicate getActiveRestaurantId; use window.getActiveRestaurantId)
@@ -3731,7 +3737,7 @@ async function loadAuthedState(reason = "manual") {
   });
 
   wireManagerBoardButton();
-  applyWaiterTemplateGates();
+  applyRoleTemplateGates();
 
   // (ctx push removed here; only iframe onload + bc_ctx_request reply are allowed)
 }
