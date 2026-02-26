@@ -7516,11 +7516,16 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         });
 
         const unlocked = isUnlocked();
-        console.log(`[UNLOCK] role=${isManager ? "manager" : (isWaiter ? "waiter" : "?")} rid=${restaurantId || "?"} wines=${getWineCount?.() ?? "?"}/${LIMIT} unlocked=${unlocked} sessionType=${sessionType || "null"}`);
+        console.log(
+          `[UNLOCK] role=${isManager ? "manager" : (isWaiter ? "waiter" : "?")}` +
+          ` rid=${restaurantId || "?"}` +
+          ` wines=${getWineCount?.() ?? "?"}/${LIMIT ?? "?"}` +
+          ` unlocked=${unlocked}` +
+          ` sessionType=${sessionType || "null"}`
+        );
         if (sessionType !== "drill" && !unlocked) {
           console.warn("[UNLOCK] BLOCKED (needs wines)");
-          const ok = await assertWinesReadyOrExplain();
-          if (!ok) return;
+          return;
         }
 
         if (!sessionId) {
