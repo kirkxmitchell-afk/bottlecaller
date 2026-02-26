@@ -1864,11 +1864,8 @@ function ensureProgLoaded() {
         window.__BC_GUARD__ = window.__BC_GUARD__ || {};
         window.__BC_GUARD__.lastDecision = null;
 
-        // 2) rebuild UI clean
-        showScreen("screenPlay");
-
-        // 3) start fresh
-        startEncounter();
+        // 2) rebuild UI clean and start when ctx+wines are ready
+        void startPlayWithReadyGate();
       }
 
       // ✅ define once, even across hot reloads / injected patches
@@ -3414,7 +3411,7 @@ function ensureProgLoaded() {
         startDrill(repTarget);
       }
 
-      function startProgressionSession() {
+      async function startProgressionSession() {
         sessionType = "progression";
         drillRepDone = 0;
         window.__BC_SESSION__ = {
@@ -3424,8 +3421,7 @@ function ensureProgLoaded() {
           startedAt: Date.now(),
         };
         resetNavState();
-        showScreen("screenPlay");
-        startEncounter();
+        await startPlayWithReadyGate();
       }
 
       function applyRoleVisibility() {
@@ -4775,18 +4771,39 @@ function ensureProgLoaded() {
         return getWineCount() >= LIMIT;
       }
 
-      async function waitForCtxAndWines(timeoutMs = 800) {
+      async function waitForCtxAndWines(timeoutMs = 1200) {
         const t0 = Date.now();
         while (Date.now() - t0 < timeoutMs) {
           const rid = restaurantId || window.__BC_CTX__?.restaurantId || null;
           const wc = (typeof getWineCount === "function") ? getWineCount() : null;
-          if (rid && typeof wc === "number") return { rid, wc };
+          const lim = (typeof LIMIT !== "undefined") ? LIMIT : null;
+
+          if (rid && typeof wc === "number" && typeof lim === "number") {
+            return { ok: true, rid, wc, lim };
+          }
           await new Promise((r) => setTimeout(r, 50));
         }
         return {
+          ok: false,
           rid: restaurantId || window.__BC_CTX__?.restaurantId || null,
           wc: (typeof getWineCount === "function") ? getWineCount() : null,
+          lim: (typeof LIMIT !== "undefined") ? LIMIT : null,
         };
+      }
+
+      async function startPlayWithReadyGate(timeoutMs = 1500) {
+        showScreen("screenPlay");
+
+        const g = await waitForCtxAndWines(timeoutMs);
+        console.log("[START][GATE]", g);
+
+        if (!g.ok) {
+          console.warn("[START] blocked: ctx/wines not ready yet");
+          return false;
+        }
+
+        await startEncounter();
+        return true;
       }
 
       async function isUnlockedAsync() {
@@ -6230,6 +6247,15 @@ function ensureProgLoaded() {
           payload?.sessionId &&
           hasChecks
         ) {
+          console.log("[EMIT] encounter_resolved", {
+            user: window.__BC_CTX__?.userId,
+            rid: window.__BC_CTX__?.restaurantId,
+            sessionId: payload?.sessionId,
+            encounterId: payload?.encounterId,
+            encounterNumber: payload?.encounterNumber,
+            chainScore: payload?.chainScore,
+            chainSignal: payload?.chainSignal
+          });
           bcEmitEvent("encounter_resolved", payload);
         } else {
           console.warn("[BC] blocked encounter_resolved (invalid payload)", payload);
@@ -7538,19 +7564,19 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           PROG_meta: window.PROG?.meta || null
         });
 
-        const { rid, wc } = await waitForCtxAndWines(1000);
-        console.log("[START] ctx/wines gate", { rid, wc, LIMIT, role, sessionType });
+        const g = await waitForCtxAndWines(1500);
+        console.log("[START][GATE]", g);
 
         const unlocked = isUnlocked();
         console.log(
           `[UNLOCK] role=${isManager ? "manager" : (isWaiter ? "waiter" : "?")}` +
           ` rid=${restaurantId || "?"}` +
-          ` wines=${getWineCount?.() ?? "?"}/${LIMIT ?? "?"}` +
+          ` wines=${getWineCount?.() ?? "?"}/${LIMIT}` +
           ` unlocked=${unlocked}` +
           ` sessionType=${sessionType || "null"}`
         );
         if (sessionType !== "drill" && !unlocked) {
-          console.warn("[UNLOCK] BLOCKED (needs wines)", { rid, wc, LIMIT });
+          console.warn("[UNLOCK] BLOCKED (needs wines)");
           return;
         }
 
@@ -7906,8 +7932,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
         bindInput(btn, async () => {
           resetNavState();
-          showScreen("screenPlay");
-          startEncounter();
+          await startPlayWithReadyGate();
         });
       }
 
@@ -7987,8 +8012,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
               return;
             }
             resetNavState();
-            showScreen("screenPlay");
-            startEncounter();
+            await startPlayWithReadyGate();
           });
         }
 
@@ -8071,8 +8095,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           encounterIndex = 0;
           saveEncounterIndex(encounterIndex);
 
-          showScreen("screenPlay");
-          startEncounter();
+          await startPlayWithReadyGate();
         });
 
         const back = document.getElementById("btnBackHomeFromSetupPremium");
