@@ -1202,7 +1202,13 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
           if (dest === "screenManagerBoard") {
             wireManagerBoardMenu?.();
-            if (msg.mbTab) window.__BC_MB_SHOWTAB__?.(msg.mbTab);
+            if (msg.mbTab) {
+              window.__BC_MB_SHOWTAB__?.(msg.mbTab);
+              if (msg.mbTab === "insights") await loadManagerInsights();
+              if (msg.mbTab === "overview") await loadManagerBoardData();
+            } else {
+              await loadManagerBoardData();
+            }
           }
           return;
         }
@@ -2848,7 +2854,10 @@ async function loadManagerInsights() {
   const trendEl = document.getElementById("mbInsightsTrendTable");
   const legendEl = document.getElementById("mbInsightsLegend");
 
-  const restaurantId = window.getActiveRestaurantId?.() || null;
+  const restaurantId =
+    window.getActiveRestaurantId?.() ||
+    appState.activeRestaurantId ||
+    appState.profile?.restaurant_id;
   if (!restaurantId) {
     if (msgEl) msgEl.textContent = "Active restaurant not set.";
     return;
@@ -4455,7 +4464,7 @@ document.getElementById("btnCloseHud").addEventListener("click", () => {
 });
 document.getElementById("hudBackdrop").addEventListener("click", closeHud);
 document.getElementById("btnBackToPremium")?.addEventListener("click", () => {
-  showScreen("screenHome");
+  showScreen("screenPremiumApp");
 });
 document.getElementById("btnLogoutManagerBoard")?.addEventListener("click", () => logoutAll("managerBoard.logout"));
 
