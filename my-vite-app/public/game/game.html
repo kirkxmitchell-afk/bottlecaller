@@ -28,13 +28,18 @@
       durationSec: 300,
     };
 
+    function getBackToParam() {
+      try { return new URLSearchParams(location.search).get("backTo"); }
+      catch { return null; }
+    }
+
     // ---- optional back button (drill -> manager board) ----
     (function initBackButtonFromParams() {
       try {
         const params = new URLSearchParams(location.search);
         const showBack = params.get("showBack") === "1";
         if (!showBack) return;
-        const backTo = params.get("backTo") || "screenManagerBoard";
+        const backTo = getBackToParam() || "screenManagerBoard";
 
         const btn = document.createElement("button");
         btn.type = "button";
@@ -46,15 +51,8 @@
 
         btn.onclick = () => {
           btn.remove();
-          const payload = {
-            source: "BC_MSG",
-            v: 1,
-            type: "nav",
-            to: backTo,
-          };
-          if (backTo === "screenManagerBoard") payload.mbTab = "insights";
           window.parent.postMessage(
-            payload,
+            { source: "BC_MSG", v: 1, type: "nav_back", backTo },
             window.location.origin
           );
         };
@@ -7944,9 +7942,14 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         if (roleNow !== "waiter") return;
 
         const btn = document.getElementById("btnWelcomeStart");
-        if (!btn) return;
+        if (!btn) {
+          console.warn("[WAITER] btnWelcomeStart missing");
+          return;
+        }
 
         btn.classList.remove("hidden");
+        btn.disabled = false;
+        btn.style.pointerEvents = "auto";
         btn.textContent = "Start";
         btn.onclick = null;
         btn.__bcBound = false;
@@ -7954,6 +7957,30 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         bindInput(btn, async () => {
           resetNavState();
           await startPlayWithReadyGate();
+        });
+        console.log("[WAITER] Play button wired ✅");
+      }
+
+      function wireDrillBack() {
+        ["btnBackToPremium", "btnExitDrill", "btnBackHomeFromDrillSummary"].forEach((id) => {
+          const btn = document.getElementById(id);
+          if (!btn) return;
+
+          btn.onclick = null;
+          btn.__bcBound = false;
+
+          bindInput(btn, () => {
+            const backTo = getBackToParam();
+            if (window.parent && backTo) {
+              window.parent.postMessage(
+                { source: "BC_MSG", v: 1, type: "nav_back", backTo },
+                window.location.origin
+              );
+              return;
+            }
+            resetNavState();
+            showScreen("screenHome");
+          });
         });
       }
 
@@ -8022,6 +8049,8 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           });
           bindWaiterStart();
         }
+
+        wireDrillBack();
 
         const IS_IFRAME = !!window.frameElement;
         if (IS_IFRAME && btnGoSetup && !isWaiter) {

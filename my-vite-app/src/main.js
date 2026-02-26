@@ -1224,13 +1224,16 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
       if (msg.type === "nav_back" || msg.type === "nav") {
         if (shouldIgnoreDuplicateNav(msg)) return;
-        const dest = msg.to || msg.target || msg.backTo || "screenHome";
+        const dest =
+          msg.type === "nav_back"
+            ? (msg.backTo || msg.to || "screenPremiumApp")
+            : (msg.to || msg.target || msg.backTo || "screenHome");
         const roleNow = String(appState?.profile?.role || "").toLowerCase();
         console.log("[PARENT] NAV ->", dest, msg);
 
         if (msg.type === "nav" && msg.to === "screenManagerBoard") {
           if (roleNow === "waiter") {
-            showScreen("screenHome");
+            showScreen("screenPremiumApp");
             return;
           }
           showScreen("screenManagerBoard");
@@ -1247,7 +1250,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
         if (String(dest).startsWith("screen")) {
           if (roleNow === "waiter" && dest === "screenManagerBoard") {
-            showScreen("screenHome");
+            showScreen("screenPremiumApp");
             return;
           }
           setPremiumOverlayActive(dest === "screenPlay" || dest === "screenPremiumApp");
@@ -3268,7 +3271,7 @@ function mountPremiumGameIframe({ showBack = false, backTo = "screenManagerBoard
   iframe.id = "premiumRootFrame";
   const showBackParam = showBack ? 1 : 0;
   const roleNow = String(appState?.profile?.role || "").toLowerCase();
-  const resolvedBackTo = roleNow === "waiter" ? "screenHome" : (backTo || "screenManagerBoard");
+  const resolvedBackTo = roleNow === "waiter" ? "screenPremiumApp" : (backTo || "screenManagerBoard");
   const backToParam = encodeURIComponent(resolvedBackTo);
   iframe.src = `/game/game.html?mode=premium&showBack=${showBackParam}&backTo=${backToParam}&v=${Date.now()}`;
   iframe.style.width = "100%";
