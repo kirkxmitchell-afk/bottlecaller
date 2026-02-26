@@ -316,6 +316,7 @@ document.querySelector("#app").innerHTML = `
       </div>
 
       <div id="mbMenu" class="card" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <button class="btn" type="button" data-mbtab="menu">Menu</button>
         <button class="btn" type="button" data-mbtab="overview">Overview</button>
         <button class="btn" type="button" data-mbtab="staff">Staff</button>
         <button class="btn" type="button" data-mbtab="insights">Insights</button>
@@ -349,6 +350,15 @@ document.querySelector("#app").innerHTML = `
 
         <div id="mbTab_staff" class="mbTab hidden"></div>
         <div id="mbTab_insights" class="mbTab hidden"></div>
+        <div id="mbTab_menu" class="mbTab hidden">
+          <div class="card" style="margin-top:12px;">
+            <strong>Manager Setup</strong>
+            <div class="small-text" style="margin-top:6px;">
+              Create group manager access or enterprise access.
+            </div>
+            <div id="mbMenuSetupHost" style="margin-top:10px;"></div>
+          </div>
+        </div>
 
         <div id="mbTab_billing" class="mbTab hidden">
           <div id="mbBillingAccess" class="card" style="margin-top:12px;">
@@ -533,6 +543,8 @@ document.querySelector("#app").innerHTML = `
       font-size: 12px;
     "></pre>
 `;
+
+moveSignupCardsIntoMenuPanel();
 
 // ------------------------------------------------------------
 // Debug + global crash catcher
@@ -2281,7 +2293,7 @@ function wireManagerBoardMenu() {
 
     if (tab === "overview") await loadManagerBoardData();
     if (tab === "billing") await loadManagerBoardSeats?.();
-    if (tab === "provision") {
+    if (tab === "provision" || tab === "menu") {
       wireGroupSetupRedeem?.();
       wireManagerBoardBillingAccess?.();
     }
@@ -2291,24 +2303,46 @@ function wireManagerBoardMenu() {
   showTab("overview");
 }
 
+function moveSignupCardsIntoMenuPanel() {
+  const provisionTab = document.getElementById("mbTab_provision");
+  const menuHost = document.getElementById("mbMenuSetupHost");
+
+  if (!provisionTab || !menuHost) {
+    console.warn("[BC] moveSignupCardsIntoMenuPanel: missing provisionTab or menuHost");
+    return;
+  }
+
+  const groupCard = provisionTab.querySelector(".card");
+  const enterpriseCard = document.getElementById("mbProvisionAccess");
+
+  if (!groupCard && !enterpriseCard) {
+    console.warn("[BC] moveSignupCardsIntoMenuPanel: no cards found to move");
+    return;
+  }
+
+  if (groupCard) menuHost.appendChild(groupCard);
+  if (enterpriseCard) menuHost.appendChild(enterpriseCard);
+
+  provisionTab.classList.add("hidden");
+
+  console.log("[BC] Signup cards moved to Menu panel ✅");
+}
+
 function applyManagerBoardVisibility() {
   const p = appState.profile || {};
   const role = String(p.role || "").toLowerCase();
-  const scopeType = String(p.scope_type || "").toLowerCase();
 
   const picker = document.getElementById("groupRestaurantPicker");
-  if (picker) {
-    const show = role === "manager" && (scopeType === "group" || scopeType === "enterprise") && !!p.scope_id;
-    picker.style.display = show ? "block" : "none";
-  }
-
-  const provisionBtn = document.querySelector('#mbMenu [data-mbtab="provision"]');
-  if (provisionBtn) {
-    provisionBtn.style.display = (scopeType === "group" || scopeType === "enterprise") ? "" : "none";
-  }
+  if (picker) picker.style.display = (role === "manager") ? "block" : "none";
 
   const billingBtn = document.querySelector('#mbMenu [data-mbtab="billing"]');
   if (billingBtn) billingBtn.style.display = "";
+
+  const provisionBtn = document.querySelector('#mbMenu [data-mbtab="provision"]');
+  if (provisionBtn) provisionBtn.style.display = "none";
+
+  const menuBtn = document.querySelector('#mbMenu [data-mbtab="menu"]');
+  if (menuBtn) menuBtn.style.display = "";
 }
 
 async function mapUserIdsToNames(userIds) {
@@ -2549,6 +2583,7 @@ function startManagerDrill({ focus = "read", pool = ["decider", "bargain_smart",
 
   showScreen("screenPlay");
   mountPremiumGameIframe({ showBack: true, backTo: "screenManagerBoard" });
+  pushPremiumCtxAndDrill();
 }
 
 function wireInsightsCTAs(plan) {
@@ -2753,78 +2788,77 @@ async function loadManagerInsights() {
 async function loadGroupRestaurantsForPicker() {
   const sel = document.getElementById("selActiveRestaurant");
   const hint = document.getElementById("activeRestaurantHint");
-  if (!sel) return;
+  const card = document.getElementById("groupRestaurantPicker");
+  const btn = document.getElementById("btnSetActiveRestaurant");
+  if (!sel || !card) return;
+
+  // ✅ Always allow picker for manager UI (no scope gating)
+  card.style.display = "";
 
   sel.innerHTML = "";
   if (hint) hint.textContent = "Loading restaurants…";
 
-  const p = appState.profile || {};
-  const scopeType = String(p.scope_type || "").toLowerCase();
-  const scopeId = p.scope_id || null;
+  const r = await supabase
+    .from("restaurants")
+    .select("id, name")
+    .order("name", { ascending: true });
 
-  if (!scopeId || (scopeType !== "group" && scopeType !== "enterprise")) {
-    if (hint) hint.textContent = "Picker disabled (not group/enterprise or missing scope_id).";
-    console.warn("[BC] picker disabled", { scopeType, scopeId });
+  if (r.error) {
+    console.error("[BC] restaurants fetch failed", r.error);
+    if (hint) hint.textContent = `⚠️ Failed to load restaurants: ${r.error.message}`;
     return;
   }
 
-  // 1) Fetch allowed restaurant ids
-  const a = await supabase
-    .from("bc_scope_restaurants")
-    .select("restaurant_id, created_at")
-    .eq("scope_id", scopeId)
-    .order("created_at", { ascending: true });
-
-  if (a.error) {
-    console.error("[BC] scope restaurants fetch failed", a.error);
-    if (hint) hint.textContent = `⚠️ Failed to load scope restaurants: ${a.error.message}`;
+  const rows = r.data || [];
+  if (!rows.length) {
+    if (hint) hint.textContent = "⚠️ No restaurants found.";
     return;
   }
 
-  const ids = (a.data || []).map(r => r.restaurant_id).filter(Boolean);
-
-  if (!ids.length) {
-    if (hint) hint.textContent = "⚠️ No restaurants attached to this manager scope yet.";
-    console.warn("[BC] picker empty: scope has 0 restaurants", { scopeId });
-    return;
-  }
-
-  // 2) Fetch restaurant names (don’t fail the whole picker if this fails)
-  let nameById = new Map();
-  const b = await supabase.from("restaurants").select("id, name").in("id", ids);
-
-  if (b.error) {
-    console.warn("[BC] restaurants name fetch failed (falling back to ids)", b.error);
-    if (hint) hint.textContent = "Loaded restaurants (names unavailable).";
-  } else {
-    nameById = new Map((b.data || []).map(r => [r.id, r.name]));
-    if (hint) hint.textContent = `Loaded ${ids.length} restaurant(s).`;
-  }
-
-  // 3) Render options
-  for (const rid of ids) {
+  for (const row of rows) {
     const opt = document.createElement("option");
-    opt.value = rid;
-    opt.textContent = nameById.get(rid) || rid.slice(0, 8) + "…";
+    opt.value = row.id;
+    opt.textContent = row.name || row.id.slice(0, 8) + "…";
     sel.appendChild(opt);
   }
 
-  // 4) Select active/stored
-  const stored = (typeof getStoredActiveRestaurantId === "function") ? getStoredActiveRestaurantId() : null;
-  const active = appState.activeRestaurantId || stored || ids[0];
+  // restore active
+  const stored =
+    (typeof getStoredActiveRestaurantId === "function" ? getStoredActiveRestaurantId() : null) ||
+    localStorage.getItem("BC_ACTIVE_RESTAURANT_ID") ||
+    null;
+
+  const active = appState.activeRestaurantId || stored || rows[0].id;
   sel.value = active;
 
-  // Optional: don’t auto-switch here unless you want it
-  // If you do want it, keep it, but show failures:
-  try {
-    await setActiveRestaurantForGroup(active);
-    if (hint) hint.textContent = `✅ Active: ${String(active).slice(0, 8)}…`;
-  } catch (e) {
-    console.warn("[BC] setActiveRestaurantForGroup failed during hydrate", e);
-    if (hint) hint.textContent = `⚠️ Could not set active: ${e?.message || e}`;
+  async function setActiveRestaurant(id) {
+    appState.activeRestaurantId = id;
+    localStorage.setItem("BC_ACTIVE_RESTAURANT_ID", id);
+
+    if (hint) {
+      const name = rows.find(x => x.id === id)?.name;
+      hint.textContent = `✅ Active: ${name || String(id).slice(0, 8) + "…"}`;
+    }
+
+    // ✅ hard refresh the manager board data
+    if (typeof refreshManagerBoardForRestaurant === "function") {
+      await refreshManagerBoardForRestaurant(id);
+    } else if (typeof routeManagerBoard === "function") {
+      // fallback: re-enter screen (keeps your current plumbing)
+      routeManagerBoard();
+    } else {
+      console.warn("[BC] No refresh hook found. Active restaurant set only.", id);
+    }
   }
 
-  console.log("[BC] picker hydrated", { scopeId, ids, active, stored });
+  // hydrate active immediately
+  await setActiveRestaurant(active);
+
+  if (btn) {
+    btn.onclick = () => setActiveRestaurant(sel.value);
+  }
+
+  console.log("[BC] picker hydrated (no scope)", { active });
 }
 
 async function assertRestaurantAllowedForScope(scopeId, restaurantId) {
@@ -2920,47 +2954,58 @@ function pushCtxToPremiumIframe(source = "manual") {
   );
 }
 
+function pushPremiumCtxAndDrill() {
+  // 1) ctx
+  try {
+    const ctx = window.__BC_BUILD_CTX__?.(null) || window.__BC_BUILD_CTX__?.("premium");
+    if (ctx?.userId && ctx?.restaurantId && ctx?.role) {
+      postToGame("bc_ctx", { ...ctx });
+    }
+  } catch (e) {
+    console.warn("[PARENT] bc_ctx push failed", e);
+  }
+
+  // 2) drill config
+  if (!window.__BC_DRILL_CONFIG__ && window.setDefaultDrillConfig) {
+    window.setDefaultDrillConfig();
+  }
+  postToGame("drill_config", { drill: window.__BC_DRILL_CONFIG__ || null });
+
+  // 3) start drill (if queued)
+  if (window.__BC_PENDING_START_DRILL__) {
+    postToGame("start_drill", window.__BC_PENDING_START_DRILL__);
+    window.__BC_PENDING_START_DRILL__ = null;
+  }
+}
+
 function mountPremiumGameIframe({ showBack = false, backTo = "screenManagerBoard" } = {}) {
   const root = document.getElementById("premiumRoot");
   if (!root) return;
 
+  // ✅ Do NOT remount if already present
+  let iframe = document.getElementById("premiumRootFrame");
+  if (iframe) {
+    pushPremiumCtxAndDrill();
+    return;
+  }
+
   root.innerHTML = "";
 
-  const iframe = document.createElement("iframe");
+  iframe = document.createElement("iframe");
   iframe.id = "premiumRootFrame";
   const showBackParam = showBack ? 1 : 0;
   const backToParam = encodeURIComponent(backTo || "");
-  iframe.src = `/game/game.html?mode=premium&v=${Date.now()}&showBack=${showBackParam}&backTo=${backToParam}`;
+  iframe.src = `/game/game.html?mode=premium&showBack=${showBackParam}&backTo=${backToParam}`;
   iframe.style.width = "100%";
   iframe.style.height = "78vh";
   iframe.style.border = "0";
+
   iframe.addEventListener("load", () => {
-    // 1) push ctx (so restaurantId/userId exist inside iframe)
-    try {
-      const ctx = window.__BC_BUILD_CTX__?.(null) || window.__BC_BUILD_CTX__?.("premium");
-      if (ctx?.userId && ctx?.restaurantId && ctx?.role) {
-        postToGame("bc_ctx", { ...ctx, drill: window.__BC_DRILL_CONFIG__ || null });
-      }
-    } catch (e) {
-      console.warn("[PARENT] bc_ctx push failed", e);
-    }
-
-    // 2) push drill config (pool + focus)
-    if (!window.__BC_DRILL_CONFIG__ && window.setDefaultDrillConfig) {
-      window.setDefaultDrillConfig();
-    }
-    postToGame("drill_config", { drill: window.__BC_DRILL_CONFIG__ || null });
-
-    // 3) start drill (if queued)
-    if (window.__BC_PENDING_START_DRILL__) {
-      postToGame("start_drill", window.__BC_PENDING_START_DRILL__);
-      window.__BC_PENDING_START_DRILL__ = null;
-    }
-
+    pushPremiumCtxAndDrill();
     console.log("[PARENT] premium iframe loaded ✅ (ctx + drill_config + start_drill)");
   });
-  root.appendChild(iframe);
 
+  root.appendChild(iframe);
   console.log("[BC] mounted premium iframe", iframe.src);
 }
 
