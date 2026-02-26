@@ -2712,6 +2712,12 @@ function ensureProgLoaded() {
           });
           applyBcCtx(msg);
           await ensureWinesLoadedReadOnly();
+          console.log("[CTX APPLIED]", {
+            role: msg.role,
+            restaurantId: msg.restaurantId,
+            scopeId: msg.scopeId,
+            mode: msg.mode
+          });
           return;
         }
 
@@ -2720,6 +2726,11 @@ function ensureProgLoaded() {
           wines = setWines(list);
           renderWineTables?.();
           updateCounts?.();
+          console.log("[WINES RECEIVED]", {
+            count: Array.isArray(msg.wines) ? msg.wines.length : null,
+            role: window.__BC_CTX__?.role,
+            restaurantId: window.__BC_CTX__?.restaurantId
+          });
           console.log("[BC] wines_report applied ✅", { count: wines.length });
           return;
         }
@@ -7915,7 +7926,11 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           btnGoSetup.textContent = "Start";
           btnGoSetup.onclick = null;
           btnGoSetup.__bcBound = false;
-          bindInput(btnGoSetup, () => {
+          bindInput(btnGoSetup, async () => {
+            if (!window.__BC_CTX__ || !window.__BC_CTX__.restaurantId) {
+              console.warn("[BOOT] ctx not ready — blocking play");
+              return;
+            }
             resetNavState();
             showScreen("screenPlay");
             startEncounter();
