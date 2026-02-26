@@ -4410,7 +4410,6 @@ document.getElementById("btnCloseHud").addEventListener("click", () => {
 });
 document.getElementById("hudBackdrop").addEventListener("click", closeHud);
 document.getElementById("btnBackToPremium")?.addEventListener("click", () => {
-  setPremiumOverlayActive(false);
   showScreen("screenHome");
 });
 document.getElementById("btnLogoutManagerBoard")?.addEventListener("click", () => logoutAll("managerBoard.logout"));

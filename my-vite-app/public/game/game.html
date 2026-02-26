@@ -33,7 +33,6 @@
       try {
         const params = new URLSearchParams(location.search);
         const showBack = params.get("showBack") === "1";
-        const backTo = params.get("backTo") || "screenManagerBoard";
         if (!showBack) return;
 
         const btn = document.createElement("button");
@@ -46,9 +45,9 @@
 
         btn.onclick = () => {
           btn.remove();
-          window.parent?.postMessage(
-            { source: "BC_MSG", v: 1, type: "nav", to: backTo },
-            location.origin
+          window.parent.postMessage(
+            { source: "BC_MSG", v: 1, type: "nav", to: "screenManagerBoard", mbTab: "insights" },
+            window.location.origin
           );
         };
 
