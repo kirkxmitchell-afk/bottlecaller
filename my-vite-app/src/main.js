@@ -4519,8 +4519,8 @@ async function submitAuth() {
 
       // ✅ Force UI role to match real profile role (prevents confusion)
       const pr = String(appState.profile?.role || "").toLowerCase();
-      if (pr === "manager") setRole("manager");
       if (pr === "waiter") setRole("waiter");
+      else setRole("manager");
 
       await decideRoute("login.ok.decideRoute");
       return;
