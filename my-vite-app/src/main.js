@@ -3318,7 +3318,7 @@ function mountPremiumGameIframe({ showBack = false, backTo = "screenManagerBoard
   iframe.id = "premiumRootFrame";
   const showBackParam = showBack ? 1 : 0;
   const roleNow = String(appState?.profile?.role || "").toLowerCase();
-  const resolvedBackTo = roleNow === "waiter" ? "screenHome" : (backTo || "screenManagerBoard");
+  const resolvedBackTo = roleNow === "waiter" ? "screenPremiumApp" : (backTo || "screenManagerBoard");
   const backToParam = encodeURIComponent(resolvedBackTo);
   iframe.src = `/game/game.html?mode=premium&showBack=${showBackParam}&backTo=${backToParam}&v=${Date.now()}`;
   iframe.style.width = "100%";
@@ -3865,8 +3865,9 @@ async function demoJoinRestaurantByCode() {
     setMsg("demoJoinMsg", "Submitting...");
     setDebug({ step: "demo.join.start", time: new Date().toISOString(), code });
 
+    const sb = window.supabase || supabase;
     const rpc = await withTimeout(
-      supabase.rpc("join_restaurant_by_code", { p_code: code }),
+      sb.rpc("join_restaurant_by_code", { p_code: code }),
       15000,
       "rpc.join_restaurant_by_code"
     );

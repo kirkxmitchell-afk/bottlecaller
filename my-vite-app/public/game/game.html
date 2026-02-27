@@ -1644,7 +1644,11 @@ function ensureProgLoaded() {
       const premiumRunsKey = "bc_premium_runs";
       const coverKey = "bc_has_seen_cover";
 
-      const runsKey  = isDemo ? demoRunsKey  : premiumRunsKey;
+      function runsKey(mode) {
+        const uid = window.__BC_CTX__?.userId || "anon";
+        const rid = window.__BC_CTX__?.restaurantId || "no_restaurant";
+        return `bc_runs_v1_${uid}_${rid}_${mode || "premium"}`;
+      }
 
       // ============================================================
       // ✅ STREAK SYSTEM (Rule B: break only on FAIL)
@@ -2458,6 +2462,12 @@ function ensureProgLoaded() {
         }
 
         console.log("[BC] bc_ctx applied ✅", window.__BC_CTX__);
+        try {
+          runs = loadRuns();
+          updateCounts?.();
+        } catch (e) {
+          console.warn("[BC] runs rehydrate after ctx failed", e);
+        }
         applyRoleTemplate();
         window.__BC_RESOLVE_CTX_READY__?.();
         // Always set key after ctx (safe)
@@ -3832,9 +3842,10 @@ function ensureProgLoaded() {
       }
 
       function loadRuns() {
-        const raw = localStorage.getItem(runsKey);
-        if (!raw) return [];
         try {
+          const k = runsKey(bcMode);
+          const raw = localStorage.getItem(k);
+          if (!raw) return [];
           const parsed = JSON.parse(raw);
           return Array.isArray(parsed) ? parsed : [];
         } catch {
@@ -3843,7 +3854,10 @@ function ensureProgLoaded() {
       }
 
       function saveRuns() {
-        localStorage.setItem(runsKey, JSON.stringify(Array.isArray(runs) ? runs : []));
+        try {
+          const k = runsKey(bcMode);
+          localStorage.setItem(k, JSON.stringify(Array.isArray(runs) ? runs : []));
+        } catch {}
       }
 
       function loadInt(key, fallback = 0) {
@@ -8029,22 +8043,16 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
       function wireDrillBack_FIXED() {
         const bindBack = () => {
-          const roleNow = String(window.__BC_CTX__?.role || "").toLowerCase();
-
-          console.log("[DRILL_BACK] clicked", { role: roleNow, sessionType });
-
+          const backTo = getBackToParam();
           exitDrillState();
-          resetNavState();
-
-          if (window.parent) {
-            const backTo = getBackToParam() || "screenHome";
-            window.parent.postMessage(
-              { source: "BC_MSG", v: 1, type: "nav_back", backTo },
+          if (backTo === "screenManagerBoard") {
+            window.parent?.postMessage(
+              { source: "BC_MSG", v: 1, type: "nav", to: "screenManagerBoard", mbTab: "insights" },
               window.location.origin
             );
             return;
           }
-
+          resetNavState();
           showScreen("screenHome");
         };
 
@@ -8192,6 +8200,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           localStorage.removeItem(premiumWinesKey);
           localStorage.removeItem(demoRunsKey);
           localStorage.removeItem(premiumRunsKey);
+          try { localStorage.removeItem(runsKey(bcMode)); } catch {}
           localStorage.removeItem(demoStreakKey);
           localStorage.removeItem(premiumStreakKey);
           localStorage.removeItem(demoBestStreakKey);
