@@ -66,6 +66,13 @@
     window.isDemo = DEMO;
     window.__BC_STANDALONE_DEMO__ = DEMO;
 
+    // DEMO FALLBACKS: no parent progression/tier unlocks
+    if (window.isDemo || window.bcMode === "demo") {
+      window.getTierUnlocked = window.getTierUnlocked || (() => 1);
+      window.allowedGuestTypes = window.allowedGuestTypes || (() => ["decider", "bargain_smart", "griever"]);
+      window.getPointsTotal = window.getPointsTotal || (() => 0);
+    }
+
     console.log("[BC][MODE]", { MODE, DEMO, bcMode: window.bcMode, isDemo: window.isDemo });
 
     // Demo always has wines locally (no DB)
@@ -6913,10 +6920,15 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             allowedReads = [window.GUEST.DECIDER, window.GUEST.BARGAIN_SMART, window.GUEST.GRIEVER];
           }
 
+          const tierUnlocked =
+            (window.isDemo || window.bcMode === "demo")
+              ? 1
+              : (typeof window.getTierUnlocked === "function" ? window.getTierUnlocked() : 1);
+
           console.log("[BC][GUEST_UNLOCK]", {
             encounterIndex,
             encounterNumber: currentEncounter?.encounterNumber,
-            tierUnlocked: (typeof window.getTierUnlocked === "function" ? window.getTierUnlocked() : null),
+            tierUnlocked,
             allowedReads,
             allowedCount: allowedReads?.length
           });
