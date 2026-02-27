@@ -364,6 +364,14 @@ document.querySelector("#app").innerHTML = `
             <h3 style="margin:0 0 8px 0;">Recent activity</h3>
             <div id="mbRecent" class="small" style="opacity:.9;">Loading…</div>
           </div>
+
+          <div id="mbMembersCard" class="card" style="margin-top:12px;">
+            <strong>Members</strong>
+            <div class="small-text" style="margin-top:6px;">
+              Staff linked to this active restaurant.
+            </div>
+            <div id="mbMembersList" style="margin-top:10px;"></div>
+          </div>
         </div>
 
         <div id="mbTab_staff" class="mbTab hidden"></div>
@@ -3565,6 +3573,41 @@ function getManagerBoardFilter() {
   return { restaurantId, isManager, isGroupish };
 }
 
+async function loadManagerBoardMembers() {
+  const rid = window.appState?.activeRestaurantId || window.appState?.profile?.restaurant_id || null;
+
+  const box = document.getElementById("mbMembersList");
+  if (!box) return;
+  if (!rid) {
+    box.innerHTML = `<div class="small-text">No active restaurant selected.</div>`;
+    return;
+  }
+
+  box.innerHTML = `<div class="small-text">Loading…</div>`;
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("user_id, display_name, role, created_at")
+    .eq("restaurant_id", rid)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    box.innerHTML = `<div class="small-text">Failed to load members: ${escapeHtml(error.message)}</div>`;
+    return;
+  }
+
+  const rows = (data || []).map((p) => `
+    <div style="display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid rgba(255,255,255,.08)">
+      <div>
+        <div style="font-weight:700">${escapeHtml(p.display_name || "(no name)")}</div>
+        <div class="small-text">${escapeHtml(p.role || "")} • ${escapeHtml(p.user_id || "")}</div>
+      </div>
+    </div>
+  `).join("");
+
+  box.innerHTML = rows || `<div class="small-text">No members found.</div>`;
+}
+
 async function loadManagerBoardData() {
   try {
     const { restaurantId, isManager, isGroupish } = getManagerBoardFilter();
@@ -3578,6 +3621,7 @@ async function loadManagerBoardData() {
     document.getElementById("mbRestName").textContent =
       appState.restaurant?.name || (String(restaurantId).slice(0, 8) + "…");
     document.getElementById("mbMsg").textContent = "";
+    await loadManagerBoardMembers();
 
     // Views you actually have
     const RUNS_TABLE = "bc_sessions_v1";                 // sessions summary
