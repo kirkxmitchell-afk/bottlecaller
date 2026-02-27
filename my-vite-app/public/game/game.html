@@ -8,10 +8,24 @@
   <link rel="stylesheet" href="/game/game.css" />
 
   <script>
+    function isStandalone() {
+      return window.parent === window && !window.frameElement;
+    }
+
+    function queryMode() {
+      try { return new URLSearchParams(location.search).get("mode"); } catch { return null; }
+    }
+
+    if (isStandalone() && String(queryMode() || "").toLowerCase() === "premium") {
+      console.warn("[BC] standalone premium -> DEMO fallback");
+      window.__BC_STANDALONE_DEMO__ = true;
+    }
+
     // ---- app mode (demo/premium) ----
+    const __bcBootMode = window.__BC_STANDALONE_DEMO__ ? "demo" : (queryMode() || "demo");
     window.APP_MODE =
       window.APP_MODE ||
-      (new URLSearchParams(location.search).get("mode") || "demo");
+      __bcBootMode;
     console.log("[BC] APP_MODE =", window.APP_MODE);
 
     // ---- Drill session flag (iframe-wide) ----
@@ -51,6 +65,12 @@
 
         btn.onclick = () => {
           btn.remove();
+          if (window.__BC_STANDALONE_DEMO__) {
+            try { window.__BC_SESSION_TYPE__ = "play"; } catch {}
+            try { resetNavState?.(); } catch {}
+            try { showScreen?.("screenHome"); } catch {}
+            return;
+          }
           window.parent.postMessage(
             { source: "BC_MSG", v: 1, type: "nav_back", backTo },
             window.location.origin
@@ -67,6 +87,7 @@
     window.wines = Array.isArray(window.wines) ? window.wines : [];
 
     function bcGetMode() {
+      if (window.__BC_STANDALONE_DEMO__) return "demo";
       // 1) URL param wins
       const p = new URLSearchParams(window.location.search)
       const urlMode = (p.get("mode") || "").toLowerCase()
@@ -677,8 +698,10 @@ function isDrillMode() {
       // ============================================================
       // ✅ MODE ENFORCEMENT (single source of truth)
       // ============================================================
-      const bcMode = (window.APP_MODE === "premium") ? "premium" : "demo";
-      const isDemo = bcMode === "demo";
+      const standaloneDemo = !!window.__BC_STANDALONE_DEMO__;
+      const modeFromQuery = String(queryMode() || "").toLowerCase();
+      const bcMode = (standaloneDemo ? "demo" : (modeFromQuery || window.APP_MODE || "demo")) === "premium" ? "premium" : "demo";
+      const isDemo = (bcMode === "demo") || standaloneDemo;
       const WINE_LIMIT = isDemo ? 3 : 10;
       const LIMIT = WINE_LIMIT;
       // --- SESSION STATE (single source of truth) ---
@@ -699,6 +722,7 @@ function isDrillMode() {
       let role = null;
       let isManager = false;
       let isWaiter = false;
+      if (isDemo && !restaurantId) restaurantId = "demo";
       window.__BC_RUNTIME__ = () => ({ userId, restaurantId, scopeId, role, mode });
       console.log("[BOOT] declared", { restaurantId, role, mode, bcMode });
       // Crash becomes visible (iframe)
@@ -1386,6 +1410,30 @@ function ensureProgLoaded() {
         { name: "demo_white", varietal: "White Blend" },
         { name: "demo_bubbles", varietal: "Sparkling" },
       ]);
+      const DEMO_WINES_KEY = "bc_demo_wines_v1";
+
+      function getDefaultDemoWines() {
+        return [
+          { name: "Chenin Blanc — Stellenbosch", varietal: "Chenin Blanc", region: "Stellenbosch", story: "Fresh pear + acid cut." },
+          { name: "Pinotage — Paarl", varietal: "Pinotage", region: "Paarl", story: "Smoky plum, SA classic." },
+          { name: "Cap Classique Brut — WC", varietal: "Chardonnay/Pinot Noir", region: "Western Cape", story: "Crisp bubbles, celebratory." },
+        ];
+      }
+
+      function loadDemoWines() {
+        try {
+          const raw = localStorage.getItem(DEMO_WINES_KEY);
+          const arr = raw ? JSON.parse(raw) : null;
+          if (Array.isArray(arr) && arr.length) return arr.slice(0, 3);
+        } catch {}
+        const d = getDefaultDemoWines();
+        try { localStorage.setItem(DEMO_WINES_KEY, JSON.stringify(d)); } catch {}
+        return d;
+      }
+
+      function saveDemoWines(next3) {
+        try { localStorage.setItem(DEMO_WINES_KEY, JSON.stringify((next3 || []).slice(0, 3))); } catch {}
+      }
 
       // ---------- IDS (declare once, before any UI functions) ----------
       let ids = (window.__BC_IDS__ ?? (isDemo ? {
@@ -1506,8 +1554,10 @@ function ensureProgLoaded() {
 
         function getIframeMode() {
           try {
+            if (window.__BC_STANDALONE_DEMO__) return "demo";
             return new URLSearchParams(location.search).get("mode") || window.APP_MODE || "premium";
           } catch {
+            if (window.__BC_STANDALONE_DEMO__) return "demo";
             return window.APP_MODE || "premium";
           }
         }
@@ -3013,7 +3063,9 @@ function ensureProgLoaded() {
       try { window.dispatchEvent(new Event("BC_MSG_HANDLER_READY")); } catch {}
 
       // Always establish app mode first
-      window.APP_MODE = window.APP_MODE || (new URLSearchParams(location.search).get("mode") || "demo");
+      window.APP_MODE = window.__BC_STANDALONE_DEMO__
+        ? "demo"
+        : (window.APP_MODE || (new URLSearchParams(location.search).get("mode") || "demo"));
 
       // Prefer one local variable name; avoid MODE collisions
       mode = window.APP_MODE;
@@ -3071,12 +3123,12 @@ function ensureProgLoaded() {
 
       if (isDemo) {
         if (!restaurantId) restaurantId = "demo";
-        const existing = WineStore.migrateIfNeeded(restaurantId) || [];
+        const existing = loadDemoWines();
         if (existing.length > 0) {
           wines = setWines(existing.slice(0, WINE_LIMIT));
         } else {
           wines = setWines(DEMO_WINES.slice(0, WINE_LIMIT));
-          if (restaurantId) WineStore.write(restaurantId, wines);
+          saveDemoWines(wines);
         }
       }
 
@@ -3879,7 +3931,7 @@ function ensureProgLoaded() {
         if (!restaurantId) return [];
         // DEMO: localStorage only
         if (isDemo) {
-          const out = WineStore.migrateIfNeeded(restaurantId);
+          const out = loadDemoWines();
           return (out || [])
             .map(normalizeWineToDbShape)
             .map(w => sanitizeWine(w))
@@ -4622,6 +4674,13 @@ function ensureProgLoaded() {
       }
 
       function endDrillSession() {
+        sessionType = null;
+        window.__BC_SESSION_TYPE__ = "play";
+        if (isDemo || window.__BC_STANDALONE_DEMO__) {
+          resetNavState();
+          showScreen("screenHome");
+          return;
+        }
         showScreen("screenDrillSummary");
         renderDrillSummary();
       }
@@ -7687,7 +7746,11 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         console.log("[START][GATE]", g);
         if (!g.ok) {
           console.warn("[START] blocked: ctx/wines not ready yet");
-          return;
+          if (!isDemo) return;
+        }
+
+        if (isDemo && (!Array.isArray(wines) || wines.length === 0)) {
+          wines = setWines(loadDemoWines().slice(0, 3));
         }
 
         const okPlay = canPlay();
@@ -7698,7 +7761,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           ` wines=${wines?.length ?? "?"}` +
           ` sessionType=${sessionType || "null"}`
         );
-        if (sessionType !== "drill" && !okPlay) {
+        if (!isDemo && sessionType !== "drill" && !okPlay) {
           console.warn("[PLAY] BLOCKED (needs wines)");
           return;
         }
@@ -8145,8 +8208,16 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
       function wireDrillBack_FIXED() {
         const bindBack = () => {
+          const standalone = window.parent === window || !!window.__BC_STANDALONE_DEMO__;
           const backTo = getBackToParam();
           exitDrillState();
+          sessionType = null;
+          window.__BC_SESSION_TYPE__ = null;
+          if (isDemo || standalone) {
+            resetNavState();
+            showScreen("screenHome");
+            return;
+          }
           try {
             window.parent?.postMessage(
               { source: "BC_MSG", v: 1, type: "nav_back", backTo: backTo || "screenPremiumApp" },
@@ -8256,18 +8327,18 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             console.warn("[NAV] setup blocked: drill active");
             return;
           }
+          if (isDemo) {
+            localStorage.setItem(coverKey, "true");
+            resetNavState();
+            showScreen("screenPlay");
+            startEncounter();
+            return;
+          }
           localStorage.setItem(coverKey, "true");
           resetNavState();
-          showScreen(isDemo ? "screenHome" : ids.setupScreen);
+          showScreen(ids.setupScreen);
           setTimeout(() => {
-            if (isDemo) {
-              const list = restaurantId ? WineStore.read(restaurantId) : [];
-              wines = setWines(list);
-              console.log("[BC] setup hydrate after showScreen", { restaurantId, count: wines.length });
-              if (wines.length) hydrateSetupFormFromWine(bcMode, wines[0]);
-            } else {
-              requestWinesFromParent();
-            }
+            requestWinesFromParent();
           }, 0);
         });
 
