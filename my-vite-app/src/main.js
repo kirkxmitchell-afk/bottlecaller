@@ -2690,9 +2690,18 @@ async function ensureProfileDisplayName() {
     const display_name = String(candidate || "").trim();
     if (!display_name) return;
 
+    const cur = await sb
+      .from("profiles")
+      .select("display_name")
+      .eq("user_id", uid)
+      .maybeSingle();
+
+    if (cur?.data?.display_name && String(cur.data.display_name).trim()) return;
+
     const { error } = await sb
       .from("profiles")
-      .upsert({ user_id: uid, display_name }, { onConflict: "user_id" });
+      .update({ display_name })
+      .eq("user_id", uid);
 
     if (error) console.warn("[BC] ensureProfileDisplayName failed", error);
   } catch (e) {
