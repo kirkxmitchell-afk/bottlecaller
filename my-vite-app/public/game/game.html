@@ -831,7 +831,11 @@ function isDrillMode() {
       let role = null;
       let isManager = false;
       let isWaiter = false;
-      if (isDemo && !restaurantId) restaurantId = "demo";
+      if (isDemo) {
+        restaurantId = "demo";
+        role = "demo";
+        sessionType = null;
+      }
       window.__BC_RUNTIME__ = () => ({ userId, restaurantId, scopeId, role, mode });
       console.log("[BOOT] declared", { restaurantId, role, mode, bcMode });
       // Crash becomes visible (iframe)
@@ -852,8 +856,10 @@ function isDrillMode() {
       }
 
       function getProgressionSpine({ allowNull = false } = {}) {
-        // If we're in drill, we do NOT require a progression spine at all.
-        // Drill is ctx-driven (pool/focus) and should work without parent progression.
+        // Demo never requires progression spine
+        if (window.isDemo || window.bcMode === "demo") return null;
+
+        // Drill never requires progression spine
         if (sessionType === "drill") return null;
 
         const host =
@@ -1163,6 +1169,9 @@ function isDrillMode() {
       }
 
       function evaluateUnlocks() {
+        // demo does not use spine-based unlocks
+        if (window.isDemo || window.bcMode === "demo") return;
+
         // Route A: drill ignores progression entirely
         if (window.isDrillMode && window.isDrillMode()) return;
 
@@ -1445,6 +1454,13 @@ function isDrillMode() {
       }
 
 function ensureProgLoaded() {
+  // Demo: no progression spine
+  if (window.isDemo || window.bcMode === "demo") {
+    window.PROG = window.PROG || { meta: { tierUnlocked: 1, pointsTotal: 0 }, axes: {}, unlocks: {} };
+    PROG = window.PROG;
+    return PROG;
+  }
+
   // Route A: drill is ctx-only. Do NOT touch progression spine.
   if (window.isDrillMode && window.isDrillMode()) return null;
 
