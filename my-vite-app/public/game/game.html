@@ -8216,6 +8216,31 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
       }
 
       function applyRoleTemplate() {
+        // Demo template: no manager board, no setup flow, just play
+        if (window.isDemo || window.bcMode === "demo") {
+          const btnWelcomeBackToSetup = document.getElementById("btnWelcomeBackToSetup");
+          btnWelcomeBackToSetup?.classList.add("hidden");
+
+          const btnGoPremium = document.getElementById("btnGoPremium");
+          if (btnGoPremium) {
+            btnGoPremium.textContent = "Play";
+            btnGoPremium.classList.remove("hidden");
+            btnGoPremium.disabled = false;
+            btnGoPremium.onclick = null;
+            btnGoPremium.__bcBound = false;
+            bindInput(btnGoPremium, () => {
+              resetNavState();
+              showScreen("screenPlay");
+              window.startEncounter?.();
+            });
+          }
+
+          document.querySelectorAll('[data-role="manager"]').forEach((el) => el.classList.add("hidden"));
+          document.querySelectorAll('[data-nav="screenSetupPremium"]').forEach((el) => el.classList.add("hidden"));
+          document.getElementById("screenSetupPremium")?.classList.add("hidden");
+          return;
+        }
+
         const roleNow = String(window.__BC_CTX__?.role || "").toLowerCase();
         const isWaiterNow = roleNow === "waiter";
         const btnWelcomeBackToSetup = document.getElementById("btnWelcomeBackToSetup");
@@ -8400,54 +8425,35 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
         console.log("[SETUP] btnWelcomeStart element =", btnWelcomeStart);
         console.log("[SETUP] btnWelcomeStart id/class =", btnWelcomeStart?.id, btnWelcomeStart?.className);
-        if (!btnWelcomeStart && window.isDemo) {
-          console.warn("[BC][DEMO] btnWelcomeStart missing ❌");
-        }
-        if (btnWelcomeStart && window.isDemo) {
-          function demoStartNow() {
-            // 1) Force demo state
-            window.isDemo = true;
-            window.bcMode = "demo";
-            window.__BC_STANDALONE_DEMO__ = true;
-
-            // 2) Ensure demo wines exist
-            window.LIMIT = 3;
-            window.wines = window.wines || [
-              { name: "Demo Chenin Blanc", varietal: "Chenin Blanc", region: "Western Cape", story: "Crisp + bright." },
-              { name: "Demo Pinotage", varietal: "Pinotage", region: "Stellenbosch", story: "Plum + spice." },
-              { name: "Demo MCC Brut", varietal: "Chardonnay / Pinot Noir", region: "Western Cape", story: "Fresh bubbles." },
-            ];
-
-            // 3) Go to play screen
-            showScreen("screenPlay");
-
-            // 4) Start encounter
-            window.startEncounter?.();
-          }
+        // Welcome Start (single binding)
+        if (btnWelcomeStart) {
           btnWelcomeStart.onclick = null;
           btnWelcomeStart.__bcBound = false;
-          bindInput(btnWelcomeStart, demoStartNow);
-          console.log("[BC][DEMO] btnWelcomeStart wired ✅");
-        } else {
-        bindInput(btnWelcomeStart, () => {
-          if (sessionType === "drill") {
-            console.warn("[NAV] setup blocked: drill active");
-            return;
-          }
-          if (isDemo) {
-            localStorage.setItem(coverKey, "true");
+
+          bindInput(btnWelcomeStart, async () => {
+            // Drill guard
+            if (sessionType === "drill") {
+              console.warn("[NAV] start blocked: drill active");
+              return;
+            }
+
+            // Mark cover as dismissed
+            try { localStorage.setItem(coverKey, "true"); } catch {}
+
             resetNavState();
             showScreen("screenPlay");
-            window.startEncounter?.();
-            return;
-          }
-          localStorage.setItem(coverKey, "true");
-          resetNavState();
-          showScreen(ids.setupScreen);
-          setTimeout(() => {
-            requestWinesFromParent();
-          }, 0);
-        });
+
+            // DEMO: start immediately
+            if (window.isDemo || window.bcMode === "demo") {
+              window.startEncounter?.();
+              return;
+            }
+
+            // PREMIUM: ensure ctx/wines are ready then start
+            await startPlayWithReadyGate();
+          });
+
+          console.log("[BOOT] btnWelcomeStart wired ✅", { mode: window.bcMode, isDemo: window.isDemo });
         }
 
         if (!isWaiter) {
