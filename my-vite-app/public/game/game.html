@@ -16,8 +16,13 @@
       try { return new URLSearchParams(location.search).get("mode"); } catch { return null; }
     }
 
+    const __bcForceDemo = String(new URLSearchParams(location.search).get("demo") || "") === "1"
+      || String(queryMode() || "").toLowerCase() === "demo";
     if (isStandalone() && String(queryMode() || "").toLowerCase() === "premium") {
       console.warn("[BC] standalone premium -> DEMO fallback");
+      window.__BC_STANDALONE_DEMO__ = true;
+    }
+    if (__bcForceDemo) {
       window.__BC_STANDALONE_DEMO__ = true;
     }
 
@@ -702,6 +707,8 @@ function isDrillMode() {
       const modeFromQuery = String(queryMode() || "").toLowerCase();
       const bcMode = (standaloneDemo ? "demo" : (modeFromQuery || window.APP_MODE || "demo")) === "premium" ? "premium" : "demo";
       const isDemo = (bcMode === "demo") || standaloneDemo;
+      window.bcMode = bcMode;
+      window.isDemo = isDemo;
       const WINE_LIMIT = isDemo ? 3 : 10;
       const LIMIT = WINE_LIMIT;
       // --- SESSION STATE (single source of truth) ---

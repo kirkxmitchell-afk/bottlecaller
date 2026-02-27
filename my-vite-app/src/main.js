@@ -3441,15 +3441,24 @@ function pushPremiumCtxAndDrill() {
   }
 }
 
-function mountPremiumGameIframe({ showBack = false, backTo = "screenManagerBoard" } = {}) {
+function mountPremiumGameIframe({
+  showBack = false,
+  backTo = "screenManagerBoard",
+  mode = "premium",
+  url = null,
+  forceRemount = false,
+} = {}) {
   const root = document.getElementById("premiumRoot");
   if (!root) return;
 
   // ✅ Do NOT remount if already present
   let iframe = document.getElementById("premiumRootFrame");
-  if (iframe) {
+  if (iframe && !forceRemount) {
     pushPremiumCtxAndDrill();
     return;
+  }
+  if (iframe && forceRemount) {
+    try { iframe.remove(); } catch {}
   }
 
   root.innerHTML = "";
@@ -3460,7 +3469,7 @@ function mountPremiumGameIframe({ showBack = false, backTo = "screenManagerBoard
   const roleNow = String(appState?.profile?.role || "").toLowerCase();
   const resolvedBackTo = roleNow === "waiter" ? "screenPremiumApp" : (backTo || "screenManagerBoard");
   const backToParam = encodeURIComponent(resolvedBackTo);
-  iframe.src = `/game/game.html?mode=premium&showBack=${showBackParam}&backTo=${backToParam}&v=${Date.now()}`;
+  iframe.src = url || `/game/game.html?mode=${encodeURIComponent(mode || "premium")}&showBack=${showBackParam}&backTo=${backToParam}&v=${Date.now()}`;
   iframe.style.width = "100%";
   iframe.style.height = "78vh";
   iframe.style.border = "0";
@@ -4297,6 +4306,24 @@ async function routeManagerBoard(reason = "manual") {
   wireManagerBoardBillingAccess();
 }
 
+function isAuthed() {
+  return !!window.appState?.session?.user?.id;
+}
+
+function routeDemoShellNoAuth() {
+  console.log("[ROUTE] demo (no auth)");
+  showScreen("screenPremiumApp");
+  setPremiumOverlayActive(true);
+  destroyPremiumIframe("routeDemoShellNoAuth");
+  mountPremiumGameIframe({
+    mode: "demo",
+    url: "/game/game.html?mode=demo&demo=1",
+    showBack: false,
+    backTo: null,
+    forceRemount: true,
+  });
+}
+
 async function decideRoute(reason = "decideRoute") {
   clearMsgs();
 
@@ -4304,13 +4331,13 @@ async function decideRoute(reason = "decideRoute") {
     await loadAuthedState(reason);
     await initRestaurantContextAfterAuth();
 
-    // 1) Logged out => Home
-    if (!appState.session?.user) {
+    // 1) Logged out => Demo shell
+    if (!isAuthed()) {
       closeHud();
       setAuthIntent("demo");
       appMode = "public";
-      showScreen("screenHome");
-      setDebug({ step: "decideRoute.logged_out", time: new Date().toISOString(), reason });
+      routeDemoShellNoAuth();
+      setDebug({ step: "decideRoute.logged_out.demo_shell", time: new Date().toISOString(), reason });
       return;
     }
 
