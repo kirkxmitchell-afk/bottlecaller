@@ -3782,6 +3782,11 @@ async function loadAuthedState(reason = "manual") {
   }
 
   appState.session = session || null;
+  if (window.__LAST_USER_ID__ && window.__LAST_USER_ID__ !== appState.session?.user?.id) {
+    destroyPremiumIframe("user_changed");
+  }
+  window.__LAST_USER_ID__ = appState.session?.user?.id;
+
   appState.profile = null;
   appState.restaurant = null;
   appState.invites = [];
