@@ -620,6 +620,11 @@ const appState = {
   restaurant: null,
   invites: [],
 };
+
+function isManagerRole(role) {
+  return ["manager", "group_manager", "enterprise_admin"]
+    .includes(String(role || "").toLowerCase());
+}
 // --- storage key should be per-scope (group/enterprise) ---
 function activeRestaurantStorageKey(scopeId) {
   return `bc_active_restaurant_id::${scopeId || "noscope"}`;
@@ -1009,7 +1014,7 @@ async function assertRestaurantAllowedForCtx(profile, restaurantId) {
   if (!role) return { ok: false, reason: "missing_role" };
 
   // Managers + group/enterprise: must be in bc_scope_restaurants
-  if (role === "manager" && (scopeType === "group" || scopeType === "enterprise")) {
+  if (isManagerRole(role) && (scopeType === "group" || scopeType === "enterprise")) {
     if (!scopeId) return { ok: false, reason: "missing_scope_id" };
 
     const { data, error } = await supabase
@@ -2098,7 +2103,7 @@ function canAccessPremium(profile) {
   const passExpiresAt = profile?.premium_pass_expires_at ? new Date(profile.premium_pass_expires_at) : null;
   const passOk = passExpiresAt && !isNaN(passExpiresAt.getTime()) && passExpiresAt.getTime() > Date.now();
 
-  if (role !== "waiter" && role !== "manager") return { ok: false, reason: "invalid_role" };
+  if (role !== "waiter" && !isManagerRole(role)) return { ok: false, reason: "invalid_role" };
 
   // ✅ HARD OVERRIDE: restaurant membership is premium
   if (restaurantId) return { ok: true, reason: "entitled.restaurant" };
@@ -2438,7 +2443,7 @@ async function loadManagerBoardSeats() {
 }
 
 async function adminSetSeats(newLimit) {
-  if (appState.profile?.role !== "manager") {
+  if (!isManagerRole(appState.profile?.role)) {
     alert("Managers only.");
     return;
   }
@@ -2459,7 +2464,7 @@ async function adminSetSeats(newLimit) {
 }
 
 async function redeemEnterpriseManagerSetupCode() {
-  if (appState.profile?.role !== "manager") {
+  if (!isManagerRole(appState.profile?.role)) {
     alert("Managers only.");
     return;
   }
@@ -2531,7 +2536,7 @@ function wireGroupSetupRedeem() {
 }
 
 function wireManagerBoardBillingAccess() {
-  const isMgr = appState.profile?.role === "manager";
+  const isMgr = isManagerRole(appState.profile?.role);
   const b15 = document.getElementById("mbSeat15");
   const b30 = document.getElementById("mbSeat30");
   const b60 = document.getElementById("mbSeat60");
@@ -3264,7 +3269,7 @@ async function resolveInitialRestaurantForScope(profile) {
   }
 
   // Group/enterprise: choose active per-scope (storage -> first allowed)
-  if (role !== "manager") return null; // only managers switch restaurants
+  if (!isManagerRole(role)) return null; // only managers switch restaurants
   if (!scopeId) return null;
 
   // 1) try stored
@@ -3389,7 +3394,7 @@ async function setActiveRestaurantForGroup(restaurantId) {
   const scopeType = String(p.scope_type || "").toLowerCase();
   const scopeId = p.scope_id || null;
 
-  if (role !== "manager") throw new Error("Only managers can switch restaurants.");
+  if (!isManagerRole(role)) throw new Error("Only managers can switch restaurants.");
   if (!scopeId) throw new Error("Missing scope_id on profile.");
   if (scopeType !== "group" && scopeType !== "enterprise") {
     throw new Error("Restaurant switching only allowed for group/enterprise scopes.");
@@ -3510,7 +3515,7 @@ function getManagerBoardFilter() {
   const scopeType = String(p.scope_type || "").toLowerCase();
   const restaurantId = window.getActiveRestaurantId?.() || null;
 
-  const isManager = role === "manager";
+  const isManager = isManagerRole(role);
   const isGroupish = isManager && (scopeType === "group" || scopeType === "enterprise");
 
   return { restaurantId, isManager, isGroupish };
@@ -3843,7 +3848,7 @@ async function loadAuthedState(reason = "manual") {
 // Tabs
 // ------------------------------------------------------------
 function setRole(role) {
-  uiState.role = role === "manager" ? "manager" : "waiter";
+  uiState.role = isManagerRole(role) ? "manager" : "waiter";
   const w = document.getElementById("tabRoleWaiter");
   const m = document.getElementById("tabRoleManager");
   if (uiState.role === "waiter") {
@@ -4023,7 +4028,7 @@ async function routePremium(reason = "manual") {
 
     // ✅ HARD RULE: restaurant membership routes to premium always (do not block on access_tier)
     if (profile?.restaurant_id) {
-      if (String(profile?.role).toLowerCase() === "manager" && appState.restaurant?.id) {
+      if (isManagerRole(profile?.role) && appState.restaurant?.id) {
         try {
           appState.invites = await loadInvites(appState.restaurant.id);
         } catch {
@@ -4071,7 +4076,7 @@ async function routePremium(reason = "manual") {
     }
 
     // Manager without restaurant -> create it
-    if (String(profile?.role).toLowerCase() === "manager" && !profile?.restaurant_id) {
+    if (isManagerRole(profile?.role) && !profile?.restaurant_id) {
       appMode = "premium";
       closeHud();
       showScreen("screenCreateRestaurant");
@@ -4117,7 +4122,7 @@ async function routeManagerBoard(reason = "manual") {
   await loadAuthedState(`routeManagerBoard:${reason}`);
 
   const role = String(appState.profile?.role || "").toLowerCase();
-  if (role !== "manager") {
+  if (!isManagerRole(role)) {
     setDebug({ step: "managerBoard.blocked", reason, role });
     setMsg("authMsg", "Manager Board is manager-only.", "error");
     showScreen("screenPremiumApp");
@@ -4257,7 +4262,7 @@ function renderHud() {
   document.getElementById("hudRequireInvite").textContent = r ? (r.require_invite ? "Yes" : "No") : "-";
 
   const mgrBtn = document.getElementById("btnManagerBoard");
-  if (mgrBtn) mgrBtn.classList.toggle("hidden", role !== "manager");
+  if (mgrBtn) mgrBtn.classList.toggle("hidden", !isManagerRole(role));
 
   const badge = document.getElementById("premiumBadge");
   if (badge) badge.textContent = `PREMIUM • ${String(role).toUpperCase()}`;
@@ -4266,7 +4271,7 @@ function renderHud() {
   const joinRow = document.getElementById("hudJoinRow");
   const copyRow = document.getElementById("hudCopyRow");
 
-  const isMgr = role === "manager";
+  const isMgr = isManagerRole(role);
   managerBlock?.classList.toggle("hidden", !isMgr);
   joinRow?.classList.toggle("hidden", !isMgr);
   copyRow?.classList.toggle("hidden", !isMgr);
@@ -4293,7 +4298,7 @@ async function adminAddInvite(emailRaw) {
     const sess = appState.session;
     if (!r?.id) throw new Error("Restaurant not loaded.");
     if (!sess?.user) throw new Error("Not logged in.");
-    if (String(appState.profile?.role || "").toLowerCase() !== "manager") throw new Error("Manager only.");
+    if (!isManagerRole(appState.profile?.role)) throw new Error("Manager only.");
 
     const ins = await withTimeout(
       supabase.from("restaurant_invites").insert({
@@ -4338,7 +4343,7 @@ async function adminRevokeInvite(emailRaw) {
     const sess = appState.session;
     if (!r?.id) throw new Error("Restaurant not loaded.");
     if (!sess?.user) throw new Error("Not logged in.");
-    if (String(appState.profile?.role || "").toLowerCase() !== "manager") throw new Error("Manager only.");
+    if (!isManagerRole(appState.profile?.role)) throw new Error("Manager only.");
 
     const upd = await withTimeout(
       supabase
@@ -4369,7 +4374,7 @@ async function adminSaveRequireInvite() {
     setMsg("hudMsg", "");
     const r = appState.restaurant;
     if (!r?.id) throw new Error("Restaurant not loaded.");
-    if (String(appState.profile?.role || "").toLowerCase() !== "manager") throw new Error("Manager only.");
+    if (!isManagerRole(appState.profile?.role)) throw new Error("Manager only.");
 
     const desired = !!document.getElementById("toggleRequireInvite")?.checked;
 
@@ -4394,7 +4399,7 @@ async function adminSaveSeatLimit() {
     setMsg("hudMsg", "");
     const r = appState.restaurant;
     if (!r?.id) throw new Error("Restaurant not loaded.");
-    if (String(appState.profile?.role || "").toLowerCase() !== "manager") throw new Error("Manager only.");
+    if (!isManagerRole(appState.profile?.role)) throw new Error("Manager only.");
 
     const raw = document.getElementById("seatLimitInput")?.value;
     const seatLimit = raw ? parseInt(raw, 10) : NaN;
