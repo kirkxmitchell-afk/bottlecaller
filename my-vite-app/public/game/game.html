@@ -139,7 +139,7 @@
       <!-- Demo card -->
       <div class="card" id="cardDemo">
         <strong>Demo</strong>
-        <div class="score-row">Wines saved: <span id="homeDemoCount">0 / 2</span></div>
+        <div class="score-row">Wines saved: <span id="homeDemoCount">0 / 3</span></div>
         <div class="score-row">Runs saved: <span id="homeDemoRuns">0</span></div>
         <div class="card" style="margin-top:10px;">
           <strong>Progress</strong>
@@ -189,7 +189,7 @@
   <section id="screenSetupDemo" class="screen">
     <div class="panel">
       <h2>Setup</h2>
-      <div class="score-row">Wines added: <span id="wineCountDemo">0 / 2</span></div>
+      <div class="score-row">Wines added: <span id="wineCountDemo">0 / 3</span></div>
 
       <div class="manager-row">
         <input type="text" id="wineNameInputDemo" placeholder="Wine Name (required)" />
@@ -679,7 +679,7 @@ function isDrillMode() {
       // ============================================================
       const bcMode = (window.APP_MODE === "premium") ? "premium" : "demo";
       const isDemo = bcMode === "demo";
-      const LIMIT = isDemo ? 2 : 10;
+      const LIMIT = isDemo ? 3 : 10;
       // --- SESSION STATE (single source of truth) ---
       let sessionId = null;
       let sessionType = null; // "drill" | "run" | null
@@ -1480,13 +1480,19 @@ function ensureProgLoaded() {
             mode: msg.mode ?? null,
           };
 
-          const valid = !!next.userId && !!next.restaurantId && !!next.role;
+          const isDemoCtx = String(next.mode || "").toLowerCase() === "demo";
+          const valid = !!next.userId && !!next.role && (isDemoCtx || !!next.restaurantId);
           if (!valid) {
             console.warn("[BC] setCtx ignored (partial ctx)", next);
             return;
           }
 
-          if (window.__BC_CTX__?.userId && window.__BC_CTX__?.restaurantId) return;
+          if (
+            window.__BC_CTX__?.userId &&
+            window.__BC_CTX__?.userId === next.userId &&
+            String(window.__BC_CTX__?.mode || "").toLowerCase() === String(next.mode || "").toLowerCase() &&
+            (isDemoCtx || window.__BC_CTX__?.restaurantId)
+          ) return;
 
           window.__BC_CTX__ = next;
 
@@ -1497,15 +1503,24 @@ function ensureProgLoaded() {
         }
         window.__BC_SET_CTX__ = setCtx;
 
+        function getIframeMode() {
+          try {
+            return new URLSearchParams(location.search).get("mode") || window.APP_MODE || "premium";
+          } catch {
+            return window.APP_MODE || "premium";
+          }
+        }
+
         function requestCtxOnce() {
           if (window.__BC_CTX_REQUESTED__) return;
           window.__BC_CTX_REQUESTED__ = true;
           try {
+            const mode = getIframeMode();
             window.parent?.postMessage(
-              { source: "BC_MSG", v: 1, type: "bc_ctx_request", mode: window.APP_MODE || "premium" },
+              { source: "BC_MSG", v: 1, type: "bc_ctx_request", mode },
               location.origin
             );
-            console.log("[BC] bc_ctx_request sent ✅");
+            console.log("[BC] bc_ctx_request sent ✅", mode);
           } catch (e) {
             console.warn("[BC] bc_ctx_request failed", e);
           }
@@ -1549,11 +1564,12 @@ function ensureProgLoaded() {
 
           function requestCtxAgain() {
             try {
+              const mode = getIframeMode();
               window.parent?.postMessage(
-                { source: "BC_MSG", v: 1, type: "bc_ctx_request", mode: window.APP_MODE || "premium" },
+                { source: "BC_MSG", v: 1, type: "bc_ctx_request", mode },
                 location.origin
               );
-              console.log("[BC] bc_ctx_request re-sent ✅");
+              console.log("[BC] bc_ctx_request re-sent ✅", mode);
             } catch (e) {
               console.warn("[BC] re-request ctx failed", e);
             }
@@ -1990,7 +2006,9 @@ function ensureProgLoaded() {
 
         if (bundle && typeof bundle === "object") {
           const list = bundle[mode] || bundle.premium || bundle.demo || [];
-          return normalizeEncounterGuestStates(list);
+          const normalized = normalizeEncounterGuestStates(list);
+          if (String(mode || "").toLowerCase() === "demo") return normalized.slice(0, 3);
+          return normalized;
         }
 
         return [];
@@ -2804,6 +2822,10 @@ function ensureProgLoaded() {
           const roleNow = String(window.__BC_CTX__?.role || "").toLowerCase();
           const isWaiterNow = roleNow === "waiter";
           if (msg.target === "setup_premium" || msg.action === "setup_premium") {
+            if (isDemo) {
+              window.showToast?.("Setup is Premium only.");
+              return;
+            }
             if (isWaiterNow) {
               window.showToast?.("Only managers can edit the wine list.");
               return;
@@ -3841,6 +3863,7 @@ function ensureProgLoaded() {
       }
 
       async function loadWines() {
+        if (isDemo && !restaurantId) restaurantId = "demo";
         if (!restaurantId) return [];
         // DEMO: localStorage only
         if (isDemo) {
@@ -3848,7 +3871,7 @@ function ensureProgLoaded() {
           return (out || [])
             .map(normalizeWineToDbShape)
             .map(w => sanitizeWine(w))
-            .slice(0, LIMIT);
+            .slice(0, 3);
         }
 
         // PREMIUM: DB source of truth
@@ -7692,6 +7715,10 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           alert("Encounter list is empty. Drill cannot start.");
           return;
         }
+        if (isDemo) {
+          const maxIdx = Math.max(0, list.length - 1);
+          encounterIndex = Math.min(Math.max(0, encounterIndex), maxIdx);
+        }
         if (typeof encounterIndex !== "number") {
           const n = Number(encounterIndex);
           encounterIndex = Number.isFinite(n) ? n : 0;
@@ -8025,6 +8052,11 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
         bindInput(btn, async () => {
           resetNavState();
+          if (isDemo) {
+            localStorage.setItem(coverKey, "true");
+            showScreen("screenHome");
+            return;
+          }
           await startPlayWithReadyGate();
         });
         console.log("[WAITER] Play button wired ✅");
@@ -8194,27 +8226,25 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
         console.log("[SETUP] btnWelcomeStart element =", btnWelcomeStart);
         console.log("[SETUP] btnWelcomeStart id/class =", btnWelcomeStart?.id, btnWelcomeStart?.className);
-        if (!isWaiter) {
-          bindInput(btnWelcomeStart, () => {
-            if (sessionType === "drill") {
-              console.warn("[NAV] setup blocked: drill active");
-              return;
+        bindInput(btnWelcomeStart, () => {
+          if (sessionType === "drill") {
+            console.warn("[NAV] setup blocked: drill active");
+            return;
+          }
+          localStorage.setItem(coverKey, "true");
+          resetNavState();
+          showScreen(isDemo ? "screenHome" : ids.setupScreen);
+          setTimeout(() => {
+            if (isDemo) {
+              const list = restaurantId ? WineStore.read(restaurantId) : [];
+              wines = setWines(list);
+              console.log("[BC] setup hydrate after showScreen", { restaurantId, count: wines.length });
+              if (wines.length) hydrateSetupFormFromWine(bcMode, wines[0]);
+            } else {
+              requestWinesFromParent();
             }
-            localStorage.setItem(coverKey, "true");
-            resetNavState();
-            showScreen(isDemo ? "screenHome" : ids.setupScreen);
-            setTimeout(() => {
-              if (isDemo) {
-                const list = restaurantId ? WineStore.read(restaurantId) : [];
-                wines = setWines(list);
-                console.log("[BC] setup hydrate after showScreen", { restaurantId, count: wines.length });
-                if (wines.length) hydrateSetupFormFromWine(bcMode, wines[0]);
-              } else {
-                requestWinesFromParent();
-              }
-            }, 0);
-          });
-        }
+          }, 0);
+        });
 
         if (!isWaiter) {
           bindInput(btnBackToSetup, () => {

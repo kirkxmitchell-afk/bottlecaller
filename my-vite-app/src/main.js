@@ -442,6 +442,13 @@ document.querySelector("#app").innerHTML = `
 
       <!-- Game lives here (isolated) -->
       <div id="gameRootDemo" style="margin-top:10px;"></div>
+      <div class="row" style="margin-top:10px;">
+        <button id="btnDemoRestartEncounter1" class="btn-ghost" type="button">Start from Encounter 1</button>
+      </div>
+      <div class="small" style="margin-top:8px;">
+        Contact us for purchase:
+        <a href="mailto:hello@bottlecaller.com">hello@bottlecaller.com</a>
+      </div>
     </div>
   </section>
 
@@ -1066,12 +1073,14 @@ async function buildBcCtxSafe(requestedMode = null) {
   const profile = S?.profile ?? null;
   if (!userId || !profile?.role) return null;
 
-  const restaurantId = window.getActiveRestaurantId?.() ?? null;
-  if (!restaurantId) return null;
+  const mode = String(requestedMode || "").toLowerCase();
+  const isDemo = mode === "demo";
+  const restaurantId = window.getActiveRestaurantId?.() ?? profile?.restaurant_id ?? null;
+  if (!restaurantId && !isDemo) return null;
 
   return {
     userId,
-    restaurantId,
+    restaurantId: restaurantId ?? null,
     scopeId: profile?.scope_id ?? null,
     role: profile?.role ?? null,
     mode: requestedMode ?? null,
@@ -1110,16 +1119,18 @@ if (!window.__BC_PARENT_BRIDGE__) {
       }
     } catch {}
 
+    const requestedMode = String(p.mode || "").toLowerCase();
+    const needRestaurant = requestedMode !== "demo";
     const rid = window.getActiveRestaurantId?.();
     const ready =
       !!window.appState?.session?.user?.id &&
       !!window.appState?.profile?.role &&
-      !!rid;
+      (needRestaurant ? !!rid : true);
     if (!ready) return;
 
     const bcCtx = await buildBcCtxSafe(p.mode ?? null);
     if (bcCtx) bcCtx.drill = window.__BC_DRILL_CONFIG__ || window.BC_DRILL_CONFIG || null;
-    if (!bcCtx?.userId || !bcCtx?.restaurantId || !bcCtx?.role) {
+    if (!bcCtx?.userId || !bcCtx?.role || (!bcCtx?.restaurantId && requestedMode !== "demo")) {
       console.warn("[PARENT] flushPendingCtx: refusing null/partial bc_ctx", bcCtx);
       return;
     }
@@ -1147,7 +1158,8 @@ if (!window.__BC_PARENT_BRIDGE__) {
     window.__BC_RESTAURANT_WATCH__ = setInterval(() => {
       if (!window.__BC_PENDING_CTX_REQ__) return;
       if (!window.appState?.session?.user?.id || !window.appState?.profile?.role) return;
-      if (!window.getActiveRestaurantId?.()) return;
+      const pendingMode = String(window.__BC_PENDING_CTX_REQ__?.mode || "").toLowerCase();
+      if (pendingMode !== "demo" && !window.getActiveRestaurantId?.()) return;
       flushPendingCtx();
     }, 250);
   }
@@ -1215,11 +1227,13 @@ if (!window.__BC_PARENT_BRIDGE__) {
           }
         } catch {}
 
+        const requestedMode = String(msg?.mode || "").toLowerCase();
+        const needRestaurant = requestedMode !== "demo";
         const rid = window.getActiveRestaurantId?.();
         const ready =
           !!window.appState?.session?.user?.id &&
           !!window.appState?.profile?.role &&
-          !!rid;
+          (needRestaurant ? !!rid : true);
 
         if (!ready) {
           console.warn("[PARENT] ctx not ready — queued bc_ctx_request");
@@ -1256,7 +1270,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
           bcCtx,
         });
 
-        if (!bcCtx?.userId || !bcCtx?.restaurantId || !bcCtx?.role) {
+        if (!bcCtx?.userId || !bcCtx?.role || (!bcCtx?.restaurantId && requestedMode !== "demo")) {
           console.warn("[PARENT] refusing to send null/partial bc_ctx", bcCtx);
           return;
         }
@@ -2359,6 +2373,31 @@ function mountGameIframe(targetId, mode /* "demo" | "premium" */) {
   // ctx is now delivered only via bc_ctx_request reply from the iframe
 
   setDebug({ step: "game.iframe.mounted", targetId, mode, src, time: new Date().toISOString() });
+}
+
+function remountDemoIframe({ resetProgress = false } = {}) {
+  const mount = document.getElementById("gameRootDemo");
+  if (!mount) return;
+
+  currentIframeMode = null;
+  const v = Date.now();
+  const reset = resetProgress ? "&reset_progress=1" : "";
+  mount.innerHTML = `
+    <iframe
+      id="gameRootDemoFrame"
+      src="/game/game.html?mode=demo&v=${v}${reset}"
+      title="BottleCaller Game"
+      style="
+        width: 100%;
+        height: 420px;
+        border: 1px solid rgba(255,255,255,0.10);
+        border-radius: 14px;
+        background: rgba(0,0,0,0.35);
+        box-shadow: 0 10px 28px rgba(0,0,0,0.55);
+      "
+      loading="eager"
+    ></iframe>
+  `;
 }
 
 function callPremiumIframeNav(fnName) {
@@ -4024,6 +4063,13 @@ function renderDemoJoinBlock() {
   if (joinBlock) (showJoin ? joinBlock.classList.remove("hidden") : joinBlock.classList.add("hidden"));
 }
 
+function wireDemoButtons() {
+  const b = document.getElementById("btnDemoRestartEncounter1");
+  if (!b || b.__wired) return;
+  b.__wired = true;
+  b.addEventListener("click", () => remountDemoIframe({ resetProgress: true }));
+}
+
 async function demoJoinRestaurantByCode() {
   try {
     clearMsgs();
@@ -4104,26 +4150,8 @@ async function routeDemo(reason = "manual") {
   setDebug({ step: "route.demo", time: new Date().toISOString(), reason, authed: !!appState.session?.user });
   showScreen("screenGameDemo");
   renderDemoJoinBlock();
+  wireDemoButtons();
   mountGameIframe("gameRootDemo", "demo");
-  setTimeout(() => {
-    const frame = document.getElementById("gameRootDemoFrame");
-    const w = frame?.contentWindow;
-    if (!w) return;
-
-    w.postMessage(
-      {
-        source: "BC_MSG",
-        v: 1,
-        type: "bc_ctx",
-        userId: appState.session?.user?.id || null,
-        restaurantId: appState.profile?.restaurant_id || null,
-        scopeId: appState.profile?.scope_id || null,
-        role: appState.profile?.role || null,
-        mode: "demo",
-      },
-      window.location.origin
-    );
-  }, 50);
 }
 
 async function routePremium(reason = "manual") {
