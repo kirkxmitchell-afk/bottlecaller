@@ -365,12 +365,13 @@ document.querySelector("#app").innerHTML = `
             <div id="mbRecent" class="small" style="opacity:.9;">Loading…</div>
           </div>
 
-          <div id="mbMembersCard" class="card" style="margin-top:12px;">
-            <strong>Members</strong>
-            <div class="small-text" style="margin-top:6px;">
-              Staff linked to this active restaurant.
+          <div class="card" id="mbMembersCard" style="margin-top:12px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+              <strong>Members</strong>
+              <button id="mbRefreshMembers" class="btn" type="button">Refresh</button>
             </div>
-            <div id="mbMembersList" style="margin-top:10px;"></div>
+            <div id="mbMembersMsg" class="small-text" style="margin-top:6px;"></div>
+            <div id="mbMembersList" style="margin-top:10px; display:flex; flex-direction:column; gap:8px;"></div>
           </div>
         </div>
 
@@ -3575,15 +3576,19 @@ function getManagerBoardFilter() {
 
 async function loadManagerBoardMembers() {
   const rid = window.appState?.activeRestaurantId || window.appState?.profile?.restaurant_id || null;
-
   const box = document.getElementById("mbMembersList");
-  if (!box) return;
+  const msg = document.getElementById("mbMembersMsg");
+  if (!box || !msg) return;
+
+  box.innerHTML = "";
+  msg.textContent = "";
+
   if (!rid) {
-    box.innerHTML = `<div class="small-text">No active restaurant selected.</div>`;
+    msg.textContent = "No active restaurant selected.";
     return;
   }
 
-  box.innerHTML = `<div class="small-text">Loading…</div>`;
+  msg.textContent = "Loading members…";
 
   const { data, error } = await supabase
     .from("profiles")
@@ -3592,20 +3597,44 @@ async function loadManagerBoardMembers() {
     .order("created_at", { ascending: true });
 
   if (error) {
-    box.innerHTML = `<div class="small-text">Failed to load members: ${escapeHtml(error.message)}</div>`;
+    msg.textContent = "Failed to load members: " + (error.message || "unknown");
     return;
   }
 
-  const rows = (data || []).map((p) => `
-    <div style="display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid rgba(255,255,255,.08)">
-      <div>
-        <div style="font-weight:700">${escapeHtml(p.display_name || "(no name)")}</div>
-        <div class="small-text">${escapeHtml(p.role || "")} • ${escapeHtml(p.user_id || "")}</div>
-      </div>
-    </div>
-  `).join("");
+  const rows = (data || []).map((p) => {
+    const name = String(p?.display_name || "").trim() || "(no name)";
+    const role = String(p?.role || "").toLowerCase();
+    const badge =
+      role === "waiter" ? "Waiter" :
+      role === "manager" ? "Manager" :
+      role === "group_manager" ? "Group Manager" :
+      role === "enterprise_admin" ? "Enterprise Admin" :
+      role;
 
-  box.innerHTML = rows || `<div class="small-text">No members found.</div>`;
+    return `
+      <div class="card" style="padding:10px; border-radius:12px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+          <div style="min-width:0;">
+            <div style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+              ${escapeHtml(name)}
+            </div>
+            <div class="small-text" style="margin-top:2px;">${escapeHtml(p?.user_id || "")}</div>
+          </div>
+          <div class="small-text" style="white-space:nowrap; opacity:0.9;">${escapeHtml(badge)}</div>
+        </div>
+      </div>
+    `;
+  });
+
+  box.innerHTML = rows.join("") || `<div class="small-text">No members found.</div>`;
+  msg.textContent = `${(data || []).length} member(s) loaded.`;
+}
+
+function wireManagerBoardMembers() {
+  const btn = document.getElementById("mbRefreshMembers");
+  if (!btn || btn.__wired) return;
+  btn.__wired = true;
+  btn.addEventListener("click", () => loadManagerBoardMembers());
 }
 
 async function loadManagerBoardData() {
@@ -3621,6 +3650,7 @@ async function loadManagerBoardData() {
     document.getElementById("mbRestName").textContent =
       appState.restaurant?.name || (String(restaurantId).slice(0, 8) + "…");
     document.getElementById("mbMsg").textContent = "";
+    wireManagerBoardMembers();
     await loadManagerBoardMembers();
 
     // Views you actually have
