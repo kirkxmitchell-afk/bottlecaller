@@ -625,14 +625,13 @@ function activeRestaurantStorageKey(scopeId) {
   return `bc_active_restaurant_id::${scopeId || "noscope"}`;
 }
 
-function getStoredActiveRestaurantId() {
-  const scopeId = window.appState?.profile?.scope_id || null;
+function getStoredActiveRestaurantId(scopeId = window.appState?.profile?.scope_id || null) {
   try { return localStorage.getItem(activeRestaurantStorageKey(scopeId)) || null; }
   catch { return null; }
 }
 
-function setStoredActiveRestaurantId(rid) {
-  const scopeId = window.appState?.profile?.scope_id || null;
+function setStoredActiveRestaurantId(scopeId = window.appState?.profile?.scope_id || null, rid = null) {
+  if (!rid) return;
   try { localStorage.setItem(activeRestaurantStorageKey(scopeId), rid); } catch {}
 }
 
@@ -736,7 +735,8 @@ async function fetchAllowedRestaurantsForScope(scopeId) {
   const { data, error } = await supabase
     .from("bc_scope_restaurants")
     .select("restaurant_id, restaurants:restaurants(id,name,code,seat_limit,require_invite)")
-    .eq("scope_id", scopeId);
+    .eq("scope_id", scopeId)
+    .order("created_at", { ascending: true });
 
   if (error) {
     console.warn("[MB] fetchAllowedRestaurantsForScope failed", error);
@@ -762,7 +762,7 @@ async function ensureActiveRestaurantValid() {
   const allowed = await fetchAllowedRestaurantsForScope(scopeId);
   const allowedIds = new Set(allowed.map(r => r.id));
 
-  const stored = getStoredActiveRestaurantId();
+  const stored = getStoredActiveRestaurantId(scopeId);
   const candidate =
     stored ||
     S.activeRestaurantId ||
@@ -775,7 +775,7 @@ async function ensureActiveRestaurantValid() {
   }
 
   S.activeRestaurantId = next;
-  if (next) setStoredActiveRestaurantId(next);
+  if (next) setStoredActiveRestaurantId(scopeId, next);
 
   return { ok: !!next, activeRestaurantId: next, allowed };
 }
@@ -1504,13 +1504,18 @@ function showScreen(id) {
 
 function onScreenChanged(id) {
   console.log("[NAV] parent onScreenChanged ->", id);
+  const role = String(appState?.profile?.role || "").toLowerCase();
+  const isWaiter = role === "waiter";
 
   const isPremium = id === "screenPremiumApp" || id === "screenPlay";
   setPremiumOverlayActive(isPremium);
 
   if (isPremium) {
     if (!document.getElementById("premiumRootFrame")) {
-      mountPremiumGameIframe({ showBack: true, backTo: "screenManagerBoard" });
+      mountPremiumGameIframe({
+        showBack: true,
+        backTo: isWaiter ? "screenPremiumApp" : "screenManagerBoard"
+      });
     }
   }
 
@@ -1521,6 +1526,10 @@ function onScreenChanged(id) {
 
 function shouldIgnoreDuplicateNav(msg) {
   if (!msg || (msg.type !== "nav" && msg.type !== "nav_back")) return false;
+
+  // Do NOT ignore nav_back — it's an escape hatch.
+  if (msg.type === "nav_back") return false;
+
   window.__BC_LAST_NAV_AT__ = window.__BC_LAST_NAV_AT__ || 0;
   const now = Date.now();
   if (now - window.__BC_LAST_NAV_AT__ < 250) return true;
@@ -1777,31 +1786,27 @@ function postToGameAfterLoad(msg) {
   const frame = getPremiumFrame();
   if (!frame) return false;
 
-  // If the iframe already loaded, send immediately
-  try {
-    frame.contentWindow?.postMessage(
-      { source: "BC_MSG", v: 1, ...(msg || {}) },
-      window.location.origin
-    );
-    return true;
-  } catch {}
+  const send = () => {
+    try {
+      frame.contentWindow?.postMessage(
+        { source: "BC_MSG", v: 1, ...(msg || {}) },
+        window.location.origin
+      );
+      return true;
+    } catch (e) {
+      console.warn("[PARENT] postToGameAfterLoad send failed", e);
+      return false;
+    }
+  };
 
-  // Otherwise, wait for load then send
+  // Always bind one load retry, then also try immediate best-effort send.
   frame.addEventListener(
     "load",
-    () => {
-      try {
-        frame.contentWindow?.postMessage(
-          { source: "BC_MSG", v: 1, ...(msg || {}) },
-          window.location.origin
-        );
-      } catch (e) {
-        console.warn("[PARENT] postToGameAfterLoad failed", e);
-      }
-    },
+    () => send(),
     { once: true }
   );
 
+  send();
   return true;
 }
 
@@ -2023,23 +2028,39 @@ function wireParentButtons() {
   if (btnManagerBoard && !btnManagerBoard.__bcBound) {
     btnManagerBoard.__bcBound = true;
     btnManagerBoard.addEventListener("click", () => {
-      postToGame("nav", { target: "manager_board" });
+      const roleNow = String(appState?.profile?.role || "").toLowerCase();
+      if (roleNow === "waiter") return;
+      showScreen("screenManagerBoard");
+      wireManagerBoardMenu?.();
+      loadManagerBoardData?.();
     });
   }
 
   if (btnFiveMinRep && !btnFiveMinRep.__bcBound) {
     btnFiveMinRep.__bcBound = true;
-    btnFiveMinRep.addEventListener("click", () => {
-      const tier = 0;
+    btnFiveMinRep.addEventListener("click", async () => {
+      const roleNow = String(appState?.profile?.role || "").toLowerCase();
+      const isWaiter = roleNow === "waiter";
       const drill = window.__BC_DRILL_CONFIG__ || window.BC_DRILL_CONFIG || null;
-      postToGame("start_drill", {
+
+      showScreen("screenPlay");
+
+      const backTo = isWaiter ? "screenPremiumApp" : "screenManagerBoard";
+      mountPremiumGameIframe({ showBack: true, backTo });
+
+      postToGameAfterLoad({
+        type: "drill_config",
+        drill: drill || null
+      });
+
+      postToGameAfterLoad({
+        type: "start_drill",
         repTarget: drill?.repTarget ?? 3,
-        focus: drill?.focus ?? null,
-        pool: drill?.pool ?? null,
+        focus: drill?.focus ?? "read",
+        pool: drill?.pool ?? ["decider", "bargain_smart", "griever"],
         durationSec: drill?.durationSec ?? 300,
         tier: drill?.tier ?? 0,
-        drill,
-        starter: "manager"
+        starter: isWaiter ? "waiter" : "manager"
       });
     });
   }
@@ -3188,13 +3209,16 @@ async function loadGroupRestaurantsForPicker() {
 
   // restore active
   const stored =
-    (typeof getStoredActiveRestaurantId === "function" ? getStoredActiveRestaurantId() : null) ||
+    (typeof getStoredActiveRestaurantId === "function"
+      ? getStoredActiveRestaurantId(appState?.profile?.scope_id || null)
+      : null) ||
     localStorage.getItem("BC_ACTIVE_RESTAURANT_ID") ||
     null;
 
   const active = appState.activeRestaurantId || stored || rows[0].id;
   sel.value = active;
   appState.activeRestaurantId = active;
+  setStoredActiveRestaurantId(appState?.profile?.scope_id || null, active);
   localStorage.setItem("BC_ACTIVE_RESTAURANT_ID", active);
   const activeRow = rows.find((x) => x.id === active) || null;
   if (activeRow && !appState.restaurant) appState.restaurant = activeRow;
@@ -3236,7 +3260,7 @@ async function resolveInitialRestaurantForScope(profile) {
 
   // 1) try stored
   let stored = null;
-  try { stored = getStoredActiveRestaurantId(); } catch {}
+  try { stored = getStoredActiveRestaurantId(scopeId); } catch {}
 
   if (stored) {
     try {
@@ -3269,7 +3293,7 @@ async function resolveInitialRestaurantForScope(profile) {
   if (!first) return null;
 
   // persist per-scope so future loads are instant
-  try { setStoredActiveRestaurantId(first); } catch {}
+  try { setStoredActiveRestaurantId(scopeId, first); } catch {}
   return first;
 }
 
@@ -3391,8 +3415,8 @@ async function setActiveRestaurantForGroup(restaurantId) {
     // 1) persist selection (LOCAL preference only)
     appState.activeRestaurantId = restaurantId;
     try {
-      prev.stored = getStoredActiveRestaurantId();
-      setStoredActiveRestaurantId(restaurantId);
+      prev.stored = getStoredActiveRestaurantId(scopeId);
+      setStoredActiveRestaurantId(scopeId, restaurantId);
     } catch {}
 
     const hint = document.getElementById("activeRestaurantHint");
@@ -3435,7 +3459,7 @@ async function setActiveRestaurantForGroup(restaurantId) {
     appState.restaurant = prev.restaurant;
 
     try {
-      if (prev.activeRestaurantId) setStoredActiveRestaurantId(prev.activeRestaurantId);
+      if (prev.activeRestaurantId) setStoredActiveRestaurantId(scopeId, prev.activeRestaurantId);
       else localStorage.removeItem(activeRestaurantStorageKey(appState?.profile?.scope_id || null));
     } catch {}
 
@@ -3933,7 +3957,7 @@ async function routeDemo(reason = "manual") {
 
   if (was !== "demo") forceRemountForModeSwitch("demo");
 
-  const p = window.__BC_APP_STATE__?.profile;
+  const p = appState?.profile;
   const isPremium = String(p?.access_tier || "").toLowerCase().startsWith("premium");
   if (isPremium) {
     console.log("[BC] premium user -> skipping demo mount ✅");
@@ -4007,12 +4031,14 @@ async function routePremium(reason = "manual") {
 
       unmountDemoGame("decideRoute:restaurant-member->premium");
       showScreen("screenPremiumApp");
-      const p = window.__BC_APP_STATE__?.profile;
+      const p = appState?.profile;
       const isPremium = String(p?.access_tier || "").toLowerCase().startsWith("premium");
-      const isGroup = String(p?.scope_type || "").toLowerCase() === "group";
+      const scopeType = String(p?.scope_type || "").toLowerCase();
+      const isGroupOrEnterprise = scopeType === "group" || scopeType === "enterprise";
+      const needsPicker = isGroupOrEnterprise && !appState.activeRestaurantId;
 
-      if (isPremium && isGroup && !p?.restaurant_id) {
-        console.log("[BC] group manager needs active restaurant -> Manager Board");
+      if (isPremium && needsPicker) {
+        console.log("[BC] scope manager needs active restaurant -> Manager Board");
         showScreen("screenManagerBoard");
         return;
       }
@@ -4051,12 +4077,14 @@ async function routePremium(reason = "manual") {
     unmountDemoGame("decideRoute:premium-entitled");
     showScreen("screenPremiumApp");
     wireParentButtons();
-    const p = window.__BC_APP_STATE__?.profile;
+    const p = appState?.profile;
     const isPremium = String(p?.access_tier || "").toLowerCase().startsWith("premium");
-    const isGroup = String(p?.scope_type || "").toLowerCase() === "group";
+    const scopeType = String(p?.scope_type || "").toLowerCase();
+    const isGroupOrEnterprise = scopeType === "group" || scopeType === "enterprise";
+    const needsPicker = isGroupOrEnterprise && !appState.activeRestaurantId;
 
-    if (isPremium && isGroup && !p?.restaurant_id) {
-      console.log("[BC] group manager needs active restaurant -> Manager Board");
+    if (isPremium && needsPicker) {
+      console.log("[BC] scope manager needs active restaurant -> Manager Board");
       showScreen("screenManagerBoard");
       return;
     }
@@ -4421,17 +4449,27 @@ async function redeemPremiumCodeIfProvided() {
   const code = normCode(raw);
   if (!code) return { attempted: false, ok: false };
 
+  const restaurantName = (document.getElementById("premiumRestaurantName")?.value || "").trim();
+  const args = {
+    p_code: code,
+    p_restaurant_name: restaurantName || null
+  };
+
   // IMPORTANT:
   // This RPC name/param must match YOUR database function.
   // If yours is named differently, change the next line only.
   const rpc = await withTimeout(
-    supabase.rpc("claim_license_code", { p_code: code }),
+    supabase.rpc("claim_license_code", args),
     15000,
     "rpc.claim_license_code"
   );
 
   if (rpc.error) throw rpc.error;
-  if (!rpc.data?.ok) throw new Error(rpc.data?.error || "Code failed");
+  if (rpc.data?.ok !== true) {
+    const err = rpc.data?.error || "Code failed";
+    if (err === "need_restaurant_name") throw new Error("Enter your restaurant name to finish setup.");
+    throw new Error(err);
+  }
 
   return { attempted: true, ok: true, data: rpc.data };
 }

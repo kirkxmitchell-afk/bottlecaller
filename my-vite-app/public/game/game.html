@@ -2680,11 +2680,16 @@ function ensureProgLoaded() {
 
         btn.onclick = () => {
           btn.remove();
+          try { exitDrillState?.(); } catch {}
           const backTo = getBackToParam?.() || "screenPremiumApp";
-          window.parent.postMessage(
-            { source: "BC_MSG", v: 1, type: "nav_back", backTo },
-            window.location.origin
-          );
+          const msg = { source: "BC_MSG", v: 1, type: "nav_back", backTo };
+          try {
+            window.parent?.postMessage(msg, window.location.origin);
+            setTimeout(() => {
+              try { window.parent?.postMessage(msg, window.location.origin); } catch {}
+            }, 60);
+          } catch {}
+          try { resetNavState?.(); showScreen?.("screenHome"); } catch {}
         };
 
         document.body.appendChild(btn);
