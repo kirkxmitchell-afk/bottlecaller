@@ -8097,6 +8097,13 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         renderEncounterStep();
       }
 
+      // expose for button handlers + console debugging
+      window.startEncounter = startEncounter;
+      window.__BC_API__ = window.__BC_API__ || {};
+      window.__BC_API__.startEncounter = startEncounter;
+      window.__BC_API__.showScreen = showScreen;
+      window.__BC_API__.resetNavState = resetNavState;
+
       async function startEncounterNumber(n) {
         const idx = Math.max(1, Number(n || 1)) - 1;
         encounterIndex = idx;
@@ -8415,7 +8422,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             showScreen("screenPlay");
 
             // 4) Start encounter
-            startEncounter();
+            window.startEncounter?.();
           }
           btnWelcomeStart.onclick = null;
           btnWelcomeStart.__bcBound = false;
@@ -8431,7 +8438,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             localStorage.setItem(coverKey, "true");
             resetNavState();
             showScreen("screenPlay");
-            startEncounter();
+            window.startEncounter?.();
             return;
           }
           localStorage.setItem(coverKey, "true");
