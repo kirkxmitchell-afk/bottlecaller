@@ -679,7 +679,8 @@ function isDrillMode() {
       // ============================================================
       const bcMode = (window.APP_MODE === "premium") ? "premium" : "demo";
       const isDemo = bcMode === "demo";
-      const LIMIT = isDemo ? 3 : 10;
+      const WINE_LIMIT = isDemo ? 3 : 10;
+      const LIMIT = WINE_LIMIT;
       // --- SESSION STATE (single source of truth) ---
       let sessionId = null;
       let sessionType = null; // "drill" | "run" | null
@@ -2732,6 +2733,11 @@ function ensureProgLoaded() {
         btn.onclick = () => {
           btn.remove();
           try { exitDrillState?.(); } catch {}
+          if (isDemo) {
+            try { resetNavState?.(); } catch {}
+            try { showScreen?.("screenHome"); } catch {}
+            return;
+          }
           const backTo = getBackToParam?.() || "screenPremiumApp";
           const msg = { source: "BC_MSG", v: 1, type: "nav_back", backTo };
           try {
@@ -3064,8 +3070,14 @@ function ensureProgLoaded() {
       }
 
       if (isDemo) {
-        wines = setWines(DEMO_WINES.slice());
-        if (restaurantId) WineStore.write(restaurantId, wines);
+        if (!restaurantId) restaurantId = "demo";
+        const existing = WineStore.migrateIfNeeded(restaurantId) || [];
+        if (existing.length > 0) {
+          wines = setWines(existing.slice(0, WINE_LIMIT));
+        } else {
+          wines = setWines(DEMO_WINES.slice(0, WINE_LIMIT));
+          if (restaurantId) WineStore.write(restaurantId, wines);
+        }
       }
 
       console.log("[BC] wine schema sample", wines?.[0]);
@@ -8097,6 +8109,19 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         if (btnGoPremium) btnGoPremium.textContent = "Setup";
       }
 
+      function applyDemoUIRestrictions() {
+        if (!isDemo) return;
+        [
+          "btnResetRunsDemo",
+          "btnViewHistoryDemo",
+          "btnGoDemo",
+          "btnResetWinesDemo",
+        ].forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) el.style.display = "none";
+        });
+      }
+
       function exitDrillState() {
         sessionType = null;
         try { window.__BC_DRILL_ACTIVE__ = false; } catch {}
@@ -8419,6 +8444,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
       renderWineTables();
       initButtons();
+      applyDemoUIRestrictions();
       try { wireDrillBack_FIXED(); } catch (e) { console.warn("[DRILL] wireDrillBack_FIXED failed", e); }
       applyRoleGatingToSetupUI();
 

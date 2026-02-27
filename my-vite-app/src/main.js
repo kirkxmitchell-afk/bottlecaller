@@ -142,11 +142,11 @@ document.querySelector("#app").innerHTML = `
         <input id="authPassword" type="password" placeholder="Password" />
 
         <!-- ✅ Premium intent extras (only visible when Premium is selected) -->
-        <div id="premiumIntentBlock" class="hidden" style="margin-top:10px;">
+        <div id="premiumIntentBlock" class="hidden" style="margin-top:10px;color:#fff;">
           <input id="premiumLicenseCode" type="text" placeholder="Enter Premium code" />
           <div class="small" style="margin-top:8px;">
             Contact us for purchase:
-            <a href="mailto:hello@bottlecaller.com">hello@bottlecaller.com</a>
+            <a href="mailto:hello@bottlecaller.com" style="color:#fff;">hello@bottlecaller.com</a>
           </div>
         </div>
 
@@ -442,12 +442,9 @@ document.querySelector("#app").innerHTML = `
 
       <!-- Game lives here (isolated) -->
       <div id="gameRootDemo" style="margin-top:10px;"></div>
-      <div class="row" style="margin-top:10px;">
-        <button id="btnDemoRestartEncounter1" class="btn-ghost" type="button">Start from Encounter 1</button>
-      </div>
       <div class="small" style="margin-top:8px;">
         Contact us for purchase:
-        <a href="mailto:hello@bottlecaller.com">hello@bottlecaller.com</a>
+        <a href="mailto:hello@bottlecaller.com" style="color:#fff;">hello@bottlecaller.com</a>
       </div>
     </div>
   </section>
@@ -4063,13 +4060,6 @@ function renderDemoJoinBlock() {
   if (joinBlock) (showJoin ? joinBlock.classList.remove("hidden") : joinBlock.classList.add("hidden"));
 }
 
-function wireDemoButtons() {
-  const b = document.getElementById("btnDemoRestartEncounter1");
-  if (!b || b.__wired) return;
-  b.__wired = true;
-  b.addEventListener("click", () => remountDemoIframe({ resetProgress: true }));
-}
-
 async function demoJoinRestaurantByCode() {
   try {
     clearMsgs();
@@ -4150,7 +4140,6 @@ async function routeDemo(reason = "manual") {
   setDebug({ step: "route.demo", time: new Date().toISOString(), reason, authed: !!appState.session?.user });
   showScreen("screenGameDemo");
   renderDemoJoinBlock();
-  wireDemoButtons();
   mountGameIframe("gameRootDemo", "demo");
 }
 
