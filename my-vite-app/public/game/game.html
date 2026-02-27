@@ -761,10 +761,13 @@ function isDrillMode() {
       // ============================================================
       // ✅ MODE ENFORCEMENT (single source of truth)
       // ============================================================
-      const bcMode = String(window.bcMode || "premium").toLowerCase() === "demo" ? "demo" : "premium";
+      let bcMode = String(window.bcMode || "premium").toLowerCase() === "demo" ? "demo" : "premium";
       const isDemo = !!window.isDemo;
       window.bcMode = bcMode;
       window.isDemo = isDemo;
+      function syncModeFromWindow() {
+        bcMode = String(window.bcMode || bcMode || "premium").toLowerCase() === "demo" ? "demo" : "premium";
+      }
       const WINE_LIMIT = isDemo ? 3 : 10;
       const LIMIT = WINE_LIMIT;
       // --- SESSION STATE (single source of truth) ---
@@ -2113,20 +2116,19 @@ function ensureProgLoaded() {
       }
 
       function getEncounterListForMode() {
-        const mode = (typeof bcMode !== "undefined" && bcMode) ? bcMode : (window.__BC_CTX__?.mode || "premium");
+        const mode = String(window.bcMode || bcMode || "premium").toLowerCase();
+        const bundle = window.__BC_ENCOUNTERS__ || (typeof encounters !== "undefined" ? encounters : null) || {};
 
-        const bundle = window.__BC_ENCOUNTERS__ || (typeof encounters !== "undefined" ? encounters : null);
-
-        if (Array.isArray(bundle)) return normalizeEncounterGuestStates(bundle);
-
-        if (bundle && typeof bundle === "object") {
-          const list = bundle[mode] || bundle.premium || bundle.demo || [];
-          const normalized = normalizeEncounterGuestStates(list);
-          if (String(mode || "").toLowerCase() === "demo") return normalized.slice(0, 3);
-          return normalized;
+        if (Array.isArray(bundle)) {
+          return normalizeEncounterGuestStates(bundle);
         }
 
-        return [];
+        const list = mode === "demo"
+          ? (bundle.demo || bundle.premium || [])
+          : (bundle.premium || bundle.demo || []);
+        const normalized = normalizeEncounterGuestStates(list);
+        if (mode === "demo") return normalized.slice(0, 3);
+        return normalized;
       }
 
       // ---------- Pivot (Recovery / Power Move) scenarios ----------
@@ -4995,6 +4997,10 @@ function ensureProgLoaded() {
       }
 
       async function waitForCtxAndWines(timeoutMs = 1200) {
+        // demo never needs ctx or WineBridge/DB hydration
+        if (window.isDemo || window.bcMode === "demo") {
+          return { ok: true, demo: true, ctx: null, wines: window.wines || [] };
+        }
         const t0 = Date.now();
         while (Date.now() - t0 < timeoutMs) {
           const rid = restaurantId || window.__BC_CTX__?.restaurantId || null;
@@ -7792,6 +7798,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
       }
 
       async function startEncounter() {
+        syncModeFromWindow();
         console.log("[ENCOUNTER] startEncounter()", {
           sessionType,
           encounterIndex: (typeof encounterIndex !== "undefined") ? encounterIndex : "UNDEFINED"
