@@ -53,23 +53,20 @@
       try { return new URLSearchParams(location.search).get("mode"); } catch { return null; }
     }
 
-    (() => {
-      const qs = new URLSearchParams(location.search);
-      const queryMode = (qs.get("mode") || "premium").toLowerCase();
-      const forceDemo = (queryMode === "demo") || (qs.get("demo") === "1");
+    function getMode() {
+      try { return new URLSearchParams(location.search).get("mode") || "premium"; }
+      catch { return "premium"; }
+    }
 
-      window.__BC_STANDALONE_DEMO__ = forceDemo;
-      window.isDemo = forceDemo;
-      window.bcMode = forceDemo ? "demo" : queryMode;
+    const MODE = getMode();
+    const DEMO = (MODE === "demo");
 
-      console.log("[BC][DEMO_INIT]", {
-        queryMode,
-        forceDemo,
-        __BC_STANDALONE_DEMO__: window.__BC_STANDALONE_DEMO__,
-        isDemo: window.isDemo,
-        bcMode: window.bcMode
-      });
-    })();
+    // single source of truth for mode
+    window.bcMode = MODE;
+    window.isDemo = DEMO;
+    window.__BC_STANDALONE_DEMO__ = DEMO;
+
+    console.log("[BC][MODE]", { MODE, DEMO, bcMode: window.bcMode, isDemo: window.isDemo });
 
     // Demo always has wines locally (no DB)
     if (window.isDemo) {
@@ -88,7 +85,7 @@
     }
 
     // ---- app mode (demo/premium) ----
-    const __bcBootMode = window.__BC_STANDALONE_DEMO__ ? "demo" : ((queryMode() || "demo").toLowerCase());
+    const __bcBootMode = MODE.toLowerCase();
     window.APP_MODE =
       window.APP_MODE ||
       __bcBootMode;
@@ -764,10 +761,8 @@ function isDrillMode() {
       // ============================================================
       // ✅ MODE ENFORCEMENT (single source of truth)
       // ============================================================
-      const standaloneDemo = !!window.__BC_STANDALONE_DEMO__;
-      const modeFromQuery = String(queryMode() || "").toLowerCase();
-      const bcMode = (standaloneDemo ? "demo" : (modeFromQuery || window.APP_MODE || "demo")) === "premium" ? "premium" : "demo";
-      const isDemo = (bcMode === "demo") || standaloneDemo;
+      const bcMode = String(window.bcMode || "premium").toLowerCase() === "demo" ? "demo" : "premium";
+      const isDemo = !!window.isDemo;
       window.bcMode = bcMode;
       window.isDemo = isDemo;
       const WINE_LIMIT = isDemo ? 3 : 10;
@@ -1589,6 +1584,7 @@ function ensureProgLoaded() {
         window.__BC_CTX_BOOTSTRAPPED__ = true;
 
         function setCtx(msg) {
+          if (window.isDemo) return;
           const next = {
             userId: msg.userId ?? null,
             restaurantId: msg.restaurantId ?? null,
@@ -1660,7 +1656,7 @@ function ensureProgLoaded() {
             restaurantId = window.__BC_CTX__?.restaurantId ?? restaurantId ?? null;
             scopeId = window.__BC_CTX__?.scopeId ?? scopeId ?? null;
             role = window.__BC_CTX__?.role ?? role ?? null;
-            mode = window.__BC_CTX__?.mode ?? mode ?? null;
+            if (!window.isDemo) mode = window.__BC_CTX__?.mode ?? mode ?? null;
             (async () => {
               try {
                 if (typeof bootstrapWinesFromCtx === "function") {
@@ -8390,14 +8386,34 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
         console.log("[SETUP] btnWelcomeStart element =", btnWelcomeStart);
         console.log("[SETUP] btnWelcomeStart id/class =", btnWelcomeStart?.id, btnWelcomeStart?.className);
+        if (!btnWelcomeStart && window.isDemo) {
+          console.warn("[BC][DEMO] btnWelcomeStart missing ❌");
+        }
         if (btnWelcomeStart && window.isDemo) {
+          function demoStartNow() {
+            // 1) Force demo state
+            window.isDemo = true;
+            window.bcMode = "demo";
+            window.__BC_STANDALONE_DEMO__ = true;
+
+            // 2) Ensure demo wines exist
+            window.LIMIT = 3;
+            window.wines = window.wines || [
+              { name: "Demo Chenin Blanc", varietal: "Chenin Blanc", region: "Western Cape", story: "Crisp + bright." },
+              { name: "Demo Pinotage", varietal: "Pinotage", region: "Stellenbosch", story: "Plum + spice." },
+              { name: "Demo MCC Brut", varietal: "Chardonnay / Pinot Noir", region: "Western Cape", story: "Fresh bubbles." },
+            ];
+
+            // 3) Go to play screen
+            showScreen("screenPlay");
+
+            // 4) Start encounter
+            startEncounter();
+          }
           btnWelcomeStart.onclick = null;
           btnWelcomeStart.__bcBound = false;
-          bindInput(btnWelcomeStart, () => {
-            resetNavState?.();
-            showScreen("screenPlay");
-            startEncounter();
-          });
+          bindInput(btnWelcomeStart, demoStartNow);
+          console.log("[BC][DEMO] btnWelcomeStart wired ✅");
         } else {
         bindInput(btnWelcomeStart, () => {
           if (sessionType === "drill") {
