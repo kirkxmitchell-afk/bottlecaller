@@ -82,6 +82,32 @@
         LIMIT: window.LIMIT,
         wineCount: window.getWineCount()
       });
+
+      // Demo: force the SAME identifiers the game uses
+      if (window.isDemo || window.bcMode === "demo") {
+        // keep window copies
+        window.LIMIT = 3;
+        window.wines = window.wines || [
+          { name: "Demo Chenin Blanc", varietal: "Chenin Blanc", region: "Western Cape", story: "Crisp + bright." },
+          { name: "Demo Pinotage", varietal: "Pinotage", region: "Stellenbosch", story: "Plum + spice." },
+          { name: "Demo MCC Brut", varietal: "Chardonnay / Pinot Noir", region: "Western Cape", story: "Fresh bubbles." },
+        ];
+        window.getWineCount = () => (Array.isArray(window.wines) ? window.wines.length : 0);
+
+        // now force the unqualified identifiers too (the ones isUnlocked() may use)
+        try { LIMIT = window.LIMIT; } catch {}
+        try { wines = window.wines; } catch {}
+        try { getWineCount = window.getWineCount; } catch {}
+
+        // hard bypass
+        try { isUnlocked = () => true; } catch {}
+
+        console.log("[BC][DEMO_FORCE_GLOBALS] ok", {
+          LIMIT: (typeof LIMIT !== "undefined" ? LIMIT : "undef"),
+          wineCount: (typeof getWineCount === "function" ? getWineCount() : "no_fn"),
+          isUnlocked: (typeof isUnlocked === "function" ? isUnlocked() : "no_fn"),
+        });
+      }
     }
 
     // ---- app mode (demo/premium) ----
