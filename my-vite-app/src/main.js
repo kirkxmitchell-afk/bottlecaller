@@ -1496,8 +1496,17 @@ window.__BC_GET_PROGRESSION_SNAPSHOT__ = async ({ userId, restaurantId }) => {
 // Helpers
 // ------------------------------------------------------------
 function showScreen(id) {
-  document.querySelectorAll(".screen").forEach((s) => s.classList.add("hidden"));
-  document.getElementById(id)?.classList.remove("hidden");
+  const screens = document.querySelectorAll(".screen");
+  screens.forEach((s) => s.classList.add("hidden"));
+
+  const el = document.getElementById(id);
+  if (el) {
+    el.classList.remove("hidden");
+  } else {
+    console.error("[NAV] showScreen missing:", id, "-> falling back to screenHome");
+    document.getElementById("screenHome")?.classList.remove("hidden");
+  }
+
   applyRoleTemplateGates();
   onScreenChanged(id);
 }
@@ -2043,7 +2052,7 @@ function wireParentButtons() {
       const isWaiter = roleNow === "waiter";
       const drill = window.__BC_DRILL_CONFIG__ || window.BC_DRILL_CONFIG || null;
 
-      showScreen("screenPlay");
+      showScreen("screenPremiumApp");
 
       const backTo = isWaiter ? "screenPremiumApp" : "screenManagerBoard";
       mountPremiumGameIframe({ showBack: true, backTo });
