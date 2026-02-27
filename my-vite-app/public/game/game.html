@@ -7825,6 +7825,13 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
       async function startEncounter() {
         syncModeFromWindow();
+        console.log("[DEMO][START] gate snapshot", {
+          bcMode,
+          isDemo: window.isDemo,
+          LIMIT: (typeof LIMIT !== "undefined" ? LIMIT : "undef"),
+          getWineCount: (typeof getWineCount === "function" ? getWineCount() : "no_fn"),
+          unlocked: (typeof isUnlocked === "function" ? isUnlocked() : "no_fn"),
+        });
         console.log("[ENCOUNTER] startEncounter()", {
           sessionType,
           encounterIndex: (typeof encounterIndex !== "undefined") ? encounterIndex : "UNDEFINED"
@@ -8457,6 +8464,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           btnWelcomeStart.__bcBound = false;
 
           bindInput(btnWelcomeStart, async () => {
+            console.log("[CLICK] welcome start", { mode: window.bcMode, isDemo: window.isDemo });
             // Drill guard
             if (sessionType === "drill") {
               console.warn("[NAV] start blocked: drill active");
