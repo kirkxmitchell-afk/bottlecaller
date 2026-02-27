@@ -8,6 +8,43 @@
   <link rel="stylesheet" href="/game/game.css" />
 
   <script>
+    (function () {
+      try {
+        var qs = new URLSearchParams(location.search);
+        var mode = qs.get("mode") || "premium";
+        var demo = (mode === "demo") || (qs.get("demo") === "1");
+
+        // Force globals
+        window.__BC_STANDALONE_DEMO__ = demo;
+        window.isDemo = demo;
+        window.bcMode = demo ? "demo" : mode;
+
+        if (demo) {
+          window.LIMIT = 3;
+          window.wines = [
+            { name: "Demo Chenin Blanc", varietal: "Chenin Blanc", region: "Western Cape", story: "Crisp + bright." },
+            { name: "Demo Pinotage", varietal: "Pinotage", region: "Stellenbosch", story: "Plum + spice." },
+            { name: "Demo MCC Brut", varietal: "Chardonnay / Pinot Noir", region: "Western Cape", story: "Fresh bubbles." },
+          ];
+          window.getWineCount = function () { return (Array.isArray(window.wines) ? window.wines.length : 0); };
+          window.isUnlocked = function () { return true; };
+        }
+
+        console.log("[BC][DEMO_BOOTSTRAP]", {
+          href: location.href,
+          mode: mode,
+          demo: demo,
+          bcMode: window.bcMode,
+          LIMIT: window.LIMIT,
+          wineCount: (typeof window.getWineCount === "function") ? window.getWineCount() : null
+        });
+      } catch (e) {
+        console.warn("[BC][DEMO_BOOTSTRAP] failed", e);
+      }
+    })();
+  </script>
+
+  <script>
     function isStandalone() {
       return window.parent === window && !window.frameElement;
     }
