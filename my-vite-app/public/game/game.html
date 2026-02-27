@@ -2680,8 +2680,9 @@ function ensureProgLoaded() {
 
         btn.onclick = () => {
           btn.remove();
+          const backTo = getBackToParam?.() || "screenPremiumApp";
           window.parent.postMessage(
-            { source: "BC_MSG", v: 1, type: "nav", to: "screenManagerBoard", mbTab: "insights" },
+            { source: "BC_MSG", v: 1, type: "nav_back", backTo },
             window.location.origin
           );
         };
@@ -8130,7 +8131,6 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           });
         }
 
-        wireDrillBack();
         applyRoleTemplate();
 
         const IS_IFRAME = !!window.frameElement;
@@ -8345,6 +8345,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
       renderWineTables();
       initButtons();
+      try { wireDrillBack_FIXED(); } catch (e) { console.warn("[DRILL] wireDrillBack_FIXED failed", e); }
       applyRoleGatingToSetupUI();
 
       // ============================================================
