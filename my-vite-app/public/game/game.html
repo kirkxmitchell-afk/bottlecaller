@@ -2462,6 +2462,9 @@ function ensureProgLoaded() {
         }
 
         console.log("[BC] bc_ctx applied ✅", window.__BC_CTX__);
+        if (window.__BC_CTX__) {
+          try { hydrateRunCountFromServer?.(); } catch (e) { console.warn("[BC] hydrateRunCountFromServer failed", e); }
+        }
         try {
           runs = loadRuns();
           updateCounts?.();
