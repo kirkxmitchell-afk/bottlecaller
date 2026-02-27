@@ -165,11 +165,12 @@
         <div class="score-row">Runs saved: <span id="homePremiumRuns">0</span></div>
         <div class="card" style="margin-top:10px;">
           <strong>Progress</strong>
-          <div class="small-text">Level: <span id="progressNamePremium">—</span></div>
-          <div class="small-text">Focus: <span id="progressFocusPremium">—</span></div>
-          <div class="small-text">Next: <span id="progressNextPremium">—</span></div>
-          <div class="small-text">Points: <span id="progressPointsPremium">0</span></div>
-        </div>
+        <div class="small-text">Level: <span id="progressNamePremium">—</span></div>
+        <div class="small-text">Focus: <span id="progressFocusPremium">—</span></div>
+        <div class="small-text">Next: <span id="progressNextPremium">—</span></div>
+        <div class="small-text">Points: <span id="progressPointsPremium">0</span></div>
+        <div class="small-text">Saved runs: <span id="bcSavedRunsPremium">0</span></div>
+      </div>
         <div class="button-row" id="premiumButtons">
           <button id="btnGoPremium" type="button">Setup</button>
           <button id="btnViewHistoryPremium" type="button">View History</button>
@@ -2429,6 +2430,35 @@ function ensureProgLoaded() {
         window.__BC_RESOLVE_CTX_READY__ = () => { try { _resolve?.(); } catch {} };
       })();
 
+      function renderRunsCount(n) {
+        const value = String(Number(n || 0));
+        const elPremium = document.getElementById("bcSavedRunsPremium");
+        const elGeneric = document.getElementById("bcSavedRuns");
+        if (elPremium) elPremium.textContent = value;
+        if (elGeneric) elGeneric.textContent = value;
+      }
+
+      function requestRunsCountFromParent() {
+        const ctx = window.__BC_CTX__;
+        if (!ctx?.userId || !ctx?.restaurantId) return;
+        try {
+          window.parent?.postMessage(
+            {
+              source: "BC_MSG",
+              v: 1,
+              type: "runs_count_request",
+              userId: ctx.userId,
+              restaurantId: ctx.restaurantId,
+            },
+            location.origin
+          );
+        } catch {}
+      }
+
+      async function hydrateRunCountFromServer() {
+        requestRunsCountFromParent();
+      }
+
       function applyBcCtx(msg) {
         const hasIdentity =
           msg.userId != null ||
@@ -2755,6 +2785,12 @@ function ensureProgLoaded() {
             restaurantId: window.__BC_CTX__?.restaurantId
           });
           console.log("[BC] wines_report applied ✅", { count: wines.length });
+          return;
+        }
+
+        if (msg.type === "runs_count_response") {
+          window.__BC_SERVER_RUNS_COUNT__ = Number(msg.count || 0);
+          try { renderRunsCount?.(window.__BC_SERVER_RUNS_COUNT__); } catch {}
           return;
         }
 

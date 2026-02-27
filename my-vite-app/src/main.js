@@ -1151,6 +1151,50 @@ if (!window.__BC_PARENT_BRIDGE__) {
       // Same-origin only (your game is served from the same Vite origin)
       if (event.origin !== window.location.origin) return;
 
+      // RUNS COUNT: iframe asks parent -> parent queries supabase -> reply
+      if (msg.type === "runs_count_request") {
+        try {
+          const userId = String(msg.userId || "");
+          const restaurantId = String(msg.restaurantId || "");
+          if (!userId || !restaurantId) {
+            event.source?.postMessage(
+              { source: "BC_MSG", v: 1, type: "runs_count_response", ok: false, count: 0, error: "missing_params" },
+              event.origin
+            );
+            return;
+          }
+
+          const authed = window.appState?.session?.user?.id;
+          if (authed && authed !== userId) {
+            event.source?.postMessage(
+              { source: "BC_MSG", v: 1, type: "runs_count_response", ok: false, count: 0, error: "forbidden_user" },
+              event.origin
+            );
+            return;
+          }
+
+          const { count, error } = await supabase
+            .from("bc_encounter_resolutions_v2")
+            .select("*", { count: "exact", head: true })
+            .eq("user_id", userId)
+            .eq("restaurant_id", restaurantId);
+
+          if (error) throw error;
+
+          event.source?.postMessage(
+            { source: "BC_MSG", v: 1, type: "runs_count_response", ok: true, count: Number(count || 0) },
+            event.origin
+          );
+          return;
+        } catch (e) {
+          event.source?.postMessage(
+            { source: "BC_MSG", v: 1, type: "runs_count_response", ok: false, count: 0, error: e?.message || String(e) },
+            event.origin
+          );
+          return;
+        }
+      }
+
       // ✅ 1) ctx request MUST be handled before any event_log filtering
       if (msg.type === "bc_ctx_request") {
         try {
@@ -4062,6 +4106,15 @@ async function routePremium(reason = "manual") {
         return;
       }
       mountGameIframe("premiumRoot", "premium");
+      try {
+        postToGame("bc_ctx", {
+          userId: appState.session?.user?.id || null,
+          restaurantId: appState.activeRestaurantId || appState.profile?.restaurant_id || null,
+          scopeId: appState.profile?.scope_id || null,
+          role: appState.profile?.role || null,
+          mode: "premium"
+        });
+      } catch {}
       wireParentButtons();
       refreshParentProgressionUI();
       return;
@@ -4108,6 +4161,15 @@ async function routePremium(reason = "manual") {
       return;
     }
     mountGameIframe("premiumRoot", "premium");
+    try {
+      postToGame("bc_ctx", {
+        userId: appState.session?.user?.id || null,
+        restaurantId: appState.activeRestaurantId || appState.profile?.restaurant_id || null,
+        scopeId: appState.profile?.scope_id || null,
+        role: appState.profile?.role || null,
+        mode: "premium"
+      });
+    } catch {}
     refreshParentProgressionUI();
   } catch (e) {
     console.error(e);
