@@ -8045,13 +8045,13 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         const bindBack = () => {
           const backTo = getBackToParam();
           exitDrillState();
-          if (backTo === "screenManagerBoard") {
+          try {
             window.parent?.postMessage(
-              { source: "BC_MSG", v: 1, type: "nav", to: "screenManagerBoard", mbTab: "insights" },
+              { source: "BC_MSG", v: 1, type: "nav_back", backTo: backTo || "screenPremiumApp" },
               window.location.origin
             );
             return;
-          }
+          } catch {}
           resetNavState();
           showScreen("screenHome");
         };

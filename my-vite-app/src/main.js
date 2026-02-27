@@ -1227,12 +1227,15 @@ if (!window.__BC_PARENT_BRIDGE__) {
         if (shouldIgnoreDuplicateNav(msg)) return;
         const roleNow = String(appState?.profile?.role || "").toLowerCase();
         if (msg.type === "nav_back") {
-          const to = msg.backTo || msg.to || "screenHome";
-          console.log("[PARENT] NAV_BACK ->", to, msg);
+          const requested = String(msg.backTo || msg.to || "screenPremiumApp");
+          const backTo = (roleNow === "waiter" && requested === "screenManagerBoard")
+            ? "screenPremiumApp"
+            : requested;
+          console.log("[PARENT] NAV_BACK ->", backTo, msg);
 
-          try { destroyPremiumIframe("nav_back"); } catch {}
-          try { setPremiumOverlayActive(false); } catch {}
-          showScreen(to);
+          destroyPremiumIframe("nav_back");
+          setPremiumOverlayActive(false);
+          showScreen(backTo);
           return;
         }
         const dest = msg.to || msg.target || msg.backTo || "screenHome";
@@ -1240,6 +1243,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
         if (msg.type === "nav" && msg.to === "screenManagerBoard") {
           if (roleNow === "waiter") {
+            console.warn("[NAV] blocked waiter -> managerboard");
             showScreen("screenPremiumApp");
             return;
           }
