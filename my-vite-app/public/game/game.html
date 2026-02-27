@@ -1711,8 +1711,11 @@ function ensureProgLoaded() {
         }
 
         function requestCtxOnce() {
-          const IS_IFRAME = (window.parent && window.parent !== window) || !!window.frameElement;
-          if (!IS_IFRAME) return;
+          const IS_IFRAME = (window.parent !== window) && !!window.frameElement;
+          if (!IS_IFRAME) {
+            console.log("[BC] standalone - skipping bc_ctx_request");
+            return;
+          }
           if (window.__BC_CTX_REQUESTED__) return;
           window.__BC_CTX_REQUESTED__ = true;
           try {
@@ -1732,6 +1735,12 @@ function ensureProgLoaded() {
           window.addEventListener("message", (event) => {
             const msg = event?.data;
             if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
+            const IS_IFRAME = (window.parent !== window) && !!window.frameElement;
+            const isDemoNow = !!(window.isDemo || window.bcMode === "demo");
+            if (!IS_IFRAME && isDemoNow && msg.type === "bc_ctx") {
+              console.warn("[BC][DEMO] ignoring bc_ctx (standalone demo)", msg);
+              return;
+            }
             if (msg.type !== "bc_ctx") return;
             setCtx(msg);
             console.log("[BC] bc_ctx received ✅", window.__BC_CTX__);
@@ -1764,7 +1773,7 @@ function ensureProgLoaded() {
           });
 
           function requestCtxAgain() {
-            const IS_IFRAME = (window.parent && window.parent !== window) || !!window.frameElement;
+            const IS_IFRAME = (window.parent !== window) && !!window.frameElement;
             if (!IS_IFRAME) return;
             try {
               const mode = getIframeMode();
@@ -1790,7 +1799,7 @@ function ensureProgLoaded() {
           }, 250);
         }
 
-        const IS_IFRAME = (window.parent && window.parent !== window) || !!window.frameElement;
+        const IS_IFRAME = (window.parent !== window) && !!window.frameElement;
         console.log("[BC] iframe check", { IS_IFRAME, hasFrameElement: !!window.frameElement, parentDiff: window.parent !== window });
 
         // If game.html is opened directly (top-level), do NOT block the game.
@@ -2659,6 +2668,7 @@ function ensureProgLoaded() {
       }
 
       function requestRunsCountFromParent() {
+        if (window.isDemo || window.bcMode === "demo") return;
         const ctx = window.__BC_CTX__;
         if (!ctx?.userId || !ctx?.restaurantId) return;
         try {
@@ -2964,6 +2974,12 @@ function ensureProgLoaded() {
         const msg = ev.data;
         if (!msg) return;
         console.log("[IFRAME] message received", msg?.type, msg);
+        const IS_IFRAME = (window.parent !== window) && !!window.frameElement;
+        const isDemoNow = !!(window.isDemo || window.bcMode === "demo");
+        if (!IS_IFRAME && isDemoNow && msg.type === "bc_ctx") {
+          console.warn("[BC][DEMO] ignoring bc_ctx (standalone demo)", msg);
+          return;
+        }
 
         // BC_APP NAV (parent button routing)
         if (msg.source === "BC_APP" && msg.type === "NAV") {
@@ -7887,6 +7903,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         // DEMO FORCE
         if (window.isDemo || window.bcMode === "demo") forceDemoLocals();
         syncModeFromWindow();
+        const isDemoNow = !!(window.isDemo || window.bcMode === "demo" || isDemo || bcMode === "demo");
         try {
           console.log("[DEMO][START] gate snapshot", {
             bcMode,
@@ -7913,10 +7930,10 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           console.log("[START][GATE]", g);
           if (!g.ok) {
             console.warn("[START] blocked: ctx/wines not ready yet");
-            if (!isDemo) return;
+            if (!isDemoNow) return;
           }
 
-          if (isDemo && (!Array.isArray(wines) || wines.length === 0)) {
+          if (isDemoNow && (!Array.isArray(wines) || wines.length === 0)) {
             wines = setWines(loadDemoWines().slice(0, 3));
           }
 
@@ -7938,7 +7955,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           });
           if (!okPlay) {
             console.warn("[DEMO] BLOCKED BY canPlay()");
-            if (isDemo || window.isDemo) {
+          if (isDemoNow) {
               console.warn("[DEMO] overriding canPlay() block");
             } else {
               return;
@@ -7969,7 +7986,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           alert("Encounter list is empty. Drill cannot start.");
           return;
         }
-        if (isDemo) {
+        if (isDemoNow) {
           if (typeof encounterIndex !== "number") encounterIndex = Number(encounterIndex) || 0;
           if (encounterIndex >= list.length) {
             console.warn("[DEMO] encounterIndex out of range, resetting", { encounterIndex, len: list.length });
@@ -7986,19 +8003,22 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
         bcRenderHud("start");
 
-        try {
-          const spine = getProgressionSpine();
-          const [minE, maxE] = spine.selectors.encounterRange();
-          const encounterNumber = encounterIndex + 1;
-          if (encounterNumber < minE) encounterIndex = minE - 1;
-          if (encounterNumber > maxE) encounterIndex = maxE - 1;
-        } catch {}
+        console.log("[DEMO_SPINE_GUARD]", { isDemo: window.isDemo, bcMode: window.bcMode });
+        if (!isDemoNow) {
+          try {
+            const spine = getProgressionSpine();
+            const [minE, maxE] = spine.selectors.encounterRange();
+            const encounterNumber = encounterIndex + 1;
+            if (encounterNumber < minE) encounterIndex = minE - 1;
+            if (encounterNumber > maxE) encounterIndex = maxE - 1;
+          } catch {}
+        }
 
         // ----------------------------
         // Index rules (progression)
         // ----------------------------
         // Premium: STOP when complete (finite)
-        if (!isDemo && encounterIndex >= list.length) {
+        if (!isDemoNow && encounterIndex >= list.length) {
           resetNavState();
           showScreen("screenHome");
           return;
@@ -8016,17 +8036,21 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           const use = src.length ? src : list;
           idx = (typeof encounterIndex === "number" ? encounterIndex : 0) % use.length;
           enc = use[idx];
-        } else if (isDemo) {
-          idx = (encounterIndex % list.length);
-          enc = list[idx];
         } else {
-          // PREMIUM: tierUnlocked drives allowed guest types (points unlocks 5/10)
-          const spine = getProgressionSpine();
-          const points = spine.selectors.points();
-          const allowedTypes = window.allowedGuestTypes(points);
-          const filtered = (Array.isArray(list) ? list : []).filter(e =>
-            allowedTypes.includes(normalizeGuestType(e?.guestStateActual))
-          );
+          // DEMO uses raw list; PREMIUM applies tier-based guest filtering.
+          let allowedTypes = null;
+          if (!isDemoNow) {
+            const spine = getProgressionSpine();
+            const points = spine.selectors.points();
+            allowedTypes = window.allowedGuestTypes(points);
+          }
+
+          let filtered = list;
+          if (!isDemoNow && Array.isArray(allowedTypes) && allowedTypes.length) {
+            filtered = (Array.isArray(list) ? list : []).filter(e =>
+              allowedTypes.includes(normalizeGuestType(e?.guestStateActual))
+            );
+          }
           const src = filtered.length ? filtered : list;
 
           idx = (Number.isFinite(encounterIndex) ? encounterIndex : 0) % src.length;
@@ -8041,7 +8065,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           // Placeholder for drill so renderers can read wineSelected.name safely.
           wine = { name: "DRILL", varietal: "", region: "", story: "" };
         } else {
-          if (isDemo) {
+          if (isDemoNow) {
             // Demo: wine matches encounter index (same pacing)
             wine = wines[(encounterIndex % wines.length)] || wines[0] || null;
           } else {
@@ -8089,28 +8113,46 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         const sameEncounter = !!prev?.runId && prev.runId === encounterRunId;
         const carry = sameEncounter ? prev : null;
 
-        ensureProgLoaded();
-        const spine = getProgressionSpine();
-        const seedFromProg = Number(spine.selectors.effectiveDifficultySeed());
-        const policySeed =
-          (window.__BC_GUARD__ && Number.isFinite(window.__BC_GUARD__.finalDifficulty))
-            ? window.__BC_GUARD__.finalDifficulty
-            : ((window.__BC_DIFFICULTY__ && Number.isFinite(window.__BC_DIFFICULTY__.d))
-                ? window.__BC_DIFFICULTY__.d
-                : (Number.isFinite(seedFromProg)
-                    ? seedFromProg
-                    : (enc.difficulty ?? 1)));
-        enc.difficulty = enc.difficulty ?? policySeed ?? 1;
-        const policy = difficultyPolicy(enc.difficulty);
-        window.__BC_DIFFICULTY__ = {
-          ...policy,
-          tierUnlocked: PROG?.meta?.tierUnlocked || 1,
-          pressure: PROG?.guard?.pressureLevel || 0
-        };
-        if (window.PROG?.meta) {
-          window.PROG.meta.difficultySeed = policy.d;
-          window.PROG.meta.lastUpdatedMs = Date.now();
-          saveProg();
+        let policy = difficultyPolicy(enc.difficulty ?? 1);
+        if (!isDemoNow) {
+          ensureProgLoaded();
+          const spine = getProgressionSpine();
+          const seedFromProg = Number(spine.selectors.effectiveDifficultySeed());
+          const policySeed =
+            (window.__BC_GUARD__ && Number.isFinite(window.__BC_GUARD__.finalDifficulty))
+              ? window.__BC_GUARD__.finalDifficulty
+              : ((window.__BC_DIFFICULTY__ && Number.isFinite(window.__BC_DIFFICULTY__.d))
+                  ? window.__BC_DIFFICULTY__.d
+                  : (Number.isFinite(seedFromProg)
+                      ? seedFromProg
+                      : (enc.difficulty ?? 1)));
+          enc.difficulty = enc.difficulty ?? policySeed ?? 1;
+          policy = difficultyPolicy(enc.difficulty);
+          window.__BC_DIFFICULTY__ = {
+            ...policy,
+            tierUnlocked: PROG?.meta?.tierUnlocked || 1,
+            pressure: PROG?.guard?.pressureLevel || 0
+          };
+          if (window.PROG?.meta) {
+            window.PROG.meta.difficultySeed = policy.d;
+            window.PROG.meta.lastUpdatedMs = Date.now();
+            saveProg();
+          }
+        } else {
+          enc.difficulty = enc.difficulty ?? 1;
+          window.__BC_DIFFICULTY__ = {
+            d: 1,
+            pivotChance: 0.2,
+            hookStrictness: "lenient",
+            hookStrict: false,
+            deliveryStrict: false,
+            deliveryNoise: 0,
+            timeLimitSec: null,
+            streakGate: "relaxed",
+            streakPenaltyMultiplier: 1,
+            tierUnlocked: 1,
+            pressure: 0
+          };
         }
         const pivotPlanned = sameEncounter
           ? (carry?.pivotPlanned ?? false)
