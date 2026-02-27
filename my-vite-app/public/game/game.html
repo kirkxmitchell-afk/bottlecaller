@@ -16,18 +16,42 @@
       try { return new URLSearchParams(location.search).get("mode"); } catch { return null; }
     }
 
-    const __bcForceDemo = String(new URLSearchParams(location.search).get("demo") || "") === "1"
-      || String(queryMode() || "").toLowerCase() === "demo";
-    if (isStandalone() && String(queryMode() || "").toLowerCase() === "premium") {
-      console.warn("[BC] standalone premium -> DEMO fallback");
-      window.__BC_STANDALONE_DEMO__ = true;
-    }
-    if (__bcForceDemo) {
-      window.__BC_STANDALONE_DEMO__ = true;
+    (() => {
+      const qs = new URLSearchParams(location.search);
+      const queryMode = (qs.get("mode") || "premium").toLowerCase();
+      const forceDemo = (queryMode === "demo") || (qs.get("demo") === "1");
+
+      window.__BC_STANDALONE_DEMO__ = forceDemo;
+      window.isDemo = forceDemo;
+      window.bcMode = forceDemo ? "demo" : queryMode;
+
+      console.log("[BC][DEMO_INIT]", {
+        queryMode,
+        forceDemo,
+        __BC_STANDALONE_DEMO__: window.__BC_STANDALONE_DEMO__,
+        isDemo: window.isDemo,
+        bcMode: window.bcMode
+      });
+    })();
+
+    // Demo always has wines locally (no DB)
+    if (window.isDemo) {
+      window.LIMIT = 3;
+      window.wines = [
+        { name: "Demo Chenin Blanc", varietal: "Chenin Blanc", region: "Western Cape", story: "Crisp + bright." },
+        { name: "Demo Pinotage", varietal: "Pinotage", region: "Stellenbosch", story: "Plum + spice." },
+        { name: "Demo MCC Brut", varietal: "Chardonnay / Pinot Noir", region: "Western Cape", story: "Fresh bubbles." },
+      ];
+      window.getWineCount = () => (Array.isArray(window.wines) ? window.wines.length : 0);
+      window.isUnlocked = () => true;
+      console.log("[BC][DEMO_WINES_READY]", {
+        LIMIT: window.LIMIT,
+        wineCount: window.getWineCount()
+      });
     }
 
     // ---- app mode (demo/premium) ----
-    const __bcBootMode = window.__BC_STANDALONE_DEMO__ ? "demo" : (queryMode() || "demo");
+    const __bcBootMode = window.__BC_STANDALONE_DEMO__ ? "demo" : ((queryMode() || "demo").toLowerCase());
     window.APP_MODE =
       window.APP_MODE ||
       __bcBootMode;
@@ -8329,6 +8353,15 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
         console.log("[SETUP] btnWelcomeStart element =", btnWelcomeStart);
         console.log("[SETUP] btnWelcomeStart id/class =", btnWelcomeStart?.id, btnWelcomeStart?.className);
+        if (btnWelcomeStart && window.isDemo) {
+          btnWelcomeStart.onclick = null;
+          btnWelcomeStart.__bcBound = false;
+          bindInput(btnWelcomeStart, () => {
+            resetNavState?.();
+            showScreen("screenPlay");
+            startEncounter();
+          });
+        } else {
         bindInput(btnWelcomeStart, () => {
           if (sessionType === "drill") {
             console.warn("[NAV] setup blocked: drill active");
@@ -8348,6 +8381,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             requestWinesFromParent();
           }, 0);
         });
+        }
 
         if (!isWaiter) {
           bindInput(btnBackToSetup, () => {
