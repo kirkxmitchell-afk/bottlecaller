@@ -794,6 +794,23 @@ function isDrillMode() {
       function syncModeFromWindow() {
         bcMode = String(window.bcMode || bcMode || "premium").toLowerCase() === "demo" ? "demo" : "premium";
       }
+      function forceDemoLocals() {
+        // local flags used throughout the file
+        try { window.isDemo = true; } catch {}
+        try { window.bcMode = "demo"; } catch {}
+        try { bcMode = "demo"; } catch {}
+
+        // demo wines always exist
+        try {
+          LIMIT = 3;
+          wines = Array.isArray(wines) && wines.length ? wines : [
+            { name: "Demo Chenin Blanc", varietal: "Chenin Blanc", region: "Western Cape", story: "Crisp + bright." },
+            { name: "Demo Pinotage", varietal: "Pinotage", region: "Stellenbosch", story: "Plum + spice." },
+            { name: "Demo MCC Brut", varietal: "Chardonnay / Pinot Noir", region: "Western Cape", story: "Fresh bubbles." },
+          ];
+          getWineCount = () => (Array.isArray(wines) ? wines.length : 0);
+        } catch {}
+      }
       const WINE_LIMIT = isDemo ? 3 : 10;
       const LIMIT = WINE_LIMIT;
       // --- SESSION STATE (single source of truth) ---
@@ -5013,6 +5030,7 @@ function ensureProgLoaded() {
       }
 
       function canPlay() {
+        if (window.isDemo || window.bcMode === "demo" || isDemo || bcMode === "demo") return true;
         if (Array.isArray(wines) && wines.length > 0) return true;
         if (typeof getWineCount === "function") return (getWineCount() || 0) > 0;
         return false;
@@ -7824,51 +7842,66 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
       }
 
       async function startEncounter() {
+        // DEMO FORCE
+        if (window.isDemo || window.bcMode === "demo") forceDemoLocals();
         syncModeFromWindow();
-        console.log("[DEMO][START] gate snapshot", {
-          bcMode,
-          isDemo: window.isDemo,
-          LIMIT: (typeof LIMIT !== "undefined" ? LIMIT : "undef"),
-          getWineCount: (typeof getWineCount === "function" ? getWineCount() : "no_fn"),
-          unlocked: (typeof isUnlocked === "function" ? isUnlocked() : "no_fn"),
-        });
-        console.log("[ENCOUNTER] startEncounter()", {
-          sessionType,
-          encounterIndex: (typeof encounterIndex !== "undefined") ? encounterIndex : "UNDEFINED"
-        });
-        console.log("[DEBUG] before ensureProgLoaded");
-        ensureProgLoaded();
-        console.log("[DEBUG] after ensureProgLoaded", {
-          sessionType,
-          bcMode,
-          encounterIndex,
-          typeofEncounterIndex: typeof encounterIndex,
-          PROG_meta: window.PROG?.meta || null
-        });
+        try {
+          console.log("[DEMO][START] gate snapshot", {
+            bcMode,
+            isDemo: window.isDemo,
+            LIMIT: (typeof LIMIT !== "undefined" ? LIMIT : "undef"),
+            getWineCount: (typeof getWineCount === "function" ? getWineCount() : "no_fn"),
+            unlocked: (typeof isUnlocked === "function" ? isUnlocked() : "no_fn"),
+          });
+          console.log("[ENCOUNTER] startEncounter()", {
+            sessionType,
+            encounterIndex: (typeof encounterIndex !== "undefined") ? encounterIndex : "UNDEFINED"
+          });
+          console.log("[DEBUG] before ensureProgLoaded");
+          ensureProgLoaded();
+          console.log("[DEBUG] after ensureProgLoaded", {
+            sessionType,
+            bcMode,
+            encounterIndex,
+            typeofEncounterIndex: typeof encounterIndex,
+            PROG_meta: window.PROG?.meta || null
+          });
 
-        const g = await waitForCtxAndWines(1500);
-        console.log("[START][GATE]", g);
-        if (!g.ok) {
-          console.warn("[START] blocked: ctx/wines not ready yet");
-          if (!isDemo) return;
-        }
+          const g = await waitForCtxAndWines(1500);
+          console.log("[START][GATE]", g);
+          if (!g.ok) {
+            console.warn("[START] blocked: ctx/wines not ready yet");
+            if (!isDemo) return;
+          }
 
-        if (isDemo && (!Array.isArray(wines) || wines.length === 0)) {
-          wines = setWines(loadDemoWines().slice(0, 3));
-        }
+          if (isDemo && (!Array.isArray(wines) || wines.length === 0)) {
+            wines = setWines(loadDemoWines().slice(0, 3));
+          }
 
-        const okPlay = canPlay();
-        console.log(
-          `[PLAY] ok=${okPlay}` +
-          ` role=${isManager ? "manager" : (isWaiter ? "waiter" : "?")}` +
-          ` rid=${restaurantId || "?"}` +
-          ` wines=${wines?.length ?? "?"}` +
-          ` sessionType=${sessionType || "null"}`
-        );
-        if (!isDemo && sessionType !== "drill" && !okPlay) {
-          console.warn("[PLAY] BLOCKED (needs wines)");
-          return;
-        }
+          const okPlay = canPlay();
+          console.log(
+            `[PLAY] ok=${okPlay}` +
+            ` role=${isManager ? "manager" : (isWaiter ? "waiter" : "?")}` +
+            ` rid=${restaurantId || "?"}` +
+            ` wines=${wines?.length ?? "?"}` +
+            ` sessionType=${sessionType || "null"}`
+          );
+          console.log("[DEMO][canPlay]", okPlay, {
+            hasScreenPlay: !!document.getElementById("screenPlay"),
+            playHidden: document.getElementById("screenPlay")?.classList?.contains("hidden"),
+            hasStepContent: !!document.getElementById("stepContent"),
+            hasStepButtons: !!document.getElementById("stepButtons"),
+            bcMode,
+            isDemo
+          });
+          if (!okPlay) {
+            console.warn("[DEMO] BLOCKED BY canPlay()");
+            if (isDemo || window.isDemo) {
+              console.warn("[DEMO] overriding canPlay() block");
+            } else {
+              return;
+            }
+          }
 
         if (!sessionId) {
           sessionId = crypto.randomUUID();
@@ -8126,8 +8159,14 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         });
         window.__BC_LAST_ENCOUNTER__ = currentEncounter;
 
-        currentStep = 0;
-        renderEncounterStep();
+          currentStep = 0;
+          console.log("[DEMO] calling renderEncounterStep()", { currentStep, encounterIndex, hasEncounter: !!window.currentEncounter });
+          renderEncounterStep();
+        } catch (e) {
+          console.error("[BC][FATAL] startEncounter crashed", e);
+          alert("startEncounter crashed — check console [BC][FATAL].");
+          return;
+        }
       }
 
       // expose for button handlers + console debugging
@@ -8425,6 +8464,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         const btnExitDrill = document.getElementById("btnExitDrill");
         const btnStartAnotherDrill = document.getElementById("btnStartAnotherDrill");
         const btnFiveMinDrill = document.getElementById("btnFiveMinDrill");
+        const btnGoPremium = document.getElementById("btnGoPremium");
         const roleNow = String(window.__BC_CTX__?.role || "").toLowerCase();
         const isWaiter = roleNow === "waiter";
 
@@ -8440,6 +8480,22 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         }
 
         applyRoleTemplate();
+
+        if (window.isDemo || window.bcMode === "demo") {
+          if (btnGoPremium) {
+            btnGoPremium.textContent = "Play";
+            btnGoPremium.classList.remove("hidden");
+            btnGoPremium.disabled = false;
+            btnGoPremium.onclick = null;
+            btnGoPremium.__bcBound = false;
+
+            bindInput(btnGoPremium, () => {
+              resetNavState();
+              showScreen("screenPlay");
+              window.startEncounter?.();
+            });
+          }
+        }
 
         const IS_IFRAME = !!window.frameElement;
         if (IS_IFRAME && btnGoSetup && !isWaiter) {
