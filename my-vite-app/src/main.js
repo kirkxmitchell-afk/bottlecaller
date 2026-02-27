@@ -4738,6 +4738,19 @@ document.getElementById("btnAddInvite").addEventListener("click", async () => {
 document.getElementById("btnSaveRequireInvite").addEventListener("click", adminSaveRequireInvite);
 document.getElementById("btnSaveSeatLimit").addEventListener("click", adminSaveSeatLimit);
 
+// Debug + cross-module access (safe to ship)
+window.__BC_MB__ = window.__BC_MB__ || {};
+window.__BC_MB__.wireManagerBoardMenu = wireManagerBoardMenu;
+window.__BC_MB__.applyManagerBoardVisibility = applyManagerBoardVisibility;
+window.__BC_MB__.loadManagerInsights = loadManagerInsights;
+window.__BC_MB__.loadManagerBoardData = loadManagerBoardData;
+
+// Optional convenience aliases (only if you want old calls to work)
+window.wireManagerBoardMenu = wireManagerBoardMenu;
+window.applyManagerBoardVisibility = applyManagerBoardVisibility;
+window.loadManagerInsights = loadManagerInsights;
+window.loadManagerBoardData = loadManagerBoardData;
+
 // ------------------------------------------------------------
 // Boot + auth change
 // ------------------------------------------------------------
