@@ -85,6 +85,15 @@
 
       // Demo: force the SAME identifiers the game uses
       if (window.isDemo || window.bcMode === "demo") {
+        // Force legacy globals used across old code paths
+        window.__BC_CTX__ = null;
+        try { restaurantId = "demo"; } catch {}
+        try { role = "demo"; } catch {}
+        try { sessionType = null; } catch {}
+        window.restaurantId = "demo";
+        window.role = "demo";
+        window.sessionType = null;
+
         // keep window copies
         window.LIMIT = 3;
         window.wines = window.wines || [
@@ -876,6 +885,14 @@ function isDrillMode() {
 
         return spine;
       }
+      window.getProgressionSpine = getProgressionSpine;
+      window.__BC_VARS__ = () => ({
+        restaurantId: (typeof restaurantId !== "undefined" ? restaurantId : undefined),
+        role: (typeof role !== "undefined" ? role : undefined),
+        sessionType: (typeof sessionType !== "undefined" ? sessionType : undefined),
+        bcMode: window.bcMode,
+        isDemo: window.isDemo,
+      });
 
       function tryGetProgressionSpine() {
         const host =
@@ -1488,7 +1505,12 @@ function ensureProgLoaded() {
   if (typeof PROG.unlocks.guestFancy !== "boolean") PROG.unlocks.guestFancy = false;
   if (typeof PROG.unlocks.guestCelebrator !== "boolean") PROG.unlocks.guestCelebrator = false;
 
-  evaluateUnlocks();
+  // DO NOT evaluate unlocks in demo
+  if (window.isDemo || window.bcMode === "demo") return;
+
+  try { evaluateUnlocks(); } catch (e) {
+    console.warn("[PROG] ensureProgLoaded: evaluateUnlocks failed", e);
+  }
 
   console.log("[PROG] ensure key =", progKey());
   window.PROG = PROG;
