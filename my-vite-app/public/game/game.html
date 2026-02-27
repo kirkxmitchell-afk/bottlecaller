@@ -1673,6 +1673,8 @@ function ensureProgLoaded() {
         }
 
         function requestCtxOnce() {
+          const IS_IFRAME = (window.parent && window.parent !== window) || !!window.frameElement;
+          if (!IS_IFRAME) return;
           if (window.__BC_CTX_REQUESTED__) return;
           window.__BC_CTX_REQUESTED__ = true;
           try {
@@ -1724,6 +1726,8 @@ function ensureProgLoaded() {
           });
 
           function requestCtxAgain() {
+            const IS_IFRAME = (window.parent && window.parent !== window) || !!window.frameElement;
+            if (!IS_IFRAME) return;
             try {
               const mode = getIframeMode();
               window.parent?.postMessage(
@@ -7928,8 +7932,12 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           return;
         }
         if (isDemo) {
-          const maxIdx = Math.max(0, list.length - 1);
-          encounterIndex = Math.min(Math.max(0, encounterIndex), maxIdx);
+          if (typeof encounterIndex !== "number") encounterIndex = Number(encounterIndex) || 0;
+          if (encounterIndex >= list.length) {
+            console.warn("[DEMO] encounterIndex out of range, resetting", { encounterIndex, len: list.length });
+            encounterIndex = 0;
+            try { saveEncounterIndex?.(encounterIndex); } catch {}
+          }
         }
         if (typeof encounterIndex !== "number") {
           const n = Number(encounterIndex);
@@ -8352,7 +8360,6 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         [
           "btnResetRunsDemo",
           "btnViewHistoryDemo",
-          "btnGoDemo",
           "btnResetWinesDemo",
         ].forEach((id) => {
           const el = document.getElementById(id);
@@ -8464,6 +8471,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         const btnExitDrill = document.getElementById("btnExitDrill");
         const btnStartAnotherDrill = document.getElementById("btnStartAnotherDrill");
         const btnFiveMinDrill = document.getElementById("btnFiveMinDrill");
+        const btnGoDemo = document.getElementById("btnGoDemo");
         const btnGoPremium = document.getElementById("btnGoPremium");
         const roleNow = String(window.__BC_CTX__?.role || "").toLowerCase();
         const isWaiter = roleNow === "waiter";
@@ -8480,6 +8488,20 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         }
 
         applyRoleTemplate();
+
+        if (btnGoDemo && (window.isDemo || window.bcMode === "demo")) {
+          btnGoDemo.textContent = "Play";
+          btnGoDemo.onclick = null;
+          btnGoDemo.__bcBound = false;
+
+          bindInput(btnGoDemo, () => {
+            resetNavState();
+            showScreen("screenPlay");
+            window.startEncounter?.();
+          });
+
+          console.log("[BC][DEMO] btnGoDemo wired ✅");
+        }
 
         if (window.isDemo || window.bcMode === "demo") {
           if (btnGoPremium) {
@@ -8498,7 +8520,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         }
 
         const IS_IFRAME = !!window.frameElement;
-        if (IS_IFRAME && btnGoSetup && !isWaiter) {
+        if (IS_IFRAME && btnGoSetup && !isWaiter && !(window.isDemo || window.bcMode === "demo")) {
           btnGoSetup.textContent = "Start";
           btnGoSetup.onclick = null;
           btnGoSetup.__bcBound = false;
