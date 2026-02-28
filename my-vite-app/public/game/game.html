@@ -68,9 +68,9 @@
 
     // DEMO FALLBACKS: no parent progression/tier unlocks
     if (window.isDemo || window.bcMode === "demo") {
-      window.getTierUnlocked = window.getTierUnlocked || (() => 1);
-      window.allowedGuestTypes = window.allowedGuestTypes || (() => ["decider", "bargain_smart", "griever"]);
-      window.getPointsTotal = window.getPointsTotal || (() => 0);
+      window.getTierUnlocked = () => 1;
+      window.allowedGuestTypes = () => ["decider", "bargain_smart", "griever"];
+      window.getPointsTotal = () => 0;
     }
 
     console.log("[BC][MODE]", { MODE, DEMO, bcMode: window.bcMode, isDemo: window.isDemo });
