@@ -1756,6 +1756,21 @@ function ensureProgLoaded() {
             console.log("[BC] standalone - skipping bc_ctx_request");
             return;
           }
+          const modeNow = String(window.bcMode || getIframeMode() || "premium").toLowerCase();
+          if (modeNow === "demo") {
+            window.__BC_CTX__ = window.__BC_CTX__ || {
+              userId: "demo",
+              restaurantId: null,
+              scopeId: null,
+              role: "demo",
+              mode: "demo",
+            };
+            window.__BC_CTX_READY_RESOLVE__?.(window.__BC_CTX__);
+            window.__BC_CTX_READY_RESOLVE__ = null;
+            window.__BC_RESOLVE_CTX_READY__?.();
+            console.log("[BC] demo iframe - skipping bc_ctx_request");
+            return;
+          }
           if (window.__BC_CTX_REQUESTED__) return;
           window.__BC_CTX_REQUESTED__ = true;
           try {
@@ -1815,6 +1830,8 @@ function ensureProgLoaded() {
           function requestCtxAgain() {
             const IS_IFRAME = (window.parent !== window) && !!window.frameElement;
             if (!IS_IFRAME) return;
+            const modeNow = String(window.bcMode || getIframeMode() || "premium").toLowerCase();
+            if (modeNow === "demo") return;
             try {
               const mode = window.bcMode || getIframeMode();
               window.parent?.postMessage(
@@ -1831,10 +1848,12 @@ function ensureProgLoaded() {
           requestCtxOnce();
 
           setTimeout(() => {
+            if (String(window.bcMode || getIframeMode() || "premium").toLowerCase() === "demo") return;
             if (!window.__BC_CTX__?.userId) requestCtxAgain();
           }, 0);
 
           setTimeout(() => {
+            if (String(window.bcMode || getIframeMode() || "premium").toLowerCase() === "demo") return;
             if (!window.__BC_CTX__?.userId) requestCtxAgain();
           }, 250);
         }

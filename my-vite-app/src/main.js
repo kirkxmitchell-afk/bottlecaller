@@ -2538,7 +2538,8 @@ function mountGameIframe(targetId, mode /* "demo" | "premium" */) {
   currentIframeMode = mode;
 
   // Cache-busting param required — but stable within this mode session
-  const src = `/game/game.html?mode=${encodeURIComponent(mode)}&v=${currentIframeVersion}`;
+  const demoFlag = mode === "demo" ? "&demo=1" : "";
+  const src = `/game/game.html?mode=${encodeURIComponent(mode)}${demoFlag}&v=${currentIframeVersion}`;
 
   // ✅ Smaller default height to avoid giant empty space before setup
   mount.innerHTML = `
@@ -3669,6 +3670,8 @@ function mountPremiumGameIframe({
   iframe.style.pointerEvents = "auto";
 
   iframe.addEventListener("load", () => {
+    const modeFromSrc = String(new URL(iframe.src, window.location.href).searchParams.get("mode") || "").toLowerCase();
+    if (modeFromSrc === "demo") return;
     pushPremiumCtxAndDrill();
     console.log("[PARENT] premium iframe loaded ✅ (drill_config + start_drill)");
   });
@@ -4503,16 +4506,13 @@ function isAuthed() {
 
 function routeDemoShellNoAuth() {
   console.log("[ROUTE] demo (no auth)");
-  showScreen("screenPremiumApp");
-  setPremiumOverlayActive(true);
+  showScreen("screenGameDemo");
+  setPremiumOverlayActive(false);
   destroyPremiumIframe("routeDemoShellNoAuth");
-  mountPremiumGameIframe({
-    mode: "demo",
-    url: "/game/game.html?mode=demo&demo=1",
-    showBack: false,
-    backTo: null,
-    forceRemount: true,
-  });
+  window.__BC_DRILL_CONFIG__ = null;
+  window.BC_DRILL_CONFIG = null;
+  setPendingStartDrill(null);
+  mountGameIframe("gameRootDemo", "demo");
 }
 
 async function decideRoute(reason = "decideRoute") {
