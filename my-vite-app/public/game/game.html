@@ -667,6 +667,7 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
               source: "BC_MSG",
               v: 1,
               type: "event_log",
+              mode: window.bcMode || null,
               eventType,
               payload: {
                 eventId: payload?.eventId || crypto.randomUUID(),

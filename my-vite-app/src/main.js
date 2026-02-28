@@ -1221,6 +1221,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
         if (!isFromIframe) return;
 
         if (requestedMode === "demo") {
+          window.__BC_LAST_CTX_MODE__ = "demo";
           event.source?.postMessage(
             {
               source: "BC_MSG",
@@ -1282,6 +1283,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
           return;
         }
         const bcCtx = await buildBcCtxSafe(msg?.mode ?? null);
+        window.__BC_LAST_CTX_MODE__ = "premium";
         if (bcCtx) bcCtx.drill = window.__BC_DRILL_CONFIG__ || window.BC_DRILL_CONFIG || null;
 
         console.log("[PARENT] bc_ctx_request -> reply", {
@@ -1386,7 +1388,8 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
       const isDemoNow =
         String(msg?.mode || "").toLowerCase() === "demo" ||
-        String(msg?.payload?.mode || "").toLowerCase() === "demo";
+        String(msg?.payload?.mode || "").toLowerCase() === "demo" ||
+        String(window.__BC_LAST_CTX_MODE__ || "").toLowerCase() === "demo";
       if (isDemoNow) {
         event.source?.postMessage(
           { source: "BC_MSG", v: 1, type: "event_log_ack", ok: true, demo: true, eventType },
