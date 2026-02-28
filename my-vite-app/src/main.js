@@ -4532,6 +4532,7 @@ function routeAuth() {
   setPendingStartDrill(null);
 
   closeHud();
+  clearMsgs();
   setHomeAuthUI(false);
   setMode("login");
   setAuthIntent("login");

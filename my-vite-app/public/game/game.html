@@ -8527,6 +8527,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         if (!confirm("Reset saved runs only?")) return;
         runs = [];
         saveRuns();
+        window.__BC_SERVER_RUNS_COUNT__ = 0;
         updateCounts?.();
       }
 
