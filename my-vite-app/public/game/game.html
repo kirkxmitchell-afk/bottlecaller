@@ -2121,11 +2121,21 @@ function ensureProgLoaded() {
         throw new Error("Progression spine unavailable: guestTypes cannot be derived from fallback state.");
       };
 
-      window.getTierUnlocked = function getTierUnlocked() {
-        const spine = tryGetProgressionSpine();
-        if (spine?.selectors?.tier) return spine.selectors.tier();
-        throw new Error("Progression spine unavailable: tier cannot be derived from fallback state.");
-      };
+      function getTierUnlocked() {
+        // DEMO: always tier 1
+        if (window.isDemo || window.bcMode === "demo") return 1;
+
+        // PREMIUM: derive from spine if available, otherwise safe fallback
+        const spine = (typeof getProgressionSpine === "function")
+          ? getProgressionSpine({ allowNull: true })
+          : null;
+
+        const tier = spine?.selectors?.tier?.();
+        return (typeof tier === "number" && Number.isFinite(tier)) ? tier : 1;
+      }
+
+      // make sure global uses this
+      window.getTierUnlocked = getTierUnlocked;
 
       function ensureProgKeyAfterCtx() {
         try {
