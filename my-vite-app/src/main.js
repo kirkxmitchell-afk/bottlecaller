@@ -4554,6 +4554,12 @@ async function decideRoute(reason = "decideRoute") {
     // 1) Logged out => Auth by default (Demo only if explicitly requested)
     if (!isAuthed()) {
       appMode = "public";
+      if (window.__BC_FORCE_AUTH__) {
+        window.__BC_FORCE_AUTH__ = false;
+        routeAuth();
+        setDebug({ step: "decideRoute.logged_out.force_auth", time: new Date().toISOString(), reason });
+        return;
+      }
       const qs = new URLSearchParams(window.location.search);
       const wantsDemo = qs.get("demo") === "1";
       if (wantsDemo) {
@@ -4963,6 +4969,13 @@ async function submitAuth() {
 // ------------------------------------------------------------
 async function logoutAll(reason = "logout") {
   try {
+    window.__BC_FORCE_AUTH__ = true;
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.delete("demo");
+      u.searchParams.delete("mode");
+      window.history.replaceState({}, "", u.pathname + (u.search ? u.search : ""));
+    } catch {}
     setPremiumOverlayActive(false);
     destroyPremiumIframe("preSignOut");
     unmountDemoGame("preSignOut");
