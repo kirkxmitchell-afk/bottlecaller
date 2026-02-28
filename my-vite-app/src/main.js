@@ -2357,6 +2357,17 @@ function setHomeAuthUI(isAuthed) {
   }
 }
 
+async function syncAuthUi() {
+  try {
+    const ses = await supabase.auth.getSession();
+    const authed = !!(ses?.data?.session?.user?.id);
+    setHomeAuthUI(authed);
+    console.log("[UI] syncAuthUi", { authed });
+  } catch (e) {
+    console.warn("[UI] syncAuthUi failed", e);
+  }
+}
+
 function hardResetAuthUI() {
   try { setHomeAuthUI(false); } catch {}
 
@@ -5026,12 +5037,16 @@ async function signOutHard() {
     console.log("[AUTH] session after forced clear =", ses2 && ses2.data ? ses2.data.session : null);
   }
 
-  console.log("[AUTH] signOutHard: done");
+  const sesFinal = await supabase.auth.getSession();
+  const stillAuthed = !!(sesFinal?.data?.session);
+  console.log("[AUTH] signOutHard: done", { stillAuthed, user: sesFinal?.data?.session?.user?.id || null });
+  return { stillAuthed, session: sesFinal?.data?.session || null };
 }
 
 async function logoutAll(reason = "logout") {
   console.log("[LOGOUT] start", reason);
   window.__BC_FORCE_AUTH__ = true;
+  let trulyLoggedOut = false;
   try {
     // remove demo/mode params
     try {
@@ -5046,11 +5061,25 @@ async function logoutAll(reason = "logout") {
     unmountDemoGame("logout.pre");
     destroyAllIframes("logout.pre");
 
-    // MUST await sign out
-    await signOutHard();
+    // MUST await sign out + verify
+    const out = await signOutHard();
+    const stillAuthed = !!out?.stillAuthed;
+    console.log("[LOGOUT] verify session:", { stillAuthed, user: out?.session?.user?.id || null });
+    if (stillAuthed) {
+      try { localStorage.removeItem(supabase.storageKey); } catch {}
+      location.reload();
+      return;
+    }
+    trulyLoggedOut = true;
   } catch (e) {
     console.warn("[LOGOUT] error", e);
   } finally {
+    if (!trulyLoggedOut) {
+      window.__BC_FORCE_AUTH__ = false;
+      void syncAuthUi();
+      return;
+    }
+
     // wipe local app state
     appMode = "public";
     appState.session = null;
@@ -5195,6 +5224,7 @@ showScreen("screenHome");
 setRole("waiter");
 setMode("login");
 setAuthIntent("login");
+void syncAuthUi();
 
 setDebug({ step: "boot.ready", time: new Date().toISOString(), supabaseUrl: import.meta.env.VITE_SUPABASE_URL });
 
@@ -5218,9 +5248,11 @@ supabase.auth.onAuthStateChange((event) => {
     try {
       if (event === "TOKEN_REFRESHED") {
         await loadAuthedState(`auth.refresh:${event}`);
+        await syncAuthUi();
         return; // do not call decideRoute here (prevents iframe reset)
       }
       await decideRouteGuarded("auth_subscriber");
+      await syncAuthUi();
     } catch {
       closeHud();
       showScreen("screenHome");
