@@ -8502,7 +8502,10 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
       }
 
       async function resetRunsOnly() {
-        await startFromEncounter1_GRIND();
+        if (!confirm("Reset saved runs only?")) return;
+        runs = [];
+        saveRuns();
+        updateCounts?.();
       }
 
       function bindWaiterStart() {
@@ -9011,9 +9014,16 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           startDrill(3);
         });
 
-        bindInput(btnResetRuns, () => startFromEncounter1_GRIND());
-        bindInput(btnResetWines, () => resetWinesOnly());
-        bindInput(btnResetProgress, () => startFromEncounter1_GRIND());
+        function rebind(btn, fn) {
+          if (!btn) return;
+          btn.onclick = null;
+          btn.__bcBound = false;
+          bindInput(btn, fn);
+        }
+
+        rebind(btnResetRuns, () => resetRunsOnly());
+        rebind(btnResetProgress, () => startFromEncounter1_GRIND());
+        rebind(btnResetWines, () => resetWinesOnly());
 
         const addWineBtn = document.getElementById(ids.addWineBtn);
         bindInput(addWineBtn, () => addWineFromForm());
