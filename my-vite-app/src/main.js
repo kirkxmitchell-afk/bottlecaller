@@ -1517,7 +1517,16 @@ if (!window.__BC_PARENT_BRIDGE__) {
         return;
       }
 
-      const userId = senderCtx?.userId || appState.session?.user?.id || null;
+      const isDemoPayload = String(payload?.mode || "").toLowerCase() === "demo";
+      if (isDemoPayload) {
+        event.source?.postMessage(
+          { source: "BC_MSG", v: 1, type: "event_log_ack", ok: true, demo: true, eventType },
+          event.origin
+        );
+        return;
+      }
+
+      const userId = senderCtx?.userId || null;
       try {
         if (window.__BC_ACTIVE_REST_READY__) {
           await Promise.race([
@@ -1528,11 +1537,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
       } catch {}
 
       // Prefer sender-bound ctx restaurant to avoid cross-iframe contamination.
-      const restaurantId =
-        senderCtx?.restaurantId ||
-        (typeof getActiveRestaurantId === "function" ? getActiveRestaurantId() : null) ||
-        appState.activeRestaurantId ||
-        null;
+      const restaurantId = senderCtx?.restaurantId || null;
       if (
         payload?.restaurantId &&
         senderCtx?.restaurantId &&

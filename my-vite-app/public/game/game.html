@@ -8571,6 +8571,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
         const roleNow = String(window.__BC_CTX__?.role || "").toLowerCase();
         const isWaiterNow = roleNow === "waiter";
+        const isManagerLike = ["manager", "group_manager", "enterprise_admin", "enterprisor"].includes(roleNow);
         const btnWelcomeBackToSetup = document.getElementById("btnWelcomeBackToSetup");
         const btnGoPremium = document.getElementById("btnGoPremium");
 
@@ -8600,7 +8601,18 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         }
 
         btnWelcomeBackToSetup?.classList.remove("hidden");
-        if (btnGoPremium) btnGoPremium.textContent = "Setup";
+        if (btnGoPremium) {
+          btnGoPremium.textContent = isManagerLike ? "Play" : "Setup";
+          btnGoPremium.onclick = null;
+          btnGoPremium.__bcBound = false;
+
+          if (isManagerLike) {
+            bindInput(btnGoPremium, async () => {
+              resetNavState();
+              await startPlayWithReadyGate();
+            });
+          }
+        }
       }
 
       function applyDemoHomeUI() {
