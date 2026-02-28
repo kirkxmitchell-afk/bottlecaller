@@ -81,6 +81,15 @@
     };
     window.__BC_DEMO_DONE__ = window.__BC_DEMO_DONE__ || 0;
     window.__BC_DEMO_TARGET__ = window.__BC_DEMO_TARGET__ || 3;
+    window._bc_sessions = window._bc_sessions || {};
+    window._bc_sessions[window.bcMode] = window._bc_sessions[window.bcMode] || {
+      mode: window.bcMode,
+      sessionId: null,
+      repDone: 0,
+      repTarget: 3,
+      demoDone: 0,
+      demoTarget: 3,
+    };
 
     // DEMO FALLBACKS: no parent progression/tier unlocks
     if (window.isDemo || window.bcMode === "demo") {
@@ -3407,6 +3416,18 @@ function ensureProgLoaded() {
         drillRepTarget = repTarget;
         drillRepDone = 0;
         sessionId = sessionId || crypto.randomUUID();
+        window._bc_sessions = window._bc_sessions || {};
+        const modeKey = window.bcMode || "premium";
+        window._bc_sessions[modeKey] = window._bc_sessions[modeKey] || {
+          mode: modeKey, sessionId: null, repDone: 0, repTarget: 3, demoDone: 0, demoTarget: 3
+        };
+        window._bc_sessions[modeKey].mode = modeKey;
+        window._bc_sessions[modeKey].sessionId = sessionId;
+        window._bc_sessions[modeKey].repDone = 0;
+        window._bc_sessions[modeKey].repTarget = repTarget;
+        window._bc_sessions[modeKey].demoDone = Number(window.__BC_DEMO_DONE__ || 0);
+        window._bc_sessions[modeKey].demoTarget = Number(window.__BC_DEMO_TARGET__ || 3);
+        window.__BC_SESSION__ = window._bc_sessions[modeKey];
 
         resetNavState();
         showScreen("screenDrill");
@@ -3762,12 +3783,18 @@ function ensureProgLoaded() {
       async function startProgressionSession() {
         sessionType = "progression";
         drillRepDone = 0;
-        window.__BC_SESSION__ = {
+        window._bc_sessions = window._bc_sessions || {};
+        const modeKey = window.bcMode || "premium";
+        window._bc_sessions[modeKey] = {
+          ...(window._bc_sessions[modeKey] || {}),
+          mode: modeKey,
+          sessionId: sessionId || null,
           type: "progression",
           repTarget: null,
           repDone: 0,
           startedAt: Date.now(),
         };
+        window.__BC_SESSION__ = window._bc_sessions[modeKey];
         resetNavState();
         await startPlayWithReadyGate();
       }
@@ -8498,6 +8525,12 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
           document.querySelectorAll('[data-role="manager"]').forEach((el) => el.classList.add("hidden"));
           document.querySelectorAll('[data-nav="screenSetupPremium"]').forEach((el) => el.classList.add("hidden"));
+          document.getElementById("btnResetAll")?.classList.add("hidden");
+          document.getElementById("btnResetAll")?.setAttribute("disabled", "true");
+          document.querySelectorAll('[data-action="reset_all"]').forEach((el) => {
+            el.classList.add("hidden");
+            el.setAttribute("disabled", "true");
+          });
           document.getElementById("screenSetupPremium")?.classList.add("hidden");
           return;
         }

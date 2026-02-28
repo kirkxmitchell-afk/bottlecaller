@@ -1215,6 +1215,28 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
       // ✅ 1) ctx request MUST be handled before any event_log filtering
       if (msg.type === "bc_ctx_request") {
+        const requestedMode = String(msg?.mode || "").toLowerCase();
+        const isFromIframe = !!event.source && event.source !== window;
+        if (!isFromIframe) return;
+
+        if (requestedMode === "demo") {
+          event.source?.postMessage(
+            {
+              source: "BC_MSG",
+              v: 1,
+              type: "bc_ctx",
+              userId: "demo",
+              restaurantId: "demo",
+              scopeId: null,
+              role: "demo",
+              mode: "demo",
+              drill: null,
+            },
+            event.origin
+          );
+          return;
+        }
+
         try {
           if (window.__BC_ACTIVE_REST_READY__) {
             await Promise.race([
@@ -1224,7 +1246,6 @@ if (!window.__BC_PARENT_BRIDGE__) {
           }
         } catch {}
 
-        const requestedMode = String(msg?.mode || "").toLowerCase();
         const needRestaurant = requestedMode !== "demo";
         const rid = window.getActiveRestaurantId?.();
         const ready =
@@ -1361,6 +1382,19 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
       const { eventType, payload } = msg;
       if (!eventType) return;
+
+      const isDemoNow =
+        String(msg?.mode || "").toLowerCase() === "demo" ||
+        String(payload?.mode || "").toLowerCase() === "demo" ||
+        String(payload?.bcMode || "").toLowerCase() === "demo" ||
+        String(msg?.userId || "").toLowerCase() === "demo";
+      if (isDemoNow) {
+        event.source?.postMessage(
+          { source: "BC_MSG", v: 1, type: "event_log_ack", ok: true, demo: true, eventType },
+          event.origin
+        );
+        return;
+      }
 
       const userId = appState.session?.user?.id || null;
       try {
