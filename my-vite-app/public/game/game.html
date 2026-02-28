@@ -661,6 +661,7 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
           console.trace("[BC][EMIT TRACE] " + eventType);
 
           const ctx = window.__BC_CTX__ || null;
+          const isDemoNow = (window.isDemo || window.bcMode === "demo");
 
           window.parent.postMessage(
             {
@@ -674,7 +675,7 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
                 ...(payload || {}),
                 sessionType: window.__BC_SESSION_TYPE__ || null,
                 // add these two so parent can validate/debug
-                restaurantId: ctx?.restaurantId || null,
+                restaurantId: isDemoNow ? null : (ctx?.restaurantId || null),
                 role: ctx?.role || null,
               },
             },
