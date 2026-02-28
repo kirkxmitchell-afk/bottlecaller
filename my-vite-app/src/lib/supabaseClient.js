@@ -39,7 +39,11 @@ export async function signUp(email, password, metadata = {}) {
 }
 
 export async function signOut() {
-  return supabase.auth.signOut();
+  const { error } = await supabase.auth.signOut();
+  if (error) {
+    console.warn("[AUTH] signOut error", error);
+  }
+  return { error };
 }
 
 export async function getUser() {

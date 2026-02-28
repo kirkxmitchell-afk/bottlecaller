@@ -2479,6 +2479,16 @@ function destroyPremiumIframe(reason = "") {
   window.BC_PENDING_START_DRILL = null;
 }
 
+function destroyAllIframes(reason = "destroyAllIframes") {
+  try {
+    document.querySelectorAll("iframe").forEach((f) => {
+      try { f.src = "about:blank"; } catch {}
+      try { f.remove(); } catch {}
+    });
+  } catch {}
+  console.log("[BC] destroyAllIframes ✅", reason);
+}
+
 async function startPremiumDrillFromParent(repTarget = 3) {
   const iframe =
     document.querySelector('iframe[title="BottleCaller Game"]') ||
@@ -5001,7 +5011,9 @@ async function logoutAll(reason = "logout") {
     setPremiumOverlayActive(false);
     destroyPremiumIframe("preSignOut");
     unmountDemoGame("preSignOut");
+    destroyAllIframes("preSignOut");
     await signOut();
+    destroyAllIframes("postSignOut");
   } finally {
     appMode = "public";
     appState.session = null;
@@ -5152,6 +5164,17 @@ setDebug({ step: "boot.ready", time: new Date().toISOString(), supabaseUrl: impo
 // ✅ TOKEN_REFRESHED must NOT remount iframes / reset gameplay.
 supabase.auth.onAuthStateChange((event) => {
   setDebug({ step: "auth.change", event, time: new Date().toISOString() });
+
+  if (window.__BC_FORCE_AUTH__) {
+    if (event === "SIGNED_OUT") {
+      setTimeout(() => {
+        routeAuth();
+        hardResetAuthUI();
+        destroyAllIframes("authState.SIGNED_OUT");
+      }, 0);
+    }
+    return;
+  }
 
   if (authRouteTimer) clearTimeout(authRouteTimer);
 
