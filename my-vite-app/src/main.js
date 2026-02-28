@@ -3380,6 +3380,7 @@ async function loadManagerInsights() {
       "session_id",
     ].join(","))
     .eq("restaurant_id", restaurantId)
+    .neq("mode", "demo")
     .gte("occurred_at", sinceIso)
     .order("occurred_at", { ascending: false })
     .limit(2000);
