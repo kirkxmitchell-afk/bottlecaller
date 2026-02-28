@@ -1124,6 +1124,13 @@ if (!window.__BC_PARENT_BRIDGE__) {
     const p = window.__BC_PENDING_CTX_REQ__;
     if (!p) return;
 
+    // stale drop
+    if (p.at && (Date.now() - p.at > 30000)) {
+      console.warn("[PARENT] flushPendingCtx dropped: stale pending ctx (>30s)");
+      window.__BC_PENDING_CTX_REQ__ = null;
+      return;
+    }
+
     // ✅ same-origin only
     if (p.origin !== window.location.origin) {
       console.warn("[PARENT] flushPendingCtx blocked: origin mismatch", { origin: p.origin });
@@ -1156,22 +1163,48 @@ if (!window.__BC_PARENT_BRIDGE__) {
       return;
     }
 
-    try {
-      console.log("[PARENT] sending bc_ctx (flush path)", {
-        hasDrill: !!bcCtx?.drill,
-        drill: bcCtx?.drill,
-        to: p.origin
-      });
-      p.source?.postMessage({ source: "BC_MSG", v: 1, type: "bc_ctx", ...bcCtx }, p.origin);
-      setSourceCtx(p.source, bcCtx);
-      console.log("[PARENT] flushPendingCtx -> sent ✅", bcCtx);
-      window.__BC_PENDING_CTX_REQ__ = null;
-      if (window.__BC_CTX_FLUSH_TICK__) {
-        clearInterval(window.__BC_CTX_FLUSH_TICK__);
-        window.__BC_CTX_FLUSH_TICK__ = null;
+    // refuse ctx swaps for same source (stops ghosts)
+    const existing = getSourceCtx(p.source);
+    if (existing) {
+      const same =
+        String(existing.userId || "") === String(bcCtx.userId || "") &&
+        String(existing.restaurantId || "") === String(bcCtx.restaurantId || "") &&
+        String(existing.role || "") === String(bcCtx.role || "") &&
+        String(existing.mode || "") === String(bcCtx.mode || "");
+      if (!same) {
+        console.warn("[PARENT] flushPendingCtx dropped: ctx mismatch vs existing", { existing, next: bcCtx });
+        window.__BC_PENDING_CTX_REQ__ = null;
+        return;
       }
-    } catch (e) {
-      console.warn("[PARENT] flushPendingCtx failed", e);
+    }
+
+    console.log("[PARENT] sending bc_ctx (flush path)", {
+      hasDrill: !!bcCtx?.drill,
+      drill: bcCtx?.drill,
+      to: p.origin
+    });
+
+    // send-first, stamp-after
+    const sent = (() => {
+      try {
+        if (!p.source || p.source === window) return false;
+        if (typeof p.source.closed === "boolean" && p.source.closed) return false;
+        p.source.postMessage({ source: "BC_MSG", v: 1, type: "bc_ctx", ...bcCtx }, p.origin);
+        return true;
+      } catch (e) {
+        console.warn("[PARENT] flushPendingCtx postMessage failed", e);
+        return false;
+      }
+    })();
+
+    if (!sent) return;
+
+    setSourceCtx(p.source, bcCtx);
+    console.log("[PARENT] flushPendingCtx -> sent ✅", bcCtx);
+    window.__BC_PENDING_CTX_REQ__ = null;
+    if (window.__BC_CTX_FLUSH_TICK__) {
+      clearInterval(window.__BC_CTX_FLUSH_TICK__);
+      window.__BC_CTX_FLUSH_TICK__ = null;
     }
   }
   window.__BC_PARENT_BRIDGE__.flushPendingCtx = flushPendingCtx;
