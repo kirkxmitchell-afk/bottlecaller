@@ -5031,40 +5031,45 @@ async function signOutHard() {
 
 async function logoutAll(reason = "logout") {
   console.log("[LOGOUT] start", reason);
+  window.__BC_FORCE_AUTH__ = true;
   try {
-    window.__BC_FORCE_AUTH__ = true;
+    // remove demo/mode params
     try {
-      const u = new URL(window.location.href);
+      var u = new URL(window.location.href);
       u.searchParams.delete("demo");
       u.searchParams.delete("mode");
-      window.history.replaceState({}, "", u.pathname + (u.search ? u.search : ""));
-    } catch {}
+      history.replaceState({}, "", u.pathname + (u.search ? u.search : ""));
+    } catch (e) {}
+
     setPremiumOverlayActive(false);
-    destroyPremiumIframe("preSignOut");
-    unmountDemoGame("preSignOut");
-    destroyAllIframes("preSignOut");
+    destroyPremiumIframe("logout.pre");
+    unmountDemoGame("logout.pre");
+    destroyAllIframes("logout.pre");
+
+    // MUST await sign out
     await signOutHard();
-    destroyAllIframes("postSignOut");
+  } catch (e) {
+    console.warn("[LOGOUT] error", e);
   } finally {
+    // wipe local app state
     appMode = "public";
     appState.session = null;
     appState.profile = null;
     appState.restaurant = null;
     appState.invites = [];
-    try { closeHud(); } catch {}
-    try { setHomeAuthUI(false); } catch {}
-    try { currentIframeMode = null; } catch {}
-    try { clearGameMounts(); } catch {}
-    try { destroyAllIframes("logout.post"); } catch {}
 
-    try {
-      routeAuth();
-      hardResetAuthUI();
-    } catch {
-      showScreen("screenHome");
-      try { setMode("login"); } catch {}
-      try { hardResetAuthUI(); } catch {}
-    }
+    closeHud();
+    setHomeAuthUI(false);
+    setAuthIntent("login");
+    currentIframeMode = null;
+    clearGameMounts && clearGameMounts();
+    destroyAllIframes("logout.post");
+
+    // route to login UI
+    setMode("login");
+    showScreen("screenHome");
+    hardResetAuthUI();
+
     window.__BC_FORCE_AUTH__ = false;
     console.log("[LOGOUT] done");
     setDebug({ step: "logout", time: new Date().toISOString(), reason });
