@@ -1438,6 +1438,16 @@ if (!window.__BC_PARENT_BRIDGE__) {
         (typeof getActiveRestaurantId === "function" ? getActiveRestaurantId() : null) ||
         appState.activeRestaurantId ||
         null;
+      if (
+        payload?.restaurantId &&
+        senderCtx?.restaurantId &&
+        String(payload.restaurantId) !== String(senderCtx.restaurantId)
+      ) {
+        console.warn("[BC] payload rid mismatch; using senderCtx", {
+          payloadRid: payload.restaurantId,
+          senderRid: senderCtx.restaurantId
+        });
+      }
 
       // If not authed, ignore
       if (!userId) return;
