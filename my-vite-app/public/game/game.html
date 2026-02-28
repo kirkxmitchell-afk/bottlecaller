@@ -65,6 +65,8 @@
     window.bcMode = MODE;
     window.isDemo = DEMO;
     window.__BC_STANDALONE_DEMO__ = DEMO;
+    window.__BC_DEMO_DONE__ = window.__BC_DEMO_DONE__ || 0;
+    window.__BC_DEMO_TARGET__ = window.__BC_DEMO_TARGET__ || 3;
 
     // DEMO FALLBACKS: no parent progression/tier unlocks
     if (window.isDemo || window.bcMode === "demo") {
@@ -1187,8 +1189,8 @@ function isDrillMode() {
       }
 
       function difficultyFromProgSpine() {
-        const spine = getProgressionSpine();
-        const d = Number(spine.selectors.effectiveDifficultySeed());
+        const spine = getProgressionSpine({ allowNull: true });
+        const d = Number(spine?.selectors?.effectiveDifficultySeed?.());
         return Number.isFinite(d) ? d : 1;
       }
 
@@ -1726,7 +1728,7 @@ function ensureProgLoaded() {
           if (window.__BC_CTX_REQUESTED__) return;
           window.__BC_CTX_REQUESTED__ = true;
           try {
-            const mode = getIframeMode();
+            const mode = window.bcMode || getIframeMode();
             window.parent?.postMessage(
               { source: "BC_MSG", v: 1, type: "bc_ctx_request", mode },
               location.origin
@@ -1745,7 +1747,7 @@ function ensureProgLoaded() {
             const IS_IFRAME = (window.parent !== window) && !!window.frameElement;
             const isDemoNow = !!(window.isDemo || window.bcMode === "demo");
             if (!IS_IFRAME && isDemoNow && msg.type === "bc_ctx") {
-              console.warn("[BC][DEMO] ignoring bc_ctx (standalone demo)", msg);
+              console.warn("[DEMO] ignoring bc_ctx (standalone)", msg);
               return;
             }
             if (msg.type !== "bc_ctx") return;
@@ -1783,7 +1785,7 @@ function ensureProgLoaded() {
             const IS_IFRAME = (window.parent !== window) && !!window.frameElement;
             if (!IS_IFRAME) return;
             try {
-              const mode = getIframeMode();
+              const mode = window.bcMode || getIframeMode();
               window.parent?.postMessage(
                 { source: "BC_MSG", v: 1, type: "bc_ctx_request", mode },
                 location.origin
@@ -2019,8 +2021,8 @@ function ensureProgLoaded() {
 
       function resolveAllowedGuestTypes(encounter) {
         try {
-          const spine = getProgressionSpine();
-          const points = spine.selectors.points();
+          const spine = getProgressionSpine({ allowNull: true });
+          const points = Number(spine?.selectors?.points?.() ?? 0);
           return window.allowedGuestTypes(points);
         } catch (e) {
           console.warn("[BC] resolveAllowedGuestTypes failed", e);
@@ -2078,7 +2080,8 @@ function ensureProgLoaded() {
 
       function replayFromStage1() {
         try {
-          getProgressionSpine().actions.resetEncounterFlow();
+          const spine = getProgressionSpine({ allowNull: true });
+          spine?.actions?.resetEncounterFlow?.();
         } catch (e) {
           console.warn("[PROG] resetEncounterFlow failed", e);
         }
@@ -2984,7 +2987,7 @@ function ensureProgLoaded() {
         const IS_IFRAME = (window.parent !== window) && !!window.frameElement;
         const isDemoNow = !!(window.isDemo || window.bcMode === "demo");
         if (!IS_IFRAME && isDemoNow && msg.type === "bc_ctx") {
-          console.warn("[BC][DEMO] ignoring bc_ctx (standalone demo)", msg);
+          console.warn("[DEMO] ignoring bc_ctx (standalone)", msg);
           return;
         }
 
@@ -4728,7 +4731,8 @@ function ensureProgLoaded() {
       function describeDifficultyState() {
         const s = window.__BC_DIFFICULTY__;
         if (!s) return "no difficulty state";
-        const tier = getProgressionSpine().selectors.tier();
+        const spine = getProgressionSpine({ allowNull: true });
+        const tier = spine?.selectors?.tier?.() ?? 1;
         return `tier=${tier} pressure=${s.pressure} d=${s.d} pivotChance=${s.pivotChance} hook=${s.hookStrictness} noise=${s.deliveryNoise} time=${s.timeLimitSec ?? "none"}`;
       }
 
@@ -5235,9 +5239,9 @@ function ensureProgLoaded() {
         if (!nameEl && !focusEl && !nextEl && !pointsEl) return;
 
         try {
-          const spine = getProgressionSpine();
-          const points = spine.selectors.points();
-          const tier = spine.selectors.tier();
+          const spine = getProgressionSpine({ allowNull: true });
+          const points = spine?.selectors?.points?.() ?? 0;
+          const tier = spine?.selectors?.tier?.() ?? 1;
           if (nameEl) nameEl.innerText = `Tier ${tier}`;
           if (focusEl) focusEl.innerText = "Progression";
           if (nextEl) nextEl.innerText = "";
@@ -6563,6 +6567,11 @@ function ensureProgLoaded() {
         if (currentEncounter.__logged) return;
         currentEncounter.__logged = true;
 
+        if ((window.isDemo || window.bcMode === "demo") && sessionType !== "drill") {
+          window.__BC_DEMO_DONE__ = Number(window.__BC_DEMO_DONE__ || 0) + 1;
+          console.log("[DEMO] progress", window.__BC_DEMO_DONE__, "/", window.__BC_DEMO_TARGET__);
+        }
+
           const payload = buildEncounterResolvedPayloadV2();
 
           // Normalize guest types for stable analytics
@@ -7487,7 +7496,8 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
               currentEncounter?.encounterNumber;
             if (encounterIdRaw == null) throw new Error("Missing encounterId on currentEncounter");
             const encounterId = String(encounterIdRaw);
-            getProgressionSpine().actions.applyEncounterResult({
+            const spine = getProgressionSpine({ allowNull: true });
+            spine?.actions?.applyEncounterResult?.({
               encounterId,
               success: didWin,
               pointEligible: didWin
@@ -7499,7 +7509,8 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           bcRenderHud("encounter resolved");
           bcToast("Encounter resolved");
           renderProgressStatusWindow();
-          console.log("[PROG] earned", { pointsTotal: getProgressionSpine().selectors.points() });
+          const spineNow = getProgressionSpine({ allowNull: true });
+          console.log("[PROG] earned", { pointsTotal: spineNow?.selectors?.points?.() ?? 0 });
 
           // ============================================================
           // ✅ Strength + Fix (Mastery snapshot)
@@ -7671,8 +7682,16 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             }
           }
 
-          addStepButton(inDrill ? "NEXT REP" : "NEXT ENCOUNTER", () => {
+          const isDemoNow = (window.isDemo || window.bcMode === "demo");
+          const done = Number(window.__BC_DEMO_DONE__ || 0);
+          const target = Number(window.__BC_DEMO_TARGET__ || 3);
+          addStepButton(inDrill ? "NEXT REP" : (isDemoNow && done >= target ? "BACK HOME" : "NEXT ENCOUNTER"), () => {
             try { logEncounter(); } catch (e) { console.warn("[BC] logEncounter failed", e); }
+            if (isDemoNow && !inDrill && done >= target) {
+              resetNavState();
+              showScreen("screenHome");
+              return;
+            }
             if (window.__NEXT_LOCK__) return;
             window.__NEXT_LOCK__ = true;
             setTimeout(() => { window.__NEXT_LOCK__ = false; }, 150);
@@ -7871,7 +7890,15 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
                 // Do not crash the game because logging/scoring failed
               }
 
-              addStepButton(inDrill ? "NEXT REP" : "NEXT ENCOUNTER", () => {
+              const isDemoNow = (window.isDemo || window.bcMode === "demo");
+              const done = Number(window.__BC_DEMO_DONE__ || 0);
+              const target = Number(window.__BC_DEMO_TARGET__ || 3);
+              addStepButton(inDrill ? "NEXT REP" : (isDemoNow && done >= target ? "BACK HOME" : "NEXT ENCOUNTER"), () => {
+                if (isDemoNow && !inDrill && done >= target) {
+                  resetNavState();
+                  showScreen("screenHome");
+                  return;
+                }
                 if (window.__NEXT_LOCK__) return;
                 window.__NEXT_LOCK__ = true;
                 setTimeout(() => { window.__NEXT_LOCK__ = false; }, 150);
