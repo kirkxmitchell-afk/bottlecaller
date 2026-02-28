@@ -6468,7 +6468,11 @@ function ensureProgLoaded() {
           encounterId: currentEncounter?.encounterId || currentEncounter?.id,
         });
 
-        if (!currentEncounter || currentEncounter.__logged || currentEncounter.__resolvedLogged) return;
+        if (!currentEncounter) {
+          console.warn("[BC] logEncounter skipped: currentEncounter is null");
+          return;
+        }
+        if (currentEncounter.__logged || currentEncounter.__resolvedLogged) return;
         currentEncounter.__resolvedLogged = true;
         if (!sessionId) sessionId = crypto.randomUUID();
 
@@ -6597,17 +6601,6 @@ function ensureProgLoaded() {
         if (currentEncounter.__logged) return;
         currentEncounter.__logged = true;
 
-        if ((window.isDemo || window.bcMode === "demo") && sessionType !== "drill") {
-          window.__BC_DEMO_DONE__ = Number(window.__BC_DEMO_DONE__ || 0) + 1;
-          console.log("[DEMO] progress", window.__BC_DEMO_DONE__, "/", window.__BC_DEMO_TARGET__);
-          if (window.__BC_DEMO_DONE__ >= 3) {
-            console.log("[DEMO] completed 3 encounters -> home");
-            resetNavState();
-            showScreen("screenHome");
-            return;
-          }
-        }
-
           const payload = buildEncounterResolvedPayloadV2();
 
           // Normalize guest types for stable analytics
@@ -6662,6 +6655,24 @@ function ensureProgLoaded() {
         }
 
         updateCounts();
+      }
+
+      function maybeEndDemoRunAndReturnHome() {
+        const isDemoNow = (window.isDemo || window.bcMode === "demo");
+        if (!isDemoNow) return false;
+        if (sessionType === "drill") return false;
+
+        window.__BC_DEMO_DONE__ = Number(window.__BC_DEMO_DONE__ || 0) + 1;
+        console.log("[DEMO] progress", window.__BC_DEMO_DONE__, "/", window.__BC_DEMO_TARGET__);
+
+        if (window.__BC_DEMO_DONE__ >= 3) {
+          console.log("[DEMO] completed 3 encounters -> home");
+          resetNavState();
+          showScreen("screenHome");
+          return true;
+        }
+
+        return false;
       }
 
       function getPivotScenario() {
@@ -7700,6 +7711,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           }
 
           logEncounter();
+          if (maybeEndDemoRunAndReturnHome()) return;
 
           // ============================================================
           // ✅ DRILL REP ACCOUNTING (3 reps then stop)
@@ -7925,6 +7937,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
                 console.error("[BC] logEncounter crashed in Recovery step", e);
                 // Do not crash the game because logging/scoring failed
               }
+              if (maybeEndDemoRunAndReturnHome()) return;
 
               const isDemoNow = (window.isDemo || window.bcMode === "demo");
               const done = Number(window.__BC_DEMO_DONE__ || 0);
