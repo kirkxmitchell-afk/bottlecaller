@@ -620,7 +620,7 @@ let appMode = "public"; // public | demo | premium
 let routingLock = false;
 let lastRouteAt = 0;
 
-let authIntent = "demo"; // demo | premium
+let authIntent = "login"; // login/public | premium
 
 const uiState = {
   role: "waiter", // waiter | manager (used only for signup UI)
@@ -2374,7 +2374,7 @@ function canAccessPremium(profile) {
 
 // Home screen intent toggle
 function setAuthIntent(next) {
-  authIntent = next === "premium" ? "premium" : "demo";
+  authIntent = next === "premium" ? "premium" : "login";
 
   const title = document.querySelector("#screenHome .title");
   const sub = document.querySelector("#screenHome .subtle");
@@ -4533,7 +4533,12 @@ function routeAuth() {
 
   closeHud();
   setMode("login");
-  setAuthIntent("demo");
+  setAuthIntent("login");
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("demo");
+    window.history.replaceState({}, "", url.toString());
+  } catch {}
   showScreen("screenHome");
 }
 
@@ -5093,7 +5098,7 @@ window.loadManagerBoardData = loadManagerBoardData;
 showScreen("screenHome");
 setRole("waiter");
 setMode("login");
-setAuthIntent("demo");
+setAuthIntent("login");
 
 setDebug({ step: "boot.ready", time: new Date().toISOString(), supabaseUrl: import.meta.env.VITE_SUPABASE_URL });
 
