@@ -4986,14 +4986,18 @@ async function logoutAll(reason = "logout") {
     appState.profile = null;
     appState.restaurant = null;
     appState.invites = [];
-    closeHud();
-    setHomeAuthUI(false);
+    try { closeHud(); } catch {}
+    try { setHomeAuthUI(false); } catch {}
+    try { currentIframeMode = null; } catch {}
+    try { clearGameMounts(); } catch {}
 
-    setAuthIntent("login");
-    currentIframeMode = null;
-    clearGameMounts();
-
-    showScreen("screenHome");
+    try {
+      window.__BC_FORCE_AUTH__ = false;
+      routeAuth();
+    } catch {
+      showScreen("screenHome");
+      try { setMode("login"); } catch {}
+    }
     setDebug({ step: "logout", time: new Date().toISOString(), reason });
   }
 }

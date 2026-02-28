@@ -8646,6 +8646,9 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           if (btnResetProgress) {
             btnResetProgress.classList.remove("hidden");
             btnResetProgress.disabled = false;
+            btnResetProgress.onclick = null;
+            btnResetProgress.__bcBound = false;
+            bindInput(btnResetProgress, () => startFromEncounter1_GRIND());
           }
           const btnResetRuns = document.getElementById("btnResetRunsPremium");
           if (btnResetRuns) {
