@@ -4999,7 +4999,36 @@ async function submitAuth() {
 // ------------------------------------------------------------
 // Logout
 // ------------------------------------------------------------
+async function signOutHard() {
+  console.log("[AUTH] signOutHard: start");
+
+  const res = await supabase.auth.signOut({ scope: "global" });
+  if (res?.error) console.warn("[AUTH] signOutHard error:", res.error);
+
+  const { data, error } = await supabase.auth.getSession();
+  if (error) console.warn("[AUTH] getSession error after signOut:", error);
+  console.log("[AUTH] signOutHard: session after =", data?.session || null);
+
+  if (data?.session) {
+    console.warn("[AUTH] session still present after signOut — forcing local storage token clear");
+    try {
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith("sb-") && k.endsWith("-auth-token")) {
+          localStorage.removeItem(k);
+        }
+      }
+    } catch {}
+
+    const chk = await supabase.auth.getSession();
+    console.log("[AUTH] session after forced clear =", chk?.data?.session || null);
+  }
+
+  console.log("[AUTH] signOutHard: done");
+}
+
 async function logoutAll(reason = "logout") {
+  console.log("[LOGOUT] start", reason);
   try {
     window.__BC_FORCE_AUTH__ = true;
     try {
@@ -5012,7 +5041,7 @@ async function logoutAll(reason = "logout") {
     destroyPremiumIframe("preSignOut");
     unmountDemoGame("preSignOut");
     destroyAllIframes("preSignOut");
-    await signOut();
+    await signOutHard();
     destroyAllIframes("postSignOut");
   } finally {
     appMode = "public";
@@ -5024,9 +5053,9 @@ async function logoutAll(reason = "logout") {
     try { setHomeAuthUI(false); } catch {}
     try { currentIframeMode = null; } catch {}
     try { clearGameMounts(); } catch {}
+    try { destroyAllIframes("logout.post"); } catch {}
 
     try {
-      window.__BC_FORCE_AUTH__ = false;
       routeAuth();
       hardResetAuthUI();
     } catch {
@@ -5034,6 +5063,8 @@ async function logoutAll(reason = "logout") {
       try { setMode("login"); } catch {}
       try { hardResetAuthUI(); } catch {}
     }
+    window.__BC_FORCE_AUTH__ = false;
+    console.log("[LOGOUT] done");
     setDebug({ step: "logout", time: new Date().toISOString(), reason });
   }
 }
@@ -5167,11 +5198,9 @@ supabase.auth.onAuthStateChange((event) => {
 
   if (window.__BC_FORCE_AUTH__) {
     if (event === "SIGNED_OUT") {
-      setTimeout(() => {
-        routeAuth();
-        hardResetAuthUI();
-        destroyAllIframes("authState.SIGNED_OUT");
-      }, 0);
+      destroyAllIframes("authState.SIGNED_OUT");
+      hardResetAuthUI();
+      routeAuth();
     }
     return;
   }
