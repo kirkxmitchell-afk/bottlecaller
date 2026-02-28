@@ -4962,6 +4962,9 @@ async function submitAuth() {
 // ------------------------------------------------------------
 async function logoutAll(reason = "logout") {
   try {
+    setPremiumOverlayActive(false);
+    destroyPremiumIframe("preSignOut");
+    unmountDemoGame("preSignOut");
     await signOut();
   } finally {
     appMode = "public";

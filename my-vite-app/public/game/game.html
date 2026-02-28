@@ -2150,6 +2150,12 @@ function ensureProgLoaded() {
 
         encounterIndex = 0;
         saveEncounterIndex(encounterIndex);
+        window.__BC_DEMO_DONE__ = 0;
+
+        if (window.__BC_SESSION__) {
+          window.__BC_SESSION__.repDone = 0;
+          window.__BC_SESSION__.repTarget = window.__BC_SESSION__.repTarget || 0;
+        }
 
         // Optional: clear any per-encounter caches
         window.__BC_GUARD__ = window.__BC_GUARD__ || {};
@@ -3103,6 +3109,22 @@ function ensureProgLoaded() {
         if (msg.type === "runs_count_response") {
           window.__BC_SERVER_RUNS_COUNT__ = Number(msg.count || 0);
           try { renderRunsCount?.(window.__BC_SERVER_RUNS_COUNT__); } catch {}
+          return;
+        }
+
+        if (msg.type === "reset_to_encounter_1") {
+          try {
+            window.__BC_DEMO_DONE__ = 0;
+            encounterIndex = 0;
+            saveEncounterIndex?.(0);
+            currentStep = 0;
+            currentEncounter = null;
+            resetNavState?.();
+            showScreen?.("screenPlay");
+            window.startEncounter?.();
+          } catch (e) {
+            console.warn("[BC] reset_to_encounter_1 failed", e);
+          }
           return;
         }
 
