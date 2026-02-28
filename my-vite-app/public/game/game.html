@@ -65,6 +65,20 @@
     window.bcMode = MODE;
     window.isDemo = DEMO;
     window.__BC_STANDALONE_DEMO__ = DEMO;
+    window.getTierUnlocked = function getTierUnlocked() {
+      if (window.isDemo || window.bcMode === "demo") return 1;
+
+      try {
+        const spine = (typeof getProgressionSpine === "function")
+          ? getProgressionSpine({ allowNull: true })
+          : null;
+
+        const t = spine?.selectors?.tier?.();
+        return (typeof t === "number" && Number.isFinite(t)) ? t : 1;
+      } catch {
+        return 1;
+      }
+    };
     window.__BC_DEMO_DONE__ = window.__BC_DEMO_DONE__ || 0;
     window.__BC_DEMO_TARGET__ = window.__BC_DEMO_TARGET__ || 3;
 
