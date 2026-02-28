@@ -8534,7 +8534,19 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         console.log("[WAITER] Play button wired ✅");
       }
 
+      function removeResetAllContainer() {
+        const ra = document.getElementById("btnResetApp");
+        if (ra) {
+          ra.onclick = null;
+          ra.disabled = true;
+        }
+        ra?.closest(".button-row")?.remove();
+      }
+
       function applyRoleTemplate() {
+        // Remove Reset All globally (all templates)
+        removeResetAllContainer();
+
         // Demo template: no manager board, no setup flow, just play
         if (window.isDemo || window.bcMode === "demo") {
           const btnWelcomeBackToSetup = document.getElementById("btnWelcomeBackToSetup");
@@ -8556,14 +8568,16 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
           document.querySelectorAll('[data-role="manager"]').forEach((el) => el.classList.add("hidden"));
           document.querySelectorAll('[data-nav="screenSetupPremium"]').forEach((el) => el.classList.add("hidden"));
-          document.getElementById("btnResetRunsPremium")?.classList.add("hidden");
-          document.getElementById("btnResetProgressPremium")?.classList.add("hidden");
-          document.getElementById("btnResetWinesPremium")?.classList.add("hidden");
-          document.getElementById("btnResetAll")?.classList.add("hidden");
-          document.getElementById("btnResetAll")?.setAttribute("disabled", "true");
+          document.getElementById("btnResetRunsPremium")?.remove();
+          document.getElementById("btnResetProgressPremium")?.remove();
+          document.getElementById("btnResetWinesPremium")?.remove();
+          document.getElementById("btnResetRunsDemo")?.remove();
+          document.getElementById("btnResetProgressDemo")?.remove();
+          document.getElementById("btnResetWinesDemo")?.remove();
           document.querySelectorAll('[data-action="reset_all"]').forEach((el) => {
-            el.classList.add("hidden");
+            el.onclick = null;
             el.setAttribute("disabled", "true");
+            el.remove();
           });
           document.getElementById("screenSetupPremium")?.classList.add("hidden");
           return;
@@ -8596,6 +8610,8 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             el.classList.add("hidden");
             el.style.pointerEvents = "none";
           });
+          document.getElementById("btnResetRunsPremium")?.remove();
+          document.getElementById("btnResetProgressPremium")?.remove();
           document.getElementById("screenSetupPremium")?.classList.add("hidden");
           return;
         }
@@ -8619,6 +8635,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         const isDemoNow = (window.isDemo || window.bcMode === "demo");
         if (!isDemoNow) return;
 
+        removeResetAllContainer();
         [
           "btnResetRunsDemo",
           "btnResetProgressDemo",
