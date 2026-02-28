@@ -1112,6 +1112,13 @@ if (!window.__BC_PARENT_BRIDGE__) {
     try { return window.__BC_SOURCE_CTX_MAP__.get(source) || null; }
     catch { return null; }
   }
+  function tagSource(source) {
+    try {
+      if (!source) return "null";
+      if (!source.__BC_SRC_ID__) source.__BC_SRC_ID__ = crypto.randomUUID().slice(0, 8);
+      return source.__BC_SRC_ID__;
+    } catch { return "no_tag"; }
+  }
 
   async function flushPendingCtx() {
     const p = window.__BC_PENDING_CTX_REQ__;
@@ -1155,8 +1162,8 @@ if (!window.__BC_PARENT_BRIDGE__) {
         drill: bcCtx?.drill,
         to: p.origin
       });
-      setSourceCtx(p.source, bcCtx);
       p.source?.postMessage({ source: "BC_MSG", v: 1, type: "bc_ctx", ...bcCtx }, p.origin);
+      setSourceCtx(p.source, bcCtx);
       console.log("[PARENT] flushPendingCtx -> sent ✅", bcCtx);
       window.__BC_PENDING_CTX_REQ__ = null;
       if (window.__BC_CTX_FLUSH_TICK__) {
@@ -1240,7 +1247,9 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
         if (requestedMode === "demo") {
           window.__BC_LAST_CTX_MODE__ = "demo";
-          const demoRole = String(window.appState?.profile?.role || "demo").toLowerCase();
+          const demoRole = String(window.appState?.profile?.role || "waiter").toLowerCase() === "manager"
+            ? "manager"
+            : "waiter";
           const demoCtx = {
             userId: window.appState?.session?.user?.id || "demo",
             restaurantId: null,
@@ -1249,16 +1258,20 @@ if (!window.__BC_PARENT_BRIDGE__) {
             mode: "demo",
             drill: null,
           };
-          setSourceCtx(event.source, demoCtx);
-          event.source?.postMessage(
-            {
-              source: "BC_MSG",
-              v: 1,
-              type: "bc_ctx",
-              ...demoCtx,
-            },
-            event.origin
-          );
+          try {
+            event.source?.postMessage(
+              {
+                source: "BC_MSG",
+                v: 1,
+                type: "bc_ctx",
+                ...demoCtx,
+              },
+              event.origin
+            );
+            setSourceCtx(event.source, demoCtx);
+          } catch (e) {
+            console.warn("[PARENT] failed to send bc_ctx demo", e);
+          }
           return;
         }
 
@@ -1326,11 +1339,15 @@ if (!window.__BC_PARENT_BRIDGE__) {
         });
 
         // ✅ OK: send ctx
-        setSourceCtx(event.source, bcCtx);
-        event.source?.postMessage(
-          { source: "BC_MSG", v: 1, type: "bc_ctx", ...bcCtx },
-          event.origin
-        );
+        try {
+          event.source?.postMessage(
+            { source: "BC_MSG", v: 1, type: "bc_ctx", ...bcCtx },
+            event.origin
+          );
+          setSourceCtx(event.source, bcCtx);
+        } catch (e) {
+          console.warn("[PARENT] failed to send bc_ctx premium", e);
+        }
 
         return;
       }
@@ -1410,6 +1427,16 @@ if (!window.__BC_PARENT_BRIDGE__) {
       const { eventType, payload } = msg;
       if (!eventType) return;
       const senderCtx = getSourceCtx(event.source);
+      const isFromIframe = !!event.source && event.source !== window;
+      if (isFromIframe && !senderCtx) {
+        console.warn("[BC] event_log ignored (no senderCtx yet)", { eventType });
+        event.source?.postMessage(
+          { source: "BC_MSG", v: 1, type: "event_log_ack", ok: false, error: "no_sender_ctx" },
+          event.origin
+        );
+        return;
+      }
+      console.log("[BC] event_log from", tagSource(event.source), senderCtx);
 
       const isDemoNow =
         String(msg?.mode || "").toLowerCase() === "demo" ||
