@@ -1250,6 +1250,10 @@ if (!window.__BC_PARENT_BRIDGE__) {
       const msg = event?.data;
       if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
 
+      const onAuthScreen = document.querySelector(".screen:not(.hidden)")?.id === "screenHome";
+      const authed = !!appState?.session?.user?.id;
+      if (!authed && onAuthScreen && msg?.source === "BC_MSG") return;
+
       // Same-origin only (your game is served from the same Vite origin)
       if (event.origin !== window.location.origin) return;
 
@@ -2351,6 +2355,23 @@ function setHomeAuthUI(isAuthed) {
     badge?.classList.add("hidden");
     logoutBtn?.classList.add("hidden");
   }
+}
+
+function hardResetAuthUI() {
+  try { setHomeAuthUI(false); } catch {}
+
+  document.querySelectorAll("button").forEach((b) => {
+    const t = (b.textContent || "").toLowerCase();
+    const id = (b.id || "").toLowerCase();
+    if (t.includes("logout") || t.includes("sign out") || id.includes("logout")) {
+      b.classList.add("hidden");
+      b.disabled = false;
+      b.onclick = null;
+    }
+  });
+
+  document.getElementById("authFields")?.classList.remove("hidden");
+  document.getElementById("homeAuthBadge")?.classList.add("hidden");
 }
 
 // Premium entitlement check (Option 2)
@@ -4542,6 +4563,7 @@ function routeAuth() {
     window.history.replaceState({}, "", url.toString());
   } catch {}
   showScreen("screenHome");
+  hardResetAuthUI();
 }
 
 async function decideRoute(reason = "decideRoute") {
@@ -4994,9 +5016,11 @@ async function logoutAll(reason = "logout") {
     try {
       window.__BC_FORCE_AUTH__ = false;
       routeAuth();
+      hardResetAuthUI();
     } catch {
       showScreen("screenHome");
       try { setMode("login"); } catch {}
+      try { hardResetAuthUI(); } catch {}
     }
     setDebug({ step: "logout", time: new Date().toISOString(), reason });
   }
