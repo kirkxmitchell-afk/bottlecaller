@@ -638,6 +638,19 @@ function isManagerRole(role) {
   return ["manager", "group_manager", "enterprise_admin"]
     .includes(String(role || "").toLowerCase());
 }
+function isUuid(s) {
+  return typeof s === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
+}
+function hasRestaurantBoundAccess() {
+  const role = String(appState?.profile?.role || "").toLowerCase();
+  const rid =
+    window.getActiveRestaurantId?.() ||
+    appState.activeRestaurantId ||
+    appState.profile?.restaurant_id ||
+    null;
+  return isManagerRole(role) && isUuid(rid);
+}
 // --- storage key should be per-scope (group/enterprise) ---
 function activeRestaurantStorageKey(scopeId) {
   return `bc_active_restaurant_id::${scopeId || "noscope"}`;
@@ -1247,7 +1260,8 @@ if (!window.__BC_PARENT_BRIDGE__) {
           const isDemoReq =
             String(msg?.mode || "").toLowerCase() === "demo" ||
             String(senderCtx?.mode || "").toLowerCase() === "demo" ||
-            String(msg?.restaurantId || "").toLowerCase() === "demo";
+            String(msg?.payload?.mode || "").toLowerCase() === "demo" ||
+            String(msg?.payload?.bcMode || "").toLowerCase() === "demo";
           if (isDemoReq) {
             event.source?.postMessage(
               { source: "BC_MSG", v: 1, type: "runs_count_response", ok: true, count: 0, demo: true },
@@ -1256,11 +1270,12 @@ if (!window.__BC_PARENT_BRIDGE__) {
             return;
           }
 
-          const userId = String(msg.userId || "");
-          const restaurantId = String(msg.restaurantId || "");
-          if (!userId || !restaurantId) {
+          // ONLY trust sender-bound ctx, never msg.userId/msg.restaurantId.
+          const userId = senderCtx?.userId || null;
+          const restaurantId = senderCtx?.restaurantId || null;
+          if (!isUuid(userId) || !isUuid(restaurantId)) {
             event.source?.postMessage(
-              { source: "BC_MSG", v: 1, type: "runs_count_response", ok: false, count: 0, error: "missing_params" },
+              { source: "BC_MSG", v: 1, type: "runs_count_response", ok: true, count: 0, skipped: "invalid_ctx" },
               event.origin
             );
             return;
@@ -1427,8 +1442,8 @@ if (!window.__BC_PARENT_BRIDGE__) {
         console.log("[PARENT] NAV ->", dest, msg);
 
         if (msg.type === "nav" && msg.to === "screenManagerBoard") {
-          if (roleNow === "waiter") {
-            console.warn("[NAV] blocked waiter -> managerboard");
+          if (!hasRestaurantBoundAccess()) {
+            console.warn("[NAV] blocked -> managerboard (no restaurant-bound access)");
             showScreen("screenPremiumApp");
             return;
           }
@@ -1445,7 +1460,8 @@ if (!window.__BC_PARENT_BRIDGE__) {
         }
 
         if (String(dest).startsWith("screen")) {
-          if (roleNow === "waiter" && dest === "screenManagerBoard") {
+          if (dest === "screenManagerBoard" && !hasRestaurantBoundAccess()) {
+            console.warn("[NAV] blocked -> managerboard (no restaurant-bound access)");
             showScreen("screenPremiumApp");
             return;
           }
@@ -3302,8 +3318,8 @@ async function loadManagerInsights() {
     window.getActiveRestaurantId?.() ||
     appState.activeRestaurantId ||
     appState.profile?.restaurant_id;
-  if (!restaurantId) {
-    if (msgEl) msgEl.textContent = "Active restaurant not set.";
+  if (!isUuid(restaurantId)) {
+    if (msgEl) msgEl.textContent = "Insights unavailable (no active restaurant).";
     return;
   }
 
