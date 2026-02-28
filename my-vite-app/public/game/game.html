@@ -7733,9 +7733,10 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           const isDemoNow = (window.isDemo || window.bcMode === "demo");
           const done2 = Number(window.__BC_DEMO_DONE__ || 0);
           const target = Number(window.__BC_DEMO_TARGET__ || 3);
-          addStepButton(inDrill ? "NEXT REP" : (isDemoNow && done2 >= target ? "BACK HOME" : "NEXT ENCOUNTER"), () => {
+          const demoComplete = isDemoNow && !inDrill && done2 >= target;
+          addStepButton(inDrill ? "NEXT REP" : (demoComplete ? "BACK HOME" : "NEXT ENCOUNTER"), () => {
             try { logEncounter(); } catch (e) { console.warn("[BC] logEncounter failed", e); }
-            if (isDemoNow && !inDrill && done2 >= target) {
+            if (demoComplete) {
               resetNavState();
               showScreen("screenHome");
               return;
@@ -7942,8 +7943,9 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
               const isDemoNow = (window.isDemo || window.bcMode === "demo");
               const done = Number(window.__BC_DEMO_DONE__ || 0);
               const target = Number(window.__BC_DEMO_TARGET__ || 3);
-              addStepButton(inDrill ? "NEXT REP" : (isDemoNow && done >= target ? "BACK HOME" : "NEXT ENCOUNTER"), () => {
-                if (isDemoNow && !inDrill && done >= target) {
+              const demoComplete = isDemoNow && !inDrill && done >= target;
+              addStepButton(inDrill ? "NEXT REP" : (demoComplete ? "BACK HOME" : "NEXT ENCOUNTER"), () => {
+                if (demoComplete) {
                   resetNavState();
                   showScreen("screenHome");
                   return;
