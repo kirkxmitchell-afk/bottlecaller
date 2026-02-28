@@ -4367,6 +4367,8 @@ async function demoJoinRestaurantByCode() {
 let authRouteTimer = null;
 let __BC_LAST_ROUTE_KEY__ = "";
 let __BC_ROUTE_INFLIGHT__ = false;
+window.__BC_LOGOUT_INFLIGHT__ = false;
+window.__BC_LOGOUT_LAST_AT__ = 0;
 
 async function routeDemo(reason = "manual") {
   clearMsgs();
@@ -5044,65 +5046,109 @@ async function signOutHard() {
 }
 
 async function logoutAll(reason = "logout") {
-  console.log("[LOGOUT] start", reason);
-  window.__BC_FORCE_AUTH__ = true;
-  let trulyLoggedOut = false;
-  try {
-    // remove demo/mode params
-    try {
-      var u = new URL(window.location.href);
-      u.searchParams.delete("demo");
-      u.searchParams.delete("mode");
-      history.replaceState({}, "", u.pathname + (u.search ? u.search : ""));
-    } catch (e) {}
-
-    setPremiumOverlayActive(false);
-    destroyPremiumIframe("logout.pre");
-    unmountDemoGame("logout.pre");
-    destroyAllIframes("logout.pre");
-
-    // MUST await sign out + verify
-    const out = await signOutHard();
-    const stillAuthed = !!out?.stillAuthed;
-    console.log("[LOGOUT] verify session:", { stillAuthed, user: out?.session?.user?.id || null });
-    if (stillAuthed) {
-      try { localStorage.removeItem(supabase.storageKey); } catch {}
-      location.reload();
-      return;
-    }
-    trulyLoggedOut = true;
-  } catch (e) {
-    console.warn("[LOGOUT] error", e);
-  } finally {
-    if (!trulyLoggedOut) {
-      window.__BC_FORCE_AUTH__ = false;
-      void syncAuthUi();
-      return;
-    }
-
-    // wipe local app state
-    appMode = "public";
-    appState.session = null;
-    appState.profile = null;
-    appState.restaurant = null;
-    appState.invites = [];
-
-    closeHud();
-    setHomeAuthUI(false);
-    setAuthIntent("login");
-    currentIframeMode = null;
-    clearGameMounts && clearGameMounts();
-    destroyAllIframes("logout.post");
-
-    // route to login UI
-    setMode("login");
-    showScreen("screenHome");
-    hardResetAuthUI();
-
-    window.__BC_FORCE_AUTH__ = false;
-    console.log("[LOGOUT] done");
-    setDebug({ step: "logout", time: new Date().toISOString(), reason });
+  // prevent double clicks / multiple buttons firing
+  if (window.__BC_LOGOUT_INFLIGHT__) {
+    console.warn("[LOGOUT] blocked (already inflight)");
+    return;
   }
+  window.__BC_LOGOUT_INFLIGHT__ = true;
+  window.__BC_LOGOUT_LAST_AT__ = Date.now();
+
+  console.log("[LOGOUT] start", { reason });
+
+  // Disable all logout buttons instantly (UX)
+  ["btnHomeLogout", "btnLogoutCreate", "btnLogoutPremium", "btnLogoutManagerBoard"].forEach((id) => {
+    const b = document.getElementById(id);
+    if (b) {
+      b.disabled = true;
+      b.style.pointerEvents = "none";
+      b.style.opacity = "0.6";
+    }
+  });
+
+  // Stop routing while we sign out
+  window.__BC_ROUTE_INFLIGHT__ = true;
+  window.__BC_FORCE_AUTH__ = true;
+
+  // Always tear down iframes/overlays first (prevents “logout overlay stuck”)
+  try { setPremiumOverlayActive(false); } catch {}
+  try { destroyPremiumIframe("logoutAll.pre"); } catch {}
+  try { unmountDemoGame("logoutAll.pre"); } catch {}
+  try {
+    document.querySelectorAll("iframe").forEach((f) => {
+      try { f.src = "about:blank"; } catch {}
+      try { f.remove(); } catch {}
+    });
+  } catch {}
+
+  // Remove demo/mode params so decideRoute can't push you into demo shell while logged out
+  try {
+    const u = new URL(location.href);
+    u.searchParams.delete("demo");
+    u.searchParams.delete("mode");
+    history.replaceState({}, "", u.pathname + (u.search ? u.search : ""));
+  } catch {}
+
+  // ---- HARD SIGN OUT (must be awaited + verified) ----
+  let signOutErr = null;
+  try {
+    // Supabase v2 supports scope:"global" (best)
+    try {
+      const out = await supabase.auth.signOut({ scope: "global" });
+      signOutErr = out?.error || null;
+    } catch (e) {
+      const out2 = await supabase.auth.signOut();
+      signOutErr = out2?.error || null;
+    }
+  } catch (e) {
+    signOutErr = e;
+  }
+  if (signOutErr) console.warn("[LOGOUT] signOut error", signOutErr);
+
+  // VERIFY: wait until session is actually null
+  const waitMs = 1500;
+  const t0 = Date.now();
+  let session = null;
+
+  while (Date.now() - t0 < waitMs) {
+    try {
+      const res = await supabase.auth.getSession();
+      session = res?.data?.session || null;
+    } catch {}
+    if (!session) break;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+
+  console.log("[LOGOUT] verified session =", session ? "STILL_PRESENT" : "NULL");
+
+  // If session is STILL present, kill token storage + reload (do NOT fake-logout UI)
+  if (session) {
+    try { localStorage.removeItem(supabase.storageKey); } catch {}
+    location.reload();
+    return;
+  }
+
+  // ---- Now it's truly logged out: safe to reset app state/UI ----
+  appMode = "public";
+  appState.session = null;
+  appState.profile = null;
+  appState.restaurant = null;
+  appState.invites = [];
+
+  try { closeHud(); } catch {}
+  try { setHomeAuthUI(false); } catch {}
+
+  try { setAuthIntent("login"); } catch {}
+  try { setMode("login"); } catch {}
+  try { clearGameMounts?.(); } catch {}
+  try { showScreen("screenHome"); } catch {}
+
+  // Re-enable route system
+  window.__BC_ROUTE_INFLIGHT__ = false;
+  window.__BC_LOGOUT_INFLIGHT__ = false;
+  window.__BC_FORCE_AUTH__ = false;
+
+  console.log("[LOGOUT] done ✅", { reason });
 }
 
 // ------------------------------------------------------------
@@ -5232,6 +5278,12 @@ setDebug({ step: "boot.ready", time: new Date().toISOString(), supabaseUrl: impo
 // ✅ TOKEN_REFRESHED must NOT remount iframes / reset gameplay.
 supabase.auth.onAuthStateChange((event) => {
   setDebug({ step: "auth.change", event, time: new Date().toISOString() });
+
+  // if logout is in progress, ignore routing changes
+  if (window.__BC_LOGOUT_INFLIGHT__) {
+    console.warn("[AUTH] event ignored during logout:", event);
+    return;
+  }
 
   if (window.__BC_FORCE_AUTH__) {
     if (event === "SIGNED_OUT") {
