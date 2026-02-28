@@ -4521,6 +4521,22 @@ function routeDemoShellNoAuth() {
   mountGameIframe("gameRootDemo", "demo");
 }
 
+function routeAuth() {
+  console.log("[ROUTE] auth (no user)");
+  destroyPremiumIframe("routeAuth");
+  unmountDemoGame("routeAuth");
+  setPremiumOverlayActive(false);
+
+  window.__BC_DRILL_CONFIG__ = null;
+  window.BC_DRILL_CONFIG = null;
+  setPendingStartDrill(null);
+
+  closeHud();
+  setMode("login");
+  setAuthIntent("demo");
+  showScreen("screenHome");
+}
+
 async function decideRoute(reason = "decideRoute") {
   clearMsgs();
 
@@ -4528,13 +4544,18 @@ async function decideRoute(reason = "decideRoute") {
     await loadAuthedState(reason);
     await initRestaurantContextAfterAuth();
 
-    // 1) Logged out => Demo shell
+    // 1) Logged out => Auth by default (Demo only if explicitly requested)
     if (!isAuthed()) {
-      closeHud();
-      setAuthIntent("demo");
       appMode = "public";
-      routeDemoShellNoAuth();
-      setDebug({ step: "decideRoute.logged_out.demo_shell", time: new Date().toISOString(), reason });
+      const qs = new URLSearchParams(window.location.search);
+      const wantsDemo = qs.get("demo") === "1";
+      if (wantsDemo) {
+        routeDemoShellNoAuth();
+        setDebug({ step: "decideRoute.logged_out.demo_shell", time: new Date().toISOString(), reason });
+      } else {
+        routeAuth();
+        setDebug({ step: "decideRoute.logged_out.auth", time: new Date().toISOString(), reason });
+      }
       return;
     }
 
