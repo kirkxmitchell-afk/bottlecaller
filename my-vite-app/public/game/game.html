@@ -8092,6 +8092,15 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
                 sessionId,
                 occurredAtMs: Date.now(),
               });
+              window.__BC_SESSIONS__ = window.__BC_SESSIONS__ || [];
+              if (!window.__BC_SESSIONS__.find((x) => x && x.sessionId === sessionId)) {
+                window.__BC_SESSIONS__.push({
+                  sessionId,
+                  mode: window.bcMode,
+                  startedAtMs: Date.now(),
+                  role: window.__BC_CTX__?.role || "demo",
+                });
+              }
               localStorage.setItem(k, "1");
               console.log("[BC] session_started ✅", { mode: bcMode, sessionId });
             }
@@ -8527,6 +8536,9 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
           document.querySelectorAll('[data-role="manager"]').forEach((el) => el.classList.add("hidden"));
           document.querySelectorAll('[data-nav="screenSetupPremium"]').forEach((el) => el.classList.add("hidden"));
+          document.getElementById("btnResetRunsPremium")?.classList.add("hidden");
+          document.getElementById("btnResetProgressPremium")?.classList.add("hidden");
+          document.getElementById("btnResetWinesPremium")?.classList.add("hidden");
           document.getElementById("btnResetAll")?.classList.add("hidden");
           document.getElementById("btnResetAll")?.setAttribute("disabled", "true");
           document.querySelectorAll('[data-action="reset_all"]').forEach((el) => {
@@ -8574,6 +8586,9 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
       function applyDemoUIRestrictions() {
         if (!isDemo) return;
         [
+          "btnResetRunsPremium",
+          "btnResetProgressPremium",
+          "btnResetWinesPremium",
           "btnResetRunsDemo",
           "btnViewHistoryDemo",
           "btnResetWinesDemo",
@@ -8867,6 +8882,9 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
                     note: "ended_via_back_from_play",
                   },
                 });
+                window.__BC_SESSIONS__ = window.__BC_SESSIONS__ || [];
+                const s = window.__BC_SESSIONS__.find((x) => x && x.sessionId === sessionId);
+                if (s) s.endedAtMs = Date.now();
                 localStorage.setItem(k, "1");
                 console.log("[BC] session_ended ✅", { mode: bcMode, sessionId });
               }
