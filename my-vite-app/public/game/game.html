@@ -6600,6 +6600,12 @@ function ensureProgLoaded() {
         if ((window.isDemo || window.bcMode === "demo") && sessionType !== "drill") {
           window.__BC_DEMO_DONE__ = Number(window.__BC_DEMO_DONE__ || 0) + 1;
           console.log("[DEMO] progress", window.__BC_DEMO_DONE__, "/", window.__BC_DEMO_TARGET__);
+          if (window.__BC_DEMO_DONE__ >= 3) {
+            console.log("[DEMO] completed 3 encounters -> home");
+            resetNavState();
+            showScreen("screenHome");
+            return;
+          }
         }
 
           const payload = buildEncounterResolvedPayloadV2();
@@ -7713,11 +7719,11 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           }
 
           const isDemoNow = (window.isDemo || window.bcMode === "demo");
-          const done = Number(window.__BC_DEMO_DONE__ || 0);
+          const done2 = Number(window.__BC_DEMO_DONE__ || 0);
           const target = Number(window.__BC_DEMO_TARGET__ || 3);
-          addStepButton(inDrill ? "NEXT REP" : (isDemoNow && done >= target ? "BACK HOME" : "NEXT ENCOUNTER"), () => {
+          addStepButton(inDrill ? "NEXT REP" : (isDemoNow && done2 >= target ? "BACK HOME" : "NEXT ENCOUNTER"), () => {
             try { logEncounter(); } catch (e) { console.warn("[BC] logEncounter failed", e); }
-            if (isDemoNow && !inDrill && done >= target) {
+            if (isDemoNow && !inDrill && done2 >= target) {
               resetNavState();
               showScreen("screenHome");
               return;
