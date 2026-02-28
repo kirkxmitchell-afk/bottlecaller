@@ -5002,26 +5002,28 @@ async function submitAuth() {
 async function signOutHard() {
   console.log("[AUTH] signOutHard: start");
 
-  const res = await supabase.auth.signOut({ scope: "global" });
-  if (res?.error) console.warn("[AUTH] signOutHard error:", res.error);
+  // 1) call signOut
+  var res = await supabase.auth.signOut();
+  if (res && res.error) console.warn("[AUTH] signOut error:", res.error);
 
-  const { data, error } = await supabase.auth.getSession();
-  if (error) console.warn("[AUTH] getSession error after signOut:", error);
-  console.log("[AUTH] signOutHard: session after =", data?.session || null);
+  // 2) verify session
+  var ses1 = await supabase.auth.getSession();
+  console.log("[AUTH] session after signOut =", ses1 && ses1.data ? ses1.data.session : null);
 
-  if (data?.session) {
-    console.warn("[AUTH] session still present after signOut — forcing local storage token clear");
+  // 3) if still present, force-clear Supabase token storage keys
+  if (ses1 && ses1.data && ses1.data.session) {
+    console.warn("[AUTH] session still present -> forcing token clear");
     try {
-      for (let i = localStorage.length - 1; i >= 0; i--) {
-        const k = localStorage.key(i);
-        if (k && k.startsWith("sb-") && k.endsWith("-auth-token")) {
+      for (var i = localStorage.length - 1; i >= 0; i--) {
+        var k = localStorage.key(i);
+        if (k && k.indexOf("sb-") === 0 && k.indexOf("-auth-token") === (k.length - 11)) {
           localStorage.removeItem(k);
         }
       }
-    } catch {}
+    } catch (e) {}
 
-    const chk = await supabase.auth.getSession();
-    console.log("[AUTH] session after forced clear =", chk?.data?.session || null);
+    var ses2 = await supabase.auth.getSession();
+    console.log("[AUTH] session after forced clear =", ses2 && ses2.data ? ses2.data.session : null);
   }
 
   console.log("[AUTH] signOutHard: done");
