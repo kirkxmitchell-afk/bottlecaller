@@ -8584,19 +8584,31 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         if (btnGoPremium) btnGoPremium.textContent = "Setup";
       }
 
+      function applyDemoHomeUI() {
+        const isDemoNow = (window.isDemo || window.bcMode === "demo");
+        if (!isDemoNow) return;
+
+        [
+          "btnResetRunsDemo",
+          "btnResetProgressDemo",
+          "btnResetWinesDemo",
+        ].forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) el.remove();
+        });
+      }
+
       function applyDemoUIRestrictions() {
         if (!isDemo) return;
         [
           "btnResetRunsPremium",
           "btnResetProgressPremium",
           "btnResetWinesPremium",
-          "btnResetRunsDemo",
-          "btnViewHistoryDemo",
-          "btnResetWinesDemo",
         ].forEach((id) => {
           const el = document.getElementById(id);
           if (el) el.style.display = "none";
         });
+        applyDemoHomeUI();
       }
 
       function exitDrillState() {
@@ -8977,6 +8989,8 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
       renderWineTables();
       initButtons();
       applyDemoUIRestrictions();
+      applyDemoHomeUI();
+      document.addEventListener("DOMContentLoaded", applyDemoHomeUI, { once: true });
       try { wireDrillBack_FIXED(); } catch (e) { console.warn("[DRILL] wireDrillBack_FIXED failed", e); }
       applyRoleGatingToSetupUI();
 

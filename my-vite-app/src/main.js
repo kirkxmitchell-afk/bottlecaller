@@ -1742,8 +1742,31 @@ function showScreen(id) {
     document.getElementById("screenHome")?.classList.remove("hidden");
   }
 
+  removeGlobalResetButtons();
   applyRoleTemplateGates();
   onScreenChanged(id);
+}
+
+function removeGlobalResetButtons() {
+  const ids = [
+    "btnResetAll",
+    "btnResetRuns",
+    "btnResetProgress",
+    "btnResetWines",
+    "btnResetRunsPremium",
+    "btnResetProgressPremium",
+    "btnResetWinesPremium",
+    "btnResetRunsDemo",
+    "btnResetProgressDemo",
+    "btnResetWinesDemo",
+  ];
+
+  ids.forEach((id) => document.getElementById(id)?.remove());
+
+  document.querySelectorAll("button").forEach((b) => {
+    const t = (b.textContent || "").trim().toLowerCase();
+    if (t.includes("reset")) b.remove();
+  });
 }
 
 function onScreenChanged(id) {
@@ -1766,6 +1789,8 @@ function onScreenChanged(id) {
   if (!isPremium) {
     document.getElementById("hudPanel")?.classList.add("hidden");
   }
+
+  removeGlobalResetButtons();
 }
 
 function shouldIgnoreDuplicateNav(msg) {
