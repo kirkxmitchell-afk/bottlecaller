@@ -1072,12 +1072,25 @@ async function buildBcCtxSafe(requestedMode = null) {
 
   const mode = String(requestedMode || "").toLowerCase();
   const isDemo = mode === "demo";
+
+  // DEMO: never attach to a real restaurant boundary
+  if (isDemo) {
+    return {
+      userId,
+      restaurantId: null,
+      scopeId: null,
+      role: profile?.role ?? null,
+      mode: "demo",
+      drill: null,
+    };
+  }
+
   const restaurantId = window.getActiveRestaurantId?.() ?? profile?.restaurant_id ?? null;
-  if (!restaurantId && !isDemo) return null;
+  if (!restaurantId) return null;
 
   return {
     userId,
-    restaurantId: restaurantId ?? null,
+    restaurantId,
     scopeId: profile?.scope_id ?? null,
     role: profile?.role ?? null,
     mode: requestedMode ?? null,
@@ -1230,6 +1243,19 @@ if (!window.__BC_PARENT_BRIDGE__) {
       // RUNS COUNT: iframe asks parent -> parent queries supabase -> reply
       if (msg.type === "runs_count_request") {
         try {
+          const senderCtx = getSourceCtx(event.source);
+          const isDemoReq =
+            String(msg?.mode || "").toLowerCase() === "demo" ||
+            String(senderCtx?.mode || "").toLowerCase() === "demo" ||
+            String(msg?.restaurantId || "").toLowerCase() === "demo";
+          if (isDemoReq) {
+            event.source?.postMessage(
+              { source: "BC_MSG", v: 1, type: "runs_count_response", ok: true, count: 0, demo: true },
+              event.origin
+            );
+            return;
+          }
+
           const userId = String(msg.userId || "");
           const restaurantId = String(msg.restaurantId || "");
           if (!userId || !restaurantId) {
@@ -1280,17 +1306,8 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
         if (requestedMode === "demo") {
           window.__BC_LAST_CTX_MODE__ = "demo";
-          const demoRole = String(window.appState?.profile?.role || "waiter").toLowerCase() === "manager"
-            ? "manager"
-            : "waiter";
-          const demoCtx = {
-            userId: window.appState?.session?.user?.id || "demo",
-            restaurantId: null,
-            scopeId: null,
-            role: demoRole,
-            mode: "demo",
-            drill: null,
-          };
+          const demoCtx = await buildBcCtxSafe("demo");
+          if (!demoCtx?.userId || !demoCtx?.role) return;
           try {
             event.source?.postMessage(
               {
@@ -1298,6 +1315,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
                 v: 1,
                 type: "bc_ctx",
                 ...demoCtx,
+                drill: null,
               },
               event.origin
             );
@@ -1473,7 +1491,8 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
       const isDemoNow =
         String(msg?.mode || "").toLowerCase() === "demo" ||
-        String(payload?.mode || "").toLowerCase() === "demo";
+        String(payload?.mode || "").toLowerCase() === "demo" ||
+        String(payload?.bcMode || "").toLowerCase() === "demo";
       if (isDemoNow) {
         event.source?.postMessage(
           { source: "BC_MSG", v: 1, type: "event_log_ack", ok: true, demo: true, eventType },
