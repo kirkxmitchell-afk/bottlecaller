@@ -1244,8 +1244,14 @@ function isDrillMode() {
           PROG.unlocks.singleVariableHooks = PROG.axes.compression >= 4;
         }
 
-        const pts = spine.selectors.points();
-        const tier = spine.selectors.tier();
+        const isDemoNow = (window.isDemo || window.bcMode === "demo");
+        let pts = 0;
+        let tier = 1;
+        if (!isDemoNow) {
+          const spineSafe = getProgressionSpine({ allowNull: true });
+          pts = Number(spineSafe?.selectors?.points?.() ?? 0);
+          tier = Number(spineSafe?.selectors?.tier?.() ?? 1);
+        }
         const fancyUnlocked = tier >= 2;
         const celebratorUnlocked = tier >= 3;
         PROG.unlocks.fancy = fancyUnlocked;
@@ -8053,14 +8059,19 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         bcRenderHud("start");
 
         console.log("[DEMO_SPINE_GUARD]", { isDemo: window.isDemo, bcMode: window.bcMode });
+        let minE = 1, maxE = 9999;
         if (!isDemoNow) {
-          try {
-            const spine = getProgressionSpine();
-            const [minE, maxE] = spine.selectors.encounterRange();
-            const encounterNumber = encounterIndex + 1;
-            if (encounterNumber < minE) encounterIndex = minE - 1;
-            if (encounterNumber > maxE) encounterIndex = maxE - 1;
-          } catch {}
+          const spine = getProgressionSpine({ allowNull: true });
+          const r = spine?.selectors?.encounterRange?.();
+          if (Array.isArray(r) && r.length === 2) {
+            minE = Number(r[0] ?? 1);
+            maxE = Number(r[1] ?? 9999);
+          }
+        }
+        if (!isDemoNow) {
+          const encounterNumber = encounterIndex + 1;
+          if (encounterNumber < minE) encounterIndex = minE - 1;
+          if (encounterNumber > maxE) encounterIndex = maxE - 1;
         }
 
         // ----------------------------
@@ -8087,20 +8098,23 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           enc = use[idx];
         } else {
           // DEMO uses raw list; PREMIUM applies tier-based guest filtering.
-          let allowedTypes = null;
+          let points = 0;
           if (!isDemoNow) {
-            const spine = getProgressionSpine();
-            const points = spine.selectors.points();
-            allowedTypes = window.allowedGuestTypes(points);
+            const spine = getProgressionSpine({ allowNull: true });
+            points = Number(spine?.selectors?.points?.() ?? 0);
           }
 
-          let filtered = list;
+          const allowedTypes = (isDemoNow)
+            ? null
+            : (typeof window.allowedGuestTypes === "function" ? window.allowedGuestTypes(points) : null);
+
+          let src = list;
           if (!isDemoNow && Array.isArray(allowedTypes) && allowedTypes.length) {
-            filtered = (Array.isArray(list) ? list : []).filter(e =>
+            src = (Array.isArray(list) ? list : []).filter(e =>
               allowedTypes.includes(normalizeGuestType(e?.guestStateActual))
             );
           }
-          const src = filtered.length ? filtered : list;
+          src = (Array.isArray(src) && src.length) ? src : list;
 
           idx = (Number.isFinite(encounterIndex) ? encounterIndex : 0) % src.length;
           enc = src[idx] || list[0] || null;
@@ -8165,8 +8179,11 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         let policy = difficultyPolicy(enc.difficulty ?? 1);
         if (!isDemoNow) {
           ensureProgLoaded();
-          const spine = getProgressionSpine();
-          const seedFromProg = Number(spine.selectors.effectiveDifficultySeed());
+          let seedFromProg = 1;
+          if (!isDemoNow) {
+            const spine = getProgressionSpine({ allowNull: true });
+            seedFromProg = Number(spine?.selectors?.effectiveDifficultySeed?.() ?? 1);
+          }
           const policySeed =
             (window.__BC_GUARD__ && Number.isFinite(window.__BC_GUARD__.finalDifficulty))
               ? window.__BC_GUARD__.finalDifficulty
