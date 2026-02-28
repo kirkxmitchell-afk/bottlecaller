@@ -4532,6 +4532,7 @@ function routeAuth() {
   setPendingStartDrill(null);
 
   closeHud();
+  setHomeAuthUI(false);
   setMode("login");
   setAuthIntent("login");
   try {
@@ -4971,7 +4972,7 @@ async function logoutAll(reason = "logout") {
     closeHud();
     setHomeAuthUI(false);
 
-    setAuthIntent("demo");
+    setAuthIntent("login");
     currentIframeMode = null;
     clearGameMounts();
 
@@ -4989,7 +4990,7 @@ document.getElementById("btnHomePremium").addEventListener("click", async () => 
   // Logged out: toggle intent only
   if (!appState.session?.user) {
     if (authIntent === "premium") {
-      setAuthIntent("demo");
+      setAuthIntent("login");
       setMsg("authMsg", "", "normal");
     } else {
       setAuthIntent("premium");
@@ -5004,7 +5005,7 @@ document.getElementById("btnHomePremium").addEventListener("click", async () => 
 
 // ✅ Exit Premium (logged out intent)
 document.getElementById("btnHomeExitPremium").addEventListener("click", () => {
-  setAuthIntent("demo");
+  setAuthIntent("login");
   setMsg("authMsg", "", "normal");
 });
 
@@ -5024,7 +5025,7 @@ document.getElementById("btnDemoPremium").addEventListener("click", async () => 
 });
 
 document.getElementById("btnDemoExit").addEventListener("click", () => {
-  setAuthIntent("demo");
+  setAuthIntent("login");
   closeHud();
   showScreen("screenHome");
 });

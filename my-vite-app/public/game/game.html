@@ -8610,8 +8610,17 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             el.classList.add("hidden");
             el.style.pointerEvents = "none";
           });
-          document.getElementById("btnResetRunsPremium")?.remove();
-          document.getElementById("btnResetProgressPremium")?.remove();
+          const btnResetProgress = document.getElementById("btnResetProgressPremium");
+          if (btnResetProgress) {
+            btnResetProgress.classList.remove("hidden");
+            btnResetProgress.disabled = false;
+          }
+          const btnResetRuns = document.getElementById("btnResetRunsPremium");
+          if (btnResetRuns) {
+            btnResetRuns.classList.remove("hidden");
+            btnResetRuns.disabled = false;
+          }
+          document.getElementById("btnResetWinesPremium")?.remove();
           document.getElementById("screenSetupPremium")?.classList.add("hidden");
           return;
         }
