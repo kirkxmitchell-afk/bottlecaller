@@ -331,9 +331,6 @@
         </div>
       </div>
 
-      <div class="button-row" style="margin-top:16px;">
-        <button id="btnResetApp" type="button">Reset All</button>
-      </div>
     </div>
   </section>
 
@@ -2161,7 +2158,16 @@ function ensureProgLoaded() {
         window.__BC_GUARD__ = window.__BC_GUARD__ || {};
         window.__BC_GUARD__.lastDecision = null;
 
-        // 2) rebuild UI clean and start when ctx+wines are ready
+        // 2) Best-effort sync to mounted frame (if this code is embedded)
+        try {
+          const frame = document.getElementById("premiumRootFrame") || document.querySelector("#gameRootDemo iframe");
+          frame?.contentWindow?.postMessage(
+            { source: "BC_MSG", v: 1, type: "reset_to_encounter_1" },
+            window.location.origin
+          );
+        } catch {}
+
+        // 3) rebuild UI clean and start when ctx+wines are ready
         void startPlayWithReadyGate();
       }
 
@@ -8916,32 +8922,34 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           });
         }
 
-        bindInput(btnResetApp, () => {
-          if (!confirm("Reset app? This clears wines and runs.")) return;
+        if (btnResetApp) {
+          bindInput(btnResetApp, () => {
+            if (!confirm("Reset app? This clears wines and runs.")) return;
 
-          localStorage.removeItem(demoWinesKey);
-          localStorage.removeItem(premiumWinesKey);
-          localStorage.removeItem(demoRunsKey);
-          localStorage.removeItem(premiumRunsKey);
-          try { localStorage.removeItem(runsKey(bcMode)); } catch {}
-          localStorage.removeItem(demoStreakKey);
-          localStorage.removeItem(premiumStreakKey);
-          localStorage.removeItem(demoBestStreakKey);
-          localStorage.removeItem(premiumBestStreakKey);
-          localStorage.removeItem(demoEncounterIndexKey);
-          localStorage.removeItem(premiumEncounterIndexKey);
-          localStorage.removeItem(coverKey);
-          if (restaurantId) WineStore.remove(restaurantId);
+            localStorage.removeItem(demoWinesKey);
+            localStorage.removeItem(premiumWinesKey);
+            localStorage.removeItem(demoRunsKey);
+            localStorage.removeItem(premiumRunsKey);
+            try { localStorage.removeItem(runsKey(bcMode)); } catch {}
+            localStorage.removeItem(demoStreakKey);
+            localStorage.removeItem(premiumStreakKey);
+            localStorage.removeItem(demoBestStreakKey);
+            localStorage.removeItem(premiumBestStreakKey);
+            localStorage.removeItem(demoEncounterIndexKey);
+            localStorage.removeItem(premiumEncounterIndexKey);
+            localStorage.removeItem(coverKey);
+            if (restaurantId) WineStore.remove(restaurantId);
 
-          wines = setWines([]);
-          runs = [];
-          resetEncounterIndex();
-          encounterIndex = 0;
+            wines = setWines([]);
+            runs = [];
+            resetEncounterIndex();
+            encounterIndex = 0;
 
-          resetNavState();
-          renderWineTables();
-          showScreen("screenWelcome");
-        });
+            resetNavState();
+            renderWineTables();
+            showScreen("screenWelcome");
+          });
+        }
 
         bindInput(btnContinue, async () => {
           if (!(await assertWinesReadyOrExplain())) return;
