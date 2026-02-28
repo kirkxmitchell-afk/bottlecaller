@@ -1215,7 +1215,8 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
       // ✅ 1) ctx request MUST be handled before any event_log filtering
       if (msg.type === "bc_ctx_request") {
-        const requestedMode = String(msg?.mode || "").toLowerCase();
+        const requestedMode =
+          String(msg?.mode || msg?.requestedMode || "").toLowerCase();
         const isFromIframe = !!event.source && event.source !== window;
         if (!isFromIframe) return;
 
@@ -1385,9 +1386,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
       const isDemoNow =
         String(msg?.mode || "").toLowerCase() === "demo" ||
-        String(payload?.mode || "").toLowerCase() === "demo" ||
-        String(payload?.bcMode || "").toLowerCase() === "demo" ||
-        String(msg?.userId || "").toLowerCase() === "demo";
+        String(msg?.payload?.mode || "").toLowerCase() === "demo";
       if (isDemoNow) {
         event.source?.postMessage(
           { source: "BC_MSG", v: 1, type: "event_log_ack", ok: true, demo: true, eventType },
