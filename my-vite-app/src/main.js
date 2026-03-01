@@ -4141,8 +4141,15 @@ function mountPremiumGameIframe({
   const roleNow = String(appState?.profile?.role || "").toLowerCase();
   const resolvedBackTo = roleNow === "waiter" ? "screenPremiumApp" : (backTo || "screenManagerBoard");
   const backToParam = encodeURIComponent(resolvedBackTo);
-  const epochParam = `&epoch=${window.__BC_IFRAME_EPOCH__}`;
-  iframe.src = url || `/game/game.html?mode=${encodeURIComponent(mode || "premium")}&showBack=${showBackParam}&backTo=${backToParam}${epochParam}&v=${Date.now()}`;
+  const epoch = window.__BC_IFRAME_EPOCH__;
+  const epochParam = `&epoch=${encodeURIComponent(epoch)}`;
+  iframe.src =
+    url ||
+    `/game/game.html?mode=${encodeURIComponent(mode || "premium")}` +
+    `&showBack=${showBackParam}` +
+    `&backTo=${backToParam}` +
+    `${epochParam}` +
+    `&v=${Date.now()}`;
   iframe.style.width = "100%";
   iframe.style.height = "78vh";
   iframe.style.border = "0";

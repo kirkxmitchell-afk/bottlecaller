@@ -65,9 +65,19 @@
       catch { return "premium"; }
     }
 
+    (function initEpochFromUrl() {
+      try {
+        const qs = new URLSearchParams(location.search);
+        window.__BC_EPOCH__ = Number(qs.get("epoch") || 0);
+        console.log("[BC] epoch from URL =", window.__BC_EPOCH__);
+      } catch {
+        window.__BC_EPOCH__ = 0;
+      }
+    })();
+
     const MODE = getMode();
     const DEMO = (MODE === "demo");
-    const EPOCH = Number(new URLSearchParams(location.search).get("epoch") || 0);
+    const EPOCH = Number(window.__BC_EPOCH__ || 0);
 
     // single source of truth for mode
     window.bcMode = MODE;
