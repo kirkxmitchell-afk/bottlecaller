@@ -1230,7 +1230,6 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
   window.__BC_BUILD_CTX_SAFE__ = buildBcCtxSafe;
 
-  window.__BC_PENDING_CTX_REQ__ = window.__BC_PENDING_CTX_REQ__ || null;
   window.__BC_SOURCE_CTX_MAP__ = window.__BC_SOURCE_CTX_MAP__ || new WeakMap();
   function setSourceCtx(source, ctx) {
     if (!source || source === window || !ctx) return;
@@ -1267,105 +1266,6 @@ if (!window.__BC_PARENT_BRIDGE__) {
     } catch { return "no_tag"; }
   }
 
-  async function flushPendingCtx() {
-    const p = window.__BC_PENDING_CTX_REQ__;
-    if (!p) return;
-
-    // stale drop
-    if (p.at && (Date.now() - p.at > 30000)) {
-      console.warn("[PARENT] flushPendingCtx dropped: stale pending ctx (>30s)");
-      window.__BC_PENDING_CTX_REQ__ = null;
-      return;
-    }
-
-    // ✅ same-origin only
-    if (p.origin !== window.location.origin) {
-      console.warn("[PARENT] flushPendingCtx blocked: origin mismatch", { origin: p.origin });
-      window.__BC_PENDING_CTX_REQ__ = null;
-      return;
-    }
-
-    try {
-      if (window.__BC_ACTIVE_REST_READY__) {
-        await Promise.race([
-          window.__BC_ACTIVE_REST_READY__,
-          new Promise((r) => setTimeout(r, 600))
-        ]);
-      }
-    } catch {}
-
-    const requestedMode = String(p.mode || "").toLowerCase();
-    const needRestaurant = requestedMode !== "demo";
-    const rid = window.getActiveRestaurantId?.();
-    const ready =
-      !!window.appState?.session &&
-      !!window.appState?.profile?.role &&
-      (needRestaurant ? !!rid : true);
-    if (!ready) return;
-
-    const bcCtx = await buildBcCtxSafe(p.mode ?? null);
-    if (bcCtx) bcCtx.drill = window.__BC_DRILL_CONFIG__ || window.BC_DRILL_CONFIG || null;
-    if (!bcCtx?.userId || !bcCtx?.role || (!bcCtx?.restaurantId && requestedMode !== "demo")) {
-      console.warn("[PARENT] flushPendingCtx: refusing null/partial bc_ctx", bcCtx);
-      return;
-    }
-
-    // refuse ctx swaps for same source (stops ghosts)
-    const existing = getSourceCtx(p.source);
-    if (existing) {
-      const same =
-        String(existing.userId || "") === String(bcCtx.userId || "") &&
-        String(existing.restaurantId || "") === String(bcCtx.restaurantId || "") &&
-        String(existing.role || "") === String(bcCtx.role || "") &&
-        String(existing.mode || "") === String(bcCtx.mode || "");
-      if (!same) {
-        console.warn("[PARENT] flushPendingCtx dropped: ctx mismatch vs existing", { existing, next: bcCtx });
-        window.__BC_PENDING_CTX_REQ__ = null;
-        return;
-      }
-    }
-
-    console.log("[PARENT] sending bc_ctx (flush path)", {
-      hasDrill: !!bcCtx?.drill,
-      drill: bcCtx?.drill,
-      to: p.origin
-    });
-
-    // send-first, stamp-after
-    const sent = (() => {
-      try {
-        if (!p.source || p.source === window) return false;
-        if (typeof p.source.closed === "boolean" && p.source.closed) return false;
-        p.source.postMessage({ source: "BC_MSG", v: 1, type: "bc_ctx", ...bcCtx }, p.origin);
-        return true;
-      } catch (e) {
-        console.warn("[PARENT] flushPendingCtx postMessage failed", e);
-        return false;
-      }
-    })();
-
-    if (!sent) return;
-
-    setSourceCtx(p.source, bcCtx);
-    console.log("[PARENT] flushPendingCtx -> sent ✅", bcCtx);
-    window.__BC_PENDING_CTX_REQ__ = null;
-    if (window.__BC_CTX_FLUSH_TICK__) {
-      clearInterval(window.__BC_CTX_FLUSH_TICK__);
-      window.__BC_CTX_FLUSH_TICK__ = null;
-    }
-  }
-  window.__BC_PARENT_BRIDGE__.flushPendingCtx = flushPendingCtx;
-
-  if (!window.__BC_RESTAURANT_WATCH__) {
-    window.__BC_RESTAURANT_WATCH__ = setInterval(() => {
-      if (!window.__BC_PENDING_CTX_REQ__) return;
-      if (!window.appState?.session?.user?.id || !window.appState?.profile?.role) return;
-      const pendingMode = String(window.__BC_PENDING_CTX_REQ__?.mode || "").toLowerCase();
-      if (pendingMode !== "demo" && !window.getActiveRestaurantId?.()) return;
-      flushPendingCtx();
-    }, 250);
-  }
-
   if (!window.__BC_BRIDGE__) {
     async function getBcCtx({ requestedMode, msg, event }) {
       const prem =
@@ -1400,12 +1300,12 @@ if (!window.__BC_PARENT_BRIDGE__) {
         !!window.appState?.profile?.role &&
         (needRestaurant ? !!rid : true);
       if (!ready) {
-        window.__BC_PENDING_CTX_REQ__ = {
-          source: event.source,
-          origin: event.origin,
-          mode: requestedMode ?? null,
-          at: Date.now(),
-        };
+        try {
+          event.source?.postMessage(
+            { source: "BC_MSG", v: 1, type: "ctx_not_ready", ok: false },
+            event.origin
+          );
+        } catch {}
         return null;
       }
 
@@ -1554,12 +1454,13 @@ if (!window.__BC_PARENT_BRIDGE__) {
         "bc_logout_request",
         "nav_back",
         "nav",
+        "ctx_retry",
       ]);
       if (!senderCtx && !PRE_BIND_ALLOW.has(msg.type)) {
         console.warn("[PARENT] blocked msg (no senderCtx yet)", msg.type);
         try {
           event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: "ctx_required", ok: false, reason: "no_sender_ctx" },
+            { source: "BC_MSG", v: 1, type: "auth_state", authed: false, reason: "no_sender_ctx" },
             event.origin
           );
         } catch {}
@@ -4360,16 +4261,7 @@ async function setActiveRestaurantForGroup(restaurantId) {
       restaurant: restaurant ? { id: restaurant.id, name: restaurant.name } : null
     });
 
-    // 3) If a ctx request was waiting, flush immediately now that restaurant is valid
-    try {
-      if (window.__BC_PENDING_CTX_REQ__ && window.__BC_PARENT_BRIDGE__?.flushPendingCtx) {
-        await window.__BC_PARENT_BRIDGE__.flushPendingCtx();
-      }
-    } catch (e) {
-      console.warn("[BC] flushPendingCtx failed after switch", e);
-    }
-
-    // 4) optional: only remount game if play screen visible
+    // 3) optional: only remount game if play screen visible
     try {
       const playVisible =
         !document.getElementById("screenPlay")?.classList.contains("hidden") ||

@@ -1816,12 +1816,16 @@ function ensureProgLoaded() {
           window.addEventListener("message", (event) => {
             const msg = event?.data;
             if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
+            if (event.origin !== location.origin) return;
             if (msg.type === "ctx_not_ready" || msg.type === "ctx_required") {
               if (String(window.bcMode || getIframeMode() || "premium").toLowerCase() !== "demo") {
                 window.__BC_CTX_REQUESTED__ = false;
+                window.__BC_CTX_RETRY_N__ = (window.__BC_CTX_RETRY_N__ || 0) + 1;
+                const n = window.__BC_CTX_RETRY_N__;
+                const delay = Math.min(1000, 150 + n * 100);
                 setTimeout(() => {
                   try { requestCtxOnce(); } catch {}
-                }, 250);
+                }, delay);
               }
               return;
             }
@@ -1844,6 +1848,7 @@ function ensureProgLoaded() {
               return;
             }
             if (msg.type !== "bc_ctx") return;
+            window.__BC_CTX_RETRY_N__ = 0;
             setCtx(msg);
             console.log("[BC] bc_ctx received ✅", window.__BC_CTX__);
             if (typeof renderProgressMeterUnderBackButton === "function") {
