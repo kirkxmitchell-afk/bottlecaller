@@ -1544,7 +1544,137 @@ if (!window.__BC_PARENT_BRIDGE__) {
       }
 
       if (msg.type === "wines_request") {
-        await fetchAndSendWines(event.source);
+        const reqId = msg.reqId || null;
+        const senderCtx = getSourceCtx(event.source);
+        const rid =
+          msg.restaurantId ||
+          senderCtx?.restaurantId ||
+          window.getActiveRestaurantId?.() ||
+          appState.activeRestaurantId ||
+          appState.profile?.restaurant_id ||
+          null;
+        try {
+          const { data: live } = await supabase.auth.getSession();
+          if (!live?.session) throw new Error("no_session");
+          if (!rid) throw new Error("missing_restaurant_id");
+
+          const { data, error } = await supabase
+            .from("bc_wines")
+            .select("*")
+            .eq("restaurant_id", rid)
+            .order("created_at", { ascending: true });
+          if (error) throw error;
+
+          event.source?.postMessage(
+            {
+              source: "BC_MSG",
+              v: 1,
+              type: "wines_report",
+              reqId,
+              ok: true,
+              wines: data || [],
+            },
+            event.origin
+          );
+        } catch (e) {
+          event.source?.postMessage(
+            {
+              source: "BC_MSG",
+              v: 1,
+              type: "wines_report",
+              reqId,
+              ok: false,
+              error: e?.message || String(e),
+              wines: [],
+            },
+            event.origin
+          );
+        }
+        return;
+      }
+
+      if (msg.type === "wines_mutate") {
+        const reqId = msg.reqId || null;
+        const action = String(msg.action || "");
+        const payload = msg.payload || {};
+        const senderCtx = getSourceCtx(event.source);
+        const rid =
+          msg.restaurantId ||
+          senderCtx?.restaurantId ||
+          window.getActiveRestaurantId?.() ||
+          appState.activeRestaurantId ||
+          appState.profile?.restaurant_id ||
+          null;
+        try {
+          const { data: live } = await supabase.auth.getSession();
+          const userId = live?.session?.user?.id || null;
+          if (!userId) throw new Error("no_session");
+
+          if (action === "add") {
+            if (!rid) throw new Error("missing_restaurant_id");
+            const row = {
+              restaurant_id: rid,
+              created_by: userId,
+              name: payload?.name || "",
+              varietal: payload?.varietal || "",
+              fruit_tags: payload?.fruit_tags || [],
+              texture_tags: payload?.texture_tags || [],
+              oak_level: payload?.oak_level || "",
+              process: payload?.process || "",
+              region: payload?.region || "",
+              story: payload?.story || "",
+            };
+            const { error } = await supabase.from("bc_wines").insert(row);
+            if (error) throw error;
+          } else if (action === "upsert") {
+            if (!rid) throw new Error("missing_restaurant_id");
+            const row = {
+              id: payload?.id || undefined,
+              restaurant_id: rid,
+              created_by: userId,
+              name: payload?.name || "",
+              varietal: payload?.varietal || "",
+              fruit_tags: payload?.fruit_tags || [],
+              texture_tags: payload?.texture_tags || [],
+              oak_level: payload?.oak_level || "",
+              process: payload?.process || "",
+              region: payload?.region || "",
+              story: payload?.story || "",
+            };
+            const { error } = await supabase
+              .from("bc_wines")
+              .upsert(row, { onConflict: "id" });
+            if (error) throw error;
+          } else if (action === "delete") {
+            const wineId = payload?.wineId || payload?.id;
+            if (!wineId) throw new Error("missing_wine_id");
+            const { error } = await supabase.from("bc_wines").delete().eq("id", wineId);
+            if (error) throw error;
+          } else if (action === "delete_all") {
+            if (!rid) throw new Error("missing_restaurant_id");
+            const { error } = await supabase.from("bc_wines").delete().eq("restaurant_id", rid);
+            if (error) throw error;
+          } else {
+            throw new Error("unsupported_action");
+          }
+
+          event.source?.postMessage(
+            { source: "BC_MSG", v: 1, type: "wines_mutate_result", reqId, ok: true },
+            event.origin
+          );
+        } catch (e) {
+          event.source?.postMessage(
+            {
+              source: "BC_MSG",
+              v: 1,
+              type: "wines_mutate_result",
+              reqId,
+              ok: false,
+              error: e?.message || String(e),
+            },
+            event.origin
+          );
+        }
         return;
       }
 

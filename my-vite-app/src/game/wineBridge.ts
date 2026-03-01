@@ -1,94 +1,40 @@
 // src/game/wineBridge.ts
-import { supabase } from "../lib/supabaseClient.js";
+const ORIGIN = window.location.origin;
 
-export type WineRow = {
-  id: string;
-  scope_id?: string;
-  restaurant_id: string;
-  created_by: string;
-  name: string;
-  varietal: string;
-  fruit_tags: string[];
-  texture_tags: string[];
-  oak_level: string;
-  process: string;
-  region: string;
-  story: string;
-};
+function postToParent(payload: Record<string, unknown>) {
+  window.parent?.postMessage({ source: "BC_MSG", v: 1, ...payload }, ORIGIN);
+}
 
-export type WineInput = {
-  name: string;
-  varietal: string;
-  fruitTags: string[];
-  textureTags: string[];
-  oakLevel: string;
-  process: string;
-  region: string;
-  story: string;
-};
+function waitFor(
+  type: string,
+  matchFn?: (msg: any) => boolean,
+  timeoutMs = 8000
+): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => {
+      window.removeEventListener("message", onMsg);
+      reject(new Error("timeout waiting for " + type));
+    }, timeoutMs);
 
-function toUiWine(r: WineRow) {
+    function onMsg(e: MessageEvent) {
+      const msg = e?.data as any;
+      if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
+      if (e.origin !== ORIGIN) return;
+      if (msg.type !== type) return;
+      if (matchFn && !matchFn(msg)) return;
+
+      clearTimeout(t);
+      window.removeEventListener("message", onMsg);
+      resolve(msg);
+    }
+
+    window.addEventListener("message", onMsg);
+  });
+}
+
+function toDbWineShape(wine: any) {
   return {
-    id: r.id,
-    name: r.name,
-    varietal: r.varietal,
-    fruitTags: r.fruit_tags || [],
-    textureTags: r.texture_tags || [],
-    oakLevel: r.oak_level || "",
-    process: r.process || "",
-    region: r.region || "",
-    story: r.story || "",
-  };
-}
-
-export async function fetchRestaurantWines(scopeId: string | null, restaurantId: string) {
-  const { data, error } = await supabase
-    .from("bc_wines")
-    .select("*")
-    .eq("restaurant_id", restaurantId)
-    .order("created_at", { ascending: true });
-
-  if (error) throw error;
-  return (data || []).map(toUiWine);
-}
-
-export async function addRestaurantWine(scopeId: string | null, restaurantId: string, wine: WineInput) {
-  const { data: userRes, error: uErr } = await supabase.auth.getUser();
-  if (uErr) throw uErr;
-
-  const userId = userRes?.user?.id;
-  if (!userId) throw new Error("not_authenticated");
-
-  const row = {
-    scope_id: scopeId || null,
-    restaurant_id: restaurantId,
-    created_by: userId,
-    name: wine.name,
-    varietal: wine.varietal,
-    fruit_tags: wine.fruitTags || [],
-    texture_tags: wine.textureTags || [],
-    oak_level: wine.oakLevel || "",
-    process: wine.process || "",
-    region: wine.region || "",
-    story: wine.story || "",
-  };
-
-  const { error } = await supabase.from("bc_wines").insert(row);
-  if (error) throw error;
-}
-
-export async function upsertRestaurantWine(scopeId: string | null, restaurantId: string, wine: any) {
-  const { data: userRes, error: uErr } = await supabase.auth.getUser();
-  if (uErr) throw uErr;
-
-  const userId = userRes?.user?.id;
-  if (!userId) throw new Error("not_authenticated");
-
-  const row = {
     id: wine?.id || undefined,
-    scope_id: scopeId || null,
-    restaurant_id: restaurantId,
-    created_by: userId,
     name: wine?.name || "",
     varietal: wine?.varietal || "",
     fruit_tags: wine?.fruitTags || wine?.fruit_tags || wine?.fruit || [],
@@ -98,23 +44,55 @@ export async function upsertRestaurantWine(scopeId: string | null, restaurantId:
     region: wine?.region || "",
     story: wine?.story || "",
   };
+}
 
-  const { error } = await supabase
-    .from("bc_wines")
-    .upsert(row, { onConflict: "id" });
-  if (error) throw error;
+export async function requestWines(rid: string) {
+  const reqId = "wreq_" + Math.random().toString(16).slice(2);
+
+  postToParent({
+    type: "wines_request",
+    reqId,
+    restaurantId: rid,
+    mode: "premium",
+  });
+
+  const res = await waitFor("wines_report", (m) => m.reqId === reqId, 12000);
+  if (!res.ok) throw new Error(res.error || "wines_request failed");
+  return res.wines || [];
+}
+
+export async function fetchRestaurantWines(_scopeId: string | null, restaurantId: string) {
+  return requestWines(restaurantId);
+}
+
+async function mutateWines(action: string, payload: any, restaurantId?: string) {
+  const reqId = "wmut_" + Math.random().toString(16).slice(2);
+  postToParent({
+    type: "wines_mutate",
+    reqId,
+    action,
+    restaurantId: restaurantId || null,
+    payload: payload || {},
+    mode: "premium",
+  });
+
+  const res = await waitFor("wines_mutate_result", (m) => m.reqId === reqId, 12000);
+  if (!res.ok) throw new Error(res.error || `wines_mutate:${action} failed`);
+  return true;
+}
+
+export async function addRestaurantWine(_scopeId: string | null, restaurantId: string, wine: any) {
+  return mutateWines("add", toDbWineShape(wine), restaurantId);
+}
+
+export async function upsertRestaurantWine(_scopeId: string | null, restaurantId: string, wine: any) {
+  return mutateWines("upsert", toDbWineShape(wine), restaurantId);
 }
 
 export async function deleteRestaurantWine(wineId: string) {
-  const { error } = await supabase.from("bc_wines").delete().eq("id", wineId);
-  if (error) throw error;
+  return mutateWines("delete", { wineId });
 }
 
-export async function deleteAllRestaurantWines(scopeId: string | null, restaurantId: string) {
-  const { error } = await supabase
-    .from("bc_wines")
-    .delete()
-    .eq("restaurant_id", restaurantId);
-  if (error) throw error;
-  return true;
+export async function deleteAllRestaurantWines(_scopeId: string | null, restaurantId: string) {
+  return mutateWines("delete_all", {}, restaurantId);
 }

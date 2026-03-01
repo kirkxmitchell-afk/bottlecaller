@@ -3422,17 +3422,6 @@ function ensureProgLoaded() {
 
       console.log("[BC] wine schema sample", wines?.[0]);
 
-      function reportWinesToParent(mode, wines) {
-        try {
-          window.parent?.postMessage(
-            { source: "BC_MSG", v: 1, type: "wines_report", mode, wines },
-            window.location.origin
-          );
-        } catch {}
-      }
-
-      reportWinesToParent(bcMode, wines);
-
       function requestWinesFromParent() {
         try {
           window.parent?.postMessage(
@@ -5662,46 +5651,11 @@ function ensureProgLoaded() {
             const fresh = await window.WineBridge.fetchRestaurantWines(null, restaurantId);
             wines = setWines(Array.isArray(fresh) ? fresh : wines);
             if (restaurantId) WineStore.write(restaurantId, wines);
-            try {
-              window.parent?.postMessage(
-                { source: "BC_MSG", v: 1, type: "wines_report", mode: bcMode, wines },
-                window.location.origin
-              );
-            } catch {}
             renderWineTables();
             return;
           } catch (e) {
-            console.warn("[BC] upsertRestaurantWine failed, trying direct DB fallback", e);
-            try {
-              const parentSupabase = window.parent?.__BC_SUPABASE__ || window.parent?.supabase;
-              const row = { ...normalizeWineToDbShape(wine), restaurant_id: restaurantId };
-              const ins = await parentSupabase
-                ?.from("bc_wines")
-                .upsert(row, { onConflict: "id" });
-              if (ins?.error) throw ins.error;
-
-              const fresh2 = await parentSupabase
-                ?.from("bc_wines")
-                .select("*")
-                .eq("restaurant_id", restaurantId)
-                .order("created_at", { ascending: true });
-
-              if (!fresh2?.error && Array.isArray(fresh2.data)) {
-                wines = setWines(fresh2.data);
-                WineStore.write(restaurantId, wines);
-                try {
-                  window.parent?.postMessage(
-                    { source: "BC_MSG", v: 1, type: "wines_report", mode: bcMode, wines },
-                    window.location.origin
-                  );
-                } catch {}
-                renderWineTables();
-                return;
-              }
-            } catch (e2) {
-              console.warn("[BC] direct DB wines fallback failed", e2);
-              if (restaurantId) WineStore.write(restaurantId, wines);
-            }
+            console.warn("[BC] upsertRestaurantWine failed", e);
+            if (restaurantId) WineStore.write(restaurantId, wines);
             alert("Failed to save wine (check RLS / role / restaurantId).");
             return;
           }
