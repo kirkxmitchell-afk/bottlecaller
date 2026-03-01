@@ -1,4 +1,4 @@
-import { getSupabase } from "./lib/supabaseClient.js";
+import { getSupabase } from "./lib/supabaseSingleton.js";
 import { mountPremium, unmountPremium } from "./premiumMount.js";
 
 const supabase = getSupabase();

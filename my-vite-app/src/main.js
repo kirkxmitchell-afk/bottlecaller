@@ -5283,25 +5283,17 @@ async function signOutHard() {
 }
 
 function purgeSupabaseAuthStorage() {
+  const k = window.__BC_SUPABASE_STORAGE_KEY__ || "bc_supabase_auth_v1";
+
+  try { localStorage.removeItem(k); } catch {}
+  try { sessionStorage.removeItem(k); } catch {}
+
+  // Also purge any old/default keys from earlier experiments
   try {
     for (let i = localStorage.length - 1; i >= 0; i--) {
-      const k = localStorage.key(i);
-      if (!k) continue;
-      if (k.startsWith("sb-") && k.includes("auth-token")) {
-        localStorage.removeItem(k);
-        console.warn("[LOGOUT] removed localStorage", k);
-      }
-    }
-  } catch {}
-
-  try {
-    for (let i = sessionStorage.length - 1; i >= 0; i--) {
-      const k = sessionStorage.key(i);
-      if (!k) continue;
-      if (k.startsWith("sb-") && k.includes("auth-token")) {
-        sessionStorage.removeItem(k);
-        console.warn("[LOGOUT] removed sessionStorage", k);
-      }
+      const key = localStorage.key(i);
+      if (!key) continue;
+      if (key.startsWith("sb-") && key.includes("auth-token")) localStorage.removeItem(key);
     }
   } catch {}
 }
@@ -5313,36 +5305,34 @@ async function doLogout(reason = "user") {
 
   console.log("[LOGOUT] start", reason);
 
-  // 1) Immediate invariant enforcement
-  try { appState.session = null; } catch {}
+  // A) Kill UI first
   hardResetUI("logout.start");
-  console.log(
-    "[LOGOUT ASSERT]",
-    "session:", appState?.session,
-    "premiumFrame:", !!document.getElementById("premiumRootFrame"),
-    "premiumRootHTML:", (document.getElementById("premiumRoot")?.innerHTML || "").length
-  );
 
-  // 2) Sign out network call
-  try {
-    await supabase.auth.signOut({ scope: "global" });
-    console.log("[LOGOUT] supabase signOut ✅");
-  } catch (e) {
-    console.warn("[LOGOUT] signOut error (UI remains logged out)", e);
-  }
-
-  // 3) Purge Supabase auth storage (kills multi-client rehydrate)
+  // B) Purge auth storage FIRST (deterministic logout)
   purgeSupabaseAuthStorage();
 
-  // 4) Clear remaining storage
-  try { localStorage.clear(); } catch {}
-  try { sessionStorage.clear(); } catch {}
+  // C) Best effort: tell Supabase server-side too
+  try {
+    console.log("[LOGOUT] calling signOut on", supabase.__BC_ID__);
+    await supabase.auth.signOut({ scope: "global" });
+    console.log("[LOGOUT] signOut done");
+  } catch (e) {
+    console.warn("[LOGOUT] signOut error (ignored)", e);
+  }
 
-  // 5) Final re-assert
-  hardResetUI("logout.final");
+  // D) Purge again (sometimes signOut writes)
+  purgeSupabaseAuthStorage();
 
-  // 6) Hard redirect with cache-bust
-  window.location.replace("/?forceLogout=1&ts=" + Date.now());
+  // E) Remove demo/premium flags from URL
+  try {
+    const u = new URL(window.location.href);
+    u.searchParams.delete("demo");
+    u.searchParams.delete("mode");
+    history.replaceState({}, "", u.pathname);
+  } catch {}
+
+  // F) HARD reload with cache bust
+  window.location.href = "/?loggedOut=1&ts=" + Date.now();
 }
 
 // Backward-compatible alias for existing callsites.
@@ -5649,6 +5639,12 @@ applyAuthUi();
 void syncAuthUi();
 
 setDebug({ step: "boot.ready", time: new Date().toISOString(), supabaseUrl: import.meta.env.VITE_SUPABASE_URL });
+
+// Boot proof: confirms current singleton/session state every load.
+(async function bootSessionProof() {
+  const { data } = await supabase.auth.getSession();
+  console.log("[BOOT PROOF] supabase", supabase.__BC_ID__, "session?", !!data?.session);
+})();
 
 async function enforceAuthRoute() {
   const { data } = await supabase.auth.getSession();
