@@ -7,22 +7,33 @@ import { createClient } from "@supabase/supabase-js";
  * - VITE_SUPABASE_URL
  * - VITE_SUPABASE_ANON_KEY
  */
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const URL = import.meta.env.VITE_SUPABASE_URL;
+const KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+if (!URL || !KEY) {
   throw new Error(
     "Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY in my-vite-app/.env. Restart dev server after setting them."
   );
 }
 
-const _supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let _client;
 
-if (!window.supabase) {
-  window.supabase = _supabase;
+export function getSupabase() {
+  if (_client) return _client;
+  _client = createClient(URL, KEY, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+    },
+  });
+  if (!window.supabase) {
+    window.supabase = _client;
+  }
+  return window.supabase;
 }
 
-export const supabase = window.supabase;
+export const supabase = getSupabase();
 
 export async function signIn(email, password) {
   return supabase.auth.signInWithPassword({ email, password });

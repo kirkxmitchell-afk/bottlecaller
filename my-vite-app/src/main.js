@@ -1,8 +1,10 @@
 // src/main.js
 import "./style.css";
-import { supabase, signIn, signUp, signOut, getSession } from "./lib/supabaseClient.js";
+import { getSupabase, signIn, signUp, signOut, getSession } from "./lib/supabaseClient.js";
 import { decideAllowedTier } from "./game/progressionBridge";
 import { createProgressionStore } from "./progressionStore.js";
+
+const supabase = getSupabase();
 
 // Avoid redeclare crash (no sweep needed)
 window.escapeHtml =
@@ -1255,6 +1257,15 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
       // Same-origin only (your game is served from the same Vite origin)
       if (event.origin !== window.location.origin) return;
+
+      // Session gate: logged-out state must ignore iframe traffic.
+      if (!appState?.session) return;
+
+      // Source gate: only accept messages from mounted premium iframe window.
+      const frame =
+        document.getElementById("bcPremiumFrame") ||
+        document.getElementById("premiumRootFrame");
+      if (!frame || event.source !== frame.contentWindow) return;
 
       if (msg.type === "logout" || msg.type === "bc_logout_request") {
         await doLogout("bc_msg_logout");
