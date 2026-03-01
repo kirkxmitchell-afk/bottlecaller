@@ -16,7 +16,13 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   );
 }
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const _supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+if (!window.supabase) {
+  window.supabase = _supabase;
+}
+
+export const supabase = window.supabase;
 
 export async function signIn(email, password) {
   return supabase.auth.signInWithPassword({ email, password });

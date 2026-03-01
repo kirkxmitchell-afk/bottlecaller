@@ -64,7 +64,6 @@ function uiModeLabel(modeKey, uiStyle) {
 let wines = [];
 
 console.log("supabase client present:", !!supabase);
-window.supabase = supabase;
 window.__BC_SUPABASE__ = supabase;
 
 function hidePremiumPlayOverlay() {
