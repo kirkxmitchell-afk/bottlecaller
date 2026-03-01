@@ -2068,9 +2068,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
           msg,
           event,
           supabase,
-          getSourceCtx,
           tagSource,
-          senderCtx,
           ctx,
         });
         return;

@@ -1,83 +1,71 @@
 // src/lib/handlers/handleEventLog.js
+function isUuid(x) {
+  return typeof x === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(x);
+}
+
 export async function handleEventLog({
   msg,
   event,
   supabase,
-  getSourceCtx,
   tagSource,
-  senderCtx: senderCtxInput,
   ctx,
 }) {
-  const { eventType, payload } = msg || {};
-  if (!eventType) return;
-
-  const senderCtx = ctx || senderCtxInput || getSourceCtx(event.source);
-  const isFromIframe = !!event.source && event.source !== window;
-
-  if (isFromIframe && !senderCtx) {
-    console.warn("[BC] event_log ignored (no senderCtx yet)", { eventType });
-    event.source?.postMessage(
-      { source: "BC_MSG", v: 1, type: "event_log_ack", ok: false, error: "no_sender_ctx" },
-      event.origin
-    );
-    return;
-  }
-
-  console.log("[BC] event_log from", tagSource(event.source), senderCtx);
-
-  const isDemoNow =
-    String(msg?.mode || "").toLowerCase() === "demo" ||
-    String(payload?.mode || "").toLowerCase() === "demo" ||
-    String(payload?.bcMode || "").toLowerCase() === "demo";
-
-  if (isDemoNow) {
-    event.source?.postMessage(
-      { source: "BC_MSG", v: 1, type: "event_log_ack", ok: true, demo: true, eventType },
-      event.origin
-    );
-    return;
-  }
-
-  const isDemoPayload = String(payload?.mode || "").toLowerCase() === "demo";
-  if (isDemoPayload) {
-    event.source?.postMessage(
-      { source: "BC_MSG", v: 1, type: "event_log_ack", ok: true, demo: true, eventType },
-      event.origin
-    );
-    return;
-  }
-
-  // Always derive identity and boundaries from validated sender-bound ctx.
-  const userId = senderCtx?.userId || null;
-  const restaurantId = senderCtx?.restaurantId || null;
-
-  if (
-    payload?.restaurantId &&
-    senderCtx?.restaurantId &&
-    String(payload.restaurantId) !== String(senderCtx.restaurantId)
-  ) {
-    console.warn("[BC] payload rid mismatch; using senderCtx", {
-      payloadRid: payload.restaurantId,
-      senderRid: senderCtx.restaurantId,
-    });
-  }
-
-  // If not authed, ignore
-  if (!userId) return;
-
-  // If your DB requires restaurant_id, do NOT insert without it
-  if (!restaurantId) {
-    console.warn("[BC] event_log skipped (no restaurant_id)", { eventType });
-    event.source?.postMessage(
-      { source: "BC_MSG", v: 1, type: "event_log_ack", ok: false, error: "no_restaurant_id" },
-      event.origin
-    );
-    return;
-  }
+  const replyType = "event_log_ack";
 
   try {
+    const { eventType, payload } = msg || {};
+    if (!eventType) return;
+
+    const senderCtx = ctx || null;
+    if (!senderCtx) {
+      event.source?.postMessage(
+        { source: "BC_MSG", v: 1, type: replyType, ok: false, error: "missing_ctx_param" },
+        event.origin
+      );
+      return;
+    }
+
+    console.log("[BC] event_log from", tagSource?.(event.source), senderCtx);
+
+    const isDemo =
+      String(senderCtx?.mode || "").toLowerCase() === "demo" ||
+      String(msg?.mode || "").toLowerCase() === "demo" ||
+      String(payload?.mode || "").toLowerCase() === "demo" ||
+      String(payload?.bcMode || "").toLowerCase() === "demo";
+    if (isDemo) {
+      event.source?.postMessage(
+        { source: "BC_MSG", v: 1, type: replyType, ok: true, demo: true, eventType },
+        event.origin
+      );
+      return;
+    }
+
+    const epochNow = Number(window.__BC_IFRAME_EPOCH__ || 0);
+    const msgEpoch = Number(msg?.epoch || 0);
+    if (!epochNow || msgEpoch !== epochNow) {
+      event.source?.postMessage(
+        { source: "BC_MSG", v: 1, type: replyType, ok: false, error: "epoch_mismatch", eventType },
+        event.origin
+      );
+      return;
+    }
+
+    const userId = senderCtx?.userId || null;
+    const restaurantId = senderCtx?.restaurantId || null;
+    if (!isUuid(userId) || !isUuid(restaurantId)) {
+      event.source?.postMessage(
+        { source: "BC_MSG", v: 1, type: replyType, ok: false, error: "invalid_ctx", eventType },
+        event.origin
+      );
+      return;
+    }
+
+    const eventId = String(payload?.eventId || crypto.randomUUID());
+    const occurredAt = payload?.occurredAt || payload?.occurred_at || new Date().toISOString();
+
     const row = {
-      event_id: payload?.eventId || crypto.randomUUID(),
+      event_id: eventId,
       user_id: userId,
       restaurant_id: restaurantId,
       event_type: String(eventType),
@@ -85,35 +73,18 @@ export async function handleEventLog({
       occurred_at: new Date().toISOString(),
     };
 
-    if (eventType === "encounter_resolved") {
-      const p = payload || {};
-      console.log("[BC] about to upsert encounter_resolved payload fields", {
-        v: p?.v,
-        encounterId: p?.encounterId,
-        sessionId: p?.sessionId,
-        hasChecksKey: Object.prototype.hasOwnProperty.call(p, "checks"),
-        keys: Object.keys(p || {}),
-      });
-    }
-
-    console.log("[BC] upsert row", row);
-
     const ins = await supabase
       .from("bc_event_log")
       .upsert(row, { onConflict: "event_id" });
-
     if (ins.error) throw ins.error;
 
     if (eventType === "encounter_resolved") {
       const p = payload || {};
-      const nowIso = new Date().toISOString();
-      const evId = String(p.eventId || payload?.eventId || crypto.randomUUID());
-
       const resRow = {
-        event_id: evId,
+        event_id: eventId,
         user_id: userId,
         restaurant_id: restaurantId,
-        occurred_at: p.occurredAt || p.occurred_at || nowIso,
+        occurred_at: occurredAt,
         v: p.v ?? 1,
         mode: p.mode ?? p.bcMode ?? null,
         session_id: p.sessionId ?? p.session_id ?? null,
@@ -147,16 +118,11 @@ export async function handleEventLog({
       const up = await supabase
         .from("bc_encounter_resolutions_v2")
         .upsert(resRow, { onConflict: "event_id" });
-
-      if (up.error) {
-        console.warn("[BC] encounter_resolutions upsert failed", up.error);
-      } else {
-        console.log("[BC] encounter_resolutions upsert ✅", { event_id: evId, userId, restaurantId });
-      }
+      if (up.error) console.warn("[BC] encounter_resolutions upsert failed", up.error);
     }
 
     event.source?.postMessage(
-      { source: "BC_MSG", v: 1, type: "event_log_ack", ok: true, eventType },
+      { source: "BC_MSG", v: 1, type: replyType, ok: true, eventType },
       event.origin
     );
   } catch (e) {
