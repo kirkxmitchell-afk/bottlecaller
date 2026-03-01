@@ -2392,13 +2392,6 @@ function postToGame(typeOrMsg, payload = {}) {
     return false;
   }
 
-  const currentEpoch = Number(window.__BC_IFRAME_EPOCH__ || 0);
-  const frameEpoch = Number(frame.dataset?.bcEpoch || 0);
-  if (currentEpoch && frameEpoch && frameEpoch !== currentEpoch) {
-    console.warn("[PARENT] postToGame blocked (epoch mismatch)", { frameEpoch, currentEpoch });
-    return false;
-  }
-
   const msg =
     typeof typeOrMsg === "string"
       ? { source: "BC_MSG", v: 1, type: typeOrMsg, ...payload }
