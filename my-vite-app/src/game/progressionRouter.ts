@@ -1,5 +1,5 @@
 // src/game/progressionRouter.ts
-import { supabase } from "../lib/supabaseClient";
+import { supabase } from "../supabase.js";
 import { decideAllowedTierFromSnapshot, describeLockReasons } from "./progressionEvaluator";
 import type { Tier, ProgressionSnapshot } from "./progressionRules";
 

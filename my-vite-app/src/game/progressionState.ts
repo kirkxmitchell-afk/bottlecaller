@@ -1,5 +1,5 @@
 // src/game/progressionState.ts
-import { supabase } from "../lib/supabaseClient"; // adjust path if needed
+import { supabase } from "../supabase.js";
 import type { ProgressionState, RecentWindow, Tier, WeakestLink, Readiness } from "./progressionGuards";
 
 export async function buildProgressionInputs(params: {

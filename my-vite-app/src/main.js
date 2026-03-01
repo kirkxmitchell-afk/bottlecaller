@@ -1326,9 +1326,24 @@ if (!window.__BC_PARENT_BRIDGE__) {
       const msg = event?.data;
       if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
       const type = msg.type;
+      const notifyLoggedOut = () => {
+        try {
+          if (event.source && typeof event.source.postMessage === "function") {
+            event.source.postMessage(
+              { source: "BC_MSG", v: 1, type: "auth_state", authed: false },
+              event.origin || "*"
+            );
+            event.source.postMessage(
+              { source: "BC_MSG", v: 1, type: "parent_logged_out" },
+              event.origin || "*"
+            );
+          }
+        } catch {}
+      };
 
       if (isHardLoggedOut()) {
         console.warn("[PARENT] BC_MSG blocked: hard logged out", type);
+        notifyLoggedOut();
         try { destroyPremiumIframe("hard_logged_out_msg_gate"); } catch {}
         try { destroyDemoIframe("hard_logged_out_msg_gate"); } catch {}
         return;
@@ -1336,6 +1351,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
       if (window.__BC_LOGOUT_LOCK__) {
         console.warn("[PARENT] BC_MSG blocked: logout lock active", type);
+        notifyLoggedOut();
         try { destroyPremiumIframe("logout_lock"); } catch {}
         try { destroyDemoIframe("logout_lock"); } catch {}
         return;
@@ -1344,19 +1360,17 @@ if (!window.__BC_PARENT_BRIDGE__) {
       // Same-origin only (your game is served from the same Vite origin)
       if (event.origin !== window.location.origin) return;
 
+      if (msg.type === "logout" || msg.type === "bc_logout_request") {
+        await doLogout("bc_msg_logout");
+        return;
+      }
+
       // 🔒 AUTH GATE: use live Supabase session, not just in-memory appState.
       const { data: live } = await supabase.auth.getSession();
       const liveSession = live?.session || null;
       if (!liveSession) {
         console.warn("[PARENT] BC_MSG blocked: live session is null", { type });
-        try {
-          if (event.source && typeof event.source.postMessage === "function") {
-            event.source.postMessage(
-              { source: "BC_MSG", v: 1, type: "parent_logged_out" },
-              event.origin || "*"
-            );
-          }
-        } catch {}
+        notifyLoggedOut();
         try { destroyPremiumIframe("parent_no_session_msg_gate"); } catch {}
         try { destroyDemoIframe("parent_no_session_msg_gate"); } catch {}
         return;
@@ -1372,11 +1386,6 @@ if (!window.__BC_PARENT_BRIDGE__) {
         document.getElementById("bcPremiumFrame") ||
         document.getElementById("premiumRootFrame");
       if (!frame || event.source !== frame.contentWindow) return;
-
-      if (msg.type === "logout" || msg.type === "bc_logout_request") {
-        await doLogout("bc_msg_logout");
-        return;
-      }
 
       // RUNS COUNT: iframe asks parent -> parent queries supabase -> reply
       if (msg.type === "runs_count_request") {
@@ -1431,6 +1440,59 @@ if (!window.__BC_PARENT_BRIDGE__) {
         } catch (e) {
           event.source?.postMessage(
             { source: "BC_MSG", v: 1, type: "runs_count_response", ok: false, count: 0, error: e?.message || String(e) },
+            event.origin
+          );
+          return;
+        }
+      }
+
+      if (msg.type === "ritual_status_request") {
+        const reqId = msg.reqId || null;
+        try {
+          const senderCtx = getSourceCtx(event.source);
+          const userId = senderCtx?.userId || null;
+          const restaurantId = senderCtx?.restaurantId || null;
+          if (!isUuid(userId) || !isUuid(restaurantId)) {
+            event.source?.postMessage(
+              { source: "BC_MSG", v: 1, type: "ritual_status_response", reqId, ok: false, doneToday: false, error: "invalid_ctx" },
+              event.origin
+            );
+            return;
+          }
+
+          const now = new Date();
+          const zaNow = new Date(now.toLocaleString("en-US", { timeZone: "Africa/Johannesburg" }));
+          const startZA = new Date(zaNow);
+          startZA.setHours(0, 0, 0, 0);
+          const startIso = startZA.toISOString();
+
+          const { data, error } = await supabase
+            .from("bc_event_log")
+            .select("id")
+            .eq("event_type", "ritual_completed")
+            .eq("user_id", userId)
+            .eq("restaurant_id", restaurantId)
+            .gte("occurred_at", startIso)
+            .limit(1);
+
+          if (error) throw error;
+          const doneToday = Array.isArray(data) && data.length > 0;
+          event.source?.postMessage(
+            { source: "BC_MSG", v: 1, type: "ritual_status_response", reqId, ok: true, doneToday },
+            event.origin
+          );
+          return;
+        } catch (e) {
+          event.source?.postMessage(
+            {
+              source: "BC_MSG",
+              v: 1,
+              type: "ritual_status_response",
+              reqId,
+              ok: false,
+              doneToday: false,
+              error: e?.message || String(e),
+            },
             event.origin
           );
           return;
@@ -5522,6 +5584,19 @@ async function doLogout(reason = "user") {
 
   try { localStorage.setItem("__BC_LOGOUT_LOCK__", String(Date.now())); } catch {}
   window.__BC_LOGOUT_LOCK__ = Date.now();
+
+  // Notify active iframe(s) before teardown so UI can collapse immediately.
+  try {
+    const origin = window.location.origin;
+    const notify = (frameId) => {
+      const win = document.getElementById(frameId)?.contentWindow;
+      if (!win) return;
+      win.postMessage({ source: "BC_MSG", v: 1, type: "auth_state", authed: false }, origin);
+      win.postMessage({ source: "BC_MSG", v: 1, type: "parent_logged_out" }, origin);
+    };
+    notify("premiumRootFrame");
+    notify("gameRootDemoFrame");
+  } catch {}
 
   // 1) detach UI immediately
   try { destroyPremiumIframe("logout"); } catch (e) { console.warn("destroyPremiumIframe failed", e); }

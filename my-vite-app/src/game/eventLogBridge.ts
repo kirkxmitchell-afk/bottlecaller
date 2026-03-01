@@ -1,28 +1,36 @@
 // src/game/eventLogBridge.ts
-import { supabase } from "../lib/supabaseClient.js";
+const ORIGIN = window.location.origin;
+
+function postToParent(payload: Record<string, unknown>) {
+  window.parent?.postMessage({ source: "BC_MSG", v: 1, ...payload }, ORIGIN);
+}
+
+function waitFor(type: string, reqId: string, timeoutMs = 8000): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => {
+      window.removeEventListener("message", onMsg);
+      reject(new Error("timeout waiting for " + type));
+    }, timeoutMs);
+
+    function onMsg(e: MessageEvent) {
+      const msg = e?.data as any;
+      if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
+      if (e.origin !== ORIGIN) return;
+      if (msg.type !== type) return;
+      if (msg.reqId !== reqId) return;
+      clearTimeout(t);
+      window.removeEventListener("message", onMsg);
+      resolve(msg);
+    }
+
+    window.addEventListener("message", onMsg);
+  });
+}
 
 export async function hasRitualCompletedTodayZA() {
-  // We fetch the most recent ritual and compare to ZA “today”
-  const { data, error } = await supabase
-    .from("bc_event_log")
-    .select("occurred_at")
-    .eq("event_type", "ritual_completed")
-    .order("occurred_at", { ascending: false })
-    .limit(1);
-
-  if (error) throw error;
-
-  const last = data?.[0]?.occurred_at ? new Date(data[0].occurred_at) : null;
-  if (!last) return false;
-
-  // ZA “today” boundary
-  const now = new Date();
-  const zaNow = new Date(now.toLocaleString("en-US", { timeZone: "Africa/Johannesburg" }));
-  const startZA = new Date(zaNow);
-  startZA.setHours(0, 0, 0, 0);
-
-  // convert startZA back to “real” UTC moment
-  const startZA_utc = new Date(startZA.toISOString());
-
-  return last >= startZA_utc;
+  const reqId = "rit_" + Math.random().toString(16).slice(2);
+  postToParent({ type: "ritual_status_request", reqId, mode: "premium" });
+  const res = await waitFor("ritual_status_response", reqId, 12000);
+  if (!res?.ok) throw new Error(res?.error || "ritual_status_request failed");
+  return !!res.doneToday;
 }

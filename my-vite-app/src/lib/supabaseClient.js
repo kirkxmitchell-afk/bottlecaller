@@ -19,6 +19,11 @@ function isIframe() {
   try { return window.self !== window.top; } catch { return true; }
 }
 
+if (isIframe()) {
+  console.error("[SUPABASE] supabaseClient imported inside iframe. This is forbidden.");
+  throw new Error("Supabase client import is forbidden in iframe context.");
+}
+
 // Tiny in-memory storage implementation (prevents localStorage writes)
 function memoryStorage() {
   const mem = new Map();
