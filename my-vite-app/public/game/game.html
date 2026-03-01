@@ -94,7 +94,13 @@
     function getBcMode() {
       return String(window.bcMode || "premium").toLowerCase();
     }
+    function isActuallyIframe() {
+      try { return window.parent && window.parent !== window && !!window.frameElement; }
+      catch { return true; }
+    }
     function postToParent(payload = {}) {
+      if (!isActuallyIframe()) return false;
+
       const msg = {
         source: "BC_MSG",
         v: 1,
@@ -103,6 +109,7 @@
         ...payload,
       };
       window.parent?.postMessage(msg, ORIGIN);
+      return true;
     }
     window.getTierUnlocked = function getTierUnlocked() {
       if (window.isDemo || window.bcMode === "demo") return 1;
@@ -2798,9 +2805,17 @@ function ensureProgLoaded() {
       }
 
       function requestRunsCountFromParent() {
-        if (window.isDemo || window.bcMode === "demo") return;
+        if (String(getBcMode()).toLowerCase() === "demo") return;
+
+        const epoch = getEpoch();
+        if (!epoch) {
+          console.warn("[BC] runs_count_request blocked: missing epoch");
+          return;
+        }
+
+        const reqId = "rc_" + Math.random().toString(16).slice(2);
         try {
-          postToParent({ type: "runs_count_request" });
+          postToParent({ type: "runs_count_request", reqId });
         } catch {}
       }
 
