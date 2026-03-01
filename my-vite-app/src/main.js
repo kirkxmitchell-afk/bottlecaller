@@ -1802,6 +1802,11 @@ function onScreenChanged(id) {
   const isWaiter = role === "waiter";
 
   const isPremium = id === "screenPremiumApp" || id === "screenPlay";
+  if (isPremium && !appState?.session) {
+    console.warn("[NAV] blocked premium mount: no session");
+    showScreen("screenHome");
+    return;
+  }
   setPremiumOverlayActive(isPremium);
 
   if (isPremium) {
@@ -3765,6 +3770,11 @@ function mountPremiumGameIframe({
   url = null,
   forceRemount = false,
 } = {}) {
+  if (!appState?.session) {
+    console.warn("[BC] mountPremiumGameIframe blocked: no session");
+    return;
+  }
+
   const root = document.getElementById("premiumRoot");
   if (!root) return;
 
@@ -5125,10 +5135,27 @@ async function signOutHard() {
 async function doLogout(reason = "user") {
   console.log("[LOGOUT] hard reset start", reason);
 
+  let signedOut = false;
   try {
     await supabase.auth.signOut({ scope: "global" });
+    signedOut = true;
   } catch (e) {
     console.warn("[LOGOUT] signOut error", e);
+  }
+
+  if (signedOut) {
+    // DESTROY premium shell completely
+    try {
+      const premiumContainer = document.getElementById("premiumContainer");
+      if (premiumContainer) {
+        premiumContainer.innerHTML = "";
+        premiumContainer.remove();
+      }
+    } catch {}
+
+    try {
+      document.querySelectorAll("iframe").forEach((f) => f.remove());
+    } catch {}
   }
 
   // Clear all local app state
@@ -5136,7 +5163,7 @@ async function doLogout(reason = "user") {
   try { sessionStorage.clear(); } catch {}
 
   // Hard redirect to root
-  window.location.href = "/";
+  window.location.replace("/");
 }
 
 // Backward-compatible alias for existing callsites.
