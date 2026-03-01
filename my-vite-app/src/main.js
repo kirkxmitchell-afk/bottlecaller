@@ -1327,6 +1327,13 @@ if (!window.__BC_PARENT_BRIDGE__) {
       if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
       const type = msg.type;
 
+      if (isHardLoggedOut()) {
+        console.warn("[PARENT] BC_MSG blocked: hard logged out", type);
+        try { destroyPremiumIframe("hard_logged_out_msg_gate"); } catch {}
+        try { destroyDemoIframe("hard_logged_out_msg_gate"); } catch {}
+        return;
+      }
+
       if (window.__BC_LOGOUT_LOCK__) {
         console.warn("[PARENT] BC_MSG blocked: logout lock active", type);
         try { destroyPremiumIframe("logout_lock"); } catch {}
@@ -2099,8 +2106,7 @@ function shouldIgnoreDuplicateNav(msg) {
 }
 
 function applyRoleTemplateGates() {
-  if (isLoggingOut()) return;
-  if (!appState?.session) return;
+  if (isHardLoggedOut()) return;
 
   const role = String(appState?.profile?.role || "").toLowerCase();
   const isWaiter = role === "waiter";
@@ -4060,12 +4066,8 @@ function mountPremiumGameIframe({
   url = null,
   forceRemount = false,
 } = {}) {
-  if (isLoggingOut()) {
-    console.warn("[BC] mountPremiumGameIframe blocked (logging out)");
-    return;
-  }
-  if (!appState?.session) {
-    console.warn("[BC] mountPremiumGameIframe blocked: no session");
+  if (isHardLoggedOut()) {
+    console.warn("[BC] premium mount blocked: hard logged out");
     return;
   }
 
@@ -4075,6 +4077,7 @@ function mountPremiumGameIframe({
   // ✅ Do NOT remount if already present
   let iframe = document.getElementById("premiumRootFrame");
   if (iframe && !forceRemount) {
+    if (isHardLoggedOut()) return;
     pushPremiumCtxAndDrill();
     return;
   }
@@ -4763,6 +4766,10 @@ function isLoggingOut() {
   return window.__BC_LOGGING_OUT__ === true;
 }
 
+function isHardLoggedOut() {
+  return !!window.__BC_LOGGING_OUT__ || !appState?.session;
+}
+
 function hardResetUI(reason = "") {
   console.log("[LOGOUT] hardResetUI", reason);
 
@@ -4828,6 +4835,10 @@ async function routeDemo(reason = "manual") {
 }
 
 async function routePremium(reason = "manual") {
+  if (isHardLoggedOut()) {
+    console.warn("[BC] routePremium blocked: hard logged out");
+    return;
+  }
   const now = Date.now();
   if (routingLock) return;
   if (now - lastRouteAt < 250) return;
@@ -4837,9 +4848,12 @@ async function routePremium(reason = "manual") {
   const was = appMode;
 
   try {
+    if (isHardLoggedOut()) return;
     clearMsgs();
     await loadAuthedState(`routePremium:${reason}`);
+    if (isHardLoggedOut()) return;
     await initRestaurantContextAfterAuth();
+    if (isHardLoggedOut()) return;
 
     if (!appState.session?.user) {
       closeHud();
@@ -5023,8 +5037,8 @@ function routeAuth() {
 }
 
 async function decideRoute(reason = "decideRoute") {
-  if (isLoggingOut()) {
-    console.warn("[BC] decideRoute blocked (logging out)", reason);
+  if (isHardLoggedOut()) {
+    console.warn("[BC] decideRoute blocked (hard logged out)", reason);
     return;
   }
 
@@ -5032,9 +5046,9 @@ async function decideRoute(reason = "decideRoute") {
 
   try {
     await loadAuthedState(reason);
-    if (isLoggingOut()) return;
+    if (isHardLoggedOut()) return;
     await initRestaurantContextAfterAuth();
-    if (isLoggingOut()) return;
+    if (isHardLoggedOut()) return;
 
     // 1) Logged out => Auth by default (Demo only if explicitly requested)
     if (!isAuthed()) {
@@ -5506,12 +5520,31 @@ async function doLogout(reason = "user") {
   if (window.__BC_LOGGING_OUT__) return;
   window.__BC_LOGGING_OUT__ = true;
 
+  // 🔥 kill all state authority NOW (before any async)
+  try {
+    appState.session = null;
+    appState.profile = null;
+    appState.restaurant = null;
+    appState.invites = [];
+    appState.activeRestaurantId = null;
+  } catch {}
+
   try { localStorage.setItem("__BC_LOGOUT_LOCK__", String(Date.now())); } catch {}
   window.__BC_LOGOUT_LOCK__ = Date.now();
 
+  // 🔥 hard UI reset NOW
   try { destroyPremiumIframe("logout"); } catch {}
+  try { clearGameMounts(); } catch {}
+  try { setPremiumOverlayActive(false); } catch {}
+  try { setHomeAuthUI(false); } catch {}
+  try { hardResetAuthUI(); } catch {}
+  try { showScreen("screenHome"); } catch {}
+  try { closeHud(); } catch {}
+  try { clearMsgs(); } catch {}
+
   try { routeAuth(); } catch {}
 
+  // async signout is now "best effort" (state already dead)
   try { await supabase.auth.signOut({ scope: "global" }); } catch {}
 
   purgeSupabaseStorage();
