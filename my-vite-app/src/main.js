@@ -1697,6 +1697,10 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
       // ✅ 1) ctx request MUST be handled before any event_log filtering
       if (msg.type === "bc_ctx_request") {
+        if (event.origin !== window.location.origin) {
+          console.warn("[PARENT] denied bc_ctx_request: origin mismatch", event.origin);
+          return;
+        }
         const prem = document.getElementById("premiumRootFrame");
         const isFromPremiumFrame = !!(prem && event.source === prem.contentWindow);
         if (!isFromPremiumFrame) {
@@ -1756,34 +1760,17 @@ if (!window.__BC_PARENT_BRIDGE__) {
           (needRestaurant ? !!rid : true);
 
         if (!ready) {
-          console.warn("[PARENT] ctx not ready — queued bc_ctx_request");
-          window.__BC_PENDING_CTX_REQ__ = {
-            source: event.source,
-            origin: event.origin,
-            mode: msg?.mode ?? null,
-            at: Date.now(),
-          };
-          if (!window.__BC_CTX_FLUSH_TICK__) {
-            window.__BC_CTX_FLUSH_TICK__ = setInterval(() => {
-              const p = window.__BC_PENDING_CTX_REQ__;
-              if (!p) {
-                clearInterval(window.__BC_CTX_FLUSH_TICK__);
-                window.__BC_CTX_FLUSH_TICK__ = null;
-                return;
-              }
-              if (Date.now() - p.at > 30000) {
-                console.warn("[PARENT] ctx flush timed out (30s) — still not ready");
-                clearInterval(window.__BC_CTX_FLUSH_TICK__);
-                window.__BC_CTX_FLUSH_TICK__ = null;
-                return;
-              }
-              flushPendingCtx();
-            }, 250);
-          }
+          console.warn("[PARENT] ctx not ready — ask iframe to retry");
+          try {
+            event.source?.postMessage(
+              { source: "BC_MSG", v: 1, type: "ctx_not_ready", ok: false },
+              event.origin
+            );
+          } catch {}
           return;
         }
         const bcCtx = await buildBcCtxSafe(msg?.mode ?? null);
-        window.__BC_LAST_CTX_MODE__ = "premium";
+        window.__BC_LAST_CTX_MODE__ = requestedMode || "premium";
         if (bcCtx) bcCtx.drill = window.__BC_DRILL_CONFIG__ || window.BC_DRILL_CONFIG || null;
 
         console.log("[PARENT] bc_ctx_request -> reply", {

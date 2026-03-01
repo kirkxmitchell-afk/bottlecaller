@@ -1816,6 +1816,15 @@ function ensureProgLoaded() {
           window.addEventListener("message", (event) => {
             const msg = event?.data;
             if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
+            if (msg.type === "ctx_not_ready" || msg.type === "ctx_required") {
+              if (String(window.bcMode || getIframeMode() || "premium").toLowerCase() !== "demo") {
+                window.__BC_CTX_REQUESTED__ = false;
+                setTimeout(() => {
+                  try { requestCtxOnce(); } catch {}
+                }, 250);
+              }
+              return;
+            }
             if (msg.type === "auth_state" && msg.authed === false) {
               console.warn("[IFRAME] auth_state=false -> shutting down");
               try { localStorage.removeItem("bc_ctx"); } catch {}
