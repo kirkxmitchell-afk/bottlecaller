@@ -1,8 +1,23 @@
 // src/game/wineBridge.ts
 const ORIGIN = window.location.origin;
 
+function getEpoch() {
+  return Number((window as any).__BC_EPOCH__ || 0);
+}
+
+function getMode() {
+  return String((window as any).bcMode || "premium").toLowerCase();
+}
+
 function postToParent(payload: Record<string, unknown>) {
-  window.parent?.postMessage({ source: "BC_MSG", v: 1, ...payload }, ORIGIN);
+  const msg = {
+    source: "BC_MSG",
+    v: 1,
+    epoch: getEpoch(),
+    mode: getMode(),
+    ...payload,
+  };
+  window.parent?.postMessage(msg, ORIGIN);
 }
 
 function waitFor(
@@ -48,14 +63,10 @@ function toDbWineShape(wine: any) {
 
 export async function requestWines(rid: string) {
   const reqId = "wreq_" + Math.random().toString(16).slice(2);
-  const epoch = Number((window as any).__BC_EPOCH__ || 0);
 
   postToParent({
     type: "wines_request",
     reqId,
-    epoch,
-    restaurantId: rid,
-    mode: "premium",
   });
 
   const res = await waitFor("wines_report", (m) => m.reqId === reqId, 12000);
@@ -69,15 +80,11 @@ export async function fetchRestaurantWines(_scopeId: string | null, restaurantId
 
 async function mutateWines(action: string, payload: any, restaurantId?: string) {
   const reqId = "wmut_" + Math.random().toString(16).slice(2);
-  const epoch = Number((window as any).__BC_EPOCH__ || 0);
   postToParent({
     type: "wines_mutate",
     reqId,
-    epoch,
     action,
-    restaurantId: restaurantId || null,
     payload: payload || {},
-    mode: "premium",
   });
 
   const res = await waitFor("wines_mutate_result", (m) => m.reqId === reqId, 12000);

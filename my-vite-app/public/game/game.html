@@ -66,13 +66,13 @@
     }
 
     (function initEpochFromUrl() {
+      let epoch = 0;
       try {
         const qs = new URLSearchParams(location.search);
-        window.__BC_EPOCH__ = Number(qs.get("epoch") || 0);
-        console.log("[BC] epoch from URL =", window.__BC_EPOCH__);
-      } catch {
-        window.__BC_EPOCH__ = 0;
-      }
+        epoch = Number(qs.get("epoch") || 0);
+      } catch {}
+      window.__BC_EPOCH__ = epoch;
+      console.log("[BC] epoch from URL =", epoch);
     })();
 
     const MODE = getMode();
@@ -82,8 +82,28 @@
     // single source of truth for mode
     window.bcMode = MODE;
     window.isDemo = DEMO;
-    window.__BC_EPOCH__ = EPOCH;
     window.__BC_STANDALONE_DEMO__ = DEMO;
+    if (!DEMO && !EPOCH) {
+      console.warn("[BC] premium iframe missing epoch -> requesting ctx anyway, but expecting parent to deny/repair");
+    }
+
+    const ORIGIN = window.location.origin;
+    function getEpoch() {
+      return Number(window.__BC_EPOCH__ || 0);
+    }
+    function getBcMode() {
+      return String(window.bcMode || "premium").toLowerCase();
+    }
+    function postToParent(payload = {}) {
+      const msg = {
+        source: "BC_MSG",
+        v: 1,
+        epoch: getEpoch(),
+        mode: getBcMode(),
+        ...payload,
+      };
+      window.parent?.postMessage(msg, ORIGIN);
+    }
     window.getTierUnlocked = function getTierUnlocked() {
       if (window.isDemo || window.bcMode === "demo") return 1;
 
@@ -677,27 +697,17 @@ console.log("[BC] MARKER LOADED:", window.__BC_GAME_HTML_MARKER__);
           console.trace("[BC][EMIT TRACE] " + eventType);
 
           const ctx = window.__BC_CTX__ || null;
-          const isDemoNow = (window.isDemo || window.bcMode === "demo");
 
-          window.parent.postMessage(
-            {
-              source: "BC_MSG",
-              v: 1,
-              epoch: Number(window.__BC_EPOCH__ || 0),
-              type: "event_log",
-              mode: window.bcMode || null,
-              eventType,
-              payload: {
-                eventId: payload?.eventId || crypto.randomUUID(),
-                ...(payload || {}),
-                sessionType: window.__BC_SESSION_TYPE__ || null,
-                // add these two so parent can validate/debug
-                restaurantId: isDemoNow ? null : (ctx?.restaurantId || null),
-                role: ctx?.role || null,
-              },
+          postToParent({
+            type: "event_log",
+            eventType,
+            payload: {
+              eventId: payload?.eventId || crypto.randomUUID(),
+              ...(payload || {}),
+              sessionType: window.__BC_SESSION_TYPE__ || null,
+              role: ctx?.role || null,
             },
-            window.location.origin
-          );
+          });
         } catch (e) {
           console.error("[BC] bcEmitEvent failed:", e);
         }
@@ -2789,22 +2799,8 @@ function ensureProgLoaded() {
 
       function requestRunsCountFromParent() {
         if (window.isDemo || window.bcMode === "demo") return;
-        const ctx = window.__BC_CTX__;
-        if (!ctx?.userId || !ctx?.restaurantId) return;
         try {
-          const epoch = Number(window.__BC_EPOCH__ || 0);
-          window.parent?.postMessage(
-            {
-              source: "BC_MSG",
-              v: 1,
-              type: "runs_count_request",
-              mode: window.bcMode || "premium",
-              epoch,
-              userId: ctx.userId,
-              restaurantId: ctx.restaurantId,
-            },
-            location.origin
-          );
+          postToParent({ type: "runs_count_request" });
         } catch {}
       }
 
@@ -3003,11 +2999,7 @@ function ensureProgLoaded() {
         }
 
         try {
-          const epoch = Number(window.__BC_EPOCH__ || 0);
-          window.parent?.postMessage(
-            { source: "BC_MSG", v: 1, type: "wines_request", mode: "premium", epoch, restaurantId },
-            window.location.origin
-          );
+          postToParent({ type: "wines_request" });
           await new Promise((r) => setTimeout(r, 350));
         } catch {}
 
@@ -3457,11 +3449,7 @@ function ensureProgLoaded() {
 
       function requestWinesFromParent() {
         try {
-          const epoch = Number(window.__BC_EPOCH__ || 0);
-          window.parent?.postMessage(
-            { source: "BC_MSG", v: 1, type: "wines_request", mode: window.bcMode || "premium", epoch },
-            window.location.origin
-          );
+          postToParent({ type: "wines_request" });
         } catch {}
       }
 
@@ -9089,10 +9077,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
       function bcPost(type, payload = {}) {
         try {
-          window.parent.postMessage(
-            { source: "BC_MSG", v: 1, type, ...payload },
-            window.location.origin
-          );
+          postToParent({ type, ...payload });
         } catch (e) {
           console.warn("[IFRAME] bcPost failed", type, e);
         }

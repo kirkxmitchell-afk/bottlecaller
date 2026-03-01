@@ -1,8 +1,23 @@
 // src/game/eventLogBridge.ts
 const ORIGIN = window.location.origin;
 
+function getEpoch() {
+  return Number((window as any).__BC_EPOCH__ || 0);
+}
+
+function getMode() {
+  return String((window as any).bcMode || "premium").toLowerCase();
+}
+
 function postToParent(payload: Record<string, unknown>) {
-  window.parent?.postMessage({ source: "BC_MSG", v: 1, ...payload }, ORIGIN);
+  const msg = {
+    source: "BC_MSG",
+    v: 1,
+    epoch: getEpoch(),
+    mode: getMode(),
+    ...payload,
+  };
+  window.parent?.postMessage(msg, ORIGIN);
 }
 
 function waitFor(type: string, reqId: string, timeoutMs = 8000): Promise<any> {
@@ -29,8 +44,7 @@ function waitFor(type: string, reqId: string, timeoutMs = 8000): Promise<any> {
 
 export async function hasRitualCompletedTodayZA() {
   const reqId = "rit_" + Math.random().toString(16).slice(2);
-  const epoch = Number((window as any).__BC_EPOCH__ || 0);
-  postToParent({ type: "ritual_status_request", reqId, mode: (window as any).bcMode || "premium", epoch });
+  postToParent({ type: "ritual_status_request", reqId });
   const res = await waitFor("ritual_status_response", reqId, 12000);
   if (!res?.ok) throw new Error(res?.error || "ritual_status_request failed");
   return !!res.doneToday;
