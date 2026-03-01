@@ -1663,8 +1663,10 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
         const needRestaurant = requestedMode !== "demo";
         const rid = window.getActiveRestaurantId?.();
+        const live = await getLiveSessionOrNull();
+        if (live) window.appState.session = live;
         const ready =
-          !!window.appState?.session &&
+          !!live &&
           !!window.appState?.profile?.role &&
           (needRestaurant ? !!rid : true);
 
@@ -1687,6 +1689,24 @@ if (!window.__BC_PARENT_BRIDGE__) {
           return;
         }
         const bcCtx = await buildBcCtxSafe(msg?.mode ?? null);
+        if (!bcCtx) {
+          console.warn("[PARENT] buildBcCtxSafe returned null — ask iframe to retry");
+          try {
+            event.source?.postMessage(
+              {
+                source: "BC_MSG",
+                v: 1,
+                type: "ctx_not_ready",
+                ok: false,
+                epoch: Number(window.__BC_IFRAME_EPOCH__ || 0),
+                retryAfterMs: 250,
+                why: "ctx_build_null",
+              },
+              event.origin
+            );
+          } catch {}
+          return;
+        }
         window.__BC_LAST_CTX_MODE__ = requestedMode || "premium";
         if (bcCtx) bcCtx.drill = window.__BC_DRILL_CONFIG__ || window.BC_DRILL_CONFIG || null;
 
