@@ -43,7 +43,12 @@
           }
         } catch {}
 
-        // 3) Hard redirect back to home (clean URL)
+        // 3) Clear URL tokens (hash/search) so nothing rehydrates
+        try {
+          history.replaceState({}, "", "/");
+        } catch {}
+
+        // 4) Hard redirect back to home (clean URL)
         location.replace("/?loggedOut=1&ts=" + Date.now());
       })();
     </script>

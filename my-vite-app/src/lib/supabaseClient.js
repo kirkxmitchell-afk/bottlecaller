@@ -56,7 +56,7 @@ export function getSupabase() {
           // ✅ PARENT: persistent auth
           persistSession: true,
           autoRefreshToken: true,
-          detectSessionInUrl: true,
+          detectSessionInUrl: false,
           storageKey: PARENT_STORAGE_KEY,
         },
   });
