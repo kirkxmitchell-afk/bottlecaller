@@ -1804,6 +1804,11 @@ function onScreenChanged(id) {
     document.getElementById("hudPanel")?.classList.add("hidden");
   }
 
+  // Login/home screen should never show logout controls.
+  if (id === "screenHome") {
+    hideAllLogoutButtons();
+  }
+
   removeGlobalResetButtons();
 }
 
@@ -2360,6 +2365,21 @@ function setHomeAuthUI(isAuthed) {
     badge?.classList.add("hidden");
     logoutBtn?.classList.add("hidden");
   }
+}
+
+function hideAllLogoutButtons() {
+  const ids = [
+    "btnHomeLogout",
+    "btnLogoutCreate",
+    "btnLogoutPremium",
+    "btnLogoutManagerBoard",
+    "btnLogout",
+    "btnDemoExit",
+  ];
+  ids.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.classList.add("hidden");
+  });
 }
 
 function applyAuthUi() {
@@ -5188,6 +5208,8 @@ async function doLogout(reason = "user") {
   try { setMode("login"); } catch {}
   try { clearGameMounts?.(); } catch {}
   try { showScreen("screenHome"); } catch {}
+  try { hideAllLogoutButtons(); } catch {}
+  try { window.__BC_LAST_SCREEN__ = "screenHome"; } catch {}
   try { appState.activeRestaurantId = null; } catch {}
   try {
     Object.keys(localStorage || {}).forEach((k) => {
@@ -5232,24 +5254,32 @@ function wireDemoButtons() {
   const btnPremium = document.getElementById("btnDemoPremium");
   const btnExit = document.getElementById("btnDemoExit");
 
-  if (btnExit && !btnExit.__bcBound) {
-    btnExit.__bcBound = true;
+  if (btnExit) {
     btnExit.textContent = "Logout";
     btnExit.onclick = null;
-    bindInput(btnExit, async () => {
-      console.log("[DEMO] Logout clicked");
-      await doLogout("demo_exit");
-    });
+    if (!btnExit.__bcBound) {
+      btnExit.__bcBound = true;
+      btnExit.addEventListener("click", async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log("[DEMO] Logout clicked ✅");
+        await doLogout("demo_logout");
+      });
+    }
   }
 
-  if (btnPremium && !btnPremium.__bcBound) {
-    btnPremium.__bcBound = true;
+  if (btnPremium) {
     btnPremium.onclick = null;
-    bindInput(btnPremium, async () => {
-      console.log("[DEMO] Premium clicked");
-      setAuthIntent("premium");
-      await routePremium("demo.premium");
-    });
+    if (!btnPremium.__bcBound) {
+      btnPremium.__bcBound = true;
+      btnPremium.addEventListener("click", async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log("[DEMO] Premium clicked");
+        setAuthIntent("premium");
+        await routePremium("demo.premium");
+      });
+    }
   }
 }
 
