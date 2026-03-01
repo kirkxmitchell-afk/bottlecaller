@@ -5,11 +5,13 @@ export async function handleEventLog({
   supabase,
   getSourceCtx,
   tagSource,
+  senderCtx: senderCtxInput,
+  ctx,
 }) {
   const { eventType, payload } = msg || {};
   if (!eventType) return;
 
-  const senderCtx = getSourceCtx(event.source);
+  const senderCtx = ctx || senderCtxInput || getSourceCtx(event.source);
   const isFromIframe = !!event.source && event.source !== window;
 
   if (isFromIframe && !senderCtx) {
@@ -45,9 +47,8 @@ export async function handleEventLog({
     return;
   }
 
+  // Always derive identity and boundaries from validated sender-bound ctx.
   const userId = senderCtx?.userId || null;
-
-  // Prefer sender-bound ctx restaurant to avoid cross-iframe contamination.
   const restaurantId = senderCtx?.restaurantId || null;
 
   if (

@@ -1235,6 +1235,30 @@ function getSenderCtxOrReject(event, senderCtx, replyType, extra = {}, opts = {}
   };
 }
 
+function rejectIfEpochMismatch(event, msg, replyType, extra = {}) {
+  const epochNow = Number(window.__BC_IFRAME_EPOCH__ || 0);
+  const msgEpoch = Number(msg?.epoch || 0);
+  if (!epochNow || msgEpoch !== epochNow) {
+    try {
+      event.source?.postMessage(
+        { source: "BC_MSG", v: 1, type: replyType, ok: false, error: "epoch_mismatch", ...extra },
+        event.origin
+      );
+    } catch {}
+    return true;
+  }
+  return false;
+}
+
+function isDemoMsg(msg, senderCtx) {
+  return (
+    String(senderCtx?.mode || "").toLowerCase() === "demo" ||
+    String(msg?.mode || "").toLowerCase() === "demo" ||
+    String(msg?.payload?.mode || "").toLowerCase() === "demo" ||
+    String(msg?.payload?.bcMode || "").toLowerCase() === "demo"
+  );
+}
+
 async function buildBcCtxSafe(requestedMode = null) {
   // Absolute: never build ctx without a live session.
   const live = await getLiveSessionOrNull();
@@ -1693,7 +1717,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
           return;
         }
 
-        if (liveAuth.userId !== senderCtx.userId) {
+        if (String(liveAuth.userId) !== String(senderCtx.userId)) {
           console.warn("[PARENT] forbidden_user mismatch", {
             type: msg.type,
             authedUserId: liveAuth.userId,
@@ -1730,9 +1754,9 @@ if (!window.__BC_PARENT_BRIDGE__) {
           });
           if (!ctx) return;
 
-          const authed = window.appState?.session?.user?.id || null;
+          const authed = liveAuth?.userId || null;
           if (!authed) throw new Error("no_session");
-          if (authed !== ctx.userId) {
+          if (String(authed) !== String(ctx.userId)) {
             event.source?.postMessage(
               { source: "BC_MSG", v: 1, type: "runs_count_response", ok: false, count: 0, error: "forbidden_user" },
               event.origin
@@ -1781,9 +1805,9 @@ if (!window.__BC_PARENT_BRIDGE__) {
           });
           if (!ctx) return;
 
-          const authed = window.appState?.session?.user?.id || null;
+          const authed = liveAuth?.userId || null;
           if (!authed) throw new Error("no_session");
-          if (authed !== ctx.userId) throw new Error("forbidden_user");
+          if (String(authed) !== String(ctx.userId)) throw new Error("forbidden_user");
 
           const now = new Date();
           const zaNow = new Date(now.toLocaleString("en-US", { timeZone: "Africa/Johannesburg" }));
@@ -1826,17 +1850,17 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
       if (msg.type === "wines_request") {
         const reqId = msg.reqId || null;
+        const replyType = "wines_report";
         try {
-          const ctx = getSenderCtxOrReject(event, senderCtx, "wines_report", { reqId, wines: [] }, {
+          const ctx = getSenderCtxOrReject(event, senderCtx, replyType, { reqId, wines: [] }, {
             requireRestaurant: true,
           });
           if (!ctx) return;
-          const rid = ctx.restaurantId;
 
           const { data, error } = await supabase
             .from("bc_wines")
             .select("*")
-            .eq("restaurant_id", rid)
+            .eq("restaurant_id", ctx.restaurantId)
             .order("created_at", { ascending: true });
           if (error) throw error;
 
@@ -1844,7 +1868,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
             {
               source: "BC_MSG",
               v: 1,
-              type: "wines_report",
+              type: replyType,
               reqId,
               ok: true,
               wines: data || [],
@@ -1856,7 +1880,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
             {
               source: "BC_MSG",
               v: 1,
-              type: "wines_report",
+              type: replyType,
               reqId,
               ok: false,
               error: e?.message || String(e),
@@ -1872,22 +1896,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
         const reqId = msg.reqId || null;
         const action = String(msg.action || "");
         const payload = msg.payload || {};
-        const epochNow = Number(window.__BC_IFRAME_EPOCH__ || 0);
-        const msgEpoch = Number(msg?.epoch || 0);
-        if (!epochNow || msgEpoch !== epochNow) {
-          event.source?.postMessage(
-            {
-              source: "BC_MSG",
-              v: 1,
-              type: "wines_mutate_result",
-              reqId,
-              ok: false,
-              error: "epoch_mismatch",
-            },
-            event.origin
-          );
-          return;
-        }
+        if (rejectIfEpochMismatch(event, msg, "wines_mutate_result", { reqId })) return;
         try {
           const ctx = getSenderCtxOrReject(event, senderCtx, "wines_mutate_result", { reqId }, {
             requireRestaurant: true,
@@ -1896,9 +1905,9 @@ if (!window.__BC_PARENT_BRIDGE__) {
           if (!ctx) return;
 
           const rid = ctx.restaurantId;
-          const userId = window.appState?.session?.user?.id || null;
+          const userId = liveAuth?.userId || null;
           if (!userId) throw new Error("no_session");
-          if (userId !== ctx.userId) throw new Error("forbidden_user");
+          if (String(userId) !== String(ctx.userId)) throw new Error("forbidden_user");
 
           if (action === "add") {
             const row = {
@@ -2035,28 +2044,34 @@ if (!window.__BC_PARENT_BRIDGE__) {
       }
 
       if (msg.type === "event_log") {
-        const isDemoLog =
-          String(senderCtx?.mode || "").toLowerCase() === "demo" ||
-          String(msg?.mode || "").toLowerCase() === "demo" ||
-          String(msg?.payload?.mode || "").toLowerCase() === "demo" ||
-          String(msg?.payload?.bcMode || "").toLowerCase() === "demo";
-        if (!isDemoLog) {
-          const epochNow = Number(window.__BC_IFRAME_EPOCH__ || 0);
-          const msgEpoch = Number(msg?.epoch || 0);
-          if (!epochNow || msgEpoch !== epochNow) {
-            event.source?.postMessage(
-              { source: "BC_MSG", v: 1, type: "event_log_ack", ok: false, error: "epoch_mismatch" },
-              event.origin
-            );
-            return;
-          }
+        const replyType = "event_log_ack";
+        const eventType = msg?.eventType || null;
+        if (isDemoMsg(msg, senderCtx)) {
+          event.source?.postMessage(
+            { source: "BC_MSG", v: 1, type: replyType, ok: true, demo: true, eventType },
+            event.origin
+          );
+          return;
         }
+        if (rejectIfEpochMismatch(event, msg, replyType, { eventType })) return;
+
+        const ctx = getSenderCtxOrReject(
+          event,
+          senderCtx,
+          replyType,
+          { eventType },
+          { requireRestaurant: true }
+        );
+        if (!ctx) return;
+
         await handleEventLog({
           msg,
           event,
           supabase,
           getSourceCtx,
           tagSource,
+          senderCtx,
+          ctx,
         });
         return;
       }
