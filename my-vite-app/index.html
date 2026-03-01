@@ -22,7 +22,10 @@
           const origSet = Storage.prototype.setItem;
           Storage.prototype.setItem = function (k, v) {
             if (k === "bc_supabase_auth_v1") {
-              console.warn("[KILLAUTH] blocked write to bc_supabase_auth_v1");
+              console.group("[KILLAUTH] blocked write to bc_supabase_auth_v1");
+              console.trace("WRITE ATTEMPT STACK");
+              try { console.log("value preview:", String(v).slice(0, 120) + "..."); } catch {}
+              console.groupEnd();
               return;
             }
             return origSet.call(this, k, v);
