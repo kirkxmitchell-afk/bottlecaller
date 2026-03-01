@@ -2366,14 +2366,36 @@ function getPremiumFrameWindow() {
 }
 
 function getPremiumFrame() {
-  return document.getElementById("premiumRootFrame") || document.querySelector("#premiumRoot iframe");
+  const frame = document.getElementById("premiumRootFrame");
+  if (!frame) return null;
+
+  const currentEpoch = Number(window.__BC_IFRAME_EPOCH__ || 0);
+  const frameEpoch = Number(frame.dataset?.bcEpoch || 0);
+  if (currentEpoch && frameEpoch && frameEpoch !== currentEpoch) {
+    console.warn("[PARENT] getPremiumFrame blocked (epoch mismatch)", { frameEpoch, currentEpoch });
+    return null;
+  }
+  return frame;
 }
 
 function postToGame(typeOrMsg, payload = {}) {
+  try {
+    if (isHardLoggedOut?.()) return false;
+    if (isLoggingOut?.()) return false;
+    if (!window.appState?.session) return false;
+  } catch {}
+
   const frame = getPremiumFrame();
   const win = frame?.contentWindow;
   if (!win) {
-    setDebug({ step: "postToGame.no_frame", type: typeOrMsg, payload });
+    setDebug?.({ step: "postToGame.no_frame", type: typeOrMsg, payload });
+    return false;
+  }
+
+  const currentEpoch = Number(window.__BC_IFRAME_EPOCH__ || 0);
+  const frameEpoch = Number(frame.dataset?.bcEpoch || 0);
+  if (currentEpoch && frameEpoch && frameEpoch !== currentEpoch) {
+    console.warn("[PARENT] postToGame blocked (epoch mismatch)", { frameEpoch, currentEpoch });
     return false;
   }
 
