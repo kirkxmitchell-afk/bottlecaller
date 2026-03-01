@@ -2357,11 +2357,44 @@ function setHomeAuthUI(isAuthed) {
   }
 }
 
+function applyAuthUi() {
+  const authed = !!appState?.session?.user?.id;
+
+  setHomeAuthUI(authed);
+
+  const authFields = document.getElementById("authFields");
+  authFields?.classList.toggle("hidden", authed);
+
+  const homeExit = document.getElementById("btnHomeExitPremium");
+  if (!authed) homeExit?.classList.add("hidden");
+
+  [
+    "btnHomeLogout",
+    "btnLogoutCreate",
+    "btnLogoutPremium",
+    "btnLogoutManagerBoard"
+  ].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.toggle("hidden", !authed);
+    if (!authed) {
+      el.disabled = false;
+      el.style.pointerEvents = "";
+      el.style.opacity = "";
+    }
+  });
+
+  if (!authed) {
+    document.querySelectorAll("[data-role]").forEach((el) => el.classList.add("hidden"));
+  }
+}
+
 async function syncAuthUi() {
   try {
     const ses = await supabase.auth.getSession();
-    const authed = !!(ses?.data?.session?.user?.id);
-    setHomeAuthUI(authed);
+    appState.session = ses?.data?.session || null;
+    applyAuthUi();
+    const authed = !!appState.session?.user?.id;
     console.log("[UI] syncAuthUi", { authed });
   } catch (e) {
     console.warn("[UI] syncAuthUi failed", e);
@@ -2369,7 +2402,7 @@ async function syncAuthUi() {
 }
 
 function hardResetAuthUI() {
-  try { setHomeAuthUI(false); } catch {}
+  try { applyAuthUi(); } catch {}
 
   document.querySelectorAll("button").forEach((b) => {
     const t = (b.textContent || "").toLowerCase();
@@ -5136,12 +5169,19 @@ async function logoutAll(reason = "logout") {
   appState.invites = [];
 
   try { closeHud(); } catch {}
-  try { setHomeAuthUI(false); } catch {}
+  try { applyAuthUi(); } catch {}
 
   try { setAuthIntent("login"); } catch {}
   try { setMode("login"); } catch {}
   try { clearGameMounts?.(); } catch {}
   try { showScreen("screenHome"); } catch {}
+  try { appState.activeRestaurantId = null; } catch {}
+  try {
+    Object.keys(localStorage || {}).forEach((k) => {
+      if (String(k).startsWith("bc_active_restaurant_id::")) localStorage.removeItem(k);
+    });
+  } catch {}
+  try { applyAuthUi(); } catch {}
 
   // Re-enable route system
   window.__BC_ROUTE_INFLIGHT__ = false;
@@ -5276,8 +5316,9 @@ setDebug({ step: "boot.ready", time: new Date().toISOString(), supabaseUrl: impo
 
 // ✅ Auth changes should route via decideRoute.
 // ✅ TOKEN_REFRESHED must NOT remount iframes / reset gameplay.
-supabase.auth.onAuthStateChange((event) => {
+supabase.auth.onAuthStateChange((event, session) => {
   setDebug({ step: "auth.change", event, time: new Date().toISOString() });
+  appState.session = session || null;
 
   // if logout is in progress, ignore routing changes
   if (window.__BC_LOGOUT_INFLIGHT__) {
@@ -5298,6 +5339,14 @@ supabase.auth.onAuthStateChange((event) => {
 
   authRouteTimer = setTimeout(async () => {
     try {
+      if (!appState.session?.user?.id) {
+        appState.profile = null;
+        appState.restaurant = null;
+        appState.activeRestaurantId = null;
+        routeAuth();
+        applyAuthUi();
+        return;
+      }
       if (event === "TOKEN_REFRESHED") {
         await loadAuthedState(`auth.refresh:${event}`);
         await syncAuthUi();
