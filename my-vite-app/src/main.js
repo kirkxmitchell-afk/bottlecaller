@@ -2023,11 +2023,9 @@ function showScreen(id) {
   onScreenChanged(id);
 
   // Ensure current screen controls are always wired after any UI/template mutation.
-  try { wireLogoutButtons(); } catch {}
   try { wireDemoButtons(); } catch {}
   try { applyAuthUi(); } catch {}
   try { syncAuthUi?.(); } catch {}
-  try { forceWireHomeLogout(); } catch {}
 
   if (id === "screenHome") {
     hideAllLogoutButtons?.();
@@ -5582,9 +5580,9 @@ function wireLogoutButtons() {
   });
 }
 
-function wireGlobalLogout() {
-  if (window.__BC_LOGOUT_DELEGATION__) return;
-  window.__BC_LOGOUT_DELEGATION__ = true;
+function wireLogout() {
+  if (window.__BC_LOGOUT_WIRED__) return;
+  window.__BC_LOGOUT_WIRED__ = true;
 
   const LOGOUT_IDS = new Set([
     "btnHomeLogout",
@@ -5594,7 +5592,7 @@ function wireGlobalLogout() {
   ]);
 
   // capture phase so we catch it even if something stops propagation
-  document.addEventListener(
+  window.addEventListener(
     "click",
     (e) => {
       const btn = e.target?.closest?.("button");
@@ -5933,8 +5931,7 @@ showScreen("screenHome");
 setRole("waiter");
 setMode("login");
 setAuthIntent("login");
-wireLogoutButtons();
-wireGlobalLogout();
+wireLogout();
 wireGlobalDemoExit();
 wireDemoButtons();
 applyAuthUi();
