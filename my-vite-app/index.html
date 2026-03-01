@@ -6,6 +6,21 @@
     <title>BottleCaller</title>
     <script>
       (function () {
+        // Always remove legacy default Supabase auth tokens.
+        // You want exactly ONE authority key: bc_supabase_auth_v1
+        try {
+          for (let i = localStorage.length - 1; i >= 0; i--) {
+            const k = localStorage.key(i);
+            if (k && k.startsWith("sb-") && k.endsWith("-auth-token")) {
+              console.warn("[PREBOOT] removing legacy supabase key", k);
+              localStorage.removeItem(k);
+            }
+          }
+        } catch {}
+      })();
+    </script>
+    <script>
+      (function () {
         const qs = new URLSearchParams(location.search);
         if (qs.get("traceAuth") !== "1") return;
 

@@ -5478,40 +5478,45 @@ async function signOutHard() {
   return { stillAuthed, session: sesFinal?.data?.session || null };
 }
 
-function purgeSupabaseStorageHard() {
-  const keysToKill = [
-    "bc_supabase_auth_v1",
-    "bc_supabase_iframe_ephemeral_v1",
-  ];
+function purgeSupabaseStorage() {
+  // Your custom key
+  try { localStorage.removeItem("bc_supabase_auth_v1"); } catch {}
+  try { sessionStorage.removeItem("bc_supabase_auth_v1"); } catch {}
 
-  for (const k of keysToKill) {
-    try { localStorage.removeItem(k); } catch {}
-    try { sessionStorage.removeItem(k); } catch {}
-  }
+  // Supabase default key for this project
+  try { localStorage.removeItem("sb-ezbcahmbzeyucqxcyfad-auth-token"); } catch {}
+  try { sessionStorage.removeItem("sb-ezbcahmbzeyucqxcyfad-auth-token"); } catch {}
 
-  // kill legacy default keys (sb-*-auth-token)
-  const kill = (store) => {
-    try {
-      for (let i = store.length - 1; i >= 0; i--) {
-        const k = store.key(i);
-        if (!k) continue;
-        if (k.startsWith("sb-") && k.includes("auth-token")) store.removeItem(k);
-      }
-    } catch {}
-  };
-  kill(localStorage);
-  kill(sessionStorage);
+  // Any other legacy sb- auth token keys
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith("sb-") && k.endsWith("-auth-token")) localStorage.removeItem(k);
+    }
+  } catch {}
+  try {
+    for (let i = sessionStorage.length - 1; i >= 0; i--) {
+      const k = sessionStorage.key(i);
+      if (k && k.startsWith("sb-") && k.endsWith("-auth-token")) sessionStorage.removeItem(k);
+    }
+  } catch {}
 }
 
-function purgeAllSupabaseKeys() {
-  purgeSupabaseStorageHard();
-}
+async function doLogout(reason = "user") {
+  if (window.__BC_LOGGING_OUT__) return;
+  window.__BC_LOGGING_OUT__ = true;
 
-function doLogout(reason = "user") {
   try { localStorage.setItem("__BC_LOGOUT_LOCK__", String(Date.now())); } catch {}
-  window.__BC_LOGOUT_LOCK__ = Date.now(); // stop serving ctx immediately
+  window.__BC_LOGOUT_LOCK__ = Date.now();
+
   try { destroyPremiumIframe("logout"); } catch {}
-  location.replace("/?loggedOut=1&ts=" + Date.now());
+  try { routeAuth(); } catch {}
+
+  try { await supabase.auth.signOut({ scope: "global" }); } catch {}
+
+  purgeSupabaseStorage();
+
+  window.location.replace("/?loggedOut=1&ts=" + Date.now());
 }
 
 // Backward-compatible alias for existing callsites.
