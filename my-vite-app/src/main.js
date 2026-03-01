@@ -5321,6 +5321,12 @@ window.loadManagerBoardData = loadManagerBoardData;
 // ------------------------------------------------------------
 // Boot + auth change
 // ------------------------------------------------------------
+try {
+  const cleanUrl = new URL(window.location.href);
+  cleanUrl.searchParams.delete("mode");
+  history.replaceState({}, "", cleanUrl.pathname);
+} catch {}
+
 showScreen("screenHome");
 setRole("waiter");
 setMode("login");
@@ -5331,6 +5337,26 @@ applyAuthUi();
 void syncAuthUi();
 
 setDebug({ step: "boot.ready", time: new Date().toISOString(), supabaseUrl: import.meta.env.VITE_SUPABASE_URL });
+
+async function enforceAuthRoute() {
+  const { data } = await supabase.auth.getSession();
+  const session = data?.session || null;
+
+  if (!session) {
+    console.log("[ROUTE] no session -> forcing public mode");
+
+    appMode = "public";
+    window.__BC_FORCE_AUTH__ = false;
+
+    try { setMode("login"); } catch {}
+    try { setAuthIntent("login"); } catch {}
+
+    showScreen("screenHome");
+    return;
+  }
+
+  console.log("[ROUTE] session present -> allow premium flow");
+}
 
 // ✅ Auth changes should route via decideRoute.
 // ✅ TOKEN_REFRESHED must NOT remount iframes / reset gameplay.
@@ -5369,8 +5395,11 @@ supabase.auth.onAuthStateChange((event, session) => {
   try {
     await decideRoute("boot.resume");
     wireManagerBoardButton();
+    await enforceAuthRoute();
   } catch {}
 })();
+
+void enforceAuthRoute();
 
 window.addEventListener("message", (event) => {
   if (event?.data?.source === "BC_MSG") {
