@@ -2639,8 +2639,18 @@ function unmountDemoGame(reason = "") {
   }
 
   console.log("[BC] demo game unmounted ✅", reason);
+  try { document.getElementById("gameRootDemoFrame")?.remove(); } catch {}
   const root = document.getElementById("gameRootDemo");
   if (root) root.innerHTML = "";
+  try { currentIframeMode = null; } catch {}
+}
+
+function destroyDemoIframe(reason = "") {
+  console.log("[BC] destroyDemoIframe", reason);
+  try { document.getElementById("gameRootDemoFrame")?.remove(); } catch {}
+  const root = document.getElementById("gameRootDemo");
+  if (root) root.innerHTML = "";
+  try { currentIframeMode = null; } catch {}
 }
 
 function destroyPremiumIframe(reason = "") {
@@ -4787,13 +4797,14 @@ function routeDemoShellNoAuth() {
   window.__BC_DRILL_CONFIG__ = null;
   window.BC_DRILL_CONFIG = null;
   setPendingStartDrill(null);
+  destroyDemoIframe("routeDemoShellNoAuth:pre");
   mountGameIframe("gameRootDemo", "demo");
 }
 
 function routeAuth() {
   console.log("[ROUTE] auth (no user)");
   destroyPremiumIframe("routeAuth");
-  unmountDemoGame("routeAuth");
+  destroyDemoIframe("routeAuth");
   setPremiumOverlayActive(false);
 
   window.__BC_DRILL_CONFIG__ = null;
@@ -4808,7 +4819,8 @@ function routeAuth() {
   try {
     const url = new URL(window.location.href);
     url.searchParams.delete("demo");
-    window.history.replaceState({}, "", url.toString());
+    url.searchParams.delete("mode");
+    window.history.replaceState({}, "", url.pathname);
   } catch {}
   showScreen("screenHome");
   hardResetAuthUI();
