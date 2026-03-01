@@ -1209,9 +1209,8 @@ if (!window.__BC_PARENT_BRIDGE__) {
   function setSourceCtx(source, ctx) {
     if (!source || source === window || !ctx) return;
     try {
-      const epoch = Number(window.__BC_IFRAME_EPOCH__ || 0);
+      if (!window.__BC_SOURCE_CTX_MAP__) window.__BC_SOURCE_CTX_MAP__ = new WeakMap();
       window.__BC_SOURCE_CTX_MAP__.set(source, {
-        epoch, // bind ctx to current iframe generation
         mode: String(ctx.mode || ""),
         userId: ctx.userId || null,
         restaurantId: ctx.restaurantId || null,
@@ -1222,11 +1221,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
   }
   function getSourceCtx(source) {
     try {
-      const rec = window.__BC_SOURCE_CTX_MAP__.get(source) || null;
-      if (!rec) return null;
-      const epochNow = Number(window.__BC_IFRAME_EPOCH__ || 0);
-      if (Number(rec.epoch || 0) !== epochNow) return null;
-      return rec;
+      return window.__BC_SOURCE_CTX_MAP__?.get(source) || null;
     } catch { return null; }
   }
   function tagSource(source) {
@@ -4160,12 +4155,19 @@ function mountPremiumGameIframe({
   iframe = document.createElement("iframe");
   iframe.id = "premiumRootFrame";
   const roleNow = String(appState?.profile?.role || "").toLowerCase();
-  const resolvedBackTo = roleNow === "waiter" ? "screenPremiumApp" : (backTo || "screenManagerBoard");
-  // New iframe generation
+  const resolvedBackTo = roleNow === "waiter"
+    ? "screenPremiumApp"
+    : (backTo || "screenManagerBoard");
+
+  // ✅ New iframe generation
   window.__BC_IFRAME_EPOCH__ = Date.now();
   const epoch = window.__BC_IFRAME_EPOCH__;
-  // Optional but recommended: new ctx map for each mount
+  const myEpoch = epoch; // capture for stale-load gating
+
+  // ✅ Reset sender ctx map for new iframe lifetime
   window.__BC_SOURCE_CTX_MAP__ = new WeakMap();
+
+  iframe.dataset.bcEpoch = String(epoch); // optional but great for debugging
 
   iframe.src = buildGameIframeUrl({
     mode: mode || "premium",
@@ -4182,15 +4184,25 @@ function mountPremiumGameIframe({
   iframe.style.pointerEvents = "auto";
 
   iframe.addEventListener("load", () => {
+    // 🔒 ignore stale load events (hot reload / rapid remount)
+    if (Number(window.__BC_IFRAME_EPOCH__ || 0) !== myEpoch) {
+      console.warn("[PARENT] ignored iframe load (stale epoch)", { myEpoch, current: window.__BC_IFRAME_EPOCH__ });
+      return;
+    }
+
+    // 🔒 do not push ctx while logging out / not authed
     if (isLoggingOut() || !appState?.session) return;
+
+    // demo never gets ctx
     const modeFromSrc = String(new URL(iframe.src, window.location.href).searchParams.get("mode") || "").toLowerCase();
     if (modeFromSrc === "demo") return;
+
     pushPremiumCtxAndDrill();
-    console.log("[PARENT] premium iframe loaded ✅ (drill_config + start_drill)");
+    console.log("[PARENT] premium iframe loaded ✅ (ctx/drill pushed)", { epoch: myEpoch });
   });
 
   root.appendChild(iframe);
-  console.log("[BC] mounted premium iframe", iframe.src);
+  console.log("[BC] mounted premium iframe", { src: iframe.src, epoch });
 }
 
 async function setActiveRestaurantForGroup(restaurantId) {
