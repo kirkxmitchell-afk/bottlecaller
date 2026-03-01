@@ -2,6 +2,12 @@
 import "./style.css";
 import { parentSignIn, parentSignOutGlobal, parentSignUp, parentGetSession } from "./lib/authParent.js";
 import { getSupabaseParent, purgeAuthStorage } from "./lib/supabaseParent.js";
+import { createBcBridge } from "./lib/bcBridge.js";
+import { BC_TYPES } from "./lib/bcMessages.js";
+import { makeLogoutHandler } from "./lib/bcHandlers/logout.js";
+import { makeCtxHandler } from "./lib/bcHandlers/ctx.js";
+import { makeWinesHandler } from "./lib/bcHandlers/wines.js";
+import { makeRunsCountHandler } from "./lib/bcHandlers/runsCount.js";
 import { decideAllowedTier } from "./game/progressionBridge";
 import { createProgressionStore } from "./progressionStore.js";
 
@@ -1322,6 +1328,128 @@ if (!window.__BC_PARENT_BRIDGE__) {
     }, 250);
   }
 
+  if (!window.__BC_BRIDGE__) {
+    async function getBcCtx({ requestedMode, msg, event }) {
+      const prem =
+        document.getElementById("bcPremiumFrame") ||
+        document.getElementById("premiumRootFrame");
+      const isFromPremiumFrame = !!(prem && event?.source === prem.contentWindow);
+      if (!isFromPremiumFrame) return null;
+
+      const epoch = Number(window.__BC_IFRAME_EPOCH__ || 0);
+      const msgEpoch = Number(msg?.epoch || 0);
+      if (msgEpoch !== epoch) return null;
+
+      if (String(requestedMode || "").toLowerCase() === "demo") {
+        const demoCtx = await buildBcCtxSafe("demo");
+        if (demoCtx) setSourceCtx(event.source, demoCtx);
+        return demoCtx;
+      }
+
+      try {
+        if (window.__BC_ACTIVE_REST_READY__) {
+          await Promise.race([
+            window.__BC_ACTIVE_REST_READY__,
+            new Promise((r) => setTimeout(r, 600))
+          ]);
+        }
+      } catch {}
+
+      const needRestaurant = String(requestedMode || "").toLowerCase() !== "demo";
+      const rid = window.getActiveRestaurantId?.();
+      const ready =
+        !!window.appState?.session &&
+        !!window.appState?.profile?.role &&
+        (needRestaurant ? !!rid : true);
+      if (!ready) {
+        window.__BC_PENDING_CTX_REQ__ = {
+          source: event.source,
+          origin: event.origin,
+          mode: requestedMode ?? null,
+          at: Date.now(),
+        };
+        return null;
+      }
+
+      const bcCtx = await buildBcCtxSafe(requestedMode ?? null);
+      if (bcCtx) {
+        bcCtx.drill = window.__BC_DRILL_CONFIG__ || window.BC_DRILL_CONFIG || null;
+        setSourceCtx(event.source, bcCtx);
+      }
+      if (!bcCtx?.userId || !bcCtx?.role || (!bcCtx?.restaurantId && needRestaurant)) return null;
+      return bcCtx;
+    }
+
+    async function fetchWines({ restaurantId, mode, event }) {
+      const senderCtx = getSourceCtx(event.source);
+      const rid =
+        restaurantId ||
+        senderCtx?.restaurantId ||
+        window.getActiveRestaurantId?.() ||
+        appState.activeRestaurantId ||
+        appState.profile?.restaurant_id ||
+        null;
+      const { data: live } = await supabase.auth.getSession();
+      if (!live?.session || !rid) return [];
+      if (String(mode || "").toLowerCase() === "demo") return [];
+
+      const { data, error } = await supabase
+        .from("bc_wines")
+        .select("*")
+        .eq("restaurant_id", rid)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return data || [];
+    }
+
+    async function fetchRunsCount({ mode, msg, event }) {
+      const senderCtx = getSourceCtx(event.source);
+      const isDemoReq =
+        String(mode || "").toLowerCase() === "demo" ||
+        String(senderCtx?.mode || "").toLowerCase() === "demo" ||
+        String(msg?.payload?.mode || "").toLowerCase() === "demo" ||
+        String(msg?.payload?.bcMode || "").toLowerCase() === "demo";
+      if (isDemoReq) return 0;
+
+      const userId = senderCtx?.userId || null;
+      const restaurantId = senderCtx?.restaurantId || null;
+      if (!isUuid(userId) || !isUuid(restaurantId)) return 0;
+
+      const authed = window.appState?.session?.user?.id;
+      if (authed && authed !== userId) return 0;
+
+      const { count, error } = await supabase
+        .from("bc_encounter_resolutions_v2")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .eq("restaurant_id", restaurantId);
+      if (error) throw error;
+      return Number(count || 0);
+    }
+
+    const handledTypes = new Set([
+      BC_TYPES.LOGOUT_REQUEST,
+      BC_TYPES.CTX_REQUEST,
+      BC_TYPES.WINES_REQUEST,
+      BC_TYPES.RUNS_COUNT_REQUEST,
+      "logout",
+    ]);
+    window.__BC_BRIDGE_HANDLED_TYPES__ = handledTypes;
+
+    const bridge = createBcBridge({
+      allowedOrigin: window.location.origin,
+      debug: true,
+      handlers: {
+        [BC_TYPES.LOGOUT_REQUEST]: makeLogoutHandler({ doLogout }),
+        logout: makeLogoutHandler({ doLogout }),
+        [BC_TYPES.CTX_REQUEST]: makeCtxHandler({ getBcCtx }),
+        [BC_TYPES.WINES_REQUEST]: makeWinesHandler({ fetchWines }),
+        [BC_TYPES.RUNS_COUNT_REQUEST]: makeRunsCountHandler({ fetchRunsCount }),
+      },
+    });
+    window.__BC_BRIDGE__ = bridge;
+  }
+
   window.addEventListener("message", async (event) => {
     try {
       const msg = event?.data;
@@ -1329,6 +1457,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
       // Same-origin only (your game is served from the same Vite origin)
       if (event.origin !== window.location.origin) return;
       const type = msg.type;
+      if (window.__BC_BRIDGE__ && window.__BC_BRIDGE_HANDLED_TYPES__?.has(type)) return;
       const notifyLoggedOut = () => {
         try {
           if (event.source && typeof event.source.postMessage === "function") {

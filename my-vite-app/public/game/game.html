@@ -9066,12 +9066,20 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         bindInput(wineCards, delHandler);
       }
 
-      function requestParentLogout() {
+      function bcPost(type, payload = {}) {
         try {
           window.parent.postMessage(
-            { source: "BC_MSG", v: 1, type: "bc_logout_request" },
+            { source: "BC_MSG", v: 1, type, ...payload },
             window.location.origin
           );
+        } catch (e) {
+          console.warn("[IFRAME] bcPost failed", type, e);
+        }
+      }
+
+      function requestParentLogout() {
+        try {
+          bcPost("bc_logout_request");
         } catch (e) {
           console.warn("[IFRAME] logout request failed", e);
         }
