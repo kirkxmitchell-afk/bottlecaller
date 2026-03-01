@@ -5501,10 +5501,6 @@ function purgeAllSupabaseKeys() {
 
 function doLogout(reason = "user") {
   window.__BC_LOGOUT_LOCK__ = Date.now(); // stop serving ctx immediately
-  window.__BC_LOGGING_OUT__ = true;
-  try { destroyPremiumIframe("logout"); } catch {}
-  try { routeAuth(); } catch {}
-  // trigger pre-boot purge + non-persist boot
   location.replace("/?loggedOut=1&ts=" + Date.now());
 }
 

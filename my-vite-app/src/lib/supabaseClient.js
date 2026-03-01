@@ -84,6 +84,7 @@ export function getSupabase() {
     "forceLoggedOut=",
     forceLoggedOut
   );
+  console.log("[SUPABASE] parent forceLoggedOut?", forceLoggedOut);
 
   return supabase;
 }
