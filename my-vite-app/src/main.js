@@ -1165,19 +1165,74 @@ async function getLiveSessionOrNull() {
   }
 }
 
-function getSenderCtxOrReject(event, senderCtx, type, extra = {}) {
-  const userId = senderCtx?.userId || null;
-  const restaurantId = senderCtx?.restaurantId || null;
+async function getLiveAuthOrNull() {
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) return null;
 
-  if (!isUuid(userId) || !isUuid(restaurantId)) {
-    event.source?.postMessage(
-      { source: "BC_MSG", v: 1, type, ok: false, error: "invalid_ctx", ...extra },
-      event.origin
-    );
+    const session = data?.session ?? null;
+    const userId = session?.user?.id ?? null;
+
+    if (!session || !userId) return null;
+    return { session, userId };
+  } catch {
+    return null;
+  }
+}
+
+function getSenderCtxOrReject(event, senderCtx, replyType, extra = {}, opts = {}) {
+  const userId = senderCtx?.userId || null;
+  const restaurantId = senderCtx?.restaurantId ?? null;
+
+  const mode = String(senderCtx?.mode || "").toLowerCase();
+  const role = String(senderCtx?.role || "").toLowerCase();
+
+  const requireRestaurant = opts.requireRestaurant ?? true;
+  const allowDemo = opts.allowDemo ?? true;
+  const allowedRoles = Array.isArray(opts.allowedRoles) ? opts.allowedRoles.map(String) : null;
+
+  if (!isUuid(userId)) {
+    try {
+      event.source?.postMessage(
+        { source: "BC_MSG", v: 1, type: replyType, ok: false, error: "invalid_ctx_user", ...extra },
+        event.origin
+      );
+    } catch {}
     return null;
   }
 
-  return { userId, restaurantId };
+  const isDemo = allowDemo && mode === "demo";
+  if (requireRestaurant && !isDemo) {
+    if (!isUuid(restaurantId)) {
+      try {
+        event.source?.postMessage(
+          { source: "BC_MSG", v: 1, type: replyType, ok: false, error: "invalid_ctx_restaurant", ...extra },
+          event.origin
+        );
+      } catch {}
+      return null;
+    }
+  }
+
+  if (allowedRoles && allowedRoles.length) {
+    const ok = allowedRoles.includes(role);
+    if (!ok) {
+      try {
+        event.source?.postMessage(
+          { source: "BC_MSG", v: 1, type: replyType, ok: false, error: "forbidden_role", role, ...extra },
+          event.origin
+        );
+      } catch {}
+      return null;
+    }
+  }
+
+  return {
+    userId,
+    restaurantId: isDemo ? null : restaurantId,
+    role,
+    mode: mode || null,
+  };
 }
 
 async function buildBcCtxSafe(requestedMode = null) {
@@ -1598,7 +1653,12 @@ if (!window.__BC_PARENT_BRIDGE__) {
       const PRE_BIND_ALLOW = new Set(["nav", "nav_back", "ctx_retry"]);
       if (!senderCtx && !PRE_BIND_ALLOW.has(msg.type)) {
         console.warn("[PARENT] blocked msg (no senderCtx yet)", msg.type);
-        notifyLoggedOut();
+        try {
+          event.source?.postMessage(
+            { source: "BC_MSG", v: 1, type: "auth_state", authed: false, reason: "no_sender_ctx" },
+            event.origin
+          );
+        } catch {}
         return;
       }
 
@@ -1610,20 +1670,41 @@ if (!window.__BC_PARENT_BRIDGE__) {
         "event_log",
       ]);
 
+      let liveAuth = null;
       if (DB_TYPES.has(msg.type)) {
-        const liveSession = await getLiveSessionOrNull();
-        if (!liveSession) {
+        liveAuth = await getLiveAuthOrNull();
+        if (!liveAuth) {
           console.warn("[PARENT] blocked: no live session", msg.type);
           notifyLoggedOut();
           try { destroyPremiumIframe("parent_no_session_db_gate"); } catch {}
           try { destroyDemoIframe("parent_no_session_db_gate"); } catch {}
           return;
         }
-        appState.session = liveSession;
+        appState.session = liveAuth.session;
 
-        const authedUserId = liveSession?.user?.id || null;
-        if (authedUserId && senderCtx?.userId && authedUserId !== senderCtx.userId) {
-          console.warn("[PARENT] forbidden_user mismatch", { authedUserId, senderUserId: senderCtx.userId });
+        if (!senderCtx?.userId) {
+          console.warn("[PARENT] blocked DB msg (no senderCtx.userId)", msg.type);
+          try {
+            event.source?.postMessage(
+              { source: "BC_MSG", v: 1, type: "auth_state", authed: false, reason: "no_sender_ctx_db" },
+              event.origin
+            );
+          } catch {}
+          return;
+        }
+
+        if (liveAuth.userId !== senderCtx.userId) {
+          console.warn("[PARENT] forbidden_user mismatch", {
+            type: msg.type,
+            authedUserId: liveAuth.userId,
+            senderUserId: senderCtx.userId,
+          });
+          try {
+            event.source?.postMessage(
+              { source: "BC_MSG", v: 1, type: "auth_state", authed: false, reason: "forbidden_user" },
+              event.origin
+            );
+          } catch {}
           return;
         }
       }
@@ -1631,14 +1712,6 @@ if (!window.__BC_PARENT_BRIDGE__) {
       // RUNS COUNT: iframe asks parent -> parent queries supabase -> reply
       if (msg.type === "runs_count_request") {
         try {
-          if (!senderCtx) {
-            event.source?.postMessage(
-              { source: "BC_MSG", v: 1, type: "runs_count_response", ok: false, count: 0, error: "no_sender_ctx" },
-              event.origin
-            );
-            return;
-          }
-
           const isDemoReq =
             String(msg?.mode || "").toLowerCase() === "demo" ||
             String(senderCtx?.mode || "").toLowerCase() === "demo" ||
@@ -1652,11 +1725,12 @@ if (!window.__BC_PARENT_BRIDGE__) {
             return;
           }
 
-          const ctx = getSenderCtxOrReject(event, senderCtx, "runs_count_response", { count: 0 });
+          const ctx = getSenderCtxOrReject(event, senderCtx, "runs_count_response", { count: 0 }, {
+            requireRestaurant: true,
+          });
           if (!ctx) return;
 
-          const live = await getLiveSessionOrNull();
-          const authed = live?.user?.id || null;
+          const authed = window.appState?.session?.user?.id || null;
           if (!authed) throw new Error("no_session");
           if (authed !== ctx.userId) {
             event.source?.postMessage(
@@ -1691,14 +1765,6 @@ if (!window.__BC_PARENT_BRIDGE__) {
       if (msg.type === "ritual_status_request") {
         const reqId = msg.reqId || null;
         try {
-          if (!senderCtx) {
-            event.source?.postMessage(
-              { source: "BC_MSG", v: 1, type: "ritual_status_response", reqId, ok: false, doneToday: false, error: "no_sender_ctx" },
-              event.origin
-            );
-            return;
-          }
-
           const isDemoReq =
             String(msg?.mode || "").toLowerCase() === "demo" ||
             String(senderCtx?.mode || "").toLowerCase() === "demo";
@@ -1710,11 +1776,12 @@ if (!window.__BC_PARENT_BRIDGE__) {
             return;
           }
 
-          const ctx = getSenderCtxOrReject(event, senderCtx, "ritual_status_response", { reqId, doneToday: false });
+          const ctx = getSenderCtxOrReject(event, senderCtx, "ritual_status_response", { reqId, doneToday: false }, {
+            requireRestaurant: true,
+          });
           if (!ctx) return;
 
-          const live = await getLiveSessionOrNull();
-          const authed = live?.user?.id || null;
+          const authed = window.appState?.session?.user?.id || null;
           if (!authed) throw new Error("no_session");
           if (authed !== ctx.userId) throw new Error("forbidden_user");
 
@@ -1759,11 +1826,12 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
       if (msg.type === "wines_request") {
         const reqId = msg.reqId || null;
-        const rid = senderCtx?.restaurantId || null;
         try {
-          const live = await getLiveSessionOrNull();
-          if (!live) throw new Error("no_session");
-          if (!isUuid(rid)) throw new Error("invalid_ctx_restaurant");
+          const ctx = getSenderCtxOrReject(event, senderCtx, "wines_report", { reqId, wines: [] }, {
+            requireRestaurant: true,
+          });
+          if (!ctx) return;
+          const rid = ctx.restaurantId;
 
           const { data, error } = await supabase
             .from("bc_wines")
@@ -1804,7 +1872,6 @@ if (!window.__BC_PARENT_BRIDGE__) {
         const reqId = msg.reqId || null;
         const action = String(msg.action || "");
         const payload = msg.payload || {};
-        const rid = senderCtx?.restaurantId || null;
         const epochNow = Number(window.__BC_IFRAME_EPOCH__ || 0);
         const msgEpoch = Number(msg?.epoch || 0);
         if (!epochNow || msgEpoch !== epochNow) {
@@ -1822,17 +1889,18 @@ if (!window.__BC_PARENT_BRIDGE__) {
           return;
         }
         try {
-          const live = await getLiveSessionOrNull();
-          const userId = live?.user?.id || null;
-          if (!userId) throw new Error("no_session");
-          if (!isUuid(rid)) throw new Error("invalid_ctx_restaurant");
+          const ctx = getSenderCtxOrReject(event, senderCtx, "wines_mutate_result", { reqId }, {
+            requireRestaurant: true,
+            allowedRoles: ["manager", "group_manager", "admin"],
+          });
+          if (!ctx) return;
 
-          const role = String(senderCtx?.role || "").toLowerCase();
-          const canMutate = role === "manager" || role === "group_manager" || role === "admin";
-          if (!canMutate) throw new Error("forbidden_role");
+          const rid = ctx.restaurantId;
+          const userId = window.appState?.session?.user?.id || null;
+          if (!userId) throw new Error("no_session");
+          if (userId !== ctx.userId) throw new Error("forbidden_user");
 
           if (action === "add") {
-            if (!rid) throw new Error("missing_restaurant_id");
             const row = {
               restaurant_id: rid,
               created_by: userId,
@@ -1875,7 +1943,6 @@ if (!window.__BC_PARENT_BRIDGE__) {
               .eq("restaurant_id", rid);
             if (error) throw error;
           } else if (action === "delete_all") {
-            if (!rid) throw new Error("missing_restaurant_id");
             const { error } = await supabase.from("bc_wines").delete().eq("restaurant_id", rid);
             if (error) throw error;
           } else {
