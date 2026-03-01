@@ -1,11 +1,12 @@
 // src/game/progressionState.ts
-import { supabase } from "../supabase.js";
+import { getSupabaseParent } from "../lib/supabaseParent.js";
 import type { ProgressionState, RecentWindow, Tier, WeakestLink, Readiness } from "./progressionGuards";
 
 export async function buildProgressionInputs(params: {
   userId: string;
   restaurantId: string;
 }): Promise<{ state: ProgressionState; win: RecentWindow }> {
+  const supabase = getSupabaseParent();
   const { userId, restaurantId } = params;
 
   // 1) Readiness view (last10 + readiness)

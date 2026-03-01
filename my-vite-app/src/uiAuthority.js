@@ -1,7 +1,7 @@
-import { getSupabase } from "./lib/supabaseClient.js";
+import { getSupabaseParent } from "./lib/supabaseParent.js";
 import { mountPremium, unmountPremium } from "./premiumMount.js";
 
-const supabase = getSupabase();
+const supabase = getSupabaseParent();
 
 const state = {
   session: null,

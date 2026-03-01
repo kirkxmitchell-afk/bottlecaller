@@ -1,10 +1,11 @@
 // src/main.js
 import "./style.css";
-import { signIn, signUp, signOut, getSession, getSupabase } from "./lib/supabaseClient.js";
+import { signIn, signUp, getSession } from "./lib/authParent.js";
+import { getSupabaseParent, purgeSupabaseStorage } from "./lib/supabaseParent.js";
 import { decideAllowedTier } from "./game/progressionBridge";
 import { createProgressionStore } from "./progressionStore.js";
 
-const supabase = getSupabase();
+const supabase = getSupabaseParent();
 
 // ==== SUPABASE FINGERPRINT ====
 if (!supabase.__BC_ID__) supabase.__BC_ID__ = "sb_" + Math.random().toString(16).slice(2);
@@ -5552,30 +5553,6 @@ async function signOutHard() {
   return { stillAuthed, session: sesFinal?.data?.session || null };
 }
 
-function purgeSupabaseStorage() {
-  // Your custom key
-  try { localStorage.removeItem("bc_supabase_auth_v1"); } catch {}
-  try { sessionStorage.removeItem("bc_supabase_auth_v1"); } catch {}
-
-  // Supabase default key for this project
-  try { localStorage.removeItem("sb-ezbcahmbzeyucqxcyfad-auth-token"); } catch {}
-  try { sessionStorage.removeItem("sb-ezbcahmbzeyucqxcyfad-auth-token"); } catch {}
-
-  // Any other legacy sb- auth token keys
-  try {
-    for (let i = localStorage.length - 1; i >= 0; i--) {
-      const k = localStorage.key(i);
-      if (k && k.startsWith("sb-") && k.endsWith("-auth-token")) localStorage.removeItem(k);
-    }
-  } catch {}
-  try {
-    for (let i = sessionStorage.length - 1; i >= 0; i--) {
-      const k = sessionStorage.key(i);
-      if (k && k.startsWith("sb-") && k.endsWith("-auth-token")) sessionStorage.removeItem(k);
-    }
-  } catch {}
-}
-
 async function doLogout(reason = "user") {
   if (window.__BC_LOGGING_OUT__) return;
   window.__BC_LOGGING_OUT__ = true;
@@ -5604,7 +5581,8 @@ async function doLogout(reason = "user") {
 
   // 2) sign out (best effort)
   try {
-    await supabase?.auth?.signOut({ scope: "global" });
+    const sb = getSupabaseParent();
+    await sb.auth.signOut({ scope: "global" });
     console.warn("[LOGOUT] supabase signOut ok");
   } catch (e) {
     console.warn("[LOGOUT] supabase signOut failed (continuing anyway)", e);

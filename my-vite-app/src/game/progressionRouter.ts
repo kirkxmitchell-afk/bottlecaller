@@ -1,5 +1,5 @@
 // src/game/progressionRouter.ts
-import { supabase } from "../supabase.js";
+import { getSupabaseParent } from "../lib/supabaseParent.js";
 import { decideAllowedTierFromSnapshot, describeLockReasons } from "./progressionEvaluator";
 import type { Tier, ProgressionSnapshot } from "./progressionRules";
 
@@ -31,6 +31,7 @@ export type DecideAllowedTierOutput = {
 export async function decideAllowedTier(
   input: DecideAllowedTierInput
 ): Promise<DecideAllowedTierOutput> {
+  const supabase = getSupabaseParent();
   const desiredTier: Tier =
     input.desiredTier === 3 ? 3 : input.desiredTier === 2 ? 2 : 1;
 

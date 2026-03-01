@@ -1,6 +1,8 @@
 // src/lib/bcSync.ts
 import { peekBatch, markSent, markFailed, BCQueuedEvent } from "./bcQueue";
-import { supabase } from "./supabaseClient.js";
+import { getSupabaseParent } from "./supabaseParent.js";
+
+const supabase = getSupabaseParent();
 
 const BATCH_SIZE = 50;
 const BASE_BACKOFF_MS = 800;

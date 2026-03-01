@@ -1,5 +1,6 @@
 // src/auth.js
-import { supabase, signIn, signUp, signOut as sbSignOut, getUser, getSession } from "./lib/supabaseClient.js";
+import { getSupabaseParent } from "./lib/supabaseParent.js";
+import { signIn, signUp, signOutLocal as sbSignOut, getUser, getSession } from "./lib/authParent.js";
 
 /**
  * With the DB trigger enabled, you do NOT insert into profiles from the client anymore.
@@ -38,6 +39,7 @@ export async function getCurrentSession() {
 }
 
 export async function getMyProfile() {
+  const supabase = getSupabaseParent();
   const { user, error: uErr } = await getUser();
   if (uErr) throw uErr;
   if (!user) throw new Error("Not logged in.");
@@ -53,6 +55,7 @@ export async function getMyProfile() {
 }
 
 export async function joinRestaurantByCode(code) {
+  const supabase = getSupabaseParent();
   const cleaned = (code || "").trim().toUpperCase();
   if (!cleaned) throw new Error("Enter a restaurant code.");
 
@@ -65,6 +68,7 @@ export async function joinRestaurantByCode(code) {
 }
 
 export async function createRestaurant({ name, seatLimit = 15, code }) {
+  const supabase = getSupabaseParent();
   const cleanName = (name || "").trim();
   if (!cleanName) throw new Error("Restaurant name is required.");
 

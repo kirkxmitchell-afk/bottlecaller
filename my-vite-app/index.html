@@ -143,9 +143,12 @@
             }
           } catch {}
 
-          // this flag is critical: tells supabaseClient to NOT persist during this boot
+          // this flag is critical: tells parent Supabase boot to avoid persistence this tick
           window.__BC_FORCE_LOGGED_OUT__ = true;
-          console.warn("[BOOT] forced logout latch active + logout lock set");
+          // clear one-shot lock so it does not become sticky across boots
+          try { localStorage.removeItem("__BC_LOGOUT_LOCK__"); } catch {}
+          try { sessionStorage.removeItem("__BC_LOGOUT_LOCK__"); } catch {}
+          console.warn("[BOOT] forced logout latch active + logout lock cleared");
         }
       })();
     </script>
