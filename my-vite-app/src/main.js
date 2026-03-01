@@ -1237,6 +1237,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
     try {
       if (!window.__BC_SOURCE_CTX_MAP__) window.__BC_SOURCE_CTX_MAP__ = new WeakMap();
       window.__BC_SOURCE_CTX_MAP__.set(source, {
+        epoch: Number(window.__BC_IFRAME_EPOCH__ || 0),
         mode: String(ctx.mode || ""),
         userId: ctx.userId || null,
         restaurantId: ctx.restaurantId || null,
@@ -1247,7 +1248,15 @@ if (!window.__BC_PARENT_BRIDGE__) {
   }
   function getSourceCtx(source) {
     try {
-      return window.__BC_SOURCE_CTX_MAP__?.get(source) || null;
+      const c = window.__BC_SOURCE_CTX_MAP__?.get(source) || null;
+      if (!c) return null;
+
+      const currentEpoch = Number(window.__BC_IFRAME_EPOCH__ || 0);
+      if (currentEpoch && c.epoch && c.epoch !== currentEpoch) return null;
+
+      if (Date.now() - (c.at || 0) > 60_000 * 30) return null;
+
+      return c;
     } catch { return null; }
   }
   function tagSource(source) {
@@ -1550,7 +1559,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
         console.warn("[PARENT] blocked msg (no senderCtx yet)", msg.type);
         try {
           event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: "auth_state", authed: false, reason: "no_sender_ctx" },
+            { source: "BC_MSG", v: 1, type: "ctx_required", ok: false, reason: "no_sender_ctx" },
             event.origin
           );
         } catch {}
