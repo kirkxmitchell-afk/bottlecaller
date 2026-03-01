@@ -1827,6 +1827,10 @@ if (!window.__BC_PARENT_BRIDGE__) {
           if (!userId) throw new Error("no_session");
           if (!isUuid(rid)) throw new Error("invalid_ctx_restaurant");
 
+          const role = String(senderCtx?.role || "").toLowerCase();
+          const canMutate = role === "manager" || role === "group_manager" || role === "admin";
+          if (!canMutate) throw new Error("forbidden_role");
+
           if (action === "add") {
             if (!rid) throw new Error("missing_restaurant_id");
             const row = {
@@ -1844,28 +1848,31 @@ if (!window.__BC_PARENT_BRIDGE__) {
             const { error } = await supabase.from("bc_wines").insert(row);
             if (error) throw error;
           } else if (action === "upsert") {
-            if (!rid) throw new Error("missing_restaurant_id");
-            const row = {
-              id: payload?.id || undefined,
-              restaurant_id: rid,
-              created_by: userId,
-              name: payload?.name || "",
-              varietal: payload?.varietal || "",
-              fruit_tags: payload?.fruit_tags || [],
-              texture_tags: payload?.texture_tags || [],
-              oak_level: payload?.oak_level || "",
-              process: payload?.process || "",
-              region: payload?.region || "",
-              story: payload?.story || "",
-            };
+            const wineId = payload?.id;
+            if (!wineId) throw new Error("missing_wine_id");
             const { error } = await supabase
               .from("bc_wines")
-              .upsert(row, { onConflict: "id" });
+              .update({
+                name: payload?.name || "",
+                varietal: payload?.varietal || "",
+                fruit_tags: payload?.fruit_tags || [],
+                texture_tags: payload?.texture_tags || [],
+                oak_level: payload?.oak_level || "",
+                process: payload?.process || "",
+                region: payload?.region || "",
+                story: payload?.story || "",
+              })
+              .eq("id", wineId)
+              .eq("restaurant_id", rid);
             if (error) throw error;
           } else if (action === "delete") {
             const wineId = payload?.wineId || payload?.id;
             if (!wineId) throw new Error("missing_wine_id");
-            const { error } = await supabase.from("bc_wines").delete().eq("id", wineId);
+            const { error } = await supabase
+              .from("bc_wines")
+              .delete()
+              .eq("id", wineId)
+              .eq("restaurant_id", rid);
             if (error) throw error;
           } else if (action === "delete_all") {
             if (!rid) throw new Error("missing_restaurant_id");
