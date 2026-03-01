@@ -5340,31 +5340,29 @@ async function signOutHard() {
   return { stillAuthed, session: sesFinal?.data?.session || null };
 }
 
-function purgeSupabaseAuthStorageHard() {
-  const k = window.__BC_SUPABASE_STORAGE_KEY__ || "bc_supabase_auth_v1";
+function purgeAllSupabaseKeys() {
+  const keysToKill = [
+    "bc_supabase_auth_v1",
+    "bc_supabase_iframe_ephemeral_v1",
+  ];
 
-  try { localStorage.removeItem(k); } catch {}
-  try { sessionStorage.removeItem(k); } catch {}
+  for (const k of keysToKill) {
+    try { localStorage.removeItem(k); } catch {}
+    try { sessionStorage.removeItem(k); } catch {}
+  }
 
-  // Also purge any old/default keys from earlier experiments
-  try {
-    for (let i = localStorage.length - 1; i >= 0; i--) {
-      const key = localStorage.key(i);
-      if (!key) continue;
-      if (key.startsWith("sb-") && key.includes("auth-token")) localStorage.removeItem(key);
-    }
-  } catch {}
-  try {
-    for (let i = sessionStorage.length - 1; i >= 0; i--) {
-      const key = sessionStorage.key(i);
-      if (!key) continue;
-      if (key.startsWith("sb-") && key.includes("auth-token")) sessionStorage.removeItem(key);
-    }
-  } catch {}
-}
-
-function purgeSupabaseAuthStorage() {
-  purgeSupabaseAuthStorageHard();
+  // kill legacy default keys (sb-*-auth-token)
+  const kill = (store) => {
+    try {
+      for (let i = store.length - 1; i >= 0; i--) {
+        const k = store.key(i);
+        if (!k) continue;
+        if (k.startsWith("sb-") && k.includes("auth-token")) store.removeItem(k);
+      }
+    } catch {}
+  };
+  kill(localStorage);
+  kill(sessionStorage);
 }
 
 async function doLogout(reason = "user") {
@@ -5379,7 +5377,7 @@ async function doLogout(reason = "user") {
   hardResetUI("logout.start");
 
   // B) Purge auth storage FIRST (deterministic logout)
-  purgeSupabaseAuthStorageHard();
+  purgeAllSupabaseKeys();
 
   // C) Best effort: tell Supabase server-side too
   try {
@@ -5397,7 +5395,7 @@ async function doLogout(reason = "user") {
   }
 
   // D) Purge again (sometimes signOut writes)
-  purgeSupabaseAuthStorageHard();
+  purgeAllSupabaseKeys();
 
   // E) Remove demo/premium flags from URL
   try {
@@ -5407,8 +5405,8 @@ async function doLogout(reason = "user") {
     history.replaceState({}, "", u.pathname);
   } catch {}
 
-  // F) HARD reload with cache bust
-  window.location.href = "/?ts=" + Date.now();
+  // F) HARD reload to a clean URL
+  window.location.href = "/?loggedOut=1&ts=" + Date.now();
 }
 
 // Backward-compatible alias for existing callsites.
@@ -5602,6 +5600,8 @@ window.loadManagerBoardData = loadManagerBoardData;
   console.log("[BOOT] first boot ✅");
 })();
 
+const __BC_BOOT_LOGGED_OUT__ = new URLSearchParams(location.search).get("loggedOut") === "1";
+
 try {
   const cleanUrl = new URL(window.location.href);
   cleanUrl.searchParams.delete("mode");
@@ -5630,6 +5630,15 @@ try {
 })();
 
 let __BC_BOOT_ROUTE_BLOCKED__ = false;
+if (__BC_BOOT_LOGGED_OUT__) {
+  console.warn("[BOOT] loggedOut latch: forcing auth screen, skipping routing");
+  try { appState.session = null; appState.profile = null; } catch {}
+  try { destroyPremiumIframe("boot.loggedOut"); } catch {}
+  try { destroyDemoIframe("boot.loggedOut"); } catch {}
+  try { routeAuth(); } catch {}
+  __BC_BOOT_ROUTE_BLOCKED__ = true;
+}
+
 try {
   const latch = localStorage.getItem("__BC_LOGOUT_LATCH__");
   if (latch) {

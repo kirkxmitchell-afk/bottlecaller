@@ -29,7 +29,7 @@ function memoryStorage() {
   };
 }
 
-let _client;
+let supabase;
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   throw new Error(
@@ -38,11 +38,11 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
 }
 
 export function getSupabase() {
-  if (_client) return _client;
+  if (supabase) return supabase;
 
   const inIframe = isIframe();
 
-  _client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: inIframe
       ? {
           // 🚫 IFRAME: never persist, never refresh, never touch localStorage
@@ -61,23 +61,24 @@ export function getSupabase() {
         },
   });
 
-  _client.__BC_ID__ = "sb_" + Math.random().toString(16).slice(2);
-  window.__BC_SUPABASE__ = _client;
-  window.__BC_SUPABASE_ID__ = _client.__BC_ID__;
+  supabase.__BC_ID__ = "sb_" + Math.random().toString(16).slice(2);
+  window.__BC_SUPABASE__ = supabase;
+  window.__BC_SUPABASE_ID__ = supabase.__BC_ID__;
   window.__BC_SUPABASE_STORAGE_KEY__ = inIframe ? IFRAME_STORAGE_KEY : PARENT_STORAGE_KEY;
 
   console.log(
     `[SUPABASE] created ${inIframe ? "IFRAME" : "PARENT"} client`,
-    _client.__BC_ID__,
+    supabase.__BC_ID__,
     "storageKey=",
     inIframe ? IFRAME_STORAGE_KEY : PARENT_STORAGE_KEY
   );
 
-  return _client;
+  return supabase;
 }
 
 // Backward-compat export (since your game imports { supabase })
-export const supabase = getSupabase();
+export { supabase };
+supabase = getSupabase();
 
 export async function signIn(email, password) {
   return supabase.auth.signInWithPassword({ email, password });
