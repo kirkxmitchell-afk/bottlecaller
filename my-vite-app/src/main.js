@@ -5517,49 +5517,43 @@ function purgeSupabaseStorage() {
 }
 
 async function doLogout(reason = "user") {
-  const now = Date.now();
-  const startedAt = Number(window.__BC_LOGGING_OUT_AT__ || 0);
-
-  if (window.__BC_LOGGING_OUT__ && startedAt && now - startedAt < 3000) {
-    console.warn("[LOGOUT] blocked by lock", reason);
-    return;
-  }
-
+  if (window.__BC_LOGGING_OUT__) return;
   window.__BC_LOGGING_OUT__ = true;
-  window.__BC_LOGGING_OUT_AT__ = now;
 
-  console.log("[LOGOUT] start", reason);
-
-  // 🔥 kill all state authority NOW (before any async)
-  try {
-    appState.session = null;
-    appState.profile = null;
-    appState.restaurant = null;
-    appState.invites = [];
-    appState.activeRestaurantId = null;
-  } catch {}
+  console.warn("[LOGOUT] start", reason);
 
   try { localStorage.setItem("__BC_LOGOUT_LOCK__", String(Date.now())); } catch {}
   window.__BC_LOGOUT_LOCK__ = Date.now();
 
-  // 🔥 hard UI reset NOW
-  try { destroyPremiumIframe("logout"); } catch {}
-  try { clearGameMounts(); } catch {}
-  try { setPremiumOverlayActive(false); } catch {}
-  try { setHomeAuthUI(false); } catch {}
-  try { hardResetAuthUI(); } catch {}
-  try { showScreen("screenHome"); } catch {}
-  try { closeHud(); } catch {}
-  try { clearMsgs(); } catch {}
+  // 1) detach UI immediately
+  try { destroyPremiumIframe("logout"); } catch (e) { console.warn("destroyPremiumIframe failed", e); }
+  try { routeAuth(); } catch (e) { console.warn("routeAuth failed", e); }
 
-  // async signout is now "best effort" (state already dead)
-  try { await supabase.auth.signOut({ scope: "global" }); } catch (e) {
-    console.warn("[LOGOUT] signOut error (continuing anyway)", e);
+  // 2) sign out (best effort)
+  try {
+    await supabase?.auth?.signOut({ scope: "global" });
+    console.warn("[LOGOUT] supabase signOut ok");
+  } catch (e) {
+    console.warn("[LOGOUT] supabase signOut failed (continuing anyway)", e);
   }
 
+  // 3) purge ALL known keys (yours + supabase default/legacy)
   try { purgeSupabaseStorage(); } catch {}
+  try {
+    localStorage.removeItem("bc_supabase_auth_v1");
+    sessionStorage.removeItem("bc_supabase_auth_v1");
 
-  console.log("[LOGOUT] redirecting…");
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith("sb-") && k.includes("auth-token")) localStorage.removeItem(k);
+    }
+    for (let i = sessionStorage.length - 1; i >= 0; i--) {
+      const k = sessionStorage.key(i);
+      if (k && k.startsWith("sb-") && k.includes("auth-token")) sessionStorage.removeItem(k);
+    }
+  } catch {}
+
+  // 4) hard redirect with latch
   window.location.replace("/?loggedOut=1&ts=" + Date.now());
 }
 window.doLogout = doLogout;
@@ -5589,8 +5583,8 @@ function wireLogoutButtons() {
 }
 
 function wireGlobalLogout() {
-  if (window.__BC_LOGOUT_WIRED__) return;
-  window.__BC_LOGOUT_WIRED__ = true;
+  if (window.__BC_LOGOUT_DELEGATION__) return;
+  window.__BC_LOGOUT_DELEGATION__ = true;
 
   const LOGOUT_IDS = new Set([
     "btnHomeLogout",
@@ -5606,23 +5600,22 @@ function wireGlobalLogout() {
       const btn = e.target?.closest?.("button");
       if (!btn || !LOGOUT_IDS.has(btn.id)) return;
 
-      console.log("[UI] Logout click captured ✅", btn.id);
+      console.log("[LOGOUT] captured", btn.id);
 
       e.preventDefault();
+      // Don’t block other UI generally — but for logout, we want control.
       e.stopPropagation();
       e.stopImmediatePropagation?.();
 
-      // Call actual logout with guard logging.
-      try {
-        doLogout("ui_click:" + btn.id);
-      } catch (err) {
-        console.error("[UI] doLogout threw", err);
-      }
+      // Optional UX: disable button immediately to prevent double taps.
+      try { btn.disabled = true; } catch {}
+
+      (window.doLogout || doLogout)("ui:" + btn.id);
     },
     true
   );
 
-  console.log("[UI] global logout wired ✅");
+  console.log("[LOGOUT] delegation armed ✅");
 }
 
 function wireGlobalDemoExit() {
