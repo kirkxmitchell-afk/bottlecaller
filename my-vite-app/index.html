@@ -5,6 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>BottleCaller</title>
     <script>
+      (function () {
+        const qs = new URLSearchParams(location.search);
+        if (qs.get("loggedOut") === "1") {
+          try { localStorage.removeItem("bc_supabase_auth_v1"); } catch {}
+          try { sessionStorage.removeItem("bc_supabase_auth_v1"); } catch {}
+
+          // legacy/default keys too
+          try {
+            for (let i = localStorage.length - 1; i >= 0; i--) {
+              const k = localStorage.key(i);
+              if (k && k.startsWith("sb-") && k.includes("auth-token")) localStorage.removeItem(k);
+            }
+          } catch {}
+
+          // this flag is critical: tells supabaseClient to NOT persist during this boot
+          window.__BC_FORCE_LOGGED_OUT__ = true;
+          console.warn("[BOOT] forced logout latch active");
+        }
+      })();
+    </script>
+    <script>
       (() => {
         const u = new URL(window.location.href);
         if (u.searchParams.get("forceLogout") !== "1") return;

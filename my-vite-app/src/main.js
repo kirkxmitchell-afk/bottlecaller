@@ -5504,7 +5504,8 @@ function doLogout(reason = "user") {
   window.__BC_LOGGING_OUT__ = true;
   try { destroyPremiumIframe("logout"); } catch {}
   try { routeAuth(); } catch {}
-  window.location.assign("/logout.html?ts=" + Date.now());
+  // trigger pre-boot purge + non-persist boot
+  location.replace("/?loggedOut=1&ts=" + Date.now());
 }
 
 // Backward-compatible alias for existing callsites.

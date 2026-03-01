@@ -41,6 +41,7 @@ export function getSupabase() {
   if (supabase) return supabase;
 
   const inIframe = isIframe();
+  const forceLoggedOut = !inIframe && !!window.__BC_FORCE_LOGGED_OUT__;
 
   supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: inIframe
@@ -50,6 +51,15 @@ export function getSupabase() {
           autoRefreshToken: false,
           detectSessionInUrl: false,
           storageKey: IFRAME_STORAGE_KEY,
+          storage: memoryStorage(),
+        }
+      : forceLoggedOut
+      ? {
+          // 🚫 during forced logout boot: DO NOT rehydrate/persist anything
+          persistSession: false,
+          autoRefreshToken: false,
+          detectSessionInUrl: false,
+          storageKey: PARENT_STORAGE_KEY,
           storage: memoryStorage(),
         }
       : {
@@ -70,7 +80,9 @@ export function getSupabase() {
     `[SUPABASE] created ${inIframe ? "IFRAME" : "PARENT"} client`,
     supabase.__BC_ID__,
     "storageKey=",
-    inIframe ? IFRAME_STORAGE_KEY : PARENT_STORAGE_KEY
+    inIframe ? IFRAME_STORAGE_KEY : PARENT_STORAGE_KEY,
+    "forceLoggedOut=",
+    forceLoggedOut
   );
 
   return supabase;
