@@ -1663,12 +1663,19 @@ if (!window.__BC_PARENT_BRIDGE__) {
       }
 
       const senderCtx = getSourceCtx(event.source);
-      const PRE_BIND_ALLOW = new Set(["nav", "nav_back", "ctx_retry"]);
+      const PRE_BIND_ALLOW = new Set([
+        "bc_ctx_request",
+        "logout",
+        "bc_logout_request",
+        "nav",
+        "nav_back",
+        "ctx_retry",
+      ]);
       if (!senderCtx && !PRE_BIND_ALLOW.has(msg.type)) {
         console.warn("[PARENT] blocked msg (no senderCtx yet)", msg.type);
         try {
           event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: "auth_state", authed: false, reason: "no_sender_ctx" },
+            { source: "BC_MSG", v: 1, type: "ctx_required", ok: false, reason: "no_sender_ctx" },
             event.origin
           );
         } catch {}
@@ -1697,28 +1704,18 @@ if (!window.__BC_PARENT_BRIDGE__) {
         appState.session = liveAuth.session;
 
         if (!senderCtx?.userId) {
-          console.warn("[PARENT] blocked DB msg (no senderCtx.userId)", msg.type);
-          try {
-            event.source?.postMessage(
-              { source: "BC_MSG", v: 1, type: "ctx_required", ok: false, reason: "no_sender_ctx_db" },
-              event.origin
-            );
-          } catch {}
+          event.source?.postMessage(
+            { source: "BC_MSG", v: 1, type: "ctx_required", ok: false, reason: "no_sender_ctx_db" },
+            event.origin
+          );
           return;
         }
 
         if (String(liveAuth.userId) !== String(senderCtx.userId)) {
-          console.warn("[PARENT] forbidden_user mismatch", {
-            type: msg.type,
-            authedUserId: liveAuth.userId,
-            senderUserId: senderCtx.userId,
-          });
-          try {
-            event.source?.postMessage(
-              { source: "BC_MSG", v: 1, type: "ctx_required", ok: false, reason: "forbidden_user" },
-              event.origin
-            );
-          } catch {}
+          event.source?.postMessage(
+            { source: "BC_MSG", v: 1, type: "ctx_required", ok: false, reason: "forbidden_user" },
+            event.origin
+          );
           return;
         }
       }

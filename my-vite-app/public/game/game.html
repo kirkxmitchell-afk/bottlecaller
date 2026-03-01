@@ -1741,8 +1741,22 @@ function ensureProgLoaded() {
         if (window.__BC_CTX_BOOTSTRAPPED__) return;
         window.__BC_CTX_BOOTSTRAPPED__ = true;
 
+        function isUuid(x) {
+          return typeof x === "string" &&
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(x);
+        }
+
         function setCtx(msg) {
           if (window.isDemo) return;
+
+          // epoch guard
+          const myEpoch = Number(window.__BC_EPOCH__ || 0);
+          const msgEpoch = Number(msg?.epoch || 0);
+          if (myEpoch && msgEpoch && msgEpoch !== myEpoch) {
+            console.warn("[BC] setCtx ignored (epoch mismatch)", { myEpoch, msgEpoch });
+            return;
+          }
+
           const next = {
             userId: msg.userId ?? null,
             restaurantId: msg.restaurantId ?? null,
@@ -1752,18 +1766,25 @@ function ensureProgLoaded() {
           };
 
           const isDemoCtx = String(next.mode || "").toLowerCase() === "demo";
-          const valid = !!next.userId && !!next.role && (isDemoCtx || !!next.restaurantId);
+          const valid =
+            isDemoCtx
+              ? ((next.userId === "demo" || isUuid(next.userId)) && !!next.role)
+              : (isUuid(next.userId) && isUuid(next.restaurantId) && !!next.role);
           if (!valid) {
-            console.warn("[BC] setCtx ignored (partial ctx)", next);
+            console.warn("[BC] setCtx ignored (invalid/partial ctx)", next);
             return;
           }
 
-          if (
-            window.__BC_CTX__?.userId &&
-            window.__BC_CTX__?.userId === next.userId &&
-            String(window.__BC_CTX__?.mode || "").toLowerCase() === String(next.mode || "").toLowerCase() &&
-            (isDemoCtx || window.__BC_CTX__?.restaurantId)
-          ) return;
+          // full equality check (allows restaurant switching correctly)
+          const prev = window.__BC_CTX__ || null;
+          const same =
+            prev &&
+            String(prev.userId || "") === String(next.userId || "") &&
+            String(prev.restaurantId || "") === String(next.restaurantId || "") &&
+            String(prev.scopeId || "") === String(next.scopeId || "") &&
+            String(prev.role || "") === String(next.role || "") &&
+            String(prev.mode || "").toLowerCase() === String(next.mode || "").toLowerCase();
+          if (same) return;
 
           window.__BC_CTX__ = next;
 
@@ -1813,6 +1834,11 @@ function ensureProgLoaded() {
           if (!epoch) {
             console.warn("[BC] bc_ctx_request blocked: missing epoch");
             window.__BC_CTX_REQUESTED__ = false; // allow retry once epoch exists
+
+            try { clearTimeout(window.__BC_EPOCH_WAIT_T__); } catch {}
+            window.__BC_EPOCH_WAIT_T__ = setTimeout(() => {
+              try { requestCtxOnce(); } catch {}
+            }, 50);
             return;
           }
 
@@ -1836,24 +1862,45 @@ function ensureProgLoaded() {
             if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
             if (event.origin !== location.origin) return;
             if (msg.type === "ctx_not_ready" || msg.type === "ctx_required") {
-              const modeNow = String(window.bcMode || getIframeMode() || "premium").toLowerCase();
+              const modeNow = String(window.bcMode || (typeof getIframeMode === "function" ? getIframeMode() : "premium")).toLowerCase();
               if (modeNow === "demo") return;
 
               const myEpoch = Number(window.__BC_EPOCH__ || 0);
               const parentEpoch = Number(msg.epoch || 0);
+
+              // If parent epoch differs, we are stale. Stop retrying.
               if (myEpoch && parentEpoch && parentEpoch !== myEpoch) {
-                console.warn("[BC] ctx_not_ready ignored (epoch mismatch)", { myEpoch, parentEpoch });
+                console.warn("[BC] ctx retry ignored (epoch mismatch -> stale iframe)", { myEpoch, parentEpoch });
+                window.__BC_CTX_REQUESTED__ = true; // lock out further requests
+                try { clearTimeout(window.__BC_CTX_RETRY_T__); } catch {}
                 return;
               }
 
-              window.__BC_CTX_REQUESTED__ = false;
+              // Retry cap to avoid infinite storms
               window.__BC_CTX_RETRY_N__ = (window.__BC_CTX_RETRY_N__ || 0) + 1;
               const n = window.__BC_CTX_RETRY_N__;
+              const MAX = 12;
+
+              if (n > MAX) {
+                console.warn("[BC] ctx retry cap hit — giving up", { n, type: msg.type, why: msg.why });
+                try {
+                  window.parent?.postMessage(
+                    { source: "BC_MSG", v: 1, type: "nav_back", backTo: "screenPremiumApp", epoch: myEpoch, mode: modeNow },
+                    location.origin
+                  );
+                } catch {}
+                return;
+              }
+
+              // release latch so requestCtxOnce() can send again
+              window.__BC_CTX_REQUESTED__ = false;
+
               const base = Number(msg.retryAfterMs || 250);
               const delay = Math.min(1200, base + n * 150);
 
-              console.warn("[BC] ctx_not_ready -> retry", { n, delay, why: msg.why });
-              setTimeout(() => {
+              console.warn("[BC] ctx retry scheduled", { n, delay, type: msg.type, why: msg.why });
+              try { clearTimeout(window.__BC_CTX_RETRY_T__); } catch {}
+              window.__BC_CTX_RETRY_T__ = setTimeout(() => {
                 try { requestCtxOnce(); } catch {}
               }, delay);
               return;
