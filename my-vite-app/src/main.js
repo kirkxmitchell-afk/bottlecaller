@@ -1741,6 +1741,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
           // 2) Validate sender-bound ctx (restaurant required)
           const ctx = getSenderCtxOrReject(event, senderCtx, replyType, { count: 0 }, {
             requireRestaurant: true,
+            allowedRoles: ["waiter", "manager", "group_manager", "admin"],
           });
           if (!ctx) return;
 
@@ -1798,6 +1799,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
           // 2) Validate sender-bound ctx (restaurant required)
           const ctx = getSenderCtxOrReject(event, senderCtx, replyType, { reqId, doneToday: false }, {
             requireRestaurant: true,
+            allowedRoles: ["waiter", "manager", "group_manager", "admin"],
           });
           if (!ctx) return;
 
@@ -1872,7 +1874,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
             senderCtx,
             replyType,
             { reqId, wines: [] },
-            { requireRestaurant: true }
+            { requireRestaurant: true, allowedRoles: ["waiter", "manager", "group_manager", "admin"] }
           );
           if (!ctx) return;
 
@@ -2093,7 +2095,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
           senderCtx,
           replyType,
           { eventType },
-          { requireRestaurant: true }
+          { requireRestaurant: true, allowedRoles: ["waiter", "manager", "group_manager", "admin"] }
         );
         if (!ctx) return;
 
