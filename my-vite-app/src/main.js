@@ -1226,15 +1226,21 @@ function rejectIfEpochMismatch(event, msg, replyType, extra = {}) {
   return false;
 }
 
-function isDemoMsg(msg, senderCtx) {
+function isDemoMsg({ mode, msg }, senderCtx) {
   const ctxMode = String(senderCtx?.mode || "").toLowerCase();
   if (ctxMode === "demo") return true;
 
-  const msgMode = String(msg?.mode || "").toLowerCase();
-  if (msgMode === "demo") return true;
+  const topMode = String(mode || msg?.mode || "").toLowerCase();
+  if (topMode === "demo") return true;
 
   // Do not trust payload mode fields to switch runtime into demo.
   return false;
+}
+
+function rejectIfEpochMismatchSimple(msg) {
+  const epochNow = Number(window.__BC_IFRAME_EPOCH__ || 0);
+  const msgEpoch = Number(msg?.epoch || 0);
+  return !epochNow || msgEpoch !== epochNow;
 }
 
 async function buildBcCtxSafe(requestedMode = null) {
@@ -1411,6 +1417,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
     }
 
     async function fetchRunsCount({ mode, msg, event }) {
+      // 0) Source gate: only accept from current premium iframe
       const prem =
         document.getElementById("bcPremiumFrame") ||
         document.getElementById("premiumRootFrame");
@@ -1418,22 +1425,26 @@ if (!window.__BC_PARENT_BRIDGE__) {
       if (!isFromPremiumFrame) return 0;
 
       const senderCtx = getSourceCtx(event.source);
-      const isDemoReq =
-        String(mode || "").toLowerCase() === "demo" ||
-        String(senderCtx?.mode || "").toLowerCase() === "demo" ||
-        String(msg?.payload?.mode || "").toLowerCase() === "demo" ||
-        String(msg?.payload?.bcMode || "").toLowerCase() === "demo";
-      if (isDemoReq) return 0;
+      // 1) Demo short-circuit
+      if (isDemoMsg({ mode, msg }, senderCtx)) return 0;
 
+      // 2) Epoch guard (prevents ghosts / old iframe spam)
+      if (rejectIfEpochMismatchSimple(msg)) return 0;
+
+      // 3) Sender ctx validation (only trust senderCtx)
       const userId = senderCtx?.userId || null;
       const restaurantId = senderCtx?.restaurantId || null;
       if (!isUuid(userId) || !isUuid(restaurantId)) return 0;
 
+      // 4) Live auth must exist AND match ctx.userId
       const live = await getLiveSessionOrNull();
-      const authed = live?.user?.id || null;
-      if (!authed || authed !== userId) return 0;
+      const authedUserId = live?.user?.id || null;
+      if (!authedUserId || authedUserId !== userId) return 0;
+
+      // keep parent appState synced (optional, but consistent)
       window.appState.session = live;
 
+      // 5) DB query
       const { count, error } = await supabase
         .from("bc_encounter_resolutions_v2")
         .select("*", { count: "exact", head: true })
@@ -1714,7 +1725,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
       // RUNS COUNT: iframe asks parent -> parent queries supabase -> reply
       if (msg.type === "runs_count_request") {
         try {
-          if (isDemoMsg(msg, senderCtx)) {
+          if (isDemoMsg({ msg }, senderCtx)) {
             event.source?.postMessage(
               { source: "BC_MSG", v: 1, type: "runs_count_response", ok: true, count: 0, demo: true },
               event.origin
@@ -1762,7 +1773,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
       if (msg.type === "ritual_status_request") {
         const reqId = msg.reqId || null;
         try {
-          if (isDemoMsg(msg, senderCtx)) {
+          if (isDemoMsg({ msg }, senderCtx)) {
             event.source?.postMessage(
               { source: "BC_MSG", v: 1, type: "ritual_status_response", reqId, ok: true, doneToday: false, demo: true },
               event.origin
@@ -1821,7 +1832,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
       if (msg.type === "wines_request") {
         const reqId = msg.reqId || null;
         const replyType = "wines_report";
-        if (isDemoMsg(msg, senderCtx)) {
+        if (isDemoMsg({ msg }, senderCtx)) {
           event.source?.postMessage(
             { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, demo: true, wines: [] },
             event.origin
@@ -1873,7 +1884,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
         const reqId = msg.reqId || null;
         const action = String(msg.action || "");
         const payload = msg.payload || {};
-        if (isDemoMsg(msg, senderCtx)) {
+        if (isDemoMsg({ msg }, senderCtx)) {
           event.source?.postMessage(
             { source: "BC_MSG", v: 1, type: "wines_mutate_result", reqId, ok: true, demo: true },
             event.origin
@@ -2030,7 +2041,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
       if (msg.type === "event_log") {
         const replyType = "event_log_ack";
         const eventType = msg?.eventType || null;
-        if (isDemoMsg(msg, senderCtx)) {
+        if (isDemoMsg({ msg }, senderCtx)) {
           event.source?.postMessage(
             { source: "BC_MSG", v: 1, type: replyType, ok: true, demo: true, eventType },
             event.origin

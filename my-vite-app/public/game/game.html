@@ -2792,12 +2792,14 @@ function ensureProgLoaded() {
         const ctx = window.__BC_CTX__;
         if (!ctx?.userId || !ctx?.restaurantId) return;
         try {
+          const epoch = Number(window.__BC_EPOCH__ || 0);
           window.parent?.postMessage(
             {
               source: "BC_MSG",
               v: 1,
               type: "runs_count_request",
               mode: window.bcMode || null,
+              epoch,
               userId: ctx.userId,
               restaurantId: ctx.restaurantId,
             },
