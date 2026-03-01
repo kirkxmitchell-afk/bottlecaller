@@ -5517,12 +5517,16 @@ function purgeSupabaseStorage() {
 }
 
 async function doLogout(reason = "user") {
-  if (!canStartLogout()) {
+  const now = Date.now();
+  const startedAt = Number(window.__BC_LOGGING_OUT_AT__ || 0);
+
+  if (window.__BC_LOGGING_OUT__ && startedAt && now - startedAt < 3000) {
     console.warn("[LOGOUT] blocked by lock", reason);
     return;
   }
+
   window.__BC_LOGGING_OUT__ = true;
-  window.__BC_LOGGING_OUT_AT__ = Date.now();
+  window.__BC_LOGGING_OUT_AT__ = now;
 
   console.log("[LOGOUT] start", reason);
 
@@ -5585,41 +5589,33 @@ function wireLogoutButtons() {
 function wireGlobalLogout() {
   if (window.__BC_GLOBAL_LOGOUT_WIRED__) return;
   window.__BC_GLOBAL_LOGOUT_WIRED__ = true;
+  const LOGOUT_SELECTOR = [
+    "#btnHomeLogout",
+    "#btnLogoutCreate",
+    "#btnLogoutPremium",
+    "#btnLogoutManagerBoard",
+    "[data-action='logout']",
+  ].join(",");
 
   // capture phase so we catch it even if something stops propagation
   document.addEventListener(
     "click",
     (e) => {
-      const btn = e.target?.closest?.(
-        "#btnLogout, [data-action='logout'], .btnLogout, #btnHomeLogout, #btnLogoutCreate, #btnLogoutPremium, #btnLogoutManagerBoard"
-      );
+      const btn = e.target?.closest?.(LOGOUT_SELECTOR);
       if (!btn) return;
 
-      console.log("[UI] Logout click captured", { id: btn.id, cls: btn.className });
+      console.log("[UI] Logout click captured ✅", btn.id);
 
       e.preventDefault();
       e.stopPropagation();
+      e.stopImmediatePropagation?.();
 
-      doLogout("ui_click");
+      doLogout("ui_click:" + btn.id);
     },
     true
   );
 
-  console.log("[UI] global logout wired ✅");
-}
-
-function canStartLogout() {
-  const now = Date.now();
-  const startedAt = Number(window.__BC_LOGGING_OUT_AT__ || 0);
-  const inProgress = !!window.__BC_LOGGING_OUT__;
-
-  // if logout has been "in progress" for > 3 seconds, treat it as stuck and allow again
-  if (inProgress && startedAt && now - startedAt > 3000) {
-    console.warn("[LOGOUT] stale lock detected → clearing", { startedAt, now });
-    window.__BC_LOGGING_OUT__ = false;
-  }
-
-  return !window.__BC_LOGGING_OUT__;
+  console.log("[UI] global logout wired ✅", LOGOUT_SELECTOR);
 }
 
 function forceWireHomeLogout() {

@@ -91,12 +91,17 @@ button, input { font-family: inherit; }
 
 #topBar, #premiumHeader, .appHeader {
   position: relative;
-  z-index: 50;
+  z-index: 9999;
 }
 
 #premiumRootFrame {
   position: relative;
   z-index: 1;
+}
+
+#screenPremiumApp {
+  position: relative;
+  z-index: 9999;
 }
 
 .brand {
