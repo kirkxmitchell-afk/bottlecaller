@@ -5122,13 +5122,21 @@ async function signOutHard() {
   return { stillAuthed, session: sesFinal?.data?.session || null };
 }
 
-async function doLogout(reason = "manual") {
-  console.log("[AUTH] doLogout()", { reason });
+async function doLogout(reason = "user") {
+  console.log("[LOGOUT] hard reset start", reason);
+
   try {
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: "global" });
   } catch (e) {
-    console.warn("[AUTH] signOut failed (continuing)", e);
+    console.warn("[LOGOUT] signOut error", e);
   }
+
+  // Clear all local app state
+  try { localStorage.clear(); } catch {}
+  try { sessionStorage.clear(); } catch {}
+
+  // Hard redirect to root
+  window.location.href = "/";
 }
 
 // Backward-compatible alias for existing callsites.
