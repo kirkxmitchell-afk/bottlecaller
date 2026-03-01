@@ -5330,7 +5330,7 @@ async function doLogout(reason = "user") {
   hardResetUI("logout.final");
 
   // 6) Hard redirect with cache-bust
-  window.location.replace("/?logout=1&ts=" + Date.now());
+  window.location.replace("/?forceLogout=1&ts=" + Date.now());
 }
 
 // Backward-compatible alias for existing callsites.
