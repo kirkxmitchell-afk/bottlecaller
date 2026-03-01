@@ -1181,56 +1181,34 @@ async function getLiveAuthOrNull() {
 }
 
 function getSenderCtxOrReject(event, senderCtx, replyType, extra = {}, opts = {}) {
-  const userId = senderCtx?.userId || null;
+  const userId = senderCtx?.userId ?? null;
   const restaurantId = senderCtx?.restaurantId ?? null;
 
-  const mode = String(senderCtx?.mode || "").toLowerCase();
+  const requireRestaurant = opts.requireRestaurant ?? true;
+  const allowedRoles = Array.isArray(opts.allowedRoles)
+    ? opts.allowedRoles.map((r) => String(r).toLowerCase())
+    : null;
   const role = String(senderCtx?.role || "").toLowerCase();
 
-  const requireRestaurant = opts.requireRestaurant ?? true;
-  const allowDemo = opts.allowDemo ?? true;
-  const allowedRoles = Array.isArray(opts.allowedRoles) ? opts.allowedRoles.map(String) : null;
-
-  if (!isUuid(userId)) {
+  const reply = (error, more = {}) => {
     try {
       event.source?.postMessage(
-        { source: "BC_MSG", v: 1, type: replyType, ok: false, error: "invalid_ctx_user", ...extra },
+        { source: "BC_MSG", v: 1, type: replyType, ok: false, error, ...extra, ...more },
         event.origin
       );
     } catch {}
     return null;
-  }
+  };
 
-  const isDemo = allowDemo && mode === "demo";
-  if (requireRestaurant && !isDemo) {
-    if (!isUuid(restaurantId)) {
-      try {
-        event.source?.postMessage(
-          { source: "BC_MSG", v: 1, type: replyType, ok: false, error: "invalid_ctx_restaurant", ...extra },
-          event.origin
-        );
-      } catch {}
-      return null;
-    }
-  }
+  if (!isUuid(userId)) return reply("invalid_ctx_user");
+
+  if (requireRestaurant && !isUuid(restaurantId)) return reply("invalid_ctx_restaurant");
 
   if (allowedRoles && allowedRoles.length) {
-    const ok = allowedRoles.includes(role);
-    if (!ok) {
-      try {
-        event.source?.postMessage(
-          { source: "BC_MSG", v: 1, type: replyType, ok: false, error: "forbidden_role", role, ...extra },
-          event.origin
-        );
-      } catch {}
-      return null;
-    }
+    if (!allowedRoles.includes(role)) return reply("forbidden_role");
   }
 
-  return {
-    userId,
-    restaurantId: isDemo ? null : restaurantId,
-  };
+  return { userId, restaurantId };
 }
 
 function rejectIfEpochMismatch(event, msg, replyType, extra = {}) {
@@ -1249,12 +1227,14 @@ function rejectIfEpochMismatch(event, msg, replyType, extra = {}) {
 }
 
 function isDemoMsg(msg, senderCtx) {
-  return (
-    String(senderCtx?.mode || "").toLowerCase() === "demo" ||
-    String(msg?.mode || "").toLowerCase() === "demo" ||
-    String(msg?.payload?.mode || "").toLowerCase() === "demo" ||
-    String(msg?.payload?.bcMode || "").toLowerCase() === "demo"
-  );
+  const ctxMode = String(senderCtx?.mode || "").toLowerCase();
+  if (ctxMode === "demo") return true;
+
+  const msgMode = String(msg?.mode || "").toLowerCase();
+  if (msgMode === "demo") return true;
+
+  // Do not trust payload mode fields to switch runtime into demo.
+  return false;
 }
 
 async function buildBcCtxSafe(requestedMode = null) {
@@ -1734,12 +1714,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
       // RUNS COUNT: iframe asks parent -> parent queries supabase -> reply
       if (msg.type === "runs_count_request") {
         try {
-          const isDemoReq =
-            String(msg?.mode || "").toLowerCase() === "demo" ||
-            String(senderCtx?.mode || "").toLowerCase() === "demo" ||
-            String(msg?.payload?.mode || "").toLowerCase() === "demo" ||
-            String(msg?.payload?.bcMode || "").toLowerCase() === "demo";
-          if (isDemoReq) {
+          if (isDemoMsg(msg, senderCtx)) {
             event.source?.postMessage(
               { source: "BC_MSG", v: 1, type: "runs_count_response", ok: true, count: 0, demo: true },
               event.origin
@@ -1787,10 +1762,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
       if (msg.type === "ritual_status_request") {
         const reqId = msg.reqId || null;
         try {
-          const isDemoReq =
-            String(msg?.mode || "").toLowerCase() === "demo" ||
-            String(senderCtx?.mode || "").toLowerCase() === "demo";
-          if (isDemoReq) {
+          if (isDemoMsg(msg, senderCtx)) {
             event.source?.postMessage(
               { source: "BC_MSG", v: 1, type: "ritual_status_response", reqId, ok: true, doneToday: false, demo: true },
               event.origin
@@ -1849,6 +1821,13 @@ if (!window.__BC_PARENT_BRIDGE__) {
       if (msg.type === "wines_request") {
         const reqId = msg.reqId || null;
         const replyType = "wines_report";
+        if (isDemoMsg(msg, senderCtx)) {
+          event.source?.postMessage(
+            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, demo: true, wines: [] },
+            event.origin
+          );
+          return;
+        }
         try {
           const ctx = getSenderCtxOrReject(event, senderCtx, replyType, { reqId, wines: [] }, {
             requireRestaurant: true,
@@ -1894,6 +1873,13 @@ if (!window.__BC_PARENT_BRIDGE__) {
         const reqId = msg.reqId || null;
         const action = String(msg.action || "");
         const payload = msg.payload || {};
+        if (isDemoMsg(msg, senderCtx)) {
+          event.source?.postMessage(
+            { source: "BC_MSG", v: 1, type: "wines_mutate_result", reqId, ok: true, demo: true },
+            event.origin
+          );
+          return;
+        }
         if (rejectIfEpochMismatch(event, msg, "wines_mutate_result", { reqId })) return;
         try {
           const ctx = getSenderCtxOrReject(event, senderCtx, "wines_mutate_result", { reqId }, {
