@@ -5389,6 +5389,7 @@ async function enforceAuthRoute() {
 // ✅ TOKEN_REFRESHED must NOT remount iframes / reset gameplay.
 supabase.auth.onAuthStateChange((event, session) => {
   setDebug({ step: "auth.change", event, time: new Date().toISOString() });
+  console.log("[AUTH EVENT]", event);
   console.log("[AUTH] state change:", event, !!session);
 
   if (authRouteTimer) clearTimeout(authRouteTimer);
@@ -5398,12 +5399,24 @@ supabase.auth.onAuthStateChange((event, session) => {
       appState.session = session || null;
 
       if (!session) {
+        console.log("[AUTH] session gone -> forcing login screen");
         appState.profile = null;
         appState.restaurant = null;
         appState.activeRestaurantId = null;
+        appMode = "public";
+
+        // Destroy all premium/demo shells
+        try { document.querySelectorAll("iframe").forEach((f) => f.remove()); } catch {}
+
         showScreen("screenHome");
         hideAllLogoutButtons();
         hideDemoButtonsOnLogin();
+        document
+          .querySelectorAll("#btnHomeLogout, #btnLogoutCreate, #btnLogoutPremium, #btnLogoutManagerBoard")
+          .forEach((btn) => {
+            btn.classList.add("hidden");
+            btn.disabled = false;
+          });
         applyAuthUi();
         return;
       }
