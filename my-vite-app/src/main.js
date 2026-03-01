@@ -1257,6 +1257,11 @@ if (!window.__BC_PARENT_BRIDGE__) {
       // Same-origin only (your game is served from the same Vite origin)
       if (event.origin !== window.location.origin) return;
 
+      if (msg.type === "logout") {
+        await doLogout("bc_msg_logout");
+        return;
+      }
+
       // RUNS COUNT: iframe asks parent -> parent queries supabase -> reply
       if (msg.type === "runs_count_request") {
         try {
@@ -5078,7 +5083,7 @@ async function signOutHard() {
   return { stillAuthed, session: sesFinal?.data?.session || null };
 }
 
-async function logoutAll(reason = "logout") {
+async function doLogout(reason = "user") {
   // prevent double clicks / multiple buttons firing
   if (window.__BC_LOGOUT_INFLIGHT__) {
     console.warn("[LOGOUT] blocked (already inflight)");
@@ -5165,8 +5170,16 @@ async function logoutAll(reason = "logout") {
   appMode = "public";
   appState.session = null;
   appState.profile = null;
+  appState.activeRestaurantId = null;
   appState.restaurant = null;
   appState.invites = [];
+
+  // Clear sticky globals that can keep premium/demo state alive
+  try { window.__BC_CTX__ = null; } catch {}
+  try { window.__BC_DRILL_CONFIG__ = null; } catch {}
+  try { window.BC_DRILL_CONFIG = null; } catch {}
+  try { window.__BC_PENDING_CTX_REQ__ = false; } catch {}
+  try { window.__BC_SWITCHING_RESTAURANT__ = false; } catch {}
 
   try { closeHud(); } catch {}
   try { applyAuthUi(); } catch {}
@@ -5189,6 +5202,31 @@ async function logoutAll(reason = "logout") {
   window.__BC_FORCE_AUTH__ = false;
 
   console.log("[LOGOUT] done ✅", { reason });
+}
+
+// Backward-compatible alias for existing callsites.
+async function logoutAll(reason = "logout") {
+  return doLogout(reason);
+}
+
+function wireLogoutButtons() {
+  const ids = [
+    "btnHomeLogout",
+    "btnLogoutCreate",
+    "btnLogoutPremium",
+    "btnLogoutManagerBoard",
+    "btnDemoExit",
+  ];
+
+  ids.forEach((id) => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.onclick = null;
+    btn.__bcBound = false;
+    bindInput(btn, async () => {
+      await doLogout(id);
+    });
+  });
 }
 
 // ------------------------------------------------------------
@@ -5219,7 +5257,6 @@ document.getElementById("btnHomeExitPremium").addEventListener("click", () => {
   setMsg("authMsg", "", "normal");
 });
 
-document.getElementById("btnHomeLogout").addEventListener("click", () => logoutAll("home.logout"));
 document.getElementById("btnAuthSubmit").addEventListener("click", submitAuth);
 
 document.getElementById("tabRoleWaiter").addEventListener("click", () => setRole("waiter"));
@@ -5234,14 +5271,7 @@ document.getElementById("btnDemoPremium").addEventListener("click", async () => 
   await routePremium("demo.premium");
 });
 
-document.getElementById("btnDemoExit").addEventListener("click", () => {
-  setAuthIntent("login");
-  closeHud();
-  showScreen("screenHome");
-});
-
 document.getElementById("btnCreateRestaurant").addEventListener("click", createPremiumRestaurant);
-document.getElementById("btnLogoutCreate").addEventListener("click", () => logoutAll("create.logout"));
 
 document.getElementById("btnCopyCode").addEventListener("click", async () => {
   try {
@@ -5255,7 +5285,6 @@ document.getElementById("btnCopyCode").addEventListener("click", async () => {
 });
 document.getElementById("btnEnterPremium").addEventListener("click", () => decideRoute("enterPremium"));
 
-document.getElementById("btnLogoutPremium").addEventListener("click", () => logoutAll("premium.logout"));
 wireManagerBoardButton();
 document.getElementById("btnOpenHud").addEventListener("click", () => {
   openHud();
@@ -5269,7 +5298,6 @@ document.getElementById("hudBackdrop").addEventListener("click", closeHud);
 document.getElementById("btnBackToPremium")?.addEventListener("click", () => {
   showScreen("screenPremiumApp");
 });
-document.getElementById("btnLogoutManagerBoard")?.addEventListener("click", () => logoutAll("managerBoard.logout"));
 
 document.getElementById("btnCopyHudCode").addEventListener("click", async () => {
   try {
@@ -5310,6 +5338,8 @@ showScreen("screenHome");
 setRole("waiter");
 setMode("login");
 setAuthIntent("login");
+wireLogoutButtons();
+applyAuthUi();
 void syncAuthUi();
 
 setDebug({ step: "boot.ready", time: new Date().toISOString(), supabaseUrl: import.meta.env.VITE_SUPABASE_URL });
