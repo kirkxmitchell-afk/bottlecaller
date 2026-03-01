@@ -1156,10 +1156,18 @@ async function getFirstAllowedRestaurantForScope(scopeId) {
   return data?.[0]?.restaurant_id || null;
 }
 
+async function getLiveSessionOrNull() {
+  try {
+    const { data } = await supabase.auth.getSession();
+    return data?.session || null;
+  } catch {
+    return null;
+  }
+}
+
 async function buildBcCtxSafe(requestedMode = null) {
   // Absolute: never build ctx without a live session.
-  const { data } = await supabase.auth.getSession();
-  const live = data?.session || null;
+  const live = await getLiveSessionOrNull();
   if (!live) return null;
 
   // keep appState synced
@@ -1386,17 +1394,11 @@ if (!window.__BC_PARENT_BRIDGE__) {
       return bcCtx;
     }
 
-    async function fetchWines({ restaurantId, mode, event }) {
+    async function fetchWines({ mode, event }) {
       const senderCtx = getSourceCtx(event.source);
-      const rid =
-        restaurantId ||
-        senderCtx?.restaurantId ||
-        window.getActiveRestaurantId?.() ||
-        appState.activeRestaurantId ||
-        appState.profile?.restaurant_id ||
-        null;
-      const { data: live } = await supabase.auth.getSession();
-      if (!live?.session || !rid) return [];
+      const rid = senderCtx?.restaurantId || null;
+      const live = await getLiveSessionOrNull();
+      if (!live || !isUuid(rid)) return [];
       if (String(mode || "").toLowerCase() === "demo") return [];
 
       const { data, error } = await supabase
@@ -1501,8 +1503,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
       }
 
       // 🔒 AUTH GATE: use live Supabase session, not just in-memory appState.
-      const { data: live } = await supabase.auth.getSession();
-      const liveSession = live?.session || null;
+      const liveSession = await getLiveSessionOrNull();
       if (!liveSession) {
         console.warn("[PARENT] BC_MSG blocked: live session is null", { type });
         notifyLoggedOut();
@@ -1522,10 +1523,28 @@ if (!window.__BC_PARENT_BRIDGE__) {
         document.getElementById("premiumRootFrame");
       if (!frame || event.source !== frame.contentWindow) return;
 
+      const senderCtx = getSourceCtx(event.source);
+      const PRE_BIND_ALLOW = new Set([
+        "bc_ctx_request",
+        "logout",
+        "bc_logout_request",
+        "nav_back",
+        "nav",
+      ]);
+      if (!senderCtx && !PRE_BIND_ALLOW.has(msg.type)) {
+        console.warn("[PARENT] blocked msg (no senderCtx yet)", msg.type);
+        try {
+          event.source?.postMessage(
+            { source: "BC_MSG", v: 1, type: "auth_state", authed: false, reason: "no_sender_ctx" },
+            event.origin
+          );
+        } catch {}
+        return;
+      }
+
       // RUNS COUNT: iframe asks parent -> parent queries supabase -> reply
       if (msg.type === "runs_count_request") {
         try {
-          const senderCtx = getSourceCtx(event.source);
           const isDemoReq =
             String(msg?.mode || "").toLowerCase() === "demo" ||
             String(senderCtx?.mode || "").toLowerCase() === "demo" ||
@@ -1584,7 +1603,6 @@ if (!window.__BC_PARENT_BRIDGE__) {
       if (msg.type === "ritual_status_request") {
         const reqId = msg.reqId || null;
         try {
-          const senderCtx = getSourceCtx(event.source);
           const userId = senderCtx?.userId || null;
           const restaurantId = senderCtx?.restaurantId || null;
           if (!isUuid(userId) || !isUuid(restaurantId)) {
@@ -1757,18 +1775,11 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
       if (msg.type === "wines_request") {
         const reqId = msg.reqId || null;
-        const senderCtx = getSourceCtx(event.source);
-        const rid =
-          msg.restaurantId ||
-          senderCtx?.restaurantId ||
-          window.getActiveRestaurantId?.() ||
-          appState.activeRestaurantId ||
-          appState.profile?.restaurant_id ||
-          null;
+        const rid = senderCtx?.restaurantId || null;
         try {
-          const { data: live } = await supabase.auth.getSession();
-          if (!live?.session) throw new Error("no_session");
-          if (!rid) throw new Error("missing_restaurant_id");
+          const live = await getLiveSessionOrNull();
+          if (!live) throw new Error("no_session");
+          if (!isUuid(rid)) throw new Error("invalid_ctx_restaurant");
 
           const { data, error } = await supabase
             .from("bc_wines")
@@ -1809,18 +1820,12 @@ if (!window.__BC_PARENT_BRIDGE__) {
         const reqId = msg.reqId || null;
         const action = String(msg.action || "");
         const payload = msg.payload || {};
-        const senderCtx = getSourceCtx(event.source);
-        const rid =
-          msg.restaurantId ||
-          senderCtx?.restaurantId ||
-          window.getActiveRestaurantId?.() ||
-          appState.activeRestaurantId ||
-          appState.profile?.restaurant_id ||
-          null;
+        const rid = senderCtx?.restaurantId || null;
         try {
-          const { data: live } = await supabase.auth.getSession();
-          const userId = live?.session?.user?.id || null;
+          const live = await getLiveSessionOrNull();
+          const userId = live?.user?.id || null;
           if (!userId) throw new Error("no_session");
+          if (!isUuid(rid)) throw new Error("invalid_ctx_restaurant");
 
           if (action === "add") {
             if (!rid) throw new Error("missing_restaurant_id");
