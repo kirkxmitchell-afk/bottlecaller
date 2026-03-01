@@ -1230,8 +1230,6 @@ function getSenderCtxOrReject(event, senderCtx, replyType, extra = {}, opts = {}
   return {
     userId,
     restaurantId: isDemo ? null : restaurantId,
-    role,
-    mode: mode || null,
   };
 }
 
