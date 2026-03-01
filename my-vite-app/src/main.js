@@ -2574,7 +2574,7 @@ function unmountDemoGame(reason = "") {
   }
 
   console.log("[BC] demo game unmounted ✅", reason);
-  const root = document.getElementById("premiumRoot");
+  const root = document.getElementById("gameRootDemo");
   if (root) root.innerHTML = "";
 }
 
@@ -2671,6 +2671,17 @@ function forceRemountForModeSwitch(nextMode) {
 }
 
 function mountGameIframe(targetId, mode /* "demo" | "premium" */) {
+  if (isLoggingOut()) {
+    console.warn("[BC] mountGameIframe blocked (logging out)", { targetId, mode });
+    return;
+  }
+
+  // Invariant: no session => never mount premium.
+  if (mode === "premium" && !appState?.session) {
+    console.warn("[BC] mountGameIframe blocked: premium requested without session", { targetId, mode });
+    return;
+  }
+
   const mount = document.getElementById(targetId);
   if (!mount) return;
 
@@ -4761,15 +4772,8 @@ async function decideRoute(reason = "decideRoute") {
         setDebug({ step: "decideRoute.logged_out.force_auth", time: new Date().toISOString(), reason });
         return;
       }
-      const qs = new URLSearchParams(window.location.search);
-      const wantsDemo = qs.get("demo") === "1";
-      if (wantsDemo) {
-        routeDemoShellNoAuth();
-        setDebug({ step: "decideRoute.logged_out.demo_shell", time: new Date().toISOString(), reason });
-      } else {
-        routeAuth();
-        setDebug({ step: "decideRoute.logged_out.auth", time: new Date().toISOString(), reason });
-      }
+      routeAuth();
+      setDebug({ step: "decideRoute.logged_out.auth", time: new Date().toISOString(), reason });
       return;
     }
 
@@ -5420,8 +5424,29 @@ window.loadManagerBoardData = loadManagerBoardData;
 try {
   const cleanUrl = new URL(window.location.href);
   cleanUrl.searchParams.delete("mode");
+  cleanUrl.searchParams.delete("demo");
+  cleanUrl.searchParams.delete("logout");
   history.replaceState({}, "", cleanUrl.pathname);
 } catch {}
+
+(function watchGhostPremium() {
+  const root = document.getElementById("premiumRoot");
+  if (!root) return;
+
+  const obs = new MutationObserver(() => {
+    if (!appState?.session) {
+      const hasFrame = !!document.getElementById("premiumRootFrame");
+      const hasHtml = root.innerHTML.trim().length > 0;
+      if (hasFrame || hasHtml) {
+        console.error("[GHOST] premiumRoot changed while logged out. Something is remounting it.");
+        root.innerHTML = "";
+        try { document.getElementById("premiumRootFrame")?.remove(); } catch {}
+      }
+    }
+  });
+
+  obs.observe(root, { childList: true, subtree: true });
+})();
 
 showScreen("screenHome");
 setRole("waiter");
