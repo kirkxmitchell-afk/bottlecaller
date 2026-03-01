@@ -2980,6 +2980,33 @@ function forceRemountForModeSwitch(nextMode) {
   setDebug({ step: "game.iframe.forceRemount", nextMode, v: currentIframeVersion, time: new Date().toISOString() });
 }
 
+function buildGameIframeUrl({
+  mode = "premium",
+  showBack = false,
+  backTo = "screenPremiumApp",
+  urlOverride = null,
+  epoch = Date.now(),
+} = {}) {
+  // If you pass a full override URL, use it as the base.
+  // Otherwise build from same-origin /game/game.html
+  const base = urlOverride
+    ? new URL(urlOverride, window.location.href)
+    : new URL("/game/game.html", window.location.origin);
+
+  // Normalize + set params
+  base.searchParams.set("mode", String(mode || "premium"));
+  base.searchParams.set("showBack", showBack ? "1" : "0");
+  base.searchParams.set("backTo", String(backTo || "screenPremiumApp"));
+
+  // epoch gate param
+  base.searchParams.set("epoch", String(epoch));
+
+  // cache-buster
+  base.searchParams.set("v", String(Date.now()));
+
+  return base.toString();
+}
+
 function mountGameIframe(targetId, mode /* "demo" | "premium" */) {
   if (isLoggingOut()) {
     console.warn("[BC] mountGameIframe blocked (logging out)", { targetId, mode });
@@ -4128,28 +4155,25 @@ function mountPremiumGameIframe({
     try { iframe.remove(); } catch {}
   }
 
-  // new iframe generation
-  window.__BC_IFRAME_EPOCH__ = Date.now();
-  // optional: reset ctx map so only current iframe windows can ever match
-  window.__BC_SOURCE_CTX_MAP__ = new WeakMap();
-
   root.innerHTML = "";
 
   iframe = document.createElement("iframe");
   iframe.id = "premiumRootFrame";
-  const showBackParam = showBack ? 1 : 0;
   const roleNow = String(appState?.profile?.role || "").toLowerCase();
   const resolvedBackTo = roleNow === "waiter" ? "screenPremiumApp" : (backTo || "screenManagerBoard");
-  const backToParam = encodeURIComponent(resolvedBackTo);
+  // New iframe generation
+  window.__BC_IFRAME_EPOCH__ = Date.now();
   const epoch = window.__BC_IFRAME_EPOCH__;
-  const epochParam = `&epoch=${encodeURIComponent(epoch)}`;
-  iframe.src =
-    url ||
-    `/game/game.html?mode=${encodeURIComponent(mode || "premium")}` +
-    `&showBack=${showBackParam}` +
-    `&backTo=${backToParam}` +
-    `${epochParam}` +
-    `&v=${Date.now()}`;
+  // Optional but recommended: new ctx map for each mount
+  window.__BC_SOURCE_CTX_MAP__ = new WeakMap();
+
+  iframe.src = buildGameIframeUrl({
+    mode: mode || "premium",
+    showBack: !!showBack,
+    backTo: resolvedBackTo || "screenPremiumApp",
+    urlOverride: url || null,
+    epoch,
+  });
   iframe.style.width = "100%";
   iframe.style.height = "78vh";
   iframe.style.border = "0";
