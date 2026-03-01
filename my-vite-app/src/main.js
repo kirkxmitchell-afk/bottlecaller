@@ -5215,7 +5215,6 @@ function wireLogoutButtons() {
     "btnLogoutCreate",
     "btnLogoutPremium",
     "btnLogoutManagerBoard",
-    "btnDemoExit",
   ];
 
   ids.forEach((id) => {
@@ -5227,6 +5226,31 @@ function wireLogoutButtons() {
       await doLogout(id);
     });
   });
+}
+
+function wireDemoButtons() {
+  const btnPremium = document.getElementById("btnDemoPremium");
+  const btnExit = document.getElementById("btnDemoExit");
+
+  if (btnExit && !btnExit.__bcBound) {
+    btnExit.__bcBound = true;
+    btnExit.textContent = "Logout";
+    btnExit.onclick = null;
+    bindInput(btnExit, async () => {
+      console.log("[DEMO] Logout clicked");
+      await doLogout("demo_exit");
+    });
+  }
+
+  if (btnPremium && !btnPremium.__bcBound) {
+    btnPremium.__bcBound = true;
+    btnPremium.onclick = null;
+    bindInput(btnPremium, async () => {
+      console.log("[DEMO] Premium clicked");
+      setAuthIntent("premium");
+      await routePremium("demo.premium");
+    });
+  }
 }
 
 // ------------------------------------------------------------
@@ -5265,11 +5289,6 @@ document.getElementById("tabModeLogin").addEventListener("click", () => setMode(
 document.getElementById("tabModeSignup").addEventListener("click", () => setMode("signup"));
 
 document.getElementById("btnDemoJoin").addEventListener("click", demoJoinRestaurantByCode);
-
-document.getElementById("btnDemoPremium").addEventListener("click", async () => {
-  setAuthIntent("premium");
-  await routePremium("demo.premium");
-});
 
 document.getElementById("btnCreateRestaurant").addEventListener("click", createPremiumRestaurant);
 
@@ -5339,6 +5358,7 @@ setRole("waiter");
 setMode("login");
 setAuthIntent("login");
 wireLogoutButtons();
+wireDemoButtons();
 applyAuthUi();
 void syncAuthUi();
 
