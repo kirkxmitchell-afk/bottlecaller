@@ -7,6 +7,26 @@ import { createProgressionStore } from "./progressionStore.js";
 
 const supabase = getSupabase();
 
+// ==== SUPABASE FINGERPRINT ====
+if (!supabase.__BC_ID__) supabase.__BC_ID__ = "sb_" + Math.random().toString(16).slice(2);
+if (!supabase.__BC_FINGERPRINT_PATCHED__) {
+  const _getSession = supabase.auth.getSession.bind(supabase.auth);
+  supabase.auth.getSession = async (...args) => {
+    const r = await _getSession(...args);
+    console.log("[SB]", supabase.__BC_ID__, "getSession ->", !!r?.data?.session);
+    return r;
+  };
+
+  const _signOut = supabase.auth.signOut.bind(supabase.auth);
+  supabase.auth.signOut = async (...args) => {
+    console.log("[SB]", supabase.__BC_ID__, "signOut CALLED", args);
+    const r = await _signOut(...args);
+    console.log("[SB]", supabase.__BC_ID__, "signOut DONE", r?.error || "ok");
+    return r;
+  };
+  supabase.__BC_FINGERPRINT_PATCHED__ = true;
+}
+
 // Avoid redeclare crash (no sweep needed)
 window.escapeHtml =
   window.escapeHtml ||
@@ -5277,6 +5297,7 @@ function purgeSupabaseAuthStorage() {
 async function doLogout(reason = "user") {
   if (isLoggingOut()) return;
   window.__BC_LOGGING_OUT__ = true;
+  try { localStorage.setItem("__BC_LOGOUT_LATCH__", String(Date.now())); } catch {}
 
   console.log("[LOGOUT] start", reason);
 
@@ -5530,6 +5551,82 @@ try {
   obs.observe(root, { childList: true, subtree: true });
 })();
 
+let __BC_BOOT_ROUTE_BLOCKED__ = false;
+try {
+  const latch = localStorage.getItem("__BC_LOGOUT_LATCH__");
+  if (latch) {
+    console.warn("[BOOT] logout latch active -> forcing logged-out UI");
+    localStorage.removeItem("__BC_LOGOUT_LATCH__");
+
+    try { appState.session = null; } catch {}
+    try { appState.profile = null; } catch {}
+    try { document.getElementById("premiumRoot") && (document.getElementById("premiumRoot").innerHTML = ""); } catch {}
+    try { document.getElementById("premiumRootFrame")?.remove(); } catch {}
+    try { document.getElementById("btnLogout") && (document.getElementById("btnLogout").style.display = "none"); } catch {}
+    try { showScreen("screenHome"); } catch {}
+
+    __BC_BOOT_ROUTE_BLOCKED__ = true;
+    setTimeout(() => {
+      __BC_BOOT_ROUTE_BLOCKED__ = false;
+    }, 1000);
+  }
+} catch {}
+
+// ==== STACK TRACE TRAPS ====
+if (!window.__BC_TRACE_TRAPS__) {
+  window.__BC_TRACE_TRAPS__ = true;
+  function trace(tag, data = {}) {
+    console.log(tag, data);
+    console.log(new Error("[TRACE]").stack);
+  }
+
+  window.mountPremiumGameIframe = mountPremiumGameIframe;
+  window.routePremium = routePremium;
+  window.showScreen = showScreen;
+  window.setHomeAuthUI = setHomeAuthUI;
+  window.routeDemoShellNoAuth = routeDemoShellNoAuth;
+
+  if (typeof window.mountPremiumGameIframe === "function") {
+    const _mountPremiumGameIframe = window.mountPremiumGameIframe;
+    window.mountPremiumGameIframe = function (...args) {
+      trace("[TRAP] mountPremiumGameIframe()", { hasSession: !!appState?.session, args });
+      return _mountPremiumGameIframe.apply(this, args);
+    };
+  }
+
+  if (typeof window.routePremium === "function") {
+    const _routePremium = window.routePremium;
+    window.routePremium = async function (...args) {
+      trace("[TRAP] routePremium()", { hasSession: !!appState?.session, args });
+      return _routePremium.apply(this, args);
+    };
+  }
+
+  if (typeof window.showScreen === "function") {
+    const _showScreen = window.showScreen;
+    window.showScreen = function (...args) {
+      trace("[TRAP] showScreen()", { args });
+      return _showScreen.apply(this, args);
+    };
+  }
+
+  if (typeof window.setHomeAuthUI === "function") {
+    const _setHomeAuthUI = window.setHomeAuthUI;
+    window.setHomeAuthUI = function (isLoggedIn, ...rest) {
+      trace("[TRAP] setHomeAuthUI()", { isLoggedIn, hasSession: !!appState?.session });
+      return _setHomeAuthUI.call(this, isLoggedIn, ...rest);
+    };
+  }
+
+  if (typeof window.routeDemoShellNoAuth === "function") {
+    const _r = window.routeDemoShellNoAuth;
+    window.routeDemoShellNoAuth = function (...args) {
+      trace("[TRAP] routeDemoShellNoAuth()", { args, url: location.href });
+      return _r.apply(this, args);
+    };
+  }
+}
+
 showScreen("screenHome");
 setRole("waiter");
 setMode("login");
@@ -5567,6 +5664,10 @@ supabase.auth.onAuthStateChange((event, session) => {
   setDebug({ step: "auth.change", event, time: new Date().toISOString() });
   console.log("[AUTH EVENT]", event);
   console.log("[AUTH] state change:", event, !!session);
+  if (__BC_BOOT_ROUTE_BLOCKED__) {
+    console.warn("[AUTH] blocked by boot logout latch", event);
+    return;
+  }
   if (isLoggingOut()) {
     console.warn("[AUTH] listener blocked (logging out)", event);
     return;
@@ -5613,13 +5714,16 @@ supabase.auth.onAuthStateChange((event, session) => {
 // Resume state on refresh
 (async function bootResume() {
   try {
+    if (__BC_BOOT_ROUTE_BLOCKED__) return;
     await decideRoute("boot.resume");
     wireManagerBoardButton();
     await enforceAuthRoute();
   } catch {}
 })();
 
-void enforceAuthRoute();
+if (!__BC_BOOT_ROUTE_BLOCKED__) {
+  void enforceAuthRoute();
+}
 
 window.addEventListener("message", (event) => {
   if (event?.data?.source === "BC_MSG") {
