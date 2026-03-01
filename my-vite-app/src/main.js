@@ -1165,6 +1165,21 @@ async function getLiveSessionOrNull() {
   }
 }
 
+function getSenderCtxOrReject(event, senderCtx, type, extra = {}) {
+  const userId = senderCtx?.userId || null;
+  const restaurantId = senderCtx?.restaurantId || null;
+
+  if (!isUuid(userId) || !isUuid(restaurantId)) {
+    event.source?.postMessage(
+      { source: "BC_MSG", v: 1, type, ok: false, error: "invalid_ctx", ...extra },
+      event.origin
+    );
+    return null;
+  }
+
+  return { userId, restaurantId };
+}
+
 async function buildBcCtxSafe(requestedMode = null) {
   // Absolute: never build ctx without a live session.
   const live = await getLiveSessionOrNull();
@@ -1545,6 +1560,14 @@ if (!window.__BC_PARENT_BRIDGE__) {
       // RUNS COUNT: iframe asks parent -> parent queries supabase -> reply
       if (msg.type === "runs_count_request") {
         try {
+          if (!senderCtx) {
+            event.source?.postMessage(
+              { source: "BC_MSG", v: 1, type: "runs_count_response", ok: false, count: 0, error: "no_sender_ctx" },
+              event.origin
+            );
+            return;
+          }
+
           const isDemoReq =
             String(msg?.mode || "").toLowerCase() === "demo" ||
             String(senderCtx?.mode || "").toLowerCase() === "demo" ||
@@ -1558,19 +1581,13 @@ if (!window.__BC_PARENT_BRIDGE__) {
             return;
           }
 
-          // ONLY trust sender-bound ctx, never msg.userId/msg.restaurantId.
-          const userId = senderCtx?.userId || null;
-          const restaurantId = senderCtx?.restaurantId || null;
-          if (!isUuid(userId) || !isUuid(restaurantId)) {
-            event.source?.postMessage(
-              { source: "BC_MSG", v: 1, type: "runs_count_response", ok: true, count: 0, skipped: "invalid_ctx" },
-              event.origin
-            );
-            return;
-          }
+          const ctx = getSenderCtxOrReject(event, senderCtx, "runs_count_response", { count: 0 });
+          if (!ctx) return;
 
-          const authed = window.appState?.session?.user?.id;
-          if (authed && authed !== userId) {
+          const live = await getLiveSessionOrNull();
+          const authed = live?.user?.id || null;
+          if (!authed) throw new Error("no_session");
+          if (authed !== ctx.userId) {
             event.source?.postMessage(
               { source: "BC_MSG", v: 1, type: "runs_count_response", ok: false, count: 0, error: "forbidden_user" },
               event.origin
@@ -1581,8 +1598,8 @@ if (!window.__BC_PARENT_BRIDGE__) {
           const { count, error } = await supabase
             .from("bc_encounter_resolutions_v2")
             .select("*", { count: "exact", head: true })
-            .eq("user_id", userId)
-            .eq("restaurant_id", restaurantId);
+            .eq("user_id", ctx.userId)
+            .eq("restaurant_id", ctx.restaurantId);
 
           if (error) throw error;
 
@@ -1603,15 +1620,32 @@ if (!window.__BC_PARENT_BRIDGE__) {
       if (msg.type === "ritual_status_request") {
         const reqId = msg.reqId || null;
         try {
-          const userId = senderCtx?.userId || null;
-          const restaurantId = senderCtx?.restaurantId || null;
-          if (!isUuid(userId) || !isUuid(restaurantId)) {
+          if (!senderCtx) {
             event.source?.postMessage(
-              { source: "BC_MSG", v: 1, type: "ritual_status_response", reqId, ok: false, doneToday: false, error: "invalid_ctx" },
+              { source: "BC_MSG", v: 1, type: "ritual_status_response", reqId, ok: false, doneToday: false, error: "no_sender_ctx" },
               event.origin
             );
             return;
           }
+
+          const isDemoReq =
+            String(msg?.mode || "").toLowerCase() === "demo" ||
+            String(senderCtx?.mode || "").toLowerCase() === "demo";
+          if (isDemoReq) {
+            event.source?.postMessage(
+              { source: "BC_MSG", v: 1, type: "ritual_status_response", reqId, ok: true, doneToday: false, demo: true },
+              event.origin
+            );
+            return;
+          }
+
+          const ctx = getSenderCtxOrReject(event, senderCtx, "ritual_status_response", { reqId, doneToday: false });
+          if (!ctx) return;
+
+          const live = await getLiveSessionOrNull();
+          const authed = live?.user?.id || null;
+          if (!authed) throw new Error("no_session");
+          if (authed !== ctx.userId) throw new Error("forbidden_user");
 
           const now = new Date();
           const zaNow = new Date(now.toLocaleString("en-US", { timeZone: "Africa/Johannesburg" }));
@@ -1623,8 +1657,8 @@ if (!window.__BC_PARENT_BRIDGE__) {
             .from("bc_event_log")
             .select("id")
             .eq("event_type", "ritual_completed")
-            .eq("user_id", userId)
-            .eq("restaurant_id", restaurantId)
+            .eq("user_id", ctx.userId)
+            .eq("restaurant_id", ctx.restaurantId)
             .gte("occurred_at", startIso)
             .limit(1);
 
