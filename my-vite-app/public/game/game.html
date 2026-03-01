@@ -1779,14 +1779,24 @@ function ensureProgLoaded() {
           }
           if (window.__BC_CTX_REQUESTED__) return;
           window.__BC_CTX_REQUESTED__ = true;
+
+          // hard requirement for premium
+          const epoch = Number(window.__BC_EPOCH__ || 0);
+          if (!epoch) {
+            console.warn("[BC] bc_ctx_request blocked: missing epoch");
+            window.__BC_CTX_REQUESTED__ = false; // allow retry once epoch exists
+            return;
+          }
+
           try {
             const mode = window.bcMode || getIframeMode();
             window.parent?.postMessage(
-              { source: "BC_MSG", v: 1, type: "bc_ctx_request", mode, epoch: window.__BC_EPOCH__ },
+              { source: "BC_MSG", v: 1, type: "bc_ctx_request", mode, epoch },
               location.origin
             );
-            console.log("[BC] bc_ctx_request sent ✅", mode);
+            console.log("[BC] bc_ctx_request sent ✅", { mode, epoch });
           } catch (e) {
+            window.__BC_CTX_REQUESTED__ = false; // allow retry on failure
             console.warn("[BC] bc_ctx_request failed", e);
           }
         }
@@ -1850,13 +1860,18 @@ function ensureProgLoaded() {
             if (!IS_IFRAME) return;
             const modeNow = String(window.bcMode || getIframeMode() || "premium").toLowerCase();
             if (modeNow === "demo") return;
+            const epoch = Number(window.__BC_EPOCH__ || 0);
+            if (!epoch) {
+              console.warn("[BC] bc_ctx_request re-send blocked: missing epoch");
+              return;
+            }
             try {
               const mode = window.bcMode || getIframeMode();
               window.parent?.postMessage(
-                { source: "BC_MSG", v: 1, type: "bc_ctx_request", mode, epoch: window.__BC_EPOCH__ },
+                { source: "BC_MSG", v: 1, type: "bc_ctx_request", mode, epoch },
                 location.origin
               );
-              console.log("[BC] bc_ctx_request re-sent ✅", mode);
+              console.log("[BC] bc_ctx_request re-sent ✅", { mode, epoch });
             } catch (e) {
               console.warn("[BC] re-request ctx failed", e);
             }
@@ -1874,6 +1889,19 @@ function ensureProgLoaded() {
             if (String(window.bcMode || getIframeMode() || "premium").toLowerCase() === "demo") return;
             if (!window.__BC_CTX__?.userId) requestCtxAgain();
           }, 250);
+
+          (function watchEpochChange() {
+            let last = Number(window.__BC_EPOCH__ || 0);
+            setInterval(() => {
+              const now = Number(window.__BC_EPOCH__ || 0);
+              if (now && last && now !== last) {
+                console.warn("[BC] epoch changed — resetting ctx latch", { last, now });
+                window.__BC_CTX_REQUESTED__ = false;
+                window.__BC_CTX__ = null;
+                last = now;
+              }
+            }, 500);
+          })();
         }
 
         const IS_IFRAME = (window.parent !== window) && !!window.frameElement;
