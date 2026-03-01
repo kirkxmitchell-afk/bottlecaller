@@ -1724,30 +1724,38 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
       // RUNS COUNT: iframe asks parent -> parent queries supabase -> reply
       if (msg.type === "runs_count_request") {
+        const replyType = "runs_count_response";
         try {
+          // 0) Demo short-circuit
           if (isDemoMsg({ msg }, senderCtx)) {
             event.source?.postMessage(
-              { source: "BC_MSG", v: 1, type: "runs_count_response", ok: true, count: 0, demo: true },
+              { source: "BC_MSG", v: 1, type: replyType, ok: true, count: 0, demo: true },
               event.origin
             );
             return;
           }
 
-          const ctx = getSenderCtxOrReject(event, senderCtx, "runs_count_response", { count: 0 }, {
+          // 1) Epoch guard (prevents ghosts / old iframes)
+          if (rejectIfEpochMismatch(event, msg, replyType, { count: 0 })) return;
+
+          // 2) Validate sender-bound ctx (restaurant required)
+          const ctx = getSenderCtxOrReject(event, senderCtx, replyType, { count: 0 }, {
             requireRestaurant: true,
           });
           if (!ctx) return;
 
+          // 3) Live auth must exist AND match ctx.userId
           const authed = liveAuth?.userId || null;
           if (!authed) throw new Error("no_session");
           if (String(authed) !== String(ctx.userId)) {
             event.source?.postMessage(
-              { source: "BC_MSG", v: 1, type: "runs_count_response", ok: false, count: 0, error: "forbidden_user" },
+              { source: "BC_MSG", v: 1, type: replyType, ok: false, count: 0, error: "forbidden_user" },
               event.origin
             );
             return;
           }
 
+          // 4) DB query
           const { count, error } = await supabase
             .from("bc_encounter_resolutions_v2")
             .select("*", { count: "exact", head: true })
@@ -1756,14 +1764,15 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
           if (error) throw error;
 
+          // 5) Reply
           event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: "runs_count_response", ok: true, count: Number(count || 0) },
+            { source: "BC_MSG", v: 1, type: replyType, ok: true, count: Number(count || 0) },
             event.origin
           );
           return;
         } catch (e) {
           event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: "runs_count_response", ok: false, count: 0, error: e?.message || String(e) },
+            { source: "BC_MSG", v: 1, type: replyType, ok: false, count: 0, error: e?.message || String(e) },
             event.origin
           );
           return;
