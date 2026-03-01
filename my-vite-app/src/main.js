@@ -1,7 +1,6 @@
 // src/main.js
 import "./style.css";
-import { signIn, signUp, signOut, getSession } from "./lib/supabaseClient.js";
-import { getSupabase } from "./lib/supabaseSingleton.js";
+import { signIn, signUp, signOut, getSession, getSupabase } from "./lib/supabaseClient.js";
 import { decideAllowedTier } from "./game/progressionBridge";
 import { createProgressionStore } from "./progressionStore.js";
 
@@ -5353,6 +5352,13 @@ function purgeSupabaseAuthStorageHard() {
       const key = localStorage.key(i);
       if (!key) continue;
       if (key.startsWith("sb-") && key.includes("auth-token")) localStorage.removeItem(key);
+    }
+  } catch {}
+  try {
+    for (let i = sessionStorage.length - 1; i >= 0; i--) {
+      const key = sessionStorage.key(i);
+      if (!key) continue;
+      if (key.startsWith("sb-") && key.includes("auth-token")) sessionStorage.removeItem(key);
     }
   } catch {}
 }
