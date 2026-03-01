@@ -1758,15 +1758,14 @@ function showScreen(id) {
 
   removeGlobalResetButtons();
   applyRoleTemplateGates();
+  onScreenChanged(id);
 
   // Ensure current screen controls are always wired after any UI/template mutation.
   try { wireLogoutButtons(); } catch {}
-  try { wireHomeLogout(); } catch {}
   try { wireDemoButtons(); } catch {}
   try { applyAuthUi(); } catch {}
   try { syncAuthUi?.(); } catch {}
-
-  onScreenChanged(id);
+  try { forceWireHomeLogout(); } catch {}
 
   if (id === "screenHome") {
     hideAllLogoutButtons?.();
@@ -5155,26 +5154,25 @@ function wireLogoutButtons() {
   });
 }
 
-function wireHomeLogout() {
+function forceWireHomeLogout() {
   const btn = document.getElementById("btnHomeLogout");
-  if (!btn) return;
-
-  // Clone to drop any stale listeners added by previous template passes.
-  const fresh = btn.cloneNode(true);
-  btn.replaceWith(fresh);
-
-  fresh.onclick = null;
-  fresh.__bcBound = false;
-
-  if (!fresh.__bcBound) {
-    fresh.__bcBound = true;
-    fresh.addEventListener("click", async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      console.log("[HOME] Logout clicked");
-      await doLogout("home_logout");
-    });
+  if (!btn) {
+    console.warn("[LOGOUT] btnHomeLogout not found");
+    return;
   }
+
+  // Remove any previous listeners
+  const newBtn = btn.cloneNode(true);
+  btn.parentNode.replaceChild(newBtn, btn);
+
+  newBtn.addEventListener("click", async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log("[HOME] Logout clicked");
+    await doLogout("home_logout");
+  });
+
+  console.log("[HOME] Logout wired ✅");
 }
 
 function wireDemoButtons() {
