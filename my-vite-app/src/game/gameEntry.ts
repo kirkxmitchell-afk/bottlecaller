@@ -1,6 +1,18 @@
 // src/game/gameEntry.ts
 console.log("[BOOT] gameEntry.ts evaluated");
 
+// 🚫 IFRAME MUST NOT USE SUPABASE
+if (window.self !== window.top) {
+  if ((window as any).__BC_SUPABASE__ || (window as any).supabase) {
+    console.error("[IFRAME] Supabase client detected in iframe. This WILL break logout.");
+  }
+
+  // If any code tries to create a supabase singleton in iframe, crash hard.
+  if ((window as any).__BC_SUPABASE_SINGLETON_TOUCHED__) {
+    throw new Error("Supabase singleton touched inside iframe. Remove Supabase imports from /game bundle.");
+  }
+}
+
 import { installEngineBridge } from "./engineBridge";
 import { ENCOUNTERS, validateEncounters } from "./encounter";
 import * as WineBridge from "./wineBridge";

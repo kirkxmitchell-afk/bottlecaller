@@ -67,10 +67,12 @@
 
     const MODE = getMode();
     const DEMO = (MODE === "demo");
+    const EPOCH = Number(new URLSearchParams(location.search).get("epoch") || 0);
 
     // single source of truth for mode
     window.bcMode = MODE;
     window.isDemo = DEMO;
+    window.__BC_EPOCH__ = EPOCH;
     window.__BC_STANDALONE_DEMO__ = DEMO;
     window.getTierUnlocked = function getTierUnlocked() {
       if (window.isDemo || window.bcMode === "demo") return 1;
@@ -1780,7 +1782,7 @@ function ensureProgLoaded() {
           try {
             const mode = window.bcMode || getIframeMode();
             window.parent?.postMessage(
-              { source: "BC_MSG", v: 1, type: "bc_ctx_request", mode },
+              { source: "BC_MSG", v: 1, type: "bc_ctx_request", mode, epoch: window.__BC_EPOCH__ },
               location.origin
             );
             console.log("[BC] bc_ctx_request sent ✅", mode);
@@ -1845,7 +1847,7 @@ function ensureProgLoaded() {
             try {
               const mode = window.bcMode || getIframeMode();
               window.parent?.postMessage(
-                { source: "BC_MSG", v: 1, type: "bc_ctx_request", mode },
+                { source: "BC_MSG", v: 1, type: "bc_ctx_request", mode, epoch: window.__BC_EPOCH__ },
                 location.origin
               );
               console.log("[BC] bc_ctx_request re-sent ✅", mode);

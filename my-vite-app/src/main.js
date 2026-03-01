@@ -1139,6 +1139,14 @@ async function getFirstAllowedRestaurantForScope(scopeId) {
 }
 
 async function buildBcCtxSafe(requestedMode = null) {
+  // Absolute: never build ctx without a live session.
+  const { data } = await supabase.auth.getSession();
+  const live = data?.session || null;
+  if (!live) return null;
+
+  // keep appState synced
+  appState.session = live;
+
   const S = window.appState;
   const userId = S?.session?.user?.id ?? null;
   const profile = S?.profile ?? null;
@@ -1312,6 +1320,13 @@ if (!window.__BC_PARENT_BRIDGE__) {
       if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
       const type = msg.type;
 
+      if (window.__BC_LOGOUT_LOCK__) {
+        console.warn("[PARENT] BC_MSG blocked: logout lock active", type);
+        try { destroyPremiumIframe("logout_lock"); } catch {}
+        try { destroyDemoIframe("logout_lock"); } catch {}
+        return;
+      }
+
       // Same-origin only (your game is served from the same Vite origin)
       if (event.origin !== window.location.origin) return;
 
@@ -1414,6 +1429,14 @@ if (!window.__BC_PARENT_BRIDGE__) {
         const isFromPremiumFrame = !!(prem && event.source === prem.contentWindow);
         if (!isFromPremiumFrame) {
           console.warn("[PARENT] denied bc_ctx_request: not from current premium frame");
+          return;
+        }
+
+        // Epoch gate: only respond to iframes created after last mount.
+        const epoch = Number(window.__BC_IFRAME_EPOCH__ || 0);
+        const msgEpoch = Number(msg?.epoch || 0);
+        if (msgEpoch !== epoch) {
+          console.warn("[PARENT] denied bc_ctx_request: epoch mismatch", { msgEpoch, epoch });
           return;
         }
 
@@ -2753,6 +2776,8 @@ function wireManagerBoardButton() {
 // ------------------------------------------------------------
 let currentIframeMode = null; // "demo" | "premium"
 let currentIframeVersion = Date.now(); // stable per mode-session
+window.__BC_IFRAME_EPOCH__ = window.__BC_IFRAME_EPOCH__ || 0;
+window.__BC_LOGOUT_LOCK__ = window.__BC_LOGOUT_LOCK__ || 0;
 
 function clearGameMounts() {
   const demoMount = document.getElementById("gameRootDemo");
@@ -2789,10 +2814,14 @@ function mountGameIframe(targetId, mode /* "demo" | "premium" */) {
   if (existing && currentIframeMode === mode) return;
 
   currentIframeMode = mode;
+  if (mode === "premium") {
+    window.__BC_IFRAME_EPOCH__ = Date.now();
+  }
 
   // Cache-busting param required — but stable within this mode session
   const demoFlag = mode === "demo" ? "&demo=1" : "";
-  const src = `/game/game.html?mode=${encodeURIComponent(mode)}${demoFlag}&v=${currentIframeVersion}`;
+  const epochFlag = mode === "premium" ? `&epoch=${window.__BC_IFRAME_EPOCH__}` : "";
+  const src = `/game/game.html?mode=${encodeURIComponent(mode)}${demoFlag}${epochFlag}&v=${currentIframeVersion}`;
 
   // ✅ Smaller default height to avoid giant empty space before setup
   mount.innerHTML = `
@@ -5335,6 +5364,7 @@ function purgeSupabaseAuthStorage() {
 async function doLogout(reason = "user") {
   if (isLoggingOut()) return;
   window.__BC_LOGGING_OUT__ = true;
+  window.__BC_LOGOUT_LOCK__ = Date.now();
   try { localStorage.setItem("__BC_LOGOUT_LATCH__", String(Date.now())); } catch {}
 
   console.log("[LOGOUT] start", reason);
