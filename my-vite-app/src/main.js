@@ -2387,11 +2387,19 @@ function hideAllLogoutButtons() {
     "btnLogoutManagerBoard",
     "btnLogout",
     "btnDemoExit",
+    "btnDemoPremium",
   ];
   ids.forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.classList.add("hidden");
   });
+}
+
+function hideDemoButtonsOnLogin() {
+  const authFields = document.getElementById("authFields");
+  if (!authFields) return;
+  document.getElementById("btnDemoExit")?.classList.add("hidden");
+  document.getElementById("btnDemoPremium")?.classList.add("hidden");
 }
 
 function applyAuthUi() {
@@ -5221,6 +5229,7 @@ async function doLogout(reason = "user") {
   try { clearGameMounts?.(); } catch {}
   try { showScreen("screenHome"); } catch {}
   try { hideAllLogoutButtons(); } catch {}
+  try { hideDemoButtonsOnLogin(); } catch {}
   try { window.__BC_LAST_SCREEN__ = "screenHome"; } catch {}
   try { appState.activeRestaurantId = null; } catch {}
   try {
@@ -5267,6 +5276,7 @@ function wireDemoButtons() {
   const btnExit = document.getElementById("btnDemoExit");
 
   if (btnExit) {
+    btnExit.classList.remove("hidden");
     if (btnExit.textContent !== "Logout") {
       btnExit.textContent = "Logout";
     }
