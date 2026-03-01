@@ -1940,6 +1940,9 @@ if (!window.__BC_PARENT_BRIDGE__) {
         if (rejectIfEpochMismatch(event, msg, replyType, { reqId })) return;
 
         try {
+          // 1.5) Action guard (nice error)
+          if (!action) throw new Error("missing_action");
+
           // 2) Validate sender ctx + role gate
           const ctx = getSenderCtxOrReject(
             event,
@@ -1953,8 +1956,20 @@ if (!window.__BC_PARENT_BRIDGE__) {
           // 3) Live auth (should already exist from DB gate)
           const rid = ctx.restaurantId;
           const userId = liveAuth?.userId || null;
-          if (!userId) throw new Error("no_session");
-          if (String(userId) !== String(ctx.userId)) throw new Error("forbidden_user");
+          if (!userId) {
+            event.source?.postMessage(
+              { source: "BC_MSG", v: 1, type: replyType, reqId, ok: false, error: "no_session" },
+              event.origin
+            );
+            return;
+          }
+          if (String(userId) !== String(ctx.userId)) {
+            event.source?.postMessage(
+              { source: "BC_MSG", v: 1, type: replyType, reqId, ok: false, error: "forbidden_user" },
+              event.origin
+            );
+            return;
+          }
 
           // 4) Mutations
           if (action === "add") {
@@ -2114,14 +2129,37 @@ if (!window.__BC_PARENT_BRIDGE__) {
         );
         if (!ctx) return;
 
-        await handleEventLog({
-          msg,
-          event,
-          supabase,
-          tagSource,
-          ctx,
-          replyType,
-        });
+        const authed = liveAuth?.userId || null;
+        if (!authed) {
+          event.source?.postMessage(
+            { source: "BC_MSG", v: 1, type: replyType, ok: false, error: "no_session", eventType },
+            event.origin
+          );
+          return;
+        }
+        if (String(authed) !== String(ctx.userId)) {
+          event.source?.postMessage(
+            { source: "BC_MSG", v: 1, type: replyType, ok: false, error: "forbidden_user", eventType },
+            event.origin
+          );
+          return;
+        }
+
+        try {
+          await handleEventLog({
+            msg,
+            event,
+            supabase,
+            tagSource,
+            ctx,
+            replyType,
+          });
+        } catch (e) {
+          event.source?.postMessage(
+            { source: "BC_MSG", v: 1, type: replyType, ok: false, error: e?.message || String(e), eventType },
+            event.origin
+          );
+        }
         return;
       }
     } catch (e) {
