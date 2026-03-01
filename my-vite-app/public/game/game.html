@@ -6,6 +6,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <!-- ✅ IMPORTANT: because this file is served at /game/game.html -->
   <link rel="stylesheet" href="/game/game.css" />
+  <script>
+    if (window.self !== window.top) {
+      if (window.__BC_SUPABASE__ || window.supabase) {
+        console.error("[IFRAME] Supabase client detected inside iframe. This will break logout.");
+      }
+    }
+  </script>
 
   <script>
     (function () {
@@ -1787,6 +1794,12 @@ function ensureProgLoaded() {
           window.addEventListener("message", (event) => {
             const msg = event?.data;
             if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
+            if (msg.type === "parent_logged_out") {
+              console.warn("[IFRAME] parent logged out -> shutting down");
+              try { localStorage.removeItem("bc_ctx"); } catch {}
+              window.location.replace("/game/game.html?mode=demo&demo=1");
+              return;
+            }
             const IS_IFRAME = (window.parent !== window) && !!window.frameElement;
             const isDemoNow = !!(window.isDemo || window.bcMode === "demo");
             if (!IS_IFRAME && isDemoNow && msg.type === "bc_ctx") {
@@ -3081,6 +3094,13 @@ function ensureProgLoaded() {
 
         // BC_MSG (ctx + nav + drill)
         if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
+
+        if (msg.type === "parent_logged_out") {
+          console.warn("[IFRAME] parent logged out -> shutting down");
+          try { localStorage.removeItem("bc_ctx"); } catch {}
+          window.location.replace("/game/game.html?mode=demo&demo=1");
+          return;
+        }
 
         if (msg.type === "bc_ctx") {
           console.log("[IFRAME] received bc_ctx", {

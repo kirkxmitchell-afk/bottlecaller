@@ -31,6 +31,7 @@ export function getSupabase() {
   console.log("[SUPABASE] singleton created", client.__BC_ID__, "storageKey=", STORAGE_KEY);
 
   window.__BC_SUPABASE__ = client;
+  window.__BC_SUPABASE_ID__ = client.__BC_ID__;
   window.__BC_SUPABASE_STORAGE_KEY__ = STORAGE_KEY;
 
   return client;

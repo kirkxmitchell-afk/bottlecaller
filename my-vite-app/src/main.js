@@ -1310,16 +1310,33 @@ if (!window.__BC_PARENT_BRIDGE__) {
     try {
       const msg = event?.data;
       if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
-
-      const onAuthScreen = document.querySelector(".screen:not(.hidden)")?.id === "screenHome";
-      const authed = !!appState?.session;
-      if (!authed && onAuthScreen && msg?.source === "BC_MSG") return;
+      const type = msg.type;
 
       // Same-origin only (your game is served from the same Vite origin)
       if (event.origin !== window.location.origin) return;
 
-      // Session gate: logged-out state must ignore iframe traffic.
-      if (!appState?.session) return;
+      // 🔒 AUTH GATE: use live Supabase session, not just in-memory appState.
+      const { data: live } = await supabase.auth.getSession();
+      const liveSession = live?.session || null;
+      if (!liveSession) {
+        console.warn("[PARENT] BC_MSG blocked: live session is null", { type });
+        try {
+          if (event.source && typeof event.source.postMessage === "function") {
+            event.source.postMessage(
+              { source: "BC_MSG", v: 1, type: "parent_logged_out" },
+              event.origin || "*"
+            );
+          }
+        } catch {}
+        try { destroyPremiumIframe("parent_no_session_msg_gate"); } catch {}
+        try { destroyDemoIframe("parent_no_session_msg_gate"); } catch {}
+        return;
+      }
+      appState.session = liveSession;
+
+      const onAuthScreen = document.querySelector(".screen:not(.hidden)")?.id === "screenHome";
+      const authed = !!appState?.session;
+      if (!authed && onAuthScreen && msg?.source === "BC_MSG") return;
 
       // Source gate: only accept messages from mounted premium iframe window.
       const frame =
@@ -1393,6 +1410,13 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
       // ✅ 1) ctx request MUST be handled before any event_log filtering
       if (msg.type === "bc_ctx_request") {
+        const prem = document.getElementById("premiumRootFrame");
+        const isFromPremiumFrame = !!(prem && event.source === prem.contentWindow);
+        if (!isFromPremiumFrame) {
+          console.warn("[PARENT] denied bc_ctx_request: not from current premium frame");
+          return;
+        }
+
         const requestedMode =
           String(msg?.mode || msg?.requestedMode || "").toLowerCase();
         const isFromIframe = !!event.source && event.source !== window;
@@ -4372,6 +4396,12 @@ async function loadManagerBoardData() {
 }
 
 async function loadAuthedState(reason = "manual") {
+  console.log(
+    "[AUTH] loadAuthedState using supabase",
+    supabase.__BC_ID__,
+    "storageKey",
+    window.__BC_SUPABASE_STORAGE_KEY__
+  );
   const { session, error: sErr } = await withTimeout(getSession(), 8000, "getSession");
   if (sErr) {
     console.warn("[AUTH] getSession error", sErr);
@@ -5282,7 +5312,7 @@ async function signOutHard() {
   return { stillAuthed, session: sesFinal?.data?.session || null };
 }
 
-function purgeSupabaseAuthStorage() {
+function purgeSupabaseAuthStorageHard() {
   const k = window.__BC_SUPABASE_STORAGE_KEY__ || "bc_supabase_auth_v1";
 
   try { localStorage.removeItem(k); } catch {}
@@ -5298,6 +5328,10 @@ function purgeSupabaseAuthStorage() {
   } catch {}
 }
 
+function purgeSupabaseAuthStorage() {
+  purgeSupabaseAuthStorageHard();
+}
+
 async function doLogout(reason = "user") {
   if (isLoggingOut()) return;
   window.__BC_LOGGING_OUT__ = true;
@@ -5309,19 +5343,25 @@ async function doLogout(reason = "user") {
   hardResetUI("logout.start");
 
   // B) Purge auth storage FIRST (deterministic logout)
-  purgeSupabaseAuthStorage();
+  purgeSupabaseAuthStorageHard();
 
   // C) Best effort: tell Supabase server-side too
   try {
-    console.log("[LOGOUT] calling signOut on", supabase.__BC_ID__);
+    console.log(
+      "[LOGOUT] using supabase",
+      supabase.__BC_ID__,
+      "storageKey",
+      window.__BC_SUPABASE_STORAGE_KEY__
+    );
     await supabase.auth.signOut({ scope: "global" });
-    console.log("[LOGOUT] signOut done");
+    const { data: after } = await supabase.auth.getSession();
+    console.log("[LOGOUT] post-signOut getSession =", !!after?.session, "client", supabase.__BC_ID__);
   } catch (e) {
     console.warn("[LOGOUT] signOut error (ignored)", e);
   }
 
   // D) Purge again (sometimes signOut writes)
-  purgeSupabaseAuthStorage();
+  purgeSupabaseAuthStorageHard();
 
   // E) Remove demo/premium flags from URL
   try {
@@ -5332,7 +5372,7 @@ async function doLogout(reason = "user") {
   } catch {}
 
   // F) HARD reload with cache bust
-  window.location.href = "/?loggedOut=1&ts=" + Date.now();
+  window.location.href = "/?ts=" + Date.now();
 }
 
 // Backward-compatible alias for existing callsites.
