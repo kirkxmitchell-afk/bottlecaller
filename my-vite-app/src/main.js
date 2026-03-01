@@ -1209,7 +1209,9 @@ if (!window.__BC_PARENT_BRIDGE__) {
   function setSourceCtx(source, ctx) {
     if (!source || source === window || !ctx) return;
     try {
+      const epoch = Number(window.__BC_IFRAME_EPOCH__ || 0);
       window.__BC_SOURCE_CTX_MAP__.set(source, {
+        epoch, // bind ctx to current iframe generation
         mode: String(ctx.mode || ""),
         userId: ctx.userId || null,
         restaurantId: ctx.restaurantId || null,
@@ -1219,8 +1221,13 @@ if (!window.__BC_PARENT_BRIDGE__) {
     } catch {}
   }
   function getSourceCtx(source) {
-    try { return window.__BC_SOURCE_CTX_MAP__.get(source) || null; }
-    catch { return null; }
+    try {
+      const rec = window.__BC_SOURCE_CTX_MAP__.get(source) || null;
+      if (!rec) return null;
+      const epochNow = Number(window.__BC_IFRAME_EPOCH__ || 0);
+      if (Number(rec.epoch || 0) !== epochNow) return null;
+      return rec;
+    } catch { return null; }
   }
   function tagSource(source) {
     try {
@@ -2879,6 +2886,9 @@ function destroyPremiumIframe(reason = "") {
   if (root) root.innerHTML = "";
   window.__BC_PENDING_START_DRILL__ = null;
   window.BC_PENDING_START_DRILL = null;
+  // invalidate any remaining messages from removed iframe window
+  window.__BC_IFRAME_EPOCH__ = Date.now();
+  window.__BC_SOURCE_CTX_MAP__ = new WeakMap();
 }
 
 function destroyAllIframes(reason = "destroyAllIframes") {
@@ -2949,6 +2959,9 @@ function wireManagerBoardButton() {
 // ------------------------------------------------------------
 let currentIframeMode = null; // "demo" | "premium"
 let currentIframeVersion = Date.now(); // stable per mode-session
+// one ctx per iframe window; WeakMap prevents memory leaks
+window.__BC_SOURCE_CTX_MAP__ = window.__BC_SOURCE_CTX_MAP__ || new WeakMap();
+// current “active iframe generation”
 window.__BC_IFRAME_EPOCH__ = window.__BC_IFRAME_EPOCH__ || 0;
 window.__BC_LOGOUT_LOCK__ = window.__BC_LOGOUT_LOCK__ || 0;
 
@@ -4115,6 +4128,11 @@ function mountPremiumGameIframe({
     try { iframe.remove(); } catch {}
   }
 
+  // new iframe generation
+  window.__BC_IFRAME_EPOCH__ = Date.now();
+  // optional: reset ctx map so only current iframe windows can ever match
+  window.__BC_SOURCE_CTX_MAP__ = new WeakMap();
+
   root.innerHTML = "";
 
   iframe = document.createElement("iframe");
@@ -4123,7 +4141,8 @@ function mountPremiumGameIframe({
   const roleNow = String(appState?.profile?.role || "").toLowerCase();
   const resolvedBackTo = roleNow === "waiter" ? "screenPremiumApp" : (backTo || "screenManagerBoard");
   const backToParam = encodeURIComponent(resolvedBackTo);
-  iframe.src = url || `/game/game.html?mode=${encodeURIComponent(mode || "premium")}&showBack=${showBackParam}&backTo=${backToParam}&v=${Date.now()}`;
+  const epochParam = `&epoch=${window.__BC_IFRAME_EPOCH__}`;
+  iframe.src = url || `/game/game.html?mode=${encodeURIComponent(mode || "premium")}&showBack=${showBackParam}&backTo=${backToParam}${epochParam}&v=${Date.now()}`;
   iframe.style.width = "100%";
   iframe.style.height = "78vh";
   iframe.style.border = "0";
