@@ -7,6 +7,46 @@
     <script>
       (function () {
         const qs = new URLSearchParams(location.search);
+        const kill = qs.get("killAuth") === "1";
+
+        if (!kill) return;
+
+        console.warn("[KILLAUTH] Engaged. bc_supabase_auth_v1 will be BLOCKED.");
+
+        // 1) delete existing token
+        try { localStorage.removeItem("bc_supabase_auth_v1"); } catch {}
+        try { sessionStorage.removeItem("bc_supabase_auth_v1"); } catch {}
+
+        // 2) monkeypatch localStorage.setItem to block any writes to the key
+        try {
+          const origSet = Storage.prototype.setItem;
+          Storage.prototype.setItem = function (k, v) {
+            if (k === "bc_supabase_auth_v1") {
+              console.warn("[KILLAUTH] blocked write to bc_supabase_auth_v1");
+              return;
+            }
+            return origSet.call(this, k, v);
+          };
+        } catch (e) {
+          console.warn("[KILLAUTH] failed to patch setItem", e);
+        }
+
+        // 3) also block remove->readd cycles via defineProperty (best effort)
+        try {
+          Object.defineProperty(window, "__BC_FORCE_LOGGED_OUT__", { value: true, writable: false });
+        } catch {}
+
+        // 4) clean URL so it doesn't keep re-running
+        try {
+          const u = new URL(location.href);
+          u.searchParams.delete("killAuth");
+          history.replaceState({}, "", u.pathname + u.search);
+        } catch {}
+      })();
+    </script>
+    <script>
+      (function () {
+        const qs = new URLSearchParams(location.search);
         const loggedOut = qs.get("loggedOut") === "1";
         if (loggedOut) {
           try { localStorage.setItem("__BC_LOGOUT_LOCK__", String(Date.now())); } catch {}
