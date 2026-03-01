@@ -5562,6 +5562,8 @@ async function doLogout(reason = "user") {
   console.log("[LOGOUT] redirecting…");
   window.location.replace("/?loggedOut=1&ts=" + Date.now());
 }
+window.doLogout = doLogout;
+console.log("doLogout is", window.doLogout);
 
 // Backward-compatible alias for existing callsites.
 async function logoutAll(reason = "logout") {
@@ -5587,22 +5589,22 @@ function wireLogoutButtons() {
 }
 
 function wireGlobalLogout() {
-  if (window.__BC_GLOBAL_LOGOUT_WIRED__) return;
-  window.__BC_GLOBAL_LOGOUT_WIRED__ = true;
-  const LOGOUT_SELECTOR = [
-    "#btnHomeLogout",
-    "#btnLogoutCreate",
-    "#btnLogoutPremium",
-    "#btnLogoutManagerBoard",
-    "[data-action='logout']",
-  ].join(",");
+  if (window.__BC_LOGOUT_WIRED__) return;
+  window.__BC_LOGOUT_WIRED__ = true;
+
+  const LOGOUT_IDS = new Set([
+    "btnHomeLogout",
+    "btnLogoutCreate",
+    "btnLogoutPremium",
+    "btnLogoutManagerBoard",
+  ]);
 
   // capture phase so we catch it even if something stops propagation
   document.addEventListener(
     "click",
     (e) => {
-      const btn = e.target?.closest?.(LOGOUT_SELECTOR);
-      if (!btn) return;
+      const btn = e.target?.closest?.("button");
+      if (!btn || !LOGOUT_IDS.has(btn.id)) return;
 
       console.log("[UI] Logout click captured ✅", btn.id);
 
@@ -5610,12 +5612,37 @@ function wireGlobalLogout() {
       e.stopPropagation();
       e.stopImmediatePropagation?.();
 
-      doLogout("ui_click:" + btn.id);
+      // Call actual logout with guard logging.
+      try {
+        doLogout("ui_click:" + btn.id);
+      } catch (err) {
+        console.error("[UI] doLogout threw", err);
+      }
     },
     true
   );
 
-  console.log("[UI] global logout wired ✅", LOGOUT_SELECTOR);
+  console.log("[UI] global logout wired ✅");
+}
+
+function wireGlobalDemoExit() {
+  if (window.__BC_DEMO_EXIT_WIRED__) return;
+  window.__BC_DEMO_EXIT_WIRED__ = true;
+
+  document.addEventListener(
+    "click",
+    (e) => {
+      const btn = e.target?.closest?.("button");
+      if (!btn || btn.id !== "btnDemoExit") return;
+
+      console.log("[UI] Demo exit captured ✅");
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation?.();
+      routeAuth();
+    },
+    true
+  );
 }
 
 function forceWireHomeLogout() {
@@ -5915,6 +5942,7 @@ setMode("login");
 setAuthIntent("login");
 wireLogoutButtons();
 wireGlobalLogout();
+wireGlobalDemoExit();
 wireDemoButtons();
 applyAuthUi();
 void syncAuthUi();
