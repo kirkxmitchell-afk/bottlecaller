@@ -131,9 +131,12 @@ function setDrillConfig(cfg) {
 }
 
 function setPendingStartDrill(payload) {
-  window.__BC_PENDING_START_DRILL__ = payload;
-  window.BC_PENDING_START_DRILL = payload;
-  return payload;
+  const next = payload
+    ? { ...payload, __epoch: Number(window.__BC_IFRAME_EPOCH__ || 0) }
+    : null;
+  window.__BC_PENDING_START_DRILL__ = next;
+  window.BC_PENDING_START_DRILL = next;
+  return next;
 }
 
 window.setDefaultDrillConfig =
@@ -4107,20 +4110,53 @@ function pushCtxToPremiumIframe(source = "manual") {
   );
 }
 
+function postToPremiumIframeSafe(type, payload = {}) {
+  try {
+    if (isHardLoggedOut?.()) return false;
+    if (isLoggingOut?.()) return false;
+    if (!window.appState?.session) return false;
+
+    const frame = document.getElementById("premiumRootFrame");
+    if (!frame || !frame.contentWindow) return false;
+
+    const currentEpoch = Number(window.__BC_IFRAME_EPOCH__ || 0);
+    const frameEpoch = Number(frame.dataset?.bcEpoch || 0);
+    if (!currentEpoch || !frameEpoch || frameEpoch !== currentEpoch) {
+      console.warn("[PARENT] post blocked (epoch mismatch)", { type, frameEpoch, currentEpoch });
+      return false;
+    }
+
+    frame.contentWindow.postMessage(
+      { source: "BC_MSG", v: 1, type, ...payload },
+      window.location.origin
+    );
+    return true;
+  } catch (e) {
+    console.warn("[PARENT] postToPremiumIframeSafe failed", type, e);
+    return false;
+  }
+}
+
 function pushPremiumCtxAndDrill() {
-  // ctx is delivered only via bc_ctx_request reply from the iframe
-  // 1) drill config
+  if (isHardLoggedOut?.() || isLoggingOut?.() || !window.appState?.session) return;
+
   if (!window.__BC_DRILL_CONFIG__ && window.setDefaultDrillConfig) {
     window.setDefaultDrillConfig();
   }
   const drillCfg = window.__BC_DRILL_CONFIG__ || window.BC_DRILL_CONFIG || null;
-  postToGame("drill_config", { drill: drillCfg });
+  const ok1 = postToPremiumIframeSafe("drill_config", { drill: drillCfg });
+  if (!ok1) return;
 
-  // 2) start drill (if queued)
   const pending = window.__BC_PENDING_START_DRILL__ || window.BC_PENDING_START_DRILL;
-  if (pending) {
-    postToGame("start_drill", pending);
+  if (pending?.__epoch && pending.__epoch !== Number(window.__BC_IFRAME_EPOCH__ || 0)) {
+    console.warn("[DRILL] pending drill dropped (stale epoch)", pending);
     setPendingStartDrill(null);
+    return;
+  }
+
+  if (pending) {
+    const ok2 = postToPremiumIframeSafe("start_drill", pending);
+    if (ok2) setPendingStartDrill(null);
   }
 }
 
