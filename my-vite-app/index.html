@@ -186,6 +186,64 @@
   </head>
   <body>
     <div id="app"></div>
+    <script>
+      (function bcArmHardLogout() {
+        if (window.__BC_HARD_LOGOUT_ARMED__) return;
+        window.__BC_HARD_LOGOUT_ARMED__ = true;
+
+        const LOGOUT_IDS = new Set([
+          "btnHomeLogout",
+          "btnLogoutCreate",
+          "btnLogoutPremium",
+          "btnLogoutManagerBoard",
+        ]);
+
+        function purgeAuthEverywhere() {
+          try { localStorage.removeItem("bc_supabase_auth_v1"); } catch {}
+          try { sessionStorage.removeItem("bc_supabase_auth_v1"); } catch {}
+
+          // supabase default keys
+          try {
+            for (let i = localStorage.length - 1; i >= 0; i--) {
+              const k = localStorage.key(i);
+              if (k && k.startsWith("sb-") && k.includes("auth-token")) localStorage.removeItem(k);
+            }
+          } catch {}
+
+          try {
+            for (let i = sessionStorage.length - 1; i >= 0; i--) {
+              const k = sessionStorage.key(i);
+              if (k && k.startsWith("sb-") && k.includes("auth-token")) sessionStorage.removeItem(k);
+            }
+          } catch {}
+        }
+
+        window.addEventListener("click", function (e) {
+          const btn = e.target && e.target.closest ? e.target.closest("button") : null;
+          if (!btn || !LOGOUT_IDS.has(btn.id)) return;
+
+          console.warn("[HARD LOGOUT] captured:", btn.id);
+
+          e.preventDefault();
+          e.stopPropagation();
+          if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+
+          // kill iframe immediately (even if app code is broken)
+          try {
+            const f = document.getElementById("premiumRootFrame");
+            if (f) f.remove();
+          } catch {}
+
+          // purge storage no matter what
+          purgeAuthEverywhere();
+
+          // force boot latch path
+          window.location.replace("/?loggedOut=1&ts=" + Date.now());
+        }, true);
+
+        console.warn("[HARD LOGOUT] armed ✅");
+      })();
+    </script>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
