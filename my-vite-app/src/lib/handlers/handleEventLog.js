@@ -10,9 +10,8 @@ export async function handleEventLog({
   supabase,
   tagSource,
   ctx,
+  replyType = "event_log_ack",
 }) {
-  const replyType = "event_log_ack";
-
   try {
     const { eventType, payload } = msg || {};
     if (!eventType) return;

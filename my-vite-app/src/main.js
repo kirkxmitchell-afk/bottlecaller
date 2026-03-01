@@ -2070,6 +2070,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
           supabase,
           tagSource,
           ctx,
+          replyType,
         });
         return;
       }
