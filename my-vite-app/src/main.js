@@ -1769,6 +1769,8 @@ function showScreen(id) {
 
   if (id === "screenHome") {
     hideAllLogoutButtons?.();
+    document.getElementById("btnHomeLogout")?.classList.add("hidden");
+    document.getElementById("btnHomeExitPremium")?.classList.add("hidden");
   }
 }
 
