@@ -1226,11 +1226,11 @@ function rejectIfEpochMismatch(event, msg, replyType, extra = {}) {
   return false;
 }
 
-function isDemoMsg({ mode, msg }, senderCtx) {
+function isDemoMsg(msg, senderCtx) {
   const ctxMode = String(senderCtx?.mode || "").toLowerCase();
   if (ctxMode === "demo") return true;
 
-  const topMode = String(mode || msg?.mode || "").toLowerCase();
+  const topMode = String(msg?.mode || "").toLowerCase();
   if (topMode === "demo") return true;
 
   // Do not trust payload mode fields to switch runtime into demo.
@@ -1426,7 +1426,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
       const senderCtx = getSourceCtx(event.source);
       // 1) Demo short-circuit
-      if (isDemoMsg({ mode, msg }, senderCtx)) return 0;
+      if (isDemoMsg(msg, senderCtx)) return 0;
 
       // 2) Epoch guard (prevents ghosts / old iframe spam)
       if (rejectIfEpochMismatchSimple(msg)) return 0;
@@ -1684,7 +1684,8 @@ if (!window.__BC_PARENT_BRIDGE__) {
       ]);
 
       let liveAuth = null;
-      if (DB_TYPES.has(msg.type)) {
+      const isDemo = isDemoMsg(msg, senderCtx);
+      if (DB_TYPES.has(msg.type) && !isDemo) {
         liveAuth = await getLiveAuthOrNull();
         if (!liveAuth) {
           console.warn("[PARENT] blocked: no live session", msg.type);
@@ -1699,7 +1700,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
           console.warn("[PARENT] blocked DB msg (no senderCtx.userId)", msg.type);
           try {
             event.source?.postMessage(
-              { source: "BC_MSG", v: 1, type: "auth_state", authed: false, reason: "no_sender_ctx_db" },
+              { source: "BC_MSG", v: 1, type: "ctx_required", ok: false, reason: "no_sender_ctx_db" },
               event.origin
             );
           } catch {}
@@ -1714,7 +1715,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
           });
           try {
             event.source?.postMessage(
-              { source: "BC_MSG", v: 1, type: "auth_state", authed: false, reason: "forbidden_user" },
+              { source: "BC_MSG", v: 1, type: "ctx_required", ok: false, reason: "forbidden_user" },
               event.origin
             );
           } catch {}
@@ -1725,21 +1726,22 @@ if (!window.__BC_PARENT_BRIDGE__) {
       // RUNS COUNT: iframe asks parent -> parent queries supabase -> reply
       if (msg.type === "runs_count_request") {
         const replyType = "runs_count_response";
+        const reqId = msg?.reqId || null;
         try {
           // 0) Demo short-circuit
-          if (isDemoMsg({ msg }, senderCtx)) {
+          if (isDemoMsg(msg, senderCtx)) {
             event.source?.postMessage(
-              { source: "BC_MSG", v: 1, type: replyType, ok: true, count: 0, demo: true },
+              { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, count: 0, demo: true },
               event.origin
             );
             return;
           }
 
           // 1) Epoch guard (prevents ghosts / old iframes)
-          if (rejectIfEpochMismatch(event, msg, replyType, { count: 0 })) return;
+          if (rejectIfEpochMismatch(event, msg, replyType, { reqId, count: 0 })) return;
 
           // 2) Validate sender-bound ctx (restaurant required)
-          const ctx = getSenderCtxOrReject(event, senderCtx, replyType, { count: 0 }, {
+          const ctx = getSenderCtxOrReject(event, senderCtx, replyType, { reqId, count: 0 }, {
             requireRestaurant: true,
             allowedRoles: ["waiter", "manager", "group_manager", "admin"],
           });
@@ -1750,7 +1752,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
           if (!authed) throw new Error("no_session");
           if (String(authed) !== String(ctx.userId)) {
             event.source?.postMessage(
-              { source: "BC_MSG", v: 1, type: replyType, ok: false, count: 0, error: "forbidden_user" },
+              { source: "BC_MSG", v: 1, type: replyType, reqId, ok: false, count: 0, error: "forbidden_user" },
               event.origin
             );
             return;
@@ -1767,13 +1769,13 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
           // 5) Reply
           event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: replyType, ok: true, count: Number(count || 0) },
+            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, count: Number(count || 0) },
             event.origin
           );
           return;
         } catch (e) {
           event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: replyType, ok: false, count: 0, error: e?.message || String(e) },
+            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: false, count: 0, error: e?.message || String(e) },
             event.origin
           );
           return;
@@ -1785,7 +1787,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
         const reqId = msg.reqId || null;
         try {
           // 0) Demo short-circuit
-          if (isDemoMsg({ msg }, senderCtx)) {
+          if (isDemoMsg(msg, senderCtx)) {
             event.source?.postMessage(
               { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, doneToday: false, demo: true },
               event.origin
@@ -1856,7 +1858,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
         const reqId = msg.reqId || null;
 
         // 0) Demo short-circuit
-        if (isDemoMsg({ msg }, senderCtx)) {
+        if (isDemoMsg(msg, senderCtx)) {
           event.source?.postMessage(
             { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, demo: true, wines: [] },
             event.origin
@@ -1921,29 +1923,40 @@ if (!window.__BC_PARENT_BRIDGE__) {
       }
 
       if (msg.type === "wines_mutate") {
+        const replyType = "wines_mutate_result";
         const reqId = msg.reqId || null;
         const action = String(msg.action || "");
         const payload = msg.payload || {};
-        if (isDemoMsg({ msg }, senderCtx)) {
+        // 0) Demo short-circuit
+        if (isDemoMsg(msg, senderCtx)) {
           event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: "wines_mutate_result", reqId, ok: true, demo: true },
+            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, demo: true },
             event.origin
           );
           return;
         }
-        if (rejectIfEpochMismatch(event, msg, "wines_mutate_result", { reqId })) return;
+
+        // 1) Epoch guard
+        if (rejectIfEpochMismatch(event, msg, replyType, { reqId })) return;
+
         try {
-          const ctx = getSenderCtxOrReject(event, senderCtx, "wines_mutate_result", { reqId }, {
-            requireRestaurant: true,
-            allowedRoles: ["manager", "group_manager", "admin"],
-          });
+          // 2) Validate sender ctx + role gate
+          const ctx = getSenderCtxOrReject(
+            event,
+            senderCtx,
+            replyType,
+            { reqId },
+            { requireRestaurant: true, allowedRoles: ["manager", "group_manager", "admin"] }
+          );
           if (!ctx) return;
 
+          // 3) Live auth (should already exist from DB gate)
           const rid = ctx.restaurantId;
           const userId = liveAuth?.userId || null;
           if (!userId) throw new Error("no_session");
           if (String(userId) !== String(ctx.userId)) throw new Error("forbidden_user");
 
+          // 4) Mutations
           if (action === "add") {
             const row = {
               restaurant_id: rid,
@@ -1993,24 +2006,26 @@ if (!window.__BC_PARENT_BRIDGE__) {
             throw new Error("unsupported_action");
           }
 
+          // 5) Reply
           event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: "wines_mutate_result", reqId, ok: true },
+            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true },
             event.origin
           );
+          return;
         } catch (e) {
           event.source?.postMessage(
             {
               source: "BC_MSG",
               v: 1,
-              type: "wines_mutate_result",
+              type: replyType,
               reqId,
               ok: false,
               error: e?.message || String(e),
             },
             event.origin
           );
+          return;
         }
-        return;
       }
 
       if (msg.type === "nav_back" || msg.type === "nav") {
@@ -2081,7 +2096,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
       if (msg.type === "event_log") {
         const replyType = "event_log_ack";
         const eventType = msg?.eventType || null;
-        if (isDemoMsg({ msg }, senderCtx)) {
+        if (isDemoMsg(msg, senderCtx)) {
           event.source?.postMessage(
             { source: "BC_MSG", v: 1, type: replyType, ok: true, demo: true, eventType },
             event.origin
