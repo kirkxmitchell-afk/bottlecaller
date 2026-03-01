@@ -1302,7 +1302,15 @@ if (!window.__BC_PARENT_BRIDGE__) {
       if (!ready) {
         try {
           event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: "ctx_not_ready", ok: false },
+            {
+              source: "BC_MSG",
+              v: 1,
+              type: "ctx_not_ready",
+              ok: false,
+              epoch: Number(window.__BC_IFRAME_EPOCH__ || 0),
+              retryAfterMs: 250,
+              why: "profile_or_restaurant_not_ready",
+            },
             event.origin
           );
         } catch {}
@@ -1664,7 +1672,15 @@ if (!window.__BC_PARENT_BRIDGE__) {
           console.warn("[PARENT] ctx not ready — ask iframe to retry");
           try {
             event.source?.postMessage(
-              { source: "BC_MSG", v: 1, type: "ctx_not_ready", ok: false },
+              {
+                source: "BC_MSG",
+                v: 1,
+                type: "ctx_not_ready",
+                ok: false,
+                epoch: Number(window.__BC_IFRAME_EPOCH__ || 0),
+                retryAfterMs: 250,
+                why: "profile_or_restaurant_not_ready",
+              },
               event.origin
             );
           } catch {}

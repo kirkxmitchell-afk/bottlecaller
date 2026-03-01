@@ -1818,15 +1818,26 @@ function ensureProgLoaded() {
             if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
             if (event.origin !== location.origin) return;
             if (msg.type === "ctx_not_ready" || msg.type === "ctx_required") {
-              if (String(window.bcMode || getIframeMode() || "premium").toLowerCase() !== "demo") {
-                window.__BC_CTX_REQUESTED__ = false;
-                window.__BC_CTX_RETRY_N__ = (window.__BC_CTX_RETRY_N__ || 0) + 1;
-                const n = window.__BC_CTX_RETRY_N__;
-                const delay = Math.min(1000, 150 + n * 100);
-                setTimeout(() => {
-                  try { requestCtxOnce(); } catch {}
-                }, delay);
+              const modeNow = String(window.bcMode || getIframeMode() || "premium").toLowerCase();
+              if (modeNow === "demo") return;
+
+              const myEpoch = Number(window.__BC_EPOCH__ || 0);
+              const parentEpoch = Number(msg.epoch || 0);
+              if (myEpoch && parentEpoch && parentEpoch !== myEpoch) {
+                console.warn("[BC] ctx_not_ready ignored (epoch mismatch)", { myEpoch, parentEpoch });
+                return;
               }
+
+              window.__BC_CTX_REQUESTED__ = false;
+              window.__BC_CTX_RETRY_N__ = (window.__BC_CTX_RETRY_N__ || 0) + 1;
+              const n = window.__BC_CTX_RETRY_N__;
+              const base = Number(msg.retryAfterMs || 250);
+              const delay = Math.min(1200, base + n * 150);
+
+              console.warn("[BC] ctx_not_ready -> retry", { n, delay, why: msg.why });
+              setTimeout(() => {
+                try { requestCtxOnce(); } catch {}
+              }, delay);
               return;
             }
             if (msg.type === "auth_state" && msg.authed === false) {
