@@ -7,7 +7,9 @@
     <script>
       (function () {
         const qs = new URLSearchParams(location.search);
-        if (qs.get("loggedOut") === "1") {
+        const loggedOut = qs.get("loggedOut") === "1";
+        if (loggedOut) {
+          try { localStorage.setItem("__BC_LOGOUT_LOCK__", String(Date.now())); } catch {}
           try { localStorage.removeItem("bc_supabase_auth_v1"); } catch {}
           try { sessionStorage.removeItem("bc_supabase_auth_v1"); } catch {}
 
@@ -21,7 +23,7 @@
 
           // this flag is critical: tells supabaseClient to NOT persist during this boot
           window.__BC_FORCE_LOGGED_OUT__ = true;
-          console.warn("[BOOT] forced logout latch active");
+          console.warn("[BOOT] forced logout latch active + logout lock set");
         }
       })();
     </script>

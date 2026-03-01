@@ -41,7 +41,12 @@ export function getSupabase() {
   if (supabase) return supabase;
 
   const inIframe = isIframe();
-  const forceLoggedOut = !inIframe && !!window.__BC_FORCE_LOGGED_OUT__;
+  let lock = null;
+  try { lock = localStorage.getItem("__BC_LOGOUT_LOCK__"); } catch {}
+
+  const forceLoggedOut =
+    !inIframe &&
+    (!!window.__BC_FORCE_LOGGED_OUT__ || !!lock);
 
   supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: inIframe

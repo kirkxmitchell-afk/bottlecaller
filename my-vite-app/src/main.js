@@ -46,6 +46,14 @@ if (window.__BOTTLECALLER_BOOTED__) {
 }
 window.__BOTTLECALLER_BOOTED__ = true;
 
+window.addEventListener("storage", (e) => {
+  if (e.key === "__BC_LOGOUT_LOCK__" && e.newValue) {
+    console.warn("[CROSS-TAB] logout lock detected -> forcing logout UI");
+    try { window.__BC_FORCE_LOGGED_OUT__ = true; } catch {}
+    try { window.location.replace("/?loggedOut=1&ts=" + Date.now()); } catch {}
+  }
+});
+
 // ===== CANONICAL MODES =====
 const MODE = {
   SCOUT: "scout",
@@ -5500,7 +5508,9 @@ function purgeAllSupabaseKeys() {
 }
 
 function doLogout(reason = "user") {
+  try { localStorage.setItem("__BC_LOGOUT_LOCK__", String(Date.now())); } catch {}
   window.__BC_LOGOUT_LOCK__ = Date.now(); // stop serving ctx immediately
+  try { destroyPremiumIframe("logout"); } catch {}
   location.replace("/?loggedOut=1&ts=" + Date.now());
 }
 
