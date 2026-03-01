@@ -29,7 +29,8 @@ function waitFor(type: string, reqId: string, timeoutMs = 8000): Promise<any> {
 
 export async function hasRitualCompletedTodayZA() {
   const reqId = "rit_" + Math.random().toString(16).slice(2);
-  postToParent({ type: "ritual_status_request", reqId, mode: "premium" });
+  const epoch = Number((window as any).__BC_EPOCH__ || 0);
+  postToParent({ type: "ritual_status_request", reqId, mode: (window as any).bcMode || "premium", epoch });
   const res = await waitFor("ritual_status_response", reqId, 12000);
   if (!res?.ok) throw new Error(res?.error || "ritual_status_request failed");
   return !!res.doneToday;

@@ -3003,8 +3003,9 @@ function ensureProgLoaded() {
         }
 
         try {
+          const epoch = Number(window.__BC_EPOCH__ || 0);
           window.parent?.postMessage(
-            { source: "BC_MSG", v: 1, type: "wines_request", mode: "premium", restaurantId },
+            { source: "BC_MSG", v: 1, type: "wines_request", mode: "premium", epoch, restaurantId },
             window.location.origin
           );
           await new Promise((r) => setTimeout(r, 350));
@@ -3456,9 +3457,10 @@ function ensureProgLoaded() {
 
       function requestWinesFromParent() {
         try {
+          const epoch = Number(window.__BC_EPOCH__ || 0);
           window.parent?.postMessage(
-            { source: "BC_MSG", v: 1, type: "wines_request" },
-            "*"
+            { source: "BC_MSG", v: 1, type: "wines_request", mode: window.bcMode || "premium", epoch },
+            window.location.origin
           );
         } catch {}
       }

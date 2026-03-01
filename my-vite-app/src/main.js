@@ -1780,31 +1780,40 @@ if (!window.__BC_PARENT_BRIDGE__) {
       }
 
       if (msg.type === "ritual_status_request") {
+        const replyType = "ritual_status_response";
         const reqId = msg.reqId || null;
         try {
+          // 0) Demo short-circuit
           if (isDemoMsg({ msg }, senderCtx)) {
             event.source?.postMessage(
-              { source: "BC_MSG", v: 1, type: "ritual_status_response", reqId, ok: true, doneToday: false, demo: true },
+              { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, doneToday: false, demo: true },
               event.origin
             );
             return;
           }
 
-          const ctx = getSenderCtxOrReject(event, senderCtx, "ritual_status_response", { reqId, doneToday: false }, {
+          // 1) Epoch guard (prevents ghosts / old iframes)
+          if (rejectIfEpochMismatch(event, msg, replyType, { reqId, doneToday: false })) return;
+
+          // 2) Validate sender-bound ctx (restaurant required)
+          const ctx = getSenderCtxOrReject(event, senderCtx, replyType, { reqId, doneToday: false }, {
             requireRestaurant: true,
           });
           if (!ctx) return;
 
+          // 3) Live auth must exist AND match ctx.userId
           const authed = liveAuth?.userId || null;
           if (!authed) throw new Error("no_session");
           if (String(authed) !== String(ctx.userId)) throw new Error("forbidden_user");
 
+          // 4) Compute "today" start in ZA timezone (midnight ZA)
           const now = new Date();
           const zaNow = new Date(now.toLocaleString("en-US", { timeZone: "Africa/Johannesburg" }));
           const startZA = new Date(zaNow);
           startZA.setHours(0, 0, 0, 0);
           const startIso = startZA.toISOString();
 
+          // 5) Query (exists check)
           const { data, error } = await supabase
             .from("bc_event_log")
             .select("id")
@@ -1816,8 +1825,10 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
           if (error) throw error;
           const doneToday = Array.isArray(data) && data.length > 0;
+
+          // 6) Reply
           event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: "ritual_status_response", reqId, ok: true, doneToday },
+            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, doneToday },
             event.origin
           );
           return;
@@ -1826,7 +1837,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
             {
               source: "BC_MSG",
               v: 1,
-              type: "ritual_status_response",
+              type: replyType,
               reqId,
               ok: false,
               doneToday: false,
@@ -1839,8 +1850,10 @@ if (!window.__BC_PARENT_BRIDGE__) {
       }
 
       if (msg.type === "wines_request") {
-        const reqId = msg.reqId || null;
         const replyType = "wines_report";
+        const reqId = msg.reqId || null;
+
+        // 0) Demo short-circuit
         if (isDemoMsg({ msg }, senderCtx)) {
           event.source?.postMessage(
             { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, demo: true, wines: [] },
@@ -1848,12 +1861,27 @@ if (!window.__BC_PARENT_BRIDGE__) {
           );
           return;
         }
+
         try {
-          const ctx = getSenderCtxOrReject(event, senderCtx, replyType, { reqId, wines: [] }, {
-            requireRestaurant: true,
-          });
+          // 1) Epoch guard (prevents ghosts / old iframes)
+          if (rejectIfEpochMismatch(event, msg, replyType, { reqId, wines: [] })) return;
+
+          // 2) Validate sender-bound ctx (restaurant required)
+          const ctx = getSenderCtxOrReject(
+            event,
+            senderCtx,
+            replyType,
+            { reqId, wines: [] },
+            { requireRestaurant: true }
+          );
           if (!ctx) return;
 
+          // 3) Live auth must exist AND match ctx.userId
+          const authed = liveAuth?.userId || null;
+          if (!authed) throw new Error("no_session");
+          if (String(authed) !== String(ctx.userId)) throw new Error("forbidden_user");
+
+          // 4) Query
           const { data, error } = await supabase
             .from("bc_wines")
             .select("*")
@@ -1861,6 +1889,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
             .order("created_at", { ascending: true });
           if (error) throw error;
 
+          // 5) Reply
           event.source?.postMessage(
             {
               source: "BC_MSG",
