@@ -1176,7 +1176,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
     const needRestaurant = requestedMode !== "demo";
     const rid = window.getActiveRestaurantId?.();
     const ready =
-      !!window.appState?.session?.user?.id &&
+      !!window.appState?.session &&
       !!window.appState?.profile?.role &&
       (needRestaurant ? !!rid : true);
     if (!ready) return;
@@ -1250,7 +1250,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
       if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
 
       const onAuthScreen = document.querySelector(".screen:not(.hidden)")?.id === "screenHome";
-      const authed = !!appState?.session?.user?.id;
+      const authed = !!appState?.session;
       if (!authed && onAuthScreen && msg?.source === "BC_MSG") return;
 
       // Same-origin only (your game is served from the same Vite origin)
@@ -1361,7 +1361,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
         const needRestaurant = requestedMode !== "demo";
         const rid = window.getActiveRestaurantId?.();
         const ready =
-          !!window.appState?.session?.user?.id &&
+          !!window.appState?.session &&
           !!window.appState?.profile?.role &&
           (needRestaurant ? !!rid : true);
 
@@ -2402,7 +2402,7 @@ function hideDemoButtonsOnLogin() {
 }
 
 function applyAuthUi() {
-  const authed = !!appState?.session?.user?.id;
+  const authed = !!appState?.session;
 
   setHomeAuthUI(authed);
 
@@ -2435,10 +2435,8 @@ function applyAuthUi() {
 
 async function syncAuthUi() {
   try {
-    const ses = await supabase.auth.getSession();
-    appState.session = ses?.data?.session || null;
     applyAuthUi();
-    const authed = !!appState.session?.user?.id;
+    const authed = !!appState.session;
     console.log("[UI] syncAuthUi", { authed });
   } catch (e) {
     console.warn("[UI] syncAuthUi failed", e);
@@ -4628,7 +4626,7 @@ async function routeManagerBoard(reason = "manual") {
 }
 
 function isAuthed() {
-  return !!window.appState?.session?.user?.id;
+  return !!window.appState?.session;
 }
 
 function routeDemoShellNoAuth() {
@@ -5122,42 +5120,13 @@ async function signOutHard() {
   return { stillAuthed, session: sesFinal?.data?.session || null };
 }
 
-async function doLogout(reason = "forced") {
-  console.log("[LOGOUT] HARD logout start", { reason });
-
+async function doLogout(reason = "manual") {
+  console.log("[AUTH] doLogout()", { reason });
   try {
     await supabase.auth.signOut();
   } catch (e) {
-    console.warn("[LOGOUT] signOut error", e);
+    console.warn("[AUTH] signOut failed (continuing)", e);
   }
-
-  // Hard wipe ALL Supabase auth storage
-  try {
-    Object.keys(localStorage).forEach((k) => {
-      if (k.startsWith("sb-")) {
-        localStorage.removeItem(k);
-      }
-    });
-  } catch {}
-
-  try {
-    Object.keys(sessionStorage).forEach((k) => {
-      if (k.startsWith("sb-")) {
-        sessionStorage.removeItem(k);
-      }
-    });
-  } catch {}
-
-  // Hard reset memory state
-  appState.session = null;
-  appState.profile = null;
-  appState.activeRestaurantId = null;
-  appState.restaurant = null;
-
-  window.__BC_CTX__ = null;
-
-  // Force full reload to guarantee auth reset
-  location.href = "/";
 }
 
 // Backward-compatible alias for existing callsites.
@@ -5337,40 +5306,25 @@ setDebug({ step: "boot.ready", time: new Date().toISOString(), supabaseUrl: impo
 // ✅ TOKEN_REFRESHED must NOT remount iframes / reset gameplay.
 supabase.auth.onAuthStateChange((event, session) => {
   setDebug({ step: "auth.change", event, time: new Date().toISOString() });
-  appState.session = session || null;
-
-  // if logout is in progress, ignore routing changes
-  if (window.__BC_LOGOUT_INFLIGHT__) {
-    console.warn("[AUTH] event ignored during logout:", event);
-    return;
-  }
-
-  if (window.__BC_FORCE_AUTH__) {
-    if (event === "SIGNED_OUT") {
-      destroyAllIframes("authState.SIGNED_OUT");
-      hardResetAuthUI();
-      routeAuth();
-    }
-    return;
-  }
+  console.log("[AUTH] state change:", event, !!session);
 
   if (authRouteTimer) clearTimeout(authRouteTimer);
 
   authRouteTimer = setTimeout(async () => {
     try {
-      if (!appState.session?.user?.id) {
+      appState.session = session || null;
+
+      if (!session) {
         appState.profile = null;
         appState.restaurant = null;
         appState.activeRestaurantId = null;
-        routeAuth();
+        showScreen("screenHome");
+        hideAllLogoutButtons();
+        hideDemoButtonsOnLogin();
         applyAuthUi();
         return;
       }
-      if (event === "TOKEN_REFRESHED") {
-        await loadAuthedState(`auth.refresh:${event}`);
-        await syncAuthUi();
-        return; // do not call decideRoute here (prevents iframe reset)
-      }
+
       await decideRouteGuarded("auth_subscriber");
       await syncAuthUi();
     } catch {
