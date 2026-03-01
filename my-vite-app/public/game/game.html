@@ -9077,6 +9077,32 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         bindInput(wineCards, delHandler);
       }
 
+      function wireIframeLogout() {
+        const btn =
+          document.getElementById("btnHomeLogout") ||
+          document.getElementById("btnLogoutPremium") ||
+          document.getElementById("btnLogoutManagerBoard");
+
+        if (!btn) return;
+
+        btn.onclick = null;
+        btn.__bcBound = false;
+
+        btn.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+
+          console.log("[IFRAME] requesting parent logout");
+
+          window.parent.postMessage(
+            { source: "BC_MSG", v: 1, type: "bc_logout_request" },
+            window.location.origin
+          );
+        });
+
+        console.log("[IFRAME] logout wired ✅");
+      }
+
       // ---------- Boot ----------
       buildOptionButtons(ids.fruitOptions, fruitOptions);
       buildOptionButtons(ids.textureOptions, textureOptions);
@@ -9089,6 +9115,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
       renderWineTables();
       initButtons();
+      wireIframeLogout();
       applyDemoUIRestrictions();
       applyDemoHomeUI();
       document.addEventListener("DOMContentLoaded", applyDemoHomeUI, { once: true });

@@ -1256,7 +1256,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
       // Same-origin only (your game is served from the same Vite origin)
       if (event.origin !== window.location.origin) return;
 
-      if (msg.type === "logout") {
+      if (msg.type === "logout" || msg.type === "bc_logout_request") {
         await doLogout("bc_msg_logout");
         return;
       }
