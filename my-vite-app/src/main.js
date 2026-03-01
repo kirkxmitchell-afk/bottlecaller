@@ -1754,11 +1754,23 @@ function showScreen(id) {
   } else {
     console.error("[NAV] showScreen missing:", id, "-> falling back to screenHome");
     document.getElementById("screenHome")?.classList.remove("hidden");
+    id = "screenHome";
   }
 
   removeGlobalResetButtons();
   applyRoleTemplateGates();
+
+  // Ensure current screen controls are always wired after any UI/template mutation.
+  try { wireLogoutButtons(); } catch {}
+  try { wireDemoButtons(); } catch {}
+  try { applyAuthUi(); } catch {}
+  try { syncAuthUi?.(); } catch {}
+
   onScreenChanged(id);
+
+  if (id === "screenHome") {
+    hideAllLogoutButtons?.();
+  }
 }
 
 function removeGlobalResetButtons() {
@@ -5255,7 +5267,9 @@ function wireDemoButtons() {
   const btnExit = document.getElementById("btnDemoExit");
 
   if (btnExit) {
-    btnExit.textContent = "Logout";
+    if (btnExit.textContent !== "Logout") {
+      btnExit.textContent = "Logout";
+    }
     btnExit.onclick = null;
     if (!btnExit.__bcBound) {
       btnExit.__bcBound = true;
@@ -5266,6 +5280,8 @@ function wireDemoButtons() {
         await doLogout("demo_logout");
       });
     }
+  } else {
+    console.warn("[DEMO] btnDemoExit not found (yet)");
   }
 
   if (btnPremium) {
