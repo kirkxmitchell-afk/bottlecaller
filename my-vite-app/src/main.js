@@ -1422,11 +1422,11 @@ if (!window.__BC_PARENT_BRIDGE__) {
           if (event.source && typeof event.source.postMessage === "function") {
             event.source.postMessage(
               { source: "BC_MSG", v: 1, type: "auth_state", authed: false },
-              event.origin || "*"
+              event.origin
             );
             event.source.postMessage(
               { source: "BC_MSG", v: 1, type: "parent_logged_out" },
-              event.origin || "*"
+              event.origin
             );
           }
         } catch {}
@@ -1453,45 +1453,179 @@ if (!window.__BC_PARENT_BRIDGE__) {
         return;
       }
 
-      // 🔒 AUTH GATE: use live Supabase session, not just in-memory appState.
-      const liveSession = await getLiveSessionOrNull();
-      if (!liveSession) {
-        console.warn("[PARENT] BC_MSG blocked: live session is null", { type });
-        notifyLoggedOut();
-        try { destroyPremiumIframe("parent_no_session_msg_gate"); } catch {}
-        try { destroyDemoIframe("parent_no_session_msg_gate"); } catch {}
-        return;
-      }
-      appState.session = liveSession;
-
-      const onAuthScreen = document.querySelector(".screen:not(.hidden)")?.id === "screenHome";
-      const authed = !!appState?.session;
-      if (!authed && onAuthScreen && msg?.source === "BC_MSG") return;
-
       // Source gate: only accept messages from mounted premium iframe window.
       const frame =
         document.getElementById("bcPremiumFrame") ||
         document.getElementById("premiumRootFrame");
       if (!frame || event.source !== frame.contentWindow) return;
 
-      const senderCtx = getSourceCtx(event.source);
-      const PRE_BIND_ALLOW = new Set([
-        "bc_ctx_request",
-        "logout",
-        "bc_logout_request",
-        "nav_back",
-        "nav",
-        "ctx_retry",
-      ]);
-      if (!senderCtx && !PRE_BIND_ALLOW.has(msg.type)) {
-        console.warn("[PARENT] blocked msg (no senderCtx yet)", msg.type);
+      // ✅ 1) ctx request MUST be handled before any other typed routing
+      if (msg.type === "bc_ctx_request") {
+        if (event.origin !== window.location.origin) {
+          console.warn("[PARENT] denied bc_ctx_request: origin mismatch", event.origin);
+          return;
+        }
+        const prem = document.getElementById("premiumRootFrame");
+        const isFromPremiumFrame = !!(prem && event.source === prem.contentWindow);
+        if (!isFromPremiumFrame) {
+          console.warn("[PARENT] denied bc_ctx_request: not from current premium frame");
+          return;
+        }
+
+        // Epoch gate: only respond to iframes created after last mount.
+        const epoch = Number(window.__BC_IFRAME_EPOCH__ || 0);
+        const msgEpoch = Number(msg?.epoch || 0);
+        if (msgEpoch !== epoch) {
+          console.warn("[PARENT] denied bc_ctx_request: epoch mismatch", { msgEpoch, epoch });
+          return;
+        }
+
+        const requestedMode =
+          String(msg?.mode || msg?.requestedMode || "").toLowerCase();
+        const isFromIframe = !!event.source && event.source !== window;
+        if (!isFromIframe) return;
+
+        if (requestedMode === "demo") {
+          window.__BC_LAST_CTX_MODE__ = "demo";
+          const demoCtx = await buildBcCtxSafe("demo");
+          if (!demoCtx?.userId || !demoCtx?.role) return;
+          try {
+            event.source?.postMessage(
+              {
+                source: "BC_MSG",
+                v: 1,
+                type: "bc_ctx",
+                ...demoCtx,
+                drill: null,
+              },
+              event.origin
+            );
+            setSourceCtx(event.source, demoCtx);
+          } catch (e) {
+            console.warn("[PARENT] failed to send bc_ctx demo", e);
+          }
+          return;
+        }
+
+        try {
+          if (window.__BC_ACTIVE_REST_READY__) {
+            await Promise.race([
+              window.__BC_ACTIVE_REST_READY__,
+              new Promise((r) => setTimeout(r, 600))
+            ]);
+          }
+        } catch {}
+
+        const needRestaurant = requestedMode !== "demo";
+        const rid = window.getActiveRestaurantId?.();
+        const live = await getLiveSessionOrNull();
+        if (live) window.appState.session = live;
+        const ready =
+          !!live &&
+          !!window.appState?.profile?.role &&
+          (needRestaurant ? !!rid : true);
+
+        if (!ready) {
+          console.warn("[PARENT] ctx not ready — ask iframe to retry");
+          try {
+            event.source?.postMessage(
+              {
+                source: "BC_MSG",
+                v: 1,
+                type: "ctx_not_ready",
+                ok: false,
+                epoch: Number(window.__BC_IFRAME_EPOCH__ || 0),
+                retryAfterMs: 250,
+                why: "profile_or_restaurant_not_ready",
+              },
+              event.origin
+            );
+          } catch {}
+          return;
+        }
+        const bcCtx = await buildBcCtxSafe(msg?.mode ?? null);
+        if (!bcCtx) {
+          console.warn("[PARENT] buildBcCtxSafe returned null — ask iframe to retry");
+          try {
+            event.source?.postMessage(
+              {
+                source: "BC_MSG",
+                v: 1,
+                type: "ctx_not_ready",
+                ok: false,
+                epoch: Number(window.__BC_IFRAME_EPOCH__ || 0),
+                retryAfterMs: 250,
+                why: "ctx_build_null",
+              },
+              event.origin
+            );
+          } catch {}
+          return;
+        }
+        window.__BC_LAST_CTX_MODE__ = requestedMode || "premium";
+        bcCtx.drill = window.__BC_DRILL_CONFIG__ || window.BC_DRILL_CONFIG || null;
+
+        console.log("[PARENT] bc_ctx_request -> reply", {
+          requested: msg?.mode ?? null,
+          bcCtx,
+        });
+
+        if (!bcCtx?.userId || !bcCtx?.role || (!bcCtx?.restaurantId && requestedMode !== "demo")) {
+          console.warn("[PARENT] refusing to send null/partial bc_ctx", bcCtx);
+          return;
+        }
+
+        console.log("[PARENT] sending bc_ctx (request path)", {
+          hasDrill: !!bcCtx?.drill,
+          drill: bcCtx?.drill,
+          to: event.origin
+        });
+
         try {
           event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: "auth_state", authed: false, reason: "no_sender_ctx" },
+            { source: "BC_MSG", v: 1, type: "bc_ctx", ...bcCtx },
             event.origin
           );
-        } catch {}
+          setSourceCtx(event.source, bcCtx);
+        } catch (e) {
+          console.warn("[PARENT] failed to send bc_ctx premium", e);
+        }
+
         return;
+      }
+
+      const senderCtx = getSourceCtx(event.source);
+      const PRE_BIND_ALLOW = new Set(["nav", "nav_back", "ctx_retry"]);
+      if (!senderCtx && !PRE_BIND_ALLOW.has(msg.type)) {
+        console.warn("[PARENT] blocked msg (no senderCtx yet)", msg.type);
+        notifyLoggedOut();
+        return;
+      }
+
+      const DB_TYPES = new Set([
+        "wines_request",
+        "wines_mutate",
+        "runs_count_request",
+        "ritual_status_request",
+        "event_log",
+      ]);
+
+      if (DB_TYPES.has(msg.type)) {
+        const liveSession = await getLiveSessionOrNull();
+        if (!liveSession) {
+          console.warn("[PARENT] blocked: no live session", msg.type);
+          notifyLoggedOut();
+          try { destroyPremiumIframe("parent_no_session_db_gate"); } catch {}
+          try { destroyDemoIframe("parent_no_session_db_gate"); } catch {}
+          return;
+        }
+        appState.session = liveSession;
+
+        const authedUserId = liveSession?.user?.id || null;
+        if (authedUserId && senderCtx?.userId && authedUserId !== senderCtx.userId) {
+          console.warn("[PARENT] forbidden_user mismatch", { authedUserId, senderUserId: senderCtx.userId });
+          return;
+        }
       }
 
       // RUNS COUNT: iframe asks parent -> parent queries supabase -> reply
@@ -1621,142 +1755,6 @@ if (!window.__BC_PARENT_BRIDGE__) {
           );
           return;
         }
-      }
-
-      // ✅ 1) ctx request MUST be handled before any event_log filtering
-      if (msg.type === "bc_ctx_request") {
-        if (event.origin !== window.location.origin) {
-          console.warn("[PARENT] denied bc_ctx_request: origin mismatch", event.origin);
-          return;
-        }
-        const prem = document.getElementById("premiumRootFrame");
-        const isFromPremiumFrame = !!(prem && event.source === prem.contentWindow);
-        if (!isFromPremiumFrame) {
-          console.warn("[PARENT] denied bc_ctx_request: not from current premium frame");
-          return;
-        }
-
-        // Epoch gate: only respond to iframes created after last mount.
-        const epoch = Number(window.__BC_IFRAME_EPOCH__ || 0);
-        const msgEpoch = Number(msg?.epoch || 0);
-        if (msgEpoch !== epoch) {
-          console.warn("[PARENT] denied bc_ctx_request: epoch mismatch", { msgEpoch, epoch });
-          return;
-        }
-
-        const requestedMode =
-          String(msg?.mode || msg?.requestedMode || "").toLowerCase();
-        const isFromIframe = !!event.source && event.source !== window;
-        if (!isFromIframe) return;
-
-        if (requestedMode === "demo") {
-          window.__BC_LAST_CTX_MODE__ = "demo";
-          const demoCtx = await buildBcCtxSafe("demo");
-          if (!demoCtx?.userId || !demoCtx?.role) return;
-          try {
-            event.source?.postMessage(
-              {
-                source: "BC_MSG",
-                v: 1,
-                type: "bc_ctx",
-                ...demoCtx,
-                drill: null,
-              },
-              event.origin
-            );
-            setSourceCtx(event.source, demoCtx);
-          } catch (e) {
-            console.warn("[PARENT] failed to send bc_ctx demo", e);
-          }
-          return;
-        }
-
-        try {
-          if (window.__BC_ACTIVE_REST_READY__) {
-            await Promise.race([
-              window.__BC_ACTIVE_REST_READY__,
-              new Promise((r) => setTimeout(r, 600))
-            ]);
-          }
-        } catch {}
-
-        const needRestaurant = requestedMode !== "demo";
-        const rid = window.getActiveRestaurantId?.();
-        const live = await getLiveSessionOrNull();
-        if (live) window.appState.session = live;
-        const ready =
-          !!live &&
-          !!window.appState?.profile?.role &&
-          (needRestaurant ? !!rid : true);
-
-        if (!ready) {
-          console.warn("[PARENT] ctx not ready — ask iframe to retry");
-          try {
-            event.source?.postMessage(
-              {
-                source: "BC_MSG",
-                v: 1,
-                type: "ctx_not_ready",
-                ok: false,
-                epoch: Number(window.__BC_IFRAME_EPOCH__ || 0),
-                retryAfterMs: 250,
-                why: "profile_or_restaurant_not_ready",
-              },
-              event.origin
-            );
-          } catch {}
-          return;
-        }
-        const bcCtx = await buildBcCtxSafe(msg?.mode ?? null);
-        if (!bcCtx) {
-          console.warn("[PARENT] buildBcCtxSafe returned null — ask iframe to retry");
-          try {
-            event.source?.postMessage(
-              {
-                source: "BC_MSG",
-                v: 1,
-                type: "ctx_not_ready",
-                ok: false,
-                epoch: Number(window.__BC_IFRAME_EPOCH__ || 0),
-                retryAfterMs: 250,
-                why: "ctx_build_null",
-              },
-              event.origin
-            );
-          } catch {}
-          return;
-        }
-        window.__BC_LAST_CTX_MODE__ = requestedMode || "premium";
-        if (bcCtx) bcCtx.drill = window.__BC_DRILL_CONFIG__ || window.BC_DRILL_CONFIG || null;
-
-        console.log("[PARENT] bc_ctx_request -> reply", {
-          requested: msg?.mode ?? null,
-          bcCtx,
-        });
-
-        if (!bcCtx?.userId || !bcCtx?.role || (!bcCtx?.restaurantId && requestedMode !== "demo")) {
-          console.warn("[PARENT] refusing to send null/partial bc_ctx", bcCtx);
-          return;
-        }
-
-        console.log("[PARENT] sending bc_ctx (request path)", {
-          hasDrill: !!bcCtx?.drill,
-          drill: bcCtx?.drill,
-          to: event.origin
-        });
-
-        // ✅ OK: send ctx
-        try {
-          event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: "bc_ctx", ...bcCtx },
-            event.origin
-          );
-          setSourceCtx(event.source, bcCtx);
-        } catch (e) {
-          console.warn("[PARENT] failed to send bc_ctx premium", e);
-        }
-
-        return;
       }
 
       if (msg.type === "wines_request") {
@@ -1998,8 +1996,10 @@ if (!window.__BC_PARENT_BRIDGE__) {
     } catch (e) {
       console.error("[BC] parent bridge failed:", e);
       try {
+        const errType = String(event?.data?.type || "");
+        const replyType = errType === "event_log" ? "event_log_ack" : "error";
         event.source?.postMessage(
-          { source: "BC_MSG", v: 1, type: "event_log_ack", ok: false, error: String(e?.message || e) },
+          { source: "BC_MSG", v: 1, type: replyType, ok: false, error: String(e?.message || e) },
           event.origin
         );
       } catch {}
