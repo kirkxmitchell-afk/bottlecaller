@@ -74,7 +74,7 @@ export function getSupabaseParent() {
   return supabase;
 }
 
-export function purgeSupabaseStorage() {
+export function purgeAuthStorage() {
   // Your key
   try { localStorage.removeItem(PARENT_STORAGE_KEY); } catch {}
   try { sessionStorage.removeItem(PARENT_STORAGE_KEY); } catch {}
@@ -94,3 +94,6 @@ export function purgeSupabaseStorage() {
     }
   } catch {}
 }
+
+// Backward-compatible alias while migrating callsites.
+export const purgeSupabaseStorage = purgeAuthStorage;

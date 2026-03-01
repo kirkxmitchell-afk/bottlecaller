@@ -9066,27 +9066,35 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         bindInput(wineCards, delHandler);
       }
 
-      function wireIframeLogout() {
-        const btn =
-          document.getElementById("btnHomeLogout") ||
-          document.getElementById("btnLogoutPremium") ||
-          document.getElementById("btnLogoutManagerBoard");
-
-        if (!btn) return;
-
-        btn.onclick = null;
-        btn.__bcBound = false;
-
-        btn.addEventListener("click", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-
-          console.log("[IFRAME] requesting parent logout");
-
+      function requestParentLogout() {
+        try {
           window.parent.postMessage(
             { source: "BC_MSG", v: 1, type: "bc_logout_request" },
             window.location.origin
           );
+        } catch (e) {
+          console.warn("[IFRAME] logout request failed", e);
+        }
+      }
+
+      function wireIframeLogout() {
+        const ids = [
+          "btnLogoutPremium",
+          "btnHomeLogout",
+          "btnLogoutCreate",
+          "btnLogoutManagerBoard",
+        ];
+
+        ids.forEach((id) => {
+          const btn = document.getElementById(id);
+          if (!btn || btn.__bcLogoutBound) return;
+          btn.__bcLogoutBound = true;
+          btn.addEventListener("click", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log("[IFRAME] requesting parent logout", id);
+            requestParentLogout();
+          });
         });
 
         console.log("[IFRAME] logout wired ✅");

@@ -1,7 +1,7 @@
 // src/main.js
 import "./style.css";
-import { signIn, signUp, getSession } from "./lib/authParent.js";
-import { getSupabaseParent, purgeSupabaseStorage } from "./lib/supabaseParent.js";
+import { parentSignIn, parentSignOutGlobal, parentSignUp, parentGetSession } from "./lib/authParent.js";
+import { getSupabaseParent, purgeAuthStorage } from "./lib/supabaseParent.js";
 import { decideAllowedTier } from "./game/progressionBridge";
 import { createProgressionStore } from "./progressionStore.js";
 
@@ -1326,6 +1326,8 @@ if (!window.__BC_PARENT_BRIDGE__) {
     try {
       const msg = event?.data;
       if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
+      // Same-origin only (your game is served from the same Vite origin)
+      if (event.origin !== window.location.origin) return;
       const type = msg.type;
       const notifyLoggedOut = () => {
         try {
@@ -1357,9 +1359,6 @@ if (!window.__BC_PARENT_BRIDGE__) {
         try { destroyDemoIframe("logout_lock"); } catch {}
         return;
       }
-
-      // Same-origin only (your game is served from the same Vite origin)
-      if (event.origin !== window.location.origin) return;
 
       if (msg.type === "logout" || msg.type === "bc_logout_request") {
         await doLogout("bc_msg_logout");
@@ -4632,7 +4631,7 @@ async function loadAuthedState(reason = "manual") {
     "storageKey",
     window.__BC_SUPABASE_STORAGE_KEY__
   );
-  const { session, error: sErr } = await withTimeout(getSession(), 8000, "getSession");
+  const { session, error: sErr } = await withTimeout(parentGetSession(), 8000, "getSession");
   if (sErr) {
     console.warn("[AUTH] getSession error", sErr);
     throw sErr;
@@ -5475,7 +5474,7 @@ async function submitAuth() {
 
     if (uiState.mode === "login") {
       setMsg("authMsg", "Logging in...");
-      const res = await withTimeout(signIn(email, password), 15000, "auth.signIn");
+      const res = await withTimeout(parentSignIn(email, password), 15000, "auth.signIn");
       if (res.error) throw res.error;
 
       await loadAuthedState("login.ok");
@@ -5503,7 +5502,7 @@ async function submitAuth() {
     // signup
     setMsg("authMsg", "Creating account...");
     const { error } = await withTimeout(
-      signUp(email, password, { role: roleForSignup, display_name: displayName || null }),
+      parentSignUp(email, password, { role: roleForSignup, display_name: displayName || null }),
       15000,
       "auth.signUp"
     );
@@ -5581,15 +5580,14 @@ async function doLogout(reason = "user") {
 
   // 2) sign out (best effort)
   try {
-    const sb = getSupabaseParent();
-    await sb.auth.signOut({ scope: "global" });
+    await parentSignOutGlobal();
     console.warn("[LOGOUT] supabase signOut ok");
   } catch (e) {
     console.warn("[LOGOUT] supabase signOut failed (continuing anyway)", e);
   }
 
   // 3) purge ALL known keys (yours + supabase default/legacy)
-  try { purgeSupabaseStorage(); } catch {}
+  try { purgeAuthStorage(); } catch {}
   try {
     localStorage.removeItem("bc_supabase_auth_v1");
     sessionStorage.removeItem("bc_supabase_auth_v1");
