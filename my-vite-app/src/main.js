@@ -5123,128 +5123,42 @@ async function signOutHard() {
   return { stillAuthed, session: sesFinal?.data?.session || null };
 }
 
-async function doLogout(reason = "user") {
-  // prevent double clicks / multiple buttons firing
-  if (window.__BC_LOGOUT_INFLIGHT__) {
-    console.warn("[LOGOUT] blocked (already inflight)");
-    return;
-  }
-  window.__BC_LOGOUT_INFLIGHT__ = true;
-  window.__BC_LOGOUT_LAST_AT__ = Date.now();
+async function doLogout(reason = "forced") {
+  console.log("[LOGOUT] HARD logout start", { reason });
 
-  console.log("[LOGOUT] start", { reason });
-
-  // Disable all logout buttons instantly (UX)
-  ["btnHomeLogout", "btnLogoutCreate", "btnLogoutPremium", "btnLogoutManagerBoard"].forEach((id) => {
-    const b = document.getElementById(id);
-    if (b) {
-      b.disabled = true;
-      b.style.pointerEvents = "none";
-      b.style.opacity = "0.6";
-    }
-  });
-
-  // Stop routing while we sign out
-  window.__BC_ROUTE_INFLIGHT__ = true;
-  window.__BC_FORCE_AUTH__ = true;
-
-  // Always tear down iframes/overlays first (prevents “logout overlay stuck”)
-  try { setPremiumOverlayActive(false); } catch {}
-  try { destroyPremiumIframe("logoutAll.pre"); } catch {}
-  try { unmountDemoGame("logoutAll.pre"); } catch {}
   try {
-    document.querySelectorAll("iframe").forEach((f) => {
-      try { f.src = "about:blank"; } catch {}
-      try { f.remove(); } catch {}
+    await supabase.auth.signOut();
+  } catch (e) {
+    console.warn("[LOGOUT] signOut error", e);
+  }
+
+  // Hard wipe ALL Supabase auth storage
+  try {
+    Object.keys(localStorage).forEach((k) => {
+      if (k.startsWith("sb-")) {
+        localStorage.removeItem(k);
+      }
     });
   } catch {}
 
-  // Remove demo/mode params so decideRoute can't push you into demo shell while logged out
   try {
-    const u = new URL(location.href);
-    u.searchParams.delete("demo");
-    u.searchParams.delete("mode");
-    history.replaceState({}, "", u.pathname + (u.search ? u.search : ""));
+    Object.keys(sessionStorage).forEach((k) => {
+      if (k.startsWith("sb-")) {
+        sessionStorage.removeItem(k);
+      }
+    });
   } catch {}
 
-  // ---- HARD SIGN OUT (must be awaited + verified) ----
-  let signOutErr = null;
-  try {
-    // Supabase v2 supports scope:"global" (best)
-    try {
-      const out = await supabase.auth.signOut({ scope: "global" });
-      signOutErr = out?.error || null;
-    } catch (e) {
-      const out2 = await supabase.auth.signOut();
-      signOutErr = out2?.error || null;
-    }
-  } catch (e) {
-    signOutErr = e;
-  }
-  if (signOutErr) console.warn("[LOGOUT] signOut error", signOutErr);
-
-  // VERIFY: wait until session is actually null
-  const waitMs = 1500;
-  const t0 = Date.now();
-  let session = null;
-
-  while (Date.now() - t0 < waitMs) {
-    try {
-      const res = await supabase.auth.getSession();
-      session = res?.data?.session || null;
-    } catch {}
-    if (!session) break;
-    await new Promise((r) => setTimeout(r, 100));
-  }
-
-  console.log("[LOGOUT] verified session =", session ? "STILL_PRESENT" : "NULL");
-
-  // If session is STILL present, kill token storage + reload (do NOT fake-logout UI)
-  if (session) {
-    try { localStorage.removeItem(supabase.storageKey); } catch {}
-    location.reload();
-    return;
-  }
-
-  // ---- Now it's truly logged out: safe to reset app state/UI ----
-  appMode = "public";
+  // Hard reset memory state
   appState.session = null;
   appState.profile = null;
   appState.activeRestaurantId = null;
   appState.restaurant = null;
-  appState.invites = [];
 
-  // Clear sticky globals that can keep premium/demo state alive
-  try { window.__BC_CTX__ = null; } catch {}
-  try { window.__BC_DRILL_CONFIG__ = null; } catch {}
-  try { window.BC_DRILL_CONFIG = null; } catch {}
-  try { window.__BC_PENDING_CTX_REQ__ = false; } catch {}
-  try { window.__BC_SWITCHING_RESTAURANT__ = false; } catch {}
+  window.__BC_CTX__ = null;
 
-  try { closeHud(); } catch {}
-  try { applyAuthUi(); } catch {}
-
-  try { setAuthIntent("login"); } catch {}
-  try { setMode("login"); } catch {}
-  try { clearGameMounts?.(); } catch {}
-  try { showScreen("screenHome"); } catch {}
-  try { hideAllLogoutButtons(); } catch {}
-  try { hideDemoButtonsOnLogin(); } catch {}
-  try { window.__BC_LAST_SCREEN__ = "screenHome"; } catch {}
-  try { appState.activeRestaurantId = null; } catch {}
-  try {
-    Object.keys(localStorage || {}).forEach((k) => {
-      if (String(k).startsWith("bc_active_restaurant_id::")) localStorage.removeItem(k);
-    });
-  } catch {}
-  try { applyAuthUi(); } catch {}
-
-  // Re-enable route system
-  window.__BC_ROUTE_INFLIGHT__ = false;
-  window.__BC_LOGOUT_INFLIGHT__ = false;
-  window.__BC_FORCE_AUTH__ = false;
-
-  console.log("[LOGOUT] done ✅", { reason });
+  // Force full reload to guarantee auth reset
+  location.href = "/";
 }
 
 // Backward-compatible alias for existing callsites.
