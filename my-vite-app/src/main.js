@@ -1295,8 +1295,10 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
       const needRestaurant = String(requestedMode || "").toLowerCase() !== "demo";
       const rid = window.getActiveRestaurantId?.();
+      const live = await getLiveSessionOrNull();
+      if (live) window.appState.session = live;
       const ready =
-        !!window.appState?.session &&
+        !!live &&
         !!window.appState?.profile?.role &&
         (needRestaurant ? !!rid : true);
       if (!ready) {
@@ -1327,10 +1329,19 @@ if (!window.__BC_PARENT_BRIDGE__) {
     }
 
     async function fetchWines({ mode, event }) {
+      const prem =
+        document.getElementById("bcPremiumFrame") ||
+        document.getElementById("premiumRootFrame");
+      const isFromPremiumFrame = !!(prem && event?.source === prem.contentWindow);
+      if (!isFromPremiumFrame) return [];
+
       const senderCtx = getSourceCtx(event.source);
+      const userId = senderCtx?.userId || null;
       const rid = senderCtx?.restaurantId || null;
       const live = await getLiveSessionOrNull();
-      if (!live || !isUuid(rid)) return [];
+      if (!live || !isUuid(userId) || !isUuid(rid)) return [];
+      window.appState.session = live;
+      if (live?.user?.id !== userId) return [];
       if (String(mode || "").toLowerCase() === "demo") return [];
 
       const { data, error } = await supabase
@@ -1343,6 +1354,12 @@ if (!window.__BC_PARENT_BRIDGE__) {
     }
 
     async function fetchRunsCount({ mode, msg, event }) {
+      const prem =
+        document.getElementById("bcPremiumFrame") ||
+        document.getElementById("premiumRootFrame");
+      const isFromPremiumFrame = !!(prem && event?.source === prem.contentWindow);
+      if (!isFromPremiumFrame) return 0;
+
       const senderCtx = getSourceCtx(event.source);
       const isDemoReq =
         String(mode || "").toLowerCase() === "demo" ||
@@ -1355,8 +1372,10 @@ if (!window.__BC_PARENT_BRIDGE__) {
       const restaurantId = senderCtx?.restaurantId || null;
       if (!isUuid(userId) || !isUuid(restaurantId)) return 0;
 
-      const authed = window.appState?.session?.user?.id;
-      if (authed && authed !== userId) return 0;
+      const live = await getLiveSessionOrNull();
+      const authed = live?.user?.id || null;
+      if (!authed || authed !== userId) return 0;
+      window.appState.session = live;
 
       const { count, error } = await supabase
         .from("bc_encounter_resolutions_v2")
@@ -1788,6 +1807,22 @@ if (!window.__BC_PARENT_BRIDGE__) {
         const action = String(msg.action || "");
         const payload = msg.payload || {};
         const rid = senderCtx?.restaurantId || null;
+        const epochNow = Number(window.__BC_IFRAME_EPOCH__ || 0);
+        const msgEpoch = Number(msg?.epoch || 0);
+        if (!epochNow || msgEpoch !== epochNow) {
+          event.source?.postMessage(
+            {
+              source: "BC_MSG",
+              v: 1,
+              type: "wines_mutate_result",
+              reqId,
+              ok: false,
+              error: "epoch_mismatch",
+            },
+            event.origin
+          );
+          return;
+        }
         try {
           const live = await getLiveSessionOrNull();
           const userId = live?.user?.id || null;
@@ -1935,6 +1970,22 @@ if (!window.__BC_PARENT_BRIDGE__) {
       }
 
       if (msg.type === "event_log") {
+        const isDemoLog =
+          String(senderCtx?.mode || "").toLowerCase() === "demo" ||
+          String(msg?.mode || "").toLowerCase() === "demo" ||
+          String(msg?.payload?.mode || "").toLowerCase() === "demo" ||
+          String(msg?.payload?.bcMode || "").toLowerCase() === "demo";
+        if (!isDemoLog) {
+          const epochNow = Number(window.__BC_IFRAME_EPOCH__ || 0);
+          const msgEpoch = Number(msg?.epoch || 0);
+          if (!epochNow || msgEpoch !== epochNow) {
+            event.source?.postMessage(
+              { source: "BC_MSG", v: 1, type: "event_log_ack", ok: false, error: "epoch_mismatch" },
+              event.origin
+            );
+            return;
+          }
+        }
         await handleEventLog({
           msg,
           event,

@@ -48,10 +48,12 @@ function toDbWineShape(wine: any) {
 
 export async function requestWines(rid: string) {
   const reqId = "wreq_" + Math.random().toString(16).slice(2);
+  const epoch = Number((window as any).__BC_EPOCH__ || 0);
 
   postToParent({
     type: "wines_request",
     reqId,
+    epoch,
     restaurantId: rid,
     mode: "premium",
   });
@@ -67,9 +69,11 @@ export async function fetchRestaurantWines(_scopeId: string | null, restaurantId
 
 async function mutateWines(action: string, payload: any, restaurantId?: string) {
   const reqId = "wmut_" + Math.random().toString(16).slice(2);
+  const epoch = Number((window as any).__BC_EPOCH__ || 0);
   postToParent({
     type: "wines_mutate",
     reqId,
+    epoch,
     action,
     restaurantId: restaurantId || null,
     payload: payload || {},
