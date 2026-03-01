@@ -7,6 +7,70 @@
     <script>
       (function () {
         const qs = new URLSearchParams(location.search);
+        if (qs.get("traceAuth") !== "1") return;
+
+        const KEY = "bc_supabase_auth_v1";
+
+        console.warn("[TRACEAUTH] enabled. Purging key, then tracing writes:", KEY);
+
+        // 1) Purge FIRST so we guarantee the next appearance is a WRITE we can catch
+        try { localStorage.removeItem(KEY); } catch {}
+        try { sessionStorage.removeItem(KEY); } catch {}
+
+        // 2) Trace writes to the key (same tab / same JS context)
+        try {
+          const origSet = Storage.prototype.setItem;
+          Storage.prototype.setItem = function (k, v) {
+            if (k === KEY) {
+              console.group("[TRACEAUTH] setItem → " + KEY);
+              console.trace("STACK");
+              try { console.log("value preview:", String(v).slice(0, 120) + "..."); } catch {}
+              console.groupEnd();
+            }
+            return origSet.call(this, k, v);
+          };
+
+          const origRemove = Storage.prototype.removeItem;
+          Storage.prototype.removeItem = function (k) {
+            if (k === KEY) {
+              console.group("[TRACEAUTH] removeItem → " + KEY);
+              console.trace("STACK");
+              console.groupEnd();
+            }
+            return origRemove.call(this, k);
+          };
+        } catch (e) {
+          console.warn("[TRACEAUTH] failed to patch Storage", e);
+        }
+
+        // 3) Detect cross-tab changes (writes from other tabs won’t hit our setItem hook)
+        window.addEventListener("storage", (e) => {
+          if (e.key === KEY) {
+            console.group("[TRACEAUTH] storage event (OTHER TAB) → " + KEY);
+            console.log("old:", e.oldValue ? "non-null" : "null");
+            console.log("new:", e.newValue ? "non-null" : "null");
+            console.groupEnd();
+          }
+        });
+
+        // 4) Poll so we can see it appear even if it’s set without calling setItem here (rare, but helps)
+        let last = null;
+        setInterval(() => {
+          let cur = null;
+          try { cur = localStorage.getItem(KEY); } catch {}
+          if (cur !== last) {
+            console.group("[TRACEAUTH] POLL change → " + KEY);
+            console.log("was:", last ? "non-null" : "null");
+            console.log("now:", cur ? "non-null" : "null");
+            console.groupEnd();
+            last = cur;
+          }
+        }, 250);
+      })();
+    </script>
+    <script>
+      (function () {
+        const qs = new URLSearchParams(location.search);
         const kill = qs.get("killAuth") === "1";
 
         if (!kill) return;
