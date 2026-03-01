@@ -5340,7 +5340,7 @@ async function signOutHard() {
   return { stillAuthed, session: sesFinal?.data?.session || null };
 }
 
-function purgeAllSupabaseKeys() {
+function purgeSupabaseStorageHard() {
   const keysToKill = [
     "bc_supabase_auth_v1",
     "bc_supabase_iframe_ephemeral_v1",
@@ -5365,37 +5365,40 @@ function purgeAllSupabaseKeys() {
   kill(sessionStorage);
 }
 
+function purgeAllSupabaseKeys() {
+  purgeSupabaseStorageHard();
+}
+
 async function doLogout(reason = "user") {
   if (isLoggingOut()) return;
   window.__BC_LOGGING_OUT__ = true;
   window.__BC_LOGOUT_LOCK__ = Date.now();
   try { localStorage.setItem("__BC_LOGOUT_LATCH__", String(Date.now())); } catch {}
 
-  console.log("[LOGOUT] start", reason);
+  console.log("[LOGOUT] start", reason, "client", supabase.__BC_ID__);
 
-  // A) Kill UI first
+  // 1) freeze refresh
+  try { supabase.auth.stopAutoRefresh?.(); } catch {}
+
+  // 2) kill UI immediately
   hardResetUI("logout.start");
+  try { destroyPremiumIframe("logout.start"); } catch {}
+  try { destroyDemoIframe("logout.start"); } catch {}
 
-  // B) Purge auth storage FIRST (deterministic logout)
-  purgeAllSupabaseKeys();
+  // 3) purge BEFORE signOut (prevents instant rehydrate)
+  purgeSupabaseStorageHard();
 
-  // C) Best effort: tell Supabase server-side too
+  // 4) best-effort revoke server-side
   try {
-    console.log(
-      "[LOGOUT] using supabase",
-      supabase.__BC_ID__,
-      "storageKey",
-      window.__BC_SUPABASE_STORAGE_KEY__
-    );
+    console.log("[LOGOUT] signOut via", supabase.__BC_ID__);
     await supabase.auth.signOut({ scope: "global" });
-    const { data: after } = await supabase.auth.getSession();
-    console.log("[LOGOUT] post-signOut getSession =", !!after?.session, "client", supabase.__BC_ID__);
+    console.log("[LOGOUT] signOut done");
   } catch (e) {
-    console.warn("[LOGOUT] signOut error (ignored)", e);
+    console.warn("[LOGOUT] signOut error", e);
   }
 
-  // D) Purge again (sometimes signOut writes)
-  purgeAllSupabaseKeys();
+  // 5) purge again
+  purgeSupabaseStorageHard();
 
   // E) Remove demo/premium flags from URL
   try {
@@ -5405,7 +5408,7 @@ async function doLogout(reason = "user") {
     history.replaceState({}, "", u.pathname);
   } catch {}
 
-  // F) HARD reload to a clean URL
+  // 6) hard reload (and use latch)
   window.location.href = "/?loggedOut=1&ts=" + Date.now();
 }
 
@@ -5601,6 +5604,7 @@ window.loadManagerBoardData = loadManagerBoardData;
 })();
 
 const __BC_BOOT_LOGGED_OUT__ = new URLSearchParams(location.search).get("loggedOut") === "1";
+window.__BC_SKIP_DECIDE_ROUTE__ = false;
 
 try {
   const cleanUrl = new URL(window.location.href);
@@ -5635,7 +5639,15 @@ if (__BC_BOOT_LOGGED_OUT__) {
   try { appState.session = null; appState.profile = null; } catch {}
   try { destroyPremiumIframe("boot.loggedOut"); } catch {}
   try { destroyDemoIframe("boot.loggedOut"); } catch {}
+  try {
+    const u = new URL(location.href);
+    u.searchParams.delete("loggedOut");
+    u.searchParams.delete("mode");
+    u.searchParams.delete("demo");
+    history.replaceState({}, "", u.pathname);
+  } catch {}
   try { routeAuth(); } catch {}
+  window.__BC_SKIP_DECIDE_ROUTE__ = true;
   __BC_BOOT_ROUTE_BLOCKED__ = true;
 }
 
@@ -5807,7 +5819,7 @@ supabase.auth.onAuthStateChange((event, session) => {
 // Resume state on refresh
 (async function bootResume() {
   try {
-    if (__BC_BOOT_ROUTE_BLOCKED__) return;
+    if (__BC_BOOT_ROUTE_BLOCKED__ || window.__BC_SKIP_DECIDE_ROUTE__) return;
     await decideRoute("boot.resume");
     wireManagerBoardButton();
     await enforceAuthRoute();
