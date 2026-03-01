@@ -1,6 +1,7 @@
 // src/main.js
 import "./style.css";
-import { getSupabase, signIn, signUp, signOut, getSession } from "./lib/supabaseClient.js";
+import { signIn, signUp, signOut, getSession } from "./lib/supabaseClient.js";
+import { getSupabase } from "./lib/supabaseSingleton.js";
 import { decideAllowedTier } from "./game/progressionBridge";
 import { createProgressionStore } from "./progressionStore.js";
 
@@ -634,6 +635,45 @@ const appState = {
   restaurant: null,
   invites: [],
 };
+
+(function bcAuthInvariantWatchdog() {
+  if (window.__BC_AUTH_WATCHDOG__) return;
+  window.__BC_AUTH_WATCHDOG__ = true;
+
+  function killPremium(reason) {
+    try { document.getElementById("premiumRootFrame")?.remove(); } catch {}
+    try {
+      const r = document.getElementById("premiumRoot");
+      if (r) r.innerHTML = "";
+    } catch {}
+    try {
+      const d = document.getElementById("gameRootDemo");
+      if (d) d.innerHTML = "";
+    } catch {}
+    try {
+      const b = document.getElementById("btnLogout");
+      if (b) b.style.display = "none";
+    } catch {}
+    try { showScreen("screenHome"); } catch {}
+
+    window.__BC_PENDING_START_DRILL__ = null;
+    window.BC_PENDING_START_DRILL = null;
+
+    console.warn("[AUTH_WATCHDOG] enforced logged-out UI:", reason);
+  }
+
+  setInterval(() => {
+    const hasSession = !!window.appState?.session;
+    if (!hasSession) {
+      const premRoot = document.getElementById("premiumRoot");
+      const hasFrame = !!document.getElementById("premiumRootFrame");
+      const hasHtml = premRoot ? premRoot.innerHTML.trim().length > 0 : false;
+      if (hasFrame || hasHtml) {
+        killPremium("interval.detected_premium_without_session");
+      }
+    }
+  }, 200);
+})();
 
 function isManagerRole(role) {
   return ["manager", "group_manager", "enterprise_admin"]
@@ -2388,6 +2428,11 @@ function wireParentButtons() {
 }
 
 function setHomeAuthUI(isAuthed) {
+  console.log("[HOME_UI] setHomeAuthUI", {
+    isLoggedIn: isAuthed,
+    session: !!appState?.session,
+    stack: new Error().stack
+  });
   const badge = document.getElementById("homeAuthBadge");
   const logoutBtn = document.getElementById("btnHomeLogout");
   if (isAuthed) {
@@ -5205,6 +5250,30 @@ async function signOutHard() {
   return { stillAuthed, session: sesFinal?.data?.session || null };
 }
 
+function purgeSupabaseAuthStorage() {
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (!k) continue;
+      if (k.startsWith("sb-") && k.includes("auth-token")) {
+        localStorage.removeItem(k);
+        console.warn("[LOGOUT] removed localStorage", k);
+      }
+    }
+  } catch {}
+
+  try {
+    for (let i = sessionStorage.length - 1; i >= 0; i--) {
+      const k = sessionStorage.key(i);
+      if (!k) continue;
+      if (k.startsWith("sb-") && k.includes("auth-token")) {
+        sessionStorage.removeItem(k);
+        console.warn("[LOGOUT] removed sessionStorage", k);
+      }
+    }
+  } catch {}
+}
+
 async function doLogout(reason = "user") {
   if (isLoggingOut()) return;
   window.__BC_LOGGING_OUT__ = true;
@@ -5212,6 +5281,7 @@ async function doLogout(reason = "user") {
   console.log("[LOGOUT] start", reason);
 
   // 1) Immediate invariant enforcement
+  try { appState.session = null; } catch {}
   hardResetUI("logout.start");
   console.log(
     "[LOGOUT ASSERT]",
@@ -5228,15 +5298,18 @@ async function doLogout(reason = "user") {
     console.warn("[LOGOUT] signOut error (UI remains logged out)", e);
   }
 
-  // 3) Clear storage
+  // 3) Purge Supabase auth storage (kills multi-client rehydrate)
+  purgeSupabaseAuthStorage();
+
+  // 4) Clear remaining storage
   try { localStorage.clear(); } catch {}
   try { sessionStorage.clear(); } catch {}
 
-  // 4) Final re-assert
+  // 5) Final re-assert
   hardResetUI("logout.final");
 
-  // 5) Hard redirect
-  window.location.replace("/");
+  // 6) Hard redirect with cache-bust
+  window.location.replace("/?logout=1&ts=" + Date.now());
 }
 
 // Backward-compatible alias for existing callsites.
@@ -5421,6 +5494,15 @@ window.loadManagerBoardData = loadManagerBoardData;
 // ------------------------------------------------------------
 // Boot + auth change
 // ------------------------------------------------------------
+(function bcBootSingleton() {
+  if (window.__BC_BOOTED__) {
+    console.warn("[BOOT] blocked duplicate boot");
+    return;
+  }
+  window.__BC_BOOTED__ = true;
+  console.log("[BOOT] first boot ✅");
+})();
+
 try {
   const cleanUrl = new URL(window.location.href);
   cleanUrl.searchParams.delete("mode");
