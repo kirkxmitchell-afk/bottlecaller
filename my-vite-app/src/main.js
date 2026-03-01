@@ -1855,6 +1855,9 @@ function shouldIgnoreDuplicateNav(msg) {
 }
 
 function applyRoleTemplateGates() {
+  if (isLoggingOut()) return;
+  if (!appState?.session) return;
+
   const role = String(appState?.profile?.role || "").toLowerCase();
   const isWaiter = role === "waiter";
 
@@ -3781,6 +3784,10 @@ function mountPremiumGameIframe({
   url = null,
   forceRemount = false,
 } = {}) {
+  if (isLoggingOut()) {
+    console.warn("[BC] mountPremiumGameIframe blocked (logging out)");
+    return;
+  }
   if (!appState?.session) {
     console.warn("[BC] mountPremiumGameIframe blocked: no session");
     return;
@@ -3816,6 +3823,7 @@ function mountPremiumGameIframe({
   iframe.style.pointerEvents = "auto";
 
   iframe.addEventListener("load", () => {
+    if (isLoggingOut() || !appState?.session) return;
     const modeFromSrc = String(new URL(iframe.src, window.location.href).searchParams.get("mode") || "").toLowerCase();
     if (modeFromSrc === "demo") return;
     pushPremiumCtxAndDrill();
@@ -4467,6 +4475,49 @@ let __BC_LAST_ROUTE_KEY__ = "";
 let __BC_ROUTE_INFLIGHT__ = false;
 window.__BC_LOGOUT_INFLIGHT__ = false;
 window.__BC_LOGOUT_LAST_AT__ = 0;
+window.__BC_LOGGING_OUT__ = false;
+
+function isLoggingOut() {
+  return window.__BC_LOGGING_OUT__ === true;
+}
+
+function hardResetUI(reason = "") {
+  console.log("[LOGOUT] hardResetUI", reason);
+
+  window.__BC_PENDING_START_DRILL__ = null;
+  window.BC_PENDING_START_DRILL = null;
+
+  try {
+    const prem = document.getElementById("premiumRoot");
+    if (prem) prem.innerHTML = "";
+  } catch {}
+
+  try {
+    const demo = document.getElementById("gameRootDemo");
+    if (demo) demo.innerHTML = "";
+  } catch {}
+
+  try { document.getElementById("premiumRootFrame")?.remove(); } catch {}
+  try { document.getElementById("gameRootDemoFrame")?.remove(); } catch {}
+
+  try { appState.session = null; } catch {}
+  try { appState.profile = null; } catch {}
+  try { appMode = "public"; } catch {}
+
+  try { showScreen("screenHome"); } catch {}
+
+  try {
+    const u = new URL(window.location.href);
+    u.searchParams.delete("mode");
+    u.searchParams.delete("demo");
+    history.replaceState({}, "", u.pathname);
+  } catch {}
+
+  try {
+    const btn = document.getElementById("btnLogout");
+    if (btn) btn.style.display = "none";
+  } catch {}
+}
 
 async function routeDemo(reason = "manual") {
   clearMsgs();
@@ -4688,11 +4739,18 @@ function routeAuth() {
 }
 
 async function decideRoute(reason = "decideRoute") {
+  if (isLoggingOut()) {
+    console.warn("[BC] decideRoute blocked (logging out)", reason);
+    return;
+  }
+
   clearMsgs();
 
   try {
     await loadAuthedState(reason);
+    if (isLoggingOut()) return;
     await initRestaurantContextAfterAuth();
+    if (isLoggingOut()) return;
 
     // 1) Logged out => Auth by default (Demo only if explicitly requested)
     if (!isAuthed()) {
@@ -5144,36 +5202,36 @@ async function signOutHard() {
 }
 
 async function doLogout(reason = "user") {
-  console.log("[LOGOUT] hard reset start", reason);
+  if (isLoggingOut()) return;
+  window.__BC_LOGGING_OUT__ = true;
 
-  let signedOut = false;
+  console.log("[LOGOUT] start", reason);
+
+  // 1) Immediate invariant enforcement
+  hardResetUI("logout.start");
+  console.log(
+    "[LOGOUT ASSERT]",
+    "session:", appState?.session,
+    "premiumFrame:", !!document.getElementById("premiumRootFrame"),
+    "premiumRootHTML:", (document.getElementById("premiumRoot")?.innerHTML || "").length
+  );
+
+  // 2) Sign out network call
   try {
     await supabase.auth.signOut({ scope: "global" });
-    signedOut = true;
+    console.log("[LOGOUT] supabase signOut ✅");
   } catch (e) {
-    console.warn("[LOGOUT] signOut error", e);
+    console.warn("[LOGOUT] signOut error (UI remains logged out)", e);
   }
 
-  if (signedOut) {
-    // DESTROY premium shell completely
-    try {
-      const premiumContainer = document.getElementById("premiumContainer");
-      if (premiumContainer) {
-        premiumContainer.innerHTML = "";
-        premiumContainer.remove();
-      }
-    } catch {}
-
-    try {
-      document.querySelectorAll("iframe").forEach((f) => f.remove());
-    } catch {}
-  }
-
-  // Clear all local app state
+  // 3) Clear storage
   try { localStorage.clear(); } catch {}
   try { sessionStorage.clear(); } catch {}
 
-  // Hard redirect to root
+  // 4) Final re-assert
+  hardResetUI("logout.final");
+
+  // 5) Hard redirect
   window.location.replace("/");
 }
 
@@ -5402,6 +5460,10 @@ supabase.auth.onAuthStateChange((event, session) => {
   setDebug({ step: "auth.change", event, time: new Date().toISOString() });
   console.log("[AUTH EVENT]", event);
   console.log("[AUTH] state change:", event, !!session);
+  if (isLoggingOut()) {
+    console.warn("[AUTH] listener blocked (logging out)", event);
+    return;
+  }
 
   if (authRouteTimer) clearTimeout(authRouteTimer);
 
