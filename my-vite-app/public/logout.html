@@ -1,0 +1,51 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Logging out…</title>
+  </head>
+  <body>
+    <script>
+      (async () => {
+        // 1) Purge your known storage key(s)
+        const kill = (store) => {
+          try {
+            const keys = [];
+            for (let i = 0; i < store.length; i++) keys.push(store.key(i));
+            for (const k of keys) {
+              if (!k) continue;
+
+              // Your pinned key(s)
+              if (k === "bc_supabase_auth_v1") store.removeItem(k);
+              if (k === "bc_supabase_iframe_ephemeral_v1") store.removeItem(k);
+
+              // Any default Supabase keys from older runs
+              if (k.startsWith("sb-") && k.includes("auth-token")) store.removeItem(k);
+            }
+          } catch {}
+        };
+
+        kill(localStorage);
+        kill(sessionStorage);
+
+        // 2) Nuke caches + service worker (if any)
+        try {
+          if ("serviceWorker" in navigator) {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            for (const r of regs) await r.unregister();
+          }
+        } catch {}
+
+        try {
+          if ("caches" in window) {
+            const names = await caches.keys();
+            for (const n of names) await caches.delete(n);
+          }
+        } catch {}
+
+        // 3) Hard redirect back to home (clean URL)
+        location.replace("/?loggedOut=1&ts=" + Date.now());
+      })();
+    </script>
+  </body>
+</html>

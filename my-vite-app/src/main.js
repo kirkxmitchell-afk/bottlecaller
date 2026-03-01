@@ -5499,47 +5499,12 @@ function purgeAllSupabaseKeys() {
   purgeSupabaseStorageHard();
 }
 
-async function doLogout(reason = "user") {
-  if (isLoggingOut()) return;
+function doLogout(reason = "user") {
+  window.__BC_LOGOUT_LOCK__ = Date.now(); // stop serving ctx immediately
   window.__BC_LOGGING_OUT__ = true;
-  window.__BC_LOGOUT_LOCK__ = Date.now();
-  try { localStorage.setItem("__BC_LOGOUT_LATCH__", String(Date.now())); } catch {}
-
-  console.log("[LOGOUT] start", reason, "client", supabase.__BC_ID__);
-
-  // 1) freeze refresh
-  try { supabase.auth.stopAutoRefresh?.(); } catch {}
-
-  // 2) kill UI immediately
-  hardResetUI("logout.start");
-  try { destroyPremiumIframe("logout.start"); } catch {}
-  try { destroyDemoIframe("logout.start"); } catch {}
-
-  // 3) purge BEFORE signOut (prevents instant rehydrate)
-  purgeSupabaseStorageHard();
-
-  // 4) best-effort revoke server-side
-  try {
-    console.log("[LOGOUT] signOut via", supabase.__BC_ID__);
-    await supabase.auth.signOut({ scope: "global" });
-    console.log("[LOGOUT] signOut done");
-  } catch (e) {
-    console.warn("[LOGOUT] signOut error", e);
-  }
-
-  // 5) purge again
-  purgeSupabaseStorageHard();
-
-  // E) Remove demo/premium flags from URL
-  try {
-    const u = new URL(window.location.href);
-    u.searchParams.delete("demo");
-    u.searchParams.delete("mode");
-    history.replaceState({}, "", u.pathname);
-  } catch {}
-
-  // 6) hard reload (and use latch)
-  window.location.href = "/?loggedOut=1&ts=" + Date.now();
+  try { destroyPremiumIframe("logout"); } catch {}
+  try { routeAuth(); } catch {}
+  window.location.href = "/logout.html?ts=" + Date.now();
 }
 
 // Backward-compatible alias for existing callsites.
