@@ -1227,15 +1227,32 @@ function rejectIfEpochMismatch(event, msg, replyType, extra = {}) {
 }
 
 function isDemoMsg(msg, senderCtx) {
-  const ctxMode = String(senderCtx?.mode || "").toLowerCase();
-  if (ctxMode === "demo") return true;
-
-  const topMode = String(msg?.mode || "").toLowerCase();
-  if (topMode === "demo") return true;
-
-  // Do not trust payload mode fields to switch runtime into demo.
-  return false;
+  return (
+    String(senderCtx?.mode || "").toLowerCase() === "demo" ||
+    String(msg?.mode || "").toLowerCase() === "demo" ||
+    String(msg?.payload?.mode || "").toLowerCase() === "demo" ||
+    String(msg?.payload?.bcMode || "").toLowerCase() === "demo"
+  );
 }
+
+const PRE_BIND_ALLOW = new Set([
+  "bc_ctx_request",
+  "logout",
+  "bc_logout_request",
+  "nav",
+  "nav_back",
+  "ctx_retry",
+  "progression_snapshot_request",
+]);
+
+const DB_TYPES = new Set([
+  "wines_request",
+  "wines_mutate",
+  "runs_count_request",
+  "ritual_status_request",
+  "event_log",
+  "progression_snapshot_request",
+]);
 
 function rejectIfEpochMismatchSimple(msg) {
   const epochNow = Number(window.__BC_IFRAME_EPOCH__ || 0);
@@ -1585,13 +1602,16 @@ if (!window.__BC_PARENT_BRIDGE__) {
         } catch {}
 
         const needRestaurant = requestedMode !== "demo";
-        const rid = window.getActiveRestaurantId?.();
+        const effectiveRid =
+          window.getActiveRestaurantId?.() ??
+          window.appState?.profile?.restaurant_id ??
+          null;
         const live = await getLiveSessionOrNull();
         if (live) window.appState.session = live;
         const ready =
           !!live &&
           !!window.appState?.profile?.role &&
-          (needRestaurant ? !!rid : true);
+          (needRestaurant ? !!effectiveRid : true);
 
         if (!ready) {
           console.warn("[PARENT] ctx not ready — ask iframe to retry");
@@ -1663,33 +1683,25 @@ if (!window.__BC_PARENT_BRIDGE__) {
       }
 
       const senderCtx = getSourceCtx(event.source);
-      const PRE_BIND_ALLOW = new Set([
-        "bc_ctx_request",
-        "logout",
-        "bc_logout_request",
-        "nav",
-        "nav_back",
-        "ctx_retry",
-      ]);
       if (!senderCtx && !PRE_BIND_ALLOW.has(msg.type)) {
         console.warn("[PARENT] blocked msg (no senderCtx yet)", msg.type);
         try {
           event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: "ctx_required", ok: false, reason: "no_sender_ctx" },
+            {
+              source: "BC_MSG",
+              v: 1,
+              type: "ctx_required",
+              ok: false,
+              reason: "no_sender_ctx",
+              epoch: Number(window.__BC_IFRAME_EPOCH__ || 0),
+              retryAfterMs: 250,
+              why: "no_sender_ctx",
+            },
             event.origin
           );
         } catch {}
         return;
       }
-
-      const DB_TYPES = new Set([
-        "wines_request",
-        "wines_mutate",
-        "runs_count_request",
-        "ritual_status_request",
-        "event_log",
-        "progression_snapshot_request",
-      ]);
 
       let liveAuth = null;
       const isDemo = isDemoMsg(msg, senderCtx);
@@ -1706,7 +1718,16 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
         if (!senderCtx?.userId) {
           event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: "ctx_required", ok: false, reason: "no_sender_ctx_db" },
+            {
+              source: "BC_MSG",
+              v: 1,
+              type: "ctx_not_ready",
+              ok: false,
+              reason: "no_sender_ctx_db",
+              epoch: Number(window.__BC_IFRAME_EPOCH__ || 0),
+              retryAfterMs: 250,
+              why: "no_sender_ctx",
+            },
             event.origin
           );
           return;
@@ -1714,7 +1735,14 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
         if (String(liveAuth.userId) !== String(senderCtx.userId)) {
           event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: "ctx_required", ok: false, reason: "forbidden_user" },
+            {
+              source: "BC_MSG",
+              v: 1,
+              type: "ctx_required",
+              ok: false,
+              reason: "forbidden_user",
+              epoch: Number(window.__BC_IFRAME_EPOCH__ || 0),
+            },
             event.origin
           );
           return;
@@ -2165,6 +2193,23 @@ if (!window.__BC_PARENT_BRIDGE__) {
         const replyType = "progression_snapshot";
         const reqId = msg?.reqId || null;
 
+        if (!senderCtx) {
+          event.source?.postMessage(
+            {
+              source: "BC_MSG",
+              v: 1,
+              type: "ctx_not_ready",
+              ok: false,
+              reason: "no_sender_ctx",
+              epoch: Number(window.__BC_IFRAME_EPOCH__ || 0),
+              retryAfterMs: 250,
+              why: "no_sender_ctx",
+            },
+            event.origin
+          );
+          return;
+        }
+
         if (isDemoMsg(msg, senderCtx)) {
           event.source?.postMessage(
             {
@@ -2204,6 +2249,27 @@ if (!window.__BC_PARENT_BRIDGE__) {
         if (!ctx) return;
 
         try {
+          const rid = window.getActiveRestaurantId?.();
+          const ready =
+            !!window.appState?.session &&
+            !!window.appState?.profile?.role &&
+            !!rid;
+          if (!ready) {
+            event.source?.postMessage(
+              {
+                source: "BC_MSG",
+                v: 1,
+                type: "ctx_not_ready",
+                ok: false,
+                epoch: Number(window.__BC_IFRAME_EPOCH__ || 0),
+                retryAfterMs: 250,
+                why: "profile_or_restaurant_not_ready",
+              },
+              event.origin
+            );
+            return;
+          }
+
           const authed = liveAuth?.userId || null;
           if (!authed) throw new Error("no_session");
           if (String(authed) !== String(ctx.userId)) throw new Error("forbidden_user");
@@ -3244,6 +3310,7 @@ function buildGameIframeUrl({
   backTo = "screenPremiumApp",
   urlOverride = null,
   epoch = Date.now(),
+  bustCache = true,
 } = {}) {
   // If you pass a full override URL, use it as the base.
   // Otherwise build from same-origin /game/game.html
@@ -3251,16 +3318,21 @@ function buildGameIframeUrl({
     ? new URL(urlOverride, window.location.href)
     : new URL("/game/game.html", window.location.origin);
 
+  // prevent cross-origin overrides (bridge is same-origin)
+  if (base.origin !== window.location.origin) {
+    throw new Error("buildGameIframeUrl: urlOverride must be same-origin");
+  }
+
   // Normalize + set params
-  base.searchParams.set("mode", String(mode || "premium"));
+  base.searchParams.set("mode", String(mode || "premium").toLowerCase());
   base.searchParams.set("showBack", showBack ? "1" : "0");
   base.searchParams.set("backTo", String(backTo || "screenPremiumApp"));
 
   // epoch gate param
   base.searchParams.set("epoch", String(epoch));
 
-  // cache-buster
-  base.searchParams.set("v", String(Date.now()));
+  // cache-buster (only when desired)
+  if (bustCache) base.searchParams.set("v", String(Date.now()));
 
   return base.toString();
 }
@@ -4462,6 +4534,7 @@ function mountPremiumGameIframe({
 
   // ✅ Reset sender ctx map for new iframe lifetime
   window.__BC_SOURCE_CTX_MAP__ = new WeakMap();
+  window.__BC_PENDING_CTX_REQ__ = null;
 
   iframe.dataset.bcEpoch = String(epoch); // optional but great for debugging
 
@@ -4471,6 +4544,7 @@ function mountPremiumGameIframe({
     backTo: resolvedBackTo || "screenPremiumApp",
     urlOverride: url || null,
     epoch,
+    bustCache: true,
   });
   iframe.style.width = "100%";
   iframe.style.height = "78vh";
@@ -4480,21 +4554,26 @@ function mountPremiumGameIframe({
   iframe.style.pointerEvents = "auto";
 
   iframe.addEventListener("load", () => {
-    // 🔒 ignore stale load events (hot reload / rapid remount)
-    if (Number(window.__BC_IFRAME_EPOCH__ || 0) !== myEpoch) {
-      console.warn("[PARENT] ignored iframe load (stale epoch)", { myEpoch, current: window.__BC_IFRAME_EPOCH__ });
-      return;
-    }
+    (async () => {
+      // 🔒 ignore stale load events (hot reload / rapid remount)
+      if (Number(window.__BC_IFRAME_EPOCH__ || 0) !== myEpoch) {
+        console.warn("[PARENT] ignored iframe load (stale epoch)", { myEpoch, current: window.__BC_IFRAME_EPOCH__ });
+        return;
+      }
 
-    // 🔒 do not push ctx while logging out / not authed
-    if (isLoggingOut() || !appState?.session) return;
+      if (isLoggingOut()) return;
 
-    // demo never gets ctx
-    const modeFromSrc = String(new URL(iframe.src, window.location.href).searchParams.get("mode") || "").toLowerCase();
-    if (modeFromSrc === "demo") return;
+      const live = await getLiveSessionOrNull();
+      if (!live) return;
+      appState.session = live;
 
-    pushPremiumCtxAndDrill();
-    console.log("[PARENT] premium iframe loaded ✅ (ctx/drill pushed)", { epoch: myEpoch });
+      // demo never gets ctx
+      const modeFromSrc = String(new URL(iframe.src, window.location.href).searchParams.get("mode") || "").toLowerCase();
+      if (modeFromSrc === "demo") return;
+
+      pushPremiumCtxAndDrill();
+      console.log("[PARENT] premium iframe loaded ✅ (ctx/drill pushed)", { epoch: myEpoch });
+    })();
   });
 
   root.appendChild(iframe);
