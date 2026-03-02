@@ -1,7 +1,7 @@
-// src/game/progressionRouter.ts
+// src/parent/progressionRouter.ts
 import { getSupabaseParent } from "../lib/supabaseParent.js";
-import { decideAllowedTierFromSnapshot, describeLockReasons } from "./progressionEvaluator";
-import type { Tier, ProgressionSnapshot } from "./progressionRules";
+import { decideAllowedTierFromSnapshot, describeLockReasons } from "../game/progressionEvaluator";
+import type { Tier, ProgressionSnapshot } from "../game/progressionRules";
 
 export type DecideAllowedTierInput = {
   userId?: string | null;

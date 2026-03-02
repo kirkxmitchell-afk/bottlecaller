@@ -1,6 +1,6 @@
-// src/game/progressionState.ts
+// src/parent/progressionState.ts
 import { getSupabaseParent } from "../lib/supabaseParent.js";
-import type { ProgressionState, RecentWindow, Tier, WeakestLink, Readiness } from "./progressionGuards";
+import type { ProgressionState, RecentWindow, Tier, WeakestLink, Readiness } from "../game/progressionGuards";
 
 export async function buildProgressionInputs(params: {
   userId: string;

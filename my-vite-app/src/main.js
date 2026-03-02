@@ -9,7 +9,7 @@ import { makeCtxHandler } from "./lib/bcHandlers/ctx.js";
 import { makeWinesHandler } from "./lib/bcHandlers/wines.js";
 import { makeRunsCountHandler } from "./lib/bcHandlers/runsCount.js";
 import { handleEventLog } from "./lib/handlers/handleEventLog.js";
-import { decideAllowedTier } from "./game/progressionBridge";
+import { decideAllowedTier } from "./parent/progressionRouter";
 import { createProgressionStore } from "./progressionStore.js";
 
 const supabase = getSupabaseParent();
@@ -1688,6 +1688,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
         "runs_count_request",
         "ritual_status_request",
         "event_log",
+        "progression_snapshot_request",
       ]);
 
       let liveAuth = null;
@@ -2154,6 +2155,90 @@ if (!window.__BC_PARENT_BRIDGE__) {
         } catch (e) {
           event.source?.postMessage(
             { source: "BC_MSG", v: 1, type: replyType, ok: false, error: e?.message || String(e), eventType },
+            event.origin
+          );
+        }
+        return;
+      }
+
+      if (msg.type === "progression_snapshot_request") {
+        const replyType = "progression_snapshot";
+        const reqId = msg?.reqId || null;
+
+        if (isDemoMsg(msg, senderCtx)) {
+          event.source?.postMessage(
+            {
+              source: "BC_MSG",
+              v: 1,
+              type: replyType,
+              reqId,
+              ok: true,
+              demo: true,
+              tierToServe: 1,
+              reasons: [],
+              reasonsHuman: [],
+              snapshot: {
+                encountersTotal: 0,
+                last10Count: 0,
+                last10Greens: 0,
+                last10Reds: 0,
+                anyRedT2Plus: false,
+                pivotsTaken: 0,
+                pivotsSuccess: 0,
+              },
+            },
+            event.origin
+          );
+          return;
+        }
+
+        if (rejectIfEpochMismatch(event, msg, replyType, { reqId })) return;
+
+        const ctx = getSenderCtxOrReject(
+          event,
+          senderCtx,
+          replyType,
+          { reqId },
+          { requireRestaurant: true, allowedRoles: ["waiter", "manager", "group_manager", "admin"] }
+        );
+        if (!ctx) return;
+
+        try {
+          const authed = liveAuth?.userId || null;
+          if (!authed) throw new Error("no_session");
+          if (String(authed) !== String(ctx.userId)) throw new Error("forbidden_user");
+
+          const desiredTier = Number(msg?.desiredTier || 3);
+          const result = await decideAllowedTier({
+            desiredTier: desiredTier === 1 ? 1 : desiredTier === 2 ? 2 : 3,
+            userId: ctx.userId,
+            restaurantId: ctx.restaurantId,
+          });
+
+          event.source?.postMessage(
+            {
+              source: "BC_MSG",
+              v: 1,
+              type: replyType,
+              reqId,
+              ok: true,
+              tierToServe: result?.tierToServe ?? 1,
+              reasons: result?.reasons || [],
+              reasonsHuman: result?.reasonsHuman || [],
+              snapshot: result?.snapshot || null,
+            },
+            event.origin
+          );
+        } catch (e) {
+          event.source?.postMessage(
+            {
+              source: "BC_MSG",
+              v: 1,
+              type: replyType,
+              reqId,
+              ok: false,
+              error: e?.message || String(e),
+            },
             event.origin
           );
         }
