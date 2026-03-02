@@ -30,6 +30,7 @@ declare global {
     __BC_ENCOUNTERS__?: any;
     __BC_GAME_ENTRY_INSTALLED__?: boolean;
     __BC_CTX__?: any;
+    __BC_PROGRESSION__?: any;
   }
 }
 
@@ -69,16 +70,34 @@ function getCtxFromWindow() {
   window.EventLogBridge = EventLogBridge;
   window.ProgressionBridge = ProgressionBridge;
 
+  ProgressionBridge.onProgressionSnapshot((payload: any) => {
+    window.__BC_PROGRESSION__ = payload?.snapshot || null;
+    console.log("[BC] progression snapshot updated", {
+      ok: !!payload?.ok,
+      demo: !!payload?.demo,
+      tierToServe: payload?.tierToServe ?? null,
+    });
+  });
+
+  async function refreshProgressionSnapshot() {
+    try {
+      const payload = await ProgressionBridge.requestProgressionSnapshot(3);
+      window.__BC_PROGRESSION__ = payload?.snapshot || null;
+    } catch {}
+  }
+
   // Install guards ONLY when ctx arrives
   window.addEventListener("BC_CTX_READY", () => {
     const bridge = installProgressionGuards(getCtxFromWindow);
     console.log("[BC] ProgressionBridge installed ✅", bridge);
+    void refreshProgressionSnapshot();
   });
 
   // In case ctx already arrived before this module loaded:
   if ((window as any).__BC_CTX__) {
     const bridge = installProgressionGuards(getCtxFromWindow);
     console.log("[BC] ProgressionBridge installed (late) ✅", bridge);
+    void refreshProgressionSnapshot();
   }
 
   // Expose encounters -> game.html can read this without importing TS

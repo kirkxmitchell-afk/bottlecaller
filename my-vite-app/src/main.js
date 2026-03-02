@@ -2207,12 +2207,11 @@ if (!window.__BC_PARENT_BRIDGE__) {
           const authed = liveAuth?.userId || null;
           if (!authed) throw new Error("no_session");
           if (String(authed) !== String(ctx.userId)) throw new Error("forbidden_user");
-
           const desiredTier = Number(msg?.desiredTier || 3);
-          const result = await decideAllowedTier({
-            desiredTier: desiredTier === 1 ? 1 : desiredTier === 2 ? 2 : 3,
+          const result = await buildProgressionResult({
             userId: ctx.userId,
             restaurantId: ctx.restaurantId,
+            desiredTier: desiredTier === 1 ? 1 : desiredTier === 2 ? 2 : 3,
           });
 
           event.source?.postMessage(
@@ -2261,6 +2260,14 @@ if (!window.__BC_PARENT_BRIDGE__) {
 // ------------------------------------------------------------
 // Progression Snapshot Provider (PARENT) -> used by progressionRouter
 // ------------------------------------------------------------
+async function buildProgressionResult({ userId, restaurantId, desiredTier = 3 }) {
+  return await decideAllowedTier({
+    desiredTier: desiredTier === 1 ? 1 : desiredTier === 2 ? 2 : 3,
+    userId,
+    restaurantId,
+  });
+}
+
 window.__BC_GET_PROGRESSION_SNAPSHOT__ = async ({ userId, restaurantId }) => {
   // Basic sanity
   if (!userId || !restaurantId) return null;
@@ -2273,51 +2280,8 @@ window.__BC_GET_PROGRESSION_SNAPSHOT__ = async ({ userId, restaurantId }) => {
   if (authedUserId !== userId) return null;                 // prevent spoofing
   if (authedRestaurantId !== restaurantId) return null;     // prevent spoofing
 
-  // Pull from your existing views
-  // bc_readiness_v1 already contains last10_count/greens/reds/any_red_t2plus
-  // bc_sessions_v1 contains pivots_success / pivots_taken AND encounters_resolved totals per session
-  const [{ data: ready, error: e1 }, { data: sessions, error: e2 }] = await Promise.all([
-    supabase
-      .from("bc_readiness_v1")
-      .select("last10_count,last10_greens,last10_reds,any_red_t2plus")
-      .eq("user_id", userId)
-      .eq("restaurant_id", restaurantId)
-      .maybeSingle(),
-
-    supabase
-      .from("bc_sessions_v1")
-      .select("encounters_resolved,pivots_taken,pivots_success")
-      .eq("user_id", userId)
-      .eq("restaurant_id", restaurantId),
-  ]);
-
-  if (e1) console.warn("[BC] snapshot readiness error", e1);
-  if (e2) console.warn("[BC] snapshot sessions error", e2);
-
-  const totalEncounters = Array.isArray(sessions)
-    ? sessions.reduce((sum, r) => sum + Number(r.encounters_resolved || 0), 0)
-    : 0;
-
-  const pivotsTaken = Array.isArray(sessions)
-    ? sessions.reduce((sum, r) => sum + Number(r.pivots_taken || 0), 0)
-    : 0;
-
-  const pivotsSuccess = Array.isArray(sessions)
-    ? sessions.reduce((sum, r) => sum + Number(r.pivots_success || 0), 0)
-    : 0;
-
-  return {
-    encountersTotal: totalEncounters,
-
-    last10Count: Number(ready?.last10_count || 0),
-    last10Greens: Number(ready?.last10_greens || 0),
-    last10Reds: Number(ready?.last10_reds || 0),
-
-    anyRedT2Plus: !!ready?.any_red_t2plus,
-
-    pivotsTaken,
-    pivotsSuccess,
-  };
+  const result = await buildProgressionResult({ userId, restaurantId, desiredTier: 3 });
+  return result?.snapshot || null;
 };
 
 // ------------------------------------------------------------
