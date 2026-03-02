@@ -4120,7 +4120,7 @@ function startManagerDrill({ focus = "read", pool = ["decider", "bargain_smart",
 
   showScreen("screenPlay");
   mountPremiumGameIframe({ showBack: true, backTo: "screenManagerBoard" });
-  pushPremiumCtxAndDrill();
+  pushPremiumDrill();
 }
 
 function wireInsightsCTAs(plan) {
@@ -4448,18 +4448,28 @@ function postToPremiumIframeSafe(type, payload = {}) {
     if (isLoggingOut?.()) return false;
     if (!window.appState?.session) return false;
 
-    const frame = document.getElementById("premiumRootFrame");
+    const frame =
+      document.getElementById("premiumRootFrame") ||
+      document.getElementById("bcPremiumFrame");
     if (!frame || !frame.contentWindow) return false;
+    const src = String(frame.getAttribute("src") || "");
+    try {
+      const u = new URL(src, window.location.origin);
+      if (u.origin !== window.location.origin) {
+        console.warn("[PARENT] post blocked (iframe not same-origin)", { type, src: u.origin });
+        return false;
+      }
+    } catch {}
 
     const currentEpoch = Number(window.__BC_IFRAME_EPOCH__ || 0);
     const frameEpoch = Number(frame.dataset?.bcEpoch || 0);
-    if (!currentEpoch || !frameEpoch || frameEpoch !== currentEpoch) {
+    if (!currentEpoch || (frameEpoch && frameEpoch !== currentEpoch)) {
       console.warn("[PARENT] post blocked (epoch mismatch)", { type, frameEpoch, currentEpoch });
       return false;
     }
 
     frame.contentWindow.postMessage(
-      { source: "BC_MSG", v: 1, type, ...payload },
+      { source: "BC_MSG", v: 1, type, ...payload, epoch: currentEpoch },
       window.location.origin
     );
     return true;
@@ -4469,25 +4479,27 @@ function postToPremiumIframeSafe(type, payload = {}) {
   }
 }
 
-function pushPremiumCtxAndDrill() {
+function pushPremiumDrill() {
+  const epoch = Number(window.__BC_IFRAME_EPOCH__ || 0);
   if (isHardLoggedOut?.() || isLoggingOut?.() || !window.appState?.session) return;
+  if (!epoch) return;
 
   if (!window.__BC_DRILL_CONFIG__ && window.setDefaultDrillConfig) {
     window.setDefaultDrillConfig();
   }
   const drillCfg = window.__BC_DRILL_CONFIG__ || window.BC_DRILL_CONFIG || null;
-  const ok1 = postToPremiumIframeSafe("drill_config", { drill: drillCfg });
+  const ok1 = postToPremiumIframeSafe("drill_config", { drill: drillCfg, epoch });
   if (!ok1) return;
 
   const pending = window.__BC_PENDING_START_DRILL__ || window.BC_PENDING_START_DRILL;
-  if (pending?.__epoch && pending.__epoch !== Number(window.__BC_IFRAME_EPOCH__ || 0)) {
+  if (pending?.__epoch && pending.__epoch !== epoch) {
     console.warn("[DRILL] pending drill dropped (stale epoch)", pending);
     setPendingStartDrill(null);
     return;
   }
 
   if (pending) {
-    const ok2 = postToPremiumIframeSafe("start_drill", pending);
+    const ok2 = postToPremiumIframeSafe("start_drill", { ...pending, epoch });
     if (ok2) setPendingStartDrill(null);
   }
 }
@@ -4511,7 +4523,7 @@ function mountPremiumGameIframe({
   let iframe = document.getElementById("premiumRootFrame");
   if (iframe && !forceRemount) {
     if (isHardLoggedOut()) return;
-    pushPremiumCtxAndDrill();
+    pushPremiumDrill();
     return;
   }
   if (iframe && forceRemount) {
@@ -4571,7 +4583,7 @@ function mountPremiumGameIframe({
       const modeFromSrc = String(new URL(iframe.src, window.location.href).searchParams.get("mode") || "").toLowerCase();
       if (modeFromSrc === "demo") return;
 
-      pushPremiumCtxAndDrill();
+      pushPremiumDrill();
       console.log("[PARENT] premium iframe loaded ✅ (ctx/drill pushed)", { epoch: myEpoch });
     })();
   });
