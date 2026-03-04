@@ -6168,57 +6168,58 @@ function ensureProgLoaded() {
         renderEncounterStep();
       }
 
-      function renderActiveStep() {
+      function renderBcStage() {
         const enc = bcActiveEncounter;
         if (!enc) return;
 
-        const steps = Array.isArray(enc.steps) ? enc.steps : null;
-        const step = steps ? steps[bcStepIndex] : null;
+        if (!Array.isArray(enc.steps) || enc.steps.length !== 3) {
+          console.warn("[BC] encounter has no 3-stage steps, using legacy flow", enc?.encounterNumber);
+          return;
+        }
+
+        const step = enc.steps[bcStepIndex];
 
         const header = document.getElementById("stepHeader");
         const content = document.getElementById("stepContent");
         const buttons = document.getElementById("stepButtons");
         const fb = document.getElementById("bcFeedbackLine");
 
-        if (!header || !content || !buttons) return;
-
-        if (step) {
-          const stageName =
-            step.stage === "read" ? "Read the guest" :
-            step.stage === "recommend" ? "Recommend" :
-            step.stage === "close" ? "Close" : String(step.stage);
-
-          header.textContent = `Stage ${bcStepIndex + 1}/${steps.length} — ${stageName}`;
-          content.textContent = step.prompt;
-        } else {
-          header.textContent = `Encounter ${enc.encounterNumber}`;
-          content.textContent = enc.guestLine || "";
+        if (!header || !content || !buttons) {
+          console.warn("[BC] missing stage DOM nodes", { header: !!header, content: !!content, buttons: !!buttons });
+          return;
         }
 
         if (fb) fb.textContent = "";
+
+        const stageName =
+          step.stage === "read" ? "Read the guest" :
+          step.stage === "recommend" ? "Recommend" :
+          step.stage === "close" ? "Close" :
+          String(step.stage || "Stage");
+
+        header.textContent = `Stage ${bcStepIndex + 1}/3 — ${stageName}`;
+        content.textContent = step.prompt;
+
         buttons.innerHTML = "";
-        const choices = step ? step.choices : [];
-        choices.forEach((c) => {
+        (step.choices || []).forEach((c) => {
           const b = document.createElement("button");
           b.type = "button";
           b.className = "option-btn";
           b.textContent = c.text;
-          b.addEventListener("click", () => onChooseOption(c));
+          b.addEventListener("click", () => onBcChoose(c));
           buttons.appendChild(b);
         });
+
+        console.log("[BC] renderBcStage", { enc: enc.encounterNumber, step: bcStepIndex, stage: step.stage });
       }
 
-      function onChooseOption(choice) {
+      function onBcChoose(choice) {
         const enc = bcActiveEncounter;
         const step = enc?.steps?.[bcStepIndex];
-        if (!step) return;
+        if (!enc || !step) return;
 
         const correct = !!choice.correct;
-        bcStageResults.push({
-          stage: step.stage,
-          skillFocus: step.skillFocus,
-          correct
-        });
+        bcStageResults.push({ stage: step.stage, skillFocus: step.skillFocus, correct });
 
         const fb = document.getElementById("bcFeedbackLine");
         if (fb) {
@@ -6226,13 +6227,21 @@ function ensureProgLoaded() {
           fb.textContent = msg || (correct ? "Correct." : "Not quite.");
         }
 
-        if (bcStepIndex < enc.steps.length - 1) {
+        if (bcStepIndex < 2) {
           bcStepIndex += 1;
-          setTimeout(renderActiveStep, 180);
+          setTimeout(renderBcStage, 160);
           return;
         }
 
-        finalizeEncounter(enc, bcStageResults);
+        console.log("[BC] encounter complete (3-stage)", {
+          enc: enc.encounterNumber,
+          results: bcStageResults
+        });
+
+        bcActiveEncounter = null;
+        bcStepIndex = 0;
+        bcStageResults = [];
+        advanceToNextEncounter();
       }
 
       function advanceToNextEncounter() {
@@ -7152,7 +7161,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         console.log("[RENDER] currentStep =", currentStep, "enc#", currentEncounter?.encounterNumber);
         if (currentEncounter && Array.isArray(currentEncounter.steps) && currentEncounter.steps.length) {
           bcActiveEncounter = currentEncounter;
-          renderActiveStep();
+          renderBcStage();
           return;
         }
         const stepHeader = document.getElementById("stepHeader");
@@ -8651,8 +8660,13 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           window.__BC_LAST_ENCOUNTER__ = currentEncounter;
 
           bcActiveEncounter = currentEncounter;
+          window.__BC_ACTIVE_ENCOUNTER__ = currentEncounter;
           bcStepIndex = 0;
           bcStageResults = [];
+          if (Array.isArray(currentEncounter.steps) && currentEncounter.steps.length === 3) {
+            renderBcStage();
+            return;
+          }
           currentStep = 0;
           console.log("[DEMO] calling renderEncounterStep()", { currentStep, encounterIndex, hasEncounter: !!window.currentEncounter });
           renderEncounterStep();
