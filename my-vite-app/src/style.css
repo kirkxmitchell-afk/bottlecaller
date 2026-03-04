@@ -579,3 +579,141 @@ button:hover, .btn:hover, .btn-ghost:hover{
   border-radius: 28px !important;
   box-shadow: 0 26px 80px rgba(0,0,0,0.70) !important;
 }
+
+/* =========================================================
+   PREMIUM WRAPPER (PARENT) — remove outer box + add HUD + stage
+   Target: #screenPremiumApp markup from src/main.js
+   ========================================================= */
+
+/* 1) Kill the big outer rounded panel */
+#screenPremiumApp > .panel.stack{
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+/* 2) Give the premium screen a wide, clean shell */
+#screenPremiumApp{
+  width: min(1480px, 100%);
+  margin: 0 auto;
+  padding: 18px 16px 40px;
+}
+
+/* 3) Topbar becomes a HUD strip (not a box) */
+#screenPremiumApp .topbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+
+  padding: 14px 16px;
+  border-radius: 26px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background:
+    radial-gradient(900px 260px at 20% 0%, rgba(125,211,252,0.10), rgba(0,0,0,0) 60%),
+    rgba(0,0,0,0.22);
+  box-shadow: 0 18px 55px rgba(0,0,0,0.62);
+  backdrop-filter: blur(10px);
+}
+
+/* Brand + badge */
+#screenPremiumApp .topbar .brand h2{
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+#screenPremiumApp #premiumBadge.badge{
+  border-radius: 999px;
+  padding: 6px 10px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.04);
+  color: rgba(245,246,247,.85);
+  font-size: 12px;
+}
+
+/* Right-side actions row */
+#screenPremiumApp .topbar .row{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  justify-content:flex-end;
+}
+
+/* Buttons */
+#screenPremiumApp button,
+#screenPremiumApp .btn-ghost,
+#screenPremiumApp .btn-danger{
+  border-radius: 18px !important;
+  padding: 12px 14px !important;
+  border: 1px solid rgba(255,255,255,0.14) !important;
+  background: rgba(255,255,255,0.04) !important;
+  color: rgba(245,246,247,0.92) !important;
+  transition: transform 140ms cubic-bezier(.2,.8,.2,1), background 140ms cubic-bezier(.2,.8,.2,1), border-color 140ms cubic-bezier(.2,.8,.2,1);
+}
+
+#screenPremiumApp .btn-danger{
+  background: rgba(251,113,133,0.14) !important;
+  border-color: rgba(251,113,133,0.35) !important;
+}
+
+#screenPremiumApp button:hover,
+#screenPremiumApp .btn-ghost:hover,
+#screenPremiumApp .btn-danger:hover{
+  transform: translateY(-1px);
+  background: rgba(255,255,255,0.07) !important;
+  border-color: rgba(125,211,252,0.30) !important;
+}
+
+#screenPremiumApp button:active,
+#screenPremiumApp .btn-ghost:active,
+#screenPremiumApp .btn-danger:active{
+  transform: translateY(0) scale(.99);
+}
+
+/* 4) Progression card: one clean surface, not nested boxes */
+#bcProgressionCard.bc-prog-card{
+  margin-top: 14px;
+  border-radius: 28px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0) 120px),
+    rgba(255,255,255,0.03);
+  box-shadow: 0 26px 90px rgba(0,0,0,0.70);
+  padding: 16px;
+}
+
+/* If bcProgressionCard contains nested cards/panels, flatten them */
+#bcProgressionCard .card,
+#bcProgressionCard .panel{
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+/* 5) Frame the iframe as the game stage */
+#premiumRoot{
+  margin-top: 14px !important;
+  border-radius: 30px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(0,0,0,0.14);
+  box-shadow: 0 30px 100px rgba(0,0,0,0.75);
+  padding: 12px;
+}
+
+/* the iframe itself */
+#premiumRootFrame{
+  width: 100% !important;
+  height: 78vh !important;
+  border: 0 !important;
+  display: block;
+  border-radius: 24px;
+  background: rgba(0,0,0,0.18);
+}
+
+/* Mobile: reduce padding */
+@media (max-width: 860px){
+  #screenPremiumApp{ padding: 14px 12px 28px; }
+  #premiumRoot{ padding: 10px; }
+}
