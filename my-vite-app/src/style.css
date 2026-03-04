@@ -414,3 +414,59 @@ html::before{
   border-radius:10px;
   font:12px/1.2 monospace;
 }
+
+/* =========================================================
+   BOTTLECALLER PREMIUM (PARENT) — paste at VERY BOTTOM
+   ========================================================= */
+
+:root{
+  --p-bg0:#060607;
+  --p-bg1:#0a0b0d;
+  --p-surface:#0f1114;
+
+  --p-text:#f5f6f7;
+  --p-muted:rgba(245,246,247,.72);
+
+  --p-stroke:rgba(255,255,255,.10);
+  --p-stroke2:rgba(255,255,255,.16);
+
+  --p-accent:#7dd3fc;
+
+  --p-r-xl:22px;
+  --p-shadow1:0 14px 40px rgba(0,0,0,.55);
+  --p-shadow2:0 8px 20px rgba(0,0,0,.45);
+  --p-ease:cubic-bezier(.2,.8,.2,1);
+}
+
+body{
+  background:
+    radial-gradient(1100px 650px at 18% 0%, rgba(125,211,252,.06), transparent 60%),
+    radial-gradient(900px 600px at 82% 22%, rgba(52,211,153,.04), transparent 60%),
+    linear-gradient(180deg, var(--p-bg1), var(--p-bg0)) !important;
+  color: var(--p-text) !important;
+}
+
+/* generic panels become premium */
+.panel, .card{
+  background: linear-gradient(180deg, rgba(255,255,255,.04), transparent 120px), var(--p-surface) !important;
+  border: 1px solid var(--p-stroke) !important;
+  border-radius: var(--p-r-xl) !important;
+  box-shadow: var(--p-shadow1) !important;
+}
+
+/* buttons */
+button, .btn, .btn-ghost, .btn-danger{
+  border-radius: 14px !important;
+  transition: transform 140ms var(--p-ease), background 140ms var(--p-ease), border-color 140ms var(--p-ease) !important;
+}
+
+button:hover, .btn:hover, .btn-ghost:hover{
+  transform: translateY(-1px);
+}
+
+/* premium iframe mount surface */
+#premiumRootFrame{
+  border: 1px solid rgba(255,255,255,0.10) !important;
+  border-radius: 22px !important;
+  background: rgba(0,0,0,0.18) !important;
+}

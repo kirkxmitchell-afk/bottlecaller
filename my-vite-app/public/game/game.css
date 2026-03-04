@@ -711,12 +711,189 @@ body{
   max-width: 1320px;
 }
 
-/* === PROOF PATCH (must show) === */
-#bcShell {
-  outline: 6px solid #ff00ff !important;
+/* =========================================================
+   BOTTLECALLER PREMIUM (IFRAME) — paste at VERY BOTTOM
+   ========================================================= */
+
+/* Tokens */
+:root{
+  --bg0:#060607;
+  --bg1:#0a0b0d;
+  --surface:#0f1114;
+
+  --text:#f5f6f7;
+  --muted:rgba(245,246,247,.72);
+
+  --stroke:rgba(255,255,255,.10);
+  --stroke2:rgba(255,255,255,.16);
+
+  --accent:#7dd3fc;
+  --success:#34d399;
+  --warn:#f5c26b;
+  --danger:#fb7185;
+
+  --r-lg:18px;
+  --r-xl:22px;
+
+  --shadow1:0 14px 40px rgba(0,0,0,.55);
+  --shadow2:0 8px 20px rgba(0,0,0,.45);
+
+  --ease:cubic-bezier(.2,.8,.2,1);
 }
 
-#encounterPanel {
-  outline: 6px solid #00ff66 !important;
-  background: #111 !important;
+html, body{ height:100%; }
+body{
+  margin:0 !important;
+  background:
+    radial-gradient(1100px 650px at 18% 0%, rgba(125,211,252,.06), transparent 60%),
+    radial-gradient(900px 600px at 82% 22%, rgba(52,211,153,.04), transparent 60%),
+    linear-gradient(180deg, var(--bg1), var(--bg0)) !important;
+  color:var(--text) !important;
+  overflow:auto !important;
+  -webkit-overflow-scrolling: touch;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* Shell */
+#bcShell.bc-shell{
+  width:min(1320px, 100%);
+  margin:0 auto;
+  padding:14px;
+  display:grid !important;
+  gap:12px;
+
+  grid-template-columns: 1.5fr .75fr;
+  grid-template-rows: auto 1fr auto;
+  grid-template-areas:
+    "hud hud"
+    "stage rail"
+    "bottom bottom";
+}
+
+#bcHudTop{ grid-area:hud; }
+#bcStage{ grid-area:stage; }
+#bcRail{ grid-area:rail; }
+#bcHudBottom{ grid-area:bottom; }
+
+@media (max-width: 860px){
+  #bcShell.bc-shell{
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "hud"
+      "stage"
+      "rail"
+      "bottom";
+  }
+}
+
+/* HUD */
+#bcHudTop.bc-hud,
+#bcHudBottom.bc-hud{
+  background: rgba(0,0,0,.22) !important;
+  border: 1px solid var(--stroke) !important;
+  border-radius: var(--r-xl) !important;
+  box-shadow: var(--shadow2) !important;
+  backdrop-filter: blur(10px);
+}
+
+#bcHudTop.bc-hud-top{
+  padding:12px 14px !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:space-between !important;
+  gap:12px !important;
+}
+
+#bcHudBottom.bc-hud-bottom{
+  padding:12px 14px !important;
+}
+
+/* Cards */
+.bc-card{
+  background: linear-gradient(180deg, rgba(255,255,255,.04), transparent 120px), var(--surface) !important;
+  border:1px solid var(--stroke) !important;
+  border-radius:var(--r-xl) !important;
+  box-shadow:var(--shadow1) !important;
+}
+
+.bc-stage-card{ padding:16px !important; }
+.bc-rail-card{ padding:14px !important; }
+
+/* Encounter panel (your exact markup) */
+#encounterPanel{
+  background: linear-gradient(180deg, rgba(255,255,255,.04), transparent 120px), var(--surface) !important;
+  border:1px solid var(--stroke) !important;
+  border-radius:var(--r-xl) !important;
+  box-shadow:var(--shadow1) !important;
+  padding:16px !important;
+}
+
+#encounterPanel .bc-step-header{
+  font-size:12px !important;
+  color:var(--muted) !important;
+  letter-spacing:.8px !important;
+  text-transform:uppercase !important;
+  margin-bottom:10px !important;
+}
+
+#encounterPanel .bc-score-row{
+  display:flex !important;
+  align-items:center !important;
+  justify-content:space-between !important;
+  gap:10px !important;
+  padding:10px 12px !important;
+  border-radius:16px !important;
+  border:1px solid var(--stroke) !important;
+  background: rgba(0,0,0,.18) !important;
+}
+
+#encounterPanel .bc-badges{
+  display:flex !important;
+  gap:8px !important;
+  flex-wrap:wrap !important;
+  margin-top:8px !important;
+}
+
+#encounterPanel .bc-step-content{ margin-top:10px !important; }
+#encounterPanel .bc-feedback{ margin-top:10px !important; color:var(--muted) !important; opacity:.92 !important; }
+#encounterPanel .bc-button-row{ display:flex !important; flex-wrap:wrap !important; gap:10px !important; margin-top:12px !important; }
+
+/* Buttons: catches whatever JS renders */
+#stepButtons > button,
+#stepButtons .btn,
+#stepButtons .option-btn{
+  width:100% !important;
+  text-align:left !important;
+  padding:12px 12px !important;
+  border-radius:16px !important;
+  border:1px solid var(--stroke) !important;
+  background: rgba(255,255,255,.03) !important;
+  color:var(--text) !important;
+  cursor:pointer !important;
+  transition: transform 140ms var(--ease), border-color 140ms var(--ease), background 140ms var(--ease) !important;
+}
+
+#stepButtons > button:hover,
+#stepButtons .btn:hover,
+#stepButtons .option-btn:hover{
+  transform: translateY(-1px) !important;
+  border-color: rgba(125,211,252,.32) !important;
+  background: rgba(125,211,252,.06) !important;
+}
+
+#stepButtons > button:active,
+#stepButtons .btn:active,
+#stepButtons .option-btn:active{
+  transform: translateY(0) scale(.99) !important;
+}
+
+/* Tiny entrance motion (won't break if .screen.active is absent) */
+@keyframes bcIn { from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);} }
+#bcShell.bc-shell{ animation: bcIn 220ms var(--ease) both; }
+
+@media (prefers-reduced-motion: reduce){
+  #bcShell.bc-shell{ animation:none; }
+  #stepButtons > button,
+  #stepButtons .btn,
+  #stepButtons .option-btn{ transition:none !important; }
 }
