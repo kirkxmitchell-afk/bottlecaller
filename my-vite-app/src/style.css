@@ -545,3 +545,37 @@ button:hover, .btn:hover, .btn-ghost:hover{
   border-radius: 999px;
   pointer-events: none;
 }
+
+/* === PREMIUM v2: BIG VISIBLE SHIFT (PARENT) === */
+
+#screenPremiumApp .panel.stack{
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+
+  width: min(1480px, 100%);
+  margin: 0 auto;
+  padding: 16px !important;
+
+  display: grid !important;
+  gap: 14px !important;
+}
+
+#screenPremiumApp .topbar{
+  border-radius: 24px !important;
+  padding: 14px 16px !important;
+  background: rgba(0,0,0,0.24) !important;
+  border: 1px solid rgba(255,255,255,0.12) !important;
+  box-shadow: 0 18px 50px rgba(0,0,0,0.55) !important;
+}
+
+#bcProgressionCard.bc-prog-card{
+  border-radius: 24px !important;
+  background: rgba(0,0,0,0.18) !important;
+  border: 1px solid rgba(255,255,255,0.12) !important;
+}
+
+#premiumRootFrame{
+  border-radius: 28px !important;
+  box-shadow: 0 26px 80px rgba(0,0,0,0.70) !important;
+}
