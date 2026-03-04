@@ -272,12 +272,6 @@ document.querySelector("#app").innerHTML = `
           <div class="bc-prog-k">Level</div>
           <div id="bcProgLevelParent" class="bc-prog-v">Building recognition</div>
         </div>
-
-        <div class="bc-prog-line">
-          <div class="bc-prog-k">Focus</div>
-          <div id="bcProgFocusParent" class="bc-prog-v">Reading guest intent</div>
-        </div>
-
         <div class="bc-prog-line">
           <div class="bc-prog-k">Next</div>
           <div id="bcProgNextParent" class="bc-prog-v">Keep playing encounters</div>
@@ -2529,10 +2523,10 @@ function refreshParentProgressionUI() {
   const nextEl = document.getElementById("bcProgNextParent");
   const noteEl = document.getElementById("bcProgNoteParent");
 
-  if (!levelEl || !focusEl || !nextEl || !noteEl) return;
+  if (!levelEl || !nextEl || !noteEl) return;
 
   levelEl.textContent = v.level || "";
-  focusEl.textContent = v.focus || "";
+  if (focusEl) focusEl.textContent = v.focus || "";
   nextEl.textContent = v.next || "";
 
   if (v.note) {

@@ -339,12 +339,11 @@
       <div class="card" id="cardDemo">
         <strong>Demo</strong>
         <div class="score-row">Wines saved: <span id="homeDemoCount">0 / 3</span></div>
-        <div class="score-row">Runs saved: <span id="homeDemoRuns">0</span></div>
+        <div class="score-row">Runs total: <span id="homeDemoRuns">0</span></div>
         <div class="card" style="margin-top:10px;">
           <strong>Progress</strong>
           <div class="small-text">Level: <span id="progressNameDemo">—</span></div>
-          <div class="small-text">Focus: <span id="progressFocusDemo">—</span></div>
-          <div class="small-text">Next: <span id="progressNextDemo">—</span></div>
+                    <div class="small-text">Next: <span id="progressNextDemo">—</span></div>
           <div class="small-text">Points: <span id="progressPointsDemo">0</span></div>
         </div>
         <div class="button-row" id="demoButtons">
@@ -361,14 +360,13 @@
       <div class="card" id="cardPremium">
         <strong>Premium</strong>
         <div class="score-row">Wines saved: <span id="homePremiumCount">0 / 10</span></div>
-        <div class="score-row">Runs saved: <span id="homePremiumRuns">0</span></div>
+        <div class="score-row">Runs total: <span id="homePremiumRuns">0</span></div>
         <div class="card" style="margin-top:10px;">
           <strong>Progress</strong>
         <div class="small-text">Level: <span id="progressNamePremium">—</span></div>
-        <div class="small-text">Focus: <span id="progressFocusPremium">—</span></div>
-        <div class="small-text">Next: <span id="progressNextPremium">—</span></div>
+                <div class="small-text">Next: <span id="progressNextPremium">—</span></div>
         <div class="small-text">Points: <span id="progressPointsPremium">0</span></div>
-        <div class="small-text">Saved runs: <span id="bcSavedRunsPremium">0</span></div>
+        <div class="small-text">Total runs: <span id="bcSavedRunsPremium">0</span></div>
       </div>
         <div class="button-row" id="premiumButtons">
           <button id="btnGoPremium" type="button">Setup</button>
@@ -7080,7 +7078,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         if (diffNum !== "" && Number.isFinite(diffNum)) diffNum = Math.min(2, Math.max(1, diffNum));
         const diffLabel = (diffNum === "" ? "" : diffNum);
         if (diffLabel !== "") chipParts.push(`Difficulty ${diffLabel}`);
-        if (focus) chipParts.push(`Focus: ${focus}`);
+        // Focus intentionally not shown here (parent meter owns focus messaging)
         if (trap && trap !== "none") chipParts.push(`Trap: ${trap}`);
         if (currentEncounter.__drillRep) chipParts.push(`Rep ${currentEncounter.__drillRep}/3`);
 
@@ -9366,59 +9364,5 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
   <!-- ✅ MUST be inside body so the iframe reliably loads EngineBridge + encounters -->
   <script type="module">
     import "/src/game/gameEntry.ts";
-  </script>
-  <script>
-  (() => {
-    function normalizeProgressText(text) {
-      const raw = String(text || "");
-      const lines = raw.split("\n").map(l => l.trim()).filter(Boolean);
-
-      const out = [];
-      for (let i = 0; i < lines.length; i++) {
-        let line = lines[i];
-
-        // Remove the Focus row entirely (covers "Focus" and "Focus: Progression")
-        if (/^focus\b/i.test(line)) continue;
-
-        // Rename labels
-        line = line.replace(/^saved\s*runs\s*:/i, "Total runs:");
-        line = line.replace(/^runs\s*saved\s*:/i, "Runs total:");
-
-        out.push(line);
-      }
-
-      return out.join("\n");
-    }
-
-    function patchBcProgK() {
-      const root = document.querySelector(".bc-prog-k");
-      if (!root) return;
-
-      const before = root.innerText;
-      const after = normalizeProgressText(before);
-
-      if (after !== before) {
-        root.textContent = after;
-        root.style.whiteSpace = "pre-line"; // preserve line breaks nicely
-      }
-    }
-
-    // Run once + keep applying across rerenders
-    const run = () => patchBcProgK();
-
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", run, { once: true });
-    } else {
-      run();
-    }
-
-    const obs = new MutationObserver(run);
-    obs.observe(document.documentElement, {
-      subtree: true,
-      childList: true,
-      characterData: true
-    });
-  })();
-  </script>
-</body>
+  </script></body>
 </html>
