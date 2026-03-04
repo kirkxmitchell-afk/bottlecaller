@@ -7175,6 +7175,11 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         if (window.__BC3__?.active) return;
         clearStepHighlights();
         console.log("[RENDER] currentStep =", currentStep, "enc#", currentEncounter?.encounterNumber);
+        console.log("[RENDER CHECK]", {
+          num: currentEncounter?.encounterNumber,
+          hasSteps: Array.isArray(currentEncounter?.steps),
+          stepsLen: currentEncounter?.steps?.length
+        });
         if (currentEncounter && Array.isArray(currentEncounter.steps) && currentEncounter.steps.length) {
           bcActiveEncounter = currentEncounter;
           renderBcStage();
@@ -8482,8 +8487,25 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           enc = src[idx] || list[0] || null;
         }
 
+        // --- PROOF: what did we pick? ---
+        console.log("[PICKED ENC]", {
+          num: enc?.encounterNumber,
+          hasSteps: Array.isArray(enc?.steps),
+          stepsLen: enc?.steps?.length,
+          keys: enc ? Object.keys(enc).slice(0, 12) : null
+        });
+
+        // --- HARD SYNC: single source of truth for encounter ---
         currentEncounter = enc;
-        console.log("[ENCOUNTER LOADED]", currentEncounter?.encounterNumber, currentEncounter?.steps?.length);
+        window.currentEncounter = enc;
+        bcActiveEncounter = enc;
+        window.__BC_ACTIVE_ENCOUNTER__ = enc;
+        window.__BC_LAST_ENCOUNTER__ = enc;
+
+        // reset state for both systems
+        currentStep = 0;
+        bcStepIndex = 0;
+        bcStageResults = [];
 
         // 3-stage takeover: if encounter defines steps, bypass legacy 7-step renderer
         if (window.__BC3__?.enabled && enc && Array.isArray(enc.steps) && enc.steps.length === 3) {
@@ -8689,16 +8711,20 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         });
           window.__BC_LAST_ENCOUNTER__ = currentEncounter;
 
-          bcActiveEncounter = currentEncounter;
-          window.__BC_ACTIVE_ENCOUNTER__ = currentEncounter;
-          bcStepIndex = 0;
-          bcStageResults = [];
-          if (Array.isArray(currentEncounter.steps) && currentEncounter.steps.length === 3) {
+          const has3 = Array.isArray(currentEncounter?.steps) && currentEncounter.steps.length === 3;
+
+          console.log("[START] has3?", has3, {
+            num: currentEncounter?.encounterNumber,
+            stepsLen: currentEncounter?.steps?.length
+          });
+
+          if (has3) {
+            console.log("[START] -> renderBcStage()");
             renderBcStage();
             return;
           }
-          currentStep = 0;
-          console.log("[DEMO] calling renderEncounterStep()", { currentStep, encounterIndex, hasEncounter: !!window.currentEncounter });
+
+          console.log("[START] -> renderEncounterStep() legacy");
           renderEncounterStep();
         } catch (e) {
           console.error("[BC][FATAL] startEncounter crashed", e);
