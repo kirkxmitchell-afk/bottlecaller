@@ -530,21 +530,6 @@ button:hover, .btn:hover, .btn-ghost:hover{
   box-shadow: 0 18px 50px rgba(0,0,0,0.55);
 }
 
-/* === PREMIUM CSS ACTIVE: v2 stamp (parent) === */
-#app::after{
-  content:"PREMIUM v2 (parent)";
-  position: fixed;
-  left: 12px;
-  top: 12px;
-  z-index: 999999;
-  font: 12px/1.2 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-  color: rgba(245,246,247,.7);
-  background: rgba(0,0,0,.45);
-  border: 1px solid rgba(255,255,255,.12);
-  padding: 6px 10px;
-  border-radius: 999px;
-  pointer-events: none;
-}
 
 /* === PREMIUM v2: BIG VISIBLE SHIFT (PARENT) === */
 
@@ -743,4 +728,142 @@ button:hover, .btn:hover, .btn-ghost:hover{
   border: 1px solid rgba(255,255,255,0.10) !important;
   background: rgba(0,0,0,0.20) !important;
   box-shadow: 0 32px 110px rgba(0,0,0,0.80) !important;
+}
+
+/* ================================
+   PREMIUM PARENT: no prototype box, tight spacing, square corners
+   ================================ */
+
+/* Make the premium screen tighter */
+#screenPremiumApp{
+  width: min(1480px, 100%);
+  margin: 0 auto;
+  padding: 10px 12px 18px;
+}
+
+/* Reduce the stack spacing (your .stack class adds big gaps) */
+#screenPremiumApp .panel.stack{
+  gap: 8px !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Topbar: keep HUD feel but square corners and less padding */
+#screenPremiumApp .topbar{
+  padding: 10px 12px !important;
+  border-radius: 0 !important;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(0,0,0,0.22);
+  box-shadow: 0 14px 40px rgba(0,0,0,0.55);
+}
+
+/* Progression card: square corners, less space */
+#bcProgressionCard.bc-prog-card{
+  margin-top: 0 !important;
+  padding: 10px 12px !important;
+  border-radius: 0 !important;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.03);
+  box-shadow: 0 18px 55px rgba(0,0,0,0.55);
+}
+
+/* The mount div is NOT a wrapper card (no box) */
+#premiumRoot{
+  margin-top: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Iframe: square corners, no extra border-radius */
+#premiumRootFrame{
+  width: 100% !important;
+  height: 78vh !important;
+  border: 0 !important;
+  border-radius: 0 !important;  /* <-- square */
+  display: block !important;
+  box-shadow: 0 26px 80px rgba(0,0,0,0.70);
+  background: rgba(0,0,0,0.18);
+}
+
+/* premiumRoot should NOT look like a card/box */
+#premiumRoot{
+  margin-top: 14px;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+/* iframe itself is the framed stage */
+#premiumRootFrame{
+  width: 100%;
+  height: 78vh;
+  border: 0;
+  display: block;
+  border-radius: 28px;
+  box-shadow: 0 32px 110px rgba(0,0,0,0.80);
+  background: rgba(0,0,0,0.20);
+}
+
+/* ================================
+   PREMIUM PARENT: no prototype box, tight spacing, square corners
+   ================================ */
+
+/* Make the premium screen tighter */
+#screenPremiumApp{
+  width: min(1480px, 100%);
+  margin: 0 auto;
+  padding: 10px 12px 18px;
+}
+
+/* Reduce the stack spacing (your .stack class adds big gaps) */
+#screenPremiumApp .panel.stack{
+  gap: 8px !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Topbar: keep HUD feel but square corners and less padding */
+#screenPremiumApp .topbar{
+  padding: 10px 12px !important;
+  border-radius: 0 !important;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(0,0,0,0.22);
+  box-shadow: 0 14px 40px rgba(0,0,0,0.55);
+}
+
+/* Progression card: square corners, less space */
+#bcProgressionCard.bc-prog-card{
+  margin-top: 0 !important;
+  padding: 10px 12px !important;
+  border-radius: 0 !important;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.03);
+  box-shadow: 0 18px 55px rgba(0,0,0,0.55);
+}
+
+/* The mount div is NOT a wrapper card (no box) */
+#premiumRoot{
+  margin-top: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Iframe: square corners, no extra border-radius */
+#premiumRootFrame{
+  width: 100% !important;
+  height: 78vh !important;
+  border: 0 !important;
+  border-radius: 0 !important;  /* <-- square */
+  display: block !important;
+  box-shadow: 0 26px 80px rgba(0,0,0,0.70);
+  background: rgba(0,0,0,0.18);
 }

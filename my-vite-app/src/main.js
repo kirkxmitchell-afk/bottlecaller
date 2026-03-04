@@ -289,7 +289,7 @@ document.querySelector("#app").innerHTML = `
       <div id="bcUnlockNotice" class="bc-unlock" style="display:none;"></div>
 
       <!-- Game lives here (isolated) -->
-      <iframe id="premiumRootFrame" style="margin-top:10px;"></iframe>
+      <div id="premiumRoot"></div>
     </div>
   </section>
 
