@@ -51,6 +51,24 @@ export type EncounterMeta = {
   trapType: TrapType;
 };
 
+export type EncounterStepChoice = {
+  text: string;
+  correct: boolean;
+};
+
+export type EncounterStepFeedback = {
+  correct: string;
+  wrong: string;
+};
+
+export type EncounterStep = {
+  stage: "read" | "recommend" | "close" | string;
+  skillFocus: SkillFocus | "frame";
+  prompt: string;
+  choices: EncounterStepChoice[];
+  feedback: EncounterStepFeedback;
+};
+
 export type Encounter = {
   encounterNumber: number; // 1..N
 
@@ -69,6 +87,7 @@ export type Encounter = {
   difficulty?: number;
   tags?: string[];
   wineIndexHint?: number;
+  steps?: EncounterStep[];
 };
 
 export type EncounterPack = {
@@ -99,6 +118,54 @@ export const ENCOUNTERS: EncounterPack = {
       toneTag: "Direct",
       meta: { tier: tierFromEncounterNumber(1), difficulty: 1, skillFocus: "read", trapType: "none" },
       wineIndexHint: 0,
+
+      // 3-stage encounter flow
+      steps: [
+        {
+          stage: "read",
+          skillFocus: "read",
+          prompt: "Guest: “We’re in a bit of a rush.” What do they want most right now?",
+          choices: [
+            { text: "A long explanation of the whole wine list.", correct: false },
+            { text: "A fast, confident recommendation with minimal questions.", correct: true },
+            { text: "Only the cheapest option.", correct: false },
+          ],
+          feedback: {
+            correct: "Yes — they want speed and confidence, not a lecture.",
+            wrong: "Not quite. This is about urgency: keep it quick and decisive."
+          }
+        },
+
+        {
+          stage: "recommend",
+          skillFocus: "frame",
+          prompt: "How do you recommend while keeping it fast?",
+          choices: [
+            { text: "“Our best is… (long story and details).”", correct: false },
+            { text: "“If you want a quick win: I’d go with [house favorite]. It’s crowd-pleasing and pairs with most dishes.”", correct: true },
+            { text: "“Just pick anything — they’re all good.”", correct: false },
+          ],
+          feedback: {
+            correct: "Good: decisive, short, and reassuring.",
+            wrong: "Too slow, too vague, or too unhelpful for a rushed guest."
+          }
+        },
+
+        {
+          stage: "close",
+          skillFocus: "delivery",
+          prompt: "How do you close without creating friction?",
+          choices: [
+            { text: "“Do you want that?”", correct: false },
+            { text: "“Perfect — shall I bring a bottle, or start you with two glasses to save time?”", correct: true },
+            { text: "“Let me know if you decide.”", correct: false },
+          ],
+          feedback: {
+            correct: "Clean close with a low-friction option that matches their urgency.",
+            wrong: "Either too vague or too passive — you need a crisp close."
+          }
+        }
+      ]
     },
     {
       encounterNumber: 2,
