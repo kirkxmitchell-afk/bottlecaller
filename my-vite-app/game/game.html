@@ -9367,5 +9367,32 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
   <script type="module">
     import "/src/game/gameEntry.ts";
   </script>
+  <script>
+  (() => {
+    // Removes "Focus: Progression" row from the in-game progress list (railProgress)
+    function patchRailProgress() {
+      const root =
+        document.getElementById("railProgress") ||
+        document.getElementById("railProgressList") ||
+        document.querySelector("[data-rail-progress]");
+
+      if (!root) return;
+
+      // Look for any element that contains "Focus:" and "Progress"
+      const candidates = root.querySelectorAll("li, div, p, span");
+      for (const el of candidates) {
+        const t = (el.textContent || "").trim();
+        if (/^focus\s*:/i.test(t) && /progress/i.test(t)) {
+          el.remove();
+        }
+      }
+    }
+
+    // Run now + whenever the rail is re-rendered
+    patchRailProgress();
+    const obs = new MutationObserver(patchRailProgress);
+    obs.observe(document.documentElement, { subtree: true, childList: true });
+  })();
+  </script>
 </body>
 </html>
