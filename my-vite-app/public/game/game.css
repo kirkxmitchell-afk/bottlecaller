@@ -898,7 +898,104 @@ body{
   #stepButtons .option-btn{ transition:none !important; }
 }
 
-/* === CANARY PATCH: MUST be obvious === */
-body { background: #8b0000 !important; } /* dark red */
-#bcHudTop { background: #00ffff !important; color: #000 !important; } /* cyan topbar */
-#encounterPanel { transform: rotate(-1deg) !important; outline: 8px solid #00ff66 !important; }
+/* =======================
+   PREMIUM GAME (IFRAME) — BIG VISUAL SHIFT
+   ======================= */
+
+/* Make HUD more cockpit */
+#bcHudTop{
+  position: sticky;
+  top: 10px;
+  z-index: 10;
+}
+
+#bcHudTop .bc-brand{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+
+#bcHudTop .bc-stats{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  justify-content:center;
+}
+
+/* Make rail feel like an intentional side HUD */
+#bcRail{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+
+/* Stage spacing + depth */
+#bcStage{
+  min-height: 0;
+}
+
+#encounterPanel{
+  position: relative;
+}
+
+/* Subtle glass highlight edge */
+#encounterPanel::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  border-radius: var(--r-xl);
+  pointer-events:none;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0) 35%),
+    radial-gradient(900px 260px at 20% 0%, rgba(125,211,252,0.10), rgba(0,0,0,0) 60%);
+  opacity: .9;
+}
+
+/* Step content typography */
+#stepContent{
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+#stepContent p{
+  margin: 10px 0;
+}
+
+#stepContent small, #stepContent .small-text{
+  color: var(--muted) !important;
+}
+
+/* Inputs */
+#stepContent input,
+#stepContent select,
+#stepContent textarea{
+  width:100%;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--stroke);
+  border-radius: 14px;
+  padding: 10px 12px;
+  color: var(--text);
+  outline: none;
+}
+
+#stepContent input:focus,
+#stepContent select:focus,
+#stepContent textarea:focus{
+  border-color: rgba(125,211,252,0.35);
+  box-shadow: 0 0 0 4px rgba(125,211,252,0.10);
+}
+
+/* Make option buttons feel like game choices */
+#stepButtons > button,
+#stepButtons .btn,
+#stepButtons .option-btn{
+  border-radius: 18px !important;
+  background: rgba(255,255,255,0.035) !important;
+}
+
+#stepButtons > button:hover,
+#stepButtons .btn:hover,
+#stepButtons .option-btn:hover{
+  box-shadow: 0 10px 28px rgba(0,0,0,0.35);
+}
