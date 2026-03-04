@@ -529,3 +529,19 @@ button:hover, .btn:hover, .btn-ghost:hover{
   background: rgba(0,0,0,0.18);
   box-shadow: 0 18px 50px rgba(0,0,0,0.55);
 }
+
+/* === PREMIUM CSS ACTIVE: v2 stamp (parent) === */
+#app::after{
+  content:"PREMIUM v2 (parent)";
+  position: fixed;
+  left: 12px;
+  top: 12px;
+  z-index: 999999;
+  font: 12px/1.2 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  color: rgba(245,246,247,.7);
+  background: rgba(0,0,0,.45);
+  border: 1px solid rgba(255,255,255,.12);
+  padding: 6px 10px;
+  border-radius: 999px;
+  pointer-events: none;
+}
