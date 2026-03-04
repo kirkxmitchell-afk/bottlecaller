@@ -289,7 +289,7 @@ document.querySelector("#app").innerHTML = `
       <div id="bcUnlockNotice" class="bc-unlock" style="display:none;"></div>
 
       <!-- Game lives here (isolated) -->
-      <div id="premiumRoot" style="margin-top:10px;"></div>
+      <iframe id="premiumRootFrame" style="margin-top:10px;"></iframe>
     </div>
   </section>
 
@@ -3207,7 +3207,11 @@ function destroyDemoIframe(reason = "") {
 function destroyPremiumIframe(reason = "") {
   console.log("[BC] destroyPremiumIframe", reason);
   const root = document.getElementById("premiumRoot");
+  const frame = document.getElementById("premiumRootFrame");
   if (root) root.innerHTML = "";
+  if (!root && frame) {
+    try { frame.src = "about:blank"; } catch {}
+  }
   window.__BC_PENDING_START_DRILL__ = null;
   window.BC_PENDING_START_DRILL = null;
   // invalidate any remaining messages from removed iframe window
@@ -3292,8 +3296,12 @@ window.__BC_LOGOUT_LOCK__ = window.__BC_LOGOUT_LOCK__ || 0;
 function clearGameMounts() {
   const demoMount = document.getElementById("gameRootDemo");
   const premMount = document.getElementById("premiumRoot");
+  const premFrame = document.getElementById("premiumRootFrame");
   if (demoMount) demoMount.innerHTML = "";
   if (premMount) premMount.innerHTML = "";
+  if (!premMount && premFrame) {
+    try { premFrame.src = "about:blank"; } catch {}
+  }
 }
 
 function forceRemountForModeSwitch(nextMode) {
@@ -4419,7 +4427,7 @@ async function resolveInitialRestaurantForScope(profile) {
 }
 
 function pushCtxToPremiumIframe(source = "manual") {
-  const iframe = document.querySelector("#premiumRoot iframe");
+  const iframe = document.querySelector("#premiumRoot iframe") || document.getElementById("premiumRootFrame");
   if (!iframe || !iframe.contentWindow) return;
 
   const uid = appState.session?.user?.id || null;
@@ -4517,23 +4525,28 @@ function mountPremiumGameIframe({
   }
 
   const root = document.getElementById("premiumRoot");
-  if (!root) return;
+  let iframe = document.getElementById("premiumRootFrame");
+  if (!root && !iframe) return;
 
   // ✅ Do NOT remount if already present
-  let iframe = document.getElementById("premiumRootFrame");
-  if (iframe && !forceRemount) {
+  const iframeSrcNow = String(iframe?.getAttribute("src") || "");
+  const hasLiveGameSrc = iframeSrcNow.includes("/game/game.html");
+  if (iframe && !forceRemount && hasLiveGameSrc) {
     if (isHardLoggedOut()) return;
     pushPremiumDrill();
     return;
   }
-  if (iframe && forceRemount) {
+  if (iframe && forceRemount && root) {
     try { iframe.remove(); } catch {}
   }
 
-  root.innerHTML = "";
-
-  iframe = document.createElement("iframe");
-  iframe.id = "premiumRootFrame";
+  if (root) {
+    root.innerHTML = "";
+    iframe = document.createElement("iframe");
+    iframe.id = "premiumRootFrame";
+  } else if (!iframe) {
+    return;
+  }
   const roleNow = String(appState?.profile?.role || "").toLowerCase();
   const resolvedBackTo = roleNow === "waiter"
     ? "screenPremiumApp"
@@ -4588,8 +4601,10 @@ function mountPremiumGameIframe({
     })();
   });
 
-  root.style.pointerEvents = "auto";
-  root.appendChild(iframe);
+  if (root) {
+    root.style.pointerEvents = "auto";
+    root.appendChild(iframe);
+  }
   console.log("[BC] mounted premium iframe", { src: iframe.src, epoch });
 }
 
@@ -5365,7 +5380,7 @@ async function routePremium(reason = "manual") {
         showScreen("screenManagerBoard");
         return;
       }
-      mountGameIframe("premiumRoot", "premium");
+      mountPremiumGameIframe({ mode: "premium" });
       try {
         postToGame("bc_ctx", {
           userId: appState.session?.user?.id || null,
@@ -5420,7 +5435,7 @@ async function routePremium(reason = "manual") {
       showScreen("screenManagerBoard");
       return;
     }
-    mountGameIframe("premiumRoot", "premium");
+    mountPremiumGameIframe({ mode: "premium" });
     try {
       postToGame("bc_ctx", {
         userId: appState.session?.user?.id || null,
