@@ -470,3 +470,7 @@ button:hover, .btn:hover, .btn-ghost:hover{
   border-radius: 22px !important;
   background: rgba(0,0,0,0.18) !important;
 }
+
+/* === PARENT CANARY PATCH: MUST be obvious === */
+#screenPremiumApp .topbar { background: #ff00ff !important; }
+#screenPremiumApp .panel.stack { outline: 6px solid yellow !important; }

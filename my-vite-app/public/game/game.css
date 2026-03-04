@@ -897,3 +897,8 @@ body{
   #stepButtons .btn,
   #stepButtons .option-btn{ transition:none !important; }
 }
+
+/* === CANARY PATCH: MUST be obvious === */
+body { background: #8b0000 !important; } /* dark red */
+#bcHudTop { background: #00ffff !important; color: #000 !important; } /* cyan topbar */
+#encounterPanel { transform: rotate(-1deg) !important; outline: 8px solid #00ff66 !important; }
