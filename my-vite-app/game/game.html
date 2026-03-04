@@ -938,12 +938,14 @@ function isDrillMode() {
       let bcActiveEncounter = null;      // current encounter object (steps mode)
       let bcStepIndex = 0;               // 0..2
       let bcStageResults = [];           // [{stage, skillFocus, correct}]
-      // --- 3-stage encounter mode ---
-      let bc3Enabled = true;
-      let bc3Active = false;
-      let bc3Enc = null;
-      let bc3Step = 0;          // 0..2
-      let bc3Results = [];      // [{stage, skillFocus, correct}]
+      // --- 3-stage encounter mode (global) ---
+      window.__BC3__ = window.__BC3__ || {
+        enabled: true,
+        active: false,
+        enc: null,
+        step: 0,
+        results: []
+      };
       // optional: if you have these elsewhere, declare here too
       let restaurantId = null;
       let userId = null;
@@ -4273,10 +4275,12 @@ function ensureProgLoaded() {
         bcActiveEncounter = null;
         bcStepIndex = 0;
         bcStageResults = [];
-        bc3Active = false;
-        bc3Enc = null;
-        bc3Step = 0;
-        bc3Results = [];
+        if (window.__BC3__) {
+          window.__BC3__.active = false;
+          window.__BC3__.enc = null;
+          window.__BC3__.step = 0;
+          window.__BC3__.results = [];
+        }
       }
 
       // ---------- Storage ----------
@@ -7168,7 +7172,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
       }
 
       function renderEncounterStep() {
-        if (bc3Active) return;
+        if (window.__BC3__?.active) return;
         clearStepHighlights();
         console.log("[RENDER] currentStep =", currentStep, "enc#", currentEncounter?.encounterNumber);
         if (currentEncounter && Array.isArray(currentEncounter.steps) && currentEncounter.steps.length) {
@@ -8478,11 +8482,11 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         }
 
         // 3-stage takeover: if encounter defines steps, bypass legacy 7-step renderer
-        if (bc3Enabled && enc && Array.isArray(enc.steps) && enc.steps.length === 3) {
-          bc3Active = true;
-          bc3Enc = enc;
-          bc3Step = 0;
-          bc3Results = [];
+        if (window.__BC3__?.enabled && enc && Array.isArray(enc.steps) && enc.steps.length === 3) {
+          window.__BC3__.active = true;
+          window.__BC3__.enc = enc;
+          window.__BC3__.step = 0;
+          window.__BC3__.results = [];
           bc3Render();
           return;
         }
@@ -8700,16 +8704,17 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
       }
 
       function bc3Render() {
-        if (!bc3Active || !bc3Enc) return;
+        const S = window.__BC3__;
+        if (!S?.active || !S.enc) return;
 
-        const steps = bc3Enc.steps;
+        const steps = S.enc.steps;
         if (!Array.isArray(steps) || steps.length !== 3) {
-          console.warn("[BC3] invalid steps, falling back", bc3Enc?.encounterNumber);
-          bc3Active = false;
+          console.warn("[BC3] invalid steps, disable", S.enc?.encounterNumber);
+          S.active = false;
           return;
         }
 
-        const step = steps[bc3Step];
+        const step = steps[S.step];
 
         const header = document.getElementById("stepHeader");
         const content = document.getElementById("stepContent");
@@ -8728,7 +8733,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           step.stage === "recommend" ? "Recommend" :
           step.stage === "close" ? "Close" : String(step.stage || "Stage");
 
-        header.textContent = `Stage ${bc3Step + 1}/3 — ${stageName}`;
+        header.textContent = `Stage ${S.step + 1}/3 — ${stageName}`;
         content.textContent = step.prompt || "";
 
         buttons.innerHTML = "";
@@ -8741,16 +8746,16 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           buttons.appendChild(b);
         });
 
-        console.log("[BC3] render", { enc: bc3Enc.encounterNumber, step: bc3Step, stage: step.stage });
+        console.log("[BC3] render", { enc: S.enc.encounterNumber, step: S.step, stage: step.stage });
       }
 
       function bc3Choose(choice) {
-        if (!bc3Active || !bc3Enc) return;
-        const step = bc3Enc?.steps?.[bc3Step];
-        if (!step) return;
+        const S = window.__BC3__;
+        const step = S?.enc?.steps?.[S.step];
+        if (!S?.active || !step) return;
 
         const correct = !!choice.correct;
-        bc3Results.push({ stage: step.stage, skillFocus: step.skillFocus, correct });
+        S.results.push({ stage: step.stage, skillFocus: step.skillFocus, correct });
 
         const fb = document.getElementById("bcFeedbackLine");
         if (fb) {
@@ -8758,19 +8763,19 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           fb.textContent = msg || (correct ? "Correct." : "Not quite.");
         }
 
-        if (bc3Step < 2) {
-          bc3Step += 1;
+        if (S.step < 2) {
+          S.step += 1;
           setTimeout(bc3Render, 160);
           return;
         }
 
-        console.log("[BC3] complete", { enc: bc3Enc.encounterNumber, results: bc3Results });
+        console.log("[BC3] complete", { enc: S.enc.encounterNumber, results: S.results });
 
         // reset stage state
-        bc3Active = false;
-        bc3Enc = null;
-        bc3Step = 0;
-        bc3Results = [];
+        S.active = false;
+        S.enc = null;
+        S.step = 0;
+        S.results = [];
 
         // continue using existing progression flow
         advanceToNextEncounter();
