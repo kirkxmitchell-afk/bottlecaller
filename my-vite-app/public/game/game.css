@@ -710,3 +710,13 @@ body{
 #bcShell{
   max-width: 1320px;
 }
+
+/* === PROOF PATCH (must show) === */
+#bcShell {
+  outline: 6px solid #ff00ff !important;
+}
+
+#encounterPanel {
+  outline: 6px solid #00ff66 !important;
+  background: #111 !important;
+}
