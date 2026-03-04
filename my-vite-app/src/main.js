@@ -273,6 +273,10 @@ document.querySelector("#app").innerHTML = `
           <div id="bcProgLevelParent" class="bc-prog-v">Building recognition</div>
         </div>
         <div class="bc-prog-line">
+          <div class="bc-prog-k">Focus</div>
+          <div id="bcProgFocusParent" class="bc-prog-v">Reading guest intent</div>
+        </div>
+        <div class="bc-prog-line">
           <div class="bc-prog-k">Next</div>
           <div id="bcProgNextParent" class="bc-prog-v">Keep playing encounters</div>
         </div>
