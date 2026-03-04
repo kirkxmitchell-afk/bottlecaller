@@ -9369,57 +9369,41 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
   </script>
   <script>
   (() => {
+    function normalizeProgressText(text) {
+      const raw = String(text || "");
+      const lines = raw.split("\n").map(l => l.trim()).filter(Boolean);
+
+      const out = [];
+      for (let i = 0; i < lines.length; i++) {
+        let line = lines[i];
+
+        // Remove the Focus row entirely (covers "Focus" and "Focus: Progression")
+        if (/^focus\b/i.test(line)) continue;
+
+        // Rename labels
+        line = line.replace(/^saved\s*runs\s*:/i, "Total runs:");
+        line = line.replace(/^runs\s*saved\s*:/i, "Runs total:");
+
+        out.push(line);
+      }
+
+      return out.join("\n");
+    }
+
     function patchBcProgK() {
       const root = document.querySelector(".bc-prog-k");
       if (!root) return;
 
-      // Iterate direct text blocks/lines
-      // We treat each block element line as removable/replaceable
-      const lines = [...root.querySelectorAll("*")]
-        .filter(el => el.children.length === 0)
-        .filter(el => (el.textContent || "").trim().length);
+      const before = root.innerText;
+      const after = normalizeProgressText(before);
 
-      for (const el of lines) {
-        const t = (el.textContent || "").trim();
-
-        // 1) Remove "Focus: Progression" (and any Focus line)
-        if (/^focus\s*:/i.test(t)) {
-          el.remove();
-          continue;
-        }
-        if (/^focus$/i.test(t)) { // handles a separate "Focus" label node
-          el.remove();
-          continue;
-        }
-        if (/^progression$/i.test(t)) { // if "Progression" is its own node
-          // Only remove if it looks like it belonged to a Focus pair
-          el.remove();
-          continue;
-        }
-
-        // 2) Rename "Saved runs" -> "Total runs"
-        if (/^saved\s*runs\s*:/i.test(t)) {
-          el.textContent = t.replace(/^saved\s*runs\s*:/i, "Total runs:");
-          continue;
-        }
-        if (/^saved\s*runs$/i.test(t)) {
-          el.textContent = "Total runs";
-          continue;
-        }
-
-        // 3) Rename "Runs saved" -> "Runs total"
-        if (/^runs\s*saved\s*:/i.test(t)) {
-          el.textContent = t.replace(/^runs\s*saved\s*:/i, "Runs total:");
-          continue;
-        }
-        if (/^runs\s*saved$/i.test(t)) {
-          el.textContent = "Runs total";
-          continue;
-        }
+      if (after !== before) {
+        root.textContent = after;
+        root.style.whiteSpace = "pre-line"; // preserve line breaks nicely
       }
     }
 
-    // run once + keep applying
+    // Run once + keep applying across rerenders
     const run = () => patchBcProgK();
 
     if (document.readyState === "loading") {
@@ -9429,7 +9413,11 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
     }
 
     const obs = new MutationObserver(run);
-    obs.observe(document.documentElement, { subtree: true, childList: true, characterData: true });
+    obs.observe(document.documentElement, {
+      subtree: true,
+      childList: true,
+      characterData: true
+    });
   })();
   </script>
 </body>
