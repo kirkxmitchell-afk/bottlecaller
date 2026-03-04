@@ -296,3 +296,109 @@ button[disabled] { opacity: 0.5; cursor: not-allowed; transform: none; }
 
 .successText { color: var(--greenText); }
 .errorText { color: rgba(255, 140, 140, 0.92); }
+
+/* =========================================================
+   PREMIUM APP: click-safe overlays + wide cockpit styling
+   Applies to your exact DOM: #screenPremiumApp, #premiumRoot, #premiumRootFrame,
+   #hudBackdrop, #hudPanel, #debugPanel
+   ========================================================= */
+
+/* Root stability */
+#app{
+  min-height: 100vh;
+}
+
+/* IMPORTANT: if hidden overlays exist, they must not block clicks */
+#hudBackdrop.hidden,
+#hudPanel.hidden{
+  display: none !important; /* prevents invisible overlay click blockers */
+}
+
+/* HUD overlays when shown */
+#hudBackdrop{
+  pointer-events: auto;
+}
+#hudPanel{
+  pointer-events: auto;
+}
+
+/* PREMIUM SCREEN LAYOUT */
+#screenPremiumApp .panel.stack{
+  width: min(1400px, 100%);
+  margin: 0 auto;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+  grid-template-rows: auto auto auto 1fr;
+
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Topbar becomes HUD */
+#screenPremiumApp .topbar{
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(0,0,0,0.22);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.45);
+  padding: 12px 14px;
+}
+
+#screenPremiumApp .topbar .brand{
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+#premiumBadge.badge{
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.05);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+/* Progress card */
+#bcProgressionCard.bc-prog-card{
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(0,0,0,0.18);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.35);
+}
+
+/* Unlock notice */
+#bcUnlockNotice.bc-unlock{
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(0,0,0,0.16);
+}
+
+/* IFRAME SURFACE */
+#premiumRoot{
+  position: relative;
+  margin-top: 10px;
+}
+
+#premiumRootFrame,
+#premiumRoot iframe{
+  width: 100%;
+  height: 78vh;
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 22px;
+  background: rgba(0,0,0,0.18);
+  display: block;
+  pointer-events: auto;
+}
+
+#premiumRoot,
+#premiumRootFrame{
+  isolation: isolate;
+}
+
+@media (max-width: 860px){
+  #debugPanel{
+    max-height: 28vh !important;
+    opacity: 0.92;
+  }
+}

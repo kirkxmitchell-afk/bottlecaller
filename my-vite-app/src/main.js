@@ -4588,6 +4588,7 @@ function mountPremiumGameIframe({
     })();
   });
 
+  root.style.pointerEvents = "auto";
   root.appendChild(iframe);
   console.log("[BC] mounted premium iframe", { src: iframe.src, epoch });
 }

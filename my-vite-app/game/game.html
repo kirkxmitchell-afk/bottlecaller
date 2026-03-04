@@ -307,25 +307,27 @@
   <h1>BottleCaller Prototype</h1>
 
   <section id="screenWelcome" class="screen">
-    <div class="panel cover-screen">
-      <h2>Welcome to BottleCaller</h2>
-      <p>BottleCaller trains servers to sell the right wine by matching guest psychology with the right delivery style — in under 5 minutes.</p>
-      <ul class="cover-list" id="welcomeBulletList">
-        <li>Diagnose the guest</li>
-        <li id="welcomeBulletModeHook">Choose Hook</li>
-        <li>Deliver in 2 sentences</li>
-      </ul>
-      <div class="button-row">
-        <button id="btnWelcomeStart" type="button">Start</button>
-        <button
-          id="btnWelcomeBackToSetup"
-          type="button"
-          class="btn-ghost"
-        >
-          Back to Setup
-        </button>
+    <div class="bc-shell bc-shell-center">
+      <div class="bc-card bc-stage-card panel cover-screen">
+        <h2>Welcome to BottleCaller</h2>
+        <p>BottleCaller trains servers to sell the right wine by matching guest psychology with the right delivery style — in under 5 minutes.</p>
+        <ul class="cover-list" id="welcomeBulletList">
+          <li>Diagnose the guest</li>
+          <li id="welcomeBulletModeHook">Choose Hook</li>
+          <li>Deliver in 2 sentences</li>
+        </ul>
+        <div class="button-row">
+          <button id="btnWelcomeStart" type="button">Start</button>
+          <button
+            id="btnWelcomeBackToSetup"
+            type="button"
+            class="btn-ghost"
+          >
+            Back to Setup
+          </button>
+        </div>
+        <div class="small-text" id="welcomeFooterNote"></div>
       </div>
-      <div class="small-text" id="welcomeFooterNote"></div>
     </div>
   </section>
 
@@ -547,22 +549,58 @@
   </section>
 
   <section id="screenPlay" class="screen">
-    <div class="panel">
-      <div class="button-row">
-        <button id="btnBackHomeFromPlay" type="button">Back</button>
-      </div>
-
-      <div id="encounterPanel" class="encounter-panel">
-        <div class="step-header" id="stepHeader"></div>
-        <div class="score-row">
-          <strong id="wineDisplayName">Session:</strong>
-          <div id="difficultyBadge" class="difficulty-badge hidden">⚠ stricter rules</div>
+    <div id="bcShell" class="bc-shell">
+      <header id="bcHudTop" class="bc-hud bc-hud-top">
+        <div class="bc-brand">
+          <div class="bc-dot"></div>
+          <div class="bc-title">BottleCaller</div>
+          <div class="bc-subtitle" id="bcModePill">Premium</div>
         </div>
-        <div id="wineBadges"></div>
-        <div id="stepContent" style="margin-top:10px;"></div>
-        <div id="bcFeedbackLine" style="margin-top:10px; opacity:0.85;"></div>
-        <div class="button-row" id="stepButtons"></div>
-      </div>
+
+        <div class="bc-stats">
+          <div class="bc-chip" id="tierChip">Tier</div>
+          <div class="bc-chip" id="streakChip">Streak</div>
+          <div class="bc-chip" id="pointsChip">Points</div>
+        </div>
+
+        <div class="bc-actions">
+          <button id="btnBackHomeFromPlay" class="btn btn-ghost" type="button">Back</button>
+        </div>
+      </header>
+
+      <main id="bcStage" class="bc-stage">
+        <div id="encounterPanel" class="bc-card bc-stage-card encounter-panel">
+          <div class="bc-step-header step-header" id="stepHeader"></div>
+
+          <div class="bc-score-row score-row">
+            <strong id="wineDisplayName">Session:</strong>
+            <div id="difficultyBadge" class="bc-badge bc-badge-warn difficulty-badge hidden">⚠ stricter rules</div>
+          </div>
+
+          <div id="wineBadges" class="bc-badges"></div>
+
+          <div id="stepContent" class="bc-step-content"></div>
+          <div id="bcFeedbackLine" class="bc-feedback"></div>
+
+          <div id="stepButtons" class="bc-button-row button-row"></div>
+        </div>
+      </main>
+
+      <aside id="bcRail" class="bc-rail">
+        <div class="bc-card bc-rail-card">
+          <div class="bc-rail-title">Wine Notes</div>
+          <div class="bc-rail-body" id="railWineNotes">-</div>
+        </div>
+
+        <div class="bc-card bc-rail-card">
+          <div class="bc-rail-title">Progress</div>
+          <div class="bc-rail-body" id="railProgress">-</div>
+        </div>
+      </aside>
+
+      <footer id="bcHudBottom" class="bc-hud bc-hud-bottom">
+        <div class="bc-hint" id="bcHintLine">Read the guest. Choose the hook.</div>
+      </footer>
     </div>
   </section>
 
