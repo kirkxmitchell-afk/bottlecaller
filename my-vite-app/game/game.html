@@ -9369,93 +9369,67 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
   </script>
   <script>
   (() => {
-    // What to rename / remove inside the in-game rail progress area
-    const RENAME_MAP = [
-      [/^\s*Saved\s+runs?\s*:/i, "Total runs:"],
-      [/^\s*Saved\s+runs?\s*$/i, "Total runs"],
-    ];
+    function patchBcProgK() {
+      const root = document.querySelector(".bc-prog-k");
+      if (!root) return;
 
-    function getRailRoot() {
-      // Primary target: the railProgress container you created in your refactor
-      const root =
-        document.getElementById("railProgress") ||
-        document.querySelector("#bcRail #railProgress") ||
-        document.querySelector("#bcRail .bc-rail-body");
+      // Iterate direct text blocks/lines
+      // We treat each block element line as removable/replaceable
+      const lines = [...root.querySelectorAll("*")]
+        .filter(el => el.children.length === 0)
+        .filter(el => (el.textContent || "").trim().length);
 
-      return root;
-    }
+      for (const el of lines) {
+        const t = (el.textContent || "").trim();
 
-    function patchTextNodes(root) {
-      // Walk through leaf nodes and patch their textContent safely
-      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
-      const toRemove = new Set();
-
-      while (walker.nextNode()) {
-        const n = walker.currentNode;
-        const t0 = (n.nodeValue || "");
-        const t = t0.trim();
-        if (!t) continue;
-
-        // Remove any "Focus: Progression" line (handles variants like "Focus : Progression", etc.)
-        if (/^focus\s*:/i.test(t) && /progress/i.test(t)) {
-          // remove the nearest line container
-          const host = n.parentElement?.closest("li, .row, .item, p, div") || n.parentElement;
-          if (host) toRemove.add(host);
+        // 1) Remove "Focus: Progression" (and any Focus line)
+        if (/^focus\s*:/i.test(t)) {
+          el.remove();
+          continue;
+        }
+        if (/^focus$/i.test(t)) { // handles a separate "Focus" label node
+          el.remove();
+          continue;
+        }
+        if (/^progression$/i.test(t)) { // if "Progression" is its own node
+          // Only remove if it looks like it belonged to a Focus pair
+          el.remove();
           continue;
         }
 
-        // Rename "Saved runs" -> "Total runs"
-        let next = t0;
-        for (const [re, repl] of RENAME_MAP) {
-          next = next.replace(re, repl);
+        // 2) Rename "Saved runs" -> "Total runs"
+        if (/^saved\s*runs\s*:/i.test(t)) {
+          el.textContent = t.replace(/^saved\s*runs\s*:/i, "Total runs:");
+          continue;
         }
-        if (next !== t0) n.nodeValue = next;
-      }
-
-      // Apply removals after traversal
-      for (const el of toRemove) el.remove();
-    }
-
-    function patchRailProgress() {
-      const root = getRailRoot();
-      if (!root) return;
-
-      // Patch within the root
-      patchTextNodes(root);
-
-      // Also handle cases where content is not text nodes but elements with direct text
-      const els = root.querySelectorAll("li, div, p, span");
-      els.forEach(el => {
-        const t = (el.textContent || "").trim();
-
-        if (/^focus\s*:/i.test(t) && /progress/i.test(t)) {
-          el.remove();
-          return;
-        }
-
-        // If element is exactly "Saved runs" (no colon), rename it
-        if (/^saved\s+runs?$/i.test(t)) {
+        if (/^saved\s*runs$/i.test(t)) {
           el.textContent = "Total runs";
-          return;
+          continue;
         }
 
-        // If element contains "Saved runs:" label, rename
-        if (/^saved\s+runs?\s*:/i.test(t)) {
-          el.textContent = el.textContent.replace(/^\s*Saved\s+runs?\s*:/i, "Total runs:");
+        // 3) Rename "Runs saved" -> "Runs total"
+        if (/^runs\s*saved\s*:/i.test(t)) {
+          el.textContent = t.replace(/^runs\s*saved\s*:/i, "Runs total:");
+          continue;
         }
-      });
+        if (/^runs\s*saved$/i.test(t)) {
+          el.textContent = "Runs total";
+          continue;
+        }
+      }
     }
 
-    // Run once after DOM is ready
+    // run once + keep applying
+    const run = () => patchBcProgK();
+
     if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", patchRailProgress, { once: true });
+      document.addEventListener("DOMContentLoaded", run, { once: true });
     } else {
-      patchRailProgress();
+      run();
     }
 
-    // Keep it applied when the rail re-renders
-    const obs = new MutationObserver(() => patchRailProgress());
-    obs.observe(document.documentElement, { subtree: true, childList: true });
+    const obs = new MutationObserver(run);
+    obs.observe(document.documentElement, { subtree: true, childList: true, characterData: true });
   })();
   </script>
 </body>
