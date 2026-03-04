@@ -8447,6 +8447,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
         let idx = 0;
         let enc = null;
+        const prevEncounterState = currentEncounter || null;
 
         if (sessionType === "drill") {
           const drill = getDrillConfig();
@@ -8480,6 +8481,9 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           idx = (Number.isFinite(encounterIndex) ? encounterIndex : 0) % src.length;
           enc = src[idx] || list[0] || null;
         }
+
+        currentEncounter = enc;
+        console.log("[ENCOUNTER LOADED]", currentEncounter?.encounterNumber, currentEncounter?.steps?.length);
 
         // 3-stage takeover: if encounter defines steps, bypass legacy 7-step renderer
         if (window.__BC3__?.enabled && enc && Array.isArray(enc.steps) && enc.steps.length === 3) {
@@ -8543,7 +8547,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         const runIndex = Number.isFinite(encounterIndex) ? encounterIndex : 0;
         const encounterRunId = `${encounterIdStable}::i_${runIndex}`;
 
-        const prev = currentEncounter || null;
+        const prev = prevEncounterState;
         const sameEncounter = !!prev?.runId && prev.runId === encounterRunId;
         const carry = sameEncounter ? prev : null;
 
