@@ -717,3 +717,30 @@ button:hover, .btn:hover, .btn-ghost:hover{
   #screenPremiumApp{ padding: 14px 12px 28px; }
   #premiumRoot{ padding: 10px; }
 }
+
+/* =========================================================
+   REMOVE "BottleCaller Prototype" WRAPPER
+   ========================================================= */
+
+/* Hide the heading */
+#screenPremiumApp h2:has(+ #premiumRoot),
+#screenPremiumApp h3:has(+ #premiumRoot){
+  display:none !important;
+}
+
+/* Remove the wrapper box completely */
+#premiumRoot{
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin-top: 14px;
+}
+
+/* Let the iframe become the real stage */
+#premiumRootFrame{
+  border-radius: 28px !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
+  background: rgba(0,0,0,0.20) !important;
+  box-shadow: 0 32px 110px rgba(0,0,0,0.80) !important;
+}
