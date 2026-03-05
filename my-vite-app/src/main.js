@@ -2127,20 +2127,27 @@ if (!window.__BC_PARENT_BRIDGE__) {
             showScreen("screenPremiumApp");
             return;
           }
+          window.__BC_MB_DEFAULTTAB__ = msg.mbTab || "overview";
           showScreen("screenManagerBoard");
+          await ensureActiveRestaurantReady?.();
           wireManagerBoardMenu?.();
 
-          if (msg.mbTab) window.__BC_MB_SHOWTAB__?.(msg.mbTab);
+          if (!window.__BC_MB_LOADTAB__) {
+            await loadManagerBoardData();
+            destroyPremiumIframe("exit drill -> managerboard");
+            setPremiumOverlayActive(false);
+            return;
+          }
+
+          if (msg.mbTab) {
+            window.__BC_MB_SHOWTAB__?.(msg.mbTab);
+            await window.__BC_MB_LOADTAB__?.(msg.mbTab);
+          } else {
+            await window.__BC_MB_LOADTAB__?.(window.__BC_MB_DEFAULTTAB__);
+          }
 
           destroyPremiumIframe("exit drill -> managerboard");
           setPremiumOverlayActive(false);
-
-          if (msg.mbTab === "insights") await loadManagerInsights();
-          if (msg.mbTab === "messenger") {
-            wireManagerBoardMessenger();
-            await mbLoadInstructionTargets();
-            await loadManagerMessenger();
-          }
           return;
         }
 
@@ -2154,18 +2161,20 @@ if (!window.__BC_PARENT_BRIDGE__) {
           showScreen(dest);
 
           if (dest === "screenManagerBoard") {
+            window.__BC_MB_DEFAULTTAB__ = msg.mbTab || "overview";
+            await ensureActiveRestaurantReady?.();
             wireManagerBoardMenu?.();
+
+            if (!window.__BC_MB_LOADTAB__) {
+              await loadManagerBoardData();
+              return;
+            }
+
             if (msg.mbTab) {
               window.__BC_MB_SHOWTAB__?.(msg.mbTab);
-              if (msg.mbTab === "insights") await loadManagerInsights();
-              if (msg.mbTab === "overview") await loadManagerBoardData();
-              if (msg.mbTab === "messenger") {
-                wireManagerBoardMessenger();
-                await mbLoadInstructionTargets();
-                await loadManagerMessenger();
-              }
+              await window.__BC_MB_LOADTAB__?.(msg.mbTab);
             } else {
-              await loadManagerBoardData();
+              await window.__BC_MB_LOADTAB__?.(window.__BC_MB_DEFAULTTAB__);
             }
           }
           return;
@@ -3804,6 +3813,17 @@ function wireManagerBoardMenu() {
     document.getElementById(`mbTab_${name}`)?.classList.remove("hidden");
   }
   window.__BC_MB_SHOWTAB__ = showTab;
+  window.__BC_MB_LOADTAB__ = async function(name) {
+    if (!name) return;
+    if (name === "overview") return loadManagerBoardData();
+    if (name === "billing") return loadManagerBoardSeats?.();
+    if (name === "insights") return loadManagerInsights();
+    if (name === "messenger") {
+      wireManagerBoardMessenger();
+      await mbLoadInstructionTargets();
+      return loadManagerMessenger();
+    }
+  };
 
   menu.addEventListener("click", async (e) => {
     const btn = e.target?.closest?.("[data-mbtab]");
@@ -3813,7 +3833,7 @@ function wireManagerBoardMenu() {
     showTab(tab);
 
     if (tab === "overview") await loadManagerBoardData();
-    if (tab === "listing" || tab === "billing") await loadManagerBoardSeats?.();
+    if (tab === "billing") await loadManagerBoardSeats?.();
     if (tab === "insights") await loadManagerInsights();
     if (tab === "messenger") {
       wireManagerBoardMessenger();
@@ -3822,7 +3842,7 @@ function wireManagerBoardMenu() {
     }
   });
 
-  showTab("overview");
+  showTab(window.__BC_MB_DEFAULTTAB__ || "overview");
 }
 
 async function loadRestaurantsForHudPicker() {
@@ -5764,12 +5784,21 @@ async function routeManagerBoard(reason = "manual") {
   }
 
   unmountDemoGame("routeManagerBoard");
+
+  // ✅ respect nav-passed tab (from iframe) if set
+  window.__BC_MB_DEFAULTTAB__ = window.__BC_MB_DEFAULTTAB__ || "overview";
+
   showScreen("screenManagerBoard");
   applyManagerBoardVisibility();
   wireManagerBoardMenu();
   wireGroupSetupRedeem();
+
   await ensureActiveRestaurantReady();
-  await loadManagerBoardData();
+
+  // ✅ load the selected tab without requiring a click
+  window.__BC_MB_SHOWTAB__?.(window.__BC_MB_DEFAULTTAB__);
+  await (window.__BC_MB_LOADTAB__?.(window.__BC_MB_DEFAULTTAB__) || loadManagerBoardData());
+
   wireManagerBoardMessenger();
   wireManagerBoardBillingAccess();
 }
