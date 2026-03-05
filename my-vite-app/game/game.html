@@ -8487,35 +8487,20 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           enc = src[idx] || list[0] || null;
         }
 
-        // --- PROOF: what did we pick? ---
-        console.log("[PICKED ENC]", {
-          num: enc?.encounterNumber,
-          hasSteps: Array.isArray(enc?.steps),
-          stepsLen: enc?.steps?.length,
-          keys: enc ? Object.keys(enc).slice(0, 12) : null
-        });
-
-        // --- HARD SYNC: single source of truth for encounter ---
+        // --- BC3 FORCE ROUTE (authoritative) ---
         currentEncounter = enc;
-        window.currentEncounter = enc;
+        window.currentEncounter = enc; // helps debugging consistency
         bcActiveEncounter = enc;
-        window.__BC_ACTIVE_ENCOUNTER__ = enc;
-        window.__BC_LAST_ENCOUNTER__ = enc;
-
-        // reset state for both systems
-        currentStep = 0;
         bcStepIndex = 0;
         bcStageResults = [];
+        currentStep = 0;
 
-        // 3-stage takeover: if encounter defines steps, bypass legacy 7-step renderer
-        if (window.__BC3__?.enabled && enc && Array.isArray(enc.steps) && enc.steps.length === 3) {
-          window.__BC3__.active = true;
-          window.__BC3__.enc = enc;
-          window.__BC3__.step = 0;
-          window.__BC3__.results = [];
-          bc3Render();
-          return;
-        }
+        // Hard proof in console every time
+        console.log("[BC3 ROUTE CHECK]", {
+          encNum: enc?.encounterNumber,
+          hasSteps: Array.isArray(enc?.steps),
+          stepsLen: enc?.steps?.length
+        });
 
         // ----------------------------
         // Wine selection
@@ -8711,20 +8696,15 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         });
           window.__BC_LAST_ENCOUNTER__ = currentEncounter;
 
-          const has3 = Array.isArray(currentEncounter?.steps) && currentEncounter.steps.length === 3;
-
-          console.log("[START] has3?", has3, {
-            num: currentEncounter?.encounterNumber,
-            stepsLen: currentEncounter?.steps?.length
-          });
+          const has3 = Array.isArray(enc?.steps) && enc.steps.length === 3;
 
           if (has3) {
-            console.log("[START] -> renderBcStage()");
-            renderBcStage();
+            console.log("[BC3] taking 3-stage renderer ✅", { encNum: enc.encounterNumber });
+            renderBcStage();   // closure-scoped but callable here
             return;
           }
 
-          console.log("[START] -> renderEncounterStep() legacy");
+          console.log("[BC3] falling back to legacy renderer (no steps)", { encNum: enc?.encounterNumber });
           renderEncounterStep();
         } catch (e) {
           console.error("[BC][FATAL] startEncounter crashed", e);
