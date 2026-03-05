@@ -2246,87 +2246,73 @@ if (!window.__BC_PARENT_BRIDGE__) {
         const replyType = "progress_report_submit_result";
         const reqId = msg?.reqId || null;
 
-        if (isDemoMsg(msg, senderCtx)) {
-          event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, demo: true, sent: 0 },
-            event.origin
-          );
-          return;
-        }
-
-        if (rejectIfEpochMismatch(event, msg, replyType, { reqId, sent: 0 })) return;
-
-        const ctx = getSenderCtxOrReject(
-          event,
-          senderCtx,
-          replyType,
-          { reqId, sent: 0 },
-          { requireRestaurant: true, allowedRoles: ["waiter", "manager", "group_manager", "admin"] }
-        );
-        if (!ctx) return;
-
         try {
-          const authed = liveAuth?.userId || null;
-          if (!authed) throw new Error("no_session");
-          if (String(authed) !== String(ctx.userId)) throw new Error("forbidden_user");
-
-          const restaurantId = ctx.restaurantId;
-          const senderId = ctx.userId;
-
-          const { data: mgrs, error: mgrErr } = await supabase
-            .from("profiles")
-            .select("user_id, role")
-            .eq("restaurant_id", restaurantId)
-            .in("role", ["manager", "group_manager"]);
-
-          if (mgrErr) throw mgrErr;
-
-          const managerIds = (mgrs || [])
-            .map((x) => x.user_id)
-            .filter(Boolean)
-            .filter((uid) => String(uid) !== String(senderId));
-
-          if (!managerIds.length) {
+          // 0) Demo short-circuit
+          if (isDemoMsg(msg, senderCtx)) {
             event.source?.postMessage(
-              { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, sent: 0, note: "no_managers_found" },
+              { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, demo: true, inserted: 0 },
               event.origin
             );
             return;
           }
 
-          const body = String(msg?.body || "").trim();
-          const payload = msg?.payload || null;
-          const safeBody = body || "Progress report";
+          // 1) Epoch guard
+          if (rejectIfEpochMismatch(event, msg, replyType, { reqId, inserted: 0 })) return;
 
-          const rows = managerIds.map((managerUserId) => {
-            const row = {
-              scope_type: "restaurant",
-              scope_id: ctx.restaurantId,
-              restaurant_id: ctx.restaurantId,
-              sender_user_id: ctx.userId,
-              receiver_user_id: managerUserId,
-              sender_role: String(ctx.role || ""),
-              type: "progress_report",
-              body: safeBody || "Progress report",
-              payload: payload || null,
-            };
-            return row;
+          // 2) Validate sender-bound ctx (restaurant required)
+          const ctx = getSenderCtxOrReject(
+            event,
+            senderCtx,
+            replyType,
+            { reqId, inserted: 0 },
+            { requireRestaurant: true, allowedRoles: ["waiter", "manager", "group_manager", "admin"] }
+          );
+          if (!ctx) return;
+
+          // 3) Live auth must exist AND match ctx.userId
+          const authed = liveAuth?.userId || null;
+          if (!authed) throw new Error("no_session");
+          if (String(authed) !== String(ctx.userId)) throw new Error("forbidden_user");
+
+          // 4) Resolve scope defaults
+          const scopeType =
+            String(msg?.scope_type || ctx.scopeType || "restaurant").toLowerCase();
+
+          const scopeId =
+            msg?.scope_id ||
+            ctx.scopeId ||
+            ctx.restaurantId;
+
+          const body = String(msg?.body || "Progress report").slice(0, 2000);
+          const payload = msg?.payload ?? null;
+
+          // 5) Call RPC that inserts one message per manager target
+          const { data, error } = await supabase.rpc("bc_send_progress_report_v1", {
+            p_scope_type: scopeType,
+            p_scope_id: scopeId,
+            p_restaurant_id: ctx.restaurantId,
+            p_body: body,
+            p_payload: payload,
           });
 
-          const { error } = await supabase.from("bc_messages_v1").insert(rows);
           if (error) throw error;
 
+          const inserted = Number(data || 0);
+
+          // 6) Reply
           event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, sent: rows.length },
+            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, inserted },
             event.origin
           );
+
+          return;
         } catch (e) {
           event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: false, sent: 0, error: e?.message || String(e) },
+            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: false, inserted: 0, error: e?.message || String(e) },
             event.origin
           );
+          return;
         }
-        return;
       }
 
       if (msg.type === "progression_snapshot_request") {
@@ -4935,6 +4921,7 @@ async function loadManagerMessenger() {
   if (!isManager) throw new Error("Manager only");
   if (!restaurantId) throw new Error("Active restaurant not set");
 
+  const scopeType = "restaurant";
   const scopeId = getScopeIdSafe();
   if (!scopeId) throw new Error("Scope not set");
 
@@ -4945,7 +4932,8 @@ async function loadManagerMessenger() {
 
   const { data, error } = await supabase
     .from("bc_messages_v1")
-    .select("id, created_at, scope_id, restaurant_id, sender_user_id, receiver_user_id, sender_role, type, body, payload, read_at")
+    .select("id, created_at, scope_type, scope_id, restaurant_id, sender_user_id, receiver_user_id, sender_role, type, body, payload, read_at")
+    .eq("scope_type", scopeType)
     .eq("scope_id", scopeId)
     .eq("restaurant_id", restaurantId)
     .is("archived_at", null)
@@ -5019,6 +5007,7 @@ async function mbSendInstruction() {
   if (!senderId) throw new Error("No session");
 
   const row = {
+    scope_type: "restaurant",
     scope_id: scopeId,
     restaurant_id: restaurantId,
     sender_user_id: senderId,

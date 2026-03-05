@@ -114,6 +114,7 @@
     function submitProgressReport({ body, payload, reqId } = {}) {
       try {
         const id = reqId || ("pr_" + Math.random().toString(16).slice(2));
+        const epoch = Number(window.__BC_IFRAME_EPOCH__ || window.__BC_EPOCH__ || 0);
         window.parent.postMessage(
           {
             source: "BC_MSG",
@@ -122,7 +123,9 @@
             reqId: id,
             body: body || "Progress report",
             payload: payload || null,
-            epoch: Number(window.__BC_IFRAME_EPOCH__ || window.__BC_EPOCH__ || 0),
+            scope_type: "restaurant",
+            scope_id: null,
+            epoch,
           },
           window.location.origin
         );
@@ -135,6 +138,15 @@
     function submitProgressReportToManager({ body, payload } = {}) {
       return submitProgressReport({ body, payload });
     }
+    window.addEventListener("message", (event) => {
+      const msg = event?.data;
+      if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
+      if (event.origin !== window.location.origin) return;
+
+      if (msg.type === "progress_report_submit_result") {
+        console.log("[GAME] progress report result", msg);
+      }
+    });
     window.submitProgressReport = submitProgressReport;
     window.submitProgressReportToManager = submitProgressReportToManager;
     window.getTierUnlocked = function getTierUnlocked() {
