@@ -8618,7 +8618,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
           // Encounter content (from encounters.ts)
           encounterNumber: enc.encounterNumber ?? (encounterIndex + 1),
-          steps: Array.isArray(enc.steps) ? enc.steps : null,
+          steps: Array.isArray(enc.steps) ? enc.steps : [],
           // ✅ KEEP META + SKILLFOCUS ON THE ENCOUNTER OBJECT
           meta: enc.meta || null,
           skillFocus: (enc.meta && enc.meta.skillFocus) ? enc.meta.skillFocus : "read",
