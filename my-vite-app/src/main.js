@@ -2243,74 +2243,83 @@ if (!window.__BC_PARENT_BRIDGE__) {
       }
 
       if (msg.type === "progress_report_submit") {
-        const replyType = "progress_report_ack";
+        const replyType = "progress_report_submit_result";
         const reqId = msg?.reqId || null;
 
         if (isDemoMsg(msg, senderCtx)) {
           event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, demo: true },
+            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, demo: true, sent: 0 },
             event.origin
           );
           return;
         }
 
-        if (rejectIfEpochMismatch(event, msg, replyType, { reqId })) return;
+        if (rejectIfEpochMismatch(event, msg, replyType, { reqId, sent: 0 })) return;
 
         const ctx = getSenderCtxOrReject(
           event,
           senderCtx,
           replyType,
-          { reqId },
+          { reqId, sent: 0 },
           { requireRestaurant: true, allowedRoles: ["waiter", "manager", "group_manager", "admin"] }
         );
         if (!ctx) return;
 
-        const authed = liveAuth?.userId || null;
-        if (!authed) {
-          event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: false, error: "no_session" },
-            event.origin
-          );
-          return;
-        }
-        if (String(authed) !== String(ctx.userId)) {
-          event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: false, error: "forbidden_user" },
-            event.origin
-          );
-          return;
-        }
-
         try {
-          const scopeId = getScopeIdSafe();
-          if (!scopeId) throw new Error("scope_not_set");
+          const authed = liveAuth?.userId || null;
+          if (!authed) throw new Error("no_session");
+          if (String(authed) !== String(ctx.userId)) throw new Error("forbidden_user");
 
-          const receiver = msg?.toUserId || msg?.managerUserId || null;
+          const restaurantId = ctx.restaurantId;
+          const senderId = ctx.userId;
+
+          const { data: mgrs, error: mgrErr } = await supabase
+            .from("profiles")
+            .select("user_id, role")
+            .eq("restaurant_id", restaurantId)
+            .in("role", ["manager", "group_manager"]);
+
+          if (mgrErr) throw mgrErr;
+
+          const managerIds = (mgrs || [])
+            .map((x) => x.user_id)
+            .filter(Boolean)
+            .filter((uid) => String(uid) !== String(senderId));
+
+          if (!managerIds.length) {
+            event.source?.postMessage(
+              { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, sent: 0, note: "no_managers_found" },
+              event.origin
+            );
+            return;
+          }
+
           const body = String(msg?.body || "").trim();
           const payload = msg?.payload || null;
-          if (!body && !payload) throw new Error("empty_report");
+          const safeBody = body || "Progress report";
 
-          const row = {
-            scope_id: scopeId,
-            restaurant_id: ctx.restaurantId,
-            sender_user_id: ctx.userId,
-            receiver_user_id: receiver,
+          const rows = managerIds.map((receiverId) => ({
+            scope_type: "restaurant",
+            scope_id: restaurantId,
+            restaurant_id: restaurantId,
+            sender_user_id: senderId,
+            receiver_user_id: receiverId,
             sender_role: String(ctx.role || ""),
             type: "progress_report",
-            body: body || "Progress report",
+            body: safeBody,
             payload,
-          };
+          }));
 
-          const { error } = await supabase.from("bc_messages_v1").insert(row);
+          const { error } = await supabase.from("bc_messages_v1").insert(rows);
           if (error) throw error;
 
           event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true },
+            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, sent: rows.length },
             event.origin
           );
         } catch (e) {
           event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: false, error: e?.message || String(e) },
+            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: false, sent: 0, error: e?.message || String(e) },
             event.origin
           );
         }

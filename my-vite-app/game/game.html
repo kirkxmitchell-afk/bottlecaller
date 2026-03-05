@@ -111,28 +111,31 @@
       window.parent?.postMessage(msg, ORIGIN);
       return true;
     }
-    function submitProgressReportToManager({ body, payload, toUserId = null } = {}) {
+    function submitProgressReport({ body, payload, reqId } = {}) {
       try {
-        const reqId = "pr_" + Math.random().toString(16).slice(2);
+        const id = reqId || ("pr_" + Math.random().toString(16).slice(2));
         window.parent.postMessage(
           {
             source: "BC_MSG",
             v: 1,
             type: "progress_report_submit",
-            reqId,
-            epoch: Number(window.__BC_EPOCH__ || window.__BC_IFRAME_EPOCH__ || 0),
-            body: body || "",
+            reqId: id,
+            body: body || "Progress report",
             payload: payload || null,
-            toUserId: toUserId || null,
+            epoch: Number(window.__BC_IFRAME_EPOCH__ || window.__BC_EPOCH__ || 0),
           },
           window.location.origin
         );
-        return reqId;
+        return id;
       } catch (e) {
-        console.warn("submitProgressReportToManager failed", e);
+        console.warn("submitProgressReport failed", e);
         return null;
       }
     }
+    function submitProgressReportToManager({ body, payload } = {}) {
+      return submitProgressReport({ body, payload });
+    }
+    window.submitProgressReport = submitProgressReport;
     window.submitProgressReportToManager = submitProgressReportToManager;
     window.getTierUnlocked = function getTierUnlocked() {
       if (window.isDemo || window.bcMode === "demo") return 1;
