@@ -118,54 +118,6 @@ export const ENCOUNTERS: EncounterPack = {
       toneTag: "Direct",
       meta: { tier: tierFromEncounterNumber(1), difficulty: 1, skillFocus: "read", trapType: "none" },
       wineIndexHint: 0,
-
-      // 3-stage encounter flow
-      steps: [
-        {
-          stage: "read",
-          skillFocus: "read",
-          prompt: "Guest: “We’re in a bit of a rush.” What do they want most right now?",
-          choices: [
-            { text: "A long explanation of the whole wine list.", correct: false },
-            { text: "A fast, confident recommendation with minimal questions.", correct: true },
-            { text: "Only the cheapest option.", correct: false },
-          ],
-          feedback: {
-            correct: "Yes — they want speed and confidence, not a lecture.",
-            wrong: "Not quite. This is about urgency: keep it quick and decisive."
-          }
-        },
-
-        {
-          stage: "recommend",
-          skillFocus: "frame",
-          prompt: "How do you recommend while keeping it fast?",
-          choices: [
-            { text: "“Our best is… (long story and details).”", correct: false },
-            { text: "“If you want a quick win: I’d go with [house favorite]. It’s crowd-pleasing and pairs with most dishes.”", correct: true },
-            { text: "“Just pick anything — they’re all good.”", correct: false },
-          ],
-          feedback: {
-            correct: "Good: decisive, short, and reassuring.",
-            wrong: "Too slow, too vague, or too unhelpful for a rushed guest."
-          }
-        },
-
-        {
-          stage: "close",
-          skillFocus: "delivery",
-          prompt: "How do you close without creating friction?",
-          choices: [
-            { text: "“Do you want that?”", correct: false },
-            { text: "“Perfect — shall I bring a bottle, or start you with two glasses to save time?”", correct: true },
-            { text: "“Let me know if you decide.”", correct: false },
-          ],
-          feedback: {
-            correct: "Clean close with a low-friction option that matches their urgency.",
-            wrong: "Either too vague or too passive — you need a crisp close."
-          }
-        }
-      ]
     },
     {
       encounterNumber: 2,
@@ -274,52 +226,6 @@ export const ENCOUNTERS: EncounterPack = {
       toneTag: "Impatient",
       tags: ["decider", "lead", "impatient"],
       meta: { tier: tierFromEncounterNumber(6), difficulty: 2, skillFocus: "read", trapType: "none" },
-
-      // 3-stage flow
-      steps: [
-        {
-          stage: "read",
-          skillFocus: "read",
-          prompt: "Guest: “Two options. Then we choose.” What are they asking for?",
-          choices: [
-            { text: "A full rundown of the wine list.", correct: false },
-            { text: "Two confident options with a quick difference.", correct: true },
-            { text: "Only the cheapest bottle.", correct: false },
-          ],
-          feedback: {
-            correct: "Exactly — they want speed + clarity, not depth.",
-            wrong: "Not quite. This guest is time-efficient: give two clean options."
-          }
-        },
-        {
-          stage: "recommend",
-          skillFocus: "frame",
-          prompt: "What’s the best way to present two options?",
-          choices: [
-            { text: "“Here are 6 wines people like…”", correct: false },
-            { text: "“Option 1 is crisp and fresh. Option 2 is richer and smoother. Which mood are you in?”", correct: true },
-            { text: "“Just pick one — they’re similar.”", correct: false },
-          ],
-          feedback: {
-            correct: "Yes — two options, one contrast, one fast question.",
-            wrong: "Too slow, too vague, or too many options for an impatient decider."
-          }
-        },
-        {
-          stage: "close",
-          skillFocus: "delivery",
-          prompt: "How do you close without adding friction?",
-          choices: [
-            { text: "“So… what do you want?”", correct: false },
-            { text: "“Perfect — I’ll bring the bottle, or we can start with two glasses if you want to decide fast.”", correct: true },
-            { text: "“Let me know when you’re ready.”", correct: false },
-          ],
-          feedback: {
-            correct: "Clean close: decisive + gives a fast path forward.",
-            wrong: "Too passive or too open-ended for this guest type."
-          }
-        }
-      ],
     },
     {
       encounterNumber: 7,
@@ -332,54 +238,6 @@ export const ENCOUNTERS: EncounterPack = {
       toneTag: "Elegant",
       tags: ["fancy", "reflect", "elegant"],
       meta: { tier: tierFromEncounterNumber(7), difficulty: 3, skillFocus: "read", trapType: "none" },
-
-      // 3-stage encounter flow
-      steps: [
-        {
-          stage: "read",
-          skillFocus: "read",
-          prompt: "Guest: “We like lighter reds… elegant.” What do they value most right now?",
-          choices: [
-            { text: "Maximum power and heavy oak.", correct: false },
-            { text: "Finesse: lighter body, freshness, and polish.", correct: true },
-            { text: "The cheapest red that’s available.", correct: false },
-          ],
-          feedback: {
-            correct: "Yes — they want refinement and restraint, not weight and sweetness.",
-            wrong: "Not quite. ‘Elegant’ usually means lighter body, finer tannin, and freshness."
-          }
-        },
-
-        {
-          stage: "recommend",
-          skillFocus: "frame",
-          prompt: "How do you recommend in a way that sounds like you *belong* in their world?",
-          choices: [
-            { text: "“Uhh… this one is nice. People like it.”", correct: false },
-            { text: "“If you like elegant lighter reds: I’d point you to something with fine tannins and bright red-fruit — silky, not heavy.”", correct: true },
-            { text: "“Our strongest red is the best red.”", correct: false },
-          ],
-          feedback: {
-            correct: "Good: confident, precise, and aligned to their language.",
-            wrong: "Too vague or too heavy — they’re asking for finesse, not force."
-          }
-        },
-
-        {
-          stage: "close",
-          skillFocus: "delivery",
-          prompt: "What’s the cleanest close that keeps the tone premium?",
-          choices: [
-            { text: "“So… do you want it?”", correct: false },
-            { text: "“Perfect — shall I bring a bottle, or would you like two glasses to start and see how it sits with your first bites?”", correct: true },
-            { text: "“Okay, let me know later.”", correct: false },
-          ],
-          feedback: {
-            correct: "Smooth, premium, and low-friction — gives them control without awkwardness.",
-            wrong: "Too blunt or too passive — keep it polished and guided."
-          }
-        }
-      ],
     },
 
     // --- Stage 2 (8–14) introduce more pressure / second-guessing ---

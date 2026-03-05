@@ -8696,16 +8696,33 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         });
           window.__BC_LAST_ENCOUNTER__ = currentEncounter;
 
-          const has3 = Array.isArray(enc?.steps) && enc.steps.length === 3;
+          // --- BC3 HARD RESET (so it can’t interfere with legacy 7-step) ---
+          try {
+            // global marker object (if you created one)
+            if (window.__BC3__) {
+              window.__BC3__.active = false;
+              window.__BC3__.enc = null;
+              window.__BC3__.step = 0;
+            }
 
-          if (has3) {
-            console.log("[BC3] taking 3-stage renderer ✅", { encNum: enc.encounterNumber });
-            renderBcStage();   // closure-scoped but callable here
-            return;
+            // common globals you introduced during BC3 work
+            window.bc3Active = false;
+            window.bc3Enc = null;
+            window.bc3Step = 0;
+
+            // any “bc stage” state you added
+            window.bcActiveEncounter = null;
+            window.bcStepIndex = 0;
+            window.bcStageResults = [];
+          } catch (e) {
+            console.warn("[BC3] reset warn", e);
           }
 
-          console.log("[BC3] falling back to legacy renderer (no steps)", { encNum: enc?.encounterNumber });
+          // FORCE legacy 7-step renderer only
+          console.log("[BC3] disabled -> using legacy 7-step", { encNum: currentEncounter?.encounterNumber });
+          currentStep = 0;              // important: restart the 7-step pipeline clean
           renderEncounterStep();
+          return;
         } catch (e) {
           console.error("[BC][FATAL] startEncounter crashed", e);
           alert("startEncounter crashed — check console [BC][FATAL].");
