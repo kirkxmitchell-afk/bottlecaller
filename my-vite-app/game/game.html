@@ -111,6 +111,29 @@
       window.parent?.postMessage(msg, ORIGIN);
       return true;
     }
+    function submitProgressReportToManager({ body, payload, toUserId = null } = {}) {
+      try {
+        const reqId = "pr_" + Math.random().toString(16).slice(2);
+        window.parent.postMessage(
+          {
+            source: "BC_MSG",
+            v: 1,
+            type: "progress_report_submit",
+            reqId,
+            epoch: Number(window.__BC_EPOCH__ || window.__BC_IFRAME_EPOCH__ || 0),
+            body: body || "",
+            payload: payload || null,
+            toUserId: toUserId || null,
+          },
+          window.location.origin
+        );
+        return reqId;
+      } catch (e) {
+        console.warn("submitProgressReportToManager failed", e);
+        return null;
+      }
+    }
+    window.submitProgressReportToManager = submitProgressReportToManager;
     window.getTierUnlocked = function getTierUnlocked() {
       if (window.isDemo || window.bcMode === "demo") return 1;
 

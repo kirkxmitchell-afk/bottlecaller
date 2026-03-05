@@ -377,6 +377,7 @@ document.querySelector("#app").innerHTML = `
         <button class="btn" type="button" data-mbtab="overview">Overview</button>
         <button class="btn" type="button" data-mbtab="staff">Staff</button>
         <button class="btn" type="button" data-mbtab="insights">Insights</button>
+        <button class="btn" type="button" data-mbtab="messenger">Messenger</button>
         <button class="btn" type="button" data-mbtab="billing">Listing</button>
       </div>
 
@@ -415,6 +416,40 @@ document.querySelector("#app").innerHTML = `
 
         <div id="mbTab_staff" class="mbTab hidden"></div>
         <div id="mbTab_insights" class="mbTab hidden"></div>
+        <div id="mbTab_messenger" class="mbTab hidden">
+          <div class="card" style="margin-top:12px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+              <strong>Messenger</strong>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <button id="mbMsgRefresh" class="btn-ghost" type="button">Refresh</button>
+              </div>
+            </div>
+
+            <div class="small-text" style="margin-top:6px; opacity:.85;">
+              Progress reports from staff + instructions you send back. (Per active restaurant.)
+            </div>
+
+            <div id="mbMsgList" style="margin-top:10px; display:flex; flex-direction:column; gap:8px;"></div>
+            <div id="mbMsgEmpty" class="small-text" style="margin-top:10px; display:none; opacity:.8;">
+              No messages yet.
+            </div>
+          </div>
+
+          <div class="card" style="margin-top:12px;">
+            <strong>Send instruction</strong>
+            <div class="small-text" style="margin-top:6px; opacity:.85;">Pick a staff member and send a short instruction.</div>
+
+            <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; align-items:center;">
+              <select id="mbInstrTo" class="input" style="flex:1; min-width:220px;"></select>
+              <button id="mbInstrSend" class="btn" type="button">Send</button>
+            </div>
+
+            <textarea id="mbInstrBody" class="input" style="margin-top:10px; width:100%; min-height:90px;"
+              placeholder="Example: Tonight: keep it short + confirm intent first. Run 5-min Guest Reading before shift."></textarea>
+
+            <div class="small-text" id="mbInstrStatus" style="margin-top:8px; opacity:.85;"></div>
+          </div>
+        </div>
 
         <div id="mbTab_billing" class="mbTab hidden">
           <div id="mbBillingAccess" class="card" style="margin-top:12px;">
@@ -1250,6 +1285,7 @@ const DB_TYPES = new Set([
   "ritual_status_request",
   "event_log",
   "progression_snapshot_request",
+  "progress_report_submit",
 ]);
 
 function rejectIfEpochMismatchSimple(msg) {
@@ -2100,6 +2136,11 @@ if (!window.__BC_PARENT_BRIDGE__) {
           setPremiumOverlayActive(false);
 
           if (msg.mbTab === "insights") await loadManagerInsights();
+          if (msg.mbTab === "messenger") {
+            wireManagerBoardMessenger();
+            await mbLoadInstructionTargets();
+            await loadManagerMessenger();
+          }
           return;
         }
 
@@ -2118,6 +2159,11 @@ if (!window.__BC_PARENT_BRIDGE__) {
               window.__BC_MB_SHOWTAB__?.(msg.mbTab);
               if (msg.mbTab === "insights") await loadManagerInsights();
               if (msg.mbTab === "overview") await loadManagerBoardData();
+              if (msg.mbTab === "messenger") {
+                wireManagerBoardMessenger();
+                await mbLoadInstructionTargets();
+                await loadManagerMessenger();
+              }
             } else {
               await loadManagerBoardData();
             }
@@ -2181,6 +2227,81 @@ if (!window.__BC_PARENT_BRIDGE__) {
         } catch (e) {
           event.source?.postMessage(
             { source: "BC_MSG", v: 1, type: replyType, ok: false, error: e?.message || String(e), eventType },
+            event.origin
+          );
+        }
+        return;
+      }
+
+      if (msg.type === "progress_report_submit") {
+        const replyType = "progress_report_ack";
+        const reqId = msg?.reqId || null;
+
+        if (isDemoMsg(msg, senderCtx)) {
+          event.source?.postMessage(
+            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, demo: true },
+            event.origin
+          );
+          return;
+        }
+
+        if (rejectIfEpochMismatch(event, msg, replyType, { reqId })) return;
+
+        const ctx = getSenderCtxOrReject(
+          event,
+          senderCtx,
+          replyType,
+          { reqId },
+          { requireRestaurant: true, allowedRoles: ["waiter", "manager", "group_manager", "admin"] }
+        );
+        if (!ctx) return;
+
+        const authed = liveAuth?.userId || null;
+        if (!authed) {
+          event.source?.postMessage(
+            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: false, error: "no_session" },
+            event.origin
+          );
+          return;
+        }
+        if (String(authed) !== String(ctx.userId)) {
+          event.source?.postMessage(
+            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: false, error: "forbidden_user" },
+            event.origin
+          );
+          return;
+        }
+
+        try {
+          const scopeId = getScopeIdSafe();
+          if (!scopeId) throw new Error("scope_not_set");
+
+          const receiver = msg?.toUserId || msg?.managerUserId || null;
+          const body = String(msg?.body || "").trim();
+          const payload = msg?.payload || null;
+          if (!body && !payload) throw new Error("empty_report");
+
+          const row = {
+            scope_id: scopeId,
+            restaurant_id: ctx.restaurantId,
+            sender_user_id: ctx.userId,
+            receiver_user_id: receiver,
+            sender_role: String(ctx.role || ""),
+            type: "progress_report",
+            body: body || "Progress report",
+            payload,
+          };
+
+          const { error } = await supabase.from("bc_messages_v1").insert(row);
+          if (error) throw error;
+
+          event.source?.postMessage(
+            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true },
+            event.origin
+          );
+        } catch (e) {
+          event.source?.postMessage(
+            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: false, error: e?.message || String(e) },
             event.origin
           );
         }
@@ -3694,6 +3815,11 @@ function wireManagerBoardMenu() {
     if (tab === "overview") await loadManagerBoardData();
     if (tab === "listing" || tab === "billing") await loadManagerBoardSeats?.();
     if (tab === "insights") await loadManagerInsights();
+    if (tab === "messenger") {
+      wireManagerBoardMessenger();
+      await mbLoadInstructionTargets();
+      await loadManagerMessenger();
+    }
   });
 
   showTab("overview");
@@ -4730,6 +4856,174 @@ function getManagerBoardFilter() {
   return { restaurantId, isManager, isGroupish };
 }
 
+function getScopeIdSafe() {
+  return (
+    window.appState?.profile?.scope_id ||
+    window.appState?.profile?.group_id ||
+    null
+  );
+}
+
+function mbEl(id) {
+  return document.getElementById(id);
+}
+
+function renderMbMessageItem(m, nameMap) {
+  const when = m.created_at || "";
+  const sender = userLabel(m.sender_user_id, nameMap);
+  const typ = String(m.type || "dm");
+  const badge =
+    typ === "progress_report" ? "REPORT" :
+    typ === "instruction" ? "INSTRUCTION" :
+    "MSG";
+
+  const body = String(m.body || "");
+  const payloadRaw = m.payload ? JSON.stringify(m.payload) : "";
+  const payloadPreview = payloadRaw
+    ? `<div class="small-text" style="opacity:.75; margin-top:6px;">${escapeHtml(payloadRaw.slice(0, 220))}${payloadRaw.length > 220 ? "…" : ""}</div>`
+    : "";
+
+  return `
+    <div style="padding:10px; border:1px solid rgba(255,255,255,0.10); border-radius:12px;">
+      <div style="display:flex; justify-content:space-between; gap:10px; align-items:center;">
+        <div style="display:flex; gap:8px; align-items:center;">
+          <span class="badge">${badge}</span>
+          <b>${escapeHtml(sender)}</b>
+        </div>
+        <div class="small-text" style="opacity:.65;">${escapeHtml(when)}</div>
+      </div>
+      <div style="margin-top:8px; white-space:pre-wrap;">${escapeHtml(body)}</div>
+      ${payloadPreview}
+    </div>
+  `;
+}
+
+async function loadManagerMessenger() {
+  const { restaurantId, isManager } = getManagerBoardFilter();
+  if (!isManager) throw new Error("Manager only");
+  if (!restaurantId) throw new Error("Active restaurant not set");
+
+  const scopeId = getScopeIdSafe();
+  if (!scopeId) throw new Error("Scope not set");
+
+  const listEl = mbEl("mbMsgList");
+  const emptyEl = mbEl("mbMsgEmpty");
+  if (listEl) listEl.innerHTML = `<div class="small-text" style="opacity:.85;">Loading…</div>`;
+  if (emptyEl) emptyEl.style.display = "none";
+
+  const { data, error } = await supabase
+    .from("bc_messages_v1")
+    .select("id, created_at, scope_id, restaurant_id, sender_user_id, receiver_user_id, sender_role, type, body, payload, read_at")
+    .eq("scope_id", scopeId)
+    .eq("restaurant_id", restaurantId)
+    .is("archived_at", null)
+    .order("created_at", { ascending: false })
+    .limit(30);
+
+  if (error) throw error;
+
+  const rows = data || [];
+  const userIds = Array.from(new Set(rows.flatMap((r) => [r.sender_user_id, r.receiver_user_id]).filter(Boolean)));
+  const nameMap = await mapUserIdsToNames(userIds);
+
+  if (!rows.length) {
+    if (listEl) listEl.innerHTML = "";
+    if (emptyEl) emptyEl.style.display = "block";
+    return;
+  }
+
+  if (listEl) {
+    listEl.innerHTML = rows.map((m) => renderMbMessageItem(m, nameMap)).join("");
+  }
+}
+
+async function mbLoadInstructionTargets() {
+  const { restaurantId, isManager } = getManagerBoardFilter();
+  if (!isManager) return;
+  if (!restaurantId) return;
+
+  const sel = mbEl("mbInstrTo");
+  if (!sel) return;
+  sel.innerHTML = `<option value="">Loading staff…</option>`;
+
+  const { data, error } = await supabase
+    .from("bc_user_latest_v1")
+    .select("user_id")
+    .eq("restaurant_id", restaurantId)
+    .limit(200);
+
+  if (error) {
+    sel.innerHTML = `<option value="">Failed to load</option>`;
+    return;
+  }
+
+  const ids = Array.from(new Set((data || []).map((x) => x.user_id).filter(Boolean)));
+  const nameMap = await mapUserIdsToNames(ids);
+
+  sel.innerHTML = `<option value="">Select staff…</option>` + ids
+    .map((id) => `<option value="${escapeHtml(id)}">${escapeHtml(userLabel(id, nameMap))}</option>`)
+    .join("");
+}
+
+async function mbSendInstruction() {
+  const { restaurantId, isManager } = getManagerBoardFilter();
+  if (!isManager) throw new Error("Manager only");
+  if (!restaurantId) throw new Error("Active restaurant not set");
+
+  const scopeId = getScopeIdSafe();
+  if (!scopeId) throw new Error("Scope not set");
+
+  const to = String(mbEl("mbInstrTo")?.value || "");
+  const body = String(mbEl("mbInstrBody")?.value || "").trim();
+  const status = mbEl("mbInstrStatus");
+
+  if (!to) throw new Error("Select a staff member");
+  if (!body) throw new Error("Write a short instruction");
+
+  if (status) status.textContent = "Sending…";
+
+  const senderId = appState?.session?.user?.id || appState?.session?.userId || null;
+  const senderRole = String(appState?.profile?.role || "");
+  if (!senderId) throw new Error("No session");
+
+  const row = {
+    scope_id: scopeId,
+    restaurant_id: restaurantId,
+    sender_user_id: senderId,
+    receiver_user_id: to,
+    sender_role: senderRole,
+    type: "instruction",
+    body,
+    payload: null,
+  };
+
+  const { error } = await supabase.from("bc_messages_v1").insert(row);
+  if (error) throw error;
+
+  if (status) status.textContent = "Sent ✅";
+  try { mbEl("mbInstrBody").value = ""; } catch {}
+  await loadManagerMessenger();
+}
+
+function wireManagerBoardMessenger() {
+  const btn = mbEl("mbMsgRefresh");
+  if (btn && !btn.__wired) {
+    btn.__wired = true;
+    btn.addEventListener("click", () => loadManagerMessenger().catch(console.error));
+  }
+
+  const send = mbEl("mbInstrSend");
+  if (send && !send.__wired) {
+    send.__wired = true;
+    send.addEventListener("click", () => {
+      mbSendInstruction().catch((e) => {
+        const status = mbEl("mbInstrStatus");
+        if (status) status.textContent = e?.message || String(e);
+      });
+    });
+  }
+}
+
 async function loadManagerBoardMembers() {
   const rid = window.appState?.activeRestaurantId || window.appState?.profile?.restaurant_id || null;
   const box = document.getElementById("mbMembersList");
@@ -5476,6 +5770,7 @@ async function routeManagerBoard(reason = "manual") {
   wireGroupSetupRedeem();
   await ensureActiveRestaurantReady();
   await loadManagerBoardData();
+  wireManagerBoardMessenger();
   wireManagerBoardBillingAccess();
 }
 
@@ -6260,12 +6555,16 @@ window.__BC_MB__.wireManagerBoardMenu = wireManagerBoardMenu;
 window.__BC_MB__.applyManagerBoardVisibility = applyManagerBoardVisibility;
 window.__BC_MB__.loadManagerInsights = loadManagerInsights;
 window.__BC_MB__.loadManagerBoardData = loadManagerBoardData;
+window.__BC_MB__.loadManagerMessenger = loadManagerMessenger;
+window.__BC_MB__.mbLoadInstructionTargets = mbLoadInstructionTargets;
+window.__BC_MB__.wireManagerBoardMessenger = wireManagerBoardMessenger;
 
 // Optional convenience aliases (only if you want old calls to work)
 window.wireManagerBoardMenu = wireManagerBoardMenu;
 window.applyManagerBoardVisibility = applyManagerBoardVisibility;
 window.loadManagerInsights = loadManagerInsights;
 window.loadManagerBoardData = loadManagerBoardData;
+window.loadManagerMessenger = loadManagerMessenger;
 
 // ------------------------------------------------------------
 // Boot + auth change
