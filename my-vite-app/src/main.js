@@ -442,6 +442,7 @@ document.querySelector("#app").innerHTML = `
             <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; align-items:center;">
               <select id="mbInstrTo" class="input" style="flex:1; min-width:220px;"></select>
               <button id="mbInstrSend" class="btn" type="button">Send</button>
+              <button id="mbInstrRunDrill" class="btn-ghost" type="button">Run Drill</button>
             </div>
 
             <textarea id="mbInstrBody" class="input" style="margin-top:10px; width:100%; min-height:90px;"
@@ -1286,6 +1287,8 @@ const DB_TYPES = new Set([
   "event_log",
   "progression_snapshot_request",
   "progress_report_submit",
+  "messages_unread_request",
+  "message_mark_read",
 ]);
 
 function rejectIfEpochMismatchSimple(msg) {
@@ -2097,6 +2100,118 @@ if (!window.__BC_PARENT_BRIDGE__) {
               ok: false,
               error: e?.message || String(e),
             },
+            event.origin
+          );
+          return;
+        }
+      }
+
+      if (msg.type === "messages_unread_request") {
+        const replyType = "messages_unread_response";
+        const reqId = msg?.reqId || null;
+        try {
+          // 0) Demo short-circuit
+          if (isDemoMsg(msg, senderCtx)) {
+            event.source?.postMessage(
+              { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, rows: [], demo: true },
+              event.origin
+            );
+            return;
+          }
+
+          // 1) Epoch guard
+          if (rejectIfEpochMismatch(event, msg, replyType, { reqId, rows: [] })) return;
+
+          // 2) Validate sender ctx
+          const ctx = getSenderCtxOrReject(
+            event,
+            senderCtx,
+            replyType,
+            { reqId, rows: [] },
+            { requireRestaurant: true, allowedRoles: ["waiter", "manager", "group_manager", "enterprise_admin", "admin"] }
+          );
+          if (!ctx) return;
+
+          // 3) Live auth must match ctx.userId
+          const authed = liveAuth?.userId || null;
+          if (!authed) throw new Error("no_session");
+          if (String(authed) !== String(ctx.userId)) throw new Error("forbidden_user");
+
+          // 4) Query unread manager->staff messages for active restaurant
+          const { data, error } = await supabase
+            .from("bc_messages_v1")
+            .select("id, type, body, payload, sender_user_id, sender_role, receiver_user_id, created_at, restaurant_id, scope_id, scope_type")
+            .eq("receiver_user_id", ctx.userId)
+            .eq("restaurant_id", ctx.restaurantId)
+            .is("archived_at", null)
+            .is("read_at", null)
+            .order("created_at", { ascending: true })
+            .limit(25);
+          if (error) throw error;
+
+          event.source?.postMessage(
+            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, rows: data || [] },
+            event.origin
+          );
+          return;
+        } catch (e) {
+          event.source?.postMessage(
+            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: false, rows: [], error: e?.message || String(e) },
+            event.origin
+          );
+          return;
+        }
+      }
+
+      if (msg.type === "message_mark_read") {
+        const replyType = "message_mark_read_result";
+        const reqId = msg?.reqId || null;
+        const id = msg?.id || null;
+        try {
+          // 0) Demo short-circuit
+          if (isDemoMsg(msg, senderCtx)) {
+            event.source?.postMessage(
+              { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, demo: true, id },
+              event.origin
+            );
+            return;
+          }
+
+          // 1) Epoch guard
+          if (rejectIfEpochMismatch(event, msg, replyType, { reqId, id })) return;
+
+          // 2) Validate sender ctx
+          const ctx = getSenderCtxOrReject(
+            event,
+            senderCtx,
+            replyType,
+            { reqId, id },
+            { requireRestaurant: true, allowedRoles: ["waiter", "manager", "group_manager", "enterprise_admin", "admin"] }
+          );
+          if (!ctx) return;
+
+          // 3) Live auth must match ctx.userId
+          const authed = liveAuth?.userId || null;
+          if (!authed) throw new Error("no_session");
+          if (String(authed) !== String(ctx.userId)) throw new Error("forbidden_user");
+          if (!id) throw new Error("missing_id");
+
+          // 4) Mark read (receiver only, same restaurant only)
+          const { error } = await supabase
+            .from("bc_messages_v1")
+            .update({ read_at: new Date().toISOString() })
+            .eq("id", id)
+            .eq("receiver_user_id", ctx.userId);
+          if (error) throw error;
+
+          event.source?.postMessage(
+            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, id },
+            event.origin
+          );
+          return;
+        } catch (e) {
+          event.source?.postMessage(
+            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: false, id, error: e?.message || String(e) },
             event.origin
           );
           return;
@@ -5026,6 +5141,53 @@ async function mbSendInstruction() {
   await loadManagerMessenger();
 }
 
+async function mbSendDrillOverride() {
+  const { restaurantId, isManager } = getManagerBoardFilter();
+  if (!isManager) throw new Error("Manager only");
+  if (!restaurantId) throw new Error("Active restaurant not set");
+
+  const scopeId = getScopeIdSafe();
+  if (!scopeId) throw new Error("Scope not set");
+
+  const to = String(mbEl("mbInstrTo")?.value || "");
+  const reason = String(mbEl("mbInstrBody")?.value || "").trim() || "Run this now";
+  const status = mbEl("mbInstrStatus");
+
+  if (!to) throw new Error("Select a staff member");
+  if (status) status.textContent = "Sending drill override…";
+
+  const senderId = appState?.session?.user?.id || appState?.session?.userId || null;
+  const senderRole = String(appState?.profile?.role || "");
+  if (!senderId) throw new Error("No session");
+
+  if (!window.__BC_DRILL_CONFIG__ && window.setDefaultDrillConfig) {
+    window.setDefaultDrillConfig();
+  }
+  const drillConfig = window.__BC_DRILL_CONFIG__ || window.BC_DRILL_CONFIG || null;
+  if (!drillConfig) throw new Error("No drill config available");
+
+  const row = {
+    scope_type: "restaurant",
+    scope_id: scopeId,
+    restaurant_id: restaurantId,
+    sender_user_id: senderId,
+    receiver_user_id: to,
+    sender_role: senderRole,
+    type: "drill_override",
+    body: reason,
+    payload: {
+      drill: drillConfig,
+      reason,
+    },
+  };
+
+  const { error } = await supabase.from("bc_messages_v1").insert(row);
+  if (error) throw error;
+
+  if (status) status.textContent = "Drill override sent ✅";
+  await loadManagerMessenger();
+}
+
 function wireManagerBoardMessenger() {
   const btn = mbEl("mbMsgRefresh");
   if (btn && !btn.__wired) {
@@ -5038,6 +5200,17 @@ function wireManagerBoardMessenger() {
     send.__wired = true;
     send.addEventListener("click", () => {
       mbSendInstruction().catch((e) => {
+        const status = mbEl("mbInstrStatus");
+        if (status) status.textContent = e?.message || String(e);
+      });
+    });
+  }
+
+  const runDrill = mbEl("mbInstrRunDrill");
+  if (runDrill && !runDrill.__wired) {
+    runDrill.__wired = true;
+    runDrill.addEventListener("click", () => {
+      mbSendDrillOverride().catch((e) => {
         const status = mbEl("mbInstrStatus");
         if (status) status.textContent = e?.message || String(e);
       });

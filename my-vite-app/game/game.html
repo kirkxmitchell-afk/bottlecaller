@@ -138,6 +138,75 @@
     function submitProgressReportToManager({ body, payload } = {}) {
       return submitProgressReport({ body, payload });
     }
+    function requestUnreadMessages() {
+      try {
+        if (!isActuallyIframe()) return null;
+        const reqId = "mur_" + Math.random().toString(16).slice(2);
+        window.parent?.postMessage(
+          {
+            source: "BC_MSG",
+            v: 1,
+            type: "messages_unread_request",
+            reqId,
+            epoch: Number(window.__BC_IFRAME_EPOCH__ || window.__BC_EPOCH__ || 0),
+          },
+          window.location.origin
+        );
+        return reqId;
+      } catch (e) {
+        console.warn("requestUnreadMessages failed", e);
+        return null;
+      }
+    }
+    function markMessageRead(id) {
+      try {
+        if (!id || !isActuallyIframe()) return null;
+        const reqId = "mmr_" + Math.random().toString(16).slice(2);
+        window.parent?.postMessage(
+          {
+            source: "BC_MSG",
+            v: 1,
+            type: "message_mark_read",
+            reqId,
+            id,
+            epoch: Number(window.__BC_IFRAME_EPOCH__ || window.__BC_EPOCH__ || 0),
+          },
+          window.location.origin
+        );
+        return reqId;
+      } catch (e) {
+        console.warn("markMessageRead failed", e);
+        return null;
+      }
+    }
+    function applyDrillOverrideFromMessage(message) {
+      try {
+        const drill = message?.payload?.drill || null;
+        if (!drill || typeof drill !== "object") return false;
+        const cfg = (window.__BC_DRILL_CONFIG__ = window.__BC_DRILL_CONFIG__ || {});
+        Object.assign(cfg, drill);
+        console.log("[GAME] drill_override applied ✅", cfg);
+        window.showToast?.("Manager updated your drill ✅");
+        return true;
+      } catch (e) {
+        console.warn("applyDrillOverrideFromMessage failed", e);
+        return false;
+      }
+    }
+    function startUnreadMessagesPolling() {
+      if (window.__BC_UNREAD_POLL_WIRED__) return;
+      window.__BC_UNREAD_POLL_WIRED__ = true;
+
+      const kick = () => {
+        if (String(window.bcMode || "").toLowerCase() === "demo") return;
+        requestUnreadMessages();
+      };
+      kick();
+      window.__BC_UNREAD_POLL_TICK__ = setInterval(kick, 12000);
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) kick();
+      });
+    }
     window.addEventListener("message", (event) => {
       const msg = event?.data;
       if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
@@ -146,7 +215,26 @@
       if (msg.type === "progress_report_submit_result") {
         console.log("[GAME] progress report result", msg);
       }
+      if (msg.type === "messages_unread_response") {
+        if (!msg.ok) {
+          console.warn("[GAME] messages_unread_response failed", msg?.error || "unknown");
+          return;
+        }
+        const rows = Array.isArray(msg.rows) ? msg.rows : [];
+        for (const row of rows) {
+          if (String(row?.type || "") === "drill_override") {
+            applyDrillOverrideFromMessage(row);
+          } else if (String(row?.type || "") === "instruction") {
+            window.showToast?.("New manager instruction ✅");
+          }
+          if (row?.id) markMessageRead(row.id);
+        }
+      }
+      if (msg.type === "message_mark_read_result") {
+        if (!msg.ok) console.warn("[GAME] message_mark_read_result failed", msg?.error || "unknown", msg?.id);
+      }
     });
+    startUnreadMessagesPolling();
     window.submitProgressReport = submitProgressReport;
     window.submitProgressReportToManager = submitProgressReportToManager;
     window.getTierUnlocked = function getTierUnlocked() {
