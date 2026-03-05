@@ -2298,17 +2298,20 @@ if (!window.__BC_PARENT_BRIDGE__) {
           const payload = msg?.payload || null;
           const safeBody = body || "Progress report";
 
-          const rows = managerIds.map((receiverId) => ({
-            scope_type: "restaurant",
-            scope_id: restaurantId,
-            restaurant_id: restaurantId,
-            sender_user_id: senderId,
-            receiver_user_id: receiverId,
-            sender_role: String(ctx.role || ""),
-            type: "progress_report",
-            body: safeBody,
-            payload,
-          }));
+          const rows = managerIds.map((managerUserId) => {
+            const row = {
+              scope_type: "restaurant",
+              scope_id: ctx.restaurantId,
+              restaurant_id: ctx.restaurantId,
+              sender_user_id: ctx.userId,
+              receiver_user_id: managerUserId,
+              sender_role: String(ctx.role || ""),
+              type: "progress_report",
+              body: safeBody || "Progress report",
+              payload: payload || null,
+            };
+            return row;
+          });
 
           const { error } = await supabase.from("bc_messages_v1").insert(rows);
           if (error) throw error;
