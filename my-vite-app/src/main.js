@@ -559,6 +559,11 @@ document.querySelector("#app").innerHTML = `
       <div><b>Seat limit:</b> <span id="hudSeatLimit">-</span></div>
       <div><b>Invite required:</b> <span id="hudRequireInvite">-</span></div>
     </div>
+    <div style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.10);">
+      <div style="font-weight:600; margin-bottom:8px;">Coach</div>
+      <button id="btnHudSendProgress" class="btn-ghost" type="button">Send progress to manager</button>
+      <div id="hudSendProgressStatus" class="small-text" style="margin-top:6px; opacity:.85;"></div>
+    </div>
 
     <!-- Copy join code MANAGER ONLY -->
     <div id="hudCopyRow" class="row hidden" style="margin-top:10px;">
@@ -3401,6 +3406,39 @@ function openHud() {
 }
 function closeHud() {
   setHudOpen(false);
+}
+
+function wireHudSendProgressButton() {
+  const btn = document.getElementById("btnHudSendProgress");
+  const status = document.getElementById("hudSendProgressStatus");
+  if (!btn || btn.__wired) return;
+  btn.__wired = true;
+
+  btn.addEventListener("click", () => {
+    try {
+      const frame = document.getElementById("premiumRootFrame");
+      if (!frame || !frame.contentWindow) {
+        if (status) status.textContent = "Game not ready.";
+        return;
+      }
+
+      const reqId = "hud_pr_" + Math.random().toString(16).slice(2);
+      frame.contentWindow.postMessage(
+        {
+          source: "BC_MSG",
+          v: 1,
+          type: "hud_send_progress_request",
+          reqId,
+        },
+        window.location.origin
+      );
+
+      if (status) status.textContent = "Sending progress...";
+    } catch (e) {
+      console.warn("wireHudSendProgressButton failed", e);
+      if (status) status.textContent = "Could not send progress.";
+    }
+  });
 }
 
 function setHudOpen(isOpen) {
@@ -6720,6 +6758,7 @@ document.getElementById("btnCopyCode").addEventListener("click", async () => {
 document.getElementById("btnEnterPremium").addEventListener("click", () => decideRoute("enterPremium"));
 
 wireManagerBoardButton();
+wireHudSendProgressButton();
 document.getElementById("btnOpenHud").addEventListener("click", () => {
   openHud();
 });

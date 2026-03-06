@@ -153,15 +153,17 @@
             difficulty: enc?.difficulty || null,
             chainSignal: enc?.chainSignal || null,
             chainScore: enc?.chainScore ?? null,
-            mode: String(window.bcMode || ""),
+            outcome: enc?.__reaction?.outcome || null,
+            grade: enc?.latest_grade || null,
+            currentStep: typeof currentStep === "number" ? currentStep : null,
             occurredAt: new Date().toISOString(),
           };
 
           const body =
-            "Progress update" +
-            (enc?.encounterNumber ? ` • Encounter ${enc.encounterNumber}` : "") +
-            (enc?.guestStateActual ? ` • Guest: ${enc.guestStateActual}` : "") +
-            (enc?.chainSignal ? ` • Signal: ${enc.chainSignal}` : "");
+            "Encounter summary" +
+            (enc?.encounterNumber ? ` • #${enc.encounterNumber}` : "") +
+            (enc?.guestStateActual ? ` • ${enc.guestStateActual}` : "") +
+            (enc?.chainSignal ? ` • ${enc.chainSignal}` : "");
 
           const reqId = submitProgressReportToManager({ body, payload });
           if (status) status.textContent = reqId ? "Sending progress..." : "Could not send progress.";
@@ -170,6 +172,14 @@
           if (status) status.textContent = "Could not send progress.";
         }
       });
+    }
+    function syncProgressReportButtonVisibility() {
+      const btn = document.getElementById("btnSendProgressReport");
+      const status = document.getElementById("progressReportStatus");
+      if (!btn) return;
+      const show = typeof currentStep === "number" && currentStep === 6;
+      btn.style.display = show ? "" : "none";
+      if (status && !show) status.textContent = "";
     }
     function requestUnreadMessages() {
       try {
@@ -255,6 +265,27 @@
             status.textContent = `Send failed: ${msg.error || "unknown error"}`;
           }
         }
+      }
+      if (msg.type === "hud_send_progress_request") {
+        const enc = typeof currentEncounter !== "undefined" ? currentEncounter : null;
+        const payload = {
+          encounterNumber: enc?.encounterNumber || null,
+          guestStateActual: enc?.guestStateActual || null,
+          difficulty: enc?.difficulty || null,
+          chainSignal: enc?.chainSignal || null,
+          chainScore: enc?.chainScore ?? null,
+          currentStep: typeof currentStep === "number" ? currentStep : null,
+          mode: String(window.bcMode || ""),
+          occurredAt: new Date().toISOString(),
+        };
+
+        const body =
+          "Progress update" +
+          (enc?.encounterNumber ? ` • Encounter ${enc.encounterNumber}` : "") +
+          (enc?.guestStateActual ? ` • Guest: ${enc.guestStateActual}` : "") +
+          (enc?.chainSignal ? ` • Signal: ${enc.chainSignal}` : "");
+
+        submitProgressReportToManager({ body, payload });
       }
       if (msg.type === "messages_unread_response") {
         if (!msg.ok) {
@@ -765,7 +796,7 @@
       <footer id="bcHudBottom" class="bc-hud bc-hud-bottom">
         <div class="bc-hint" id="bcHintLine">Read the guest. Choose the hook.</div>
         <div>
-          <button id="btnSendProgressReport" class="btn btn-ghost" type="button">Send progress to manager</button>
+          <button id="btnSendProgressReport" class="btn btn-ghost" type="button" style="display:none;">Send progress to manager</button>
           <div id="progressReportStatus" class="small-text" style="margin-top:6px; opacity:.85;"></div>
         </div>
       </footer>
@@ -7347,6 +7378,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         if (window.__BC3__?.active) return;
         clearStepHighlights();
         console.log("[RENDER] currentStep =", currentStep, "enc#", currentEncounter?.encounterNumber);
+        syncProgressReportButtonVisibility();
         console.log("[RENDER CHECK]", {
           num: currentEncounter?.encounterNumber,
           hasSteps: Array.isArray(currentEncounter?.steps),
