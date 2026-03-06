@@ -528,6 +528,37 @@ document.querySelector("#app").innerHTML = `
   <div id="hudBackdrop" class="hidden"
     style="position:fixed; inset:0; background: rgba(0,0,0,0.55); z-index: 99998;"></div>
 
+  <div id="waiterMessagesBackdrop" class="hidden"
+    style="position:fixed; inset:0; background: rgba(0,0,0,0.55); z-index: 99998;"></div>
+
+  <div id="waiterMessagesPanel" class="hidden"
+    style="
+      position:fixed; right:12px; top:12px;
+      width:min(560px, 94vw);
+      max-height:calc(100vh - 24px);
+      overflow-y:auto;
+      z-index:2147483001;
+      background:#0b0d0f; color:#fff;
+      border-radius:14px;
+      padding:12px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      border:1px solid rgba(255,255,255,0.10);
+    ">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+      <b>Coach Messages</b>
+      <button id="btnCloseMessages" type="button" style="font-size:12px;">Close</button>
+    </div>
+
+    <div id="waiterMessagesThread" style="margin-top:12px; display:flex; flex-direction:column; gap:8px;">
+      <div class="small-text" style="opacity:.8;">No messages yet.</div>
+    </div>
+
+    <div style="margin-top:14px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.10);">
+      <button id="btnWaiterSendProgress" class="btn-ghost" type="button">Send Progress</button>
+      <div id="waiterSendProgressStatus" class="small-text" style="margin-top:6px; opacity:.85;"></div>
+    </div>
+  </div>
+
   <!-- HUD PANEL -->
   <div id="hudPanel" class="hidden"
     style="
@@ -3192,6 +3223,7 @@ function wireParentButtons() {
   const btnSetup = document.getElementById("btnGoSetupPremium");
   const btnManagerBoard = document.getElementById("btnManagerBoard");
   const btnFiveMinRep = document.getElementById("btnFiveMinRep");
+  const btnOpenMessages = document.getElementById("btnOpenMessages");
 
   if (btnSetup && !btnSetup.__bcBound) {
     btnSetup.__bcBound = true;
@@ -3237,9 +3269,17 @@ function wireParentButtons() {
         focus: drill?.focus ?? "read",
         pool: drill?.pool ?? ["decider", "bargain_smart", "griever"],
         durationSec: drill?.durationSec ?? 300,
-        tier: drill?.tier ?? 0,
-        starter: isWaiter ? "waiter" : "manager"
+        tier: drill?.tier ?? 1,
+        mode: "premium"
       });
+    });
+  }
+
+  // Waiter / premium messages panel
+  if (btnOpenMessages && !btnOpenMessages.__bcBound) {
+    btnOpenMessages.__bcBound = true;
+    btnOpenMessages.addEventListener("click", () => {
+      openWaiterMessages();
     });
   }
 
@@ -3407,6 +3447,62 @@ function openHud() {
 }
 function closeHud() {
   setHudOpen(false);
+}
+
+function openWaiterMessages() {
+  document.getElementById("waiterMessagesBackdrop")?.classList.remove("hidden");
+  document.getElementById("waiterMessagesPanel")?.classList.remove("hidden");
+}
+
+function closeWaiterMessages() {
+  document.getElementById("waiterMessagesBackdrop")?.classList.add("hidden");
+  document.getElementById("waiterMessagesPanel")?.classList.add("hidden");
+}
+
+function wireWaiterMessagesPanel() {
+  const closeBtn = document.getElementById("btnCloseMessages");
+  const backdrop = document.getElementById("waiterMessagesBackdrop");
+  const sendBtn = document.getElementById("btnWaiterSendProgress");
+
+  if (closeBtn && !closeBtn.__bcBound) {
+    closeBtn.__bcBound = true;
+    closeBtn.addEventListener("click", closeWaiterMessages);
+  }
+
+  if (backdrop && !backdrop.__bcBound) {
+    backdrop.__bcBound = true;
+    backdrop.addEventListener("click", closeWaiterMessages);
+  }
+
+  if (sendBtn && !sendBtn.__bcBound) {
+    sendBtn.__bcBound = true;
+    sendBtn.addEventListener("click", () => {
+      const status = document.getElementById("waiterSendProgressStatus");
+      try {
+        const reqId = "hud_pr_" + Math.random().toString(16).slice(2);
+        const frame = document.getElementById("premiumRootFrame");
+        if (!frame || !frame.contentWindow) {
+          if (status) status.textContent = "Game not ready.";
+          return;
+        }
+
+        frame.contentWindow.postMessage(
+          {
+            source: "BC_MSG",
+            v: 1,
+            type: "hud_send_progress_request",
+            reqId,
+          },
+          window.location.origin
+        );
+
+        if (status) status.textContent = "Sending progress…";
+      } catch (e) {
+        console.warn("waiter send progress failed", e);
+        if (status) status.textContent = "Could not send progress.";
+      }
+    });
+  }
 }
 
 function wireHudSendProgressButton() {
@@ -6758,17 +6854,20 @@ document.getElementById("btnCopyCode").addEventListener("click", async () => {
 });
 document.getElementById("btnEnterPremium").addEventListener("click", () => decideRoute("enterPremium"));
 
+wireParentButtons();
 wireManagerBoardButton();
 wireHudSendProgressButton();
-document.getElementById("btnOpenHud").addEventListener("click", () => {
+wireWaiterMessagesPanel();
+
+document.getElementById("btnOpenHud")?.addEventListener("click", () => {
   openHud();
 });
 
-document.getElementById("btnCloseHud").addEventListener("click", () => {
+document.getElementById("btnCloseHud")?.addEventListener("click", () => {
   document.getElementById("hudPanel")?.classList.add("hidden");
   showScreen("screenPremiumApp");
 });
-document.getElementById("hudBackdrop").addEventListener("click", closeHud);
+document.getElementById("hudBackdrop")?.addEventListener("click", closeHud);
 document.getElementById("btnBackToPremium")?.addEventListener("click", () => {
   showScreen("screenPremiumApp");
 });
