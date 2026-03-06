@@ -3453,11 +3453,15 @@ function closeHud() {
 function openWaiterMessages() {
   document.getElementById("waiterMessagesBackdrop")?.classList.remove("hidden");
   document.getElementById("waiterMessagesPanel")?.classList.remove("hidden");
+  const status = document.getElementById("waiterSendProgressStatus");
+  if (status) status.textContent = "";
 }
 
 function closeWaiterMessages() {
   document.getElementById("waiterMessagesBackdrop")?.classList.add("hidden");
   document.getElementById("waiterMessagesPanel")?.classList.add("hidden");
+  const status = document.getElementById("waiterSendProgressStatus");
+  if (status) status.textContent = "";
 }
 
 function wireWaiterMessagesPanel() {
@@ -3480,7 +3484,7 @@ function wireWaiterMessagesPanel() {
     sendBtn.addEventListener("click", () => {
       const status = document.getElementById("waiterSendProgressStatus");
       try {
-        const reqId = "hud_pr_" + Math.random().toString(16).slice(2);
+        const reqId = "wm_pr_" + Math.random().toString(16).slice(2);
         const frame = document.getElementById("premiumRootFrame");
         if (!frame || !frame.contentWindow) {
           if (status) status.textContent = "Game not ready.";
@@ -3505,6 +3509,24 @@ function wireWaiterMessagesPanel() {
     });
   }
 }
+
+window.addEventListener("message", (event) => {
+  const msg = event?.data;
+  if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
+  if (event.origin !== window.location.origin) return;
+
+  if (msg.type === "progress_report_submit_result") {
+    const status = document.getElementById("waiterSendProgressStatus");
+    const hudStatus = document.getElementById("hudSendProgressStatus");
+
+    const text = msg.ok
+      ? `Sent to manager${msg.inserted ? ` (${msg.inserted})` : ""} ✅`
+      : `Send failed: ${msg.error || "unknown error"}`;
+
+    if (status) status.textContent = text;
+    if (hudStatus) hudStatus.textContent = text;
+  }
+});
 
 function wireHudSendProgressButton() {
   const btn = document.getElementById("btnHudSendProgress");
