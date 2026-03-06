@@ -427,29 +427,58 @@ document.querySelector("#app").innerHTML = `
             </div>
 
             <div class="small-text" style="margin-top:6px; opacity:.85;">
-              Progress reports from staff + instructions you send back. (Per active restaurant.)
+              Progress reports from staff + coaching replies. (Per active restaurant.)
             </div>
 
-            <div id="mbMsgList" style="margin-top:10px; display:flex; flex-direction:column; gap:8px;"></div>
-            <div id="mbMsgEmpty" class="small-text" style="margin-top:10px; display:none; opacity:.8;">
-              No messages yet.
+            <div style="display:grid; grid-template-columns: 280px 1fr; gap:12px; margin-top:12px;">
+              <div style="border:1px solid rgba(255,255,255,0.10); border-radius:12px; overflow:hidden;">
+                <div style="padding:10px; border-bottom:1px solid rgba(255,255,255,0.10); font-weight:600;">
+                  Staff Threads
+                </div>
+
+                <div id="mbThreadList" style="display:flex; flex-direction:column; gap:0;"></div>
+
+                <div id="mbThreadEmpty" class="small-text" style="padding:10px; display:none; opacity:.8;">
+                  No waiter threads yet.
+                </div>
+              </div>
+
+              <div style="border:1px solid rgba(255,255,255,0.10); border-radius:12px; overflow:hidden; display:flex; flex-direction:column; min-height:520px;">
+                <div style="padding:10px; border-bottom:1px solid rgba(255,255,255,0.10);">
+                  <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+                    <strong id="mbThreadTitle">Select a waiter</strong>
+                    <span id="mbThreadMeta" class="small-text" style="opacity:.75;"></span>
+                  </div>
+                </div>
+
+                <div id="mbThreadMessages"
+                  style="flex:1; padding:10px; display:flex; flex-direction:column; gap:8px; overflow-y:auto; min-height:280px;">
+                  <div class="small-text" style="opacity:.8;">Select a waiter thread to view messages.</div>
+                </div>
+
+                <div style="padding:10px; border-top:1px solid rgba(255,255,255,0.10); display:flex; flex-direction:column; gap:10px;">
+                  <div>
+                    <strong>Suggested prompts</strong>
+                    <div id="mbSuggestedPrompts" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;"></div>
+                  </div>
+
+                  <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                    <button id="mbInstrRunDrill" class="btn-ghost" type="button">Run Drill</button>
+                    <button id="mbInstrUseSuggestion" class="btn-ghost" type="button">Use Suggestion</button>
+                  </div>
+
+                  <textarea id="mbInstrBody" class="input"
+                    style="width:100%; min-height:110px;"
+                    placeholder="Example: Tonight: keep it short + confirm intent first. Run 5-min Guest Reading before shift."></textarea>
+
+                  <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                    <button id="mbInstrSend" class="btn" type="button">Send Message</button>
+                  </div>
+
+                  <div class="small-text" id="mbInstrStatus" style="opacity:.85;"></div>
+                </div>
+              </div>
             </div>
-          </div>
-
-          <div class="card" style="margin-top:12px;">
-            <strong>Send instruction</strong>
-            <div class="small-text" style="margin-top:6px; opacity:.85;">Pick a staff member and send a short instruction.</div>
-
-            <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; align-items:center;">
-              <select id="mbInstrTo" class="input" style="flex:1; min-width:220px;"></select>
-              <button id="mbInstrSend" class="btn" type="button">Send</button>
-              <button id="mbInstrRunDrill" class="btn-ghost" type="button">Run Drill</button>
-            </div>
-
-            <textarea id="mbInstrBody" class="input" style="margin-top:10px; width:100%; min-height:90px;"
-              placeholder="Example: Tonight: keep it short + confirm intent first. Run 5-min Guest Reading before shift."></textarea>
-
-            <div class="small-text" id="mbInstrStatus" style="margin-top:8px; opacity:.85;"></div>
           </div>
         </div>
 
@@ -4196,7 +4225,6 @@ function wireManagerBoardMenu() {
     if (name === "insights") return loadManagerInsights();
     if (name === "messenger") {
       wireManagerBoardMessenger();
-      await mbLoadInstructionTargets();
       return loadManagerMessenger();
     }
   };
@@ -4213,7 +4241,6 @@ function wireManagerBoardMenu() {
     if (tab === "insights") await loadManagerInsights();
     if (tab === "messenger") {
       wireManagerBoardMessenger();
-      await mbLoadInstructionTargets();
       await loadManagerMessenger();
     }
   });
@@ -5263,6 +5290,8 @@ function getScopeIdSafe() {
 function mbEl(id) {
   return document.getElementById(id);
 }
+window.__BC_MB_THREADS__ = [];
+window.__BC_MB_ACTIVE_THREAD_USER_ID__ = null;
 
 function renderMbMessageItem(m, nameMap) {
   const when = m.created_at || "";
@@ -5294,15 +5323,114 @@ function renderMbMessageItem(m, nameMap) {
   `;
 }
 
+function renderManagerThreadListItem(thread, nameMap) {
+  const active = String(window.__BC_MB_ACTIVE_THREAD_USER_ID__ || "") === String(thread.userId || "");
+  const name = escapeHtml(userLabel(thread.userId, nameMap));
+  const preview = escapeHtml(String(thread.latestBody || "").slice(0, 80));
+  const when = escapeHtml(String(thread.latestAt || ""));
+  const type = String(thread.latestType || "message").toUpperCase();
+
+  return `
+    <button
+      type="button"
+      class="btn-ghost"
+      data-thread-user-id="${thread.userId}"
+      style="
+        width:100%;
+        text-align:left;
+        border-radius:0;
+        border:0;
+        border-bottom:1px solid rgba(255,255,255,0.08);
+        background:${active ? "rgba(255,255,255,0.08)" : "transparent"};
+        padding:10px;
+      ">
+      <div style="display:flex; justify-content:space-between; gap:8px; align-items:center;">
+        <strong>${name}</strong>
+        <span class="small-text" style="opacity:.6;">${when}</span>
+      </div>
+      <div class="small-text" style="margin-top:4px; opacity:.75;">${type}</div>
+      <div class="small-text" style="margin-top:4px; opacity:.85;">${preview}</div>
+    </button>
+  `;
+}
+
+function buildManagerSuggestedPrompts(thread) {
+  const host = mbEl("mbSuggestedPrompts");
+  if (!host) return;
+
+  const rows = [...(thread?.rows || [])].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  const latest = rows[rows.length - 1];
+  const payload = latest?.payload || {};
+  const suggestions = [];
+
+  const sig = String(payload?.chainSignal || "").toLowerCase();
+  const guest = String(payload?.guestStateActual || "").toLowerCase();
+
+  if (sig === "red" || sig === "soft_close") {
+    suggestions.push("Keep it shorter and confirm guest intent first.");
+    suggestions.push("Run a 5-minute Guest Reading drill before next shift.");
+    suggestions.push("Offer two confident options instead of over-explaining.");
+  } else {
+    suggestions.push("Good progress. Keep your close crisp and confident.");
+    suggestions.push("Stay concise and guide the guest to a decision.");
+  }
+
+  if (guest === "decider") {
+    suggestions.push("With Deciders: lead quickly with two strong options.");
+  }
+
+  window.__BC_MB_SELECTED_SUGGESTION__ = suggestions[0] || "";
+
+  host.innerHTML = suggestions
+    .map((txt) => `<button type="button" class="btn-ghost" data-suggested-prompt="${escapeHtml(txt)}">${escapeHtml(txt)}</button>`)
+    .join("");
+}
+
+function renderManagerActiveThread(nameMap) {
+  const msgEl = mbEl("mbThreadMessages");
+  const titleEl = mbEl("mbThreadTitle");
+  const metaEl = mbEl("mbThreadMeta");
+
+  const activeUserId = window.__BC_MB_ACTIVE_THREAD_USER_ID__;
+  const threads = window.__BC_MB_THREADS__ || [];
+  const thread = threads.find((t) => String(t.userId) === String(activeUserId));
+
+  if (!thread) {
+    if (titleEl) titleEl.textContent = "Select a waiter";
+    if (metaEl) metaEl.textContent = "";
+    if (msgEl) msgEl.innerHTML = `<div class="small-text" style="opacity:.8;">Select a waiter thread to view messages.</div>`;
+    return;
+  }
+
+  if (titleEl) titleEl.textContent = userLabel(thread.userId, nameMap);
+  if (metaEl) metaEl.textContent = `${thread.rows.length} message(s)`;
+
+  const ordered = [...thread.rows].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+  if (msgEl) {
+    msgEl.innerHTML = ordered.map((m) => renderMbMessageItem(m, nameMap)).join("");
+    msgEl.scrollTop = msgEl.scrollHeight;
+  }
+
+  buildManagerSuggestedPrompts(thread);
+}
+
 async function loadManagerMessenger() {
   const { restaurantId, isManager } = getManagerBoardFilter();
   if (!isManager) throw new Error("Manager only");
   if (!restaurantId) throw new Error("Active restaurant not set");
 
-  const listEl = mbEl("mbMsgList");
-  const emptyEl = mbEl("mbMsgEmpty");
-  if (listEl) listEl.innerHTML = `<div class="small-text" style="opacity:.85;">Loading…</div>`;
+  const listEl = mbEl("mbThreadList");
+  const emptyEl = mbEl("mbThreadEmpty");
+  const msgEl = mbEl("mbThreadMessages");
+  const titleEl = mbEl("mbThreadTitle");
+  const metaEl = mbEl("mbThreadMeta");
+
+  if (listEl) listEl.innerHTML = `<div class="small-text" style="padding:10px; opacity:.85;">Loading…</div>`;
   if (emptyEl) emptyEl.style.display = "none";
+  if (msgEl) msgEl.innerHTML = `<div class="small-text" style="opacity:.8;">Select a waiter thread to view messages.</div>`;
+  if (titleEl) titleEl.textContent = "Select a waiter";
+  if (metaEl) metaEl.textContent = "";
 
   const { data, error } = await supabase
     .from("bc_messages_v1")
@@ -5310,51 +5438,71 @@ async function loadManagerMessenger() {
     .eq("restaurant_id", restaurantId)
     .is("archived_at", null)
     .order("created_at", { ascending: false })
-    .limit(30);
+    .limit(200);
 
   if (error) throw error;
 
   const rows = data || [];
-  const userIds = Array.from(new Set(rows.flatMap((r) => [r.sender_user_id, r.receiver_user_id]).filter(Boolean)));
-  const nameMap = await mapUserIdsToNames(userIds);
-
   if (!rows.length) {
     if (listEl) listEl.innerHTML = "";
     if (emptyEl) emptyEl.style.display = "block";
+    window.__BC_MB_THREADS__ = [];
+    window.__BC_MB_ACTIVE_THREAD_USER_ID__ = null;
     return;
   }
+
+  const managerId =
+    appState?.session?.user?.id ||
+    appState?.session?.userId ||
+    null;
+
+  const grouped = new Map();
+
+  for (const row of rows) {
+    const sender = row.sender_user_id;
+    const receiver = row.receiver_user_id;
+
+    const otherUserId =
+      String(sender) === String(managerId) ? receiver : sender;
+
+    if (!otherUserId) continue;
+
+    const entry = grouped.get(otherUserId) || {
+      userId: otherUserId,
+      latestAt: row.created_at,
+      latestBody: row.body || "",
+      latestType: row.type || "message",
+      rows: [],
+    };
+
+    entry.rows.push(row);
+
+    if (new Date(row.created_at) > new Date(entry.latestAt)) {
+      entry.latestAt = row.created_at;
+      entry.latestBody = row.body || "";
+      entry.latestType = row.type || "message";
+    }
+
+    grouped.set(otherUserId, entry);
+  }
+
+  const threads = Array.from(grouped.values())
+    .sort((a, b) => new Date(b.latestAt) - new Date(a.latestAt));
+
+  window.__BC_MB_THREADS__ = threads;
+
+  const userIds = threads.map((t) => t.userId);
+  const nameMap = await mapUserIdsToNames(userIds);
 
   if (listEl) {
-    listEl.innerHTML = rows.map((m) => renderMbMessageItem(m, nameMap)).join("");
-  }
-}
-
-async function mbLoadInstructionTargets() {
-  const { restaurantId, isManager } = getManagerBoardFilter();
-  if (!isManager) return;
-  if (!restaurantId) return;
-
-  const sel = mbEl("mbInstrTo");
-  if (!sel) return;
-  sel.innerHTML = `<option value="">Loading staff…</option>`;
-
-  const { data, error } = await supabase
-    .from("bc_user_latest_v1")
-    .select("user_id")
-    .eq("restaurant_id", restaurantId)
-    .limit(200);
-
-  if (error) {
-    sel.innerHTML = `<option value="">Failed to load</option>`;
-    return;
+    listEl.innerHTML = threads.map((t) => renderManagerThreadListItem(t, nameMap)).join("");
   }
 
-  const ids = Array.from(new Set((data || []).map((x) => x.user_id).filter(Boolean)));
-  const nameMap = await mapUserIdsToNames(ids);
+  if (!window.__BC_MB_ACTIVE_THREAD_USER_ID__ && threads[0]) {
+    window.__BC_MB_ACTIVE_THREAD_USER_ID__ = threads[0].userId;
+  }
 
-  sel.innerHTML = `<option value="">Select staff…</option>` + ids
-    .map((id) => `<option value="${escapeHtml(id)}">${escapeHtml(userLabel(id, nameMap))}</option>`)
-    .join("");
+  renderManagerActiveThread(nameMap);
 }
 
 async function mbSendInstruction() {
@@ -5365,11 +5513,11 @@ async function mbSendInstruction() {
   const scopeId = getScopeIdSafe();
   if (!scopeId) throw new Error("Scope not set");
 
-  const to = String(mbEl("mbInstrTo")?.value || "");
+  const to = String(window.__BC_MB_ACTIVE_THREAD_USER_ID__ || "");
   const body = String(mbEl("mbInstrBody")?.value || "").trim();
   const status = mbEl("mbInstrStatus");
 
-  if (!to) throw new Error("Select a staff member");
+  if (!to) throw new Error("Select a waiter thread");
   if (!body) throw new Error("Write a short instruction");
 
   if (status) status.textContent = "Sending…";
@@ -5380,7 +5528,7 @@ async function mbSendInstruction() {
 
   const row = {
     scope_type: "restaurant",
-    scope_id: scopeId,
+    scope_id: restaurantId,
     restaurant_id: restaurantId,
     sender_user_id: senderId,
     receiver_user_id: to,
@@ -5406,11 +5554,11 @@ async function mbSendDrillOverride() {
   const scopeId = getScopeIdSafe();
   if (!scopeId) throw new Error("Scope not set");
 
-  const to = String(mbEl("mbInstrTo")?.value || "");
+  const to = String(window.__BC_MB_ACTIVE_THREAD_USER_ID__ || "");
   const reason = String(mbEl("mbInstrBody")?.value || "").trim() || "Run this now";
   const status = mbEl("mbInstrStatus");
 
-  if (!to) throw new Error("Select a staff member");
+  if (!to) throw new Error("Select a waiter thread");
   if (status) status.textContent = "Sending drill override…";
 
   const senderId = appState?.session?.user?.id || appState?.session?.userId || null;
@@ -5467,10 +5615,61 @@ function wireManagerBoardMessenger() {
   if (runDrill && !runDrill.__wired) {
     runDrill.__wired = true;
     runDrill.addEventListener("click", () => {
-      mbSendDrillOverride().catch((e) => {
-        const status = mbEl("mbInstrStatus");
-        if (status) status.textContent = e?.message || String(e);
-      });
+      const status = mbEl("mbInstrStatus");
+      const to = String(window.__BC_MB_ACTIVE_THREAD_USER_ID__ || "");
+      if (!to) {
+        if (status) status.textContent = "Select a waiter thread";
+        return;
+      }
+      if (status) status.textContent = "Run Drill wiring comes next.";
+    });
+  }
+
+  const useSuggestion = mbEl("mbInstrUseSuggestion");
+  if (useSuggestion && !useSuggestion.__wired) {
+    useSuggestion.__wired = true;
+    useSuggestion.addEventListener("click", () => {
+      const picked = window.__BC_MB_SELECTED_SUGGESTION__ || "";
+      const body = mbEl("mbInstrBody");
+      if (!body) return;
+      if (picked) {
+        body.value = picked;
+      }
+    });
+  }
+
+  const prompts = mbEl("mbSuggestedPrompts");
+  if (prompts && !prompts.__wired) {
+    prompts.__wired = true;
+    prompts.addEventListener("click", (e) => {
+      const btn = e.target?.closest?.("[data-suggested-prompt]");
+      if (!btn) return;
+      const txt = btn.getAttribute("data-suggested-prompt") || "";
+      window.__BC_MB_SELECTED_SUGGESTION__ = txt;
+      const body = mbEl("mbInstrBody");
+      if (body) body.value = txt;
+    });
+  }
+
+  const list = mbEl("mbThreadList");
+  if (list && !list.__wired) {
+    list.__wired = true;
+    list.addEventListener("click", async (e) => {
+      const btn = e.target?.closest?.("[data-thread-user-id]");
+      if (!btn) return;
+
+      window.__BC_MB_ACTIVE_THREAD_USER_ID__ = btn.getAttribute("data-thread-user-id");
+
+      const threads = window.__BC_MB_THREADS__ || [];
+      const ids = threads.map((t) => t.userId);
+      const nameMap = await mapUserIdsToNames(ids);
+
+      const listEl = mbEl("mbThreadList");
+      if (listEl) {
+        listEl.innerHTML = threads.map((t) => renderManagerThreadListItem(t, nameMap)).join("");
+      }
+
+      renderManagerActiveThread(nameMap);
     });
   }
 }
@@ -7022,7 +7221,6 @@ window.__BC_MB__.applyManagerBoardVisibility = applyManagerBoardVisibility;
 window.__BC_MB__.loadManagerInsights = loadManagerInsights;
 window.__BC_MB__.loadManagerBoardData = loadManagerBoardData;
 window.__BC_MB__.loadManagerMessenger = loadManagerMessenger;
-window.__BC_MB__.mbLoadInstructionTargets = mbLoadInstructionTargets;
 window.__BC_MB__.wireManagerBoardMessenger = wireManagerBoardMessenger;
 
 // Optional convenience aliases (only if you want old calls to work)
