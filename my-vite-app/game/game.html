@@ -175,10 +175,21 @@
     function syncProgressReportButtonVisibility() {
       const btn = document.getElementById("btnSendProgressReport");
       const status = document.getElementById("progressReportStatus");
+
+      console.log("[PROGRESS BTN] sync", {
+        hasBtn: !!btn,
+        currentStep,
+        shouldShow: typeof currentStep === "number" && currentStep === 6
+      });
+
       if (!btn) return;
+
       const show = typeof currentStep === "number" && currentStep === 6;
-      btn.style.display = show ? "" : "none";
-      if (status && !show) status.textContent = "";
+      btn.style.display = show ? "inline-flex" : "none";
+
+      if (!show && status) {
+        status.textContent = "";
+      }
     }
     function requestUnreadMessages() {
       try {
