@@ -256,6 +256,7 @@ document.querySelector("#app").innerHTML = `
         </div>
         <div class="row">
           <button id="btnOpenHud" class="btn-ghost" type="button">Menu</button>
+          <button id="btnOpenMessages" class="btn-ghost" type="button">Messages</button>
 
           <button id="btnManagerBoard" class="btn-ghost" type="button">Manager Board</button>
           <button id="btnGoSetupPremium" class="btn-ghost" type="button">Setup</button>
