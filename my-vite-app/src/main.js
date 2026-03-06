@@ -529,7 +529,7 @@ document.querySelector("#app").innerHTML = `
     style="position:fixed; inset:0; background: rgba(0,0,0,0.55); z-index: 99998;"></div>
 
   <div id="waiterMessagesBackdrop" class="hidden"
-    style="position:fixed; inset:0; background: rgba(0,0,0,0.55); z-index: 99998;"></div>
+    style="position:fixed; inset:0; background: rgba(0,0,0,0.55); z-index: 2147482999;"></div>
 
   <div id="waiterMessagesPanel" class="hidden"
     style="
@@ -3279,6 +3279,7 @@ function wireParentButtons() {
   if (btnOpenMessages && !btnOpenMessages.__bcBound) {
     btnOpenMessages.__bcBound = true;
     btnOpenMessages.addEventListener("click", () => {
+      closeHud?.();
       openWaiterMessages();
     });
   }
@@ -6860,6 +6861,7 @@ wireHudSendProgressButton();
 wireWaiterMessagesPanel();
 
 document.getElementById("btnOpenHud")?.addEventListener("click", () => {
+  closeWaiterMessages?.();
   openHud();
 });
 
