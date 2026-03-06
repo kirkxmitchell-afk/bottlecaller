@@ -5551,45 +5551,74 @@ async function mbSendDrillOverride() {
   if (!isManager) throw new Error("Manager only");
   if (!restaurantId) throw new Error("Active restaurant not set");
 
-  const scopeId = getScopeIdSafe();
-  if (!scopeId) throw new Error("Scope not set");
-
   const to = String(window.__BC_MB_ACTIVE_THREAD_USER_ID__ || "");
-  const reason = String(mbEl("mbInstrBody")?.value || "").trim() || "Run this now";
   const status = mbEl("mbInstrStatus");
 
   if (!to) throw new Error("Select a waiter thread");
-  if (status) status.textContent = "Sending drill override…";
+
+  if (status) status.textContent = "Sending drill…";
 
   const senderId = appState?.session?.user?.id || appState?.session?.userId || null;
   const senderRole = String(appState?.profile?.role || "");
   if (!senderId) throw new Error("No session");
 
-  if (!window.__BC_DRILL_CONFIG__ && window.setDefaultDrillConfig) {
-    window.setDefaultDrillConfig();
+  const baseDrill = window.__BC_DRILL_CONFIG__ || window.BC_DRILL_CONFIG || null;
+
+  const thread = (window.__BC_MB_THREADS__ || []).find(
+    (t) => String(t.userId) === String(to)
+  );
+  const latest = [...(thread?.rows || [])]
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+    .slice(-1)[0];
+
+  const latestPayload = latest?.payload || {};
+  const guest = String(latestPayload?.guestStateActual || "").toLowerCase();
+  const sig = String(latestPayload?.chainSignal || "").toLowerCase();
+
+  let focus = "read";
+  let pool = ["decider", "bargain_smart", "griever"];
+  let tier = 1;
+  let durationSec = 300;
+  let repTarget = 3;
+
+  if (guest === "decider") {
+    focus = "read";
+    pool = ["decider"];
   }
-  const drillConfig = window.__BC_DRILL_CONFIG__ || window.BC_DRILL_CONFIG || null;
-  if (!drillConfig) throw new Error("No drill config available");
+
+  if (sig === "soft_close" || sig === "red") {
+    focus = "read";
+    repTarget = 4;
+  }
+
+  const drill = {
+    ...(baseDrill || {}),
+    focus,
+    pool,
+    repTarget,
+    durationSec,
+    tier,
+  };
 
   const row = {
     scope_type: "restaurant",
-    scope_id: scopeId,
+    scope_id: restaurantId,
     restaurant_id: restaurantId,
     sender_user_id: senderId,
     receiver_user_id: to,
     sender_role: senderRole,
     type: "drill_override",
-    body: reason,
+    body: "Run this drill now.",
     payload: {
-      drill: drillConfig,
-      reason,
+      drill,
+      reason: "Manager assigned a focused drill based on recent progress."
     },
   };
 
   const { error } = await supabase.from("bc_messages_v1").insert(row);
   if (error) throw error;
 
-  if (status) status.textContent = "Drill override sent ✅";
+  if (status) status.textContent = "Drill sent ✅";
   await loadManagerMessenger();
 }
 
@@ -5615,13 +5644,10 @@ function wireManagerBoardMessenger() {
   if (runDrill && !runDrill.__wired) {
     runDrill.__wired = true;
     runDrill.addEventListener("click", () => {
-      const status = mbEl("mbInstrStatus");
-      const to = String(window.__BC_MB_ACTIVE_THREAD_USER_ID__ || "");
-      if (!to) {
-        if (status) status.textContent = "Select a waiter thread";
-        return;
-      }
-      if (status) status.textContent = "Run Drill wiring comes next.";
+      mbSendDrillOverride().catch((e) => {
+        const status = mbEl("mbInstrStatus");
+        if (status) status.textContent = e?.message || String(e);
+      });
     });
   }
 
