@@ -5304,10 +5304,6 @@ async function loadManagerMessenger() {
   if (!isManager) throw new Error("Manager only");
   if (!restaurantId) throw new Error("Active restaurant not set");
 
-  const scopeType = "restaurant";
-  const scopeId = getScopeIdSafe();
-  if (!scopeId) throw new Error("Scope not set");
-
   const listEl = mbEl("mbMsgList");
   const emptyEl = mbEl("mbMsgEmpty");
   if (listEl) listEl.innerHTML = `<div class="small-text" style="opacity:.85;">Loading…</div>`;
@@ -5316,8 +5312,6 @@ async function loadManagerMessenger() {
   const { data, error } = await supabase
     .from("bc_messages_v1")
     .select("id, created_at, scope_type, scope_id, restaurant_id, sender_user_id, receiver_user_id, sender_role, type, body, payload, read_at")
-    .eq("scope_type", scopeType)
-    .eq("scope_id", scopeId)
     .eq("restaurant_id", restaurantId)
     .is("archived_at", null)
     .order("created_at", { ascending: false })
