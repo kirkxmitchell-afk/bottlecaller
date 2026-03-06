@@ -138,6 +138,39 @@
     function submitProgressReportToManager({ body, payload } = {}) {
       return submitProgressReport({ body, payload });
     }
+    function wireProgressReportButton() {
+      const btn = document.getElementById("btnSendProgressReport");
+      const status = document.getElementById("progressReportStatus");
+      if (!btn || btn.__wired) return;
+      btn.__wired = true;
+
+      btn.addEventListener("click", () => {
+        try {
+          const enc = typeof currentEncounter !== "undefined" ? currentEncounter : null;
+          const payload = {
+            encounterNumber: enc?.encounterNumber || null,
+            guestStateActual: enc?.guestStateActual || null,
+            difficulty: enc?.difficulty || null,
+            chainSignal: enc?.chainSignal || null,
+            chainScore: enc?.chainScore ?? null,
+            mode: String(window.bcMode || ""),
+            occurredAt: new Date().toISOString(),
+          };
+
+          const body =
+            "Progress update" +
+            (enc?.encounterNumber ? ` • Encounter ${enc.encounterNumber}` : "") +
+            (enc?.guestStateActual ? ` • Guest: ${enc.guestStateActual}` : "") +
+            (enc?.chainSignal ? ` • Signal: ${enc.chainSignal}` : "");
+
+          const reqId = submitProgressReportToManager({ body, payload });
+          if (status) status.textContent = reqId ? "Sending progress..." : "Could not send progress.";
+        } catch (e) {
+          console.warn("wireProgressReportButton click failed", e);
+          if (status) status.textContent = "Could not send progress.";
+        }
+      });
+    }
     function requestUnreadMessages() {
       try {
         if (!isActuallyIframe()) return null;
@@ -214,6 +247,14 @@
 
       if (msg.type === "progress_report_submit_result") {
         console.log("[GAME] progress report result", msg);
+        const status = document.getElementById("progressReportStatus");
+        if (status) {
+          if (msg.ok) {
+            status.textContent = `Sent to manager${msg.inserted ? ` (${msg.inserted})` : ""} ✅`;
+          } else {
+            status.textContent = `Send failed: ${msg.error || "unknown error"}`;
+          }
+        }
       }
       if (msg.type === "messages_unread_response") {
         if (!msg.ok) {
@@ -234,6 +275,7 @@
         if (!msg.ok) console.warn("[GAME] message_mark_read_result failed", msg?.error || "unknown", msg?.id);
       }
     });
+    wireProgressReportButton();
     startUnreadMessagesPolling();
     window.submitProgressReport = submitProgressReport;
     window.submitProgressReportToManager = submitProgressReportToManager;
@@ -722,6 +764,10 @@
 
       <footer id="bcHudBottom" class="bc-hud bc-hud-bottom">
         <div class="bc-hint" id="bcHintLine">Read the guest. Choose the hook.</div>
+        <div>
+          <button id="btnSendProgressReport" class="btn btn-ghost" type="button">Send progress to manager</button>
+          <div id="progressReportStatus" class="small-text" style="margin-top:6px; opacity:.85;"></div>
+        </div>
       </footer>
     </div>
   </section>
