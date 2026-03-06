@@ -146,27 +146,26 @@
 
       btn.addEventListener("click", () => {
         try {
-          const enc = typeof currentEncounter !== "undefined" ? currentEncounter : null;
           const payload = {
-            encounterNumber: enc?.encounterNumber || null,
-            guestStateActual: enc?.guestStateActual || null,
-            difficulty: enc?.difficulty || null,
-            chainSignal: enc?.chainSignal || null,
-            chainScore: enc?.chainScore ?? null,
-            outcome: enc?.__reaction?.outcome || null,
-            grade: enc?.latest_grade || null,
+            encounterNumber: currentEncounter?.encounterNumber || null,
+            guestStateActual: currentEncounter?.guestStateActual || null,
+            difficulty: currentEncounter?.difficulty || null,
+            chainSignal: currentEncounter?.chainSignal || null,
+            chainScore: currentEncounter?.chainScore ?? null,
             currentStep: typeof currentStep === "number" ? currentStep : null,
             occurredAt: new Date().toISOString(),
           };
 
           const body =
             "Encounter summary" +
-            (enc?.encounterNumber ? ` • #${enc.encounterNumber}` : "") +
-            (enc?.guestStateActual ? ` • ${enc.guestStateActual}` : "") +
-            (enc?.chainSignal ? ` • ${enc.chainSignal}` : "");
+            (currentEncounter?.encounterNumber ? ` • #${currentEncounter.encounterNumber}` : "") +
+            (currentEncounter?.guestStateActual ? ` • ${currentEncounter.guestStateActual}` : "") +
+            (currentEncounter?.chainSignal ? ` • ${currentEncounter.chainSignal}` : "");
 
           const reqId = submitProgressReportToManager({ body, payload });
-          if (status) status.textContent = reqId ? "Sending progress..." : "Could not send progress.";
+          if (status) {
+            status.textContent = reqId ? "Sending progress…" : "Could not send progress.";
+          }
         } catch (e) {
           console.warn("wireProgressReportButton click failed", e);
           if (status) status.textContent = "Could not send progress.";
@@ -307,6 +306,7 @@
       }
     });
     wireProgressReportButton();
+    syncProgressReportButtonVisibility();
     startUnreadMessagesPolling();
     window.submitProgressReport = submitProgressReport;
     window.submitProgressReportToManager = submitProgressReportToManager;
