@@ -6410,6 +6410,7 @@ function renderInvitesList() {
 function renderHud() {
   const role = String(appState.profile?.role || "-").toLowerCase();
   const r = appState.restaurant;
+  const isMgr = isManagerRole(role);
 
   document.getElementById("hudRole").textContent = role;
   document.getElementById("hudRestName").textContent = r?.name || "-";
@@ -6418,7 +6419,7 @@ function renderHud() {
   document.getElementById("hudRequireInvite").textContent = r ? (r.require_invite ? "Yes" : "No") : "-";
 
   const mgrBtn = document.getElementById("btnManagerBoard");
-  if (mgrBtn) mgrBtn.classList.toggle("hidden", !isManagerRole(role));
+  if (mgrBtn) mgrBtn.classList.toggle("hidden", !isMgr);
   const msgBtn = document.getElementById("btnOpenMessages");
   if (msgBtn) msgBtn.classList.remove("hidden");
 
@@ -6428,8 +6429,6 @@ function renderHud() {
   const managerBlock = document.getElementById("managerOnlyBlock");
   const joinRow = document.getElementById("hudJoinRow");
   const copyRow = document.getElementById("hudCopyRow");
-
-  const isMgr = isManagerRole(role);
   managerBlock?.classList.toggle("hidden", !isMgr);
   joinRow?.classList.toggle("hidden", !isMgr);
   copyRow?.classList.toggle("hidden", !isMgr);
