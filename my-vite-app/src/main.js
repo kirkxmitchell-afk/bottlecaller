@@ -3456,7 +3456,6 @@ function renderWaiterThreadItem(row, selfUserId, nameMap) {
   const kind = String(row?.type || "message");
   const body = escapeHtml(String(row?.body || ""));
   const when = escapeHtml(String(row?.created_at || ""));
-  const payload = row?.payload || null;
 
   let badge = "MSG";
   if (kind === "progress_report") badge = "REPORT";
@@ -3464,10 +3463,10 @@ function renderWaiterThreadItem(row, selfUserId, nameMap) {
   if (kind === "drill_override") badge = "DRILL";
 
   let payloadHtml = "";
-  if (payload && typeof payload === "object" && Object.keys(payload).length) {
+  if (row?.payload && typeof row.payload === "object" && Object.keys(row.payload).length) {
     payloadHtml = `
       <div class="small-text" style="margin-top:6px; opacity:.75; white-space:pre-wrap;">
-        ${escapeHtml(JSON.stringify(payload, null, 2))}
+        ${escapeHtml(JSON.stringify(row.payload, null, 2))}
       </div>
     `;
   }
@@ -3481,8 +3480,8 @@ function renderWaiterThreadItem(row, selfUserId, nameMap) {
       border-radius:12px;
       padding:10px;
     ">
-      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
-        <div style="display:flex; gap:8px; align-items:center;">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+        <div style="display:flex; align-items:center; gap:8px;">
           <span class="badge">${badge}</span>
           <b>${escapeHtml(who)}</b>
         </div>
@@ -3503,7 +3502,7 @@ async function loadWaiterMessagesThread() {
     appState?.profile?.restaurant_id ||
     null;
 
-  const senderId =
+  const selfUserId =
     appState?.session?.user?.id ||
     appState?.session?.userId ||
     null;
@@ -3511,7 +3510,7 @@ async function loadWaiterMessagesThread() {
   const scopeId = getScopeIdSafe();
   const scopeType = String(appState?.profile?.scope_type || "restaurant").toLowerCase();
 
-  if (!senderId || !restaurantId || !scopeId) {
+  if (!restaurantId || !selfUserId || !scopeId) {
     threadEl.innerHTML = `<div class="small-text" style="opacity:.8;">Messages not ready.</div>`;
     return;
   }
@@ -3524,14 +3523,15 @@ async function loadWaiterMessagesThread() {
     .eq("scope_type", scopeType)
     .eq("scope_id", scopeId)
     .eq("restaurant_id", restaurantId)
-    .or(`sender_user_id.eq.${senderId},receiver_user_id.eq.${senderId}`)
+    .or(`sender_user_id.eq.${selfUserId},receiver_user_id.eq.${selfUserId}`)
     .is("archived_at", null)
     .order("created_at", { ascending: true })
     .limit(100);
 
   if (error) {
+    console.error("[WAITER MSG] load failed", error);
     threadEl.innerHTML = `<div class="small-text" style="opacity:.8;">Failed to load messages.</div>`;
-    throw error;
+    return;
   }
 
   const rows = data || [];
@@ -3545,7 +3545,9 @@ async function loadWaiterMessagesThread() {
   );
   const nameMap = await mapUserIdsToNames(userIds);
 
-  threadEl.innerHTML = rows.map((row) => renderWaiterThreadItem(row, senderId, nameMap)).join("");
+  threadEl.innerHTML = rows
+    .map((row) => renderWaiterThreadItem(row, selfUserId, nameMap))
+    .join("");
   threadEl.scrollTop = threadEl.scrollHeight;
 }
 
@@ -3557,7 +3559,7 @@ async function openWaiterMessages() {
   try {
     await loadWaiterMessagesThread();
   } catch (e) {
-    console.error(e);
+    console.error("[WAITER MSG] open failed", e);
   }
 }
 
