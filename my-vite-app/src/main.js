@@ -3450,11 +3450,115 @@ function closeHud() {
   setHudOpen(false);
 }
 
-function openWaiterMessages() {
+function renderWaiterThreadItem(row, selfUserId, nameMap) {
+  const mine = String(row?.sender_user_id || "") === String(selfUserId || "");
+  const who = userLabel(row?.sender_user_id, nameMap);
+  const kind = String(row?.type || "message");
+  const body = escapeHtml(String(row?.body || ""));
+  const when = escapeHtml(String(row?.created_at || ""));
+  const payload = row?.payload || null;
+
+  let badge = "MSG";
+  if (kind === "progress_report") badge = "REPORT";
+  if (kind === "instruction") badge = "INSTRUCTION";
+  if (kind === "drill_override") badge = "DRILL";
+
+  let payloadHtml = "";
+  if (payload && typeof payload === "object" && Object.keys(payload).length) {
+    payloadHtml = `
+      <div class="small-text" style="margin-top:6px; opacity:.75; white-space:pre-wrap;">
+        ${escapeHtml(JSON.stringify(payload, null, 2))}
+      </div>
+    `;
+  }
+
+  return `
+    <div style="
+      align-self:${mine ? "flex-end" : "flex-start"};
+      max-width:88%;
+      background:${mine ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.10)"};
+      border:1px solid rgba(255,255,255,0.10);
+      border-radius:12px;
+      padding:10px;
+    ">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+        <div style="display:flex; gap:8px; align-items:center;">
+          <span class="badge">${badge}</span>
+          <b>${escapeHtml(who)}</b>
+        </div>
+        <div class="small-text" style="opacity:.6;">${when}</div>
+      </div>
+      <div style="margin-top:8px; white-space:pre-wrap;">${body}</div>
+      ${payloadHtml}
+    </div>
+  `;
+}
+
+async function loadWaiterMessagesThread() {
+  const threadEl = document.getElementById("waiterMessagesThread");
+  if (!threadEl) return;
+
+  const restaurantId =
+    window.getActiveRestaurantId?.() ||
+    appState?.profile?.restaurant_id ||
+    null;
+
+  const senderId =
+    appState?.session?.user?.id ||
+    appState?.session?.userId ||
+    null;
+
+  const scopeId = getScopeIdSafe();
+  const scopeType = String(appState?.profile?.scope_type || "restaurant").toLowerCase();
+
+  if (!senderId || !restaurantId || !scopeId) {
+    threadEl.innerHTML = `<div class="small-text" style="opacity:.8;">Messages not ready.</div>`;
+    return;
+  }
+
+  threadEl.innerHTML = `<div class="small-text" style="opacity:.8;">Loading…</div>`;
+
+  const { data, error } = await supabase
+    .from("bc_messages_v1")
+    .select("id, created_at, scope_type, scope_id, restaurant_id, sender_user_id, receiver_user_id, sender_role, type, body, payload, read_at")
+    .eq("scope_type", scopeType)
+    .eq("scope_id", scopeId)
+    .eq("restaurant_id", restaurantId)
+    .or(`sender_user_id.eq.${senderId},receiver_user_id.eq.${senderId}`)
+    .is("archived_at", null)
+    .order("created_at", { ascending: true })
+    .limit(100);
+
+  if (error) {
+    threadEl.innerHTML = `<div class="small-text" style="opacity:.8;">Failed to load messages.</div>`;
+    throw error;
+  }
+
+  const rows = data || [];
+  if (!rows.length) {
+    threadEl.innerHTML = `<div class="small-text" style="opacity:.8;">No messages yet.</div>`;
+    return;
+  }
+
+  const userIds = Array.from(
+    new Set(rows.flatMap((r) => [r.sender_user_id, r.receiver_user_id]).filter(Boolean))
+  );
+  const nameMap = await mapUserIdsToNames(userIds);
+
+  threadEl.innerHTML = rows.map((row) => renderWaiterThreadItem(row, senderId, nameMap)).join("");
+  threadEl.scrollTop = threadEl.scrollHeight;
+}
+
+async function openWaiterMessages() {
   document.getElementById("waiterMessagesBackdrop")?.classList.remove("hidden");
   document.getElementById("waiterMessagesPanel")?.classList.remove("hidden");
   const status = document.getElementById("waiterSendProgressStatus");
   if (status) status.textContent = "";
+  try {
+    await loadWaiterMessagesThread();
+  } catch (e) {
+    console.error(e);
+  }
 }
 
 function closeWaiterMessages() {
@@ -3525,6 +3629,10 @@ window.addEventListener("message", (event) => {
 
     if (status) status.textContent = text;
     if (hudStatus) hudStatus.textContent = text;
+
+    if (msg.ok) {
+      loadWaiterMessagesThread().catch(console.error);
+    }
   }
 });
 
@@ -6311,6 +6419,8 @@ function renderHud() {
 
   const mgrBtn = document.getElementById("btnManagerBoard");
   if (mgrBtn) mgrBtn.classList.toggle("hidden", !isManagerRole(role));
+  const msgBtn = document.getElementById("btnOpenMessages");
+  if (msgBtn) msgBtn.classList.remove("hidden");
 
   const badge = document.getElementById("premiumBadge");
   if (badge) badge.textContent = `PREMIUM • ${String(role).toUpperCase()}`;
