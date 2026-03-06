@@ -3507,10 +3507,7 @@ async function loadWaiterMessagesThread() {
     appState?.session?.userId ||
     null;
 
-  const scopeId = getScopeIdSafe();
-  const scopeType = String(appState?.profile?.scope_type || "restaurant").toLowerCase();
-
-  if (!restaurantId || !selfUserId || !scopeId) {
+  if (!restaurantId || !selfUserId) {
     threadEl.innerHTML = `<div class="small-text" style="opacity:.8;">Messages not ready.</div>`;
     return;
   }
@@ -3520,8 +3517,6 @@ async function loadWaiterMessagesThread() {
   const { data, error } = await supabase
     .from("bc_messages_v1")
     .select("id, created_at, scope_type, scope_id, restaurant_id, sender_user_id, receiver_user_id, sender_role, type, body, payload, read_at")
-    .eq("scope_type", scopeType)
-    .eq("scope_id", scopeId)
     .eq("restaurant_id", restaurantId)
     .or(`sender_user_id.eq.${selfUserId},receiver_user_id.eq.${selfUserId}`)
     .is("archived_at", null)
