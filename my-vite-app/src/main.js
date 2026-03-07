@@ -1415,6 +1415,8 @@ const PRE_BIND_ALLOW = new Set([
   "nav_back",
   "ctx_retry",
   "progression_snapshot_request",
+  "debug_progress_payload",
+  "debug_skill_tree",
 ]);
 
 const DB_TYPES = new Set([
@@ -1718,6 +1720,16 @@ if (!window.__BC_PARENT_BRIDGE__) {
         document.getElementById("bcPremiumFrame") ||
         document.getElementById("premiumRootFrame");
       if (!frame || event.source !== frame.contentWindow) return;
+
+      if (msg.type === "debug_progress_payload") {
+        console.log("[PARENT][DEBUG_PROGRESS_PAYLOAD]", msg.payload);
+        return;
+      }
+
+      if (msg.type === "debug_skill_tree") {
+        console.log("[PARENT][DEBUG_SKILL_TREE]", msg.tree);
+        return;
+      }
 
       // ✅ 1) ctx request MUST be handled before any other typed routing
       if (msg.type === "bc_ctx_request") {
