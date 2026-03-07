@@ -5526,8 +5526,34 @@ function getCoachingSuggestionsFromReport(payload) {
   return suggestions;
 }
 
-function getAutomaticDrillRecommendation(payload) {
-  const skills = payload?.skills || {};
+function getLastAssignedDrill(threadRows) {
+  const rows = Array.isArray(threadRows) ? threadRows : [];
+  const last = rows
+    .filter((r) => String(r?.type || "") === "drill_override")
+    .sort((a, b) => new Date(b?.created_at || 0) - new Date(a?.created_at || 0))[0];
+
+  if (!last) return null;
+
+  return {
+    focus: String(last?.payload?.drill?.focus || "").toLowerCase(),
+    createdAt: last?.created_at ? new Date(last.created_at) : null,
+  };
+}
+
+function isInCooldown(lastDrill, focus, cooldownHours = 48) {
+  if (!lastDrill?.createdAt || !lastDrill?.focus) return false;
+  if (String(lastDrill.focus) !== String(focus || "").toLowerCase()) return false;
+
+  const ageMs = Date.now() - lastDrill.createdAt.getTime();
+  return ageMs < cooldownHours * 60 * 60 * 1000;
+}
+
+function getAutomaticDrillRecommendationForThread(thread) {
+  const rows = Array.isArray(thread?.rows) ? thread.rows : [];
+  const latest = [...rows].sort((a, b) => new Date(b?.created_at || 0) - new Date(a?.created_at || 0))[0];
+
+  const p = latest?.payload || {};
+  const skills = p?.skills || null;
   if (!skills) return null;
 
   const entries = [
@@ -5536,20 +5562,23 @@ function getAutomaticDrillRecommendation(payload) {
     { key: "delivery", label: "Delivery", focus: "delivery" },
     { key: "recovery", label: "Recovery", focus: "recovery" },
     { key: "closing", label: "Closing", focus: "closing" }
-  ];
+  ].sort((a, b) => (skills[a.key] ?? 0) - (skills[b.key] ?? 0));
 
-  entries.sort((a, b) => (skills[a.key] ?? 0) - (skills[b.key] ?? 0));
+  const lastDrill = getLastAssignedDrill(rows);
+
+  for (const e of entries) {
+    const pct = skills[e.key] ?? 0;
+    if (pct >= 40) continue;
+
+    if (!isInCooldown(lastDrill, e.focus, 48)) {
+      return { label: e.label, focus: e.focus, pct, cooldown: false };
+    }
+  }
 
   const weakest = entries[0];
-  const pct = skills[weakest.key] ?? 0;
-
-  if (pct >= 40) return null;
-
-  return {
-    label: weakest.label,
-    focus: weakest.focus,
-    pct
-  };
+  return weakest
+    ? { label: weakest.label, focus: weakest.focus, pct: skills[weakest.key] ?? 0, cooldown: true }
+    : null;
 }
 
 function wireMbCoachSuggestionButtons() {
@@ -5794,39 +5823,6 @@ function renderMbMessageItem(row, nameMap) {
     const p = row.payload || {};
     const skills = p.skills || {};
     const suggestions = getCoachingSuggestionsFromReport(p);
-    const recommendation = getAutomaticDrillRecommendation(p);
-    let recommendationHtml = "";
-
-    if (recommendation) {
-      recommendationHtml = `
-  <div style="
-    margin-top:10px;
-    padding:10px;
-    border-radius:10px;
-    background:rgba(255,140,0,0.10);
-    border:1px solid rgba(255,140,0,0.35);
-  ">
-
-    <div style="font-weight:bold;">
-      Recommended Drill
-    </div>
-
-    <div class="small-text" style="margin-top:6px;">
-      ${recommendation.label} skill is ${recommendation.pct}% (below target).
-    </div>
-
-    <button
-      class="btn"
-      data-auto-drill="${escapeHtml(recommendation.focus)}"
-      data-msg-id="${escapeHtml(String(row.id))}"
-      style="margin-top:8px;"
-    >
-      Assign ${recommendation.label} Drill
-    </button>
-
-  </div>
-  `;
-    }
 
     const suggestionsHtml = suggestions.map((s, i) => `
 <button
@@ -5870,8 +5866,6 @@ ${escapeHtml(s.label)}
         <div class="small-text" style="opacity:.75;">
           Needs Work: ${escapeHtml(String(p.weakestSkill ?? "-"))}
         </div>
-
-        ${recommendationHtml}
 
         <div style="margin-top:12px;">
           <strong>Performance Radar</strong>
@@ -5947,6 +5941,15 @@ function buildManagerSuggestedPrompts(thread) {
   const latest = rows[rows.length - 1];
   const payload = latest?.payload || {};
   const suggestions = [];
+  const rec = getAutomaticDrillRecommendationForThread(thread);
+
+  if (rec && !rec.cooldown) {
+    suggestions.unshift(`Assign ${rec.label} drill (auto)`);
+  }
+
+  if (rec && rec.cooldown) {
+    suggestions.unshift(`Cooldown active: ${rec.label} drill was assigned recently`);
+  }
 
   const sig = String(payload?.chainSignal || "").toLowerCase();
   const guest = String(payload?.guestStateActual || "").toLowerCase();
@@ -5971,6 +5974,50 @@ function buildManagerSuggestedPrompts(thread) {
     .join("");
 }
 
+function renderManagerThreadRecommendation(thread) {
+  const rec = getAutomaticDrillRecommendationForThread(thread);
+  if (!rec) return "";
+
+  if (rec.cooldown) {
+    return `
+      <div style="
+        margin-top:10px;
+        padding:10px;
+        border-radius:10px;
+        background:rgba(255,140,0,0.08);
+        border:1px solid rgba(255,140,0,0.25);
+      ">
+        <div style="font-weight:bold;">Recommended Drill</div>
+        <div class="small-text" style="margin-top:6px; opacity:.85;">
+          Cooldown active: ${escapeHtml(rec.label)} drill was assigned recently.
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div style="
+      margin-top:10px;
+      padding:10px;
+      border-radius:10px;
+      background:rgba(255,140,0,0.10);
+      border:1px solid rgba(255,140,0,0.35);
+    ">
+      <div style="font-weight:bold;">Recommended Drill</div>
+      <div class="small-text" style="margin-top:6px;">
+        ${escapeHtml(rec.label)} skill is ${escapeHtml(String(rec.pct))}% (below target).
+      </div>
+      <button
+        class="btn"
+        data-auto-drill="${escapeHtml(rec.focus)}"
+        style="margin-top:8px;"
+      >
+        Assign ${escapeHtml(rec.label)} Drill
+      </button>
+    </div>
+  `;
+}
+
 function renderManagerActiveThread(nameMap) {
   const msgEl = mbEl("mbThreadMessages");
   const titleEl = mbEl("mbThreadTitle");
@@ -5991,9 +6038,10 @@ function renderManagerActiveThread(nameMap) {
   if (metaEl) metaEl.textContent = `${thread.rows.length} message(s)`;
 
   const ordered = [...thread.rows].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  const recommendationHtml = renderManagerThreadRecommendation(thread);
 
   if (msgEl) {
-    msgEl.innerHTML = ordered.map((m) => renderMbMessageItem(m, nameMap)).join("");
+    msgEl.innerHTML = `${ordered.map((m) => renderMbMessageItem(m, nameMap)).join("")}${recommendationHtml}`;
     msgEl.scrollTop = msgEl.scrollHeight;
     wireMbCoachSuggestionButtons();
     wireMbAutoDrillButtons();
