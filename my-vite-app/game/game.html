@@ -4797,6 +4797,39 @@ function ensureProgLoaded() {
         };
       }
 
+      function checkSkillMilestones(prevSnap, newSnap) {
+        const milestones = [50, 70, 85];
+
+        const skills = [
+          { key: "read", label: "Reading" },
+          { key: "framing", label: "Framing" },
+          { key: "delivery", label: "Delivery" },
+          { key: "recovery", label: "Recovery" },
+          { key: "closing", label: "Closing" }
+        ];
+
+        skills.forEach((skill) => {
+          const prev = prevSnap?.[skill.key] ?? 0;
+          const curr = newSnap?.[skill.key] ?? 0;
+
+          milestones.forEach((level) => {
+            if (prev < level && curr >= level) {
+              window.showToast?.(
+                `🎉 ${skill.label} reached ${level}%`
+              );
+            }
+          });
+
+          const improvement = curr - prev;
+
+          if (improvement >= 15) {
+            window.showToast?.(
+              `📈 ${skill.label} improved +${improvement}%`
+            );
+          }
+        });
+      }
+
       function updateSkillTreeFromEncounter(enc) {
         const tree = loadSkillTree();
         const isDrill = sessionType === "drill";
@@ -8469,12 +8502,14 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
               currentEncounter?.__reaction?.chainSignal ||
               null;
 
+            const prevSnapshot = getSkillSnapshot();
             const skillTree = updateSkillTreeFromEncounter(currentEncounter);
-            const snap = getSkillSnapshot();
+            const newSnapshot = getSkillSnapshot();
+            checkSkillMilestones(prevSnapshot, newSnapshot);
 
             console.log("[SKILLS] updated", {
               tree: skillTree,
-              snapshot: snap
+              snapshot: newSnapshot
             });
           } catch (e) {
             console.warn("[SKILLS] update failed", e);
