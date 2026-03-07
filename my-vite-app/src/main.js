@@ -5874,6 +5874,9 @@ function renderMbMessageItem(row, nameMap) {
     const duration = escapeHtml(String(d.durationSec ?? "-"));
     const tier = escapeHtml(String(d.tier ?? "-"));
     const reason = escapeHtml(String(row?.payload?.reason || ""));
+    const targetName = escapeHtml(
+      userLabel(row?.receiver_user_id, nameMap) || "waiter"
+    );
 
     payloadHtml = `
       <div style="
@@ -5884,7 +5887,10 @@ function renderMbMessageItem(row, nameMap) {
         background:rgba(255,255,255,0.04);
       ">
         <div><strong>Assigned drill</strong></div>
-        <div class="small-text" style="margin-top:6px; opacity:.9;">Focus: ${focus}</div>
+        <div class="small-text" style="margin-top:6px; opacity:.9;">
+          Assigned to: ${targetName}
+        </div>
+        <div class="small-text" style="opacity:.9;">Focus: ${focus}</div>
         <div class="small-text" style="opacity:.9;">Pool: ${escapeHtml(pool)}</div>
         <div class="small-text" style="opacity:.9;">Reps: ${reps}</div>
         <div class="small-text" style="opacity:.9;">Duration: ${duration}s</div>
@@ -6341,7 +6347,7 @@ async function mbSendDrillOverride(opts = {}) {
     receiver_user_id: to,
     sender_role: senderRole,
     type: "drill_override",
-    body: `Run this ${focus} drill now.`,
+    body: `Assigned a ${focus} drill to this waiter.`,
     payload: {
       drill,
       reason: "Manager assigned a focused drill based on recent progress."

@@ -163,14 +163,10 @@
             strongestSkill: getStrengthAndFix(loadMastery()).strongest,
             weakestSkill: getStrengthAndFix(loadMastery()).weakest
           };
-
-          const body =
-            "Encounter summary" +
-            (currentEncounter?.encounterNumber ? ` • #${currentEncounter.encounterNumber}` : "") +
-            (currentEncounter?.guestStateActual ? ` • ${currentEncounter.guestStateActual}` : "") +
-            (currentEncounter?.chainSignal ? ` • ${currentEncounter.chainSignal}` : "");
-
-          const reqId = submitProgressReportToManager({ body, payload });
+          const reqId = submitProgressReportToManager({
+            body: `Progress update • Encounter ${payload.encounterNumber} • Guest: ${payload.guestStateActual} • Signal: ${payload.chainSignal}`,
+            payload
+          });
           (async () => {
             try {
               const ctx = window.__BC_CTX__ || {};
@@ -364,7 +360,6 @@
         }
       }
       if (msg.type === "hud_send_progress_request") {
-        const enc = typeof currentEncounter !== "undefined" ? currentEncounter : null;
         const skillSnapshot = getSkillSnapshot();
 
         const payload = {
@@ -375,7 +370,7 @@
             currentEncounter?.chainSignal ||
             currentEncounter?.__reaction?.chainSignal ||
             null,
-          chainScore: enc?.chainScore ?? null,
+          chainScore: currentEncounter?.chainScore ?? null,
 
           skills: skillSnapshot,
 
