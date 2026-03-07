@@ -4803,21 +4803,45 @@ function ensureProgLoaded() {
 
       function loadSkillTree() {
         const key = getSkillKey();
-        if (!key) return JSON.parse(JSON.stringify(SKILL_TEMPLATE));
+        if (!key) {
+          const tree = JSON.parse(JSON.stringify(SKILL_TEMPLATE));
+          console.log("[SKILLS] loadSkillTree", {
+            key: getSkillKey?.(),
+            tree
+          });
+          return tree;
+        }
 
         try {
           const raw = localStorage.getItem(key);
-          if (!raw) return JSON.parse(JSON.stringify(SKILL_TEMPLATE));
+          if (!raw) {
+            const tree = JSON.parse(JSON.stringify(SKILL_TEMPLATE));
+            console.log("[SKILLS] loadSkillTree", {
+              key: getSkillKey?.(),
+              tree
+            });
+            return tree;
+          }
           const parsed = JSON.parse(raw);
-          return {
+          const tree = {
             read: { ...SKILL_TEMPLATE.read, ...(parsed.read || {}) },
             framing: { ...SKILL_TEMPLATE.framing, ...(parsed.framing || {}) },
             delivery: { ...SKILL_TEMPLATE.delivery, ...(parsed.delivery || {}) },
             recovery: { ...SKILL_TEMPLATE.recovery, ...(parsed.recovery || {}) },
             closing: { ...SKILL_TEMPLATE.closing, ...(parsed.closing || {}) },
           };
+          console.log("[SKILLS] loadSkillTree", {
+            key: getSkillKey?.(),
+            tree
+          });
+          return tree;
         } catch {
-          return JSON.parse(JSON.stringify(SKILL_TEMPLATE));
+          const tree = JSON.parse(JSON.stringify(SKILL_TEMPLATE));
+          console.log("[SKILLS] loadSkillTree", {
+            key: getSkillKey?.(),
+            tree
+          });
+          return tree;
         }
       }
 
@@ -4842,13 +4866,24 @@ function ensureProgLoaded() {
 
       function getSkillSnapshot() {
         const tree = loadSkillTree();
-        return {
+        const snapshot = {
           read: skillPercent(tree.read),
           framing: skillPercent(tree.framing),
           delivery: skillPercent(tree.delivery),
           recovery: skillPercent(tree.recovery),
           closing: skillPercent(tree.closing),
         };
+        console.log("[SKILLS] getSkillSnapshot result", {
+          key: getSkillKey?.(),
+          snapshot: {
+            read: skillPercent(tree.read),
+            framing: skillPercent(tree.framing),
+            delivery: skillPercent(tree.delivery),
+            recovery: skillPercent(tree.recovery),
+            closing: skillPercent(tree.closing),
+          }
+        });
+        return snapshot;
       }
 
       function checkSkillMilestones(prevSnap, newSnap) {
