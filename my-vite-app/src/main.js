@@ -416,6 +416,18 @@ document.querySelector("#app").innerHTML = `
             <div id="mbLeaderboard" style="margin-top:10px;"></div>
           </div>
 
+          <div class="card" style="margin-top:12px;">
+            <strong>Weekly Training Report</strong>
+
+            <div class="small-text" style="margin-top:6px; opacity:.85;">
+              Summary of team progress over the last 7 days.
+            </div>
+
+            <div id="mbWeeklyReport" style="margin-top:10px;">
+              <div class="small-text" style="opacity:.7;">Loading report…</div>
+            </div>
+          </div>
+
           <div class="card" id="mbMembersCard" style="margin-top:12px;">
             <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
               <strong>Members</strong>
@@ -6478,6 +6490,251 @@ async function loadLeaderboard() {
   renderLeaderboard(list);
 }
 
+function renderWeeklyTrainingReport(rows) {
+  const el = document.getElementById("mbWeeklyReport");
+  if (!el) return;
+
+  if (!rows.length) {
+    el.innerHTML = `<div class="small-text">No training data this week.</div>`;
+    return;
+  }
+
+  const waiterMap = {};
+  const skillGrowth = {
+    read: 0,
+    framing: 0,
+    delivery: 0,
+    recovery: 0,
+    closing: 0
+  };
+
+  rows.forEach((r) => {
+    const id = r.user_id;
+    const profileObj = Array.isArray(r.profiles) ? r.profiles[0] : r.profiles;
+
+    if (!waiterMap[id]) {
+      waiterMap[id] = {
+        name: profileObj?.display_name || id,
+        total: 0,
+        count: 0
+      };
+    }
+
+    const score =
+      (r.read_pct +
+       r.framing_pct +
+       r.delivery_pct +
+       r.recovery_pct +
+       r.closing_pct) / 5;
+
+    waiterMap[id].total += score;
+    waiterMap[id].count += 1;
+
+    skillGrowth.read += r.read_pct;
+    skillGrowth.framing += r.framing_pct;
+    skillGrowth.delivery += r.delivery_pct;
+    skillGrowth.recovery += r.recovery_pct;
+    skillGrowth.closing += r.closing_pct;
+  });
+
+  const waiters = Object.values(waiterMap)
+    .map((w) => ({
+      name: w.name,
+      avg: w.total / w.count
+    }))
+    .sort((a, b) => b.avg - a.avg);
+
+  const topWaiter = waiters[0]?.name || "—";
+
+  const skillAvg = Object.entries(skillGrowth)
+    .map(([k, v]) => ({
+      skill: k,
+      avg: v / rows.length
+    }))
+    .sort((a, b) => a.avg - b.avg);
+
+  const recommendedFocus = skillAvg[0]?.skill || "—";
+
+  el.innerHTML = `
+    <div style="display:flex; flex-direction:column; gap:6px;">
+
+      <div>
+        🏆 <b>Top waiter:</b> ${escapeHtml(topWaiter)}
+      </div>
+
+      <div>
+        📉 <b>Team focus area:</b> ${escapeHtml(recommendedFocus)}
+      </div>
+
+      <div>
+        📊 <b>Total reports analyzed:</b> ${rows.length}
+      </div>
+
+      <div class="small-text" style="opacity:.7;">
+        Recommendation: run focused drills on ${escapeHtml(recommendedFocus)} this week.
+      </div>
+
+    </div>
+  `;
+}
+
+async function loadWeeklyTrainingReport() {
+  const { restaurantId } = getManagerBoardFilter();
+  if (!restaurantId) return [];
+
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+  const { data, error } = await supabase
+    .from("bc_skill_snapshots_v1")
+    .select(`
+      user_id,
+      read_pct,
+      framing_pct,
+      delivery_pct,
+      recovery_pct,
+      closing_pct,
+      created_at,
+      profiles(display_name)
+    `)
+    .eq("restaurant_id", restaurantId)
+    .gte("created_at", sevenDaysAgo.toISOString());
+
+  if (error) {
+    console.warn("[WEEKLY REPORT]", error);
+    return [];
+  }
+
+  const rows = data || [];
+  renderWeeklyTrainingReport(rows);
+  return rows;
+}
+
+function getWeekStartIso(d = new Date()) {
+  const x = new Date(d);
+  const day = (x.getUTCDay() + 6) % 7; // Monday=0
+  x.setUTCDate(x.getUTCDate() - day);
+  x.setUTCHours(0, 0, 0, 0);
+  return x.toISOString().slice(0, 10);
+}
+
+function prettySkillLabel(key) {
+  const k = String(key || "").toLowerCase();
+  if (k === "read") return "Reading";
+  if (k === "framing") return "Framing";
+  if (k === "delivery") return "Delivery";
+  if (k === "recovery") return "Recovery";
+  if (k === "closing") return "Closing";
+  return key || "—";
+}
+
+async function maybeSendWeeklyManagerSummary(rows) {
+  try {
+    const { restaurantId, isManager } = getManagerBoardFilter();
+    if (!isManager || !restaurantId) return;
+    if (!Array.isArray(rows) || !rows.length) return;
+
+    const managerId = appState?.session?.user?.id || appState?.session?.userId || null;
+    const senderRole = String(appState?.profile?.role || "manager");
+    if (!managerId) return;
+
+    const weekStart = getWeekStartIso();
+    const sentKey = `bc_weekly_summary_sent_v1_${restaurantId}_${managerId}_${weekStart}`;
+    if (localStorage.getItem(sentKey) === "1") return;
+
+    const waiterMap = {};
+    const skillGrowth = { read: 0, framing: 0, delivery: 0, recovery: 0, closing: 0 };
+
+    rows.forEach((r) => {
+      const id = r.user_id;
+      const profileObj = Array.isArray(r.profiles) ? r.profiles[0] : r.profiles;
+      if (!waiterMap[id]) {
+        waiterMap[id] = { name: profileObj?.display_name || id, total: 0, count: 0 };
+      }
+      const score =
+        (r.read_pct + r.framing_pct + r.delivery_pct + r.recovery_pct + r.closing_pct) / 5;
+      waiterMap[id].total += score;
+      waiterMap[id].count += 1;
+      skillGrowth.read += r.read_pct;
+      skillGrowth.framing += r.framing_pct;
+      skillGrowth.delivery += r.delivery_pct;
+      skillGrowth.recovery += r.recovery_pct;
+      skillGrowth.closing += r.closing_pct;
+    });
+
+    const waiters = Object.values(waiterMap)
+      .map((w) => ({ name: w.name, avg: w.total / w.count }))
+      .sort((a, b) => b.avg - a.avg);
+    const topWaiter = waiters[0]?.name || "—";
+
+    const skillAvg = Object.entries(skillGrowth)
+      .map(([k, v]) => ({ skill: k, avg: v / rows.length }))
+      .sort((a, b) => a.avg - b.avg);
+    const recommendedFocus = skillAvg[0]?.skill || "—";
+
+    const byTime = [...rows]
+      .filter((r) => r?.created_at)
+      .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    const n = Math.max(1, Math.min(5, Math.floor(byTime.length / 2) || 1));
+    const first = byTime.slice(0, n);
+    const last = byTime.slice(-n);
+    const keys = ["read_pct", "framing_pct", "delivery_pct", "recovery_pct", "closing_pct"];
+
+    const mean = (arr, k) => {
+      if (!arr.length) return 0;
+      const total = arr.reduce((acc, r) => acc + Number(r?.[k] ?? 0), 0);
+      return total / arr.length;
+    };
+
+    let bestDelta = -Infinity;
+    let mostImproved = "read";
+    keys.forEach((k) => {
+      const delta = mean(last, k) - mean(first, k);
+      if (delta > bestDelta) {
+        bestDelta = delta;
+        mostImproved = k.replace("_pct", "");
+      }
+    });
+
+    const body = [
+      "Weekly Training Summary",
+      "",
+      `Top performer: ${topWaiter}`,
+      `Most improved skill: ${prettySkillLabel(mostImproved)}`,
+      `Recommended focus: ${prettySkillLabel(recommendedFocus)}`
+    ].join("\n");
+
+    const row = {
+      scope_type: "restaurant",
+      scope_id: getScopeIdSafe() || restaurantId,
+      restaurant_id: restaurantId,
+      sender_user_id: managerId,
+      receiver_user_id: managerId,
+      sender_role: senderRole,
+      type: "instruction",
+      body,
+      payload: {
+        kind: "weekly_summary",
+        week_start: weekStart,
+        top_performer: topWaiter,
+        most_improved_skill: mostImproved,
+        recommended_focus: recommendedFocus,
+        reports_analyzed: rows.length
+      },
+    };
+
+    const { error } = await supabase.from("bc_messages_v1").insert(row);
+    if (error) {
+      console.warn("[WEEKLY SUMMARY] insert failed", error);
+      return;
+    }
+
+    localStorage.setItem(sentKey, "1");
+  } catch (e) {
+    console.warn("[WEEKLY SUMMARY] failed", e);
+  }
+}
+
 async function loadManagerBoardData() {
   try {
     const { restaurantId, isManager, isGroupish } = getManagerBoardFilter();
@@ -6494,6 +6751,8 @@ async function loadManagerBoardData() {
     wireManagerBoardMembers();
     await loadManagerBoardMembers();
     await loadLeaderboard();
+    const weeklyRows = await loadWeeklyTrainingReport();
+    await maybeSendWeeklyManagerSummary(weeklyRows);
 
     // Views you actually have
     const RUNS_TABLE = "bc_sessions_v1";                 // sessions summary
