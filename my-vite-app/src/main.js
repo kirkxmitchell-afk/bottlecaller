@@ -5332,32 +5332,81 @@ function mbEl(id) {
 window.__BC_MB_THREADS__ = [];
 window.__BC_MB_ACTIVE_THREAD_USER_ID__ = null;
 
-function renderMbMessageItem(m, nameMap) {
-  const when = m.created_at || "";
-  const sender = userLabel(m.sender_user_id, nameMap);
-  const typ = String(m.type || "dm");
-  const badge =
-    typ === "progress_report" ? "REPORT" :
-    typ === "instruction" ? "INSTRUCTION" :
-    "MSG";
+function renderMbMessageItem(row, nameMap) {
+  const who = userLabel(row?.sender_user_id, nameMap);
+  const kind = String(row?.type || "message");
+  const body = escapeHtml(String(row?.body || ""));
+  const when = escapeHtml(String(row?.created_at || ""));
 
-  const body = String(m.body || "");
-  const payloadRaw = m.payload ? JSON.stringify(m.payload) : "";
-  const payloadPreview = payloadRaw
-    ? `<div class="small-text" style="opacity:.75; margin-top:6px;">${escapeHtml(payloadRaw.slice(0, 220))}${payloadRaw.length > 220 ? "…" : ""}</div>`
-    : "";
+  let badge = "MSG";
+  if (kind === "progress_report") badge = "REPORT";
+  if (kind === "instruction") badge = "INSTRUCTION";
+  if (kind === "drill_override") badge = "DRILL";
+
+  let payloadHtml = "";
+
+  if (kind === "drill_override" && row?.payload?.drill) {
+    const d = row.payload.drill || {};
+    const pool = Array.isArray(d.pool) ? d.pool.join(", ") : "-";
+    const focus = escapeHtml(String(d.focus || "-"));
+    const reps = escapeHtml(String(d.repTarget ?? "-"));
+    const duration = escapeHtml(String(d.durationSec ?? "-"));
+    const tier = escapeHtml(String(d.tier ?? "-"));
+    const reason = escapeHtml(String(row?.payload?.reason || ""));
+
+    payloadHtml = `
+      <div style="
+        margin-top:8px;
+        padding:10px;
+        border:1px solid rgba(255,255,255,0.10);
+        border-radius:10px;
+        background:rgba(255,255,255,0.04);
+      ">
+        <div><strong>Assigned drill</strong></div>
+        <div class="small-text" style="margin-top:6px; opacity:.9;">Focus: ${focus}</div>
+        <div class="small-text" style="opacity:.9;">Pool: ${escapeHtml(pool)}</div>
+        <div class="small-text" style="opacity:.9;">Reps: ${reps}</div>
+        <div class="small-text" style="opacity:.9;">Duration: ${duration}s</div>
+        <div class="small-text" style="opacity:.9;">Tier: ${tier}</div>
+        ${reason ? `<div class="small-text" style="margin-top:8px; opacity:.75;">${reason}</div>` : ""}
+      </div>
+    `;
+  } else if (kind === "progress_report" && row?.payload && typeof row.payload === "object" && Object.keys(row.payload).length) {
+    const p = row.payload || {};
+    payloadHtml = `
+      <div style="
+        margin-top:8px;
+        padding:10px;
+        border:1px solid rgba(255,255,255,0.10);
+        border-radius:10px;
+        background:rgba(255,255,255,0.04);
+      ">
+        <div><strong>Progress snapshot</strong></div>
+        <div class="small-text" style="margin-top:6px; opacity:.9;">Encounter: ${escapeHtml(String(p.encounterNumber ?? "-"))}</div>
+        <div class="small-text" style="opacity:.9;">Guest: ${escapeHtml(String(p.guestStateActual || "-"))}</div>
+        <div class="small-text" style="opacity:.9;">Difficulty: ${escapeHtml(String(p.difficulty ?? "-"))}</div>
+        <div class="small-text" style="opacity:.9;">Signal: ${escapeHtml(String(p.chainSignal || "-"))}</div>
+        <div class="small-text" style="opacity:.9;">Score: ${escapeHtml(String(p.chainScore ?? "-"))}</div>
+      </div>
+    `;
+  }
 
   return `
-    <div style="padding:10px; border:1px solid rgba(255,255,255,0.10); border-radius:12px;">
-      <div style="display:flex; justify-content:space-between; gap:10px; align-items:center;">
-        <div style="display:flex; gap:8px; align-items:center;">
+    <div style="
+      border:1px solid rgba(255,255,255,0.10);
+      border-radius:12px;
+      padding:10px;
+      background:rgba(255,255,255,0.04);
+    ">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+        <div style="display:flex; align-items:center; gap:8px;">
           <span class="badge">${badge}</span>
-          <b>${escapeHtml(sender)}</b>
+          <b>${escapeHtml(who)}</b>
         </div>
-        <div class="small-text" style="opacity:.65;">${escapeHtml(when)}</div>
+        <div class="small-text" style="opacity:.6;">${when}</div>
       </div>
-      <div style="margin-top:8px; white-space:pre-wrap;">${escapeHtml(body)}</div>
-      ${payloadPreview}
+      <div style="margin-top:8px; white-space:pre-wrap;">${body}</div>
+      ${payloadHtml}
     </div>
   `;
 }
