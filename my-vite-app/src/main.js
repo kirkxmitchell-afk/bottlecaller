@@ -3567,19 +3567,37 @@ function renderWaiterThreadItem(row, selfUserId, nameMap) {
   const showBody = kind !== "drill_override";
 
   if (kind === "drill_override" && row?.payload?.drill) {
-    const focus = escapeHtml(String(row?.payload?.drill?.focus || "-"));
+    const d = row.payload.drill || {};
+    const pool = Array.isArray(d.pool) ? d.pool.join(", ") : "-";
+    const focus = escapeHtml(String(d.focus || "-"));
+    const reps = escapeHtml(String(d.repTarget ?? "-"));
+    const duration = escapeHtml(String(d.durationSec ?? "-"));
+    const tier = escapeHtml(String(d.tier ?? "-"));
+    const reason = escapeHtml(String(row?.payload?.reason || ""));
 
     payloadHtml = `
       <div style="
-        margin-top:10px;
+        margin-top:8px;
         padding:10px;
         border:1px solid rgba(255,255,255,0.10);
         border-radius:10px;
         background:rgba(255,255,255,0.04);
       ">
-        <div><strong>📋 Manager Drill Assigned</strong></div>
-        <div class="small-text" style="margin-top:6px; opacity:.9;">${body}</div>
-        <div class="small-text" style="opacity:.75; margin-top:4px;">Focus: ${focus}</div>
+        <div><strong>Assigned drill</strong></div>
+        <div class="small-text" style="margin-top:6px; opacity:.9;">Focus: ${focus}</div>
+        <div class="small-text" style="opacity:.9;">Pool: ${escapeHtml(pool)}</div>
+        <div class="small-text" style="opacity:.9;">Reps: ${reps}</div>
+        <div class="small-text" style="opacity:.9;">Duration: ${duration}s</div>
+        <div class="small-text" style="opacity:.9;">Tier: ${tier}</div>
+        ${reason ? `<div class="small-text" style="margin-top:8px; opacity:.75;">${reason}</div>` : ""}
+        <button
+          type="button"
+          class="btn-ghost waiterStartAssignedDrill"
+          data-drill-message-id="${escapeHtml(String(row.id || ""))}"
+          style="margin-top:10px;"
+        >
+          Start Assigned Drill
+        </button>
       </div>
     `;
   } else if (kind === "progress_report" && row?.payload && typeof row.payload === "object" && Object.keys(row.payload).length) {
@@ -3712,6 +3730,68 @@ async function loadWaiterMessagesThread() {
     .map((row) => renderWaiterThreadItem(row, selfUserId, nameMap))
     .join("");
   threadEl.scrollTop = threadEl.scrollHeight;
+  wireWaiterThreadButtons();
+}
+
+function wireWaiterThreadButtons() {
+  document.querySelectorAll(".waiterStartAssignedDrill").forEach((btn) => {
+    if (btn.__wired) return;
+    btn.__wired = true;
+
+    btn.addEventListener("click", async () => {
+      try {
+        const msgId = String(btn.getAttribute("data-drill-message-id") || "");
+        if (!msgId) return;
+
+        const restaurantId =
+          window.getActiveRestaurantId?.() ||
+          appState?.profile?.restaurant_id ||
+          null;
+
+        const selfUserId =
+          appState?.session?.user?.id ||
+          appState?.session?.userId ||
+          null;
+
+        if (!restaurantId || !selfUserId) return;
+
+        const { data, error } = await supabase
+          .from("bc_messages_v1")
+          .select("id, payload, type")
+          .eq("id", msgId)
+          .eq("restaurant_id", restaurantId)
+          .or(`sender_user_id.eq.${selfUserId},receiver_user_id.eq.${selfUserId}`)
+          .limit(1)
+          .maybeSingle();
+
+        if (error || !data || String(data.type) !== "drill_override") {
+          console.warn("[WAITER] failed to load drill message", error || "not_found");
+          return;
+        }
+
+        const drill = data?.payload?.drill || null;
+        if (!drill) return;
+
+        const frame = document.getElementById("premiumRootFrame");
+        if (!frame || !frame.contentWindow) return;
+
+        frame.contentWindow.postMessage(
+          {
+            source: "BC_MSG",
+            v: 1,
+            type: "launch_assigned_drill_request",
+            drill,
+          },
+          window.location.origin
+        );
+
+        const status = document.getElementById("waiterSendProgressStatus");
+        if (status) status.textContent = "Starting assigned drill…";
+      } catch (e) {
+        console.warn("[WAITER] start assigned drill failed", e);
+      }
+    });
+  });
 }
 
 async function openWaiterMessages() {

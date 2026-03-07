@@ -252,6 +252,60 @@
         return null;
       }
     }
+    function launchAssignedDrill(drill) {
+      try {
+        if (!drill || typeof drill !== "object") return false;
+
+        const cfg = (window.__BC_DRILL_CONFIG__ = window.__BC_DRILL_CONFIG__ || {});
+        Object.assign(cfg, drill);
+
+        console.log("[GAME] launchAssignedDrill ✅", cfg);
+
+        if (typeof startDrill === "function") {
+          try {
+            startDrill(
+              Number(drill?.repTarget ?? 3),
+              drill?.focus ?? "read",
+              "manager",
+              Number(drill?.tier ?? 1)
+            );
+            return true;
+          } catch (e) {
+            console.warn("[GAME] startDrill failed", e);
+          }
+        }
+
+        if (typeof startDrillSession === "function") {
+          try {
+            startDrillSession(drill?.repTarget ?? 3);
+            return true;
+          } catch (e) {
+            console.warn("[GAME] startDrillSession failed", e);
+          }
+        }
+
+        window.postMessage(
+          {
+            source: "BC_MSG",
+            v: 1,
+            type: "start_drill",
+            repTarget: drill?.repTarget ?? 3,
+            focus: drill?.focus ?? "read",
+            pool: drill?.pool ?? ["decider", "bargain_smart", "griever"],
+            durationSec: drill?.durationSec ?? 300,
+            tier: drill?.tier ?? 1,
+            mode: "premium",
+            drill
+          },
+          window.location.origin
+        );
+        return true;
+
+      } catch (e) {
+        console.warn("[GAME] launchAssignedDrill failed", e);
+        return false;
+      }
+    }
     function applyDrillOverrideFromMessage(message) {
       try {
         const drill = message?.payload?.drill || null;
@@ -263,32 +317,15 @@
         console.log("[GAME] drill_override applied ✅", cfg);
         window.showToast?.("Manager updated your drill ✅");
 
-        // auto-start the drill
-        if (typeof window.startDrillSession === "function") {
-          try {
-            // This build's startDrillSession currently takes repTarget as positional arg.
-            window.startDrillSession(drill?.repTarget ?? 3);
-          } catch (e) {
-            console.warn("[GAME] startDrillSession failed", e);
-          }
-        } else {
-          // Fallback to the same path used by parent start-drill messaging.
-          window.postMessage(
-            {
-              source: "BC_MSG",
-              v: 1,
-              type: "start_drill",
-              repTarget: drill?.repTarget ?? 3,
-              focus: drill?.focus ?? "read",
-              pool: drill?.pool ?? ["decider", "bargain_smart", "griever"],
-              durationSec: drill?.durationSec ?? 300,
-              tier: drill?.tier ?? 1,
-              mode: "premium",
-              drill
-            },
-            window.location.origin
-          );
-        }
+        window.__BC_LAST_ASSIGNED_DRILL__ = {
+          id: message?.id || null,
+          body: message?.body || "",
+          payload: message?.payload || {},
+          drill
+        };
+
+        const started = launchAssignedDrill(drill);
+        console.log("[GAME] assigned drill auto-start", { started, focus: drill?.focus });
 
         return true;
       } catch (e) {
@@ -381,6 +418,19 @@
             console.warn("[SNAPSHOT] insert failed", e);
           }
         })();
+      }
+      if (msg.type === "launch_assigned_drill_request") {
+        const drill = msg?.drill || null;
+        if (!drill) return;
+
+        const started = launchAssignedDrill(drill);
+        console.log("[GAME] launch_assigned_drill_request", { started, drill });
+
+        if (started) {
+          window.showToast?.("Assigned drill started ✅");
+        } else {
+          console.warn("[GAME] assigned drill failed to start");
+        }
       }
       if (msg.type === "messages_unread_response") {
         if (!msg.ok) {
