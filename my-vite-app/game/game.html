@@ -432,6 +432,55 @@
         return null;
       }
     }
+    async function logDrillRunStart(drill, assignedMessageId = null) {
+      try {
+        const ctx = window.__BC_CTX__ || null;
+        if (!ctx?.userId || !ctx?.restaurantId) return null;
+
+        const payload = {
+          drill: drill || null
+        };
+
+        window.parent?.postMessage(
+          {
+            source: "BC_MSG",
+            v: 1,
+            type: "drill_run_started",
+            assignedMessageId: assignedMessageId || null,
+            payload
+          },
+          window.location.origin
+        );
+
+        return true;
+      } catch (e) {
+        console.warn("[DRILL RUN] start log failed", e);
+        return false;
+      }
+    }
+    function logDrillRunComplete(details = {}) {
+      try {
+        const assignedMessageId = window.__BC_LAST_ASSIGNED_DRILL__?.id || null;
+
+        window.parent?.postMessage(
+          {
+            source: "BC_MSG",
+            v: 1,
+            type: "drill_run_completed",
+            assignedMessageId,
+            payload: {
+              repsDone: details?.repsDone ?? null,
+              repTarget: details?.repTarget ?? null,
+              focus: details?.focus ?? null,
+              durationSec: details?.durationSec ?? null
+            }
+          },
+          window.location.origin
+        );
+      } catch (e) {
+        console.warn("[DRILL RUN] completion log failed", e);
+      }
+    }
     function launchAssignedDrill(drill) {
       try {
         if (!drill || typeof drill !== "object") return false;
@@ -486,7 +535,7 @@
         return false;
       }
     }
-    function applyDrillOverrideFromMessage(message) {
+    async function applyDrillOverrideFromMessage(message) {
       try {
         const drill = message?.payload?.drill || null;
         if (!drill || typeof drill !== "object") return false;
@@ -503,6 +552,8 @@
           payload: message?.payload || {},
           drill
         };
+
+        await logDrillRunStart(drill, message?.id || null);
 
         const started = launchAssignedDrill(drill);
         console.log("[GAME] assigned drill auto-start", { started, focus: drill?.focus });
@@ -527,7 +578,7 @@
         if (!document.hidden) kick();
       });
     }
-    window.addEventListener("message", (event) => {
+    window.addEventListener("message", async (event) => {
       const msg = event?.data;
       if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
       if (event.origin !== window.location.origin) return;
@@ -565,9 +616,18 @@
       if (msg.type === "launch_assigned_drill_request") {
         const drill = msg?.drill || null;
         if (!drill) return;
+        const assignedMessageId = msg?.assignedMessageId || null;
+
+        window.__BC_LAST_ASSIGNED_DRILL__ = {
+          id: assignedMessageId,
+          body: "",
+          payload: { drill },
+          drill
+        };
+        await logDrillRunStart(drill, assignedMessageId);
 
         const started = launchAssignedDrill(drill);
-        console.log("[GAME] launch_assigned_drill_request", { started, drill });
+        console.log("[GAME] launch_assigned_drill_request", { started, drill, assignedMessageId });
 
         if (started) {
           window.showToast?.("Assigned drill started ✅");
@@ -583,7 +643,7 @@
         const rows = Array.isArray(msg.rows) ? msg.rows : [];
         for (const row of rows) {
           if (String(row?.type || "") === "drill_override") {
-            applyDrillOverrideFromMessage(row);
+            await applyDrillOverrideFromMessage(row);
           } else if (String(row?.type || "") === "instruction") {
             window.showToast?.("New manager instruction ✅");
           }
@@ -4457,6 +4517,14 @@ function ensureProgLoaded() {
         encounterIndex += 1;
 
         if (DRILL.repDone >= DRILL.repTarget) {
+          logDrillRunComplete({
+            repsDone: DRILL.repDone,
+            repTarget: DRILL.repTarget,
+            focus: DRILL.focus || null,
+            durationSec: Number.isFinite(DRILL.startedAt)
+              ? Math.max(0, Math.round((Date.now() - DRILL.startedAt) / 1000))
+              : null
+          });
           showScreen("screenDrillSummary");
           const s = document.getElementById("drillSummary");
           if (s) s.textContent = `Completed ${DRILL.repTarget} reps.`;

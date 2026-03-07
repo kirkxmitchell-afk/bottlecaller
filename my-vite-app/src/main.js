@@ -2629,6 +2629,89 @@ if (!window.__BC_PARENT_BRIDGE__) {
         }
       }
 
+      if (msg.type === "drill_run_started") {
+        const ctx = getSenderCtxOrReject(
+          event,
+          senderCtx,
+          "drill_run_started_result",
+          {},
+          { requireRestaurant: true, allowedRoles: ["waiter", "manager", "group_manager", "admin"] }
+        );
+        if (!ctx) return;
+
+        const authed = liveAuth?.userId || null;
+        if (!authed || String(authed) !== String(ctx.userId)) return;
+
+        const drill = msg?.payload?.drill || {};
+
+        const { data, error } = await supabase
+          .from("bc_drill_runs_v1")
+          .insert({
+            restaurant_id: ctx.restaurantId,
+            user_id: ctx.userId,
+            assigned_message_id: msg?.assignedMessageId || null,
+            focus: drill?.focus || null,
+            rep_target: drill?.repTarget ?? null,
+            reps_done: 0,
+            duration_sec: drill?.durationSec ?? null,
+            payload: msg?.payload || null
+          })
+          .select("id")
+          .single();
+
+        if (error) {
+          console.warn("[DRILL RUN] parent start insert failed", error);
+        } else {
+          console.log("[DRILL RUN] started ✅", data);
+          window.__BC_LAST_DRILL_RUN_ID__ = data.id;
+        }
+        return;
+      }
+
+      if (msg.type === "drill_run_completed") {
+        const ctx = getSenderCtxOrReject(
+          event,
+          senderCtx,
+          "drill_run_completed_result",
+          {},
+          { requireRestaurant: true, allowedRoles: ["waiter", "manager", "group_manager", "admin"] }
+        );
+        if (!ctx) return;
+
+        const authed = liveAuth?.userId || null;
+        if (!authed || String(authed) !== String(ctx.userId)) return;
+
+        const assignedMessageId = msg?.assignedMessageId || null;
+        const p = msg?.payload || {};
+
+        let query = supabase
+          .from("bc_drill_runs_v1")
+          .update({
+            reps_done: p?.repsDone ?? null,
+            completed: true,
+            completed_at: new Date().toISOString(),
+            payload: p
+          })
+          .eq("user_id", ctx.userId)
+          .eq("restaurant_id", ctx.restaurantId)
+          .eq("completed", false);
+
+        if (assignedMessageId) {
+          query = query.eq("assigned_message_id", assignedMessageId);
+        }
+
+        const { error } = await query;
+        if (error) {
+          console.warn("[DRILL RUN] parent completion update failed", error);
+        } else {
+          console.log("[DRILL RUN] completed ✅", {
+            userId: ctx.userId,
+            assignedMessageId
+          });
+        }
+        return;
+      }
+
       if (msg.type === "progression_snapshot_request") {
         const replyType = "progression_snapshot";
         const reqId = msg?.reqId || null;
@@ -3846,6 +3929,7 @@ function wireWaiterThreadButtons() {
             source: "BC_MSG",
             v: 1,
             type: "launch_assigned_drill_request",
+            assignedMessageId: msgId,
             drill,
           },
           window.location.origin
