@@ -171,6 +171,37 @@
             (currentEncounter?.chainSignal ? ` • ${currentEncounter.chainSignal}` : "");
 
           const reqId = submitProgressReportToManager({ body, payload });
+          (async () => {
+            try {
+              const ctx = window.__BC_CTX__ || {};
+              const skills = payload?.skills || {};
+
+              await supabase.from("bc_skill_snapshots_v1").insert({
+                user_id: ctx.userId,
+                restaurant_id: ctx.restaurantId,
+                scope_id: ctx.scopeId || null,
+
+                encounter_number: payload?.encounterNumber ?? null,
+                guest_state: payload?.guestStateActual ?? null,
+                difficulty: payload?.difficulty ?? null,
+                chain_signal: payload?.chainSignal ?? null,
+                chain_score: payload?.chainScore ?? null,
+
+                read_pct: skills.read ?? 0,
+                framing_pct: skills.framing ?? 0,
+                delivery_pct: skills.delivery ?? 0,
+                recovery_pct: skills.recovery ?? 0,
+                closing_pct: skills.closing ?? 0,
+
+                strongest_skill: payload?.strongestSkill ?? null,
+                weakest_skill: payload?.weakestSkill ?? null,
+
+                payload
+              });
+            } catch (e) {
+              console.warn("[SNAPSHOT] insert failed", e);
+            }
+          })();
           if (status) {
             status.textContent = reqId ? "Sending progress…" : "Could not send progress.";
           }
@@ -319,6 +350,37 @@
           body: `Progress update • Encounter ${payload.encounterNumber} • Guest: ${payload.guestStateActual} • Signal: ${payload.chainSignal}`,
           payload
         });
+        (async () => {
+          try {
+            const ctx = window.__BC_CTX__ || {};
+            const skills = payload?.skills || {};
+
+            await supabase.from("bc_skill_snapshots_v1").insert({
+              user_id: ctx.userId,
+              restaurant_id: ctx.restaurantId,
+              scope_id: ctx.scopeId || null,
+
+              encounter_number: payload?.encounterNumber ?? null,
+              guest_state: payload?.guestStateActual ?? null,
+              difficulty: payload?.difficulty ?? null,
+              chain_signal: payload?.chainSignal ?? null,
+              chain_score: payload?.chainScore ?? null,
+
+              read_pct: skills.read ?? 0,
+              framing_pct: skills.framing ?? 0,
+              delivery_pct: skills.delivery ?? 0,
+              recovery_pct: skills.recovery ?? 0,
+              closing_pct: skills.closing ?? 0,
+
+              strongest_skill: payload?.strongestSkill ?? null,
+              weakest_skill: payload?.weakestSkill ?? null,
+
+              payload
+            });
+          } catch (e) {
+            console.warn("[SNAPSHOT] insert failed", e);
+          }
+        })();
       }
       if (msg.type === "messages_unread_response") {
         if (!msg.ok) {

@@ -380,6 +380,7 @@ document.querySelector("#app").innerHTML = `
         <button class="btn" type="button" data-mbtab="insights">Insights</button>
         <button class="btn" type="button" data-mbtab="messenger">Messenger</button>
         <button class="btn" type="button" data-mbtab="billing">Listing</button>
+        <button class="btn" type="button" data-mbtab="history">Performance</button>
       </div>
 
       <div id="mbPanels">
@@ -499,6 +500,21 @@ document.querySelector("#app").innerHTML = `
               <button id="mbSeat60" class="btn-ghost" type="button">Set seats: 60</button>
               <button id="mbRefreshSeats" class="btn-ghost" type="button">Refresh</button>
             </div>
+          </div>
+        </div>
+
+        <div id="mbTab_history" class="mbTab hidden">
+          <div class="card">
+            <strong>Performance History</strong>
+            <div class="small-text" style="margin-top:6px; opacity:.85;">
+              Skill growth over time.
+            </div>
+            <select id="mbHistoryUser" class="input" style="margin-top:10px;"></select>
+            <canvas id="mbHistoryChart"
+              width="600"
+              height="280"
+              style="margin-top:12px;">
+            </canvas>
           </div>
         </div>
 
@@ -4299,6 +4315,20 @@ function wireManagerBoardMenu() {
     if (name === "overview") return loadManagerBoardData();
     if (name === "billing") return loadManagerBoardSeats?.();
     if (name === "insights") return loadManagerInsights();
+    if (name === "history") {
+      await loadHistoryWaiters();
+      const select = document.getElementById("mbHistoryUser");
+      if (select && !select.__wired) {
+        select.__wired = true;
+        select.addEventListener("change", () => {
+          loadPerformanceHistory(select.value);
+        });
+      }
+      if (select?.value) {
+        loadPerformanceHistory(select.value);
+      }
+      return;
+    }
     if (name === "messenger") {
       wireManagerBoardMessenger();
       return loadManagerMessenger();
@@ -4315,6 +4345,22 @@ function wireManagerBoardMenu() {
     if (tab === "overview") await loadManagerBoardData();
     if (tab === "billing") await loadManagerBoardSeats?.();
     if (tab === "insights") await loadManagerInsights();
+    if (tab === "history") {
+      await loadHistoryWaiters();
+
+      const select = document.getElementById("mbHistoryUser");
+
+      if (select && !select.__wired) {
+        select.__wired = true;
+        select.addEventListener("change", () => {
+          loadPerformanceHistory(select.value);
+        });
+      }
+
+      if (select?.value) {
+        loadPerformanceHistory(select.value);
+      }
+    }
     if (tab === "messenger") {
       wireManagerBoardMessenger();
       await loadManagerMessenger();
@@ -5517,6 +5563,80 @@ function drawSkillRadar(canvas, skills) {
     const y = cy + Math.sin(a) * (radius + 12);
 
     ctx.fillText(label.toUpperCase(), x - 16, y + 4);
+  });
+}
+
+async function loadHistoryWaiters() {
+  const { restaurantId } = getManagerBoardFilter();
+  const select = document.getElementById("mbHistoryUser");
+
+  if (!restaurantId || !select) return;
+
+  const { data } = await supabase
+    .from("profiles")
+    .select("user_id, display_name")
+    .eq("restaurant_id", restaurantId)
+    .eq("role", "waiter");
+
+  const rows = Array.isArray(data) ? data : [];
+  select.innerHTML = rows.map((w) =>
+    `<option value="${w.user_id}">${escapeHtml(w.display_name || w.user_id)}</option>`
+  ).join("");
+}
+
+async function loadPerformanceHistory(userId) {
+  const { restaurantId } = getManagerBoardFilter();
+
+  const { data } = await supabase
+    .from("bc_skill_snapshots_v1")
+    .select("*")
+    .eq("restaurant_id", restaurantId)
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true })
+    .limit(50);
+
+  drawPerformanceHistoryChart(data || []);
+}
+
+function drawPerformanceHistoryChart(rows) {
+  const canvas = document.getElementById("mbHistoryChart");
+  if (!canvas) return;
+
+  const ctx = canvas.getContext("2d");
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (!rows.length) return;
+
+  const skills = [
+    { key: "read_pct", color: "#5ab4ff" },
+    { key: "framing_pct", color: "#ffb45a" },
+    { key: "delivery_pct", color: "#5aff9c" },
+    { key: "recovery_pct", color: "#ff5a8a" },
+    { key: "closing_pct", color: "#c05aff" }
+  ];
+
+  const maxPoints = rows.length;
+  const w = canvas.width;
+  const h = canvas.height;
+
+  const xStep = w / Math.max(1, maxPoints - 1);
+
+  skills.forEach((skill) => {
+    ctx.beginPath();
+    ctx.strokeStyle = skill.color;
+    ctx.lineWidth = 2;
+
+    rows.forEach((r, i) => {
+      const pct = r[skill.key] ?? 0;
+      const x = i * xStep;
+      const y = h - (pct / 100) * h;
+
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+
+    ctx.stroke();
   });
 }
 
