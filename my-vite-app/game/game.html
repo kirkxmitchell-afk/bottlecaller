@@ -4657,6 +4657,152 @@ function ensureProgLoaded() {
         return Number.isFinite(n) ? n : fallback;
       }
 
+      const SKILL_TEMPLATE = {
+        read: { points: 0, attempts: 0 },
+        framing: { points: 0, attempts: 0 },
+        delivery: { points: 0, attempts: 0 },
+        recovery: { points: 0, attempts: 0 },
+        closing: { points: 0, attempts: 0 },
+      };
+
+      function getSkillKey() {
+        const ctx = window.__BC_CTX__ || window.BC_CTX || null;
+        const userId = ctx?.userId || null;
+        const restaurantId = ctx?.restaurantId || null;
+        if (!userId || !restaurantId) return null;
+        return `bc_skills_v1_${userId}_${restaurantId}`;
+      }
+
+      function loadSkillTree() {
+        const key = getSkillKey();
+        if (!key) return JSON.parse(JSON.stringify(SKILL_TEMPLATE));
+
+        try {
+          const raw = localStorage.getItem(key);
+          if (!raw) return JSON.parse(JSON.stringify(SKILL_TEMPLATE));
+          const parsed = JSON.parse(raw);
+          return {
+            read: { ...SKILL_TEMPLATE.read, ...(parsed.read || {}) },
+            framing: { ...SKILL_TEMPLATE.framing, ...(parsed.framing || {}) },
+            delivery: { ...SKILL_TEMPLATE.delivery, ...(parsed.delivery || {}) },
+            recovery: { ...SKILL_TEMPLATE.recovery, ...(parsed.recovery || {}) },
+            closing: { ...SKILL_TEMPLATE.closing, ...(parsed.closing || {}) },
+          };
+        } catch {
+          return JSON.parse(JSON.stringify(SKILL_TEMPLATE));
+        }
+      }
+
+      function saveSkillTree(tree) {
+        const key = getSkillKey();
+        if (!key) return;
+        try {
+          localStorage.setItem(key, JSON.stringify(tree));
+        } catch {}
+      }
+
+      function addSkillScore(tree, bucket, earned, possible) {
+        if (!tree?.[bucket]) return;
+        tree[bucket].points += Number(earned || 0);
+        tree[bucket].attempts += Number(possible || 0);
+      }
+
+      function skillPercent(node) {
+        if (!node || !node.attempts) return 0;
+        return Math.max(0, Math.min(100, Math.round((node.points / node.attempts) * 100)));
+      }
+
+      function getSkillSnapshot() {
+        const tree = loadSkillTree();
+        return {
+          read: skillPercent(tree.read),
+          framing: skillPercent(tree.framing),
+          delivery: skillPercent(tree.delivery),
+          recovery: skillPercent(tree.recovery),
+          closing: skillPercent(tree.closing),
+        };
+      }
+
+      function updateSkillTreeFromEncounter(enc) {
+        const tree = loadSkillTree();
+        const isDrill = sessionType === "drill";
+        const w = isDrill ? 0.5 : 1;
+
+        const readTier = String(
+          enc?.__uxSummary?.checksRaw?.readTier ||
+          enc?.readTier ||
+          ""
+        ).toLowerCase();
+
+        if (readTier === "right" || readTier === "correct") addSkillScore(tree, "read", 1 * w, 1 * w);
+        else if (readTier === "slightly" || readTier === "close") addSkillScore(tree, "read", 0.5 * w, 1 * w);
+        else if (readTier) addSkillScore(tree, "read", 0, 1 * w);
+
+        const modeTier = String(
+          enc?.__uxSummary?.checksRaw?.modeTier ||
+          enc?.modeTier ||
+          ""
+        ).toLowerCase();
+
+        const hookTier = String(
+          enc?.__uxSummary?.checksRaw?.hookTier ||
+          enc?.hookTier ||
+          ""
+        ).toLowerCase();
+
+        if (modeTier) {
+          if (modeTier === "right" || modeTier === "correct") addSkillScore(tree, "framing", 1 * w, 1 * w);
+          else if (modeTier === "slightly") addSkillScore(tree, "framing", 0.5 * w, 1 * w);
+          else if (modeTier === "neutral") addSkillScore(tree, "framing", 0.25 * w, 1 * w);
+          else addSkillScore(tree, "framing", 0, 1 * w);
+        }
+
+        if (hookTier) {
+          if (hookTier === "optimal" || hookTier === "right") addSkillScore(tree, "framing", 1 * w, 1 * w);
+          else if (hookTier === "slightly") addSkillScore(tree, "framing", 0.5 * w, 1 * w);
+          else addSkillScore(tree, "framing", 0, 1 * w);
+        }
+
+        const s1 = enc?.selectedS1;
+        const s2 = enc?.selectedS2;
+        const c1 = enc?.correctSlotS1;
+        const c2 = enc?.correctSlotS2;
+
+        if (s1 != null || s2 != null || c1 != null || c2 != null) {
+          let earned = 0;
+          if (s1 && c1 && String(s1) === String(c1)) earned += 0.5;
+          if (s2 && c2 && String(s2) === String(c2)) earned += 0.5;
+          addSkillScore(tree, "delivery", earned * w, 1 * w);
+        }
+
+        if (enc?.pivotType || enc?.resetUsed || enc?.recoveryChoice) {
+          addSkillScore(tree, "recovery", enc?.recoveryCorrect ? 1 * w : 0, 1 * w);
+        }
+
+        const signal = String(
+          enc?.chainSignal ||
+          enc?.__reaction?.chainSignal ||
+          ""
+        ).toLowerCase();
+
+        const outcome = String(
+          enc?.outcome ||
+          enc?.__reaction?.outcome ||
+          ""
+        ).toLowerCase();
+
+        if (signal || outcome) {
+          let earned = 0;
+          if (signal === "green" || outcome === "hard_close" || outcome === "strong_close") earned = 1;
+          else if (signal === "yellow" || outcome === "soft_close") earned = 0.5;
+          else earned = 0;
+          addSkillScore(tree, "closing", earned * w, 1 * w);
+        }
+
+        saveSkillTree(tree);
+        return tree;
+      }
+
       const unlockTierKey = "bc_unlock_tier_v1";
       const accountDifficultyKey = "bc_account_difficulty_v1";
 
@@ -8242,6 +8388,23 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
           const outcome = resolveOutcome(currentEncounter, checks);
           console.log("[BC] outcome", outcome, currentEncounter.__tiers);
+          try {
+            currentEncounter.outcome = outcome?.outcome || null;
+            currentEncounter.chainSignal =
+              currentEncounter.chainSignal ||
+              currentEncounter?.__reaction?.chainSignal ||
+              null;
+
+            const skillTree = updateSkillTreeFromEncounter(currentEncounter);
+            const snap = getSkillSnapshot();
+
+            console.log("[SKILLS] updated", {
+              tree: skillTree,
+              snapshot: snap
+            });
+          } catch (e) {
+            console.warn("[SKILLS] update failed", e);
+          }
 
           if (outcome.outcome === "pivot") {
             const p = choosePivot(currentEncounter, currentEncounter.policy);
