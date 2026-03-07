@@ -646,6 +646,33 @@ document.querySelector("#app").innerHTML = `
       <div><b>Seat limit:</b> <span id="hudSeatLimit">-</span></div>
       <div><b>Invite required:</b> <span id="hudRequireInvite">-</span></div>
     </div>
+    <div id="hudSkillsCard" style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.10);">
+      <div style="font-weight:600; margin-bottom:8px;">Your Skills</div>
+
+      <div class="small-text" id="hudSkillSummary" style="margin-bottom:8px; opacity:.85;">
+        Loading skill summary…
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px 12px; margin-bottom:10px;">
+        <div class="small-text">Reading: <span id="hudSkillRead">0%</span></div>
+        <div class="small-text">Framing: <span id="hudSkillFraming">0%</span></div>
+        <div class="small-text">Delivery: <span id="hudSkillDelivery">0%</span></div>
+        <div class="small-text">Recovery: <span id="hudSkillRecovery">0%</span></div>
+        <div class="small-text">Closing: <span id="hudSkillClosing">0%</span></div>
+      </div>
+
+      <canvas id="hudSkillRadar" width="240" height="240" style="display:block; margin:0 auto;"></canvas>
+
+      <div id="hudSkillTimeline" style="margin-top:12px;">
+
+        <div style="font-weight:600; margin-bottom:6px;">Recent Progress</div>
+
+        <div id="hudTimelineList" class="small-text" style="display:flex; flex-direction:column; gap:6px;">
+          <div style="opacity:.7;">No history yet.</div>
+        </div>
+
+      </div>
+    </div>
     <div style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.10);">
       <div style="font-weight:600; margin-bottom:8px;">Coach</div>
       <button id="btnHudSendProgress" class="btn-ghost" type="button">Send progress to manager</button>
@@ -3757,8 +3784,10 @@ window.addEventListener("message", (event) => {
 
     if (status) status.textContent = text;
     if (hudStatus) hudStatus.textContent = text;
+    renderHudSkillDashboard();
 
     if (msg.ok) {
+      loadHudSkillTimeline().catch(console.error);
       loadWaiterMessagesThread().catch(console.error);
     }
   }
@@ -7310,6 +7339,153 @@ function renderInvitesList() {
   });
 }
 
+function renderHudSkillDashboard() {
+  const localSkillSnapshot = () => {
+    try {
+      const uid = appState?.session?.user?.id || appState?.session?.userId || null;
+      const rid = window.getActiveRestaurantId?.() || appState?.profile?.restaurant_id || null;
+      if (!uid || !rid) {
+        return { read: 0, framing: 0, delivery: 0, recovery: 0, closing: 0 };
+      }
+      const key = `bc_skills_v1_${uid}_${rid}`;
+      const raw = localStorage.getItem(key);
+      if (!raw) return { read: 0, framing: 0, delivery: 0, recovery: 0, closing: 0 };
+      const t = JSON.parse(raw);
+      const pct = (node) => {
+        const p = Number(node?.points || 0);
+        const a = Number(node?.attempts || 0);
+        if (!a) return 0;
+        return Math.max(0, Math.min(100, Math.round((p / a) * 100)));
+      };
+      return {
+        read: pct(t.read),
+        framing: pct(t.framing),
+        delivery: pct(t.delivery),
+        recovery: pct(t.recovery),
+        closing: pct(t.closing),
+      };
+    } catch {
+      return { read: 0, framing: 0, delivery: 0, recovery: 0, closing: 0 };
+    }
+  };
+
+  const snap = (typeof getSkillSnapshot === "function")
+    ? getSkillSnapshot()
+    : localSkillSnapshot();
+
+  const setText = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = `${value}%`;
+  };
+
+  setText("hudSkillRead", snap.read ?? 0);
+  setText("hudSkillFraming", snap.framing ?? 0);
+  setText("hudSkillDelivery", snap.delivery ?? 0);
+  setText("hudSkillRecovery", snap.recovery ?? 0);
+  setText("hudSkillClosing", snap.closing ?? 0);
+
+  const entries = [
+    { key: "read", label: "Reading", val: snap.read ?? 0 },
+    { key: "framing", label: "Framing", val: snap.framing ?? 0 },
+    { key: "delivery", label: "Delivery", val: snap.delivery ?? 0 },
+    { key: "recovery", label: "Recovery", val: snap.recovery ?? 0 },
+    { key: "closing", label: "Closing", val: snap.closing ?? 0 },
+  ].sort((a, b) => b.val - a.val);
+
+  const strongest = entries[0];
+  const weakest = entries[entries.length - 1];
+
+  const summary = document.getElementById("hudSkillSummary");
+  if (summary) {
+    summary.textContent = `Strongest: ${strongest.label} (${strongest.val}%) • Needs work: ${weakest.label} (${weakest.val}%)`;
+  }
+
+  const canvas = document.getElementById("hudSkillRadar");
+  if (canvas && typeof drawSkillRadar === "function") {
+    drawSkillRadar(canvas, snap);
+  }
+
+  loadHudSkillTimeline();
+}
+
+async function loadHudSkillTimeline() {
+  const ctx = window.__BC_CTX__ || {};
+  if (!ctx.userId || !ctx.restaurantId) return;
+
+  const { data, error } = await supabase
+    .from("bc_skill_snapshots_v1")
+    .select(`
+      created_at,
+      read_pct,
+      framing_pct,
+      delivery_pct,
+      recovery_pct,
+      closing_pct
+    `)
+    .eq("user_id", ctx.userId)
+    .eq("restaurant_id", ctx.restaurantId)
+    .order("created_at", { ascending: false })
+    .limit(5);
+
+  if (error) {
+    console.warn("[HUD TIMELINE]", error);
+    return;
+  }
+
+  renderHudTimeline(data || []);
+}
+
+function renderHudTimeline(rows) {
+  const el = document.getElementById("hudTimelineList");
+  if (!el) return;
+
+  if (!rows.length) {
+    el.innerHTML = `<div style="opacity:.7;">No progress reports yet.</div>`;
+    return;
+  }
+
+  const compare = (curr, prev) => {
+    if (!prev) return "→";
+    if (curr > prev) return "↑";
+    if (curr < prev) return "↓";
+    return "→";
+  };
+
+  el.innerHTML = rows.map((r, i) => {
+    const prev = rows[i + 1];
+
+    const readTrend = compare(r.read_pct, prev?.read_pct);
+    const recTrend = compare(r.recovery_pct, prev?.recovery_pct);
+
+    const time = new Date(r.created_at).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+
+    return `
+      <div style="
+        padding:6px 8px;
+        border:1px solid rgba(255,255,255,0.08);
+        border-radius:8px;
+        background:rgba(255,255,255,0.03);
+      ">
+
+        <div style="display:flex; justify-content:space-between;">
+          <div>${time}</div>
+          <div style="opacity:.7;">Report</div>
+        </div>
+
+        <div style="margin-top:4px;">
+          Reading ${r.read_pct}% ${readTrend}
+          &nbsp;&nbsp;|&nbsp;&nbsp;
+          Recovery ${r.recovery_pct}% ${recTrend}
+        </div>
+
+      </div>
+    `;
+  }).join("");
+}
+
 function renderHud() {
   const role = String(appState.profile?.role || "-").toLowerCase();
   const r = appState.restaurant;
@@ -7343,6 +7519,7 @@ function renderHud() {
   if (seatInput && r) seatInput.value = String(r.seat_limit ?? "");
 
   renderInvitesList();
+  renderHudSkillDashboard();
 }
 
 // ------------------------------------------------------------
@@ -7897,6 +8074,7 @@ wireWaiterMessagesPanel();
 document.getElementById("btnOpenHud")?.addEventListener("click", () => {
   closeWaiterMessages?.();
   openHud();
+  renderHud();
 });
 
 document.getElementById("btnCloseHud")?.addEventListener("click", () => {
