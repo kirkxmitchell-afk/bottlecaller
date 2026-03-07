@@ -406,6 +406,16 @@ document.querySelector("#app").innerHTML = `
             <div id="mbRecent" class="small" style="opacity:.9;">Loading…</div>
           </div>
 
+          <div class="card" style="margin-top:12px;">
+            <strong>Top Performers</strong>
+
+            <div class="small-text" style="margin-top:6px; opacity:.85;">
+              Average skill score based on recent encounters.
+            </div>
+
+            <div id="mbLeaderboard" style="margin-top:10px;"></div>
+          </div>
+
           <div class="card" id="mbMembersCard" style="margin-top:12px;">
             <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
               <strong>Members</strong>
@@ -6214,6 +6224,97 @@ function wireManagerBoardMembers() {
   btn.addEventListener("click", () => loadManagerBoardMembers());
 }
 
+function renderLeaderboard(list) {
+  const el = document.getElementById("mbLeaderboard");
+  if (!el) return;
+
+  if (!list.length) {
+    el.innerHTML = `<div class="small-text">No performance data yet.</div>`;
+    return;
+  }
+
+  el.innerHTML = list.map((w, i) => `
+
+    <div style="
+      display:flex;
+      justify-content:space-between;
+      padding:6px 0;
+      border-bottom:1px solid rgba(255,255,255,0.08);
+    ">
+
+      <div>
+        <b>#${i + 1}</b> ${escapeHtml(w.name)}
+      </div>
+
+      <div style="opacity:.8;">
+        ${w.avg}%
+      </div>
+
+    </div>
+
+  `).join("");
+}
+
+async function loadLeaderboard() {
+  const { restaurantId } = getManagerBoardFilter();
+  if (!restaurantId) return;
+
+  const { data, error } = await supabase
+    .from("bc_skill_snapshots_v1")
+    .select(`
+      user_id,
+      read_pct,
+      framing_pct,
+      delivery_pct,
+      recovery_pct,
+      closing_pct,
+      profiles(display_name)
+    `)
+    .eq("restaurant_id", restaurantId)
+    .order("created_at", { ascending: false })
+    .limit(500);
+
+  if (error) {
+    console.warn("[LEADERBOARD]", error);
+    return;
+  }
+
+  const map = {};
+
+  (data || []).forEach((row) => {
+    const id = row.user_id;
+
+    if (!map[id]) {
+      const profileObj = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+      map[id] = {
+        name: profileObj?.display_name || id,
+        total: 0,
+        count: 0
+      };
+    }
+
+    const score =
+      (row.read_pct +
+       row.framing_pct +
+       row.delivery_pct +
+       row.recovery_pct +
+       row.closing_pct) / 5;
+
+    map[id].total += score;
+    map[id].count += 1;
+  });
+
+  const list = Object.values(map)
+    .map((w) => ({
+      name: w.name,
+      avg: Math.round(w.total / w.count)
+    }))
+    .sort((a, b) => b.avg - a.avg)
+    .slice(0, 10);
+
+  renderLeaderboard(list);
+}
+
 async function loadManagerBoardData() {
   try {
     const { restaurantId, isManager, isGroupish } = getManagerBoardFilter();
@@ -6229,6 +6330,7 @@ async function loadManagerBoardData() {
     document.getElementById("mbMsg").textContent = "";
     wireManagerBoardMembers();
     await loadManagerBoardMembers();
+    await loadLeaderboard();
 
     // Views you actually have
     const RUNS_TABLE = "bc_sessions_v1";                 // sessions summary
