@@ -5368,6 +5368,81 @@ function mbEl(id) {
 }
 window.__BC_MB_THREADS__ = [];
 window.__BC_MB_ACTIVE_THREAD_USER_ID__ = null;
+window.__MB_LAST_MESSAGES__ = [];
+
+function getCoachingSuggestionsFromReport(payload) {
+  if (!payload || !payload.skills) return [];
+
+  const s = payload.skills;
+
+  const skillMap = [
+    { key: "read", label: "Guest Reading", drillFocus: "read" },
+    { key: "framing", label: "Framing", drillFocus: "frame" },
+    { key: "delivery", label: "Delivery", drillFocus: "delivery" },
+    { key: "recovery", label: "Recovery", drillFocus: "recovery" },
+    { key: "closing", label: "Closing", drillFocus: "closing" }
+  ];
+
+  skillMap.sort((a, b) => (s[a.key] ?? 0) - (s[b.key] ?? 0));
+
+  const weakest = skillMap[0];
+  const second = skillMap[1];
+
+  const suggestions = [];
+
+  if (weakest) {
+    suggestions.push({
+      label: `Run ${weakest.label} Drill`,
+      type: "drill",
+      focus: weakest.drillFocus
+    });
+  }
+
+  if (second) {
+    suggestions.push({
+      label: `Practice ${second.label}`,
+      type: "message",
+      text: `Focus on ${second.label.toLowerCase()} during your next tables.`
+    });
+  }
+
+  suggestions.push({
+    label: "Encourage confidence",
+    type: "message",
+    text: "Good work — keep your delivery confident and concise."
+  });
+
+  return suggestions;
+}
+
+function wireMbCoachSuggestionButtons() {
+  document.querySelectorAll(".mbCoachSuggestion").forEach((btn) => {
+    btn.onclick = () => {
+      const index = Number(btn.dataset.index);
+      const rowId = btn.closest("[data-msg-id]")?.dataset.msgId;
+
+      const row = window.__MB_LAST_MESSAGES__?.find((r) => String(r.id) === String(rowId));
+      if (!row) return;
+
+      const suggestions = getCoachingSuggestionsFromReport(row.payload || {});
+      const s = suggestions[index];
+      if (!s) return;
+
+      const bodyInput = mbEl("mbInstrBody");
+      if (!bodyInput) return;
+
+      if (s.type === "message") {
+        bodyInput.value = s.text;
+      }
+
+      if (s.type === "drill") {
+        bodyInput.value = `Run a focused ${s.focus} drill before your next shift.`;
+      }
+
+      bodyInput.focus();
+    };
+  });
+}
 
 function renderMbMessageItem(row, nameMap) {
   const who = userLabel(row?.sender_user_id, nameMap);
@@ -5410,6 +5485,19 @@ function renderMbMessageItem(row, nameMap) {
     `;
   } else if (kind === "progress_report" && row?.payload && typeof row.payload === "object" && Object.keys(row.payload).length) {
     const p = row.payload || {};
+    const skills = p.skills || {};
+    const suggestions = getCoachingSuggestionsFromReport(p);
+
+    const suggestionsHtml = suggestions.map((s, i) => `
+<button
+  class="btn-ghost mbCoachSuggestion"
+  data-index="${i}"
+  style="margin-top:6px;"
+>
+${escapeHtml(s.label)}
+</button>
+`).join("");
+
     payloadHtml = `
       <div style="
         margin-top:8px;
@@ -5424,12 +5512,37 @@ function renderMbMessageItem(row, nameMap) {
         <div class="small-text" style="opacity:.9;">Difficulty: ${escapeHtml(String(p.difficulty ?? "-"))}</div>
         <div class="small-text" style="opacity:.9;">Signal: ${escapeHtml(String(p.chainSignal || "-"))}</div>
         <div class="small-text" style="opacity:.9;">Score: ${escapeHtml(String(p.chainScore ?? "-"))}</div>
+
+        <hr style="opacity:.2; margin:8px 0;">
+
+        <div><strong>Skill Tree</strong></div>
+
+        <div class="small-text">Guest Reading: ${skills.read ?? 0}%</div>
+        <div class="small-text">Framing: ${skills.framing ?? 0}%</div>
+        <div class="small-text">Delivery: ${skills.delivery ?? 0}%</div>
+        <div class="small-text">Recovery: ${skills.recovery ?? 0}%</div>
+        <div class="small-text">Closing: ${skills.closing ?? 0}%</div>
+
+        <div class="small-text" style="margin-top:8px; opacity:.75;">
+          Strongest: ${escapeHtml(String(p.strongestSkill ?? "-"))}
+        </div>
+
+        <div class="small-text" style="opacity:.75;">
+          Needs Work: ${escapeHtml(String(p.weakestSkill ?? "-"))}
+        </div>
+
+        <div style="margin-top:10px;">
+          <strong>Coach Suggestions</strong>
+          <div style="display:flex; flex-direction:column; gap:4px; margin-top:6px;">
+            ${suggestionsHtml}
+          </div>
+        </div>
       </div>
     `;
   }
 
   return `
-    <div style="
+    <div data-msg-id="${escapeHtml(String(row?.id ?? ""))}" style="
       border:1px solid rgba(255,255,255,0.10);
       border-radius:12px;
       padding:10px;
@@ -5535,6 +5648,7 @@ function renderManagerActiveThread(nameMap) {
   if (msgEl) {
     msgEl.innerHTML = ordered.map((m) => renderMbMessageItem(m, nameMap)).join("");
     msgEl.scrollTop = msgEl.scrollHeight;
+    wireMbCoachSuggestionButtons();
   }
 
   buildManagerSuggestedPrompts(thread);
@@ -5568,6 +5682,7 @@ async function loadManagerMessenger() {
   if (error) throw error;
 
   const rows = data || [];
+  window.__MB_LAST_MESSAGES__ = rows;
   if (!rows.length) {
     if (listEl) listEl.innerHTML = "";
     if (emptyEl) emptyEl.style.display = "block";
@@ -5628,6 +5743,7 @@ async function loadManagerMessenger() {
   }
 
   renderManagerActiveThread(nameMap);
+  wireMbCoachSuggestionButtons();
 }
 
 async function mbSendInstruction() {
