@@ -3951,6 +3951,22 @@ window.addEventListener("message", (event) => {
       loadWaiterMessagesThread().catch(console.error);
     }
   }
+
+  if (msg.type === "hud_send_progress_feedback") {
+    const status = document.getElementById("waiterSendProgressStatus");
+    const result = msg?.result || {};
+
+    if (!status) return;
+
+    if (result?.ok) {
+      status.textContent = "Progress sent ✅";
+    } else if (result?.error === "encounter_not_resolved") {
+      status.textContent = "Finish the encounter first, then send progress.";
+    } else {
+      status.textContent = "Could not send progress.";
+    }
+    return;
+  }
 });
 
 function wireHudSendProgressButton() {

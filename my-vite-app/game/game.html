@@ -175,8 +175,33 @@
       return entries[0]?.label || null;
     }
 
+    function canSendResolvedProgress() {
+      const enc = window.currentEncounter || currentEncounter || null;
+      if (!enc) return false;
+
+      const hasOutcome =
+        !!enc?.outcome ||
+        !!enc?.__reaction?.outcome ||
+        !!enc?.chainSignal ||
+        !!enc?.__reaction?.chainSignal;
+
+      const hasScore =
+        enc?.chainScore !== null &&
+        enc?.chainScore !== undefined;
+
+      return !!(hasOutcome || hasScore);
+    }
+
     async function sendLiveProgressReport(source = "unknown") {
       try {
+        if (!canSendResolvedProgress()) {
+          console.warn("[REPORT] blocked: encounter not resolved yet", {
+            source,
+            encounter: window.currentEncounter || currentEncounter || null
+          });
+          return { ok: false, error: "encounter_not_resolved" };
+        }
+
         const encounter = window.currentEncounter || currentEncounter || null;
         if (!encounter) {
           console.warn("[REPORT] no currentEncounter", { source });
@@ -421,6 +446,17 @@
         (async () => {
           const result = await sendLiveProgressReport("hud_request");
           console.log("[REPORT] hud_send_progress_request result", result);
+          try {
+            window.parent?.postMessage(
+              {
+                source: "BC_MSG",
+                v: 1,
+                type: "hud_send_progress_feedback",
+                result
+              },
+              window.location.origin
+            );
+          } catch {}
         })();
         return;
       }
@@ -4875,7 +4911,7 @@ function ensureProgLoaded() {
       }
 
       function getSkillSnapshot() {
-        const tree = loadSkillTree();
+        const tree = loadSkillTree() || JSON.parse(JSON.stringify(SKILL_TEMPLATE));
         const snapshot = {
           read: skillPercent(tree.read),
           framing: skillPercent(tree.framing),
@@ -4886,13 +4922,7 @@ function ensureProgLoaded() {
         console.log("[SKILLS][SNAPSHOT]", {
           key: typeof getSkillKey === "function" ? getSkillKey() : null,
           tree,
-          snapshot: {
-            read: skillPercent(tree.read),
-            framing: skillPercent(tree.framing),
-            delivery: skillPercent(tree.delivery),
-            recovery: skillPercent(tree.recovery),
-            closing: skillPercent(tree.closing),
-          }
+          snapshot
         });
         return snapshot;
       }
