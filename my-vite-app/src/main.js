@@ -5471,6 +5471,32 @@ function getCoachingSuggestionsFromReport(payload) {
   return suggestions;
 }
 
+function getAutomaticDrillRecommendation(payload) {
+  const skills = payload?.skills || {};
+  if (!skills) return null;
+
+  const entries = [
+    { key: "read", label: "Guest Reading", focus: "read" },
+    { key: "framing", label: "Framing", focus: "frame" },
+    { key: "delivery", label: "Delivery", focus: "delivery" },
+    { key: "recovery", label: "Recovery", focus: "recovery" },
+    { key: "closing", label: "Closing", focus: "closing" }
+  ];
+
+  entries.sort((a, b) => (skills[a.key] ?? 0) - (skills[b.key] ?? 0));
+
+  const weakest = entries[0];
+  const pct = skills[weakest.key] ?? 0;
+
+  if (pct >= 40) return null;
+
+  return {
+    label: weakest.label,
+    focus: weakest.focus,
+    pct
+  };
+}
+
 function wireMbCoachSuggestionButtons() {
   document.querySelectorAll(".mbCoachSuggestion").forEach((btn) => {
     btn.onclick = () => {
@@ -5496,6 +5522,26 @@ function wireMbCoachSuggestionButtons() {
       }
 
       bodyInput.focus();
+    };
+  });
+}
+
+function wireMbAutoDrillButtons() {
+  document.querySelectorAll("[data-auto-drill]").forEach((btn) => {
+    btn.onclick = async () => {
+      try {
+        const focus = String(btn.dataset.autoDrill || "").trim();
+        if (!focus) return;
+
+        await sendManagerDrillOverride({
+          focus,
+          repTarget: 3,
+          durationSec: 300
+        });
+      } catch (e) {
+        const status = mbEl("mbInstrStatus");
+        if (status) status.textContent = e?.message || String(e);
+      }
     };
   });
 }
@@ -5693,6 +5739,39 @@ function renderMbMessageItem(row, nameMap) {
     const p = row.payload || {};
     const skills = p.skills || {};
     const suggestions = getCoachingSuggestionsFromReport(p);
+    const recommendation = getAutomaticDrillRecommendation(p);
+    let recommendationHtml = "";
+
+    if (recommendation) {
+      recommendationHtml = `
+  <div style="
+    margin-top:10px;
+    padding:10px;
+    border-radius:10px;
+    background:rgba(255,140,0,0.10);
+    border:1px solid rgba(255,140,0,0.35);
+  ">
+
+    <div style="font-weight:bold;">
+      Recommended Drill
+    </div>
+
+    <div class="small-text" style="margin-top:6px;">
+      ${recommendation.label} skill is ${recommendation.pct}% (below target).
+    </div>
+
+    <button
+      class="btn"
+      data-auto-drill="${escapeHtml(recommendation.focus)}"
+      data-msg-id="${escapeHtml(String(row.id))}"
+      style="margin-top:8px;"
+    >
+      Assign ${recommendation.label} Drill
+    </button>
+
+  </div>
+  `;
+    }
 
     const suggestionsHtml = suggestions.map((s, i) => `
 <button
@@ -5736,6 +5815,8 @@ ${escapeHtml(s.label)}
         <div class="small-text" style="opacity:.75;">
           Needs Work: ${escapeHtml(String(p.weakestSkill ?? "-"))}
         </div>
+
+        ${recommendationHtml}
 
         <div style="margin-top:12px;">
           <strong>Performance Radar</strong>
@@ -5860,6 +5941,7 @@ function renderManagerActiveThread(nameMap) {
     msgEl.innerHTML = ordered.map((m) => renderMbMessageItem(m, nameMap)).join("");
     msgEl.scrollTop = msgEl.scrollHeight;
     wireMbCoachSuggestionButtons();
+    wireMbAutoDrillButtons();
     setTimeout(() => {
       const canvases = msgEl.querySelectorAll(".mbSkillRadar");
       const skillRows = ordered.filter((row) => row?.payload?.skills);
@@ -6080,6 +6162,58 @@ async function mbSendDrillOverride() {
   if (error) throw error;
 
   if (status) status.textContent = "Drill sent ✅";
+  await loadManagerMessenger();
+}
+
+async function sendManagerDrillOverride({ focus, repTarget = 3, durationSec = 300 } = {}) {
+  const { restaurantId, isManager } = getManagerBoardFilter();
+  if (!isManager) throw new Error("Manager only");
+  if (!restaurantId) throw new Error("Active restaurant not set");
+
+  const to = String(window.__BC_MB_ACTIVE_THREAD_USER_ID__ || "");
+  if (!to) throw new Error("Select a waiter thread");
+
+  const status = mbEl("mbInstrStatus");
+  if (status) status.textContent = "Assigning drill…";
+
+  const senderId = appState?.session?.user?.id || appState?.session?.userId || null;
+  const senderRole = String(appState?.profile?.role || "");
+  if (!senderId) throw new Error("No session");
+
+  const baseDrill = window.__BC_DRILL_CONFIG__ || window.BC_DRILL_CONFIG || {};
+  const f = String(focus || "read").toLowerCase();
+
+  let pool = ["decider", "bargain_smart", "griever"];
+  if (f === "read") pool = ["decider"];
+
+  const drill = {
+    ...baseDrill,
+    focus: f,
+    pool,
+    repTarget,
+    durationSec,
+    tier: Number(baseDrill?.tier ?? 1)
+  };
+
+  const row = {
+    scope_type: "restaurant",
+    scope_id: restaurantId,
+    restaurant_id: restaurantId,
+    sender_user_id: senderId,
+    receiver_user_id: to,
+    sender_role: senderRole,
+    type: "drill_override",
+    body: "Run this drill now.",
+    payload: {
+      drill,
+      reason: "Manager assigned a focused drill based on skill recommendation."
+    },
+  };
+
+  const { error } = await supabase.from("bc_messages_v1").insert(row);
+  if (error) throw error;
+
+  if (status) status.textContent = "Drill assigned ✅";
   await loadManagerMessenger();
 }
 
