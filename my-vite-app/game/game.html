@@ -4517,17 +4517,27 @@ function ensureProgLoaded() {
         encounterIndex += 1;
 
         if (DRILL.repDone >= DRILL.repTarget) {
-          logDrillRunComplete({
-            repsDone: DRILL.repDone,
-            repTarget: DRILL.repTarget,
-            focus: DRILL.focus || null,
-            durationSec: Number.isFinite(DRILL.startedAt)
-              ? Math.max(0, Math.round((Date.now() - DRILL.startedAt) / 1000))
-              : null
-          });
+
+          try {
+            logDrillRunComplete({
+              repsDone: DRILL.repDone,
+              repTarget: DRILL.repTarget,
+              focus: DRILL.focus || window.__BC_DRILL_CONFIG__?.focus || null,
+              durationSec: Number.isFinite(DRILL.startedAt)
+                ? Math.max(0, Math.round((Date.now() - DRILL.startedAt) / 1000))
+                : null
+            });
+          } catch (e) {
+            console.warn("[DRILL RUN] completion log failed", e);
+          }
+
           showScreen("screenDrillSummary");
+
           const s = document.getElementById("drillSummary");
-          if (s) s.textContent = `Completed ${DRILL.repTarget} reps.`;
+          if (s) {
+            s.textContent = `Completed ${DRILL.repTarget} reps.`;
+          }
+
           return;
         }
 
