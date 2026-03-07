@@ -94,6 +94,9 @@
     function getBcMode() {
       return String(window.bcMode || "premium").toLowerCase();
     }
+    window.syncProgressReportButtonVisibility =
+      window.syncProgressReportButtonVisibility ||
+      function () {};
     function isActuallyIframe() {
       try { return window.parent && window.parent !== window && !!window.frameElement; }
       catch { return true; }
@@ -140,6 +143,11 @@
     }
     async function sendLiveProgressReport(source = "unknown") {
       try {
+        console.log("[REPORT] sendLiveProgressReport called", {
+          source,
+          currentEncounter: window.currentEncounter || currentEncounter || null
+        });
+
         const encounter = window.currentEncounter || currentEncounter || null;
         if (!encounter) {
           console.warn("[REPORT] no currentEncounter", { source });
@@ -192,10 +200,11 @@
         });
 
         const reqId = submitProgressReportToManager({ body, payload });
+        console.log("[REPORT] submitProgressReportToManager returned", { reqId });
 
         const ctx =
-          window.BC_CTX ||
           window.__BC_CTX__ ||
+          window.BC_CTX ||
           window.__BC_LAST_CTX__ ||
           {
             userId: window.userId || null,
@@ -238,6 +247,7 @@
           return { ok: !!reqId, reqId, warning: "snapshot_insert_failed", error };
         }
 
+        console.log("[SNAPSHOT] insert success");
         console.log("[SNAPSHOT] inserted ✅", {
           source,
           userId: ctx.userId,
@@ -258,6 +268,7 @@
       btn.__wired = true;
 
       btn.addEventListener("click", async () => {
+        console.log("[REPORT UI] Step 7 send clicked");
         try {
           const result = await sendLiveProgressReport("step7_button");
           if (status) {
@@ -462,7 +473,9 @@
       }
     });
     wireProgressReportButton();
-    syncProgressReportButtonVisibility();
+    if (typeof syncProgressReportButtonVisibility === "function") {
+      syncProgressReportButtonVisibility();
+    }
     startUnreadMessagesPolling();
     window.submitProgressReport = submitProgressReport;
     window.submitProgressReportToManager = submitProgressReportToManager;
@@ -7720,7 +7733,9 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         if (window.__BC3__?.active) return;
         clearStepHighlights();
         console.log("[RENDER] currentStep =", currentStep, "enc#", currentEncounter?.encounterNumber);
-        syncProgressReportButtonVisibility();
+        if (typeof syncProgressReportButtonVisibility === "function") {
+          syncProgressReportButtonVisibility();
+        }
         console.log("[RENDER CHECK]", {
           num: currentEncounter?.encounterNumber,
           hasSteps: Array.isArray(currentEncounter?.steps),
@@ -8852,6 +8867,10 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         }
 
         if (currentStep === 7) {
+          console.log("[REPORT UI] Step 7 rendered", {
+            encounter: currentEncounter?.encounterNumber,
+            currentEncounter
+          });
           try {
             renderRecoveryStep(stepContent, stepButtons, currentEncounter, inDrill);
           } catch (e) {
