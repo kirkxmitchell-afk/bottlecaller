@@ -3492,10 +3492,49 @@ function renderWaiterThreadItem(row, selfUserId, nameMap) {
   if (kind === "drill_override") badge = "DRILL";
 
   let payloadHtml = "";
-  if (row?.payload && typeof row.payload === "object" && Object.keys(row.payload).length) {
+
+  if (kind === "drill_override" && row?.payload?.drill) {
+    const d = row.payload.drill || {};
+    const pool = Array.isArray(d.pool) ? d.pool.join(", ") : "-";
+    const focus = escapeHtml(String(d.focus || "-"));
+    const reps = escapeHtml(String(d.repTarget ?? "-"));
+    const duration = escapeHtml(String(d.durationSec ?? "-"));
+    const tier = escapeHtml(String(d.tier ?? "-"));
+    const reason = escapeHtml(String(row?.payload?.reason || ""));
+
     payloadHtml = `
-      <div class="small-text" style="margin-top:6px; opacity:.75; white-space:pre-wrap;">
-        ${escapeHtml(JSON.stringify(row.payload, null, 2))}
+      <div style="
+        margin-top:8px;
+        padding:10px;
+        border:1px solid rgba(255,255,255,0.10);
+        border-radius:10px;
+        background:rgba(255,255,255,0.04);
+      ">
+        <div><strong>Assigned drill</strong></div>
+        <div class="small-text" style="margin-top:6px; opacity:.9;">Focus: ${focus}</div>
+        <div class="small-text" style="opacity:.9;">Pool: ${escapeHtml(pool)}</div>
+        <div class="small-text" style="opacity:.9;">Reps: ${reps}</div>
+        <div class="small-text" style="opacity:.9;">Duration: ${duration}s</div>
+        <div class="small-text" style="opacity:.9;">Tier: ${tier}</div>
+        ${reason ? `<div class="small-text" style="margin-top:8px; opacity:.75;">${reason}</div>` : ""}
+      </div>
+    `;
+  } else if (kind === "progress_report" && row?.payload && typeof row.payload === "object" && Object.keys(row.payload).length) {
+    const p = row.payload || {};
+    payloadHtml = `
+      <div style="
+        margin-top:8px;
+        padding:10px;
+        border:1px solid rgba(255,255,255,0.10);
+        border-radius:10px;
+        background:rgba(255,255,255,0.04);
+      ">
+        <div><strong>Progress snapshot</strong></div>
+        <div class="small-text" style="margin-top:6px; opacity:.9;">Encounter: ${escapeHtml(String(p.encounterNumber ?? "-"))}</div>
+        <div class="small-text" style="opacity:.9;">Guest: ${escapeHtml(String(p.guestStateActual || "-"))}</div>
+        <div class="small-text" style="opacity:.9;">Difficulty: ${escapeHtml(String(p.difficulty ?? "-"))}</div>
+        <div class="small-text" style="opacity:.9;">Signal: ${escapeHtml(String(p.chainSignal || "-"))}</div>
+        <div class="small-text" style="opacity:.9;">Score: ${escapeHtml(String(p.chainScore ?? "-"))}</div>
       </div>
     `;
   }
