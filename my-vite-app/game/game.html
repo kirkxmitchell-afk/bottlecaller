@@ -175,6 +175,81 @@
       return entries[0]?.label || null;
     }
 
+    function buildEncounterSkillFallback(enc) {
+      const raw = enc?.__uxSummary?.checksRaw || {};
+      const result = enc?.__uxSummary?.result || {};
+
+      const readTier = String(raw?.readTier ?? enc?.readTier ?? "").toLowerCase();
+      const modeTier = String(raw?.modeTier ?? enc?.modeTier ?? "").toLowerCase();
+      const hookTier = String(raw?.hookTier ?? enc?.hookTier ?? "").toLowerCase();
+
+      const deliveryCorrect =
+        raw?.deliveryCorrect ??
+        result?.deliveryCorrect ??
+        enc?.deliveryCorrect ??
+        null;
+
+      const chainSignal = String(
+        enc?.chainSignal ??
+        enc?.__reaction?.chainSignal ??
+        result?.chainSignal ??
+        ""
+      ).toLowerCase();
+
+      const outcome = String(
+        enc?.outcome ??
+        enc?.__reaction?.outcome ??
+        result?.outcome ??
+        ""
+      ).toLowerCase();
+
+      function pctFromTier(tier) {
+        if (["right", "correct", "optimal"].includes(tier)) return 100;
+        if (["slightly", "close", "partial", "neutral"].includes(tier)) return 50;
+        if (tier) return 0;
+        return 0;
+      }
+
+      const read = pctFromTier(readTier);
+
+      const framingParts = [];
+      if (modeTier) framingParts.push(pctFromTier(modeTier));
+      if (hookTier) framingParts.push(pctFromTier(hookTier));
+      const framing = framingParts.length
+        ? Math.round(framingParts.reduce((a, b) => a + b, 0) / framingParts.length)
+        : 0;
+
+      const delivery =
+        deliveryCorrect === true ? 100 :
+        deliveryCorrect === false ? 0 : 0;
+
+      const recovery =
+        enc?.recoveryCorrect === true ? 100 :
+        (enc?.pivotType || enc?.resetUsed || enc?.recoveryChoice || outcome === "recovery") ? 0 : 0;
+
+      let closing = 0;
+      if (["green"].includes(chainSignal) || ["hard_close", "strong_close"].includes(outcome)) closing = 100;
+      else if (["yellow", "pivot"].includes(chainSignal) || ["soft_close", "pivot"].includes(outcome)) closing = 50;
+      else if (chainSignal || outcome) closing = 0;
+
+      return { read, framing, delivery, recovery, closing };
+    }
+
+    function pickStrongestWeakest(snapshot) {
+      const entries = [
+        ["read", Number(snapshot?.read || 0)],
+        ["framing", Number(snapshot?.framing || 0)],
+        ["delivery", Number(snapshot?.delivery || 0)],
+        ["recovery", Number(snapshot?.recovery || 0)],
+        ["closing", Number(snapshot?.closing || 0)],
+      ];
+
+      const strongest = [...entries].sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+      const weakest = [...entries].sort((a, b) => a[1] - b[1])[0]?.[0] || null;
+
+      return { strongest, weakest };
+    }
+
     function canSendResolvedProgress() {
       const enc = window.currentEncounter || currentEncounter || null;
       if (!enc) return false;
@@ -225,21 +300,21 @@
           console.warn("[REPORT] getSkillSnapshot failed, using zero fallback", skillErr);
         }
 
-        let strongestSkill = null;
-        let weakestSkill = null;
+        const allZero =
+          !snapshotFromFn.read &&
+          !snapshotFromFn.framing &&
+          !snapshotFromFn.delivery &&
+          !snapshotFromFn.recovery &&
+          !snapshotFromFn.closing;
 
-        try {
-          strongestSkill =
-            typeof getStrongestSkillLabel === "function"
-              ? getStrongestSkillLabel(snapshotFromFn)
-              : null;
-          weakestSkill =
-            typeof getWeakestSkillLabel === "function"
-              ? getWeakestSkillLabel(snapshotFromFn)
-              : null;
-        } catch (labelErr) {
-          console.warn("[REPORT] strongest/weakest helpers failed", labelErr);
+        if (allZero) {
+          snapshotFromFn = buildEncounterSkillFallback(encounter);
+          console.log("[REPORT] using encounter-derived fallback snapshot ✅", snapshotFromFn);
         }
+
+        const labels = pickStrongestWeakest(snapshotFromFn);
+        const strongestSkill = labels.strongest;
+        const weakestSkill = labels.weakest;
 
         console.log("[REPORT] raw skill snapshot", {
           snapshotFromFn,
