@@ -5611,22 +5611,19 @@ function wireMbCoachSuggestionButtons() {
 }
 
 function wireMbAutoDrillButtons() {
-  document.querySelectorAll("[data-auto-drill]").forEach((btn) => {
-    btn.onclick = async () => {
-      try {
-        const focus = String(btn.dataset.autoDrill || "").trim();
-        if (!focus) return;
+  document.querySelectorAll("[data-auto-drill-focus]").forEach((btn) => {
+    if (btn.__wired) return;
+    btn.__wired = true;
 
-        await sendManagerDrillOverride({
-          focus,
-          repTarget: 3,
-          durationSec: 300
-        });
-      } catch (e) {
+    btn.addEventListener("click", () => {
+      const focus = String(btn.getAttribute("data-auto-drill-focus") || "").toLowerCase();
+      if (!focus) return;
+
+      mbSendDrillOverride({ focus }).catch((e) => {
         const status = mbEl("mbInstrStatus");
         if (status) status.textContent = e?.message || String(e);
-      }
-    };
+      });
+    });
   });
 }
 
@@ -5981,15 +5978,19 @@ function renderManagerThreadRecommendation(thread) {
   if (rec.cooldown) {
     return `
       <div style="
-        margin-top:10px;
+        margin-top:12px;
         padding:10px;
         border-radius:10px;
-        background:rgba(255,140,0,0.08);
-        border:1px solid rgba(255,140,0,0.25);
+        background:rgba(255,180,0,0.10);
+        border:1px solid rgba(255,180,0,0.30);
       ">
-        <div style="font-weight:bold;">Recommended Drill</div>
-        <div class="small-text" style="margin-top:6px; opacity:.85;">
-          Cooldown active: ${escapeHtml(rec.label)} drill was assigned recently.
+        <div style="font-weight:600;">Recommended Drill</div>
+        <div class="small-text" style="margin-top:6px; opacity:.9;">
+          ${escapeHtml(rec.label)} is below target at ${escapeHtml(String(rec.pct))}%,
+          but this drill was assigned recently.
+        </div>
+        <div class="small-text" style="margin-top:6px; opacity:.7;">
+          Cooldown active — try coaching first or wait before reassigning the same drill.
         </div>
       </div>
     `;
@@ -5997,19 +5998,20 @@ function renderManagerThreadRecommendation(thread) {
 
   return `
     <div style="
-      margin-top:10px;
+      margin-top:12px;
       padding:10px;
       border-radius:10px;
       background:rgba(255,140,0,0.10);
       border:1px solid rgba(255,140,0,0.35);
     ">
-      <div style="font-weight:bold;">Recommended Drill</div>
-      <div class="small-text" style="margin-top:6px;">
-        ${escapeHtml(rec.label)} skill is ${escapeHtml(String(rec.pct))}% (below target).
+      <div style="font-weight:600;">Recommended Drill</div>
+      <div class="small-text" style="margin-top:6px; opacity:.9;">
+        ${escapeHtml(rec.label)} is at ${escapeHtml(String(rec.pct))}% and needs focused work.
       </div>
       <button
         class="btn"
-        data-auto-drill="${escapeHtml(rec.focus)}"
+        type="button"
+        data-auto-drill-focus="${escapeHtml(rec.focus)}"
         style="margin-top:8px;"
       >
         Assign ${escapeHtml(rec.label)} Drill
@@ -6192,7 +6194,7 @@ async function mbSendInstruction() {
   await loadManagerMessenger();
 }
 
-async function mbSendDrillOverride() {
+async function mbSendDrillOverride(opts = {}) {
   const { restaurantId, isManager } = getManagerBoardFilter();
   if (!isManager) throw new Error("Manager only");
   if (!restaurantId) throw new Error("Active restaurant not set");
@@ -6221,18 +6223,27 @@ async function mbSendDrillOverride() {
   const guest = String(latestPayload?.guestStateActual || "").toLowerCase();
   const sig = String(latestPayload?.chainSignal || "").toLowerCase();
 
-  let focus = "read";
+  let focus = String(opts.focus || "").toLowerCase() || "read";
   let pool = ["decider", "bargain_smart", "griever"];
   let tier = 1;
   let durationSec = 300;
   let repTarget = 3;
 
-  if (guest === "decider") {
-    focus = "read";
-    pool = ["decider"];
+  if (focus === "read") {
+    if (guest === "decider") pool = ["decider"];
+    else pool = ["decider", "bargain_smart", "griever"];
+  } else if (focus === "frame") {
+    pool = ["decider", "fancy"];
+  } else if (focus === "delivery") {
+    pool = ["decider", "fancy", "griever"];
+  } else if (focus === "recovery") {
+    pool = ["griever", "decider"];
+    repTarget = 4;
+  } else if (focus === "closing") {
+    pool = ["decider", "fancy"];
   }
 
-  if (sig === "soft_close" || sig === "red") {
+  if (!opts.focus && (sig === "soft_close" || sig === "red")) {
     focus = "read";
     repTarget = 4;
   }
@@ -6254,7 +6265,7 @@ async function mbSendDrillOverride() {
     receiver_user_id: to,
     sender_role: senderRole,
     type: "drill_override",
-    body: "Run this drill now.",
+    body: `Run this ${focus} drill now.`,
     payload: {
       drill,
       reason: "Manager assigned a focused drill based on recent progress."
