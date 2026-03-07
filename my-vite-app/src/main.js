@@ -2552,6 +2552,55 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
           const inserted = Number(data || 0);
 
+          try {
+            const p = msg?.payload || {};
+            const skills = p?.skills || {};
+
+            const snapCtx = getSenderCtxOrReject(
+              event,
+              senderCtx,
+              "progress_report_submit_result",
+              { reqId: msg?.reqId || null },
+              { requireRestaurant: true, allowedRoles: ["waiter", "manager", "group_manager", "admin"] }
+            );
+            if (snapCtx) {
+              const { error: snapError } = await supabase.from("bc_skill_snapshots_v1").insert({
+                user_id: snapCtx.userId,
+                restaurant_id: snapCtx.restaurantId,
+                scope_id: snapCtx.scopeId || null,
+
+                encounter_number: p?.encounterNumber ?? null,
+                guest_state: p?.guestStateActual ?? null,
+                difficulty: p?.difficulty ?? null,
+                chain_signal: p?.chainSignal ?? null,
+                chain_score: p?.chainScore ?? null,
+
+                read_pct: skills.read ?? 0,
+                framing_pct: skills.framing ?? 0,
+                delivery_pct: skills.delivery ?? 0,
+                recovery_pct: skills.recovery ?? 0,
+                closing_pct: skills.closing ?? 0,
+
+                strongest_skill: p?.strongestSkill ?? null,
+                weakest_skill: p?.weakestSkill ?? null,
+
+                payload: p
+              });
+
+              if (snapError) {
+                console.warn("[SNAPSHOT] parent insert failed", snapError);
+              } else {
+                console.log("[SNAPSHOT] parent insert success ✅", {
+                  userId: snapCtx.userId,
+                  restaurantId: snapCtx.restaurantId,
+                  encounterNumber: p?.encounterNumber
+                });
+              }
+            }
+          } catch (e) {
+            console.warn("[SNAPSHOT] parent insert exception", e);
+          }
+
           // 6) Reply
           event.source?.postMessage(
             { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, inserted },

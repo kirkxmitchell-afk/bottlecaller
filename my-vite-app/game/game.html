@@ -141,13 +141,42 @@
     function submitProgressReportToManager({ body, payload } = {}) {
       return submitProgressReport({ body, payload });
     }
+    function getStrongestSkillLabel(snapshot) {
+      const s = snapshot || {};
+      const entries = [
+        ["read", "read"],
+        ["framing", "framing"],
+        ["delivery", "delivery"],
+        ["recovery", "recovery"],
+        ["closing", "closing"],
+      ].map(([key, label]) => ({
+        key,
+        label,
+        value: Number(s[key] || 0)
+      })).sort((a, b) => b.value - a.value);
+
+      return entries[0]?.label || null;
+    }
+
+    function getWeakestSkillLabel(snapshot) {
+      const s = snapshot || {};
+      const entries = [
+        ["read", "read"],
+        ["framing", "framing"],
+        ["delivery", "delivery"],
+        ["recovery", "recovery"],
+        ["closing", "closing"],
+      ].map(([key, label]) => ({
+        key,
+        label,
+        value: Number(s[key] || 0)
+      })).sort((a, b) => a.value - b.value);
+
+      return entries[0]?.label || null;
+    }
+
     async function sendLiveProgressReport(source = "unknown") {
       try {
-        console.log("[REPORT] sendLiveProgressReport called", {
-          source,
-          currentEncounter: window.currentEncounter || currentEncounter || null
-        });
-
         const encounter = window.currentEncounter || currentEncounter || null;
         if (!encounter) {
           console.warn("[REPORT] no currentEncounter", { source });
@@ -159,15 +188,11 @@
             ? getSkillSnapshot()
             : { read: 0, framing: 0, delivery: 0, recovery: 0, closing: 0 };
 
-        const mastery =
-          typeof loadMastery === "function"
-            ? loadMastery()
-            : null;
-
-        const sf =
-          mastery && typeof getStrengthAndFix === "function"
-            ? getStrengthAndFix(mastery)
-            : { strongest: null, weakest: null };
+        console.log("[REPORT] raw skill snapshot", {
+          snapshotFromFn: typeof getSkillSnapshot === "function" ? getSkillSnapshot() : null,
+          ctx: window.__BC_CTX__ || null,
+          encounter: encounter?.encounterNumber
+        });
 
         const payload = {
           encounterNumber: encounter?.encounterNumber ?? null,
@@ -184,8 +209,8 @@
 
           skills: skillSnapshot,
 
-          strongestSkill: sf?.strongest ?? null,
-          weakestSkill: sf?.weakest ?? null
+          strongestSkill: getStrongestSkillLabel?.(skillSnapshot) || null,
+          weakestSkill: getWeakestSkillLabel?.(skillSnapshot) || null
         };
 
         const body =
@@ -202,59 +227,6 @@
         const reqId = submitProgressReportToManager({ body, payload });
         console.log("[REPORT] submitProgressReportToManager returned", { reqId });
 
-        const ctx =
-          window.__BC_CTX__ ||
-          window.BC_CTX ||
-          window.__BC_LAST_CTX__ ||
-          {
-            userId: window.userId || null,
-            restaurantId: window.restaurantId || null,
-            scopeId: window.scopeId || null
-          };
-
-        if (!ctx?.userId || !ctx?.restaurantId) {
-          console.warn("[SNAPSHOT] skipped: missing ctx", { source, ctx });
-          return { ok: !!reqId, reqId, warning: "missing_ctx_for_snapshot" };
-        }
-
-        const skills = payload.skills || {};
-
-        const { error } = await supabase.from("bc_skill_snapshots_v1").insert({
-          user_id: ctx.userId,
-          restaurant_id: ctx.restaurantId,
-          scope_id: ctx.scopeId || null,
-
-          encounter_number: payload.encounterNumber ?? null,
-          guest_state: payload.guestStateActual ?? null,
-          difficulty: payload.difficulty ?? null,
-          chain_signal: payload.chainSignal ?? null,
-          chain_score: payload.chainScore ?? null,
-
-          read_pct: skills.read ?? 0,
-          framing_pct: skills.framing ?? 0,
-          delivery_pct: skills.delivery ?? 0,
-          recovery_pct: skills.recovery ?? 0,
-          closing_pct: skills.closing ?? 0,
-
-          strongest_skill: payload.strongestSkill ?? null,
-          weakest_skill: payload.weakestSkill ?? null,
-
-          payload
-        });
-
-        if (error) {
-          console.warn("[SNAPSHOT] insert failed", { source, error, ctx, payload });
-          return { ok: !!reqId, reqId, warning: "snapshot_insert_failed", error };
-        }
-
-        console.log("[SNAPSHOT] insert success");
-        console.log("[SNAPSHOT] inserted ✅", {
-          source,
-          userId: ctx.userId,
-          restaurantId: ctx.restaurantId,
-          encounterNumber: payload.encounterNumber
-        });
-
         return { ok: !!reqId, reqId };
       } catch (e) {
         console.warn("[REPORT] sendLiveProgressReport failed", { source, error: e });
@@ -267,7 +239,7 @@
       if (!btn || btn.__wired) return;
       btn.__wired = true;
 
-      btn.addEventListener("click", async () => {
+      btn.onclick = async () => {
         console.log("[REPORT UI] Step 7 send clicked ✅");
         try {
           const result = await sendLiveProgressReport("step7_button");
@@ -280,7 +252,7 @@
           console.warn("wireProgressReportButton click failed", e);
           if (status) status.textContent = "Could not send progress.";
         }
-      });
+      };
     }
     function requestUnreadMessages() {
       try {
@@ -4988,6 +4960,10 @@ function ensureProgLoaded() {
           addSkillScore(tree, "closing", earned * w, 1 * w);
         }
 
+        console.log("[SKILLS] about to save tree", {
+          key: getSkillKey?.(),
+          tree
+        });
         saveSkillTree(tree);
         return tree;
       }
@@ -8874,7 +8850,25 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             currentEncounter
           });
           setTimeout(() => {
-            wireProgressReportButton();
+            const btn = document.getElementById("btnSendProgressReport");
+            const status = document.getElementById("progressReportStatus");
+
+            if (!btn) {
+              console.warn("[REPORT UI] Step 7 button not found");
+              return;
+            }
+
+            btn.onclick = async () => {
+              console.log("[REPORT UI] Step 7 send clicked ✅");
+              const result = await sendLiveProgressReport("step7_button");
+              if (status) {
+                status.textContent = result?.ok
+                  ? "Sending progress…"
+                  : `Could not send progress${result?.error ? `: ${result.error}` : "."}`;
+              }
+            };
+
+            console.log("[REPORT UI] Step 7 button wired ✅");
           }, 0);
           try {
             renderRecoveryStep(stepContent, stepButtons, currentEncounter, inDrill);
