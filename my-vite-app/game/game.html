@@ -194,21 +194,52 @@
 
     async function sendLiveProgressReport(source = "unknown") {
       try {
-        if (!canSendResolvedProgress()) {
-          console.warn("[REPORT] blocked: encounter not resolved yet", {
-            source,
-            encounter: window.currentEncounter || currentEncounter || null
-          });
-          return { ok: false, error: "encounter_not_resolved" };
-        }
-
         const encounter = window.currentEncounter || currentEncounter || null;
         if (!encounter) {
           console.warn("[REPORT] no currentEncounter", { source });
           return { ok: false, error: "no_current_encounter" };
         }
 
-        const snapshotFromFn = getSkillSnapshot();
+        let snapshotFromFn = {
+          read: 0,
+          framing: 0,
+          delivery: 0,
+          recovery: 0,
+          closing: 0
+        };
+
+        try {
+          if (typeof getSkillSnapshot === "function") {
+            const maybe = getSkillSnapshot();
+            if (maybe && typeof maybe === "object") {
+              snapshotFromFn = {
+                read: Number(maybe.read || 0),
+                framing: Number(maybe.framing || 0),
+                delivery: Number(maybe.delivery || 0),
+                recovery: Number(maybe.recovery || 0),
+                closing: Number(maybe.closing || 0),
+              };
+            }
+          }
+        } catch (skillErr) {
+          console.warn("[REPORT] getSkillSnapshot failed, using zero fallback", skillErr);
+        }
+
+        let strongestSkill = null;
+        let weakestSkill = null;
+
+        try {
+          strongestSkill =
+            typeof getStrongestSkillLabel === "function"
+              ? getStrongestSkillLabel(snapshotFromFn)
+              : null;
+          weakestSkill =
+            typeof getWeakestSkillLabel === "function"
+              ? getWeakestSkillLabel(snapshotFromFn)
+              : null;
+        } catch (labelErr) {
+          console.warn("[REPORT] strongest/weakest helpers failed", labelErr);
+        }
 
         console.log("[REPORT] raw skill snapshot", {
           snapshotFromFn,
@@ -231,8 +262,8 @@
 
           skills: snapshotFromFn,
 
-          strongestSkill: getStrongestSkillLabel?.(snapshotFromFn) || null,
-          weakestSkill: getWeakestSkillLabel?.(snapshotFromFn) || null
+          strongestSkill,
+          weakestSkill
         };
 
         window.parent?.postMessage(
@@ -250,18 +281,17 @@
           `Guest: ${payload.guestStateActual} • ` +
           `Signal: ${payload.chainSignal}`;
 
-        console.log("[REPORT] sending live progress", {
-          source,
-          payload,
-          encounter
-        });
-
         const reqId = submitProgressReportToManager({ body, payload });
         console.log("[REPORT] submitProgressReportToManager returned", { reqId });
 
         return { ok: !!reqId, reqId };
       } catch (e) {
-        console.warn("[REPORT] sendLiveProgressReport failed", { source, error: e });
+        console.warn("[REPORT] sendLiveProgressReport failed", {
+          source,
+          message: e?.message,
+          stack: e?.stack,
+          error: e
+        });
         return { ok: false, error: e?.message || String(e) };
       }
     }
