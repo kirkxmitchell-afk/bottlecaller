@@ -5444,6 +5444,82 @@ function wireMbCoachSuggestionButtons() {
   });
 }
 
+function drawSkillRadar(canvas, skills) {
+  if (!canvas || !skills) return;
+
+  const ctx = canvas.getContext("2d");
+  const w = canvas.width;
+  const h = canvas.height;
+
+  ctx.clearRect(0, 0, w, h);
+
+  const labels = ["read", "framing", "delivery", "recovery", "closing"];
+  const values = labels.map((k) => (skills[k] ?? 0) / 100);
+
+  const cx = w / 2;
+  const cy = h / 2;
+  const radius = Math.min(w, h) * 0.38;
+  const angleStep = (Math.PI * 2) / labels.length;
+
+  ctx.strokeStyle = "rgba(255,255,255,0.25)";
+  ctx.lineWidth = 1;
+
+  // grid rings
+  for (let r = 0.2; r <= 1; r += 0.2) {
+    ctx.beginPath();
+    labels.forEach((_, i) => {
+      const a = angleStep * i - Math.PI / 2;
+      const x = cx + Math.cos(a) * radius * r;
+      const y = cy + Math.sin(a) * radius * r;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.closePath();
+    ctx.stroke();
+  }
+
+  // axes
+  labels.forEach((_, i) => {
+    const a = angleStep * i - Math.PI / 2;
+    const x = cx + Math.cos(a) * radius;
+    const y = cy + Math.sin(a) * radius;
+
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  });
+
+  // skill polygon
+  ctx.beginPath();
+  values.forEach((v, i) => {
+    const a = angleStep * i - Math.PI / 2;
+    const x = cx + Math.cos(a) * radius * v;
+    const y = cy + Math.sin(a) * radius * v;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+
+  ctx.closePath();
+
+  ctx.fillStyle = "rgba(90,180,255,0.25)";
+  ctx.strokeStyle = "rgba(90,180,255,0.9)";
+  ctx.lineWidth = 2;
+
+  ctx.fill();
+  ctx.stroke();
+
+  // labels
+  ctx.fillStyle = "rgba(255,255,255,0.85)";
+  ctx.font = "11px sans-serif";
+
+  labels.forEach((label, i) => {
+    const a = angleStep * i - Math.PI / 2;
+    const x = cx + Math.cos(a) * (radius + 12);
+    const y = cy + Math.sin(a) * (radius + 12);
+
+    ctx.fillText(label.toUpperCase(), x - 16, y + 4);
+  });
+}
+
 function renderMbMessageItem(row, nameMap) {
   const who = userLabel(row?.sender_user_id, nameMap);
   const kind = String(row?.type || "message");
@@ -5529,6 +5605,11 @@ ${escapeHtml(s.label)}
 
         <div class="small-text" style="opacity:.75;">
           Needs Work: ${escapeHtml(String(p.weakestSkill ?? "-"))}
+        </div>
+
+        <div style="margin-top:12px;">
+          <strong>Performance Radar</strong>
+          <canvas class="mbSkillRadar" width="220" height="220" style="margin-top:8px;"></canvas>
         </div>
 
         <div style="margin-top:10px;">
@@ -5649,6 +5730,15 @@ function renderManagerActiveThread(nameMap) {
     msgEl.innerHTML = ordered.map((m) => renderMbMessageItem(m, nameMap)).join("");
     msgEl.scrollTop = msgEl.scrollHeight;
     wireMbCoachSuggestionButtons();
+    setTimeout(() => {
+      const canvases = msgEl.querySelectorAll(".mbSkillRadar");
+      const skillRows = ordered.filter((row) => row?.payload?.skills);
+      canvases.forEach((canvas, i) => {
+        const row = skillRows[i];
+        if (!row?.payload?.skills) return;
+        drawSkillRadar(canvas, row.payload.skills);
+      });
+    }, 0);
   }
 
   buildManagerSuggestedPrompts(thread);
