@@ -138,68 +138,132 @@
     function submitProgressReportToManager({ body, payload } = {}) {
       return submitProgressReport({ body, payload });
     }
+    async function sendLiveProgressReport(source = "unknown") {
+      try {
+        const encounter = window.currentEncounter || currentEncounter || null;
+        if (!encounter) {
+          console.warn("[REPORT] no currentEncounter", { source });
+          return { ok: false, error: "no_current_encounter" };
+        }
+
+        const skillSnapshot =
+          typeof getSkillSnapshot === "function"
+            ? getSkillSnapshot()
+            : { read: 0, framing: 0, delivery: 0, recovery: 0, closing: 0 };
+
+        const mastery =
+          typeof loadMastery === "function"
+            ? loadMastery()
+            : null;
+
+        const sf =
+          mastery && typeof getStrengthAndFix === "function"
+            ? getStrengthAndFix(mastery)
+            : { strongest: null, weakest: null };
+
+        const payload = {
+          encounterNumber: encounter?.encounterNumber ?? null,
+          guestStateActual: encounter?.guestStateActual ?? null,
+          difficulty: encounter?.difficulty ?? null,
+          chainSignal:
+            encounter?.chainSignal ||
+            encounter?.__reaction?.chainSignal ||
+            null,
+          chainScore:
+            encounter?.chainScore ??
+            encounter?.__reaction?.chainScore ??
+            null,
+
+          skills: skillSnapshot,
+
+          strongestSkill: sf?.strongest ?? null,
+          weakestSkill: sf?.weakest ?? null
+        };
+
+        const body =
+          `Progress update • Encounter ${payload.encounterNumber} • ` +
+          `Guest: ${payload.guestStateActual} • ` +
+          `Signal: ${payload.chainSignal}`;
+
+        console.log("[REPORT] sending live progress", {
+          source,
+          payload,
+          encounter
+        });
+
+        const reqId = submitProgressReportToManager({ body, payload });
+
+        const ctx =
+          window.BC_CTX ||
+          window.__BC_CTX__ ||
+          window.__BC_LAST_CTX__ ||
+          {
+            userId: window.userId || null,
+            restaurantId: window.restaurantId || null,
+            scopeId: window.scopeId || null
+          };
+
+        if (!ctx?.userId || !ctx?.restaurantId) {
+          console.warn("[SNAPSHOT] skipped: missing ctx", { source, ctx });
+          return { ok: !!reqId, reqId, warning: "missing_ctx_for_snapshot" };
+        }
+
+        const skills = payload.skills || {};
+
+        const { error } = await supabase.from("bc_skill_snapshots_v1").insert({
+          user_id: ctx.userId,
+          restaurant_id: ctx.restaurantId,
+          scope_id: ctx.scopeId || null,
+
+          encounter_number: payload.encounterNumber ?? null,
+          guest_state: payload.guestStateActual ?? null,
+          difficulty: payload.difficulty ?? null,
+          chain_signal: payload.chainSignal ?? null,
+          chain_score: payload.chainScore ?? null,
+
+          read_pct: skills.read ?? 0,
+          framing_pct: skills.framing ?? 0,
+          delivery_pct: skills.delivery ?? 0,
+          recovery_pct: skills.recovery ?? 0,
+          closing_pct: skills.closing ?? 0,
+
+          strongest_skill: payload.strongestSkill ?? null,
+          weakest_skill: payload.weakestSkill ?? null,
+
+          payload
+        });
+
+        if (error) {
+          console.warn("[SNAPSHOT] insert failed", { source, error, ctx, payload });
+          return { ok: !!reqId, reqId, warning: "snapshot_insert_failed", error };
+        }
+
+        console.log("[SNAPSHOT] inserted ✅", {
+          source,
+          userId: ctx.userId,
+          restaurantId: ctx.restaurantId,
+          encounterNumber: payload.encounterNumber
+        });
+
+        return { ok: !!reqId, reqId };
+      } catch (e) {
+        console.warn("[REPORT] sendLiveProgressReport failed", { source, error: e });
+        return { ok: false, error: e?.message || String(e) };
+      }
+    }
     function wireProgressReportButton() {
       const btn = document.getElementById("btnSendProgressReport");
       const status = document.getElementById("progressReportStatus");
       if (!btn || btn.__wired) return;
       btn.__wired = true;
 
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", async () => {
         try {
-          const skillSnapshot = getSkillSnapshot();
-
-          const payload = {
-            encounterNumber: currentEncounter?.encounterNumber ?? null,
-            guestStateActual: currentEncounter?.guestStateActual ?? null,
-            difficulty: currentEncounter?.difficulty ?? null,
-            chainSignal:
-              currentEncounter?.chainSignal ||
-              currentEncounter?.__reaction?.chainSignal ||
-              null,
-            chainScore: currentEncounter?.chainScore ?? null,
-
-            skills: skillSnapshot,
-
-            strongestSkill: getStrengthAndFix(loadMastery()).strongest,
-            weakestSkill: getStrengthAndFix(loadMastery()).weakest
-          };
-          const reqId = submitProgressReportToManager({
-            body: `Progress update • Encounter ${payload.encounterNumber} • Guest: ${payload.guestStateActual} • Signal: ${payload.chainSignal}`,
-            payload
-          });
-          (async () => {
-            try {
-              const ctx = window.__BC_CTX__ || {};
-              const skills = payload?.skills || {};
-
-              await supabase.from("bc_skill_snapshots_v1").insert({
-                user_id: ctx.userId,
-                restaurant_id: ctx.restaurantId,
-                scope_id: ctx.scopeId || null,
-
-                encounter_number: payload?.encounterNumber ?? null,
-                guest_state: payload?.guestStateActual ?? null,
-                difficulty: payload?.difficulty ?? null,
-                chain_signal: payload?.chainSignal ?? null,
-                chain_score: payload?.chainScore ?? null,
-
-                read_pct: skills.read ?? 0,
-                framing_pct: skills.framing ?? 0,
-                delivery_pct: skills.delivery ?? 0,
-                recovery_pct: skills.recovery ?? 0,
-                closing_pct: skills.closing ?? 0,
-
-                strongest_skill: payload?.strongestSkill ?? null,
-                weakest_skill: payload?.weakestSkill ?? null,
-
-                payload
-              });
-            } catch (e) {
-              console.warn("[SNAPSHOT] insert failed", e);
-            }
-          })();
+          const result = await sendLiveProgressReport("step7_button");
           if (status) {
-            status.textContent = reqId ? "Sending progress…" : "Could not send progress.";
+            status.textContent = result?.ok
+              ? "Sending progress…"
+              : `Could not send progress${result?.error ? `: ${result.error}` : "."}`;
           }
         } catch (e) {
           console.warn("wireProgressReportButton click failed", e);
@@ -360,58 +424,9 @@
         }
       }
       if (msg.type === "hud_send_progress_request") {
-        const skillSnapshot = getSkillSnapshot();
-
-        const payload = {
-          encounterNumber: currentEncounter?.encounterNumber ?? null,
-          guestStateActual: currentEncounter?.guestStateActual ?? null,
-          difficulty: currentEncounter?.difficulty ?? null,
-          chainSignal:
-            currentEncounter?.chainSignal ||
-            currentEncounter?.__reaction?.chainSignal ||
-            null,
-          chainScore: currentEncounter?.chainScore ?? null,
-
-          skills: skillSnapshot,
-
-          strongestSkill: getStrengthAndFix(loadMastery()).strongest,
-          weakestSkill: getStrengthAndFix(loadMastery()).weakest
-        };
-
-        submitProgressReportToManager({
-          body: `Progress update • Encounter ${payload.encounterNumber} • Guest: ${payload.guestStateActual} • Signal: ${payload.chainSignal}`,
-          payload
-        });
         (async () => {
-          try {
-            const ctx = window.__BC_CTX__ || {};
-            const skills = payload?.skills || {};
-
-            await supabase.from("bc_skill_snapshots_v1").insert({
-              user_id: ctx.userId,
-              restaurant_id: ctx.restaurantId,
-              scope_id: ctx.scopeId || null,
-
-              encounter_number: payload?.encounterNumber ?? null,
-              guest_state: payload?.guestStateActual ?? null,
-              difficulty: payload?.difficulty ?? null,
-              chain_signal: payload?.chainSignal ?? null,
-              chain_score: payload?.chainScore ?? null,
-
-              read_pct: skills.read ?? 0,
-              framing_pct: skills.framing ?? 0,
-              delivery_pct: skills.delivery ?? 0,
-              recovery_pct: skills.recovery ?? 0,
-              closing_pct: skills.closing ?? 0,
-
-              strongest_skill: payload?.strongestSkill ?? null,
-              weakest_skill: payload?.weakestSkill ?? null,
-
-              payload
-            });
-          } catch (e) {
-            console.warn("[SNAPSHOT] insert failed", e);
-          }
+          const result = await sendLiveProgressReport("hud_request");
+          console.log("[REPORT] hud_send_progress_request result", result);
         })();
       }
       if (msg.type === "launch_assigned_drill_request") {
@@ -3293,6 +3308,13 @@ function ensureProgLoaded() {
         }
 
         console.log("[BC] bc_ctx applied ✅", window.__BC_CTX__);
+        console.log("[CTX DEBUG]", {
+          BC_CTX: window.BC_CTX || null,
+          __BC_CTX__: window.__BC_CTX__ || null,
+          userId: window.userId || null,
+          restaurantId: window.restaurantId || null,
+          scopeId: window.scopeId || null
+        });
         if (window.__BC_CTX__) {
           try { hydrateRunCountFromServer?.(); } catch (e) { console.warn("[BC] hydrateRunCountFromServer failed", e); }
         }
