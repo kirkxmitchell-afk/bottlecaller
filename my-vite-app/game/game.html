@@ -146,14 +146,22 @@
 
       btn.addEventListener("click", () => {
         try {
+          const skillSnapshot = getSkillSnapshot();
+
           const payload = {
-            encounterNumber: currentEncounter?.encounterNumber || null,
-            guestStateActual: currentEncounter?.guestStateActual || null,
-            difficulty: currentEncounter?.difficulty || null,
-            chainSignal: currentEncounter?.chainSignal || null,
+            encounterNumber: currentEncounter?.encounterNumber ?? null,
+            guestStateActual: currentEncounter?.guestStateActual ?? null,
+            difficulty: currentEncounter?.difficulty ?? null,
+            chainSignal:
+              currentEncounter?.chainSignal ||
+              currentEncounter?.__reaction?.chainSignal ||
+              null,
             chainScore: currentEncounter?.chainScore ?? null,
-            currentStep: typeof currentStep === "number" ? currentStep : null,
-            occurredAt: new Date().toISOString(),
+
+            skills: skillSnapshot,
+
+            strongestSkill: getStrengthAndFix(loadMastery()).strongest,
+            weakestSkill: getStrengthAndFix(loadMastery()).weakest
           };
 
           const body =
@@ -289,24 +297,28 @@
       }
       if (msg.type === "hud_send_progress_request") {
         const enc = typeof currentEncounter !== "undefined" ? currentEncounter : null;
+        const skillSnapshot = getSkillSnapshot();
+
         const payload = {
-          encounterNumber: enc?.encounterNumber || null,
-          guestStateActual: enc?.guestStateActual || null,
-          difficulty: enc?.difficulty || null,
-          chainSignal: enc?.chainSignal || null,
+          encounterNumber: currentEncounter?.encounterNumber ?? null,
+          guestStateActual: currentEncounter?.guestStateActual ?? null,
+          difficulty: currentEncounter?.difficulty ?? null,
+          chainSignal:
+            currentEncounter?.chainSignal ||
+            currentEncounter?.__reaction?.chainSignal ||
+            null,
           chainScore: enc?.chainScore ?? null,
-          currentStep: typeof currentStep === "number" ? currentStep : null,
-          mode: String(window.bcMode || ""),
-          occurredAt: new Date().toISOString(),
+
+          skills: skillSnapshot,
+
+          strongestSkill: getStrengthAndFix(loadMastery()).strongest,
+          weakestSkill: getStrengthAndFix(loadMastery()).weakest
         };
 
-        const body =
-          "Progress update" +
-          (enc?.encounterNumber ? ` • Encounter ${enc.encounterNumber}` : "") +
-          (enc?.guestStateActual ? ` • Guest: ${enc.guestStateActual}` : "") +
-          (enc?.chainSignal ? ` • Signal: ${enc.chainSignal}` : "");
-
-        submitProgressReportToManager({ body, payload });
+        submitProgressReportToManager({
+          body: `Progress update • Encounter ${payload.encounterNumber} • Guest: ${payload.guestStateActual} • Signal: ${payload.chainSignal}`,
+          payload
+        });
       }
       if (msg.type === "messages_unread_response") {
         if (!msg.ok) {

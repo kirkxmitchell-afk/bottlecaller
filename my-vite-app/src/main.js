@@ -3521,22 +3521,59 @@ function renderWaiterThreadItem(row, selfUserId, nameMap) {
     `;
   } else if (kind === "progress_report" && row?.payload && typeof row.payload === "object" && Object.keys(row.payload).length) {
     const p = row.payload || {};
+    const skills = p.skills || {};
+
     payloadHtml = `
-      <div style="
-        margin-top:8px;
-        padding:10px;
-        border:1px solid rgba(255,255,255,0.10);
-        border-radius:10px;
-        background:rgba(255,255,255,0.04);
-      ">
-        <div><strong>Progress snapshot</strong></div>
-        <div class="small-text" style="margin-top:6px; opacity:.9;">Encounter: ${escapeHtml(String(p.encounterNumber ?? "-"))}</div>
-        <div class="small-text" style="opacity:.9;">Guest: ${escapeHtml(String(p.guestStateActual || "-"))}</div>
-        <div class="small-text" style="opacity:.9;">Difficulty: ${escapeHtml(String(p.difficulty ?? "-"))}</div>
-        <div class="small-text" style="opacity:.9;">Signal: ${escapeHtml(String(p.chainSignal || "-"))}</div>
-        <div class="small-text" style="opacity:.9;">Score: ${escapeHtml(String(p.chainScore ?? "-"))}</div>
-      </div>
-    `;
+<div style="
+  margin-top:8px;
+  padding:10px;
+  border:1px solid rgba(255,255,255,0.10);
+  border-radius:10px;
+  background:rgba(255,255,255,0.04);
+">
+
+<div><strong>Progress snapshot</strong></div>
+
+<div class="small-text" style="margin-top:6px;">
+Encounter: ${escapeHtml(String(p.encounterNumber ?? "-"))}
+</div>
+
+<div class="small-text">
+Guest: ${escapeHtml(String(p.guestStateActual ?? "-"))}
+</div>
+
+<div class="small-text">
+Difficulty: ${escapeHtml(String(p.difficulty ?? "-"))}
+</div>
+
+<div class="small-text">
+Signal: ${escapeHtml(String(p.chainSignal ?? "-"))}
+</div>
+
+<div class="small-text">
+Score: ${escapeHtml(String(p.chainScore ?? "-"))}
+</div>
+
+<hr style="opacity:.2; margin:8px 0;">
+
+<div><strong>Skill Tree</strong></div>
+
+<div class="small-text">Guest Reading: ${skills.read ?? 0}%</div>
+<div class="small-text">Framing: ${skills.framing ?? 0}%</div>
+<div class="small-text">Delivery: ${skills.delivery ?? 0}%</div>
+<div class="small-text">Recovery: ${skills.recovery ?? 0}%</div>
+<div class="small-text">Closing: ${skills.closing ?? 0}%</div>
+
+<div class="small-text" style="margin-top:8px; opacity:.75;">
+Strongest: ${escapeHtml(String(p.strongestSkill ?? "-"))}
+</div>
+
+<div class="small-text" style="opacity:.75;">
+Needs Work: ${escapeHtml(String(p.weakestSkill ?? "-"))}
+</div>
+
+</div>
+`;
   }
 
   return `
