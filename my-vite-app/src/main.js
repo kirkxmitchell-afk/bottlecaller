@@ -4540,11 +4540,11 @@ function wireManagerBoardMenu() {
       if (select && !select.__wired) {
         select.__wired = true;
         select.addEventListener("change", () => {
-          loadPerformanceHistory(select.value);
+          loadPerformanceHistory(select.value).catch(console.error);
         });
       }
       if (select?.value) {
-        loadPerformanceHistory(select.value);
+        await loadPerformanceHistory(select.value);
       }
       return;
     }
@@ -4575,12 +4575,12 @@ function wireManagerBoardMenu() {
       if (select && !select.__wired) {
         select.__wired = true;
         select.addEventListener("change", () => {
-          loadPerformanceHistory(select.value);
+          loadPerformanceHistory(select.value).catch(console.error);
         });
       }
 
       if (select?.value) {
-        loadPerformanceHistory(select.value);
+        await loadPerformanceHistory(select.value);
       }
     }
     if (tab === "messenger") {
@@ -5793,18 +5793,24 @@ function drawSkillRadar(canvas, skills) {
 
   ctx.clearRect(0, 0, w, h);
 
-  const labels = ["read", "framing", "delivery", "recovery", "closing"];
-  const values = labels.map((k) => (skills[k] ?? 0) / 100);
+  const labels = [
+    { key: "read", label: "READ" },
+    { key: "framing", label: "FRAME" },
+    { key: "delivery", label: "DELIVER" },
+    { key: "recovery", label: "RECOVER" },
+    { key: "closing", label: "CLOSE" },
+  ];
+
+  const values = labels.map(({ key }) => Math.max(0, Math.min(100, Number(skills?.[key] || 0))) / 100);
 
   const cx = w / 2;
   const cy = h / 2;
-  const radius = Math.min(w, h) * 0.38;
+  const radius = Math.min(w, h) * 0.34;
   const angleStep = (Math.PI * 2) / labels.length;
 
-  ctx.strokeStyle = "rgba(255,255,255,0.25)";
+  ctx.strokeStyle = "rgba(255,255,255,0.18)";
   ctx.lineWidth = 1;
 
-  // grid rings
   for (let r = 0.2; r <= 1; r += 0.2) {
     ctx.beginPath();
     labels.forEach((_, i) => {
@@ -5817,7 +5823,6 @@ function drawSkillRadar(canvas, skills) {
     ctx.stroke();
   }
 
-  // axes
   labels.forEach((_, i) => {
     const a = angleStep * i - Math.PI / 2;
     const x = cx + Math.cos(a) * radius;
@@ -5829,34 +5834,32 @@ function drawSkillRadar(canvas, skills) {
     ctx.stroke();
   });
 
-  // skill polygon
   ctx.beginPath();
   values.forEach((v, i) => {
     const a = angleStep * i - Math.PI / 2;
-    const x = cx + Math.cos(a) * radius * v;
-    const y = cy + Math.sin(a) * radius * v;
+
+    const effective = v > 0 ? Math.max(v, 0.08) : 0;
+
+    const x = cx + Math.cos(a) * radius * effective;
+    const y = cy + Math.sin(a) * radius * effective;
     i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
   });
-
   ctx.closePath();
 
-  ctx.fillStyle = "rgba(90,180,255,0.25)";
-  ctx.strokeStyle = "rgba(90,180,255,0.9)";
+  ctx.fillStyle = "rgba(90,180,255,0.22)";
+  ctx.strokeStyle = "rgba(90,180,255,0.95)";
   ctx.lineWidth = 2;
-
   ctx.fill();
   ctx.stroke();
 
-  // labels
-  ctx.fillStyle = "rgba(255,255,255,0.85)";
+  ctx.fillStyle = "rgba(255,255,255,0.88)";
   ctx.font = "11px sans-serif";
 
-  labels.forEach((label, i) => {
+  labels.forEach(({ label }, i) => {
     const a = angleStep * i - Math.PI / 2;
-    const x = cx + Math.cos(a) * (radius + 12);
-    const y = cy + Math.sin(a) * (radius + 12);
-
-    ctx.fillText(label.toUpperCase(), x - 16, y + 4);
+    const x = cx + Math.cos(a) * (radius + 18);
+    const y = cy + Math.sin(a) * (radius + 18);
+    ctx.fillText(label, x - 18, y + 4);
   });
 }
 
@@ -5897,40 +5900,80 @@ function drawPerformanceHistoryChart(rows) {
   if (!canvas) return;
 
   const ctx = canvas.getContext("2d");
-
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  if (!rows.length) return;
-
-  const skills = [
-    { key: "read_pct", color: "#5ab4ff" },
-    { key: "framing_pct", color: "#ffb45a" },
-    { key: "delivery_pct", color: "#5aff9c" },
-    { key: "recovery_pct", color: "#ff5a8a" },
-    { key: "closing_pct", color: "#c05aff" }
-  ];
-
-  const maxPoints = rows.length;
   const w = canvas.width;
   const h = canvas.height;
 
-  const xStep = w / Math.max(1, maxPoints - 1);
+  ctx.clearRect(0, 0, w, h);
 
-  skills.forEach((skill) => {
+  if (!rows.length) {
+    ctx.fillStyle = "rgba(255,255,255,0.7)";
+    ctx.font = "14px sans-serif";
+    ctx.fillText("No performance history yet.", 20, 30);
+    return;
+  }
+
+  const padL = 40;
+  const padR = 20;
+  const padT = 20;
+  const padB = 30;
+
+  const plotW = w - padL - padR;
+  const plotH = h - padT - padB;
+
+  ctx.strokeStyle = "rgba(255,255,255,0.20)";
+  ctx.lineWidth = 1;
+
+  ctx.beginPath();
+  ctx.moveTo(padL, padT);
+  ctx.lineTo(padL, h - padB);
+  ctx.lineTo(w - padR, h - padB);
+  ctx.stroke();
+
+  ctx.fillStyle = "rgba(255,255,255,0.65)";
+  ctx.font = "11px sans-serif";
+  [0, 25, 50, 75, 100].forEach((v) => {
+    const y = padT + plotH - (v / 100) * plotH;
+    ctx.fillText(String(v), 8, y + 4);
+
+    ctx.strokeStyle = "rgba(255,255,255,0.08)";
     ctx.beginPath();
-    ctx.strokeStyle = skill.color;
+    ctx.moveTo(padL, y);
+    ctx.lineTo(w - padR, y);
+    ctx.stroke();
+  });
+
+  const skills = [
+    { key: "read_pct", label: "READ" },
+    { key: "framing_pct", label: "FRAME" },
+    { key: "delivery_pct", label: "DELIVER" },
+    { key: "recovery_pct", label: "RECOVER" },
+    { key: "closing_pct", label: "CLOSE" }
+  ];
+
+  const xStep = rows.length > 1 ? plotW / (rows.length - 1) : plotW / 2;
+
+  skills.forEach((skill, skillIndex) => {
+    ctx.beginPath();
     ctx.lineWidth = 2;
+    const alpha = 0.95 - skillIndex * 0.12;
+    ctx.strokeStyle = `rgba(255,255,255,${Math.max(alpha, 0.28)})`;
 
     rows.forEach((r, i) => {
-      const pct = r[skill.key] ?? 0;
-      const x = i * xStep;
-      const y = h - (pct / 100) * h;
+      const pct = Math.max(0, Math.min(100, Number(r?.[skill.key] || 0)));
+      const x = padL + i * xStep;
+      const y = padT + plotH - (pct / 100) * plotH;
 
       if (i === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
     });
 
     ctx.stroke();
+  });
+
+  ctx.fillStyle = "rgba(255,255,255,0.8)";
+  ctx.font = "11px sans-serif";
+  skills.forEach((s, i) => {
+    ctx.fillText(s.label, padL + i * 70, 12);
   });
 }
 
