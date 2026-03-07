@@ -3565,6 +3565,7 @@ function renderWaiterThreadItem(row, selfUserId, nameMap) {
 
   let payloadHtml = "";
   const showBody = kind !== "drill_override";
+  const isWaiterView = String(appState?.profile?.role || "").toLowerCase() === "waiter";
 
   if (kind === "drill_override" && row?.payload?.drill) {
     const d = row.payload.drill || {};
@@ -3574,6 +3575,17 @@ function renderWaiterThreadItem(row, selfUserId, nameMap) {
     const duration = escapeHtml(String(d.durationSec ?? "-"));
     const tier = escapeHtml(String(d.tier ?? "-"));
     const reason = escapeHtml(String(row?.payload?.reason || ""));
+
+    const launchBtn = isWaiterView ? `
+        <button
+          type="button"
+          class="btn-ghost waiterStartAssignedDrill"
+          data-drill-message-id="${escapeHtml(String(row.id || ""))}"
+          style="margin-top:10px;"
+        >
+          Start Assigned Drill
+        </button>
+    ` : "";
 
     payloadHtml = `
       <div style="
@@ -3590,14 +3602,7 @@ function renderWaiterThreadItem(row, selfUserId, nameMap) {
         <div class="small-text" style="opacity:.9;">Duration: ${duration}s</div>
         <div class="small-text" style="opacity:.9;">Tier: ${tier}</div>
         ${reason ? `<div class="small-text" style="margin-top:8px; opacity:.75;">${reason}</div>` : ""}
-        <button
-          type="button"
-          class="btn-ghost waiterStartAssignedDrill"
-          data-drill-message-id="${escapeHtml(String(row.id || ""))}"
-          style="margin-top:10px;"
-        >
-          Start Assigned Drill
-        </button>
+        ${launchBtn}
       </div>
     `;
   } else if (kind === "progress_report" && row?.payload && typeof row.payload === "object" && Object.keys(row.payload).length) {
