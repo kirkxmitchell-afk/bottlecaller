@@ -3564,31 +3564,22 @@ function renderWaiterThreadItem(row, selfUserId, nameMap) {
   if (kind === "drill_override") badge = "DRILL";
 
   let payloadHtml = "";
+  const showBody = kind !== "drill_override";
 
   if (kind === "drill_override" && row?.payload?.drill) {
-    const d = row.payload.drill || {};
-    const pool = Array.isArray(d.pool) ? d.pool.join(", ") : "-";
-    const focus = escapeHtml(String(d.focus || "-"));
-    const reps = escapeHtml(String(d.repTarget ?? "-"));
-    const duration = escapeHtml(String(d.durationSec ?? "-"));
-    const tier = escapeHtml(String(d.tier ?? "-"));
-    const reason = escapeHtml(String(row?.payload?.reason || ""));
+    const focus = escapeHtml(String(row?.payload?.drill?.focus || "-"));
 
     payloadHtml = `
       <div style="
-        margin-top:8px;
+        margin-top:10px;
         padding:10px;
         border:1px solid rgba(255,255,255,0.10);
         border-radius:10px;
         background:rgba(255,255,255,0.04);
       ">
-        <div><strong>Assigned drill</strong></div>
-        <div class="small-text" style="margin-top:6px; opacity:.9;">Focus: ${focus}</div>
-        <div class="small-text" style="opacity:.9;">Pool: ${escapeHtml(pool)}</div>
-        <div class="small-text" style="opacity:.9;">Reps: ${reps}</div>
-        <div class="small-text" style="opacity:.9;">Duration: ${duration}s</div>
-        <div class="small-text" style="opacity:.9;">Tier: ${tier}</div>
-        ${reason ? `<div class="small-text" style="margin-top:8px; opacity:.75;">${reason}</div>` : ""}
+        <div><strong>📋 Manager Drill Assigned</strong></div>
+        <div class="small-text" style="margin-top:6px; opacity:.9;">${body}</div>
+        <div class="small-text" style="opacity:.75; margin-top:4px;">Focus: ${focus}</div>
       </div>
     `;
   } else if (kind === "progress_report" && row?.payload && typeof row.payload === "object" && Object.keys(row.payload).length) {
@@ -3664,7 +3655,7 @@ Needs Work: ${escapeHtml(String(p.weakestSkill ?? "-"))}
         </div>
         <div class="small-text" style="opacity:.6;">${when}</div>
       </div>
-      <div style="margin-top:8px; white-space:pre-wrap;">${body}</div>
+      ${showBody ? `<div style="margin-top:8px; white-space:pre-wrap;">${body}</div>` : ""}
       ${payloadHtml}
     </div>
   `;
