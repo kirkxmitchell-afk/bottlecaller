@@ -268,7 +268,7 @@
       btn.__wired = true;
 
       btn.addEventListener("click", async () => {
-        console.log("[REPORT UI] Step 7 send clicked");
+        console.log("[REPORT UI] Step 7 send clicked ✅");
         try {
           const result = await sendLiveProgressReport("step7_button");
           if (status) {
@@ -435,10 +435,12 @@
         }
       }
       if (msg.type === "hud_send_progress_request") {
+        console.log("[REPORT] hud_send_progress_request received ✅", msg);
         (async () => {
           const result = await sendLiveProgressReport("hud_request");
           console.log("[REPORT] hud_send_progress_request result", result);
         })();
+        return;
       }
       if (msg.type === "launch_assigned_drill_request") {
         const drill = msg?.drill || null;
@@ -8867,10 +8869,13 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         }
 
         if (currentStep === 7) {
-          console.log("[REPORT UI] Step 7 rendered", {
+          console.log("[REPORT UI] Step 7 rendered ✅", {
             encounter: currentEncounter?.encounterNumber,
             currentEncounter
           });
+          setTimeout(() => {
+            wireProgressReportButton();
+          }, 0);
           try {
             renderRecoveryStep(stepContent, stepButtons, currentEncounter, inDrill);
           } catch (e) {

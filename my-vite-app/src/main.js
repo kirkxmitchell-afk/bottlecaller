@@ -3836,12 +3836,15 @@ function wireWaiterMessagesPanel() {
   if (sendBtn && !sendBtn.__bcBound) {
     sendBtn.__bcBound = true;
     sendBtn.addEventListener("click", () => {
+      console.log("[WAITER PANEL] Send Progress clicked ✅");
       const status = document.getElementById("waiterSendProgressStatus");
       try {
-        const reqId = "wm_pr_" + Math.random().toString(16).slice(2);
+        const reqId = "hud_pr_" + Math.random().toString(16).slice(2);
         const frame = document.getElementById("premiumRootFrame");
+        console.log("[WAITER PANEL] premiumRootFrame", frame);
         if (!frame || !frame.contentWindow) {
           if (status) status.textContent = "Game not ready.";
+          console.warn("[WAITER PANEL] no iframe/contentWindow");
           return;
         }
 
@@ -3854,6 +3857,7 @@ function wireWaiterMessagesPanel() {
           },
           window.location.origin
         );
+        console.log("[WAITER PANEL] hud_send_progress_request posted ✅", { reqId });
 
         if (status) status.textContent = "Sending progress…";
       } catch (e) {
@@ -7286,6 +7290,8 @@ async function loadAuthedState(reason = "manual") {
   });
 
   wireManagerBoardButton();
+  wireHudSendProgressButton();
+  wireWaiterMessagesPanel();
   applyRoleTemplateGates();
 
   // (ctx push removed here; only iframe onload + bc_ctx_request reply are allowed)
