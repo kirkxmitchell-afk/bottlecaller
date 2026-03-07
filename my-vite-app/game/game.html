@@ -208,13 +208,10 @@
           return { ok: false, error: "no_current_encounter" };
         }
 
-        const skillSnapshot =
-          typeof getSkillSnapshot === "function"
-            ? getSkillSnapshot()
-            : { read: 0, framing: 0, delivery: 0, recovery: 0, closing: 0 };
+        const snapshotFromFn = getSkillSnapshot();
 
         console.log("[REPORT] raw skill snapshot", {
-          snapshotFromFn: typeof getSkillSnapshot === "function" ? getSkillSnapshot() : null,
+          snapshotFromFn,
           ctx: window.__BC_CTX__ || null,
           encounter: encounter?.encounterNumber
         });
@@ -232,10 +229,10 @@
             encounter?.__reaction?.chainScore ??
             null,
 
-          skills: skillSnapshot,
+          skills: snapshotFromFn,
 
-          strongestSkill: getStrongestSkillLabel?.(skillSnapshot) || null,
-          weakestSkill: getWeakestSkillLabel?.(skillSnapshot) || null
+          strongestSkill: getStrongestSkillLabel?.(snapshotFromFn) || null,
+          weakestSkill: getWeakestSkillLabel?.(snapshotFromFn) || null
         };
 
         window.parent?.postMessage(
@@ -4839,64 +4836,99 @@ function ensureProgLoaded() {
         closing: { points: 0, attempts: 0 },
       };
 
+      function cloneSkillTemplate() {
+        return JSON.parse(JSON.stringify(SKILL_TEMPLATE));
+      }
+
+      function normalizeSkillTree(raw) {
+        const src = raw || {};
+        return {
+          read: {
+            points: Number(src?.read?.points || 0),
+            attempts: Number(src?.read?.attempts || 0),
+          },
+          framing: {
+            points: Number(src?.framing?.points || 0),
+            attempts: Number(src?.framing?.attempts || 0),
+          },
+          delivery: {
+            points: Number(src?.delivery?.points || 0),
+            attempts: Number(src?.delivery?.attempts || 0),
+          },
+          recovery: {
+            points: Number(src?.recovery?.points || 0),
+            attempts: Number(src?.recovery?.attempts || 0),
+          },
+          closing: {
+            points: Number(src?.closing?.points || 0),
+            attempts: Number(src?.closing?.attempts || 0),
+          },
+        };
+      }
+
       function getSkillKey() {
-        const ctx = window.__BC_CTX__ || window.BC_CTX || null;
+        const ctx =
+          window.__BC_CTX__ ||
+          window.BC_CTX ||
+          null;
+
         const userId = ctx?.userId || null;
         const restaurantId = ctx?.restaurantId || null;
-        if (!userId || !restaurantId) return null;
-        return `bc_skills_v1_${userId}_${restaurantId}`;
+
+        if (!userId || !restaurantId) {
+          console.warn("[SKILLS] getSkillKey missing ctx", { ctx });
+          return null;
+        }
+
+        return `bc_skills_v2_${userId}_${restaurantId}`;
       }
 
       function loadSkillTree() {
+        if (window.__BC_SKILL_TREE_CACHE__) {
+          return normalizeSkillTree(window.__BC_SKILL_TREE_CACHE__);
+        }
+
         const key = getSkillKey();
         if (!key) {
-          const tree = JSON.parse(JSON.stringify(SKILL_TEMPLATE));
-          console.log("[SKILLS] loadSkillTree", {
-            key: getSkillKey?.(),
-            tree
-          });
-          return tree;
+          const blank = cloneSkillTemplate();
+          window.__BC_SKILL_TREE_CACHE__ = blank;
+          return blank;
         }
 
         try {
           const raw = localStorage.getItem(key);
-          if (!raw) {
-            const tree = JSON.parse(JSON.stringify(SKILL_TEMPLATE));
-            console.log("[SKILLS] loadSkillTree", {
-              key: getSkillKey?.(),
-              tree
-            });
-            return tree;
-          }
-          const parsed = JSON.parse(raw);
-          const tree = {
-            read: { ...SKILL_TEMPLATE.read, ...(parsed.read || {}) },
-            framing: { ...SKILL_TEMPLATE.framing, ...(parsed.framing || {}) },
-            delivery: { ...SKILL_TEMPLATE.delivery, ...(parsed.delivery || {}) },
-            recovery: { ...SKILL_TEMPLATE.recovery, ...(parsed.recovery || {}) },
-            closing: { ...SKILL_TEMPLATE.closing, ...(parsed.closing || {}) },
-          };
-          console.log("[SKILLS] loadSkillTree", {
-            key: getSkillKey?.(),
-            tree
-          });
+          const parsed = raw ? JSON.parse(raw) : cloneSkillTemplate();
+          const tree = normalizeSkillTree(parsed);
+
+          window.__BC_SKILL_TREE_CACHE__ = tree;
+
+          console.log("[SKILLS] loadSkillTree", { key, tree });
           return tree;
-        } catch {
-          const tree = JSON.parse(JSON.stringify(SKILL_TEMPLATE));
-          console.log("[SKILLS] loadSkillTree", {
-            key: getSkillKey?.(),
-            tree
-          });
-          return tree;
+        } catch (e) {
+          const blank = cloneSkillTemplate();
+          window.__BC_SKILL_TREE_CACHE__ = blank;
+          console.warn("[SKILLS] loadSkillTree failed", e);
+          return blank;
         }
       }
 
       function saveSkillTree(tree) {
         const key = getSkillKey();
-        if (!key) return;
+        const normalized = normalizeSkillTree(tree);
+
+        window.__BC_SKILL_TREE_CACHE__ = normalized;
+
+        if (!key) {
+          console.warn("[SKILLS] saveSkillTree skipped: no key", { normalized });
+          return;
+        }
+
         try {
-          localStorage.setItem(key, JSON.stringify(tree));
-        } catch {}
+          localStorage.setItem(key, JSON.stringify(normalized));
+          console.log("[SKILLS] saveSkillTree", { key, tree: normalized });
+        } catch (e) {
+          console.warn("[SKILLS] saveSkillTree failed", e);
+        }
       }
 
       function addSkillScore(tree, bucket, earned, possible) {
@@ -4911,7 +4943,7 @@ function ensureProgLoaded() {
       }
 
       function getSkillSnapshot() {
-        const tree = loadSkillTree() || JSON.parse(JSON.stringify(SKILL_TEMPLATE));
+        const tree = loadSkillTree();
         const snapshot = {
           read: skillPercent(tree.read),
           framing: skillPercent(tree.framing),
@@ -4919,12 +4951,35 @@ function ensureProgLoaded() {
           recovery: skillPercent(tree.recovery),
           closing: skillPercent(tree.closing),
         };
-        console.log("[SKILLS][SNAPSHOT]", {
-          key: typeof getSkillKey === "function" ? getSkillKey() : null,
+
+        console.log("[SKILLS] getSkillSnapshot", {
+          key: getSkillKey(),
           tree,
           snapshot
         });
+
         return snapshot;
+      }
+
+      // TEMP one-time reset/migration for broken local data. Remove after confirmation.
+      try {
+        const resetFlag = "__BC_SKILL_RESET_V2_DONE__";
+        if (!localStorage.getItem(resetFlag)) {
+          const ctx = window.__BC_CTX__ || window.BC_CTX || null;
+          const uid = ctx?.userId || null;
+          const rid = ctx?.restaurantId || null;
+          if (uid && rid) {
+            const oldKey = `bc_skills_v1_${uid}_${rid}`;
+            const newKey = `bc_skills_v2_${uid}_${rid}`;
+            localStorage.removeItem(oldKey);
+            localStorage.removeItem(newKey);
+            window.__BC_SKILL_TREE_CACHE__ = cloneSkillTemplate();
+            console.log("[SKILLS] reset complete", { oldKey, newKey });
+          }
+          localStorage.setItem(resetFlag, "1");
+        }
+      } catch (e) {
+        console.warn("[SKILLS] reset failed", e);
       }
 
       function checkSkillMilestones(prevSnap, newSnap) {
@@ -5085,7 +5140,7 @@ function ensureProgLoaded() {
         }
 
         console.log("[SKILLS][UPDATE] final tree before save", {
-          key: typeof getSkillKey === "function" ? getSkillKey() : null,
+          key: getSkillKey(),
           tree
         });
         window.parent?.postMessage(
