@@ -2739,6 +2739,31 @@ if (!window.__BC_PARENT_BRIDGE__) {
         return;
       }
 
+      if (msg.type === "hud_send_progress_feedback") {
+        const result = msg?.result || {};
+
+        const statuses = [
+          document.getElementById("waiterSendProgressStatus"),
+          document.getElementById("progressReportStatus")
+        ].filter(Boolean);
+
+        const setAll = (text) => {
+          statuses.forEach((el) => {
+            el.textContent = text;
+          });
+        };
+
+        if (result?.ok) {
+          setAll("Progress sent ✅");
+        } else if (result?.error === "encounter_not_resolved") {
+          setAll("Finish the encounter first, then send progress.");
+        } else {
+          setAll("Could not send progress.");
+        }
+
+        return;
+      }
+
       if (msg.type === "progression_snapshot_request") {
         const replyType = "progression_snapshot";
         const reqId = msg?.reqId || null;
@@ -4111,29 +4136,6 @@ window.addEventListener("message", (event) => {
     }
   }
 
-  if (msg.type === "hud_send_progress_feedback") {
-    const result = msg?.result || {};
-
-    const statuses = [
-      document.getElementById("waiterSendProgressStatus"),
-      document.getElementById("progressReportStatus")
-    ].filter(Boolean);
-
-    const setAll = (text) => {
-      statuses.forEach((el) => {
-        el.textContent = text;
-      });
-    };
-
-    if (result?.ok) {
-      setAll("Progress sent ✅");
-    } else if (result?.error === "encounter_not_resolved") {
-      setAll("Finish the encounter first, then send progress.");
-    } else {
-      setAll("Could not send progress.");
-    }
-    return;
-  }
 });
 
 function wireHudSendProgressButton() {
