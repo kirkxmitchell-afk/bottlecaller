@@ -2708,6 +2708,36 @@ if (!window.__BC_PARENT_BRIDGE__) {
             userId: ctx.userId,
             assignedMessageId
           });
+
+          try {
+            const body = `Drill completed • ${p?.focus || "drill"} • ${p?.repsDone ?? 0}/${p?.repTarget ?? 0} reps`;
+
+            const { error: msgError } = await supabase.from("bc_messages_v1").insert({
+              scope_type: "restaurant",
+              scope_id: ctx.restaurantId,
+              restaurant_id: ctx.restaurantId,
+              sender_user_id: ctx.userId,
+              receiver_user_id: ctx.userId,
+              sender_role: "waiter",
+              type: "drill_completed",
+              body,
+              payload: {
+                focus: p?.focus ?? null,
+                repsDone: p?.repsDone ?? null,
+                repTarget: p?.repTarget ?? null,
+                durationSec: p?.durationSec ?? null,
+                assignedMessageId: assignedMessageId || null
+              }
+            });
+
+            if (msgError) {
+              console.warn("[DRILL RUN] completion message insert failed", msgError);
+            } else {
+              console.log("[DRILL RUN] completion message inserted ✅");
+            }
+          } catch (e) {
+            console.warn("[DRILL RUN] completion message exception", e);
+          }
         }
         return;
       }
@@ -3706,6 +3736,7 @@ function renderWaiterThreadItem(row, selfUserId, nameMap) {
   if (kind === "progress_report") badge = "REPORT";
   if (kind === "instruction") badge = "INSTRUCTION";
   if (kind === "drill_override") badge = "DRILL";
+  if (kind === "drill_completed") badge = "DONE";
 
   let payloadHtml = "";
   const showBody = kind !== "drill_override";
@@ -3747,6 +3778,30 @@ function renderWaiterThreadItem(row, selfUserId, nameMap) {
         <div class="small-text" style="opacity:.9;">Tier: ${tier}</div>
         ${reason ? `<div class="small-text" style="margin-top:8px; opacity:.75;">${reason}</div>` : ""}
         ${launchBtn}
+      </div>
+    `;
+  } else if (kind === "drill_completed") {
+    const p = row.payload || {};
+    const focus = escapeHtml(String(p.focus || "-"));
+    const repsDone = escapeHtml(String(p.repsDone ?? "-"));
+    const repTarget = escapeHtml(String(p.repTarget ?? "-"));
+    const durationSec = Number(p.durationSec ?? 0);
+    const mins = durationSec ? Math.floor(durationSec / 60) : 0;
+    const secs = durationSec ? durationSec % 60 : 0;
+    const durationText = durationSec ? `${mins}m ${secs}s` : "-";
+
+    payloadHtml = `
+      <div style="
+        margin-top:8px;
+        padding:10px;
+        border:1px solid rgba(255,255,255,0.10);
+        border-radius:10px;
+        background:rgba(255,255,255,0.04);
+      ">
+        <div><strong>Drill completed</strong></div>
+        <div class="small-text" style="margin-top:6px; opacity:.9;">Focus: ${focus}</div>
+        <div class="small-text" style="opacity:.9;">Reps: ${repsDone} / ${repTarget}</div>
+        <div class="small-text" style="opacity:.9;">Time: ${escapeHtml(durationText)}</div>
       </div>
     `;
   } else if (kind === "progress_report" && row?.payload && typeof row.payload === "object" && Object.keys(row.payload).length) {
