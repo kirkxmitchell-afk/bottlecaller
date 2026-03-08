@@ -2744,137 +2744,85 @@ if (!window.__BC_PARENT_BRIDGE__) {
           {},
           { requireRestaurant: true, allowedRoles: ["waiter", "manager", "group_manager", "admin"] }
         );
-        if (!ctx) return;
+        if (!ctx) {
+          console.warn("[DRILL RUN] ctx rejected");
+          return;
+        }
 
         const authed = liveAuth?.userId || null;
-        if (!authed || String(authed) !== String(ctx.userId)) return;
+        if (!authed || String(authed) !== String(ctx.userId)) {
+          console.warn("[DRILL RUN] auth mismatch", { authed, ctxUserId: ctx.userId });
+          return;
+        }
 
-        const assignedMessageId = msg?.assignedMessageId || null;
         const p = msg?.payload || {};
+        const assignedMessageId = msg?.assignedMessageId || null;
 
-        // 1) optional: update an open drill run if one exists
-        try {
-          let selectQuery = supabase
-            .from("bc_drill_runs_v1")
-            .select("id, assigned_message_id, started_at")
-            .eq("user_id", ctx.userId)
-            .eq("restaurant_id", ctx.restaurantId)
-            .eq("completed", false)
-            .order("started_at", { ascending: false })
-            .limit(1);
+        console.log("[DRILL RUN] payload ✅", { p, assignedMessageId, ctx });
 
-          if (assignedMessageId) {
-            selectQuery = selectQuery.eq("assigned_message_id", assignedMessageId);
-          }
+        // 1) Find managers for this restaurant ONLY (simple and direct)
+        const { data: managers, error: managerErr } = await supabase
+          .from("profiles")
+          .select("user_id, role, restaurant_id")
+          .eq("restaurant_id", ctx.restaurantId)
+          .in("role", ["manager", "group_manager", "enterprise_admin", "admin"]);
 
-          const { data: openRun, error: openRunError } = await selectQuery.maybeSingle();
-
-          if (openRunError) {
-            console.warn("[DRILL RUN] open run lookup failed", openRunError);
-          } else if (openRun?.id) {
-            const { error: runUpdateError } = await supabase
-              .from("bc_drill_runs_v1")
-              .update({
-                reps_done: p?.repsDone ?? null,
-                completed: true,
-                completed_at: new Date().toISOString(),
-                payload: p
-              })
-              .eq("id", openRun.id);
-
-            if (runUpdateError) {
-              console.warn("[DRILL RUN] parent completion update failed", runUpdateError);
-            } else {
-              console.log("[DRILL RUN] completion update success ✅", {
-                drillRunId: openRun.id,
-                assignedMessageId,
-                payload: p
-              });
-            }
-          } else {
-            console.warn("[DRILL RUN] no open run found to complete");
-          }
-        } catch (e) {
-          console.warn("[DRILL RUN] drill run update exception", e);
+        if (managerErr) {
+          console.warn("[DRILL RUN] manager lookup failed", managerErr);
+          return;
         }
 
-        // 2) ALWAYS notify the relevant manager(s)
-        try {
-          const { data: targets, error: targetError } = await supabase
-            .from("profiles")
-            .select("user_id, role, restaurant_id, scope_id")
-            .or(`restaurant_id.eq.${ctx.restaurantId},scope_id.not.is.null`);
+        console.log("[DRILL RUN] manager lookup ✅", managers);
 
-          if (targetError) {
-            console.warn("[DRILL RUN] target lookup failed", targetError);
-            return;
-          }
+        const targetIds = Array.from(
+          new Set(
+            (managers || [])
+              .map((m) => m.user_id)
+              .filter((id) => String(id) !== String(ctx.userId))
+          )
+        );
 
-          // keep only managers relevant to this restaurant
-          const managerTargets = [];
-          for (const row of targets || []) {
-            const role = String(row?.role || "").toLowerCase();
-            if (!["manager", "group_manager", "enterprise_admin", "admin"].includes(role)) continue;
-            if (String(row?.user_id || "") === String(ctx.userId)) continue;
-
-            if (String(row?.restaurant_id || "") === String(ctx.restaurantId)) {
-              managerTargets.push(row.user_id);
-              continue;
-            }
-
-            if (row?.scope_id) {
-              const { data: linkRows, error: linkError } = await supabase
-                .from("bc_scope_restaurants")
-                .select("scope_id")
-                .eq("scope_id", row.scope_id)
-                .eq("restaurant_id", ctx.restaurantId)
-                .limit(1);
-
-              if (!linkError && Array.isArray(linkRows) && linkRows.length) {
-                managerTargets.push(row.user_id);
-              }
-            }
-          }
-
-          const uniqueTargets = Array.from(new Set(managerTargets));
-
-          if (!uniqueTargets.length) {
-            console.warn("[DRILL RUN] no manager targets found", { restaurantId: ctx.restaurantId });
-            return;
-          }
-
-          const body = `Drill completed • ${p?.focus || "drill"} • ${p?.repsDone ?? 0}/${p?.repTarget ?? 0} reps`;
-
-          const rows = uniqueTargets.map((receiverId) => ({
-            scope_type: "restaurant",
-            scope_id: ctx.restaurantId,
-            restaurant_id: ctx.restaurantId,
-            sender_user_id: ctx.userId,
-            receiver_user_id: receiverId,
-            sender_role: "waiter",
-            type: "drill_completed",
-            body,
-            payload: {
-              focus: p?.focus ?? null,
-              repsDone: p?.repsDone ?? null,
-              repTarget: p?.repTarget ?? null,
-              durationSec: p?.durationSec ?? null,
-              assignedMessageId: assignedMessageId || null
-            }
-          }));
-
-          const { error: msgError } = await supabase.from("bc_messages_v1").insert(rows);
-
-          if (msgError) {
-            console.warn("[DRILL RUN] completion message insert failed", msgError);
-          } else {
-            console.log("[DRILL RUN] drill_completed message inserted ✅", {
-              targets: uniqueTargets.length
-            });
-          }
-        } catch (e) {
-          console.warn("[DRILL RUN] completion message exception", e);
+        if (!targetIds.length) {
+          console.warn("[DRILL RUN] no manager targets found", {
+            restaurantId: ctx.restaurantId
+          });
+          return;
         }
+
+        const body = `Drill completed • ${p?.focus || "drill"} • ${p?.repsDone ?? 0}/${p?.repTarget ?? 0} reps`;
+
+        const rows = targetIds.map((receiverId) => ({
+          scope_type: "restaurant",
+          scope_id: ctx.restaurantId,
+          restaurant_id: ctx.restaurantId,
+          sender_user_id: ctx.userId,
+          receiver_user_id: receiverId,
+          sender_role: "waiter",
+          type: "drill_completed",
+          body,
+          payload: {
+            focus: p?.focus ?? null,
+            repsDone: p?.repsDone ?? null,
+            repTarget: p?.repTarget ?? null,
+            durationSec: p?.durationSec ?? null,
+            assignedMessageId
+          }
+        }));
+
+        console.log("[DRILL RUN] inserting completion messages ✅", rows);
+
+        const { error: insertErr } = await supabase
+          .from("bc_messages_v1")
+          .insert(rows);
+
+        if (insertErr) {
+          console.warn("[DRILL RUN] completion message insert failed", insertErr);
+          return;
+        }
+
+        console.log("[DRILL RUN] drill_completed message inserted ✅", {
+          count: rows.length
+        });
 
         return;
       }
