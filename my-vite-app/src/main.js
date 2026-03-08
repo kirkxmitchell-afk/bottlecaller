@@ -2762,7 +2762,11 @@ if (!window.__BC_PARENT_BRIDGE__) {
         if (error) {
           console.warn("[DRILL RUN] parent start insert failed", error);
         } else {
-          console.log("[DRILL RUN] started ✅", data);
+          console.log("[DRILL RUN] started ✅", {
+            drillRunId: data?.id,
+            assignedMessageId: msg?.assignedMessageId || null,
+            drill
+          });
           window.__BC_LAST_DRILL_RUN_ID__ = data.id;
         }
         return;
@@ -2784,7 +2788,41 @@ if (!window.__BC_PARENT_BRIDGE__) {
         const assignedMessageId = msg?.assignedMessageId || null;
         const p = msg?.payload || {};
 
-        let query = supabase
+        console.log("[PARENT] drill_run_completed received ✅", {
+          msg,
+          senderCtx
+        });
+
+        let selectQuery = supabase
+          .from("bc_drill_runs_v1")
+          .select("id, assigned_message_id, started_at")
+          .eq("user_id", ctx.userId)
+          .eq("restaurant_id", ctx.restaurantId)
+          .eq("completed", false)
+          .order("started_at", { ascending: false })
+          .limit(1);
+
+        if (assignedMessageId) {
+          selectQuery = selectQuery.eq("assigned_message_id", assignedMessageId);
+        }
+
+        const { data: openRun, error: openRunError } = await selectQuery.maybeSingle();
+
+        if (openRunError) {
+          console.warn("[DRILL RUN] open run lookup failed", openRunError);
+          return;
+        }
+
+        if (!openRun?.id) {
+          console.warn("[DRILL RUN] no open run found to complete", {
+            assignedMessageId,
+            userId: ctx.userId,
+            restaurantId: ctx.restaurantId
+          });
+          return;
+        }
+
+        const { error } = await supabase
           .from("bc_drill_runs_v1")
           .update({
             reps_done: p?.repsDone ?? null,
@@ -2792,21 +2830,16 @@ if (!window.__BC_PARENT_BRIDGE__) {
             completed_at: new Date().toISOString(),
             payload: p
           })
-          .eq("user_id", ctx.userId)
-          .eq("restaurant_id", ctx.restaurantId)
-          .eq("completed", false);
+          .eq("id", openRun.id);
 
-        if (assignedMessageId) {
-          query = query.eq("assigned_message_id", assignedMessageId);
-        }
-
-        const { error } = await query;
         if (error) {
           console.warn("[DRILL RUN] parent completion update failed", error);
+          return;
         } else {
-          console.log("[DRILL RUN] completed ✅", {
-            userId: ctx.userId,
-            assignedMessageId
+          console.log("[DRILL RUN] completion update success ✅", {
+            drillRunId: openRun.id,
+            assignedMessageId,
+            payload: p
           });
 
           try {
@@ -2833,7 +2866,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
             if (msgError) {
               console.warn("[DRILL RUN] completion message insert failed", msgError);
             } else {
-              console.log("[DRILL RUN] completion message inserted ✅");
+              console.log("[DRILL RUN] drill_completed message inserted ✅");
             }
           } catch (e) {
             console.warn("[DRILL RUN] completion message exception", e);
@@ -4182,7 +4215,7 @@ function wireWaiterMessagesPanel() {
         );
         console.log("[WAITER PANEL] hud_send_progress_request posted ✅", { reqId });
 
-        if (status) status.textContent = "Sending progress…";
+        if (status) status.textContent = "Sending…";
       } catch (e) {
         console.warn("waiter send progress failed", e);
         if (status) status.textContent = "Could not send progress.";
@@ -4215,17 +4248,25 @@ window.addEventListener("message", (event) => {
   }
 
   if (msg.type === "hud_send_progress_feedback") {
-    const status = document.getElementById("waiterSendProgressStatus");
     const result = msg?.result || {};
 
-    if (!status) return;
+    const statuses = [
+      document.getElementById("waiterSendProgressStatus"),
+      document.getElementById("progressReportStatus")
+    ].filter(Boolean);
+
+    const setAll = (text) => {
+      statuses.forEach((el) => {
+        el.textContent = text;
+      });
+    };
 
     if (result?.ok) {
-      status.textContent = "Progress sent ✅";
+      setAll("Progress sent ✅");
     } else if (result?.error === "encounter_not_resolved") {
-      status.textContent = "Finish the encounter first, then send progress.";
+      setAll("Finish the encounter first, then send progress.");
     } else {
-      status.textContent = "Could not send progress.";
+      setAll("Could not send progress.");
     }
     return;
   }

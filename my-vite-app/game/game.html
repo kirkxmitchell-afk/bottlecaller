@@ -461,6 +461,10 @@
     function logDrillRunComplete(details = {}) {
       try {
         const assignedMessageId = window.__BC_LAST_ASSIGNED_DRILL__?.id || null;
+        console.log("[DRILL RUN] logDrillRunComplete called ✅", {
+          details,
+          assignedMessageId: window.__BC_LAST_ASSIGNED_DRILL__?.id || null
+        });
 
         window.parent?.postMessage(
           {
