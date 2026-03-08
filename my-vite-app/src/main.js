@@ -2752,45 +2752,44 @@ if (!window.__BC_PARENT_BRIDGE__) {
         const p = msg?.payload || {};
         const assignedMessageId = msg?.assignedMessageId || null;
 
-        console.log("[DRILL RUN] payload ✅", { p, assignedMessageId, ctx });
-
-        // 1) Find managers for this restaurant ONLY (simple and direct)
-        const { data: managers, error: managerErr } = await supabase
-          .from("profiles")
-          .select("user_id, role, restaurant_id")
-          .eq("restaurant_id", ctx.restaurantId)
-          .in("role", ["manager", "group_manager", "enterprise_admin", "admin"]);
-
-        if (managerErr) {
-          console.warn("[DRILL RUN] manager lookup failed", managerErr);
+        if (!assignedMessageId) {
+          console.warn("[DRILL RUN] missing assignedMessageId");
           return;
         }
 
-        console.log("[DRILL RUN] manager lookup ✅", managers);
+        // 1) Look up the original drill assignment row
+        const { data: assignedMsg, error: assignedErr } = await supabase
+          .from("bc_messages_v1")
+          .select("id, sender_user_id, receiver_user_id, restaurant_id, type, body, payload")
+          .eq("id", assignedMessageId)
+          .eq("type", "drill_override")
+          .maybeSingle();
 
-        const targetIds = Array.from(
-          new Set(
-            (managers || [])
-              .map((m) => m.user_id)
-              .filter((id) => String(id) !== String(ctx.userId))
-          )
-        );
+        if (assignedErr) {
+          console.warn("[DRILL RUN] assigned message lookup failed", assignedErr);
+          return;
+        }
 
-        if (!targetIds.length) {
-          console.warn("[DRILL RUN] no manager targets found", {
-            restaurantId: ctx.restaurantId
-          });
+        if (!assignedMsg?.id) {
+          console.warn("[DRILL RUN] assigned drill message not found", { assignedMessageId });
+          return;
+        }
+
+        // sender_user_id on the drill_override row is the manager who assigned it
+        const managerUserId = assignedMsg.sender_user_id || null;
+        if (!managerUserId) {
+          console.warn("[DRILL RUN] assigned drill message has no sender_user_id", assignedMsg);
           return;
         }
 
         const body = `Drill completed • ${p?.focus || "drill"} • ${p?.repsDone ?? 0}/${p?.repTarget ?? 0} reps`;
 
-        const rows = targetIds.map((receiverId) => ({
+        const completionRow = {
           scope_type: "restaurant",
           scope_id: ctx.restaurantId,
           restaurant_id: ctx.restaurantId,
           sender_user_id: ctx.userId,
-          receiver_user_id: receiverId,
+          receiver_user_id: managerUserId,
           sender_role: "waiter",
           type: "drill_completed",
           body,
@@ -2801,13 +2800,13 @@ if (!window.__BC_PARENT_BRIDGE__) {
             durationSec: p?.durationSec ?? null,
             assignedMessageId
           }
-        }));
+        };
 
-        console.log("[DRILL RUN] inserting completion messages ✅", rows);
+        console.log("[DRILL RUN] inserting completion row ✅", completionRow);
 
         const { error: insertErr } = await supabase
           .from("bc_messages_v1")
-          .insert(rows);
+          .insert(completionRow);
 
         if (insertErr) {
           console.warn("[DRILL RUN] completion message insert failed", insertErr);
@@ -2815,7 +2814,8 @@ if (!window.__BC_PARENT_BRIDGE__) {
         }
 
         console.log("[DRILL RUN] drill_completed message inserted ✅", {
-          count: rows.length
+          managerUserId,
+          assignedMessageId
         });
 
         return;
