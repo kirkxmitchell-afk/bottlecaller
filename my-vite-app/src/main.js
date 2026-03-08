@@ -2730,6 +2730,8 @@ if (!window.__BC_PARENT_BRIDGE__) {
       }
 
       if (msg.type === "drill_run_started") {
+        console.log("[PARENT] drill_run_started received ✅", { msg, senderCtx });
+
         const ctx = getSenderCtxOrReject(
           event,
           senderCtx,
@@ -2767,12 +2769,13 @@ if (!window.__BC_PARENT_BRIDGE__) {
             assignedMessageId: msg?.assignedMessageId || null,
             drill
           });
-          window.__BC_LAST_DRILL_RUN_ID__ = data.id;
         }
         return;
       }
 
       if (msg.type === "drill_run_completed") {
+        console.log("[PARENT] drill_run_completed received ✅", { msg, senderCtx });
+
         const ctx = getSenderCtxOrReject(
           event,
           senderCtx,
@@ -2787,11 +2790,6 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
         const assignedMessageId = msg?.assignedMessageId || null;
         const p = msg?.payload || {};
-
-        console.log("[PARENT] drill_run_completed received ✅", {
-          msg,
-          senderCtx
-        });
 
         let selectQuery = supabase
           .from("bc_drill_runs_v1")
@@ -2835,43 +2833,44 @@ if (!window.__BC_PARENT_BRIDGE__) {
         if (error) {
           console.warn("[DRILL RUN] parent completion update failed", error);
           return;
-        } else {
-          console.log("[DRILL RUN] completion update success ✅", {
-            drillRunId: openRun.id,
-            assignedMessageId,
-            payload: p
+        }
+
+        console.log("[DRILL RUN] completion update success ✅", {
+          drillRunId: openRun.id,
+          assignedMessageId,
+          payload: p
+        });
+
+        try {
+          const body = `Drill completed • ${p?.focus || "drill"} • ${p?.repsDone ?? 0}/${p?.repTarget ?? 0} reps`;
+
+          const { error: msgError } = await supabase.from("bc_messages_v1").insert({
+            scope_type: "restaurant",
+            scope_id: ctx.restaurantId,
+            restaurant_id: ctx.restaurantId,
+            sender_user_id: ctx.userId,
+            receiver_user_id: ctx.userId,
+            sender_role: "waiter",
+            type: "drill_completed",
+            body,
+            payload: {
+              focus: p?.focus ?? null,
+              repsDone: p?.repsDone ?? null,
+              repTarget: p?.repTarget ?? null,
+              durationSec: p?.durationSec ?? null,
+              assignedMessageId: assignedMessageId || null
+            }
           });
 
-          try {
-            const body = `Drill completed • ${p?.focus || "drill"} • ${p?.repsDone ?? 0}/${p?.repTarget ?? 0} reps`;
-
-            const { error: msgError } = await supabase.from("bc_messages_v1").insert({
-              scope_type: "restaurant",
-              scope_id: ctx.restaurantId,
-              restaurant_id: ctx.restaurantId,
-              sender_user_id: ctx.userId,
-              receiver_user_id: ctx.userId,
-              sender_role: "waiter",
-              type: "drill_completed",
-              body,
-              payload: {
-                focus: p?.focus ?? null,
-                repsDone: p?.repsDone ?? null,
-                repTarget: p?.repTarget ?? null,
-                durationSec: p?.durationSec ?? null,
-                assignedMessageId: assignedMessageId || null
-              }
-            });
-
-            if (msgError) {
-              console.warn("[DRILL RUN] completion message insert failed", msgError);
-            } else {
-              console.log("[DRILL RUN] drill_completed message inserted ✅");
-            }
-          } catch (e) {
-            console.warn("[DRILL RUN] completion message exception", e);
+          if (msgError) {
+            console.warn("[DRILL RUN] completion message insert failed", msgError);
+          } else {
+            console.log("[DRILL RUN] drill_completed message inserted ✅");
           }
+        } catch (e) {
+          console.warn("[DRILL RUN] completion message exception", e);
         }
+
         return;
       }
 
