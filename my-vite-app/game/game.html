@@ -4531,12 +4531,29 @@ function ensureProgLoaded() {
                 ? Math.max(0, Math.round((Date.now() - DRILL.startedAt) / 1000))
                 : null
             });
-
-            setTimeout(() => {
-              sendLiveProgressReport("post_drill_completion");
-            }, 250);
           } catch (e) {
             console.warn("[DRILL RUN] completion log failed", e);
+          }
+
+          try {
+            setTimeout(async () => {
+              const result = await sendLiveProgressReport("post_drill_completion");
+              console.log("[DRILL RUN] auto progress after completion", result);
+
+              try {
+                window.parent?.postMessage(
+                  {
+                    source: "BC_MSG",
+                    v: 1,
+                    type: "hud_send_progress_feedback",
+                    result
+                  },
+                  window.location.origin
+                );
+              } catch {}
+            }, 250);
+          } catch (e) {
+            console.warn("[DRILL RUN] auto progress send failed", e);
           }
 
           showScreen("screenDrillSummary");
@@ -9279,7 +9296,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
         if (!btn) return;
 
-        const show = typeof currentStep === "number" && currentStep === 6;
+        const show = false;
 
         btn.style.display = show ? "inline-flex" : "none";
 
