@@ -2607,6 +2607,106 @@ if (!window.__BC_PARENT_BRIDGE__) {
                   restaurantId: snapCtx.restaurantId,
                   encounterNumber: p?.encounterNumber
                 });
+
+                try {
+                  const { data: recentDrill, error: recentDrillError } = await supabase
+                    .from("bc_drill_runs_v1")
+                    .select("id, focus, completed_at, effectiveness_delta")
+                    .eq("user_id", snapCtx.userId)
+                    .eq("restaurant_id", snapCtx.restaurantId)
+                    .eq("completed", true)
+                    .is("effectiveness_delta", null)
+                    .order("completed_at", { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+
+                  if (!recentDrillError && recentDrill?.id && recentDrill?.focus) {
+                    const focusMap = {
+                      read: "read",
+                      frame: "framing",
+                      framing: "framing",
+                      delivery: "delivery",
+                      recovery: "recovery",
+                      closing: "closing"
+                    };
+
+                    const skillKey = focusMap[String(recentDrill.focus || "").toLowerCase()] || null;
+                    const currentSkillValue = skillKey ? Number(skills?.[skillKey] || 0) : null;
+
+                    if (skillKey && currentSkillValue !== null) {
+                      const { data: beforeSnap, error: beforeSnapError } = await supabase
+                        .from("bc_skill_snapshots_v1")
+                        .select("read_pct, framing_pct, delivery_pct, recovery_pct, closing_pct, created_at")
+                        .eq("user_id", snapCtx.userId)
+                        .eq("restaurant_id", snapCtx.restaurantId)
+                        .lt("created_at", recentDrill.completed_at)
+                        .order("created_at", { ascending: false })
+                        .limit(1)
+                        .maybeSingle();
+
+                      if (!beforeSnapError && beforeSnap) {
+                        const beforeMap = {
+                          read: Number(beforeSnap.read_pct || 0),
+                          framing: Number(beforeSnap.framing_pct || 0),
+                          delivery: Number(beforeSnap.delivery_pct || 0),
+                          recovery: Number(beforeSnap.recovery_pct || 0),
+                          closing: Number(beforeSnap.closing_pct || 0)
+                        };
+
+                        const beforeValue = Number(beforeMap[skillKey] || 0);
+                        const delta = currentSkillValue - beforeValue;
+
+                        const note =
+                          delta > 0
+                            ? `${skillKey} improved +${delta}% after ${recentDrill.focus} drill`
+                            : delta < 0
+                              ? `${skillKey} changed ${delta}% after ${recentDrill.focus} drill`
+                              : `${skillKey} stayed flat after ${recentDrill.focus} drill`;
+
+                        const { error: effError } = await supabase
+                          .from("bc_drill_runs_v1")
+                          .update({
+                            effectiveness_delta: delta,
+                            effectiveness_note: note
+                          })
+                          .eq("id", recentDrill.id);
+
+                        if (effError) {
+                          console.warn("[DRILL EFFECT] update failed", effError);
+                        } else {
+                          console.log("[DRILL EFFECT] updated ✅", {
+                            drillRunId: recentDrill.id,
+                            delta,
+                            note
+                          });
+
+                          const { error: insightMsgError } = await supabase.from("bc_messages_v1").insert({
+                            scope_type: "restaurant",
+                            scope_id: snapCtx.restaurantId,
+                            restaurant_id: snapCtx.restaurantId,
+                            sender_user_id: snapCtx.userId,
+                            receiver_user_id: snapCtx.userId,
+                            sender_role: "system",
+                            type: "drill_effectiveness",
+                            body: note,
+                            payload: {
+                              drillRunId: recentDrill.id,
+                              focus: recentDrill.focus,
+                              delta,
+                              skillKey
+                            }
+                          });
+
+                          if (insightMsgError) {
+                            console.warn("[DRILL EFFECT] insight message insert failed", insightMsgError);
+                          }
+                        }
+                      }
+                    }
+                  }
+                } catch (e) {
+                  console.warn("[DRILL EFFECT] exception", e);
+                }
               }
             }
           } catch (e) {
@@ -3737,6 +3837,7 @@ function renderWaiterThreadItem(row, selfUserId, nameMap) {
   if (kind === "instruction") badge = "INSTRUCTION";
   if (kind === "drill_override") badge = "DRILL";
   if (kind === "drill_completed") badge = "DONE";
+  if (kind === "drill_effectiveness") badge = "IMPACT";
 
   let payloadHtml = "";
   const showBody = kind !== "drill_override";
@@ -3802,6 +3903,28 @@ function renderWaiterThreadItem(row, selfUserId, nameMap) {
         <div class="small-text" style="margin-top:6px; opacity:.9;">Focus: ${focus}</div>
         <div class="small-text" style="opacity:.9;">Reps: ${repsDone} / ${repTarget}</div>
         <div class="small-text" style="opacity:.9;">Time: ${escapeHtml(durationText)}</div>
+      </div>
+    `;
+  } else if (kind === "drill_effectiveness") {
+    const p = row.payload || {};
+    const focus = escapeHtml(String(p.focus || "-"));
+    const delta = Number(p.delta ?? 0);
+    const skillKey = escapeHtml(String(p.skillKey || "-"));
+    const deltaText = delta > 0 ? `+${delta}%` : `${delta}%`;
+
+    payloadHtml = `
+      <div style="
+        margin-top:8px;
+        padding:10px;
+        border:1px solid rgba(255,255,255,0.10);
+        border-radius:10px;
+        background:rgba(255,255,255,0.04);
+      ">
+        <div><strong>Drill effectiveness</strong></div>
+        <div class="small-text" style="margin-top:6px; opacity:.9;">Focus: ${focus}</div>
+        <div class="small-text" style="opacity:.9;">Skill: ${skillKey}</div>
+        <div class="small-text" style="opacity:.9;">Change: ${escapeHtml(deltaText)}</div>
+        <div class="small-text" style="margin-top:8px; opacity:.75;">${escapeHtml(String(row.body || ""))}</div>
       </div>
     `;
   } else if (kind === "progress_report" && row?.payload && typeof row.payload === "object" && Object.keys(row.payload).length) {
