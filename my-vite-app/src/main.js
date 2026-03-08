@@ -2749,12 +2749,6 @@ if (!window.__BC_PARENT_BRIDGE__) {
           return;
         }
 
-        const authed = liveAuth?.userId || null;
-        if (!authed || String(authed) !== String(ctx.userId)) {
-          console.warn("[DRILL RUN] auth mismatch", { authed, ctxUserId: ctx.userId });
-          return;
-        }
-
         const p = msg?.payload || {};
         const assignedMessageId = msg?.assignedMessageId || null;
 
@@ -4205,6 +4199,11 @@ window.addEventListener("message", (event) => {
   const msg = event?.data;
   if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
   if (event.origin !== window.location.origin) return;
+
+  // Intentionally handled in the async BC_MSG pipeline; no-op here to keep console quiet.
+  if (msg.type === "drill_pick" || msg.type === "messages_unread_request") {
+    return;
+  }
 
   if (msg.type === "progress_report_submit_result") {
     const status = document.getElementById("waiterSendProgressStatus");
