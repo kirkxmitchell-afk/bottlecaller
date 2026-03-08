@@ -4531,6 +4531,10 @@ function ensureProgLoaded() {
                 ? Math.max(0, Math.round((Date.now() - DRILL.startedAt) / 1000))
                 : null
             });
+
+            setTimeout(() => {
+              sendLiveProgressReport("post_drill_completion");
+            }, 250);
           } catch (e) {
             console.warn("[DRILL RUN] completion log failed", e);
           }
