@@ -4685,21 +4685,23 @@ function ensureProgLoaded() {
         const range = spine?.selectors?.encounterRange ? spine.selectors.encounterRange() : null;
         const minEncounter = Number(range?.[0] ?? 1);
         const maxEncounter = Number(range?.[1] ?? Number.MAX_SAFE_INTEGER);
-        const actual = normalizeGuestType(enc?.guestStateActual);
-        if (!allowed.length) return enc;
-        if (Number.isFinite(Number(enc?.encounterNumber))) {
-          const n = Number(enc.encounterNumber);
+        if (!enc || typeof enc !== "object") return enc;
+
+        const next = { ...enc, tags: Array.isArray(enc.tags) ? [...enc.tags] : [] };
+        const actual = normalizeGuestType(next?.guestStateActual);
+
+        if (!allowed.length) return next;
+        if (Number.isFinite(Number(next?.encounterNumber))) {
+          const n = Number(next.encounterNumber);
           if (n < minEncounter || n > maxEncounter) {
-            enc.tags = Array.isArray(enc.tags) ? enc.tags : [];
-            enc.tags.push("encounter_range_clamped_out");
+            next.tags.push("encounter_range_clamped_out");
           }
         }
-        if (allowed.includes(actual)) return enc;
+        if (allowed.includes(actual)) return next;
 
-        enc.guestStateActual = allowed[Math.floor(Math.random() * allowed.length)];
-        enc.tags = Array.isArray(enc.tags) ? enc.tags : [];
-        enc.tags.push("guest_pool_substitution");
-        return enc;
+        next.guestStateActual = allowed[Math.floor(Math.random() * allowed.length)];
+        next.tags.push("guest_pool_substitution");
+        return next;
       }
 
       function tierStartIndex(tier) {
