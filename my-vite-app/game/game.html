@@ -7435,11 +7435,6 @@ function ensureProgLoaded() {
         const hookRule = getHookRuleForGuest(modeKey);
         if (!modeRule) console.warn("[BC] modeRule missing for key:", modeKey, { encounter: encounter?.encounterNumber });
         if (!hookRule) console.warn("[BC] hookRule missing for key:", modeKey, { encounter: encounter?.encounterNumber });
-        assertHookConsistency(hookRule, {
-          encounterNumber: encounter?.encounterNumber,
-          guest: encounter?.guestStateActual,
-          source: "evaluateChecks_legacy"
-        });
 
         const unlockedModes = getUnlockedModesForCurrentPlayer();
         const modeOptimal = modeRule?.optimal
@@ -7449,17 +7444,12 @@ function ensureProgLoaded() {
           ? resolveCorrectModeForPlayer(modeRule.neutral, unlockedModes)
           : null;
 
-        const hookOptimal = hookRule?.optimal ?? null;
-        const hookNeutral = hookRule?.neutral ?? null;
-
         const modeStatus =
           encounter.modeSelected && modeOptimal && encounter.modeSelected === modeOptimal ? "optimal" :
           encounter.modeSelected && modeNeutral && encounter.modeSelected === modeNeutral ? "neutral" :
           "damaging";
         encounter.correctModeResolved = modeOptimal || null;
         encounter.correctModeNeutralResolved = modeNeutral || null;
-        encounter.correctHookResolved = hookRule?.optimal || null;
-        encounter.correctHookNeutralResolved = hookRule?.neutral || null;
         assertModeConsistency(unlockedModes, modeOptimal, {
           encounterNumber: encounter?.encounterNumber,
           tier: getProgressionSpine({ allowNull: true })?.selectors?.tier?.(),
@@ -7467,40 +7457,63 @@ function ensureProgLoaded() {
           source: "evaluateChecks_legacy"
         });
 
-        let hookStatus = "damaging";
-        const hookId = encounter.hookSelected;
-        const chosenHookKey = canonicalHook(getSelectedHookType(encounter));
+        // Hook status
+        let hookStatus = "neutral";
 
-        if (encounter.hookMeta) {
-          const hookTier = encounter.hookMeta.tier || "neutral";
+        const selectedHookType = getSelectedHookType(encounter);
+        const chosenHookKey = canonicalHook(selectedHookType);
 
-          const base =
-            hookTier === "right" ? "optimal" :
-            hookTier === "slightly" ? "neutral" :
-            "damaging";
+        assertHookConsistency(hookRule, {
+          encounterNumber: encounter?.encounterNumber,
+          guest: encounter?.guestStateActual,
+          source: "evaluateChecks_hook"
+        });
 
-          if (strictness === "lenient") {
-            hookStatus = (hookTier === "slightly") ? "optimal" : base;
-          } else if (strictness === "normal") {
-            hookStatus = base;
-          } else if (strictness === "strict") {
-            hookStatus = (hookTier === "slightly") ? "damaging" : base;
-          } else if (strictness === "hard") {
-            hookStatus = (hookTier === "right") ? "optimal" : "damaging";
-          } else {
-            hookStatus = base;
+        let hookStatusEval = "neutral";
+
+        if (hookRule?.optimalKey && chosenHookKey && chosenHookKey === hookRule.optimalKey) {
+          hookStatusEval = "optimal";
+        } else if (hookRule?.neutralKey && chosenHookKey && chosenHookKey === hookRule.neutralKey) {
+          hookStatusEval = "neutral";
+        } else if (hookRule && chosenHookKey) {
+          hookStatusEval = "damaging";
+        }
+
+        if (encounter.hookMeta?.tier) {
+          const metaTierRaw = String(encounter.hookMeta.tier || "").toLowerCase();
+          const metaStatus =
+            metaTierRaw === "right" ? "optimal" :
+            metaTierRaw === "slightly" ? "neutral" :
+            metaTierRaw ? "damaging" :
+            null;
+
+          if (metaStatus && metaStatus !== hookStatusEval) {
+            console.warn("[HOOK CONSISTENCY] hookMeta tier disagrees with canonical rule", {
+              selectedHookType,
+              chosenHookKey,
+              hookMeta: encounter.hookMeta,
+              canonical: hookStatusEval,
+              metaStatus,
+              guest: encounter?.guestStateActual,
+              encounterNumber: encounter?.encounterNumber
+            });
           }
+        }
+
+        // Strictness modifies interpretation of the canonical result.
+        // It should not replace the canonical result source.
+        if (strictness === "lenient") {
+          hookStatus =
+            hookStatusEval === "neutral" ? "optimal" : hookStatusEval;
+        } else if (strictness === "normal") {
+          hookStatus = hookStatusEval;
+        } else if (strictness === "strict") {
+          hookStatus =
+            hookStatusEval === "neutral" ? "damaging" : hookStatusEval;
+        } else if (strictness === "hard") {
+          hookStatus =
+            hookStatusEval === "optimal" ? "optimal" : "damaging";
         } else {
-          let hookStatusEval = "neutral";
-
-          if (hookRule?.optimalKey && chosenHookKey && chosenHookKey === hookRule.optimalKey) {
-            hookStatusEval = "optimal";
-          } else if (hookRule?.neutralKey && chosenHookKey && chosenHookKey === hookRule.neutralKey) {
-            hookStatusEval = "neutral";
-          } else if (hookRule && chosenHookKey) {
-            hookStatusEval = "damaging";
-          }
-
           hookStatus = hookStatusEval;
         }
 
@@ -7508,11 +7521,16 @@ function ensureProgLoaded() {
           encounter.selectedS1 === encounter.correctSlotS1 &&
           encounter.selectedS2 === encounter.correctSlotS2;
 
-        // ✅ writeback for logging + DB
+        // Writeback
         encounter.readCorrect = !!guestRead;
         encounter.modeStatus = modeStatus;
         encounter.hookStatus = hookStatus;
         encounter.deliveryCorrect = !!deliveryCorrect;
+
+        // Store resolved hook truth for reflection / summaries
+        encounter.correctHookResolved = hookRule?.optimal || null;
+        encounter.correctHookNeutralResolved = hookRule?.neutral || null;
+        encounter.selectedHookResolved = selectedHookType || null;
 
         return { guestRead, modeStatus, hookStatus, deliveryCorrect };
       }
@@ -11437,11 +11455,6 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
         const modeRule = getModeRuleForCurrentPlayer(modeKey);
         const hookRule = getHookRuleForGuest(modeKey);
-        assertHookConsistency(hookRule, {
-          encounterNumber: encounter?.encounterNumber,
-          guest: encounter?.guestStateActual,
-          source: "evaluateChecks_optimal"
-        });
 
         const unlockedModes = getUnlockedModesForCurrentPlayer();
         const resolvedOptimalMode = modeRule?.optimal || null;
@@ -11449,8 +11462,6 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
         encounter.correctModeResolved = resolvedOptimalMode || null;
         encounter.correctModeNeutralResolved = resolvedNeutralMode || null;
-        encounter.correctHookResolved = hookRule?.optimal || null;
-        encounter.correctHookNeutralResolved = hookRule?.neutral || null;
 
         if (resolvedOptimalMode) {
           assertModeConsistency(unlockedModes, resolvedOptimalMode, {
@@ -11477,32 +11488,61 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
         // Hook status
         let hookStatus = "neutral";
-        const hookId = encounter.hookSelected;
-        const chosenHookKey = canonicalHook(getSelectedHookType(encounter));
 
-        if (encounter.hookMeta) {
-          const hookTier = encounter.hookMeta.tier || "neutral";
-          const base =
-            hookTier === "right" ? "optimal" :
-            hookTier === "slightly" ? "neutral" :
-            "damaging";
+        const selectedHookType = getSelectedHookType(encounter);
+        const chosenHookKey = canonicalHook(selectedHookType);
 
-          if (strictness === "lenient") hookStatus = (hookTier === "slightly") ? "optimal" : base;
-          else if (strictness === "normal") hookStatus = base;
-          else if (strictness === "strict") hookStatus = (hookTier === "slightly") ? "damaging" : base;
-          else if (strictness === "hard") hookStatus = (hookTier === "right") ? "optimal" : "damaging";
-          else hookStatus = base;
-        } else {
-          let hookStatusEval = "neutral";
+        assertHookConsistency(hookRule, {
+          encounterNumber: encounter?.encounterNumber,
+          guest: encounter?.guestStateActual,
+          source: "evaluateChecks_hook"
+        });
 
-          if (hookRule?.optimalKey && chosenHookKey && chosenHookKey === hookRule.optimalKey) {
-            hookStatusEval = "optimal";
-          } else if (hookRule?.neutralKey && chosenHookKey && chosenHookKey === hookRule.neutralKey) {
-            hookStatusEval = "neutral";
-          } else if (hookRule && chosenHookKey) {
-            hookStatusEval = "damaging";
+        let hookStatusEval = "neutral";
+
+        if (hookRule?.optimalKey && chosenHookKey && chosenHookKey === hookRule.optimalKey) {
+          hookStatusEval = "optimal";
+        } else if (hookRule?.neutralKey && chosenHookKey && chosenHookKey === hookRule.neutralKey) {
+          hookStatusEval = "neutral";
+        } else if (hookRule && chosenHookKey) {
+          hookStatusEval = "damaging";
+        }
+
+        if (encounter.hookMeta?.tier) {
+          const metaTierRaw = String(encounter.hookMeta.tier || "").toLowerCase();
+          const metaStatus =
+            metaTierRaw === "right" ? "optimal" :
+            metaTierRaw === "slightly" ? "neutral" :
+            metaTierRaw ? "damaging" :
+            null;
+
+          if (metaStatus && metaStatus !== hookStatusEval) {
+            console.warn("[HOOK CONSISTENCY] hookMeta tier disagrees with canonical rule", {
+              selectedHookType,
+              chosenHookKey,
+              hookMeta: encounter.hookMeta,
+              canonical: hookStatusEval,
+              metaStatus,
+              guest: encounter?.guestStateActual,
+              encounterNumber: encounter?.encounterNumber
+            });
           }
+        }
 
+        // Strictness modifies interpretation of the canonical result.
+        // It should not replace the canonical result source.
+        if (strictness === "lenient") {
+          hookStatus =
+            hookStatusEval === "neutral" ? "optimal" : hookStatusEval;
+        } else if (strictness === "normal") {
+          hookStatus = hookStatusEval;
+        } else if (strictness === "strict") {
+          hookStatus =
+            hookStatusEval === "neutral" ? "damaging" : hookStatusEval;
+        } else if (strictness === "hard") {
+          hookStatus =
+            hookStatusEval === "optimal" ? "optimal" : "damaging";
+        } else {
           hookStatus = hookStatusEval;
         }
 
@@ -11515,6 +11555,11 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         encounter.modeStatus = modeStatus;
         encounter.hookStatus = hookStatus;
         encounter.deliveryCorrect = !!deliveryCorrect;
+
+        // Store resolved hook truth for reflection / summaries
+        encounter.correctHookResolved = hookRule?.optimal || null;
+        encounter.correctHookNeutralResolved = hookRule?.neutral || null;
+        encounter.selectedHookResolved = selectedHookType || null;
 
         return { guestRead, modeStatus, hookStatus, deliveryCorrect };
       };
