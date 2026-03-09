@@ -5709,6 +5709,11 @@ function ensureProgLoaded() {
         const target = document.getElementById(screenId);
         if (!target) return;
         target.classList.add("active");
+        const mode = getCurrentDifficultyMode();
+        applyDifficultyTheme(mode);
+        const hudStats = document.querySelector("#bcHudTop .bc-stats");
+        if (hudStats) renderDifficultyBadge(hudStats);
+        if (screenId === "screenHome") renderDifficultyToggleHome();
       }
 
       window.__BC_UI__ = {
@@ -6637,6 +6642,258 @@ function ensureProgLoaded() {
         if (!badge) return;
         if (finalDifficulty >= 4) badge.classList.remove("hidden");
         else badge.classList.add("hidden");
+        applyDifficultyTheme(getDifficultyModeFromSeed(finalDifficulty));
+        const hudStats = document.querySelector("#bcHudTop .bc-stats");
+        if (hudStats) renderDifficultyBadge(hudStats);
+      }
+
+      function getDifficultyModeFromSeed(d) {
+        const n = Number(d || 1);
+        if (n <= 2) return "easy";
+        if (n <= 4) return "medium";
+        return "hard";
+      }
+
+      function getCurrentDifficultyMode() {
+        const mode =
+          window.__BC_DIFFICULTY__?.mode ||
+          window.__BC_SELECTED_DIFFICULTY__ ||
+          "medium";
+
+        const m = String(mode).trim().toLowerCase();
+        if (m === "easy" || m === "medium" || m === "hard") return m;
+        return "medium";
+      }
+
+      function applyDifficultyTheme(diff) {
+        document.body.classList.remove(
+          "difficulty-easy",
+          "difficulty-medium",
+          "difficulty-hard"
+        );
+        document.body.classList.add("difficulty-" + String(diff || "medium"));
+      }
+
+      function setDifficulty(mode) {
+        const key = String(mode || "medium").toLowerCase();
+        const seedByMode = { easy: 2, medium: 4, hard: 6 };
+        const nextSeed = seedByMode[key] || 4;
+        const priorPressure = Number(window.__BC_GUARD__?.pressureLevel || window.__BC_DIFFICULTY__?.pressure || 0);
+        const nextPolicy = difficultyPolicy(nextSeed);
+        window.__BC_DIFFICULTY__ = {
+          ...nextPolicy,
+          mode: key,
+          pressure: priorPressure
+        };
+        window.__BC_SELECTED_DIFFICULTY__ = key;
+        if (window.__BC_GUARD__) {
+          window.__BC_GUARD__.finalDifficulty = nextSeed;
+          window.__BC_GUARD__.nextDifficulty = nextSeed;
+        }
+        try { saveAccountDifficulty(nextSeed); } catch {}
+        try { if (typeof saveGuardState === "function" && window.__BC_GUARD__) saveGuardState(window.__BC_GUARD__); } catch {}
+        applyDifficultyTheme(key);
+        updateDifficultyBadge(nextSeed);
+      }
+
+      function renderDifficultyBadge(container) {
+        if (!container) return;
+        const diff = getCurrentDifficultyMode();
+        let badge = container.querySelector("#difficultyModeBadge");
+        if (!badge) {
+          badge = document.createElement("div");
+          badge.id = "difficultyModeBadge";
+          badge.className = "difficulty-badge difficulty-mode-badge";
+          container.appendChild(badge);
+        }
+        badge.innerText = "Difficulty: " + diff.toUpperCase();
+      }
+
+      function ensureDifficultyStyles() {
+        if (document.getElementById("bcDifficultyStyles")) return;
+        const style = document.createElement("style");
+        style.id = "bcDifficultyStyles";
+        style.textContent = `
+.difficulty-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.difficulty-card {
+  border-radius: 12px;
+  padding: 16px;
+  text-align: left;
+  border: 2px solid transparent;
+  background: #111;
+  color: #ddd;
+  transition: all .18s ease;
+}
+
+.difficulty-card:hover {
+  transform: translateY(-2px);
+}
+
+.difficulty-card.active {
+  transform: scale(1.03);
+}
+
+.difficulty-title {
+  font-weight: 700;
+}
+
+.difficulty-sub {
+  margin-top: 4px;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.difficulty-desc {
+  margin-top: 6px;
+  font-size: 12px;
+  opacity: 0.72;
+}
+
+.diff-easy {
+  border-color: #2ecc71;
+}
+
+body.difficulty-easy .bc-card {
+  border-color: #2ecc71;
+}
+
+body.difficulty-easy .option-btn.selected {
+  background: #1f6f4a;
+}
+
+.diff-medium {
+  border-color: #3498db;
+}
+
+body.difficulty-medium .bc-card {
+  border-color: #3498db;
+}
+
+body.difficulty-medium .option-btn.selected {
+  background: #1e4f73;
+}
+
+.diff-hard {
+  border-color: #e74c3c;
+}
+
+body.difficulty-hard .bc-card {
+  border-color: #e74c3c;
+}
+
+body.difficulty-hard .option-btn.selected {
+  background: #7a1f1f;
+}
+
+.difficulty-badge {
+  font-size: 11px;
+  letter-spacing: .12em;
+  opacity: .8;
+}
+
+.difficulty-mode-badge {
+  margin-left: 8px;
+}
+`;
+        document.head.appendChild(style);
+      }
+
+      function renderDifficultyToggle(container, current) {
+        const modes = [
+          {
+            key: "easy",
+            title: "Easy",
+            subtitle: "Practice Mode",
+            desc: "Guided play with softer mistakes",
+            class: "diff-easy"
+          },
+          {
+            key: "medium",
+            title: "Medium",
+            subtitle: "Standard",
+            desc: "Balanced challenge",
+            class: "diff-medium"
+          },
+          {
+            key: "hard",
+            title: "Hard",
+            subtitle: "Elite Mode",
+            desc: "Sharper penalties and tougher reads",
+            class: "diff-hard"
+          }
+        ];
+
+        const wrap = document.createElement("div");
+        wrap.className = "difficulty-grid";
+
+        modes.forEach(m => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+
+          btn.className =
+            "difficulty-card " +
+            m.class +
+            (current === m.key ? " active" : "");
+
+          btn.innerHTML = `
+      <div class="difficulty-title">${m.title}</div>
+      <div class="difficulty-sub">${m.subtitle}</div>
+      <div class="difficulty-desc">${m.desc}</div>
+    `;
+
+          bindInput(btn, () => {
+            setDifficulty(m.key);
+            renderApp();
+          });
+
+          wrap.appendChild(btn);
+        });
+
+        container.appendChild(wrap);
+      }
+
+      function renderDifficultyToggleHome() {
+        const homePanel = document.querySelector("#screenHome .panel");
+        if (!homePanel) return;
+        ensureDifficultyStyles();
+        let card = document.getElementById("difficultyToggleCard");
+        if (!card) {
+          card = document.createElement("div");
+          card.id = "difficultyToggleCard";
+          card.className = "card";
+          card.style.marginTop = "12px";
+          const title = document.createElement("strong");
+          title.innerText = "Difficulty";
+          card.appendChild(title);
+          const body = document.createElement("div");
+          body.id = "difficultyToggleBody";
+          body.style.marginTop = "10px";
+          card.appendChild(body);
+          homePanel.appendChild(card);
+        }
+        const body = card.querySelector("#difficultyToggleBody");
+        if (!body) return;
+        body.innerHTML = "";
+        renderDifficultyToggle(body, getCurrentDifficultyMode());
+      }
+
+      function renderApp() {
+        updateCounts();
+        applyDemoHomeUI();
+        renderDifficultyToggleHome();
+        const mode = getCurrentDifficultyMode();
+        applyDifficultyTheme(mode);
+        const hudStats = document.querySelector("#bcHudTop .bc-stats");
+        if (hudStats) renderDifficultyBadge(hudStats);
+        const activeScreen = document.querySelector(".screen.active")?.id;
+        if (activeScreen === "screenPlay" && currentEncounter) {
+          renderEncounterStep();
+        }
       }
 
       function shouldShowStrictBadge() {
@@ -7929,6 +8186,9 @@ function ensureProgLoaded() {
       }
 
       function getDeliveryDistractorProfile(encounter) {
+        const trapProfile = encounter?.trapProfile || null;
+        if (trapProfile?.delivery) return String(trapProfile.delivery).trim().toLowerCase();
+
         const p = encounter?.guestPressure || initGuestPressureState(encounter);
 
         if (p.resistance >= 0.7) return "pushy";
@@ -8248,11 +8508,13 @@ function ensureProgLoaded() {
           urgency: 0.4
         };
 
+        const bias = encounter?.pressureBias || {};
+
         return {
-          openness: base.openness,
-          resistance: base.resistance,
-          confidence: base.confidence,
-          urgency: base.urgency
+          openness: clamp01(base.openness + Number(bias.openness || 0)),
+          resistance: clamp01(base.resistance + Number(bias.resistance || 0)),
+          confidence: clamp01(base.confidence + Number(bias.confidence || 0)),
+          urgency: clamp01(base.urgency + Number(bias.urgency || 0))
         };
       }
 
@@ -8364,6 +8626,12 @@ function ensureProgLoaded() {
       }
 
       function getHookDistractorBiases(encounter) {
+        const trapProfile = encounter?.trapProfile || null;
+        if (trapProfile?.hook === "vague") return ["FLAVOUR", "STORY", "STORY"];
+        if (trapProfile?.hook === "pushy") return ["VALUE", "VALUE", "FLAVOUR"];
+        if (trapProfile?.hook === "romantic") return ["STORY", "STORY", "FLAVOUR"];
+        if (trapProfile?.hook === "practical") return ["VALUE", "FLAVOUR", "VALUE"];
+
         const tags = getPressureProfile(encounter);
 
         const pool = {
@@ -8433,6 +8701,113 @@ function ensureProgLoaded() {
           if (uniq.length < 3 && !uniq.includes(t)) uniq.push(t);
         });
         return uniq.slice(0, 3);
+      }
+
+      function getAllowedVariationIdsForDifficulty(diff) {
+        if (diff === "easy") return ["A", "B"];
+        if (diff === "medium") return ["A", "B", "C"];
+        return ["A", "B", "C", "D", "E"];
+      }
+
+      function normalizeEncounterSchema(rawEncounter) {
+        const e = rawEncounter || {};
+
+        return {
+          ...e,
+          contextLine: e.contextLine || "",
+          guestLine: e.guestLine || "",
+          physicalCues: Array.isArray(e.physicalCues) ? e.physicalCues : [],
+          verbalCues: Array.isArray(e.verbalCues) ? e.verbalCues : [],
+          variations: Array.isArray(e.variations) ? e.variations : []
+        };
+      }
+
+      function pickEncounterVariation(encounter, runSeed = "") {
+        const diff = getCurrentDifficultyMode();
+        const allowedIds = getAllowedVariationIdsForDifficulty(diff);
+
+        const all = Array.isArray(encounter?.variations) ? encounter.variations : [];
+        if (!all.length) return null;
+
+        let pool = all.filter(v =>
+          v &&
+          allowedIds.includes(String(v.id || "").toUpperCase()) &&
+          (!Array.isArray(v.difficulty) || v.difficulty.includes(diff))
+        );
+
+        if (!pool.length) {
+          pool = all.filter(Boolean);
+        }
+
+        if (!pool.length) return null;
+
+        const seed = `${encounter?.encounterNumber || ""}::${runSeed}::${diff}`;
+        let hash = 0;
+        for (let i = 0; i < seed.length; i++) {
+          hash = ((hash << 5) - hash) + seed.charCodeAt(i);
+          hash |= 0;
+        }
+
+        const idx = Math.abs(hash) % pool.length;
+        return pool[idx];
+      }
+
+      function applyEncounterVariation(baseEncounter, variation) {
+        const base = normalizeEncounterSchema(baseEncounter);
+
+        if (!variation) {
+          return {
+            ...base,
+            variationId: "",
+            variationLabel: "",
+            pressureBias: null,
+            trapProfile: null,
+            variationNotes: ""
+          };
+        }
+
+        return {
+          ...base,
+          variationId: variation.id || "",
+          variationLabel: variation.label || "",
+          contextLine: variation.contextLine || base.contextLine || "",
+          guestLine: variation.guestLine || base.guestLine || "",
+          physicalCues: Array.isArray(variation.physicalCues)
+            ? variation.physicalCues
+            : base.physicalCues,
+          verbalCues: Array.isArray(variation.verbalCues)
+            ? variation.verbalCues
+            : base.verbalCues,
+          pressureBias: variation.pressureBias || null,
+          trapProfile: variation.trapProfile || null,
+          variationNotes: variation.notes || ""
+        };
+      }
+
+      function upgradeEncounterToVariationReady(encounter) {
+        const e = normalizeEncounterSchema(encounter);
+
+        if (Array.isArray(e.variations) && e.variations.length) {
+          return e;
+        }
+
+        return {
+          ...e,
+          variations: [
+            {
+              id: "A",
+              label: "legacy_base",
+              difficulty: ["easy", "medium", "hard"],
+              contextLine: e.contextLine || "",
+              guestLine: e.guestLine || "",
+              physicalCues: Array.isArray(e.physicalCues) ? e.physicalCues : [],
+              verbalCues: Array.isArray(e.verbalCues) ? e.verbalCues : [],
+              pressureBias: null,
+              trapProfile: null,
+              notes: "Auto-wrapped legacy encounter"
+            }
+          ]
+        };
       }
 
       function evaluateChecks(encounterOverride) {
@@ -8738,6 +9113,16 @@ function ensureProgLoaded() {
           encounterId: encounter.encounterId,
           encounterNumber: encounter.encounterNumber,
           guest: encounter.guestStateActual,
+          schema: {
+            hasVariations: Array.isArray(encounter.variations) && encounter.variations.length > 0,
+            variationId: encounter.variationId || "",
+            variationLabel: encounter.variationLabel || ""
+          },
+          variation: {
+            id: encounter.variationId,
+            label: encounter.variationLabel,
+            notes: encounter.variationNotes
+          },
 
           selected: {
             read: encounter.guestReadSelected,
@@ -9669,6 +10054,7 @@ function ensureProgLoaded() {
           `urgency:${p.urgency.toFixed(2)} ` +
           `| tags:${pressureTags} ` +
           `| deliveryProfile:${deliveryProfile} ` +
+          `| variation:${encounter?.variationId || "-"} ` +
           `| pivot:${encounter?.pivotType || "-"}`;
 
         container.appendChild(block);
@@ -10235,6 +10621,9 @@ function ensureProgLoaded() {
       }
 
       function selectPivotTypeFromPressure(encounter) {
+        const trapProfile = encounter?.trapProfile || null;
+        if (trapProfile?.pivot) return String(trapProfile.pivot).trim().toLowerCase();
+
         const p = encounter?.guestPressure || initGuestPressureState(encounter);
 
         const resistance = Number(p.resistance || 0);
@@ -12442,14 +12831,11 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         // ----------------------------
         // Normalize encounter -> UI state
         // ----------------------------
-        enc = enc || {};
+        enc = normalizeEncounterSchema(enc);
         enc.encounterNumber = enc.encounterNumber ?? (encounterIndex + 1);
         enc.guestStateActual = normalizeGuestType(enc.guestStateActual);
         enc = enforceGuestPoolByTier(enc);
-        enc.contextLine = enc.contextLine ?? "";
-        enc.guestLine = enc.guestLine ?? "";
-        enc.physicalCues = Array.isArray(enc.physicalCues) ? enc.physicalCues : [];
-        enc.verbalCues = Array.isArray(enc.verbalCues) ? enc.verbalCues : [];
+        enc = normalizeEncounterSchema(enc);
 
         console.assert(
           typeof enc.encounterNumber === "number",
@@ -12468,6 +12854,9 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         // even if the same template repeats due to tier filtering.
         const runIndex = Number.isFinite(encounterIndex) ? encounterIndex : 0;
         const encounterRunId = `${encounterIdStable}::i_${runIndex}`;
+        const variationSeed = `${encounterRunId || encounterIndex}`;
+        const selectedVariation = pickEncounterVariation(enc, variationSeed);
+        enc = applyEncounterVariation(enc, selectedVariation);
         const variantSeed = `${encounterIdStable}::${encounterRunId}::${enc.guestStateActual || ""}`;
         const presentationCtx = getEncounterPresentationContext();
 
@@ -12572,11 +12961,17 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           guestLine: preferNonEmpty(enc.guestLine, ""),
           physicalCues: Array.isArray(enc.physicalCues) ? enc.physicalCues : [],
           verbalCues: Array.isArray(enc.verbalCues) ? enc.verbalCues : [],
+          variations: Array.isArray(enc.variations) ? enc.variations : [],
           toneTag: enc.toneTag || "",
 
           // Metadata
           difficulty: enc.difficulty,
           tags: Array.isArray(enc.tags) ? [...enc.tags] : [],
+          variationId: enc.variationId || "",
+          variationLabel: enc.variationLabel || "",
+          variationNotes: enc.variationNotes || "",
+          pressureBias: enc.pressureBias || null,
+          trapProfile: enc.trapProfile || null,
           policy,
           showStrictBadge: (policy.d ?? enc.difficulty ?? 1) >= 4,
           pivotPlanned,
@@ -13518,6 +13913,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         }
       }
       updateCounts();
+      renderApp();
 
       // Helpful debug (optional)
       console.log("[BC] game.html boot ✅", {

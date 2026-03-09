@@ -69,6 +69,28 @@ export type EncounterStep = {
   feedback: EncounterStepFeedback;
 };
 
+export type EncounterVariation = {
+  id: string;
+  label?: string;
+  difficulty?: Array<"easy" | "medium" | "hard">;
+  contextLine?: string;
+  guestLine?: string;
+  physicalCues?: string[];
+  verbalCues?: string[];
+  pressureBias?: {
+    openness?: number;
+    resistance?: number;
+    confidence?: number;
+    urgency?: number;
+  } | null;
+  trapProfile?: {
+    hook?: string;
+    delivery?: string;
+    pivot?: string;
+  } | null;
+  notes?: string;
+};
+
 export type Encounter = {
   encounterNumber: number; // 1..N
 
@@ -88,12 +110,51 @@ export type Encounter = {
   tags?: string[];
   wineIndexHint?: number;
   steps?: EncounterStep[];
+  variations?: EncounterVariation[];
 };
 
 export type EncounterPack = {
   demo: Encounter[];
   premium: Encounter[];
 };
+
+export type MakeVariationEncounterInput = {
+  encounterNumber: number;
+  guestStateActual: GuestState;
+  skillFocus: SkillFocus;
+  baseContextLine: string;
+  baseGuestLine: string;
+  basePhysicalCues?: string[];
+  baseVerbalCues?: string[];
+  variations?: EncounterVariation[];
+};
+
+export function makeVariationEncounter({
+  encounterNumber,
+  guestStateActual,
+  skillFocus,
+  baseContextLine,
+  baseGuestLine,
+  basePhysicalCues = [],
+  baseVerbalCues = [],
+  variations = []
+}: MakeVariationEncounterInput): Encounter {
+  return {
+    encounterNumber,
+    guestStateActual,
+    meta: {
+      tier: tierFromEncounterNumber(encounterNumber),
+      difficulty: 3,
+      skillFocus,
+      trapType: "none"
+    },
+    contextLine: baseContextLine || "",
+    guestLine: baseGuestLine || "",
+    physicalCues: Array.isArray(basePhysicalCues) ? basePhysicalCues : [],
+    verbalCues: Array.isArray(baseVerbalCues) ? baseVerbalCues : [],
+    variations: Array.isArray(variations) ? variations : []
+  };
+}
 
 export function tierFromEncounterNumber(n: number): 1 | 2 | 3 {
   if (n >= 1 && n <= 5) return 1;
@@ -104,6 +165,35 @@ export function tierFromEncounterNumber(n: number): 1 | 2 | 3 {
 // ------------------------------------------------------------
 // ✅ AUTHOR HERE
 // ------------------------------------------------------------
+/*
+ENCOUNTER CONVERSION WORKSHEET
+
+Encounter Number:
+Guest Family:
+Skill Focus:
+
+Core lesson:
+Best mode:
+Best hook:
+Best delivery tone:
+Most tempting wrong instinct:
+
+A = baseline readable
+B = alternate flavor
+C = medium pressure
+D = hard anti-pattern
+E = hard urgency/complexity
+
+Check before shipping:
+[ ] All 5 still teach the same lesson
+[ ] Easy only shows A/B
+[ ] Medium shows A/B/C
+[ ] Hard shows A/B/C/D/E
+[ ] Trap profiles differ meaningfully
+[ ] Pressure biases differ meaningfully
+[ ] No variation contradicts the guest family
+[ ] Reflection still reads cleanly
+*/
 
 export const ENCOUNTERS: EncounterPack = {
   demo: [
@@ -219,51 +309,703 @@ export const ENCOUNTERS: EncounterPack = {
       encounterNumber: 6,
       difficulty: 2,
       guestStateActual: "Decider",
-      contextLine: "They’re decisive but impatient — don’t over-explain.",
-      guestLine: "“Two options. Then we choose.”",
-      physicalCues: ["Tap-tap on the menu", "Short nods"],
-      verbalCues: ["“Two options.”", "“Keep it quick.”"],
-      toneTag: "Impatient",
-      tags: ["decider", "lead", "impatient"],
-      meta: { tier: tierFromEncounterNumber(6), difficulty: 2, skillFocus: "read", trapType: "none" },
+      contextLine: "The guest wants help narrowing the choice.",
+      guestLine: "I just need something good.",
+      physicalCues: [
+        "glances between two bottles",
+        "keeps returning to the list"
+      ],
+      verbalCues: [
+        "They want the choice made simpler.",
+        "They are ready to move if someone narrows the field confidently."
+      ],
+      toneTag: "Narrowing",
+      tags: ["decider", "guide", "narrowing"],
+      meta: { tier: tierFromEncounterNumber(6), difficulty: 2, skillFocus: "mode", trapType: "none" },
+      variations: [
+        {
+          id: "A",
+          label: "clean_narrowing",
+          difficulty: ["easy", "medium", "hard"],
+
+          contextLine: "The guest wants help narrowing the choice quickly.",
+          guestLine: "I just need something good without overthinking it.",
+          physicalCues: [
+            "glances between two bottles",
+            "looks ready to order"
+          ],
+          verbalCues: [
+            "They want the choice made simpler.",
+            "They are waiting for a confident steer."
+          ],
+
+          pressureBias: {
+            openness: 0.02,
+            resistance: -0.02,
+            confidence: 0.00,
+            urgency: 0.08
+          },
+
+          trapProfile: {
+            hook: "vague",
+            delivery: "balanced",
+            pivot: "impatience"
+          },
+
+          notes: "Core readable version. Good first decider."
+        },
+        {
+          id: "B",
+          label: "soft_indecision",
+          difficulty: ["easy", "medium", "hard"],
+
+          contextLine: "The guest is open, but keeps circling the list.",
+          guestLine: "I'm stuck between a few options.",
+          physicalCues: [
+            "looks back and forth between the menu and the table",
+            "pauses before speaking"
+          ],
+          verbalCues: [
+            "They sound open but indecisive.",
+            "They do not want more information - they want less friction."
+          ],
+
+          pressureBias: {
+            openness: 0.00,
+            resistance: 0.03,
+            confidence: -0.05,
+            urgency: 0.02
+          },
+
+          trapProfile: {
+            hook: "balanced",
+            delivery: "vague",
+            pivot: "confusion"
+          },
+
+          notes: "Alternate flavor. Softer uncertainty."
+        },
+        {
+          id: "C",
+          label: "decision_fatigue",
+          difficulty: ["medium", "hard"],
+
+          contextLine: "The guest looks slightly worn down by too many options.",
+          guestLine: "I don't want to overthink this anymore.",
+          physicalCues: [
+            "exhales while looking at the list",
+            "stops reading midway down the page"
+          ],
+          verbalCues: [
+            "They want less decision work, not more detail.",
+            "They are ready to move if the recommendation becomes clean."
+          ],
+
+          pressureBias: {
+            openness: -0.03,
+            resistance: 0.04,
+            confidence: -0.04,
+            urgency: 0.12
+          },
+
+          trapProfile: {
+            hook: "pushy",
+            delivery: "rushed",
+            pivot: "impatience"
+          },
+
+          notes: "Medium pressure. Tempts rushed simplification."
+        },
+        {
+          id: "D",
+          label: "guarded_decider",
+          difficulty: ["hard"],
+
+          contextLine: "The guest wants clarity, but is wary of being pushed.",
+          guestLine: "I just want the right bottle, not a sales pitch.",
+          physicalCues: [
+            "raises an eyebrow when recommendations start coming too fast",
+            "leans back slightly"
+          ],
+          verbalCues: [
+            "They want direction, but not pressure.",
+            "They may resist if the recommendation feels too forceful."
+          ],
+
+          pressureBias: {
+            openness: -0.08,
+            resistance: 0.12,
+            confidence: -0.06,
+            urgency: 0.04
+          },
+
+          trapProfile: {
+            hook: "pushy",
+            delivery: "pushy",
+            pivot: "resistance"
+          },
+
+          notes: "Hard anti-pressure variant."
+        },
+        {
+          id: "E",
+          label: "high_stakes_choice",
+          difficulty: ["hard"],
+
+          contextLine: "The guest wants to choose quickly, but feels the bottle matters.",
+          guestLine: "Can you just point me to the best fit here?",
+          physicalCues: [
+            "looks ready to commit",
+            "wants the recommendation landed fast"
+          ],
+          verbalCues: [
+            "They want a clear recommendation quickly.",
+            "They do not want a long walk through options."
+          ],
+
+          pressureBias: {
+            openness: 0.01,
+            resistance: 0.00,
+            confidence: -0.03,
+            urgency: 0.15
+          },
+
+          trapProfile: {
+            hook: "practical",
+            delivery: "rushed",
+            pivot: "impatience"
+          },
+
+          notes: "Hard urgency variant."
+        }
+      ]
     },
     {
       encounterNumber: 7,
       difficulty: 3,
-      guestStateActual: "Fancy",
-      contextLine: "They want you to sound like you belong in their world.",
-      guestLine: "“We like lighter reds… elegant.”",
-      physicalCues: ["Tilts head", "Quiet confidence"],
-      verbalCues: ["“Elegant.”", "“Not too heavy.”"],
-      toneTag: "Elegant",
-      tags: ["fancy", "reflect", "elegant"],
-      meta: { tier: tierFromEncounterNumber(7), difficulty: 3, skillFocus: "read", trapType: "none" },
+      guestStateActual: "Griever",
+      contextLine: "The guest wants reassurance more than excitement.",
+      guestLine: "I'm not very confident choosing wine.",
+      physicalCues: [
+        "keeps scanning the list without settling",
+        "looks cautious before responding"
+      ],
+      verbalCues: [
+        "They need reassurance before they move.",
+        "They seem more worried about risk than excited about wine."
+      ],
+      toneTag: "Reassuring",
+      tags: ["griever", "hook", "risk-reduction"],
+      meta: { tier: tierFromEncounterNumber(7), difficulty: 3, skillFocus: "hook", trapType: "none" },
+      variations: [
+        {
+          id: "A",
+          label: "gentle_reassurance",
+          difficulty: ["easy", "medium", "hard"],
+
+          contextLine: "The guest looks cautious and wants the choice to feel safe.",
+          guestLine: "I'm just not very confident with wine.",
+          physicalCues: [
+            "glances at the list, then back to you",
+            "hesitates before speaking"
+          ],
+          verbalCues: [
+            "They need reassurance before they move.",
+            "They are looking for safety."
+          ],
+
+          pressureBias: {
+            openness: 0.00,
+            resistance: -0.02,
+            confidence: -0.06,
+            urgency: 0.00
+          },
+
+          trapProfile: {
+            hook: "balanced",
+            delivery: "vague",
+            pivot: "hesitation"
+          },
+
+          notes: "Core reassuring Griever. Best for validating flavour-first support."
+        },
+        {
+          id: "B",
+          label: "fear_of_regret",
+          difficulty: ["easy", "medium", "hard"],
+
+          contextLine: "The guest seems afraid of making the wrong choice.",
+          guestLine: "I just don't want to regret ordering it.",
+          physicalCues: [
+            "reads the wine list slowly",
+            "looks slightly tense when options are mentioned"
+          ],
+          verbalCues: [
+            "They seem afraid of choosing wrong.",
+            "They are waiting for reassurance before committing."
+          ],
+
+          pressureBias: {
+            openness: -0.03,
+            resistance: 0.04,
+            confidence: -0.08,
+            urgency: 0.01
+          },
+
+          trapProfile: {
+            hook: "vague",
+            delivery: "balanced",
+            pivot: "confusion"
+          },
+
+          notes: "Softer anxiety. Tempts fuzzy reassurance."
+        },
+        {
+          id: "C",
+          label: "hesitant_commitment",
+          difficulty: ["medium", "hard"],
+
+          contextLine: "The guest needs the risk of the choice reduced before they commit.",
+          guestLine: "I want to feel sure before I say yes.",
+          physicalCues: [
+            "leans in, but does not look settled",
+            "seems close to deciding, but not comfortable"
+          ],
+          verbalCues: [
+            "They want the spend to feel emotionally safe.",
+            "They may shut down if the recommendation feels too strong."
+          ],
+
+          pressureBias: {
+            openness: -0.02,
+            resistance: 0.06,
+            confidence: -0.10,
+            urgency: 0.04
+          },
+
+          trapProfile: {
+            hook: "vague",
+            delivery: "pushy",
+            pivot: "hesitation"
+          },
+
+          notes: "Medium pressure. Wrong confidence can backfire."
+        },
+        {
+          id: "D",
+          label: "guarded_refusal_edge",
+          difficulty: ["hard"],
+
+          contextLine: "The guest's hesitation is close to turning into refusal.",
+          guestLine: "I really don't want to make a bad call here.",
+          physicalCues: [
+            "pulls back when recommendations sound too certain",
+            "looks guarded and unconvinced"
+          ],
+          verbalCues: [
+            "They may shut down if the recommendation feels too risky or too strong.",
+            "They are looking for safety, not persuasion."
+          ],
+
+          pressureBias: {
+            openness: -0.08,
+            resistance: 0.14,
+            confidence: -0.12,
+            urgency: 0.02
+          },
+
+          trapProfile: {
+            hook: "pushy",
+            delivery: "pushy",
+            pivot: "resistance"
+          },
+
+          notes: "Hard anti-pressure variant. Strong punishment for force."
+        },
+        {
+          id: "E",
+          label: "fragile_yes_moment",
+          difficulty: ["hard"],
+
+          contextLine: "The guest could say yes, but only if the recommendation feels genuinely safe.",
+          guestLine: "I'm nervous about committing to the wrong one.",
+          physicalCues: [
+            "looks ready to decide, but still uneasy",
+            "wants reassurance before landing"
+          ],
+          verbalCues: [
+            "They need calm certainty, not a hard sell.",
+            "They want to feel safe saying yes."
+          ],
+
+          pressureBias: {
+            openness: 0.01,
+            resistance: 0.08,
+            confidence: -0.10,
+            urgency: 0.06
+          },
+
+          trapProfile: {
+            hook: "practical",
+            delivery: "vague",
+            pivot: "hesitation"
+          },
+
+          notes: "Hard fragile-yes variant. Tests safe closing."
+        }
+      ]
     },
 
     // --- Stage 2 (8–14) introduce more pressure / second-guessing ---
     {
       encounterNumber: 8,
       difficulty: 2,
-      guestStateActual: "Griever",
-      contextLine: "They’re anxious about choosing wrong — make it safe.",
-      guestLine: "“I don’t want to mess this up.”",
-      physicalCues: ["Small laugh", "Looks to friend for help"],
-      verbalCues: ["“I don’t want to mess this up.”", "“We’re not wine people.”"],
-  toneTag: "Anxious",
-  tags: ["griever", "hold", "anxious"],
-  meta: { tier: tierFromEncounterNumber(8), difficulty: 2, skillFocus: "read", trapType: "none" },
+      guestStateActual: "Fancy",
+      contextLine: "The guest wants the bottle to feel like part of the experience.",
+      guestLine: "I'm after something refined.",
+      physicalCues: [
+        "reads the list with care",
+        "responds to tone as much as content"
+      ],
+      verbalCues: [
+        "They respond to tone and refinement.",
+        "They want the bottle to feel intentionally chosen."
+      ],
+      toneTag: "Polished",
+      tags: ["fancy", "hook", "elevate"],
+      meta: { tier: tierFromEncounterNumber(8), difficulty: 2, skillFocus: "hook", trapType: "none" },
+      variations: [
+        {
+          id: "A",
+          label: "polished_recommendation",
+          difficulty: ["easy", "medium", "hard"],
+
+          contextLine: "The guest wants the bottle to feel considered, not just expensive.",
+          guestLine: "I'd like something that feels elevated.",
+          physicalCues: [
+            "listens closely to how the recommendation is framed",
+            "shows interest when the tone feels polished"
+          ],
+          verbalCues: [
+            "They respond to refinement and tone.",
+            "They want the bottle to feel intentionally chosen."
+          ],
+
+          pressureBias: {
+            openness: 0.03,
+            resistance: 0.00,
+            confidence: 0.00,
+            urgency: 0.00
+          },
+
+          trapProfile: {
+            hook: "romantic",
+            delivery: "balanced",
+            pivot: "hesitation"
+          },
+
+          notes: "Core Fancy baseline. Story should feel premium and natural."
+        },
+        {
+          id: "B",
+          label: "taste_sensitive_guest",
+          difficulty: ["easy", "medium", "hard"],
+
+          contextLine: "The guest is listening for whether the recommendation feels thoughtful.",
+          guestLine: "I want something with a bit more character.",
+          physicalCues: [
+            "seems interested, but selective",
+            "reacts subtly to wording"
+          ],
+          verbalCues: [
+            "They care about the feel of the recommendation.",
+            "They are sensitive to whether the recommendation feels thoughtful."
+          ],
+
+          pressureBias: {
+            openness: 0.00,
+            resistance: 0.03,
+            confidence: -0.02,
+            urgency: 0.00
+          },
+
+          trapProfile: {
+            hook: "balanced",
+            delivery: "romantic",
+            pivot: "confusion"
+          },
+
+          notes: "Alternative Fancy. Tests thoughtful vs generic language."
+        },
+        {
+          id: "C",
+          label: "anti_generic_fancy",
+          difficulty: ["medium", "hard"],
+
+          contextLine: "The guest notices quickly if the recommendation feels generic.",
+          guestLine: "I want this to feel a little more special.",
+          physicalCues: [
+            "stays attentive, but not easily impressed",
+            "seems to lose interest when phrasing feels ordinary"
+          ],
+          verbalCues: [
+            "They are sensitive to whether the recommendation feels generic.",
+            "They want the bottle to feel distinctive, not merely expensive."
+          ],
+
+          pressureBias: {
+            openness: -0.02,
+            resistance: 0.05,
+            confidence: 0.00,
+            urgency: 0.02
+          },
+
+          trapProfile: {
+            hook: "flavour",
+            delivery: "balanced",
+            pivot: "confusion"
+          },
+
+          notes: "Medium pressure. Penalizes generic polish."
+        },
+        {
+          id: "D",
+          label: "high_standard_tone_test",
+          difficulty: ["hard"],
+
+          contextLine: "The guest's standards are high and the tone matters.",
+          guestLine: "I don't want something obvious.",
+          physicalCues: [
+            "becomes cooler when the recommendation feels too direct",
+            "expects elegance without effort"
+          ],
+          verbalCues: [
+            "They are judging the recommendation as much as the bottle.",
+            "They will disengage if the recommendation feels obvious or flat."
+          ],
+
+          pressureBias: {
+            openness: -0.05,
+            resistance: 0.10,
+            confidence: -0.02,
+            urgency: 0.00
+          },
+
+          trapProfile: {
+            hook: "practical",
+            delivery: "pushy",
+            pivot: "resistance"
+          },
+
+          notes: "Hard anti-obvious variant. Great for testing tone failure."
+        },
+        {
+          id: "E",
+          label: "considered_choice_pressure",
+          difficulty: ["hard"],
+
+          contextLine: "The guest wants the bottle to feel properly chosen, not merely recommended.",
+          guestLine: "I want it to feel considered.",
+          physicalCues: [
+            "is open, but exacting",
+            "wants the recommendation to carry style and intention"
+          ],
+          verbalCues: [
+            "They want the bottle to feel like part of the experience.",
+            "They notice whether the recommendation lands with taste."
+          ],
+
+          pressureBias: {
+            openness: 0.01,
+            resistance: 0.06,
+            confidence: -0.03,
+            urgency: 0.03
+          },
+
+          trapProfile: {
+            hook: "romantic",
+            delivery: "romantic",
+            pivot: "hesitation"
+          },
+
+          notes: "Hard selective Fancy. Tests polish without drift into fluff."
+        }
+      ]
     },
     {
       encounterNumber: 9,
       difficulty: 3,
       guestStateActual: "Bargain-Smart",
-      contextLine: "They’ll buy premium if you justify it like a pro.",
-      guestLine: "“What makes this worth more?”",
-      physicalCues: ["Points at two bottles", "Waits for your argument"],
-      verbalCues: ["“Worth more?”", "“What’s the difference?”"],
-  toneTag: "Compare",
-  tags: ["bargain-smart", "hold", "compare"],
-  meta: { tier: tierFromEncounterNumber(9), difficulty: 3, skillFocus: "read", trapType: "none" },
+      contextLine: "The guest wants confidence that the bottle is worth the spend.",
+      guestLine: "I don't mind spending if it makes sense.",
+      physicalCues: [
+        "checks the price before the bottle name",
+        "looks interested but not persuaded yet"
+      ],
+      verbalCues: [
+        "They care about whether it's worth it.",
+        "They want the spend to feel justified."
+      ],
+      toneTag: "Value",
+      tags: ["bargain-smart", "hook", "justify-spend"],
+      meta: { tier: tierFromEncounterNumber(9), difficulty: 3, skillFocus: "hook", trapType: "none" },
+      variations: [
+        {
+          id: "A",
+          label: "clear_value_case",
+          difficulty: ["easy", "medium", "hard"],
+
+          contextLine: "The guest is open to spending, but only if the logic is clear.",
+          guestLine: "I want something that's worth it.",
+          physicalCues: [
+            "reads prices carefully",
+            "seems ready to listen if the case is made well"
+          ],
+          verbalCues: [
+            "They are price-aware without being closed.",
+            "They want a good reason to spend."
+          ],
+
+          pressureBias: {
+            openness: 0.01,
+            resistance: 0.00,
+            confidence: 0.00,
+            urgency: 0.00
+          },
+
+          trapProfile: {
+            hook: "practical",
+            delivery: "balanced",
+            pivot: "confusion"
+          },
+
+          notes: "Core readable value-first version."
+        },
+        {
+          id: "B",
+          label: "smart_spend_test",
+          difficulty: ["easy", "medium", "hard"],
+
+          contextLine: "The guest is mentally comparing price to quality.",
+          guestLine: "I'm looking for the smart choice here.",
+          physicalCues: [
+            "compares options rather than reacting emotionally",
+            "listens for justification"
+          ],
+          verbalCues: [
+            "They're looking for the smartest trade-off.",
+            "They want the recommendation to feel justified, not inflated."
+          ],
+
+          pressureBias: {
+            openness: 0.00,
+            resistance: 0.04,
+            confidence: -0.02,
+            urgency: 0.00
+          },
+
+          trapProfile: {
+            hook: "balanced",
+            delivery: "vague",
+            pivot: "objection"
+          },
+
+          notes: "Alternative value-rational read. Punishes weak justification."
+        },
+        {
+          id: "C",
+          label: "price_step_up",
+          difficulty: ["medium", "hard"],
+
+          contextLine: "The guest may spend more, but only if the bottle clearly earns it.",
+          guestLine: "I don't mind paying more if there's a clear step up.",
+          physicalCues: [
+            "looks open to upgrade, but skeptical",
+            "waits for a clean value case"
+          ],
+          verbalCues: [
+            "They want the spend to feel justified.",
+            "They are testing whether the recommendation holds up."
+          ],
+
+          pressureBias: {
+            openness: -0.01,
+            resistance: 0.05,
+            confidence: -0.03,
+            urgency: 0.02
+          },
+
+          trapProfile: {
+            hook: "story",
+            delivery: "vague",
+            pivot: "objection"
+          },
+
+          notes: "Medium pressure. Tempts emotional oversell instead of justification."
+        },
+        {
+          id: "D",
+          label: "anti_fluff_value",
+          difficulty: ["hard"],
+
+          contextLine: "The guest will disengage if the recommendation sounds inflated or fluffy.",
+          guestLine: "I need a reason this is worth the extra money.",
+          physicalCues: [
+            "stays cool when phrasing becomes too romantic",
+            "wants logic, not atmosphere"
+          ],
+          verbalCues: [
+            "They need the recommendation to feel justified, not inflated.",
+            "They care more about the smart case than the mood."
+          ],
+
+          pressureBias: {
+            openness: -0.04,
+            resistance: 0.10,
+            confidence: -0.03,
+            urgency: 0.03
+          },
+
+          trapProfile: {
+            hook: "romantic",
+            delivery: "romantic",
+            pivot: "resistance"
+          },
+
+          notes: "Hard anti-fluff variant. Great for punishing story-heavy overreach."
+        },
+        {
+          id: "E",
+          label: "justify_it_cleanly",
+          difficulty: ["hard"],
+
+          contextLine: "The guest is ready to buy if the recommendation makes sharp practical sense.",
+          guestLine: "I need to understand why this is the smart spend.",
+          physicalCues: [
+            "looks ready to commit, but still analytical",
+            "wants the recommendation landed cleanly"
+          ],
+          verbalCues: [
+            "They want the spend to feel justified quickly.",
+            "They are open, but only to a recommendation that makes practical sense."
+          ],
+
+          pressureBias: {
+            openness: 0.02,
+            resistance: 0.04,
+            confidence: -0.01,
+            urgency: 0.08
+          },
+
+          trapProfile: {
+            hook: "practical",
+            delivery: "rushed",
+            pivot: "impatience"
+          },
+
+          notes: "Hard urgency + value logic variant. Tests clean justification under pressure."
+        }
+      ]
     },
     {
       encounterNumber: 10,
