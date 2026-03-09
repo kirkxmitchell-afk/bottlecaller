@@ -1298,6 +1298,25 @@ console.log("BC3_MARKER_V1");
     };
   }
 
+  function getHookRuleForGuest(actualGuestState) {
+    const guest = normalizeGuestType(actualGuestState);
+    const rawRule =
+      hookMap && hookMap[guest]
+        ? hookMap[guest]
+        : null;
+
+    if (!rawRule) return null;
+
+    return {
+      optimal: rawRule.optimal || null,
+      neutral: rawRule.neutral || null,
+      damaging: rawRule.damaging || null,
+      optimalKey: canonicalHook(rawRule.optimal),
+      neutralKey: canonicalHook(rawRule.neutral),
+      damagingKey: canonicalHook(rawRule.damaging)
+    };
+  }
+
   function resolveCorrectModeForPlayer(rawMode, unlockedModes) {
     const allowed = Array.isArray(unlockedModes)
       ? unlockedModes.map(canonicalModeFromUi).filter(Boolean)
@@ -1350,6 +1369,20 @@ console.log("BC3_MARKER_V1");
       console.warn("[MODE CONSISTENCY] illegal mode outside unlocked pool", {
         unlockedModes: allowed,
         correctMode: normalized,
+        ...context
+      });
+    }
+  }
+
+  function assertHookConsistency(rule, context = {}) {
+    if (!rule) return;
+
+    const keys = [rule.optimalKey, rule.neutralKey, rule.damagingKey].filter(Boolean);
+    const unique = new Set(keys);
+
+    if (keys.length !== unique.size) {
+      console.warn("[HOOK CONSISTENCY] duplicate canonical hook values in rule", {
+        rule,
         ...context
       });
     }
@@ -3544,6 +3577,15 @@ function ensureProgLoaded() {
         if (s === "close") return MODES.CLOSER;
         if (s === MODES.SCOUT || s === MODES.GUIDE || s === MODES.CHARM || s === MODES.AUTH || s === MODES.CLOSER) return s;
         return "";
+      }
+
+      function canonicalHook(raw) {
+        return String(raw || "")
+          .trim()
+          .toLowerCase()
+          .replace(/[’']/g, "")
+          .replace(/[^a-z0-9]+/g, "_")
+          .replace(/^_+|_+$/g, "");
       }
 
       function uiModeLabel(mode, context = "game") {
@@ -7294,9 +7336,14 @@ function ensureProgLoaded() {
         ).trim().toLowerCase();
 
         const modeRule = getModeRuleForCurrentPlayer(modeKey);
-        const hookRule = (typeof hookMap === "object" && hookMap && modeKey) ? hookMap[modeKey] : null;
+        const hookRule = getHookRuleForGuest(modeKey);
         if (!modeRule) console.warn("[BC] modeRule missing for key:", modeKey, { encounter: encounter?.encounterNumber });
         if (!hookRule) console.warn("[BC] hookRule missing for key:", modeKey, { encounter: encounter?.encounterNumber });
+        assertHookConsistency(hookRule, {
+          encounterNumber: encounter?.encounterNumber,
+          guest: encounter?.guestStateActual,
+          source: "evaluateChecks_legacy"
+        });
 
         const unlockedModes = getUnlockedModesForCurrentPlayer();
         const modeOptimal = modeRule?.optimal
@@ -7315,6 +7362,8 @@ function ensureProgLoaded() {
           "damaging";
         encounter.correctModeResolved = modeOptimal || null;
         encounter.correctModeNeutralResolved = modeNeutral || null;
+        encounter.correctHookResolved = hookRule?.optimal || null;
+        encounter.correctHookNeutralResolved = hookRule?.neutral || null;
         assertModeConsistency(unlockedModes, modeOptimal, {
           encounterNumber: encounter?.encounterNumber,
           tier: getProgressionSpine({ allowNull: true })?.selectors?.tier?.(),
@@ -7324,6 +7373,7 @@ function ensureProgLoaded() {
 
         let hookStatus = "damaging";
         const hookId = encounter.hookSelected;
+        const chosenHookKey = canonicalHook(encounter.hookSelected);
 
         if (encounter.hookMeta) {
           const hookTier = encounter.hookMeta.tier || "neutral";
@@ -7345,10 +7395,17 @@ function ensureProgLoaded() {
             hookStatus = base;
           }
         } else {
-          hookStatus =
-            hookId && hookOptimal && hookId === hookOptimal ? "optimal" :
-            hookId && hookNeutral && hookId === hookNeutral ? "neutral" :
-            "damaging";
+          let hookStatusEval = "neutral";
+
+          if (hookRule?.optimalKey && chosenHookKey && chosenHookKey === hookRule.optimalKey) {
+            hookStatusEval = "optimal";
+          } else if (hookRule?.neutralKey && chosenHookKey && chosenHookKey === hookRule.neutralKey) {
+            hookStatusEval = "neutral";
+          } else if (hookRule && chosenHookKey) {
+            hookStatusEval = "damaging";
+          }
+
+          hookStatus = hookStatusEval;
         }
 
         const deliveryCorrect =
@@ -7549,21 +7606,128 @@ function ensureProgLoaded() {
       }
 
       function modeWhy(actualGuestState) {
-        const rule = getModeRuleForCurrentPlayer(actualGuestState);
+        const guest = normalizeGuestType(actualGuestState);
+        const rule = getModeRuleForCurrentPlayer(guest);
+
         if (!rule) return "No rule found for this guest type.";
+
         const optResolved = rule?.optimal || null;
         const neuResolved = rule?.neutral || null;
         const dmgResolved = rule?.damaging || null;
 
-        const opt = uiModeLabel(optResolved, "game");
-        const neu = uiModeLabel(neuResolved, "game");
-        const dmg = uiModeLabel(dmgResolved, "game");
+        const guestReasons = {
+          [window.GUEST.DECIDER]: {
+            scout: "Scout works when you still need one more clue before steering them.",
+            guide: "Guide works best because this guest wants the choice narrowed down clearly.",
+            charm: "Charm is weaker here because warmth alone does not solve their indecision.",
+            authority: "Authority works when this guest is ready for strong certainty."
+          },
+
+          [window.GUEST.BARGAIN_SMART]: {
+            scout: "Scout works best because you need to learn what they value most first.",
+            guide: "Guide can work if you clearly frame the smart-value option.",
+            charm: "Charm is weaker here because they care more about value than atmosphere.",
+            authority: "Authority can work if you sound certain about the strongest-value choice."
+          },
+
+          [window.GUEST.FANCY]: {
+            scout: "Scout works when you need to read their taste before positioning the bottle.",
+            guide: "Guide works when they want refinement translated into a clear suggestion.",
+            charm: "Charm works best when the moment should feel elevated, stylish, and personal.",
+            authority: "Authority can work if they respect strong expertise and conviction."
+          },
+
+          [window.GUEST.GRIEVER]: {
+            scout: "Scout works best because you need to read the hesitation before pushing anything.",
+            guide: "Guide can work when you calmly reduce their sense of risk.",
+            charm: "Charm can help warm the moment, but too much can feel like avoidance.",
+            authority: "Authority is often risky here if it adds pressure to an already hesitant guest."
+          },
+
+          [window.GUEST.CELEBRATOR]: {
+            scout: "Scout works when you still need to understand what kind of celebration this is.",
+            guide: "Guide works when the guest wants help turning the moment into a clear choice.",
+            charm: "Charm works best because energy, warmth, and occasion matter most here.",
+            authority: "Authority can work if the guest wants someone to lead confidently."
+          }
+        };
+
+        const reasonMap = guestReasons[guest] || {};
+
+        const optLabel = uiModeLabel(optResolved, "game");
+        const neuLabel = uiModeLabel(neuResolved, "game");
+        const dmgLabel = uiModeLabel(dmgResolved, "game");
+
+        const optWhy = reasonMap[canonicalModeFromUi(optResolved)] || "This is the strongest fit for the guest's current state.";
+        const neuWhy = reasonMap[canonicalModeFromUi(neuResolved)] || "This can work, but it is not the strongest fit.";
+        const dmgWhy = reasonMap[canonicalModeFromUi(dmgResolved)] || "This pushes in the wrong direction for this guest.";
 
         return (
-          `Optimal: ${opt} (take control & close). ` +
-          `Neutral: ${neu} (probe, then shift). ` +
-          `Damaging: ${dmg} (wrong tempo for this guest).`
+          `Best: ${optLabel}. ${optWhy} ` +
+          `Okay: ${neuLabel}. ${neuWhy} ` +
+          `Weak: ${dmgLabel}. ${dmgWhy}`
         );
+      }
+
+      function modeWhyWithChoice(actualGuestState, selectedMode) {
+        const guest = normalizeGuestType(actualGuestState);
+        const chosen = canonicalModeFromUi(selectedMode);
+        const rule = getModeRuleForCurrentPlayer(guest);
+
+        if (!rule) return "No rule found for this guest type.";
+
+        const best = canonicalModeFromUi(rule.optimal);
+        const okay = canonicalModeFromUi(rule.neutral);
+        const weak = canonicalModeFromUi(rule.damaging);
+
+        const chosenLabel = chosen ? uiModeLabel(chosen, "game") : "Your choice";
+        const bestLabel = best ? uiModeLabel(best, "game") : "the best mode";
+        const okayLabel = okay ? uiModeLabel(okay, "game") : null;
+        const weakLabel = weak ? uiModeLabel(weak, "game") : null;
+
+        const guestLines = {
+          [window.GUEST.DECIDER]: {
+            best: `${bestLabel} was strongest because this guest wanted the choice narrowed down clearly.`,
+            okay: okayLabel ? `${chosenLabel} could work, but ${bestLabel} would have guided the decision more cleanly.` : `${chosenLabel} could work, but ${bestLabel} was stronger.`,
+            weak: `${chosenLabel} was a weak fit because it did not resolve the indecision well. ${bestLabel} was better.`
+          },
+
+          [window.GUEST.BARGAIN_SMART]: {
+            best: `${bestLabel} was strongest because this guest needed value to be understood before being steered.`,
+            okay: `${chosenLabel} could work, but ${bestLabel} would have matched the value-first mindset better.`,
+            weak: `${chosenLabel} was a weak fit because this guest cares more about smart value than vibe. ${bestLabel} was better.`
+          },
+
+          [window.GUEST.FANCY]: {
+            best: `${bestLabel} was strongest because this guest responds to taste, tone, and a refined experience.`,
+            okay: `${chosenLabel} could work, but ${bestLabel} would have fit the guest's style more naturally.`,
+            weak: `${chosenLabel} was a weak fit because it missed the tone this guest was looking for. ${bestLabel} was better.`
+          },
+
+          [window.GUEST.GRIEVER]: {
+            best: `${bestLabel} was strongest because this guest needed hesitation handled carefully, not pressured.`,
+            okay: `${chosenLabel} could work, but ${bestLabel} would have reduced the guest's resistance more effectively.`,
+            weak: `${chosenLabel} was a weak fit because it pushed against hesitation instead of calming it. ${bestLabel} was better.`
+          },
+
+          [window.GUEST.CELEBRATOR]: {
+            best: `${bestLabel} was strongest because this guest responds to the emotional tone of the moment.`,
+            okay: `${chosenLabel} could work, but ${bestLabel} would have matched the celebration energy better.`,
+            weak: `${chosenLabel} was a weak fit because it missed the spirit of the occasion. ${bestLabel} was better.`
+          }
+        };
+
+        const guestLine = guestLines[guest] || {
+          best: `${bestLabel} was the strongest fit here.`,
+          okay: `${chosenLabel} could work, but ${bestLabel} was stronger.`,
+          weak: `${chosenLabel} was a weak fit here. ${bestLabel} was better.`
+        };
+
+        if (chosen && chosen === best) return guestLine.best;
+        if (chosen && okay && chosen === okay) return guestLine.okay;
+        if (chosen) return guestLine.weak;
+
+        return guestLine.best;
       }
 
       function modeWhyResolved(guestType, resolvedMode) {
@@ -7596,6 +7760,70 @@ function ensureProgLoaded() {
           `Neutral: ${neu} (safe but weaker). ` +
           `Damaging: ${dmg} (pulls attention the wrong way).`
         );
+      }
+
+      function hookWhyWithChoice(actualGuestState, selectedHook) {
+        const guest = normalizeGuestType(actualGuestState);
+        const chosenRaw = String(selectedHook || "").trim();
+        const chosenKey = canonicalHook(selectedHook);
+        const rule = getHookRuleForGuest(guest);
+
+        if (!rule) return "No hook rule found for this guest type.";
+
+        const best = rule.optimal || null;
+        const okay = rule.neutral || null;
+        const weak = rule.damaging || null;
+
+        const bestKey = rule.optimalKey || "";
+        const okayKey = rule.neutralKey || "";
+        const weakKey = rule.damagingKey || "";
+
+        const chosenLabel = chosenRaw || "Your hook";
+        const bestLabel = best || "the best hook";
+
+        const guestLines = {
+          [window.GUEST.DECIDER]: {
+            best: `${bestLabel} was strongest because this guest needed the choice made clearer and easier to act on.`,
+            okay: `${chosenLabel} could work, but ${bestLabel} would have narrowed the decision down more cleanly.`,
+            weak: `${chosenLabel} was a weak fit because it did not reduce the indecision well. ${bestLabel} was better.`
+          },
+
+          [window.GUEST.BARGAIN_SMART]: {
+            best: `${bestLabel} was strongest because this guest needed a reason that felt smart, practical, and justified.`,
+            okay: `${chosenLabel} could work, but ${bestLabel} would have matched the guest's value-first mindset better.`,
+            weak: `${chosenLabel} was a weak fit because it did not speak clearly enough to value. ${bestLabel} was better.`
+          },
+
+          [window.GUEST.FANCY]: {
+            best: `${bestLabel} was strongest because this guest responds to taste, status, story, and refinement.`,
+            okay: `${chosenLabel} could work, but ${bestLabel} would have fit the guest's desired tone more naturally.`,
+            weak: `${chosenLabel} was a weak fit because it flattened the experience instead of elevating it. ${bestLabel} was better.`
+          },
+
+          [window.GUEST.GRIEVER]: {
+            best: `${bestLabel} was strongest because this guest needed reassurance and lower perceived risk.`,
+            okay: `${chosenLabel} could work, but ${bestLabel} would have reduced hesitation more effectively.`,
+            weak: `${chosenLabel} was a weak fit because it added friction instead of calming the guest. ${bestLabel} was better.`
+          },
+
+          [window.GUEST.CELEBRATOR]: {
+            best: `${bestLabel} was strongest because this guest responds to energy, occasion, and emotional momentum.`,
+            okay: `${chosenLabel} could work, but ${bestLabel} would have matched the celebration mood more strongly.`,
+            weak: `${chosenLabel} was a weak fit because it missed the emotional shape of the moment. ${bestLabel} was better.`
+          }
+        };
+
+        const guestLine = guestLines[guest] || {
+          best: `${bestLabel} was the strongest fit here.`,
+          okay: `${chosenLabel} could work, but ${bestLabel} was stronger.`,
+          weak: `${chosenLabel} was a weak fit here. ${bestLabel} was better.`
+        };
+
+        if (chosenKey && bestKey && chosenKey === bestKey) return guestLine.best;
+        if (chosenKey && okayKey && chosenKey === okayKey) return guestLine.okay;
+        if (chosenKey) return guestLine.weak;
+
+        return guestLine.best;
       }
 
       function explainModeResult(enc) {
@@ -9125,17 +9353,23 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             stepContent,
             "Mode",
             scoreSymbol(checks.modeStatus),
-            "Best: " +
-              (modeBestResolved ? uiModeLabel(modeBestResolved, "game") : "—") +
-              " — " +
-              modeWhyResolved(currentEncounter.guestStateActual, modeBestResolved)
+            modeWhyWithChoice(currentEncounter.guestStateActual, currentEncounter.modeSelected)
           );
+
+          const hookRuleForGuest = getHookRuleForGuest(currentEncounter.guestStateActual);
+          assertHookConsistency(hookRuleForGuest, {
+            encounterNumber: currentEncounter?.encounterNumber,
+            guest: currentEncounter?.guestStateActual,
+            source: "reflection_hook"
+          });
+
+          const bestHook = hookRuleForGuest?.optimal || "—";
 
           addReflectionBlock(
             stepContent,
             "Hook",
             scoreSymbol(checks.hookStatus),
-            "Best: " + (hookMap && hookMap[currentEncounter.guestStateActual] ? (hookMap[currentEncounter.guestStateActual].optimal || "—") : "—") + " — " + hookWhy(currentEncounter.guestStateActual)
+            `Best: ${bestHook}. ` + hookWhyWithChoice(currentEncounter.guestStateActual, currentEncounter.hookSelected)
           );
 
           const correctS1 = currentEncounter.deliverOptionsS1[currentEncounter.correctSlotS1];
@@ -11069,7 +11303,12 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         };
 
         const modeRule = getModeRuleForCurrentPlayer(modeKey);
-        const hookRule = safeGetRule(window.hookMap || hookMap, modeKey);
+        const hookRule = getHookRuleForGuest(modeKey);
+        assertHookConsistency(hookRule, {
+          encounterNumber: encounter?.encounterNumber,
+          guest: encounter?.guestStateActual,
+          source: "evaluateChecks_optimal"
+        });
 
         const unlockedModes = getUnlockedModesForCurrentPlayer();
         const resolvedOptimalMode = modeRule?.optimal || null;
@@ -11077,6 +11316,8 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
         encounter.correctModeResolved = resolvedOptimalMode || null;
         encounter.correctModeNeutralResolved = resolvedNeutralMode || null;
+        encounter.correctHookResolved = hookRule?.optimal || null;
+        encounter.correctHookNeutralResolved = hookRule?.neutral || null;
 
         if (resolvedOptimalMode) {
           assertModeConsistency(unlockedModes, resolvedOptimalMode, {
@@ -11104,6 +11345,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         // Hook status
         let hookStatus = "neutral";
         const hookId = encounter.hookSelected;
+        const chosenHookKey = canonicalHook(encounter.hookSelected);
 
         if (encounter.hookMeta) {
           const hookTier = encounter.hookMeta.tier || "neutral";
@@ -11118,11 +11360,17 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           else if (strictness === "hard") hookStatus = (hookTier === "right") ? "optimal" : "damaging";
           else hookStatus = base;
         } else {
-          // If no hook rule, neutral unless the user picked something clearly wrong per known rule
-          if (hookRule?.optimal && hookId === hookRule.optimal) hookStatus = "optimal";
-          else if (hookRule?.neutral && hookId === hookRule.neutral) hookStatus = "neutral";
-          else if (hookId) hookStatus = "damaging";
-          else hookStatus = "neutral";
+          let hookStatusEval = "neutral";
+
+          if (hookRule?.optimalKey && chosenHookKey && chosenHookKey === hookRule.optimalKey) {
+            hookStatusEval = "optimal";
+          } else if (hookRule?.neutralKey && chosenHookKey && chosenHookKey === hookRule.neutralKey) {
+            hookStatusEval = "neutral";
+          } else if (hookRule && chosenHookKey) {
+            hookStatusEval = "damaging";
+          }
+
+          hookStatus = hookStatusEval;
         }
 
         const deliveryCorrect =
