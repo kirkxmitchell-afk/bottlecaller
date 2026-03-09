@@ -3588,6 +3588,23 @@ function ensureProgLoaded() {
           .replace(/^_+|_+$/g, "");
       }
 
+      function getSelectedHookType(encounter) {
+        if (!encounter) return "";
+
+        if (encounter.hookMeta?.hookType) {
+          return String(encounter.hookMeta.hookType).trim();
+        }
+
+        const raw = String(encounter.hookSelected || "").trim();
+        if (!raw) return "";
+
+        if (raw.includes("::")) {
+          return raw.split("::").slice(1).join("::").trim();
+        }
+
+        return raw;
+      }
+
       function uiModeLabel(mode, context = "game") {
         const m = canonicalModeFromUi(mode);
         if (m === "scout") return "Scout";
@@ -3596,6 +3613,10 @@ function ensureProgLoaded() {
         if (m === "authority") return "Authority";
         if (m === "closer") return "Closer";
         return String(mode || "");
+      }
+
+      function uiHookLabel(hook, context = "game") {
+        return String(hook || "").trim();
       }
 
       function uiModeIntentLabel(mode, guestType = null, context = "game") {
@@ -3647,6 +3668,81 @@ function ensureProgLoaded() {
         };
 
         return guestCopy?.[guest]?.[m] || fallback[m] || uiModeLabel(mode, context);
+      }
+
+      function uiHookIntentLabel(hook, guestType = null, context = "game") {
+        const guest = normalizeGuestType(guestType);
+        const hookKey = canonicalHook(hook);
+
+        if (context !== "game") {
+          return uiHookLabel(hook, context);
+        }
+
+        const guestCopy = {
+          [window.GUEST.DECIDER]: {
+            by_the_glass: "Make the choice feel easier",
+            trusted_pick: "Reduce the decision stress",
+            popular_choice: "Show them a safe next step",
+            special_occasion: "Make it feel simpler, not bigger",
+            staff_favourite: "Give them a calm recommendation"
+          },
+
+          [window.GUEST.BARGAIN_SMART]: {
+            by_the_glass: "Lower the commitment",
+            trusted_pick: "Show them the smart-value angle",
+            popular_choice: "Prove it’s a safe choice",
+            special_occasion: "Make the spend feel worth it",
+            staff_favourite: "Frame it as the best-value move"
+          },
+
+          [window.GUEST.FANCY]: {
+            by_the_glass: "Keep it elegant and low-risk",
+            trusted_pick: "Signal taste and confidence",
+            popular_choice: "Use social proof carefully",
+            special_occasion: "Make it feel elevated",
+            staff_favourite: "Offer a refined insider pick"
+          },
+
+          [window.GUEST.GRIEVER]: {
+            by_the_glass: "Reduce the risk gently",
+            trusted_pick: "Give them something dependable",
+            popular_choice: "Make the decision feel safer",
+            special_occasion: "Avoid making it feel heavier",
+            staff_favourite: "Offer a reassuring recommendation"
+          },
+
+          [window.GUEST.CELEBRATOR]: {
+            by_the_glass: "Keep the moment flowing",
+            trusted_pick: "Make it feel confidently chosen",
+            popular_choice: "Use the crowd-energy angle",
+            special_occasion: "Match the occasion",
+            staff_favourite: "Offer something fun and memorable"
+          }
+        };
+
+        const fallback = {
+          by_the_glass: "Lower the commitment",
+          trusted_pick: "Offer a dependable choice",
+          popular_choice: "Use social proof",
+          special_occasion: "Match the moment",
+          staff_favourite: "Recommend your insider pick"
+        };
+
+        return guestCopy?.[guest]?.[hookKey] || fallback[hookKey] || uiHookLabel(hook, context);
+      }
+
+      function uiHookSubtitleLabel(hook) {
+        const key = canonicalHook(hook);
+
+        const labels = {
+          by_the_glass: "By the Glass",
+          trusted_pick: "Trusted Pick",
+          popular_choice: "Popular Choice",
+          special_occasion: "Special Occasion",
+          staff_favourite: "Staff Favourite"
+        };
+
+        return labels[key] || String(hook || "").trim();
       }
 
       function canonicalGuestType(raw) {
@@ -7373,7 +7469,7 @@ function ensureProgLoaded() {
 
         let hookStatus = "damaging";
         const hookId = encounter.hookSelected;
-        const chosenHookKey = canonicalHook(encounter.hookSelected);
+        const chosenHookKey = canonicalHook(getSelectedHookType(encounter));
 
         if (encounter.hookMeta) {
           const hookTier = encounter.hookMeta.tier || "neutral";
@@ -7843,7 +7939,7 @@ function ensureProgLoaded() {
         const rule = hookMap ? hookMap[enc.guestStateActual] : null;
         if (!rule) return "Hook rule missing.";
 
-        const chosen = enc.hookSelected || "—";
+        const chosen = getSelectedHookType(enc) || "—";
         if (chosen === rule?.optimal) return `Clean — ${chosen} is the best hook for this guest.`;
         if (chosen === rule?.neutral) return `Safe — ${chosen} works, but ${rule?.optimal} lands harder here.`;
         return `You pulled them the wrong direction — ${chosen} clashes with what a ${enc.guestStateActual} wants.`;
@@ -7865,7 +7961,7 @@ function ensureProgLoaded() {
         const actual = enc?.guestStateActual || "this guest";
         const chosenRead = enc?.guestReadSelected || "—";
         const chosenMode = enc?.modeSelected || "—";
-        const chosenHook = enc?.hookSelected || "—";
+        const chosenHook = getSelectedHookType(enc) || "—";
 
         switch (primary) {
           case "read":
@@ -7958,7 +8054,7 @@ function ensureProgLoaded() {
         }
 
         if (checks.hookStatus !== "optimal") {
-          fixes.push(`Hook mismatch: best was **${bestHookFor(actual)}** (you chose **${enc.hookSelected || "—"}**).`);
+          fixes.push(`Hook mismatch: best was **${bestHookFor(actual)}** (you chose **${getSelectedHookType(enc) || "—"}**).`);
           next.push(`Micro-fix: pick the hook that answers the guest’s real question in 1 line.`);
         }
 
@@ -8912,9 +9008,11 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
         if (currentStep === 3) {
           debugHookStrictness(currentEncounter);
+
           const prompt = document.createElement("p");
           prompt.textContent = "Which sentence do you lead with?";
           stepContent.appendChild(prompt);
+
           renderStrictRulesBadge(stepContent, currentEncounter);
 
           const wine = currentEncounter?.wineSelected || {};
@@ -8929,34 +9027,66 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           console.log("[DRILL] hook opts", opts);
 
           opts.forEach((opt) => {
-            console.log(
-              "[HOOK_OPTION]",
-              opt.id,
-              opt.hookType,
-              "tier:",
-              opt.tier
-            );
-            const key = String(opt.id || "") + "::" + String(opt.hookType || "");
+            console.log("[HOOK_OPTION]", opt.id, opt.hookType, "tier:", opt.tier);
+
+            const hookType = String(opt.hookType || opt.id || opt.text || "").trim();
+            const key = String(opt.id || "") + "::" + hookType;
+
             const btn = document.createElement("button");
             btn.type = "button";
-            const selected = String(currentEncounter.hookSelected || "") === key;
+
+            const selected =
+              String(currentEncounter.hookSelectedKey || "") === key;
+
             btn.className = "option-btn" + (selected ? " selected" : "");
-            btn.textContent = opt.text || "(missing hook text)";
+
+            const primary = document.createElement("div");
+            primary.className = "option-title";
+            primary.innerText = uiHookIntentLabel(hookType, currentEncounter.guestStateActual, "game");
+
+            const secondary = document.createElement("div");
+            secondary.className = "option-subtitle";
+            secondary.innerText = uiHookSubtitleLabel(hookType);
+
+            btn.innerHTML = "";
+            btn.appendChild(primary);
+            btn.appendChild(secondary);
+
+            if (opt.text) {
+              const preview = document.createElement("div");
+              preview.className = "option-preview";
+              preview.innerText = String(opt.text).trim();
+              btn.appendChild(preview);
+            }
 
             bindInput(btn, () => {
-              currentEncounter.hookSelected = key;
-              currentEncounter.hookMeta = opt;
+              currentEncounter.hookSelectedKey = key;              // UI identity
+              currentEncounter.hookSelected = hookType;            // scoring/reflection truth
+              currentEncounter.hookMeta = {
+                ...opt,
+                hookType
+              };
               renderEncounterStep();
             });
 
             options.appendChild(btn);
           });
+
           stepContent.appendChild(options);
 
-          const contBtn = addStepButton("CONTINUE", () => { currentStep = 4; renderEncounterStep(); }, stepButtons);
+          const contBtn = addStepButton(
+            "CONTINUE",
+            () => {
+              currentStep = 4;
+              renderEncounterStep();
+            },
+            stepButtons
+          );
+
           const ready = !!currentEncounter.hookSelected;
           contBtn.disabled = !ready;
           if (ready) contBtn.removeAttribute("disabled");
+
           return;
         }
 
@@ -9369,7 +9499,10 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             stepContent,
             "Hook",
             scoreSymbol(checks.hookStatus),
-            `Best: ${bestHook}. ` + hookWhyWithChoice(currentEncounter.guestStateActual, currentEncounter.hookSelected)
+            `Best: ${bestHook}. ` + hookWhyWithChoice(
+              currentEncounter.guestStateActual,
+              getSelectedHookType(currentEncounter)
+            )
           );
 
           const correctS1 = currentEncounter.deliverOptionsS1[currentEncounter.correctSlotS1];
@@ -11345,7 +11478,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         // Hook status
         let hookStatus = "neutral";
         const hookId = encounter.hookSelected;
-        const chosenHookKey = canonicalHook(encounter.hookSelected);
+        const chosenHookKey = canonicalHook(getSelectedHookType(encounter));
 
         if (encounter.hookMeta) {
           const hookTier = encounter.hookMeta.tier || "neutral";
