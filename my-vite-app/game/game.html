@@ -8641,7 +8641,7 @@ body.difficulty-hard .option-btn.selected {
         if (trapProfile?.hook === "vague") return ["FLAVOUR", "STORY", "STORY"];
         if (trapProfile?.hook === "pushy") return ["VALUE", "VALUE", "FLAVOUR"];
         if (trapProfile?.hook === "romantic") return ["STORY", "STORY", "FLAVOUR"];
-        if (trapProfile?.hook === "style") return ["STORY", "STORY", "FLAVOUR"];
+        if (trapProfile?.hook === "style") return ["STORY", "FLAVOUR", "STORY"];
         if (trapProfile?.hook === "practical") return ["VALUE", "FLAVOUR", "VALUE"];
 
         const tags = getPressureProfile(encounter);
@@ -8985,6 +8985,9 @@ body.difficulty-hard .option-btn.selected {
           ...e,
           contextLine: e.contextLine || "",
           guestLine: e.guestLine || "",
+          toneTag: e.toneTag || "",
+          tags: Array.isArray(e.tags) ? e.tags : [],
+          meta: (e.meta && typeof e.meta === "object") ? e.meta : {},
           physicalCues: Array.isArray(e.physicalCues) ? e.physicalCues : [],
           verbalCues: Array.isArray(e.verbalCues) ? e.verbalCues : [],
           variations: Array.isArray(e.variations) ? e.variations : []
@@ -9037,6 +9040,13 @@ body.difficulty-hard .option-btn.selected {
 
         return {
           ...base,
+          difficulty: variation.difficultyValue ?? base.difficulty,
+          toneTag: variation.toneTag || base.toneTag || "",
+          tags: Array.isArray(base.tags) ? [...base.tags] : [],
+          meta: {
+            ...(base.meta || {}),
+            ...(variation.meta || {})
+          },
           variationId: variation.id || "",
           variationLabel: variation.label || "",
           contextLine: variation.contextLine || base.contextLine || "",
@@ -13110,6 +13120,20 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         enc.guestStateActual = normalizeGuestType(enc.guestStateActual);
         enc = enforceGuestPoolByTier(enc);
         enc = normalizeEncounterSchema(enc);
+        console.log("[START_ENCOUNTER][ENC_READY]", {
+          encounterNumber: enc?.encounterNumber,
+          guestStateActual: enc?.guestStateActual,
+          difficulty: enc?.difficulty,
+          toneTag: enc?.toneTag,
+          tags: enc?.tags,
+          meta: enc?.meta,
+          variationId: enc?.variationId,
+          variationLabel: enc?.variationLabel,
+          trapProfile: enc?.trapProfile,
+          pressureBias: enc?.pressureBias,
+          physicalCues: enc?.physicalCues,
+          verbalCues: enc?.verbalCues
+        });
 
         console.assert(
           typeof enc.encounterNumber === "number",
