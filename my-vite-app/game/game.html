@@ -783,17 +783,23 @@
         const params = new URLSearchParams(location.search);
         const showBack = params.get("showBack") === "1";
         if (!showBack) return;
-        const backTo = getBackToParam() || "screenHome";
+        const host =
+          document.getElementById("topBar") ||
+          document.getElementById("hudPanel") ||
+          document.body;
+
+        if (!host) return;
 
         const btn = document.createElement("button");
         btn.type = "button";
-        btn.textContent = "← Back";
+        btn.id = "btnParamBack";
+        btn.textContent = "Back";
         btn.style.cssText =
           "position:fixed;top:12px;left:12px;z-index:999999;" +
           "padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.2);" +
           "background:rgba(0,0,0,.55);color:white;cursor:pointer;";
 
-        btn.onclick = () => {
+        bindInput(btn, () => {
           btn.remove();
           if (window.__BC_STANDALONE_DEMO__) {
             try { window.__BC_SESSION_TYPE__ = "play"; } catch {}
@@ -801,13 +807,18 @@
             try { showScreen?.("screenHome"); } catch {}
             return;
           }
-          window.parent.postMessage(
-            { source: "BC_MSG", v: 1, type: "nav_back", backTo },
+          window.parent?.postMessage(
+            {
+              source: "BC_MSG",
+              v: 1,
+              type: "nav_back",
+              backTo: params.get("backTo") || "screenPremiumApp"
+            },
             window.location.origin
           );
-        };
+        });
 
-        document.body.appendChild(btn);
+        host.appendChild(btn);
       } catch (e) {
         console.warn("[BC] back button init failed", e);
       }
@@ -3923,7 +3934,7 @@ function ensureProgLoaded() {
         }
 
         const idx = Math.abs(hash) % pool.length;
-        return pool[idx];
+        return pool[idx] || null;
       }
 
       function getEncounterPresentationContext() {
@@ -8630,6 +8641,7 @@ body.difficulty-hard .option-btn.selected {
         if (trapProfile?.hook === "vague") return ["FLAVOUR", "STORY", "STORY"];
         if (trapProfile?.hook === "pushy") return ["VALUE", "VALUE", "FLAVOUR"];
         if (trapProfile?.hook === "romantic") return ["STORY", "STORY", "FLAVOUR"];
+        if (trapProfile?.hook === "style") return ["STORY", "STORY", "FLAVOUR"];
         if (trapProfile?.hook === "practical") return ["VALUE", "FLAVOUR", "VALUE"];
 
         const tags = getPressureProfile(encounter);
@@ -8708,6 +8720,263 @@ body.difficulty-hard .option-btn.selected {
         if (diff === "medium") return ["A", "B", "C"];
         return ["A", "B", "C", "D", "E"];
       }
+
+      /* =========================================================
+         BOTTLECALLER — VARIATION ENCOUNTER AUTHORING SCAFFOLD
+         ========================================================= */
+
+      function makeVariationEncounter({
+        encounterNumber,
+        guestStateActual,
+        skillFocus,
+        baseContextLine,
+        baseGuestLine,
+        basePhysicalCues = [],
+        baseVerbalCues = [],
+        variations = []
+      }) {
+        return {
+          encounterNumber,
+          guestStateActual,
+          meta: {
+            skillFocus
+          },
+          contextLine: baseContextLine || "",
+          guestLine: baseGuestLine || "",
+          physicalCues: Array.isArray(basePhysicalCues) ? basePhysicalCues : [],
+          verbalCues: Array.isArray(baseVerbalCues) ? baseVerbalCues : [],
+          variations: Array.isArray(variations) ? variations : []
+        };
+      }
+
+      const VARIATION_PRESSURE_PRESETS = {
+        readable: {
+          openness: 0.02,
+          resistance: -0.02,
+          confidence: 0.00,
+          urgency: 0.00
+        },
+
+        mild_uncertainty: {
+          openness: 0.00,
+          resistance: 0.03,
+          confidence: -0.05,
+          urgency: 0.02
+        },
+
+        medium_pressure: {
+          openness: -0.03,
+          resistance: 0.05,
+          confidence: -0.04,
+          urgency: 0.08
+        },
+
+        hard_resistance: {
+          openness: -0.08,
+          resistance: 0.12,
+          confidence: -0.08,
+          urgency: 0.03
+        },
+
+        hard_urgency: {
+          openness: 0.01,
+          resistance: 0.03,
+          confidence: -0.03,
+          urgency: 0.14
+        }
+      };
+
+      const VARIATION_TRAP_PRESETS = {
+        readable: {
+          hook: "balanced",
+          delivery: "balanced",
+          pivot: "confusion"
+        },
+
+        vague: {
+          hook: "vague",
+          delivery: "vague",
+          pivot: "hesitation"
+        },
+
+        pressure: {
+          hook: "pushy",
+          delivery: "pushy",
+          pivot: "resistance"
+        },
+
+        urgency: {
+          hook: "practical",
+          delivery: "rushed",
+          pivot: "impatience"
+        },
+
+        style: {
+          hook: "romantic",
+          delivery: "romantic",
+          pivot: "confusion"
+        }
+      };
+
+      const ENCOUNTER_TEMPLATE_BLANK = makeVariationEncounter({
+        encounterNumber: 999,
+        guestStateActual: window.GUEST.DECIDER,
+        skillFocus: "mode",
+
+        baseContextLine: "The guest wants help narrowing the choice.",
+        baseGuestLine: "I just need something good.",
+        basePhysicalCues: [
+          "glances between two bottles"
+        ],
+        baseVerbalCues: [
+          "They want the choice made simpler."
+        ],
+
+        variations: [
+          {
+            id: "A",
+            label: "baseline_readable",
+            difficulty: ["easy", "medium", "hard"],
+
+            contextLine: "",
+            guestLine: "",
+            physicalCues: [],
+            verbalCues: [],
+
+            pressureBias: { ...VARIATION_PRESSURE_PRESETS.readable },
+            trapProfile: { ...VARIATION_TRAP_PRESETS.readable },
+
+            notes: "Core readable version."
+          },
+
+          {
+            id: "B",
+            label: "alternate_flavor",
+            difficulty: ["easy", "medium", "hard"],
+
+            contextLine: "",
+            guestLine: "",
+            physicalCues: [],
+            verbalCues: [],
+
+            pressureBias: { ...VARIATION_PRESSURE_PRESETS.mild_uncertainty },
+            trapProfile: { ...VARIATION_TRAP_PRESETS.vague },
+
+            notes: "Same lesson, different emotional texture."
+          },
+
+          {
+            id: "C",
+            label: "medium_pressure",
+            difficulty: ["medium", "hard"],
+
+            contextLine: "",
+            guestLine: "",
+            physicalCues: [],
+            verbalCues: [],
+
+            pressureBias: { ...VARIATION_PRESSURE_PRESETS.medium_pressure },
+            trapProfile: { ...VARIATION_TRAP_PRESETS.readable },
+
+            notes: "Medium pressure version. More tempting wrong path."
+          },
+
+          {
+            id: "D",
+            label: "hard_antipattern",
+            difficulty: ["hard"],
+
+            contextLine: "",
+            guestLine: "",
+            physicalCues: [],
+            verbalCues: [],
+
+            pressureBias: { ...VARIATION_PRESSURE_PRESETS.hard_resistance },
+            trapProfile: { ...VARIATION_TRAP_PRESETS.pressure },
+
+            notes: "Hard anti-pattern version. Punishes one common wrong instinct."
+          },
+
+          {
+            id: "E",
+            label: "hard_urgency_complexity",
+            difficulty: ["hard"],
+
+            contextLine: "",
+            guestLine: "",
+            physicalCues: [],
+            verbalCues: [],
+
+            pressureBias: { ...VARIATION_PRESSURE_PRESETS.hard_urgency },
+            trapProfile: { ...VARIATION_TRAP_PRESETS.urgency },
+
+            notes: "Hard urgency / complexity version."
+          }
+        ]
+      });
+
+      const GUEST_VARIATION_GUIDE = {
+        [window.GUEST.DECIDER]: {
+          coreLesson: "Reduce decision friction.",
+          bestSolve: {
+            mode: "guide",
+            hook: "VALUE",
+            deliveryTone: "clean / direct / narrowing"
+          },
+          temptingWrongInstincts: [
+            "over-explaining",
+            "staying vague",
+            "making the guest do more decision work",
+            "sounding pushy too early"
+          ]
+        },
+
+        [window.GUEST.GRIEVER]: {
+          coreLesson: "Reduce fear and perceived risk.",
+          bestSolve: {
+            mode: "scout_or_guide",
+            hook: "FLAVOUR",
+            deliveryTone: "gentle / soft / reassuring"
+          },
+          temptingWrongInstincts: [
+            "pushing too hard",
+            "sounding too certain too fast",
+            "vague reassurance without clarity",
+            "making the choice feel risky"
+          ]
+        },
+
+        [window.GUEST.FANCY]: {
+          coreLesson: "Make the recommendation feel considered and refined.",
+          bestSolve: {
+            mode: "charm",
+            hook: "STORY",
+            deliveryTone: "polished / elegant / intentional"
+          },
+          temptingWrongInstincts: [
+            "sounding generic",
+            "being too blunt",
+            "flattening the moment",
+            "confusing expensive with tasteful"
+          ]
+        },
+
+        [window.GUEST.BARGAIN_SMART]: {
+          coreLesson: "Justify the spend clearly.",
+          bestSolve: {
+            mode: "scout",
+            hook: "VALUE",
+            deliveryTone: "measured / practical / grounded"
+          },
+          temptingWrongInstincts: [
+            "being fluffy",
+            "overselling emotionally",
+            "failing to justify price",
+            "making value sound inflated"
+          ]
+        }
+      };
+      // NOTE: upgradeEncounterToVariationReady(...) is already implemented below.
 
       function normalizeEncounterSchema(rawEncounter) {
         const e = rawEncounter || {};
@@ -12832,6 +13101,11 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         // Normalize encounter -> UI state
         // ----------------------------
         enc = normalizeEncounterSchema(enc);
+        const variationSeed = String(
+          Number.isFinite(encounterIndex) ? encounterIndex : 0
+        );
+        const selectedVariation = pickEncounterVariation(enc, variationSeed);
+        enc = applyEncounterVariation(enc, selectedVariation);
         enc.encounterNumber = enc.encounterNumber ?? (encounterIndex + 1);
         enc.guestStateActual = normalizeGuestType(enc.guestStateActual);
         enc = enforceGuestPoolByTier(enc);
@@ -12854,9 +13128,6 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         // even if the same template repeats due to tier filtering.
         const runIndex = Number.isFinite(encounterIndex) ? encounterIndex : 0;
         const encounterRunId = `${encounterIdStable}::i_${runIndex}`;
-        const variationSeed = `${encounterRunId || encounterIndex}`;
-        const selectedVariation = pickEncounterVariation(enc, variationSeed);
-        enc = applyEncounterVariation(enc, selectedVariation);
         const variantSeed = `${encounterIdStable}::${encounterRunId}::${enc.guestStateActual || ""}`;
         const presentationCtx = getEncounterPresentationContext();
 

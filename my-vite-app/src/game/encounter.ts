@@ -162,6 +162,10 @@ export function tierFromEncounterNumber(n: number): 1 | 2 | 3 {
   return 3; // 13..20
 }
 
+function guestConst(key: string, fallback: GuestState): GuestState {
+  return ((globalThis as any)?.window?.GUEST?.[key] || fallback) as GuestState;
+}
+
 // ------------------------------------------------------------
 // ✅ AUTHOR HERE
 // ------------------------------------------------------------
@@ -200,7 +204,7 @@ export const ENCOUNTERS: EncounterPack = {
     {
       encounterNumber: 1,
       difficulty: 1,
-      guestStateActual: "Decider",
+      guestStateActual: guestConst("DECIDER", "Decider"),
       contextLine: "They scan the list fast, ready to choose.",
       guestLine: "“We’re in a bit of a rush.”",
       physicalCues: ["Phone on table, glancing at time", "Direct eye contact, waiting"],
@@ -243,7 +247,7 @@ export const ENCOUNTERS: EncounterPack = {
     },
     {
       encounterNumber: 2,
-      guestStateActual: "Griever",
+      guestStateActual: guestConst("GRIEVER", "Griever"),
       contextLine: "They look tired. They want safety, not performance.",
       guestLine: "“I don’t really know wine… something easy?”",
       physicalCues: ["Soft voice", "Avoids eye contact"],
@@ -259,7 +263,7 @@ export const ENCOUNTERS: EncounterPack = {
     },
     {
       encounterNumber: 3,
-      guestStateActual: "Fancy",
+      guestStateActual: guestConst("FANCY", "Fancy"),
       contextLine: "They’re checking if you have taste and standards.",
       guestLine: "“Do you have something more… refined?”",
       physicalCues: ["Slow scan of the list", "Raises eyebrow slightly"],
@@ -275,7 +279,7 @@ export const ENCOUNTERS: EncounterPack = {
     },
     {
       encounterNumber: 4,
-      guestStateActual: "Bargain-Smart",
+      guestStateActual: guestConst("BARGAIN_SMART", "Bargain-Smart"),
       contextLine: "They’re not cheap — they’re rational. They want proof.",
       guestLine: "“What’s the best value bottle here?”",
       physicalCues: ["Finger on price column", "Leans in slightly"],
@@ -291,7 +295,7 @@ export const ENCOUNTERS: EncounterPack = {
     },
     {
       encounterNumber: 5,
-      guestStateActual: "Celebrator",
+      guestStateActual: guestConst("CELEBRATOR", "Celebrator"),
       contextLine: "Energy is up — they want the moment to feel special.",
       guestLine: "“We’re celebrating — make it fun.”",
       physicalCues: ["Smiling", "Glances around the table"],
@@ -308,7 +312,7 @@ export const ENCOUNTERS: EncounterPack = {
     {
       encounterNumber: 6,
       difficulty: 2,
-      guestStateActual: "Decider",
+      guestStateActual: guestConst("DECIDER", "Decider"),
       contextLine: "The guest wants help narrowing the choice.",
       guestLine: "I just need something good.",
       physicalCues: [
@@ -483,7 +487,7 @@ export const ENCOUNTERS: EncounterPack = {
     {
       encounterNumber: 7,
       difficulty: 3,
-      guestStateActual: "Griever",
+      guestStateActual: guestConst("GRIEVER", "Griever"),
       contextLine: "The guest wants reassurance more than excitement.",
       guestLine: "I'm not very confident choosing wine.",
       physicalCues: [
@@ -660,7 +664,7 @@ export const ENCOUNTERS: EncounterPack = {
     {
       encounterNumber: 8,
       difficulty: 2,
-      guestStateActual: "Fancy",
+      guestStateActual: guestConst("FANCY", "Fancy"),
       contextLine: "The guest wants the bottle to feel like part of the experience.",
       guestLine: "I'm after something refined.",
       physicalCues: [
@@ -835,7 +839,7 @@ export const ENCOUNTERS: EncounterPack = {
     {
       encounterNumber: 9,
       difficulty: 3,
-      guestStateActual: "Bargain-Smart",
+      guestStateActual: guestConst("BARGAIN_SMART", "Bargain-Smart"),
       contextLine: "The guest wants confidence that the bottle is worth the spend.",
       guestLine: "I don't mind spending if it makes sense.",
       physicalCues: [
@@ -1007,18 +1011,180 @@ export const ENCOUNTERS: EncounterPack = {
         }
       ]
     },
-    {
+    makeVariationEncounter({
       encounterNumber: 10,
-      difficulty: 3,
-      guestStateActual: "Celebrator",
-      contextLine: "They’re in a mood—your job is to elevate it, not teach.",
-      guestLine: "“We want something with a story.”",
-      physicalCues: ["Laughing", "Leans back relaxed"],
-      verbalCues: ["“With a story.”", "“What’s your favorite?”"],
-  toneTag: "High",
-  tags: ["celebrator", "reflect", "story"],
-  meta: { tier: tierFromEncounterNumber(10), difficulty: 3, skillFocus: "read", trapType: "none" },
-    },
+      guestStateActual: guestConst("CELEBRATOR", "Celebrator"),
+      skillFocus: "read",
+
+      baseContextLine: "They're in a mood-your job is to elevate it, not teach.",
+      baseGuestLine: "We want something with a story.",
+      basePhysicalCues: [
+        "Laughing",
+        "Leans back relaxed"
+      ],
+      baseVerbalCues: [
+        "With a story.",
+        "What's your favorite?"
+      ],
+
+      variations: [
+        {
+          id: "A",
+          label: "story_seeking_baseline",
+          difficulty: ["easy", "medium", "hard"],
+
+          contextLine: "They're in a mood-your job is to elevate it, not teach.",
+          guestLine: "We want something with a story.",
+          physicalCues: [
+            "Laughing",
+            "Leans back relaxed"
+          ],
+          verbalCues: [
+            "With a story.",
+            "What's your favorite?"
+          ],
+
+          pressureBias: {
+            openness: 0.08,
+            resistance: -0.02,
+            confidence: 0.00,
+            urgency: 0.05
+          },
+
+          trapProfile: {
+            hook: "style",
+            delivery: "balanced",
+            pivot: "hesitation"
+          },
+
+          notes: "Core celebrator baseline. Read the emotional tone correctly."
+        },
+        {
+          id: "B",
+          label: "favorite_bottle_energy",
+          difficulty: ["easy", "medium", "hard"],
+
+          contextLine: "The table energy is warm and social-they want the bottle to add to it.",
+          guestLine: "What's your favorite for a table like this?",
+          physicalCues: [
+            "Smiles easily",
+            "Looks to the group for reactions"
+          ],
+          verbalCues: [
+            "What would you choose for this kind of moment?",
+            "We want something that feels fun."
+          ],
+
+          pressureBias: {
+            openness: 0.10,
+            resistance: -0.02,
+            confidence: -0.05,
+            urgency: 0.02
+          },
+
+          trapProfile: {
+            hook: "romantic",
+            delivery: "romantic",
+            pivot: "confusion"
+          },
+
+          notes: "Alternate flavor. Tests emotional reading over literal wording."
+        },
+        {
+          id: "C",
+          label: "occasion_fit_medium",
+          difficulty: ["medium", "hard"],
+
+          contextLine: "The table is lively, but the bottle still needs to feel like the right match for the moment.",
+          guestLine: "We want something that actually suits tonight.",
+          physicalCues: [
+            "Relaxed, but expectant",
+            "Ready to be led if it feels right"
+          ],
+          verbalCues: [
+            "It should feel like it fits the table.",
+            "We want something memorable."
+          ],
+
+          pressureBias: {
+            openness: 0.06,
+            resistance: 0.05,
+            confidence: -0.04,
+            urgency: 0.07
+          },
+
+          trapProfile: {
+            hook: "balanced",
+            delivery: "romantic",
+            pivot: "hesitation"
+          },
+
+          notes: "Medium pressure. Story is still good, but it must connect to the occasion."
+        },
+        {
+          id: "D",
+          label: "anti_lecture_celebrator",
+          difficulty: ["hard"],
+
+          contextLine: "They want the bottle to lift the mood, not turn into a lesson.",
+          guestLine: "Don't give us the wine textbook version.",
+          physicalCues: [
+            "Still warm, but less patient",
+            "Energy drops if the tone gets too instructional"
+          ],
+          verbalCues: [
+            "Keep it fun.",
+            "We want the feeling, not the lecture."
+          ],
+
+          pressureBias: {
+            openness: 0.02,
+            resistance: 0.12,
+            confidence: -0.08,
+            urgency: 0.06
+          },
+
+          trapProfile: {
+            hook: "practical",
+            delivery: "pushy",
+            pivot: "resistance"
+          },
+
+          notes: "Hard anti-pattern. Punishes over-teaching and flattening the mood."
+        },
+        {
+          id: "E",
+          label: "high_energy_choice",
+          difficulty: ["hard"],
+
+          contextLine: "The table wants the bottle to land quickly and feel right emotionally.",
+          guestLine: "Okay, give us the one that makes tonight feel like tonight.",
+          physicalCues: [
+            "High energy",
+            "Ready to commit if the recommendation lands fast"
+          ],
+          verbalCues: [
+            "We want to feel good about it straight away.",
+            "Just give us the right bottle for this mood."
+          ],
+
+          pressureBias: {
+            openness: 0.10,
+            resistance: 0.03,
+            confidence: -0.03,
+            urgency: 0.14
+          },
+
+          trapProfile: {
+            hook: "romantic",
+            delivery: "rushed",
+            pivot: "impatience"
+          },
+
+          notes: "Hard urgency variant. Tests clean emotional reading under momentum."
+        }
+      ]
+    }),
     {
       encounterNumber: 11,
       difficulty: 4,
@@ -1031,34 +1197,354 @@ export const ENCOUNTERS: EncounterPack = {
   tags: ["fancy", "reflect", "test"],
   meta: { tier: tierFromEncounterNumber(11), difficulty: 4, skillFocus: "read", trapType: "none" },
     },
-    {
+    makeVariationEncounter({
       encounterNumber: 12,
-      difficulty: 4,
-      guestStateActual: "Decider",
-      contextLine: "They want certainty; your hesitation loses the table.",
-      guestLine: "“Just tell us what to do — we’re hungry.”",
-      physicalCues: ["Glances at kitchen", "Menu closed"],
-      verbalCues: ["“Tell us what to do.”", "“We’re hungry.”"],
-  toneTag: "Now",
-  tags: ["decider", "lead", "now"],
-  meta: { tier: tierFromEncounterNumber(12), difficulty: 4, skillFocus: "read", trapType: "none" },
-    },
-    {
+      guestStateActual: guestConst("DECIDER", "Decider"),
+      skillFocus: "read",
+
+      baseContextLine: "They want certainty; your hesitation loses the table.",
+      baseGuestLine: "Just tell us what to do - we're hungry.",
+      basePhysicalCues: [
+        "Glances at kitchen",
+        "Menu closed"
+      ],
+      baseVerbalCues: [
+        "Tell us what to do.",
+        "We're hungry."
+      ],
+
+      variations: [
+        {
+          id: "A",
+          label: "hungry_decider_baseline",
+          difficulty: ["easy", "medium", "hard"],
+
+          contextLine: "They want certainty; your hesitation loses the table.",
+          guestLine: "Just tell us what to do - we're hungry.",
+          physicalCues: [
+            "Glances at kitchen",
+            "Menu closed"
+          ],
+          verbalCues: [
+            "Tell us what to do.",
+            "We're hungry."
+          ],
+
+          pressureBias: {
+            openness: 0.05,
+            resistance: -0.02,
+            confidence: 0.00,
+            urgency: 0.10
+          },
+
+          trapProfile: {
+            hook: "practical",
+            delivery: "balanced",
+            pivot: "impatience"
+          },
+
+          notes: "Core urgent decider. Read must identify certainty-seeking fast."
+        },
+        {
+          id: "B",
+          label: "decision_now",
+          difficulty: ["easy", "medium", "hard"],
+
+          contextLine: "The table is ready to move and does not want more decision work.",
+          guestLine: "We just need the right call, quickly.",
+          physicalCues: [
+            "Looks ready to order immediately",
+            "No patience for extra exploration"
+          ],
+          verbalCues: [
+            "Just point us.",
+            "We'll follow your lead."
+          ],
+
+          pressureBias: {
+            openness: 0.03,
+            resistance: 0.03,
+            confidence: -0.05,
+            urgency: 0.12
+          },
+
+          trapProfile: {
+            hook: "balanced",
+            delivery: "rushed",
+            pivot: "impatience"
+          },
+
+          notes: "Alternate flavor. Same core solve, slightly more cooperative."
+        },
+        {
+          id: "C",
+          label: "certainty_under_pressure",
+          difficulty: ["medium", "hard"],
+
+          contextLine: "They want the recommendation to remove friction immediately.",
+          guestLine: "We don't want to think about this much more.",
+          physicalCues: [
+            "Ready to move on from the list",
+            "Wants the choice simplified now"
+          ],
+          verbalCues: [
+            "Make it easy for us.",
+            "We just want the clear option."
+          ],
+
+          pressureBias: {
+            openness: 0.02,
+            resistance: 0.05,
+            confidence: -0.04,
+            urgency: 0.14
+          },
+
+          trapProfile: {
+            hook: "vague",
+            delivery: "rushed",
+            pivot: "impatience"
+          },
+
+          notes: "Medium pressure. Tempts vague or half-committed guidance."
+        },
+        {
+          id: "D",
+          label: "anti_hesitation_table",
+          difficulty: ["hard"],
+
+          contextLine: "The table wants direction, but will cool quickly if you sound unsure.",
+          guestLine: "If you know, just say it.",
+          physicalCues: [
+            "Watches for hesitation",
+            "Loses patience with indecision"
+          ],
+          verbalCues: [
+            "Don't give us ten options.",
+            "Just land it."
+          ],
+
+          pressureBias: {
+            openness: 0.00,
+            resistance: 0.12,
+            confidence: -0.08,
+            urgency: 0.12
+          },
+
+          trapProfile: {
+            hook: "vague",
+            delivery: "pushy",
+            pivot: "resistance"
+          },
+
+          notes: "Hard anti-pattern. Punishes uncertainty and over-explaining."
+        },
+        {
+          id: "E",
+          label: "fast_table_high_stakes",
+          difficulty: ["hard"],
+
+          contextLine: "They want the right bottle fast, and the moment will cool if you drift.",
+          guestLine: "Tell us the one you'd put on this table right now.",
+          physicalCues: [
+            "Ready to commit",
+            "Needs a decisive recommendation"
+          ],
+          verbalCues: [
+            "What's the one?",
+            "We don't need the whole process."
+          ],
+
+          pressureBias: {
+            openness: 0.04,
+            resistance: 0.03,
+            confidence: -0.03,
+            urgency: 0.16
+          },
+
+          trapProfile: {
+            hook: "practical",
+            delivery: "rushed",
+            pivot: "impatience"
+          },
+
+          notes: "Hard urgency variant. Tests clean decisive read under momentum."
+        }
+      ]
+    }),
+    makeVariationEncounter({
       encounterNumber: 13,
-      guestStateActual: "Griever",
-      contextLine: "They’re quietly resisting pressure — soften and simplify.",
-      guestLine: "“Maybe we’ll just do water for now.”",
-      physicalCues: ["Half smile", "Looks away"],
-      verbalCues: ["“Just water.”", "“Maybe later.”"],
-      toneTag: "Withdrawn",
-      tags: ["griever", "hold", "withdrawn"],
-      meta: {
-        tier: tierFromEncounterNumber(13),
-        difficulty: 4,
-        skillFocus: "pivot",
-        trapType: "silence",
-      },
-    },
+      guestStateActual: guestConst("GRIEVER", "Griever"),
+      skillFocus: "pivot",
+
+      baseContextLine: "They're quietly resisting pressure - soften and simplify.",
+      baseGuestLine: "Maybe we'll just do water for now.",
+      basePhysicalCues: [
+        "Half smile",
+        "Looks away"
+      ],
+      baseVerbalCues: [
+        "Just water.",
+        "Maybe later."
+      ],
+
+      variations: [
+        {
+          id: "A",
+          label: "quiet_withdrawal_baseline",
+          difficulty: ["easy", "medium", "hard"],
+
+          contextLine: "They're quietly resisting pressure - soften and simplify.",
+          guestLine: "Maybe we'll just do water for now.",
+          physicalCues: [
+            "Half smile",
+            "Looks away"
+          ],
+          verbalCues: [
+            "Just water.",
+            "Maybe later."
+          ],
+
+          pressureBias: {
+            openness: -0.04,
+            resistance: -0.02,
+            confidence: -0.08,
+            urgency: 0.00
+          },
+
+          trapProfile: {
+            hook: "balanced",
+            delivery: "vague",
+            pivot: "hesitation"
+          },
+
+          notes: "Core withdrawn griever. Good pivot read should reduce pressure."
+        },
+        {
+          id: "B",
+          label: "soft_retreat",
+          difficulty: ["easy", "medium", "hard"],
+
+          contextLine: "The guest is not rejecting the table - they're retreating from the decision.",
+          guestLine: "Maybe we'll come back to wine in a bit.",
+          physicalCues: [
+            "Polite, but backing away from the choice",
+            "Avoids committing"
+          ],
+          verbalCues: [
+            "Maybe later.",
+            "Let's leave it for now."
+          ],
+
+          pressureBias: {
+            openness: -0.03,
+            resistance: 0.03,
+            confidence: -0.10,
+            urgency: 0.02
+          },
+
+          trapProfile: {
+            hook: "vague",
+            delivery: "balanced",
+            pivot: "confusion"
+          },
+
+          notes: "Alternate flavor. Withdrawal without overt refusal."
+        },
+        {
+          id: "C",
+          label: "low_confidence_hold",
+          difficulty: ["medium", "hard"],
+
+          contextLine: "The guest is close to disengaging unless the pressure drops and the choice feels simpler.",
+          guestLine: "Maybe water is easier for now.",
+          physicalCues: [
+            "Looks like they'd rather avoid the decision entirely",
+            "Wants emotional safety more than options"
+          ],
+          verbalCues: [
+            "Let's keep it simple.",
+            "I'm not sure I want to decide on wine right now."
+          ],
+
+          pressureBias: {
+            openness: -0.05,
+            resistance: 0.06,
+            confidence: -0.12,
+            urgency: 0.08
+          },
+
+          trapProfile: {
+            hook: "vague",
+            delivery: "pushy",
+            pivot: "hesitation"
+          },
+
+          notes: "Medium pressure. Tempts the player to chase too hard."
+        },
+        {
+          id: "D",
+          label: "anti_chase_withdrawal",
+          difficulty: ["hard"],
+
+          contextLine: "The guest is withdrawing because the moment already feels too pressured.",
+          guestLine: "No, really - water is fine.",
+          physicalCues: [
+            "Looks away more directly",
+            "Closes down if pursued"
+          ],
+          verbalCues: [
+            "Let's leave it.",
+            "We're okay with water."
+          ],
+
+          pressureBias: {
+            openness: -0.10,
+            resistance: 0.12,
+            confidence: -0.12,
+            urgency: 0.03
+          },
+
+          trapProfile: {
+            hook: "pushy",
+            delivery: "pushy",
+            pivot: "resistance"
+          },
+
+          notes: "Hard anti-pattern. Punishes chasing and over-persuasion."
+        },
+        {
+          id: "E",
+          label: "fragile_reentry_moment",
+          difficulty: ["hard"],
+
+          contextLine: "The guest could still be brought back in, but only if the next move feels genuinely low-pressure.",
+          guestLine: "Maybe... unless there's something really easy.",
+          physicalCues: [
+            "Still withdrawn, but not fully gone",
+            "Leaves a small opening"
+          ],
+          verbalCues: [
+            "Only if it's easy.",
+            "I don't want to make a whole thing of it."
+          ],
+
+          pressureBias: {
+            openness: -0.02,
+            resistance: 0.05,
+            confidence: -0.10,
+            urgency: 0.08
+          },
+
+          trapProfile: {
+            hook: "practical",
+            delivery: "vague",
+            pivot: "hesitation"
+          },
+
+          notes: "Hard fragile-reentry variant. Tests gentle recovery without overplaying the opening."
+        }
+      ]
+    }),
     {
       encounterNumber: 14,
       guestStateActual: "Bargain-Smart",
@@ -1077,22 +1563,180 @@ export const ENCOUNTERS: EncounterPack = {
     },
 
     // --- Stage 3 (15–20) advanced: social dynamics / higher stakes ---
-    {
+    makeVariationEncounter({
       encounterNumber: 15,
-      guestStateActual: "Celebrator",
-      contextLine: "They want a win the whole table agrees on.",
-      guestLine: "“Something everyone will like.”",
-      physicalCues: ["Looks around the table", "Group nods"],
-      verbalCues: ["“Everyone will like.”", "“Crowd-pleaser.”"],
-      toneTag: "Group",
-      tags: ["celebrator", "lead", "group"],
-      meta: {
-        tier: tierFromEncounterNumber(15),
-        difficulty: 4,
-        skillFocus: "delivery",
-        trapType: "group-consensus",
-      },
-    },
+      guestStateActual: guestConst("CELEBRATOR", "Celebrator"),
+      skillFocus: "delivery",
+
+      baseContextLine: "They want a win the whole table agrees on.",
+      baseGuestLine: "Something everyone will like.",
+      basePhysicalCues: [
+        "Looks around the table",
+        "Group nods"
+      ],
+      baseVerbalCues: [
+        "Everyone will like.",
+        "Crowd-pleaser."
+      ],
+
+      variations: [
+        {
+          id: "A",
+          label: "group_pleaser_baseline",
+          difficulty: ["easy", "medium", "hard"],
+
+          contextLine: "They want a win the whole table agrees on.",
+          guestLine: "Something everyone will like.",
+          physicalCues: [
+            "Looks around the table",
+            "Group nods"
+          ],
+          verbalCues: [
+            "Everyone will like.",
+            "Crowd-pleaser."
+          ],
+
+          pressureBias: {
+            openness: 0.08,
+            resistance: -0.02,
+            confidence: 0.00,
+            urgency: 0.03
+          },
+
+          trapProfile: {
+            hook: "balanced",
+            delivery: "balanced",
+            pivot: "hesitation"
+          },
+
+          notes: "Core group-friendly celebrator. Best delivery should feel socially safe and upbeat."
+        },
+        {
+          id: "B",
+          label: "table_energy_first",
+          difficulty: ["easy", "medium", "hard"],
+
+          contextLine: "The table wants the bottle to keep the mood easy and shared.",
+          guestLine: "We just want something the whole table enjoys.",
+          physicalCues: [
+            "Checks the group before answering",
+            "Easy social energy"
+          ],
+          verbalCues: [
+            "Something everyone can get behind.",
+            "Keep it fun."
+          ],
+
+          pressureBias: {
+            openness: 0.10,
+            resistance: -0.02,
+            confidence: -0.05,
+            urgency: 0.02
+          },
+
+          trapProfile: {
+            hook: "style",
+            delivery: "romantic",
+            pivot: "confusion"
+          },
+
+          notes: "Alternate flavor. Tempts style-heavy but less clear delivery."
+        },
+        {
+          id: "C",
+          label: "consensus_pressure",
+          difficulty: ["medium", "hard"],
+
+          contextLine: "They want the bottle to land well with everyone, not just one person at the table.",
+          guestLine: "It has to work for the whole group.",
+          physicalCues: [
+            "Looks around for agreement",
+            "Doesn't want the call to backfire socially"
+          ],
+          verbalCues: [
+            "It needs to land with everyone.",
+            "We don't want a weird split decision."
+          ],
+
+          pressureBias: {
+            openness: 0.05,
+            resistance: 0.05,
+            confidence: -0.04,
+            urgency: 0.06
+          },
+
+          trapProfile: {
+            hook: "balanced",
+            delivery: "vague",
+            pivot: "hesitation"
+          },
+
+          notes: "Medium pressure. Tempts safe-but-flat delivery."
+        },
+        {
+          id: "D",
+          label: "anti_generic_group",
+          difficulty: ["hard"],
+
+          contextLine: "They want a shared win, but the bottle still needs some life to it.",
+          guestLine: "Don't give us the boring safe option.",
+          physicalCues: [
+            "Warm energy, but standards still matter",
+            "Pushes back against blandness"
+          ],
+          verbalCues: [
+            "Safe is fine, boring isn't.",
+            "It still has to feel like a choice."
+          ],
+
+          pressureBias: {
+            openness: 0.04,
+            resistance: 0.12,
+            confidence: -0.08,
+            urgency: 0.04
+          },
+
+          trapProfile: {
+            hook: "practical",
+            delivery: "vague",
+            pivot: "resistance"
+          },
+
+          notes: "Hard anti-pattern. Punishes flattening the table into generic consensus."
+        },
+        {
+          id: "E",
+          label: "quick_group_landing",
+          difficulty: ["hard"],
+
+          contextLine: "The table wants the bottle landed quickly, but it still needs to feel right for the group.",
+          guestLine: "Okay, just give us the one that works for tonight.",
+          physicalCues: [
+            "Group ready to move",
+            "Wants a clean recommendation fast"
+          ],
+          verbalCues: [
+            "Just land it for us.",
+            "We want to feel good about it quickly."
+          ],
+
+          pressureBias: {
+            openness: 0.08,
+            resistance: 0.00,
+            confidence: -0.03,
+            urgency: 0.14
+          },
+
+          trapProfile: {
+            hook: "practical",
+            delivery: "rushed",
+            pivot: "impatience"
+          },
+
+          notes: "Hard urgency variant. Tests quick but still socially intelligent delivery."
+        }
+      ]
+    }),
     {
       encounterNumber: 16,
       guestStateActual: "Fancy",
