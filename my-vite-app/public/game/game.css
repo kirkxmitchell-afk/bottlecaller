@@ -239,6 +239,18 @@ button[disabled] { opacity: 0.5; cursor: not-allowed; transform: none; }
   max-width: 100%;
 }
 
+.option-title {
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.option-subtitle {
+  margin-top: 4px;
+  font-size: 12px;
+  opacity: 0.75;
+}
+
 .option-btn:hover {
   border-color: rgba(255,255,255,0.18);
   background: rgba(255,255,255,0.06);

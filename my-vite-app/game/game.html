@@ -1266,6 +1266,38 @@ console.log("BC3_MARKER_V1");
       .filter(Boolean);
   }
 
+  function getCurrentPlayerTier() {
+    const spine = getProgressionSpine({ allowNull: true });
+    return Number(spine?.selectors?.tier?.() ?? 1);
+  }
+
+  function getModeRuleForCurrentPlayer(guestType) {
+    const tier = getCurrentPlayerTier();
+    const guest = normalizeGuestType(guestType);
+
+    const rawRule =
+      MODE_MAP_BY_TIER[tier]?.[guest] ||
+      MODE_MAP_BY_TIER[2]?.[guest] ||
+      MODE_MAP_BY_TIER[1]?.[guest] ||
+      null;
+
+    if (!rawRule) return null;
+
+    const unlockedModes = getUnlockedModesForCurrentPlayer();
+
+    return {
+      optimal: rawRule.optimal
+        ? resolveCorrectModeForPlayer(rawRule.optimal, unlockedModes)
+        : null,
+      neutral: rawRule.neutral
+        ? resolveCorrectModeForPlayer(rawRule.neutral, unlockedModes)
+        : null,
+      damaging: rawRule.damaging
+        ? resolveCorrectModeForPlayer(rawRule.damaging, unlockedModes)
+        : null
+    };
+  }
+
   function resolveCorrectModeForPlayer(rawMode, unlockedModes) {
     const allowed = Array.isArray(unlockedModes)
       ? unlockedModes.map(canonicalModeFromUi).filter(Boolean)
@@ -3142,12 +3174,90 @@ function ensureProgLoaded() {
       ];
 
       // ---------- Rule maps ----------
-      const modeMap = {
-        [window.GUEST.DECIDER]: { optimal: MODES.AUTH, neutral: MODES.SCOUT, damaging: MODES.GUIDE },
-        [window.GUEST.BARGAIN_SMART]: { optimal: MODES.SCOUT, neutral: MODES.AUTH, damaging: MODES.GUIDE },
-        [window.GUEST.FANCY]: { optimal: MODES.GUIDE, neutral: MODES.AUTH, damaging: MODES.SCOUT },
-        [window.GUEST.GRIEVER]: { optimal: MODES.SCOUT, neutral: MODES.GUIDE, damaging: MODES.AUTH },
-        [window.GUEST.CELEBRATOR]: { optimal: MODES.AUTH, neutral: MODES.GUIDE, damaging: MODES.SCOUT }
+      const MODE_MAP_BY_TIER = {
+        1: {
+          [window.GUEST.DECIDER]: {
+            optimal: MODES.GUIDE,
+            neutral: MODES.SCOUT,
+            damaging: MODES.CHARM
+          },
+          [window.GUEST.BARGAIN_SMART]: {
+            optimal: MODES.SCOUT,
+            neutral: MODES.GUIDE,
+            damaging: MODES.CHARM
+          },
+          [window.GUEST.FANCY]: {
+            optimal: MODES.CHARM,
+            neutral: MODES.GUIDE,
+            damaging: MODES.SCOUT
+          },
+          [window.GUEST.GRIEVER]: {
+            optimal: MODES.SCOUT,
+            neutral: MODES.CHARM,
+            damaging: MODES.GUIDE
+          },
+          [window.GUEST.CELEBRATOR]: {
+            optimal: MODES.CHARM,
+            neutral: MODES.GUIDE,
+            damaging: MODES.SCOUT
+          }
+        },
+
+        2: {
+          [window.GUEST.DECIDER]: {
+            optimal: MODES.AUTH,
+            neutral: MODES.SCOUT,
+            damaging: MODES.GUIDE
+          },
+          [window.GUEST.BARGAIN_SMART]: {
+            optimal: MODES.SCOUT,
+            neutral: MODES.AUTH,
+            damaging: MODES.GUIDE
+          },
+          [window.GUEST.FANCY]: {
+            optimal: MODES.GUIDE,
+            neutral: MODES.CHARM,
+            damaging: MODES.SCOUT
+          },
+          [window.GUEST.GRIEVER]: {
+            optimal: MODES.SCOUT,
+            neutral: MODES.GUIDE,
+            damaging: MODES.AUTH
+          },
+          [window.GUEST.CELEBRATOR]: {
+            optimal: MODES.CHARM,
+            neutral: MODES.GUIDE,
+            damaging: MODES.SCOUT
+          }
+        },
+
+        3: {
+          [window.GUEST.DECIDER]: {
+            optimal: MODES.AUTH,
+            neutral: MODES.SCOUT,
+            damaging: MODES.GUIDE
+          },
+          [window.GUEST.BARGAIN_SMART]: {
+            optimal: MODES.SCOUT,
+            neutral: MODES.AUTH,
+            damaging: MODES.GUIDE
+          },
+          [window.GUEST.FANCY]: {
+            optimal: MODES.GUIDE,
+            neutral: MODES.CHARM,
+            damaging: MODES.SCOUT
+          },
+          [window.GUEST.GRIEVER]: {
+            optimal: MODES.SCOUT,
+            neutral: MODES.GUIDE,
+            damaging: MODES.AUTH
+          },
+          [window.GUEST.CELEBRATOR]: {
+            optimal: MODES.CHARM,
+            neutral: MODES.GUIDE,
+            damaging: MODES.SCOUT
+          }
+        }
       };
 
       const hookMap = {
@@ -3436,15 +3546,65 @@ function ensureProgLoaded() {
         return "";
       }
 
-      function uiModeLabel(modeKey, uiStyle) {
-        const MODES = window.MODES;
-        const k = String(modeKey || "").toLowerCase();
-        if (k === MODES.SCOUT) return "Scout";
-        if (k === MODES.GUIDE) return "Guide";
-        if (k === MODES.CHARM) return "Charm";
-        if (k === MODES.AUTH) return "Authority";
-        if (k === MODES.CLOSER) return "Closer";
-        return String(modeKey || "");
+      function uiModeLabel(mode, context = "game") {
+        const m = canonicalModeFromUi(mode);
+        if (m === "scout") return "Scout";
+        if (m === "guide") return "Guide";
+        if (m === "charm") return "Charm";
+        if (m === "authority") return "Authority";
+        if (m === "closer") return "Closer";
+        return String(mode || "");
+      }
+
+      function uiModeIntentLabel(mode, guestType = null, context = "game") {
+        const m = canonicalModeFromUi(mode);
+        const guest = normalizeGuestType(guestType);
+
+        if (context !== "game") {
+          return uiModeLabel(mode, context);
+        }
+
+        const guestCopy = {
+          [window.GUEST.DECIDER]: {
+            scout: "Ask one more question",
+            guide: "Narrow it down for them",
+            charm: "Keep it light and easy",
+            authority: "Recommend with certainty"
+          },
+          [window.GUEST.BARGAIN_SMART]: {
+            scout: "Ask what matters most",
+            guide: "Show the smart-value option",
+            charm: "Make value feel exciting",
+            authority: "State the strongest-value pick"
+          },
+          [window.GUEST.FANCY]: {
+            scout: "Read their taste first",
+            guide: "Steer them toward refinement",
+            charm: "Make it feel special",
+            authority: "Recommend with conviction"
+          },
+          [window.GUEST.GRIEVER]: {
+            scout: "Read the hesitation carefully",
+            guide: "Calmly reduce the risk",
+            charm: "Warm the moment up",
+            authority: "Take pressure off with certainty"
+          },
+          [window.GUEST.CELEBRATOR]: {
+            scout: "See what kind of moment this is",
+            guide: "Help them choose the right bottle",
+            charm: "Lift the energy",
+            authority: "Lead the celebration confidently"
+          }
+        };
+
+        const fallback = {
+          scout: "Ask one more question",
+          guide: "Gently recommend a bottle",
+          charm: "Make the moment feel fun",
+          authority: "Speak with firm confidence"
+        };
+
+        return guestCopy?.[guest]?.[m] || fallback[m] || uiModeLabel(mode, context);
       }
 
       function canonicalGuestType(raw) {
@@ -5555,16 +5715,16 @@ function ensureProgLoaded() {
         }
 
         if (checks.modeStatus === "damaging") {
-          const rule = modeMap[enc.guestStateActual];
-          const bestResolved = resolveCorrectModeForPlayer(rule?.optimal, getUnlockedModesForCurrentPlayer());
+          const rule = getModeRuleForCurrentPlayer(enc.guestStateActual);
+          const bestResolved = rule?.optimal || null;
           return {
             code: "MODE_DAMAGING",
             text: `Streak broke: damaging mode. Best for ${enc.guestStateActual}: ${bestResolved || "—"}.`
           };
         }
         if (gate !== "relaxed" && checks.modeStatus === "neutral") {
-          const rule = modeMap[enc.guestStateActual];
-          const bestResolved = resolveCorrectModeForPlayer(rule?.optimal, getUnlockedModesForCurrentPlayer());
+          const rule = getModeRuleForCurrentPlayer(enc.guestStateActual);
+          const bestResolved = rule?.optimal || null;
           return {
             code: "MODE_NEUTRAL_DISALLOWED",
             text: `Streak broke: neutral mode doesn’t hold at difficulty ${diff}. Best for ${enc.guestStateActual}: ${bestResolved || "—"}.`
@@ -7133,7 +7293,7 @@ function ensureProgLoaded() {
           "decider"
         ).trim().toLowerCase();
 
-        const modeRule = (typeof modeMap === "object" && modeMap && modeKey) ? modeMap[modeKey] : null;
+        const modeRule = getModeRuleForCurrentPlayer(modeKey);
         const hookRule = (typeof hookMap === "object" && hookMap && modeKey) ? hookMap[modeKey] : null;
         if (!modeRule) console.warn("[BC] modeRule missing for key:", modeKey, { encounter: encounter?.encounterNumber });
         if (!hookRule) console.warn("[BC] hookRule missing for key:", modeKey, { encounter: encounter?.encounterNumber });
@@ -7389,12 +7549,11 @@ function ensureProgLoaded() {
       }
 
       function modeWhy(actualGuestState) {
-        const rule = modeMap ? modeMap[actualGuestState] : null;
+        const rule = getModeRuleForCurrentPlayer(actualGuestState);
         if (!rule) return "No rule found for this guest type.";
-        const unlockedModes = getUnlockedModesForCurrentPlayer();
-        const optResolved = resolveCorrectModeForPlayer(rule?.optimal, unlockedModes);
-        const neuResolved = resolveCorrectModeForPlayer(rule?.neutral, unlockedModes);
-        const dmgResolved = resolveCorrectModeForPlayer(rule?.damaging, unlockedModes);
+        const optResolved = rule?.optimal || null;
+        const neuResolved = rule?.neutral || null;
+        const dmgResolved = rule?.damaging || null;
 
         const opt = uiModeLabel(optResolved, "game");
         const neu = uiModeLabel(neuResolved, "game");
@@ -7408,23 +7567,22 @@ function ensureProgLoaded() {
       }
 
       function modeWhyResolved(guestType, resolvedMode) {
-        const guest = normalizeGuestType(guestType);
         const mode = canonicalModeFromUi(resolvedMode);
 
         if (mode === "scout") {
-          return "Scout fits when you still need to read the guest and open space without pressure.";
+          return "Scout fits when you need to read the guest carefully before trying to steer them.";
         }
         if (mode === "guide") {
-          return "Guide fits when the guest needs calm confidence and clear direction without being pushed.";
+          return "Guide fits when the guest needs calm direction and confidence without pressure.";
         }
         if (mode === "charm") {
-          return "Charm fits when warmth, ease, and likability help move the guest forward.";
+          return "Charm fits when warmth, ease, and connection are the best way forward.";
         }
         if (mode === "authority") {
-          return "Authority fits when the guest needs strong certainty and decisive direction.";
+          return "Authority fits when the guest responds best to strong certainty and decisive direction.";
         }
 
-        return modeWhy(guest);
+        return "Use the mode that matches the guest's pace and emotional state.";
       }
 
       function hookWhy(actualGuestState) {
@@ -7441,14 +7599,13 @@ function ensureProgLoaded() {
       }
 
       function explainModeResult(enc) {
-        const rule = modeMap ? modeMap[enc.guestStateActual] : null;
+        const rule = getModeRuleForCurrentPlayer(enc.guestStateActual);
         if (!rule) return "Mode rule missing.";
-        const unlockedModes = getUnlockedModesForCurrentPlayer();
-        const bestResolved = resolveCorrectModeForPlayer(rule?.optimal, unlockedModes);
+        const bestResolved = rule?.optimal || null;
 
         const chosen = enc.modeSelected || "—";
         if (chosen === bestResolved) return `You matched the guest tempo: ${chosen} is optimal here.`;
-        if (chosen === resolveCorrectModeForPlayer(rule?.neutral, unlockedModes)) {
+        if (chosen === (rule?.neutral || null)) {
           return `Not bad — ${chosen} is neutral here, but ${bestResolved} would close better.`;
         }
         return `That felt right, but for ${enc.guestStateActual} the best is ${bestResolved}. ${chosen} usually loses control.`;
@@ -7486,8 +7643,8 @@ function ensureProgLoaded() {
           case "read":
             return `Coach: Your first job is the READ. You chose “${chosenRead}”, but this was “${actual}”. Slow down and name the pressure cue before you act.`;
           case "mode": {
-            const rule = modeMap[actual];
-            const best = uiModeLabel(resolveCorrectModeForPlayer(rule?.optimal, getUnlockedModesForCurrentPlayer()), "game") || "—";
+            const rule = getModeRuleForCurrentPlayer(actual);
+            const best = uiModeLabel(rule?.optimal || null, "game") || "—";
             return `Coach: You read the guest, but you played the wrong MODE. For “${actual}”, best is ${best} — you chose ${chosenMode}. Match the tempo before you sell.`;
           }
           case "hook": {
@@ -7531,8 +7688,9 @@ function ensureProgLoaded() {
       }
 
       function bestModeFor(state) {
-        if (!(modeMap && modeMap[state] && modeMap[state].optimal)) return "";
-        return uiModeLabel(resolveCorrectModeForPlayer(modeMap[state].optimal, getUnlockedModesForCurrentPlayer()), "game");
+        const rule = getModeRuleForCurrentPlayer(state);
+        if (!rule?.optimal) return "";
+        return uiModeLabel(rule.optimal, "game");
       }
 
       function bestHookFor(state) {
@@ -8498,7 +8656,19 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             const btn = document.createElement("button");
             btn.type = "button";
             btn.className = "option-btn" + (currentEncounter.modeSelected === mode ? " selected" : "");
-            btn.innerText = uiModeLabel(mode, "game");
+
+            const primary = document.createElement("div");
+            primary.className = "option-title";
+            primary.innerText = uiModeIntentLabel(mode, currentEncounter.guestStateActual, "game");
+
+            const secondary = document.createElement("div");
+            secondary.className = "option-subtitle";
+            secondary.innerText = uiModeLabel(mode, "game");
+
+            btn.innerHTML = "";
+            btn.appendChild(primary);
+            btn.appendChild(secondary);
+
             bindInput(btn, () => {
               currentEncounter.modeSelected = mode;
               renderEncounterStep();
@@ -8886,15 +9056,12 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         if (currentStep === 6) {
           const checks = window.evaluateChecks(window.currentEncounter || currentEncounter);
           const unlockedModes = getUnlockedModesForCurrentPlayer();
-
-          const rawModeBest =
-            modeMap && modeMap[currentEncounter.guestStateActual]
-              ? (modeMap[currentEncounter.guestStateActual].optimal || null)
-              : null;
+          const modeRuleForPlayer = getModeRuleForCurrentPlayer(currentEncounter.guestStateActual);
 
           const modeBestResolved =
             currentEncounter.correctModeResolved ||
-            resolveCorrectModeForPlayer(rawModeBest, unlockedModes);
+            modeRuleForPlayer?.optimal ||
+            null;
 
           currentEncounter.correctModeResolved = modeBestResolved;
           assertModeConsistency(unlockedModes, modeBestResolved, {
@@ -10901,18 +11068,12 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           };
         };
 
-        const modeRule = safeGetRule(window.modeMap || modeMap, modeKey);
+        const modeRule = getModeRuleForCurrentPlayer(modeKey);
         const hookRule = safeGetRule(window.hookMap || hookMap, modeKey);
 
         const unlockedModes = getUnlockedModesForCurrentPlayer();
-
-        const resolvedOptimalMode = modeRule?.optimal
-          ? resolveCorrectModeForPlayer(modeRule.optimal, unlockedModes)
-          : null;
-
-        const resolvedNeutralMode = modeRule?.neutral
-          ? resolveCorrectModeForPlayer(modeRule.neutral, unlockedModes)
-          : null;
+        const resolvedOptimalMode = modeRule?.optimal || null;
+        const resolvedNeutralMode = modeRule?.neutral || null;
 
         encounter.correctModeResolved = resolvedOptimalMode || null;
         encounter.correctModeNeutralResolved = resolvedNeutralMode || null;
@@ -10926,12 +11087,15 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           });
         }
 
+        // Mode status
         let modeStatus = "neutral";
-        if (resolvedOptimalMode && encounter.modeSelected && encounter.modeSelected === resolvedOptimalMode) {
+        const chosenMode = canonicalModeFromUi(encounter.modeSelected);
+
+        if (resolvedOptimalMode && chosenMode && chosenMode === resolvedOptimalMode) {
           modeStatus = "optimal";
-        } else if (resolvedNeutralMode && encounter.modeSelected && encounter.modeSelected === resolvedNeutralMode) {
+        } else if (resolvedNeutralMode && chosenMode && chosenMode === resolvedNeutralMode) {
           modeStatus = "neutral";
-        } else if (modeRule && encounter.modeSelected) {
+        } else if (modeRule && chosenMode) {
           modeStatus = "damaging";
         }
 
