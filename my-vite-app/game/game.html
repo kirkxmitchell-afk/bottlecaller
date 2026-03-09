@@ -3626,6 +3626,10 @@ function ensureProgLoaded() {
       }
 
       function uiHookLabel(hook, context = "game") {
+        const key = canonicalHook(hook);
+        if (key === "value") return "Value";
+        if (key === "flavour") return "Flavour";
+        if (key === "story") return "Story";
         return String(hook || "").trim();
       }
 
@@ -3715,6 +3719,62 @@ function ensureProgLoaded() {
         if (context !== "game") {
           return uiHookLabel(hook, context);
         }
+
+        const directTypeBase = {
+          [window.GUEST.DECIDER]: {
+            value: "Make the decision easier to justify",
+            flavour: "Give a clear taste signal",
+            story: "Add meaning without adding friction"
+          },
+          [window.GUEST.BARGAIN_SMART]: {
+            value: "Make the spend feel justified",
+            flavour: "Describe what they get clearly",
+            story: "Add context that supports value"
+          },
+          [window.GUEST.FANCY]: {
+            value: "Show quality beyond price",
+            flavour: "Describe the style with precision",
+            story: "Make it feel distinctive and considered"
+          },
+          [window.GUEST.GRIEVER]: {
+            value: "Reduce risk around the spend",
+            flavour: "Reassure with safe, clear taste",
+            story: "Add confidence without pressure"
+          },
+          [window.GUEST.CELEBRATOR]: {
+            value: "Show why it is worth the moment",
+            flavour: "Match taste to celebration energy",
+            story: "Connect the bottle to the occasion"
+          }
+        };
+
+        const directTypeAdvanced = {
+          [window.GUEST.DECIDER]: {
+            value: "Lower decision friction with a clear value case",
+            flavour: "Use flavour to simplify, not widen options",
+            story: "Use story briefly to support the choice"
+          },
+          [window.GUEST.BARGAIN_SMART]: {
+            value: "Frame a defensible value-to-quality trade-off",
+            flavour: "Use flavour details that justify price",
+            story: "Use story only if it strengthens the value case"
+          },
+          [window.GUEST.FANCY]: {
+            value: "Signal value through discernment, not discounting",
+            flavour: "Use precise flavour language with restraint",
+            story: "Use story to elevate and differentiate"
+          },
+          [window.GUEST.GRIEVER]: {
+            value: "Use value to reduce perceived risk",
+            flavour: "Use flavour as reassurance and clarity",
+            story: "Use story to calm, not impress"
+          },
+          [window.GUEST.CELEBRATOR]: {
+            value: "Tie value to emotional payoff for the table",
+            flavour: "Use flavour to reinforce celebration fit",
+            story: "Use story to amplify occasion meaning"
+          }
+        };
 
         const base = {
           [window.GUEST.DECIDER]: {
@@ -3809,6 +3869,12 @@ function ensureProgLoaded() {
         };
 
         const useAdvanced = tier >= 2 || pressureBand !== "low";
+        const directType =
+          (useAdvanced ? directTypeAdvanced?.[guest]?.[hookKey] : null) ||
+          directTypeBase?.[guest]?.[hookKey] ||
+          null;
+        if (directType) return directType;
+
         return (
           (useAdvanced ? advanced?.[guest]?.[hookKey] : null) ||
           base?.[guest]?.[hookKey] ||
@@ -3821,6 +3887,9 @@ function ensureProgLoaded() {
         const key = canonicalHook(hook);
 
         const labels = {
+          value: "Value",
+          flavour: "Flavour",
+          story: "Story",
           by_the_glass: "By the Glass",
           trusted_pick: "Trusted Pick",
           popular_choice: "Popular Choice",
@@ -3895,21 +3964,26 @@ function ensureProgLoaded() {
             "I want something that's worth it.",
             "I don't mind spending if it makes sense.",
             "I'm looking for the smart choice here.",
-            "I want value, not just a bigger price tag."
+            "I want value, not just a bigger price tag.",
+            "I don't mind paying more if there's a clear step up."
           ],
 
           [window.GUEST.FANCY]: [
             "I want something with a bit more character.",
             "I'm after something refined.",
             "I'd like something that feels elevated.",
-            "I want this to feel a little more special."
+            "I want this to feel a little more special.",
+            "I want something that feels chosen, not obvious.",
+            "I'm looking for something with a bit more taste to it."
           ],
 
           [window.GUEST.GRIEVER]: [
+            "I'm not very confident choosing wine.",
+            "I'm worried I'll pick something I don't like.",
+            "I just don't want to end up with the wrong bottle.",
+            "I'm a bit nervous about getting this wrong.",
             "I'm not sure I'll enjoy that.",
-            "I don't want to get this wrong.",
-            "I'm a bit nervous about choosing badly.",
-            "I'm not very confident with wine, to be honest."
+            "I usually play it safe with wine."
           ],
 
           [window.GUEST.CELEBRATOR]: [
@@ -3927,15 +4001,16 @@ function ensureProgLoaded() {
           ],
           [window.GUEST.BARGAIN_SMART]: [
             "I'll spend more if there's a clear reason.",
-            "I'm not chasing cheap - I'm chasing value."
+            "I'm not looking for cheap - I'm looking for something that earns its price."
           ],
           [window.GUEST.FANCY]: [
             "I want something with polish, not just price.",
-            "I'm looking for something with presence."
+            "I'm looking for something with presence.",
+            "I'm after something that feels deliberate."
           ],
           [window.GUEST.GRIEVER]: [
-            "I just don't want to regret the bottle.",
-            "I need to feel safe saying yes to it."
+            "I just don't want to regret ordering it.",
+            "I want to feel sure before I say yes."
           ],
           [window.GUEST.CELEBRATOR]: [
             "It needs to feel worthy of the occasion.",
@@ -3950,15 +4025,16 @@ function ensureProgLoaded() {
           ],
           [window.GUEST.BARGAIN_SMART]: [
             "I need a reason this is worth the extra money.",
-            "Convince me this is the smart spend."
+            "I need to understand why this is the smart spend."
           ],
           [window.GUEST.FANCY]: [
             "I don't want something obvious.",
-            "I want it to feel considered."
+            "I want it to feel considered.",
+            "I want to feel like this bottle has been chosen properly."
           ],
           [window.GUEST.GRIEVER]: [
             "I really don't want to make a bad call here.",
-            "I need to feel confident before I commit."
+            "I'm nervous about committing to the wrong one."
           ],
           [window.GUEST.CELEBRATOR]: [
             "It has to land properly for the table.",
@@ -3989,19 +4065,22 @@ function ensureProgLoaded() {
           [window.GUEST.BARGAIN_SMART]: [
             "The guest studies the prices before the wines.",
             "The guest wants confidence that the bottle is worth the spend.",
-            "The guest is open, but value-sensitive."
+            "The guest is open, but value-sensitive.",
+            "The guest is mentally comparing price to quality."
           ],
 
           [window.GUEST.FANCY]: [
             "The guest wants the bottle to feel like part of the experience.",
             "The guest responds to refinement and tone.",
-            "The guest is looking for something with a sense of taste."
+            "The guest is looking for something with a sense of taste.",
+            "The guest is listening for whether the recommendation feels thoughtful.",
+            "The guest wants the bottle to feel intentionally chosen."
           ],
 
           [window.GUEST.GRIEVER]: [
             "The guest looks cautious and slightly guarded.",
             "The guest wants reassurance more than excitement.",
-            "The guest seems afraid of making the wrong choice."
+            "The guest looks worried about choosing wrong."
           ],
 
           [window.GUEST.CELEBRATOR]: [
@@ -4020,6 +4099,7 @@ function ensureProgLoaded() {
           ],
           [window.GUEST.FANCY]: [
             "The guest is judging the recommendation as much as the bottle.",
+            "The guest notices whether the recommendation feels generic or considered.",
           ],
           [window.GUEST.GRIEVER]: [
             "The guest needs the risk of the choice reduced before they commit.",
@@ -4038,6 +4118,7 @@ function ensureProgLoaded() {
           ],
           [window.GUEST.FANCY]: [
             "The guest's standards are high and the tone matters.",
+            "The guest will disengage if the recommendation feels obvious or flat.",
           ],
           [window.GUEST.GRIEVER]: [
             "The guest's hesitation is close to turning into refusal.",
@@ -4069,17 +4150,23 @@ function ensureProgLoaded() {
           [window.GUEST.BARGAIN_SMART]: [
             "They care about whether it's worth it.",
             "They are price-aware without being closed.",
-            "They want a good reason to spend."
+            "They want a good reason to spend.",
+            "They're looking for the smartest trade-off.",
+            "They want the spend to feel justified."
           ],
           [window.GUEST.FANCY]: [
             "They respond to tone and refinement.",
             "They want the bottle to feel stylish.",
-            "They care about the feel of the recommendation."
+            "They care about the feel of the recommendation.",
+            "They are sensitive to whether the recommendation feels thoughtful.",
+            "They want the bottle to feel distinctive, not merely expensive."
           ],
           [window.GUEST.GRIEVER]: [
             "They need reassurance before they move.",
             "They seem afraid of choosing wrong.",
-            "They're looking for safety."
+            "They're looking for safety.",
+            "They're waiting for reassurance before committing.",
+            "They seem more worried about risk than excited about wine."
           ],
           [window.GUEST.CELEBRATOR]: [
             "They want the bottle to match the mood.",
@@ -6982,42 +7069,57 @@ function ensureProgLoaded() {
         const chosen = canonicalModeFromUi(e.recoveryChoice);
         const best = canonicalModeFromUi(e.recoveryCorrectModeResolved || e.recoveryCorrectMode || "");
         const pivotType = String(e.pivotType || "").trim().toLowerCase();
+        const pressure = e.guestPressure || initGuestPressureState(e);
 
         const chosenLabel = chosen ? uiModeLabel(chosen, "game") : "Your choice";
         const bestLabel = best ? uiModeLabel(best, "game") : "the best response";
 
         const pivotReasons = {
           objection: {
-            scout: "Scout helps when you need to understand the resistance before trying to move it.",
-            guide: "Guide helps when the guest needs calm direction through the hesitation.",
-            charm: "Charm helps when the moment needs warmth before it can move again.",
-            authority: "Authority helps when the guest needs strong certainty to break the stall."
+            scout: "Scout helps when the guest is still holding back a hidden concern.",
+            guide: "Guide helps when the guest needs the choice simplified and made safer.",
+            charm: "Charm helps when the pushback is emotional and the moment needs softening.",
+            authority: "Authority helps when the guest wants someone decisive to settle the objection."
           },
           hesitation: {
-            scout: "Scout helps when hesitation hides the real concern.",
-            guide: "Guide helps when the guest needs a safer path forward.",
-            charm: "Charm helps when lightness reduces the emotional weight of the choice.",
-            authority: "Authority helps when the guest wants someone decisive to lead."
+            scout: "Scout helps when hesitation is still hiding the real blocker.",
+            guide: "Guide helps when the guest needs a calmer path to yes.",
+            charm: "Charm helps when lightness reduces the emotional drag of the moment.",
+            authority: "Authority helps when the guest wants certainty more than exploration."
           },
           confusion: {
-            scout: "Scout helps when you still need the missing clue.",
-            guide: "Guide helps when the guest needs the choice simplified clearly.",
-            charm: "Charm helps when the moment is getting stiff and needs ease.",
-            authority: "Authority helps when the guest responds best to direct clarity."
+            scout: "Scout helps when more signal is still needed.",
+            guide: "Guide helps when the guest needs clean structure and clarity.",
+            charm: "Charm helps when the conversation is stiff and needs warming.",
+            authority: "Authority helps when direct clarity will settle the confusion."
           },
           resistance: {
-            scout: "Scout helps when resistance is hiding something unspoken.",
-            guide: "Guide helps when pressure must be lowered while keeping direction.",
-            charm: "Charm helps when the relationship needs warming before moving again.",
-            authority: "Authority helps when the resistance softens under confident leadership."
+            scout: "Scout helps when the resistance may be hiding something more specific.",
+            guide: "Guide helps when the guest needs direction without pressure.",
+            charm: "Charm helps when the resistance softens through rapport and ease.",
+            authority: "Authority helps when the guest actually wants a decisive lead."
+          },
+          impatience: {
+            scout: "Scout can slow things down too much for an impatient guest.",
+            guide: "Guide helps when the guest needs a quick but calm narrowing of the field.",
+            charm: "Charm can help if the pressure is emotional, but may not finish the choice fast enough.",
+            authority: "Authority helps when the guest wants the decision made cleaner and faster."
           }
         };
 
         const reasonMap = pivotReasons[pivotType] || {};
 
-        const bestWhy =
+        let bestWhy =
           reasonMap[best] ||
           `${bestLabel} was the strongest way to recover this moment.`;
+
+        if (pressure.resistance >= 0.7) {
+          bestWhy += " The guest was still carrying visible resistance.";
+        } else if (pressure.confidence <= 0.35) {
+          bestWhy += " The guest still lacked confidence in the choice.";
+        } else if (pressure.urgency >= 0.7) {
+          bestWhy += " The moment needed a cleaner finish quickly.";
+        }
 
         const okayWhy =
           `${chosenLabel} could work, but ${bestLabel} would have recovered the moment more cleanly.`;
@@ -7026,7 +7128,7 @@ function ensureProgLoaded() {
           `${chosenLabel} was a weak recovery here. ${bestLabel} would have fit the pivot better.`;
 
         if (chosen && best && chosen === best) return bestWhy;
-        if (chosen) return okayWhy.startsWith(chosenLabel) ? okayWhy : weakWhy;
+        if (chosen) return okayWhy;
         return bestWhy;
       }
 
@@ -7775,20 +7877,32 @@ function ensureProgLoaded() {
         return pickRandom(holdLines);
       }
 
-      function buildSentence1Wrong() {
+      function buildSentence1Wrong(encounter = null) {
+        const guest = normalizeGuestType(encounter?.guestStateActual);
+
+        if (guest === window.GUEST.DECIDER) {
+          return [
+            "There are a few good directions we could go in here.",
+            "It depends - there are a lot of different styles to think about.",
+            "I can give you a few options and you can see what feels right.",
+            "We could keep it open for now and look at a couple of possibilities.",
+            "There isn't really one clear choice - it just depends what mood you're in.",
+            "I can talk you through several bottles before you decide.",
+            "You could go in a few different directions from here.",
+            "It's one of those choices where there isn't really a wrong answer.",
+            "There are a number of wines that could work here.",
+            "We can keep it broad and narrow it later."
+          ];
+        }
+
         return [
-          "Let’s make this complicated — you’ll feel it out.",
-          "Honestly… everything here is pretty good.",
-          "You choose first, then I’ll confirm it.",
-          "I can’t really say until I know exactly what you like.",
-          "Let’s start with the most expensive one — it’s impressive.",
-          "I’ll just name three wines and see what sticks.",
-          "We don’t need a reason — just pick something.",
-          "I’m not sure, but this one is popular so maybe that.",
-          "Let me explain the full wine list before we decide.",
-          "I’ll go with a random bottle — it’s all subjective anyway.",
-          "We’ll play it safe by avoiding anything memorable.",
-          "Let’s stay vague so you can’t disagree with me."
+          "Honestly... everything here is pretty good.",
+          "You choose first, then I'll confirm it.",
+          "I can't really say until I know exactly what you like.",
+          "Let's start with the most expensive one - it's impressive.",
+          "I'll just name three wines and see what sticks.",
+          "I'm not sure, but this one is popular so maybe that.",
+          "Let me explain the full wine list before we decide."
         ];
       }
 
@@ -7812,6 +7926,92 @@ function ensureProgLoaded() {
           "It’s complicated — I’ll explain it later.",
           "Let’s just gamble on something random."
         ];
+      }
+
+      function getDeliveryDistractorProfile(encounter) {
+        const p = encounter?.guestPressure || initGuestPressureState(encounter);
+
+        if (p.resistance >= 0.7) return "pushy";
+        if (p.confidence <= 0.35) return "vague";
+        if (p.urgency >= 0.7) return "rushed";
+        if (p.openness >= 0.7) return "romantic";
+        return "balanced";
+      }
+
+      function buildSentence1WrongByPressure(encounter) {
+        const profile = getDeliveryDistractorProfile(encounter);
+
+        const pools = {
+          pushy: [
+            "This is the one you should just go with.",
+            "You don't need to think about it - just trust me on this.",
+            "Let's not overcomplicate it, this is clearly the right bottle."
+          ],
+          vague: [
+            "It's just a nice option overall.",
+            "It's good in a general kind of way.",
+            "It could work if that sounds okay to you."
+          ],
+          rushed: [
+            "Let's just land this quickly with this bottle.",
+            "This will do the job, so let's go with it.",
+            "If you want to move fast, just take this one."
+          ],
+          romantic: [
+            "It has a lovely energy to it.",
+            "There's something beautiful about this bottle.",
+            "It just feels like the right kind of wine."
+          ],
+          balanced: [
+            "There are a few directions we could go in.",
+            "It depends a bit on what kind of mood you're in.",
+            "There are several bottles that could work here."
+          ]
+        };
+
+        return pools[profile] || pools.balanced;
+      }
+
+      function buildSentence2WrongByPressure(encounter) {
+        const profile = getDeliveryDistractorProfile(encounter);
+
+        const pools = {
+          pushy: [
+            "It's the best one, so there's no real reason not to take it.",
+            "It's obviously the strongest choice on the list.",
+            "It's just the right bottle, full stop."
+          ],
+          vague: [
+            "It works with things in a general way.",
+            "It kind of fits a lot of dishes.",
+            "It usually works for most people."
+          ],
+          rushed: [
+            "It works well enough, so we can move on with that.",
+            "It makes sense quickly, which is what matters here.",
+            "It's efficient and easy, so let's keep it simple."
+          ],
+          romantic: [
+            "It gives the table a beautiful kind of feeling.",
+            "It brings a lovely sense of atmosphere.",
+            "It adds something expressive to the whole moment."
+          ],
+          balanced: [
+            "It could go in a few different directions from here.",
+            "It works in a broad sort of way.",
+            "It's one of those bottles that generally works."
+          ]
+        };
+
+        return pools[profile] || pools.balanced;
+      }
+
+      function mergeWeightedWrongPools(basePool, pressurePool, weight = 2) {
+        const merged = [...(basePool || [])];
+        for (let i = 0; i < weight; i++) {
+          merged.push(...(pressurePool || []));
+        }
+        return merged;
       }
 
       function getSlots(n) {
@@ -7926,11 +8126,15 @@ function ensureProgLoaded() {
         const slots2 = getSlots(s2Count);
 
         const correct1Raw = buildSentence1Correct(encounter);
-        const wrongs1Raw = buildSentence1Wrong();
+        const wrongs1Base = buildSentence1Wrong(encounter);
+        const wrongs1Pressure = buildSentence1WrongByPressure(encounter);
+        const wrongs1Raw = mergeWeightedWrongPools(wrongs1Base, wrongs1Pressure, 2);
         const [wrong1aRaw, wrong1bRaw] = pickWrongPairByNoise(wrongs1Raw, correct1Raw, noise);
 
         const correct2Raw = buildSentence2Correct(encounter);
-        const wrongs2Raw = buildSentence2Wrong();
+        const wrongs2Base = buildSentence2Wrong();
+        const wrongs2Pressure = buildSentence2WrongByPressure(encounter);
+        const wrongs2Raw = mergeWeightedWrongPools(wrongs2Base, wrongs2Pressure, 2);
         const [wrong2aRaw, wrong2bRaw] = pickWrongPairByNoise(wrongs2Raw, correct2Raw, noise);
 
         const correct1 = stylizeDeliveryLine(correct1Raw, "emotional", encounter);
@@ -7999,6 +8203,236 @@ function ensureProgLoaded() {
           encounter.deliveryLine2 = "";
           encounter.deliveryLine2Key = "";
         }
+      }
+
+      function initGuestPressureState(encounter) {
+        const guest = normalizeGuestType(encounter?.guestStateActual);
+
+        const baseByGuest = {
+          [window.GUEST.DECIDER]: {
+            openness: 0.55,
+            resistance: 0.35,
+            confidence: 0.40,
+            urgency: 0.55
+          },
+          [window.GUEST.BARGAIN_SMART]: {
+            openness: 0.45,
+            resistance: 0.50,
+            confidence: 0.45,
+            urgency: 0.40
+          },
+          [window.GUEST.FANCY]: {
+            openness: 0.50,
+            resistance: 0.45,
+            confidence: 0.50,
+            urgency: 0.35
+          },
+          [window.GUEST.GRIEVER]: {
+            openness: 0.30,
+            resistance: 0.60,
+            confidence: 0.25,
+            urgency: 0.30
+          },
+          [window.GUEST.CELEBRATOR]: {
+            openness: 0.65,
+            resistance: 0.25,
+            confidence: 0.55,
+            urgency: 0.60
+          }
+        };
+
+        const base = baseByGuest[guest] || {
+          openness: 0.5,
+          resistance: 0.4,
+          confidence: 0.4,
+          urgency: 0.4
+        };
+
+        return {
+          openness: base.openness,
+          resistance: base.resistance,
+          confidence: base.confidence,
+          urgency: base.urgency
+        };
+      }
+
+      function clamp01(n) {
+        return Math.max(0, Math.min(1, Number(n || 0)));
+      }
+
+      function updateGuestPressureState(encounter, checks = null) {
+        const e = encounter || {};
+        const c = checks || (typeof window.evaluateChecks === "function" ? window.evaluateChecks(e) : {});
+        const p = e.guestPressure || initGuestPressureState(e);
+
+        const next = { ...p };
+
+        const readCorrect = !!(e.readCorrect ?? c.guestRead);
+        const modeStatus = e.modeStatus || c.modeStatus || "neutral";
+        const hookStatus = e.hookStatus || c.hookStatus || "neutral";
+        const deliveryCorrect = !!(e.deliveryCorrect ?? c.deliveryCorrect);
+        const pivotPresent = !!e.recoveryText;
+        const pivotCorrect = !!e.recoveryCorrect;
+
+        // Read quality
+        if (readCorrect) {
+          next.openness += 0.08;
+          next.confidence += 0.06;
+          next.resistance -= 0.05;
+        } else {
+          next.openness -= 0.08;
+          next.confidence -= 0.06;
+          next.resistance += 0.08;
+        }
+
+        // Mode effect
+        if (modeStatus === "optimal") {
+          next.openness += 0.10;
+          next.confidence += 0.08;
+          next.resistance -= 0.08;
+        } else if (modeStatus === "neutral") {
+          next.openness += 0.02;
+          next.confidence += 0.01;
+        } else if (modeStatus === "damaging") {
+          next.openness -= 0.10;
+          next.confidence -= 0.08;
+          next.resistance += 0.10;
+        }
+
+        // Hook effect
+        if (hookStatus === "optimal") {
+          next.openness += 0.08;
+          next.confidence += 0.05;
+          next.resistance -= 0.06;
+        } else if (hookStatus === "neutral") {
+          next.openness += 0.01;
+        } else if (hookStatus === "damaging") {
+          next.openness -= 0.07;
+          next.confidence -= 0.05;
+          next.resistance += 0.07;
+        }
+
+        // Delivery effect
+        if (deliveryCorrect) {
+          next.confidence += 0.10;
+          next.openness += 0.05;
+          next.resistance -= 0.05;
+        } else {
+          next.confidence -= 0.08;
+          next.resistance += 0.05;
+        }
+
+        // Pivot effect
+        if (pivotPresent) {
+          if (pivotCorrect) {
+            next.openness += 0.08;
+            next.confidence += 0.08;
+            next.resistance -= 0.08;
+          } else if (e.recoveryChoice) {
+            next.openness -= 0.07;
+            next.confidence -= 0.07;
+            next.resistance += 0.08;
+          }
+        }
+
+        // Urgency rises slightly when resistance and uncertainty remain high
+        next.urgency += (next.resistance > 0.6 ? 0.05 : 0);
+        next.urgency += (next.confidence < 0.35 ? 0.03 : 0);
+
+        next.openness = clamp01(next.openness);
+        next.resistance = clamp01(next.resistance);
+        next.confidence = clamp01(next.confidence);
+        next.urgency = clamp01(next.urgency);
+
+        e.guestPressure = next;
+        return next;
+      }
+
+      function getPressureProfile(encounter) {
+        const p = encounter?.guestPressure || initGuestPressureState(encounter);
+
+        const tags = [];
+
+        if (p.resistance >= 0.7) tags.push("resistant");
+        if (p.confidence <= 0.35) tags.push("uncertain");
+        if (p.urgency >= 0.7) tags.push("urgent");
+        if (p.openness >= 0.7) tags.push("open");
+
+        if (!tags.length) tags.push("balanced");
+
+        return tags;
+      }
+
+      function getHookDistractorBiases(encounter) {
+        const tags = getPressureProfile(encounter);
+
+        const pool = {
+          resistant: [
+            "VALUE",
+            "VALUE",
+            "STORY"
+          ],
+          uncertain: [
+            "FLAVOUR",
+            "FLAVOUR",
+            "STORY"
+          ],
+          urgent: [
+            "VALUE",
+            "VALUE",
+            "FLAVOUR"
+          ],
+          open: [
+            "STORY",
+            "STORY",
+            "FLAVOUR"
+          ],
+          balanced: [
+            "VALUE",
+            "FLAVOUR",
+            "STORY"
+          ]
+        };
+
+        return tags.flatMap(tag => pool[tag] || []);
+      }
+
+      function pickHookTypesForEncounter(encounter) {
+        const guest = normalizeGuestType(encounter?.guestStateActual);
+        const rule =
+          hookMap && hookMap[guest]
+            ? hookMap[guest]
+            : null;
+
+        if (!rule) {
+          return ["FLAVOUR", "VALUE", "STORY"];
+        }
+
+        const optimal = String(rule.optimal || "").trim().toUpperCase();
+        const neutral = String(rule.neutral || "").trim().toUpperCase();
+        const damaging = String(rule.damaging || "").trim().toUpperCase();
+
+        const pressureBias = getHookDistractorBiases(encounter).map((t) => String(t || "").trim().toUpperCase());
+        const distractorPool = pressureBias.length ? pressureBias : [neutral, damaging];
+
+        let distractorA = distractorPool.find(t => t && t !== optimal) || neutral || damaging;
+        let distractorB = distractorPool.find(t => t && t !== optimal && t !== distractorA) || damaging || neutral;
+
+        if (!distractorA) distractorA = neutral || damaging || optimal;
+        if (!distractorB) distractorB = damaging || neutral || optimal;
+
+        const out = [optimal, distractorA, distractorB].filter(Boolean);
+        const uniq = [];
+        out.forEach((t) => {
+          if (!uniq.includes(t)) uniq.push(t);
+        });
+        const fallback = [neutral, damaging, "FLAVOUR", "VALUE", "STORY"]
+          .map((t) => String(t || "").trim().toUpperCase())
+          .filter(Boolean);
+        fallback.forEach((t) => {
+          if (uniq.length < 3 && !uniq.includes(t)) uniq.push(t);
+        });
+        return uniq.slice(0, 3);
       }
 
       function evaluateChecks(encounterOverride) {
@@ -8256,6 +8690,7 @@ function ensureProgLoaded() {
         encounter.__resolvedLogged = false;
         encounter.dynamicGuestReaction = null;
         encounter.dynamicGuestLine = null;
+        encounter.guestPressure = initGuestPressureState(encounter);
 
         return encounter;
       }
@@ -8577,7 +9012,7 @@ function ensureProgLoaded() {
           [window.GUEST.FANCY]: {
             best: `${bestLabel} was strongest because this guest responds to taste, tone, and a refined experience.`,
             okay: `${chosenLabel} could work, but ${bestLabel} would have fit the guest's style more naturally.`,
-            weak: `${chosenLabel} was a weak fit because it missed the tone this guest was looking for. ${bestLabel} was better.`
+            weak: `${chosenLabel} was a weak fit because it missed the tone and style this guest was looking for. ${bestLabel} was better.`
           },
 
           [window.GUEST.GRIEVER]: {
@@ -8765,6 +9200,7 @@ function ensureProgLoaded() {
 
       function renderCoachLineBlock(container, encounter, checks) {
         const fb = getResolvedEncounterFeedback(encounter, checks);
+        const pressure = encounter?.guestPressure || null;
 
         let line = "";
 
@@ -8779,7 +9215,13 @@ function ensureProgLoaded() {
         } else if (encounter?.recoveryText && !fb.result.pivotCorrect) {
           line = `${uiModeLabel(fb.best.pivot, "game")} would have recovered the pivot better than ${uiModeLabel(fb.chosen.pivot, "game")}.`;
         } else {
-          line = "Good chain. You matched the guest, opened well, and delivered it cleanly.";
+          if (pressure?.confidence >= 0.7) {
+            line = "Good chain. The guest now feels confident enough to trust the recommendation.";
+          } else if (pressure?.openness >= 0.7) {
+            line = "Good chain. The guest is opening up and the recommendation is landing naturally.";
+          } else {
+            line = "Good chain. You matched the guest, opened well, and delivered it cleanly.";
+          }
         }
 
         const block = document.createElement("div");
@@ -8792,6 +9234,7 @@ function ensureProgLoaded() {
       function buildDynamicGuestReaction(encounter, checks = null) {
         const e = encounter || {};
         const c = checks || (typeof window.evaluateChecks === "function" ? window.evaluateChecks(e) : {});
+        const pressure = e.guestPressure || initGuestPressureState(e);
 
         const guest = normalizeGuestType(e.guestStateActual);
         const readCorrect = !!(e.readCorrect ?? c.guestRead);
@@ -8902,11 +9345,24 @@ function ensureProgLoaded() {
           pivotLine = pivotCorrect ? lines.pivotStrong : lines.pivotWeak;
         }
 
+        let pressureNote = "";
+
+        if (pressure.resistance >= 0.7) {
+          pressureNote = " The guest still feels guarded.";
+        } else if (pressure.confidence >= 0.7) {
+          pressureNote = " The guest is starting to trust the recommendation.";
+        } else if (pressure.openness >= 0.7) {
+          pressureNote = " The guest feels increasingly open to the bottle.";
+        } else if (pressure.urgency >= 0.7) {
+          pressureNote = " The moment feels like it needs a cleaner finish soon.";
+        }
+
         return {
           primary,
           secondary,
           pivot: pivotLine,
-          combined: [primary, secondary, pivotLine].filter(Boolean).join(" ")
+          pressureNote,
+          combined: [primary, secondary, pivotLine, pressureNote].filter(Boolean).join(" ")
         };
       }
 
@@ -8918,6 +9374,7 @@ function ensureProgLoaded() {
       function buildDynamicGuestLine(encounter, checks = null) {
         const e = encounter || {};
         const c = checks || (typeof window.evaluateChecks === "function" ? window.evaluateChecks(e) : {});
+        const pressure = e.guestPressure || initGuestPressureState(e);
 
         const guest = normalizeGuestType(e.guestStateActual);
         const readCorrect = !!(e.readCorrect ?? c.guestRead);
@@ -8976,14 +9433,15 @@ function ensureProgLoaded() {
               "That makes sense for the price."
             ],
             medium: [
-              "Maybe... I'm still weighing it up.",
+              "Maybe... I'm still weighing whether it's worth it.",
               "Alright, but I'm still thinking about value.",
               "I can hear that, but I'm not fully sold."
             ],
             weak: [
               "I'm not sure that's worth it.",
               "Hmm... I don't really see the value yet.",
-              "That doesn't sound like the smart option to me."
+              "That doesn't sound like the smart option to me.",
+              "I'm not convinced the price makes sense."
             ],
             pivotStrong: [
               "Okay, now I can see why it makes sense.",
@@ -9001,22 +9459,25 @@ function ensureProgLoaded() {
             strong: [
               "Now that sounds more like it.",
               "Yes, that feels elegant.",
-              "Mm, that's much more the kind of thing I'd want."
+              "Mm, that's much more the kind of thing I'd want.",
+              "Yes, that feels much more considered."
             ],
             medium: [
               "Okay... I can see the direction.",
-              "Hmm, there's something there.",
+              "Hmm, I can see the idea, but it still feels a little plain.",
               "Maybe, but it still doesn't feel fully elevated."
             ],
             weak: [
               "Hmm... that feels a bit flat.",
               "I'm not really getting excited by that.",
-              "That's not quite the feeling I'm after."
+              "That's not quite the feeling I'm after.",
+              "That feels a bit too obvious for what I want."
             ],
             pivotStrong: [
               "Yes, that recovers it nicely.",
               "Alright, now it feels more polished.",
-              "That's better."
+              "That's better.",
+              "Yes, that brings the tone back."
             ],
             pivotWeak: [
               "No, it still doesn't feel right.",
@@ -9029,17 +9490,19 @@ function ensureProgLoaded() {
             strong: [
               "Okay... that makes me feel better about it.",
               "Right, that feels safer.",
-              "I could go with that."
+              "I could go with that.",
+              "That actually makes me feel comfortable ordering it."
             ],
             medium: [
-              "Maybe... I'm still a little unsure.",
+              "Okay... I'm still a little unsure.",
               "I hear you, but I'm still hesitant.",
               "Okay, but I'm not fully comfortable yet."
             ],
             weak: [
               "Hmm... I'm still not comfortable with that.",
               "That actually makes me more unsure.",
-              "No, I'm still hesitating."
+              "No, I'm still hesitating.",
+              "I still feel a bit unsure about it."
             ],
             pivotStrong: [
               "Okay, that helps settle it.",
@@ -9116,10 +9579,22 @@ function ensureProgLoaded() {
           nuance = " That opening doesn't match what I care about.";
         }
 
+        let pressureNuance = "";
+
+        if (pressure.resistance >= 0.75) {
+          pressureNuance = " I'm still not fully there.";
+        } else if (pressure.confidence >= 0.75) {
+          pressureNuance = " That makes me feel much better about it.";
+        } else if (pressure.openness >= 0.75) {
+          pressureNuance = " I can feel myself opening up to that.";
+        } else if (pressure.urgency >= 0.75) {
+          pressureNuance = " I just need this to make sense quickly.";
+        }
+
         return {
-          primary: primary + nuance,
+          primary: primary + nuance + pressureNuance,
           pivot,
-          combined: [primary + nuance, pivot].filter(Boolean).join(" ")
+          combined: [primary + nuance + pressureNuance, pivot].filter(Boolean).join(" ")
         };
       }
 
@@ -9174,6 +9649,28 @@ function ensureProgLoaded() {
 
         block.appendChild(title);
         block.appendChild(body);
+        container.appendChild(block);
+      }
+
+      function renderGuestPressureDebug(container, encounter) {
+        const p = encounter?.guestPressure;
+        if (!p) return;
+        const deliveryProfile = getDeliveryDistractorProfile(encounter);
+        const pressureTags = getPressureProfile(encounter).join(",");
+
+        const block = document.createElement("div");
+        block.className = "small-text";
+        block.style.marginTop = "8px";
+        block.style.opacity = "0.7";
+        block.innerText =
+          `pressure -> openness:${p.openness.toFixed(2)} ` +
+          `resistance:${p.resistance.toFixed(2)} ` +
+          `confidence:${p.confidence.toFixed(2)} ` +
+          `urgency:${p.urgency.toFixed(2)} ` +
+          `| tags:${pressureTags} ` +
+          `| deliveryProfile:${deliveryProfile} ` +
+          `| pivot:${encounter?.pivotType || "-"}`;
+
         container.appendChild(block);
       }
 
@@ -9737,6 +10234,173 @@ function ensureProgLoaded() {
         return pickRandom(PIVOT_POOL);
       }
 
+      function selectPivotTypeFromPressure(encounter) {
+        const p = encounter?.guestPressure || initGuestPressureState(encounter);
+
+        const resistance = Number(p.resistance || 0);
+        const confidence = Number(p.confidence || 0);
+        const openness = Number(p.openness || 0);
+        const urgency = Number(p.urgency || 0);
+
+        // Priority ordering matters.
+        if (resistance >= 0.72 && confidence <= 0.38) {
+          return "resistance";
+        }
+
+        if (urgency >= 0.72 && openness >= 0.45) {
+          return "impatience";
+        }
+
+        if (confidence <= 0.40 && openness >= 0.45) {
+          return "hesitation";
+        }
+
+        if (openness <= 0.40 && resistance >= 0.50) {
+          return "objection";
+        }
+
+        return "confusion";
+      }
+
+      function buildPivotScenario(encounter) {
+        const guest = normalizeGuestType(encounter?.guestStateActual);
+        const pivotType = selectPivotTypeFromPressure(encounter);
+
+        const scenarios = {
+          objection: {
+            [window.GUEST.DECIDER]: [
+              "The guest pauses and says, 'I still don't know if that's the right one.'"
+            ],
+            [window.GUEST.BARGAIN_SMART]: [
+              "The guest frowns slightly and says, 'I'm still not sure it justifies the spend.'"
+            ],
+            [window.GUEST.FANCY]: [
+              "The guest tilts their head and says, 'I'm not sure that's quite the tone I want.'"
+            ],
+            [window.GUEST.GRIEVER]: [
+              "The guest hesitates and says, 'I'm still not convinced I'd enjoy that.'"
+            ],
+            [window.GUEST.CELEBRATOR]: [
+              "The guest says, 'I'm not sure that really matches the moment.'"
+            ]
+          },
+
+          hesitation: {
+            [window.GUEST.DECIDER]: [
+              "The guest says, 'Maybe... I'm still deciding.'"
+            ],
+            [window.GUEST.BARGAIN_SMART]: [
+              "The guest says, 'Maybe... I'm still weighing whether it's worth it.'"
+            ],
+            [window.GUEST.FANCY]: [
+              "The guest says, 'Maybe... I'm still not fully feeling it.'"
+            ],
+            [window.GUEST.GRIEVER]: [
+              "The guest says, 'Maybe... I'm still a little unsure.'"
+            ],
+            [window.GUEST.CELEBRATOR]: [
+              "The guest says, 'Maybe... I'm not fully there yet.'"
+            ]
+          },
+
+          confusion: {
+            [window.GUEST.DECIDER]: [
+              "The guest says, 'Okay... but what would you actually go with?'"
+            ],
+            [window.GUEST.BARGAIN_SMART]: [
+              "The guest says, 'Okay... but why is that the smarter choice?'"
+            ],
+            [window.GUEST.FANCY]: [
+              "The guest says, 'Okay... but what makes that the more interesting option?'"
+            ],
+            [window.GUEST.GRIEVER]: [
+              "The guest says, 'Okay... but why is that the safer choice?'"
+            ],
+            [window.GUEST.CELEBRATOR]: [
+              "The guest says, 'Okay... but why does that fit the occasion best?'"
+            ]
+          },
+
+          resistance: {
+            [window.GUEST.DECIDER]: [
+              "The guest leans back and says, 'I don't want to get pushed into the wrong bottle.'"
+            ],
+            [window.GUEST.BARGAIN_SMART]: [
+              "The guest says, 'I don't want to pay more just for the sake of it.'"
+            ],
+            [window.GUEST.FANCY]: [
+              "The guest says, 'I don't want something that feels obvious.'"
+            ],
+            [window.GUEST.GRIEVER]: [
+              "The guest says, 'I really don't want to regret this choice.'"
+            ],
+            [window.GUEST.CELEBRATOR]: [
+              "The guest says, 'I don't want the bottle to undersell the table.'"
+            ]
+          },
+
+          impatience: {
+            [window.GUEST.DECIDER]: [
+              "The guest says, 'Can you just tell me what you'd choose?'"
+            ],
+            [window.GUEST.BARGAIN_SMART]: [
+              "The guest says, 'Fine - just tell me which one makes the most sense.'"
+            ],
+            [window.GUEST.FANCY]: [
+              "The guest says, 'Alright - what's the most considered choice here?'"
+            ],
+            [window.GUEST.GRIEVER]: [
+              "The guest says, 'I just need something I can feel okay about saying yes to.'"
+            ],
+            [window.GUEST.CELEBRATOR]: [
+              "The guest says, 'Okay - just help me land the right bottle quickly.'"
+            ]
+          }
+        };
+
+        const pool =
+          scenarios[pivotType]?.[guest] ||
+          ["The guest hesitates and pushes back slightly."];
+
+        const text = pool[Math.floor(Math.random() * pool.length)] || "The guest hesitates.";
+
+        return {
+          pivotType,
+          recoveryText: text
+        };
+      }
+
+      function resolvePivotBestModeFromPressure(encounter, unlockedModes = []) {
+        const pivotType = selectPivotTypeFromPressure(encounter);
+
+        const rawBestByPivot = {
+          objection: "guide",
+          hesitation: "scout",
+          confusion: "guide",
+          resistance: "charm",
+          impatience: "authority"
+        };
+
+        const raw = rawBestByPivot[pivotType] || "guide";
+        return resolveCorrectModeForPlayer(raw, unlockedModes);
+      }
+
+      function ensurePressureDrivenPivot(encounter) {
+        if (!encounter) return encounter;
+
+        const unlockedModes = getUnlockedModesForCurrentPlayer();
+
+        const pivot = buildPivotScenario(encounter);
+        encounter.pivotType = encounter.pivotType || pivot.pivotType;
+        encounter.recoveryText = encounter.recoveryText || pivot.recoveryText;
+
+        const bestMode = resolvePivotBestModeFromPressure(encounter, unlockedModes);
+        encounter.recoveryCorrectModeRaw = encounter.recoveryCorrectModeRaw || bestMode;
+        encounter.recoveryCorrectModeResolved = resolveCorrectModeForPlayer(bestMode, unlockedModes);
+
+        return encounter;
+      }
+
       function renderModeHelp(stepContent) {
         const wrap = document.createElement("div");
         wrap.className = "notice";
@@ -9791,102 +10455,137 @@ function ensureProgLoaded() {
         stepContent.appendChild(wrap);
       }
 
+      const HOOK_FRAMES = [
+        "If you want something",
+        "If you're looking for something",
+        "If you'd like something",
+        "If you want a bottle that's",
+        "One option that works really well is",
+      ];
+
+      const HOOK_SIGNALS = {
+        VALUE: [
+          "that punches above its price",
+          "that's great value for what it is",
+          "that really earns its price",
+          "that gives you a lot for the money"
+        ],
+        FLAVOUR: [
+          "clean and easy to enjoy",
+          "bright and fresh",
+          "smooth and balanced",
+          "rich but still elegant"
+        ],
+        STORY: [
+          "with a bit of character",
+          "that has a nice story behind it",
+          "that feels a little special",
+          "that stands out from the list"
+        ]
+      };
+
+      const GUEST_TONE = {
+        [window.GUEST.DECIDER]: "clear",
+        [window.GUEST.GRIEVER]: "gentle",
+        [window.GUEST.FANCY]: "elegant",
+        [window.GUEST.BARGAIN_SMART]: "practical",
+        [window.GUEST.CELEBRATOR]: "elegant"
+      };
+
+      const HOOK_TONE_SIGNALS = {
+        clear: {
+          VALUE: ["easy to justify quickly", "clear value without overthinking"],
+          FLAVOUR: ["clean and straightforward", "easy to enjoy right away"],
+          STORY: ["with a clear point of difference"]
+        },
+        gentle: {
+          VALUE: ["safe value with low risk", "worth it without feeling risky"],
+          FLAVOUR: ["soft and easy to enjoy", "gentle and comforting"],
+          STORY: ["with a reassuring story behind it"]
+        },
+        elegant: {
+          VALUE: ["worth the spend in a refined way", "value that still feels considered"],
+          FLAVOUR: ["layered and polished", "elegant and balanced"],
+          STORY: ["with a distinctive story", "that feels thoughtfully chosen"]
+        },
+        practical: {
+          VALUE: ["with a clear quality-to-price step up", "that earns its price in the glass"],
+          FLAVOUR: ["clean and precise", "balanced and reliable"],
+          STORY: ["with context that supports the quality"]
+        }
+      };
+
+      function hookDirection(encounter, wine) {
+        const name = wine?.name || "this bottle";
+        const varietal = wine?.varietal || "this wine";
+
+        const options = [
+          `${name} works really well`,
+          `the ${varietal} is a great choice`,
+          `this bottle is a really good fit`,
+          `${name} would suit that nicely`,
+        ];
+
+        return options[Math.floor(Math.random() * options.length)];
+      }
+
+      function pickHookSignalForGuest(hookType, guestType) {
+        const type = String(hookType || "FLAVOUR").toUpperCase();
+        const guest = normalizeGuestType(guestType);
+        const tone = GUEST_TONE[guest] || "practical";
+        const base = HOOK_SIGNALS[type] || HOOK_SIGNALS.FLAVOUR;
+        const tonePool = HOOK_TONE_SIGNALS[tone]?.[type] || [];
+        const pool = [...base, ...tonePool].filter(Boolean);
+        if (!pool.length) return "";
+        return pool[Math.floor(Math.random() * pool.length)];
+      }
+
+      function generateHook(encounter, wine, hookType) {
+        const frame = HOOK_FRAMES[Math.floor(Math.random() * HOOK_FRAMES.length)];
+        const signal = pickHookSignalForGuest(hookType, encounter?.guestStateActual);
+        const direction = hookDirection(encounter, wine);
+        return `${frame} ${signal}, ${direction}.`;
+      }
+
       function hookPolicy(encounter, wine, tierNow, progState) {
         progState = progState || {};
         progState.unlocks = progState.unlocks || {};
+
         const w = wine || { name: "This bottle", varietal: "" };
-        const name = w.name || "This bottle";
         const d = difficultyOf(encounter);
-        const allowed = resolveAllowedGuestTypes(encounter);
-        const g = canonicalGuestType(encounter?.guestStateActual);
-        const safeGuest = allowed.includes(g) ? g : allowed[0];
-        if (safeGuest !== g) console.warn("[BC] guest type not unlocked yet:", g);
         const strict = hookStrictnessFromDifficulty(d);
+        const guest = normalizeGuestType(encounter?.guestStateActual);
+        const rule = getHookRuleForGuest(guest) || {
+          optimal: "FLAVOUR",
+          neutral: "VALUE",
+          damaging: "STORY"
+        };
+        const optimal = String(rule.optimal || "FLAVOUR").toUpperCase();
+        const neutral = String(rule.neutral || "VALUE").toUpperCase();
+        const damaging = String(rule.damaging || "STORY").toUpperCase();
+        const types = pickHookTypesForEncounter(encounter);
 
-        if (safeGuest === window.GUEST.DECIDER || safeGuest === "browser") {
-          const leadLine = `If you want something easy that won’t miss tonight, ${name} is a great call.`;
-          const reflectLine = `Quick one — are you leaning lighter and fresh, or richer and smooth?`;
-          const holdLine = `${name} is the right bottle for the table.`;
-          return [
-            { id: "hA", text: leadLine, tier: "right", hookType: "guest_centered_framing" },
-            { id: "hB", text: reflectLine, tier: "slightly", hookType: "diagnostic_question" },
-            { id: "hC", text: holdLine, tier: strict ? "wrong" : "slightly", hookType: "outcome_centered_framing" },
-          ];
-        }
+        const hookOptions = types.map((hookType, idx) => {
+          let tier = "slightly";
+          if (hookType === optimal) tier = "right";
+          else if (hookType === neutral) tier = "slightly";
+          else if (hookType === damaging) tier = strict ? "wrong" : "slightly";
+          return {
+            id: idx === 0 ? "hA" : (idx === 1 ? "hB" : "hC"),
+            hookType,
+            tier
+          };
+        });
 
-        if (safeGuest === window.GUEST.BARGAIN_SMART || safeGuest === "analyst") {
-          const leadLine = `Clean pick: ${name}. Bright structure, dry finish — no surprises.`;
-          const reflectLine = `Do you want higher acidity, or more body?`;
-          const holdLine = `This is our best value bottle.`;
-          return [
-            { id: "hA", text: leadLine, tier: "right", hookType: "guest_centered_framing" },
-            { id: "hB", text: reflectLine, tier: "slightly", hookType: "diagnostic_question" },
-            { id: "hC", text: holdLine, tier: "wrong", hookType: "outcome_centered_framing" },
-          ];
-        }
-
-        if (safeGuest === window.GUEST.GRIEVER) {
-          const leadLine = `Gentle pick: ${name}. Soft and calm, no sharp edges.`;
-          const reflectLine = `Do you want something softer and gentle, or a bit richer and warm?`;
-          const holdLine = `This is the safest, most comforting bottle on the list.`;
-          return [
-            { id: "hA", text: leadLine, tier: "right", hookType: "guest_centered_framing" },
-            { id: "hB", text: reflectLine, tier: "slightly", hookType: "diagnostic_question" },
-            { id: "hC", text: holdLine, tier: strict ? "wrong" : "slightly", hookType: "outcome_centered_framing" },
-          ];
-        }
-
-        if (safeGuest === window.GUEST.FANCY) {
-          const leadLine = `If you want something refined and elevated, ${name} is the move.`;
-          const reflectLine = `Are you leaning elegant and fresh, or rich and plush tonight?`;
-          const holdLine = `This is our premium bottle.`;
-          return [
-            { id: "hA", text: leadLine, tier: "right", hookType: "guest_centered_framing" },
-            { id: "hB", text: reflectLine, tier: "slightly", hookType: "diagnostic_question" },
-            { id: "hC", text: holdLine, tier: strict ? "wrong" : "slightly", hookType: "outcome_centered_framing" },
-          ];
-        }
-
-        if (safeGuest === window.GUEST.CELEBRATOR || safeGuest === "celebrator") {
-          const leadLine = `If it’s a celebration table, ${name} feels like an upgrade without getting heavy.`;
-          const reflectLine = `Are we celebrating fresh and bright, or rich and plush tonight?`;
-          const holdLine = `This is our premium bottle.`;
-          return [
-            { id: "hA", text: leadLine, tier: "right", hookType: "guest_centered_framing" },
-            { id: "hB", text: reflectLine, tier: "slightly", hookType: "diagnostic_question" },
-            { id: "hC", text: holdLine, tier: strict ? "wrong" : "slightly", hookType: "outcome_centered_framing" },
-          ];
-        }
-
-        if (safeGuest === "make_it_easy") {
-          return [
-            { id: "hA", text: `Fast, safe pick: ${name}.`, tier: "right", hookType: "guest_centered_framing" },
-            { id: "hB", text: `Want lighter and crisp, or richer and smooth?`, tier: "slightly", hookType: "diagnostic_question" },
-            { id: "hC", text: `${name} is the right bottle for the table.`, tier: "wrong", hookType: "outcome_centered_framing" },
-          ];
-        }
-
-        if (safeGuest === "budget_guard") {
-          return [
-            { id: "hA", text: `If you want great value without sacrificing quality, ${name} is the safest bet.`, tier: "right", hookType: "guest_centered_framing" },
-            { id: "hB", text: `Are we keeping it under control, or are you open to one step up?`, tier: "slightly", hookType: "diagnostic_question" },
-            { id: "hC", text: `This is what most tables choose.`, tier: "wrong", hookType: "outcome_centered_framing" },
-          ];
-        }
-
-        if (safeGuest === "alpha") {
-          return [
-            { id: "hA", text: `If you want the decisive call: ${name}.`, tier: "right", hookType: "guest_centered_framing" },
-            { id: "hB", text: `Do you want precision and dryness, or more weight and richness?`, tier: "slightly", hookType: "diagnostic_question" },
-            { id: "hC", text: `This is the top bottle.`, tier: "wrong", hookType: "outcome_centered_framing" },
-          ];
-        }
-
-        return [
-          { id: "hA", text: `If you want something safe tonight, ${name} is a great call.`, tier: "right", hookType: "guest_centered_framing" },
-          { id: "hB", text: `Quick one — lighter or richer?`, tier: "slightly", hookType: "diagnostic_question" },
-          { id: "hC", text: `${name} is the right bottle for the table.`, tier: "wrong", hookType: "outcome_centered_framing" },
-        ];
+        return hookOptions.map((opt) => {
+          const hookText = generateHook(encounter, w, opt.hookType);
+          return {
+            id: opt.id,
+            hookType: opt.hookType,
+            text: hookText,
+            tier: opt.tier
+          };
+        });
       }
 
       function filterHookOptionsForProgression(opts, prog) {
@@ -10448,6 +11147,9 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           stepContent.appendChild(reactionHint);
 
           const checksRaw = window.evaluateChecks(window.currentEncounter || currentEncounter);
+          const guestPressure = updateGuestPressureState(currentEncounter, checksRaw);
+          currentEncounter.guestPressure = guestPressure;
+          ensurePressureDrivenPivot(currentEncounter);
           currentEncounter.dynamicGuestReaction = buildDynamicGuestReaction(currentEncounter, checksRaw);
           currentEncounter.dynamicGuestLine = buildDynamicGuestLine(currentEncounter, checksRaw);
 
@@ -10587,14 +11289,17 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
           if (result.pivotUnlocked) {
             if (!currentEncounter.recoveryText) {
-              const scenario = getPivotScenario();
+              ensurePressureDrivenPivot(currentEncounter);
               const unlockedModes = getUnlockedModesForCurrentPlayer();
-              const resolvedMode = resolveCorrectModeForPlayer(scenario.correctMode, unlockedModes);
-              currentEncounter.recoveryText = scenario.text;
-              currentEncounter.recoveryCorrectModeRaw = scenario.correctMode;
+              const resolvedMode = resolveCorrectModeForPlayer(
+                currentEncounter.recoveryCorrectModeResolved ||
+                currentEncounter.recoveryCorrectModeRaw ||
+                currentEncounter.recoveryCorrectMode ||
+                null,
+                unlockedModes
+              );
               currentEncounter.recoveryCorrectMode = resolvedMode;
               currentEncounter.recoveryCorrectModeResolved = resolvedMode;
-              currentEncounter.recoveryWhy = scenario.why;
               currentEncounter.recoveryChoice = "";
               currentEncounter.recoveryCorrect = false;
               currentEncounter.resetUsed = false;
@@ -10606,9 +11311,8 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
               });
             }
 
-            const pivotType =
+            const pivotLabel =
               result.pivotType === "POWER_MOVE_PIVOT" ? "POWER MOVE PIVOT" : "RECOVERY PIVOT";
-            currentEncounter.pivotType = pivotType;
 
             const header = document.createElement("p");
             header.innerText =
@@ -10622,7 +11326,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             const box = document.createElement("div");
             box.className = "card";
             box.innerHTML =
-              "<strong>" + pivotType + "</strong>" +
+              "<strong>" + pivotLabel + " (" + (currentEncounter.pivotType || "pivot") + ")</strong>" +
               "<div style='margin-top:6px;'>" + currentEncounter.recoveryText + "</div>";
             stepContent.appendChild(box);
 
@@ -10645,6 +11349,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
                 const unlockedModes = getUnlockedModesForCurrentPlayer();
 
                 const recoveryBest = resolveCorrectModeForPlayer(
+                  currentEncounter.recoveryCorrectModeResolved ||
                   currentEncounter.recoveryCorrectModeRaw ||
                   currentEncounter.recoveryCorrectMode ||
                   null,
@@ -10702,6 +11407,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             if (currentEncounter.recoveryChoice) {
               const unlockedModes = getUnlockedModesForCurrentPlayer();
               const recoveryBest = resolveCorrectModeForPlayer(
+                currentEncounter.recoveryCorrectModeResolved ||
                 currentEncounter.recoveryCorrectModeRaw ||
                 currentEncounter.recoveryCorrectMode ||
                 null,
@@ -10743,6 +11449,10 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
         if (currentStep === 6) {
           const checks = window.evaluateChecks(window.currentEncounter || currentEncounter);
+          const guestPressure =
+            currentEncounter.guestPressure || updateGuestPressureState(currentEncounter, checks);
+          currentEncounter.guestPressure = guestPressure;
+          ensurePressureDrivenPivot(currentEncounter);
           const dynamicReaction = buildDynamicGuestReaction(currentEncounter, checks);
           currentEncounter.dynamicGuestReaction = dynamicReaction;
           const dynamicGuestLine = buildDynamicGuestLine(currentEncounter, checks);
@@ -10800,6 +11510,9 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           renderDynamicGuestReactionBlock(stepContent, currentEncounter, checks, {
             compact: false
           });
+          if (window.__BC_DEBUG_PRESSURE__ === true) {
+            renderGuestPressureDebug(stepContent, currentEncounter);
+          }
           logEncounterStateAudit("before_reflection_render", currentEncounter);
 
           // ✅ NEW: Strength + Fix (end of reflection)
@@ -10890,6 +11603,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             const unlockedModes = getUnlockedModesForCurrentPlayer();
 
             const recoveryBest = resolveCorrectModeForPlayer(
+              currentEncounter.recoveryCorrectModeResolved ||
               currentEncounter.recoveryCorrectModeRaw ||
               currentEncounter.recoveryCorrectMode ||
               null,
@@ -11922,6 +12636,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           chainScore: null,
           chainSignal: "",
           resetUsed: false,
+          guestPressure: initGuestPressureState(enc),
 
           // Internal UX/eval state
           __reactionComputed: false,
