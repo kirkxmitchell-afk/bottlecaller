@@ -1485,7 +1485,7 @@ function isDrillMode() {
       const LIMIT = WINE_LIMIT;
       // --- SESSION STATE (single source of truth) ---
       let sessionId = null;
-      let sessionType = null; // "drill" | "run" | null
+      let sessionType = null; // "progression" | "drill" | null
       let drillRepTarget = 3;
       let drillRepDone = 0;
       // ---------- PROGRESSION STATE (iframe-local, per waiter + restaurant) ----------
@@ -1540,9 +1540,6 @@ function isDrillMode() {
         // Demo never requires progression spine
         if (window.isDemo || window.bcMode === "demo") return null;
 
-        // Drill never requires progression spine
-        if (sessionType === "drill") return null;
-
         const host =
           (window.top && window.top.BottleCaller) ? window.top :
           (window.parent && window.parent.BottleCaller) ? window.parent :
@@ -1567,19 +1564,18 @@ function isDrillMode() {
       });
 
       function tryGetProgressionSpine() {
-        const host =
-          (window.top && window.top.BottleCaller) ? window.top :
-          (window.parent && window.parent.BottleCaller) ? window.parent :
-          window;
-
-        return host?.BottleCaller?.progression || null;
+        return getProgressionSpine({ allowNull: true });
       }
 
       // ===============================
       // BC PROGRESS HUD + TOAST (v1)
       // ===============================
       function bcGetSpineHost() {
-        try { return getProgressionSpine(); } catch { return null; }
+        try {
+          return getProgressionSpine({ allowNull: true });
+        } catch {
+          return null;
+        }
       }
 
       function getProgressionMonitorSnapshot() {
@@ -2889,12 +2885,20 @@ function ensureProgLoaded() {
       }
 
       function resetProgressToStart() {
-        startFromEncounter1_GRIND();
+        void startFromEncounter1_GRIND();
       }
 
-      function startFromEncounter1_GRIND() {
+      async function startFromEncounter1_GRIND() {
         // Premium progression path: reset flow only, preserving progression identity/state.
-        if (replayFromStage1()) return;
+        if (replayFromStage1()) {
+          window.__NEXT_LOCK__ = false;
+          currentStep = 0;
+          currentEncounter = null;
+          encounterIndex = 0;
+          saveEncounterIndex(encounterIndex);
+          await startPlayWithReadyGate();
+          return;
+        }
 
         // Demo fallback: keep local restart behavior when no progression spine exists.
         window.__NEXT_LOCK__ = false;
@@ -2903,7 +2907,7 @@ function ensureProgLoaded() {
         encounterIndex = 0;
         saveEncounterIndex(encounterIndex);
         window.__BC_DEMO_DONE__ = 0;
-        void startPlayWithReadyGate();
+        await startPlayWithReadyGate();
       }
 
       // ✅ define once, even across hot reloads / injected patches
@@ -4685,18 +4689,25 @@ function ensureProgLoaded() {
         const range = spine?.selectors?.encounterRange ? spine.selectors.encounterRange() : null;
         const minEncounter = Number(range?.[0] ?? 1);
         const maxEncounter = Number(range?.[1] ?? Number.MAX_SAFE_INTEGER);
+
         if (!enc || typeof enc !== "object") return enc;
 
-        const next = { ...enc, tags: Array.isArray(enc.tags) ? [...enc.tags] : [] };
+        const next = {
+          ...enc,
+          tags: Array.isArray(enc.tags) ? [...enc.tags] : []
+        };
+
         const actual = normalizeGuestType(next?.guestStateActual);
 
         if (!allowed.length) return next;
+
         if (Number.isFinite(Number(next?.encounterNumber))) {
           const n = Number(next.encounterNumber);
           if (n < minEncounter || n > maxEncounter) {
             next.tags.push("encounter_range_clamped_out");
           }
         }
+
         if (allowed.includes(actual)) return next;
 
         next.guestStateActual = allowed[Math.floor(Math.random() * allowed.length)];
@@ -9497,14 +9508,69 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         const prevEncounterState = currentEncounter || null;
 
         if (sessionType === "drill") {
-          const drill = getDrillConfig();
-          const src = (Array.isArray(list) ? list : []).filter((e) => {
-            const g = normalizeGuestType(e?.guestStateActual);
-            return drill.pool.includes(g);
+          const drill = getDrillConfig() || {};
+          const drillPool = Array.isArray(drill.pool) ? drill.pool.map(normalizeGuestType) : [];
+
+          let src = Array.isArray(list) ? list : [];
+
+          // Drill must still respect main progression standard.
+          src = src.filter((e) => {
+            const guestType = normalizeGuestType(e?.guestStateActual);
+            const encounterNo = Number(e?.encounterNumber);
+
+            const inDrillPool =
+              !drillPool.length || drillPool.includes(guestType);
+
+            const guestAllowed =
+              !allowedGuestTypes.length || allowedGuestTypes.includes(guestType);
+
+            const encounterAllowed =
+              !Number.isFinite(encounterNo) ||
+              (encounterNo >= minEncounter && encounterNo <= maxEncounter);
+
+            return inDrillPool && guestAllowed && encounterAllowed;
           });
-          const use = src.length ? src : list;
+
+          // Fallback 1: if drill pool is too strict, fall back to progression-safe candidates
+          if (!src.length) {
+            src = (Array.isArray(list) ? list : []).filter((e) => {
+              const guestType = normalizeGuestType(e?.guestStateActual);
+              const encounterNo = Number(e?.encounterNumber);
+
+              const guestAllowed =
+                !allowedGuestTypes.length || allowedGuestTypes.includes(guestType);
+
+              const encounterAllowed =
+                !Number.isFinite(encounterNo) ||
+                (encounterNo >= minEncounter && encounterNo <= maxEncounter);
+
+              return guestAllowed && encounterAllowed;
+            });
+
+            console.warn("[DRILL] drill pool produced no progression-safe encounters; using progression-safe fallback", {
+              drillPool,
+              allowedGuestTypes,
+              encounterRange: [minEncounter, maxEncounter],
+              fallbackCount: src.length
+            });
+          }
+
+          // Fallback 2: final fallback to list if absolutely nothing matched
+          // (should be rare; keeps app from crashing)
+          const use = (Array.isArray(src) && src.length) ? src : list;
+
           idx = (typeof encounterIndex === "number" ? encounterIndex : 0) % use.length;
-          enc = use[idx];
+          enc = use[idx] || use[0] || null;
+
+          console.log("[DRILL] selected encounter candidates", {
+            drillPool,
+            allowedGuestTypes,
+            encounterRange: [minEncounter, maxEncounter],
+            poolSize: Array.isArray(src) ? src.length : 0,
+            allSize: Array.isArray(list) ? list.length : 0,
+            selectedEncounter: enc?.encounterNumber ?? null,
+            selectedGuest: normalizeGuestType(enc?.guestStateActual)
+          });
         } else {
           let src = list;
           if (!isDemoNow) {
