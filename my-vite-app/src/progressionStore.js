@@ -51,7 +51,12 @@ export function createProgressionStore(storage = window.localStorage) {
   }
 
   function unlockedModes(points) {
-    return getUnlockedModesForPoints(points);
+    const pts = Number(points || 0);
+    const tier = pts >= 10 ? 3 : pts >= 5 ? 2 : 1;
+
+    if (tier <= 1) return ["scout", "guide", "charm"];
+    if (tier === 2) return ["scout", "guide", "charm", "authority"];
+    return ["scout", "guide", "charm", "authority"];
   }
 
   function clampEncounterByTier(encounterId, points) {

@@ -1255,36 +1255,69 @@ console.log("BC3_MARKER_V1");
 
   function getUnlockedModesForCurrentPlayer() {
     const spine = getProgressionSpine({ allowNull: true });
-    const unlockedModes = Array.isArray(spine?.selectors?.modes?.())
-      ? spine.selectors.modes()
-      : [window.MODES.SCOUT, window.MODES.GUIDE, window.MODES.CHARM];
-    return unlockedModes.map(canonicalModeFromUi).filter(Boolean);
+    const modes =
+      Array.isArray(spine?.selectors?.modes?.())
+        ? spine.selectors.modes()
+        : ["scout", "guide", "charm"];
+
+    return modes
+      .filter(Boolean)
+      .map(canonicalModeFromUi)
+      .filter(Boolean);
   }
 
   function resolveCorrectModeForPlayer(rawMode, unlockedModes) {
-    const allowed = Array.isArray(unlockedModes) ? unlockedModes.map(canonicalModeFromUi).filter(Boolean) : [];
-    const normalized = canonicalModeFromUi(rawMode) || normalizeGuestType(rawMode);
+    const allowed = Array.isArray(unlockedModes)
+      ? unlockedModes.map(canonicalModeFromUi).filter(Boolean)
+      : [];
 
-    if (allowed.includes(normalized)) return normalized;
+    const normalized = canonicalModeFromUi(rawMode);
 
+    if (!allowed.length) {
+      return normalized || "scout";
+    }
+
+    if (normalized && allowed.includes(normalized)) {
+      return normalized;
+    }
+
+    // Tier-safe downgrade map:
+    // If a higher-tier answer is optimal in design terms,
+    // degrade it to the closest unlocked playable answer.
     const fallbackMap = {
-      authority: "guide"
+      authority: "guide",
+      direct: "guide",
+      hold: "scout",
+      push: "guide",
+      close: "charm"
     };
 
     const fallback = fallbackMap[normalized];
-    if (fallback && allowed.includes(fallback)) return fallback;
+    if (fallback && allowed.includes(fallback)) {
+      return fallback;
+    }
 
-    return allowed[0] || window.MODES.SCOUT;
+    // Prefer guide > charm > scout if available, else first allowed
+    if (allowed.includes("guide")) return "guide";
+    if (allowed.includes("charm")) return "charm";
+    if (allowed.includes("scout")) return "scout";
+
+    return allowed[0];
   }
 
   function assertModeConsistency(unlockedModes, correctMode, context = {}) {
-    if (!Array.isArray(unlockedModes)) return;
-    if (!correctMode) return;
+    const allowed = Array.isArray(unlockedModes)
+      ? unlockedModes.map(canonicalModeFromUi).filter(Boolean)
+      : [];
 
-    if (!unlockedModes.includes(correctMode)) {
-      console.warn("[MODE CONSISTENCY] illegal correct mode outside unlocked pool", {
-        unlockedModes,
-        correctMode,
+    const normalized = canonicalModeFromUi(correctMode);
+
+    if (!allowed.length || !normalized) return;
+
+    if (!allowed.includes(normalized)) {
+      console.warn("[MODE CONSISTENCY] illegal mode outside unlocked pool", {
+        unlockedModes: allowed,
+        correctMode: normalized,
         ...context
       });
     }
@@ -5523,16 +5556,18 @@ function ensureProgLoaded() {
 
         if (checks.modeStatus === "damaging") {
           const rule = modeMap[enc.guestStateActual];
+          const bestResolved = resolveCorrectModeForPlayer(rule?.optimal, getUnlockedModesForCurrentPlayer());
           return {
             code: "MODE_DAMAGING",
-            text: `Streak broke: damaging mode. Best for ${enc.guestStateActual}: ${rule?.optimal || "—"}.`
+            text: `Streak broke: damaging mode. Best for ${enc.guestStateActual}: ${bestResolved || "—"}.`
           };
         }
         if (gate !== "relaxed" && checks.modeStatus === "neutral") {
           const rule = modeMap[enc.guestStateActual];
+          const bestResolved = resolveCorrectModeForPlayer(rule?.optimal, getUnlockedModesForCurrentPlayer());
           return {
             code: "MODE_NEUTRAL_DISALLOWED",
-            text: `Streak broke: neutral mode doesn’t hold at difficulty ${diff}. Best for ${enc.guestStateActual}: ${rule?.optimal || "—"}.`
+            text: `Streak broke: neutral mode doesn’t hold at difficulty ${diff}. Best for ${enc.guestStateActual}: ${bestResolved || "—"}.`
           };
         }
 
@@ -7103,8 +7138,13 @@ function ensureProgLoaded() {
         if (!modeRule) console.warn("[BC] modeRule missing for key:", modeKey, { encounter: encounter?.encounterNumber });
         if (!hookRule) console.warn("[BC] hookRule missing for key:", modeKey, { encounter: encounter?.encounterNumber });
 
-        const modeOptimal = modeRule?.optimal ?? null;
-        const modeNeutral = modeRule?.neutral ?? null;
+        const unlockedModes = getUnlockedModesForCurrentPlayer();
+        const modeOptimal = modeRule?.optimal
+          ? resolveCorrectModeForPlayer(modeRule.optimal, unlockedModes)
+          : null;
+        const modeNeutral = modeRule?.neutral
+          ? resolveCorrectModeForPlayer(modeRule.neutral, unlockedModes)
+          : null;
 
         const hookOptimal = hookRule?.optimal ?? null;
         const hookNeutral = hookRule?.neutral ?? null;
@@ -7113,6 +7153,14 @@ function ensureProgLoaded() {
           encounter.modeSelected && modeOptimal && encounter.modeSelected === modeOptimal ? "optimal" :
           encounter.modeSelected && modeNeutral && encounter.modeSelected === modeNeutral ? "neutral" :
           "damaging";
+        encounter.correctModeResolved = modeOptimal || null;
+        encounter.correctModeNeutralResolved = modeNeutral || null;
+        assertModeConsistency(unlockedModes, modeOptimal, {
+          encounterNumber: encounter?.encounterNumber,
+          tier: getProgressionSpine({ allowNull: true })?.selectors?.tier?.(),
+          points: getProgressionSpine({ allowNull: true })?.selectors?.points?.(),
+          source: "evaluateChecks_legacy"
+        });
 
         let hookStatus = "damaging";
         const hookId = encounter.hookSelected;
@@ -7357,6 +7405,26 @@ function ensureProgLoaded() {
           `Neutral: ${neu} (probe, then shift). ` +
           `Damaging: ${dmg} (wrong tempo for this guest).`
         );
+      }
+
+      function modeWhyResolved(guestType, resolvedMode) {
+        const guest = normalizeGuestType(guestType);
+        const mode = canonicalModeFromUi(resolvedMode);
+
+        if (mode === "scout") {
+          return "Scout fits when you still need to read the guest and open space without pressure.";
+        }
+        if (mode === "guide") {
+          return "Guide fits when the guest needs calm confidence and clear direction without being pushed.";
+        }
+        if (mode === "charm") {
+          return "Charm fits when warmth, ease, and likability help move the guest forward.";
+        }
+        if (mode === "authority") {
+          return "Authority fits when the guest needs strong certainty and decisive direction.";
+        }
+
+        return modeWhy(guest);
       }
 
       function hookWhy(actualGuestState) {
@@ -7857,7 +7925,7 @@ function ensureProgLoaded() {
           recoveryText: currentEncounter.recoveryText || "",
           recoveryChoice: currentEncounter.recoveryChoice || "",
           recoveryCorrect: !!currentEncounter.recoveryCorrect,
-          recoveryCorrectMode: currentEncounter.recoveryCorrectMode || "",
+          recoveryCorrectMode: currentEncounter.recoveryCorrectModeResolved || currentEncounter.recoveryCorrectMode || "",
           recoveryWhy: currentEncounter.recoveryWhy || "",
 
           // Telemetry
@@ -8420,11 +8488,12 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
           const options = document.createElement("div");
           options.className = "option-grid";
-          const spine = getProgressionSpine({ allowNull: true });
-          const unlockedModes =
-            Array.isArray(spine?.selectors?.modes?.()) ? spine.selectors.modes() : [window.MODES.SCOUT, window.MODES.GUIDE, window.MODES.CHARM];
-          const visibleModes = unlockedModes.filter(Boolean).map(canonicalModeFromUi).filter(Boolean);
-          let allowedModes = visibleModes.length ? visibleModes : [window.MODES.SCOUT, window.MODES.GUIDE, window.MODES.CHARM];
+          const unlockedModes = getUnlockedModesForCurrentPlayer();
+          const allowedModes = unlockedModes.length
+            ? unlockedModes
+            : [window.MODES.SCOUT, window.MODES.GUIDE, window.MODES.CHARM]
+                .map(canonicalModeFromUi)
+                .filter(Boolean);
           allowedModes.forEach(mode => {
             const btn = document.createElement("button");
             btn.type = "button";
@@ -8683,7 +8752,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
               currentEncounter.recoveryText = scenario.text;
               currentEncounter.recoveryCorrectModeRaw = scenario.correctMode;
               currentEncounter.recoveryCorrectMode = resolvedMode;
-              currentEncounter.correctModeResolved = resolvedMode;
+              currentEncounter.recoveryCorrectModeResolved = resolvedMode;
               currentEncounter.recoveryWhy = scenario.why;
               currentEncounter.recoveryChoice = "";
               currentEncounter.recoveryCorrect = false;
@@ -8732,7 +8801,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
               btn.innerText = uiModeLabel(mode, "game");
               bindInput(btn, () => {
                 currentEncounter.recoveryChoice = mode;
-                currentEncounter.recoveryCorrect = (mode === currentEncounter.recoveryCorrectMode);
+                currentEncounter.recoveryCorrect = (mode === (currentEncounter.recoveryCorrectModeResolved || currentEncounter.recoveryCorrectMode));
                 renderEncounterStep();
               });
               options.appendChild(btn);
@@ -8783,7 +8852,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
                 unlockedModes
               );
               currentEncounter.recoveryCorrectMode = recoveryBest;
-              currentEncounter.correctModeResolved = recoveryBest;
+              currentEncounter.recoveryCorrectModeResolved = recoveryBest;
               assertModeConsistency(unlockedModes, recoveryBest, {
                 encounterNumber: currentEncounter?.encounterNumber,
                 tier: getProgressionSpine({ allowNull: true })?.selectors?.tier?.(),
@@ -8817,10 +8886,16 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         if (currentStep === 6) {
           const checks = window.evaluateChecks(window.currentEncounter || currentEncounter);
           const unlockedModes = getUnlockedModesForCurrentPlayer();
-          const rawModeBest = modeMap && modeMap[currentEncounter.guestStateActual]
-            ? (modeMap[currentEncounter.guestStateActual].optimal || null)
-            : null;
-          const modeBestResolved = resolveCorrectModeForPlayer(rawModeBest, unlockedModes);
+
+          const rawModeBest =
+            modeMap && modeMap[currentEncounter.guestStateActual]
+              ? (modeMap[currentEncounter.guestStateActual].optimal || null)
+              : null;
+
+          const modeBestResolved =
+            currentEncounter.correctModeResolved ||
+            resolveCorrectModeForPlayer(rawModeBest, unlockedModes);
+
           currentEncounter.correctModeResolved = modeBestResolved;
           assertModeConsistency(unlockedModes, modeBestResolved, {
             encounterNumber: currentEncounter?.encounterNumber,
@@ -8883,7 +8958,10 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             stepContent,
             "Mode",
             scoreSymbol(checks.modeStatus),
-            "Best: " + (modeBestResolved ? uiModeLabel(modeBestResolved, "game") : "—") + " — " + modeWhy(currentEncounter.guestStateActual)
+            "Best: " +
+              (modeBestResolved ? uiModeLabel(modeBestResolved, "game") : "—") +
+              " — " +
+              modeWhyResolved(currentEncounter.guestStateActual, modeBestResolved)
           );
 
           addReflectionBlock(
@@ -8917,7 +8995,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
               unlockedModes
             );
             currentEncounter.recoveryCorrectMode = recoveryBest;
-            currentEncounter.correctModeResolved = recoveryBest;
+            currentEncounter.recoveryCorrectModeResolved = recoveryBest;
             assertModeConsistency(unlockedModes, recoveryBest, {
               encounterNumber: currentEncounter?.encounterNumber,
               tier: getProgressionSpine({ allowNull: true })?.selectors?.tier?.(),
@@ -9337,13 +9415,16 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           ];
 
           const g = resolveSafeGuestType(enc);
-          const best =
+          const bestRaw =
             (g === "alpha") ? "anchor" :
             (g === "analyst") ? "narrow" :
             (g === "budget_guard") ? "own_it" :
             "narrow";
+          const best = resolveCorrectModeForPlayer(bestRaw, getUnlockedModesForCurrentPlayer());
 
           enc.recoveryCorrectMode = best;
+          enc.recoveryCorrectModeRaw = bestRaw;
+          enc.recoveryCorrectModeResolved = best;
           enc.recoveryText = enc.recoveryText || "Pressure spike — you must recover the frame.";
 
           const card = document.createElement("div");
@@ -9877,7 +9958,8 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
           // Pivot
           recoveryText: carry?.recoveryText || "",
-          recoveryCorrectMode: carry?.recoveryCorrectMode || "",
+          recoveryCorrectMode: carry?.recoveryCorrectModeResolved || carry?.recoveryCorrectMode || "",
+          recoveryCorrectModeResolved: carry?.recoveryCorrectModeResolved || carry?.recoveryCorrectMode || "",
           recoveryWhy: carry?.recoveryWhy || "",
           recoveryChoice: carry?.recoveryChoice || "",
           recoveryCorrect: carry?.recoveryCorrect || false,
@@ -9898,17 +9980,26 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           currentEncounter.__reaction = null;
         }
         {
-          const spine = getProgressionSpine({ allowNull: true });
-          const unlockedModes =
-            Array.isArray(spine?.selectors?.modes?.()) ? spine.selectors.modes() : [window.MODES.SCOUT, window.MODES.GUIDE, window.MODES.CHARM];
-          currentEncounter.correctModeResolved = resolveCorrectModeForPlayer(
-            currentEncounter.correctMode || currentEncounter.recoveryCorrectMode || null,
-            unlockedModes
-          );
-          assertModeConsistency(unlockedModes, currentEncounter.correctModeResolved, {
+          const unlockedModesNow = getUnlockedModesForCurrentPlayer();
+
+          if (currentEncounter.correctMode) {
+            currentEncounter.correctModeResolved = resolveCorrectModeForPlayer(
+              currentEncounter.correctMode,
+              unlockedModesNow
+            );
+          }
+
+          if (currentEncounter.recoveryCorrectMode || currentEncounter.recoveryCorrectModeRaw) {
+            currentEncounter.recoveryCorrectModeResolved = resolveCorrectModeForPlayer(
+              currentEncounter.recoveryCorrectMode || currentEncounter.recoveryCorrectModeRaw,
+              unlockedModesNow
+            );
+          }
+
+          assertModeConsistency(unlockedModesNow, currentEncounter.correctModeResolved, {
             encounterNumber: currentEncounter?.encounterNumber,
-            tier: spine?.selectors?.tier?.(),
-            points: spine?.selectors?.points?.(),
+            tier: getProgressionSpine({ allowNull: true })?.selectors?.tier?.(),
+            points: getProgressionSpine({ allowNull: true })?.selectors?.points?.(),
             source: "startEncounter_sanitize"
           });
         }
@@ -10088,7 +10179,13 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           const recoveryLine = entry.recoveryText
             ? "\nPivot: " + (entry.pivotType || "—") +
               "\nScenario: " + entry.recoveryText +
-              "\nBest: " + entry.recoveryCorrectMode +
+              "\nBest: " + uiModeLabel(
+                resolveCorrectModeForPlayer(
+                  entry.recoveryCorrectModeResolved || entry.recoveryCorrectMode || null,
+                  getUnlockedModesForCurrentPlayer()
+                ),
+                "game"
+              ) +
               "\nYou chose: " + entry.recoveryChoice + " (" + (entry.recoveryCorrect ? "✅" : "❌") + ")" +
               "\nWhy: " + entry.recoveryWhy
             : "";
@@ -10806,9 +10903,20 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
         const modeRule = safeGetRule(window.modeMap || modeMap, modeKey);
         const hookRule = safeGetRule(window.hookMap || hookMap, modeKey);
+
         const unlockedModes = getUnlockedModesForCurrentPlayer();
-        const resolvedOptimalMode = modeRule?.optimal ? resolveCorrectModeForPlayer(modeRule.optimal, unlockedModes) : null;
-        const resolvedNeutralMode = modeRule?.neutral ? resolveCorrectModeForPlayer(modeRule.neutral, unlockedModes) : null;
+
+        const resolvedOptimalMode = modeRule?.optimal
+          ? resolveCorrectModeForPlayer(modeRule.optimal, unlockedModes)
+          : null;
+
+        const resolvedNeutralMode = modeRule?.neutral
+          ? resolveCorrectModeForPlayer(modeRule.neutral, unlockedModes)
+          : null;
+
+        encounter.correctModeResolved = resolvedOptimalMode || null;
+        encounter.correctModeNeutralResolved = resolvedNeutralMode || null;
+
         if (resolvedOptimalMode) {
           assertModeConsistency(unlockedModes, resolvedOptimalMode, {
             encounterNumber: encounter?.encounterNumber,
@@ -10818,11 +10926,16 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           });
         }
 
-        // Mode status (if we don't know the rule, don't crash—grade neutral)
         let modeStatus = "neutral";
-        if (resolvedOptimalMode && encounter.modeSelected && encounter.modeSelected === resolvedOptimalMode) modeStatus = "optimal";
-        else if (resolvedNeutralMode && encounter.modeSelected && encounter.modeSelected === resolvedNeutralMode) modeStatus = "neutral";
-        else if (modeRule && encounter.modeSelected) modeStatus = "damaging";
+        if (resolvedOptimalMode && encounter.modeSelected && encounter.modeSelected === resolvedOptimalMode) {
+          modeStatus = "optimal";
+        } else if (resolvedNeutralMode && encounter.modeSelected && encounter.modeSelected === resolvedNeutralMode) {
+          modeStatus = "neutral";
+        } else if (modeRule && encounter.modeSelected) {
+          modeStatus = "damaging";
+        }
+
+        encounter.modeStatus = modeStatus;
 
         // Hook status
         let hookStatus = "neutral";
