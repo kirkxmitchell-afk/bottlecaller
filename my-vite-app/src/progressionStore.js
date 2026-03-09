@@ -1,4 +1,25 @@
 // progressionStore.js
+export function deriveTier(points) {
+  const pts = Number(points || 0);
+  if (pts >= 10) return 3;
+  if (pts >= 5) return 2;
+  return 1;
+}
+
+export function unlockedGuestTypes(points) {
+  const pts = Number(points || 0);
+  const tier = deriveTier(pts);
+  const base = ["decider", "bargain_smart", "griever"];
+  if (tier >= 2) base.push("budget_guard");
+  if (tier >= 3) base.push("make_it_easy");
+  return base;
+}
+
+export function encounterRangeForPoints(points) {
+  const tier = deriveTier(points);
+  return tier === 1 ? [1, 5] : tier === 2 ? [1, 12] : [1, 20];
+}
+
 export function createProgressionStore(storage = window.localStorage) {
   let state = null;
   let storageKey = null;
@@ -16,30 +37,13 @@ export function createProgressionStore(storage = window.localStorage) {
     return () => listeners.delete(fn);
   }
 
-  function deriveTier(points) {
-    if (points >= 10) return 3;
-    if (points >= 5) return 2;
-    return 1;
-  }
-
-  function unlockedGuestTypes(points) {
-    const pts = Number(points || 0);
-    const tier = pts >= 10 ? 3 : pts >= 5 ? 2 : 1;
-    const base = ["decider", "bargain_smart", "griever"];
-    if (tier >= 2) base.push("budget_guard");
-    if (tier >= 3) base.push("make_it_easy");
-    return base;
-  }
-
   function unlockedModes(points) {
     // Keep boring for now
     return ["standard"];
   }
 
   function clampEncounterByTier(encounterId, points) {
-    const tier = deriveTier(points);
-    const max = tier === 1 ? 5 : tier === 2 ? 12 : 20;
-    const min = 1;
+    const [min, max] = encounterRangeForPoints(points);
     return Math.max(min, Math.min(max, encounterId));
   }
 
@@ -215,10 +219,7 @@ export function createProgressionStore(storage = window.localStorage) {
         runEaseRemaining: () => state.session.runEaseRemaining || 0,
         guestTypes: () => unlockedGuestTypes(state.points),
         modes: () => unlockedModes(state.points),
-        encounterRange: () => {
-          const tier = deriveTier(state.points);
-          return tier === 1 ? [1, 5] : tier === 2 ? [1, 12] : [1, 20];
-        }
+        encounterRange: () => encounterRangeForPoints(state.points)
       },
       actions: { resetEncounterFlow, resetRunScoring, setSessionSelection, applyEncounterResult }
     };

@@ -1582,13 +1582,34 @@ function isDrillMode() {
         try { return getProgressionSpine(); } catch { return null; }
       }
 
-      function bcSnapshot() {
+      function getProgressionMonitorSnapshot() {
         const spine = bcGetSpineHost();
-        let points = null, tier = null, guests = null;
+        if (!spine) return null;
+        const selectors = spine.selectors || {};
+        const state = spine.getState?.();
+        const points = selectors.points?.();
+        const tier = selectors.tier?.();
+        const difficultySeed = selectors.difficultySeed?.();
+        const effectiveDifficulty = selectors.effectiveDifficultySeed?.();
+        const encounterRange = selectors.encounterRange?.();
+        const allowedGuestTypes = selectors.guestTypes?.();
 
-        try { points = spine?.selectors?.points?.(); } catch {}
-        try { tier = spine?.selectors?.tier?.(); } catch {}
-        try { guests = spine?.selectors?.guestTypes?.(); } catch {}
+        return {
+          state,
+          points,
+          tier,
+          difficultySeed,
+          effectiveDifficulty,
+          encounterRange,
+          allowedGuestTypes,
+        };
+      }
+
+      function bcSnapshot() {
+        const prog = getProgressionMonitorSnapshot();
+        const points = prog?.points ?? null;
+        const tier = prog?.tier ?? null;
+        const guests = prog?.allowedGuestTypes ?? null;
 
         const d = window.__BC_DIFFICULTY__ || null;
 
@@ -1602,6 +1623,10 @@ function isDrillMode() {
           points,
           tier,
           guests,
+          difficultySeed: prog?.difficultySeed ?? null,
+          effectiveDifficulty: prog?.effectiveDifficulty ?? null,
+          encounterRange: prog?.encounterRange ?? null,
+          state: prog?.state ?? null,
           difficulty: d ? { d: d.d, pressure: d.pressure } : null,
           encounterNumber: encNum,
           step
@@ -1628,7 +1653,9 @@ function isDrillMode() {
           `BottleCaller Status ${label ? "— " + label : ""}\n` +
           `enc=${s.encounterNumber} step=${s.step}\n` +
           `points=${s.points} tier=${s.tier}\n` +
+          `encounterRange=${Array.isArray(s.encounterRange) ? s.encounterRange.join("..") : s.encounterRange}\n` +
           `guests=${Array.isArray(s.guests) ? s.guests.join(",") : s.guests}\n` +
+          `difficultySeed=${s.difficultySeed} effectiveDifficulty=${s.effectiveDifficulty}\n` +
           `difficulty=${s.difficulty ? `d=${s.difficulty.d} pressure=${s.difficulty.pressure}` : "none"}`;
         return s;
       }
@@ -2775,6 +2802,9 @@ function ensureProgLoaded() {
       function resolveAllowedGuestTypes(encounter) {
         try {
           const spine = getProgressionSpine({ allowNull: true });
+          if (spine?.selectors?.guestTypes) {
+            return spine.selectors.guestTypes();
+          }
           const points = Number(spine?.selectors?.points?.() ?? 0);
           return window.allowedGuestTypes(points);
         } catch (e) {
@@ -2804,7 +2834,20 @@ function ensureProgLoaded() {
           : (window.ENCOUNTERS_DEMO || []);
         const spine = tryGetProgressionSpine();
         const allowed = spine?.selectors?.guestTypes ? spine.selectors.guestTypes() : [];
-        return allowed.length ? all.filter(e => allowed.includes(e.guestStateActual)) : all;
+        const range = spine?.selectors?.encounterRange ? spine.selectors.encounterRange() : [1, Number.MAX_SAFE_INTEGER];
+        const minEncounter = Number(range?.[0] ?? 1);
+        const maxEncounter = Number(range?.[1] ?? Number.MAX_SAFE_INTEGER);
+
+        let pool = all;
+        if (allowed.length) {
+          pool = pool.filter((e) => allowed.includes(normalizeGuestType(e?.guestStateActual)));
+        }
+        pool = pool.filter((e) => {
+          const n = Number(e?.encounterNumber);
+          if (!Number.isFinite(n)) return true;
+          return n >= minEncounter && n <= maxEncounter;
+        });
+        return pool.length ? pool : all;
       }
 
       // ============================================================
@@ -2834,46 +2877,32 @@ function ensureProgLoaded() {
       function replayFromStage1() {
         try {
           const spine = getProgressionSpine({ allowNull: true });
-          spine?.actions?.resetEncounterFlow?.();
+          if (!spine?.actions?.resetEncounterFlow) return false;
+          console.log("[RESET FLOW][BEFORE]", spine.selectors.points(), spine.getState());
+          spine.actions.resetEncounterFlow();
+          console.log("[RESET FLOW][AFTER]", spine.selectors.points(), spine.getState());
+          return true;
         } catch (e) {
           console.warn("[PROG] resetEncounterFlow failed", e);
+          return false;
         }
       }
 
       function resetProgressToStart() {
-        replayFromStage1();
+        startFromEncounter1_GRIND();
       }
 
       function startFromEncounter1_GRIND() {
-        // 1) hard reset runtime
-        window.__NEXT_LOCK__ = false;
+        // Premium progression path: reset flow only, preserving progression identity/state.
+        if (replayFromStage1()) return;
 
+        // Demo fallback: keep local restart behavior when no progression spine exists.
+        window.__NEXT_LOCK__ = false;
         currentStep = 0;
         currentEncounter = null;
-
         encounterIndex = 0;
         saveEncounterIndex(encounterIndex);
         window.__BC_DEMO_DONE__ = 0;
-
-        if (window.__BC_SESSION__) {
-          window.__BC_SESSION__.repDone = 0;
-          window.__BC_SESSION__.repTarget = window.__BC_SESSION__.repTarget || 0;
-        }
-
-        // Optional: clear any per-encounter caches
-        window.__BC_GUARD__ = window.__BC_GUARD__ || {};
-        window.__BC_GUARD__.lastDecision = null;
-
-        // 2) Best-effort sync to mounted frame (if this code is embedded)
-        try {
-          const frame = document.getElementById("premiumRootFrame") || document.querySelector("#gameRootDemo iframe");
-          frame?.contentWindow?.postMessage(
-            { source: "BC_MSG", v: 1, type: "reset_to_encounter_1" },
-            window.location.origin
-          );
-        } catch {}
-
-        // 3) rebuild UI clean and start when ctx+wines are ready
         void startPlayWithReadyGate();
       }
 
@@ -4653,8 +4682,18 @@ function ensureProgLoaded() {
       function enforceGuestPoolByTier(enc) {
         const spine = tryGetProgressionSpine();
         const allowed = spine?.selectors?.guestTypes ? spine.selectors.guestTypes() : [];
-        const actual = enc.guestStateActual;
+        const range = spine?.selectors?.encounterRange ? spine.selectors.encounterRange() : null;
+        const minEncounter = Number(range?.[0] ?? 1);
+        const maxEncounter = Number(range?.[1] ?? Number.MAX_SAFE_INTEGER);
+        const actual = normalizeGuestType(enc?.guestStateActual);
         if (!allowed.length) return enc;
+        if (Number.isFinite(Number(enc?.encounterNumber))) {
+          const n = Number(enc.encounterNumber);
+          if (n < minEncounter || n > maxEncounter) {
+            enc.tags = Array.isArray(enc.tags) ? enc.tags : [];
+            enc.tags.push("encounter_range_clamped_out");
+          }
+        }
         if (allowed.includes(actual)) return enc;
 
         enc.guestStateActual = allowed[Math.floor(Math.random() * allowed.length)];
@@ -6428,12 +6467,16 @@ function ensureProgLoaded() {
         if (!nameEl && !focusEl && !nextEl && !pointsEl) return;
 
         try {
-          const spine = getProgressionSpine({ allowNull: true });
-          const points = spine?.selectors?.points?.() ?? 0;
-          const tier = spine?.selectors?.tier?.() ?? 1;
+          const prog = getProgressionMonitorSnapshot();
+          const points = prog?.points ?? 0;
+          const tier = prog?.tier ?? 1;
+          const encounterRange = prog?.encounterRange ?? [1, 5];
+          const allowedGuestTypes = prog?.allowedGuestTypes ?? [];
+          const difficultySeed = prog?.difficultySeed ?? 1;
+          const effectiveDifficulty = prog?.effectiveDifficulty ?? 1;
           if (nameEl) nameEl.innerText = `Tier ${tier}`;
-          if (focusEl) focusEl.innerText = "Progression";
-          if (nextEl) nextEl.innerText = "";
+          if (focusEl) focusEl.innerText = `d=${difficultySeed} / eff=${effectiveDifficulty}`;
+          if (nextEl) nextEl.innerText = `${encounterRange[0]}-${encounterRange[1]} | ${allowedGuestTypes.join(", ")}`;
           if (pointsEl) pointsEl.innerText = String(points);
         } catch (e) {
           if (nameEl) nameEl.innerText = "—";
@@ -9419,19 +9462,22 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         bcRenderHud("start");
 
         console.log("[DEMO_SPINE_GUARD]", { isDemo: window.isDemo, bcMode: window.bcMode });
-        let minE = 1, maxE = 9999;
+        let points = 0;
+        let allowedGuestTypes = [];
+        let minEncounter = 1;
+        let maxEncounter = Number.MAX_SAFE_INTEGER;
         if (!isDemoNow) {
           const spine = getProgressionSpine({ allowNull: true });
-          const r = spine?.selectors?.encounterRange?.();
-          if (Array.isArray(r) && r.length === 2) {
-            minE = Number(r[0] ?? 1);
-            maxE = Number(r[1] ?? 9999);
+          points = Number(spine?.selectors?.points?.() ?? 0);
+          allowedGuestTypes = Array.isArray(spine?.selectors?.guestTypes?.()) ? spine.selectors.guestTypes() : [];
+          const range = spine?.selectors?.encounterRange?.();
+          if (Array.isArray(range) && range.length === 2) {
+            minEncounter = Number(range[0] ?? 1);
+            maxEncounter = Number(range[1] ?? Number.MAX_SAFE_INTEGER);
           }
-        }
-        if (!isDemoNow) {
           const encounterNumber = encounterIndex + 1;
-          if (encounterNumber < minE) encounterIndex = minE - 1;
-          if (encounterNumber > maxE) encounterIndex = maxE - 1;
+          if (encounterNumber < minEncounter) encounterIndex = minEncounter - 1;
+          if (encounterNumber > maxEncounter) encounterIndex = maxEncounter - 1;
         }
 
         // ----------------------------
@@ -9458,22 +9504,22 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           idx = (typeof encounterIndex === "number" ? encounterIndex : 0) % use.length;
           enc = use[idx];
         } else {
-          // DEMO uses raw list; PREMIUM applies tier-based guest filtering.
-          let points = 0;
-          if (!isDemoNow) {
-            const spine = getProgressionSpine({ allowNull: true });
-            points = Number(spine?.selectors?.points?.() ?? 0);
-          }
-
-          const allowedTypes = (isDemoNow)
-            ? null
-            : (typeof window.allowedGuestTypes === "function" ? window.allowedGuestTypes(points) : null);
-
           let src = list;
-          if (!isDemoNow && Array.isArray(allowedTypes) && allowedTypes.length) {
-            src = (Array.isArray(list) ? list : []).filter(e =>
-              allowedTypes.includes(normalizeGuestType(e?.guestStateActual))
-            );
+          if (!isDemoNow) {
+            src = (Array.isArray(list) ? list : []).filter((e) => {
+              const guestType = normalizeGuestType(e?.guestStateActual);
+              const encounterNo = Number(e?.encounterNumber);
+              const guestAllowed = !allowedGuestTypes.length || allowedGuestTypes.includes(guestType);
+              const encounterAllowed = !Number.isFinite(encounterNo) || (encounterNo >= minEncounter && encounterNo <= maxEncounter);
+              return guestAllowed && encounterAllowed;
+            });
+            console.log("[PROG] encounter candidates", {
+              points,
+              allowedGuestTypes,
+              encounterRange: [minEncounter, maxEncounter],
+              poolSize: src.length,
+              allSize: Array.isArray(list) ? list.length : 0,
+            });
           }
           src = (Array.isArray(src) && src.length) ? src : list;
 
@@ -10006,7 +10052,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             btnResetProgress.disabled = false;
             btnResetProgress.onclick = null;
             btnResetProgress.__bcBound = false;
-            bindInput(btnResetProgress, () => startFromEncounter1_GRIND());
+            bindInput(btnResetProgress, () => resetProgressToStart());
           }
           const btnResetRuns = document.getElementById("btnResetRunsPremium");
           if (btnResetRuns) {
@@ -10414,7 +10460,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         }
 
         rebind(btnResetRuns, () => resetRunsOnly());
-        rebind(btnResetProgress, () => startFromEncounter1_GRIND());
+        rebind(btnResetProgress, () => resetProgressToStart());
         rebind(btnResetWines, () => resetWinesOnly());
 
         const addWineBtn = document.getElementById(ids.addWineBtn);
