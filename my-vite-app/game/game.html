@@ -3588,6 +3588,16 @@ function ensureProgLoaded() {
           .replace(/^_+|_+$/g, "");
       }
 
+      function canonicalDeliveryLine(raw) {
+        return String(raw || "")
+          .trim()
+          .toLowerCase()
+          .replace(/[’']/g, "")
+          .replace(/\s+/g, " ")
+          .replace(/\s*([,.!?;:])\s*/g, "$1")
+          .trim();
+      }
+
       function getSelectedHookType(encounter) {
         if (!encounter) return "";
 
@@ -3621,53 +3631,17 @@ function ensureProgLoaded() {
 
       function uiModeIntentLabel(mode, guestType = null, context = "game") {
         const m = canonicalModeFromUi(mode);
-        const guest = normalizeGuestType(guestType);
 
         if (context !== "game") {
           return uiModeLabel(mode, context);
         }
 
-        const guestCopy = {
-          [window.GUEST.DECIDER]: {
-            scout: "Ask one more question",
-            guide: "Narrow it down for them",
-            charm: "Keep it light and easy",
-            authority: "Recommend with certainty"
-          },
-          [window.GUEST.BARGAIN_SMART]: {
-            scout: "Ask what matters most",
-            guide: "Show the smart-value option",
-            charm: "Make value feel exciting",
-            authority: "State the strongest-value pick"
-          },
-          [window.GUEST.FANCY]: {
-            scout: "Read their taste first",
-            guide: "Steer them toward refinement",
-            charm: "Make it feel special",
-            authority: "Recommend with conviction"
-          },
-          [window.GUEST.GRIEVER]: {
-            scout: "Read the hesitation carefully",
-            guide: "Calmly reduce the risk",
-            charm: "Warm the moment up",
-            authority: "Take pressure off with certainty"
-          },
-          [window.GUEST.CELEBRATOR]: {
-            scout: "See what kind of moment this is",
-            guide: "Help them choose the right bottle",
-            charm: "Lift the energy",
-            authority: "Lead the celebration confidently"
-          }
-        };
-
-        const fallback = {
-          scout: "Ask one more question",
-          guide: "Gently recommend a bottle",
-          charm: "Make the moment feel fun",
-          authority: "Speak with firm confidence"
-        };
-
-        return guestCopy?.[guest]?.[m] || fallback[m] || uiModeLabel(mode, context);
+        if (m === "scout") return "Ask one more question";
+        if (m === "guide") return "Gently recommend a bottle";
+        if (m === "charm") return "Make the moment fun";
+        if (m === "authority") return "Speak with firm confidence";
+        if (m === "closer") return "Move the guest to a decision";
+        return uiModeLabel(mode, context);
       }
 
       function uiHookIntentLabel(hook, guestType = null, context = "game") {
@@ -3731,6 +3705,118 @@ function ensureProgLoaded() {
         return guestCopy?.[guest]?.[hookKey] || fallback[hookKey] || uiHookLabel(hook, context);
       }
 
+      function uiHookIntentLabelScaled(hook, guestType = null, encounter = null, context = "game") {
+        const guest = normalizeGuestType(guestType);
+        const hookKey = canonicalHook(hook);
+        const pctx = getEncounterPresentationContext();
+        const tier = Number(pctx?.tier ?? 1);
+        const pressureBand = String(pctx?.pressureBand || "low");
+
+        if (context !== "game") {
+          return uiHookLabel(hook, context);
+        }
+
+        const base = {
+          [window.GUEST.DECIDER]: {
+            by_the_glass: "Make the choice feel easier",
+            trusted_pick: "Reduce the decision stress",
+            popular_choice: "Show them a safe next step",
+            special_occasion: "Keep it simple, not bigger",
+            staff_favourite: "Give them a calm recommendation"
+          },
+
+          [window.GUEST.BARGAIN_SMART]: {
+            by_the_glass: "Lower the commitment",
+            trusted_pick: "Show the smart-value angle",
+            popular_choice: "Prove it's a safe choice",
+            special_occasion: "Make the spend feel worth it",
+            staff_favourite: "Frame it as the best-value move"
+          },
+
+          [window.GUEST.FANCY]: {
+            by_the_glass: "Keep it elegant and low-risk",
+            trusted_pick: "Signal taste and confidence",
+            popular_choice: "Use social proof carefully",
+            special_occasion: "Make it feel elevated",
+            staff_favourite: "Offer a refined insider pick"
+          },
+
+          [window.GUEST.GRIEVER]: {
+            by_the_glass: "Reduce the risk gently",
+            trusted_pick: "Give them something dependable",
+            popular_choice: "Make the decision feel safer",
+            special_occasion: "Avoid making it feel heavier",
+            staff_favourite: "Offer a reassuring recommendation"
+          },
+
+          [window.GUEST.CELEBRATOR]: {
+            by_the_glass: "Keep the moment flowing",
+            trusted_pick: "Make it feel confidently chosen",
+            popular_choice: "Use the crowd-energy angle",
+            special_occasion: "Match the occasion",
+            staff_favourite: "Offer something fun and memorable"
+          }
+        };
+
+        const advanced = {
+          [window.GUEST.DECIDER]: {
+            by_the_glass: "Lower the friction in the decision",
+            trusted_pick: "Give them a recommendation they can land on quickly",
+            popular_choice: "Make the next step feel safe and easy",
+            special_occasion: "Keep the bottle meaningful without adding pressure",
+            staff_favourite: "Offer a recommendation that feels confidently narrowed"
+          },
+
+          [window.GUEST.BARGAIN_SMART]: {
+            by_the_glass: "Reduce commitment while preserving value",
+            trusted_pick: "Frame the bottle as the justified choice",
+            popular_choice: "Use proof that the spend is defensible",
+            special_occasion: "Make the higher spend feel emotionally and practically worth it",
+            staff_favourite: "Position it as the insider's smart-value move"
+          },
+
+          [window.GUEST.FANCY]: {
+            by_the_glass: "Keep the choice elegant without overcommitting",
+            trusted_pick: "Project refinement and taste confidence",
+            popular_choice: "Use proof without making it feel generic",
+            special_occasion: "Lift the bottle into the emotional tone of the table",
+            staff_favourite: "Make it feel like a polished insider recommendation"
+          },
+
+          [window.GUEST.GRIEVER]: {
+            by_the_glass: "Lower perceived risk without weakening the recommendation",
+            trusted_pick: "Offer certainty the guest can lean on",
+            popular_choice: "Use reassurance that makes the choice feel safer",
+            special_occasion: "Avoid adding emotional weight to an already hesitant guest",
+            staff_favourite: "Use a personal recommendation to calm resistance"
+          },
+
+          [window.GUEST.CELEBRATOR]: {
+            by_the_glass: "Keep momentum without slowing the table down",
+            trusted_pick: "Make the recommendation feel confidently anchored",
+            popular_choice: "Use social energy to validate the choice",
+            special_occasion: "Tie the bottle directly to the emotional weight of the moment",
+            staff_favourite: "Offer something memorable with personal conviction"
+          }
+        };
+
+        const fallback = {
+          by_the_glass: "Lower the commitment",
+          trusted_pick: "Offer a dependable choice",
+          popular_choice: "Use social proof",
+          special_occasion: "Match the moment",
+          staff_favourite: "Recommend your insider pick"
+        };
+
+        const useAdvanced = tier >= 2 || pressureBand !== "low";
+        return (
+          (useAdvanced ? advanced?.[guest]?.[hookKey] : null) ||
+          base?.[guest]?.[hookKey] ||
+          fallback[hookKey] ||
+          uiHookLabel(hook, context)
+        );
+      }
+
       function uiHookSubtitleLabel(hook) {
         const key = canonicalHook(hook);
 
@@ -3752,6 +3838,281 @@ function ensureProgLoaded() {
         if (g === "analyst") return window.GUEST.BARGAIN_SMART;
         if (g === "browser" || g === "alpha") return window.GUEST.DECIDER;
         return g;
+      }
+
+      function pickEncounterVariant(baseValue, variants = [], seedHint = "") {
+        const pool = [baseValue, ...(Array.isArray(variants) ? variants : [])]
+          .filter(v => typeof v === "string" && v.trim());
+
+        if (!pool.length) return "";
+
+        const seed = String(seedHint || "") + "::" + String(baseValue || "");
+        let hash = 0;
+        for (let i = 0; i < seed.length; i++) {
+          hash = ((hash << 5) - hash) + seed.charCodeAt(i);
+          hash |= 0;
+        }
+
+        const idx = Math.abs(hash) % pool.length;
+        return pool[idx];
+      }
+
+      function getEncounterPresentationContext() {
+        const spine = getProgressionSpine({ allowNull: true });
+
+        const tier = Number(spine?.selectors?.tier?.() ?? 1);
+        const points = Number(spine?.selectors?.points?.() ?? 0);
+        const effectiveDifficulty = Number(spine?.selectors?.effectiveDifficultySeed?.() ?? 1);
+        const difficultySeed = Number(spine?.selectors?.difficultySeed?.() ?? 1);
+
+        let pressureBand = "low";
+        if (effectiveDifficulty >= 5) pressureBand = "high";
+        else if (effectiveDifficulty >= 3) pressureBand = "mid";
+
+        return {
+          tier,
+          points,
+          difficultySeed,
+          effectiveDifficulty,
+          pressureBand
+        };
+      }
+
+      function getGuestLineVariants(guestType, ctx = {}) {
+        const guest = normalizeGuestType(guestType);
+        const tier = Number(ctx?.tier ?? 1);
+        const pressureBand = String(ctx?.pressureBand || "low");
+
+        const base = {
+          [window.GUEST.DECIDER]: [
+            "I just need something good.",
+            "I'm stuck between a few options.",
+            "I don't want to overthink this.",
+            "I just want the right bottle without a whole process."
+          ],
+
+          [window.GUEST.BARGAIN_SMART]: [
+            "I want something that's worth it.",
+            "I don't mind spending if it makes sense.",
+            "I'm looking for the smart choice here.",
+            "I want value, not just a bigger price tag."
+          ],
+
+          [window.GUEST.FANCY]: [
+            "I want something with a bit more character.",
+            "I'm after something refined.",
+            "I'd like something that feels elevated.",
+            "I want this to feel a little more special."
+          ],
+
+          [window.GUEST.GRIEVER]: [
+            "I'm not sure I'll enjoy that.",
+            "I don't want to get this wrong.",
+            "I'm a bit nervous about choosing badly.",
+            "I'm not very confident with wine, to be honest."
+          ],
+
+          [window.GUEST.CELEBRATOR]: [
+            "We're celebrating, so it should feel right.",
+            "I want something that suits the moment.",
+            "This should feel a bit festive.",
+            "I want the bottle to match the occasion."
+          ]
+        };
+
+        const tier2 = {
+          [window.GUEST.DECIDER]: [
+            "I want a strong recommendation, not ten options.",
+            "I'm open, but I need someone to narrow it down properly."
+          ],
+          [window.GUEST.BARGAIN_SMART]: [
+            "I'll spend more if there's a clear reason.",
+            "I'm not chasing cheap - I'm chasing value."
+          ],
+          [window.GUEST.FANCY]: [
+            "I want something with polish, not just price.",
+            "I'm looking for something with presence."
+          ],
+          [window.GUEST.GRIEVER]: [
+            "I just don't want to regret the bottle.",
+            "I need to feel safe saying yes to it."
+          ],
+          [window.GUEST.CELEBRATOR]: [
+            "It needs to feel worthy of the occasion.",
+            "I want the bottle to add to the moment, not just fill the table."
+          ]
+        };
+
+        const hard = {
+          [window.GUEST.DECIDER]: [
+            "I need this made simpler fast.",
+            "I'm losing patience with the list."
+          ],
+          [window.GUEST.BARGAIN_SMART]: [
+            "I need a reason this is worth the extra money.",
+            "Convince me this is the smart spend."
+          ],
+          [window.GUEST.FANCY]: [
+            "I don't want something obvious.",
+            "I want it to feel considered."
+          ],
+          [window.GUEST.GRIEVER]: [
+            "I really don't want to make a bad call here.",
+            "I need to feel confident before I commit."
+          ],
+          [window.GUEST.CELEBRATOR]: [
+            "It has to land properly for the table.",
+            "I don't want the bottle to undersell the moment."
+          ]
+        };
+
+        let pool = [...(base[guest] || [])];
+
+        if (tier >= 2) pool.push(...(tier2[guest] || []));
+        if (pressureBand === "high") pool.push(...(hard[guest] || []));
+
+        return pool;
+      }
+
+      function getContextLineVariants(guestType, ctx = {}) {
+        const guest = normalizeGuestType(guestType);
+        const tier = Number(ctx?.tier ?? 1);
+        const pressureBand = String(ctx?.pressureBand || "low");
+
+        const base = {
+          [window.GUEST.DECIDER]: [
+            "The guest scans the list but doesn't commit to anything.",
+            "The guest looks ready to buy, but not ready to choose.",
+            "The guest wants help narrowing it down."
+          ],
+
+          [window.GUEST.BARGAIN_SMART]: [
+            "The guest studies the prices before the wines.",
+            "The guest wants confidence that the bottle is worth the spend.",
+            "The guest is open, but value-sensitive."
+          ],
+
+          [window.GUEST.FANCY]: [
+            "The guest wants the bottle to feel like part of the experience.",
+            "The guest responds to refinement and tone.",
+            "The guest is looking for something with a sense of taste."
+          ],
+
+          [window.GUEST.GRIEVER]: [
+            "The guest looks cautious and slightly guarded.",
+            "The guest wants reassurance more than excitement.",
+            "The guest seems afraid of making the wrong choice."
+          ],
+
+          [window.GUEST.CELEBRATOR]: [
+            "The guest wants the bottle to lift the moment.",
+            "The table energy suggests this bottle matters emotionally.",
+            "The guest is buying for the occasion as much as the taste."
+          ]
+        };
+
+        const tier2 = {
+          [window.GUEST.DECIDER]: [
+            "The guest is ready to move, but only if someone sharpens the choice.",
+          ],
+          [window.GUEST.BARGAIN_SMART]: [
+            "The guest will pay, but only if the case is made well.",
+          ],
+          [window.GUEST.FANCY]: [
+            "The guest is judging the recommendation as much as the bottle.",
+          ],
+          [window.GUEST.GRIEVER]: [
+            "The guest needs the risk of the choice reduced before they commit.",
+          ],
+          [window.GUEST.CELEBRATOR]: [
+            "The bottle needs to serve the mood, not just the menu.",
+          ]
+        };
+
+        const hard = {
+          [window.GUEST.DECIDER]: [
+            "The guest's patience is thinning.",
+          ],
+          [window.GUEST.BARGAIN_SMART]: [
+            "The guest is actively testing whether the recommendation holds up.",
+          ],
+          [window.GUEST.FANCY]: [
+            "The guest's standards are high and the tone matters.",
+          ],
+          [window.GUEST.GRIEVER]: [
+            "The guest's hesitation is close to turning into refusal.",
+          ],
+          [window.GUEST.CELEBRATOR]: [
+            "The emotional expectation around the bottle is high.",
+          ]
+        };
+
+        let pool = [...(base[guest] || [])];
+
+        if (tier >= 2) pool.push(...(tier2[guest] || []));
+        if (pressureBand === "high") pool.push(...(hard[guest] || []));
+
+        return pool;
+      }
+
+      function getVerbalCueVariants(guestType, ctx = {}) {
+        const guest = normalizeGuestType(guestType);
+        const tier = Number(ctx?.tier ?? 1);
+        const pressureBand = String(ctx?.pressureBand || "low");
+
+        const base = {
+          [window.GUEST.DECIDER]: [
+            "They want help narrowing it down.",
+            "They sound open but indecisive.",
+            "They're waiting for a confident steer."
+          ],
+          [window.GUEST.BARGAIN_SMART]: [
+            "They care about whether it's worth it.",
+            "They are price-aware without being closed.",
+            "They want a good reason to spend."
+          ],
+          [window.GUEST.FANCY]: [
+            "They respond to tone and refinement.",
+            "They want the bottle to feel stylish.",
+            "They care about the feel of the recommendation."
+          ],
+          [window.GUEST.GRIEVER]: [
+            "They need reassurance before they move.",
+            "They seem afraid of choosing wrong.",
+            "They're looking for safety."
+          ],
+          [window.GUEST.CELEBRATOR]: [
+            "They want the bottle to match the mood.",
+            "They care about the emotional energy of the moment.",
+            "They want this to feel memorable."
+          ]
+        };
+
+        const advanced = {
+          [window.GUEST.DECIDER]: [
+            "They are more likely to respond to clean direction than extra detail."
+          ],
+          [window.GUEST.BARGAIN_SMART]: [
+            "They need the recommendation to feel justified, not inflated."
+          ],
+          [window.GUEST.FANCY]: [
+            "They are sensitive to whether the recommendation feels generic."
+          ],
+          [window.GUEST.GRIEVER]: [
+            "They may shut down if the recommendation feels too risky or too strong."
+          ],
+          [window.GUEST.CELEBRATOR]: [
+            "They want the bottle to carry emotional weight, not just technical quality."
+          ]
+        };
+
+        let pool = [...(base[guest] || [])];
+
+        if (tier >= 2 || pressureBand !== "low") {
+          pool.push(...(advanced[guest] || []));
+        }
+
+        return pool;
       }
 
       function tierFromEncounter(enc) {
@@ -6546,27 +6907,171 @@ function ensureProgLoaded() {
         stepContent.appendChild(line);
       }
 
+      function getResolvedEncounterFeedback(encounter, checks = null) {
+        const e = encounter || {};
+        const c = checks || (typeof window.evaluateChecks === "function" ? window.evaluateChecks(e) : {});
+
+        const guest = normalizeGuestType(e.guestStateActual);
+
+        const chosenMode = canonicalModeFromUi(e.modeSelected);
+        const bestMode = canonicalModeFromUi(e.correctModeResolved);
+        const okayMode = canonicalModeFromUi(e.correctModeNeutralResolved);
+
+        const chosenHook = getSelectedHookType(e);
+        const bestHook = e.correctHookResolved || null;
+        const okayHook = e.correctHookNeutralResolved || null;
+
+        const chosenDelivery1 =
+          e.selectedDeliveryLine1 ||
+          e.deliveryLine1 ||
+          e.deliverOptionsS1?.[e.selectedS1] ||
+          "";
+
+        const chosenDelivery2 =
+          e.selectedDeliveryLine2 ||
+          e.deliveryLine2 ||
+          e.deliverOptionsS2?.[e.selectedS2] ||
+          "";
+
+        const bestDelivery1 =
+          e.correctDeliveryLine1 ||
+          e.deliverOptionsS1?.[e.correctSlotS1] ||
+          "";
+
+        const bestDelivery2 =
+          e.correctDeliveryLine2 ||
+          e.deliverOptionsS2?.[e.correctSlotS2] ||
+          "";
+
+        return {
+          guest,
+
+          checks: c,
+
+          chosen: {
+            read: e.guestReadSelected || "",
+            mode: chosenMode || "",
+            hook: chosenHook || "",
+            delivery1: chosenDelivery1 || "",
+            delivery2: chosenDelivery2 || "",
+            pivot: canonicalModeFromUi(e.recoveryChoice) || ""
+          },
+
+          best: {
+            mode: bestMode || "",
+            modeNeutral: okayMode || "",
+            hook: bestHook || "",
+            hookNeutral: okayHook || "",
+            delivery1: bestDelivery1 || "",
+            delivery2: bestDelivery2 || "",
+            pivot: canonicalModeFromUi(e.recoveryCorrectModeResolved || e.recoveryCorrectMode || "") || ""
+          },
+
+          result: {
+            readCorrect: !!e.readCorrect,
+            modeStatus: e.modeStatus || c.modeStatus || "neutral",
+            hookStatus: e.hookStatus || c.hookStatus || "neutral",
+            deliveryCorrect: !!e.deliveryCorrect,
+            pivotCorrect: !!e.recoveryCorrect
+          }
+        };
+      }
+
+      function pivotWhyWithChoice(encounter) {
+        const e = encounter || {};
+        const chosen = canonicalModeFromUi(e.recoveryChoice);
+        const best = canonicalModeFromUi(e.recoveryCorrectModeResolved || e.recoveryCorrectMode || "");
+        const pivotType = String(e.pivotType || "").trim().toLowerCase();
+
+        const chosenLabel = chosen ? uiModeLabel(chosen, "game") : "Your choice";
+        const bestLabel = best ? uiModeLabel(best, "game") : "the best response";
+
+        const pivotReasons = {
+          objection: {
+            scout: "Scout helps when you need to understand the resistance before trying to move it.",
+            guide: "Guide helps when the guest needs calm direction through the hesitation.",
+            charm: "Charm helps when the moment needs warmth before it can move again.",
+            authority: "Authority helps when the guest needs strong certainty to break the stall."
+          },
+          hesitation: {
+            scout: "Scout helps when hesitation hides the real concern.",
+            guide: "Guide helps when the guest needs a safer path forward.",
+            charm: "Charm helps when lightness reduces the emotional weight of the choice.",
+            authority: "Authority helps when the guest wants someone decisive to lead."
+          },
+          confusion: {
+            scout: "Scout helps when you still need the missing clue.",
+            guide: "Guide helps when the guest needs the choice simplified clearly.",
+            charm: "Charm helps when the moment is getting stiff and needs ease.",
+            authority: "Authority helps when the guest responds best to direct clarity."
+          },
+          resistance: {
+            scout: "Scout helps when resistance is hiding something unspoken.",
+            guide: "Guide helps when pressure must be lowered while keeping direction.",
+            charm: "Charm helps when the relationship needs warming before moving again.",
+            authority: "Authority helps when the resistance softens under confident leadership."
+          }
+        };
+
+        const reasonMap = pivotReasons[pivotType] || {};
+
+        const bestWhy =
+          reasonMap[best] ||
+          `${bestLabel} was the strongest way to recover this moment.`;
+
+        const okayWhy =
+          `${chosenLabel} could work, but ${bestLabel} would have recovered the moment more cleanly.`;
+
+        const weakWhy =
+          `${chosenLabel} was a weak recovery here. ${bestLabel} would have fit the pivot better.`;
+
+        if (chosen && best && chosen === best) return bestWhy;
+        if (chosen) return okayWhy.startsWith(chosenLabel) ? okayWhy : weakWhy;
+        return bestWhy;
+      }
+
+      function getResolvedPivotFeedback(encounter) {
+        const e = encounter || {};
+
+        return {
+          pivotType: String(e.pivotType || "").trim().toLowerCase(),
+          pivotScenario: String(e.recoveryText || "").trim(),
+          chosen: canonicalModeFromUi(e.recoveryChoice),
+          best: canonicalModeFromUi(e.recoveryCorrectModeResolved || e.recoveryCorrectMode || ""),
+          correct: !!e.recoveryCorrect
+        };
+      }
+
+      function statusWord(status) {
+        if (status === "optimal") return "strong";
+        if (status === "neutral") return "okay";
+        if (status === "damaging") return "weak";
+        return "unclear";
+      }
+
+      function sentenceJoin(a, b) {
+        return [a, b].filter(Boolean).join(" ");
+      }
+
       function bcReflectionAnchor(checks, encounter) {
-        const readCorrect = !!checks?.guestRead;
-        const deliveryCorrect = !!checks?.deliveryCorrect;
-        const modeStatus = checks?.modeStatus || "";
-        const hookStatus = checks?.hookStatus || "";
-        const signal = (encounter?.chainSignal || "").toLowerCase();
+        const fb = getResolvedEncounterFeedback(encounter, checks);
 
-        if (encounter?.pivotUnlocked) return "Pressure shifted. The goal was recovery, not perfection.";
-
-        if (readCorrect && deliveryCorrect) return "You led early and stayed calm. That’s the move.";
-        if (!readCorrect) return "The read was late — the table took control first.";
-        if (!deliveryCorrect) return "You had the right idea, but the delivery slipped under pressure.";
-
-        if (modeStatus && modeStatus !== "correct") return "Your approach didn’t match the guest’s state.";
-        if (hookStatus && hookStatus !== "correct") return "Your hook timing was late. Lead sooner with one clear suggestion.";
-
-        if (signal === "green") return "Consistency is improving. Keep the pace.";
-        if (signal === "yellow") return "Close. Tighten the sequence and keep it calm.";
-        if (signal === "red") return "Reset and repeat. Lead the moment before it leads you.";
-
-        return "Good rep. Keep going.";
+        if (!fb.result.readCorrect) {
+          return "The miss started at the guest read.";
+        }
+        if (fb.result.modeStatus === "damaging") {
+          return "The miss started at the mode choice.";
+        }
+        if (fb.result.hookStatus === "damaging") {
+          return "The miss started at the opening hook.";
+        }
+        if (!fb.result.deliveryCorrect) {
+          return "The miss showed up in the delivery.";
+        }
+        if (encounter?.recoveryText && !fb.result.pivotCorrect) {
+          return "The miss happened in the pivot recovery.";
+        }
+        return "This chain held together from read to finish.";
       }
 
       function tierToLabel(tier) {
@@ -7353,8 +7858,58 @@ function ensureProgLoaded() {
         return [scored[n - 1].w, scored[n - 2].w];
       }
 
+      function stylizeDeliveryLine(line, kind = "emotional", encounter = null) {
+        const raw = String(line || "").trim();
+        if (!raw) return raw;
+
+        const pctx = getEncounterPresentationContext();
+        const tier = Number(pctx?.tier ?? 1);
+        const pressureBand = String(pctx?.pressureBand || "low");
+
+        if (tier <= 1 && pressureBand === "low") {
+          return raw;
+        }
+
+        // Light-touch polish only — preserve meaning.
+        const emotionalRewrites = [
+          [/^this is /i, "This feels "],
+          [/^it is /i, "It feels "],
+          [/^you could /i, "You could comfortably "],
+          [/^i’d go with /i, "I'd confidently go with "]
+        ];
+
+        const structuralRewrites = [
+          [/^it pairs /i, "It pairs especially well "],
+          [/^this goes /i, "This goes particularly well "],
+          [/^it works /i, "It works especially well "],
+          [/^it gives /i, "It gives you a clearer "]
+        ];
+
+        const rewriteList = kind === "structural" ? structuralRewrites : emotionalRewrites;
+
+        let out = raw;
+        for (const [pattern, replacement] of rewriteList) {
+          if (pattern.test(out)) {
+            out = out.replace(pattern, replacement);
+            break;
+          }
+        }
+
+        // High pressure: slightly tighter, more deliberate tone.
+        if (pressureBand === "high") {
+          out = out
+            .replace(/\breally\b/gi, "")
+            .replace(/\bvery\b/gi, "")
+            .replace(/\s{2,}/g, " ")
+            .trim();
+        }
+
+        return out;
+      }
+
       function initDeliverOptions(encounter) {
         if (encounter.deliverOptionsS1 && encounter.deliverOptionsS2) return;
+
         const d = encounter?.policy?.d ?? encounter?.difficulty ?? 1;
         const policy = encounter.policy || window.__BC_DIFFICULTY__ || difficultyPolicy(d);
         const noise = policy?.deliveryNoise ?? 0;
@@ -7370,19 +7925,34 @@ function ensureProgLoaded() {
         const slots1 = getSlots(s1Count);
         const slots2 = getSlots(s2Count);
 
-        const correct1 = buildSentence1Correct(encounter);
-        const wrongs1 = buildSentence1Wrong();
-        const [wrong1a, wrong1b] = pickWrongPairByNoise(wrongs1, correct1, noise);
+        const correct1Raw = buildSentence1Correct(encounter);
+        const wrongs1Raw = buildSentence1Wrong();
+        const [wrong1aRaw, wrong1bRaw] = pickWrongPairByNoise(wrongs1Raw, correct1Raw, noise);
 
-        const correct2 = buildSentence2Correct(encounter);
-        const wrongs2 = buildSentence2Wrong();
-        const [wrong2a, wrong2b] = pickWrongPairByNoise(wrongs2, correct2, noise);
+        const correct2Raw = buildSentence2Correct(encounter);
+        const wrongs2Raw = buildSentence2Wrong();
+        const [wrong2aRaw, wrong2bRaw] = pickWrongPairByNoise(wrongs2Raw, correct2Raw, noise);
+
+        const correct1 = stylizeDeliveryLine(correct1Raw, "emotional", encounter);
+        const wrongs1 = wrongs1Raw.map((line) => stylizeDeliveryLine(line, "emotional", encounter));
+        const wrong1a = stylizeDeliveryLine(wrong1aRaw, "emotional", encounter);
+        const wrong1b = stylizeDeliveryLine(wrong1bRaw, "emotional", encounter);
+
+        const correct2 = stylizeDeliveryLine(correct2Raw, "structural", encounter);
+        const wrongs2 = wrongs2Raw.map((line) => stylizeDeliveryLine(line, "structural", encounter));
+        const wrong2a = stylizeDeliveryLine(wrong2aRaw, "structural", encounter);
+        const wrong2b = stylizeDeliveryLine(wrong2bRaw, "structural", encounter);
 
         // Choose which slot is correct
         encounter.correctSlotS1 = slots1[Math.floor(Math.random() * slots1.length)];
         encounter.correctSlotS2 = slots2[Math.floor(Math.random() * slots2.length)];
 
-        // Build option maps
+        // Store semantic truth explicitly
+        encounter.correctDeliveryLine1 = correct1;
+        encounter.correctDeliveryLine2 = correct2;
+        encounter.correctDeliveryLine1Key = canonicalDeliveryLine(correct1);
+        encounter.correctDeliveryLine2Key = canonicalDeliveryLine(correct2);
+
         const map1 = {};
         const map2 = {};
 
@@ -7391,7 +7961,6 @@ function ensureProgLoaded() {
           if (slot === encounter.correctSlotS1) map1[slot] = correct1;
         });
 
-        // Fill remaining with wrongs
         const s1WrongPool = [wrong1a, wrong1b];
         slots1.forEach((slot) => {
           if (!map1[slot]) map1[slot] = s1WrongPool.shift() || pickRandom(wrongs1);
@@ -7410,9 +7979,26 @@ function ensureProgLoaded() {
         encounter.deliverOptionsS1 = map1;
         encounter.deliverOptionsS2 = map2;
 
-        // Ensure selected values reset correctly if difficulty changes mid-run
+        // Reset invalid selections if option structure changed
         if (!slots1.includes(encounter.selectedS1)) encounter.selectedS1 = null;
         if (!slots2.includes(encounter.selectedS2)) encounter.selectedS2 = null;
+
+        // Keep selected semantic truth aligned
+        if (encounter.selectedS1 != null && map1[encounter.selectedS1]) {
+          encounter.deliveryLine1 = map1[encounter.selectedS1];
+          encounter.deliveryLine1Key = canonicalDeliveryLine(map1[encounter.selectedS1]);
+        } else {
+          encounter.deliveryLine1 = "";
+          encounter.deliveryLine1Key = "";
+        }
+
+        if (encounter.selectedS2 != null && map2[encounter.selectedS2]) {
+          encounter.deliveryLine2 = map2[encounter.selectedS2];
+          encounter.deliveryLine2Key = canonicalDeliveryLine(map2[encounter.selectedS2]);
+        } else {
+          encounter.deliveryLine2 = "";
+          encounter.deliveryLine2Key = "";
+        }
       }
 
       function evaluateChecks(encounterOverride) {
@@ -7517,9 +8103,29 @@ function ensureProgLoaded() {
           hookStatus = hookStatusEval;
         }
 
+        const selectedDeliveryLine1 =
+          encounter.deliveryLine1 || encounter.deliverOptionsS1?.[encounter.selectedS1] || "";
+
+        const selectedDeliveryLine2 =
+          encounter.deliveryLine2 || encounter.deliverOptionsS2?.[encounter.selectedS2] || "";
+
+        const selectedDeliveryLine1Key = canonicalDeliveryLine(selectedDeliveryLine1);
+        const selectedDeliveryLine2Key = canonicalDeliveryLine(selectedDeliveryLine2);
+
+        const correctDeliveryLine1 =
+          encounter.correctDeliveryLine1 || encounter.deliverOptionsS1?.[encounter.correctSlotS1] || "";
+
+        const correctDeliveryLine2 =
+          encounter.correctDeliveryLine2 || encounter.deliverOptionsS2?.[encounter.correctSlotS2] || "";
+
+        const correctDeliveryLine1Key = canonicalDeliveryLine(correctDeliveryLine1);
+        const correctDeliveryLine2Key = canonicalDeliveryLine(correctDeliveryLine2);
+
         const deliveryCorrect =
-          encounter.selectedS1 === encounter.correctSlotS1 &&
-          encounter.selectedS2 === encounter.correctSlotS2;
+          !!selectedDeliveryLine1Key &&
+          !!selectedDeliveryLine2Key &&
+          selectedDeliveryLine1Key === correctDeliveryLine1Key &&
+          selectedDeliveryLine2Key === correctDeliveryLine2Key;
 
         // Writeback
         encounter.readCorrect = !!guestRead;
@@ -7527,10 +8133,18 @@ function ensureProgLoaded() {
         encounter.hookStatus = hookStatus;
         encounter.deliveryCorrect = !!deliveryCorrect;
 
-        // Store resolved hook truth for reflection / summaries
         encounter.correctHookResolved = hookRule?.optimal || null;
         encounter.correctHookNeutralResolved = hookRule?.neutral || null;
         encounter.selectedHookResolved = selectedHookType || null;
+
+        encounter.correctDeliveryLine1 = correctDeliveryLine1;
+        encounter.correctDeliveryLine2 = correctDeliveryLine2;
+        encounter.correctDeliveryLine1Key = correctDeliveryLine1Key;
+        encounter.correctDeliveryLine2Key = correctDeliveryLine2Key;
+        encounter.selectedDeliveryLine1 = selectedDeliveryLine1;
+        encounter.selectedDeliveryLine2 = selectedDeliveryLine2;
+        encounter.selectedDeliveryLine1Key = selectedDeliveryLine1Key;
+        encounter.selectedDeliveryLine2Key = selectedDeliveryLine2Key;
 
         return { guestRead, modeStatus, hookStatus, deliveryCorrect };
       }
@@ -7589,7 +8203,155 @@ function ensureProgLoaded() {
         return btn;
       }
 
+      function resetEncounterVolatileState(encounter) {
+        if (!encounter || typeof encounter !== "object") return encounter;
+
+        // Player choice state
+        encounter.guestReadSelected = "";
+        encounter.modeSelected = "";
+        encounter.hookSelected = "";
+        encounter.hookSelectedKey = "";
+        encounter.hookMeta = null;
+
+        encounter.selectedS1 = null;
+        encounter.selectedS2 = null;
+        encounter.deliveryLine1 = "";
+        encounter.deliveryLine2 = "";
+        encounter.deliveryLine1Key = "";
+        encounter.deliveryLine2Key = "";
+
+        encounter.recoveryChoice = "";
+        encounter.recoveryCorrect = false;
+        encounter.showModeHelp = false;
+        encounter.showHookHelp = false;
+        encounter.showDeliveryHelp = false;
+
+        // Generated option sets
+        encounter.deliverOptionsS1 = null;
+        encounter.deliverOptionsS2 = null;
+        encounter.hookOptions = null;
+
+        // Correctness truth
+        encounter.correctModeResolved = "";
+        encounter.correctModeNeutralResolved = "";
+        encounter.correctHookResolved = "";
+        encounter.correctHookNeutralResolved = "";
+        encounter.correctDeliveryLine1 = "";
+        encounter.correctDeliveryLine2 = "";
+        encounter.correctDeliveryLine1Key = "";
+        encounter.correctDeliveryLine2Key = "";
+        encounter.recoveryCorrectModeResolved = "";
+
+        // Evaluation outputs
+        encounter.readCorrect = false;
+        encounter.modeStatus = "neutral";
+        encounter.hookStatus = "neutral";
+        encounter.deliveryCorrect = false;
+
+        // Telemetry / summaries
+        encounter.__uxSummary = null;
+        encounter.__uxSummaryBuilt = false;
+        encounter.__reaction = null;
+        encounter.__reactionComputed = false;
+        encounter.__resolvedLogged = false;
+        encounter.dynamicGuestReaction = null;
+        encounter.dynamicGuestLine = null;
+
+        return encounter;
+      }
+
+      function buildCarryEncounterState(prev, encounterRunId) {
+        if (!prev || prev.runId !== encounterRunId) return null;
+
+        return {
+          // Safe same-run UI/player selections only
+          guestReadSelected: prev.guestReadSelected || "",
+          modeSelected: prev.modeSelected || "",
+          hookSelected: prev.hookSelected || "",
+          hookSelectedKey: prev.hookSelectedKey || "",
+          hookMeta: prev.hookMeta || null,
+
+          selectedS1: prev.selectedS1 ?? null,
+          selectedS2: prev.selectedS2 ?? null,
+          deliveryLine1: prev.deliveryLine1 || "",
+          deliveryLine2: prev.deliveryLine2 || "",
+          deliveryLine1Key: prev.deliveryLine1Key || "",
+          deliveryLine2Key: prev.deliveryLine2Key || "",
+
+          recoveryChoice: prev.recoveryChoice || "",
+
+          // Generated option sets are safe only for same run
+          deliverOptionsS1: prev.deliverOptionsS1 || null,
+          deliverOptionsS2: prev.deliverOptionsS2 || null,
+          hookOptions: prev.hookOptions || null,
+
+          // Slot positions safe only for same run
+          correctSlotS1: prev.correctSlotS1 ?? null,
+          correctSlotS2: prev.correctSlotS2 ?? null,
+          correctDeliveryLine1: prev.correctDeliveryLine1 || "",
+          correctDeliveryLine2: prev.correctDeliveryLine2 || "",
+          correctDeliveryLine1Key: prev.correctDeliveryLine1Key || "",
+          correctDeliveryLine2Key: prev.correctDeliveryLine2Key || ""
+        };
+      }
+
+      function logEncounterStateAudit(label, encounter) {
+        if (!encounter) return;
+
+        console.log("[ENCOUNTER AUDIT]", label, {
+          runId: encounter.runId,
+          encounterId: encounter.encounterId,
+          encounterNumber: encounter.encounterNumber,
+          guest: encounter.guestStateActual,
+
+          selected: {
+            read: encounter.guestReadSelected,
+            mode: encounter.modeSelected,
+            hook: encounter.hookSelected,
+            hookKey: encounter.hookSelectedKey,
+            s1: encounter.selectedS1,
+            s2: encounter.selectedS2,
+            delivery1: encounter.deliveryLine1,
+            delivery2: encounter.deliveryLine2,
+            pivot: encounter.recoveryChoice
+          },
+
+          resolved: {
+            mode: encounter.correctModeResolved,
+            hook: encounter.correctHookResolved,
+            delivery1: encounter.correctDeliveryLine1,
+            delivery2: encounter.correctDeliveryLine2,
+            pivot: encounter.recoveryCorrectModeResolved
+          },
+
+          result: {
+            readCorrect: encounter.readCorrect,
+            modeStatus: encounter.modeStatus,
+            hookStatus: encounter.hookStatus,
+            deliveryCorrect: encounter.deliveryCorrect,
+            recoveryCorrect: encounter.recoveryCorrect
+          }
+        });
+      }
+
+      function scrubEncounterDerivedState(encounter) {
+        if (!encounter) return;
+        encounter.correctModeResolved = "";
+        encounter.correctModeNeutralResolved = "";
+        encounter.correctHookResolved = "";
+        encounter.correctHookNeutralResolved = "";
+        encounter.recoveryCorrectModeResolved = "";
+        encounter.readCorrect = false;
+        encounter.modeStatus = "neutral";
+        encounter.hookStatus = "neutral";
+        encounter.deliveryCorrect = false;
+        encounter.recoveryCorrect = false;
+        encounter.__uxSummary = null;
+        encounter.__uxSummaryBuilt = false;
+      }
+
       function goToStep(n) {
+        if (n === 6) scrubEncounterDerivedState(currentEncounter);
         currentStep = n;
         renderEncounterStep();
       }
@@ -8001,20 +8763,418 @@ function ensureProgLoaded() {
         }
       }
 
-      function renderCoachLineBlock(stepContent, enc, checks) {
+      function renderCoachLineBlock(container, encounter, checks) {
+        const fb = getResolvedEncounterFeedback(encounter, checks);
+
+        let line = "";
+
+        if (!fb.result.readCorrect) {
+          line = "Start earlier. Get the guest read right before trying to steer the conversation.";
+        } else if (fb.result.modeStatus === "damaging") {
+          line = `${uiModeLabel(fb.best.mode, "game")} would have fit this guest better than ${uiModeLabel(fb.chosen.mode, "game")}.`;
+        } else if (fb.result.hookStatus === "damaging") {
+          line = `The angle was off. "${fb.best.hook}" was the better hook for this guest.`;
+        } else if (!fb.result.deliveryCorrect) {
+          line = "Your read and angle were close, but the delivery needed a cleaner pair of sentences.";
+        } else if (encounter?.recoveryText && !fb.result.pivotCorrect) {
+          line = `${uiModeLabel(fb.best.pivot, "game")} would have recovered the pivot better than ${uiModeLabel(fb.chosen.pivot, "game")}.`;
+        } else {
+          line = "Good chain. You matched the guest, opened well, and delivered it cleanly.";
+        }
+
         const block = document.createElement("div");
-        block.className = "card";
+        block.className = "small-text";
+        block.style.marginTop = "10px";
+        block.innerText = line;
+        container.appendChild(block);
+      }
 
-        const title = document.createElement("strong");
-        title.innerText = "Coach";
+      function buildDynamicGuestReaction(encounter, checks = null) {
+        const e = encounter || {};
+        const c = checks || (typeof window.evaluateChecks === "function" ? window.evaluateChecks(e) : {});
+
+        const guest = normalizeGuestType(e.guestStateActual);
+        const readCorrect = !!(e.readCorrect ?? c.guestRead);
+        const modeStatus = e.modeStatus || c.modeStatus || "neutral";
+        const hookStatus = e.hookStatus || c.hookStatus || "neutral";
+        const deliveryCorrect = !!(e.deliveryCorrect ?? c.deliveryCorrect);
+        const pivotPresent = !!e.recoveryText;
+        const pivotCorrect = !!e.recoveryCorrect;
+
+        const chosenMode = canonicalModeFromUi(e.modeSelected);
+        const bestMode = canonicalModeFromUi(e.correctModeResolved);
+        const chosenHook = getSelectedHookType(e);
+        const bestHook = e.correctHookResolved || "";
+
+        const chosenModeLabel = chosenMode ? uiModeLabel(chosenMode, "game") : "Your approach";
+        const bestModeLabel = bestMode ? uiModeLabel(bestMode, "game") : "the better approach";
+
+        function guestReactionLines(type) {
+          const map = {
+            [window.GUEST.DECIDER]: {
+              strong: "The guest looks relieved that the choice is getting clearer.",
+              medium: "The guest is with you, but still needs a cleaner push to decide.",
+              weak: "The guest still looks unsure and unconvinced.",
+              pivotStrong: "The guest settles again and looks ready to choose.",
+              pivotWeak: "The guest slips back into indecision."
+            },
+
+            [window.GUEST.BARGAIN_SMART]: {
+              strong: "The guest nods slowly—they can see the value in what you’re saying.",
+              medium: "The guest is interested, but still weighing whether it feels worth it.",
+              weak: "The guest looks unconvinced that this is the smart choice.",
+              pivotStrong: "The guest seems reassured that the choice makes sense.",
+              pivotWeak: "The guest still feels like the value case is weak."
+            },
+
+            [window.GUEST.FANCY]: {
+              strong: "The guest leans in—they like the tone and the sense of refinement.",
+              medium: "The guest is listening, but the moment still feels slightly flat.",
+              weak: "The guest’s interest cools; the recommendation feels less special now.",
+              pivotStrong: "The guest re-engages and the moment regains its polish.",
+              pivotWeak: "The guest remains emotionally unbought."
+            },
+
+            [window.GUEST.GRIEVER]: {
+              strong: "The guest relaxes a little—they feel safer with the recommendation now.",
+              medium: "The guest softens, but still seems hesitant.",
+              weak: "The guest tightens up and looks even more cautious.",
+              pivotStrong: "The guest eases again and seems more open to the bottle.",
+              pivotWeak: "The guest stays guarded and unconvinced."
+            },
+
+            [window.GUEST.CELEBRATOR]: {
+              strong: "The guest brightens—they can feel the moment coming together.",
+              medium: "The guest is interested, but the energy still hasn’t fully landed.",
+              weak: "The guest loses some of the excitement of the moment.",
+              pivotStrong: "The guest comes back into the mood and the energy lifts again.",
+              pivotWeak: "The celebration energy drops off."
+            }
+          };
+
+          return map[type] || {
+            strong: "The guest leans in and looks ready to move forward.",
+            medium: "The guest is interested, but not fully convinced yet.",
+            weak: "The guest pulls back and stays uncertain.",
+            pivotStrong: "The guest re-engages with the recommendation.",
+            pivotWeak: "The guest stays resistant."
+          };
+        }
+
+        const lines = guestReactionLines(guest);
+
+        let chainStrength = 0;
+        if (readCorrect) chainStrength += 1;
+        if (modeStatus === "optimal") chainStrength += 1;
+        else if (modeStatus === "damaging") chainStrength -= 1;
+
+        if (hookStatus === "optimal") chainStrength += 1;
+        else if (hookStatus === "damaging") chainStrength -= 1;
+
+        if (deliveryCorrect) chainStrength += 1;
+        else chainStrength -= 1;
+
+        let primary;
+        if (chainStrength >= 2) primary = lines.strong;
+        else if (chainStrength >= 0) primary = lines.medium;
+        else primary = lines.weak;
+
+        let secondary = "";
+
+        if (!readCorrect) {
+          secondary = "You misread the guest early, so the rest of the recommendation had weak footing.";
+        } else if (modeStatus === "damaging") {
+          secondary = `${chosenModeLabel} pushed the conversation the wrong way. ${bestModeLabel} would have fit this guest better.`;
+        } else if (modeStatus === "neutral") {
+          secondary = `${chosenModeLabel} could work, but ${bestModeLabel} would have moved the guest more cleanly.`;
+        } else if (hookStatus === "damaging") {
+          secondary = `"${chosenHook || "Your hook"}" did not give the guest the right reason to lean in. "${bestHook || "The better hook"}" was the cleaner angle.`;
+        } else if (hookStatus === "neutral") {
+          secondary = `"${chosenHook || "Your hook"}" was workable, but "${bestHook || "the stronger hook"}" would have landed better.`;
+        } else if (!deliveryCorrect) {
+          secondary = "The recommendation had the right shape, but the final wording lacked clarity.";
+        } else {
+          secondary = `${chosenModeLabel} matched the guest well, and the recommendation felt natural to receive.`;
+        }
+
+        let pivotLine = "";
+        if (pivotPresent) {
+          pivotLine = pivotCorrect ? lines.pivotStrong : lines.pivotWeak;
+        }
+
+        return {
+          primary,
+          secondary,
+          pivot: pivotLine,
+          combined: [primary, secondary, pivotLine].filter(Boolean).join(" ")
+        };
+      }
+
+      function buildShortGuestReaction(encounter, checks = null) {
+        const full = buildDynamicGuestReaction(encounter, checks);
+        return full.primary || "The guest gives very little away.";
+      }
+
+      function buildDynamicGuestLine(encounter, checks = null) {
+        const e = encounter || {};
+        const c = checks || (typeof window.evaluateChecks === "function" ? window.evaluateChecks(e) : {});
+
+        const guest = normalizeGuestType(e.guestStateActual);
+        const readCorrect = !!(e.readCorrect ?? c.guestRead);
+        const modeStatus = e.modeStatus || c.modeStatus || "neutral";
+        const hookStatus = e.hookStatus || c.hookStatus || "neutral";
+        const deliveryCorrect = !!(e.deliveryCorrect ?? c.deliveryCorrect);
+        const pivotPresent = !!e.recoveryText;
+        const pivotCorrect = !!e.recoveryCorrect;
+
+        let chainStrength = 0;
+        if (readCorrect) chainStrength += 1;
+        if (modeStatus === "optimal") chainStrength += 1;
+        else if (modeStatus === "damaging") chainStrength -= 1;
+
+        if (hookStatus === "optimal") chainStrength += 1;
+        else if (hookStatus === "damaging") chainStrength -= 1;
+
+        if (deliveryCorrect) chainStrength += 1;
+        else chainStrength -= 1;
+
+        const tone = chainStrength >= 2 ? "strong" : chainStrength >= 0 ? "medium" : "weak";
+
+        const lines = {
+          [window.GUEST.DECIDER]: {
+            strong: [
+              "Okay, that actually helps narrow it down.",
+              "Right, that makes the choice feel easier.",
+              "Yes, that sounds like the kind of direction I needed."
+            ],
+            medium: [
+              "Hmm, okay... I'm following you.",
+              "I can see where you're going with that.",
+              "Alright, but I still need a little help deciding."
+            ],
+            weak: [
+              "I'm still not really sure.",
+              "Hmm... that doesn't quite help me choose.",
+              "I don't feel clearer yet."
+            ],
+            pivotStrong: [
+              "Okay, that makes more sense now.",
+              "Right, I'm back with you.",
+              "Yes, that helps."
+            ],
+            pivotWeak: [
+              "No, I'm still stuck.",
+              "Hmm... I'm not convinced yet.",
+              "I still don't know."
+            ]
+          },
+
+          [window.GUEST.BARGAIN_SMART]: {
+            strong: [
+              "Okay, that actually sounds worth it.",
+              "Right, I can see the value in that.",
+              "That makes sense for the price."
+            ],
+            medium: [
+              "Maybe... I'm still weighing it up.",
+              "Alright, but I'm still thinking about value.",
+              "I can hear that, but I'm not fully sold."
+            ],
+            weak: [
+              "I'm not sure that's worth it.",
+              "Hmm... I don't really see the value yet.",
+              "That doesn't sound like the smart option to me."
+            ],
+            pivotStrong: [
+              "Okay, now I can see why it makes sense.",
+              "Right, that helps justify it.",
+              "That makes the choice easier to back."
+            ],
+            pivotWeak: [
+              "No, I still don't feel the value.",
+              "Hmm... I'm still not buying the case.",
+              "That still doesn't justify it for me."
+            ]
+          },
+
+          [window.GUEST.FANCY]: {
+            strong: [
+              "Now that sounds more like it.",
+              "Yes, that feels elegant.",
+              "Mm, that's much more the kind of thing I'd want."
+            ],
+            medium: [
+              "Okay... I can see the direction.",
+              "Hmm, there's something there.",
+              "Maybe, but it still doesn't feel fully elevated."
+            ],
+            weak: [
+              "Hmm... that feels a bit flat.",
+              "I'm not really getting excited by that.",
+              "That's not quite the feeling I'm after."
+            ],
+            pivotStrong: [
+              "Yes, that recovers it nicely.",
+              "Alright, now it feels more polished.",
+              "That's better."
+            ],
+            pivotWeak: [
+              "No, it still doesn't feel right.",
+              "Hmm... it's still not landing for me.",
+              "I'm still not drawn in."
+            ]
+          },
+
+          [window.GUEST.GRIEVER]: {
+            strong: [
+              "Okay... that makes me feel better about it.",
+              "Right, that feels safer.",
+              "I could go with that."
+            ],
+            medium: [
+              "Maybe... I'm still a little unsure.",
+              "I hear you, but I'm still hesitant.",
+              "Okay, but I'm not fully comfortable yet."
+            ],
+            weak: [
+              "Hmm... I'm still not comfortable with that.",
+              "That actually makes me more unsure.",
+              "No, I'm still hesitating."
+            ],
+            pivotStrong: [
+              "Okay, that helps settle it.",
+              "Right, that takes some of the pressure off.",
+              "That feels safer now."
+            ],
+            pivotWeak: [
+              "No, I'm still uneasy.",
+              "Hmm... I'm still not there.",
+              "That doesn't help the hesitation."
+            ]
+          },
+
+          [window.GUEST.CELEBRATOR]: {
+            strong: [
+              "Yes, that feels right for the moment.",
+              "Okay, that actually sounds fun.",
+              "That works - it fits the occasion."
+            ],
+            medium: [
+              "Maybe... I'm listening.",
+              "Alright, but it hasn't quite landed yet.",
+              "I can see it, but I'm not fully feeling it."
+            ],
+            weak: [
+              "Hmm... that's not really the vibe.",
+              "That takes some of the excitement out of it.",
+              "I'm not feeling the moment with that."
+            ],
+            pivotStrong: [
+              "Yes, okay - now we're back in the right mood.",
+              "That brings it back.",
+              "Right, that feels better."
+            ],
+            pivotWeak: [
+              "No, the moment's gone a bit flat now.",
+              "Hmm... I'm still not feeling it.",
+              "That didn't bring the energy back."
+            ]
+          }
+        };
+
+        const pool = lines[guest] || {
+          strong: ["That sounds right."],
+          medium: ["Okay... I'm listening."],
+          weak: ["I'm not convinced yet."],
+          pivotStrong: ["Alright, that helps."],
+          pivotWeak: ["No, that still doesn't work for me."]
+        };
+
+        const pick = (arr) => arr[Math.floor(Math.random() * arr.length)] || "";
+
+        const primary = pick(pool[tone] || pool.medium);
+        const pivot = pivotPresent ? pick(pool[pivotCorrect ? "pivotStrong" : "pivotWeak"]) : "";
+
+        const chosenMode = canonicalModeFromUi(e.modeSelected);
+        const chosenHook = getSelectedHookType(e);
+
+        let nuance = "";
+
+        if (modeStatus === "optimal" && chosenMode) {
+          if (chosenMode === "guide") nuance = " The calm direction works for me.";
+          if (chosenMode === "scout") nuance = " That question helps.";
+          if (chosenMode === "charm") nuance = " I like the tone of that.";
+          if (chosenMode === "authority") nuance = " I trust the certainty there.";
+        } else if (modeStatus === "damaging" && chosenMode) {
+          if (chosenMode === "guide") nuance = " That feels a bit too directed.";
+          if (chosenMode === "scout") nuance = " I don't want more questions right now.";
+          if (chosenMode === "charm") nuance = " That doesn't really answer what I need.";
+          if (chosenMode === "authority") nuance = " That feels a bit too strong for me.";
+        }
+
+        if (!nuance && hookStatus === "damaging" && chosenHook) {
+          nuance = " That opening doesn't match what I care about.";
+        }
+
+        return {
+          primary: primary + nuance,
+          pivot,
+          combined: [primary + nuance, pivot].filter(Boolean).join(" ")
+        };
+      }
+
+      function renderDynamicGuestReactionBlock(container, encounter, checks, opts = {}) {
+        const compact = !!opts.compact;
+
+        const reaction =
+          encounter?.dynamicGuestReaction ||
+          buildDynamicGuestReaction(encounter, checks);
+
+        const text = compact
+          ? (reaction.primary || "The guest gives very little away.")
+          : (reaction.combined || "The guest gives very little away.");
+
+        const block = document.createElement("div");
+        block.className = "notice";
+        block.style.marginTop = "10px";
+
+        const title = document.createElement("div");
+        title.innerHTML = "<strong>Guest Reaction</strong>";
+
+        const body = document.createElement("div");
+        body.style.marginTop = "6px";
+        body.innerText = text;
+
         block.appendChild(title);
+        block.appendChild(body);
+        container.appendChild(block);
+      }
 
-        const line = document.createElement("div");
-        line.style.marginTop = "8px";
-        line.innerText = getCoachLine(enc, checks);
-        block.appendChild(line);
+      function renderDynamicGuestLineBlock(container, encounter, checks, opts = {}) {
+        const compact = !!opts.compact;
 
-        stepContent.appendChild(block);
+        const lineData =
+          encounter?.dynamicGuestLine ||
+          buildDynamicGuestLine(encounter, checks);
+
+        const text = compact
+          ? (lineData.primary || "The guest gives little away.")
+          : (lineData.combined || "The guest gives little away.");
+
+        const block = document.createElement("div");
+        block.className = "notice";
+        block.style.marginTop = "10px";
+
+        const title = document.createElement("div");
+        title.innerHTML = "<strong>What the guest says</strong>";
+
+        const body = document.createElement("div");
+        body.style.marginTop = "6px";
+        body.innerText = `"${text}"`;
+
+        block.appendChild(title);
+        block.appendChild(body);
+        container.appendChild(block);
       }
 
       // ==============================
@@ -8039,70 +9199,53 @@ function ensureProgLoaded() {
         return (hookMap && hookMap[state] && hookMap[state].optimal) ? hookMap[state].optimal : "";
       }
 
-      function buildStrengthFixSummary(checks, result, enc) {
-        // checks: { guestRead, modeStatus, hookStatus, deliveryCorrect }
-        // result: { chainSignal, chainScore, pivotUnlocked, resetAllowed, pivotType, deliveryCorrect }
-        // enc: currentEncounter
-
-        const actual = enc.guestStateActual || "";
-        const chosen = enc.guestReadSelected || "";
+      function buildStrengthFixSummary(encounter, checks = null) {
+        const fb = getResolvedEncounterFeedback(encounter, checks);
 
         const strengths = [];
         const fixes = [];
-        const next = [];
 
-        // --- Strengths ---
-        if (checks.guestRead) strengths.push(`Read was correct: you identified **${actual}**.`);
-        if (checks.modeStatus === "optimal") strengths.push(`Mode nailed: **${uiModeLabel(enc.modeSelected, "game")}** fits ${actual}.`);
-        if (checks.hookStatus === "optimal") strengths.push(`Hook nailed: **${enc.hookSelected}** fits ${actual}.`);
-        if (checks.deliveryCorrect) strengths.push(`Delivery pair was correct (2 sentences clean).`);
-
-        // If no explicit strengths, still give something
-        if (!strengths.length) strengths.push(`You stayed in the sequence (Read → Mode → Hook → Deliver). That matters.`);
-
-        // --- Fixes (prioritised) ---
-        if (!checks.guestRead) {
-          fixes.push(`Guest read missed: you chose **${chosen || "—"}**, actual was **${actual}**.`);
-          next.push(`Micro-fix: re-read ONE cue (verbal or physical) and name the intent in 2 words.`);
+        if (fb.result.readCorrect) {
+          strengths.push(`You read the guest correctly as ${fb.guest}.`);
+        } else {
+          fixes.push(`Read the guest more cleanly first. You chose ${fb.chosen.read || "—"}, but the guest was ${fb.guest || "—"}.`);
         }
 
-        if (checks.modeStatus !== "optimal") {
-          fixes.push(`Mode mismatch: best was **${bestModeFor(actual)}** (you chose **${uiModeLabel(enc.modeSelected, "game") || "—"}**).`);
-          next.push(`Micro-fix: for ${actual}, default to **${bestModeFor(actual)}** unless you see a strong counter-cue.`);
+        if (fb.result.modeStatus === "optimal") {
+          strengths.push(`${uiModeLabel(fb.chosen.mode, "game")} was the right tone for this guest.`);
+        } else if (fb.result.modeStatus === "neutral") {
+          fixes.push(`${uiModeLabel(fb.chosen.mode, "game")} could work, but ${uiModeLabel(fb.best.mode, "game")} would have fit the guest more cleanly.`);
+        } else if (fb.chosen.mode) {
+          fixes.push(`${uiModeLabel(fb.chosen.mode, "game")} pushed the interaction the wrong way. ${uiModeLabel(fb.best.mode, "game")} was stronger.`);
         }
 
-        if (checks.hookStatus !== "optimal") {
-          fixes.push(`Hook mismatch: best was **${bestHookFor(actual)}** (you chose **${getSelectedHookType(enc) || "—"}**).`);
-          next.push(`Micro-fix: pick the hook that answers the guest’s real question in 1 line.`);
+        if (fb.result.hookStatus === "optimal") {
+          strengths.push(`Your opening hook matched the guest well.`);
+        } else if (fb.result.hookStatus === "neutral") {
+          fixes.push(`Your hook could work, but "${fb.best.hook}" would have been a cleaner opening.`);
+        } else if (fb.chosen.hook) {
+          fixes.push(`Your hook pulled in the wrong direction. "${fb.best.hook}" was the better lead-in.`);
         }
 
-        if (!checks.deliveryCorrect) {
-          fixes.push(`Delivery missed: the sentence pair didn’t land the right emotional + structural combo.`);
-          next.push(`Micro-fix: sentence 1 = emotional framing, sentence 2 = concrete wine reason (fruit/texture/oak/process).`);
+        if (fb.result.deliveryCorrect) {
+          strengths.push(`Your delivery pair was clear and well structured.`);
+        } else {
+          fixes.push(`Tighten the delivery. The stronger pair was "${fb.best.delivery1}" / "${fb.best.delivery2}".`);
         }
 
-        // If everything is optimal but still yellow/red (rare), give a “tighten” note
-        const sig = String(result.chainSignal || "").toLowerCase();
-        if (checks.guestRead && checks.modeStatus === "optimal" && checks.hookStatus === "optimal" && checks.deliveryCorrect) {
-          if (sig !== "green") next.push(`Tighten: shorten sentence 1 by 20% and lead with certainty.`);
+        if (encounter?.recoveryText) {
+          if (fb.result.pivotCorrect) {
+            strengths.push(`You recovered the pivot well with ${uiModeLabel(fb.chosen.pivot, "game")}.`);
+          } else if (fb.chosen.pivot) {
+            fixes.push(`${uiModeLabel(fb.chosen.pivot, "game")} was a weak recovery. ${uiModeLabel(fb.best.pivot, "game")} was the better pivot response.`);
+          }
         }
-
-        // --- One-liner grade cue ---
-        const score = (typeof result.chainScore === "number") ? result.chainScore : null;
-        const grade =
-          sig === "green" ? "STRONG" :
-          sig === "yellow" ? "RECOVERABLE" :
-          sig === "red" ? "BROKE" : "UNKNOWN";
-
-        const header = `${signalEmoji(sig)} ${grade}${score != null ? ` — ${score.toFixed(1)} / 4.0` : ""}`;
 
         return {
-          header,
+          strength: strengths[0] || "You got part of the interaction right.",
+          fix: fixes[0] || "Tighten the next decision earlier in the chain.",
           strengths,
-          fixes,
-          next: next.length ? next : [`Micro-fix: do it again with the correct Mode + best Hook.`],
-          signal: sig,
-          score
+          fixes
         };
       }
 
@@ -8120,8 +9263,18 @@ function ensureProgLoaded() {
         const head = document.createElement("div");
         head.className = "notice";
         head.style.marginTop = "8px";
-        head.innerText = summary.header;
+        head.innerText = summary.header || "Resolved encounter feedback";
         wrap.appendChild(head);
+
+        const strengthItems = (Array.isArray(summary.strengths) && summary.strengths.length)
+          ? summary.strengths
+          : [summary.strength || ""].filter(Boolean);
+        const fixItems = (Array.isArray(summary.fixes) && summary.fixes.length)
+          ? summary.fixes
+          : [summary.fix || ""].filter(Boolean);
+        const nextItems = (Array.isArray(summary.next) && summary.next.length)
+          ? summary.next
+          : [summary.fix || "Use the strongest next chain choice."];
 
         const makeList = (label, items) => {
           const block = document.createElement("div");
@@ -8143,9 +9296,9 @@ function ensureProgLoaded() {
           return block;
         };
 
-        wrap.appendChild(makeList("✅ Strength", summary.strengths));
-        if (summary.fixes && summary.fixes.length) wrap.appendChild(makeList("🔧 Fix", summary.fixes));
-        wrap.appendChild(makeList("🎯 Next", summary.next));
+        wrap.appendChild(makeList("✅ Strength", strengthItems));
+        if (fixItems.length) wrap.appendChild(makeList("🔧 Fix", fixItems));
+        wrap.appendChild(makeList("🎯 Next", nextItems));
 
         container.appendChild(wrap);
       }
@@ -8167,10 +9320,18 @@ function ensureProgLoaded() {
 
       function sessionSignalDetail(signal) {
         const s = String(signal || "").toLowerCase();
-        if (s === "green") return "You stayed ahead of the table. Keep this rhythm.";
-        if (s === "yellow") return "You recovered, but the sequence wobbled. Tighten the order.";
-        if (s === "red") return "The table took control. Reset and lead earlier next time.";
-        return "Keep practicing clean sequences under pressure.";
+        if (s === "green") return "You are stacking good decisions.";
+        if (s === "yellow") return "The chain wobbled. Tighten the next link.";
+        if (s === "red") return "The chain broke earlier in the encounter.";
+        return "Keep building clean chains from read to finish.";
+      }
+
+      function momentumLabel(signal) {
+        const s = String(signal || "").toLowerCase();
+        if (s === "green") return "BUILDING";
+        if (s === "yellow") return "WOBBLE";
+        if (s === "red") return "BREAK";
+        return "STEADY";
       }
 
       function statusScore(s) {
@@ -8223,51 +9384,21 @@ function ensureProgLoaded() {
       }
 
       function renderStrengthFixBlock(container, checks, encounter) {
-        const wrap = document.createElement("div");
-        wrap.className = "card";
+        const summary = buildStrengthFixSummary(encounter, checks);
 
-        const title = document.createElement("strong");
-        title.innerText = "Strength + Fix";
-        wrap.appendChild(title);
+        const block = document.createElement("div");
+        block.className = "notice";
 
-        const picked = pickStrengthFix(checks);
+        const strength = document.createElement("div");
+        strength.innerHTML = `<strong>You did well:</strong> ${summary.strength}`;
 
-        const s = document.createElement("div");
-        s.style.marginTop = "8px";
-        s.innerText = picked.strength;
-        wrap.appendChild(s);
+        const fix = document.createElement("div");
+        fix.style.marginTop = "8px";
+        fix.innerHTML = `<strong>Next fix:</strong> ${summary.fix}`;
 
-        const f = document.createElement("div");
-        f.style.marginTop = "6px";
-        f.innerText = picked.fix;
-        wrap.appendChild(f);
-
-        // Optional: pivot + reset notes (only if used/available)
-        if (encounter && encounter.pivotType) {
-          const p = document.createElement("div");
-          p.className = "small-text";
-          p.style.marginTop = "8px";
-          const pivotResult = encounter.recoveryChoice
-            ? (encounter.recoveryCorrect ? "✅ Pivot correct." : "❌ Pivot wrong.")
-            : "— Pivot not chosen.";
-          p.innerText = `Pivot: ${encounter.pivotType} • ${pivotResult}`;
-          wrap.appendChild(p);
-        }
-
-        if (encounter && encounter.resetUsed) {
-          const r = document.createElement("div");
-          r.className = "small-text";
-          r.innerText = "Reset: ✅ Used (allowed only if first mode was HOLD).";
-          wrap.appendChild(r);
-        }
-
-        const rule = document.createElement("div");
-        rule.className = "notice";
-        rule.style.marginTop = "10px";
-        rule.innerText = picked.nextRule;
-        wrap.appendChild(rule);
-
-        container.appendChild(wrap);
+        block.appendChild(strength);
+        block.appendChild(fix);
+        container.appendChild(block);
       }
 
       function getTierLabel(enc) {
@@ -8352,13 +9483,18 @@ function ensureProgLoaded() {
         const block = document.createElement("div");
         block.className = "card";
 
+        const descriptor =
+          gradeObj.grade === "A" ? "Excellent chain" :
+          gradeObj.grade === "B" ? "Mostly correct decisions" :
+          "The read or angle needs improvement";
+
         const title = document.createElement("strong");
-        title.innerText = `Performance Grade: ${gradeObj.grade} — ${gradeObj.tier}`;
+        title.innerText = `Grade: ${gradeObj.grade} — ${descriptor}`;
         block.appendChild(title);
 
         const meta = document.createElement("div");
         meta.className = "small-text";
-        meta.innerText = `Signal: ${(gradeObj.signal || "—").toUpperCase()} | Score: ${gradeObj.pts.toFixed(1)} pts`;
+        meta.innerText = `Tier: ${gradeObj.tier} | Momentum: ${momentumLabel(gradeObj.signal)} | Score: ${gradeObj.pts.toFixed(1)} pts`;
         block.appendChild(meta);
 
         const headline = document.createElement("div");
@@ -8603,24 +9739,54 @@ function ensureProgLoaded() {
 
       function renderModeHelp(stepContent) {
         const wrap = document.createElement("div");
-        wrap.className = "card";
+        wrap.className = "notice";
+        wrap.style.marginTop = "10px";
 
-        const title = document.createElement("strong");
-        title.innerText = "Mode guide (quick)";
-        wrap.appendChild(title);
+        wrap.innerHTML = `
+          <div><strong>Scout</strong> — Ask one more question when you still need a better read on the guest.</div>
+          <div style="margin-top:8px;"><strong>Guide</strong> — Gently steer the guest when they need help getting to a clear choice.</div>
+          <div style="margin-top:8px;"><strong>Charm</strong> — Warm the moment up when connection and ease matter most.</div>
+          <div style="margin-top:8px;"><strong>Authority</strong> — Lead with certainty when the guest wants someone decisive.</div>
+        `;
 
-        const lines = [
-          "LEAD = decide for them (speed + certainty).",
-          "HOLD = reduce pressure (safety + proof).",
-          "REFLECT = mirror identity (vibe + nuance)."
-        ];
+        stepContent.appendChild(wrap);
+      }
 
-        lines.forEach(t => {
-          const d = document.createElement("div");
-          d.className = "small-text";
-          d.innerText = t;
-          wrap.appendChild(d);
-        });
+      function renderHookHelp(stepContent) {
+        const wrap = document.createElement("div");
+        wrap.className = "notice";
+        wrap.style.marginTop = "10px";
+
+        wrap.innerHTML = `
+          <div><strong>By the Glass</strong> — Lower the commitment and make the choice feel safer.</div>
+          <div style="margin-top:8px;"><strong>Trusted Pick</strong> — Use confidence and dependability to reduce hesitation.</div>
+          <div style="margin-top:8px;"><strong>Popular Choice</strong> — Use social proof when the guest wants reassurance.</div>
+          <div style="margin-top:8px;"><strong>Special Occasion</strong> — Match the emotional weight of the moment.</div>
+          <div style="margin-top:8px;"><strong>Staff Favourite</strong> — Offer an insider recommendation that feels personal.</div>
+        `;
+
+        stepContent.appendChild(wrap);
+      }
+
+      function renderDeliveryHelp(stepContent) {
+        const pctx = getEncounterPresentationContext();
+        const tier = Number(pctx?.tier ?? 1);
+
+        const wrap = document.createElement("div");
+        wrap.className = "notice";
+        wrap.style.marginTop = "10px";
+
+        const extra =
+          tier >= 2
+            ? `<div style="margin-top:8px;"><strong>Higher-tier rule</strong> — As the game gets tougher, good delivery should still feel natural, but more polished and intentional.</div>`
+            : "";
+
+        wrap.innerHTML = `
+          <div><strong>Sentence 1</strong> — Create emotional fit first. Make the guest feel understood, reassured, interested, or excited.</div>
+          <div style="margin-top:8px;"><strong>Sentence 2</strong> — Add structural clarity. Make the recommendation easy to understand and act on.</div>
+          <div style="margin-top:8px;"><strong>Good delivery rule</strong> — First make the bottle feel right, then make the choice feel easy.</div>
+          ${extra}
+        `;
 
         stepContent.appendChild(wrap);
       }
@@ -8893,8 +10059,13 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           stepContent.appendChild(cuePanel);
 
           const prompt = document.createElement("p");
-          prompt.innerText = "Select the guest state:";
+          prompt.innerText = "What kind of guest are you dealing with?";
           stepContent.appendChild(prompt);
+
+          const hint = document.createElement("div");
+          hint.className = "small-text";
+          hint.innerText = "Watch their cues. The right read makes every decision easier.";
+          stepContent.appendChild(hint);
 
           const options = document.createElement("div");
           options.className = "option-grid";
@@ -8955,7 +10126,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           topRow.className = "history-row";
 
           const prompt = document.createElement("div");
-          prompt.innerText = "Select a Mode";
+          prompt.innerText = "How do you want to handle this guest?";
           topRow.appendChild(prompt);
 
           const helpBtn = document.createElement("button");
@@ -8978,6 +10149,11 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
           topRow.appendChild(helpBtn);
           stepContent.appendChild(topRow);
+
+          const hint = document.createElement("div");
+          hint.className = "small-text";
+          hint.innerText = "Match the tone of your approach to the guest in front of you.";
+          stepContent.appendChild(hint);
 
           bindInput(helpBtn, () => {
             currentEncounter.showModeHelp = !currentEncounter.showModeHelp;
@@ -9027,9 +10203,45 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         if (currentStep === 3) {
           debugHookStrictness(currentEncounter);
 
-          const prompt = document.createElement("p");
-          prompt.textContent = "Which sentence do you lead with?";
-          stepContent.appendChild(prompt);
+          const topRow = document.createElement("div");
+          topRow.className = "history-row";
+
+          const prompt = document.createElement("div");
+          prompt.innerText = "Choose your opening angle.";
+          topRow.appendChild(prompt);
+
+          const helpBtn = document.createElement("button");
+          helpBtn.type = "button";
+          helpBtn.className = "small-btn";
+          helpBtn.innerText = "?";
+          helpBtn.style.width = "32px";
+          helpBtn.style.height = "32px";
+          helpBtn.style.minWidth = "32px";
+          helpBtn.style.minHeight = "32px";
+          helpBtn.style.maxWidth = "32px";
+          helpBtn.style.maxHeight = "32px";
+          helpBtn.style.padding = "0";
+          helpBtn.style.borderRadius = "999px";
+          helpBtn.style.display = "inline-flex";
+          helpBtn.style.alignItems = "center";
+          helpBtn.style.justifyContent = "center";
+          helpBtn.style.lineHeight = "1";
+          helpBtn.style.flex = "0 0 auto";
+
+          topRow.appendChild(helpBtn);
+          stepContent.appendChild(topRow);
+
+          const hint = document.createElement("div");
+          hint.className = "small-text";
+          hint.innerText = "Your first sentence should make the guest lean in.";
+          stepContent.appendChild(hint);
+
+          bindInput(helpBtn, () => {
+            currentEncounter.showHookHelp = !currentEncounter.showHookHelp;
+            renderEncounterStep();
+          });
+
+          if (currentEncounter.showHookHelp) renderHookHelp(stepContent);
 
           renderStrictRulesBadge(stepContent, currentEncounter);
 
@@ -9060,7 +10272,12 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
             const primary = document.createElement("div");
             primary.className = "option-title";
-            primary.innerText = uiHookIntentLabel(hookType, currentEncounter.guestStateActual, "game");
+            primary.innerText = uiHookIntentLabelScaled(
+              hookType,
+              currentEncounter.guestStateActual,
+              currentEncounter,
+              "game"
+            );
 
             const secondary = document.createElement("div");
             secondary.className = "option-subtitle";
@@ -9109,15 +10326,50 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         }
 
         if (currentStep === 4) {
+          const topRow = document.createElement("div");
+          topRow.className = "history-row";
+
+          const prompt = document.createElement("div");
+          prompt.innerText = "Build the 2-sentence delivery.";
+          topRow.appendChild(prompt);
+
+          const helpBtn = document.createElement("button");
+          helpBtn.type = "button";
+          helpBtn.className = "small-btn";
+          helpBtn.innerText = "?";
+          helpBtn.style.width = "32px";
+          helpBtn.style.height = "32px";
+          helpBtn.style.minWidth = "32px";
+          helpBtn.style.minHeight = "32px";
+          helpBtn.style.maxWidth = "32px";
+          helpBtn.style.maxHeight = "32px";
+          helpBtn.style.padding = "0";
+          helpBtn.style.borderRadius = "999px";
+          helpBtn.style.display = "inline-flex";
+          helpBtn.style.alignItems = "center";
+          helpBtn.style.justifyContent = "center";
+          helpBtn.style.lineHeight = "1";
+          helpBtn.style.flex = "0 0 auto";
+
+          topRow.appendChild(helpBtn);
+          stepContent.appendChild(topRow);
+
+          bindInput(helpBtn, () => {
+            currentEncounter.showDeliveryHelp = !currentEncounter.showDeliveryHelp;
+            renderEncounterStep();
+          });
+
+          if (currentEncounter.showDeliveryHelp) renderDeliveryHelp(stepContent);
+
           const reminder = document.createElement("div");
           reminder.className = "notice";
-          reminder.innerText = "2 sentences max. Pick one emotional + one structural.";
+          reminder.innerText = "First create emotional fit, then make the recommendation clear.";
           stepContent.appendChild(reminder);
 
           if (!currentEncounter.deliverOptionsS1 || !currentEncounter.deliverOptionsS2) initDeliverOptions(currentEncounter);
 
           const line1Title = document.createElement("p");
-          line1Title.innerText = "Sentence 1 (Emotional framing)";
+          line1Title.innerText = "Sentence 1 — Create emotional fit";
           stepContent.appendChild(line1Title);
 
           const line1Options = document.createElement("div");
@@ -9133,6 +10385,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             bindInput(btn, () => {
               currentEncounter.selectedS1 = slot;
               currentEncounter.deliveryLine1 = currentEncounter.deliverOptionsS1[slot];
+              currentEncounter.deliveryLine1Key = canonicalDeliveryLine(currentEncounter.deliverOptionsS1[slot]);
               console.log("[STEP4] S1 handler ran ✅", slot);
               renderEncounterStep();
             });
@@ -9141,7 +10394,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           stepContent.appendChild(line1Options);
 
           const line2Title = document.createElement("p");
-          line2Title.innerText = "Sentence 2 (Structural clarity)";
+          line2Title.innerText = "Sentence 2 — Make the choice clear";
           stepContent.appendChild(line2Title);
 
           const line2Options = document.createElement("div");
@@ -9157,6 +10410,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             bindInput(btn, () => {
               currentEncounter.selectedS2 = slot;
               currentEncounter.deliveryLine2 = currentEncounter.deliverOptionsS2[slot];
+              currentEncounter.deliveryLine2Key = canonicalDeliveryLine(currentEncounter.deliverOptionsS2[slot]);
               console.log("[STEP4] S2 handler ran ✅", slot);
               renderEncounterStep();
             });
@@ -9184,7 +10438,18 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           const bar = ensureStepButtonsContainer();
           bar.innerHTML = "";
 
+          const reactionTitle = document.createElement("h3");
+          reactionTitle.innerText = "Guest Reaction";
+          stepContent.appendChild(reactionTitle);
+
+          const reactionHint = document.createElement("div");
+          reactionHint.className = "small-text";
+          reactionHint.innerText = "Your choices shape how the guest responds.";
+          stepContent.appendChild(reactionHint);
+
           const checksRaw = window.evaluateChecks(window.currentEncounter || currentEncounter);
+          currentEncounter.dynamicGuestReaction = buildDynamicGuestReaction(currentEncounter, checksRaw);
+          currentEncounter.dynamicGuestLine = buildDynamicGuestLine(currentEncounter, checksRaw);
 
           const rep = getDrillRep(); // null if not in drill
 
@@ -9264,6 +10529,14 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
               "They relax because you made it fast, safe, and inevitable.";
           }
 
+          renderDynamicGuestLineBlock(stepContent, currentEncounter, checksRaw, {
+            compact: true
+          });
+
+          renderDynamicGuestReactionBlock(stepContent, currentEncounter, checksRaw, {
+            compact: true
+          });
+
           const teaser = document.createElement("div");
           teaser.className = "small-text";
           teaser.innerText = "Streak updates after Reflection (Step 7).";
@@ -9271,8 +10544,30 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
           // ✅ ADD THIS (debug + summary render)
           console.log("[BC] UX summary build", { checksRaw, result });
-          const summary = buildStrengthFixSummary(checksRaw, result, currentEncounter);
-          currentEncounter.__uxSummary = summary;
+          const summary = buildStrengthFixSummary(currentEncounter, checksRaw);
+          const fb = getResolvedEncounterFeedback(currentEncounter, checksRaw);
+
+          currentEncounter.__uxSummary = {
+            guest: fb.guest,
+            chosenMode: fb.chosen.mode,
+            bestMode: fb.best.mode,
+            chosenHook: fb.chosen.hook,
+            bestHook: fb.best.hook,
+            chosenDelivery1: fb.chosen.delivery1,
+            chosenDelivery2: fb.chosen.delivery2,
+            bestDelivery1: fb.best.delivery1,
+            bestDelivery2: fb.best.delivery2,
+            chosenPivot: fb.chosen.pivot,
+            bestPivot: fb.best.pivot,
+            modeStatus: fb.result.modeStatus,
+            hookStatus: fb.result.hookStatus,
+            deliveryCorrect: fb.result.deliveryCorrect,
+            pivotCorrect: fb.result.pivotCorrect,
+            strength: summary.strength,
+            fix: summary.fix,
+            strengths: summary.strengths,
+            fixes: summary.fixes
+          };
           renderUxSummary(stepContent, summary, { title: "In-the-moment feedback", compact: true });
 
           const signalChip = document.createElement("div");
@@ -9347,7 +10642,19 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
               btn.innerText = uiModeLabel(mode, "game");
               bindInput(btn, () => {
                 currentEncounter.recoveryChoice = mode;
-                currentEncounter.recoveryCorrect = (mode === (currentEncounter.recoveryCorrectModeResolved || currentEncounter.recoveryCorrectMode));
+                const unlockedModes = getUnlockedModesForCurrentPlayer();
+
+                const recoveryBest = resolveCorrectModeForPlayer(
+                  currentEncounter.recoveryCorrectModeRaw ||
+                  currentEncounter.recoveryCorrectMode ||
+                  null,
+                  unlockedModes
+                );
+
+                currentEncounter.recoveryCorrectModeResolved = recoveryBest;
+                currentEncounter.recoveryCorrect =
+                  !!currentEncounter.recoveryChoice &&
+                  canonicalModeFromUi(currentEncounter.recoveryChoice) === canonicalModeFromUi(recoveryBest);
                 renderEncounterStep();
               });
               options.appendChild(btn);
@@ -9385,6 +10692,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
               currentEncounter.recoveryChoice = "";
               currentEncounter.recoveryCorrect = false;
 
+              scrubEncounterDerivedState(currentEncounter);
               currentStep = 1;
               renderEncounterStep();
             }, bar);
@@ -9394,11 +10702,15 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             if (currentEncounter.recoveryChoice) {
               const unlockedModes = getUnlockedModesForCurrentPlayer();
               const recoveryBest = resolveCorrectModeForPlayer(
-                currentEncounter.recoveryCorrectMode || currentEncounter.recoveryCorrectModeRaw || null,
+                currentEncounter.recoveryCorrectModeRaw ||
+                currentEncounter.recoveryCorrectMode ||
+                null,
                 unlockedModes
               );
-              currentEncounter.recoveryCorrectMode = recoveryBest;
               currentEncounter.recoveryCorrectModeResolved = recoveryBest;
+              currentEncounter.recoveryCorrect =
+                !!currentEncounter.recoveryChoice &&
+                canonicalModeFromUi(currentEncounter.recoveryChoice) === canonicalModeFromUi(recoveryBest);
               assertModeConsistency(unlockedModes, recoveryBest, {
                 encounterNumber: currentEncounter?.encounterNumber,
                 tier: getProgressionSpine({ allowNull: true })?.selectors?.tier?.(),
@@ -9431,6 +10743,11 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
         if (currentStep === 6) {
           const checks = window.evaluateChecks(window.currentEncounter || currentEncounter);
+          const dynamicReaction = buildDynamicGuestReaction(currentEncounter, checks);
+          currentEncounter.dynamicGuestReaction = dynamicReaction;
+          const dynamicGuestLine = buildDynamicGuestLine(currentEncounter, checks);
+          currentEncounter.dynamicGuestLine = dynamicGuestLine;
+          logEncounterStateAudit("evaluated", currentEncounter);
           const unlockedModes = getUnlockedModesForCurrentPlayer();
           const modeRuleForPlayer = getModeRuleForCurrentPlayer(currentEncounter.guestStateActual);
 
@@ -9467,7 +10784,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           updateMasteryFromEncounter(currentEncounter.skillFocus || "read", checks, currentEncounter);
 
           const reflectionTitle = document.createElement("h3");
-          reflectionTitle.innerText = "Reflection";
+          reflectionTitle.innerText = "What just happened";
           stepContent.appendChild(reflectionTitle);
           renderStrictBadge(stepContent);
 
@@ -9477,6 +10794,13 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           anchor.style.opacity = "0.9";
           anchor.innerText = bcReflectionAnchor(checks, currentEncounter);
           stepContent.appendChild(anchor);
+          renderDynamicGuestLineBlock(stepContent, currentEncounter, checks, {
+            compact: false
+          });
+          renderDynamicGuestReactionBlock(stepContent, currentEncounter, checks, {
+            compact: false
+          });
+          logEncounterStateAudit("before_reflection_render", currentEncounter);
 
           // ✅ NEW: Strength + Fix (end of reflection)
           renderStrengthFixBlock(stepContent, checks, currentEncounter);
@@ -9494,13 +10818,14 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             stepContent,
             "Guest Read",
             checks.guestRead ? "✅" : "❌",
-            "Actual: " + currentEncounter.guestStateActual + " | You chose: " + (currentEncounter.guestReadSelected || "—")
+            `Guest type: ${currentEncounter.guestStateActual || "—"}. You read them as: ${currentEncounter.guestReadSelected || "—"}.`
           );
 
           addReflectionBlock(
             stepContent,
             "Mode",
             scoreSymbol(checks.modeStatus),
+            `Best approach: ${modeBestResolved ? uiModeLabel(modeBestResolved, "game") : "—"}. ` +
             modeWhyWithChoice(currentEncounter.guestStateActual, currentEncounter.modeSelected)
           );
 
@@ -9517,52 +10842,80 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             stepContent,
             "Hook",
             scoreSymbol(checks.hookStatus),
-            `Best: ${bestHook}. ` + hookWhyWithChoice(
+            `Best opening: "${bestHook}". ` + hookWhyWithChoice(
               currentEncounter.guestStateActual,
               getSelectedHookType(currentEncounter)
             )
           );
 
-          const correctS1 = currentEncounter.deliverOptionsS1[currentEncounter.correctSlotS1];
-          const correctS2 = currentEncounter.deliverOptionsS2[currentEncounter.correctSlotS2];
+          const correctS1 =
+            currentEncounter.correctDeliveryLine1 ||
+            currentEncounter.deliverOptionsS1?.[currentEncounter.correctSlotS1] ||
+            "—";
+
+          const correctS2 =
+            currentEncounter.correctDeliveryLine2 ||
+            currentEncounter.deliverOptionsS2?.[currentEncounter.correctSlotS2] ||
+            "—";
+
+          const chosenS1 =
+            currentEncounter.selectedDeliveryLine1 ||
+            currentEncounter.deliveryLine1 ||
+            currentEncounter.deliverOptionsS1?.[currentEncounter.selectedS1] ||
+            "—";
+
+          const chosenS2 =
+            currentEncounter.selectedDeliveryLine2 ||
+            currentEncounter.deliveryLine2 ||
+            currentEncounter.deliverOptionsS2?.[currentEncounter.selectedS2] ||
+            "—";
+
           addReflectionBlock(
             stepContent,
             "Delivery",
             checks.deliveryCorrect ? "✅" : "❌",
-            "Correct pair: " + correctS1 + " / " + correctS2
+            `Best pair: "${correctS1}" / "${correctS2}". You chose: "${chosenS1}" / "${chosenS2}". The stronger pair made the recommendation feel clearer and more natural.`
           );
 
           if (currentEncounter.chainSignal) {
             addReflectionBlock(
               stepContent,
-              "Session Signal",
-              String(currentEncounter.chainSignal || "").toUpperCase(),
+              "Momentum",
+              momentumLabel(currentEncounter.chainSignal),
               sessionSignalDetail(currentEncounter.chainSignal)
             );
           }
 
           if (currentEncounter.recoveryText) {
+            const unlockedModes = getUnlockedModesForCurrentPlayer();
+
             const recoveryBest = resolveCorrectModeForPlayer(
-              currentEncounter.recoveryCorrectMode || currentEncounter.recoveryCorrectModeRaw || null,
+              currentEncounter.recoveryCorrectModeRaw ||
+              currentEncounter.recoveryCorrectMode ||
+              null,
               unlockedModes
             );
-            currentEncounter.recoveryCorrectMode = recoveryBest;
+
             currentEncounter.recoveryCorrectModeResolved = recoveryBest;
+            currentEncounter.recoveryCorrect =
+              !!currentEncounter.recoveryChoice &&
+              canonicalModeFromUi(currentEncounter.recoveryChoice) === canonicalModeFromUi(recoveryBest);
+
             assertModeConsistency(unlockedModes, recoveryBest, {
               encounterNumber: currentEncounter?.encounterNumber,
               tier: getProgressionSpine({ allowNull: true })?.selectors?.tier?.(),
               points: getProgressionSpine({ allowNull: true })?.selectors?.points?.(),
               source: "reflection_pivot"
             });
+
             addReflectionBlock(
               stepContent,
               "Pivot",
               currentEncounter.recoveryCorrect ? "✅" : (currentEncounter.recoveryChoice ? "❌" : "—"),
-              "Type: " + (currentEncounter.pivotType || "—") +
-              " | Scenario: " + currentEncounter.recoveryText +
-              " | Best: " + uiModeLabel(recoveryBest, "game") +
-              " | You chose: " + (currentEncounter.recoveryChoice || "—") +
-              " | Why: " + (currentEncounter.recoveryWhy || "")
+              `Scenario: ${currentEncounter.recoveryText || "—"}. ` +
+              `Best recovery: ${recoveryBest ? uiModeLabel(recoveryBest, "game") : "—"}. ` +
+              `You chose: ${currentEncounter.recoveryChoice ? uiModeLabel(currentEncounter.recoveryChoice, "game") : "—"}. ` +
+              `Why: ${pivotWhyWithChoice(currentEncounter)}`
             );
           }
 
@@ -10401,10 +11754,39 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         // even if the same template repeats due to tier filtering.
         const runIndex = Number.isFinite(encounterIndex) ? encounterIndex : 0;
         const encounterRunId = `${encounterIdStable}::i_${runIndex}`;
+        const variantSeed = `${encounterIdStable}::${encounterRunId}::${enc.guestStateActual || ""}`;
+        const presentationCtx = getEncounterPresentationContext();
+
+        enc.contextLine = pickEncounterVariant(
+          enc.contextLine,
+          getContextLineVariants(enc.guestStateActual, presentationCtx),
+          variantSeed + "::context"
+        );
+
+        enc.guestLine = pickEncounterVariant(
+          enc.guestLine,
+          getGuestLineVariants(enc.guestStateActual, presentationCtx),
+          variantSeed + "::guest"
+        );
+
+        if (enc.verbalCues.length) {
+          const presentationCtx = getEncounterPresentationContext();
+          const variantSeed = `${encounterIdStable}::${encounterRunId}::cue`;
+
+          const extraCue = pickEncounterVariant(
+            enc.verbalCues[0],
+            getVerbalCueVariants(enc.guestStateActual, presentationCtx),
+            variantSeed
+          );
+
+          if (extraCue && !enc.verbalCues.includes(extraCue)) {
+            enc.verbalCues = [extraCue, ...enc.verbalCues].slice(0, 3);
+          }
+        }
 
         const prev = prevEncounterState;
         const sameEncounter = !!prev?.runId && prev.runId === encounterRunId;
-        const carry = sameEncounter ? prev : null;
+        const carry = sameEncounter ? buildCarryEncounterState(prev, encounterRunId) : null;
 
         let policy = difficultyPolicy(enc.difficulty ?? 1);
         if (!isDemoNow) {
@@ -10460,76 +11842,97 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
         currentEncounter = {
           runId: encounterRunId,
-          __logged: carry?.__logged ?? false,
+          __logged: false,
           id: encounterIdStable,
           encounterId: encounterIdStable,
 
-          // Encounter content (from encounters.ts)
+          // Encounter content
           encounterNumber: enc.encounterNumber ?? (encounterIndex + 1),
           steps: Array.isArray(enc.steps) ? enc.steps : [],
-          // ✅ KEEP META + SKILLFOCUS ON THE ENCOUNTER OBJECT
           meta: enc.meta || null,
           skillFocus: (enc.meta && enc.meta.skillFocus) ? enc.meta.skillFocus : "read",
           guestStateActual: window.normalizeGuestType(
-            preferNonEmpty(enc.guestStateActual, carry?.guestStateActual || "")
+            preferNonEmpty(enc.guestStateActual, "")
           ),
-          contextLine: preferNonEmpty(enc.contextLine, carry?.contextLine || ""),
-          guestLine: preferNonEmpty(enc.guestLine, carry?.guestLine || ""),
+          contextLine: preferNonEmpty(enc.contextLine, ""),
+          guestLine: preferNonEmpty(enc.guestLine, ""),
           physicalCues: Array.isArray(enc.physicalCues) ? enc.physicalCues : [],
           verbalCues: Array.isArray(enc.verbalCues) ? enc.verbalCues : [],
           toneTag: enc.toneTag || "",
 
           // Metadata
           difficulty: enc.difficulty,
-          tags: Array.isArray(enc.tags) ? enc.tags : [],
+          tags: Array.isArray(enc.tags) ? [...enc.tags] : [],
           policy,
           showStrictBadge: (policy.d ?? enc.difficulty ?? 1) >= 4,
           pivotPlanned,
           pivotBias,
-
-          // Player choices (preserve existing)
-          guestReadSelected: carry?.guestReadSelected || "",
-          modeSelected: carry?.modeSelected || "",
-          hookSelected: carry?.hookSelected || "",
-          hookMeta: carry?.hookMeta || null,
+          pivotType: "",
+          recoveryText: "",
+          recoveryWhy: "",
+          recoveryCorrectMode: "",
+          recoveryCorrectModeRaw: "",
 
           // Wine
           wineSelected: wine,
 
-          // Delivery (preserve existing)
-          deliveryLine1: carry?.deliveryLine1 || "",
-          deliveryLine2: carry?.deliveryLine2 || "",
-          deliverOptionsS1: carry?.deliverOptionsS1 || null,
-          deliverOptionsS2: carry?.deliverOptionsS2 || null,
+          // Player selection state
+          guestReadSelected: carry?.guestReadSelected || "",
+          modeSelected: carry?.modeSelected || "",
+          hookSelected: carry?.hookSelected || "",
+          hookSelectedKey: carry?.hookSelectedKey || "",
+          hookMeta: carry?.hookMeta || null,
+
           selectedS1: carry?.selectedS1 ?? null,
           selectedS2: carry?.selectedS2 ?? null,
+          deliveryLine1: carry?.deliveryLine1 || "",
+          deliveryLine2: carry?.deliveryLine2 || "",
+          deliveryLine1Key: carry?.deliveryLine1Key || "",
+          deliveryLine2Key: carry?.deliveryLine2Key || "",
+
+          recoveryChoice: carry?.recoveryChoice || "",
+
+          // Generated option sets (same-run only)
+          hookOptions: carry?.hookOptions || null,
+          deliverOptionsS1: carry?.deliverOptionsS1 || null,
+          deliverOptionsS2: carry?.deliverOptionsS2 || null,
+
+          // Correct slot / semantic truth (same-run only)
           correctSlotS1: carry?.correctSlotS1 ?? null,
           correctSlotS2: carry?.correctSlotS2 ?? null,
+          correctDeliveryLine1: carry?.correctDeliveryLine1 || "",
+          correctDeliveryLine2: carry?.correctDeliveryLine2 || "",
+          correctDeliveryLine1Key: carry?.correctDeliveryLine1Key || "",
+          correctDeliveryLine2Key: carry?.correctDeliveryLine2Key || "",
 
-          showModeHelp: carry?.showModeHelp || false,
+          // Resolved truth / outputs — always recomputed
+          correctModeResolved: "",
+          correctModeNeutralResolved: "",
+          correctHookResolved: "",
+          correctHookNeutralResolved: "",
+          recoveryCorrectModeResolved: "",
 
-          // Pivot
-          recoveryText: carry?.recoveryText || "",
-          recoveryCorrectMode: carry?.recoveryCorrectModeResolved || carry?.recoveryCorrectMode || "",
-          recoveryCorrectModeResolved: carry?.recoveryCorrectModeResolved || carry?.recoveryCorrectMode || "",
-          recoveryWhy: carry?.recoveryWhy || "",
-          recoveryChoice: carry?.recoveryChoice || "",
-          recoveryCorrect: carry?.recoveryCorrect || false,
+          readCorrect: false,
+          modeStatus: "neutral",
+          hookStatus: "neutral",
+          deliveryCorrect: false,
+          recoveryCorrect: false,
 
           // Engine telemetry
-          chainScore: carry?.chainScore ?? null,
-          chainSignal: carry?.chainSignal || "",
-          pivotType: carry?.pivotType || "",
-          resetUsed: carry?.resetUsed || false,
-          __reactionComputed: sameEncounter ? (carry?.__reactionComputed || false) : false
+          chainScore: null,
+          chainSignal: "",
+          resetUsed: false,
+
+          // Internal UX/eval state
+          __reactionComputed: false,
+          __uxSummaryBuilt: false,
+          __recoveryLocked: false,
+          __resolvedLogged: false,
+          __reaction: null,
+          __uxSummary: null
         };
         if (!sameEncounter) {
-          currentEncounter.__reactionComputed = false;
-          currentEncounter.__uxSummaryBuilt = false;
-          currentEncounter.__recoveryLocked = false;
-          currentEncounter.__logged = false;
-          currentEncounter.__resolvedLogged = false;
-          currentEncounter.__reaction = null;
+          resetEncounterVolatileState(currentEncounter);
         }
         {
           const unlockedModesNow = getUnlockedModesForCurrentPlayer();
@@ -10557,6 +11960,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         }
         window.currentEncounter = currentEncounter;
         currentEncounter = applyDifficultyToEncounter(currentEncounter, policy);
+        logEncounterStateAudit("built", currentEncounter);
         console.log("[ENCOUNTER] built", {
           id: currentEncounter.encounterId,
           runId: currentEncounter.runId,
@@ -11546,9 +12950,29 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           hookStatus = hookStatusEval;
         }
 
+        const selectedDeliveryLine1 =
+          encounter.deliveryLine1 || encounter.deliverOptionsS1?.[encounter.selectedS1] || "";
+
+        const selectedDeliveryLine2 =
+          encounter.deliveryLine2 || encounter.deliverOptionsS2?.[encounter.selectedS2] || "";
+
+        const selectedDeliveryLine1Key = canonicalDeliveryLine(selectedDeliveryLine1);
+        const selectedDeliveryLine2Key = canonicalDeliveryLine(selectedDeliveryLine2);
+
+        const correctDeliveryLine1 =
+          encounter.correctDeliveryLine1 || encounter.deliverOptionsS1?.[encounter.correctSlotS1] || "";
+
+        const correctDeliveryLine2 =
+          encounter.correctDeliveryLine2 || encounter.deliverOptionsS2?.[encounter.correctSlotS2] || "";
+
+        const correctDeliveryLine1Key = canonicalDeliveryLine(correctDeliveryLine1);
+        const correctDeliveryLine2Key = canonicalDeliveryLine(correctDeliveryLine2);
+
         const deliveryCorrect =
-          encounter.selectedS1 === encounter.correctSlotS1 &&
-          encounter.selectedS2 === encounter.correctSlotS2;
+          !!selectedDeliveryLine1Key &&
+          !!selectedDeliveryLine2Key &&
+          selectedDeliveryLine1Key === correctDeliveryLine1Key &&
+          selectedDeliveryLine2Key === correctDeliveryLine2Key;
 
         // Writeback
         encounter.readCorrect = !!guestRead;
@@ -11556,10 +12980,18 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         encounter.hookStatus = hookStatus;
         encounter.deliveryCorrect = !!deliveryCorrect;
 
-        // Store resolved hook truth for reflection / summaries
         encounter.correctHookResolved = hookRule?.optimal || null;
         encounter.correctHookNeutralResolved = hookRule?.neutral || null;
         encounter.selectedHookResolved = selectedHookType || null;
+
+        encounter.correctDeliveryLine1 = correctDeliveryLine1;
+        encounter.correctDeliveryLine2 = correctDeliveryLine2;
+        encounter.correctDeliveryLine1Key = correctDeliveryLine1Key;
+        encounter.correctDeliveryLine2Key = correctDeliveryLine2Key;
+        encounter.selectedDeliveryLine1 = selectedDeliveryLine1;
+        encounter.selectedDeliveryLine2 = selectedDeliveryLine2;
+        encounter.selectedDeliveryLine1Key = selectedDeliveryLine1Key;
+        encounter.selectedDeliveryLine2Key = selectedDeliveryLine2Key;
 
         return { guestRead, modeStatus, hookStatus, deliveryCorrect };
       };

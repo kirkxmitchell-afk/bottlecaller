@@ -214,6 +214,12 @@ button[disabled] { opacity: 0.5; cursor: not-allowed; transform: none; }
   padding: 12px;
   color: rgba(244,246,247,0.84);
   box-shadow: var(--shadow2);
+  line-height: 1.45;
+}
+
+.notice strong {
+  display: inline-block;
+  margin-bottom: 4px;
 }
 
 /* ---------- Cards ---------- */
@@ -237,6 +243,7 @@ button[disabled] { opacity: 0.5; cursor: not-allowed; transform: none; }
   flex: 0 1 auto;
   min-width: 140px;
   max-width: 100%;
+  text-align: left;
 }
 
 .option-title {
