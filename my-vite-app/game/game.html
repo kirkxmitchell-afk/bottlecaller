@@ -1264,7 +1264,33 @@ console.log("BC3_MARKER_V1");
     return getUnlockedModesForTier(tier);
   }
 
+  function canonicalModeFromUi(mode) {
+    const raw = String(mode || "").trim().toLowerCase();
+
+    if (!raw) return "";
+
+    if (raw === "scout") return "scout";
+    if (raw === "guide") return "guide";
+    if (raw === "charm") return "charm";
+    if (raw === "authority" || raw === "auth") return "authority";
+    if (raw === "closer" || raw === "close") return "closer";
+
+    // Support old constants / labels / UI text
+    if (raw === "hold") return "scout";
+    if (raw === "direct") return "guide";
+    if (raw === "push") return "guide";
+    if (raw === "reflect") return "guide";
+    if (raw === "lead") return "authority";
+
+    return raw;
+  }
+
   function getUnlockedModesForCurrentPlayer() {
+    const canon =
+      typeof canonicalModeFromUi === "function"
+        ? canonicalModeFromUi
+        : (v) => String(v || "").trim().toLowerCase();
+
     const spine = getProgressionSpine({ allowNull: true });
     const modes =
       Array.isArray(spine?.selectors?.modes?.())
@@ -1273,7 +1299,7 @@ console.log("BC3_MARKER_V1");
 
     return modes
       .filter(Boolean)
-      .map(canonicalModeFromUi)
+      .map(canon)
       .filter(Boolean);
   }
 
@@ -3573,22 +3599,6 @@ function ensureProgLoaded() {
         [window.GUEST.FANCY]: [window.GUEST.FANCY],
         [window.GUEST.CELEBRATOR]: [window.GUEST.CELEBRATOR],
       };
-
-      function canonicalModeFromUi(label) {
-        const MODES = window.MODES;
-        const s = String(label || "").trim().toLowerCase();
-        if (s === "scout") return MODES.SCOUT;
-        if (s === "guide") return MODES.GUIDE;
-        if (s === "charm") return MODES.CHARM;
-        if (s === "authority") return MODES.AUTH;
-        if (s === "closer") return MODES.CLOSER;
-        if (s === "hold") return MODES.SCOUT;
-        if (s === "reflect") return MODES.GUIDE;
-        if (s === "lead") return MODES.AUTH;
-        if (s === "close") return MODES.CLOSER;
-        if (s === MODES.SCOUT || s === MODES.GUIDE || s === MODES.CHARM || s === MODES.AUTH || s === MODES.CLOSER) return s;
-        return "";
-      }
 
       function canonicalHook(raw) {
         return String(raw || "")
@@ -8983,6 +8993,7 @@ body.difficulty-hard .option-btn.selected {
 
         return {
           ...e,
+          difficulty: Number.isFinite(Number(e.difficulty)) ? Number(e.difficulty) : undefined,
           contextLine: e.contextLine || "",
           guestLine: e.guestLine || "",
           toneTag: e.toneTag || "",
@@ -9040,7 +9051,9 @@ body.difficulty-hard .option-btn.selected {
 
         return {
           ...base,
-          difficulty: variation.difficultyValue ?? base.difficulty,
+          difficulty: Number.isFinite(Number(variation.difficultyValue))
+            ? Number(variation.difficultyValue)
+            : base.difficulty,
           toneTag: variation.toneTag || base.toneTag || "",
           tags: Array.isArray(base.tags) ? [...base.tags] : [],
           meta: {
