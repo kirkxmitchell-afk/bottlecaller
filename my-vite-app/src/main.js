@@ -1611,6 +1611,37 @@ if (!window.__BC_PARENT_BRIDGE__) {
       return data || [];
     }
 
+    async function getRunsCountSafe({ userId, restaurantId }) {
+      try {
+        const tableCandidates = [
+          "bc_encounter_resolutions",
+          "bc_encounter_resolutions_v1",
+        ];
+
+        for (const table of tableCandidates) {
+          const { count, error } = await supabase
+            .from(table)
+            .select("event_id", { count: "exact", head: true })
+            .eq("user_id", userId)
+            .eq("restaurant_id", restaurantId);
+
+          if (!error) return Number(count || 0);
+
+          const msg = String(error?.message || "").toLowerCase();
+          const isMissingRelation =
+            msg.includes("does not exist") ||
+            msg.includes("relation") ||
+            msg.includes("schema cache");
+          if (!isMissingRelation) throw error;
+        }
+
+        return 0;
+      } catch (err) {
+        console.warn("[BC] runs_count fallback -> 0", err);
+        return 0;
+      }
+    }
+
     async function fetchRunsCount({ mode, msg, event }) {
       // 0) Source gate: only accept from current premium iframe
       const prem =
@@ -1639,14 +1670,8 @@ if (!window.__BC_PARENT_BRIDGE__) {
       // keep parent appState synced (optional, but consistent)
       window.appState.session = live;
 
-      // 5) DB query
-      const { count, error } = await supabase
-        .from("bc_encounter_resolutions_v2")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", userId)
-        .eq("restaurant_id", restaurantId);
-      if (error) throw error;
-      return Number(count || 0);
+      // 5) DB query (safe fallback to 0)
+      return await getRunsCountSafe({ userId, restaurantId });
     }
 
     const handledTypes = new Set([
@@ -1972,14 +1997,11 @@ if (!window.__BC_PARENT_BRIDGE__) {
             return;
           }
 
-          // 4) DB query
-          const { count, error } = await supabase
-            .from("bc_encounter_resolutions_v2")
-            .select("*", { count: "exact", head: true })
-            .eq("user_id", ctx.userId)
-            .eq("restaurant_id", ctx.restaurantId);
-
-          if (error) throw error;
+          // 4) DB query (safe fallback to 0)
+          const count = await getRunsCountSafe({
+            userId: ctx.userId,
+            restaurantId: ctx.restaurantId
+          });
 
           // 5) Reply
           event.source?.postMessage(

@@ -7,6 +7,31 @@ export async function handleEventLog({
   ctx,
   replyType = "event_log_ack",
 }) {
+  async function upsertEncounterResolutionRow(resRow) {
+    const tableCandidates = [
+      "bc_encounter_resolutions",
+      "bc_encounter_resolutions_v1",
+    ];
+
+    let lastError = null;
+    for (const table of tableCandidates) {
+      const up = await supabase
+        .from(table)
+        .upsert([resRow], { onConflict: "event_id" });
+      if (!up.error) return { ok: true, table };
+      lastError = up.error;
+
+      const msg = String(up.error?.message || "").toLowerCase();
+      const isMissingRelation =
+        msg.includes("does not exist") ||
+        msg.includes("relation") ||
+        msg.includes("schema cache");
+      if (!isMissingRelation) break;
+    }
+
+    return { ok: false, error: lastError };
+  }
+
   try {
     const { eventType, payload } = msg || {};
     if (!eventType) return;
@@ -56,51 +81,34 @@ export async function handleEventLog({
         user_id: userId,
         restaurant_id: restaurantId,
         occurred_at: occurredAt,
-
-        v: p.v ?? 1,
-        mode: p.mode ?? p.bcMode ?? null,
-        session_id: p.sessionId ?? p.session_id ?? null,
-        seq: p.seq ?? null,
-
         encounter_id: p.encounterId ?? p.encounter_id ?? null,
         encounter_number: p.encounterNumber ?? p.encounter_number ?? null,
-        tier: p.tier ?? null,
-
+        session_id: p.sessionId ?? p.session_id ?? null,
+        role: p.role ?? null,
+        guest_state_actual:
+          p.actualGuestType ??
+          p.actual_guest_type ??
+          p.actualGuestTypeNorm ??
+          p.actual_guest_type_norm ??
+          null,
+        guest_read:
+          p.chosenGuestType ??
+          p.chosen_guest_type ??
+          p.chosenGuestTypeNorm ??
+          p.chosen_guest_type_norm ??
+          null,
+        mode_selected: p.chosenMode ?? p.chosen_mode ?? null,
+        hook_selected: p.chosenHook ?? p.chosen_hook ?? null,
+        delivery_correct: p.deliveryCorrect ?? p.delivery_correct ?? null,
         chain_score: p.chainScore ?? p.chain_score ?? null,
         chain_signal: p.chainSignal ?? p.chain_signal ?? null,
-        performance_grade: p.performanceGrade ?? p.performance_grade ?? null,
-        final_difficulty: p.finalDifficulty ?? p.final_difficulty ?? null,
-
-        chosen_guest_type: p.chosenGuestType ?? p.chosen_guest_type ?? null,
-        chosen_mode: p.chosenMode ?? p.chosen_mode ?? null,
-        chosen_hook: p.chosenHook ?? p.chosen_hook ?? null,
-        actual_guest_type: p.actualGuestType ?? p.actual_guest_type ?? null,
-
-        chosen_guest_type_norm: p.chosenGuestTypeNorm ?? p.chosen_guest_type_norm ?? null,
-        actual_guest_type_norm: p.actualGuestTypeNorm ?? p.actual_guest_type_norm ?? null,
-
-        pivot_type: p.pivotType ?? p.pivot_type ?? null,
-        pivot_taken: p.pivotTaken ?? p.pivot_taken ?? null,
-        pivot_success: p.pivotSuccess ?? p.pivot_success ?? null,
-
-        read_correct: p.readCorrect ?? p.read_correct ?? null,
-        delivery_correct: p.deliveryCorrect ?? p.delivery_correct ?? null,
-
-        mode_status: p.modeStatus ?? p.mode_status ?? null,
-        hook_status: p.hookStatus ?? p.hook_status ?? null,
-
-        is_green: p.isGreen ?? p.is_green ?? null,
-        is_red: p.isRed ?? p.is_red ?? null,
-
-        mode_optimal: p.modeOptimal ?? p.mode_optimal ?? null,
-        hook_optimal: p.hookOptimal ?? p.hook_optimal ?? null,
+        outcome: p.outcome ?? p.chainSignal ?? p.chain_signal ?? null,
+        score: p.score ?? p.chainScore ?? p.chain_score ?? null,
       };
 
-      const up = await supabase
-        .from("bc_encounter_resolutions_v2")
-        .upsert(resRow, { onConflict: "event_id" });
+      const up = await upsertEncounterResolutionRow(resRow);
 
-      if (up.error) console.warn("[BC] encounter_resolutions upsert failed", up.error);
+      if (!up.ok) console.warn("[BC] encounter_resolutions upsert failed", up.error);
     }
 
     event.source?.postMessage(
