@@ -1447,37 +1447,52 @@ console.log("BC3_MARKER_V1");
     }
   };
 
+  function canonicalHook(value) {
+    const raw = String(value || "").trim().toLowerCase();
+
+    if (!raw) return "";
+
+    if (raw === "value") return "VALUE";
+    if (raw === "flavour" || raw === "flavor") return "FLAVOUR";
+    if (raw === "story") return "STORY";
+
+    // tolerate older / UI / label variants
+    if (raw === "price") return "VALUE";
+    if (raw === "taste") return "FLAVOUR";
+    if (raw === "emotion") return "STORY";
+
+    return String(value || "").trim().toUpperCase();
+  }
+
   function getHookRuleForGuest(actualGuestState) {
     const guest = normalizeGuestType(actualGuestState);
 
-    const map =
-      (window.hookMap && typeof window.hookMap === "object" && window.hookMap) ||
-      HOOK_MAP_BY_GUEST;
+    const rawMap =
+      (typeof hookMap !== "undefined" && hookMap) ||
+      (typeof HOOK_MAP_BY_GUEST !== "undefined" && HOOK_MAP_BY_GUEST) ||
+      {};
 
-    const rule = map?.[guest] || null;
+    const rawRule = rawMap[guest] || null;
 
-    if (rule) {
+    if (!rawRule) {
       return {
-        optimal: rule.optimal || null,
-        neutral: rule.neutral || null,
-        damaging: rule.damaging || null,
-        optimalKey: canonicalHook(rule.optimal),
-        neutralKey: canonicalHook(rule.neutral),
-        damagingKey: canonicalHook(rule.damaging)
+        optimal: "VALUE",
+        neutral: "FLAVOUR",
+        damaging: "STORY",
+        optimalKey: "VALUE",
+        neutralKey: "FLAVOUR",
+        damagingKey: "STORY"
       };
     }
 
-    const fallback = {
-      optimal: "VALUE",
-      neutral: "FLAVOUR",
-      damaging: "STORY"
-    };
-
     return {
-      ...fallback,
-      optimalKey: canonicalHook(fallback.optimal),
-      neutralKey: canonicalHook(fallback.neutral),
-      damagingKey: canonicalHook(fallback.damaging)
+      ...rawRule,
+      optimal: canonicalHook(rawRule.optimal),
+      neutral: canonicalHook(rawRule.neutral),
+      damaging: canonicalHook(rawRule.damaging),
+      optimalKey: canonicalHook(rawRule.optimalKey || rawRule.optimal),
+      neutralKey: canonicalHook(rawRule.neutralKey || rawRule.neutral),
+      damagingKey: canonicalHook(rawRule.damagingKey || rawRule.damaging)
     };
   }
 
@@ -3634,15 +3649,6 @@ function ensureProgLoaded() {
         [window.GUEST.CELEBRATOR]: [window.GUEST.CELEBRATOR],
       };
 
-      function canonicalHook(raw) {
-        return String(raw || "")
-          .trim()
-          .toLowerCase()
-          .replace(/[’']/g, "")
-          .replace(/[^a-z0-9]+/g, "_")
-          .replace(/^_+|_+$/g, "");
-      }
-
       function canonicalDeliveryLine(raw) {
         return String(raw || "")
           .trim()
@@ -3682,9 +3688,9 @@ function ensureProgLoaded() {
 
       function uiHookLabel(hook, context = "game") {
         const key = canonicalHook(hook);
-        if (key === "value") return "Value";
-        if (key === "flavour") return "Flavour";
-        if (key === "story") return "Story";
+        if (key === "VALUE") return "Value";
+        if (key === "FLAVOUR") return "Flavour";
+        if (key === "STORY") return "Story";
         return String(hook || "").trim();
       }
 
@@ -3705,7 +3711,7 @@ function ensureProgLoaded() {
 
       function uiHookIntentLabel(hook, guestType = null, context = "game") {
         const guest = normalizeGuestType(guestType);
-        const hookKey = canonicalHook(hook);
+        const hookKey = String(canonicalHook(hook) || "").trim().toLowerCase();
 
         if (context !== "game") {
           return uiHookLabel(hook, context);
@@ -3766,7 +3772,7 @@ function ensureProgLoaded() {
 
       function uiHookIntentLabelScaled(hook, guestType = null, encounter = null, context = "game") {
         const guest = normalizeGuestType(guestType);
-        const hookKey = canonicalHook(hook);
+        const hookKey = String(canonicalHook(hook) || "").trim().toLowerCase();
         const pctx = getEncounterPresentationContext();
         const tier = Number(pctx?.tier ?? 1);
         const pressureBand = String(pctx?.pressureBand || "low");
@@ -3939,7 +3945,7 @@ function ensureProgLoaded() {
       }
 
       function uiHookSubtitleLabel(hook) {
-        const key = canonicalHook(hook);
+        const key = String(canonicalHook(hook) || "").trim().toLowerCase();
 
         const labels = {
           value: "Value",
@@ -9182,7 +9188,10 @@ body.difficulty-hard .option-btn.selected {
         let hookStatus = "neutral";
 
         const selectedHookType = getSelectedHookType(encounter);
-        const chosenHookKey = canonicalHook(selectedHookType);
+        const chosenHookKey =
+          (typeof canonicalHook === "function")
+            ? canonicalHook(getSelectedHookType(encounter))
+            : String(getSelectedHookType(encounter) || "").trim().toUpperCase();
 
         assertHookConsistency(hookRule, {
           encounterNumber: encounter?.encounterNumber,
@@ -14348,7 +14357,10 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         let hookStatus = "neutral";
 
         const selectedHookType = getSelectedHookType(encounter);
-        const chosenHookKey = canonicalHook(selectedHookType);
+        const chosenHookKey =
+          (typeof canonicalHook === "function")
+            ? canonicalHook(getSelectedHookType(encounter))
+            : String(getSelectedHookType(encounter) || "").trim().toUpperCase();
 
         assertHookConsistency(hookRule, {
           encounterNumber: encounter?.encounterNumber,
