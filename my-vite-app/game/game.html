@@ -1303,35 +1303,119 @@ console.log("BC3_MARKER_V1");
       .filter(Boolean);
   }
 
-  function getCurrentPlayerTier() {
-    const spine = getProgressionSpine({ allowNull: true });
-    return Number(spine?.selectors?.tier?.() ?? 1);
+  function getCurrentTierSafe() {
+    try {
+      const spine = getProgressionSpine({ allowNull: true });
+      const tier = Number(spine?.selectors?.tier?.() ?? 1);
+      return Number.isFinite(tier) ? tier : 1;
+    } catch {
+      return 1;
+    }
   }
 
-  function getModeRuleForCurrentPlayer(guestType) {
-    const tier = getCurrentPlayerTier();
-    const guest = normalizeGuestType(guestType);
+  const MODE_MAP_BY_TIER = {
+    1: {
+      [window.GUEST.DECIDER]: {
+        optimal: "guide",
+        neutral: "scout",
+        damaging: "charm"
+      },
+      [window.GUEST.BARGAIN_SMART]: {
+        optimal: "scout",
+        neutral: "guide",
+        damaging: "charm"
+      },
+      [window.GUEST.FANCY]: {
+        optimal: "charm",
+        neutral: "guide",
+        damaging: "scout"
+      },
+      [window.GUEST.GRIEVER]: {
+        optimal: "scout",
+        neutral: "guide",
+        damaging: "charm"
+      },
+      [window.GUEST.CELEBRATOR]: {
+        optimal: "charm",
+        neutral: "guide",
+        damaging: "scout"
+      }
+    },
 
-    const rawRule =
-      MODE_MAP_BY_TIER[tier]?.[guest] ||
-      MODE_MAP_BY_TIER[2]?.[guest] ||
-      MODE_MAP_BY_TIER[1]?.[guest] ||
-      null;
+    2: {
+      [window.GUEST.DECIDER]: {
+        optimal: "authority",
+        neutral: "guide",
+        damaging: "charm"
+      },
+      [window.GUEST.BARGAIN_SMART]: {
+        optimal: "scout",
+        neutral: "authority",
+        damaging: "charm"
+      },
+      [window.GUEST.FANCY]: {
+        optimal: "guide",
+        neutral: "authority",
+        damaging: "scout"
+      },
+      [window.GUEST.GRIEVER]: {
+        optimal: "scout",
+        neutral: "guide",
+        damaging: "authority"
+      },
+      [window.GUEST.CELEBRATOR]: {
+        optimal: "authority",
+        neutral: "guide",
+        damaging: "scout"
+      }
+    },
 
-    if (!rawRule) return null;
+    3: {
+      [window.GUEST.DECIDER]: {
+        optimal: "authority",
+        neutral: "guide",
+        damaging: "charm"
+      },
+      [window.GUEST.BARGAIN_SMART]: {
+        optimal: "scout",
+        neutral: "authority",
+        damaging: "charm"
+      },
+      [window.GUEST.FANCY]: {
+        optimal: "guide",
+        neutral: "authority",
+        damaging: "scout"
+      },
+      [window.GUEST.GRIEVER]: {
+        optimal: "scout",
+        neutral: "guide",
+        damaging: "authority"
+      },
+      [window.GUEST.CELEBRATOR]: {
+        optimal: "authority",
+        neutral: "guide",
+        damaging: "scout"
+      }
+    }
+  };
 
-    const unlockedModes = getUnlockedModesForCurrentPlayer();
+  function getModeRuleForCurrentPlayer(actualGuestState) {
+    const guest = normalizeGuestType(actualGuestState);
+    const tier = getCurrentTierSafe();
+
+    const tierMap =
+      MODE_MAP_BY_TIER[tier] ||
+      MODE_MAP_BY_TIER[1] ||
+      {};
+
+    const rule = tierMap[guest] || null;
+
+    if (rule) return rule;
 
     return {
-      optimal: rawRule.optimal
-        ? resolveCorrectModeForPlayer(rawRule.optimal, unlockedModes)
-        : null,
-      neutral: rawRule.neutral
-        ? resolveCorrectModeForPlayer(rawRule.neutral, unlockedModes)
-        : null,
-      damaging: rawRule.damaging
-        ? resolveCorrectModeForPlayer(rawRule.damaging, unlockedModes)
-        : null
+      optimal: "guide",
+      neutral: "scout",
+      damaging: "charm"
     };
   }
 
@@ -3242,93 +3326,6 @@ function ensureProgLoaded() {
         { text: "“Just tell us what to do — we’re hungry.”", correctMode: MODES.AUTH, why: "Speed matters. Give direction, not more thinking." },
         { text: "They smile: “We usually drink lighter… not too heavy.”", correctMode: MODES.GUIDE, why: "They’re giving identity cues. Match preference and tailor." }
       ];
-
-      // ---------- Rule maps ----------
-      const MODE_MAP_BY_TIER = {
-        1: {
-          [window.GUEST.DECIDER]: {
-            optimal: MODES.GUIDE,
-            neutral: MODES.SCOUT,
-            damaging: MODES.CHARM
-          },
-          [window.GUEST.BARGAIN_SMART]: {
-            optimal: MODES.SCOUT,
-            neutral: MODES.GUIDE,
-            damaging: MODES.CHARM
-          },
-          [window.GUEST.FANCY]: {
-            optimal: MODES.CHARM,
-            neutral: MODES.GUIDE,
-            damaging: MODES.SCOUT
-          },
-          [window.GUEST.GRIEVER]: {
-            optimal: MODES.SCOUT,
-            neutral: MODES.CHARM,
-            damaging: MODES.GUIDE
-          },
-          [window.GUEST.CELEBRATOR]: {
-            optimal: MODES.CHARM,
-            neutral: MODES.GUIDE,
-            damaging: MODES.SCOUT
-          }
-        },
-
-        2: {
-          [window.GUEST.DECIDER]: {
-            optimal: MODES.AUTH,
-            neutral: MODES.SCOUT,
-            damaging: MODES.GUIDE
-          },
-          [window.GUEST.BARGAIN_SMART]: {
-            optimal: MODES.SCOUT,
-            neutral: MODES.AUTH,
-            damaging: MODES.GUIDE
-          },
-          [window.GUEST.FANCY]: {
-            optimal: MODES.GUIDE,
-            neutral: MODES.CHARM,
-            damaging: MODES.SCOUT
-          },
-          [window.GUEST.GRIEVER]: {
-            optimal: MODES.SCOUT,
-            neutral: MODES.GUIDE,
-            damaging: MODES.AUTH
-          },
-          [window.GUEST.CELEBRATOR]: {
-            optimal: MODES.CHARM,
-            neutral: MODES.GUIDE,
-            damaging: MODES.SCOUT
-          }
-        },
-
-        3: {
-          [window.GUEST.DECIDER]: {
-            optimal: MODES.AUTH,
-            neutral: MODES.SCOUT,
-            damaging: MODES.GUIDE
-          },
-          [window.GUEST.BARGAIN_SMART]: {
-            optimal: MODES.SCOUT,
-            neutral: MODES.AUTH,
-            damaging: MODES.GUIDE
-          },
-          [window.GUEST.FANCY]: {
-            optimal: MODES.GUIDE,
-            neutral: MODES.CHARM,
-            damaging: MODES.SCOUT
-          },
-          [window.GUEST.GRIEVER]: {
-            optimal: MODES.SCOUT,
-            neutral: MODES.GUIDE,
-            damaging: MODES.AUTH
-          },
-          [window.GUEST.CELEBRATOR]: {
-            optimal: MODES.CHARM,
-            neutral: MODES.GUIDE,
-            damaging: MODES.SCOUT
-          }
-        }
-      };
 
       const hookMap = {
         [window.GUEST.DECIDER]: { optimal: "VALUE", neutral: "FLAVOUR", damaging: "STORY" },
@@ -9118,7 +9115,10 @@ body.difficulty-hard .option-btn.selected {
           "decider"
         ).trim().toLowerCase();
 
-        const modeRule = getModeRuleForCurrentPlayer(modeKey);
+        const modeRule =
+          typeof getModeRuleForCurrentPlayer === "function"
+            ? getModeRuleForCurrentPlayer(encounter?.guestStateActual)
+            : { optimal: "guide", neutral: "scout", damaging: "charm" };
         const hookRule = getHookRuleForGuest(modeKey);
         if (!modeRule) console.warn("[BC] modeRule missing for key:", modeKey, { encounter: encounter?.encounterNumber });
         if (!hookRule) console.warn("[BC] hookRule missing for key:", modeKey, { encounter: encounter?.encounterNumber });
