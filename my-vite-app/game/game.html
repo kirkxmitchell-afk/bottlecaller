@@ -1840,13 +1840,12 @@ function isDrillMode() {
       let isManager = false;
       let isWaiter = false;
       function resolveGameplayIdentity(rawProfile = {}) {
-        const rawRole = String(rawProfile.role || "").trim().toLowerCase();
-        const modeNow = String(rawProfile.mode || "").trim().toLowerCase();
+        const rawRole = String(rawProfile?.role || "").trim().toLowerCase();
 
         let membershipType = "unknown";
         let gameplayRole = "waiter";
 
-        if (modeNow === "demo" || rawRole === "demo") {
+        if (rawRole === "demo") {
           membershipType = "demo";
           gameplayRole = "demo";
         } else if (rawRole === "waiter") {
@@ -1885,9 +1884,15 @@ function isDrillMode() {
         return identity;
       }
       function getGameplayIdentity() {
-        return window.__BC_IDENTITY__ || resolveGameplayIdentity({
-          role: window.__BC_CTX__?.role || role || null,
-          mode: window.__BC_CTX__?.mode || window.bcMode || null
+        const ctx =
+          window.__BC_CTX__ ||
+          window.BC_CTX ||
+          {};
+
+        if (ctx.identity && typeof ctx.identity === "object") return ctx.identity;
+
+        return resolveGameplayIdentity({
+          role: ctx.role || ""
         });
       }
       if (isDemo) {
@@ -1895,7 +1900,7 @@ function isDrillMode() {
         role = "demo";
         sessionType = null;
       }
-      applyGameplayIdentity({ role, mode: window.bcMode || mode || null });
+      applyGameplayIdentity({ role });
       window.__BC_RUNTIME__ = () => ({
         userId,
         restaurantId,
@@ -2800,8 +2805,24 @@ function ensureProgLoaded() {
             String(prev.mode || "").toLowerCase() === String(next.mode || "").toLowerCase();
           if (same) return;
 
-          window.__BC_CTX__ = next;
-          applyGameplayIdentity(next);
+          const identity = resolveGameplayIdentity({
+            role: next?.role || ""
+          });
+          window.__BC_CTX__ = {
+            ...next,
+            identity
+          };
+          applyGameplayIdentity({ role: next?.role || "" });
+          console.log("[CTX ROLE NORMALIZED]", {
+            rawRole: identity.rawRole,
+            membershipType: identity.membershipType,
+            gameplayRole: identity.gameplayRole,
+            isDemo: identity.isDemo,
+            isWaiter: identity.isWaiter,
+            isManager: identity.isManager,
+            isGroupManager: identity.isGroupManager,
+            isEnterpriser: identity.isEnterpriser
+          });
 
           if (window.__BC_CTX_READY_RESOLVE__) {
             window.__BC_CTX_READY_RESOLVE__(window.__BC_CTX__);
@@ -2948,7 +2969,7 @@ function ensureProgLoaded() {
             scopeId = window.__BC_CTX__?.scopeId ?? scopeId ?? null;
             role = window.__BC_CTX__?.role ?? role ?? null;
             if (!window.isDemo) mode = window.__BC_CTX__?.mode ?? mode ?? null;
-            applyGameplayIdentity({ role, mode: window.__BC_CTX__?.mode ?? mode ?? null });
+            applyGameplayIdentity({ role });
             (async () => {
               try {
                 if (typeof bootstrapWinesFromCtx === "function") {
@@ -3005,7 +3026,7 @@ function ensureProgLoaded() {
 
         role = ctx?.role ?? role ?? null;
         restaurantId = ctx?.restaurantId ?? restaurantId ?? null;
-        const identity = applyGameplayIdentity({ role, mode: ctx?.mode ?? mode ?? null });
+        const identity = applyGameplayIdentity({ role });
         console.log("[BC] ctx (after READY):", {
           role,
           restaurantId,
@@ -4474,9 +4495,30 @@ function ensureProgLoaded() {
         role = msg.role ?? role ?? null;
         mode = msg.mode ?? mode ?? null;
 
-        const identity = applyGameplayIdentity({ role, mode });
+        const identity = resolveGameplayIdentity({
+          role: role || ""
+        });
 
-        window.__BC_CTX__ = { userId, restaurantId, scopeId, role, mode };
+        window.__BC_CTX__ = {
+          ...(window.__BC_CTX__ || {}),
+          userId,
+          restaurantId,
+          scopeId,
+          role,
+          mode,
+          identity
+        };
+        applyGameplayIdentity({ role });
+        console.log("[CTX ROLE NORMALIZED]", {
+          rawRole: identity.rawRole,
+          membershipType: identity.membershipType,
+          gameplayRole: identity.gameplayRole,
+          isDemo: identity.isDemo,
+          isWaiter: identity.isWaiter,
+          isManager: identity.isManager,
+          isGroupManager: identity.isGroupManager,
+          isEnterpriser: identity.isEnterpriser
+        });
 
         if (msg.drill) {
           window.__BC_DRILL_CONFIG__ = msg.drill;
@@ -12994,13 +13036,23 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           }
 
           const okPlay = canPlay();
+          const identity = getGameplayIdentity();
           console.log(
             `[PLAY] ok=${okPlay}` +
-            ` role=${isManager ? "manager" : (isWaiter ? "waiter" : "?")}` +
+            ` role=${identity.gameplayRole || "?"}` +
             ` rid=${restaurantId || "?"}` +
             ` wines=${wines?.length ?? "?"}` +
             ` sessionType=${sessionType || "null"}`
           );
+          console.log("[PLAY ROLE]", {
+            rawRole: identity.rawRole,
+            membershipType: identity.membershipType,
+            gameplayRole: identity.gameplayRole,
+            isManager: identity.isManager,
+            isWaiter: identity.isWaiter,
+            isDemo: identity.isDemo,
+            isEnterpriser: identity.isEnterpriser
+          });
           console.log("[DEMO][canPlay]", okPlay, {
             hasScreenPlay: !!document.getElementById("screenPlay"),
             playHidden: document.getElementById("screenPlay")?.classList?.contains("hidden"),
