@@ -1839,12 +1839,72 @@ function isDrillMode() {
       let role = null;
       let isManager = false;
       let isWaiter = false;
+      function resolveGameplayIdentity(rawProfile = {}) {
+        const rawRole = String(rawProfile.role || "").trim().toLowerCase();
+        const modeNow = String(rawProfile.mode || "").trim().toLowerCase();
+
+        let membershipType = "unknown";
+        let gameplayRole = "waiter";
+
+        if (modeNow === "demo" || rawRole === "demo") {
+          membershipType = "demo";
+          gameplayRole = "demo";
+        } else if (rawRole === "waiter") {
+          membershipType = "waiter";
+          gameplayRole = "waiter";
+        } else if (rawRole === "manager") {
+          membershipType = "manager";
+          gameplayRole = "manager";
+        } else if (rawRole === "group_manager") {
+          membershipType = "group_manager";
+          gameplayRole = "manager";
+        } else if (rawRole === "enterpriser" || rawRole === "enterprise_admin") {
+          membershipType = "enterpriser";
+          gameplayRole = "manager";
+        }
+
+        return {
+          rawRole,
+          membershipType,
+          gameplayRole,
+          isDemo: membershipType === "demo",
+          isWaiter: gameplayRole === "waiter",
+          isManager: gameplayRole === "manager",
+          isGroupManager: membershipType === "group_manager",
+          isEnterpriser: membershipType === "enterpriser"
+        };
+      }
+      function applyGameplayIdentity(rawProfile = {}) {
+        const identity = resolveGameplayIdentity(rawProfile);
+        window.__BC_IDENTITY__ = identity;
+        window.__BC_ROLE__ = identity;
+        isManager = !!identity.isManager;
+        isWaiter = !!identity.isWaiter;
+        window.isManager = isManager;
+        window.isWaiter = isWaiter;
+        return identity;
+      }
+      function getGameplayIdentity() {
+        return window.__BC_IDENTITY__ || resolveGameplayIdentity({
+          role: window.__BC_CTX__?.role || role || null,
+          mode: window.__BC_CTX__?.mode || window.bcMode || null
+        });
+      }
       if (isDemo) {
         restaurantId = "demo";
         role = "demo";
         sessionType = null;
       }
-      window.__BC_RUNTIME__ = () => ({ userId, restaurantId, scopeId, role, mode });
+      applyGameplayIdentity({ role, mode: window.bcMode || mode || null });
+      window.__BC_RUNTIME__ = () => ({
+        userId,
+        restaurantId,
+        scopeId,
+        role,
+        mode,
+        identity: getGameplayIdentity(),
+        gameplayRole: getGameplayIdentity().gameplayRole || null
+      });
       console.log("[BOOT] declared", { restaurantId, role, mode, bcMode });
       // Crash becomes visible (iframe)
       window.addEventListener("error", (e) => {
@@ -2741,6 +2801,7 @@ function ensureProgLoaded() {
           if (same) return;
 
           window.__BC_CTX__ = next;
+          applyGameplayIdentity(next);
 
           if (window.__BC_CTX_READY_RESOLVE__) {
             window.__BC_CTX_READY_RESOLVE__(window.__BC_CTX__);
@@ -2887,6 +2948,7 @@ function ensureProgLoaded() {
             scopeId = window.__BC_CTX__?.scopeId ?? scopeId ?? null;
             role = window.__BC_CTX__?.role ?? role ?? null;
             if (!window.isDemo) mode = window.__BC_CTX__?.mode ?? mode ?? null;
+            applyGameplayIdentity({ role, mode: window.__BC_CTX__?.mode ?? mode ?? null });
             (async () => {
               try {
                 if (typeof bootstrapWinesFromCtx === "function") {
@@ -2943,17 +3005,16 @@ function ensureProgLoaded() {
 
         role = ctx?.role ?? role ?? null;
         restaurantId = ctx?.restaurantId ?? restaurantId ?? null;
-
-        const isManager = role === "manager";
-        const isWaiter = role === "waiter";
-
-        window.__BC_ROLE__ = window.__BC_ROLE__ || {};
-        window.__BC_ROLE__.isManager = (String(role || "").toLowerCase() === "manager");
-        window.__BC_ROLE__.isWaiter = (String(role || "").toLowerCase() === "waiter");
-        window.isManager = window.__BC_ROLE__.isManager;
-        window.isWaiter = window.__BC_ROLE__.isWaiter;
-
-        console.log("[BC] ctx (after READY):", { role, restaurantId, isManager, isWaiter });
+        const identity = applyGameplayIdentity({ role, mode: ctx?.mode ?? mode ?? null });
+        console.log("[BC] ctx (after READY):", {
+          role,
+          restaurantId,
+          gameplayRole: identity.gameplayRole,
+          isManager: identity.isManager,
+          isWaiter: identity.isWaiter,
+          isGroupManager: identity.isGroupManager,
+          isEnterpriser: identity.isEnterpriser
+        });
       })();
 
       // (message handlers consolidated below)
@@ -3458,8 +3519,8 @@ function ensureProgLoaded() {
       }
 
       async function openSetupScreen(mode) {
-        const roleNow = String(window.__BC_CTX__?.role || "").toLowerCase();
-        if (roleNow === "waiter") {
+        const identity = getGameplayIdentity();
+        if (identity.isWaiter) {
           console.warn("[NAV] setup blocked: waiter role");
           window.showToast?.("Only managers can edit the wine list.");
           return;
@@ -4413,9 +4474,7 @@ function ensureProgLoaded() {
         role = msg.role ?? role ?? null;
         mode = msg.mode ?? mode ?? null;
 
-        isManager = String(role || "").toLowerCase() === "manager";
-        isWaiter = String(role || "").toLowerCase() === "waiter";
-        window.__BC_ROLE__ = { isManager, isWaiter };
+        const identity = applyGameplayIdentity({ role, mode });
 
         window.__BC_CTX__ = { userId, restaurantId, scopeId, role, mode };
 
@@ -4423,7 +4482,11 @@ function ensureProgLoaded() {
           window.__BC_DRILL_CONFIG__ = msg.drill;
         }
 
-        console.log("[BC] bc_ctx applied ✅", window.__BC_CTX__);
+        console.log("[BC] bc_ctx applied ✅", {
+          ...window.__BC_CTX__,
+          gameplayRole: identity.gameplayRole,
+          membershipType: identity.membershipType
+        });
         console.log("[CTX DEBUG]", {
           BC_CTX: window.BC_CTX || null,
           __BC_CTX__: window.__BC_CTX__ || null,
@@ -4480,9 +4543,9 @@ function ensureProgLoaded() {
         const flagKey = `bc_wines_migrated_${rid}`;
         if (localStorage.getItem(flagKey) === "1") return false;
 
-        const roleNow = window.__BC_CTX__?.role || null;
+        const identity = getGameplayIdentity();
         const sid = window.__BC_CTX__?.scopeId || scopeId || null;
-        const canWrite = (roleNow === "manager" || roleNow === "group_manager" || roleNow === "enterprise");
+        const canWrite = !!(identity.isManager || identity.isEnterpriser);
         if (!canWrite || !sid) return false;
 
         const dbg = window.__BC_DEBUG__?.();
@@ -4778,8 +4841,8 @@ function ensureProgLoaded() {
         }
 
         if (msg.type === "nav") {
-          const roleNow = String(window.__BC_CTX__?.role || "").toLowerCase();
-          const isWaiterNow = roleNow === "waiter";
+          const identity = getGameplayIdentity();
+          const isWaiterNow = !!identity.isWaiter;
           if (msg.target === "setup_premium" || msg.action === "setup_premium") {
             if (isDemo) {
               window.showToast?.("Setup is Premium only.");
@@ -5075,8 +5138,8 @@ function ensureProgLoaded() {
       function startDrill(repTarget = 3, focus = null, starter = null, tier = 0) {
         const cfg = window.__BC_DRILL_CONFIG__ || {};
         const drillFocus = focus || cfg.focus || null;
-        const roleNow = String(window.__BC_CTX__?.role || "").toLowerCase();
-        const resolvedStarter = starter || (roleNow === "waiter" ? "waiter" : "manager");
+        const identity = getGameplayIdentity();
+        const resolvedStarter = starter || (identity.isWaiter ? "waiter" : "manager");
         const pool = Array.isArray(cfg.pool) ? cfg.pool : null;
         // HARD DRILL MODE (safety)
         window.__BC_SESSION_TYPE__ = "drill";
@@ -5512,8 +5575,7 @@ function ensureProgLoaded() {
       }
 
       function applyRoleVisibility() {
-        const role = window.__BC_RUNTIME__?.ctx?.role || null;
-        const isManager = role === "manager";
+        const isManager = !!getGameplayIdentity().isManager;
         document.querySelectorAll('[data-role="manager"]').forEach(el => {
           el.style.display = isManager ? "" : "none";
         });
@@ -7702,8 +7764,8 @@ body.difficulty-hard .option-btn.selected {
         const n = getWineCount?.() ?? (Array.isArray(wines) ? wines.length : 0);
         if (n > 0) return true;
 
-        const roleNow = String(window.__BC_CTX__?.role || "").toLowerCase();
-        if (roleNow === "manager") {
+        const identity = getGameplayIdentity();
+        if (identity.isManager) {
           showScreen("screenSetupPremium");
           window.showToast?.("Add at least 1 wine to start play.");
         } else {
@@ -7722,7 +7784,7 @@ body.difficulty-hard .option-btn.selected {
         if (isDemo) return; // demo doesn't care
         if (!restaurantId) return;
 
-        const manager = String(role || "").toLowerCase() === "manager";
+        const manager = !!getGameplayIdentity().isManager;
         if (manager) return;
 
         // disable add + inputs (waiter should not edit restaurant wines)
@@ -13647,8 +13709,8 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
       }
 
       function bindWaiterStart() {
-        const roleNow = String(window.__BC_CTX__?.role || "").toLowerCase();
-        if (roleNow !== "waiter") return;
+        const identity = getGameplayIdentity();
+        if (!identity.isWaiter) return;
 
         const btn = document.getElementById("btnWelcomeStart");
         if (!btn) {
@@ -13724,9 +13786,9 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           return;
         }
 
-        const roleNow = String(window.__BC_CTX__?.role || "").toLowerCase();
-        const isWaiterNow = roleNow === "waiter";
-        const isManagerLike = ["manager", "group_manager", "enterprise_admin", "enterprisor"].includes(roleNow);
+        const identity = getGameplayIdentity();
+        const isWaiterNow = !!identity.isWaiter;
+        const isManagerLike = !!identity.isManager;
         const btnWelcomeBackToSetup = document.getElementById("btnWelcomeBackToSetup");
         const btnGoPremium = document.getElementById("btnGoPremium");
 
@@ -13918,8 +13980,8 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         const btnFiveMinDrill = document.getElementById("btnFiveMinDrill");
         const btnGoDemo = document.getElementById("btnGoDemo");
         const btnGoPremium = document.getElementById("btnGoPremium");
-        const roleNow = String(window.__BC_CTX__?.role || "").toLowerCase();
-        const isWaiter = roleNow === "waiter";
+        const identity = getGameplayIdentity();
+        const isWaiter = !!identity.isWaiter;
 
         if (isWaiter) {
           ["btnWelcomeBackToSetup", "btnGoSetup", "btnSetupWines"].forEach((id) => {
