@@ -1419,22 +1419,65 @@ console.log("BC3_MARKER_V1");
     };
   }
 
+  const HOOK_MAP_BY_GUEST = {
+    [window.GUEST.DECIDER]: {
+      optimal: "VALUE",
+      neutral: "FLAVOUR",
+      damaging: "STORY"
+    },
+    [window.GUEST.BARGAIN_SMART]: {
+      optimal: "VALUE",
+      neutral: "FLAVOUR",
+      damaging: "STORY"
+    },
+    [window.GUEST.FANCY]: {
+      optimal: "STORY",
+      neutral: "FLAVOUR",
+      damaging: "VALUE"
+    },
+    [window.GUEST.GRIEVER]: {
+      optimal: "FLAVOUR",
+      neutral: "STORY",
+      damaging: "VALUE"
+    },
+    [window.GUEST.CELEBRATOR]: {
+      optimal: "STORY",
+      neutral: "FLAVOUR",
+      damaging: "VALUE"
+    }
+  };
+
   function getHookRuleForGuest(actualGuestState) {
     const guest = normalizeGuestType(actualGuestState);
-    const rawRule =
-      hookMap && hookMap[guest]
-        ? hookMap[guest]
-        : null;
 
-    if (!rawRule) return null;
+    const map =
+      (window.hookMap && typeof window.hookMap === "object" && window.hookMap) ||
+      HOOK_MAP_BY_GUEST;
+
+    const rule = map?.[guest] || null;
+
+    if (rule) {
+      return {
+        optimal: rule.optimal || null,
+        neutral: rule.neutral || null,
+        damaging: rule.damaging || null,
+        optimalKey: canonicalHook(rule.optimal),
+        neutralKey: canonicalHook(rule.neutral),
+        damagingKey: canonicalHook(rule.damaging)
+      };
+    }
+
+    const fallback = {
+      optimal: "VALUE",
+      neutral: "FLAVOUR",
+      damaging: "STORY"
+    };
 
     return {
-      optimal: rawRule.optimal || null,
-      neutral: rawRule.neutral || null,
-      damaging: rawRule.damaging || null,
-      optimalKey: canonicalHook(rawRule.optimal),
-      neutralKey: canonicalHook(rawRule.neutral),
-      damagingKey: canonicalHook(rawRule.damaging)
+      ...fallback,
+      optimalKey: canonicalHook(fallback.optimal),
+      neutralKey: canonicalHook(fallback.neutral),
+      damagingKey: canonicalHook(fallback.damaging)
     };
   }
 
@@ -3327,13 +3370,7 @@ function ensureProgLoaded() {
         { text: "They smile: “We usually drink lighter… not too heavy.”", correctMode: MODES.GUIDE, why: "They’re giving identity cues. Match preference and tailor." }
       ];
 
-      const hookMap = {
-        [window.GUEST.DECIDER]: { optimal: "VALUE", neutral: "FLAVOUR", damaging: "STORY" },
-        [window.GUEST.BARGAIN_SMART]: { optimal: "VALUE", neutral: "FLAVOUR", damaging: "STORY" },
-        [window.GUEST.FANCY]: { optimal: "STORY", neutral: "FLAVOUR", damaging: "VALUE" },
-        [window.GUEST.GRIEVER]: { optimal: "FLAVOUR", neutral: "STORY", damaging: "VALUE" },
-        [window.GUEST.CELEBRATOR]: { optimal: "STORY", neutral: "VALUE", damaging: "FLAVOUR" }
-      };
+      window.hookMap = window.hookMap || HOOK_MAP_BY_GUEST;
 
       // ---------- Setup options ----------
       const fruitOptions = ["Red fruit", "Dark fruit", "Citrus", "Stone fruit", "Tropical", "Floral", "Herbal/Green", "Spicy", "Earthy/Savory", "Smoky"];
@@ -6341,14 +6378,14 @@ function ensureProgLoaded() {
         }
 
         if (checks.hookStatus === "damaging") {
-          const rule = hookMap[enc.guestStateActual];
+          const rule = getHookRuleForGuest(enc.guestStateActual);
           return {
             code: "HOOK_DAMAGING",
             text: `Streak broke: damaging hook. Best for ${enc.guestStateActual}: ${rule?.optimal || "—"}.`
           };
         }
         if (gate !== "relaxed" && checks.hookStatus === "neutral") {
-          const rule = hookMap[enc.guestStateActual];
+          const rule = getHookRuleForGuest(enc.guestStateActual);
           return {
             code: "HOOK_NEUTRAL_DISALLOWED",
             text: `Streak broke: neutral hook doesn’t hold at difficulty ${diff}. Best for ${enc.guestStateActual}: ${rule?.optimal || "—"}.`
@@ -8686,10 +8723,7 @@ body.difficulty-hard .option-btn.selected {
 
       function pickHookTypesForEncounter(encounter) {
         const guest = normalizeGuestType(encounter?.guestStateActual);
-        const rule =
-          hookMap && hookMap[guest]
-            ? hookMap[guest]
-            : null;
+        const rule = getHookRuleForGuest(guest);
 
         if (!rule) {
           return ["FLAVOUR", "VALUE", "STORY"];
@@ -9738,7 +9772,7 @@ body.difficulty-hard .option-btn.selected {
       }
 
       function hookWhy(actualGuestState) {
-        const rule = hookMap ? hookMap[actualGuestState] : null;
+        const rule = getHookRuleForGuest(actualGuestState);
         if (!rule) return "No hook rule found for this guest type.";
 
         const opt = rule?.optimal, neu = rule?.neutral, dmg = rule?.damaging;
@@ -9828,7 +9862,7 @@ body.difficulty-hard .option-btn.selected {
       }
 
       function explainHookResult(enc) {
-        const rule = hookMap ? hookMap[enc.guestStateActual] : null;
+        const rule = getHookRuleForGuest(enc.guestStateActual);
         if (!rule) return "Hook rule missing.";
 
         const chosen = getSelectedHookType(enc) || "—";
@@ -9864,7 +9898,7 @@ body.difficulty-hard .option-btn.selected {
             return `Coach: You read the guest, but you played the wrong MODE. For “${actual}”, best is ${best} — you chose ${chosenMode}. Match the tempo before you sell.`;
           }
           case "hook": {
-            const rule = hookMap[actual];
+            const rule = getHookRuleForGuest(actual);
             const best = rule?.optimal || "—";
             return `Coach: Your HOOK didn’t match what “${actual}” cares about. Best is ${best} — you chose ${chosenHook}. Change the frame, not the facts.`;
           }
@@ -10371,7 +10405,8 @@ body.difficulty-hard .option-btn.selected {
       }
 
       function bestHookFor(state) {
-        return (hookMap && hookMap[state] && hookMap[state].optimal) ? hookMap[state].optimal : "";
+        const rule = getHookRuleForGuest(state);
+        return rule?.optimal || "";
       }
 
       function buildStrengthFixSummary(encounter, checks = null) {
