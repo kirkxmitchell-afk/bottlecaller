@@ -4647,25 +4647,56 @@ function ensureProgLoaded() {
         const elGeneric = document.getElementById("bcSavedRuns");
         if (elPremium) elPremium.textContent = value;
         if (elGeneric) elGeneric.textContent = value;
+        console.log("[BC][UI] rendering runs_count", {
+          runtime: window.__BC_RUNS_COUNT__,
+          ctx: window.__BC_CTX__
+        });
       }
 
       function requestRunsCountFromParent() {
-        if (String(getBcMode()).toLowerCase() === "demo") return;
+        return new Promise((resolve) => {
+          const reqId = `rc_${Math.random().toString(16).slice(2)}`;
 
-        const epoch = getEpoch();
-        if (!epoch) {
-          console.warn("[BC] runs_count_request blocked: missing epoch");
-          return;
-        }
+          function onMessage(e) {
+            const msg = e?.data;
+            if (!msg || msg.source !== "BC_MSG") return;
+            if (msg.type !== "runs_count_response") return;
+            if (msg.reqId !== reqId) return;
 
-        const reqId = "rc_" + Math.random().toString(16).slice(2);
-        try {
-          postToParent({ type: "runs_count_request", reqId });
-        } catch {}
+            window.removeEventListener("message", onMessage);
+            resolve(Number(msg.count || 0));
+          }
+
+          window.addEventListener("message", onMessage);
+
+          window.parent.postMessage(
+            {
+              source: "BC_MSG",
+              v: 1,
+              type: "runs_count_request",
+              reqId,
+              userId: window.__BC_CTX__?.userId || null,
+              restaurantId: window.__BC_CTX__?.restaurantId || null,
+              epoch: window.__BC_EPOCH__ || null
+            },
+            "*"
+          );
+        });
       }
 
       async function hydrateRunCountFromServer() {
-        requestRunsCountFromParent();
+        try {
+          const count = await requestRunsCountFromParent();
+          window.__BC_RUNS_COUNT__ = Number(count || 0);
+          window.__BC_SERVER_RUNS_COUNT__ = window.__BC_RUNS_COUNT__;
+          console.log("[BC] runs_count hydrated ✅", window.__BC_RUNS_COUNT__);
+          try { renderRunsCount?.(window.__BC_RUNS_COUNT__); } catch {}
+          updateCounts?.();
+        } catch (err) {
+          console.warn("[BC] hydrateRunCountFromServer failed", err);
+          window.__BC_RUNS_COUNT__ = 0;
+          window.__BC_SERVER_RUNS_COUNT__ = 0;
+        }
       }
 
       function applyBcCtx(msg) {
@@ -5104,8 +5135,9 @@ function ensureProgLoaded() {
         }
 
         if (msg.type === "runs_count_response") {
-          window.__BC_SERVER_RUNS_COUNT__ = Number(msg.count || 0);
-          try { renderRunsCount?.(window.__BC_SERVER_RUNS_COUNT__); } catch {}
+          window.__BC_RUNS_COUNT__ = Number(msg.count || 0);
+          window.__BC_SERVER_RUNS_COUNT__ = window.__BC_RUNS_COUNT__;
+          try { renderRunsCount?.(window.__BC_RUNS_COUNT__); } catch {}
           return;
         }
 

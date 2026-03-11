@@ -5,8 +5,12 @@ export function makeRunsCountHandler({ fetchRunsCount }) {
 
   return async ({ msg, event, state, reply }) => {
     const { userId, restaurantId, mode } = msg;
-    const count = await fetchRunsCount({ userId, restaurantId, mode, msg, event, state });
+    const result = await fetchRunsCount({ userId, restaurantId, mode, msg, event, state });
     const reqId = msg?.reqId || null;
+    const count =
+      result && typeof result === "object"
+        ? Number(result.count || 0)
+        : Number(result || 0);
 
     reply(BC_TYPES.RUNS_COUNT_RESPONSE, { reqId, ok: true, count });
   };

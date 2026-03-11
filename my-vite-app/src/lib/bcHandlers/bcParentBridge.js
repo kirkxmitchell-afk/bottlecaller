@@ -42,7 +42,9 @@ export function mountBcParentBridge({
       return 0;
     }
 
-    return Number(data?.runs_count || 0);
+    const n = Number(data?.runs_count || 0);
+    console.log("[BC] runs_count view ->", { userId, restaurantId, runsCount: n });
+    return n;
   }
 
   const notifyLoggedOut = (event) => {
@@ -89,53 +91,50 @@ export function mountBcParentBridge({
     bc_logout_request: async ({ event }) => doLogout("bc_msg_logout"),
 
     runs_count_request: async ({ msg, event }) => {
-      const senderCtx = getSourceCtx(event.source);
-
+      const ctx = window.__BC_CTX__ || {};
       const isDemoReq =
         String(msg?.mode || "").toLowerCase() === "demo" ||
-        String(senderCtx?.mode || "").toLowerCase() === "demo" ||
+        String(ctx?.mode || "").toLowerCase() === "demo" ||
         String(msg?.payload?.mode || "").toLowerCase() === "demo" ||
         String(msg?.payload?.bcMode || "").toLowerCase() === "demo";
+      const reqId = msg?.reqId || null;
 
       if (isDemoReq) {
         event.source?.postMessage(
-          { source: "BC_MSG", v: 1, type: "runs_count_response", ok: true, count: 0, demo: true },
+          { source: "BC_MSG", v: 1, type: "runs_count_response", reqId, ok: true, count: 0, demo: true },
           event.origin
         );
         return;
       }
 
-      // ONLY trust senderCtx
-      const userId = senderCtx?.userId || null;
-      const restaurantId = senderCtx?.restaurantId || null;
-
-      if (!isUuid(userId) || !isUuid(restaurantId)) {
-        event.source?.postMessage(
-          { source: "BC_MSG", v: 1, type: "runs_count_response", ok: true, count: 0, skipped: "invalid_ctx" },
-          event.origin
-        );
-        return;
-      }
-
-      const authed = window.appState?.session?.user?.id;
-      if (authed && authed !== userId) {
-        event.source?.postMessage(
-          { source: "BC_MSG", v: 1, type: "runs_count_response", ok: false, count: 0, error: "forbidden_user" },
-          event.origin
-        );
-        return;
-      }
+      const userId =
+        msg.userId ||
+        msg.user_id ||
+        ctx.userId ||
+        ctx.user_id ||
+        null;
+      const restaurantId =
+        msg.restaurantId ||
+        msg.restaurant_id ||
+        ctx.restaurantId ||
+        ctx.restaurant_id ||
+        window.__BC_ACTIVE_RESTAURANT_ID__ ||
+        null;
 
       try {
-        const count = await getRunsCountSafe(supabase, userId, restaurantId);
+        const count = await getRunsCountSafe(
+          window.__SB__ || window.sb || window.supabase || supabase,
+          userId,
+          restaurantId
+        );
 
         event.source?.postMessage(
-          { source: "BC_MSG", v: 1, type: "runs_count_response", ok: true, count: Number(count || 0) },
+          { source: "BC_MSG", v: 1, type: "runs_count_response", reqId, ok: true, count },
           event.origin
         );
       } catch (e) {
         event.source?.postMessage(
-          { source: "BC_MSG", v: 1, type: "runs_count_response", ok: false, count: 0, error: e?.message || String(e) },
+          { source: "BC_MSG", v: 1, type: "runs_count_response", reqId, ok: false, count: 0, error: e?.message || String(e) },
           event.origin
         );
       }

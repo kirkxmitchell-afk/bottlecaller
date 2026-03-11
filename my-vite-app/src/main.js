@@ -1765,39 +1765,32 @@ if (!window.__BC_PARENT_BRIDGE__) {
         return 0;
       }
 
-      return Number(data?.runs_count || 0);
+      const n = Number(data?.runs_count || 0);
+      console.log("[BC] runs_count view ->", { userId, restaurantId, runsCount: n });
+      return n;
     }
 
-    async function fetchRunsCount({ mode, msg, event }) {
-      // 0) Source gate: only accept from current premium iframe
-      const prem =
-        document.getElementById("bcPremiumFrame") ||
-        document.getElementById("premiumRootFrame");
-      const isFromPremiumFrame = !!(prem && event?.source === prem.contentWindow);
-      if (!isFromPremiumFrame) return 0;
+    async function fetchRunsCount({ supabase: supabaseArg, userId, restaurantId, msg }) {
+      const sb = supabaseArg || supabase || window.__SB__ || window.sb || window.supabase;
+      const ctx = window.__BC_CTX__ || {};
+      const nextUserId =
+        userId ||
+        msg?.userId ||
+        msg?.user_id ||
+        ctx.userId ||
+        ctx.user_id ||
+        null;
+      const nextRestaurantId =
+        restaurantId ||
+        msg?.restaurantId ||
+        msg?.restaurant_id ||
+        ctx.restaurantId ||
+        ctx.restaurant_id ||
+        window.__BC_ACTIVE_RESTAURANT_ID__ ||
+        null;
 
-      const senderCtx = getSourceCtx(event.source);
-      // 1) Demo short-circuit
-      if (isDemoMsg(msg, senderCtx)) return 0;
-
-      // 2) Epoch guard (prevents ghosts / old iframe spam)
-      if (rejectIfEpochMismatchSimple(msg)) return 0;
-
-      // 3) Sender ctx validation (only trust senderCtx)
-      const userId = senderCtx?.userId || null;
-      const restaurantId = senderCtx?.restaurantId || null;
-      if (!isUuid(userId) || !isUuid(restaurantId)) return 0;
-
-      // 4) Live auth must exist AND match ctx.userId
-      const live = await getLiveSessionOrNull();
-      const authedUserId = live?.user?.id || null;
-      if (!authedUserId || authedUserId !== userId) return 0;
-
-      // keep parent appState synced (optional, but consistent)
-      window.appState.session = live;
-
-      // 5) DB query (safe fallback to 0)
-      return await getRunsCountSafe(supabase, userId, restaurantId);
+      const count = await getRunsCountSafe(sb, nextUserId, nextRestaurantId);
+      return { ok: true, count };
     }
 
     const handledTypes = new Set([
@@ -2124,11 +2117,29 @@ if (!window.__BC_PARENT_BRIDGE__) {
           }
 
           // 4) DB query (safe fallback to 0)
-          const count = await getRunsCountSafe(supabase, ctx.userId, ctx.restaurantId);
+          const ctxWindow = window.__BC_CTX__ || {};
+          const userId =
+            msg.userId ||
+            msg.user_id ||
+            ctxWindow.userId ||
+            ctxWindow.user_id ||
+            null;
+          const restaurantId =
+            msg.restaurantId ||
+            msg.restaurant_id ||
+            ctxWindow.restaurantId ||
+            ctxWindow.restaurant_id ||
+            window.__BC_ACTIVE_RESTAURANT_ID__ ||
+            null;
+          const count = await getRunsCountSafe(
+            window.__SB__ || window.sb || window.supabase || supabase,
+            userId,
+            restaurantId
+          );
 
           // 5) Reply
           event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, count: Number(count || 0) },
+            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, count },
             event.origin
           );
           return;
