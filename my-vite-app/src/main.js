@@ -885,16 +885,10 @@ const appState = {
   }, 200);
 })();
 
-function normalizeMembershipRole(input) {
-  return String(
-    typeof input === "string"
-      ? input
-      : (input?.membership_role ?? input?.membershipRole ?? input?.role ?? "")
-  ).toLowerCase().trim();
-}
-
 const ROLE_CAPABILITIES = {
   waiter: {
+    membershipRole: "waiter",
+    gameplayRole: "waiter",
     canPlay: true,
     canInviteWaiters: false,
     canManageRestaurant: false,
@@ -904,6 +898,8 @@ const ROLE_CAPABILITIES = {
     hasManagerControls: false,
   },
   single_manager: {
+    membershipRole: "single_manager",
+    gameplayRole: "single_manager",
     canPlay: true,
     canInviteWaiters: true,
     canManageRestaurant: true,
@@ -913,6 +909,8 @@ const ROLE_CAPABILITIES = {
     hasManagerControls: true,
   },
   group_manager: {
+    membershipRole: "group_manager",
+    gameplayRole: "group_manager",
     canPlay: true,
     canInviteWaiters: true,
     canManageRestaurant: true,
@@ -922,6 +920,8 @@ const ROLE_CAPABILITIES = {
     hasManagerControls: true,
   },
   enterpriser: {
+    membershipRole: "enterpriser",
+    gameplayRole: "enterpriser",
     canPlay: true,
     canInviteWaiters: true,
     canManageRestaurant: true,
@@ -931,6 +931,8 @@ const ROLE_CAPABILITIES = {
     hasManagerControls: true,
   },
   demo: {
+    membershipRole: "demo",
+    gameplayRole: "demo",
     canPlay: true,
     canInviteWaiters: false,
     canManageRestaurant: false,
@@ -939,39 +941,34 @@ const ROLE_CAPABILITIES = {
     canUseIntuit: false,
     hasManagerControls: false,
   },
-  // legacy aliases for compatibility
-  manager: {
-    canPlay: true,
-    canInviteWaiters: true,
-    canManageRestaurant: true,
-    canManageGroup: false,
-    canManageEnterprise: false,
-    canUseIntuit: false,
-    hasManagerControls: true,
-  },
-  enterprise_admin: {
-    canPlay: true,
-    canInviteWaiters: true,
-    canManageRestaurant: true,
-    canManageGroup: true,
-    canManageEnterprise: true,
-    canUseIntuit: true,
-    hasManagerControls: true,
-  },
 };
 
-function getRoleCapabilities(roleLike) {
-  const role = normalizeMembershipRole(roleLike);
-  return ROLE_CAPABILITIES[role] || ROLE_CAPABILITIES.waiter;
+function normalizeMembershipRole(input) {
+  const rawRole =
+    typeof input === "string"
+      ? input
+      : (input?.membershipRole ?? input?.membership_role ?? input?.role ?? "");
+
+  const role = String(rawRole || "").trim().toLowerCase();
+  return ROLE_CAPABILITIES[role] ? role : "waiter";
+}
+
+function getRoleCapabilities(rawRole) {
+  return ROLE_CAPABILITIES[normalizeMembershipRole(rawRole)];
 }
 
 function roleAliasesForMatching(role) {
-  const r = normalizeMembershipRole(role);
+  const raw = String(
+    typeof role === "string"
+      ? role
+      : (role?.membershipRole ?? role?.membership_role ?? role?.role ?? "")
+  ).trim().toLowerCase();
+  const r = normalizeMembershipRole(raw);
+  if (raw === "manager") return ["manager", "single_manager"];
+  if (raw === "enterprise_admin") return ["enterprise_admin", "enterpriser"];
   if (r === "single_manager") return ["single_manager", "manager"];
   if (r === "group_manager") return ["group_manager"];
   if (r === "enterpriser") return ["enterpriser", "enterprise_admin"];
-  if (r === "manager") return ["manager", "single_manager"];
-  if (r === "enterprise_admin") return ["enterprise_admin", "enterpriser"];
   if (r) return [r];
   return [];
 }
@@ -3316,11 +3313,179 @@ function shouldIgnoreDuplicateNav(msg) {
   return false;
 }
 
+const MEMBERSHIP_UI_GATES = {
+  waiter: {
+    nav: {
+      home: true,
+      play: true,
+      progress: true,
+      skills: true,
+      messages: true,
+      restaurant: false,
+      restaurants: false,
+      waiterInvites: false,
+      managerBoard: false,
+      groupBoard: false,
+      enterpriseBoard: false,
+      influenceMap: false,
+      intuit: false,
+      profile: true,
+    },
+    powers: {
+      canJoinByCode: true,
+      canInviteWaiters: false,
+      canUninviteWaiters: false,
+      canManageRestaurant: false,
+      canManageMultipleRestaurants: false,
+      canOpenRestaurants: false,
+      canUseInfluenceMap: false,
+      canUseIntuit: false,
+    },
+  },
+
+  single_manager: {
+    nav: {
+      home: true,
+      play: true,
+      progress: true,
+      skills: true,
+      messages: true,
+      restaurant: true,
+      restaurants: false,
+      waiterInvites: true,
+      managerBoard: true,
+      groupBoard: false,
+      enterpriseBoard: false,
+      influenceMap: false,
+      intuit: false,
+      profile: true,
+    },
+    powers: {
+      canJoinByCode: false,
+      canInviteWaiters: true,
+      canUninviteWaiters: true,
+      canManageRestaurant: true,
+      canManageMultipleRestaurants: false,
+      canOpenRestaurants: true,
+      canUseInfluenceMap: false,
+      canUseIntuit: false,
+    },
+  },
+
+  group_manager: {
+    nav: {
+      home: true,
+      play: true,
+      progress: true,
+      skills: true,
+      messages: true,
+      restaurant: false,
+      restaurants: true,
+      waiterInvites: true,
+      managerBoard: true,
+      groupBoard: true,
+      enterpriseBoard: false,
+      influenceMap: true,
+      intuit: false,
+      profile: true,
+    },
+    powers: {
+      canJoinByCode: false,
+      canInviteWaiters: true,
+      canUninviteWaiters: true,
+      canManageRestaurant: true,
+      canManageMultipleRestaurants: true,
+      canOpenRestaurants: true,
+      canUseInfluenceMap: true,
+      canUseIntuit: false,
+    },
+  },
+
+  enterpriser: {
+    nav: {
+      home: true,
+      play: true,
+      progress: true,
+      skills: true,
+      messages: true,
+      restaurant: false,
+      restaurants: true,
+      waiterInvites: true,
+      managerBoard: true,
+      groupBoard: true,
+      enterpriseBoard: true,
+      influenceMap: true,
+      intuit: true,
+      profile: true,
+    },
+    powers: {
+      canJoinByCode: false,
+      canInviteWaiters: true,
+      canUninviteWaiters: true,
+      canManageRestaurant: true,
+      canManageMultipleRestaurants: true,
+      canOpenRestaurants: true,
+      canUseInfluenceMap: true,
+      canUseIntuit: true,
+    },
+  },
+};
+
+function getUiGates(role) {
+  return MEMBERSHIP_UI_GATES[role] || MEMBERSHIP_UI_GATES.waiter;
+}
+
+function setVisible(id, show) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.hidden = !show;
+}
+
+function applyNavVisibility(role) {
+  const gates = getUiGates(role).nav;
+
+  setVisible("navHome", gates.home);
+  setVisible("navPlay", gates.play);
+  setVisible("navProgress", gates.progress);
+  setVisible("navSkills", gates.skills);
+  setVisible("navMessages", gates.messages);
+  setVisible("navRestaurant", gates.restaurant);
+  setVisible("navRestaurants", gates.restaurants);
+  setVisible("navWaiterInvites", gates.waiterInvites);
+  setVisible("navManagerBoard", gates.managerBoard);
+  setVisible("navGroupBoard", gates.groupBoard);
+  setVisible("navEnterpriseBoard", gates.enterpriseBoard);
+  setVisible("navInfluenceMap", gates.influenceMap);
+  setVisible("navIntuit", gates.intuit);
+  setVisible("navProfile", gates.profile);
+}
+
+function applyPowerVisibility(role) {
+  const powers = getUiGates(role).powers;
+
+  setVisible("btnInviteWaiter", powers.canInviteWaiters);
+  setVisible("btnUninviteWaiter", powers.canUninviteWaiters);
+  setVisible("btnOpenRestaurant", powers.canOpenRestaurants);
+  setVisible("btnInfluenceMap", powers.canUseInfluenceMap);
+  setVisible("btnIntuit", powers.canUseIntuit);
+}
+
+function requirePower(role, powerKey) {
+  const powers = getUiGates(role).powers;
+  return !!powers[powerKey];
+}
+
 function applyRoleTemplateGates() {
   if (isHardLoggedOut()) return;
 
-  const role = String(appState?.profile?.role || "").toLowerCase();
-  const isWaiter = role === "waiter";
+  const role = normalizeMembershipRole(appState?.profile || null) || "waiter";
+  const gates = getUiGates(role);
+
+  applyNavVisibility(role);
+  applyPowerVisibility(role);
+  window.__BC_UI_GATES__ = gates;
+  window.__BC_ROLE__ = role;
+  window.requirePower = requirePower;
 
   const idsToHideForWaiter = [
     "btnWineSetup",
@@ -3334,12 +3499,12 @@ function applyRoleTemplateGates() {
 
   idsToHideForWaiter.forEach((id) => {
     const el = document.getElementById(id);
-    if (el) el.style.display = isWaiter ? "none" : "";
+    if (el) el.style.display = gates.powers.canManageRestaurant ? "" : "none";
   });
 
   document.querySelectorAll('[data-nav="screenSetupPremium"]').forEach((el) => {
-    el.style.display = isWaiter ? "none" : "";
-    el.style.pointerEvents = isWaiter ? "none" : "";
+    el.style.display = gates.powers.canManageRestaurant ? "" : "none";
+    el.style.pointerEvents = gates.powers.canManageRestaurant ? "" : "none";
   });
 }
 
