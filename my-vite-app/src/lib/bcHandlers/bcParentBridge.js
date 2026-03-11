@@ -36,7 +36,7 @@ export function mountBcParentBridge({
       for (const table of ENCOUNTER_RESOLUTION_COUNT_TABLES) {
         const { count, error } = await supabase
           .from(table)
-          .select("event_id", { count: "exact", head: true })
+          .select("encounter_id", { count: "exact", head: true })
           .eq("user_id", userId)
           .eq("restaurant_id", restaurantId);
 

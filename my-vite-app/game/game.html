@@ -4770,11 +4770,13 @@ function ensureProgLoaded() {
           membershipRole: identity.membershipRole
         });
         console.log("[CTX DEBUG]", {
-          BC_CTX: window.BC_CTX || null,
           __BC_CTX__: window.__BC_CTX__ || null,
-          userId: window.userId || null,
-          restaurantId: window.restaurantId || null,
-          scopeId: window.scopeId || null
+          runtime: window.__BC_RUNTIME_DUMP__?.() || null,
+          exportedRole: window.__BC_ROLE__ || null,
+          exportedGameplayRole: window.__BC_GAMEPLAY_ROLE__ || null,
+          exportedRestaurantId: window.__BC_ACTIVE_RESTAURANT_ID__ || null,
+          exportedScopeType: window.__BC_SCOPE_TYPE__ || null,
+          exportedScopeId: window.__BC_SCOPE_ID__ || null
         });
         if (window.__BC_CTX__) {
           try { hydrateRunCountFromServer?.(); } catch (e) { console.warn("[BC] hydrateRunCountFromServer failed", e); }

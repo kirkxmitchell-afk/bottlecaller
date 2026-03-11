@@ -1760,7 +1760,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
         for (const table of tableCandidates) {
           const { count, error } = await supabase
             .from(table)
-            .select("event_id", { count: "exact", head: true })
+            .select("encounter_id", { count: "exact", head: true })
             .eq("user_id", userId)
             .eq("restaurant_id", restaurantId);
 
