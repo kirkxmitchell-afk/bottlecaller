@@ -88,6 +88,58 @@
     }
 
     const ORIGIN = window.location.origin;
+    const ROLE_CAPABILITIES = Object.freeze({
+      waiter: Object.freeze({
+        membershipRole: "waiter",
+        gameplayRole: "waiter",
+        canPlay: true,
+        canInviteWaiters: false,
+        canManageRestaurant: false,
+        canManageMultipleRestaurants: false,
+        canUseInfluenceMap: false,
+        canUseIntuit: false,
+      }),
+      single_manager: Object.freeze({
+        membershipRole: "single_manager",
+        gameplayRole: "single_manager",
+        canPlay: true,
+        canInviteWaiters: true,
+        canManageRestaurant: true,
+        canManageMultipleRestaurants: false,
+        canUseInfluenceMap: false,
+        canUseIntuit: false,
+      }),
+      group_manager: Object.freeze({
+        membershipRole: "group_manager",
+        gameplayRole: "group_manager",
+        canPlay: true,
+        canInviteWaiters: true,
+        canManageRestaurant: true,
+        canManageMultipleRestaurants: true,
+        canUseInfluenceMap: true,
+        canUseIntuit: false,
+      }),
+      enterpriser: Object.freeze({
+        membershipRole: "enterpriser",
+        gameplayRole: "enterpriser",
+        canPlay: true,
+        canInviteWaiters: true,
+        canManageRestaurant: true,
+        canManageMultipleRestaurants: true,
+        canUseInfluenceMap: true,
+        canUseIntuit: true,
+      }),
+      demo: Object.freeze({
+        membershipRole: "demo",
+        gameplayRole: "demo",
+        canPlay: true,
+        canInviteWaiters: false,
+        canManageRestaurant: false,
+        canManageMultipleRestaurants: false,
+        canUseInfluenceMap: false,
+        canUseIntuit: false,
+      }),
+    });
     function getEpoch() {
       return Number(window.__BC_EPOCH__ || 0);
     }
@@ -1839,78 +1891,17 @@ function isDrillMode() {
       let role = null;
       let isManager = false;
       let isWaiter = false;
-      let __BC_ROLE_CAPABILITIES_TABLE__ = null;
-      function getRoleCapabilitiesTable() {
-        if (__BC_ROLE_CAPABILITIES_TABLE__) return __BC_ROLE_CAPABILITIES_TABLE__;
-
-        __BC_ROLE_CAPABILITIES_TABLE__ = Object.freeze({
-          waiter: Object.freeze({
-            membershipRole: "waiter",
-            gameplayRole: "waiter",
-            canPlay: true,
-            canInviteWaiters: false,
-            canManageRestaurant: false,
-            canManageMultipleRestaurants: false,
-            canUseInfluenceMap: false,
-            canUseIntuit: false,
-          }),
-          single_manager: Object.freeze({
-            membershipRole: "single_manager",
-            gameplayRole: "single_manager",
-            canPlay: true,
-            canInviteWaiters: true,
-            canManageRestaurant: true,
-            canManageMultipleRestaurants: false,
-            canUseInfluenceMap: false,
-            canUseIntuit: false,
-          }),
-          group_manager: Object.freeze({
-            membershipRole: "group_manager",
-            gameplayRole: "group_manager",
-            canPlay: true,
-            canInviteWaiters: true,
-            canManageRestaurant: true,
-            canManageMultipleRestaurants: true,
-            canUseInfluenceMap: true,
-            canUseIntuit: false,
-          }),
-          enterpriser: Object.freeze({
-            membershipRole: "enterpriser",
-            gameplayRole: "enterpriser",
-            canPlay: true,
-            canInviteWaiters: true,
-            canManageRestaurant: true,
-            canManageMultipleRestaurants: true,
-            canUseInfluenceMap: true,
-            canUseIntuit: true,
-          }),
-          demo: Object.freeze({
-            membershipRole: "demo",
-            gameplayRole: "demo",
-            canPlay: true,
-            canInviteWaiters: false,
-            canManageRestaurant: false,
-            canManageMultipleRestaurants: false,
-            canUseInfluenceMap: false,
-            canUseIntuit: false,
-          }),
-        });
-
-        return __BC_ROLE_CAPABILITIES_TABLE__;
-      }
       function normalizeRole(rawRole) {
-        const table = getRoleCapabilitiesTable();
         const role = String(rawRole || "").trim().toLowerCase();
-        return table[role] ? role : "waiter";
+        return ROLE_CAPABILITIES[role] ? role : "waiter";
       }
       function resolveRoleState(rawRole) {
-        const table = getRoleCapabilitiesTable();
         const role = normalizeRole(rawRole);
         return {
           rawRole: role,
-          membershipRole: table[role].membershipRole,
-          gameplayRole: table[role].gameplayRole,
-          capabilities: table[role],
+          membershipRole: ROLE_CAPABILITIES[role].membershipRole,
+          gameplayRole: ROLE_CAPABILITIES[role].gameplayRole,
+          capabilities: ROLE_CAPABILITIES[role],
         };
       }
       function getRoleCapabilities(role) {
