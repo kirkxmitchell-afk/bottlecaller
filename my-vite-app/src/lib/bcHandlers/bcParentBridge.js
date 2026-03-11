@@ -27,21 +27,22 @@ export function mountBcParentBridge({
 }) {
   const ORIGIN = window.location.origin;
 
-  async function getRunsCountSafe({ userId, restaurantId }) {
-    try {
-      const { data, error } = await supabase
-        .from("bc_run_counts_v1")
-        .select("runs_count")
-        .eq("user_id", userId)
-        .eq("restaurant_id", restaurantId)
-        .maybeSingle();
+  async function getRunsCountSafe(supabase, userId, restaurantId) {
+    if (!supabase || !userId || !restaurantId) return 0;
 
-      if (error) throw error;
-      return Number(data?.runs_count || 0);
-    } catch (e) {
-      console.warn("[BC] runs_count fallback -> 0", e);
+    const { data, error } = await supabase
+      .from("bc_run_counts_v1")
+      .select("runs_count")
+      .eq("user_id", userId)
+      .eq("restaurant_id", restaurantId)
+      .maybeSingle();
+
+    if (error) {
+      console.warn("[BC] runs_count fallback -> 0", error);
       return 0;
     }
+
+    return Number(data?.runs_count || 0);
   }
 
   const notifyLoggedOut = (event) => {
@@ -126,7 +127,7 @@ export function mountBcParentBridge({
       }
 
       try {
-        const count = await getRunsCountSafe({ userId, restaurantId });
+        const count = await getRunsCountSafe(supabase, userId, restaurantId);
 
         event.source?.postMessage(
           { source: "BC_MSG", v: 1, type: "runs_count_response", ok: true, count: Number(count || 0) },

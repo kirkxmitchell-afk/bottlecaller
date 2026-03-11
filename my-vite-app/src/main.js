@@ -1750,21 +1750,22 @@ if (!window.__BC_PARENT_BRIDGE__) {
       return data || [];
     }
 
-    async function getRunsCountSafe({ userId, restaurantId }) {
-      try {
-        const { data, error } = await supabase
-          .from("bc_run_counts_v1")
-          .select("runs_count")
-          .eq("user_id", userId)
-          .eq("restaurant_id", restaurantId)
-          .maybeSingle();
+    async function getRunsCountSafe(supabase, userId, restaurantId) {
+      if (!supabase || !userId || !restaurantId) return 0;
 
-        if (error) throw error;
-        return Number(data?.runs_count || 0);
-      } catch (err) {
-        console.warn("[BC] runs_count fallback -> 0", err);
+      const { data, error } = await supabase
+        .from("bc_run_counts_v1")
+        .select("runs_count")
+        .eq("user_id", userId)
+        .eq("restaurant_id", restaurantId)
+        .maybeSingle();
+
+      if (error) {
+        console.warn("[BC] runs_count fallback -> 0", error);
         return 0;
       }
+
+      return Number(data?.runs_count || 0);
     }
 
     async function fetchRunsCount({ mode, msg, event }) {
@@ -1796,7 +1797,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
       window.appState.session = live;
 
       // 5) DB query (safe fallback to 0)
-      return await getRunsCountSafe({ userId, restaurantId });
+      return await getRunsCountSafe(supabase, userId, restaurantId);
     }
 
     const handledTypes = new Set([
@@ -2123,10 +2124,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
           }
 
           // 4) DB query (safe fallback to 0)
-          const count = await getRunsCountSafe({
-            userId: ctx.userId,
-            restaurantId: ctx.restaurantId
-          });
+          const count = await getRunsCountSafe(supabase, ctx.userId, ctx.restaurantId);
 
           // 5) Reply
           event.source?.postMessage(
