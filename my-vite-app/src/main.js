@@ -886,42 +886,99 @@ const appState = {
 })();
 
 function normalizeMembershipRole(input) {
-  const raw = String(
+  return String(
     typeof input === "string"
       ? input
       : (input?.membership_role ?? input?.membershipRole ?? input?.role ?? "")
   ).toLowerCase().trim();
+}
 
-  switch (raw) {
-    case "demo":
-      return "demo";
-    case "waiter":
-      return "waiter";
-    case "single_manager":
-      return "single_manager";
-    case "group_manager":
-      return "group_manager";
-    case "enterpriser":
-    case "enterprise_admin":
-      return "enterpriser";
-    case "manager":
-      return "single_manager";
-    default:
-      return "";
-  }
+const ROLE_CAPABILITIES = {
+  waiter: {
+    canPlay: true,
+    canInviteWaiters: false,
+    canManageSingleRestaurant: false,
+    canManageGroup: false,
+    canManageEnterprise: false,
+    canUseIntuit: false,
+    hasManagerControls: false,
+  },
+  single_manager: {
+    canPlay: true,
+    canInviteWaiters: true,
+    canManageSingleRestaurant: true,
+    canManageGroup: false,
+    canManageEnterprise: false,
+    canUseIntuit: false,
+    hasManagerControls: true,
+  },
+  group_manager: {
+    canPlay: true,
+    canInviteWaiters: true,
+    canManageSingleRestaurant: true,
+    canManageGroup: true,
+    canManageEnterprise: false,
+    canUseIntuit: false,
+    hasManagerControls: true,
+  },
+  enterpriser: {
+    canPlay: true,
+    canInviteWaiters: true,
+    canManageSingleRestaurant: true,
+    canManageGroup: true,
+    canManageEnterprise: true,
+    canUseIntuit: true,
+    hasManagerControls: true,
+  },
+  demo: {
+    canPlay: true,
+    canInviteWaiters: false,
+    canManageSingleRestaurant: false,
+    canManageGroup: false,
+    canManageEnterprise: false,
+    canUseIntuit: false,
+    hasManagerControls: false,
+  },
+  // legacy aliases for compatibility
+  manager: {
+    canPlay: true,
+    canInviteWaiters: true,
+    canManageSingleRestaurant: true,
+    canManageGroup: false,
+    canManageEnterprise: false,
+    canUseIntuit: false,
+    hasManagerControls: true,
+  },
+  enterprise_admin: {
+    canPlay: true,
+    canInviteWaiters: true,
+    canManageSingleRestaurant: true,
+    canManageGroup: true,
+    canManageEnterprise: true,
+    canUseIntuit: true,
+    hasManagerControls: true,
+  },
+};
+
+function getRoleCapabilities(roleLike) {
+  const role = normalizeMembershipRole(roleLike);
+  return ROLE_CAPABILITIES[role] || ROLE_CAPABILITIES.waiter;
 }
 
 function roleAliasesForMatching(role) {
   const r = normalizeMembershipRole(role);
   if (r === "single_manager") return ["single_manager", "manager"];
+  if (r === "group_manager") return ["group_manager"];
   if (r === "enterpriser") return ["enterpriser", "enterprise_admin"];
+  if (r === "manager") return ["manager", "single_manager"];
+  if (r === "enterprise_admin") return ["enterprise_admin", "enterpriser"];
   if (r) return [r];
   return [];
 }
 
 function isManagerRole(roleLike) {
-  const role = normalizeMembershipRole(roleLike);
-  return role === "single_manager" || role === "group_manager" || role === "enterpriser";
+  const caps = getRoleCapabilities(roleLike);
+  return !!caps.hasManagerControls;
 }
 function isUuid(s) {
   return typeof s === "string" &&
@@ -1120,14 +1177,20 @@ window.__BC_BUILD_CTX__ = function buildBcCtx(requestedMode = null) {
   const membershipRole = normalizeMembershipRole(S?.profile || null) || null;
   const role = membershipRole || S?.profile?.role || null;
   const scopeId = S?.profile?.scope_id ?? null;
+  const scopeType = S?.profile?.scope_type ?? null;
+  const accessTier = S?.profile?.access_tier ?? "demo";
   const restaurantId = window.getActiveRestaurantId?.() ?? null;
-  const mode = requestedMode ?? null;
+  const mode = requestedMode ?? "premium";
   return {
     userId,
     restaurantId,
     scopeId,
+    scopeType,
+    accessTier,
+    membershipRole,
     role,
     membership_role: membershipRole,
+    gameplayRole: membershipRole,
     gameplay_role: membershipRole,
     mode
   };
@@ -1499,6 +1562,8 @@ async function buildBcCtxSafe(requestedMode = null) {
   if (!userId || !profile?.role) return null;
   const membershipRole = normalizeMembershipRole(profile) || null;
   const gameplayRole = membershipRole;
+  const scopeType = profile?.scope_type ?? null;
+  const accessTier = profile?.access_tier ?? "demo";
 
   const mode = String(requestedMode || "").toLowerCase();
   const isDemo = mode === "demo";
@@ -1509,8 +1574,12 @@ async function buildBcCtxSafe(requestedMode = null) {
       userId,
       restaurantId: null,
       scopeId: null,
+      scopeType: null,
+      accessTier,
+      membershipRole,
       role: membershipRole || profile?.role || null,
       membership_role: membershipRole,
+      gameplayRole,
       gameplay_role: gameplayRole,
       mode: "demo",
       drill: null,
@@ -1524,10 +1593,14 @@ async function buildBcCtxSafe(requestedMode = null) {
     userId,
     restaurantId,
     scopeId: profile?.scope_id ?? null,
+    scopeType,
+    accessTier,
+    membershipRole,
     role: membershipRole || profile?.role || null,
     membership_role: membershipRole,
+    gameplayRole,
     gameplay_role: gameplayRole,
-    mode: requestedMode ?? null,
+    mode: requestedMode ?? "premium",
     drill: window.__BC_DRILL_CONFIG__ || window.BC_DRILL_CONFIG || null,
   };
 }
@@ -1552,8 +1625,13 @@ if (!window.__BC_PARENT_BRIDGE__) {
         userId: ctx.userId || null,
         restaurantId: ctx.restaurantId || null,
         role: ctx.role || null,
+        membershipRole: ctx.membershipRole || ctx.membership_role || null,
         membership_role: ctx.membership_role || null,
+        gameplayRole: ctx.gameplayRole || ctx.gameplay_role || null,
         gameplay_role: ctx.gameplay_role || null,
+        scopeId: ctx.scopeId || null,
+        scopeType: ctx.scopeType || ctx.scope_type || null,
+        accessTier: ctx.accessTier || ctx.access_tier || null,
         at: Date.now(),
       });
     } catch {}
@@ -5708,6 +5786,11 @@ function pushCtxToPremiumIframe(source = "manual") {
   if (!iframe || !iframe.contentWindow) return;
 
   const uid = appState.session?.user?.id || null;
+  const membershipRole = normalizeMembershipRole(appState.profile || null) || appState.profile?.role || "waiter";
+  const activeRestaurantId = window.getActiveRestaurantId?.() || appState.profile?.restaurant_id || null;
+  const scopeId = appState.profile?.scope_id || null;
+  const scopeType = appState.profile?.scope_type || null;
+  const accessTier = appState.profile?.access_tier || "demo";
 
   iframe.contentWindow.postMessage(
     {
@@ -5716,11 +5799,15 @@ function pushCtxToPremiumIframe(source = "manual") {
       type: "bc_ctx",
       mode: "premium",
       userId: uid,
-      role: appState.profile?.role || null,
-      scopeType: appState.profile?.scope_type || null,
-      scopeId: appState.profile?.scope_id || null,
-      restaurantId: appState.profile?.restaurant_id || null,
-      accessTier: appState.profile?.access_tier || null,
+      restaurantId: activeRestaurantId,
+      scopeId,
+      scopeType,
+      accessTier,
+      membershipRole,
+      membership_role: membershipRole,
+      role: membershipRole,
+      gameplayRole: membershipRole,
+      gameplay_role: membershipRole,
       _from: source,
     },
     "*"

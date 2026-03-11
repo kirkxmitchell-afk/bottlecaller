@@ -1839,52 +1839,110 @@ function isDrillMode() {
       let role = null;
       let isManager = false;
       let isWaiter = false;
-      function normalizeMembershipRole(profile) {
-        const role = String(
-          profile?.membership_role ??
-          profile?.role ??
-          ""
-        ).toLowerCase().trim();
+      const ROLE_CAPABILITIES = {
+        waiter: {
+          canPlay: true,
+          canInviteWaiters: false,
+          canManageSingleRestaurant: false,
+          canManageGroup: false,
+          canManageEnterprise: false,
+          canUseIntuit: false,
+        },
+        single_manager: {
+          canPlay: true,
+          canInviteWaiters: true,
+          canManageSingleRestaurant: true,
+          canManageGroup: false,
+          canManageEnterprise: false,
+          canUseIntuit: false,
+        },
+        group_manager: {
+          canPlay: true,
+          canInviteWaiters: true,
+          canManageSingleRestaurant: true,
+          canManageGroup: true,
+          canManageEnterprise: false,
+          canUseIntuit: false,
+        },
+        enterpriser: {
+          canPlay: true,
+          canInviteWaiters: true,
+          canManageSingleRestaurant: true,
+          canManageGroup: true,
+          canManageEnterprise: true,
+          canUseIntuit: true,
+        },
+        // Legacy aliases (exact identity preserved; capabilities stay compatible)
+        manager: {
+          canPlay: true,
+          canInviteWaiters: true,
+          canManageSingleRestaurant: true,
+          canManageGroup: false,
+          canManageEnterprise: false,
+          canUseIntuit: false,
+        },
+        enterprise_admin: {
+          canPlay: true,
+          canInviteWaiters: true,
+          canManageSingleRestaurant: true,
+          canManageGroup: true,
+          canManageEnterprise: true,
+          canUseIntuit: true,
+        },
+        demo: {
+          canPlay: true,
+          canInviteWaiters: false,
+          canManageSingleRestaurant: false,
+          canManageGroup: false,
+          canManageEnterprise: false,
+          canUseIntuit: false,
+        },
+      };
+      function normalizeMembershipContext(ctx = {}) {
+        const membershipRole =
+          ctx.membershipRole ||
+          ctx.membership_role ||
+          ctx.role ||
+          "waiter";
 
-        switch (role) {
-          case "demo":
-            return "demo";
-          case "waiter":
-            return "waiter";
-          case "single_manager":
-            return "single_manager";
-          case "group_manager":
-            return "group_manager";
-          case "enterpriser":
-          case "enterprise_admin":
-            return "enterpriser";
-          case "manager":
-            return "single_manager";
-          default:
-            return null;
-        }
+        return {
+          userId: ctx.userId || ctx.user_id || null,
+          restaurantId: ctx.restaurantId || ctx.restaurant_id || null,
+          scopeId: ctx.scopeId || ctx.scope_id || null,
+          scopeType: ctx.scopeType || ctx.scope_type || null,
+          accessTier: ctx.accessTier || ctx.access_tier || "demo",
+          membershipRole: String(membershipRole).toLowerCase().trim(),
+          role: String(membershipRole).toLowerCase().trim(),
+          gameplayRole: String(membershipRole).toLowerCase().trim(),
+          mode: ctx.mode || "demo",
+        };
       }
       function resolveGameplayIdentity(rawProfile = {}) {
-        const membershipRole = normalizeMembershipRole(rawProfile);
-        const gameplayRole = membershipRole;
-        const isManagerial =
-          membershipRole === "single_manager" ||
-          membershipRole === "group_manager" ||
-          membershipRole === "enterpriser";
+        const nctx = normalizeMembershipContext(rawProfile);
+        const membershipRole = nctx.membershipRole;
+        const gameplayRole = nctx.gameplayRole;
+        const caps = ROLE_CAPABILITIES[gameplayRole] || ROLE_CAPABILITIES.waiter;
+
+        const isWaiter = gameplayRole === "waiter";
+        const isSingleManager = gameplayRole === "single_manager";
+        const isGroupManager = gameplayRole === "group_manager";
+        const isEnterpriser = gameplayRole === "enterpriser";
+        const isManagerial = !!caps.canManageSingleRestaurant || !!caps.canManageGroup || !!caps.canManageEnterprise;
 
         return {
           rawRole: membershipRole || "",
           membershipRole: membershipRole || "",
           membershipType: membershipRole || "unknown",
           gameplayRole: gameplayRole || "",
-          isDemo: membershipRole === "demo",
-          isWaiter: membershipRole === "waiter",
-          isSingleManager: membershipRole === "single_manager",
+          isDemo: gameplayRole === "demo",
+          isWaiter,
+          isSingleManager,
           isManager: isManagerial,
-          isGroupManager: membershipRole === "group_manager",
-          isEnterpriser: membershipRole === "enterpriser",
+          isGroupManager,
+          isEnterpriser,
           isManagerial,
-          hasManagerControls: isManagerial
+          hasManagerControls: isManagerial,
+          capabilities: caps
         };
       }
       function applyGameplayIdentity(rawProfile = {}) {
@@ -2791,20 +2849,22 @@ function ensureProgLoaded() {
             return;
           }
 
+          const nextNorm = normalizeMembershipContext(msg || {});
           const next = {
-            userId: msg.userId ?? null,
-            restaurantId: msg.restaurantId ?? null,
-            scopeId: msg.scopeId ?? null,
-            membership_role: msg.membership_role ?? msg.membershipRole ?? null,
-            role: msg.role ?? null,
-            mode: msg.mode ?? null,
+            userId: nextNorm.userId,
+            restaurantId: nextNorm.restaurantId,
+            scopeId: nextNorm.scopeId,
+            membership_role: nextNorm.membershipRole,
+            role: nextNorm.role,
+            gameplay_role: nextNorm.gameplayRole,
+            mode: msg?.mode ?? nextNorm.mode,
           };
 
           const isDemoCtx = String(next.mode || "").toLowerCase() === "demo";
           const valid =
             isDemoCtx
-              ? ((next.userId === "demo" || isUuid(next.userId)) && !!next.role)
-              : (isUuid(next.userId) && isUuid(next.restaurantId) && !!next.role);
+              ? ((next.userId === "demo" || isUuid(next.userId)) && !!next.gameplay_role)
+              : (isUuid(next.userId) && isUuid(next.restaurantId) && !!next.gameplay_role);
           if (!valid) {
             console.warn("[BC] setCtx ignored (invalid/partial ctx)", next);
             return;
@@ -2819,6 +2879,7 @@ function ensureProgLoaded() {
             String(prev.scopeId || "") === String(next.scopeId || "") &&
             String(prev.membership_role || "") === String(next.membership_role || "") &&
             String(prev.role || "") === String(next.role || "") &&
+            String(prev.gameplay_role || "") === String(next.gameplay_role || "") &&
             String(prev.mode || "").toLowerCase() === String(next.mode || "").toLowerCase();
           if (same) return;
 
@@ -4516,16 +4577,16 @@ function ensureProgLoaded() {
           return;
         }
 
-        userId = msg.userId ?? userId ?? null;
-        restaurantId = msg.restaurantId ?? restaurantId ?? null;
-        scopeId = msg.scopeId ?? scopeId ?? null;
-        const membershipRole =
-          msg.membership_role ??
-          msg.membershipRole ??
-          window.__BC_CTX__?.membership_role ??
-          null;
-        role = msg.role ?? role ?? null;
-        mode = msg.mode ?? mode ?? null;
+        const nctx = normalizeMembershipContext({
+          ...(window.__BC_CTX__ || {}),
+          ...(msg || {})
+        });
+        userId = nctx.userId ?? userId ?? null;
+        restaurantId = nctx.restaurantId ?? restaurantId ?? null;
+        scopeId = nctx.scopeId ?? scopeId ?? null;
+        const membershipRole = nctx.membershipRole || null;
+        role = nctx.role ?? role ?? null;
+        mode = nctx.mode ?? mode ?? null;
 
         const identity = resolveGameplayIdentity({
           membership_role: membershipRole || "",
@@ -4537,8 +4598,11 @@ function ensureProgLoaded() {
           userId,
           restaurantId,
           scopeId,
+          scope_type: nctx.scopeType || null,
+          access_tier: nctx.accessTier || null,
           membership_role: membershipRole,
           role,
+          gameplay_role: nctx.gameplayRole || role,
           mode,
           identity
         };
