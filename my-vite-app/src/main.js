@@ -885,76 +885,85 @@ const appState = {
   }, 200);
 })();
 
-const ROLE_CAPABILITIES = {
-  waiter: {
-    membershipRole: "waiter",
-    gameplayRole: "waiter",
-    canPlay: true,
-    canInviteWaiters: false,
-    canManageRestaurant: false,
-    canManageGroup: false,
-    canManageEnterprise: false,
-    canUseIntuit: false,
-    hasManagerControls: false,
-  },
-  single_manager: {
-    membershipRole: "single_manager",
-    gameplayRole: "single_manager",
-    canPlay: true,
-    canInviteWaiters: true,
-    canManageRestaurant: true,
-    canManageGroup: false,
-    canManageEnterprise: false,
-    canUseIntuit: false,
-    hasManagerControls: true,
-  },
-  group_manager: {
-    membershipRole: "group_manager",
-    gameplayRole: "group_manager",
-    canPlay: true,
-    canInviteWaiters: true,
-    canManageRestaurant: true,
-    canManageGroup: true,
-    canManageEnterprise: false,
-    canUseIntuit: false,
-    hasManagerControls: true,
-  },
-  enterpriser: {
-    membershipRole: "enterpriser",
-    gameplayRole: "enterpriser",
-    canPlay: true,
-    canInviteWaiters: true,
-    canManageRestaurant: true,
-    canManageGroup: true,
-    canManageEnterprise: true,
-    canUseIntuit: true,
-    hasManagerControls: true,
-  },
-  demo: {
-    membershipRole: "demo",
-    gameplayRole: "demo",
-    canPlay: true,
-    canInviteWaiters: false,
-    canManageRestaurant: false,
-    canManageGroup: false,
-    canManageEnterprise: false,
-    canUseIntuit: false,
-    hasManagerControls: false,
-  },
-};
+let __BC_ROLE_CAPABILITIES_TABLE__ = null;
+function getRoleCapabilitiesTable() {
+  if (__BC_ROLE_CAPABILITIES_TABLE__) return __BC_ROLE_CAPABILITIES_TABLE__;
+
+  __BC_ROLE_CAPABILITIES_TABLE__ = Object.freeze({
+    waiter: Object.freeze({
+      membershipRole: "waiter",
+      gameplayRole: "waiter",
+      canPlay: true,
+      canInviteWaiters: false,
+      canManageRestaurant: false,
+      canManageGroup: false,
+      canManageEnterprise: false,
+      canUseIntuit: false,
+      hasManagerControls: false,
+    }),
+    single_manager: Object.freeze({
+      membershipRole: "single_manager",
+      gameplayRole: "single_manager",
+      canPlay: true,
+      canInviteWaiters: true,
+      canManageRestaurant: true,
+      canManageGroup: false,
+      canManageEnterprise: false,
+      canUseIntuit: false,
+      hasManagerControls: true,
+    }),
+    group_manager: Object.freeze({
+      membershipRole: "group_manager",
+      gameplayRole: "group_manager",
+      canPlay: true,
+      canInviteWaiters: true,
+      canManageRestaurant: true,
+      canManageGroup: true,
+      canManageEnterprise: false,
+      canUseIntuit: false,
+      hasManagerControls: true,
+    }),
+    enterpriser: Object.freeze({
+      membershipRole: "enterpriser",
+      gameplayRole: "enterpriser",
+      canPlay: true,
+      canInviteWaiters: true,
+      canManageRestaurant: true,
+      canManageGroup: true,
+      canManageEnterprise: true,
+      canUseIntuit: true,
+      hasManagerControls: true,
+    }),
+    demo: Object.freeze({
+      membershipRole: "demo",
+      gameplayRole: "demo",
+      canPlay: true,
+      canInviteWaiters: false,
+      canManageRestaurant: false,
+      canManageGroup: false,
+      canManageEnterprise: false,
+      canUseIntuit: false,
+      hasManagerControls: false,
+    }),
+  });
+
+  return __BC_ROLE_CAPABILITIES_TABLE__;
+}
 
 function normalizeMembershipRole(input) {
+  const table = getRoleCapabilitiesTable();
   const rawRole =
     typeof input === "string"
       ? input
       : (input?.membershipRole ?? input?.membership_role ?? input?.role ?? "");
 
   const role = String(rawRole || "").trim().toLowerCase();
-  return ROLE_CAPABILITIES[role] ? role : "waiter";
+  return table[role] ? role : "waiter";
 }
 
 function getRoleCapabilities(rawRole) {
-  return ROLE_CAPABILITIES[normalizeMembershipRole(rawRole)];
+  const table = getRoleCapabilitiesTable();
+  return table[normalizeMembershipRole(rawRole)];
 }
 
 function roleAliasesForMatching(role) {
