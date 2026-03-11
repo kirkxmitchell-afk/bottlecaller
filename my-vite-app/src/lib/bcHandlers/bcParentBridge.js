@@ -128,6 +128,13 @@ export function mountBcParentBridge({
           restaurantId
         );
 
+        console.log("[BC][RUNS_COUNT_REQUEST] resolved", {
+          reqId,
+          userId,
+          restaurantId,
+          count
+        });
+
         event.source?.postMessage(
           { source: "BC_MSG", v: 1, type: "runs_count_response", reqId, ok: true, count },
           event.origin
