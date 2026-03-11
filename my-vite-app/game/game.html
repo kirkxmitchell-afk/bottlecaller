@@ -1909,15 +1909,16 @@ function isDrillMode() {
       }
       function exportRuntimeIdentity(ctx = {}) {
         const roleValue =
-          ctx.membershipRole ||
-          ctx.membership_role ||
-          ctx.role ||
-          "waiter";
+          ctx.membershipRole ??
+          ctx.membership_role ??
+          ctx.role ??
+          null;
 
         const gameplayRoleValue =
-          ctx.gameplayRole ||
-          ctx.gameplay_role ||
-          roleValue;
+          ctx.gameplayRole ??
+          ctx.gameplay_role ??
+          roleValue ??
+          null;
 
         const restaurantIdValue =
           ctx.restaurantId ??
@@ -1939,7 +1940,6 @@ function isDrillMode() {
         window.__BC_ACTIVE_RESTAURANT_ID__ = restaurantIdValue;
         window.__BC_SCOPE_TYPE__ = scopeTypeValue;
         window.__BC_SCOPE_ID__ = scopeIdValue;
-        window.__BC_CAPS__ = getRoleCapabilities(gameplayRoleValue);
 
         window.__BC_RUNTIME_DUMP__ = () => ({
           role: window.__BC_ROLE__,
@@ -1956,6 +1956,7 @@ function isDrillMode() {
           restaurantId: window.__BC_ACTIVE_RESTAURANT_ID__,
           scopeType: window.__BC_SCOPE_TYPE__,
           scopeId: window.__BC_SCOPE_ID__,
+          ctx
         });
       }
       function normalizeMembershipContext(ctx = {}) {
@@ -4681,9 +4682,9 @@ function ensureProgLoaded() {
           access_tier: nctx.accessTier || null,
           membershipRole: membershipRole,
           membership_role: membershipRole,
-          role: membershipRole || role,
-          gameplayRole: membershipRole || nctx.gameplayRole || role,
-          gameplay_role: membershipRole || nctx.gameplayRole || role,
+          role: membershipRole || role || null,
+          gameplayRole: membershipRole || nctx.gameplayRole || role || null,
+          gameplay_role: membershipRole || nctx.gameplayRole || role || null,
           mode,
           identity
         };
@@ -4692,6 +4693,7 @@ function ensureProgLoaded() {
           role: membershipRole || role || ""
         });
         exportRuntimeIdentity(window.__BC_CTX__);
+        console.log("[BC][POST_EXPORT_DUMP]", window.__BC_RUNTIME_DUMP__?.());
         console.log("[CTX ROLE NORMALIZED]", {
           rawRole: msg?.role || "",
           membershipRole: identity.membershipRole,
