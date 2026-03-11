@@ -88,6 +88,38 @@
     }
 
     const ORIGIN = window.location.origin;
+    // Canonical runtime identity defaults (single initialization point)
+    window.__BC_CTX__ = window.__BC_CTX__ || null;
+    window.__BC_ROLE__ = window.__BC_ROLE__ || null;
+    window.__BC_GAMEPLAY_ROLE__ = window.__BC_GAMEPLAY_ROLE__ || null;
+    window.__BC_ACTIVE_RESTAURANT_ID__ = window.__BC_ACTIVE_RESTAURANT_ID__ || null;
+    window.__BC_SCOPE_TYPE__ = window.__BC_SCOPE_TYPE__ || null;
+    window.__BC_SCOPE_ID__ = window.__BC_SCOPE_ID__ || null;
+    window.__BC_RUNTIME_DUMP__ = window.__BC_RUNTIME_DUMP__ || (() => ({
+      role: window.__BC_ROLE__,
+      gameplayRole: window.__BC_GAMEPLAY_ROLE__,
+      restaurantId: window.__BC_ACTIVE_RESTAURANT_ID__,
+      scopeType: window.__BC_SCOPE_TYPE__,
+      scopeId: window.__BC_SCOPE_ID__,
+      ctx: window.__BC_CTX__
+    }));
+
+    // Trace every __BC_CTX__ write to catch unexpected resets/overwrites.
+    const __bcCtxInit = window.__BC_CTX__;
+    window.__BC_CTX__VALUE__ = typeof window.__BC_CTX__VALUE__ === "undefined"
+      ? (__bcCtxInit ?? null)
+      : window.__BC_CTX__VALUE__;
+    Object.defineProperty(window, "__BC_CTX__", {
+      configurable: true,
+      enumerable: true,
+      get() {
+        return window.__BC_CTX__VALUE__;
+      },
+      set(v) {
+        console.trace("[BC][CTX_WRITE]", v);
+        window.__BC_CTX__VALUE__ = v;
+      }
+    });
     const ROLE_CAPABILITIES = Object.freeze({
       waiter: Object.freeze({
         membershipRole: "waiter",
@@ -4637,6 +4669,7 @@ function ensureProgLoaded() {
       }
 
       function applyBcCtx(msg) {
+        console.log("[BC][APPLY_CTX][IN]", msg);
         const hasIdentity =
           msg.userId != null ||
           msg.restaurantId != null ||
@@ -4663,6 +4696,15 @@ function ensureProgLoaded() {
         role = membershipRole ?? nctx.role ?? role ?? null;
         mode = nctx.mode ?? mode ?? null;
 
+        console.log("[BC][APPLY_CTX][BEFORE_SET]", {
+          prevCtx: window.__BC_CTX__,
+          userId,
+          restaurantId,
+          scopeId,
+          role,
+          mode
+        });
+
         const identity = resolveGameplayIdentity({
           membership_role: membershipRole || "",
           role: membershipRole || role || ""
@@ -4688,12 +4730,21 @@ function ensureProgLoaded() {
           mode,
           identity
         };
+        console.log("[BC][APPLY_CTX][AFTER_SET]", window.__BC_CTX__);
         applyGameplayIdentity({
           membership_role: membershipRole || "",
           role: membershipRole || role || ""
         });
         exportRuntimeIdentity(window.__BC_CTX__);
         console.log("[BC][POST_EXPORT_DUMP]", window.__BC_RUNTIME_DUMP__?.());
+        console.log("[BC][APPLY_CTX][AFTER_EXPORT]", {
+          role: window.__BC_ROLE__,
+          gameplayRole: window.__BC_GAMEPLAY_ROLE__,
+          restaurantId: window.__BC_ACTIVE_RESTAURANT_ID__,
+          scopeType: window.__BC_SCOPE_TYPE__,
+          scopeId: window.__BC_SCOPE_ID__,
+          dump: window.__BC_RUNTIME_DUMP__?.()
+        });
         console.log("[CTX ROLE NORMALIZED]", {
           rawRole: msg?.role || "",
           membershipRole: identity.membershipRole,
@@ -4767,6 +4818,13 @@ function ensureProgLoaded() {
         } catch {}
         // no-op: ctx gate resolves only via setCtx when valid
       }
+
+      // Expose live helpers for console/debugging.
+      window.normalizeMembershipContext = normalizeMembershipContext;
+      window.applyBcCtx = applyBcCtx;
+      window.resolveGameplayIdentity = resolveGameplayIdentity;
+      window.resolveRoleState = resolveRoleState;
+      window.exportRuntimeIdentity = exportRuntimeIdentity;
 
       let __BC_WINES_BOOTSTRAPPED__ = false;
 
