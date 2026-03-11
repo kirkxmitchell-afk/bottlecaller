@@ -1752,29 +1752,15 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
     async function getRunsCountSafe({ userId, restaurantId }) {
       try {
-        const tableCandidates = [
-          "bc_encounter_resolutions",
-          "bc_encounter_resolutions_v1",
-        ];
+        const { data, error } = await supabase
+          .from("bc_run_counts_v1")
+          .select("runs_count")
+          .eq("user_id", userId)
+          .eq("restaurant_id", restaurantId)
+          .maybeSingle();
 
-        for (const table of tableCandidates) {
-          const { count, error } = await supabase
-            .from(table)
-            .select("encounter_id", { count: "exact", head: true })
-            .eq("user_id", userId)
-            .eq("restaurant_id", restaurantId);
-
-          if (!error) return Number(count || 0);
-
-          const msg = String(error?.message || "").toLowerCase();
-          const isMissingRelation =
-            msg.includes("does not exist") ||
-            msg.includes("relation") ||
-            msg.includes("schema cache");
-          if (!isMissingRelation) throw error;
-        }
-
-        return 0;
+        if (error) throw error;
+        return Number(data?.runs_count || 0);
       } catch (err) {
         console.warn("[BC] runs_count fallback -> 0", err);
         return 0;
