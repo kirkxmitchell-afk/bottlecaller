@@ -897,7 +897,7 @@ const ROLE_CAPABILITIES = {
   waiter: {
     canPlay: true,
     canInviteWaiters: false,
-    canManageSingleRestaurant: false,
+    canManageRestaurant: false,
     canManageGroup: false,
     canManageEnterprise: false,
     canUseIntuit: false,
@@ -906,7 +906,7 @@ const ROLE_CAPABILITIES = {
   single_manager: {
     canPlay: true,
     canInviteWaiters: true,
-    canManageSingleRestaurant: true,
+    canManageRestaurant: true,
     canManageGroup: false,
     canManageEnterprise: false,
     canUseIntuit: false,
@@ -915,7 +915,7 @@ const ROLE_CAPABILITIES = {
   group_manager: {
     canPlay: true,
     canInviteWaiters: true,
-    canManageSingleRestaurant: true,
+    canManageRestaurant: true,
     canManageGroup: true,
     canManageEnterprise: false,
     canUseIntuit: false,
@@ -924,7 +924,7 @@ const ROLE_CAPABILITIES = {
   enterpriser: {
     canPlay: true,
     canInviteWaiters: true,
-    canManageSingleRestaurant: true,
+    canManageRestaurant: true,
     canManageGroup: true,
     canManageEnterprise: true,
     canUseIntuit: true,
@@ -933,7 +933,7 @@ const ROLE_CAPABILITIES = {
   demo: {
     canPlay: true,
     canInviteWaiters: false,
-    canManageSingleRestaurant: false,
+    canManageRestaurant: false,
     canManageGroup: false,
     canManageEnterprise: false,
     canUseIntuit: false,
@@ -943,7 +943,7 @@ const ROLE_CAPABILITIES = {
   manager: {
     canPlay: true,
     canInviteWaiters: true,
-    canManageSingleRestaurant: true,
+    canManageRestaurant: true,
     canManageGroup: false,
     canManageEnterprise: false,
     canUseIntuit: false,
@@ -952,7 +952,7 @@ const ROLE_CAPABILITIES = {
   enterprise_admin: {
     canPlay: true,
     canInviteWaiters: true,
-    canManageSingleRestaurant: true,
+    canManageRestaurant: true,
     canManageGroup: true,
     canManageEnterprise: true,
     canUseIntuit: true,

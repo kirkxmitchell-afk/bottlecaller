@@ -1843,7 +1843,7 @@ function isDrillMode() {
         waiter: {
           canPlay: true,
           canInviteWaiters: false,
-          canManageSingleRestaurant: false,
+          canManageRestaurant: false,
           canManageGroup: false,
           canManageEnterprise: false,
           canUseIntuit: false,
@@ -1851,7 +1851,7 @@ function isDrillMode() {
         single_manager: {
           canPlay: true,
           canInviteWaiters: true,
-          canManageSingleRestaurant: true,
+          canManageRestaurant: true,
           canManageGroup: false,
           canManageEnterprise: false,
           canUseIntuit: false,
@@ -1859,7 +1859,7 @@ function isDrillMode() {
         group_manager: {
           canPlay: true,
           canInviteWaiters: true,
-          canManageSingleRestaurant: true,
+          canManageRestaurant: true,
           canManageGroup: true,
           canManageEnterprise: false,
           canUseIntuit: false,
@@ -1867,7 +1867,7 @@ function isDrillMode() {
         enterpriser: {
           canPlay: true,
           canInviteWaiters: true,
-          canManageSingleRestaurant: true,
+          canManageRestaurant: true,
           canManageGroup: true,
           canManageEnterprise: true,
           canUseIntuit: true,
@@ -1876,7 +1876,7 @@ function isDrillMode() {
         manager: {
           canPlay: true,
           canInviteWaiters: true,
-          canManageSingleRestaurant: true,
+          canManageRestaurant: true,
           canManageGroup: false,
           canManageEnterprise: false,
           canUseIntuit: false,
@@ -1884,7 +1884,7 @@ function isDrillMode() {
         enterprise_admin: {
           canPlay: true,
           canInviteWaiters: true,
-          canManageSingleRestaurant: true,
+          canManageRestaurant: true,
           canManageGroup: true,
           canManageEnterprise: true,
           canUseIntuit: true,
@@ -1892,12 +1892,15 @@ function isDrillMode() {
         demo: {
           canPlay: true,
           canInviteWaiters: false,
-          canManageSingleRestaurant: false,
+          canManageRestaurant: false,
           canManageGroup: false,
           canManageEnterprise: false,
           canUseIntuit: false,
         },
       };
+      function getRoleCapabilities(role) {
+        return ROLE_CAPABILITIES[role] || ROLE_CAPABILITIES.waiter;
+      }
       function normalizeMembershipContext(ctx = {}) {
         const membershipRole =
           ctx.membershipRole ||
@@ -1921,18 +1924,17 @@ function isDrillMode() {
         const nctx = normalizeMembershipContext(rawProfile);
         const membershipRole = nctx.membershipRole;
         const gameplayRole = nctx.gameplayRole;
-        const caps = ROLE_CAPABILITIES[gameplayRole] || ROLE_CAPABILITIES.waiter;
+        const caps = getRoleCapabilities(gameplayRole);
 
         const isWaiter = gameplayRole === "waiter";
         const isSingleManager = gameplayRole === "single_manager";
         const isGroupManager = gameplayRole === "group_manager";
         const isEnterpriser = gameplayRole === "enterpriser";
-        const isManagerial = !!caps.canManageSingleRestaurant || !!caps.canManageGroup || !!caps.canManageEnterprise;
+        const isManagerial = !!caps.canManageRestaurant || !!caps.canManageGroup || !!caps.canManageEnterprise;
 
         return {
           rawRole: membershipRole || "",
           membershipRole: membershipRole || "",
-          membershipType: membershipRole || "unknown",
           gameplayRole: gameplayRole || "",
           isDemo: gameplayRole === "demo",
           isWaiter,
@@ -1948,7 +1950,8 @@ function isDrillMode() {
       function applyGameplayIdentity(rawProfile = {}) {
         const identity = resolveGameplayIdentity(rawProfile);
         window.__BC_IDENTITY__ = identity;
-        window.__BC_ROLE__ = identity;
+        window.__BC_ROLE__ = identity.gameplayRole || "waiter";
+        window.__BC_CAPS__ = identity.capabilities || getRoleCapabilities(window.__BC_ROLE__);
         isManager = !!identity.isManager;
         isWaiter = !!identity.isWaiter;
         window.isManager = isManager;
@@ -2896,12 +2899,16 @@ function ensureProgLoaded() {
             role: next?.role || ""
           });
           console.log("[CTX ROLE NORMALIZED]", {
-            rawRole: identity.rawRole,
-            membershipType: identity.membershipType,
+            rawRole: next?.role || "",
+            membershipRole: identity.membershipRole,
             gameplayRole: identity.gameplayRole,
+            scopeType: window.__BC_CTX__?.scope_type || window.__BC_CTX__?.scopeType || null,
+            scopeId: window.__BC_CTX__?.scopeId || null,
+            restaurantId: window.__BC_CTX__?.restaurantId || null,
             isDemo: identity.isDemo,
             isWaiter: identity.isWaiter,
             isManager: identity.isManager,
+            isSingleManager: identity.isSingleManager,
             isGroupManager: identity.isGroupManager,
             isEnterpriser: identity.isEnterpriser
           });
@@ -4611,12 +4618,16 @@ function ensureProgLoaded() {
           role
         });
         console.log("[CTX ROLE NORMALIZED]", {
-          rawRole: identity.rawRole,
-          membershipType: identity.membershipType,
+          rawRole: msg?.role || "",
+          membershipRole: identity.membershipRole,
           gameplayRole: identity.gameplayRole,
+          scopeType: nctx.scopeType,
+          scopeId: nctx.scopeId,
+          restaurantId: nctx.restaurantId,
           isDemo: identity.isDemo,
           isWaiter: identity.isWaiter,
           isManager: identity.isManager,
+          isSingleManager: identity.isSingleManager,
           isGroupManager: identity.isGroupManager,
           isEnterpriser: identity.isEnterpriser
         });
@@ -4628,7 +4639,7 @@ function ensureProgLoaded() {
         console.log("[BC] bc_ctx applied ✅", {
           ...window.__BC_CTX__,
           gameplayRole: identity.gameplayRole,
-          membershipType: identity.membershipType
+          membershipRole: identity.membershipRole
         });
         console.log("[CTX DEBUG]", {
           BC_CTX: window.BC_CTX || null,
@@ -13146,8 +13157,8 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             ` sessionType=${sessionType || "null"}`
           );
           console.log("[PLAY ROLE]", {
-            rawRole: identity.rawRole,
-            membershipType: identity.membershipType,
+            rawRole: identity.membershipRole,
+            membershipRole: identity.membershipRole,
             gameplayRole: identity.gameplayRole,
             isManager: identity.isManager,
             isWaiter: identity.isWaiter,
