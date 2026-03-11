@@ -885,16 +885,50 @@ const appState = {
   }, 200);
 })();
 
-function isManagerRole(role) {
-  return ["manager", "group_manager", "enterprise_admin"]
-    .includes(String(role || "").toLowerCase());
+function normalizeMembershipRole(input) {
+  const raw = String(
+    typeof input === "string"
+      ? input
+      : (input?.membership_role ?? input?.membershipRole ?? input?.role ?? "")
+  ).toLowerCase().trim();
+
+  switch (raw) {
+    case "demo":
+      return "demo";
+    case "waiter":
+      return "waiter";
+    case "single_manager":
+      return "single_manager";
+    case "group_manager":
+      return "group_manager";
+    case "enterpriser":
+    case "enterprise_admin":
+      return "enterpriser";
+    case "manager":
+      return "single_manager";
+    default:
+      return "";
+  }
+}
+
+function roleAliasesForMatching(role) {
+  const r = normalizeMembershipRole(role);
+  if (r === "single_manager") return ["single_manager", "manager"];
+  if (r === "enterpriser") return ["enterpriser", "enterprise_admin"];
+  if (r) return [r];
+  return [];
+}
+
+function isManagerRole(roleLike) {
+  const role = normalizeMembershipRole(roleLike);
+  return role === "single_manager" || role === "group_manager" || role === "enterpriser";
 }
 function isUuid(s) {
   return typeof s === "string" &&
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
 }
 function hasRestaurantBoundAccess() {
-  const role = String(appState?.profile?.role || "").toLowerCase();
+  const role = normalizeMembershipRole(appState?.profile || null);
   const rid =
     window.getActiveRestaurantId?.() ||
     appState.activeRestaurantId ||
@@ -1083,11 +1117,20 @@ async function initRestaurantContextAfterAuth() {
 window.__BC_BUILD_CTX__ = function buildBcCtx(requestedMode = null) {
   const S = window.appState;
   const userId = S?.session?.user?.id ?? null;
-  const role = S?.profile?.role ?? null;
+  const membershipRole = normalizeMembershipRole(S?.profile || null) || null;
+  const role = membershipRole || S?.profile?.role || null;
   const scopeId = S?.profile?.scope_id ?? null;
   const restaurantId = window.getActiveRestaurantId?.() ?? null;
   const mode = requestedMode ?? null;
-  return { userId, restaurantId, scopeId, role, mode };
+  return {
+    userId,
+    restaurantId,
+    scopeId,
+    role,
+    membership_role: membershipRole,
+    gameplay_role: membershipRole,
+    mode
+  };
 };
 
 // ====== Wine Setup (PARENT) ======
@@ -1360,7 +1403,10 @@ function getSenderCtxOrReject(event, senderCtx, replyType, extra = {}, opts = {}
   const allowedRoles = Array.isArray(opts.allowedRoles)
     ? opts.allowedRoles.map((r) => String(r).toLowerCase())
     : null;
-  const role = String(senderCtx?.role || "").toLowerCase();
+  const role = normalizeMembershipRole({
+    membership_role: senderCtx?.membership_role ?? senderCtx?.membershipRole ?? null,
+    role: senderCtx?.role ?? null
+  });
 
   const reply = (error, more = {}) => {
     try {
@@ -1377,7 +1423,8 @@ function getSenderCtxOrReject(event, senderCtx, replyType, extra = {}, opts = {}
   if (requireRestaurant && !isUuid(restaurantId)) return reply("invalid_ctx_restaurant");
 
   if (allowedRoles && allowedRoles.length) {
-    if (!allowedRoles.includes(role)) return reply("forbidden_role");
+    const roleMatches = roleAliasesForMatching(role).some((alias) => allowedRoles.includes(alias));
+    if (!roleMatches) return reply("forbidden_role");
   }
 
   return { userId, restaurantId };
@@ -1450,6 +1497,8 @@ async function buildBcCtxSafe(requestedMode = null) {
   const userId = S?.session?.user?.id ?? null;
   const profile = S?.profile ?? null;
   if (!userId || !profile?.role) return null;
+  const membershipRole = normalizeMembershipRole(profile) || null;
+  const gameplayRole = membershipRole;
 
   const mode = String(requestedMode || "").toLowerCase();
   const isDemo = mode === "demo";
@@ -1460,7 +1509,9 @@ async function buildBcCtxSafe(requestedMode = null) {
       userId,
       restaurantId: null,
       scopeId: null,
-      role: profile?.role ?? null,
+      role: membershipRole || profile?.role || null,
+      membership_role: membershipRole,
+      gameplay_role: gameplayRole,
       mode: "demo",
       drill: null,
     };
@@ -1473,7 +1524,9 @@ async function buildBcCtxSafe(requestedMode = null) {
     userId,
     restaurantId,
     scopeId: profile?.scope_id ?? null,
-    role: profile?.role ?? null,
+    role: membershipRole || profile?.role || null,
+    membership_role: membershipRole,
+    gameplay_role: gameplayRole,
     mode: requestedMode ?? null,
     drill: window.__BC_DRILL_CONFIG__ || window.BC_DRILL_CONFIG || null,
   };
@@ -1499,6 +1552,8 @@ if (!window.__BC_PARENT_BRIDGE__) {
         userId: ctx.userId || null,
         restaurantId: ctx.restaurantId || null,
         role: ctx.role || null,
+        membership_role: ctx.membership_role || null,
+        gameplay_role: ctx.gameplay_role || null,
         at: Date.now(),
       });
     } catch {}

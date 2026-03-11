@@ -1879,10 +1879,12 @@ function isDrillMode() {
           gameplayRole: gameplayRole || "",
           isDemo: membershipRole === "demo",
           isWaiter: membershipRole === "waiter",
+          isSingleManager: membershipRole === "single_manager",
           isManager: isManagerial,
           isGroupManager: membershipRole === "group_manager",
           isEnterpriser: membershipRole === "enterpriser",
-          isManagerial
+          isManagerial,
+          hasManagerControls: isManagerial
         };
       }
       function applyGameplayIdentity(rawProfile = {}) {
@@ -2793,6 +2795,7 @@ function ensureProgLoaded() {
             userId: msg.userId ?? null,
             restaurantId: msg.restaurantId ?? null,
             scopeId: msg.scopeId ?? null,
+            membership_role: msg.membership_role ?? msg.membershipRole ?? null,
             role: msg.role ?? null,
             mode: msg.mode ?? null,
           };
@@ -2814,18 +2817,23 @@ function ensureProgLoaded() {
             String(prev.userId || "") === String(next.userId || "") &&
             String(prev.restaurantId || "") === String(next.restaurantId || "") &&
             String(prev.scopeId || "") === String(next.scopeId || "") &&
+            String(prev.membership_role || "") === String(next.membership_role || "") &&
             String(prev.role || "") === String(next.role || "") &&
             String(prev.mode || "").toLowerCase() === String(next.mode || "").toLowerCase();
           if (same) return;
 
           const identity = resolveGameplayIdentity({
+            membership_role: next?.membership_role || "",
             role: next?.role || ""
           });
           window.__BC_CTX__ = {
             ...next,
             identity
           };
-          applyGameplayIdentity({ role: next?.role || "" });
+          applyGameplayIdentity({
+            membership_role: next?.membership_role || "",
+            role: next?.role || ""
+          });
           console.log("[CTX ROLE NORMALIZED]", {
             rawRole: identity.rawRole,
             membershipType: identity.membershipType,
@@ -2982,7 +2990,10 @@ function ensureProgLoaded() {
             scopeId = window.__BC_CTX__?.scopeId ?? scopeId ?? null;
             role = window.__BC_CTX__?.role ?? role ?? null;
             if (!window.isDemo) mode = window.__BC_CTX__?.mode ?? mode ?? null;
-            applyGameplayIdentity({ role });
+            applyGameplayIdentity({
+              membership_role: window.__BC_CTX__?.membership_role || window.__BC_CTX__?.membershipRole || "",
+              role
+            });
             (async () => {
               try {
                 if (typeof bootstrapWinesFromCtx === "function") {
@@ -3039,7 +3050,10 @@ function ensureProgLoaded() {
 
         role = ctx?.role ?? role ?? null;
         restaurantId = ctx?.restaurantId ?? restaurantId ?? null;
-        const identity = applyGameplayIdentity({ role });
+        const identity = applyGameplayIdentity({
+          membership_role: ctx?.membership_role || ctx?.membershipRole || "",
+          role
+        });
         console.log("[BC] ctx (after READY):", {
           role,
           restaurantId,
@@ -4505,10 +4519,16 @@ function ensureProgLoaded() {
         userId = msg.userId ?? userId ?? null;
         restaurantId = msg.restaurantId ?? restaurantId ?? null;
         scopeId = msg.scopeId ?? scopeId ?? null;
+        const membershipRole =
+          msg.membership_role ??
+          msg.membershipRole ??
+          window.__BC_CTX__?.membership_role ??
+          null;
         role = msg.role ?? role ?? null;
         mode = msg.mode ?? mode ?? null;
 
         const identity = resolveGameplayIdentity({
+          membership_role: membershipRole || "",
           role: role || ""
         });
 
@@ -4517,11 +4537,15 @@ function ensureProgLoaded() {
           userId,
           restaurantId,
           scopeId,
+          membership_role: membershipRole,
           role,
           mode,
           identity
         };
-        applyGameplayIdentity({ role });
+        applyGameplayIdentity({
+          membership_role: membershipRole || "",
+          role
+        });
         console.log("[CTX ROLE NORMALIZED]", {
           rawRole: identity.rawRole,
           membershipType: identity.membershipType,
