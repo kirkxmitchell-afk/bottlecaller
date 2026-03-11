@@ -1908,49 +1908,47 @@ function isDrillMode() {
         return resolveRoleState(role).capabilities;
       }
       function exportRuntimeIdentity(ctx = {}) {
-        const role =
+        const roleValue =
           ctx.membershipRole ||
           ctx.membership_role ||
           ctx.role ||
-          window.__BC_CTX__?.membershipRole ||
-          window.__BC_CTX__?.membership_role ||
-          window.__BC_CTX__?.role ||
           "waiter";
 
-        const gameplayRole =
+        const gameplayRoleValue =
           ctx.gameplayRole ||
           ctx.gameplay_role ||
-          window.__BC_CTX__?.gameplayRole ||
-          window.__BC_CTX__?.gameplay_role ||
-          role;
+          roleValue;
 
-        const restaurantId =
+        const restaurantIdValue =
           ctx.restaurantId ??
           ctx.restaurant_id ??
-          window.__BC_CTX__?.restaurantId ??
-          window.__BC_CTX__?.restaurant_id ??
           null;
 
-        const scopeType =
-          ctx.scopeType ||
-          ctx.scope_type ||
-          window.__BC_CTX__?.scopeType ||
-          window.__BC_CTX__?.scope_type ||
+        const scopeTypeValue =
+          ctx.scopeType ??
+          ctx.scope_type ??
           null;
 
-        const scopeId =
-          ctx.scopeId ||
-          ctx.scope_id ||
-          window.__BC_CTX__?.scopeId ||
-          window.__BC_CTX__?.scope_id ||
+        const scopeIdValue =
+          ctx.scopeId ??
+          ctx.scope_id ??
           null;
 
-        window.__BC_ROLE__ = role;
-        window.__BC_GAMEPLAY_ROLE__ = gameplayRole;
-        window.__BC_ACTIVE_RESTAURANT_ID__ = restaurantId;
-        window.__BC_SCOPE_TYPE__ = scopeType;
-        window.__BC_SCOPE_ID__ = scopeId;
-        window.__BC_CAPS__ = getRoleCapabilities(gameplayRole);
+        window.__BC_ROLE__ = roleValue;
+        window.__BC_GAMEPLAY_ROLE__ = gameplayRoleValue;
+        window.__BC_ACTIVE_RESTAURANT_ID__ = restaurantIdValue;
+        window.__BC_SCOPE_TYPE__ = scopeTypeValue;
+        window.__BC_SCOPE_ID__ = scopeIdValue;
+        window.__BC_CAPS__ = getRoleCapabilities(gameplayRoleValue);
+
+        window.__BC_RUNTIME_DUMP__ = () => ({
+          role: window.__BC_ROLE__,
+          gameplayRole: window.__BC_GAMEPLAY_ROLE__,
+          restaurantId: window.__BC_ACTIVE_RESTAURANT_ID__,
+          scopeType: window.__BC_SCOPE_TYPE__,
+          scopeId: window.__BC_SCOPE_ID__,
+          ctx: window.__BC_CTX__ || null
+        });
 
         console.log("[BC][EXPORT_RUNTIME_IDENTITY]", {
           role: window.__BC_ROLE__,
@@ -4661,12 +4659,12 @@ function ensureProgLoaded() {
         restaurantId = nctx.restaurantId ?? restaurantId ?? null;
         scopeId = nctx.scopeId ?? scopeId ?? null;
         const membershipRole = nctx.membershipRole || null;
-        role = nctx.role ?? role ?? null;
+        role = membershipRole ?? nctx.role ?? role ?? null;
         mode = nctx.mode ?? mode ?? null;
 
         const identity = resolveGameplayIdentity({
           membership_role: membershipRole || "",
-          role: role || ""
+          role: membershipRole || role || ""
         });
 
         window.__BC_CTX__ = {
@@ -4683,15 +4681,15 @@ function ensureProgLoaded() {
           access_tier: nctx.accessTier || null,
           membershipRole: membershipRole,
           membership_role: membershipRole,
-          role,
-          gameplayRole: nctx.gameplayRole || role,
-          gameplay_role: nctx.gameplayRole || role,
+          role: membershipRole || role,
+          gameplayRole: membershipRole || nctx.gameplayRole || role,
+          gameplay_role: membershipRole || nctx.gameplayRole || role,
           mode,
           identity
         };
         applyGameplayIdentity({
           membership_role: membershipRole || "",
-          role
+          role: membershipRole || role || ""
         });
         exportRuntimeIdentity(window.__BC_CTX__);
         console.log("[CTX ROLE NORMALIZED]", {
