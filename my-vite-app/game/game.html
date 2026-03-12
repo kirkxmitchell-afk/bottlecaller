@@ -2941,82 +2941,7 @@ function ensureProgLoaded() {
         }
 
         function setCtx(msg) {
-          if (window.isDemo) return;
-
-          // epoch guard
-          const myEpoch = Number(window.__BC_EPOCH__ || 0);
-          const msgEpoch = Number(msg?.epoch || 0);
-          if (myEpoch && msgEpoch && msgEpoch !== myEpoch) {
-            console.warn("[BC] setCtx ignored (epoch mismatch)", { myEpoch, msgEpoch });
-            return;
-          }
-
-          const nextNorm = normalizeMembershipContext(msg || {});
-          const next = {
-            userId: nextNorm.userId,
-            restaurantId: nextNorm.restaurantId,
-            scopeId: nextNorm.scopeId,
-            membership_role: nextNorm.membershipRole,
-            role: nextNorm.role,
-            gameplay_role: nextNorm.gameplayRole,
-            mode: msg?.mode ?? nextNorm.mode,
-          };
-
-          const isDemoCtx = String(next.mode || "").toLowerCase() === "demo";
-          const valid =
-            isDemoCtx
-              ? ((next.userId === "demo" || isUuid(next.userId)) && !!next.gameplay_role)
-              : (isUuid(next.userId) && isUuid(next.restaurantId) && !!next.gameplay_role);
-          if (!valid) {
-            console.warn("[BC] setCtx ignored (invalid/partial ctx)", next);
-            return;
-          }
-
-          // full equality check (allows restaurant switching correctly)
-          const prev = window.__BC_CTX__ || null;
-          const same =
-            prev &&
-            String(prev.userId || "") === String(next.userId || "") &&
-            String(prev.restaurantId || "") === String(next.restaurantId || "") &&
-            String(prev.scopeId || "") === String(next.scopeId || "") &&
-            String(prev.membership_role || "") === String(next.membership_role || "") &&
-            String(prev.role || "") === String(next.role || "") &&
-            String(prev.gameplay_role || "") === String(next.gameplay_role || "") &&
-            String(prev.mode || "").toLowerCase() === String(next.mode || "").toLowerCase();
-          if (same) return;
-
-          const identity = resolveGameplayIdentity({
-            membership_role: next?.membership_role || "",
-            role: next?.role || ""
-          });
-          window.__BC_CTX__ = {
-            ...next,
-            identity
-          };
-          applyGameplayIdentity({
-            membership_role: next?.membership_role || "",
-            role: next?.role || ""
-          });
-          exportRuntimeIdentity(window.__BC_CTX__);
-          console.log("[CTX ROLE NORMALIZED]", {
-            rawRole: next?.role || "",
-            membershipRole: identity.membershipRole,
-            gameplayRole: identity.gameplayRole,
-            scopeType: window.__BC_CTX__?.scope_type || window.__BC_CTX__?.scopeType || null,
-            scopeId: window.__BC_CTX__?.scopeId || null,
-            restaurantId: window.__BC_CTX__?.restaurantId || null,
-            isDemo: identity.isDemo,
-            isWaiter: identity.isWaiter,
-            isManager: identity.isManager,
-            isSingleManager: identity.isSingleManager,
-            isGroupManager: identity.isGroupManager,
-            isEnterpriser: identity.isEnterpriser
-          });
-
-          if (window.__BC_CTX_READY_RESOLVE__) {
-            window.__BC_CTX_READY_RESOLVE__(window.__BC_CTX__);
-            window.__BC_CTX_READY_RESOLVE__ = null;
-          }
+          applyBcCtx(msg);
         }
         window.__BC_SET_CTX__ = setCtx;
 
@@ -3144,41 +3069,6 @@ function ensureProgLoaded() {
             const isDemoNow = !!(window.isDemo || window.bcMode === "demo");
             if (!IS_IFRAME && isDemoNow && msg.type === "bc_ctx") {
               console.warn("[DEMO] ignoring bc_ctx (standalone)", msg);
-              return;
-            }
-            if (msg.type !== "bc_ctx") return;
-            window.__BC_CTX_RETRY_N__ = 0;
-            setCtx(msg);
-            console.log("[BC] bc_ctx received ✅", window.__BC_CTX__);
-            if (typeof renderProgressMeterUnderBackButton === "function") {
-              renderProgressMeterUnderBackButton();
-            }
-            userId = window.__BC_CTX__?.userId ?? userId ?? null;
-            restaurantId = window.__BC_CTX__?.restaurantId ?? restaurantId ?? null;
-            scopeId = window.__BC_CTX__?.scopeId ?? scopeId ?? null;
-            role = window.__BC_CTX__?.role ?? role ?? null;
-            if (!window.isDemo) mode = window.__BC_CTX__?.mode ?? mode ?? null;
-            applyGameplayIdentity({
-              membership_role: window.__BC_CTX__?.membership_role || window.__BC_CTX__?.membershipRole || "",
-              role
-            });
-            (async () => {
-              try {
-                if (typeof bootstrapWinesFromCtx === "function") {
-                  await bootstrapWinesFromCtx();
-                } else if (typeof hydrateSetupFromDbIfPossible === "function") {
-                  await hydrateSetupFromDbIfPossible(window.APP_MODE);
-                }
-              } catch (e) {
-                console.warn("[BC] wine hydrate after ctx failed", e);
-              }
-            })();
-            try {
-              const winesReady = (typeof window.wines !== "undefined");
-              if (winesReady && typeof updateCounts === "function") updateCounts();
-              if (winesReady && typeof renderWineTables === "function") renderWineTables();
-            } catch (e) {
-              console.warn("[BC] skip counts/tables (boot race)", e);
             }
           });
 
@@ -4819,6 +4709,10 @@ function ensureProgLoaded() {
           console.warn("[BC] runs rehydrate after ctx failed", e);
         }
         applyRoleTemplate();
+        if (window.__BC_CTX_READY_RESOLVE__) {
+          window.__BC_CTX_READY_RESOLVE__(window.__BC_CTX__);
+          window.__BC_CTX_READY_RESOLVE__ = null;
+        }
         window.__BC_RESOLVE_CTX_READY__?.();
         // Always set key after ctx (safe)
         if (typeof ensureProgKeyAfterCtx === "function") ensureProgKeyAfterCtx();
