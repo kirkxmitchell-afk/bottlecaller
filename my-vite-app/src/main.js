@@ -10,6 +10,7 @@ import { makeWinesHandler } from "./lib/bcHandlers/wines.js";
 import { makeRunsCountHandler } from "./lib/bcHandlers/runsCount.js";
 import { makeMessagesUnreadHandler } from "./lib/bcHandlers/messagesUnread.js";
 import { makeMessageMarkReadHandler } from "./lib/bcHandlers/messagesMarkRead.js";
+import { makeLeaderboardHandler } from "./lib/bcHandlers/leaderboard.js";
 import { handleEventLog } from "./lib/handlers/handleEventLog.js";
 import { decideAllowedTier } from "./parent/progressionRouter";
 import { createProgressionStore } from "./progressionStore.js";
@@ -1507,8 +1508,8 @@ function getSenderCtxOrReject(event, senderCtx, replyType, extra = {}, opts = {}
     gameplayRole: senderCtx?.gameplayRole ?? senderCtx?.gameplay_role ?? role,
     gameplay_role: senderCtx?.gameplay_role ?? senderCtx?.gameplayRole ?? role,
     scopeId: senderCtx?.scopeId ?? null,
-    scopeType: senderCtx?.scopeType ?? null,
-    accessTier: senderCtx?.accessTier ?? null,
+    scopeType: senderCtx?.scopeType ?? senderCtx?.scope_type ?? null,
+    accessTier: senderCtx?.accessTier ?? senderCtx?.access_tier ?? null,
     mode: senderCtx?.mode ?? null,
   };
 }
@@ -1557,8 +1558,8 @@ const DB_TYPES = new Set([
   "event_log",
   "progression_snapshot_request",
   "progress_report_submit",
-  "messages_unread_request",
-  "message_mark_read",
+  BC_TYPES.MESSAGES_UNREAD_REQUEST,
+  BC_TYPES.MESSAGE_MARK_READ,
   "leaderboard_request",
 ]);
 
@@ -1813,7 +1814,8 @@ if (!window.__BC_PARENT_BRIDGE__) {
       BC_TYPES.WINES_REQUEST,
       BC_TYPES.RUNS_COUNT_REQUEST,
       BC_TYPES.MESSAGES_UNREAD_REQUEST,
-      "message_mark_read",
+      BC_TYPES.MESSAGE_MARK_READ,
+      "leaderboard_request",
       "logout",
     ]);
     window.__BC_BRIDGE_HANDLED_TYPES__ = handledTypes;
@@ -1835,7 +1837,15 @@ if (!window.__BC_PARENT_BRIDGE__) {
           getSenderCtxOrReject,
           getLiveAuthOrNull,
         }),
-        message_mark_read: makeMessageMarkReadHandler({
+        [BC_TYPES.MESSAGE_MARK_READ]: makeMessageMarkReadHandler({
+          supabase,
+          getSourceCtx,
+          isDemoMsg,
+          rejectIfEpochMismatch,
+          getSenderCtxOrReject,
+          getLiveAuthOrNull,
+        }),
+        leaderboard_request: makeLeaderboardHandler({
           supabase,
           getSourceCtx,
           isDemoMsg,
@@ -2368,58 +2378,6 @@ if (!window.__BC_PARENT_BRIDGE__) {
               ok: false,
               error: e?.message || String(e),
             },
-            event.origin
-          );
-          return;
-        }
-      }
-
-      if (msg.type === "leaderboard_request") {
-        const replyType = "leaderboard_response";
-        const reqId = msg?.reqId || null;
-
-        try {
-          if (isDemoMsg(msg, senderCtx)) {
-            event.source?.postMessage(
-              { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, rows: [], demo: true },
-              event.origin
-            );
-            return;
-          }
-
-          if (rejectIfEpochMismatch(event, msg, replyType, { reqId, rows: [] })) return;
-
-          const ctx = getSenderCtxOrReject(
-            event,
-            senderCtx,
-            replyType,
-            { reqId, rows: [] },
-            { requireRestaurant: true, allowedRoles: ["waiter", "manager", "group_manager", "enterprise_admin", "admin"] }
-          );
-          if (!ctx) return;
-
-          const authed = liveAuth?.userId || null;
-          if (!authed) throw new Error("no_session");
-          if (String(authed) !== String(ctx.userId)) throw new Error("forbidden_user");
-
-          const { data, error } = await supabase
-            .from("bc_waiter_leaderboard_v1")
-            .select("*")
-            .eq("restaurant_id", ctx.restaurantId)
-            .order("total_points", { ascending: false })
-            .order("last_activity_at", { ascending: false })
-            .limit(50);
-
-          if (error) throw error;
-
-          event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, rows: data || [] },
-            event.origin
-          );
-          return;
-        } catch (e) {
-          event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: false, rows: [], error: e?.message || String(e) },
             event.origin
           );
           return;

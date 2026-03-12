@@ -16,7 +16,7 @@ export function makeMessageMarkReadHandler({
   if (!getLiveAuthOrNull) throw new Error("makeMessageMarkReadHandler: getLiveAuthOrNull required");
 
   return async ({ msg, event, reply }) => {
-    const replyType = "message_mark_read_result";
+    const replyType = BC_TYPES.MESSAGE_MARK_READ_RESULT;
     const reqId = msg?.reqId || null;
     const id = msg?.id || null;
     const senderCtx = getSourceCtx(event.source);

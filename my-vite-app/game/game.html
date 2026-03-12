@@ -1923,12 +1923,21 @@ function isDrillMode() {
       let role = null;
       let isManager = false;
       let isWaiter = false;
-      function normalizeRole(rawRole) {
+      function normalizeRole(rawRole, fallback = null) {
         const role = String(rawRole || "").trim().toLowerCase();
-        return ROLE_CAPABILITIES[role] ? role : "waiter";
+        if (ROLE_CAPABILITIES[role]) return role;
+        return fallback;
       }
       function resolveRoleState(rawRole) {
         const role = normalizeRole(rawRole);
+        if (!role) {
+          return {
+            rawRole: null,
+            membershipRole: null,
+            gameplayRole: null,
+            capabilities: ROLE_CAPABILITIES.demo,
+          };
+        }
         return {
           rawRole: role,
           membershipRole: ROLE_CAPABILITIES[role].membershipRole,
@@ -1996,8 +2005,12 @@ function isDrillMode() {
           ctx.membershipRole ||
           ctx.membership_role ||
           ctx.role ||
-          "waiter";
-        const membershipRole = normalizeRole(rawRole);
+          null;
+        const membershipRole =
+          normalizeRole(
+            rawRole,
+            String(ctx.mode || "").toLowerCase() === "demo" ? "demo" : null
+          );
 
         return {
           userId: ctx.userId || ctx.user_id || null,
