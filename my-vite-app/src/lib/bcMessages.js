@@ -16,6 +16,7 @@ export const BC_TYPES = Object.freeze({
 
   WINES_REQUEST: "wines_request",
   RUNS_COUNT_REQUEST: "runs_count_request",
+  RITUAL_STATUS_REQUEST: "ritual_status_request",
   MESSAGES_UNREAD_REQUEST: "messages_unread_request",
   MESSAGE_MARK_READ: "message_mark_read",
   LEADERBOARD_REQUEST: "leaderboard_request",
@@ -28,6 +29,7 @@ export const BC_TYPES = Object.freeze({
   AUTH_STATE: "auth_state",
   WINES_REPORT: "wines_report",
   RUNS_COUNT_RESPONSE: "runs_count_response",
+  RITUAL_STATUS_RESPONSE: "ritual_status_response",
   MESSAGES_UNREAD_RESPONSE: "messages_unread_response",
   MESSAGE_MARK_READ_RESULT: "message_mark_read_result",
   LEADERBOARD_RESPONSE: "leaderboard_response",

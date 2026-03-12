@@ -8,6 +8,7 @@ import { makeLogoutHandler } from "./lib/bcHandlers/logout.js";
 import { makeCtxHandler } from "./lib/bcHandlers/ctx.js";
 import { makeWinesHandler } from "./lib/bcHandlers/wines.js";
 import { makeRunsCountHandler } from "./lib/bcHandlers/runsCount.js";
+import { makeRitualStatusHandler } from "./lib/bcHandlers/ritualStatus.js";
 import { makeMessagesUnreadHandler } from "./lib/bcHandlers/messagesUnread.js";
 import { makeMessageMarkReadHandler } from "./lib/bcHandlers/messagesMarkRead.js";
 import { makeLeaderboardHandler } from "./lib/bcHandlers/leaderboard.js";
@@ -1555,7 +1556,7 @@ const DB_TYPES = new Set([
   "wines_request",
   "wines_mutate",
   "runs_count_request",
-  "ritual_status_request",
+  BC_TYPES.RITUAL_STATUS_REQUEST,
   "event_log",
   BC_TYPES.PROGRESSION_SNAPSHOT_REQUEST,
   "progress_report_submit",
@@ -1814,6 +1815,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
       BC_TYPES.CTX_REQUEST,
       BC_TYPES.WINES_REQUEST,
       BC_TYPES.RUNS_COUNT_REQUEST,
+      BC_TYPES.RITUAL_STATUS_REQUEST,
       BC_TYPES.MESSAGES_UNREAD_REQUEST,
       BC_TYPES.MESSAGE_MARK_READ,
       BC_TYPES.LEADERBOARD_REQUEST,
@@ -1831,6 +1833,14 @@ if (!window.__BC_PARENT_BRIDGE__) {
         [BC_TYPES.CTX_REQUEST]: makeCtxHandler({ getBcCtx }),
         [BC_TYPES.WINES_REQUEST]: makeWinesHandler({ fetchWines }),
         [BC_TYPES.RUNS_COUNT_REQUEST]: makeRunsCountHandler({ fetchRunsCount }),
+        [BC_TYPES.RITUAL_STATUS_REQUEST]: makeRitualStatusHandler({
+          supabase,
+          getSourceCtx,
+          isDemoMsg,
+          rejectIfEpochMismatch,
+          getSenderCtxOrReject,
+          getLiveAuthOrNull,
+        }),
         [BC_TYPES.MESSAGES_UNREAD_REQUEST]: makeMessagesUnreadHandler({
           supabase,
           getSourceCtx,
@@ -1910,11 +1920,6 @@ if (!window.__BC_PARENT_BRIDGE__) {
         return;
       }
 
-      if (msg.type === "logout" || msg.type === "bc_logout_request") {
-        await doLogout("bc_msg_logout");
-        return;
-      }
-
       // Source gate: only accept messages from mounted premium iframe window.
       const frame =
         document.getElementById("bcPremiumFrame") ||
@@ -1928,144 +1933,6 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
       if (msg.type === "debug_skill_tree") {
         console.log("[PARENT][DEBUG_SKILL_TREE]", msg.tree);
-        return;
-      }
-
-      // ✅ 1) ctx request MUST be handled before any other typed routing
-      if (msg.type === "bc_ctx_request") {
-        if (event.origin !== window.location.origin) {
-          console.warn("[PARENT] denied bc_ctx_request: origin mismatch", event.origin);
-          return;
-        }
-        const prem = document.getElementById("premiumRootFrame");
-        const isFromPremiumFrame = !!(prem && event.source === prem.contentWindow);
-        if (!isFromPremiumFrame) {
-          console.warn("[PARENT] denied bc_ctx_request: not from current premium frame");
-          return;
-        }
-
-        // Epoch gate: only respond to iframes created after last mount.
-        const epoch = Number(window.__BC_IFRAME_EPOCH__ || 0);
-        const msgEpoch = Number(msg?.epoch || 0);
-        if (msgEpoch !== epoch) {
-          console.warn("[PARENT] denied bc_ctx_request: epoch mismatch", { msgEpoch, epoch });
-          return;
-        }
-
-        const requestedMode =
-          String(msg?.mode || msg?.requestedMode || "").toLowerCase();
-        const isFromIframe = !!event.source && event.source !== window;
-        if (!isFromIframe) return;
-
-        if (requestedMode === "demo") {
-          window.__BC_LAST_CTX_MODE__ = "demo";
-          const demoCtx = await buildBcCtxSafe("demo");
-          if (!demoCtx?.userId || !demoCtx?.role) return;
-          try {
-            event.source?.postMessage(
-              {
-                source: "BC_MSG",
-                v: 1,
-                type: "bc_ctx",
-                ...demoCtx,
-                drill: null,
-              },
-              event.origin
-            );
-            setSourceCtx(event.source, demoCtx);
-          } catch (e) {
-            console.warn("[PARENT] failed to send bc_ctx demo", e);
-          }
-          return;
-        }
-
-        try {
-          if (window.__BC_ACTIVE_REST_READY__) {
-            await Promise.race([
-              window.__BC_ACTIVE_REST_READY__,
-              new Promise((r) => setTimeout(r, 600))
-            ]);
-          }
-        } catch {}
-
-        const needRestaurant = requestedMode !== "demo";
-        const effectiveRid =
-          window.getActiveRestaurantId?.() ??
-          window.appState?.profile?.restaurant_id ??
-          null;
-        const live = await getLiveSessionOrNull();
-        if (live) window.appState.session = live;
-        const ready =
-          !!live &&
-          !!window.appState?.profile?.role &&
-          (needRestaurant ? !!effectiveRid : true);
-
-        if (!ready) {
-          console.warn("[PARENT] ctx not ready — ask iframe to retry");
-          try {
-            event.source?.postMessage(
-              {
-                source: "BC_MSG",
-                v: 1,
-                type: "ctx_not_ready",
-                ok: false,
-                epoch: Number(window.__BC_IFRAME_EPOCH__ || 0),
-                retryAfterMs: 250,
-                why: "profile_or_restaurant_not_ready",
-              },
-              event.origin
-            );
-          } catch {}
-          return;
-        }
-        const bcCtx = await buildBcCtxSafe(msg?.mode ?? null);
-        if (!bcCtx) {
-          console.warn("[PARENT] buildBcCtxSafe returned null — ask iframe to retry");
-          try {
-            event.source?.postMessage(
-              {
-                source: "BC_MSG",
-                v: 1,
-                type: "ctx_not_ready",
-                ok: false,
-                epoch: Number(window.__BC_IFRAME_EPOCH__ || 0),
-                retryAfterMs: 250,
-                why: "ctx_build_null",
-              },
-              event.origin
-            );
-          } catch {}
-          return;
-        }
-        window.__BC_LAST_CTX_MODE__ = requestedMode || "premium";
-        bcCtx.drill = window.__BC_DRILL_CONFIG__ || window.BC_DRILL_CONFIG || null;
-
-        console.log("[PARENT] bc_ctx_request -> reply", {
-          requested: msg?.mode ?? null,
-          bcCtx,
-        });
-
-        if (!bcCtx?.userId || !bcCtx?.role || (!bcCtx?.restaurantId && requestedMode !== "demo")) {
-          console.warn("[PARENT] refusing to send null/partial bc_ctx", bcCtx);
-          return;
-        }
-
-        console.log("[PARENT] sending bc_ctx (request path)", {
-          hasDrill: !!bcCtx?.drill,
-          drill: bcCtx?.drill,
-          to: event.origin
-        });
-
-        try {
-          event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: "bc_ctx", ...bcCtx },
-            event.origin
-          );
-          setSourceCtx(event.source, bcCtx);
-        } catch (e) {
-          console.warn("[PARENT] failed to send bc_ctx premium", e);
-        }
-
         return;
       }
 
@@ -2134,146 +2001,6 @@ if (!window.__BC_PARENT_BRIDGE__) {
           );
           return;
         }
-      }
-
-      if (msg.type === "ritual_status_request") {
-        const replyType = "ritual_status_response";
-        const reqId = msg.reqId || null;
-        try {
-          // 0) Demo short-circuit
-          if (isDemoMsg(msg, senderCtx)) {
-            event.source?.postMessage(
-              { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, doneToday: false, demo: true },
-              event.origin
-            );
-            return;
-          }
-
-          // 1) Epoch guard (prevents ghosts / old iframes)
-          if (rejectIfEpochMismatch(event, msg, replyType, { reqId, doneToday: false })) return;
-
-          // 2) Validate sender-bound ctx (restaurant required)
-          const ctx = getSenderCtxOrReject(event, senderCtx, replyType, { reqId, doneToday: false }, {
-            requireRestaurant: true,
-            allowedRoles: ["waiter", "manager", "group_manager", "admin"],
-          });
-          if (!ctx) return;
-
-          // 3) Live auth must exist AND match ctx.userId
-          const authed = liveAuth?.userId || null;
-          if (!authed) throw new Error("no_session");
-          if (String(authed) !== String(ctx.userId)) throw new Error("forbidden_user");
-
-          // 4) Compute "today" start in ZA timezone (midnight ZA)
-          const now = new Date();
-          const zaNow = new Date(now.toLocaleString("en-US", { timeZone: "Africa/Johannesburg" }));
-          const startZA = new Date(zaNow);
-          startZA.setHours(0, 0, 0, 0);
-          const startIso = startZA.toISOString();
-
-          // 5) Query (exists check)
-          const { data, error } = await supabase
-            .from("bc_event_log")
-            .select("id")
-            .eq("event_type", "ritual_completed")
-            .eq("user_id", ctx.userId)
-            .eq("restaurant_id", ctx.restaurantId)
-            .gte("occurred_at", startIso)
-            .limit(1);
-
-          if (error) throw error;
-          const doneToday = Array.isArray(data) && data.length > 0;
-
-          // 6) Reply
-          event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, doneToday },
-            event.origin
-          );
-          return;
-        } catch (e) {
-          event.source?.postMessage(
-            {
-              source: "BC_MSG",
-              v: 1,
-              type: replyType,
-              reqId,
-              ok: false,
-              doneToday: false,
-              error: e?.message || String(e),
-            },
-            event.origin
-          );
-          return;
-        }
-      }
-
-      if (msg.type === "wines_request") {
-        const replyType = "wines_report";
-        const reqId = msg.reqId || null;
-
-        // 0) Demo short-circuit
-        if (isDemoMsg(msg, senderCtx)) {
-          event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, demo: true, wines: [] },
-            event.origin
-          );
-          return;
-        }
-
-        try {
-          // 1) Epoch guard (prevents ghosts / old iframes)
-          if (rejectIfEpochMismatch(event, msg, replyType, { reqId, wines: [] })) return;
-
-          // 2) Validate sender-bound ctx (restaurant required)
-          const ctx = getSenderCtxOrReject(
-            event,
-            senderCtx,
-            replyType,
-            { reqId, wines: [] },
-            { requireRestaurant: true, allowedRoles: ["waiter", "manager", "group_manager", "admin"] }
-          );
-          if (!ctx) return;
-
-          // 3) Live auth must exist AND match ctx.userId
-          const authed = liveAuth?.userId || null;
-          if (!authed) throw new Error("no_session");
-          if (String(authed) !== String(ctx.userId)) throw new Error("forbidden_user");
-
-          // 4) Query
-          const { data, error } = await supabase
-            .from("bc_wines")
-            .select("*")
-            .eq("restaurant_id", ctx.restaurantId)
-            .order("created_at", { ascending: true });
-          if (error) throw error;
-
-          // 5) Reply
-          event.source?.postMessage(
-            {
-              source: "BC_MSG",
-              v: 1,
-              type: replyType,
-              reqId,
-              ok: true,
-              wines: data || [],
-            },
-            event.origin
-          );
-        } catch (e) {
-          event.source?.postMessage(
-            {
-              source: "BC_MSG",
-              v: 1,
-              type: replyType,
-              reqId,
-              ok: false,
-              error: e?.message || String(e),
-              wines: [],
-            },
-            event.origin
-          );
-        }
-        return;
       }
 
       if (msg.type === "wines_mutate") {
