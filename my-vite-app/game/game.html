@@ -632,8 +632,21 @@
     }
     async function applyDrillOverrideFromMessage(message) {
       try {
+        const messageId = message?.id || null;
         const drill = message?.payload?.drill || null;
         if (!drill || typeof drill !== "object") return false;
+
+        const activeAssignedId = window.__BC_LAST_ASSIGNED_DRILL__?.id || null;
+        if (messageId && activeAssignedId && String(messageId) === String(activeAssignedId)) {
+          console.log("[GAME] drill_override skipped (already active)", { messageId });
+          return false;
+        }
+
+        const completedAssignedId = window.__BC_LAST_ASSIGNED_DRILL_COMPLETED__?.assignedMessageId || null;
+        if (messageId && completedAssignedId && String(messageId) === String(completedAssignedId)) {
+          console.log("[GAME] drill_override skipped (already completed)", { messageId });
+          return false;
+        }
 
         const cfg = (window.__BC_DRILL_CONFIG__ = window.__BC_DRILL_CONFIG__ || {});
         Object.assign(cfg, drill);
@@ -642,16 +655,16 @@
         window.showToast?.("Manager updated your drill ✅");
 
         window.__BC_LAST_ASSIGNED_DRILL__ = {
-          id: message?.id || null,
+          id: messageId,
           body: message?.body || "",
           payload: message?.payload || {},
           drill
         };
 
-        await logDrillRunStart(drill, message?.id || null);
+        await logDrillRunStart(drill, messageId);
 
         const started = launchAssignedDrill(drill);
-        console.log("[GAME] assigned drill auto-start", { started, focus: drill?.focus });
+        console.log("[GAME] assigned drill auto-start", { started, focus: drill?.focus, messageId });
 
         return true;
       } catch (e) {
@@ -737,12 +750,30 @@
         }
         const rows = Array.isArray(msg.rows) ? msg.rows : [];
         for (const row of rows) {
-          if (String(row?.type || "") === "drill_override") {
-            await applyDrillOverrideFromMessage(row);
-          } else if (String(row?.type || "") === "instruction") {
+          const rowType = String(row?.type || "");
+          let shouldMarkRead = true;
+
+          if (rowType === "drill_override") {
+            const activeAssignedId = window.__BC_LAST_ASSIGNED_DRILL__?.id || null;
+            const completedAssignedId = window.__BC_LAST_ASSIGNED_DRILL_COMPLETED__?.assignedMessageId || null;
+
+            const duplicateActive =
+              row?.id && activeAssignedId && String(row.id) === String(activeAssignedId);
+
+            const duplicateCompleted =
+              row?.id && completedAssignedId && String(row.id) === String(completedAssignedId);
+
+            let applied = false;
+            if (!duplicateActive && !duplicateCompleted) {
+              applied = await applyDrillOverrideFromMessage(row);
+            }
+
+            shouldMarkRead = !!applied || !!duplicateActive || !!duplicateCompleted;
+          } else if (rowType === "instruction") {
             window.showToast?.("New manager instruction ✅");
+            shouldMarkRead = true;
           }
-          if (row?.id) markMessageRead(row.id);
+          if (shouldMarkRead && row?.id) markMessageRead(row.id);
         }
       }
       if (msg.type === "message_mark_read_result") {
