@@ -7,6 +7,7 @@ import { BC_TYPES } from "./lib/bcMessages.js";
 import { makeLogoutHandler } from "./lib/bcHandlers/logout.js";
 import { makeCtxHandler } from "./lib/bcHandlers/ctx.js";
 import { makeWinesHandler } from "./lib/bcHandlers/wines.js";
+import { makeWinesMutateHandler } from "./lib/bcHandlers/winesMutate.js";
 import { makeRunsCountHandler } from "./lib/bcHandlers/runsCount.js";
 import { makeRitualStatusHandler } from "./lib/bcHandlers/ritualStatus.js";
 import { makeMessagesUnreadHandler } from "./lib/bcHandlers/messagesUnread.js";
@@ -1553,9 +1554,9 @@ const PRE_BIND_ALLOW = new Set([
 ]);
 
 const DB_TYPES = new Set([
-  "wines_request",
-  "wines_mutate",
-  "runs_count_request",
+  BC_TYPES.WINES_REQUEST,
+  BC_TYPES.WINES_MUTATE,
+  BC_TYPES.RUNS_COUNT_REQUEST,
   BC_TYPES.RITUAL_STATUS_REQUEST,
   "event_log",
   BC_TYPES.PROGRESSION_SNAPSHOT_REQUEST,
@@ -1814,6 +1815,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
       BC_TYPES.LOGOUT_REQUEST,
       BC_TYPES.CTX_REQUEST,
       BC_TYPES.WINES_REQUEST,
+      BC_TYPES.WINES_MUTATE,
       BC_TYPES.RUNS_COUNT_REQUEST,
       BC_TYPES.RITUAL_STATUS_REQUEST,
       BC_TYPES.MESSAGES_UNREAD_REQUEST,
@@ -1832,6 +1834,14 @@ if (!window.__BC_PARENT_BRIDGE__) {
         logout: makeLogoutHandler({ doLogout }),
         [BC_TYPES.CTX_REQUEST]: makeCtxHandler({ getBcCtx }),
         [BC_TYPES.WINES_REQUEST]: makeWinesHandler({ fetchWines }),
+        [BC_TYPES.WINES_MUTATE]: makeWinesMutateHandler({
+          supabase,
+          getSourceCtx,
+          isDemoMsg,
+          rejectIfEpochMismatch,
+          getSenderCtxOrReject,
+          getLiveAuthOrNull,
+        }),
         [BC_TYPES.RUNS_COUNT_REQUEST]: makeRunsCountHandler({ fetchRunsCount }),
         [BC_TYPES.RITUAL_STATUS_REQUEST]: makeRitualStatusHandler({
           supabase,
@@ -1996,127 +2006,6 @@ if (!window.__BC_PARENT_BRIDGE__) {
               ok: false,
               reason: "forbidden_user",
               epoch: Number(window.__BC_IFRAME_EPOCH__ || 0),
-            },
-            event.origin
-          );
-          return;
-        }
-      }
-
-      if (msg.type === "wines_mutate") {
-        const replyType = "wines_mutate_result";
-        const reqId = msg.reqId || null;
-        const action = String(msg.action || "");
-        const payload = msg.payload || {};
-        // 0) Demo short-circuit
-        if (isDemoMsg(msg, senderCtx)) {
-          event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, demo: true },
-            event.origin
-          );
-          return;
-        }
-
-        // 1) Epoch guard
-        if (rejectIfEpochMismatch(event, msg, replyType, { reqId })) return;
-
-        try {
-          // 1.5) Action guard (nice error)
-          if (!action) throw new Error("missing_action");
-
-          // 2) Validate sender ctx + role gate
-          const ctx = getSenderCtxOrReject(
-            event,
-            senderCtx,
-            replyType,
-            { reqId },
-            { requireRestaurant: true, allowedRoles: ["manager", "group_manager", "admin"] }
-          );
-          if (!ctx) return;
-
-          // 3) Live auth (should already exist from DB gate)
-          const rid = ctx.restaurantId;
-          const userId = liveAuth?.userId || null;
-          if (!userId) {
-            event.source?.postMessage(
-              { source: "BC_MSG", v: 1, type: replyType, reqId, ok: false, error: "no_session" },
-              event.origin
-            );
-            return;
-          }
-          if (String(userId) !== String(ctx.userId)) {
-            event.source?.postMessage(
-              { source: "BC_MSG", v: 1, type: replyType, reqId, ok: false, error: "forbidden_user" },
-              event.origin
-            );
-            return;
-          }
-
-          // 4) Mutations
-          if (action === "add") {
-            const row = {
-              restaurant_id: rid,
-              created_by: userId,
-              name: payload?.name || "",
-              varietal: payload?.varietal || "",
-              fruit_tags: payload?.fruit_tags || [],
-              texture_tags: payload?.texture_tags || [],
-              oak_level: payload?.oak_level || "",
-              process: payload?.process || "",
-              region: payload?.region || "",
-              story: payload?.story || "",
-            };
-            const { error } = await supabase.from("bc_wines").insert(row);
-            if (error) throw error;
-          } else if (action === "upsert") {
-            const wineId = payload?.id;
-            if (!wineId) throw new Error("missing_wine_id");
-            const { error } = await supabase
-              .from("bc_wines")
-              .update({
-                name: payload?.name || "",
-                varietal: payload?.varietal || "",
-                fruit_tags: payload?.fruit_tags || [],
-                texture_tags: payload?.texture_tags || [],
-                oak_level: payload?.oak_level || "",
-                process: payload?.process || "",
-                region: payload?.region || "",
-                story: payload?.story || "",
-              })
-              .eq("id", wineId)
-              .eq("restaurant_id", rid);
-            if (error) throw error;
-          } else if (action === "delete") {
-            const wineId = payload?.wineId || payload?.id;
-            if (!wineId) throw new Error("missing_wine_id");
-            const { error } = await supabase
-              .from("bc_wines")
-              .delete()
-              .eq("id", wineId)
-              .eq("restaurant_id", rid);
-            if (error) throw error;
-          } else if (action === "delete_all") {
-            const { error } = await supabase.from("bc_wines").delete().eq("restaurant_id", rid);
-            if (error) throw error;
-          } else {
-            throw new Error("unsupported_action");
-          }
-
-          // 5) Reply
-          event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true },
-            event.origin
-          );
-          return;
-        } catch (e) {
-          event.source?.postMessage(
-            {
-              source: "BC_MSG",
-              v: 1,
-              type: replyType,
-              reqId,
-              ok: false,
-              error: e?.message || String(e),
             },
             event.origin
           );

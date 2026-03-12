@@ -15,6 +15,7 @@ export const BC_TYPES = Object.freeze({
   LOGOUT_REQUEST: "bc_logout_request",
 
   WINES_REQUEST: "wines_request",
+  WINES_MUTATE: "wines_mutate",
   RUNS_COUNT_REQUEST: "runs_count_request",
   RITUAL_STATUS_REQUEST: "ritual_status_request",
   MESSAGES_UNREAD_REQUEST: "messages_unread_request",
@@ -28,6 +29,7 @@ export const BC_TYPES = Object.freeze({
   CTX_REQUIRED: "ctx_required",
   AUTH_STATE: "auth_state",
   WINES_REPORT: "wines_report",
+  WINES_MUTATE_RESULT: "wines_mutate_result",
   RUNS_COUNT_RESPONSE: "runs_count_response",
   RITUAL_STATUS_RESPONSE: "ritual_status_response",
   MESSAGES_UNREAD_RESPONSE: "messages_unread_response",
