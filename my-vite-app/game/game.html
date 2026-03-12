@@ -2006,11 +2006,8 @@ function isDrillMode() {
           ctx.membership_role ||
           ctx.role ||
           null;
-        const membershipRole =
-          normalizeRole(
-            rawRole,
-            String(ctx.mode || "").toLowerCase() === "demo" ? "demo" : null
-          );
+        const isDemoMode = String(ctx.mode || "").toLowerCase() === "demo";
+        const membershipRole = normalizeRole(rawRole, isDemoMode ? "demo" : null);
 
         return {
           userId: ctx.userId || ctx.user_id || null,
@@ -4619,10 +4616,28 @@ function ensureProgLoaded() {
           return;
         }
 
+        if (
+          msg.userId == null &&
+          msg.membershipRole == null &&
+          msg.membership_role == null &&
+          msg.role == null
+        ) {
+          console.warn("[BC] ignoring bc_ctx missing authoritative identity keys", msg);
+          return;
+        }
+
         const nctx = normalizeMembershipContext({
           ...(window.__BC_CTX__ || {}),
           ...(msg || {})
         });
+        if (!nctx.membershipRole) {
+          console.warn("[BC] ignoring bc_ctx with invalid membership role", {
+            rawRole: msg?.membershipRole ?? msg?.membership_role ?? msg?.role ?? null,
+            mode: msg?.mode ?? null,
+            msg
+          });
+          return;
+        }
         userId = nctx.userId ?? userId ?? null;
         restaurantId = nctx.restaurantId ?? restaurantId ?? null;
         scopeId = nctx.scopeId ?? scopeId ?? null;
