@@ -19,15 +19,19 @@ export const BC_TYPES = Object.freeze({
   MESSAGES_UNREAD_REQUEST: "messages_unread_request",
   MESSAGE_MARK_READ: "message_mark_read",
   LEADERBOARD_REQUEST: "leaderboard_request",
+  PROGRESSION_SNAPSHOT_REQUEST: "progression_snapshot_request",
 
   // responses
   CTX: "bc_ctx",
+  CTX_NOT_READY: "ctx_not_ready",
+  CTX_REQUIRED: "ctx_required",
   AUTH_STATE: "auth_state",
   WINES_REPORT: "wines_report",
   RUNS_COUNT_RESPONSE: "runs_count_response",
   MESSAGES_UNREAD_RESPONSE: "messages_unread_response",
   MESSAGE_MARK_READ_RESULT: "message_mark_read_result",
   LEADERBOARD_RESPONSE: "leaderboard_response",
+  PROGRESSION_SNAPSHOT: "progression_snapshot",
 
   ERROR: "bc_error",
 });

@@ -11,6 +11,7 @@ import { makeRunsCountHandler } from "./lib/bcHandlers/runsCount.js";
 import { makeMessagesUnreadHandler } from "./lib/bcHandlers/messagesUnread.js";
 import { makeMessageMarkReadHandler } from "./lib/bcHandlers/messagesMarkRead.js";
 import { makeLeaderboardHandler } from "./lib/bcHandlers/leaderboard.js";
+import { makeProgressionSnapshotHandler } from "./lib/bcHandlers/progressionSnapshot.js";
 import { handleEventLog } from "./lib/handlers/handleEventLog.js";
 import { decideAllowedTier } from "./parent/progressionRouter";
 import { createProgressionStore } from "./progressionStore.js";
@@ -1545,7 +1546,7 @@ const PRE_BIND_ALLOW = new Set([
   "nav",
   "nav_back",
   "ctx_retry",
-  "progression_snapshot_request",
+  BC_TYPES.PROGRESSION_SNAPSHOT_REQUEST,
   "debug_progress_payload",
   "debug_skill_tree",
 ]);
@@ -1556,7 +1557,7 @@ const DB_TYPES = new Set([
   "runs_count_request",
   "ritual_status_request",
   "event_log",
-  "progression_snapshot_request",
+  BC_TYPES.PROGRESSION_SNAPSHOT_REQUEST,
   "progress_report_submit",
   BC_TYPES.MESSAGES_UNREAD_REQUEST,
   BC_TYPES.MESSAGE_MARK_READ,
@@ -1816,6 +1817,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
       BC_TYPES.MESSAGES_UNREAD_REQUEST,
       BC_TYPES.MESSAGE_MARK_READ,
       BC_TYPES.LEADERBOARD_REQUEST,
+      BC_TYPES.PROGRESSION_SNAPSHOT_REQUEST,
       "logout",
     ]);
     window.__BC_BRIDGE_HANDLED_TYPES__ = handledTypes;
@@ -1852,6 +1854,17 @@ if (!window.__BC_PARENT_BRIDGE__) {
           rejectIfEpochMismatch,
           getSenderCtxOrReject,
           getLiveAuthOrNull,
+        }),
+        [BC_TYPES.PROGRESSION_SNAPSHOT_REQUEST]: makeProgressionSnapshotHandler({
+          getSourceCtx,
+          isDemoMsg,
+          rejectIfEpochMismatch,
+          getSenderCtxOrReject,
+          getLiveAuthOrNull,
+          buildProgressionResult,
+          getActiveRestaurantId: () => window.getActiveRestaurantId?.(),
+          getAppState: () => window.appState,
+          getIframeEpoch: () => window.__BC_IFRAME_EPOCH__,
         }),
       },
     });
@@ -2862,126 +2875,6 @@ if (!window.__BC_PARENT_BRIDGE__) {
         return;
       }
 
-      if (msg.type === "progression_snapshot_request") {
-        const replyType = "progression_snapshot";
-        const reqId = msg?.reqId || null;
-
-        if (!senderCtx) {
-          event.source?.postMessage(
-            {
-              source: "BC_MSG",
-              v: 1,
-              type: "ctx_not_ready",
-              ok: false,
-              reason: "no_sender_ctx",
-              epoch: Number(window.__BC_IFRAME_EPOCH__ || 0),
-              retryAfterMs: 250,
-              why: "no_sender_ctx",
-            },
-            event.origin
-          );
-          return;
-        }
-
-        if (isDemoMsg(msg, senderCtx)) {
-          event.source?.postMessage(
-            {
-              source: "BC_MSG",
-              v: 1,
-              type: replyType,
-              reqId,
-              ok: true,
-              demo: true,
-              tierToServe: 1,
-              reasons: [],
-              reasonsHuman: [],
-              snapshot: {
-                encountersTotal: 0,
-                last10Count: 0,
-                last10Greens: 0,
-                last10Reds: 0,
-                anyRedT2Plus: false,
-                pivotsTaken: 0,
-                pivotsSuccess: 0,
-              },
-            },
-            event.origin
-          );
-          return;
-        }
-
-        if (rejectIfEpochMismatch(event, msg, replyType, { reqId })) return;
-
-        const ctx = getSenderCtxOrReject(
-          event,
-          senderCtx,
-          replyType,
-          { reqId },
-          { requireRestaurant: true, allowedRoles: ["waiter", "manager", "group_manager", "admin"] }
-        );
-        if (!ctx) return;
-
-        try {
-          const rid = window.getActiveRestaurantId?.();
-          const ready =
-            !!window.appState?.session &&
-            !!window.appState?.profile?.role &&
-            !!rid;
-          if (!ready) {
-            event.source?.postMessage(
-              {
-                source: "BC_MSG",
-                v: 1,
-                type: "ctx_not_ready",
-                ok: false,
-                epoch: Number(window.__BC_IFRAME_EPOCH__ || 0),
-                retryAfterMs: 250,
-                why: "profile_or_restaurant_not_ready",
-              },
-              event.origin
-            );
-            return;
-          }
-
-          const authed = liveAuth?.userId || null;
-          if (!authed) throw new Error("no_session");
-          if (String(authed) !== String(ctx.userId)) throw new Error("forbidden_user");
-          const desiredTier = Number(msg?.desiredTier || 3);
-          const result = await buildProgressionResult({
-            userId: ctx.userId,
-            restaurantId: ctx.restaurantId,
-            desiredTier: desiredTier === 1 ? 1 : desiredTier === 2 ? 2 : 3,
-          });
-
-          event.source?.postMessage(
-            {
-              source: "BC_MSG",
-              v: 1,
-              type: replyType,
-              reqId,
-              ok: true,
-              tierToServe: result?.tierToServe ?? 1,
-              reasons: result?.reasons || [],
-              reasonsHuman: result?.reasonsHuman || [],
-              snapshot: result?.snapshot || null,
-            },
-            event.origin
-          );
-        } catch (e) {
-          event.source?.postMessage(
-            {
-              source: "BC_MSG",
-              v: 1,
-              type: replyType,
-              reqId,
-              ok: false,
-              error: e?.message || String(e),
-            },
-            event.origin
-          );
-        }
-        return;
-      }
     } catch (e) {
       console.error("[BC] parent bridge failed:", e);
       try {
