@@ -14,6 +14,7 @@ import { makeMessagesUnreadHandler } from "./lib/bcHandlers/messagesUnread.js";
 import { makeMessageMarkReadHandler } from "./lib/bcHandlers/messagesMarkRead.js";
 import { makeLeaderboardHandler } from "./lib/bcHandlers/leaderboard.js";
 import { makeProgressionSnapshotHandler } from "./lib/bcHandlers/progressionSnapshot.js";
+import { makeProgressReportSubmitHandler } from "./lib/bcHandlers/progressReportSubmit.js";
 import { handleEventLog } from "./lib/handlers/handleEventLog.js";
 import { decideAllowedTier } from "./parent/progressionRouter";
 import { createProgressionStore } from "./progressionStore.js";
@@ -1560,7 +1561,7 @@ const DB_TYPES = new Set([
   BC_TYPES.RITUAL_STATUS_REQUEST,
   "event_log",
   BC_TYPES.PROGRESSION_SNAPSHOT_REQUEST,
-  "progress_report_submit",
+  BC_TYPES.PROGRESS_REPORT_SUBMIT,
   BC_TYPES.MESSAGES_UNREAD_REQUEST,
   BC_TYPES.MESSAGE_MARK_READ,
   BC_TYPES.LEADERBOARD_REQUEST,
@@ -1822,6 +1823,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
       BC_TYPES.MESSAGE_MARK_READ,
       BC_TYPES.LEADERBOARD_REQUEST,
       BC_TYPES.PROGRESSION_SNAPSHOT_REQUEST,
+      BC_TYPES.PROGRESS_REPORT_SUBMIT,
       "logout",
     ]);
     window.__BC_BRIDGE_HANDLED_TYPES__ = handledTypes;
@@ -1885,6 +1887,14 @@ if (!window.__BC_PARENT_BRIDGE__) {
           getActiveRestaurantId: () => window.getActiveRestaurantId?.(),
           getAppState: () => window.appState,
           getIframeEpoch: () => window.__BC_IFRAME_EPOCH__,
+        }),
+        [BC_TYPES.PROGRESS_REPORT_SUBMIT]: makeProgressReportSubmitHandler({
+          supabase,
+          getSourceCtx,
+          isDemoMsg,
+          rejectIfEpochMismatch,
+          getSenderCtxOrReject,
+          getLiveAuthOrNull,
         }),
       },
     });
@@ -2114,11 +2124,12 @@ if (!window.__BC_PARENT_BRIDGE__) {
           senderCtx,
           replyType,
           { eventType },
-          { requireRestaurant: true, allowedRoles: ["waiter", "manager", "group_manager", "admin"] }
+          { requireRestaurant: true, allowedRoles: ["waiter", "single_manager", "group_manager", "enterpriser"] }
         );
         if (!ctx) return;
 
-        const authed = liveAuth?.userId || null;
+        const liveAuthNow = await getLiveAuthOrNull();
+        const authed = liveAuthNow?.userId || null;
         if (!authed) {
           event.source?.postMessage(
             { source: "BC_MSG", v: 1, type: replyType, ok: false, error: "no_session", eventType },
@@ -2152,253 +2163,70 @@ if (!window.__BC_PARENT_BRIDGE__) {
         return;
       }
 
-      if (msg.type === "progress_report_submit") {
-        const replyType = "progress_report_submit_result";
-        const reqId = msg?.reqId || null;
-
-        try {
-          // 0) Demo short-circuit
-          if (isDemoMsg(msg, senderCtx)) {
-            event.source?.postMessage(
-              { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, demo: true, inserted: 0 },
-              event.origin
-            );
-            return;
-          }
-
-          // 1) Epoch guard
-          if (rejectIfEpochMismatch(event, msg, replyType, { reqId, inserted: 0 })) return;
-
-          // 2) Validate sender-bound ctx (restaurant required)
-          const ctx = getSenderCtxOrReject(
-            event,
-            senderCtx,
-            replyType,
-            { reqId, inserted: 0 },
-            { requireRestaurant: true, allowedRoles: ["waiter", "manager", "group_manager", "admin"] }
-          );
-          if (!ctx) return;
-
-          // 3) Live auth must exist AND match ctx.userId
-          const authed = liveAuth?.userId || null;
-          if (!authed) throw new Error("no_session");
-          if (String(authed) !== String(ctx.userId)) throw new Error("forbidden_user");
-
-          // 4) Resolve scope defaults
-          const scopeType =
-            String(msg?.scope_type || ctx.scopeType || "restaurant").toLowerCase();
-
-          const scopeId =
-            msg?.scope_id ||
-            ctx.scopeId ||
-            ctx.restaurantId;
-
-          const body = String(msg?.body || "Progress report").slice(0, 2000);
-          const payload = msg?.payload ?? null;
-
-          // 5) Call RPC that inserts one message per manager target
-          const { data, error } = await supabase.rpc("bc_send_progress_report_v1", {
-            p_scope_type: scopeType,
-            p_scope_id: scopeId,
-            p_restaurant_id: ctx.restaurantId,
-            p_body: body,
-            p_payload: payload,
-          });
-
-          if (error) throw error;
-
-          const inserted = Number(data || 0);
-
-          try {
-            const p = msg?.payload || {};
-            const skills = p?.skills || {};
-
-            const snapCtx = getSenderCtxOrReject(
-              event,
-              senderCtx,
-              "progress_report_submit_result",
-              { reqId: msg?.reqId || null },
-              { requireRestaurant: true, allowedRoles: ["waiter", "manager", "group_manager", "admin"] }
-            );
-            if (snapCtx) {
-              const { error: snapError } = await supabase.from("bc_skill_snapshots_v1").insert({
-                user_id: snapCtx.userId,
-                restaurant_id: snapCtx.restaurantId,
-                scope_id: snapCtx.scopeId || null,
-
-                encounter_number: p?.encounterNumber ?? null,
-                guest_state: p?.guestStateActual ?? null,
-                difficulty: p?.difficulty ?? null,
-                chain_signal: p?.chainSignal ?? null,
-                chain_score: p?.chainScore ?? null,
-
-                read_pct: skills.read ?? 0,
-                framing_pct: skills.framing ?? 0,
-                delivery_pct: skills.delivery ?? 0,
-                recovery_pct: skills.recovery ?? 0,
-                closing_pct: skills.closing ?? 0,
-
-                strongest_skill: p?.strongestSkill ?? null,
-                weakest_skill: p?.weakestSkill ?? null,
-
-                payload: p
-              });
-
-              if (snapError) {
-                console.warn("[SNAPSHOT] parent insert failed", snapError);
-              } else {
-                console.log("[SNAPSHOT] parent insert success ✅", {
-                  userId: snapCtx.userId,
-                  restaurantId: snapCtx.restaurantId,
-                  encounterNumber: p?.encounterNumber
-                });
-
-                try {
-                  const { data: recentDrill, error: recentDrillError } = await supabase
-                    .from("bc_drill_runs_v1")
-                    .select("id, focus, completed_at, effectiveness_delta")
-                    .eq("user_id", snapCtx.userId)
-                    .eq("restaurant_id", snapCtx.restaurantId)
-                    .eq("completed", true)
-                    .is("effectiveness_delta", null)
-                    .order("completed_at", { ascending: false })
-                    .limit(1)
-                    .maybeSingle();
-
-                  if (!recentDrillError && recentDrill?.id && recentDrill?.focus) {
-                    const focusMap = {
-                      read: "read",
-                      frame: "framing",
-                      framing: "framing",
-                      delivery: "delivery",
-                      recovery: "recovery",
-                      closing: "closing"
-                    };
-
-                    const skillKey = focusMap[String(recentDrill.focus || "").toLowerCase()] || null;
-                    const currentSkillValue = skillKey ? Number(skills?.[skillKey] || 0) : null;
-
-                    if (skillKey && currentSkillValue !== null) {
-                      const { data: beforeSnap, error: beforeSnapError } = await supabase
-                        .from("bc_skill_snapshots_v1")
-                        .select("read_pct, framing_pct, delivery_pct, recovery_pct, closing_pct, created_at")
-                        .eq("user_id", snapCtx.userId)
-                        .eq("restaurant_id", snapCtx.restaurantId)
-                        .lt("created_at", recentDrill.completed_at)
-                        .order("created_at", { ascending: false })
-                        .limit(1)
-                        .maybeSingle();
-
-                      if (!beforeSnapError && beforeSnap) {
-                        const beforeMap = {
-                          read: Number(beforeSnap.read_pct || 0),
-                          framing: Number(beforeSnap.framing_pct || 0),
-                          delivery: Number(beforeSnap.delivery_pct || 0),
-                          recovery: Number(beforeSnap.recovery_pct || 0),
-                          closing: Number(beforeSnap.closing_pct || 0)
-                        };
-
-                        const beforeValue = Number(beforeMap[skillKey] || 0);
-                        const delta = currentSkillValue - beforeValue;
-
-                        const note =
-                          delta > 0
-                            ? `${skillKey} improved +${delta}% after ${recentDrill.focus} drill`
-                            : delta < 0
-                              ? `${skillKey} changed ${delta}% after ${recentDrill.focus} drill`
-                              : `${skillKey} stayed flat after ${recentDrill.focus} drill`;
-
-                        const { error: effError } = await supabase
-                          .from("bc_drill_runs_v1")
-                          .update({
-                            effectiveness_delta: delta,
-                            effectiveness_note: note
-                          })
-                          .eq("id", recentDrill.id);
-
-                        if (effError) {
-                          console.warn("[DRILL EFFECT] update failed", effError);
-                        } else {
-                          console.log("[DRILL EFFECT] updated ✅", {
-                            drillRunId: recentDrill.id,
-                            delta,
-                            note
-                          });
-
-                          const { error: insightMsgError } = await supabase.from("bc_messages_v1").insert({
-                            scope_type: "restaurant",
-                            scope_id: snapCtx.restaurantId,
-                            restaurant_id: snapCtx.restaurantId,
-                            sender_user_id: snapCtx.userId,
-                            receiver_user_id: snapCtx.userId,
-                            sender_role: "system",
-                            type: "drill_effectiveness",
-                            body: note,
-                            payload: {
-                              drillRunId: recentDrill.id,
-                              focus: recentDrill.focus,
-                              delta,
-                              skillKey
-                            }
-                          });
-
-                          if (insightMsgError) {
-                            console.warn("[DRILL EFFECT] insight message insert failed", insightMsgError);
-                          }
-                        }
-                      }
-                    }
-                  }
-                } catch (e) {
-                  console.warn("[DRILL EFFECT] exception", e);
-                }
-              }
-            }
-          } catch (e) {
-            console.warn("[SNAPSHOT] parent insert exception", e);
-          }
-
-          // 6) Reply
-          event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, inserted },
-            event.origin
-          );
-
-          return;
-        } catch (e) {
-          event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: false, inserted: 0, error: e?.message || String(e) },
-            event.origin
-          );
-          return;
-        }
-      }
-
       if (msg.type === "drill_run_started") {
         console.log("[PARENT] drill_run_started received ✅", { msg });
         return;
       }
 
       if (msg.type === "drill_run_completed") {
+        const replyType = "drill_run_completed_result";
+        const assignedMessageId = msg?.assignedMessageId || null;
+        const replyResult = (payload = {}) => {
+          try {
+            event.source?.postMessage(
+              {
+                source: "BC_MSG",
+                v: 1,
+                type: replyType,
+                assignedMessageId,
+                ...payload,
+              },
+              event.origin
+            );
+          } catch {}
+        };
         console.log("[PARENT] drill_run_completed received ✅", { msg, senderCtx });
+
+        if (isDemoMsg(msg, senderCtx)) {
+          replyResult({ ok: true, demo: true });
+          return;
+        }
+
+        if (rejectIfEpochMismatch(event, msg, replyType, { assignedMessageId })) return;
 
         const ctx = getSenderCtxOrReject(
           event,
           senderCtx,
-          "drill_run_completed_result",
-          {},
-          { requireRestaurant: true, allowedRoles: ["waiter", "manager", "group_manager", "admin"] }
+          replyType,
+          { assignedMessageId },
+          { requireRestaurant: true, allowedRoles: ["waiter", "single_manager", "group_manager", "enterpriser"] }
         );
         if (!ctx) {
           console.warn("[DRILL RUN] ctx rejected");
           return;
         }
 
+        const liveAuthNow = await getLiveAuthOrNull();
+        const authed = liveAuthNow?.userId || null;
+        if (!authed) {
+          console.warn("[DRILL RUN] no session");
+          replyResult({ ok: false, error: "no_session" });
+          return;
+        }
+        if (String(authed) !== String(ctx.userId)) {
+          console.warn("[DRILL RUN] forbidden/no session", {
+            authed,
+            ctxUserId: ctx.userId,
+          });
+          replyResult({ ok: false, error: "forbidden_user" });
+          return;
+        }
+
         const p = msg?.payload || {};
-        const assignedMessageId = msg?.assignedMessageId || null;
 
         if (!assignedMessageId) {
           console.warn("[DRILL RUN] missing assignedMessageId");
+          replyResult({ ok: false, error: "missing_assigned_message_id" });
           return;
         }
 
@@ -2412,11 +2240,13 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
         if (assignedErr) {
           console.warn("[DRILL RUN] assigned message lookup failed", assignedErr);
+          replyResult({ ok: false, error: "assigned_message_lookup_failed" });
           return;
         }
 
         if (!assignedMsg?.id) {
           console.warn("[DRILL RUN] assigned drill message not found", { assignedMessageId });
+          replyResult({ ok: false, error: "assigned_message_not_found" });
           return;
         }
 
@@ -2424,6 +2254,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
         const managerUserId = assignedMsg.sender_user_id || null;
         if (!managerUserId) {
           console.warn("[DRILL RUN] assigned drill message has no sender_user_id", assignedMsg);
+          replyResult({ ok: false, error: "assigned_message_missing_sender" });
           return;
         }
 
@@ -2435,7 +2266,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
           restaurant_id: ctx.restaurantId,
           sender_user_id: ctx.userId,
           receiver_user_id: managerUserId,
-          sender_role: "waiter",
+          sender_role: ctx.membershipRole || ctx.role || "waiter",
           type: "drill_completed",
           body,
           payload: {
@@ -2455,6 +2286,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
         if (insertErr) {
           console.warn("[DRILL RUN] completion message insert failed", insertErr);
+          replyResult({ ok: false, error: "completion_insert_failed" });
           return;
         }
 
@@ -2462,6 +2294,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
           managerUserId,
           assignedMessageId
         });
+        replyResult({ ok: true, managerUserId });
 
         return;
       }

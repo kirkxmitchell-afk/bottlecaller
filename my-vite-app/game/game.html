@@ -545,6 +545,13 @@
     function logDrillRunComplete(details = {}) {
       try {
         const assignedMessageId = window.__BC_LAST_ASSIGNED_DRILL__?.id || null;
+        const completedAssignedMessageId = window.__BC_LAST_ASSIGNED_DRILL_COMPLETED__?.assignedMessageId || null;
+        if (assignedMessageId && completedAssignedMessageId && String(assignedMessageId) === String(completedAssignedMessageId)) {
+          console.log("[DRILL RUN] completion already acknowledged, skipping duplicate send", {
+            assignedMessageId
+          });
+          return;
+        }
         console.log("[DRILL RUN] logDrillRunComplete called ✅", {
           details,
           assignedMessageId: window.__BC_LAST_ASSIGNED_DRILL__?.id || null
@@ -740,6 +747,37 @@
       }
       if (msg.type === "message_mark_read_result") {
         if (!msg.ok) console.warn("[GAME] message_mark_read_result failed", msg?.error || "unknown", msg?.id);
+      }
+      if (msg.type === "drill_run_completed_result") {
+        if (msg.ok) {
+          window.showToast?.("Drill completion sent ✅");
+          window.__BC_LAST_DRILL_COMPLETION_STATUS__ = {
+            ok: true,
+            assignedMessageId: msg.assignedMessageId || null,
+            managerUserId: msg.managerUserId || null,
+            at: Date.now(),
+          };
+          window.__BC_LAST_ASSIGNED_DRILL_COMPLETED__ = {
+            assignedMessageId: msg.assignedMessageId || null,
+            at: Date.now(),
+          };
+          if (
+            window.__BC_LAST_ASSIGNED_DRILL__?.id &&
+            msg.assignedMessageId &&
+            String(window.__BC_LAST_ASSIGNED_DRILL__.id) === String(msg.assignedMessageId)
+          ) {
+            window.__BC_LAST_ASSIGNED_DRILL__ = null;
+          }
+        } else {
+          window.showToast?.("Could not send drill completion.");
+          window.__BC_LAST_DRILL_COMPLETION_STATUS__ = {
+            ok: false,
+            assignedMessageId: msg.assignedMessageId || null,
+            error: msg.error || "unknown",
+            at: Date.now(),
+          };
+        }
+        return;
       }
     });
     wireProgressReportButton();
