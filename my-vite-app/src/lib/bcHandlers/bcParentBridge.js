@@ -27,26 +27,6 @@ export function mountBcParentBridge({
 }) {
   const ORIGIN = window.location.origin;
 
-  async function getRunsCountSafe(supabase, userId, restaurantId) {
-    if (!supabase || !userId || !restaurantId) return 0;
-
-    const { data, error } = await supabase
-      .from("bc_run_counts_v1")
-      .select("runs_count")
-      .eq("user_id", userId)
-      .eq("restaurant_id", restaurantId)
-      .maybeSingle();
-
-    if (error) {
-      console.warn("[BC] runs_count fallback -> 0", error);
-      return 0;
-    }
-
-    const n = Number(data?.runs_count || 0);
-    console.log("[BC] runs_count view ->", { userId, restaurantId, runsCount: n });
-    return n;
-  }
-
   const notifyLoggedOut = (event) => {
     try {
       if (event.source && typeof event.source.postMessage === "function") {
@@ -91,60 +71,10 @@ export function mountBcParentBridge({
     bc_logout_request: async ({ event }) => doLogout("bc_msg_logout"),
 
     runs_count_request: async ({ msg, event }) => {
-      const ctx = window.__BC_CTX__ || {};
-      const isDemoReq =
-        String(msg?.mode || "").toLowerCase() === "demo" ||
-        String(ctx?.mode || "").toLowerCase() === "demo" ||
-        String(msg?.payload?.mode || "").toLowerCase() === "demo" ||
-        String(msg?.payload?.bcMode || "").toLowerCase() === "demo";
-      const reqId = msg?.reqId || null;
-
-      if (isDemoReq) {
-        event.source?.postMessage(
-          { source: "BC_MSG", v: 1, type: "runs_count_response", reqId, ok: true, count: 0, demo: true },
-          event.origin
-        );
-        return;
-      }
-
-      const userId =
-        msg.userId ||
-        msg.user_id ||
-        ctx.userId ||
-        ctx.user_id ||
-        null;
-      const restaurantId =
-        msg.restaurantId ||
-        msg.restaurant_id ||
-        ctx.restaurantId ||
-        ctx.restaurant_id ||
-        window.__BC_ACTIVE_RESTAURANT_ID__ ||
-        null;
-
-      try {
-        const count = await getRunsCountSafe(
-          window.__SB__ || window.sb || window.supabase || supabase,
-          userId,
-          restaurantId
-        );
-
-        console.log("[BC][RUNS_COUNT_REQUEST] resolved", {
-          reqId,
-          userId,
-          restaurantId,
-          count
-        });
-
-        event.source?.postMessage(
-          { source: "BC_MSG", v: 1, type: "runs_count_response", reqId, ok: true, count },
-          event.origin
-        );
-      } catch (e) {
-        event.source?.postMessage(
-          { source: "BC_MSG", v: 1, type: "runs_count_response", reqId, ok: false, count: 0, error: e?.message || String(e) },
-          event.origin
-        );
-      }
+      console.warn("[BC] bcParentBridge runs_count_request disabled; main bridge owns this", {
+        reqId: msg?.reqId || null
+      });
+      return;
     },
 
     ritual_status_request: async ({ msg, event }) => {
