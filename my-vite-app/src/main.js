@@ -1560,7 +1560,7 @@ const DB_TYPES = new Set([
   "progress_report_submit",
   BC_TYPES.MESSAGES_UNREAD_REQUEST,
   BC_TYPES.MESSAGE_MARK_READ,
-  "leaderboard_request",
+  BC_TYPES.LEADERBOARD_REQUEST,
 ]);
 
 function rejectIfEpochMismatchSimple(msg) {
@@ -1815,7 +1815,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
       BC_TYPES.RUNS_COUNT_REQUEST,
       BC_TYPES.MESSAGES_UNREAD_REQUEST,
       BC_TYPES.MESSAGE_MARK_READ,
-      "leaderboard_request",
+      BC_TYPES.LEADERBOARD_REQUEST,
       "logout",
     ]);
     window.__BC_BRIDGE_HANDLED_TYPES__ = handledTypes;
@@ -1845,7 +1845,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
           getSenderCtxOrReject,
           getLiveAuthOrNull,
         }),
-        leaderboard_request: makeLeaderboardHandler({
+        [BC_TYPES.LEADERBOARD_REQUEST]: makeLeaderboardHandler({
           supabase,
           getSourceCtx,
           isDemoMsg,

@@ -1,3 +1,5 @@
+import { BC_TYPES } from "../bcMessages";
+
 export function makeLeaderboardHandler({
   supabase,
   getSourceCtx,
@@ -14,7 +16,7 @@ export function makeLeaderboardHandler({
   if (!getLiveAuthOrNull) throw new Error("makeLeaderboardHandler: getLiveAuthOrNull required");
 
   return async ({ msg, event, reply }) => {
-    const replyType = "leaderboard_response";
+    const replyType = BC_TYPES.LEADERBOARD_RESPONSE;
     const reqId = msg?.reqId || null;
     const senderCtx = getSourceCtx(event.source);
 

@@ -18,6 +18,7 @@ export const BC_TYPES = Object.freeze({
   RUNS_COUNT_REQUEST: "runs_count_request",
   MESSAGES_UNREAD_REQUEST: "messages_unread_request",
   MESSAGE_MARK_READ: "message_mark_read",
+  LEADERBOARD_REQUEST: "leaderboard_request",
 
   // responses
   CTX: "bc_ctx",
@@ -26,6 +27,7 @@ export const BC_TYPES = Object.freeze({
   RUNS_COUNT_RESPONSE: "runs_count_response",
   MESSAGES_UNREAD_RESPONSE: "messages_unread_response",
   MESSAGE_MARK_READ_RESULT: "message_mark_read_result",
+  LEADERBOARD_RESPONSE: "leaderboard_response",
 
   ERROR: "bc_error",
 });
