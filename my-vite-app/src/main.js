@@ -9,6 +9,7 @@ import { makeCtxHandler } from "./lib/bcHandlers/ctx.js";
 import { makeWinesHandler } from "./lib/bcHandlers/wines.js";
 import { makeRunsCountHandler } from "./lib/bcHandlers/runsCount.js";
 import { makeMessagesUnreadHandler } from "./lib/bcHandlers/messagesUnread.js";
+import { makeMessageMarkReadHandler } from "./lib/bcHandlers/messagesMarkRead.js";
 import { handleEventLog } from "./lib/handlers/handleEventLog.js";
 import { decideAllowedTier } from "./parent/progressionRouter";
 import { createProgressionStore } from "./progressionStore.js";
@@ -1812,6 +1813,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
       BC_TYPES.WINES_REQUEST,
       BC_TYPES.RUNS_COUNT_REQUEST,
       BC_TYPES.MESSAGES_UNREAD_REQUEST,
+      "message_mark_read",
       "logout",
     ]);
     window.__BC_BRIDGE_HANDLED_TYPES__ = handledTypes;
@@ -1826,6 +1828,14 @@ if (!window.__BC_PARENT_BRIDGE__) {
         [BC_TYPES.WINES_REQUEST]: makeWinesHandler({ fetchWines }),
         [BC_TYPES.RUNS_COUNT_REQUEST]: makeRunsCountHandler({ fetchRunsCount }),
         [BC_TYPES.MESSAGES_UNREAD_REQUEST]: makeMessagesUnreadHandler({
+          supabase,
+          getSourceCtx,
+          isDemoMsg,
+          rejectIfEpochMismatch,
+          getSenderCtxOrReject,
+          getLiveAuthOrNull,
+        }),
+        message_mark_read: makeMessageMarkReadHandler({
           supabase,
           getSourceCtx,
           isDemoMsg,
@@ -2410,61 +2420,6 @@ if (!window.__BC_PARENT_BRIDGE__) {
         } catch (e) {
           event.source?.postMessage(
             { source: "BC_MSG", v: 1, type: replyType, reqId, ok: false, rows: [], error: e?.message || String(e) },
-            event.origin
-          );
-          return;
-        }
-      }
-
-      if (msg.type === "message_mark_read") {
-        const replyType = "message_mark_read_result";
-        const reqId = msg?.reqId || null;
-        const id = msg?.id || null;
-        try {
-          // 0) Demo short-circuit
-          if (isDemoMsg(msg, senderCtx)) {
-            event.source?.postMessage(
-              { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, demo: true, id },
-              event.origin
-            );
-            return;
-          }
-
-          // 1) Epoch guard
-          if (rejectIfEpochMismatch(event, msg, replyType, { reqId, id })) return;
-
-          // 2) Validate sender ctx
-          const ctx = getSenderCtxOrReject(
-            event,
-            senderCtx,
-            replyType,
-            { reqId, id },
-            { requireRestaurant: true, allowedRoles: ["waiter", "manager", "group_manager", "enterprise_admin", "admin"] }
-          );
-          if (!ctx) return;
-
-          // 3) Live auth must match ctx.userId
-          const authed = liveAuth?.userId || null;
-          if (!authed) throw new Error("no_session");
-          if (String(authed) !== String(ctx.userId)) throw new Error("forbidden_user");
-          if (!id) throw new Error("missing_id");
-
-          // 4) Mark read (receiver only, same restaurant only)
-          const { error } = await supabase
-            .from("bc_messages_v1")
-            .update({ read_at: new Date().toISOString() })
-            .eq("id", id)
-            .eq("receiver_user_id", ctx.userId);
-          if (error) throw error;
-
-          event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, id },
-            event.origin
-          );
-          return;
-        } catch (e) {
-          event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: false, id, error: e?.message || String(e) },
             event.origin
           );
           return;
