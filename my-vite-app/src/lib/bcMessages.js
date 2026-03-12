@@ -16,12 +16,14 @@ export const BC_TYPES = Object.freeze({
 
   WINES_REQUEST: "wines_request",
   RUNS_COUNT_REQUEST: "runs_count_request",
+  MESSAGES_UNREAD_REQUEST: "messages_unread_request",
 
   // responses
   CTX: "bc_ctx",
   AUTH_STATE: "auth_state",
   WINES_REPORT: "wines_report",
   RUNS_COUNT_RESPONSE: "runs_count_response",
+  MESSAGES_UNREAD_RESPONSE: "messages_unread_response",
 
   ERROR: "bc_error",
 });

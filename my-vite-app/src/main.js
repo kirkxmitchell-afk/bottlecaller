@@ -1793,11 +1793,90 @@ if (!window.__BC_PARENT_BRIDGE__) {
       return { ok: true, count };
     }
 
+    function makeMessagesUnreadHandler({ supabase, liveAuth }) {
+      return async ({ msg, event }) => {
+        const replyType = "messages_unread_response";
+        const reqId = msg?.reqId || null;
+        const senderCtx = getSourceCtx(event.source);
+
+        try {
+          // 0) Demo short-circuit
+          if (isDemoMsg(msg, senderCtx)) {
+            event.source?.postMessage(
+              { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, rows: [], demo: true },
+              event.origin
+            );
+            return;
+          }
+
+          // 1) Epoch guard
+          if (rejectIfEpochMismatch(event, msg, replyType, { reqId, rows: [] })) return;
+
+          // 2) Validate sender ctx
+          const ctx = getSenderCtxOrReject(
+            event,
+            senderCtx,
+            replyType,
+            { reqId, rows: [] },
+            {
+              requireRestaurant: true,
+              allowedRoles: ["waiter", "manager", "group_manager", "enterprise_admin", "admin"]
+            }
+          );
+          if (!ctx) return;
+
+          // 3) Live auth must match ctx.userId
+          const authed = liveAuth?.userId || null;
+          if (!authed) throw new Error("no_session");
+          if (String(authed) !== String(ctx.userId)) throw new Error("forbidden_user");
+
+          // 4) Query unread messages
+          const { data, error } = await supabase
+            .from("bc_messages_v1")
+            .select("id, type, body, payload, sender_user_id, sender_role, receiver_user_id, created_at, restaurant_id, scope_id, scope_type")
+            .eq("receiver_user_id", ctx.userId)
+            .eq("restaurant_id", ctx.restaurantId)
+            .is("archived_at", null)
+            .is("read_at", null)
+            .order("created_at", { ascending: true })
+            .limit(25);
+
+          if (error) throw error;
+
+          console.log("[BC][MESSAGES_UNREAD_REQUEST] resolved", {
+            reqId,
+            userId: ctx.userId,
+            restaurantId: ctx.restaurantId,
+            count: (data || []).length
+          });
+
+          event.source?.postMessage(
+            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, rows: data || [] },
+            event.origin
+          );
+        } catch (e) {
+          event.source?.postMessage(
+            {
+              source: "BC_MSG",
+              v: 1,
+              type: replyType,
+              reqId,
+              ok: false,
+              rows: [],
+              error: e?.message || String(e)
+            },
+            event.origin
+          );
+        }
+      };
+    }
+
     const handledTypes = new Set([
       BC_TYPES.LOGOUT_REQUEST,
       BC_TYPES.CTX_REQUEST,
       BC_TYPES.WINES_REQUEST,
       BC_TYPES.RUNS_COUNT_REQUEST,
+      BC_TYPES.MESSAGES_UNREAD_REQUEST,
       "logout",
     ]);
     window.__BC_BRIDGE_HANDLED_TYPES__ = handledTypes;
@@ -1811,6 +1890,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
         [BC_TYPES.CTX_REQUEST]: makeCtxHandler({ getBcCtx }),
         [BC_TYPES.WINES_REQUEST]: makeWinesHandler({ fetchWines }),
         [BC_TYPES.RUNS_COUNT_REQUEST]: makeRunsCountHandler({ fetchRunsCount }),
+        [BC_TYPES.MESSAGES_UNREAD_REQUEST]: makeMessagesUnreadHandler({ supabase, liveAuth }),
       },
     });
     window.__BC_BRIDGE__ = bridge;
@@ -2336,63 +2416,6 @@ if (!window.__BC_PARENT_BRIDGE__) {
               ok: false,
               error: e?.message || String(e),
             },
-            event.origin
-          );
-          return;
-        }
-      }
-
-      if (msg.type === "messages_unread_request") {
-        const replyType = "messages_unread_response";
-        const reqId = msg?.reqId || null;
-        try {
-          // 0) Demo short-circuit
-          if (isDemoMsg(msg, senderCtx)) {
-            event.source?.postMessage(
-              { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, rows: [], demo: true },
-              event.origin
-            );
-            return;
-          }
-
-          // 1) Epoch guard
-          if (rejectIfEpochMismatch(event, msg, replyType, { reqId, rows: [] })) return;
-
-          // 2) Validate sender ctx
-          const ctx = getSenderCtxOrReject(
-            event,
-            senderCtx,
-            replyType,
-            { reqId, rows: [] },
-            { requireRestaurant: true, allowedRoles: ["waiter", "manager", "group_manager", "enterprise_admin", "admin"] }
-          );
-          if (!ctx) return;
-
-          // 3) Live auth must match ctx.userId
-          const authed = liveAuth?.userId || null;
-          if (!authed) throw new Error("no_session");
-          if (String(authed) !== String(ctx.userId)) throw new Error("forbidden_user");
-
-          // 4) Query unread manager->staff messages for active restaurant
-          const { data, error } = await supabase
-            .from("bc_messages_v1")
-            .select("id, type, body, payload, sender_user_id, sender_role, receiver_user_id, created_at, restaurant_id, scope_id, scope_type")
-            .eq("receiver_user_id", ctx.userId)
-            .eq("restaurant_id", ctx.restaurantId)
-            .is("archived_at", null)
-            .is("read_at", null)
-            .order("created_at", { ascending: true })
-            .limit(25);
-          if (error) throw error;
-
-          event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: true, rows: data || [] },
-            event.origin
-          );
-          return;
-        } catch (e) {
-          event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: replyType, reqId, ok: false, rows: [], error: e?.message || String(e) },
             event.origin
           );
           return;
