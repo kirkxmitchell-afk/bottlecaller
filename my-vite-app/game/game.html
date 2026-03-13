@@ -961,7 +961,7 @@
             startDrill(
               Number(drill?.repTarget ?? 3),
               drill?.focus ?? "read",
-              "manager",
+              "single_manager",
               Number(drill?.tier ?? 1)
             );
             return true;
@@ -5816,9 +5816,10 @@ function ensureProgLoaded() {
 
         const isMgr = !!window.isManager;
         const isWait = !!window.isWaiter;
+        const identity = getGameplayIdentity();
 
         const out = {
-          role: isMgr ? "manager" : (isWait ? "waiter" : "unknown"),
+          role: identity?.membershipRole || (isMgr ? "single_manager" : (isWait ? "waiter" : "unknown")),
           restaurantId: rid,
           winesArrayLen: Array.isArray(window.wines) ? window.wines.length : null,
           getWineCount: typeof window.getWineCount === "function" ? window.getWineCount() : null,
@@ -5891,7 +5892,7 @@ function ensureProgLoaded() {
         const cfg = window.__BC_DRILL_CONFIG__ || {};
         const drillFocus = focus || cfg.focus || null;
         const identity = getGameplayIdentity();
-        const resolvedStarter = starter || (identity.isWaiter ? "waiter" : "manager");
+        const resolvedStarter = starter || (identity.isWaiter ? "waiter" : (identity.membershipRole || "single_manager"));
         const pool = Array.isArray(cfg.pool) ? cfg.pool : null;
         // HARD DRILL MODE (safety)
         window.__BC_SESSION_TYPE__ = "drill";

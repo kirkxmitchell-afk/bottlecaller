@@ -550,6 +550,8 @@ document.querySelector("#app").innerHTML = `
                     <div id="mbSuggestedPrompts" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;"></div>
                   </div>
 
+                  <div id="mbDrillSummary" class="small-text" style="opacity:.85;"></div>
+
                   <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
                     <button id="mbInstrRunDrill" class="btn-ghost" type="button">Run Drill</button>
                     <button id="mbInstrUseSuggestion" class="btn-ghost" type="button">Use Suggestion</button>
@@ -1074,6 +1076,9 @@ function roleAliasesForMatching(role) {
       : (role?.membershipRole ?? role?.membership_role ?? role?.role ?? "")
   ).trim().toLowerCase();
   const r = normalizeMembershipRole(raw);
+  // Transitional compatibility only.
+  // Accept legacy manager / enterprise_admin aliases while migrating to:
+  // waiter, single_manager, group_manager, enterpriser.
   if (raw === "manager") return ["manager", "single_manager"];
   if (raw === "enterprise_admin") return ["enterprise_admin", "enterpriser"];
   if (r === "single_manager") return ["single_manager", "manager"];
@@ -1086,6 +1091,22 @@ function roleAliasesForMatching(role) {
 function isManagerRole(roleLike) {
   const caps = getRoleCapabilities(roleLike);
   return !!caps.hasManagerControls;
+}
+
+function getDisplayRoleLabel(roleLike) {
+  const role = normalizeMembershipRole(roleLike);
+  switch (role) {
+    case "waiter":
+      return "Waiter";
+    case "single_manager":
+      return "Manager";
+    case "group_manager":
+      return "Group Manager";
+    case "enterpriser":
+      return "Enterpriser";
+    default:
+      return "Unknown";
+  }
 }
 function isUuid(s) {
   return typeof s === "string" &&
@@ -3948,7 +3969,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
         const completionRow = {
           scope_type: "restaurant",
-          scope_id: ctx.restaurantId,
+          scope_id: ctx.scopeId || ctx.restaurantId,
           restaurant_id: ctx.restaurantId,
           sender_user_id: ctx.userId,
           receiver_user_id: managerUserId,
@@ -7475,6 +7496,7 @@ function renderMbMessageItem(row, nameMap) {
   if (kind === "progress_report") badge = "REPORT";
   if (kind === "instruction") badge = "INSTRUCTION";
   if (kind === "drill_override") badge = "DRILL";
+  if (kind === "drill_completed") badge = "COMPLETE";
   if (kind === "timed_challenge") badge = "CHALLENGE";
   if (kind === "timed_challenge_completed") badge = "COMPLETE";
   if (kind === "timed_challenge_expired") badge = "EXPIRED";
@@ -7748,6 +7770,47 @@ function renderManagerThreadRecommendation(thread) {
   `;
 }
 
+function renderManagerDrillSummary(thread, nameMap) {
+  const root = mbEl("mbDrillSummary");
+  if (!root) return;
+
+  if (!thread) {
+    root.innerHTML = "";
+    return;
+  }
+
+  const rows = [...(thread.rows || [])].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  const lastAssigned = rows.find((row) => String(row?.type || "") === "drill_override") || null;
+  const lastCompleted = rows.find((row) => String(row?.type || "") === "drill_completed") || null;
+  const waiterName = escapeHtml(userLabel(thread.userId, nameMap));
+
+  const assignedHtml = lastAssigned
+    ? (() => {
+        const d = lastAssigned.payload?.drill || {};
+        const focus = escapeHtml(String(d.focus || "-"));
+        const reps = escapeHtml(String(d.repTarget ?? "-"));
+        const duration = escapeHtml(String(d.durationSec ?? "-"));
+        return `<div><b>Last assigned:</b> ${focus} • ${reps} reps • ${duration}s • ${waiterName}</div>`;
+      })()
+    : `<div><b>Last assigned:</b> None</div>`;
+
+  const completedHtml = lastCompleted
+    ? (() => {
+        const p = lastCompleted.payload || {};
+        const focus = escapeHtml(String(p.focus || "-"));
+        const repsDone = escapeHtml(String(p.repsDone ?? "-"));
+        const repTarget = escapeHtml(String(p.repTarget ?? "-"));
+        const durationSec = Number(p.durationSec ?? 0);
+        const mins = durationSec ? Math.floor(durationSec / 60) : 0;
+        const secs = durationSec ? durationSec % 60 : 0;
+        const durationText = durationSec ? `${mins}m ${secs}s` : "-";
+        return `<div style="margin-top:4px;"><b>Last completed:</b> ${focus} • ${repsDone}/${repTarget} reps • ${escapeHtml(durationText)} • ${waiterName}</div>`;
+      })()
+    : `<div style="margin-top:4px;"><b>Last completed:</b> None</div>`;
+
+  root.innerHTML = assignedHtml + completedHtml;
+}
+
 function renderManagerActiveThread(nameMap) {
   const msgEl = mbEl("mbThreadMessages");
   const titleEl = mbEl("mbThreadTitle");
@@ -7761,6 +7824,7 @@ function renderManagerActiveThread(nameMap) {
     if (titleEl) titleEl.textContent = "Select a waiter";
     if (metaEl) metaEl.textContent = "";
     if (msgEl) msgEl.innerHTML = `<div class="small-text" style="opacity:.8;">Select a waiter thread to view messages.</div>`;
+    renderManagerDrillSummary(null, nameMap);
     return;
   }
 
@@ -7787,6 +7851,7 @@ function renderManagerActiveThread(nameMap) {
   }
 
   buildManagerSuggestedPrompts(thread);
+  renderManagerDrillSummary(thread, nameMap);
 }
 
 async function loadManagerMessenger() {
@@ -8167,6 +8232,11 @@ async function mbSendDrillOverride(opts = {}) {
     repTarget = 4;
   }
 
+  if (Array.isArray(opts.pool) && opts.pool.length) pool = opts.pool;
+  if (opts.tier != null) tier = Number(opts.tier);
+  if (opts.durationSec != null) durationSec = Number(opts.durationSec);
+  if (opts.repTarget != null) repTarget = Number(opts.repTarget);
+
   const drill = {
     ...(baseDrill || {}),
     focus,
@@ -8199,55 +8269,7 @@ async function mbSendDrillOverride(opts = {}) {
 }
 
 async function sendManagerDrillOverride({ focus, repTarget = 3, durationSec = 300 } = {}) {
-  const { restaurantId, isManager } = getManagerBoardFilter();
-  if (!isManager) throw new Error("Manager only");
-  if (!restaurantId) throw new Error("Active restaurant not set");
-
-  const to = String(window.__BC_MB_ACTIVE_THREAD_USER_ID__ || "");
-  if (!to) throw new Error("Select a waiter thread");
-
-  const status = mbEl("mbInstrStatus");
-  if (status) status.textContent = "Assigning drill…";
-
-  const senderId = appState?.session?.user?.id || appState?.session?.userId || null;
-  const senderRole = String(appState?.profile?.role || "");
-  if (!senderId) throw new Error("No session");
-
-  const baseDrill = window.__BC_DRILL_CONFIG__ || window.BC_DRILL_CONFIG || {};
-  const f = String(focus || "read").toLowerCase();
-
-  let pool = ["decider", "bargain_smart", "griever"];
-  if (f === "read") pool = ["decider"];
-
-  const drill = {
-    ...baseDrill,
-    focus: f,
-    pool,
-    repTarget,
-    durationSec,
-    tier: Number(baseDrill?.tier ?? 1)
-  };
-
-  const row = {
-    scope_type: "restaurant",
-    scope_id: restaurantId,
-    restaurant_id: restaurantId,
-    sender_user_id: senderId,
-    receiver_user_id: to,
-    sender_role: senderRole,
-    type: "drill_override",
-    body: "Run this drill now.",
-    payload: {
-      drill,
-      reason: "Manager assigned a focused drill based on skill recommendation."
-    },
-  };
-
-  const { error } = await supabase.from("bc_messages_v1").insert(row);
-  if (error) throw error;
-
-  if (status) status.textContent = "Drill assigned ✅";
-  await loadManagerMessenger();
+  return mbSendDrillOverride({ focus, repTarget, durationSec });
 }
 
 function wireManagerBoardMessenger() {
@@ -8365,13 +8387,7 @@ async function loadManagerBoardMembers() {
 
   const rows = (data || []).map((p) => {
     const name = String(p?.display_name || "").trim() || "(no name)";
-    const role = String(p?.role || "").toLowerCase();
-    const badge =
-      role === "waiter" ? "Waiter" :
-      role === "manager" ? "Manager" :
-      role === "group_manager" ? "Group Manager" :
-      role === "enterprise_admin" ? "Enterprise Admin" :
-      role;
+    const badge = getDisplayRoleLabel(p?.role);
 
     return `
       <div class="card" style="padding:10px; border-radius:12px;">
@@ -8636,7 +8652,7 @@ async function maybeSendWeeklyManagerSummary(rows) {
     if (!Array.isArray(rows) || !rows.length) return;
 
     const managerId = appState?.session?.user?.id || appState?.session?.userId || null;
-    const senderRole = String(appState?.profile?.role || "manager");
+    const senderRole = normalizeMembershipRole(appState?.profile) || "single_manager";
     if (!managerId) return;
 
     const weekStart = getWeekStartIso();
@@ -9144,6 +9160,8 @@ async function loadAuthedState(reason = "manual") {
 // Tabs
 // ------------------------------------------------------------
 function setRole(role) {
+  // UI uses a simplified waiter/manager choice.
+  // Runtime premium role for manager signup maps to single_manager.
   uiState.role = isManagerRole(role) ? "manager" : "waiter";
   const w = document.getElementById("tabRoleWaiter");
   const m = document.getElementById("tabRoleManager");

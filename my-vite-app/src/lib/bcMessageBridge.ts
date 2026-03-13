@@ -18,7 +18,7 @@ function isTrustedOrigin(_origin: string) {
 type BCContext = {
   mode: "demo" | "premium";
   userId: string | null;
-  role: "waiter" | "manager" | null;
+  role: "waiter" | "single_manager" | "group_manager" | "enterpriser" | null;
   restaurantId: string | null;
 };
 
