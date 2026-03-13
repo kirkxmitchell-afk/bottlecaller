@@ -146,6 +146,9 @@ function setPendingStartDrill(payload) {
   return next;
 }
 
+window.__BC_ACTIVE_TIMED_CHALLENGE__ = window.__BC_ACTIVE_TIMED_CHALLENGE__ || null;
+window.__BC_LAST_TIMED_CHALLENGE_RESULT__ = window.__BC_LAST_TIMED_CHALLENGE_RESULT__ || null;
+
 window.setDefaultDrillConfig =
   window.setDefaultDrillConfig ||
   function setDefaultDrillConfig(overrides = {}) {
@@ -401,6 +404,8 @@ document.querySelector("#app").innerHTML = `
           </div>
 
           <div id="mbOverviewLiveEffects" style="margin-top:12px;"></div>
+          <div id="mbOverviewTimedChallenge" style="margin-top:12px;"></div>
+          <div id="mbOverviewRecentChallenges" style="margin-top:12px;"></div>
 
           <div class="card" style="margin-top:12px;">
             <strong>This Week (Auto Summary)</strong>
@@ -471,6 +476,46 @@ document.querySelector("#app").innerHTML = `
 
             <div class="small-text" style="margin-top:6px; opacity:.85;">
               Progress reports from staff + coaching replies. (Per active restaurant.)
+            </div>
+
+            <div id="mbTimedChallengeComposer" class="card" style="display:flex; flex-direction:column; gap:10px; padding:12px; margin-top:12px; margin-bottom:12px;">
+              <div style="font-weight:600;">Send Timed Challenge</div>
+
+              <div class="row" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                <select id="mbTimedChallengeTarget" style="min-width:180px;"></select>
+
+                <select id="mbTimedChallengeType">
+                  <option value="closing_push">Closing Push</option>
+                  <option value="recovery_window">Recovery Window</option>
+                </select>
+
+                <select id="mbTimedChallengeDuration">
+                  <option value="300">5 min</option>
+                  <option value="600" selected>10 min</option>
+                  <option value="900">15 min</option>
+                </select>
+
+                <input
+                  id="mbTimedChallengeReward"
+                  type="number"
+                  min="0"
+                  step="10"
+                  value="50"
+                  style="width:110px;"
+                  placeholder="Reward"
+                />
+              </div>
+
+              <div class="small" style="opacity:.8;">
+                Assign a timed objective to one waiter. First version uses Closing Push.
+              </div>
+
+              <div class="row" style="display:flex; gap:8px; align-items:center;">
+                <button id="btnSendTimedChallenge" class="btn" type="button">Send Challenge</button>
+                <div id="mbTimedChallengeStatus" class="small" style="opacity:.85;"></div>
+              </div>
+
+              <div id="mbTimedChallengeRecentSummary" class="small" style="opacity:.85; margin-top:4px;"></div>
             </div>
 
             <div style="display:grid; grid-template-columns: 280px 1fr; gap:12px; margin-top:12px;">
@@ -737,6 +782,15 @@ document.querySelector("#app").innerHTML = `
         <div id="hudActiveEffectsList" class="small-text" style="display:flex; flex-direction:column; gap:6px;">
           <div style="opacity:.7;">No active abilities.</div>
         </div>
+      </div>
+    </div>
+    <div id="hudTimedChallengeCard" style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.10);">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px;">
+        <div style="font-weight:600;">Timed Challenge</div>
+        <div id="hudTimedChallengeStatus" class="small-text" style="opacity:.8;">No active challenge</div>
+      </div>
+      <div id="hudTimedChallengeBody" class="small-text" style="display:flex; flex-direction:column; gap:6px;">
+        <div style="opacity:.7;">No challenge assigned.</div>
       </div>
     </div>
     <div style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.10);">
@@ -1675,6 +1729,7 @@ function renderHudAbilities() {
   renderHudAbilityFamilyList("attribute", "hudAbilitiesAttributeList");
   renderHudAbilityFamilyList("area", "hudAbilitiesAreaList");
   renderHudActiveEffects();
+  renderHudTimedChallenge();
   setHudAbilityFamily(window.__BC_ABILITY_UI__?.hudFamily || "attribute");
 }
 
@@ -1852,6 +1907,10 @@ function tickHudActiveAbilities() {
 
   setInterval(() => {
     const active = getActiveAbilities();
+    const challenge = getActiveTimedChallenge();
+    if (!challenge && window.__BC_ACTIVE_TIMED_CHALLENGE__) {
+      expireTimedChallenge("expired");
+    }
     let changed = false;
     const now = Date.now();
     for (const entry of active) {
@@ -1866,6 +1925,7 @@ function tickHudActiveAbilities() {
       if (active.length) {
         renderHudActiveEffects();
       }
+      renderHudTimedChallenge();
     }
   }, 1000);
 }
@@ -2025,6 +2085,426 @@ function getAbilityStatusText(ability, surface = "manager_board") {
   return "Idle";
 }
 
+function getActiveTimedChallenge() {
+  const challenge = window.__BC_ACTIVE_TIMED_CHALLENGE__ || null;
+  if (!challenge) return null;
+  if (Number(challenge.expiresAt || 0) > Date.now()) return challenge;
+  return null;
+}
+
+function expireTimedChallenge(status = "expired") {
+  const active = window.__BC_ACTIVE_TIMED_CHALLENGE__ || null;
+  if (!active) return;
+
+  window.__BC_LAST_TIMED_CHALLENGE_RESULT__ = {
+    id: active.id || null,
+    title: active.title || "Timed Challenge",
+    challengeKey: active.challengeKey || null,
+    status,
+    endedAt: Date.now(),
+  };
+  window.__BC_ACTIVE_TIMED_CHALLENGE__ = null;
+}
+
+function renderHudTimedChallenge() {
+  const statusEl = document.getElementById("hudTimedChallengeStatus");
+  const bodyEl = document.getElementById("hudTimedChallengeBody");
+  if (!statusEl || !bodyEl) return;
+
+  const challenge = getActiveTimedChallenge();
+  if (!challenge) {
+    statusEl.textContent = "No active challenge";
+    bodyEl.innerHTML = '<div style="opacity:.7;">No challenge assigned.</div>';
+    return;
+  }
+
+  const secsLeft = Math.max(0, Math.ceil(((challenge.expiresAt || 0) - Date.now()) / 1000));
+  statusEl.textContent = `Active • ${secsLeft}s left`;
+  bodyEl.innerHTML = `
+    <div><b>${escapeHtml(challenge.title || "Timed Challenge")}</b></div>
+    <div style="opacity:.85;">Focus: ${escapeHtml(challenge?.payload?.focus || "-")}</div>
+    <div style="opacity:.85;">Reward: ${Number(challenge?.payload?.rewardPoints || 0)} pts</div>
+  `;
+}
+
+function getTimedChallengeLabel(challengeKey) {
+  switch (String(challengeKey || "").toLowerCase()) {
+    case "closing_push":
+      return "Closing Push";
+    case "recovery_window":
+      return "Recovery Window";
+    default:
+      return "Timed Challenge";
+  }
+}
+
+function getTimedChallengeResultLabel(status) {
+  switch (String(status || "").toLowerCase()) {
+    case "completed":
+      return "Completed";
+    case "expired":
+      return "Expired";
+    default:
+      return "Unknown";
+  }
+}
+
+function getTimedChallengeTone(kind) {
+  switch (String(kind || "")) {
+    case "completed":
+      return "opacity:.95;";
+    case "expired":
+      return "opacity:.75;";
+    case "assigned":
+      return "opacity:.9;";
+    default:
+      return "opacity:.85;";
+  }
+}
+
+function renderManagerBoardOverviewTimedChallenge() {
+  const root = document.getElementById("mbOverviewTimedChallenge");
+  if (!root) return;
+
+  const challenge = getActiveTimedChallenge();
+  const lastResult = window.__BC_LAST_TIMED_CHALLENGE_RESULT__ || null;
+
+  if (!challenge) {
+    root.innerHTML = `
+      <div class="card" style="display:flex; flex-direction:column; gap:8px; padding:12px;">
+        <div style="font-weight:600;">Timed Challenge</div>
+        <div class="small" style="opacity:.75;">No active timed challenge.</div>
+        ${lastResult ? `
+          <div class="small" style="opacity:.85;">
+            Last result: <b>${escapeHtml(getTimedChallengeLabel(lastResult.challengeKey))}</b> •
+            ${escapeHtml(getTimedChallengeResultLabel(lastResult.status))}
+            ${lastResult.strongestSkill ? ` • Strongest skill: ${escapeHtml(lastResult.strongestSkill)}` : ""}
+          </div>
+        ` : ""}
+      </div>
+    `;
+    return;
+  }
+
+  const secsLeft = Math.max(0, Math.ceil(((challenge.expiresAt || 0) - Date.now()) / 1000));
+  root.innerHTML = `
+    <div class="card" style="display:flex; flex-direction:column; gap:8px; padding:12px;">
+      <div style="font-weight:600;">Timed Challenge</div>
+      <div><b>${escapeHtml(getTimedChallengeLabel(challenge.challengeKey))}</b></div>
+      <div class="small" style="opacity:.85;">Focus: ${escapeHtml(challenge?.payload?.focus || "-")}</div>
+      <div class="small" style="opacity:.85;">Reward: ${Number(challenge?.payload?.rewardPoints || 0)} pts</div>
+      <div class="small" style="opacity:.85;">Time left: ${secsLeft}s</div>
+      ${lastResult ? `
+        <div class="small" style="opacity:.75; margin-top:4px;">
+          Last result: ${escapeHtml(getTimedChallengeLabel(lastResult.challengeKey))} •
+          ${escapeHtml(getTimedChallengeResultLabel(lastResult.status))}
+        </div>
+      ` : ""}
+    </div>
+  `;
+}
+
+function getManagerBoardMessageRows() {
+  return (
+    window.__BC_MB_MESSAGES__ ||
+    window.__BC_MESSENGER_ROWS__ ||
+    []
+  );
+}
+
+function getManagerBoardStaffRows() {
+  return (
+    window.__BC_MB_STAFF_ROWS__ ||
+    window.__BC_MB_WAITERS__ ||
+    []
+  );
+}
+
+function resolveManagerBoardUserLabel(userId) {
+  const id = String(userId || "");
+  if (!id) return "Unknown waiter";
+
+  const rows = getManagerBoardStaffRows();
+  const match = rows.find((row) => {
+    const rowId = String(row?.user_id || row?.id || "");
+    return rowId === id;
+  });
+
+  if (!match) {
+    return `Waiter ${id.slice(0, 8)}`;
+  }
+
+  return (
+    match.display_name ||
+    match.full_name ||
+    match.name ||
+    match.email ||
+    `Waiter ${id.slice(0, 8)}`
+  );
+}
+
+function getTimedChallengeTargetLabel(row) {
+  const payload = row?.payload || {};
+
+  const targetUserId =
+    payload?.targetUserId ||
+    row?.receiver_user_id ||
+    null;
+
+  return resolveManagerBoardUserLabel(targetUserId);
+}
+
+function getTimedChallengeActorLabel(row) {
+  const type = String(row?.type || "");
+  if (type === "timed_challenge") {
+    return getTimedChallengeTargetLabel(row);
+  }
+
+  const senderUserId = row?.sender_user_id || null;
+  return resolveManagerBoardUserLabel(senderUserId);
+}
+
+function getRecentTimedChallengeRows() {
+  const rows = getManagerBoardMessageRows();
+
+  return [...rows]
+    .filter((row) => {
+      const type = String(row?.type || "");
+      return (
+        type === "timed_challenge" ||
+        type === "timed_challenge_completed" ||
+        type === "timed_challenge_expired"
+      );
+    })
+    .sort((a, b) => {
+      const ta = new Date(a?.created_at || 0).getTime();
+      const tb = new Date(b?.created_at || 0).getTime();
+      return tb - ta;
+    })
+    .slice(0, 5);
+}
+
+function formatRecentChallengeTime(value) {
+  const ts = new Date(value || 0).getTime();
+  if (!ts) return "Recent";
+
+  const diffMs = Date.now() - ts;
+  const diffSec = Math.max(0, Math.floor(diffMs / 1000));
+
+  if (diffSec < 60) return `${diffSec}s ago`;
+  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
+  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
+  return `${Math.floor(diffSec / 86400)}d ago`;
+}
+
+function getRecentTimedChallengeSentRow() {
+  const rows = getManagerBoardMessageRows();
+
+  return [...rows]
+    .filter((row) => String(row?.type || "") === "timed_challenge")
+    .sort((a, b) => {
+      const ta = new Date(a?.created_at || 0).getTime();
+      const tb = new Date(b?.created_at || 0).getTime();
+      return tb - ta;
+    })[0] || null;
+}
+
+function getRecentTimedChallengeResultRow() {
+  const rows = getManagerBoardMessageRows();
+
+  return [...rows]
+    .filter((row) => {
+      const type = String(row?.type || "");
+      return type === "timed_challenge_completed" || type === "timed_challenge_expired";
+    })
+    .sort((a, b) => {
+      const ta = new Date(a?.created_at || 0).getTime();
+      const tb = new Date(b?.created_at || 0).getTime();
+      return tb - ta;
+    })[0] || null;
+}
+
+function renderTimedChallengeRecentSummary() {
+  const root = document.getElementById("mbTimedChallengeRecentSummary");
+  if (!root) return;
+
+  const lastSent = getRecentTimedChallengeSentRow();
+  const lastResult = getRecentTimedChallengeResultRow();
+
+  const sentText = lastSent
+    ? `${getTimedChallengeLabel(lastSent?.payload?.challengeKey)} -> ${getTimedChallengeActorLabel(lastSent)} • ${formatRecentChallengeTime(lastSent?.created_at)}`
+    : "None";
+
+  const resultMeta = lastResult ? getTimedChallengeMessageMeta(lastResult) : null;
+  const resultText = lastResult
+    ? `${resultMeta?.label || "Result"} • ${getTimedChallengeLabel(lastResult?.payload?.challengeKey)} • ${getTimedChallengeActorLabel(lastResult)} • ${formatRecentChallengeTime(lastResult?.created_at)}`
+    : "None";
+
+  root.innerHTML = `
+    <div><b>Last sent:</b> ${escapeHtml(sentText)}</div>
+    <div style="margin-top:4px;"><b>Last result:</b> ${escapeHtml(resultText)}</div>
+  `;
+}
+
+function renderManagerBoardRecentChallenges() {
+  const root = document.getElementById("mbOverviewRecentChallenges");
+  if (!root) return;
+
+  const rows = getRecentTimedChallengeRows();
+
+  const wrap = document.createElement("div");
+  wrap.className = "card";
+  wrap.style.display = "flex";
+  wrap.style.flexDirection = "column";
+  wrap.style.gap = "8px";
+  wrap.style.padding = "12px";
+
+  const title = document.createElement("div");
+  title.style.fontWeight = "600";
+  title.textContent = "Recent Challenge History";
+  wrap.appendChild(title);
+
+  if (!rows.length) {
+    const empty = document.createElement("div");
+    empty.className = "small";
+    empty.style.opacity = ".75";
+    empty.textContent = "No recent timed challenge activity.";
+    wrap.appendChild(empty);
+    root.innerHTML = "";
+    root.appendChild(wrap);
+    return;
+  }
+
+  for (const row of rows) {
+    const meta = getTimedChallengeMessageMeta(row);
+    const payload = row?.payload || {};
+    const label = meta?.label || "Timed Challenge";
+    const titleText = meta?.title || getTimedChallengeLabel(payload?.challengeKey);
+    const strongestSkill = meta?.strongestSkill || null;
+    const actorLabel = getTimedChallengeActorLabel(row);
+    const timeText = formatRecentChallengeTime(row?.created_at);
+
+    const item = document.createElement("div");
+    item.style.padding = "8px 0";
+    item.style.borderTop = "1px solid rgba(255,255,255,0.06)";
+
+    item.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+        <div style="min-width:0;">
+          <div style="font-weight:600;">${escapeHtml(label)}</div>
+          <div class="small" style="opacity:.85; margin-top:4px;">
+            ${escapeHtml(titleText)} • ${escapeHtml(actorLabel)}
+            ${strongestSkill ? ` • Strongest skill: ${escapeHtml(strongestSkill)}` : ""}
+          </div>
+          <div class="small" style="opacity:.7; margin-top:4px;">
+            ${escapeHtml(row?.body || "")}
+          </div>
+        </div>
+        <div class="small" style="opacity:.7; white-space:nowrap;">${escapeHtml(timeText)}</div>
+      </div>
+    `;
+
+    wrap.appendChild(item);
+  }
+
+  root.innerHTML = "";
+  root.appendChild(wrap);
+}
+
+function getTimedChallengeMessageMeta(row) {
+  const type = String(row?.type || "");
+  const payload = row?.payload || {};
+  const challengeKey = payload?.challengeKey || null;
+  const label = getTimedChallengeLabel(challengeKey);
+
+  if (type === "timed_challenge") {
+    return {
+      kind: "assigned",
+      label: "Challenge assigned",
+      title: label,
+      strongestSkill: null,
+    };
+  }
+
+  if (type === "timed_challenge_completed") {
+    return {
+      kind: "completed",
+      label: "Challenge completed",
+      title: label,
+      strongestSkill: payload?.strongestSkill || null,
+    };
+  }
+
+  if (type === "timed_challenge_expired") {
+    return {
+      kind: "expired",
+      label: "Challenge expired",
+      title: label,
+      strongestSkill: null,
+    };
+  }
+
+  return null;
+}
+
+function applyTimedChallengeFromMessage(message) {
+  try {
+    const payload = message?.payload || {};
+    const challengeKey = payload?.challengeKey || null;
+    const targetUserId = payload?.targetUserId || null;
+    const restaurantId = payload?.restaurantId || null;
+    const durationSec = Number(payload?.durationSec || 0);
+
+    const ctx = window.__BC_CTX__ || window.__BC_BUILD_CTX__?.("premium") || {};
+    const currentUserId = ctx.userId || null;
+    const currentRestaurantId = ctx.restaurantId || null;
+
+    if (!challengeKey || !targetUserId || !restaurantId || !durationSec) {
+      console.warn("[TIMED CHALLENGE] invalid payload", payload);
+      return false;
+    }
+
+    if (String(targetUserId) !== String(currentUserId || "")) return false;
+    if (String(restaurantId) !== String(currentRestaurantId || "")) return false;
+
+    const current = window.__BC_ACTIVE_TIMED_CHALLENGE__ || null;
+    if (current?.id && message?.id && String(current.id) === String(message.id)) {
+      console.log("[TIMED CHALLENGE] skipped (already active)", { id: message.id });
+      return true;
+    }
+
+    const lastResult = window.__BC_LAST_TIMED_CHALLENGE_RESULT__ || null;
+    if (lastResult?.id && message?.id && String(lastResult.id) === String(message.id)) {
+      console.log("[TIMED CHALLENGE] skipped (already resolved)", { id: message.id });
+      return true;
+    }
+
+    const startedAt = Date.now();
+    const challenge = {
+      id: message?.id || crypto.randomUUID(),
+      title: payload?.title || "Timed Challenge",
+      challengeKey,
+      targetUserId,
+      restaurantId,
+      startedAt,
+      expiresAt: startedAt + durationSec * 1000,
+      durationSec,
+      status: "active",
+      payload,
+    };
+
+    window.__BC_ACTIVE_TIMED_CHALLENGE__ = challenge;
+    console.log("[TIMED CHALLENGE] applied ✅", challenge);
+    renderHudTimedChallenge();
+    renderManagerBoardOverviewTimedChallenge();
+    window.showToast?.("Timed manager challenge started ✅");
+    return true;
+  } catch (e) {
+    console.warn("applyTimedChallengeFromMessage failed", e);
+    return false;
+  }
+}
+
 function getAbilityEffectSummary(ability) {
   switch (String(ability?.id || "")) {
     case "closing_surge":
@@ -2155,6 +2635,8 @@ function renderManagerBoardAbilitiesTab(family, targetId) {
 
 function renderManagerBoardAbilityTabs() {
   renderManagerBoardOverviewLiveEffects();
+  renderManagerBoardOverviewTimedChallenge();
+  renderManagerBoardRecentChallenges();
   renderManagerBoardAbilitiesTab("attribute", "mbTab_attribute_abilities");
   renderManagerBoardAbilitiesTab("area", "mbTab_area_abilities");
 }
@@ -2168,14 +2650,21 @@ function tickManagerBoardAbilities() {
     if (!screen || screen.classList.contains("hidden")) return;
 
     const overview = document.getElementById("mbTab_overview");
+    const messenger = document.getElementById("mbTab_messenger");
     const attr = document.getElementById("mbTab_attribute_abilities");
     const area = document.getElementById("mbTab_area_abilities");
     const overviewVisible = overview && !overview.classList.contains("hidden");
+    const messengerVisible = messenger && !messenger.classList.contains("hidden");
     const attrVisible = attr && !attr.classList.contains("hidden");
     const areaVisible = area && !area.classList.contains("hidden");
 
     if (overviewVisible) {
       renderManagerBoardOverviewLiveEffects();
+      renderManagerBoardOverviewTimedChallenge();
+      renderManagerBoardRecentChallenges();
+    }
+    if (messengerVisible) {
+      renderTimedChallengeRecentSummary();
     }
     if (attrVisible || areaVisible) {
       renderManagerBoardAbilityTabs();
@@ -3233,6 +3722,135 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
       if (msg.type === "drill_run_started") {
         console.log("[PARENT] drill_run_started received ✅", { msg });
+        return;
+      }
+
+      if (msg.type === "timed_challenge_result") {
+        const replyType = "timed_challenge_result_ack";
+        const challengeId = msg?.challengeId || null;
+        const senderCtx = getSourceCtx(event.source);
+
+        const replyResult = (payload = {}) => {
+          try {
+            event.source?.postMessage(
+              {
+                source: "BC_MSG",
+                v: 1,
+                type: replyType,
+                challengeId,
+                ...payload,
+              },
+              event.origin
+            );
+          } catch {}
+        };
+
+        if (isDemoMsg(msg, senderCtx)) {
+          replyResult({ ok: true, demo: true });
+          return;
+        }
+
+        if (rejectIfEpochMismatch(event, msg, replyType, { challengeId })) return;
+
+        const ctx = getSenderCtxOrReject(
+          event,
+          senderCtx,
+          replyType,
+          { challengeId },
+          { requireRestaurant: true, allowedRoles: ["waiter", "single_manager", "group_manager", "enterpriser"] }
+        );
+        if (!ctx) return;
+
+        const liveAuthNow = await getLiveAuthOrNull();
+        const authed = liveAuthNow?.userId || null;
+        if (!authed) {
+          replyResult({ ok: false, error: "no_session" });
+          return;
+        }
+        if (String(authed) !== String(ctx.userId)) {
+          replyResult({ ok: false, error: "forbidden_user" });
+          return;
+        }
+
+        const p = msg?.payload || {};
+        const challengeKey = p?.challengeKey || null;
+        const status = String(p?.status || "").toLowerCase();
+        const title = String(p?.title || "Timed Challenge");
+        const targetUserId = p?.targetUserId || ctx.userId;
+        const restaurantId = p?.restaurantId || ctx.restaurantId;
+        const rewardPoints = Number(p?.rewardPoints || 0);
+
+        if (!challengeId) {
+          replyResult({ ok: false, error: "missing_challenge_id" });
+          return;
+        }
+
+        const { data: assignedMsg, error: assignedErr } = await supabase
+          .from("bc_messages_v1")
+          .select("id, sender_user_id, receiver_user_id, restaurant_id, type, body, payload")
+          .eq("id", challengeId)
+          .eq("type", "timed_challenge")
+          .maybeSingle();
+
+        if (assignedErr) {
+          replyResult({ ok: false, error: "challenge_lookup_failed" });
+          return;
+        }
+
+        if (!assignedMsg?.id) {
+          replyResult({ ok: false, error: "challenge_not_found" });
+          return;
+        }
+
+        const managerUserId = assignedMsg.sender_user_id || null;
+        if (!managerUserId) {
+          replyResult({ ok: false, error: "challenge_missing_sender" });
+          return;
+        }
+
+        const resultType =
+          status === "completed"
+            ? "timed_challenge_completed"
+            : "timed_challenge_expired";
+
+        const body =
+          status === "completed"
+            ? `${title} completed`
+            : `${title} expired`;
+
+        const resultRow = {
+          scope_type: "restaurant",
+          scope_id: restaurantId,
+          restaurant_id: restaurantId,
+          sender_user_id: targetUserId,
+          receiver_user_id: managerUserId,
+          sender_role: ctx.membershipRole || ctx.role || "waiter",
+          type: resultType,
+          body,
+          payload: {
+            challengeId,
+            challengeKey,
+            status,
+            rewardPoints,
+            strongestSkill: p?.strongestSkill || null,
+            completedAt: p?.completedAt || Date.now(),
+          },
+        };
+
+        const { error: insertErr } = await supabase
+          .from("bc_messages_v1")
+          .insert(resultRow);
+
+        if (insertErr) {
+          replyResult({ ok: false, error: "result_insert_failed" });
+          return;
+        }
+
+        replyResult({
+          ok: true,
+          managerUserId,
+          resultType,
+        });
         return;
       }
 
@@ -4641,6 +5259,7 @@ async function loadWaiterMessagesThread() {
   }
 
   const rows = data || [];
+
   if (!rows.length) {
     threadEl.innerHTML = `<div class="small-text" style="opacity:.8;">No messages yet.</div>`;
     return;
@@ -5399,6 +6018,7 @@ function wireManagerBoardMenu() {
       return;
     }
     if (name === "messenger") {
+      renderTimedChallengeComposer();
       wireManagerBoardMessenger();
       return loadManagerMessenger();
     }
@@ -5438,6 +6058,7 @@ function wireManagerBoardMenu() {
       }
     }
     if (tab === "messenger") {
+      renderTimedChallengeComposer();
       wireManagerBoardMessenger();
       await loadManagerMessenger();
     }
@@ -6848,11 +7469,15 @@ function renderMbMessageItem(row, nameMap) {
   const kind = String(row?.type || "message");
   const body = escapeHtml(String(row?.body || ""));
   const when = escapeHtml(String(row?.created_at || ""));
+  const timedMeta = getTimedChallengeMessageMeta(row);
 
   let badge = "MSG";
   if (kind === "progress_report") badge = "REPORT";
   if (kind === "instruction") badge = "INSTRUCTION";
   if (kind === "drill_override") badge = "DRILL";
+  if (kind === "timed_challenge") badge = "CHALLENGE";
+  if (kind === "timed_challenge_completed") badge = "COMPLETE";
+  if (kind === "timed_challenge_expired") badge = "EXPIRED";
 
   let payloadHtml = "";
 
@@ -6886,6 +7511,37 @@ function renderMbMessageItem(row, nameMap) {
         <div class="small-text" style="opacity:.9;">Duration: ${duration}s</div>
         <div class="small-text" style="opacity:.9;">Tier: ${tier}</div>
         ${reason ? `<div class="small-text" style="margin-top:8px; opacity:.75;">${reason}</div>` : ""}
+      </div>
+    `;
+  } else if (timedMeta) {
+    const payload = row?.payload || {};
+    const actorLabel = getTimedChallengeActorLabel(row);
+    const strongestSkillText = timedMeta.strongestSkill
+      ? ` • Strongest skill: ${timedMeta.strongestSkill}`
+      : "";
+    const rewardPoints = Number(payload?.rewardPoints || 0);
+    const completedAt = payload?.completedAt
+      ? new Date(payload.completedAt).toLocaleString()
+      : "";
+
+    payloadHtml = `
+      <div style="
+        margin-top:8px;
+        padding:10px;
+        border:1px solid rgba(255,255,255,0.10);
+        border-radius:10px;
+        background:rgba(255,255,255,0.04);
+        ${getTimedChallengeTone(timedMeta.kind)}
+      ">
+        <div style="font-weight:600;">${escapeHtml(timedMeta.label)}</div>
+        <div class="small-text" style="opacity:.85; margin-top:4px;">
+          ${escapeHtml(timedMeta.title)} • ${escapeHtml(actorLabel)}${escapeHtml(strongestSkillText)}
+        </div>
+        <div class="small-text" style="opacity:.75; margin-top:4px;">
+          ${escapeHtml(row.body || "")}
+        </div>
+        ${rewardPoints ? `<div class="small-text" style="opacity:.9;">Reward: ${rewardPoints} pts</div>` : ""}
+        ${completedAt ? `<div class="small-text" style="opacity:.75; margin-top:8px;">When: ${escapeHtml(completedAt)}</div>` : ""}
       </div>
     `;
   } else if (kind === "progress_report" && row?.payload && typeof row.payload === "object" && Object.keys(row.payload).length) {
@@ -7162,6 +7818,10 @@ async function loadManagerMessenger() {
 
   const rows = data || [];
   window.__MB_LAST_MESSAGES__ = rows;
+  window.__BC_MB_MESSAGES__ = rows;
+  window.__BC_MESSENGER_ROWS__ = rows;
+  renderTimedChallengeTargetOptions();
+  wireTimedChallengeComposer();
   if (!rows.length) {
     if (listEl) listEl.innerHTML = "";
     if (emptyEl) emptyEl.style.display = "block";
@@ -7222,7 +7882,194 @@ async function loadManagerMessenger() {
   }
 
   renderManagerActiveThread(nameMap);
+  renderTimedChallengeComposer();
   wireMbCoachSuggestionButtons();
+}
+
+function getManagerBoardWaiterOptions() {
+  const rows =
+    window.__BC_MB_STAFF_ROWS__ ||
+    window.__BC_MB_WAITERS__ ||
+    [];
+
+  return rows.filter((x) => {
+    const role = String(x?.role || x?.membership_role || x?.membershipRole || "").toLowerCase();
+    return role === "waiter";
+  });
+}
+
+function renderTimedChallengeTargetOptions() {
+  const select = document.getElementById("mbTimedChallengeTarget");
+  if (!select) return;
+
+  const rows = getManagerBoardWaiterOptions();
+  const prev = select.value || "";
+  select.innerHTML = "";
+
+  if (!rows.length) {
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = "No waiters available";
+    select.appendChild(opt);
+    return;
+  }
+
+  for (const row of rows) {
+    const opt = document.createElement("option");
+    const value = row.user_id || row.id || "";
+    opt.value = value;
+    opt.textContent =
+      row.display_name ||
+      row.full_name ||
+      row.name ||
+      row.email ||
+      `Waiter ${String(value).slice(0, 8)}`;
+    select.appendChild(opt);
+  }
+
+  if (prev && rows.some((x) => String(x.user_id || x.id || "") === String(prev))) {
+    select.value = prev;
+  }
+}
+
+function buildTimedChallengePayload() {
+  const ctx = window.__BC_CTX__ || window.__BC_BUILD_CTX__?.("premium") || {};
+
+  const targetEl = document.getElementById("mbTimedChallengeTarget");
+  const typeEl = document.getElementById("mbTimedChallengeType");
+  const durationEl = document.getElementById("mbTimedChallengeDuration");
+  const rewardEl = document.getElementById("mbTimedChallengeReward");
+
+  const targetUserId = targetEl?.value || null;
+  const challengeKey = typeEl?.value || "closing_push";
+  const durationSec = Number(durationEl?.value || 600);
+  const rewardPoints = Number(rewardEl?.value || 50);
+
+  if (!targetUserId) return null;
+  if (!ctx.restaurantId) return null;
+
+  const challengeDefs = {
+    closing_push: {
+      title: "Closing Push",
+      focus: "closing",
+      successRule: {
+        type: "strongest_skill_equals",
+        value: "closing",
+      },
+    },
+    recovery_window: {
+      title: "Recovery Window",
+      focus: "recovery",
+      successRule: {
+        type: "strongest_skill_equals",
+        value: "recovery",
+      },
+    },
+  };
+
+  const def = challengeDefs[challengeKey] || challengeDefs.closing_push;
+
+  return {
+    challengeKey,
+    title: def.title,
+    targetUserId,
+    restaurantId: ctx.restaurantId,
+    durationSec,
+    focus: def.focus,
+    rewardPoints,
+    successRule: def.successRule,
+  };
+}
+
+async function sendTimedChallengeFromManager() {
+  const statusEl = document.getElementById("mbTimedChallengeStatus");
+  const payload = buildTimedChallengePayload();
+  const ctx = window.__BC_CTX__ || window.__BC_BUILD_CTX__?.("premium") || {};
+
+  if (statusEl) statusEl.textContent = "";
+
+  if (!payload) {
+    if (statusEl) statusEl.textContent = "Missing target or restaurant.";
+    return false;
+  }
+
+  try {
+    const liveAuth = await getLiveAuthOrNull();
+    const userId = liveAuth?.userId || null;
+    if (!userId) {
+      if (statusEl) statusEl.textContent = "No active session.";
+      return false;
+    }
+
+    const senderRole =
+      ctx.membershipRole ||
+      ctx.membership_role ||
+      ctx.role ||
+      "single_manager";
+
+    const row = {
+      scope_type: "restaurant",
+      scope_id: ctx.restaurantId,
+      restaurant_id: ctx.restaurantId,
+      sender_user_id: userId,
+      receiver_user_id: payload.targetUserId,
+      sender_role: senderRole,
+      type: "timed_challenge",
+      body: `${payload.title} • ${Math.round(payload.durationSec / 60)} min`,
+      payload,
+    };
+
+    const { error } = await supabase
+      .from("bc_messages_v1")
+      .insert(row);
+
+    if (error) throw error;
+
+    if (statusEl) statusEl.textContent = `${payload.title} sent ✅`;
+    renderTimedChallengeRecentSummary();
+    await loadManagerMessenger();
+    renderTimedChallengeRecentSummary();
+    return true;
+  } catch (e) {
+    console.warn("[TIMED CHALLENGE] send failed", e);
+    if (statusEl) statusEl.textContent = "Could not send challenge.";
+    return false;
+  }
+}
+
+function wireTimedChallengeComposer() {
+  const btn = document.getElementById("btnSendTimedChallenge");
+  if (!btn || btn.__bcBound) return;
+
+  btn.__bcBound = true;
+  btn.addEventListener("click", async () => {
+    await sendTimedChallengeFromManager();
+  });
+}
+
+function canManageTimedChallenges() {
+  const ctx = window.__BC_CTX__ || window.__BC_BUILD_CTX__?.("premium") || {};
+  const role = String(
+    ctx.membershipRole ||
+    ctx.membership_role ||
+    ctx.role ||
+    ""
+  ).toLowerCase();
+
+  return ["single_manager", "group_manager", "enterpriser"].includes(role);
+}
+
+function renderTimedChallengeComposer() {
+  const composer = document.getElementById("mbTimedChallengeComposer");
+  if (composer) {
+    composer.classList.toggle("hidden", !canManageTimedChallenges());
+  }
+
+  if (!canManageTimedChallenges()) return;
+
+  renderTimedChallengeTargetOptions();
+  wireTimedChallengeComposer();
+  renderTimedChallengeRecentSummary();
 }
 
 async function mbSendInstruction() {
@@ -7477,6 +8324,9 @@ function wireManagerBoardMessenger() {
       }
 
       renderManagerActiveThread(nameMap);
+      const target = document.getElementById("mbTimedChallengeTarget");
+      if (target) target.value = String(window.__BC_MB_ACTIVE_THREAD_USER_ID__ || "");
+      renderTimedChallengeComposer();
     });
   }
 }
@@ -7508,6 +8358,11 @@ async function loadManagerBoardMembers() {
     return;
   }
 
+  window.__BC_MB_STAFF_ROWS__ = data || [];
+  window.__BC_MB_WAITERS__ = (data || []).filter(
+    (p) => String(p?.role || "").toLowerCase() === "waiter"
+  );
+
   const rows = (data || []).map((p) => {
     const name = String(p?.display_name || "").trim() || "(no name)";
     const role = String(p?.role || "").toLowerCase();
@@ -7535,6 +8390,7 @@ async function loadManagerBoardMembers() {
 
   box.innerHTML = rows.join("") || `<div class="small-text">No members found.</div>`;
   msg.textContent = `${(data || []).length} member(s) loaded.`;
+  renderTimedChallengeTargetOptions();
 }
 
 function wireManagerBoardMembers() {

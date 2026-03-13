@@ -225,6 +225,177 @@
     function submitProgressReportToManager({ body, payload } = {}) {
       return submitProgressReport({ body, payload });
     }
+    function getTimedChallengeHost() {
+      try {
+        return window.parent && window.parent !== window ? window.parent : window;
+      } catch {
+        return window;
+      }
+    }
+    function getActiveTimedChallenge() {
+      return window.__BC_ACTIVE_TIMED_CHALLENGE__ || getTimedChallengeHost().__BC_ACTIVE_TIMED_CHALLENGE__ || null;
+    }
+    function getLastTimedChallengeResult() {
+      return window.__BC_LAST_TIMED_CHALLENGE_RESULT__ || getTimedChallengeHost().__BC_LAST_TIMED_CHALLENGE_RESULT__ || null;
+    }
+    function renderTimedChallengeSurfaces() {
+      const host = getTimedChallengeHost();
+      try { host.renderHudTimedChallenge?.(); } catch {}
+      try { host.renderManagerBoardOverviewTimedChallenge?.(); } catch {}
+    }
+    function logTimedChallengeResult(result = {}) {
+      try {
+        const host = getTimedChallengeHost();
+        const challenge = result?.challenge || host.__BC_LAST_TIMED_CHALLENGE_RESULT__ || null;
+        if (!challenge) return false;
+
+        window.parent?.postMessage(
+          {
+            source: "BC_MSG",
+            v: 1,
+            type: "timed_challenge_result",
+            challengeId: challenge.id || null,
+            payload: {
+              challengeKey: challenge.challengeKey || null,
+              title: challenge.title || null,
+              status: result?.status || challenge.status || null,
+              completedAt: result?.completedAt || Date.now(),
+              strongestSkill: result?.strongestSkill || null,
+              rewardPoints: result?.rewardPoints ?? challenge?.payload?.rewardPoints ?? null,
+              targetUserId: challenge.targetUserId || null,
+              restaurantId: challenge.restaurantId || null,
+            },
+            epoch: Number(window.__BC_IFRAME_EPOCH__ || window.__BC_EPOCH__ || 0),
+          },
+          window.location.origin
+        );
+
+        return true;
+      } catch (e) {
+        console.warn("[TIMED CHALLENGE] result post failed", e);
+        return false;
+      }
+    }
+    function completeTimedChallengeLocally(status, extra = {}) {
+      const host = getTimedChallengeHost();
+      const challenge = window.__BC_ACTIVE_TIMED_CHALLENGE__ || host.__BC_ACTIVE_TIMED_CHALLENGE__ || null;
+      if (!challenge) return false;
+
+      const result = {
+        id: challenge.id,
+        challengeKey: challenge.challengeKey,
+        title: challenge.title,
+        status: String(status || "expired"),
+        completedAt: Date.now(),
+        targetUserId: challenge.targetUserId || null,
+        restaurantId: challenge.restaurantId || null,
+        rewardPoints: challenge?.payload?.rewardPoints ?? null,
+        ackPending: true,
+        ackOk: null,
+        ackError: null,
+        ackAt: null,
+        challenge,
+        ...extra,
+      };
+
+      window.__BC_LAST_TIMED_CHALLENGE_RESULT__ = result;
+      host.__BC_LAST_TIMED_CHALLENGE_RESULT__ = result;
+      window.__BC_ACTIVE_TIMED_CHALLENGE__ = null;
+      host.__BC_ACTIVE_TIMED_CHALLENGE__ = null;
+
+      renderTimedChallengeSurfaces();
+
+      if (result.status === "expired") {
+        window.showToast?.("Timed challenge expired.");
+      }
+
+      logTimedChallengeResult(result);
+      return true;
+    }
+    function evaluateTimedChallengeAgainstProgress(payload) {
+      const challenge = window.__BC_ACTIVE_TIMED_CHALLENGE__ || getActiveTimedChallenge();
+      if (!challenge) return false;
+
+      const p = payload || {};
+      const challengeKey = String(challenge?.challengeKey || "").toLowerCase();
+      const strongestSkill = String(p?.strongestSkill || "").toLowerCase();
+
+      if (challengeKey === "closing_push" && strongestSkill === "closing") {
+        return completeTimedChallengeLocally("completed", {
+          strongestSkill,
+          rewardPoints: challenge?.payload?.rewardPoints ?? null,
+        });
+      }
+
+      if (challengeKey === "recovery_window" && strongestSkill === "recovery") {
+        return completeTimedChallengeLocally("completed", {
+          strongestSkill,
+          rewardPoints: challenge?.payload?.rewardPoints ?? null,
+        });
+      }
+
+      return false;
+    }
+    function applyTimedChallengeFromMessage(message) {
+      try {
+        const payload = message?.payload || {};
+        const challengeKey = payload?.challengeKey || null;
+        const targetUserId = payload?.targetUserId || null;
+        const restaurantId = payload?.restaurantId || null;
+        const durationSec = Number(payload?.durationSec || 0);
+
+        const ctx = window.__BC_CTX__ || {};
+        const currentUserId = ctx.userId || null;
+        const currentRestaurantId = ctx.restaurantId || null;
+
+        if (!challengeKey || !targetUserId || !restaurantId || !durationSec) {
+          console.warn("[TIMED CHALLENGE] invalid payload", payload);
+          return false;
+        }
+
+        if (String(targetUserId) !== String(currentUserId || "")) return false;
+        if (String(restaurantId) !== String(currentRestaurantId || "")) return false;
+
+        const host = getTimedChallengeHost();
+        const current = window.__BC_ACTIVE_TIMED_CHALLENGE__ || host.__BC_ACTIVE_TIMED_CHALLENGE__ || null;
+        if (current?.id && message?.id && String(current.id) === String(message.id)) {
+          console.log("[TIMED CHALLENGE] skipped (already active)", { id: message.id });
+          return true;
+        }
+
+        const lastResult = window.__BC_LAST_TIMED_CHALLENGE_RESULT__ || host.__BC_LAST_TIMED_CHALLENGE_RESULT__ || null;
+        if (lastResult?.id && message?.id && String(lastResult.id) === String(message.id)) {
+          console.log("[TIMED CHALLENGE] skipped (already resolved)", { id: message.id });
+          return true;
+        }
+
+        const startedAt = Date.now();
+        const challenge = {
+          id: message?.id || crypto.randomUUID(),
+          title: payload?.title || "Timed Challenge",
+          challengeKey,
+          targetUserId,
+          restaurantId,
+          startedAt,
+          expiresAt: startedAt + durationSec * 1000,
+          durationSec,
+          status: "active",
+          payload,
+        };
+
+        window.__BC_ACTIVE_TIMED_CHALLENGE__ = challenge;
+        host.__BC_ACTIVE_TIMED_CHALLENGE__ = challenge;
+
+        console.log("[TIMED CHALLENGE] applied ✅", challenge);
+        renderTimedChallengeSurfaces();
+        window.showToast?.("Timed manager challenge started ✅");
+
+        return true;
+      } catch (e) {
+        console.warn("applyTimedChallengeFromMessage failed", e);
+        return false;
+      }
+    }
     function getStrongestSkillLabel(snapshot) {
       const s = snapshot || {};
       const entries = [
@@ -623,6 +794,8 @@
           weakestSkill
         };
 
+        evaluateTimedChallengeAgainstProgress(payload);
+
         window.parent?.postMessage(
           {
             source: "BC_MSG",
@@ -884,6 +1057,27 @@
         if (!document.hidden) kick();
       });
     }
+    function tickTimedChallenge() {
+      if (window.__BC_TIMED_CHALLENGE_TICK_WIRED__) return;
+      window.__BC_TIMED_CHALLENGE_TICK_WIRED__ = true;
+
+      setInterval(() => {
+        const challenge = getActiveTimedChallenge();
+        if (!challenge) return;
+
+        const now = Date.now();
+        if ((challenge.expiresAt || 0) <= now) {
+          completeTimedChallengeLocally("expired", {
+            id: challenge.id,
+            title: challenge.title,
+            challengeKey: challenge.challengeKey,
+          });
+          return;
+        }
+
+        renderTimedChallengeSurfaces();
+      }, 1000);
+    }
     window.addEventListener("message", async (event) => {
       const msg = event?.data;
       if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
@@ -967,6 +1161,22 @@
             }
 
             shouldMarkRead = !!applied || !!duplicateActive || !!duplicateCompleted;
+          } else if (rowType === "timed_challenge") {
+            const alreadyActiveId = getActiveTimedChallenge()?.id || null;
+            const lastResultId = getLastTimedChallengeResult()?.id || null;
+
+            const duplicateActive =
+              row?.id && alreadyActiveId && String(row.id) === String(alreadyActiveId);
+
+            const duplicateResolved =
+              row?.id && lastResultId && String(row.id) === String(lastResultId);
+
+            let applied = false;
+            if (!duplicateActive && !duplicateResolved) {
+              applied = applyTimedChallengeFromMessage(row);
+            }
+
+            shouldMarkRead = !!applied || !!duplicateActive || !!duplicateResolved;
           } else if (rowType === "instruction") {
             window.showToast?.("New manager instruction ✅");
             shouldMarkRead = true;
@@ -976,6 +1186,35 @@
       }
       if (msg.type === "message_mark_read_result") {
         if (!msg.ok) console.warn("[GAME] message_mark_read_result failed", msg?.error || "unknown", msg?.id);
+      }
+      if (msg.type === "timed_challenge_result_ack") {
+        const last = window.__BC_LAST_TIMED_CHALLENGE_RESULT__ || null;
+        const ackMatchesLast =
+          last && msg?.challengeId && String(last.id || "") === String(msg.challengeId);
+
+        if (ackMatchesLast) {
+          const next = {
+            ...last,
+            ackPending: false,
+            ackOk: !!msg.ok,
+            ackError: msg.ok ? null : (msg?.error || "unknown"),
+            ackAt: Date.now(),
+          };
+          window.__BC_LAST_TIMED_CHALLENGE_RESULT__ = next;
+          try { getTimedChallengeHost().__BC_LAST_TIMED_CHALLENGE_RESULT__ = next; } catch {}
+          renderTimedChallengeSurfaces();
+        }
+
+        if (msg.ok) {
+          console.log("[TIMED CHALLENGE] result ack ✅", msg);
+          if ((last?.status || "").toLowerCase() === "completed") {
+            window.showToast?.("Timed challenge completed ✅");
+          }
+        } else {
+          console.warn("[TIMED CHALLENGE] result ack failed", msg?.error || "unknown");
+          window.showToast?.("Could not send timed challenge result.");
+        }
+        return;
       }
       if (msg.type === "drill_run_completed_result") {
         if (msg.ok) {
@@ -1014,6 +1253,7 @@
       syncProgressReportButtonVisibility();
     }
     startUnreadMessagesPolling();
+    tickTimedChallenge();
     window.submitProgressReport = submitProgressReport;
     window.submitProgressReportToManager = submitProgressReportToManager;
     window.getTierUnlocked = function getTierUnlocked() {
