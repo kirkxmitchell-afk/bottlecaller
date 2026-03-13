@@ -386,6 +386,8 @@ document.querySelector("#app").innerHTML = `
         <button class="btn" type="button" data-mbtab="staff">Staff</button>
         <button class="btn" type="button" data-mbtab="insights">Insights</button>
         <button class="btn" type="button" data-mbtab="messenger">Messenger</button>
+        <button class="btn" type="button" data-mbtab="attribute_abilities">Attribute Abilities</button>
+        <button class="btn" type="button" data-mbtab="area_abilities">Area Abilities</button>
         <button class="btn" type="button" data-mbtab="billing">Listing</button>
         <button class="btn" type="button" data-mbtab="history">Performance</button>
       </div>
@@ -454,6 +456,8 @@ document.querySelector("#app").innerHTML = `
 
         <div id="mbTab_staff" class="mbTab hidden"></div>
         <div id="mbTab_insights" class="mbTab hidden"></div>
+        <div id="mbTab_attribute_abilities" class="mbTab hidden"></div>
+        <div id="mbTab_area_abilities" class="mbTab hidden"></div>
         <div id="mbTab_messenger" class="mbTab hidden">
           <div class="card" style="margin-top:12px;">
             <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
@@ -697,6 +701,27 @@ document.querySelector("#app").innerHTML = `
           <div style="opacity:.7;">No history yet.</div>
         </div>
 
+      </div>
+    </div>
+    <div id="hudAbilitiesCard" style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.10);">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px;">
+        <div style="font-weight:600;">Abilities</div>
+        <div class="small-text" id="hudAbilitiesStatus" style="opacity:.8;">No active effects</div>
+      </div>
+
+      <div style="display:flex; gap:8px; margin-bottom:10px;">
+        <button id="btnHudAbilitiesAttribute" type="button" class="btn-ghost">Attribute</button>
+        <button id="btnHudAbilitiesArea" type="button" class="btn-ghost">Area</button>
+      </div>
+
+      <div id="hudAbilitiesAttributeList" style="display:flex; flex-direction:column; gap:8px;"></div>
+      <div id="hudAbilitiesAreaList" class="hidden" style="display:none; flex-direction:column; gap:8px;"></div>
+
+      <div id="hudActiveEffects" style="margin-top:12px;">
+        <div style="font-weight:600; margin-bottom:6px;">Active Effects</div>
+        <div id="hudActiveEffectsList" class="small-text" style="display:flex; flex-direction:column; gap:6px;">
+          <div style="opacity:.7;">No active abilities.</div>
+        </div>
       </div>
     </div>
     <div style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.10);">
@@ -1055,6 +1080,58 @@ appState.runState = appState.runState || {
   turn: 0,
   log: []
 };
+window.__BC_ABILITY_LIBRARY__ = window.__BC_ABILITY_LIBRARY__ || [
+  {
+    id: "closing_surge",
+    family: "attribute",
+    title: "Closing Surge",
+    description: "Boost your closing pressure for a short time.",
+    unlocked: true,
+    available: true,
+    active: false,
+    usesRemaining: 1,
+    durationSec: 120,
+    payload: { focus: "closing", strength: 1 }
+  },
+  {
+    id: "recovery_focus",
+    family: "attribute",
+    title: "Recovery Focus",
+    description: "Gain better recovery control for a short time.",
+    unlocked: true,
+    available: true,
+    active: false,
+    usesRemaining: 1,
+    durationSec: 120,
+    payload: { focus: "recovery", strength: 1 }
+  },
+  {
+    id: "calm_floor",
+    family: "area",
+    title: "Calm Floor",
+    description: "Reduce encounter pressure for a short time.",
+    unlocked: true,
+    available: true,
+    active: false,
+    usesRemaining: 1,
+    durationSec: 180,
+    payload: { effect: "pressure_down", strength: 1 }
+  },
+  {
+    id: "premium_window",
+    family: "area",
+    title: "Premium Window",
+    description: "Improve premium opportunity conditions briefly.",
+    unlocked: true,
+    available: true,
+    active: false,
+    usesRemaining: 1,
+    durationSec: 180,
+    payload: { effect: "premium_bias_up", strength: 1 }
+  }
+];
+window.__BC_ACTIVE_ABILITIES__ = window.__BC_ACTIVE_ABILITIES__ || [];
+window.__BC_ABILITY_UI__ = window.__BC_ABILITY_UI__ || { hudFamily: "attribute" };
 let _unlockHideTimer = null;
 
 window.__BC_DEBUG__ = {
@@ -1113,6 +1190,357 @@ function markActiveRestaurantReady() {
     window.__BC_RESOLVE_ACTIVE_REST_READY__();
     window.__BC_RESOLVE_ACTIVE_REST_READY__ = null;
   }
+}
+
+function getAbilityLibrary() {
+  return Array.isArray(window.__BC_ABILITY_LIBRARY__) ? window.__BC_ABILITY_LIBRARY__ : [];
+}
+
+function getAbilityById(id) {
+  return getAbilityLibrary().find((x) => String(x?.id || "") === String(id || "")) || null;
+}
+
+function getAbilitiesByFamily(family) {
+  const f = String(family || "").toLowerCase();
+  return getAbilityLibrary().filter((x) => String(x?.family || "").toLowerCase() === f);
+}
+
+function getActiveAbilities() {
+  return Array.isArray(window.__BC_ACTIVE_ABILITIES__) ? window.__BC_ACTIVE_ABILITIES__ : [];
+}
+
+function isAbilityActive(id) {
+  return getActiveAbilities().some((x) => String(x?.id || "") === String(id || ""));
+}
+
+function isAbilityAvailable(ability) {
+  if (!ability) return false;
+  if (!ability.unlocked) return false;
+  if (!ability.available) return false;
+  if (Number(ability.usesRemaining || 0) <= 0) return false;
+  if (isAbilityActive(ability.id)) return false;
+  return true;
+}
+
+function setHudAbilityFamily(family) {
+  const next = String(family || "attribute").toLowerCase() === "area" ? "area" : "attribute";
+  window.__BC_ABILITY_UI__.hudFamily = next;
+
+  const btnAttribute = document.getElementById("btnHudAbilitiesAttribute");
+  const btnArea = document.getElementById("btnHudAbilitiesArea");
+  const listAttribute = document.getElementById("hudAbilitiesAttributeList");
+  const listArea = document.getElementById("hudAbilitiesAreaList");
+
+  if (btnAttribute) {
+    btnAttribute.classList.toggle("btn", next === "attribute");
+    btnAttribute.classList.toggle("btn-ghost", next !== "attribute");
+  }
+  if (btnArea) {
+    btnArea.classList.toggle("btn", next === "area");
+    btnArea.classList.toggle("btn-ghost", next !== "area");
+  }
+
+  if (listAttribute) {
+    listAttribute.classList.toggle("hidden", next !== "attribute");
+    listAttribute.style.display = next === "attribute" ? "flex" : "none";
+  }
+  if (listArea) {
+    listArea.classList.toggle("hidden", next !== "area");
+    listArea.style.display = next === "area" ? "flex" : "none";
+  }
+}
+
+function renderHudAbilityFamilyList(family, targetId) {
+  const root = document.getElementById(targetId);
+  if (!root) return;
+
+  const items = getAbilitiesByFamily(family);
+  root.innerHTML = "";
+
+  if (!items.length) {
+    root.innerHTML = '<div class="small-text" style="opacity:.7;">No abilities in this family yet.</div>';
+    return;
+  }
+
+  for (const ability of items) {
+    const active = isAbilityActive(ability.id);
+    const available = isAbilityAvailable(ability);
+
+    const card = document.createElement("div");
+    card.className = "card";
+    card.style.padding = "10px";
+    card.style.display = "flex";
+    card.style.flexDirection = "column";
+    card.style.gap = "8px";
+
+    const meta = active
+      ? "Active"
+      : available
+        ? `Ready • ${Number(ability.usesRemaining || 0)} use left`
+        : Number(ability.usesRemaining || 0) <= 0
+          ? "No uses left"
+          : "Unavailable";
+
+    card.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+        <div style="min-width:0;">
+          <div style="font-weight:600;">${escapeHtml(ability.title || "Ability")}</div>
+          <div class="small-text" style="opacity:.8; margin-top:2px;">
+            ${escapeHtml(ability.description || "")}
+          </div>
+        </div>
+        <div class="small-text" style="opacity:.75; white-space:nowrap;">${escapeHtml(meta)}</div>
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+        <div class="small-text" style="opacity:.75;">
+          Duration: ${Number(ability.durationSec || 0)}s
+        </div>
+        <button type="button" class="${available ? "btn" : "btn-ghost"}" ${available ? "" : "disabled"}>
+          ${active ? "Active" : "Activate"}
+        </button>
+      </div>
+    `;
+
+    const btn = card.querySelector("button");
+    if (btn && available) {
+      btn.addEventListener("click", () => {
+        activateAbility(ability.id);
+      });
+    }
+
+    root.appendChild(card);
+  }
+}
+
+function renderHudAbilities() {
+  renderHudAbilityFamilyList("attribute", "hudAbilitiesAttributeList");
+  renderHudAbilityFamilyList("area", "hudAbilitiesAreaList");
+  renderHudActiveEffects();
+  setHudAbilityFamily(window.__BC_ABILITY_UI__?.hudFamily || "attribute");
+}
+
+function renderHudActiveEffects() {
+  const root = document.getElementById("hudActiveEffectsList");
+  const status = document.getElementById("hudAbilitiesStatus");
+  if (!root) return;
+
+  const active = getActiveAbilities();
+  root.innerHTML = "";
+
+  if (!active.length) {
+    root.innerHTML = '<div style="opacity:.7;">No active abilities.</div>';
+    if (status) status.textContent = "No active effects";
+    return;
+  }
+
+  if (status) {
+    status.textContent = `${active.length} active effect${active.length === 1 ? "" : "s"}`;
+  }
+
+  for (const entry of active) {
+    const row = document.createElement("div");
+    row.style.display = "flex";
+    row.style.justifyContent = "space-between";
+    row.style.alignItems = "center";
+    row.style.gap = "8px";
+
+    const secsLeft = Math.max(0, Math.ceil(((entry.expiresAt || 0) - Date.now()) / 1000));
+
+    row.innerHTML = `
+      <div>
+        <div style="font-weight:600;">${escapeHtml(entry.title || entry.id || "Ability")}</div>
+        <div style="opacity:.75;">${escapeHtml(entry.family || "ability")} • ${secsLeft}s left</div>
+      </div>
+    `;
+
+    root.appendChild(row);
+  }
+}
+
+function applyAbilityEffect(ability) {
+  if (!ability) return;
+
+  window.__BC_LAST_USED_ABILITY__ = {
+    id: ability.id,
+    family: ability.family,
+    at: Date.now(),
+  };
+
+  console.log("[ABILITY] applied ✅", {
+    id: ability.id,
+    family: ability.family,
+    payload: ability.payload || null,
+  });
+
+  if (ability.family === "attribute") {
+    window.showToast?.(`${ability.title} activated ✅`);
+  } else if (ability.family === "area") {
+    window.showToast?.(`${ability.title} activated ✅`);
+  }
+}
+
+function expireAbility(abilityId) {
+  const id = String(abilityId || "");
+  if (!id) return;
+
+  const nextActive = getActiveAbilities().filter((x) => String(x?.id || "") !== id);
+  window.__BC_ACTIVE_ABILITIES__ = nextActive;
+
+  const ability = getAbilityById(id);
+  if (ability) {
+    ability.active = false;
+  }
+
+  console.log("[ABILITY] expired", { id });
+  renderHudAbilities();
+}
+
+function activateAbility(abilityId) {
+  const ability = getAbilityById(abilityId);
+  if (!ability) return false;
+  if (!isAbilityAvailable(ability)) return false;
+
+  ability.active = true;
+  ability.usesRemaining = Math.max(0, Number(ability.usesRemaining || 0) - 1);
+
+  const activeEntry = {
+    id: ability.id,
+    title: ability.title,
+    family: ability.family,
+    startedAt: Date.now(),
+    expiresAt: Date.now() + Number(ability.durationSec || 0) * 1000,
+    payload: ability.payload || {},
+  };
+
+  window.__BC_ACTIVE_ABILITIES__ = [
+    ...getActiveAbilities().filter((x) => String(x?.id || "") !== String(ability.id || "")),
+    activeEntry,
+  ];
+
+  applyAbilityEffect(ability);
+  renderHudAbilities();
+  renderManagerBoardAbilityTabs();
+
+  try {
+    clearTimeout(ability.__expireTimer__);
+  } catch {}
+
+  ability.__expireTimer__ = setTimeout(() => {
+    expireAbility(ability.id);
+  }, Math.max(0, Number(ability.durationSec || 0) * 1000));
+
+  return true;
+}
+
+function wireHudAbilities() {
+  const btnAttribute = document.getElementById("btnHudAbilitiesAttribute");
+  const btnArea = document.getElementById("btnHudAbilitiesArea");
+
+  if (btnAttribute && !btnAttribute.__bcBound) {
+    btnAttribute.__bcBound = true;
+    btnAttribute.addEventListener("click", () => {
+      setHudAbilityFamily("attribute");
+    });
+  }
+
+  if (btnArea && !btnArea.__bcBound) {
+    btnArea.__bcBound = true;
+    btnArea.addEventListener("click", () => {
+      setHudAbilityFamily("area");
+    });
+  }
+
+  renderHudAbilities();
+}
+
+function tickHudActiveAbilities() {
+  if (window.__BC_HUD_ABILITIES_TICK_WIRED__) return;
+  window.__BC_HUD_ABILITIES_TICK_WIRED__ = true;
+
+  setInterval(() => {
+    const active = getActiveAbilities();
+    if (!active.length) return;
+
+    let changed = false;
+    const now = Date.now();
+    for (const entry of active) {
+      if ((entry.expiresAt || 0) <= now) {
+        expireAbility(entry.id);
+        changed = true;
+      }
+    }
+
+    if (!changed) {
+      renderHudActiveEffects();
+    }
+  }, 1000);
+}
+
+function renderManagerBoardAbilitiesTab(family, targetId) {
+  const root = document.getElementById(targetId);
+  if (!root) return;
+
+  const items = getAbilitiesByFamily(family);
+  root.innerHTML = "";
+
+  const wrap = document.createElement("div");
+  wrap.className = "card";
+  wrap.style.display = "flex";
+  wrap.style.flexDirection = "column";
+  wrap.style.gap = "10px";
+  wrap.style.padding = "12px";
+
+  const title = document.createElement("div");
+  title.style.fontWeight = "600";
+  title.textContent = family === "attribute" ? "Attribute Abilities" : "Area Abilities";
+  wrap.appendChild(title);
+
+  if (!items.length) {
+    const empty = document.createElement("div");
+    empty.className = "small";
+    empty.style.opacity = ".7";
+    empty.textContent = "No abilities found.";
+    wrap.appendChild(empty);
+    root.appendChild(wrap);
+    return;
+  }
+
+  for (const ability of items) {
+    const active = isAbilityActive(ability.id);
+
+    const row = document.createElement("div");
+    row.style.padding = "10px";
+    row.style.border = "1px solid rgba(255,255,255,0.08)";
+    row.style.borderRadius = "10px";
+    row.style.display = "flex";
+    row.style.justifyContent = "space-between";
+    row.style.alignItems = "flex-start";
+    row.style.gap = "12px";
+
+    row.innerHTML = `
+      <div style="min-width:0;">
+        <div style="font-weight:600;">${escapeHtml(ability.title || "Ability")}</div>
+        <div class="small" style="opacity:.85; margin-top:4px;">
+          ${escapeHtml(ability.description || "")}
+        </div>
+        <div class="small" style="opacity:.7; margin-top:6px;">
+          Uses left: ${Number(ability.usesRemaining || 0)} • Duration: ${Number(ability.durationSec || 0)}s
+        </div>
+      </div>
+      <div class="small" style="white-space:nowrap; opacity:.8;">
+        ${active ? "Active" : ability.unlocked ? "Unlocked" : "Locked"}
+      </div>
+    `;
+
+    wrap.appendChild(row);
+  }
+
+  root.appendChild(wrap);
+}
+
+function renderManagerBoardAbilityTabs() {
+  renderManagerBoardAbilitiesTab("attribute", "mbTab_attribute_abilities");
+  renderManagerBoardAbilitiesTab("area", "mbTab_area_abilities");
 }
 
 // --- Fetch allowed restaurants for current scope ---
@@ -4334,6 +4762,10 @@ function wireManagerBoardMenu() {
       wireManagerBoardMessenger();
       return loadManagerMessenger();
     }
+    if (name === "attribute_abilities" || name === "area_abilities") {
+      renderManagerBoardAbilityTabs();
+      return;
+    }
   };
 
   menu.addEventListener("click", async (e) => {
@@ -4368,6 +4800,9 @@ function wireManagerBoardMenu() {
     if (tab === "messenger") {
       wireManagerBoardMessenger();
       await loadManagerMessenger();
+    }
+    if (tab === "attribute_abilities" || tab === "area_abilities") {
+      renderManagerBoardAbilityTabs();
     }
   });
 
@@ -6885,6 +7320,7 @@ async function loadManagerBoardData() {
     const weeklyRows = await loadWeeklyTrainingReport();
     await maybeSendWeeklyManagerSummary(weeklyRows);
     await loadWeeklySummaryTop();
+    renderManagerBoardAbilityTabs();
 
     // Views you actually have
     const RUNS_TABLE = "bc_sessions_v1";                 // sessions summary
@@ -7913,6 +8349,7 @@ function renderHud() {
 
   renderInvitesList();
   renderHudSkillDashboard();
+  renderHudAbilities();
 }
 
 // ------------------------------------------------------------
@@ -8463,6 +8900,8 @@ wireParentButtons();
 wireManagerBoardButton();
 wireHudSendProgressButton();
 wireWaiterMessagesPanel();
+wireHudAbilities();
+tickHudActiveAbilities();
 
 document.getElementById("btnOpenHud")?.addEventListener("click", () => {
   closeWaiterMessages?.();

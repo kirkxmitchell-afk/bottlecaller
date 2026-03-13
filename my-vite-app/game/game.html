@@ -259,6 +259,121 @@
       return entries[0]?.label || null;
     }
 
+    function getParentActiveAbilities() {
+      const now = Date.now();
+      try {
+        const src =
+          window.parent && window.parent !== window
+            ? window.parent.__BC_ACTIVE_ABILITIES__
+            : window.__BC_ACTIVE_ABILITIES__;
+        if (!Array.isArray(src)) return [];
+        return src.filter((entry) => {
+          if (!entry || typeof entry !== "object") return false;
+          const expiresAt = Number(entry.expiresAt || 0);
+          return !expiresAt || expiresAt > now;
+        });
+      } catch {
+        return Array.isArray(window.__BC_ACTIVE_ABILITIES__) ? window.__BC_ACTIVE_ABILITIES__ : [];
+      }
+    }
+
+    function getAbilityStrength(abilityId) {
+      const id = String(abilityId || "");
+      if (!id) return 0;
+      const match = getParentActiveAbilities().find((entry) => String(entry?.id || "") === id);
+      if (!match) return 0;
+      const strength = Number(match?.payload?.strength || 1);
+      return Number.isFinite(strength) ? Math.max(0, strength) : 0;
+    }
+
+    function chainSignalFromScore(score) {
+      const n = Number(score || 0);
+      if (n >= 3) return "green";
+      if (n >= 2) return "yellow";
+      return "red";
+    }
+
+    function getGameplayAbilityRuntime(encounter = null) {
+      const closing = getAbilityStrength("closing_surge");
+      const recovery = getAbilityStrength("recovery_focus");
+      const calm = getAbilityStrength("calm_floor");
+      const premium = getAbilityStrength("premium_window");
+      const pressure = encounter?.guestPressure || null;
+
+      return {
+        closingSurge: closing,
+        recoveryFocus: recovery,
+        calmFloor: calm,
+        premiumWindow: premium,
+        closeScoreBonus:
+          (closing > 0 && pressure && pressure.confidence >= 0.55)
+            ? 0.5 * closing
+            : 0,
+        recoveryPivotFloor: recovery > 0 ? Math.max(1.5, 2 - (0.5 * recovery)) : 2,
+        premiumUpgradeChance:
+          premium > 0
+            ? (
+                0.35 +
+                (0.15 * premium) +
+                ((pressure?.openness ?? 0) >= 0.6 ? 0.05 : 0) +
+                ((pressure?.confidence ?? 0) >= 0.55 ? 0.05 : 0)
+              )
+            : 0.35,
+      };
+    }
+
+    function applyAbilityRuntimeToReaction(result, encounter, checks) {
+      if (!result || typeof result !== "object") return result;
+
+      const runtime = getGameplayAbilityRuntime(encounter);
+      const next = { ...result };
+
+      if (
+        runtime.closingSurge > 0 &&
+        checks?.deliveryCorrect &&
+        checks?.modeStatus !== "damaging" &&
+        checks?.hookStatus !== "damaging"
+      ) {
+        const boostedScore = Math.min(4, Number(next.chainScore || 0) + runtime.closeScoreBonus);
+        if (boostedScore > Number(next.chainScore || 0)) {
+          next.chainScore = boostedScore;
+          next.chainSignal = chainSignalFromScore(boostedScore);
+          next.__closingSurgeApplied = true;
+        }
+      }
+
+      if (
+        runtime.recoveryFocus > 0 &&
+        !next.pivotUnlocked &&
+        !checks?.deliveryCorrect &&
+        Number(next.chainScore || 0) >= runtime.recoveryPivotFloor
+      ) {
+        next.pivotUnlocked = true;
+        next.pivotType = "RECOVERY_PIVOT";
+        next.__recoveryFocusApplied = true;
+      }
+
+      return next;
+    }
+
+    function rollPremiumOpportunity(result, encounter) {
+      const runtime = getGameplayAbilityRuntime(encounter);
+      const pressure = encounter?.guestPressure || initGuestPressureState(encounter);
+      const signal = String(result?.chainSignal || "").toLowerCase();
+
+      let chance = runtime.premiumUpgradeChance;
+      if (signal !== "green") {
+        if (runtime.premiumWindow > 0 && signal === "yellow" && pressure.openness >= 0.7) {
+          chance = Math.max(chance * 0.5, 0.2);
+        } else {
+          chance = 0;
+        }
+      }
+
+      chance = Math.max(0, Math.min(0.9, chance));
+      return Math.random() < chance;
+    }
+
     function buildEncounterSkillFallback(enc) {
       const raw = enc?.__uxSummary?.checksRaw || {};
       const result = enc?.__uxSummary?.result || {};
@@ -8904,6 +9019,7 @@ body.difficulty-hard .option-btn.selected {
 
       function initGuestPressureState(encounter) {
         const guest = normalizeGuestType(encounter?.guestStateActual);
+        const runtime = getGameplayAbilityRuntime(encounter);
 
         const baseByGuest = {
           [window.GUEST.DECIDER]: {
@@ -8946,12 +9062,47 @@ body.difficulty-hard .option-btn.selected {
         };
 
         const bias = encounter?.pressureBias || {};
+        const calmFloorTuning = runtime.calmFloor > 0
+          ? {
+              openness: 0.04 * runtime.calmFloor,
+              resistance: -0.08 * runtime.calmFloor,
+              confidence: 0.05 * runtime.calmFloor,
+              urgency: -0.10 * runtime.calmFloor,
+            }
+          : null;
+        const premiumWindowTuning = runtime.premiumWindow > 0
+          ? {
+              openness: 0.06 * runtime.premiumWindow,
+              resistance: -0.03 * runtime.premiumWindow,
+              confidence: 0.06 * runtime.premiumWindow,
+              urgency: 0,
+            }
+          : null;
 
         return {
-          openness: clamp01(base.openness + Number(bias.openness || 0)),
-          resistance: clamp01(base.resistance + Number(bias.resistance || 0)),
-          confidence: clamp01(base.confidence + Number(bias.confidence || 0)),
-          urgency: clamp01(base.urgency + Number(bias.urgency || 0))
+          openness: clamp01(
+            base.openness +
+            Number(bias.openness || 0) +
+            Number(calmFloorTuning?.openness || 0) +
+            Number(premiumWindowTuning?.openness || 0)
+          ),
+          resistance: clamp01(
+            base.resistance +
+            Number(bias.resistance || 0) +
+            Number(calmFloorTuning?.resistance || 0) +
+            Number(premiumWindowTuning?.resistance || 0)
+          ),
+          confidence: clamp01(
+            base.confidence +
+            Number(bias.confidence || 0) +
+            Number(calmFloorTuning?.confidence || 0) +
+            Number(premiumWindowTuning?.confidence || 0)
+          ),
+          urgency: clamp01(
+            base.urgency +
+            Number(bias.urgency || 0) +
+            Number(calmFloorTuning?.urgency || 0)
+          )
         };
       }
 
@@ -8963,6 +9114,7 @@ body.difficulty-hard .option-btn.selected {
         const e = encounter || {};
         const c = checks || (typeof window.evaluateChecks === "function" ? window.evaluateChecks(e) : {});
         const p = e.guestPressure || initGuestPressureState(e);
+        const runtime = getGameplayAbilityRuntime(e);
 
         const next = { ...p };
 
@@ -9031,6 +9183,18 @@ body.difficulty-hard .option-btn.selected {
             next.openness -= 0.07;
             next.confidence -= 0.07;
             next.resistance += 0.08;
+          }
+
+          if (runtime.recoveryFocus > 0) {
+            if (pivotCorrect) {
+              next.openness += 0.04 * runtime.recoveryFocus;
+              next.confidence += 0.06 * runtime.recoveryFocus;
+              next.resistance -= 0.04 * runtime.recoveryFocus;
+            } else if (e.recoveryChoice) {
+              next.openness += 0.02 * runtime.recoveryFocus;
+              next.confidence += 0.02 * runtime.recoveryFocus;
+              next.resistance -= 0.02 * runtime.recoveryFocus;
+            }
           }
         }
 
@@ -12310,6 +12474,10 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           if (!currentEncounter.__reactionComputed || !result) {
             currentEncounter.__reactionComputed = true;
             result = window.EngineBridge.computeReaction(reactionChecks);
+            result = applyAbilityRuntimeToReaction(result, currentEncounter, reactionChecks);
+            if (result.__recoveryFocusApplied) {
+              currentEncounter.pivotPlanned = true;
+            }
             currentEncounter.__reaction = result;
             result.pivotUnlocked = !!currentEncounter.pivotPlanned && result.pivotUnlocked;
             // TEMP DEBUG (remove later)
@@ -12380,7 +12548,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           stepContent.appendChild(signalChip);
 
           if (result.deliveryCorrect) {
-            const upgraded = (result.chainSignal === "green") && (Math.random() < 0.35);
+            const upgraded = rollPremiumOpportunity(result, currentEncounter);
             stepContent.appendChild(document.createTextNode(upgraded ? "✅ Upgrade. “Nice — that’s the move.”" : "✅ Nod. “Perfect.”"));
             appendFeedbackLine(stepContent, bcFeedbackFromOutcome(reactionChecks, result));
             addStepButton("REFLECT", () => { goToStep(6); }, bar);
@@ -12850,10 +13018,14 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           }
           guardState.graceNext = Math.max(0, (guardState.graceNext || 0) - 1);
 
+          const runtimeAbilities = getGameplayAbilityRuntime(currentEncounter);
           const pressureBefore = guardState.pressureLevel;
           if (decision.action === "escalate") guardState.pressureLevel += 1;
           else if (decision.action === "deload") guardState.pressureLevel -= 1;
           else if (decision.action === "intervention") guardState.pressureLevel = Math.min(guardState.pressureLevel, 0);
+          if (runtimeAbilities.calmFloor > 0) {
+            guardState.pressureLevel -= 0.75 * runtimeAbilities.calmFloor;
+          }
           guardState.pressureLevel = clampPressureByTier(tierNow, guardState.pressureLevel);
 
           const baseDiff = baseDifficultyFromTier(tierNow);
@@ -13088,6 +13260,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             enc?.policy ||
             window.__BC_DIFFICULTY__ ||
             difficultyPolicy(enc?.difficulty ?? 1);
+          const runtime = getGameplayAbilityRuntime(enc);
           const pivotPlanned =
             (enc?.pivotPlanned != null)
               ? enc.pivotPlanned
@@ -13097,18 +13270,27 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           const modeTier = getModeTier(checks);
           const delivery = getDeliveryScore(enc);
 
-          const total =
+          let total =
             tierToScore(readTier) +
             tierToScore(hookTier) +
             tierToScore(modeTier) +
             delivery;
+
+          if (
+            runtime.closingSurge > 0 &&
+            checks?.deliveryCorrect &&
+            checks?.modeStatus !== "damaging" &&
+            checks?.hookStatus !== "damaging"
+          ) {
+            total += runtime.closeScoreBonus;
+          }
 
           enc.chainScore = total;
           enc.__tiers = { readTier, modeTier, hookTier, delivery };
 
           if (total >= 6) return { outcome: "clean_close", score: total };
           if (total >= 4) return { outcome: "soft_close", score: total };
-          if (total >= 1) {
+          if (total >= 1 || (runtime.recoveryFocus > 0 && total >= 0.5)) {
             return pivotPlanned
               ? { outcome: "pivot", score: total }
               : { outcome: "soft_close", score: total };
