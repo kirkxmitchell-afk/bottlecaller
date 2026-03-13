@@ -1091,6 +1091,11 @@ window.__BC_ABILITY_LIBRARY__ = window.__BC_ABILITY_LIBRARY__ || [
     active: false,
     usesRemaining: 1,
     durationSec: 120,
+    allowedRoles: ["waiter", "single_manager", "group_manager", "enterpriser"],
+    allowedModes: ["premium"],
+    allowedSurfaces: ["gameplay_panel", "manager_board"],
+    gameplayUsable: true,
+    scope: "self",
     payload: { focus: "closing", strength: 1 }
   },
   {
@@ -1103,6 +1108,11 @@ window.__BC_ABILITY_LIBRARY__ = window.__BC_ABILITY_LIBRARY__ || [
     active: false,
     usesRemaining: 1,
     durationSec: 120,
+    allowedRoles: ["waiter", "single_manager", "group_manager", "enterpriser"],
+    allowedModes: ["premium"],
+    allowedSurfaces: ["gameplay_panel", "manager_board"],
+    gameplayUsable: true,
+    scope: "self",
     payload: { focus: "recovery", strength: 1 }
   },
   {
@@ -1115,6 +1125,11 @@ window.__BC_ABILITY_LIBRARY__ = window.__BC_ABILITY_LIBRARY__ || [
     active: false,
     usesRemaining: 1,
     durationSec: 180,
+    allowedRoles: ["waiter", "single_manager", "group_manager", "enterpriser"],
+    allowedModes: ["premium"],
+    allowedSurfaces: ["gameplay_panel", "manager_board"],
+    gameplayUsable: true,
+    scope: "encounter",
     payload: { effect: "pressure_down", strength: 1 }
   },
   {
@@ -1127,6 +1142,11 @@ window.__BC_ABILITY_LIBRARY__ = window.__BC_ABILITY_LIBRARY__ || [
     active: false,
     usesRemaining: 1,
     durationSec: 180,
+    allowedRoles: ["waiter", "single_manager", "group_manager", "enterpriser"],
+    allowedModes: ["premium"],
+    allowedSurfaces: ["gameplay_panel", "manager_board"],
+    gameplayUsable: true,
+    scope: "encounter",
     payload: { effect: "premium_bias_up", strength: 1 }
   }
 ];
@@ -1213,8 +1233,47 @@ function isAbilityActive(id) {
   return getActiveAbilities().some((x) => String(x?.id || "") === String(id || ""));
 }
 
-function isAbilityAvailable(ability) {
+function getCurrentAbilityUseContext() {
+  const ctx = window.__BC_CTX__ || {};
+  const identity = window.__BC_IDENTITY__ || {};
+
+  const role =
+    ctx.membershipRole ||
+    ctx.membership_role ||
+    identity.membershipRole ||
+    ctx.role ||
+    null;
+
+  const mode = String(ctx.mode || window.bcMode || "demo").toLowerCase();
+
+  return {
+    role: role ? String(role).toLowerCase() : null,
+    mode,
+    isDemo: mode === "demo",
+  };
+}
+
+function canUseAbilityOnSurface(ability, surface = "gameplay_panel") {
   if (!ability) return false;
+
+  const useCtx = getCurrentAbilityUseContext();
+  const role = String(useCtx.role || "").toLowerCase();
+  const mode = String(useCtx.mode || "").toLowerCase();
+
+  const allowedRoles = Array.isArray(ability.allowedRoles) ? ability.allowedRoles : [];
+  const allowedModes = Array.isArray(ability.allowedModes) ? ability.allowedModes : [];
+  const allowedSurfaces = Array.isArray(ability.allowedSurfaces) ? ability.allowedSurfaces : [];
+
+  if (allowedRoles.length && !allowedRoles.includes(role)) return false;
+  if (allowedModes.length && !allowedModes.includes(mode)) return false;
+  if (allowedSurfaces.length && !allowedSurfaces.includes(surface)) return false;
+
+  return true;
+}
+
+function isAbilityAvailable(ability, surface = "gameplay_panel") {
+  if (!ability) return false;
+  if (!canUseAbilityOnSurface(ability, surface)) return false;
   if (!ability.unlocked) return false;
   if (!ability.available) return false;
   if (Number(ability.usesRemaining || 0) <= 0) return false;
@@ -1254,7 +1313,7 @@ function renderHudAbilityFamilyList(family, targetId) {
   const root = document.getElementById(targetId);
   if (!root) return;
 
-  const items = getAbilitiesByFamily(family);
+  const items = getAbilitiesByFamily(family).filter((x) => canUseAbilityOnSurface(x, "gameplay_panel"));
   root.innerHTML = "";
 
   if (!items.length) {
@@ -1264,7 +1323,7 @@ function renderHudAbilityFamilyList(family, targetId) {
 
   for (const ability of items) {
     const active = isAbilityActive(ability.id);
-    const available = isAbilityAvailable(ability);
+    const available = isAbilityAvailable(ability, "gameplay_panel");
 
     const card = document.createElement("div");
     card.className = "card";
@@ -1491,7 +1550,7 @@ function tickHudActiveAbilities() {
   }, 1000);
 }
 
-function getAbilityStatusText(ability) {
+function getAbilityStatusText(ability, surface = "manager_board") {
   if (!ability) return "Unknown";
 
   if (isAbilityActive(ability.id)) {
@@ -1501,6 +1560,7 @@ function getAbilityStatusText(ability) {
   }
 
   if (!ability.unlocked) return "Locked";
+  if (!canUseAbilityOnSurface(ability, surface)) return "Unavailable";
   if (!ability.available) return "Unavailable";
   if (Number(ability.usesRemaining || 0) <= 0) return "No uses left";
   return "Ready";
@@ -1522,7 +1582,7 @@ function getAbilityEffectSummary(ability) {
 }
 
 function getAbilityFamilySummary(family) {
-  const items = getAbilitiesByFamily(family);
+  const items = getAbilitiesByFamily(family).filter((x) => canUseAbilityOnSurface(x, "manager_board"));
   const activeCount = items.filter((x) => isAbilityActive(x.id)).length;
   const unlockedCount = items.filter((x) => !!x.unlocked).length;
 
@@ -1537,7 +1597,7 @@ function renderManagerBoardAbilitiesTab(family, targetId) {
   const root = document.getElementById(targetId);
   if (!root) return;
 
-  const items = getAbilitiesByFamily(family);
+  const items = getAbilitiesByFamily(family).filter((x) => canUseAbilityOnSurface(x, "manager_board"));
   const summary = getAbilityFamilySummary(family);
   root.innerHTML = "";
 
@@ -1571,8 +1631,10 @@ function renderManagerBoardAbilitiesTab(family, targetId) {
 
   for (const ability of items) {
     const active = isAbilityActive(ability.id);
-    const statusText = getAbilityStatusText(ability);
+    const available = isAbilityAvailable(ability, "manager_board");
+    const statusText = getAbilityStatusText(ability, "manager_board");
     const effectText = getAbilityEffectSummary(ability);
+    const familyScopeText = `${String(ability.family || "-")} → ${String(ability.scope || "-")}`;
 
     const row = document.createElement("div");
     row.style.padding = "10px";
@@ -1593,6 +1655,9 @@ function renderManagerBoardAbilitiesTab(family, targetId) {
           ${escapeHtml(effectText)}
         </div>
         <div class="small" style="opacity:.7; margin-top:6px;">
+          ${escapeHtml(`Family: ${familyScopeText} • Surface: Gameplay + Board`)}
+        </div>
+        <div class="small" style="opacity:.7; margin-top:6px;">
           Uses left: ${Number(ability.usesRemaining || 0)} • Duration: ${Number(ability.durationSec || 0)}s
         </div>
       </div>
@@ -1601,9 +1666,11 @@ function renderManagerBoardAbilitiesTab(family, targetId) {
       </div>
     `;
 
-    if (active) {
+    if (active || available) {
       row.style.borderColor = "rgba(255,255,255,0.18)";
-      row.style.boxShadow = "0 0 0 1px rgba(255,255,255,0.04) inset";
+      if (active) {
+        row.style.boxShadow = "0 0 0 1px rgba(255,255,255,0.04) inset";
+      }
     }
 
     wrap.appendChild(row);
