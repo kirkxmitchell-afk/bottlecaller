@@ -1491,11 +1491,54 @@ function tickHudActiveAbilities() {
   }, 1000);
 }
 
+function getAbilityStatusText(ability) {
+  if (!ability) return "Unknown";
+
+  if (isAbilityActive(ability.id)) {
+    const entry = getActiveAbilities().find((x) => String(x?.id || "") === String(ability.id || ""));
+    const secsLeft = Math.max(0, Math.ceil(((entry?.expiresAt || 0) - Date.now()) / 1000));
+    return `Active • ${secsLeft}s left`;
+  }
+
+  if (!ability.unlocked) return "Locked";
+  if (!ability.available) return "Unavailable";
+  if (Number(ability.usesRemaining || 0) <= 0) return "No uses left";
+  return "Ready";
+}
+
+function getAbilityEffectSummary(ability) {
+  switch (String(ability?.id || "")) {
+    case "closing_surge":
+      return "Improves closing-related performance.";
+    case "recovery_focus":
+      return "Improves recovery-related performance.";
+    case "calm_floor":
+      return "Reduces encounter pressure growth.";
+    case "premium_window":
+      return "Improves premium opportunity conditions.";
+    default:
+      return ability?.description || "";
+  }
+}
+
+function getAbilityFamilySummary(family) {
+  const items = getAbilitiesByFamily(family);
+  const activeCount = items.filter((x) => isAbilityActive(x.id)).length;
+  const unlockedCount = items.filter((x) => !!x.unlocked).length;
+
+  return {
+    total: items.length,
+    active: activeCount,
+    unlocked: unlockedCount,
+  };
+}
+
 function renderManagerBoardAbilitiesTab(family, targetId) {
   const root = document.getElementById(targetId);
   if (!root) return;
 
   const items = getAbilitiesByFamily(family);
+  const summary = getAbilityFamilySummary(family);
   root.innerHTML = "";
 
   const wrap = document.createElement("div");
@@ -1510,6 +1553,12 @@ function renderManagerBoardAbilitiesTab(family, targetId) {
   title.textContent = family === "attribute" ? "Attribute Abilities" : "Area Abilities";
   wrap.appendChild(title);
 
+  const meta = document.createElement("div");
+  meta.className = "small";
+  meta.style.opacity = ".8";
+  meta.textContent = `Unlocked: ${summary.unlocked}/${summary.total} • Active: ${summary.active}`;
+  wrap.appendChild(meta);
+
   if (!items.length) {
     const empty = document.createElement("div");
     empty.className = "small";
@@ -1522,6 +1571,8 @@ function renderManagerBoardAbilitiesTab(family, targetId) {
 
   for (const ability of items) {
     const active = isAbilityActive(ability.id);
+    const statusText = getAbilityStatusText(ability);
+    const effectText = getAbilityEffectSummary(ability);
 
     const row = document.createElement("div");
     row.style.padding = "10px";
@@ -1538,14 +1589,22 @@ function renderManagerBoardAbilitiesTab(family, targetId) {
         <div class="small" style="opacity:.85; margin-top:4px;">
           ${escapeHtml(ability.description || "")}
         </div>
+        <div class="small" style="opacity:.78; margin-top:6px;">
+          ${escapeHtml(effectText)}
+        </div>
         <div class="small" style="opacity:.7; margin-top:6px;">
           Uses left: ${Number(ability.usesRemaining || 0)} • Duration: ${Number(ability.durationSec || 0)}s
         </div>
       </div>
-      <div class="small" style="white-space:nowrap; opacity:.8;">
-        ${active ? "Active" : ability.unlocked ? "Unlocked" : "Locked"}
+      <div class="small" style="white-space:nowrap; opacity:.85; font-weight:600;">
+        ${escapeHtml(statusText)}
       </div>
     `;
+
+    if (active) {
+      row.style.borderColor = "rgba(255,255,255,0.18)";
+      row.style.boxShadow = "0 0 0 1px rgba(255,255,255,0.04) inset";
+    }
 
     wrap.appendChild(row);
   }
@@ -1556,6 +1615,17 @@ function renderManagerBoardAbilitiesTab(family, targetId) {
 function renderManagerBoardAbilityTabs() {
   renderManagerBoardAbilitiesTab("attribute", "mbTab_attribute_abilities");
   renderManagerBoardAbilitiesTab("area", "mbTab_area_abilities");
+}
+
+function tickManagerBoardAbilities() {
+  if (window.__BC_MB_ABILITIES_TICK_WIRED__) return;
+  window.__BC_MB_ABILITIES_TICK_WIRED__ = true;
+
+  setInterval(() => {
+    const screen = document.getElementById("screenManagerBoard");
+    if (!screen || screen.classList.contains("hidden")) return;
+    renderManagerBoardAbilityTabs();
+  }, 1000);
 }
 
 // --- Fetch allowed restaurants for current scope ---
@@ -8917,6 +8987,7 @@ wireHudSendProgressButton();
 wireWaiterMessagesPanel();
 wireHudAbilities();
 tickHudActiveAbilities();
+tickManagerBoardAbilities();
 
 document.getElementById("btnOpenHud")?.addEventListener("click", () => {
   closeWaiterMessages?.();
