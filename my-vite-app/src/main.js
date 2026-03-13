@@ -10065,7 +10065,7 @@ async function submitAuth() {
     if (!email) throw new Error("Enter email.");
     if (!password) throw new Error("Enter password.");
 
-    const roleForSignup = uiState.role === "waiter" ? "waiter" : "manager";
+    const roleForSignup = uiState.role === "waiter" ? "waiter" : "single_manager";
 
     if (uiState.mode === "login") {
       setMsg("authMsg", "Logging in...");
