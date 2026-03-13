@@ -1319,6 +1319,15 @@ function renderHudAbilities() {
   setHudAbilityFamily(window.__BC_ABILITY_UI__?.hudFamily || "attribute");
 }
 
+function getAbilityHudEffectText(entry) {
+  const id = String(entry?.id || "");
+  if (id === "closing_surge") return "closing boosted";
+  if (id === "recovery_focus") return "recovery steadier";
+  if (id === "calm_floor") return "pressure reduced";
+  if (id === "premium_window") return "premium chance increased";
+  return "effect active";
+}
+
 function renderHudActiveEffects() {
   const root = document.getElementById("hudActiveEffectsList");
   const status = document.getElementById("hudAbilitiesStatus");
@@ -1349,7 +1358,7 @@ function renderHudActiveEffects() {
     row.innerHTML = `
       <div>
         <div style="font-weight:600;">${escapeHtml(entry.title || entry.id || "Ability")}</div>
-        <div style="opacity:.75;">${escapeHtml(entry.family || "ability")} • ${secsLeft}s left</div>
+        <div style="opacity:.75;">${escapeHtml(getAbilityHudEffectText(entry))} • ${secsLeft}s left</div>
       </div>
     `;
 
