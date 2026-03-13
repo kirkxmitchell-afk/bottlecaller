@@ -8146,26 +8146,27 @@ function buildTimedChallengePayload() {
 async function sendTimedChallengeFromManager() {
   const statusEl = document.getElementById("mbTimedChallengeStatus");
   const payload = buildTimedChallengePayload();
-  const ctx = window.__BC_CTX__ || window.__BC_BUILD_CTX__?.("premium") || {};
-  const caps = getPremiumRoleCapabilities(appState?.profile);
+  const profile = appState?.profile || {};
+  const caps = getPremiumRoleCapabilities(profile);
 
   if (statusEl) statusEl.textContent = "";
+
+  if (!caps.canAssignTimedChallenges) {
+    if (statusEl) statusEl.textContent = "Role cannot assign timed challenges.";
+    return false;
+  }
 
   if (!payload) {
     if (statusEl) statusEl.textContent = "Missing target or restaurant.";
     return false;
   }
 
-  try {
-    if (!caps.canAssignTimedChallenges) {
-      if (statusEl) statusEl.textContent = "Role cannot assign timed challenges.";
-      return false;
-    }
-    if (!canActOnRestaurant(appState?.profile, appState?.profile, ctx.restaurantId)) {
-      if (statusEl) statusEl.textContent = "Role cannot act on this restaurant.";
-      return false;
-    }
+  if (!canActOnRestaurant(profile, profile, payload.restaurantId)) {
+    if (statusEl) statusEl.textContent = "Role cannot act on this restaurant.";
+    return false;
+  }
 
+  try {
     const liveAuth = await getLiveAuthOrNull();
     const userId = liveAuth?.userId || null;
     if (!userId) {
@@ -8173,16 +8174,16 @@ async function sendTimedChallengeFromManager() {
       return false;
     }
 
-    const senderRole =
-      ctx.membershipRole ||
-      ctx.membership_role ||
-      ctx.role ||
-      "single_manager";
+    const senderRole = normalizeMembershipRole(profile) || "single_manager";
+    const activeScopeId =
+      profile?.scope_id ||
+      profile?.scopeId ||
+      payload.restaurantId;
 
     const row = {
       scope_type: "restaurant",
-      scope_id: ctx.restaurantId,
-      restaurant_id: ctx.restaurantId,
+      scope_id: activeScopeId,
+      restaurant_id: payload.restaurantId,
       sender_user_id: userId,
       receiver_user_id: payload.targetUserId,
       sender_role: senderRole,
@@ -8279,12 +8280,12 @@ async function mbSendInstruction() {
 }
 
 async function mbSendDrillOverride(opts = {}) {
-  const { restaurantId, isManager } = getManagerBoardFilter();
-  const caps = getPremiumRoleCapabilities(appState?.profile);
-  if (!isManager) throw new Error("Manager only");
+  const { restaurantId } = getManagerBoardFilter();
+  const profile = appState?.profile || {};
+  const caps = getPremiumRoleCapabilities(profile);
   if (!restaurantId) throw new Error("Active restaurant not set");
   if (!caps.canAssignDrills) throw new Error("Role cannot assign drills.");
-  if (!canActOnRestaurant(appState?.profile, appState?.profile, restaurantId)) {
+  if (!canActOnRestaurant(profile, profile, restaurantId)) {
     throw new Error("Role cannot act on this restaurant.");
   }
 
@@ -8296,7 +8297,11 @@ async function mbSendDrillOverride(opts = {}) {
   if (status) status.textContent = "Sending drill…";
 
   const senderId = appState?.session?.user?.id || appState?.session?.userId || null;
-  const senderRole = String(appState?.profile?.role || "");
+  const senderRole = normalizeMembershipRole(profile) || "single_manager";
+  const activeScopeId =
+    profile?.scope_id ||
+    profile?.scopeId ||
+    restaurantId;
   if (!senderId) throw new Error("No session");
 
   const baseDrill = window.__BC_DRILL_CONFIG__ || window.BC_DRILL_CONFIG || null;
@@ -8353,7 +8358,7 @@ async function mbSendDrillOverride(opts = {}) {
 
   const row = {
     scope_type: "restaurant",
-    scope_id: restaurantId,
+    scope_id: activeScopeId,
     restaurant_id: restaurantId,
     sender_user_id: senderId,
     receiver_user_id: to,
@@ -8373,8 +8378,8 @@ async function mbSendDrillOverride(opts = {}) {
   await loadManagerMessenger();
 }
 
-async function sendManagerDrillOverride({ focus, repTarget = 3, durationSec = 300 } = {}) {
-  return mbSendDrillOverride({ focus, repTarget, durationSec });
+async function sendManagerDrillOverride({ focus, repTarget = 3, durationSec = 300, pool, tier } = {}) {
+  return mbSendDrillOverride({ focus, repTarget, durationSec, pool, tier });
 }
 
 function wireManagerBoardMessenger() {
@@ -9989,11 +9994,12 @@ async function adminAddInvite(emailRaw) {
 
     const r = appState.restaurant;
     const sess = appState.session;
-    const caps = getPremiumRoleCapabilities(appState.profile);
+    const profile = appState.profile || {};
+    const caps = getPremiumRoleCapabilities(profile);
     if (!r?.id) throw new Error("Restaurant not loaded.");
     if (!sess?.user) throw new Error("Not logged in.");
     if (!caps.canInviteWaiters) throw new Error("Role cannot invite waiters.");
-    if (!canActOnRestaurant(appState?.profile, appState?.profile, r.id)) {
+    if (!canActOnRestaurant(profile, profile, r.id)) {
       throw new Error("Role cannot act on this restaurant.");
     }
 
