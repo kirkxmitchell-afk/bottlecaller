@@ -9863,28 +9863,20 @@ async function adminAddInvite(emailRaw) {
     if (!sess?.user) throw new Error("Not logged in.");
     if (!isManagerRole(appState.profile?.role)) throw new Error("Manager only.");
 
-    const ins = await withTimeout(
-      supabase.from("restaurant_invites").insert({
-        restaurant_id: r.id,
-        email,
-        status: "pending",
-        created_by: sess.user.id,
+    const res = await withTimeout(
+      supabase.rpc("create_restaurant_invite", {
+        p_restaurant_id: r.id,
+        p_email: email,
       }),
       12000,
-      "invites.insert"
+      "create_restaurant_invite"
     );
 
-    if (ins.error) {
-      const upd = await withTimeout(
-        supabase
-          .from("restaurant_invites")
-          .update({ status: "pending", revoked_at: null, revoked_by: null })
-          .eq("restaurant_id", r.id)
-          .eq("email", email),
-        12000,
-        "invites.update(reinvite)"
-      );
-      if (upd.error) throw upd.error;
+    if (res.error) throw res.error;
+
+    const payload = res.data || null;
+    if (!payload?.ok) {
+      throw new Error(payload?.error || "Invite failed");
     }
 
     appState.invites = await loadInvites(r.id);
