@@ -393,6 +393,7 @@ document.querySelector("#app").innerHTML = `
         <button class="btn" type="button" data-mbtab="area_abilities">Area Abilities</button>
         <button class="btn" type="button" data-mbtab="billing">Listing</button>
         <button class="btn" type="button" data-mbtab="history">Performance</button>
+        <select id="mbRestaurantPicker" class="hidden input" style="margin-left:auto; min-width:220px;"></select>
       </div>
 
       <div id="mbPanels">
@@ -1185,25 +1186,74 @@ function canActOnRestaurant(roleLike, actorProfile, restaurantId) {
   const rid = String(restaurantId || "");
   if (!rid) return false;
 
-  const actorRestaurantId = String(
-    actorProfile?.restaurant_id ||
-    actorProfile?.restaurantId ||
+  if (role === "waiter") return false;
+
+  const allowed = getActorRestaurantSet(actorProfile);
+  return allowed.includes(rid);
+}
+
+function getActorRestaurantSet(profileLike) {
+  const profile = profileLike || {};
+  const role = normalizeMembershipRole(profile);
+
+  const ownRestaurantId = String(
+    profile?.restaurant_id ||
+    profile?.restaurantId ||
     ""
   );
 
+  const scopedRestaurantIds = Array.isArray(window.__BC_ALLOWED_RESTAURANT_IDS__)
+    ? window.__BC_ALLOWED_RESTAURANT_IDS__.map((x) => String(x || "")).filter(Boolean)
+    : [];
+
   if (role === "single_manager") {
-    return actorRestaurantId === rid;
+    return ownRestaurantId ? [ownRestaurantId] : [];
   }
 
-  if (role === "group_manager") {
-    return true;
+  if (role === "group_manager" || role === "enterpriser") {
+    if (scopedRestaurantIds.length) return scopedRestaurantIds;
+    return ownRestaurantId ? [ownRestaurantId] : [];
   }
 
-  if (role === "enterpriser") {
-    return true;
+  return [];
+}
+
+function getManagerActiveRestaurantId() {
+  const explicit =
+    window.__BC_ACTIVE_MANAGER_RESTAURANT_ID__ ||
+    window.__BC_ACTIVE_RESTAURANT_ID__ ||
+    null;
+
+  if (explicit) return String(explicit);
+
+  return String(
+    appState?.restaurant?.id ||
+    appState?.profile?.restaurant_id ||
+    appState?.profile?.restaurantId ||
+    ""
+  ) || null;
+}
+
+function setManagerActiveRestaurantId(nextRestaurantId) {
+  const rid = String(nextRestaurantId || "");
+  if (!rid) return false;
+
+  const profile = appState?.profile || {};
+  if (!canActOnRestaurant(profile, profile, rid)) {
+    console.warn("[MB] denied active restaurant switch", {
+      rid,
+      role: normalizeMembershipRole(profile)
+    });
+    return false;
   }
 
-  return false;
+  window.__BC_ACTIVE_MANAGER_RESTAURANT_ID__ = rid;
+  appState.activeRestaurantId = rid;
+
+  if (!appState.restaurant) appState.restaurant = {};
+  appState.restaurant.id = rid;
+
+  return true;
 }
 // --- storage key should be per-scope (group/enterprise) ---
 function activeRestaurantStorageKey(scopeId) {
@@ -5920,12 +5970,15 @@ async function loadRestaurant(restaurantId) {
   return res.data;
 }
 
-async function loadInvites(restaurantId) {
+async function loadInvites(restaurantId = null) {
+  const rid = String(restaurantId || getManagerActiveRestaurantId() || "");
+  if (!rid) return [];
+
   const res = await withTimeout(
     supabase
       .from("restaurant_invites")
       .select("id,email,status,created_at,accepted_user_id,revoked_at")
-      .eq("restaurant_id", restaurantId)
+      .eq("restaurant_id", rid)
       .order("created_at", { ascending: false }),
     12000,
     "invites.select"
@@ -6248,6 +6301,96 @@ async function loadRestaurantsForHudPicker() {
   btn.onclick = () => applyRestaurant(sel.value);
   loadRestaurantsForHudPicker.__loadedOnce = true;
   loadRestaurantsForHudPicker.__inflight = false;
+}
+
+async function ensureManagerRestaurantChoices() {
+  const profile = appState?.profile || {};
+  const caps = getPremiumRoleCapabilities(profile);
+
+  if (!caps.canManageMultipleRestaurants) {
+    const ownRestaurantId = String(
+      profile?.restaurant_id ||
+      profile?.restaurantId ||
+      ""
+    );
+    window.__BC_ALLOWED_RESTAURANT_IDS__ = ownRestaurantId ? [ownRestaurantId] : [];
+    return window.__BC_ALLOWED_RESTAURANT_IDS__;
+  }
+
+  try {
+    if (typeof loadGroupRestaurantsForPicker === "function") {
+      const rows = await loadGroupRestaurantsForPicker();
+      const ids = Array.isArray(rows)
+        ? rows.map((x) => String(x?.id || x?.restaurant_id || "")).filter(Boolean)
+        : [];
+      window.__BC_ALLOWED_RESTAURANT_IDS__ = ids;
+      return ids;
+    }
+  } catch (e) {
+    console.warn("[MB] loadGroupRestaurantsForPicker failed", e);
+  }
+
+  const ownRestaurantId = String(
+    profile?.restaurant_id ||
+    profile?.restaurantId ||
+    ""
+  );
+  window.__BC_ALLOWED_RESTAURANT_IDS__ = ownRestaurantId ? [ownRestaurantId] : [];
+  return window.__BC_ALLOWED_RESTAURANT_IDS__;
+}
+
+function renderManagerRestaurantPicker() {
+  const profile = appState?.profile || {};
+  const caps = getPremiumRoleCapabilities(profile);
+  const select = document.getElementById("mbRestaurantPicker");
+
+  if (!select) return;
+
+  if (!caps.canManageMultipleRestaurants) {
+    select.classList.add("hidden");
+    return;
+  }
+
+  const ids = Array.isArray(window.__BC_ALLOWED_RESTAURANT_IDS__)
+    ? window.__BC_ALLOWED_RESTAURANT_IDS__
+    : [];
+
+  select.innerHTML = "";
+  ids.forEach((rid) => {
+    const opt = document.createElement("option");
+    opt.value = rid;
+    opt.textContent = rid;
+    select.appendChild(opt);
+  });
+
+  const active = getManagerActiveRestaurantId();
+  if (active) select.value = active;
+  select.classList.remove("hidden");
+}
+
+function wireManagerRestaurantPicker() {
+  const select = document.getElementById("mbRestaurantPicker");
+  if (!select || select.__wired) return;
+
+  select.__wired = true;
+  select.addEventListener("change", async () => {
+    const rid = String(select.value || "");
+    if (!rid) return;
+    if (!setManagerActiveRestaurantId(rid)) return;
+
+    try {
+      const restaurant = await loadRestaurant(rid);
+      if (restaurant) appState.restaurant = restaurant;
+    } catch (e) {
+      console.warn("[MB] loadRestaurant after switch failed", e);
+    }
+
+    await loadManagerBoardData?.(rid);
+    await loadManagerMessenger?.(rid);
+    appState.invites = await loadInvites?.(rid);
+    renderInvitesList?.();
+    renderHud?.();
+  });
 }
 
 function applyManagerBoardVisibility() {
@@ -6834,14 +6977,18 @@ async function loadGroupRestaurantsForPicker() {
   const active = appState.activeRestaurantId || stored || rows[0].id;
   sel.value = active;
   appState.activeRestaurantId = active;
+  window.__BC_ALLOWED_RESTAURANT_IDS__ = rows.map((x) => String(x.id || "")).filter(Boolean);
   setStoredActiveRestaurantId(appState?.profile?.scope_id || null, active);
   localStorage.setItem("BC_ACTIVE_RESTAURANT_ID", active);
+  window.__BC_ACTIVE_MANAGER_RESTAURANT_ID__ = active;
+  window.__BC_ACTIVE_RESTAURANT_ID__ = active;
   const activeRow = rows.find((x) => x.id === active) || null;
   if (activeRow && !appState.restaurant) appState.restaurant = activeRow;
   markActiveRestaurantReady();
   if (hint) hint.textContent = `✅ Active: ${activeRow?.name || String(active).slice(0, 8) + "…"}`;
 
   console.log("[BC] picker hydrated (no scope)", { active });
+  return rows;
 }
 
 async function assertRestaurantAllowedForScope(scopeId, restaurantId) {
@@ -7144,6 +7291,8 @@ async function setActiveRestaurantForGroup(restaurantId) {
 
     // 1) persist selection (LOCAL preference only)
     appState.activeRestaurantId = restaurantId;
+    window.__BC_ACTIVE_MANAGER_RESTAURANT_ID__ = restaurantId;
+    window.__BC_ACTIVE_RESTAURANT_ID__ = restaurantId;
     try {
       prev.stored = getStoredActiveRestaurantId(scopeId);
       setStoredActiveRestaurantId(scopeId, restaurantId);
@@ -7217,15 +7366,23 @@ async function ensureActiveRestaurantReady() {
 }
 
 function getManagerBoardFilter() {
-  const p = window.appState?.profile || {};
-  const role = String(p.role || "").toLowerCase();
-  const scopeType = String(p.scope_type || "").toLowerCase();
-  const restaurantId = window.getActiveRestaurantId?.() || null;
+  const profile = appState?.profile || {};
+  const caps = getPremiumRoleCapabilities(profile);
+  const restaurantId = getManagerActiveRestaurantId();
 
-  const isManager = isManagerRole(role);
-  const isGroupish = isManager && (scopeType === "group" || scopeType === "enterprise");
+  return {
+    role: normalizeMembershipRole(profile),
+    caps,
+    isManager: !!caps.canAccessManagerBoard,
+    restaurantId,
+    canAct: !!restaurantId && canActOnRestaurant(profile, profile, restaurantId),
+  };
+}
 
-  return { restaurantId, isManager, isGroupish };
+function requireManagerRestaurantId(restaurantId = null) {
+  const rid = String(restaurantId || getManagerActiveRestaurantId() || "");
+  if (!rid) throw new Error("Active restaurant not set.");
+  return rid;
 }
 
 function getScopeIdSafe() {
@@ -7951,10 +8108,25 @@ function renderManagerActiveThread(nameMap) {
   renderManagerDrillSummary(thread, nameMap);
 }
 
-async function loadManagerMessenger() {
-  const { restaurantId, isManager } = getManagerBoardFilter();
-  if (!isManager) throw new Error("Manager only");
-  if (!restaurantId) throw new Error("Active restaurant not set");
+async function loadManagerMessenger(restaurantId = null) {
+  const rid = String(restaurantId || getManagerActiveRestaurantId() || "");
+  const profile = appState?.profile || {};
+  const caps = getPremiumRoleCapabilities(profile);
+
+  if (!rid) {
+    window.__BC_MB_THREADS__ = [];
+    return [];
+  }
+
+  if (!caps.canAccessManagerBoard) {
+    window.__BC_MB_THREADS__ = [];
+    return [];
+  }
+
+  if (!canActOnRestaurant(profile, profile, rid)) {
+    window.__BC_MB_THREADS__ = [];
+    return [];
+  }
 
   const listEl = mbEl("mbThreadList");
   const emptyEl = mbEl("mbThreadEmpty");
@@ -7971,7 +8143,7 @@ async function loadManagerMessenger() {
   const { data, error } = await supabase
     .from("bc_messages_v1")
     .select("id, created_at, scope_type, scope_id, restaurant_id, sender_user_id, receiver_user_id, sender_role, type, body, payload, read_at")
-    .eq("restaurant_id", restaurantId)
+    .eq("restaurant_id", rid)
     .is("archived_at", null)
     .order("created_at", { ascending: false })
     .limit(200);
@@ -8046,6 +8218,7 @@ async function loadManagerMessenger() {
   renderManagerActiveThread(nameMap);
   renderTimedChallengeComposer();
   wireMbCoachSuggestionButtons();
+  return threads;
 }
 
 function getManagerBoardWaiterOptions() {
@@ -8095,8 +8268,6 @@ function renderTimedChallengeTargetOptions() {
 }
 
 function buildTimedChallengePayload() {
-  const ctx = window.__BC_CTX__ || window.__BC_BUILD_CTX__?.("premium") || {};
-
   const targetEl = document.getElementById("mbTimedChallengeTarget");
   const typeEl = document.getElementById("mbTimedChallengeType");
   const durationEl = document.getElementById("mbTimedChallengeDuration");
@@ -8106,9 +8277,10 @@ function buildTimedChallengePayload() {
   const challengeKey = typeEl?.value || "closing_push";
   const durationSec = Number(durationEl?.value || 600);
   const rewardPoints = Number(rewardEl?.value || 50);
+  const restaurantId = getManagerActiveRestaurantId();
 
   if (!targetUserId) return null;
-  if (!ctx.restaurantId) return null;
+  if (!restaurantId) return null;
 
   const challengeDefs = {
     closing_push: {
@@ -8135,7 +8307,7 @@ function buildTimedChallengePayload() {
     challengeKey,
     title: def.title,
     targetUserId,
-    restaurantId: ctx.restaurantId,
+    restaurantId,
     durationSec,
     focus: def.focus,
     rewardPoints,
@@ -8200,7 +8372,7 @@ async function sendTimedChallengeFromManager() {
 
     if (statusEl) statusEl.textContent = `${payload.title} sent ✅`;
     renderTimedChallengeRecentSummary();
-    await loadManagerMessenger();
+    await loadManagerMessenger(payload.restaurantId);
     renderTimedChallengeRecentSummary();
     return true;
   } catch (e) {
@@ -8276,18 +8448,14 @@ async function mbSendInstruction() {
 
   if (status) status.textContent = "Sent ✅";
   try { mbEl("mbInstrBody").value = ""; } catch {}
-  await loadManagerMessenger();
+  await loadManagerMessenger(restaurantId);
 }
 
 async function mbSendDrillOverride(opts = {}) {
-  const { restaurantId } = getManagerBoardFilter();
-  const profile = appState?.profile || {};
-  const caps = getPremiumRoleCapabilities(profile);
+  const { restaurantId, canAct, caps } = getManagerBoardFilter();
   if (!restaurantId) throw new Error("Active restaurant not set");
   if (!caps.canAssignDrills) throw new Error("Role cannot assign drills.");
-  if (!canActOnRestaurant(profile, profile, restaurantId)) {
-    throw new Error("Role cannot act on this restaurant.");
-  }
+  if (!canAct) throw new Error("Role cannot act on this restaurant.");
 
   const to = String(window.__BC_MB_ACTIVE_THREAD_USER_ID__ || "");
   const status = mbEl("mbInstrStatus");
@@ -8297,10 +8465,10 @@ async function mbSendDrillOverride(opts = {}) {
   if (status) status.textContent = "Sending drill…";
 
   const senderId = appState?.session?.user?.id || appState?.session?.userId || null;
-  const senderRole = normalizeMembershipRole(profile) || "single_manager";
+  const senderRole = normalizeMembershipRole(appState?.profile) || "single_manager";
   const activeScopeId =
-    profile?.scope_id ||
-    profile?.scopeId ||
+    appState?.profile?.scope_id ||
+    appState?.profile?.scopeId ||
     restaurantId;
   if (!senderId) throw new Error("No session");
 
@@ -8375,7 +8543,7 @@ async function mbSendDrillOverride(opts = {}) {
   if (error) throw error;
 
   if (status) status.textContent = "Drill sent ✅";
-  await loadManagerMessenger();
+  await loadManagerMessenger(restaurantId);
 }
 
 async function sendManagerDrillOverride({ focus, repTarget = 3, durationSec = 300, pool, tier } = {}) {
@@ -8923,18 +9091,22 @@ async function loadWeeklySummaryTop() {
   }
 }
 
-async function loadManagerBoardData() {
+async function loadManagerBoardData(restaurantId = null) {
   try {
-    const { restaurantId, isManager, isGroupish } = getManagerBoardFilter();
-    if (!isManager) throw new Error("Manager only");
-    if (!restaurantId) throw new Error("Active restaurant not set");
+    const rid = requireManagerRestaurantId(restaurantId);
+    const profile = appState?.profile || {};
+    const caps = getPremiumRoleCapabilities(profile);
+    if (!caps.canAccessManagerBoard) throw new Error("Role cannot access manager board.");
+    if (!canActOnRestaurant(profile, profile, rid)) throw new Error("Role cannot act on this restaurant.");
 
-    if (!appState.restaurant || appState.restaurant.id !== restaurantId) {
-      try { appState.restaurant = await loadRestaurant(restaurantId); } catch {}
+    setManagerActiveRestaurantId(rid);
+
+    if (!appState.restaurant || appState.restaurant.id !== rid) {
+      try { appState.restaurant = await loadRestaurant(rid); } catch {}
     }
 
     document.getElementById("mbRestName").textContent =
-      appState.restaurant?.name || (String(restaurantId).slice(0, 8) + "…");
+      appState.restaurant?.name || (String(rid).slice(0, 8) + "…");
     document.getElementById("mbMsg").textContent = "";
     wireManagerBoardMembers();
     await loadManagerBoardMembers();
@@ -8955,12 +9127,12 @@ async function loadManagerBoardData() {
     const runsRes = await supabase
       .from(RUNS_TABLE)
       .select("session_id", { count: "exact", head: true })
-      .eq("restaurant_id", restaurantId);
+      .eq("restaurant_id", rid);
 
     const drillsRes = await supabase
       .from(DRILLS_TABLE)
       .select("event_id", { count: "exact", head: true })
-      .eq("restaurant_id", restaurantId)
+      .eq("restaurant_id", rid)
       .eq("event_type", "drill_completed");
 
     if (runsRes.error) throw runsRes.error;
@@ -8975,14 +9147,14 @@ async function loadManagerBoardData() {
     const recentRuns = await supabase
       .from(RUNS_TABLE)
       .select("session_start, user_id, encounters_resolved, avg_chain_score, greens, yellows, reds")
-      .eq("restaurant_id", restaurantId)
+      .eq("restaurant_id", rid)
       .order("session_start", { ascending: false })
       .limit(5);
 
     const recentDrills = await supabase
       .from(DRILLS_TABLE)
       .select("occurred_at, user_id, payload")
-      .eq("restaurant_id", restaurantId)
+      .eq("restaurant_id", rid)
       .eq("event_type", "drill_completed")
       .order("occurred_at", { ascending: false })
       .limit(5);
@@ -9035,7 +9207,7 @@ async function loadManagerBoardData() {
     const streakRes = await supabase
       .from(STREAK_TABLE)
       .select("user_id, occurred_at, chain_signal")
-      .eq("restaurant_id", restaurantId)
+      .eq("restaurant_id", rid)
       .order("occurred_at", { ascending: false })
       .limit(STREAK_LIMIT);
 
@@ -9107,7 +9279,7 @@ async function loadManagerBoardData() {
     let latestQ = supabase
       .from("bc_user_latest_v1")
       .select("user_id, last10_count, last10_greens, last10_yellows, last10_reds, last10_avg_chain_score, latest_chain_signal, latest_tier, latest_grade, latest_occurred_at")
-      .eq("restaurant_id", restaurantId)
+      .eq("restaurant_id", rid)
       .order("latest_occurred_at", { ascending: false })
       .limit(200);
 
@@ -9170,7 +9342,7 @@ async function loadManagerBoardData() {
 
     setDebug({
       step: "managerBoard.loaded",
-      restaurant_id: restaurantId,
+      restaurant_id: rid,
       runs: runsRes.count,
       drills: drillsRes.count,
       streakUsers: topStreaks.length,
@@ -9491,7 +9663,7 @@ async function routePremium(reason = "manual") {
     if (profile?.restaurant_id) {
       if (isManagerRole(profile?.role) && appState.restaurant?.id) {
         try {
-          appState.invites = await loadInvites(appState.restaurant.id);
+          appState.invites = await loadInvites(getManagerActiveRestaurantId());
         } catch {
           appState.invites = [];
         }
@@ -9612,6 +9784,21 @@ async function routeManagerBoard(reason = "manual") {
     return;
   }
 
+  const fallbackRestaurantId =
+    window.__BC_ACTIVE_MANAGER_RESTAURANT_ID__ ||
+    appState?.restaurant?.id ||
+    appState?.profile?.restaurant_id ||
+    appState?.profile?.restaurantId ||
+    null;
+
+  if (fallbackRestaurantId) {
+    setManagerActiveRestaurantId(fallbackRestaurantId);
+  }
+
+  await ensureManagerRestaurantChoices?.();
+  renderManagerRestaurantPicker?.();
+  wireManagerRestaurantPicker?.();
+
   unmountDemoGame("routeManagerBoard");
 
   // ✅ respect nav-passed tab (from iframe) if set
@@ -9624,9 +9811,17 @@ async function routeManagerBoard(reason = "manual") {
 
   await ensureActiveRestaurantReady();
 
+  const rid = getManagerActiveRestaurantId();
+  if (rid) {
+    appState.invites = await loadInvites(rid);
+  }
+
   // ✅ load the selected tab without requiring a click
   window.__BC_MB_SHOWTAB__?.(window.__BC_MB_DEFAULTTAB__);
-  await (window.__BC_MB_LOADTAB__?.(window.__BC_MB_DEFAULTTAB__) || loadManagerBoardData());
+  await (window.__BC_MB_LOADTAB__?.(window.__BC_MB_DEFAULTTAB__) || loadManagerBoardData(rid));
+  if (rid) {
+    await loadManagerMessenger(rid);
+  }
 
   wireManagerBoardMessenger();
   wireManagerBoardBillingAccess();
@@ -9947,10 +10142,15 @@ function renderHud() {
   const profile = appState.profile || {};
   const normalizedRole = normalizeMembershipRole(profile) || "-";
   const caps = getPremiumRoleCapabilities(profile);
+  const activeRestaurantId = getManagerActiveRestaurantId();
   const r = appState.restaurant;
 
+  if (activeRestaurantId && appState?.restaurant?.id && String(appState.restaurant.id) !== String(activeRestaurantId)) {
+    appState.restaurant.id = activeRestaurantId;
+  }
+
   document.getElementById("hudRole").textContent = getDisplayRoleLabel(profile);
-  document.getElementById("hudRestName").textContent = r?.name || "-";
+  document.getElementById("hudRestName").textContent = r?.name || activeRestaurantId || "-";
   document.getElementById("hudJoinCode").textContent = r?.code || "-";
   document.getElementById("hudSeatLimit").textContent = r?.seat_limit ?? "-";
   document.getElementById("hudRequireInvite").textContent = r ? (r.require_invite ? "Yes" : "No") : "-";
@@ -9993,19 +10193,20 @@ async function adminAddInvite(emailRaw) {
     if (!email) throw new Error("Enter a valid email.");
 
     const r = appState.restaurant;
+    const activeRestaurantId = getManagerActiveRestaurantId();
     const sess = appState.session;
     const profile = appState.profile || {};
     const caps = getPremiumRoleCapabilities(profile);
-    if (!r?.id) throw new Error("Restaurant not loaded.");
+    if (!activeRestaurantId) throw new Error("Restaurant not loaded.");
     if (!sess?.user) throw new Error("Not logged in.");
     if (!caps.canInviteWaiters) throw new Error("Role cannot invite waiters.");
-    if (!canActOnRestaurant(profile, profile, r.id)) {
+    if (!canActOnRestaurant(profile, profile, activeRestaurantId)) {
       throw new Error("Role cannot act on this restaurant.");
     }
 
     const res = await withTimeout(
       supabase.rpc("create_restaurant_invite", {
-        p_restaurant_id: r.id,
+        p_restaurant_id: activeRestaurantId,
         p_email: email,
       }),
       12000,
@@ -10019,7 +10220,7 @@ async function adminAddInvite(emailRaw) {
       throw new Error(payload?.error || "Invite failed");
     }
 
-    appState.invites = await loadInvites(r.id);
+    appState.invites = await loadInvites(activeRestaurantId);
     renderInvitesList();
     setMsg("hudMsg", `Added: ${email}`, "success");
   } catch (e) {
