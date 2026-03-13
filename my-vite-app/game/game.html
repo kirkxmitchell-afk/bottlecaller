@@ -278,6 +278,8 @@
       }),
     });
 
+    window.__BC_ABILITY_LAST_IMPACT__ = window.__BC_ABILITY_LAST_IMPACT__ || [];
+
     function getParentActiveAbilities() {
       const now = Date.now();
       try {
@@ -311,6 +313,18 @@
       if (n >= 3) return "green";
       if (n >= 2) return "yellow";
       return "red";
+    }
+
+    function recordAbilityImpact(entry) {
+      window.__BC_ABILITY_LAST_IMPACT__ = window.__BC_ABILITY_LAST_IMPACT__ || [];
+      window.__BC_ABILITY_LAST_IMPACT__.push({
+        at: Date.now(),
+        ...entry,
+      });
+
+      if (window.__BC_ABILITY_LAST_IMPACT__.length > 50) {
+        window.__BC_ABILITY_LAST_IMPACT__ = window.__BC_ABILITY_LAST_IMPACT__.slice(-50);
+      }
     }
 
     function getActiveAbilityRuntime() {
@@ -374,6 +388,13 @@
           next.chainScore = boostedScore;
           next.chainSignal = chainSignalFromScore(boostedScore);
           next.__closingSurgeApplied = true;
+          recordAbilityImpact({
+            abilityId: "closing_surge",
+            hook: "reaction_eval",
+            value: runtime.reactionClosingBonus,
+            chainScore: boostedScore,
+            chainSignal: next.chainSignal,
+          });
         }
       }
 
@@ -386,6 +407,12 @@
         next.pivotUnlocked = true;
         next.pivotType = "RECOVERY_PIVOT";
         next.__recoveryFocusApplied = true;
+        recordAbilityImpact({
+          abilityId: "recovery_focus",
+          hook: "reaction_eval",
+          value: runtime.recoveryThresholdDelta,
+          pivotUnlocked: true,
+        });
       }
 
       return next;
@@ -404,12 +431,29 @@
       if (signal !== "green") {
         if (runtime.premiumWindow && signal === "yellow" && pressure.openness >= 0.7) {
           chance = Math.max(chance * 0.5, 0.2);
+          recordAbilityImpact({
+            abilityId: "premium_window",
+            hook: "premium_roll_window",
+            value: runtime.premiumChanceBonus,
+            chance,
+            signal,
+          });
         } else {
           chance = 0;
         }
       }
 
       chance = clampNumber(chance, 0, 0.9);
+      if (runtime.premiumWindow && chance > 0) {
+        recordAbilityImpact({
+          abilityId: "premium_window",
+          hook: "premium_roll",
+          value: runtime.premiumChanceBonus,
+          chance,
+          openness: pressure?.openness ?? 0,
+          confidence: pressure?.confidence ?? 0,
+        });
+      }
       return Math.random() < chance;
     }
 
@@ -9101,8 +9145,7 @@ body.difficulty-hard .option-btn.selected {
         };
 
         const bias = encounter?.pressureBias || {};
-
-        return {
+        const nextPressure = {
           openness: clamp01(
             base.openness +
             Number(bias.openness || 0) +
@@ -9127,6 +9170,28 @@ body.difficulty-hard .option-btn.selected {
             (-0.10 * abilityFx.pressureInitRelief)
           )
         };
+
+        if (abilityFx.calmFloor) {
+          recordAbilityImpact({
+            abilityId: "calm_floor",
+            hook: "pressure_init",
+            value: abilityFx.pressureInitRelief,
+            urgency: nextPressure.urgency,
+            resistance: nextPressure.resistance,
+          });
+        }
+
+        if (abilityFx.premiumWindow) {
+          recordAbilityImpact({
+            abilityId: "premium_window",
+            hook: "pressure_init",
+            value: abilityFx.opennessBonus,
+            openness: nextPressure.openness,
+            confidence: nextPressure.confidence,
+          });
+        }
+
+        return nextPressure;
       }
 
       function clamp01(n) {
@@ -9213,10 +9278,22 @@ body.difficulty-hard .option-btn.selected {
               next.openness += 0.04;
               next.confidence += 0.06 * abilityFx.recoveryPressureRelief;
               next.resistance -= 0.04;
+              recordAbilityImpact({
+                abilityId: "recovery_focus",
+                hook: "pressure_update",
+                value: abilityFx.recoveryPressureRelief,
+                outcome: "pivot_correct",
+              });
             } else if (e.recoveryChoice) {
               next.openness += 0.02;
               next.confidence += 0.02 * abilityFx.recoveryPressureRelief;
               next.resistance -= 0.02;
+              recordAbilityImpact({
+                abilityId: "recovery_focus",
+                hook: "pressure_update",
+                value: abilityFx.recoveryPressureRelief,
+                outcome: "pivot_softened",
+              });
             }
           }
         }
@@ -13048,6 +13125,13 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           else if (decision.action === "intervention") guardState.pressureLevel = Math.min(guardState.pressureLevel, 0);
           if (abilityFx.calmFloor) {
             guardState.pressureLevel += Number(abilityFx.pressureEscalationDelta || 0);
+            recordAbilityImpact({
+              abilityId: "calm_floor",
+              hook: "pressure_guard",
+              value: abilityFx.pressureEscalationDelta,
+              pressureBefore,
+              pressureAfter: guardState.pressureLevel,
+            });
           }
           guardState.pressureLevel = clampPressureByTier(tierNow, guardState.pressureLevel);
 
@@ -13306,6 +13390,12 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             checks?.hookStatus !== "damaging"
           ) {
             total += Number(abilityFx.reactionClosingBonus || 0);
+            recordAbilityImpact({
+              abilityId: "closing_surge",
+              hook: "outcome_eval",
+              value: abilityFx.reactionClosingBonus,
+              total,
+            });
           }
 
           enc.chainScore = total;
@@ -13316,6 +13406,25 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           const cleanCloseThreshold = clampNumber(6 + (0.5 * closingThresholdDelta), 1, 10);
           const softCloseThreshold = clampNumber(4 + (0.5 * closingThresholdDelta), 1, 10);
           const recoveryPivotThreshold = clampNumber(1 + (0.5 * recoveryThresholdDelta), 0, 10);
+
+          if (abilityFx.closingSurge) {
+            recordAbilityImpact({
+              abilityId: "closing_surge",
+              hook: "outcome_threshold",
+              value: closingThresholdDelta,
+              cleanCloseThreshold,
+              softCloseThreshold,
+            });
+          }
+
+          if (abilityFx.recoveryFocus) {
+            recordAbilityImpact({
+              abilityId: "recovery_focus",
+              hook: "outcome_threshold",
+              value: recoveryThresholdDelta,
+              recoveryPivotThreshold,
+            });
+          }
 
           if (total >= cleanCloseThreshold) return { outcome: "clean_close", score: total };
           if (total >= softCloseThreshold) return { outcome: "soft_close", score: total };

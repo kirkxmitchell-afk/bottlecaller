@@ -1096,6 +1096,13 @@ window.__BC_ABILITY_LIBRARY__ = window.__BC_ABILITY_LIBRARY__ || [
     allowedSurfaces: ["gameplay_panel", "manager_board"],
     gameplayUsable: true,
     scope: "self",
+    activationRules: {
+      requireCtx: true,
+      requirePremium: true,
+      requireEncounter: true,
+      allowDuringDrill: true,
+      oncePerEncounter: true,
+    },
     payload: { focus: "closing", strength: 1 }
   },
   {
@@ -1113,6 +1120,13 @@ window.__BC_ABILITY_LIBRARY__ = window.__BC_ABILITY_LIBRARY__ || [
     allowedSurfaces: ["gameplay_panel", "manager_board"],
     gameplayUsable: true,
     scope: "self",
+    activationRules: {
+      requireCtx: true,
+      requirePremium: true,
+      requireEncounter: true,
+      allowDuringDrill: true,
+      oncePerEncounter: true,
+    },
     payload: { focus: "recovery", strength: 1 }
   },
   {
@@ -1130,6 +1144,13 @@ window.__BC_ABILITY_LIBRARY__ = window.__BC_ABILITY_LIBRARY__ || [
     allowedSurfaces: ["gameplay_panel", "manager_board"],
     gameplayUsable: true,
     scope: "encounter",
+    activationRules: {
+      requireCtx: true,
+      requirePremium: true,
+      requireEncounter: true,
+      allowDuringDrill: true,
+      oncePerEncounter: true,
+    },
     payload: { effect: "pressure_down", strength: 1 }
   },
   {
@@ -1147,10 +1168,18 @@ window.__BC_ABILITY_LIBRARY__ = window.__BC_ABILITY_LIBRARY__ || [
     allowedSurfaces: ["gameplay_panel", "manager_board"],
     gameplayUsable: true,
     scope: "encounter",
+    activationRules: {
+      requireCtx: true,
+      requirePremium: true,
+      requireEncounter: true,
+      allowDuringDrill: true,
+      oncePerEncounter: true,
+    },
     payload: { effect: "premium_bias_up", strength: 1 }
   }
 ];
 window.__BC_ACTIVE_ABILITIES__ = window.__BC_ACTIVE_ABILITIES__ || [];
+window.__BC_ABILITY_ENCOUNTER_USAGE__ = window.__BC_ABILITY_ENCOUNTER_USAGE__ || {};
 window.__BC_ABILITY_UI__ = window.__BC_ABILITY_UI__ || { hudFamily: "attribute" };
 let _unlockHideTimer = null;
 
@@ -1271,6 +1300,142 @@ function canUseAbilityOnSurface(ability, surface = "gameplay_panel") {
   return true;
 }
 
+function getGameplayAbilityFrameWindow() {
+  try {
+    return document.getElementById("premiumRootFrame")?.contentWindow || null;
+  } catch {
+    return null;
+  }
+}
+
+function getAbilityGameplayState() {
+  const frameWin = getGameplayAbilityFrameWindow();
+  const frameCtx = frameWin?.__BC_CTX__ || null;
+  const modeRaw =
+    window.__BC_CTX__?.mode ||
+    frameCtx?.mode ||
+    frameWin?.bcMode ||
+    window.bcMode ||
+    "demo";
+  const screenPlayLocal = document.getElementById("screenPlay");
+  const screenPlayFrame = frameWin?.document?.getElementById?.("screenPlay") || null;
+
+  return {
+    hasCtx: !!(window.__BC_CTX__?.userId || frameCtx?.userId),
+    isDemo: String(modeRaw).toLowerCase() === "demo",
+    isInEncounter: !!(window.currentEncounter || frameWin?.currentEncounter),
+    isOnPlayScreen:
+      (!!screenPlayLocal && !screenPlayLocal.classList.contains("hidden")) ||
+      (!!screenPlayFrame && !screenPlayFrame.classList.contains("hidden")),
+    sessionType: String(
+      window.__BC_SESSION_TYPE__ ||
+      window.sessionType ||
+      frameWin?.__BC_SESSION_TYPE__ ||
+      frameWin?.sessionType ||
+      "normal"
+    ).toLowerCase(),
+    hasAssignedDrill: !!(window.__BC_LAST_ASSIGNED_DRILL__?.id || frameWin?.__BC_LAST_ASSIGNED_DRILL__?.id),
+  };
+}
+
+function getCurrentEncounterAbilityKey() {
+  const frameWin = getGameplayAbilityFrameWindow();
+  const encounter =
+    window.currentEncounter ||
+    frameWin?.currentEncounter ||
+    null;
+  const encounterId =
+    encounter?.id ||
+    encounter?.key ||
+    encounter?.encounterId ||
+    window.encounterIndex ||
+    frameWin?.encounterIndex ||
+    "unknown";
+
+  return String(encounterId);
+}
+
+function hasUsedAbilityThisEncounter(abilityId) {
+  const k = getCurrentEncounterAbilityKey();
+  return !!window.__BC_ABILITY_ENCOUNTER_USAGE__?.[k]?.[abilityId];
+}
+
+function markAbilityUsedThisEncounter(abilityId) {
+  const k = getCurrentEncounterAbilityKey();
+  window.__BC_ABILITY_ENCOUNTER_USAGE__ = window.__BC_ABILITY_ENCOUNTER_USAGE__ || {};
+  window.__BC_ABILITY_ENCOUNTER_USAGE__[k] = window.__BC_ABILITY_ENCOUNTER_USAGE__[k] || {};
+  window.__BC_ABILITY_ENCOUNTER_USAGE__[k][abilityId] = true;
+}
+
+function getActiveAbilityByFamily(family) {
+  const f = String(family || "").toLowerCase();
+  return getActiveAbilities().find((x) => String(x?.family || "").toLowerCase() === f) || null;
+}
+
+function hasConflictingActiveAbility(ability) {
+  if (!ability) return null;
+  const family = String(ability.family || "").toLowerCase();
+  if (!family) return null;
+  return getActiveAbilityByFamily(family);
+}
+
+function canActivateAbilityNow(ability) {
+  if (!ability) return { ok: false, reason: "missing_ability" };
+
+  const state = getAbilityGameplayState();
+  const rules = ability.activationRules || {};
+
+  if (rules.requireCtx && !state.hasCtx) {
+    return { ok: false, reason: "ctx_required" };
+  }
+
+  if (rules.requirePremium && state.isDemo) {
+    return { ok: false, reason: "premium_required" };
+  }
+
+  if (rules.requireEncounter && !state.isInEncounter) {
+    return { ok: false, reason: "encounter_required" };
+  }
+
+  if (rules.allowDuringDrill === false && state.sessionType === "drill") {
+    return { ok: false, reason: "blocked_during_drill" };
+  }
+
+  if (rules.oncePerEncounter && hasUsedAbilityThisEncounter(ability.id)) {
+    return { ok: false, reason: "already_used_this_encounter" };
+  }
+
+  const conflicting = hasConflictingActiveAbility(ability);
+  if (conflicting && String(conflicting.id || "") !== String(ability.id || "")) {
+    return {
+      ok: false,
+      reason: "family_conflict",
+      conflictAbilityId: conflicting.id || null,
+      conflictTitle: conflicting.title || null,
+    };
+  }
+
+  return { ok: true, reason: null };
+}
+
+function getAbilityBlockedReasonText(ability) {
+  const result = canActivateAbilityNow(ability);
+  if (result.ok) return "";
+
+  switch (result.reason) {
+    case "ctx_required": return "Ctx required";
+    case "premium_required": return "Premium only";
+    case "encounter_required": return "Only during encounters";
+    case "blocked_during_drill": return "Blocked during drill";
+    case "already_used_this_encounter": return "Used this encounter";
+    case "family_conflict":
+      return result.conflictTitle
+        ? `Active: ${result.conflictTitle}`
+        : "Family already active";
+    default: return "Unavailable";
+  }
+}
+
 function isAbilityAvailable(ability, surface = "gameplay_panel") {
   if (!ability) return false;
   if (!canUseAbilityOnSurface(ability, surface)) return false;
@@ -1278,6 +1443,10 @@ function isAbilityAvailable(ability, surface = "gameplay_panel") {
   if (!ability.available) return false;
   if (Number(ability.usesRemaining || 0) <= 0) return false;
   if (isAbilityActive(ability.id)) return false;
+
+  const stateCheck = canActivateAbilityNow(ability);
+  if (!stateCheck.ok && surface === "gameplay_panel") return false;
+
   return true;
 }
 
@@ -1324,6 +1493,7 @@ function renderHudAbilityFamilyList(family, targetId) {
   for (const ability of items) {
     const active = isAbilityActive(ability.id);
     const available = isAbilityAvailable(ability, "gameplay_panel");
+    const blockedReasonText = !active && !available ? getAbilityBlockedReasonText(ability) : "";
 
     const card = document.createElement("div");
     card.className = "card";
@@ -1336,9 +1506,11 @@ function renderHudAbilityFamilyList(family, targetId) {
       ? "Active"
       : available
         ? `Ready • ${Number(ability.usesRemaining || 0)} use left`
-        : Number(ability.usesRemaining || 0) <= 0
-          ? "No uses left"
-          : "Unavailable";
+        : blockedReasonText || (
+            Number(ability.usesRemaining || 0) <= 0
+              ? "No uses left"
+              : "Unavailable"
+          );
 
     card.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
@@ -1408,7 +1580,11 @@ function renderHudActiveEffects() {
   }
 
   if (status) {
-    status.textContent = `${active.length} active effect${active.length === 1 ? "" : "s"}`;
+    const summary = getActiveAbilityFamilySummary();
+    const bits = [];
+    if (summary.attribute?.title) bits.push(`Attribute: ${summary.attribute.title}`);
+    if (summary.area?.title) bits.push(`Area: ${summary.area.title}`);
+    status.textContent = bits.length ? bits.join(" • ") : "No active effects";
   }
 
   for (const entry of active) {
@@ -1429,6 +1605,13 @@ function renderHudActiveEffects() {
 
     root.appendChild(row);
   }
+}
+
+function getActiveAbilityFamilySummary() {
+  return {
+    attribute: getActiveAbilityByFamily("attribute"),
+    area: getActiveAbilityByFamily("area"),
+  };
 }
 
 function applyAbilityEffect(ability) {
@@ -1467,15 +1650,23 @@ function expireAbility(abilityId) {
 
   console.log("[ABILITY] expired", { id });
   renderHudAbilities();
+  renderManagerBoardAbilityTabs();
 }
 
 function activateAbility(abilityId) {
   const ability = getAbilityById(abilityId);
   if (!ability) return false;
-  if (!isAbilityAvailable(ability)) return false;
+  if (!isAbilityAvailable(ability, "gameplay_panel")) return false;
+
+  const stateCheck = canActivateAbilityNow(ability);
+  if (!stateCheck.ok) {
+    window.showToast?.("Ability not available right now.");
+    return false;
+  }
 
   ability.active = true;
   ability.usesRemaining = Math.max(0, Number(ability.usesRemaining || 0) - 1);
+  markAbilityUsedThisEncounter(ability.id);
 
   const activeEntry = {
     id: ability.id,
@@ -1550,6 +1741,81 @@ function tickHudActiveAbilities() {
   }, 1000);
 }
 
+function getManagerBoardActiveAbilitySummary() {
+  const active = getActiveAbilities();
+
+  const attribute = active.filter((x) => String(x?.family || "") === "attribute");
+  const area = active.filter((x) => String(x?.family || "") === "area");
+
+  return {
+    total: active.length,
+    attributeCount: attribute.length,
+    areaCount: area.length,
+    active,
+  };
+}
+
+function renderManagerBoardActiveEffectsSummary() {
+  const summary = getManagerBoardActiveAbilitySummary();
+  const active = summary.active || [];
+
+  const wrap = document.createElement("div");
+  wrap.className = "card";
+  wrap.style.display = "flex";
+  wrap.style.flexDirection = "column";
+  wrap.style.gap = "8px";
+  wrap.style.padding = "12px";
+  wrap.style.marginBottom = "12px";
+
+  const title = document.createElement("div");
+  title.style.fontWeight = "600";
+  title.textContent = "Live Ability Status";
+  wrap.appendChild(title);
+
+  const meta = document.createElement("div");
+  meta.className = "small";
+  meta.style.opacity = ".8";
+  meta.textContent = `Active total: ${summary.total} • Attribute: ${summary.attributeCount} • Area: ${summary.areaCount}`;
+  wrap.appendChild(meta);
+
+  const list = document.createElement("div");
+  list.style.display = "flex";
+  list.style.flexDirection = "column";
+  list.style.gap = "6px";
+
+  if (!active.length) {
+    const empty = document.createElement("div");
+    empty.className = "small";
+    empty.style.opacity = ".7";
+    empty.textContent = "No live effects active.";
+    list.appendChild(empty);
+  } else {
+    for (const entry of active) {
+      const row = document.createElement("div");
+      row.className = "small";
+      row.style.display = "flex";
+      row.style.justifyContent = "space-between";
+      row.style.alignItems = "center";
+      row.style.gap = "8px";
+
+      const secsLeft = Math.max(0, Math.ceil(((entry?.expiresAt || 0) - Date.now()) / 1000));
+
+      row.innerHTML = `
+        <div>
+          <b>${escapeHtml(entry?.title || entry?.id || "Ability")}</b>
+          <span style="opacity:.75;"> • ${escapeHtml(entry?.family || "ability")}</span>
+        </div>
+        <div style="opacity:.8;">${secsLeft}s left</div>
+      `;
+
+      list.appendChild(row);
+    }
+  }
+
+  wrap.appendChild(list);
+  return wrap;
+}
+
 function getAbilityStatusText(ability, surface = "manager_board") {
   if (!ability) return "Unknown";
 
@@ -1560,10 +1826,28 @@ function getAbilityStatusText(ability, surface = "manager_board") {
   }
 
   if (!ability.unlocked) return "Locked";
-  if (!canUseAbilityOnSurface(ability, surface)) return "Unavailable";
+  if (!canUseAbilityOnSurface(ability, surface)) return "Hidden";
   if (!ability.available) return "Unavailable";
   if (Number(ability.usesRemaining || 0) <= 0) return "No uses left";
-  return "Ready";
+  const stateCheck = canActivateAbilityNow(ability);
+  switch (stateCheck.reason) {
+    case "family_conflict":
+      return "Blocked by active family effect";
+    case "already_used_this_encounter":
+      return "Used this encounter";
+    case "encounter_required":
+      return "Only during encounters";
+    case "blocked_during_drill":
+      return "Blocked during drill";
+    case "premium_required":
+      return "Premium only";
+    case "ctx_required":
+      return "Ctx required";
+    default:
+      break;
+  }
+  if (isAbilityAvailable(ability, "gameplay_panel")) return "Ready";
+  return "Idle";
 }
 
 function getAbilityEffectSummary(ability) {
@@ -1585,12 +1869,19 @@ function getAbilityFamilySummary(family) {
   const items = getAbilitiesByFamily(family).filter((x) => canUseAbilityOnSurface(x, "manager_board"));
   const activeCount = items.filter((x) => isAbilityActive(x.id)).length;
   const unlockedCount = items.filter((x) => !!x.unlocked).length;
+  const readyCount = items.filter((x) => isAbilityAvailable(x, "gameplay_panel")).length;
 
   return {
     total: items.length,
     active: activeCount,
     unlocked: unlockedCount,
+    ready: readyCount,
   };
+}
+
+function getAbilityUseContextLabel() {
+  const useCtx = getCurrentAbilityUseContext();
+  return `Role: ${useCtx.role || "-"} • Mode: ${useCtx.mode || "-"}`;
 }
 
 function renderManagerBoardAbilitiesTab(family, targetId) {
@@ -1613,11 +1904,19 @@ function renderManagerBoardAbilitiesTab(family, targetId) {
   title.textContent = family === "attribute" ? "Attribute Abilities" : "Area Abilities";
   wrap.appendChild(title);
 
+  const ctxLine = document.createElement("div");
+  ctxLine.className = "small";
+  ctxLine.style.opacity = ".7";
+  ctxLine.textContent = getAbilityUseContextLabel();
+  wrap.appendChild(ctxLine);
+
   const meta = document.createElement("div");
   meta.className = "small";
   meta.style.opacity = ".8";
-  meta.textContent = `Unlocked: ${summary.unlocked}/${summary.total} • Active: ${summary.active}`;
+  meta.textContent = `Unlocked: ${summary.unlocked}/${summary.total} • Active: ${summary.active} • Ready: ${summary.ready}`;
   wrap.appendChild(meta);
+
+  wrap.appendChild(renderManagerBoardActiveEffectsSummary());
 
   if (!items.length) {
     const empty = document.createElement("div");
@@ -1691,7 +1990,15 @@ function tickManagerBoardAbilities() {
   setInterval(() => {
     const screen = document.getElementById("screenManagerBoard");
     if (!screen || screen.classList.contains("hidden")) return;
-    renderManagerBoardAbilityTabs();
+
+    const attr = document.getElementById("mbTab_attribute_abilities");
+    const area = document.getElementById("mbTab_area_abilities");
+    const attrVisible = attr && !attr.classList.contains("hidden");
+    const areaVisible = area && !area.classList.contains("hidden");
+
+    if (attrVisible || areaVisible) {
+      renderManagerBoardAbilityTabs();
+    }
   }, 1000);
 }
 
