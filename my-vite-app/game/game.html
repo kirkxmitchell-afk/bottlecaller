@@ -296,6 +296,16 @@
       }
     }
 
+    function syncActiveAbilitiesFromParent() {
+      const active = getParentActiveAbilities();
+      window.__BC_ACTIVE_ABILITIES__ = active;
+      return active;
+    }
+
+    function clampNumber(x, min, max) {
+      return Math.max(min, Math.min(max, Number(x || 0)));
+    }
+
     function chainSignalFromScore(score) {
       const n = Number(score || 0);
       if (n >= 3) return "green";
@@ -303,12 +313,17 @@
       return "red";
     }
 
-    function getActiveAbilityRuntime(encounter = null) {
-      const active = getParentActiveAbilities();
-      const activeSet = new Set(
-        active.map((entry) => String(entry?.id || "")).filter(Boolean)
-      );
-      const has = (id) => activeSet.has(String(id || ""));
+    function getActiveAbilityRuntime() {
+      const active = Array.isArray(window.__BC_ACTIVE_ABILITIES__)
+        ? window.__BC_ACTIVE_ABILITIES__
+        : syncActiveAbilitiesFromParent();
+
+      const has = (id) =>
+        active.some((x) => String(x?.id || "") === String(id || ""));
+
+      const read = (id, key, fallback = 0) =>
+        has(id) ? Number(ABILITY_EFFECTS?.[id]?.[key] ?? fallback) : fallback;
+
       const closingSurge = has("closing_surge");
       const recoveryFocus = has("recovery_focus");
       const calmFloor = has("calm_floor");
@@ -320,28 +335,28 @@
         recoveryFocus,
         calmFloor,
         premiumWindow,
-        reactionClosingBonus: closingSurge ? ABILITY_EFFECTS.closing_surge.reactionClosingBonus : 0,
-        closingThresholdDelta: closingSurge ? ABILITY_EFFECTS.closing_surge.closingThresholdDelta : 0,
-        recoveryPressureRelief: recoveryFocus ? ABILITY_EFFECTS.recovery_focus.recoveryPressureRelief : 0,
-        recoveryThresholdDelta: recoveryFocus ? ABILITY_EFFECTS.recovery_focus.recoveryThresholdDelta : 0,
-        pressureInitRelief: calmFloor ? ABILITY_EFFECTS.calm_floor.pressureInitRelief : 0,
-        pressureEscalationDelta: calmFloor ? ABILITY_EFFECTS.calm_floor.pressureEscalationDelta : 0,
-        premiumChanceBonus: premiumWindow ? ABILITY_EFFECTS.premium_window.premiumChanceBonus : 0,
-        opennessBonus: premiumWindow ? ABILITY_EFFECTS.premium_window.opennessBonus : 0,
+        reactionClosingBonus: read("closing_surge", "reactionClosingBonus", 0),
+        closingThresholdDelta: read("closing_surge", "closingThresholdDelta", 0),
+        recoveryPressureRelief: read("recovery_focus", "recoveryPressureRelief", 0),
+        recoveryThresholdDelta: read("recovery_focus", "recoveryThresholdDelta", 0),
+        pressureInitRelief: read("calm_floor", "pressureInitRelief", 0),
+        pressureEscalationDelta: read("calm_floor", "pressureEscalationDelta", 0),
+        premiumChanceBonus: read("premium_window", "premiumChanceBonus", 0),
+        opennessBonus: read("premium_window", "opennessBonus", 0),
       };
     }
 
     window.__BC_ABILITY_RUNTIME_DUMP__ = function __BC_ABILITY_RUNTIME_DUMP__() {
       return {
-        active: getParentActiveAbilities(),
-        runtime: getActiveAbilityRuntime(window.currentEncounter || currentEncounter || null),
+        active: window.__BC_ACTIVE_ABILITIES__ || syncActiveAbilitiesFromParent(),
+        runtime: getActiveAbilityRuntime(),
       };
     };
 
     function applyAbilityRuntimeToReaction(result, encounter, checks) {
       if (!result || typeof result !== "object") return result;
 
-      const runtime = getActiveAbilityRuntime(encounter);
+      const runtime = getActiveAbilityRuntime();
       const next = { ...result };
 
       if (
@@ -350,7 +365,11 @@
         checks?.modeStatus !== "damaging" &&
         checks?.hookStatus !== "damaging"
       ) {
-        const boostedScore = Math.min(4, Number(next.chainScore || 0) + (0.5 * runtime.reactionClosingBonus));
+        const boostedScore = clampNumber(
+          Number(next.chainScore || 0) + (0.5 * runtime.reactionClosingBonus),
+          0,
+          4
+        );
         if (boostedScore > Number(next.chainScore || 0)) {
           next.chainScore = boostedScore;
           next.chainSignal = chainSignalFromScore(boostedScore);
@@ -362,7 +381,7 @@
         runtime.recoveryFocus &&
         !next.pivotUnlocked &&
         !checks?.deliveryCorrect &&
-        Number(next.chainScore || 0) >= Math.max(1.5, 2 + (0.5 * runtime.recoveryThresholdDelta))
+        Number(next.chainScore || 0) >= clampNumber(2 + (0.5 * runtime.recoveryThresholdDelta), 1.5, 4)
       ) {
         next.pivotUnlocked = true;
         next.pivotType = "RECOVERY_PIVOT";
@@ -373,7 +392,7 @@
     }
 
     function rollPremiumOpportunity(result, encounter) {
-      const runtime = getActiveAbilityRuntime(encounter);
+      const runtime = getActiveAbilityRuntime();
       const pressure = encounter?.guestPressure || initGuestPressureState(encounter);
       const signal = String(result?.chainSignal || "").toLowerCase();
 
@@ -390,7 +409,7 @@
         }
       }
 
-      chance = Math.max(0, Math.min(0.9, chance));
+      chance = clampNumber(chance, 0, 0.9);
       return Math.random() < chance;
     }
 
@@ -9039,7 +9058,7 @@ body.difficulty-hard .option-btn.selected {
 
       function initGuestPressureState(encounter) {
         const guest = normalizeGuestType(encounter?.guestStateActual);
-        const runtime = getActiveAbilityRuntime(encounter);
+        const abilityFx = getActiveAbilityRuntime();
 
         const baseByGuest = {
           [window.GUEST.DECIDER]: {
@@ -9087,25 +9106,25 @@ body.difficulty-hard .option-btn.selected {
           openness: clamp01(
             base.openness +
             Number(bias.openness || 0) +
-            (0.04 * runtime.pressureInitRelief) +
-            (0.06 * runtime.opennessBonus)
+            (0.04 * abilityFx.pressureInitRelief) +
+            (0.06 * abilityFx.opennessBonus)
           ),
           resistance: clamp01(
             base.resistance +
             Number(bias.resistance || 0) +
-            (-0.08 * runtime.pressureInitRelief) +
-            (-0.03 * runtime.opennessBonus)
+            (-0.08 * abilityFx.pressureInitRelief) +
+            (-0.03 * abilityFx.opennessBonus)
           ),
           confidence: clamp01(
             base.confidence +
             Number(bias.confidence || 0) +
-            (0.05 * runtime.pressureInitRelief) +
-            (0.06 * runtime.opennessBonus)
+            (0.05 * abilityFx.pressureInitRelief) +
+            (0.06 * abilityFx.opennessBonus)
           ),
           urgency: clamp01(
             base.urgency +
             Number(bias.urgency || 0) +
-            (-0.10 * runtime.pressureInitRelief)
+            (-0.10 * abilityFx.pressureInitRelief)
           )
         };
       }
@@ -9118,7 +9137,7 @@ body.difficulty-hard .option-btn.selected {
         const e = encounter || {};
         const c = checks || (typeof window.evaluateChecks === "function" ? window.evaluateChecks(e) : {});
         const p = e.guestPressure || initGuestPressureState(e);
-        const runtime = getActiveAbilityRuntime(e);
+        const abilityFx = getActiveAbilityRuntime();
 
         const next = { ...p };
 
@@ -9189,14 +9208,14 @@ body.difficulty-hard .option-btn.selected {
             next.resistance += 0.08;
           }
 
-          if (runtime.recoveryFocus) {
+          if (abilityFx.recoveryFocus) {
             if (pivotCorrect) {
               next.openness += 0.04;
-              next.confidence += 0.06 * runtime.recoveryPressureRelief;
+              next.confidence += 0.06 * abilityFx.recoveryPressureRelief;
               next.resistance -= 0.04;
             } else if (e.recoveryChoice) {
               next.openness += 0.02;
-              next.confidence += 0.02 * runtime.recoveryPressureRelief;
+              next.confidence += 0.02 * abilityFx.recoveryPressureRelief;
               next.resistance -= 0.02;
             }
           }
@@ -13022,13 +13041,13 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           }
           guardState.graceNext = Math.max(0, (guardState.graceNext || 0) - 1);
 
-          const runtimeAbilities = getActiveAbilityRuntime(currentEncounter);
+          const abilityFx = getActiveAbilityRuntime();
           const pressureBefore = guardState.pressureLevel;
           if (decision.action === "escalate") guardState.pressureLevel += 1;
           else if (decision.action === "deload") guardState.pressureLevel -= 1;
           else if (decision.action === "intervention") guardState.pressureLevel = Math.min(guardState.pressureLevel, 0);
-          if (runtimeAbilities.calmFloor) {
-            guardState.pressureLevel += runtimeAbilities.pressureEscalationDelta;
+          if (abilityFx.calmFloor) {
+            guardState.pressureLevel += Number(abilityFx.pressureEscalationDelta || 0);
           }
           guardState.pressureLevel = clampPressureByTier(tierNow, guardState.pressureLevel);
 
@@ -13264,7 +13283,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             enc?.policy ||
             window.__BC_DIFFICULTY__ ||
             difficultyPolicy(enc?.difficulty ?? 1);
-          const runtime = getActiveAbilityRuntime(enc);
+          const abilityFx = getActiveAbilityRuntime();
           const pivotPlanned =
             (enc?.pivotPlanned != null)
               ? enc.pivotPlanned
@@ -13281,20 +13300,22 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             delivery;
 
           if (
-            runtime.closingSurge &&
+            abilityFx.closingSurge &&
             checks?.deliveryCorrect &&
             checks?.modeStatus !== "damaging" &&
             checks?.hookStatus !== "damaging"
           ) {
-            total += runtime.reactionClosingBonus;
+            total += Number(abilityFx.reactionClosingBonus || 0);
           }
 
           enc.chainScore = total;
           enc.__tiers = { readTier, modeTier, hookTier, delivery };
 
-          const cleanCloseThreshold = 6 + (0.5 * runtime.closingThresholdDelta);
-          const softCloseThreshold = 4 + (0.5 * runtime.closingThresholdDelta);
-          const recoveryPivotThreshold = 1 + (0.5 * runtime.recoveryThresholdDelta);
+          const closingThresholdDelta = Number(abilityFx.closingThresholdDelta || 0);
+          const recoveryThresholdDelta = Number(abilityFx.recoveryThresholdDelta || 0);
+          const cleanCloseThreshold = clampNumber(6 + (0.5 * closingThresholdDelta), 1, 10);
+          const softCloseThreshold = clampNumber(4 + (0.5 * closingThresholdDelta), 1, 10);
+          const recoveryPivotThreshold = clampNumber(1 + (0.5 * recoveryThresholdDelta), 0, 10);
 
           if (total >= cleanCloseThreshold) return { outcome: "clean_close", score: total };
           if (total >= softCloseThreshold) return { outcome: "soft_close", score: total };
