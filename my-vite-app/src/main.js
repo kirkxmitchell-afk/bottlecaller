@@ -400,6 +400,8 @@ document.querySelector("#app").innerHTML = `
             <div class="score-row">Total drills: <span id="mbDrillsTotal">-</span></div>
           </div>
 
+          <div id="mbOverviewLiveEffects" style="margin-top:12px;"></div>
+
           <div class="card" style="margin-top:12px;">
             <strong>This Week (Auto Summary)</strong>
             <div id="mbWeeklySummaryTop" class="small-text" style="margin-top:8px; opacity:.9;">
@@ -707,6 +709,19 @@ document.querySelector("#app").innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px;">
         <div style="font-weight:600;">Abilities</div>
         <div class="small-text" id="hudAbilitiesStatus" style="opacity:.8;">No active effects</div>
+      </div>
+
+      <div id="hudAbilitySlots" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;">
+        <div id="hudAttributeSlotCard" style="padding:10px; border:1px solid rgba(255,255,255,0.08); border-radius:10px;">
+          <div class="small-text" style="opacity:.7;">Attribute Slot</div>
+          <div id="hudAttributeSlotStatus" style="font-weight:600; margin-top:4px;">-</div>
+          <div id="hudAttributeSlotMeta" class="small-text" style="opacity:.8; margin-top:4px;">-</div>
+        </div>
+        <div id="hudAreaSlotCard" style="padding:10px; border:1px solid rgba(255,255,255,0.08); border-radius:10px;">
+          <div class="small-text" style="opacity:.7;">Area Slot</div>
+          <div id="hudAreaSlotStatus" style="font-weight:600; margin-top:4px;">-</div>
+          <div id="hudAreaSlotMeta" class="small-text" style="opacity:.8; margin-top:4px;">-</div>
+        </div>
       </div>
 
       <div style="display:flex; gap:8px; margin-bottom:10px;">
@@ -1543,7 +1558,120 @@ function renderHudAbilityFamilyList(family, targetId) {
   }
 }
 
+function getAbilityFamilySlotState(family) {
+  const items = getAbilitiesByFamily(family).filter((x) => canUseAbilityOnSurface(x, "gameplay_panel"));
+  const active = getActiveAbilityByFamily(family);
+  const state = getAbilityGameplayState();
+
+  if (active) {
+    const secsLeft = Math.max(0, Math.ceil(((active.expiresAt || 0) - Date.now()) / 1000));
+    return {
+      status: "Active",
+      meta: `${active.title || active.id} • ${secsLeft}s left`,
+      tone: "active",
+    };
+  }
+
+  if (!state.hasCtx) {
+    return {
+      status: "Blocked",
+      meta: "Ctx required",
+      tone: "blocked",
+    };
+  }
+
+  if (state.isDemo) {
+    return {
+      status: "Blocked",
+      meta: "Premium only",
+      tone: "blocked",
+    };
+  }
+
+  if (!state.isInEncounter) {
+    return {
+      status: "Waiting",
+      meta: "Only during encounters",
+      tone: "idle",
+    };
+  }
+
+  const ready = items.some((x) => isAbilityAvailable(x, "gameplay_panel"));
+  if (ready) {
+    return {
+      status: "Ready",
+      meta: "Slot available",
+      tone: "ready",
+    };
+  }
+
+  const usedThisEncounter = items.some((x) => {
+    const rules = x.activationRules || {};
+    return !!rules.oncePerEncounter && hasUsedAbilityThisEncounter(x.id);
+  });
+
+  if (usedThisEncounter) {
+    return {
+      status: "Spent",
+      meta: "Used this encounter",
+      tone: "spent",
+    };
+  }
+
+  const hasUsesLeft = items.some((x) => Number(x.usesRemaining || 0) > 0);
+  if (!hasUsesLeft) {
+    return {
+      status: "Empty",
+      meta: "No uses left",
+      tone: "spent",
+    };
+  }
+
+  return {
+    status: "Blocked",
+    meta: "Unavailable",
+    tone: "blocked",
+  };
+}
+
+function applySlotTone(cardId, tone) {
+  const el = document.getElementById(cardId);
+  if (!el) return;
+
+  el.style.borderColor = "rgba(255,255,255,0.08)";
+  el.style.opacity = "1";
+
+  if (tone === "active") {
+    el.style.borderColor = "rgba(255,255,255,0.18)";
+  } else if (tone === "ready") {
+    el.style.borderColor = "rgba(255,255,255,0.12)";
+  } else if (tone === "blocked") {
+    el.style.opacity = ".9";
+  } else if (tone === "spent") {
+    el.style.opacity = ".75";
+  }
+}
+
+function renderHudAbilitySlots() {
+  const attr = getAbilityFamilySlotState("attribute");
+  const area = getAbilityFamilySlotState("area");
+
+  const attrStatus = document.getElementById("hudAttributeSlotStatus");
+  const attrMeta = document.getElementById("hudAttributeSlotMeta");
+  const areaStatus = document.getElementById("hudAreaSlotStatus");
+  const areaMeta = document.getElementById("hudAreaSlotMeta");
+
+  if (attrStatus) attrStatus.textContent = attr.status || "-";
+  if (attrMeta) attrMeta.textContent = attr.meta || "-";
+  if (areaStatus) areaStatus.textContent = area.status || "-";
+  if (areaMeta) areaMeta.textContent = area.meta || "-";
+
+  applySlotTone("hudAttributeSlotCard", attr.tone);
+  applySlotTone("hudAreaSlotCard", area.tone);
+}
+
 function renderHudAbilities() {
+  renderHudAbilitySlots();
   renderHudAbilityFamilyList("attribute", "hudAbilitiesAttributeList");
   renderHudAbilityFamilyList("area", "hudAbilitiesAreaList");
   renderHudActiveEffects();
@@ -1724,8 +1852,6 @@ function tickHudActiveAbilities() {
 
   setInterval(() => {
     const active = getActiveAbilities();
-    if (!active.length) return;
-
     let changed = false;
     const now = Date.now();
     for (const entry of active) {
@@ -1736,7 +1862,10 @@ function tickHudActiveAbilities() {
     }
 
     if (!changed) {
-      renderHudActiveEffects();
+      renderHudAbilitySlots();
+      if (active.length) {
+        renderHudActiveEffects();
+      }
     }
   }, 1000);
 }
@@ -1753,6 +1882,52 @@ function getManagerBoardActiveAbilitySummary() {
     areaCount: area.length,
     active,
   };
+}
+
+function renderManagerBoardOverviewLiveEffects() {
+  const root = document.getElementById("mbOverviewLiveEffects");
+  if (!root) return;
+
+  const active = getActiveAbilities();
+  const attribute = active.find((x) => String(x?.family || "") === "attribute") || null;
+  const area = active.find((x) => String(x?.family || "") === "area") || null;
+  const lastUsed = window.__BC_LAST_USED_ABILITY__ || null;
+  const lastUsedAbility = lastUsed?.id ? getAbilityById(lastUsed.id) : null;
+
+  const getSecsLeft = (entry) =>
+    Math.max(0, Math.ceil(((entry?.expiresAt || 0) - Date.now()) / 1000));
+
+  root.innerHTML = `
+    <div class="card" style="display:flex; flex-direction:column; gap:10px; padding:12px;">
+      <div style="font-weight:600;">Live Effects</div>
+      <div class="small" style="opacity:.8;">
+        Active ability state from the current runtime.
+      </div>
+      <div style="display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:10px;">
+        <div style="padding:10px; border:1px solid rgba(255,255,255,0.08); border-radius:10px;">
+          <div class="small" style="opacity:.7;">Active Attribute</div>
+          <div style="font-weight:600; margin-top:4px;">
+            ${attribute ? escapeHtml(attribute.title || attribute.id || "Attribute") : "None"}
+          </div>
+          <div class="small" style="opacity:.8; margin-top:4px;">
+            ${attribute ? `${getSecsLeft(attribute)}s left` : "No active attribute effect"}
+          </div>
+        </div>
+        <div style="padding:10px; border:1px solid rgba(255,255,255,0.08); border-radius:10px;">
+          <div class="small" style="opacity:.7;">Active Area</div>
+          <div style="font-weight:600; margin-top:4px;">
+            ${area ? escapeHtml(area.title || area.id || "Area") : "None"}
+          </div>
+          <div class="small" style="opacity:.8; margin-top:4px;">
+            ${area ? `${getSecsLeft(area)}s left` : "No active area effect"}
+          </div>
+        </div>
+      </div>
+      <div class="small" style="opacity:.8;">
+        Last used: ${escapeHtml(lastUsedAbility?.title || lastUsed?.id || "None")}
+      </div>
+    </div>
+  `;
 }
 
 function renderManagerBoardActiveEffectsSummary() {
@@ -1979,6 +2154,7 @@ function renderManagerBoardAbilitiesTab(family, targetId) {
 }
 
 function renderManagerBoardAbilityTabs() {
+  renderManagerBoardOverviewLiveEffects();
   renderManagerBoardAbilitiesTab("attribute", "mbTab_attribute_abilities");
   renderManagerBoardAbilitiesTab("area", "mbTab_area_abilities");
 }
@@ -1991,11 +2167,16 @@ function tickManagerBoardAbilities() {
     const screen = document.getElementById("screenManagerBoard");
     if (!screen || screen.classList.contains("hidden")) return;
 
+    const overview = document.getElementById("mbTab_overview");
     const attr = document.getElementById("mbTab_attribute_abilities");
     const area = document.getElementById("mbTab_area_abilities");
+    const overviewVisible = overview && !overview.classList.contains("hidden");
     const attrVisible = attr && !attr.classList.contains("hidden");
     const areaVisible = area && !area.classList.contains("hidden");
 
+    if (overviewVisible) {
+      renderManagerBoardOverviewLiveEffects();
+    }
     if (attrVisible || areaVisible) {
       renderManagerBoardAbilityTabs();
     }
