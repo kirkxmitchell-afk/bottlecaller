@@ -407,6 +407,7 @@ document.querySelector("#app").innerHTML = `
           <div id="mbOverviewLiveEffects" style="margin-top:12px;"></div>
           <div id="mbOverviewTimedChallenge" style="margin-top:12px;"></div>
           <div id="mbOverviewRecentChallenges" style="margin-top:12px;"></div>
+          <div id="mbInviteSummary" style="margin-top:12px;"></div>
 
           <div class="card" style="margin-top:12px;">
             <strong>This Week (Auto Summary)</strong>
@@ -2321,19 +2322,19 @@ function renderManagerBoardOverviewTimedChallenge() {
   const root = document.getElementById("mbOverviewTimedChallenge");
   if (!root) return;
 
-  const challenge = getActiveTimedChallenge();
-  const lastResult = window.__BC_LAST_TIMED_CHALLENGE_RESULT__ || null;
+  const lastSent = getRecentTimedChallengeSentRow();
+  const lastResult = getRecentTimedChallengeResultRow();
 
-  if (!challenge) {
+  if (!lastSent) {
     root.innerHTML = `
       <div class="card" style="display:flex; flex-direction:column; gap:8px; padding:12px;">
         <div style="font-weight:600;">Timed Challenge</div>
         <div class="small" style="opacity:.75;">No active timed challenge.</div>
         ${lastResult ? `
           <div class="small" style="opacity:.85;">
-            Last result: <b>${escapeHtml(getTimedChallengeLabel(lastResult.challengeKey))}</b> •
-            ${escapeHtml(getTimedChallengeResultLabel(lastResult.status))}
-            ${lastResult.strongestSkill ? ` • Strongest skill: ${escapeHtml(lastResult.strongestSkill)}` : ""}
+            Last result: <b>${escapeHtml(getTimedChallengeLabel(lastResult?.payload?.challengeKey))}</b> •
+            ${escapeHtml(getTimedChallengeMessageMeta(lastResult)?.label || "Result")}
+            ${getTimedChallengeMessageMeta(lastResult)?.strongestSkill ? ` • Strongest skill: ${escapeHtml(getTimedChallengeMessageMeta(lastResult)?.strongestSkill)}` : ""}
           </div>
         ` : ""}
       </div>
@@ -2341,18 +2342,19 @@ function renderManagerBoardOverviewTimedChallenge() {
     return;
   }
 
-  const secsLeft = Math.max(0, Math.ceil(((challenge.expiresAt || 0) - Date.now()) / 1000));
+  const sentPayload = lastSent?.payload || {};
   root.innerHTML = `
     <div class="card" style="display:flex; flex-direction:column; gap:8px; padding:12px;">
       <div style="font-weight:600;">Timed Challenge</div>
-      <div><b>${escapeHtml(getTimedChallengeLabel(challenge.challengeKey))}</b></div>
-      <div class="small" style="opacity:.85;">Focus: ${escapeHtml(challenge?.payload?.focus || "-")}</div>
-      <div class="small" style="opacity:.85;">Reward: ${Number(challenge?.payload?.rewardPoints || 0)} pts</div>
-      <div class="small" style="opacity:.85;">Time left: ${secsLeft}s</div>
+      <div><b>${escapeHtml(getTimedChallengeLabel(sentPayload?.challengeKey))}</b></div>
+      <div class="small" style="opacity:.85;">Focus: ${escapeHtml(sentPayload?.focus || "-")}</div>
+      <div class="small" style="opacity:.85;">Reward: ${Number(sentPayload?.rewardPoints || 0)} pts</div>
+      <div class="small" style="opacity:.85;">Target: ${escapeHtml(getTimedChallengeActorLabel(lastSent))}</div>
+      <div class="small" style="opacity:.85;">Sent: ${escapeHtml(formatRecentChallengeTime(lastSent?.created_at))}</div>
       ${lastResult ? `
         <div class="small" style="opacity:.75; margin-top:4px;">
-          Last result: ${escapeHtml(getTimedChallengeLabel(lastResult.challengeKey))} •
-          ${escapeHtml(getTimedChallengeResultLabel(lastResult.status))}
+          Last result: ${escapeHtml(getTimedChallengeMessageMeta(lastResult)?.label || "Result")} •
+          ${escapeHtml(formatRecentChallengeTime(lastResult?.created_at))}
         </div>
       ` : ""}
     </div>
@@ -2437,6 +2439,30 @@ function getRecentTimedChallengeRows() {
       return tb - ta;
     })
     .slice(0, 5);
+}
+
+function getRecentDrillAssignedRow() {
+  const rows = getManagerBoardMessageRows();
+
+  return [...rows]
+    .filter((row) => String(row?.type || "") === "drill_override")
+    .sort((a, b) => {
+      const ta = new Date(a?.created_at || 0).getTime();
+      const tb = new Date(b?.created_at || 0).getTime();
+      return tb - ta;
+    })[0] || null;
+}
+
+function getRecentDrillCompletedRow() {
+  const rows = getManagerBoardMessageRows();
+
+  return [...rows]
+    .filter((row) => String(row?.type || "") === "drill_completed")
+    .sort((a, b) => {
+      const ta = new Date(a?.created_at || 0).getTime();
+      const tb = new Date(b?.created_at || 0).getTime();
+      return tb - ta;
+    })[0] || null;
 }
 
 function formatRecentChallengeTime(value) {
@@ -6378,6 +6404,9 @@ function wireManagerRestaurantPicker() {
     if (!rid) return;
     if (!setManagerActiveRestaurantId(rid)) return;
 
+    resetManagerBoardScopedState();
+    resetManagerMessengerState();
+
     try {
       const restaurant = await loadRestaurant(rid);
       if (restaurant) appState.restaurant = restaurant;
@@ -6386,10 +6415,7 @@ function wireManagerRestaurantPicker() {
     }
 
     await loadManagerBoardData?.(rid);
-    await loadManagerMessenger?.(rid);
-    appState.invites = await loadInvites?.(rid);
-    renderInvitesList?.();
-    renderHud?.();
+    await refreshManagerBoardScopedViews?.(rid);
   });
 }
 
@@ -7385,6 +7411,85 @@ function requireManagerRestaurantId(restaurantId = null) {
   return rid;
 }
 
+function resetManagerBoardScopedState() {
+  window.__BC_MB_MESSAGES__ = [];
+  window.__BC_MESSENGER_ROWS__ = [];
+  window.__BC_MB_THREADS__ = [];
+  window.__BC_MB_INVITES__ = [];
+  window.__BC_MB_STAFF_ROWS__ = [];
+  window.__BC_MB_TIMED_CHALLENGE_ROWS__ = [];
+  window.__BC_MB_LAST_TIMED_CHALLENGE_RESULT__ = null;
+  window.__BC_MB_LAST_DRILL_ASSIGNMENT__ = null;
+  window.__BC_MB_LAST_DRILL_COMPLETION__ = null;
+}
+
+function setManagerBoardInvites(rows) {
+  window.__BC_MB_INVITES__ = Array.isArray(rows) ? rows : [];
+}
+
+function getManagerBoardInvites() {
+  return Array.isArray(window.__BC_MB_INVITES__)
+    ? window.__BC_MB_INVITES__
+    : [];
+}
+
+function resetManagerMessengerState(opts = {}) {
+  const keepStatus = !!opts.keepStatus;
+
+  window.__BC_MB_ACTIVE_THREAD_USER_ID__ = null;
+  window.__BC_MB_ACTIVE_THREAD_EMAIL__ = null;
+  window.__BC_MB_ACTIVE_THREAD_RESTAURANT_ID__ = null;
+  window.__BC_MB_THREADS__ = [];
+  window.__BC_MB_MESSAGES__ = [];
+  window.__BC_MESSENGER_ROWS__ = [];
+
+  const threadTitle = document.getElementById("mbThreadTitle");
+  if (threadTitle) threadTitle.textContent = "Select a waiter";
+
+  const threadMeta = document.getElementById("mbThreadMeta");
+  if (threadMeta) threadMeta.textContent = "";
+
+  const list = document.getElementById("mbThreadList");
+  if (list) list.innerHTML = "";
+
+  const feed = document.getElementById("mbThreadMessages");
+  if (feed) {
+    feed.innerHTML = `
+      <div class="small-text" style="opacity:.75;">
+        Select a waiter thread for this restaurant.
+      </div>
+    `;
+  }
+
+  const emptyEl = document.getElementById("mbThreadEmpty");
+  if (emptyEl) emptyEl.style.display = "none";
+
+  if (!keepStatus) {
+    const status = mbEl("mbInstrStatus");
+    if (status) status.textContent = "";
+  }
+}
+
+function managerThreadExistsForCurrentRestaurant(userId) {
+  const uid = String(userId || "");
+  if (!uid) return false;
+
+  const threads = Array.isArray(window.__BC_MB_THREADS__)
+    ? window.__BC_MB_THREADS__
+    : [];
+
+  return threads.some((t) => String(t?.userId || "") === uid);
+}
+
+function reconcileManagerMessengerSelection() {
+  const activeUserId = String(window.__BC_MB_ACTIVE_THREAD_USER_ID__ || "");
+  if (!activeUserId) return;
+
+  if (!managerThreadExistsForCurrentRestaurant(activeUserId)) {
+    resetManagerMessengerState({ keepStatus: true });
+  }
+}
+
 function getScopeIdSafe() {
   return (
     window.appState?.profile?.scope_id ||
@@ -8024,45 +8129,42 @@ function renderManagerThreadRecommendation(thread) {
   `;
 }
 
-function renderManagerDrillSummary(thread, nameMap) {
+function renderManagerDrillSummary() {
   const root = mbEl("mbDrillSummary");
   if (!root) return;
 
-  if (!thread) {
-    root.innerHTML = "";
-    return;
-  }
+  const lastAssigned = getRecentDrillAssignedRow();
+  const lastCompleted = getRecentDrillCompletedRow();
 
-  const rows = [...(thread.rows || [])].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-  const lastAssigned = rows.find((row) => String(row?.type || "") === "drill_override") || null;
-  const lastCompleted = rows.find((row) => String(row?.type || "") === "drill_completed") || null;
-  const waiterName = escapeHtml(userLabel(thread.userId, nameMap));
-
-  const assignedHtml = lastAssigned
+  const assignedText = lastAssigned
     ? (() => {
-        const d = lastAssigned.payload?.drill || {};
-        const focus = escapeHtml(String(d.focus || "-"));
-        const reps = escapeHtml(String(d.repTarget ?? "-"));
-        const duration = escapeHtml(String(d.durationSec ?? "-"));
-        return `<div><b>Last assigned:</b> ${focus} • ${reps} reps • ${duration}s • ${waiterName}</div>`;
+        const p = lastAssigned?.payload?.drill || {};
+        const focus = String(p?.focus || "-");
+        const reps = Number(p?.repTarget || 0) || "-";
+        const duration = Number(p?.durationSec || 0) || 0;
+        const waiter = getTimedChallengeActorLabel?.(lastAssigned) || resolveManagerBoardUserLabel(lastAssigned?.receiver_user_id) || "Waiter";
+        return `${focus} • ${reps} reps • ${duration}s • ${waiter}`;
       })()
-    : `<div><b>Last assigned:</b> None</div>`;
+    : "None";
 
-  const completedHtml = lastCompleted
+  const completedText = lastCompleted
     ? (() => {
-        const p = lastCompleted.payload || {};
-        const focus = escapeHtml(String(p.focus || "-"));
-        const repsDone = escapeHtml(String(p.repsDone ?? "-"));
-        const repTarget = escapeHtml(String(p.repTarget ?? "-"));
-        const durationSec = Number(p.durationSec ?? 0);
+        const p = lastCompleted?.payload || {};
+        const focus = String(p?.focus || "-");
+        const repsDone = Number(p?.repsDone || 0);
+        const repTarget = Number(p?.repTarget || 0);
+        const durationSec = Number(p?.durationSec || 0);
         const mins = durationSec ? Math.floor(durationSec / 60) : 0;
         const secs = durationSec ? durationSec % 60 : 0;
-        const durationText = durationSec ? `${mins}m ${secs}s` : "-";
-        return `<div style="margin-top:4px;"><b>Last completed:</b> ${focus} • ${repsDone}/${repTarget} reps • ${escapeHtml(durationText)} • ${waiterName}</div>`;
+        const waiter = getTimedChallengeActorLabel?.(lastCompleted) || resolveManagerBoardUserLabel(lastCompleted?.sender_user_id) || "Waiter";
+        return `${focus} • ${repsDone}/${repTarget} reps • ${mins}m ${secs}s • ${waiter}`;
       })()
-    : `<div style="margin-top:4px;"><b>Last completed:</b> None</div>`;
+    : "None";
 
-  root.innerHTML = assignedHtml + completedHtml;
+  root.innerHTML = `
+    <div><b>Last assigned:</b> ${escapeHtml(assignedText)}</div>
+    <div style="margin-top:4px;"><b>Last completed:</b> ${escapeHtml(completedText)}</div>
+  `;
 }
 
 function renderManagerActiveThread(nameMap) {
@@ -8078,7 +8180,7 @@ function renderManagerActiveThread(nameMap) {
     if (titleEl) titleEl.textContent = "Select a waiter";
     if (metaEl) metaEl.textContent = "";
     if (msgEl) msgEl.innerHTML = `<div class="small-text" style="opacity:.8;">Select a waiter thread to view messages.</div>`;
-    renderManagerDrillSummary(null, nameMap);
+    renderManagerDrillSummary();
     return;
   }
 
@@ -8105,7 +8207,7 @@ function renderManagerActiveThread(nameMap) {
   }
 
   buildManagerSuggestedPrompts(thread);
-  renderManagerDrillSummary(thread, nameMap);
+  renderManagerDrillSummary();
 }
 
 async function loadManagerMessenger(restaurantId = null) {
@@ -8114,17 +8216,17 @@ async function loadManagerMessenger(restaurantId = null) {
   const caps = getPremiumRoleCapabilities(profile);
 
   if (!rid) {
-    window.__BC_MB_THREADS__ = [];
+    resetManagerMessengerState({ keepStatus: true });
     return [];
   }
 
   if (!caps.canAccessManagerBoard) {
-    window.__BC_MB_THREADS__ = [];
+    resetManagerMessengerState({ keepStatus: true });
     return [];
   }
 
   if (!canActOnRestaurant(profile, profile, rid)) {
-    window.__BC_MB_THREADS__ = [];
+    resetManagerMessengerState({ keepStatus: true });
     return [];
   }
 
@@ -8154,14 +8256,16 @@ async function loadManagerMessenger(restaurantId = null) {
   window.__MB_LAST_MESSAGES__ = rows;
   window.__BC_MB_MESSAGES__ = rows;
   window.__BC_MESSENGER_ROWS__ = rows;
+  window.__BC_MB_TIMED_CHALLENGE_ROWS__ = getRecentTimedChallengeRows();
+  window.__BC_MB_LAST_TIMED_CHALLENGE_RESULT__ = getRecentTimedChallengeResultRow();
+  window.__BC_MB_LAST_DRILL_ASSIGNMENT__ = getRecentDrillAssignedRow();
+  window.__BC_MB_LAST_DRILL_COMPLETION__ = getRecentDrillCompletedRow();
   renderTimedChallengeTargetOptions();
   wireTimedChallengeComposer();
   if (!rows.length) {
-    if (listEl) listEl.innerHTML = "";
+    resetManagerMessengerState({ keepStatus: true });
     if (emptyEl) emptyEl.style.display = "block";
-    window.__BC_MB_THREADS__ = [];
-    window.__BC_MB_ACTIVE_THREAD_USER_ID__ = null;
-    return;
+    return [];
   }
 
   const managerId =
@@ -8202,23 +8306,32 @@ async function loadManagerMessenger(restaurantId = null) {
   const threads = Array.from(grouped.values())
     .sort((a, b) => new Date(b.latestAt) - new Date(a.latestAt));
 
-  window.__BC_MB_THREADS__ = threads;
+  window.__BC_MB_THREADS__ = Array.isArray(threads) ? threads : [];
+  window.__BC_MB_MESSAGES__ = Array.isArray(rows) ? rows : [];
+  window.__BC_MESSENGER_ROWS__ = Array.isArray(rows) ? rows : [];
+  window.__BC_MB_ACTIVE_THREAD_RESTAURANT_ID__ = rid;
 
-  const userIds = threads.map((t) => t.userId);
+  if (!window.__BC_MB_THREADS__.length) {
+    resetManagerMessengerState({ keepStatus: true });
+    return window.__BC_MB_THREADS__;
+  }
+
+  const userIds = window.__BC_MB_THREADS__.map((t) => t.userId);
   const nameMap = await mapUserIdsToNames(userIds);
 
   if (listEl) {
-    listEl.innerHTML = threads.map((t) => renderManagerThreadListItem(t, nameMap)).join("");
+    listEl.innerHTML = window.__BC_MB_THREADS__.map((t) => renderManagerThreadListItem(t, nameMap)).join("");
   }
 
-  if (!window.__BC_MB_ACTIVE_THREAD_USER_ID__ && threads[0]) {
-    window.__BC_MB_ACTIVE_THREAD_USER_ID__ = threads[0].userId;
+  if (!window.__BC_MB_ACTIVE_THREAD_USER_ID__ && window.__BC_MB_THREADS__[0]) {
+    window.__BC_MB_ACTIVE_THREAD_USER_ID__ = window.__BC_MB_THREADS__[0].userId;
   }
 
+  reconcileManagerMessengerSelection();
   renderManagerActiveThread(nameMap);
   renderTimedChallengeComposer();
   wireMbCoachSuggestionButtons();
-  return threads;
+  return window.__BC_MB_THREADS__;
 }
 
 function getManagerBoardWaiterOptions() {
@@ -9664,8 +9777,10 @@ async function routePremium(reason = "manual") {
       if (isManagerRole(profile?.role) && appState.restaurant?.id) {
         try {
           appState.invites = await loadInvites(getManagerActiveRestaurantId());
+          setManagerBoardInvites(appState.invites);
         } catch {
           appState.invites = [];
+          setManagerBoardInvites([]);
         }
       } else {
         appState.invites = [];
@@ -9812,15 +9927,14 @@ async function routeManagerBoard(reason = "manual") {
   await ensureActiveRestaurantReady();
 
   const rid = getManagerActiveRestaurantId();
-  if (rid) {
-    appState.invites = await loadInvites(rid);
-  }
+  resetManagerBoardScopedState();
+  resetManagerMessengerState({ keepStatus: true });
 
   // ✅ load the selected tab without requiring a click
   window.__BC_MB_SHOWTAB__?.(window.__BC_MB_DEFAULTTAB__);
   await (window.__BC_MB_LOADTAB__?.(window.__BC_MB_DEFAULTTAB__) || loadManagerBoardData(rid));
   if (rid) {
-    await loadManagerMessenger(rid);
+    await refreshManagerBoardScopedViews?.(rid);
   }
 
   wireManagerBoardMessenger();
@@ -9949,7 +10063,7 @@ function renderInvitesList() {
   const el = document.getElementById("invitesList");
   if (!el) return;
 
-  const invites = appState.invites || [];
+  const invites = getManagerBoardInvites();
   if (!invites.length) {
     el.innerHTML = `<div style="opacity:.8;">No waiters added yet.</div>`;
     return;
@@ -9989,6 +10103,41 @@ function renderInvitesList() {
       if (action === "reinvite") await adminAddInvite(email);
     });
   });
+}
+
+function renderManagerBoardInviteSummary() {
+  const root = document.getElementById("mbInviteSummary");
+  if (!root) return;
+
+  const rows = getManagerBoardInvites();
+  const pending = rows.filter((x) => String(x?.status || "") === "pending").length;
+  const accepted = rows.filter((x) => String(x?.status || "") === "accepted").length;
+
+  root.innerHTML = `
+    <div class="card" style="display:flex; flex-direction:column; gap:8px; padding:12px;">
+      <div style="font-weight:600;">Invites</div>
+      <div><b>Pending invites:</b> ${pending}</div>
+      <div style="margin-top:4px;"><b>Accepted invites:</b> ${accepted}</div>
+    </div>
+  `;
+}
+
+async function refreshManagerBoardScopedViews(restaurantId = null) {
+  const rid = requireManagerRestaurantId(restaurantId);
+
+  const invites = await loadInvites(rid);
+  setManagerBoardInvites(invites);
+  appState.invites = invites;
+
+  await loadManagerMessenger(rid);
+
+  renderInvitesList?.();
+  renderManagerBoardInviteSummary?.();
+  renderManagerBoardOverviewTimedChallenge?.();
+  renderManagerBoardRecentChallenges?.();
+  renderTimedChallengeRecentSummary?.();
+  renderManagerDrillSummary?.();
+  renderHud?.();
 }
 
 function renderHudSkillDashboard() {
@@ -10221,7 +10370,9 @@ async function adminAddInvite(emailRaw) {
     }
 
     appState.invites = await loadInvites(activeRestaurantId);
+    setManagerBoardInvites(appState.invites);
     renderInvitesList();
+    renderManagerBoardInviteSummary();
     setMsg("hudMsg", `Added: ${email}`, "success");
   } catch (e) {
     console.error(e);
@@ -10261,7 +10412,9 @@ async function adminRevokeInvite(emailRaw) {
     if (upd.error) throw upd.error;
 
     appState.invites = await loadInvites(r.id);
+    setManagerBoardInvites(appState.invites);
     renderInvitesList();
+    renderManagerBoardInviteSummary();
     setMsg("hudMsg", `Removed: ${email}`, "success");
   } catch (e) {
     console.error(e);
