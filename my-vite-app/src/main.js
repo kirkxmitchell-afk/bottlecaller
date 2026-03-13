@@ -1069,6 +1069,62 @@ function getRoleCapabilities(rawRole) {
   return table[normalizeMembershipRole(rawRole)];
 }
 
+const PREMIUM_ROLE_CAPABILITIES = Object.freeze({
+  waiter: Object.freeze({
+    canAccessManagerBoard: false,
+    canOpenSetupPremium: false,
+    canInviteWaiters: false,
+    canReadInvites: false,
+    canAssignDrills: false,
+    canAssignTimedChallenges: false,
+    canUseManagerAbilities: false,
+    canManageMultipleRestaurants: false,
+    canUseEnterpriseControls: false,
+    canImportEnterpriseMedia: false,
+  }),
+  single_manager: Object.freeze({
+    canAccessManagerBoard: true,
+    canOpenSetupPremium: true,
+    canInviteWaiters: true,
+    canReadInvites: true,
+    canAssignDrills: true,
+    canAssignTimedChallenges: true,
+    canUseManagerAbilities: true,
+    canManageMultipleRestaurants: false,
+    canUseEnterpriseControls: false,
+    canImportEnterpriseMedia: false,
+  }),
+  group_manager: Object.freeze({
+    canAccessManagerBoard: true,
+    canOpenSetupPremium: true,
+    canInviteWaiters: true,
+    canReadInvites: true,
+    canAssignDrills: true,
+    canAssignTimedChallenges: true,
+    canUseManagerAbilities: true,
+    canManageMultipleRestaurants: true,
+    canUseEnterpriseControls: false,
+    canImportEnterpriseMedia: false,
+  }),
+  enterpriser: Object.freeze({
+    canAccessManagerBoard: true,
+    canOpenSetupPremium: true,
+    canInviteWaiters: true,
+    canReadInvites: true,
+    canAssignDrills: true,
+    canAssignTimedChallenges: true,
+    canUseManagerAbilities: true,
+    canManageMultipleRestaurants: true,
+    canUseEnterpriseControls: true,
+    canImportEnterpriseMedia: true,
+  }),
+});
+
+function getPremiumRoleCapabilities(roleLike) {
+  const role = normalizeMembershipRole(roleLike);
+  return PREMIUM_ROLE_CAPABILITIES[role] || PREMIUM_ROLE_CAPABILITIES.waiter;
+}
+
 function roleAliasesForMatching(role) {
   const raw = String(
     typeof role === "string"
@@ -1089,6 +1145,8 @@ function roleAliasesForMatching(role) {
 }
 
 function isManagerRole(roleLike) {
+  // Transitional compatibility helper.
+  // Prefer specific premium capability checks for active product behavior.
   const caps = getRoleCapabilities(roleLike);
   return !!caps.hasManagerControls;
 }
@@ -1120,6 +1178,32 @@ function hasRestaurantBoundAccess() {
     appState.profile?.restaurant_id ||
     null;
   return isManagerRole(role) && isUuid(rid);
+}
+
+function canActOnRestaurant(roleLike, actorProfile, restaurantId) {
+  const role = normalizeMembershipRole(roleLike);
+  const rid = String(restaurantId || "");
+  if (!rid) return false;
+
+  const actorRestaurantId = String(
+    actorProfile?.restaurant_id ||
+    actorProfile?.restaurantId ||
+    ""
+  );
+
+  if (role === "single_manager") {
+    return actorRestaurantId === rid;
+  }
+
+  if (role === "group_manager") {
+    return true;
+  }
+
+  if (role === "enterpriser") {
+    return true;
+  }
+
+  return false;
 }
 // --- storage key should be per-scope (group/enterprise) ---
 function activeRestaurantStorageKey(scopeId) {
@@ -4840,8 +4924,8 @@ function wireParentButtons() {
   if (btnSetup && !btnSetup.__bcBound) {
     btnSetup.__bcBound = true;
     btnSetup.addEventListener("click", () => {
-      const roleNow = String(appState?.profile?.role || "").toLowerCase();
-      if (roleNow === "waiter") return;
+      const caps = getPremiumRoleCapabilities(appState?.profile);
+      if (!caps.canOpenSetupPremium) return;
       showScreen("screenPremiumApp");
       postToGame("nav", { target: "setup_premium" });
     });
@@ -4850,8 +4934,8 @@ function wireParentButtons() {
   if (btnManagerBoard && !btnManagerBoard.__bcBound) {
     btnManagerBoard.__bcBound = true;
     btnManagerBoard.addEventListener("click", () => {
-      const roleNow = String(appState?.profile?.role || "").toLowerCase();
-      if (roleNow === "waiter") return;
+      const caps = getPremiumRoleCapabilities(appState?.profile);
+      if (!caps.canAccessManagerBoard) return;
       showScreen("screenManagerBoard");
       wireManagerBoardMenu?.();
       loadManagerBoardData?.();
@@ -6167,14 +6251,27 @@ async function loadRestaurantsForHudPicker() {
 }
 
 function applyManagerBoardVisibility() {
-  const p = appState.profile || {};
-  
+  const profile = appState.profile || {};
+  const caps = getPremiumRoleCapabilities(profile);
+
   const listingBtn = document.querySelector('#mbMenu [data-mbtab="listing"]');
   if (listingBtn) listingBtn.style.display = "";
   const billingBtn = document.querySelector('#mbMenu [data-mbtab="billing"]');
   if (billingBtn) billingBtn.style.display = "";
   const provisionBtn = document.querySelector('#mbMenu [data-mbtab="provision"]');
-  if (provisionBtn) provisionBtn.style.display = "none";
+  if (provisionBtn) {
+    provisionBtn.style.display = caps.canUseEnterpriseControls ? "" : "none";
+  }
+
+  const multiRestaurantBtn = document.querySelector('#mbMenu [data-mbtab="restaurants"]');
+  if (multiRestaurantBtn) {
+    multiRestaurantBtn.style.display = caps.canManageMultipleRestaurants ? "" : "none";
+  }
+
+  const enterpriseBtn = document.querySelector('#mbMenu [data-mbtab="enterprise"]');
+  if (enterpriseBtn) {
+    enterpriseBtn.style.display = caps.canUseEnterpriseControls ? "" : "none";
+  }
 }
 
 function wireActiveRestaurantPicker() {
@@ -8050,6 +8147,7 @@ async function sendTimedChallengeFromManager() {
   const statusEl = document.getElementById("mbTimedChallengeStatus");
   const payload = buildTimedChallengePayload();
   const ctx = window.__BC_CTX__ || window.__BC_BUILD_CTX__?.("premium") || {};
+  const caps = getPremiumRoleCapabilities(appState?.profile);
 
   if (statusEl) statusEl.textContent = "";
 
@@ -8059,6 +8157,15 @@ async function sendTimedChallengeFromManager() {
   }
 
   try {
+    if (!caps.canAssignTimedChallenges) {
+      if (statusEl) statusEl.textContent = "Role cannot assign timed challenges.";
+      return false;
+    }
+    if (!canActOnRestaurant(appState?.profile, appState?.profile, ctx.restaurantId)) {
+      if (statusEl) statusEl.textContent = "Role cannot act on this restaurant.";
+      return false;
+    }
+
     const liveAuth = await getLiveAuthOrNull();
     const userId = liveAuth?.userId || null;
     if (!userId) {
@@ -8113,15 +8220,8 @@ function wireTimedChallengeComposer() {
 }
 
 function canManageTimedChallenges() {
-  const ctx = window.__BC_CTX__ || window.__BC_BUILD_CTX__?.("premium") || {};
-  const role = String(
-    ctx.membershipRole ||
-    ctx.membership_role ||
-    ctx.role ||
-    ""
-  ).toLowerCase();
-
-  return ["single_manager", "group_manager", "enterpriser"].includes(role);
+  const caps = getPremiumRoleCapabilities(appState?.profile);
+  return !!caps.canAssignTimedChallenges;
 }
 
 function renderTimedChallengeComposer() {
@@ -8180,8 +8280,13 @@ async function mbSendInstruction() {
 
 async function mbSendDrillOverride(opts = {}) {
   const { restaurantId, isManager } = getManagerBoardFilter();
+  const caps = getPremiumRoleCapabilities(appState?.profile);
   if (!isManager) throw new Error("Manager only");
   if (!restaurantId) throw new Error("Active restaurant not set");
+  if (!caps.canAssignDrills) throw new Error("Role cannot assign drills.");
+  if (!canActOnRestaurant(appState?.profile, appState?.profile, restaurantId)) {
+    throw new Error("Role cannot act on this restaurant.");
+  }
 
   const to = String(window.__BC_MB_ACTIVE_THREAD_USER_ID__ || "");
   const status = mbEl("mbInstrStatus");
@@ -9490,9 +9595,13 @@ async function routeManagerBoard(reason = "manual") {
 
   await loadAuthedState(`routeManagerBoard:${reason}`);
 
-  const role = String(appState.profile?.role || "").toLowerCase();
-  if (!isManagerRole(role)) {
-    setDebug({ step: "managerBoard.blocked", reason, role });
+  const caps = getPremiumRoleCapabilities(appState.profile);
+  if (!caps.canAccessManagerBoard) {
+    setDebug({
+      step: "managerBoard.blocked",
+      reason,
+      role: normalizeMembershipRole(appState.profile) || null
+    });
     setMsg("authMsg", "Manager Board is manager-only.", "error");
     showScreen("screenPremiumApp");
     return;
@@ -9830,30 +9939,33 @@ function renderHudTimeline(rows) {
 }
 
 function renderHud() {
-  const role = String(appState.profile?.role || "-").toLowerCase();
+  const profile = appState.profile || {};
+  const normalizedRole = normalizeMembershipRole(profile) || "-";
+  const caps = getPremiumRoleCapabilities(profile);
   const r = appState.restaurant;
-  const isMgr = isManagerRole(role);
 
-  document.getElementById("hudRole").textContent = role;
+  document.getElementById("hudRole").textContent = getDisplayRoleLabel(profile);
   document.getElementById("hudRestName").textContent = r?.name || "-";
   document.getElementById("hudJoinCode").textContent = r?.code || "-";
   document.getElementById("hudSeatLimit").textContent = r?.seat_limit ?? "-";
   document.getElementById("hudRequireInvite").textContent = r ? (r.require_invite ? "Yes" : "No") : "-";
 
   const mgrBtn = document.getElementById("btnManagerBoard");
-  if (mgrBtn) mgrBtn.classList.toggle("hidden", !isMgr);
+  if (mgrBtn) mgrBtn.classList.toggle("hidden", !caps.canAccessManagerBoard);
   const msgBtn = document.getElementById("btnOpenMessages");
   if (msgBtn) msgBtn.classList.remove("hidden");
 
   const badge = document.getElementById("premiumBadge");
-  if (badge) badge.textContent = `PREMIUM • ${String(role).toUpperCase()}`;
+  if (badge) badge.textContent = `PREMIUM • ${String(normalizedRole).toUpperCase()}`;
 
   const managerBlock = document.getElementById("managerOnlyBlock");
   const joinRow = document.getElementById("hudJoinRow");
   const copyRow = document.getElementById("hudCopyRow");
-  managerBlock?.classList.toggle("hidden", !isMgr);
-  joinRow?.classList.toggle("hidden", !isMgr);
-  copyRow?.classList.toggle("hidden", !isMgr);
+  const showManagerRestaurantControls =
+    caps.canInviteWaiters || caps.canReadInvites || caps.canAccessManagerBoard;
+  managerBlock?.classList.toggle("hidden", !showManagerRestaurantControls);
+  joinRow?.classList.toggle("hidden", !caps.canReadInvites);
+  copyRow?.classList.toggle("hidden", !caps.canReadInvites);
 
   const toggle = document.getElementById("toggleRequireInvite");
   if (toggle && r) toggle.checked = !!r.require_invite;
@@ -9877,9 +9989,13 @@ async function adminAddInvite(emailRaw) {
 
     const r = appState.restaurant;
     const sess = appState.session;
+    const caps = getPremiumRoleCapabilities(appState.profile);
     if (!r?.id) throw new Error("Restaurant not loaded.");
     if (!sess?.user) throw new Error("Not logged in.");
-    if (!isManagerRole(appState.profile?.role)) throw new Error("Manager only.");
+    if (!caps.canInviteWaiters) throw new Error("Role cannot invite waiters.");
+    if (!canActOnRestaurant(appState?.profile, appState?.profile, r.id)) {
+      throw new Error("Role cannot act on this restaurant.");
+    }
 
     const res = await withTimeout(
       supabase.rpc("create_restaurant_invite", {
@@ -9914,9 +10030,13 @@ async function adminRevokeInvite(emailRaw) {
 
     const r = appState.restaurant;
     const sess = appState.session;
+    const caps = getPremiumRoleCapabilities(appState.profile);
     if (!r?.id) throw new Error("Restaurant not loaded.");
     if (!sess?.user) throw new Error("Not logged in.");
-    if (!isManagerRole(appState.profile?.role)) throw new Error("Manager only.");
+    if (!caps.canInviteWaiters) throw new Error("Role cannot invite waiters.");
+    if (!canActOnRestaurant(appState?.profile, appState?.profile, r.id)) {
+      throw new Error("Role cannot act on this restaurant.");
+    }
 
     const upd = await withTimeout(
       supabase
@@ -9946,8 +10066,12 @@ async function adminSaveRequireInvite() {
   try {
     setMsg("hudMsg", "");
     const r = appState.restaurant;
+    const caps = getPremiumRoleCapabilities(appState.profile);
     if (!r?.id) throw new Error("Restaurant not loaded.");
-    if (!isManagerRole(appState.profile?.role)) throw new Error("Manager only.");
+    if (!caps.canReadInvites) throw new Error("Role cannot manage invite settings.");
+    if (!canActOnRestaurant(appState?.profile, appState?.profile, r.id)) {
+      throw new Error("Role cannot act on this restaurant.");
+    }
 
     const desired = !!document.getElementById("toggleRequireInvite")?.checked;
 
@@ -9971,8 +10095,12 @@ async function adminSaveSeatLimit() {
   try {
     setMsg("hudMsg", "");
     const r = appState.restaurant;
+    const caps = getPremiumRoleCapabilities(appState.profile);
     if (!r?.id) throw new Error("Restaurant not loaded.");
-    if (!isManagerRole(appState.profile?.role)) throw new Error("Manager only.");
+    if (!caps.canUseManagerAbilities) throw new Error("Role cannot manage restaurant settings.");
+    if (!canActOnRestaurant(appState?.profile, appState?.profile, r.id)) {
+      throw new Error("Role cannot act on this restaurant.");
+    }
 
     const raw = document.getElementById("seatLimitInput")?.value;
     const seatLimit = raw ? parseInt(raw, 10) : NaN;
