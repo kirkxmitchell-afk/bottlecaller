@@ -2871,8 +2871,7 @@ function renderManagerBoardAbilitiesTab(family, targetId) {
 
 function renderManagerBoardAbilityTabs() {
   renderManagerBoardOverviewLiveEffects();
-  renderManagerBoardAbilitiesTab("attribute", "mbAttributeAbilitiesPanel");
-  renderManagerBoardAbilitiesTab("area", "mbAreaAbilitiesPanel");
+  renderManagerLiveEffectsPanels();
 }
 
 function tickManagerBoardAbilities() {
@@ -6247,7 +6246,7 @@ function wireManagerBoardMenu() {
       return loadManagerMessenger();
     }
     if (normalized === "live_controls") {
-      renderManagerBoardAbilityTabs();
+      renderManagerLiveEffectsPanels?.();
       return;
     }
   };
@@ -6291,7 +6290,7 @@ function wireManagerBoardMenu() {
       await loadManagerMessenger();
     }
     if (tab === "live_controls") {
-      renderManagerBoardAbilityTabs();
+      renderManagerLiveEffectsPanels?.();
     }
   });
 
@@ -8728,7 +8727,312 @@ function renderManagerPeopleSummary() {
   `;
 }
 
+function getManagerLiveEffectsState() {
+  if (!window.__BC_MANAGER_LIVE_EFFECTS_STATE__) {
+    window.__BC_MANAGER_LIVE_EFFECTS_STATE__ = {
+      attributeEffects: [],
+      areaEffects: [],
+      updatedAt: Date.now(),
+    };
+  }
+  return window.__BC_MANAGER_LIVE_EFFECTS_STATE__;
+}
+
+function pushLiveEffectsToGame() {
+  try {
+    const frame =
+      document.getElementById("bcPremiumFrame") ||
+      document.getElementById("premiumRootFrame");
+
+    const win = frame?.contentWindow || null;
+    if (!win) return false;
+
+    const state = getManagerLiveEffectsState();
+
+    win.postMessage(
+      {
+        source: "BC_MSG",
+        v: 1,
+        type: "live_effects_sync",
+        attributeEffects: state.attributeEffects,
+        areaEffects: state.areaEffects,
+        epoch: Number(window.__BC_IFRAME_EPOCH__ || 0),
+      },
+      window.location.origin
+    );
+
+    return true;
+  } catch (e) {
+    console.warn("[LIVE EFFECTS] push to game failed", e);
+    return false;
+  }
+}
+
+function setManagerLiveEffectsState(nextState = {}) {
+  const prev = getManagerLiveEffectsState();
+
+  window.__BC_MANAGER_LIVE_EFFECTS_STATE__ = {
+    attributeEffects: Array.isArray(nextState.attributeEffects)
+      ? nextState.attributeEffects
+      : Array.isArray(prev.attributeEffects)
+        ? prev.attributeEffects
+        : [],
+    areaEffects: Array.isArray(nextState.areaEffects)
+      ? nextState.areaEffects
+      : Array.isArray(prev.areaEffects)
+        ? prev.areaEffects
+        : [],
+    updatedAt: Date.now(),
+  };
+
+  renderManagerLiveEffectsPanels?.();
+  pushLiveEffectsToGame?.();
+
+  return window.__BC_MANAGER_LIVE_EFFECTS_STATE__;
+}
+
+function updateManagerLiveEffectsState(patch = {}) {
+  const prev = getManagerLiveEffectsState();
+  return setManagerLiveEffectsState({
+    attributeEffects: patch.attributeEffects ?? prev.attributeEffects,
+    areaEffects: patch.areaEffects ?? prev.areaEffects,
+  });
+}
+
+function makeLiveEffect(def = {}) {
+  return {
+    id: String(def.id || `effect_${Math.random().toString(16).slice(2)}`),
+    name: String(def.name || "Effect"),
+    description: String(def.description || ""),
+    active: def.active !== false,
+    scope: String(def.scope || "attribute"),
+    kind: String(def.kind || "manual"),
+    createdAt: Date.now(),
+  };
+}
+
+function addManagerAttributeEffect(effectDef) {
+  const state = getManagerLiveEffectsState();
+  const next = [...(state.attributeEffects || []), makeLiveEffect({ ...effectDef, scope: "attribute" })];
+  updateManagerLiveEffectsState({ attributeEffects: next });
+}
+
+function addManagerAreaEffect(effectDef) {
+  const state = getManagerLiveEffectsState();
+  const next = [...(state.areaEffects || []), makeLiveEffect({ ...effectDef, scope: "area" })];
+  updateManagerLiveEffectsState({ areaEffects: next });
+}
+
+function renderManagerEffectRow(effect) {
+  const id = String(effect?.id || "");
+  const name = String(effect?.name || id || "Effect");
+  const desc = String(effect?.description || "");
+  const active = !!effect?.active;
+  const kind = String(effect?.kind || "");
+
+  return `
+    <div
+      style="
+        padding:10px;
+        border:1px solid rgba(255,255,255,0.10);
+        border-radius:10px;
+        background:${active ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.03)"};
+      "
+    >
+      <div style="display:flex; justify-content:space-between; gap:8px; align-items:center;">
+        <div>
+          <div style="font-weight:600;">${escapeHtml(name)}</div>
+          <div class="small" style="opacity:.8; margin-top:4px;">
+            ${escapeHtml(desc || "No description.")}
+          </div>
+        </div>
+        <div class="small" style="opacity:.75;">${escapeHtml(kind)}</div>
+      </div>
+
+      <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+        <button type="button" class="btn-ghost" data-effect-toggle="${escapeHtml(id)}">
+          ${active ? "Disable" : "Enable"}
+        </button>
+        <button type="button" class="btn-ghost" data-effect-remove="${escapeHtml(id)}">
+          Remove
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function wireManagerEffectRowActions() {
+  document.querySelectorAll("[data-effect-toggle]").forEach((btn) => {
+    if (btn.__wired) return;
+    btn.__wired = true;
+
+    btn.addEventListener("click", () => {
+      const id = String(btn.getAttribute("data-effect-toggle") || "");
+      if (!id) return;
+
+      const state = getManagerLiveEffectsState();
+
+      const nextAttribute = (state.attributeEffects || []).map((effect) =>
+        String(effect?.id || "") === id
+          ? { ...effect, active: !effect?.active }
+          : effect
+      );
+
+      const nextArea = (state.areaEffects || []).map((effect) =>
+        String(effect?.id || "") === id
+          ? { ...effect, active: !effect?.active }
+          : effect
+      );
+
+      updateManagerLiveEffectsState({
+        attributeEffects: nextAttribute,
+        areaEffects: nextArea,
+      });
+    });
+  });
+
+  document.querySelectorAll("[data-effect-remove]").forEach((btn) => {
+    if (btn.__wired) return;
+    btn.__wired = true;
+
+    btn.addEventListener("click", () => {
+      const id = String(btn.getAttribute("data-effect-remove") || "");
+      if (!id) return;
+
+      const state = getManagerLiveEffectsState();
+
+      updateManagerLiveEffectsState({
+        attributeEffects: (state.attributeEffects || []).filter((effect) => String(effect?.id || "") !== id),
+        areaEffects: (state.areaEffects || []).filter((effect) => String(effect?.id || "") !== id),
+      });
+    });
+  });
+}
+
+function wireManagerAttributeEffectsPanel() {
+  const addClosingSurge = document.getElementById("btnAddClosingSurge");
+  if (addClosingSurge && !addClosingSurge.__wired) {
+    addClosingSurge.__wired = true;
+    addClosingSurge.addEventListener("click", () => {
+      addManagerAttributeEffect({
+        id: "closing_surge",
+        name: "Closing Surge",
+        kind: "attribute",
+        description: "Improves closing pressure conversion for the current encounter window.",
+        active: true,
+      });
+    });
+  }
+
+  const addRecoveryFocus = document.getElementById("btnAddRecoveryFocus");
+  if (addRecoveryFocus && !addRecoveryFocus.__wired) {
+    addRecoveryFocus.__wired = true;
+    addRecoveryFocus.addEventListener("click", () => {
+      addManagerAttributeEffect({
+        id: "recovery_focus",
+        name: "Recovery Focus",
+        kind: "attribute",
+        description: "Improves recovery-related response shaping during tense guest states.",
+        active: true,
+      });
+    });
+  }
+
+  wireManagerEffectRowActions?.();
+}
+
+function wireManagerAreaEffectsPanel() {
+  const addPremiumWindow = document.getElementById("btnAddPremiumWindow");
+  if (addPremiumWindow && !addPremiumWindow.__wired) {
+    addPremiumWindow.__wired = true;
+    addPremiumWindow.addEventListener("click", () => {
+      addManagerAreaEffect({
+        id: "premium_window",
+        name: "Premium Window",
+        kind: "area",
+        description: "Improves premium-upgrade opportunity during the active encounter phase.",
+        active: true,
+      });
+    });
+  }
+
+  const addCalmFloor = document.getElementById("btnAddCalmFloor");
+  if (addCalmFloor && !addCalmFloor.__wired) {
+    addCalmFloor.__wired = true;
+    addCalmFloor.addEventListener("click", () => {
+      addManagerAreaEffect({
+        id: "calm_floor",
+        name: "Calm Floor",
+        kind: "area",
+        description: "Reduces pressure escalation and stabilizes the encounter atmosphere.",
+        active: true,
+      });
+    });
+  }
+
+  wireManagerEffectRowActions?.();
+}
+
+function renderManagerAttributeEffectsPanel() {
+  const root = document.getElementById("mbAttributeAbilitiesPanel");
+  if (!root) return;
+
+  const state = getManagerLiveEffectsState();
+  const effects = Array.isArray(state.attributeEffects) ? state.attributeEffects : [];
+
+  root.innerHTML = `
+    <div class="card">
+      <div style="font-weight:600; margin-bottom:8px;">Attribute Effects</div>
+      <div class="small" style="opacity:.75; margin-bottom:8px;">
+        Tactical, targeted effects that influence player-facing encounter attributes.
+      </div>
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        ${effects.length ? effects.map(renderManagerEffectRow).join("") : `
+          <div class="small" style="opacity:.75;">No attribute effects loaded.</div>
+        `}
+      </div>
+      <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;">
+        <button type="button" class="btn-ghost" id="btnAddClosingSurge">Add Closing Surge</button>
+        <button type="button" class="btn-ghost" id="btnAddRecoveryFocus">Add Recovery Focus</button>
+      </div>
+    </div>
+  `;
+
+  wireManagerAttributeEffectsPanel?.();
+}
+
+function renderManagerAreaEffectsPanel() {
+  const root = document.getElementById("mbAreaAbilitiesPanel");
+  if (!root) return;
+
+  const state = getManagerLiveEffectsState();
+  const effects = Array.isArray(state.areaEffects) ? state.areaEffects : [];
+
+  root.innerHTML = `
+    <div class="card">
+      <div style="font-weight:600; margin-bottom:8px;">Area Effects</div>
+      <div class="small" style="opacity:.75; margin-bottom:8px;">
+        Broader environmental effects that shape the encounter atmosphere.
+      </div>
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        ${effects.length ? effects.map(renderManagerEffectRow).join("") : `
+          <div class="small" style="opacity:.75;">No area effects loaded.</div>
+        `}
+      </div>
+      <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;">
+        <button type="button" class="btn-ghost" id="btnAddPremiumWindow">Add Premium Window</button>
+        <button type="button" class="btn-ghost" id="btnAddCalmFloor">Add Calm Floor</button>
+      </div>
+    </div>
+  `;
+
+  wireManagerAreaEffectsPanel?.();
+}
+
 function renderManagerLiveControlPanels() {
+  renderManagerAttributeEffectsPanel?.();
+  renderManagerAreaEffectsPanel?.();
+
   const drillRoot = document.getElementById("mbDrillQuickActionsPanel");
   if (drillRoot) {
     drillRoot.innerHTML = `
@@ -10799,7 +11103,8 @@ async function refreshManagerBoardScopedViews(restaurantId = null) {
   renderInvitesList?.();
   renderManagerBoardInviteSummary?.();
   renderManagerBoardOverviewLiveEffects?.();
-  renderManagerBoardAbilityTabs?.();
+  renderManagerLiveEffectsPanels?.();
+  pushLiveEffectsToGame?.();
   renderManagerBoardOverviewTimedChallenge?.();
   renderManagerBoardRecentChallenges?.();
   renderTimedChallengeRecentSummary?.();

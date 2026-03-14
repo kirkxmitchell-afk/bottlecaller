@@ -250,8 +250,120 @@
     function getLastDrillCompletionStatus() {
       return window.__BC_LAST_DRILL_COMPLETION_STATUS__ || null;
     }
+    function getLiveEffectsState() {
+      if (!window.__BC_LIVE_EFFECTS_STATE__) {
+        window.__BC_LIVE_EFFECTS_STATE__ = {
+          attributeEffects: [],
+          areaEffects: [],
+          updatedAt: Date.now(),
+          source: "local",
+        };
+      }
+      return window.__BC_LIVE_EFFECTS_STATE__;
+    }
+    function setLiveEffectsState(nextState = {}, meta = {}) {
+      const prev = getLiveEffectsState();
+
+      window.__BC_LIVE_EFFECTS_STATE__ = {
+        attributeEffects: Array.isArray(nextState.attributeEffects)
+          ? nextState.attributeEffects
+          : Array.isArray(prev.attributeEffects)
+            ? prev.attributeEffects
+            : [],
+        areaEffects: Array.isArray(nextState.areaEffects)
+          ? nextState.areaEffects
+          : Array.isArray(prev.areaEffects)
+            ? prev.areaEffects
+            : [],
+        updatedAt: Date.now(),
+        source: meta.source || "unknown",
+      };
+
+      window.__BC_ATTRIBUTE_EFFECTS__ = window.__BC_LIVE_EFFECTS_STATE__.attributeEffects;
+      window.__BC_AREA_EFFECTS__ = window.__BC_LIVE_EFFECTS_STATE__.areaEffects;
+
+      try { renderGameplayRail?.(); } catch {}
+      return window.__BC_LIVE_EFFECTS_STATE__;
+    }
+    function updateLiveEffectsState(patch = {}, meta = {}) {
+      const prev = getLiveEffectsState();
+      return setLiveEffectsState(
+        {
+          attributeEffects: patch.attributeEffects ?? prev.attributeEffects,
+          areaEffects: patch.areaEffects ?? prev.areaEffects,
+        },
+        meta
+      );
+    }
+    function getLiveEffectsRuntimeState() {
+      const state = window.__BC_LIVE_EFFECTS_STATE__ || null;
+
+      const attributeEffects = Array.isArray(state?.attributeEffects)
+        ? state.attributeEffects
+        : Array.isArray(window.__BC_ATTRIBUTE_EFFECTS__)
+          ? window.__BC_ATTRIBUTE_EFFECTS__
+          : [];
+
+      const areaEffects = Array.isArray(state?.areaEffects)
+        ? state.areaEffects
+        : Array.isArray(window.__BC_AREA_EFFECTS__)
+          ? window.__BC_AREA_EFFECTS__
+          : [];
+
+      return {
+        attributeEffects,
+        areaEffects,
+        updatedAt: Number(state?.updatedAt || 0) || 0,
+        source: state?.source || "unknown",
+      };
+    }
+    function getActiveLiveEffects() {
+      const state = getLiveEffectsRuntimeState();
+
+      const attributeEffects = state.attributeEffects.filter((x) => !!x?.active);
+      const areaEffects = state.areaEffects.filter((x) => !!x?.active);
+
+      return {
+        attributeEffects,
+        areaEffects,
+        all: [...attributeEffects, ...areaEffects],
+      };
+    }
+    function hasActiveLiveEffect(effectId) {
+      const id = String(effectId || "");
+      if (!id) return false;
+
+      return getActiveLiveEffects().all.some(
+        (effect) => String(effect?.id || "") === id
+      );
+    }
+    function getActiveLiveEffectIds() {
+      return getActiveLiveEffects().all.map((x) => String(x?.id || "")).filter(Boolean);
+    }
+    function getEncounterEffectModifiers() {
+      const ids = new Set(getActiveLiveEffectIds());
+
+      return {
+        closingSurge: ids.has("closing_surge"),
+        recoveryFocus: ids.has("recovery_focus"),
+        premiumWindow: ids.has("premium_window"),
+        calmFloor: ids.has("calm_floor"),
+      };
+    }
+    function getEncounterEffectDebugPayload() {
+      const liveFx = getEncounterEffectModifiers();
+      const ids = getActiveLiveEffectIds();
+
+      return {
+        activeEffectIds: ids,
+        closingSurge: !!liveFx.closingSurge,
+        recoveryFocus: !!liveFx.recoveryFocus,
+        premiumWindow: !!liveFx.premiumWindow,
+        calmFloor: !!liveFx.calmFloor,
+      };
+    }
     function getAttributeEffectsState() {
-      const explicit = window.__BC_ATTRIBUTE_EFFECTS__ || [];
+      const explicit = getLiveEffectsState().attributeEffects || window.__BC_ATTRIBUTE_EFFECTS__ || [];
       if (Array.isArray(explicit) && explicit.length) return explicit;
       try {
         return (typeof getActiveAbilities === "function" ? getActiveAbilities() : [])
@@ -261,7 +373,7 @@
       }
     }
     function getAreaEffectsState() {
-      const explicit = window.__BC_AREA_EFFECTS__ || [];
+      const explicit = getLiveEffectsState().areaEffects || window.__BC_AREA_EFFECTS__ || [];
       if (Array.isArray(explicit) && explicit.length) return explicit;
       try {
         return (typeof getActiveAbilities === "function" ? getActiveAbilities() : [])
@@ -722,9 +834,11 @@
     }
 
     function getActiveAbilityRuntime() {
-      const active = Array.isArray(window.__BC_ACTIVE_ABILITIES__)
+      const liveActive = getActiveLiveEffects().all;
+      const parentActive = Array.isArray(window.__BC_ACTIVE_ABILITIES__)
         ? window.__BC_ACTIVE_ABILITIES__
         : syncActiveAbilitiesFromParent();
+      const active = liveActive.length ? liveActive : parentActive;
 
       const has = (id) =>
         active.some((x) => String(x?.id || "") === String(id || ""));
@@ -765,6 +879,10 @@
       if (!result || typeof result !== "object") return result;
 
       const runtime = getActiveAbilityRuntime();
+      console.log("[BC][LIVE_FX]", {
+        hook: "reaction_eval",
+        ...getEncounterEffectDebugPayload()
+      });
       const next = { ...result };
 
       if (
@@ -814,6 +932,10 @@
 
     function rollPremiumOpportunity(result, encounter) {
       const runtime = getActiveAbilityRuntime();
+      console.log("[BC][LIVE_FX]", {
+        hook: "premium_roll",
+        ...getEncounterEffectDebugPayload()
+      });
       const pressure = encounter?.guestPressure || initGuestPressureState(encounter);
       const signal = String(result?.chainSignal || "").toLowerCase();
 
@@ -1317,6 +1439,27 @@
             status.textContent = `Send failed: ${msg.error || "unknown error"}`;
           }
         }
+      }
+      if (msg.type === "live_effects_sync") {
+        const myEpoch = Number(window.__BC_EPOCH__ || 0);
+        const msgEpoch = Number(msg?.epoch || 0);
+
+        if (myEpoch && msgEpoch && myEpoch !== msgEpoch) {
+          console.warn("[BC] live_effects_sync ignored (epoch mismatch)", { myEpoch, msgEpoch });
+          return;
+        }
+
+        setLiveEffectsState(
+          {
+            attributeEffects: Array.isArray(msg.attributeEffects) ? msg.attributeEffects : [],
+            areaEffects: Array.isArray(msg.areaEffects) ? msg.areaEffects : [],
+          },
+          { source: "parent_sync" }
+        );
+        try { updateCounts?.(); } catch {}
+        try { renderGameplayRail?.(); } catch {}
+
+        return;
       }
       if (msg.type === "hud_send_progress_request") {
         console.log("[REPORT] hud_send_progress_request received ✅", msg);
@@ -6481,9 +6624,17 @@ function ensureProgLoaded() {
 
         try {
           const checks = buildReactionChecksFromEncounter(currentEncounter, PROG);
+          const liveFx = getEncounterEffectModifiers();
+          console.log("[BC][LIVE_FX]", {
+            hook: "reaction_eval_bridge",
+            ...getEncounterEffectDebugPayload()
+          });
 
           const result = window.EngineBridge?.computeReaction
-            ? window.EngineBridge.computeReaction(checks)
+            ? window.EngineBridge.computeReaction({
+                ...checks,
+                liveFx,
+              })
             : null;
 
           if (result) {
@@ -9610,6 +9761,10 @@ body.difficulty-hard .option-btn.selected {
       function initGuestPressureState(encounter) {
         const guest = normalizeGuestType(encounter?.guestStateActual);
         const abilityFx = getActiveAbilityRuntime();
+        console.log("[BC][LIVE_FX]", {
+          hook: "pressure_init",
+          ...getEncounterEffectDebugPayload()
+        });
 
         const baseByGuest = {
           [window.GUEST.DECIDER]: {
@@ -9710,6 +9865,10 @@ body.difficulty-hard .option-btn.selected {
         const c = checks || (typeof window.evaluateChecks === "function" ? window.evaluateChecks(e) : {});
         const p = e.guestPressure || initGuestPressureState(e);
         const abilityFx = getActiveAbilityRuntime();
+        console.log("[BC][LIVE_FX]", {
+          hook: "pressure_update",
+          ...getEncounterEffectDebugPayload()
+        });
 
         const next = { ...p };
 
@@ -13080,7 +13239,15 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           let result = currentEncounter.__reaction;
           if (!currentEncounter.__reactionComputed || !result) {
             currentEncounter.__reactionComputed = true;
-            result = window.EngineBridge.computeReaction(reactionChecks);
+            const liveFx = getEncounterEffectModifiers();
+            console.log("[BC][LIVE_FX]", {
+              hook: "reaction_eval_bridge",
+              ...getEncounterEffectDebugPayload()
+            });
+            result = window.EngineBridge.computeReaction({
+              ...reactionChecks,
+              liveFx,
+            });
             result = applyAbilityRuntimeToReaction(result, currentEncounter, reactionChecks);
             if (result.__recoveryFocusApplied) {
               currentEncounter.pivotPlanned = true;
@@ -13875,6 +14042,10 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             window.__BC_DIFFICULTY__ ||
             difficultyPolicy(enc?.difficulty ?? 1);
           const abilityFx = getActiveAbilityRuntime();
+          console.log("[BC][LIVE_FX]", {
+            hook: "outcome_eval",
+            ...getEncounterEffectDebugPayload()
+          });
           const pivotPlanned =
             (enc?.pivotPlanned != null)
               ? enc.pivotPlanned
