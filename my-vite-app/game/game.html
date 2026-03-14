@@ -6214,6 +6214,37 @@ function ensureProgLoaded() {
           return;
         }
 
+        if (msg.type === "difficulty_set") {
+          const n = Number(msg?.difficulty || 2);
+          const difficulty = n <= 1 ? 1 : n >= 3 ? 3 : 2;
+          const modeLabel = difficulty === 1 ? "easy" : difficulty === 3 ? "hard" : "medium";
+
+          try {
+            if (typeof setDifficulty === "function") {
+              setDifficulty(modeLabel);
+            } else {
+              const seedByMode = { easy: 2, medium: 4, hard: 6 };
+              const nextSeed = seedByMode[modeLabel] || 4;
+              const nextPolicy = difficultyPolicy(nextSeed);
+              window.__BC_DIFFICULTY__ = {
+                ...nextPolicy,
+                mode: modeLabel,
+                pressure: Number(window.__BC_GUARD__?.pressureLevel || window.__BC_DIFFICULTY__?.pressure || 0),
+              };
+            }
+          } catch (e) {
+            console.warn("[BC] difficulty_set fallback failed", e);
+          }
+
+          try {
+            if (currentEncounter) currentEncounter.difficulty = difficulty === 1 ? 2 : difficulty === 3 ? 6 : 4;
+          } catch {}
+
+          console.log("[BC] difficulty_set applied ✅", { difficulty, mode: modeLabel });
+          window.showToast?.(`Difficulty set to ${difficulty === 1 ? "Easy" : difficulty === 3 ? "Hard" : "Medium"}`);
+          return;
+        }
+
         if (msg.type === "nav") {
           const identity = getGameplayIdentity();
           const isWaiterNow = !!identity.isWaiter;

@@ -853,6 +853,19 @@ document.querySelector("#app").innerHTML = `
         <div style="opacity:.7;">No challenge assigned.</div>
       </div>
     </div>
+    <div id="hudDifficultyCard" style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.10);">
+      <div style="font-weight:600; margin-bottom:8px;">Difficulty</div>
+
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button id="btnDifficultyEasy" class="btn-ghost" type="button">Easy</button>
+        <button id="btnDifficultyMedium" class="btn-ghost" type="button">Medium</button>
+        <button id="btnDifficultyHard" class="btn-ghost" type="button">Hard</button>
+      </div>
+
+      <div id="hudDifficultyStatus" class="small-text" style="margin-top:6px; opacity:.85;">
+        Current: -
+      </div>
+    </div>
     <div style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.10);">
       <div style="font-weight:600; margin-bottom:8px;">Coach</div>
       <button id="btnHudSendProgress" class="btn-ghost" type="button">Send progress to manager</button>
@@ -11207,6 +11220,84 @@ function renderHudSkillDashboard() {
   loadHudSkillTimeline();
 }
 
+function getCurrentDifficultyLabel() {
+  const raw =
+    appState?.difficulty ??
+    null;
+
+  if (raw == null) return "Medium";
+
+  const n = Number(raw);
+  if (n <= 1) return "Easy";
+  if (n >= 3) return "Hard";
+  return "Medium";
+}
+
+function getCurrentDifficultyValue() {
+  const raw =
+    appState?.difficulty ??
+    null;
+
+  if (raw == null) return 2;
+
+  const n = Number(raw);
+  if (n <= 1) return 1;
+  if (n >= 3) return 3;
+  return 2;
+}
+
+function setCurrentDifficultyValue(nextValue) {
+  const n = Number(nextValue);
+  const difficulty = n <= 1 ? 1 : n >= 3 ? 3 : 2;
+
+  appState.difficulty = difficulty;
+
+  try {
+    postToGame?.("difficulty_set", { difficulty });
+  } catch (e) {
+    console.warn("[HUD] difficulty post failed", e);
+  }
+
+  renderHudDifficultyControls?.();
+}
+
+function renderHudDifficultyControls() {
+  const easyBtn = document.getElementById("btnDifficultyEasy");
+  const mediumBtn = document.getElementById("btnDifficultyMedium");
+  const hardBtn = document.getElementById("btnDifficultyHard");
+  const status = document.getElementById("hudDifficultyStatus");
+
+  const current = getCurrentDifficultyValue();
+
+  if (easyBtn) easyBtn.classList.toggle("active", current === 1);
+  if (mediumBtn) mediumBtn.classList.toggle("active", current === 2);
+  if (hardBtn) hardBtn.classList.toggle("active", current === 3);
+
+  if (status) {
+    status.textContent = `Current: ${getCurrentDifficultyLabel()}`;
+  }
+}
+
+function wireHudDifficultyControls() {
+  const easyBtn = document.getElementById("btnDifficultyEasy");
+  if (easyBtn && !easyBtn.__wired) {
+    easyBtn.__wired = true;
+    easyBtn.addEventListener("click", () => setCurrentDifficultyValue(1));
+  }
+
+  const mediumBtn = document.getElementById("btnDifficultyMedium");
+  if (mediumBtn && !mediumBtn.__wired) {
+    mediumBtn.__wired = true;
+    mediumBtn.addEventListener("click", () => setCurrentDifficultyValue(2));
+  }
+
+  const hardBtn = document.getElementById("btnDifficultyHard");
+  if (hardBtn && !hardBtn.__wired) {
+    hardBtn.__wired = true;
+    hardBtn.addEventListener("click", () => setCurrentDifficultyValue(3));
+  }
+}
+
 async function loadHudSkillTimeline() {
   const ctx = window.__BC_CTX__ || {};
   if (!ctx.userId || !ctx.restaurantId) return;
@@ -11328,6 +11419,8 @@ function renderHud() {
   renderInvitesList();
   renderHudSkillDashboard();
   renderHudAbilities();
+  renderHudDifficultyControls?.();
+  wireHudDifficultyControls?.();
 }
 
 // ------------------------------------------------------------
