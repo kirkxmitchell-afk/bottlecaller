@@ -2708,15 +2708,15 @@ function getManagerRecentChallengeSummaryLabel(row = null) {
   const label = getManagerChallengeLabel(payload);
 
   if (type === "timed_challenge") {
-    return `Latest challenge activity: ${label} sent`;
+    return `${label} sent`;
   }
 
   if (type === "timed_challenge_completed") {
-    return `Latest challenge activity: ${label} completed`;
+    return `${label} completed`;
   }
 
   if (type === "timed_challenge_expired") {
-    return `Latest challenge activity: ${label} expired`;
+    return `${label} expired`;
   }
 
   return "No recent challenge activity.";
@@ -2725,24 +2725,38 @@ function getManagerRecentChallengeSummaryLabel(row = null) {
 function renderTimedChallengeRecentSummary() {
   const lastSent = getRecentTimedChallengeSentRow();
   const lastResult = getRecentTimedChallengeResultRow();
+
   const latest = (() => {
     if (!lastSent) return lastResult;
     if (!lastResult) return lastSent;
+
     const sentAt = new Date(lastSent?.created_at || 0).getTime();
     const resultAt = new Date(lastResult?.created_at || 0).getTime();
+
     return sentAt >= resultAt ? lastSent : lastResult;
   })();
 
   const activityText = getManagerRecentChallengeSummaryLabel(latest);
   const timeText = latest ? formatRecentChallengeTime(latest?.created_at) : "";
   const actorText = latest ? getTimedChallengeActorLabel(latest) : "";
+  const metaLine = [actorText, timeText].filter(Boolean).join(" • ");
 
-  const html = `
-    <div><b>${escapeHtml(activityText)}</b></div>
-    <div style="margin-top:4px; opacity:.8;">
-      ${escapeHtml([actorText, timeText].filter(Boolean).join(" • ") || "No recent challenge activity.")}
-    </div>
-  `;
+  const html = latest
+    ? `
+      <div style="font-weight:600;">Recent Challenge Activity</div>
+      <div class="small-text" style="margin-top:4px; opacity:.92;">
+        ${escapeHtml(activityText)}
+      </div>
+      <div class="small-text" style="margin-top:4px; opacity:.75;">
+        ${escapeHtml(metaLine)}
+      </div>
+    `
+    : `
+      <div style="font-weight:600;">Recent Challenge Activity</div>
+      <div class="small-text" style="margin-top:4px; opacity:.75;">
+        No recent challenge activity.
+      </div>
+    `;
 
   ["mbTimedChallengeRecentSummary", "mbLcTimedChallengeRecentSummary"].forEach((id) => {
     const root = document.getElementById(id);
