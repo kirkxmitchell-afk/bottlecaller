@@ -6710,6 +6710,13 @@ function ensureProgLoaded() {
             currentEncounter.pivotType = result.pivotType || "";
             currentEncounter.__decider = result.__decider || null;
             currentEncounter.__reactionComputed = true;
+            try {
+              logEncounterEffectAudit("drill_reaction", currentEncounter, {
+                pivotUnlocked: !!result.pivotUnlocked,
+              });
+            } catch (e) {
+              console.warn("[BC] effect audit failed", e);
+            }
           } else {
             currentEncounter.__reactionComputed = false;
           }
@@ -10864,6 +10871,45 @@ body.difficulty-hard .option-btn.selected {
         });
       }
 
+      function formatEffectAuditNumber(value) {
+        return Number.isFinite(Number(value)) ? Number(value).toFixed(2) : "-";
+      }
+
+      function logEncounterEffectAudit(label, encounter, extra = {}) {
+        if (!encounter) return;
+
+        const fx = getEncounterEffectDebugPayload();
+        const runtime = getActiveAbilityRuntime();
+        const pressure = encounter?.guestPressure || null;
+        const effectIds = fx.activeEffectIds.length ? fx.activeEffectIds.join(",") : "-";
+
+        const line = [
+          `label=${label}`,
+          `enc=${encounter.encounterNumber ?? encounter.encounterId ?? "-"}`,
+          `guest=${encounter.guestStateActual || "-"}`,
+          `effects=${effectIds}`,
+          `cs=${runtime.closingSurge ? "1" : "0"}/${formatEffectAuditNumber(runtime.reactionClosingBonus)}/${formatEffectAuditNumber(runtime.closingThresholdDelta)}`,
+          `rf=${runtime.recoveryFocus ? "1" : "0"}/${formatEffectAuditNumber(runtime.recoveryPressureRelief)}/${formatEffectAuditNumber(runtime.recoveryThresholdDelta)}`,
+          `pw=${runtime.premiumWindow ? "1" : "0"}/${formatEffectAuditNumber(runtime.premiumChanceBonus)}/${formatEffectAuditNumber(runtime.opennessBonus)}`,
+          `cf=${runtime.calmFloor ? "1" : "0"}/${formatEffectAuditNumber(runtime.pressureInitRelief)}/${formatEffectAuditNumber(runtime.pressureEscalationDelta)}`,
+          `pressure=o:${formatEffectAuditNumber(pressure?.openness)} c:${formatEffectAuditNumber(pressure?.confidence)} r:${formatEffectAuditNumber(pressure?.resistance)} u:${formatEffectAuditNumber(pressure?.urgency)}`,
+          `signal=${encounter.chainSignal || "-"}`,
+          `score=${formatEffectAuditNumber(encounter.chainScore)}`,
+          `outcome=${encounter.outcome || extra.outcome || "-"}`,
+          `pivot=${encounter.pivotType || extra.pivotType || "-"}`,
+        ];
+
+        if (extra && typeof extra === "object") {
+          Object.entries(extra).forEach(([key, value]) => {
+            if (["outcome", "pivotType"].includes(key)) return;
+            if (value == null || value === "") return;
+            line.push(`${key}=${typeof value === "number" ? formatEffectAuditNumber(value) : String(value)}`);
+          });
+        }
+
+        console.log("[BC][EFFECT_AUDIT]", line.join(" | "));
+      }
+
       function scrubEncounterDerivedState(encounter) {
         if (!encounter) return;
         encounter.correctModeResolved = "";
@@ -13941,6 +13987,14 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
               currentEncounter.chainSignal ||
               currentEncounter?.__reaction?.chainSignal ||
               null;
+            try {
+              logEncounterEffectAudit("outcome", currentEncounter, {
+                outcome: outcome?.outcome || null,
+                finalScore: outcome?.score,
+              });
+            } catch (e) {
+              console.warn("[BC] effect audit failed", e);
+            }
 
             const prevSnapshot = getSkillSnapshot();
             const skillTree = updateSkillTreeFromEncounter(currentEncounter);
