@@ -2575,9 +2575,6 @@ function getRecentTimedChallengeResultRow() {
 }
 
 function renderTimedChallengeRecentSummary() {
-  const root = document.getElementById("mbTimedChallengeRecentSummary");
-  if (!root) return;
-
   const lastSent = getRecentTimedChallengeSentRow();
   const lastResult = getRecentTimedChallengeResultRow();
 
@@ -2590,10 +2587,15 @@ function renderTimedChallengeRecentSummary() {
     ? `${resultMeta?.label || "Result"} • ${getTimedChallengeLabel(lastResult?.payload?.challengeKey)} • ${getTimedChallengeActorLabel(lastResult)} • ${formatRecentChallengeTime(lastResult?.created_at)}`
     : "None";
 
-  root.innerHTML = `
+  const html = `
     <div><b>Last sent:</b> ${escapeHtml(sentText)}</div>
     <div style="margin-top:4px;"><b>Last result:</b> ${escapeHtml(resultText)}</div>
   `;
+
+  ["mbTimedChallengeRecentSummary", "mbLcTimedChallengeRecentSummary"].forEach((id) => {
+    const root = document.getElementById(id);
+    if (root) root.innerHTML = html;
+  });
 }
 
 function renderManagerBoardRecentChallenges() {
@@ -9069,30 +9071,8 @@ function renderManagerAreaEffectsPanel() {
 function renderManagerLiveControlPanels() {
   renderManagerAttributeEffectsPanel?.();
   renderManagerAreaEffectsPanel?.();
-
-  const drillRoot = document.getElementById("mbDrillQuickActionsPanel");
-  if (drillRoot) {
-    drillRoot.innerHTML = `
-      <div class="card" style="display:flex; flex-direction:column; gap:8px; padding:12px;">
-        <div style="font-weight:600;">Drill Quick Actions</div>
-        <div class="small-text" style="opacity:.8;">
-          Use Messenger drill controls to assign focused drills to a waiter in the active restaurant.
-        </div>
-      </div>
-    `;
-  }
-
-  const challengeRoot = document.getElementById("mbTimedChallengeQuickActionsPanel");
-  if (challengeRoot) {
-    challengeRoot.innerHTML = `
-      <div class="card" style="display:flex; flex-direction:column; gap:8px; padding:12px;">
-        <div style="font-weight:600;">Timed Challenge Quick Actions</div>
-        <div class="small-text" style="opacity:.8;">
-          Use Messenger timed challenge controls to target a waiter in the active restaurant context.
-        </div>
-      </div>
-    `;
-  }
+  renderManagerTimedChallengeActionPanel?.();
+  renderManagerDrillActionPanel?.();
 }
 
 function renderProfileScreen() {
@@ -9310,62 +9290,96 @@ async function loadManagerMessenger(restaurantId = null) {
   return window.__BC_MB_THREADS__;
 }
 
-function getManagerBoardWaiterOptions() {
-  const rows =
-    window.__BC_MB_STAFF_ROWS__ ||
-    window.__BC_MB_WAITERS__ ||
-    [];
+function getManagerWaiterOptions() {
+  const threads = Array.isArray(window.__BC_MB_THREADS__) ? window.__BC_MB_THREADS__ : [];
 
-  return rows.filter((x) => {
-    const role = String(x?.role || x?.membership_role || x?.membershipRole || "").toLowerCase();
-    return role === "waiter";
-  });
+  return threads
+    .map((t) => {
+      const userId = t?.userId || t?.receiver_user_id || t?.sender_user_id || "";
+      const name =
+        t?.title ||
+        t?.name ||
+        t?.userName ||
+        t?.displayName ||
+        t?.waiterName ||
+        `Waiter ${String(userId).slice(0, 6)}`;
+
+      return {
+        userId: String(userId || ""),
+        label: String(name || "Unknown waiter"),
+      };
+    })
+    .filter((x) => x.userId);
+}
+
+function getManagerBoardWaiterOptions() {
+  return getManagerWaiterOptions();
+}
+
+function renderManagerWaiterSelectOptions(selectEl, options = {}) {
+  if (!selectEl) return;
+
+  const waiterOptions = getManagerWaiterOptions();
+  const placeholder = String(options.placeholder || "Select waiter");
+  const preferredUserId = String(
+    options.selectedUserId ||
+    window.__BC_MB_ACTIVE_THREAD_USER_ID__ ||
+    ""
+  );
+
+  const rows = [
+    `<option value="">${escapeHtml(placeholder)}</option>`,
+    ...waiterOptions.map((opt) => {
+      const selected = preferredUserId && String(opt.userId) === preferredUserId ? "selected" : "";
+      return `<option value="${escapeHtml(opt.userId)}" ${selected}>${escapeHtml(opt.label)}</option>`;
+    })
+  ];
+
+  selectEl.innerHTML = rows.join("");
 }
 
 function renderTimedChallengeTargetOptions() {
   const select = document.getElementById("mbTimedChallengeTarget");
   if (!select) return;
 
-  const rows = getManagerBoardWaiterOptions();
-  const prev = select.value || "";
-  select.innerHTML = "";
-
-  if (!rows.length) {
-    const opt = document.createElement("option");
-    opt.value = "";
-    opt.textContent = "No waiters available";
-    select.appendChild(opt);
-    return;
-  }
-
-  for (const row of rows) {
-    const opt = document.createElement("option");
-    const value = row.user_id || row.id || "";
-    opt.value = value;
-    opt.textContent =
-      row.display_name ||
-      row.full_name ||
-      row.name ||
-      row.email ||
-      `Waiter ${String(value).slice(0, 8)}`;
-    select.appendChild(opt);
-  }
-
-  if (prev && rows.some((x) => String(x.user_id || x.id || "") === String(prev))) {
-    select.value = prev;
-  }
+  renderManagerWaiterSelectOptions(select, {
+    selectedUserId: window.__BC_MB_ACTIVE_THREAD_USER_ID__ || "",
+  });
 }
 
-function buildTimedChallengePayload() {
-  const targetEl = document.getElementById("mbTimedChallengeTarget");
-  const typeEl = document.getElementById("mbTimedChallengeType");
-  const durationEl = document.getElementById("mbTimedChallengeDuration");
-  const rewardEl = document.getElementById("mbTimedChallengeReward");
+function getTimedChallengeComposerValues(source = "messenger") {
+  const ids = source === "live_controls"
+    ? {
+        target: "mbLcTimedChallengeTarget",
+        type: "mbLcTimedChallengeType",
+        duration: "mbLcTimedChallengeDuration",
+        reward: "mbLcTimedChallengeReward",
+      }
+    : {
+        target: "mbTimedChallengeTarget",
+        type: "mbTimedChallengeType",
+        duration: "mbTimedChallengeDuration",
+        reward: "mbTimedChallengeReward",
+      };
 
-  const targetUserId = targetEl?.value || null;
-  const challengeKey = typeEl?.value || "closing_push";
-  const durationSec = Number(durationEl?.value || 600);
-  const rewardPoints = Number(rewardEl?.value || 50);
+  const targetEl = document.getElementById(ids.target);
+  const typeEl = document.getElementById(ids.type);
+  const durationEl = document.getElementById(ids.duration);
+  const rewardEl = document.getElementById(ids.reward);
+
+  return {
+    targetUserId: String(targetEl?.value || "").trim() || null,
+    challengeKey: String(typeEl?.value || "closing_push"),
+    durationSec: Number(durationEl?.value || 600),
+    rewardPoints: Number(rewardEl?.value || 50),
+  };
+}
+
+function buildTimedChallengePayloadFromValues(values = {}) {
+  const targetUserId = values.targetUserId || null;
+  const challengeKey = values.challengeKey || "closing_push";
+  const durationSec = Number(values.durationSec || 600);
+  const rewardPoints = Number(values.rewardPoints || 50);
   const restaurantId = getManagerActiveRestaurantId();
 
   if (!targetUserId) return null;
@@ -9404,26 +9418,40 @@ function buildTimedChallengePayload() {
   };
 }
 
-async function sendTimedChallengeFromManager() {
-  const statusEl = document.getElementById("mbTimedChallengeStatus");
-  const payload = buildTimedChallengePayload();
+function buildTimedChallengePayload() {
+  return buildTimedChallengePayloadFromValues(getTimedChallengeComposerValues("messenger"));
+}
+
+function setManagerStatus(elOrId, type = "idle", text = "") {
+  const el = typeof elOrId === "string" ? document.getElementById(elOrId) : elOrId;
+  if (!el) return;
+
+  el.textContent = String(text || "");
+  el.dataset.state = String(type || "idle");
+
+  const opacity =
+    type === "error" ? "0.95" :
+    type === "success" ? "0.95" :
+    type === "working" ? "0.9" :
+    "0.85";
+
+  el.style.opacity = opacity;
+}
+
+async function sendTimedChallengeFromManagerWithValues(values = {}) {
+  const payload = buildTimedChallengePayloadFromValues(values);
   const profile = appState?.profile || {};
   const caps = getPremiumRoleCapabilities(profile);
 
-  if (statusEl) statusEl.textContent = "";
-
   if (!caps.canAssignTimedChallenges) {
-    if (statusEl) statusEl.textContent = "Role cannot assign timed challenges.";
     return false;
   }
 
   if (!payload) {
-    if (statusEl) statusEl.textContent = "Missing target or restaurant.";
     return false;
   }
 
   if (!canActOnRestaurant(profile, profile, payload.restaurantId)) {
-    if (statusEl) statusEl.textContent = "Role cannot act on this restaurant.";
     return false;
   }
 
@@ -9431,7 +9459,6 @@ async function sendTimedChallengeFromManager() {
     const liveAuth = await getLiveAuthOrNull();
     const userId = liveAuth?.userId || null;
     if (!userId) {
-      if (statusEl) statusEl.textContent = "No active session.";
       return false;
     }
 
@@ -9459,16 +9486,43 @@ async function sendTimedChallengeFromManager() {
 
     if (error) throw error;
 
-    if (statusEl) statusEl.textContent = `${payload.title} sent ✅`;
+    const messengerStatusEl = document.getElementById("mbTimedChallengeStatus");
+    if (messengerStatusEl) {
+      messengerStatusEl.textContent = `${payload.title} sent ✅`;
+    }
+
     renderTimedChallengeRecentSummary();
     await loadManagerMessenger(payload.restaurantId);
     renderTimedChallengeRecentSummary();
     return true;
   } catch (e) {
     console.warn("[TIMED CHALLENGE] send failed", e);
-    if (statusEl) statusEl.textContent = "Could not send challenge.";
+
+    const messengerStatusEl = document.getElementById("mbTimedChallengeStatus");
+    if (messengerStatusEl) {
+      messengerStatusEl.textContent = "Could not send challenge.";
+    }
+
     return false;
   }
+}
+
+async function sendTimedChallengeFromManager() {
+  const statusEl = document.getElementById("mbTimedChallengeStatus");
+  if (statusEl) statusEl.textContent = "";
+
+  const values = getTimedChallengeComposerValues("messenger");
+  const ok = await sendTimedChallengeFromManagerWithValues(values);
+
+  if (ok) {
+    if (statusEl) statusEl.textContent = "Challenge sent ✅";
+    return true;
+  }
+
+  if (statusEl && !statusEl.textContent) {
+    statusEl.textContent = "Could not send challenge.";
+  }
+  return false;
 }
 
 function wireTimedChallengeComposer() {
@@ -9479,6 +9533,34 @@ function wireTimedChallengeComposer() {
   btn.addEventListener("click", async () => {
     await sendTimedChallengeFromManager();
   });
+}
+
+function wireManagerTimedChallengeActionPanel() {
+  const btn = document.getElementById("mbLcTimedChallengeSend");
+  if (btn && !btn.__bcBound) {
+    btn.__bcBound = true;
+    btn.addEventListener("click", async () => {
+      const statusEl = document.getElementById("mbLcTimedChallengeStatus");
+      setManagerStatus(statusEl, "working", "Sending challenge…");
+
+      try {
+        const values = getTimedChallengeComposerValues("live_controls");
+        const ok = await sendTimedChallengeFromManagerWithValues(values);
+
+        if (ok) {
+          setManagerStatus(statusEl, "success", "Challenge sent ✅");
+
+          const src = document.getElementById("mbTimedChallengeRecentSummary");
+          const dst = document.getElementById("mbLcTimedChallengeRecentSummary");
+          if (src && dst) dst.textContent = src.textContent || "";
+        } else if (!statusEl.textContent) {
+          setManagerStatus(statusEl, "error", "Could not send challenge.");
+        }
+      } catch (e) {
+        setManagerStatus(statusEl, "error", e?.message || String(e));
+      }
+    });
+  }
 }
 
 function canManageTimedChallenges() {
@@ -9497,6 +9579,72 @@ function renderTimedChallengeComposer() {
   renderTimedChallengeTargetOptions();
   wireTimedChallengeComposer();
   renderTimedChallengeRecentSummary();
+}
+
+function renderManagerTimedChallengeActionPanel() {
+  const root = document.getElementById("mbTimedChallengeQuickActionsPanel");
+  if (!root) return;
+  if (!canManageTimedChallenges()) {
+    root.innerHTML = `
+      <div class="card" style="display:flex; flex-direction:column; gap:8px; padding:12px;">
+        <div style="font-weight:600;">Timed Challenge</div>
+        <div class="small-text" style="opacity:.8;">
+          Your role cannot send timed challenges in this restaurant context.
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  root.innerHTML = `
+    <div class="card" style="display:flex; flex-direction:column; gap:10px; padding:12px;">
+      <div style="font-weight:600;">Timed Challenge</div>
+      <div class="small-text" style="opacity:.8;">
+        Send a live objective to a waiter in the active restaurant.
+      </div>
+      <div class="row" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <select id="mbLcTimedChallengeTarget" style="min-width:180px;"></select>
+        <select id="mbLcTimedChallengeType">
+          <option value="closing_push">Closing Push</option>
+          <option value="recovery_window">Recovery Window</option>
+        </select>
+        <select id="mbLcTimedChallengeDuration">
+          <option value="300">5 min</option>
+          <option value="600" selected>10 min</option>
+          <option value="900">15 min</option>
+        </select>
+        <input
+          id="mbLcTimedChallengeReward"
+          type="number"
+          min="0"
+          step="10"
+          value="50"
+          style="width:110px;"
+          placeholder="Reward"
+        />
+      </div>
+      <div class="small-text" style="opacity:.8;">
+        Use this to push a live objective without leaving Live Controls.
+      </div>
+      <div class="row" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <button id="mbLcTimedChallengeSend" class="btn" type="button">Send Challenge</button>
+        <div id="mbLcTimedChallengeStatus" class="small-text" style="opacity:.85;"></div>
+      </div>
+      <div id="mbLcTimedChallengeRecentSummary" class="small-text" style="opacity:.8;"></div>
+    </div>
+  `;
+
+  renderManagerWaiterSelectOptions(
+    document.getElementById("mbLcTimedChallengeTarget"),
+    { selectedUserId: window.__BC_MB_ACTIVE_THREAD_USER_ID__ || "" }
+  );
+  wireManagerTimedChallengeActionPanel?.();
+
+  const recent = document.getElementById("mbTimedChallengeRecentSummary");
+  const liveRecent = document.getElementById("mbLcTimedChallengeRecentSummary");
+  if (recent && liveRecent) {
+    liveRecent.textContent = recent.textContent || "";
+  }
 }
 
 async function mbSendInstruction() {
@@ -9540,18 +9688,84 @@ async function mbSendInstruction() {
   await loadManagerMessenger(restaurantId);
 }
 
+function getManagerDrillActionValues(source = "live_controls") {
+  const idMap = source === "live_controls"
+    ? {
+        target: "mbLcDrillTarget",
+        focus: "mbLcDrillFocus",
+        reps: "mbLcDrillReps",
+        duration: "mbLcDrillDuration",
+        tier: "mbLcDrillTier",
+      }
+    : {
+        target: "mbTimedChallengeTarget",
+        focus: null,
+        reps: null,
+        duration: null,
+        tier: null,
+      };
+
+  return {
+    targetUserId: String(document.getElementById(idMap.target)?.value || "").trim() || null,
+    focus: String(document.getElementById(idMap.focus)?.value || "").trim() || "read",
+    repTarget: Number(document.getElementById(idMap.reps)?.value || 3),
+    durationSec: Number(document.getElementById(idMap.duration)?.value || 300),
+    tier: Number(document.getElementById(idMap.tier)?.value || 1),
+  };
+}
+
+function getManagerThreadLatestSignal(targetUserId) {
+  const threads = Array.isArray(window.__BC_MB_THREADS__) ? window.__BC_MB_THREADS__ : [];
+  const thread = threads.find((t) => String(t?.userId || "") === String(targetUserId || ""));
+  const latest = [...(thread?.rows || [])]
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+    .slice(-1)[0] || null;
+
+  const payload = latest?.payload || {};
+  return {
+    latest,
+    payload,
+    guest: String(payload?.guestStateActual || "").toLowerCase(),
+    signal: String(payload?.chainSignal || payload?.outcome || "").toLowerCase(),
+  };
+}
+
+function renderManagerDrillHint(targetUserId) {
+  const root = document.getElementById("mbLcDrillHint");
+  if (!root) return;
+  if (!targetUserId) {
+    root.textContent = "Pick a waiter to see a suggested drill direction.";
+    return;
+  }
+
+  const { guest, signal } = getManagerThreadLatestSignal(targetUserId);
+
+  let text = "Suggested: Read drill as a safe default.";
+  if (signal === "red" || signal === "soft_close") {
+    text = "Suggested: Read drill based on the latest weak result.";
+  } else if (guest === "griever") {
+    text = "Suggested: Recovery drill due to softer, resistant guest energy.";
+  } else if (guest === "decider") {
+    text = "Suggested: Closing or read drill for decisive-table handling.";
+  } else if (guest === "fancy") {
+    text = "Suggested: Frame or delivery drill for precision and confidence.";
+  }
+
+  root.textContent = text;
+}
+
 async function mbSendDrillOverride(opts = {}) {
   const { restaurantId, canAct, caps } = getManagerBoardFilter();
   if (!restaurantId) throw new Error("Active restaurant not set");
   if (!caps.canAssignDrills) throw new Error("Role cannot assign drills.");
   if (!canAct) throw new Error("Role cannot act on this restaurant.");
 
-  const to = String(window.__BC_MB_ACTIVE_THREAD_USER_ID__ || "");
+  const to = String(opts.targetUserId || window.__BC_MB_ACTIVE_THREAD_USER_ID__ || "");
   const status = mbEl("mbInstrStatus");
 
   if (!to) throw new Error("Select a waiter thread");
 
-  if (status) status.textContent = "Sending drill…";
+  if (status && !opts.silentStatus) status.textContent = "Sending drill…";
 
   const senderId = appState?.session?.user?.id || appState?.session?.userId || null;
   const senderRole = normalizeMembershipRole(appState?.profile) || "single_manager";
@@ -9562,10 +9776,8 @@ async function mbSendDrillOverride(opts = {}) {
   if (!senderId) throw new Error("No session");
 
   const baseDrill = window.__BC_DRILL_CONFIG__ || window.BC_DRILL_CONFIG || null;
-
-  const thread = (window.__BC_MB_THREADS__ || []).find(
-    (t) => String(t.userId) === String(to)
-  );
+  const threads = Array.isArray(window.__BC_MB_THREADS__) ? window.__BC_MB_THREADS__ : [];
+  const thread = threads.find((t) => String(t?.userId || "") === String(to));
   const latest = [...(thread?.rows || [])]
     .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
     .slice(-1)[0];
@@ -9631,12 +9843,118 @@ async function mbSendDrillOverride(opts = {}) {
   const { error } = await supabase.from("bc_messages_v1").insert(row);
   if (error) throw error;
 
-  if (status) status.textContent = "Drill sent ✅";
+  if (status && !opts.silentStatus) status.textContent = "Drill sent ✅";
   await loadManagerMessenger(restaurantId);
+  return true;
+}
+
+function renderManagerDrillActionPanel() {
+  const root = document.getElementById("mbDrillQuickActionsPanel");
+  if (!root) return;
+  const caps = getPremiumRoleCapabilities(appState?.profile);
+  if (!caps.canAssignDrills) {
+    root.innerHTML = `
+      <div class="card" style="display:flex; flex-direction:column; gap:8px; padding:12px;">
+        <div style="font-weight:600;">Assign Drill</div>
+        <div class="small-text" style="opacity:.8;">
+          Your role cannot assign drills in this restaurant context.
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  root.innerHTML = `
+    <div class="card" style="display:flex; flex-direction:column; gap:10px; padding:12px;">
+      <div style="font-weight:600;">Assign Drill</div>
+      <div class="small-text" style="opacity:.8;">
+        Send a focused practice block to a waiter.
+      </div>
+      <div class="row" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <select id="mbLcDrillTarget" style="min-width:180px;"></select>
+        <select id="mbLcDrillFocus">
+          <option value="read">Read</option>
+          <option value="frame">Frame</option>
+          <option value="delivery">Delivery</option>
+          <option value="recovery">Recovery</option>
+          <option value="closing">Closing</option>
+        </select>
+        <input id="mbLcDrillReps" type="number" min="1" step="1" value="3" style="width:90px;" placeholder="Reps" />
+        <select id="mbLcDrillDuration">
+          <option value="180">3 min</option>
+          <option value="300" selected>5 min</option>
+          <option value="600">10 min</option>
+        </select>
+        <select id="mbLcDrillTier">
+          <option value="1">Tier 1</option>
+          <option value="2">Tier 2</option>
+          <option value="3">Tier 3</option>
+        </select>
+      </div>
+      <div class="row" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <button id="mbLcDrillSend" class="btn" type="button">Assign Drill</button>
+        <div id="mbLcDrillStatus" class="small-text" style="opacity:.85;"></div>
+      </div>
+      <div id="mbLcDrillHint" class="small-text" style="opacity:.8;"></div>
+    </div>
+  `;
+
+  renderManagerWaiterSelectOptions(
+    document.getElementById("mbLcDrillTarget"),
+    { selectedUserId: window.__BC_MB_ACTIVE_THREAD_USER_ID__ || "" }
+  );
+
+  renderManagerDrillHint(window.__BC_MB_ACTIVE_THREAD_USER_ID__ || "");
+  wireManagerDrillActionPanel?.();
+}
+
+async function sendManagerDrillOverrideFromValues(values = {}) {
+  if (!values?.targetUserId) return false;
+
+  return mbSendDrillOverride({
+    targetUserId: values.targetUserId,
+    focus: values.focus,
+    repTarget: values.repTarget,
+    durationSec: values.durationSec,
+    tier: values.tier,
+    silentStatus: true,
+  });
 }
 
 async function sendManagerDrillOverride({ focus, repTarget = 3, durationSec = 300, pool, tier } = {}) {
   return mbSendDrillOverride({ focus, repTarget, durationSec, pool, tier });
+}
+
+function wireManagerDrillActionPanel() {
+  const btn = document.getElementById("mbLcDrillSend");
+  const targetEl = document.getElementById("mbLcDrillTarget");
+  if (targetEl && !targetEl.__bcBound) {
+    targetEl.__bcBound = true;
+    targetEl.addEventListener("change", () => {
+      renderManagerDrillHint(targetEl.value || "");
+    });
+  }
+
+  if (!btn || btn.__bcBound) return;
+
+  btn.__bcBound = true;
+  btn.addEventListener("click", async () => {
+    const statusEl = document.getElementById("mbLcDrillStatus");
+    setManagerStatus(statusEl, "working", "Sending drill…");
+
+    try {
+      const values = getManagerDrillActionValues("live_controls");
+      const ok = await sendManagerDrillOverrideFromValues(values);
+
+      if (ok) {
+        setManagerStatus(statusEl, "success", "Drill sent ✅");
+      } else if (!statusEl.textContent) {
+        setManagerStatus(statusEl, "error", "Could not send drill.");
+      }
+    } catch (e) {
+      setManagerStatus(statusEl, "error", e?.message || String(e));
+    }
+  });
 }
 
 function wireManagerBoardMessenger() {
@@ -9660,10 +9978,11 @@ function wireManagerBoardMessenger() {
   const runDrill = mbEl("mbInstrRunDrill");
   if (runDrill && !runDrill.__wired) {
     runDrill.__wired = true;
+    runDrill.textContent = "Assign Drill to This Waiter";
     runDrill.addEventListener("click", () => {
       mbSendDrillOverride().catch((e) => {
         const status = mbEl("mbInstrStatus");
-        if (status) status.textContent = e?.message || String(e);
+        setManagerStatus(status, "error", e?.message || String(e));
       });
     });
   }
