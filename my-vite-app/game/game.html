@@ -572,6 +572,17 @@
     function goBackToPremiumHome() {
       try {
         const epoch = Number(window.__BC_EPOCH__ || window.__BC_IFRAME_EPOCH__ || 0);
+        const fireBoundBack = (id) => {
+          const btn = document.getElementById(id);
+          if (!btn) return false;
+
+          if (window.PointerEvent) {
+            btn.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, cancelable: true }));
+          } else {
+            btn.click();
+          }
+          return true;
+        };
 
         if (window.parent && window.parent !== window) {
           window.parent.postMessage(
@@ -588,8 +599,28 @@
           return true;
         }
 
-        if (typeof showScreen === "function") {
-          showScreen("screenPremiumApp");
+        const activeScreen = document.querySelector(".screen.active")?.id || "";
+        if (activeScreen === "screenDrill" || String(window.__BC_SESSION_TYPE__ || "").toLowerCase() === "drill") {
+          if (fireBoundBack("__BC_DRILL_BACK__")) return true;
+          if (fireBoundBack("btnExitDrill")) return true;
+          if (fireBoundBack("btnBackHomeFromDrillSummary")) return true;
+        }
+
+        if (activeScreen === "screenPlay" && fireBoundBack("btnBackHomeFromPlay")) {
+          return true;
+        }
+
+        const show = window.__BC_UI__?.showScreen;
+        const reset = window.__BC_API__?.resetNavState;
+        if (typeof show === "function") {
+          if (document.getElementById("screenPremiumApp")) {
+            show("screenPremiumApp");
+          } else if (document.getElementById("screenHome")) {
+            try { reset?.(); } catch {}
+            show("screenHome");
+          } else {
+            return false;
+          }
           return true;
         }
 
@@ -602,16 +633,18 @@
     function startFiveMinDrillFromRail() {
       try {
         const canStart =
-          typeof startFiveMinuteDrill === "function" ||
-          typeof startDrill === "function";
+          typeof window.__BC_NAV__?.fiveMinDrill === "function" ||
+          typeof startDrill === "function" ||
+          typeof startFiveMinuteDrill === "function";
 
         if (!canStart) {
           console.warn("[RAIL] 5-Min Drill unavailable");
+          window.showToast?.("5-Min Drill is not available right now.");
           return false;
         }
 
-        if (typeof startFiveMinuteDrill === "function") {
-          startFiveMinuteDrill();
+        if (typeof window.__BC_NAV__?.fiveMinDrill === "function") {
+          window.__BC_NAV__.fiveMinDrill();
           return true;
         }
 
@@ -620,9 +653,15 @@
           return true;
         }
 
+        if (typeof startFiveMinuteDrill === "function") {
+          startFiveMinuteDrill();
+          return true;
+        }
+
         return false;
       } catch (e) {
         console.warn("[RAIL] startFiveMinDrillFromRail failed", e);
+        window.showToast?.("Could not start 5-Min Drill.");
         return false;
       }
     }
@@ -630,7 +669,7 @@
       const btnDrill = document.getElementById("btnRailFiveMinDrill");
       if (btnDrill && !btnDrill.__wired) {
         btnDrill.__wired = true;
-        bindInput(btnDrill, () => {
+        btnDrill.addEventListener("click", () => {
           startFiveMinDrillFromRail?.();
         });
       }
@@ -638,7 +677,7 @@
       const btnBack = document.getElementById("btnRailBackToHome");
       if (btnBack && !btnBack.__wired) {
         btnBack.__wired = true;
-        bindInput(btnBack, () => {
+        btnBack.addEventListener("click", () => {
           goBackToPremiumHome?.();
         });
       }
@@ -647,12 +686,19 @@
       const root = getRailEl("railQuickActions");
       if (!root) return;
 
-      const role = String(window.__BC_CTX__?.membershipRole || window.__BC_CTX__?.role || "").toLowerCase();
-      const showDrill = !["manager", "group_manager", "enterpriser"].includes(role);
+      const role = String(
+        window.__BC_CTX__?.membershipRole ||
+        window.__BC_CTX__?.membership_role ||
+        window.__BC_CTX__?.role ||
+        ""
+      ).toLowerCase();
+      const showFiveMinDrill = true;
+      const activeDrill = getActiveAssignedDrill?.() || null;
+      const fiveMinLabel = activeDrill ? "Resume Drill" : "Start 5-Min Drill";
 
       root.innerHTML = `
         <div style="display:flex; flex-direction:column; gap:8px;">
-          ${showDrill ? '<button id="btnRailFiveMinDrill" type="button" class="btn-ghost">Start 5-Min Drill</button>' : ""}
+          ${showFiveMinDrill ? `<button id="btnRailFiveMinDrill" type="button" class="btn-ghost">${fiveMinLabel}</button>` : ``}
           <button id="btnRailBackToHome" type="button" class="btn-ghost">Back to Premium Home</button>
         </div>
       `;
@@ -662,9 +708,9 @@
     function renderGameplayRail() {
       renderRailActiveChallenge?.();
       renderRailActiveDrill?.();
-      renderRailQuickActions?.();
       renderRailAttributeEffects?.();
       renderRailAreaEffects?.();
+      renderRailQuickActions?.();
     }
     function renderTimedChallengeSurfaces() {
       const host = getTimedChallengeHost();
@@ -2301,13 +2347,6 @@
         </div>
 
         <div class="bc-card bc-rail-card">
-          <div class="bc-rail-title">Quick Actions</div>
-          <div class="bc-rail-body" id="railQuickActions">
-            <div class="small-text" style="opacity:.75;">No quick actions available.</div>
-          </div>
-        </div>
-
-        <div class="bc-card bc-rail-card">
           <div class="bc-rail-title">Attribute Effects</div>
           <div class="bc-rail-body" id="railAttributeEffects">
             <div class="small-text" style="opacity:.75;">No attribute effects loaded.</div>
@@ -2318,6 +2357,16 @@
           <div class="bc-rail-title">Area Effects</div>
           <div class="bc-rail-body" id="railAreaEffects">
             <div class="small-text" style="opacity:.75;">No area effects loaded.</div>
+          </div>
+        </div>
+
+        <div class="bc-card bc-rail-card">
+          <div class="bc-rail-title">Quick Actions</div>
+          <div class="bc-rail-body" id="railQuickActions">
+            <div style="display:flex; flex-direction:column; gap:8px;">
+              <button id="btnRailFiveMinDrill" type="button" class="btn-ghost">Start 5-Min Drill</button>
+              <button id="btnRailBackToHome" type="button" class="btn-ghost">Back to Premium Home</button>
+            </div>
           </div>
         </div>
       </aside>
@@ -6222,10 +6271,8 @@ function ensureProgLoaded() {
           }
 
           if (msg.action === "five_min_rep" || msg.target === "five_min_drill") {
-            const btn = document.getElementById("btnFiveMinDrill");
-            if (btn) { btn.click(); return; }
-            if (typeof startFiveMinDrill === "function") {
-              startFiveMinDrill();
+            if (typeof startFiveMinDrillFromRail === "function") {
+              startFiveMinDrillFromRail();
               return;
             }
             console.warn("[BC] five_min_drill: handler missing");
@@ -15528,6 +15575,11 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         const identity = getGameplayIdentity();
         const isWaiter = !!identity.isWaiter;
 
+        if (btnFiveMinDrill) {
+          btnFiveMinDrill.classList.add("hidden");
+          btnFiveMinDrill.setAttribute("aria-hidden", "true");
+        }
+
         if (isWaiter) {
           ["btnWelcomeBackToSetup", "btnGoSetup", "btnSetupWines"].forEach((id) => {
             document.getElementById(id)?.classList.add("hidden");
@@ -15848,8 +15900,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
       applyDemoUIRestrictions();
       applyDemoHomeUI();
       setTimeout(() => {
-        try { renderRailQuickActions?.(); } catch {}
-        try { wireRailQuickActions?.(); } catch {}
+        try { renderGameplayRail?.(); } catch {}
       }, 0);
       document.addEventListener("DOMContentLoaded", applyDemoHomeUI, { once: true });
       try { wireDrillBack_FIXED(); } catch (e) { console.warn("[DRILL] wireDrillBack_FIXED failed", e); }
