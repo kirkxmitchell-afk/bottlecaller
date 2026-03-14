@@ -585,6 +585,7 @@ document.querySelector("#app").innerHTML = `
                 height="280"
                 style="margin-top:12px;">
               </canvas>
+              <div id="mbPerformanceLegend" style="margin-top:8px;"></div>
             </div>
           </div>
 
@@ -8291,6 +8292,36 @@ async function loadPerformanceHistory(userId) {
   drawPerformanceHistoryChart(data || []);
 }
 
+function renderPerformanceLegend(items = []) {
+  const root = document.getElementById("mbPerformanceLegend");
+  if (!root) return;
+
+  if (!Array.isArray(items) || !items.length) {
+    root.innerHTML = "";
+    return;
+  }
+
+  root.innerHTML = `
+    <div class="card" style="padding:10px;">
+      <div style="font-weight:600; margin-bottom:8px;">Legend</div>
+      <div style="display:flex; flex-wrap:wrap; gap:12px;">
+        ${items.map((item) => `
+          <div style="display:flex; align-items:center; gap:6px;">
+            <span style="
+              display:inline-block;
+              width:12px;
+              height:12px;
+              border-radius:999px;
+              background:${item.color};
+            "></span>
+            <span class="small">${escapeHtml(item.label || "-")}</span>
+          </div>
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+
 function drawPerformanceHistoryChart(rows) {
   const canvas = document.getElementById("mbHistoryChart");
   if (!canvas) return;
@@ -8298,8 +8329,16 @@ function drawPerformanceHistoryChart(rows) {
   const ctx = canvas.getContext("2d");
   const w = canvas.width;
   const h = canvas.height;
+  const skills = [
+    { key: "read_pct", label: "READ", color: "#60a5fa" },
+    { key: "framing_pct", label: "FRAME", color: "#34d399" },
+    { key: "delivery_pct", label: "DELIVER", color: "#f59e0b" },
+    { key: "recovery_pct", label: "RECOVER", color: "#f472b6" },
+    { key: "closing_pct", label: "CLOSE", color: "#a78bfa" }
+  ];
 
   ctx.clearRect(0, 0, w, h);
+  renderPerformanceLegend(skills);
 
   if (!rows.length) {
     ctx.fillStyle = "rgba(255,255,255,0.7)";
@@ -8338,21 +8377,12 @@ function drawPerformanceHistoryChart(rows) {
     ctx.stroke();
   });
 
-  const skills = [
-    { key: "read_pct", label: "READ" },
-    { key: "framing_pct", label: "FRAME" },
-    { key: "delivery_pct", label: "DELIVER" },
-    { key: "recovery_pct", label: "RECOVER" },
-    { key: "closing_pct", label: "CLOSE" }
-  ];
-
   const xStep = rows.length > 1 ? plotW / (rows.length - 1) : plotW / 2;
 
-  skills.forEach((skill, skillIndex) => {
+  skills.forEach((skill) => {
     ctx.beginPath();
     ctx.lineWidth = 2;
-    const alpha = 0.95 - skillIndex * 0.12;
-    ctx.strokeStyle = `rgba(255,255,255,${Math.max(alpha, 0.28)})`;
+    ctx.strokeStyle = skill.color;
 
     rows.forEach((r, i) => {
       const pct = Math.max(0, Math.min(100, Number(r?.[skill.key] || 0)));
@@ -8364,12 +8394,6 @@ function drawPerformanceHistoryChart(rows) {
     });
 
     ctx.stroke();
-  });
-
-  ctx.fillStyle = "rgba(255,255,255,0.8)";
-  ctx.font = "11px sans-serif";
-  skills.forEach((s, i) => {
-    ctx.fillText(s.label, padL + i * 70, 12);
   });
 }
 
