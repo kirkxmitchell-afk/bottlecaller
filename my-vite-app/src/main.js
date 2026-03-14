@@ -267,11 +267,8 @@ document.querySelector("#app").innerHTML = `
         <div class="row">
           <button id="btnOpenHud" class="btn-ghost" type="button">Menu</button>
           <button id="btnOpenMessages" class="btn-ghost" type="button">Messages</button>
-
           <button id="btnManagerBoard" class="btn-ghost" type="button">Manager Board</button>
-          <button id="btnGoSetupPremium" class="btn-ghost" type="button">Setup</button>
-          <button id="btnFiveMinRep" class="btn-ghost" type="button">5-Min Rep</button>
-
+          <button id="btnOpenProfile" class="btn-ghost" type="button">Profile</button>
           <button id="btnLogoutPremium" class="btn-danger" type="button">Logout</button>
         </div>
       </div>
@@ -299,6 +296,31 @@ document.querySelector("#app").innerHTML = `
 
       <!-- Game lives here (isolated) -->
       <div id="premiumRoot"></div>
+    </div>
+  </section>
+
+  <section id="screenProfile" class="screen hidden">
+    <div class="panel stack">
+      <div class="topbar">
+        <div class="brand">
+          <h2>Profile</h2>
+          <span class="badge">PREMIUM</span>
+        </div>
+        <div class="row">
+          <button id="btnBackFromProfile" class="btn-ghost" type="button">Back</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="score-row">Display name: <span id="profileDisplayName">-</span></div>
+        <div class="score-row">Role: <span id="profileRole">-</span></div>
+        <div class="score-row">Restaurant: <span id="profileRestaurant">-</span></div>
+        <div class="score-row">Scope type: <span id="profileScopeType">-</span></div>
+        <div class="score-row">Scope id: <span id="profileScopeId">-</span></div>
+        <div class="score-row">Access tier: <span id="profileAccessTier">-</span></div>
+      </div>
+
+      <div id="profileMultiRestaurantCard" style="margin-top:12px;"></div>
     </div>
   </section>
 
@@ -386,13 +408,12 @@ document.querySelector("#app").innerHTML = `
 
       <div id="mbMenu" class="card" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
         <button class="btn" type="button" data-mbtab="overview">Overview</button>
-        <button class="btn" type="button" data-mbtab="staff">Staff</button>
-        <button class="btn" type="button" data-mbtab="insights">Insights</button>
+        <button class="btn" type="button" data-mbtab="people">People</button>
         <button class="btn" type="button" data-mbtab="messenger">Messenger</button>
-        <button class="btn" type="button" data-mbtab="attribute_abilities">Attribute Abilities</button>
-        <button class="btn" type="button" data-mbtab="area_abilities">Area Abilities</button>
+        <button class="btn" type="button" data-mbtab="live_controls">Live Controls</button>
+        <button class="btn" type="button" data-mbtab="performance">Performance</button>
         <button class="btn" type="button" data-mbtab="billing">Listing</button>
-        <button class="btn" type="button" data-mbtab="history">Performance</button>
+        <button class="btn hidden" type="button" data-mbtab="enterprise" id="mbEnterpriseTabBtn">Enterprise</button>
         <select id="mbRestaurantPicker" class="hidden input" style="margin-left:auto; min-width:220px;"></select>
       </div>
 
@@ -408,69 +429,33 @@ document.querySelector("#app").innerHTML = `
           <div id="mbGroupOverviewCard" style="margin-top:12px;"></div>
           <div id="mbGroupMetricsCard" style="margin-top:12px;"></div>
           <div id="mbGroupRestaurantComparisonCard" style="margin-top:12px;"></div>
-          <div id="mbOverviewLiveEffects" style="margin-top:12px;"></div>
           <div id="mbOverviewTimedChallenge" style="margin-top:12px;"></div>
           <div id="mbOverviewRecentChallenges" style="margin-top:12px;"></div>
           <div id="mbInviteSummary" style="margin-top:12px;"></div>
-
-          <div class="card" style="margin-top:12px;">
-            <strong>This Week (Auto Summary)</strong>
-            <div id="mbWeeklySummaryTop" class="small-text" style="margin-top:8px; opacity:.9;">
-              Loading…
-            </div>
-          </div>
-
-          <div style="margin-top:12px;">
-            <div style="font-weight:600; margin-bottom:6px;">Best streaks</div>
-            <div id="mbBestStreaks" style="opacity:.9;">-</div>
-          </div>
-
-          <div style="margin-top:12px;">
-            <div style="font-weight:600; margin-bottom:6px;">Needs coaching</div>
-            <div id="mbNeedsCoaching" style="opacity:.9;">-</div>
-          </div>
-
-          <div class="card">
-            <h3 style="margin:0 0 8px 0;">Recent activity</h3>
-            <div id="mbRecent" class="small" style="opacity:.9;">Loading…</div>
-          </div>
-
-          <div class="card" style="margin-top:12px;">
-            <strong>Top Performers</strong>
-
-            <div class="small-text" style="margin-top:6px; opacity:.85;">
-              Average skill score based on recent encounters.
-            </div>
-
-            <div id="mbLeaderboard" style="margin-top:10px;"></div>
-          </div>
-
-          <div class="card" style="margin-top:12px;">
-            <strong>Weekly Training Report</strong>
-
-            <div class="small-text" style="margin-top:6px; opacity:.85;">
-              Summary of team progress over the last 7 days.
-            </div>
-
-            <div id="mbWeeklyReport" style="margin-top:10px;">
-              <div class="small-text" style="opacity:.7;">Loading report…</div>
-            </div>
-          </div>
-
-          <div class="card" id="mbMembersCard" style="margin-top:12px;">
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-              <strong>Members</strong>
-              <button id="mbRefreshMembers" class="btn" type="button">Refresh</button>
-            </div>
-            <div id="mbMembersMsg" class="small-text" style="margin-top:6px;"></div>
-            <div id="mbMembersList" style="margin-top:10px; display:flex; flex-direction:column; gap:8px;"></div>
-          </div>
+          <div id="mbDrillSummary" style="margin-top:12px;"></div>
         </div>
 
-        <div id="mbTab_staff" class="mbTab hidden"></div>
-        <div id="mbTab_insights" class="mbTab hidden"></div>
-        <div id="mbTab_attribute_abilities" class="mbTab hidden"></div>
-        <div id="mbTab_area_abilities" class="mbTab hidden"></div>
+        <div id="mbTab_people" class="mbTab hidden">
+          <div id="mbPeopleSummary" style="margin-top:12px;"></div>
+          <div id="mbInvitesPanel" style="margin-top:12px;">
+            <div class="card" style="padding:12px;">
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                <strong>Invites</strong>
+              </div>
+              <div id="invitesList" style="margin-top:10px;"></div>
+            </div>
+          </div>
+          <div id="mbStaffPanel" style="margin-top:12px;">
+            <div class="card" id="mbMembersCard" style="margin-top:12px;">
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                <strong>Members</strong>
+                <button id="mbRefreshMembers" class="btn" type="button">Refresh</button>
+              </div>
+              <div id="mbMembersMsg" class="small-text" style="margin-top:6px;"></div>
+              <div id="mbMembersList" style="margin-top:10px; display:flex; flex-direction:column; gap:8px;"></div>
+            </div>
+          </div>
+        </div>
         <div id="mbTab_messenger" class="mbTab hidden">
           <div class="card" style="margin-top:12px;">
             <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
@@ -556,7 +541,7 @@ document.querySelector("#app").innerHTML = `
                     <div id="mbSuggestedPrompts" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;"></div>
                   </div>
 
-                  <div id="mbDrillSummary" class="small-text" style="opacity:.85;"></div>
+                  <div id="mbThreadDrillSummary" class="small-text" style="opacity:.85;"></div>
 
                   <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
                     <button id="mbInstrRunDrill" class="btn-ghost" type="button">Run Drill</button>
@@ -574,6 +559,76 @@ document.querySelector("#app").innerHTML = `
                   <div class="small-text" id="mbInstrStatus" style="opacity:.85;"></div>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="mbTab_live_controls" class="mbTab hidden">
+          <div id="mbOverviewLiveEffects" style="margin-top:12px;"></div>
+          <div id="mbAttributeAbilitiesPanel" style="margin-top:12px;"></div>
+          <div id="mbAreaAbilitiesPanel" style="margin-top:12px;"></div>
+          <div id="mbDrillQuickActionsPanel" style="margin-top:12px;"></div>
+          <div id="mbTimedChallengeQuickActionsPanel" style="margin-top:12px;"></div>
+        </div>
+
+        <div id="mbTab_performance" class="mbTab hidden">
+          <div id="mbInsightsPanel" style="margin-top:12px;"></div>
+          <div id="mbPerformanceHistoryPanel" style="margin-top:12px;">
+            <div class="card">
+              <strong>Performance History</strong>
+              <div class="small-text" style="margin-top:6px; opacity:.85;">
+                Skill growth over time.
+              </div>
+              <select id="mbHistoryUser" class="input" style="margin-top:10px;"></select>
+              <canvas id="mbHistoryChart"
+                width="600"
+                height="280"
+                style="margin-top:12px;">
+              </canvas>
+            </div>
+          </div>
+
+          <div class="card" style="margin-top:12px;">
+            <strong>This Week (Auto Summary)</strong>
+            <div id="mbWeeklySummaryTop" class="small-text" style="margin-top:8px; opacity:.9;">
+              Loading…
+            </div>
+          </div>
+
+          <div style="margin-top:12px;">
+            <div style="font-weight:600; margin-bottom:6px;">Best streaks</div>
+            <div id="mbBestStreaks" style="opacity:.9;">-</div>
+          </div>
+
+          <div style="margin-top:12px;">
+            <div style="font-weight:600; margin-bottom:6px;">Needs coaching</div>
+            <div id="mbNeedsCoaching" style="opacity:.9;">-</div>
+          </div>
+
+          <div class="card">
+            <h3 style="margin:0 0 8px 0;">Recent activity</h3>
+            <div id="mbRecent" class="small" style="opacity:.9;">Loading…</div>
+          </div>
+
+          <div class="card" style="margin-top:12px;">
+            <strong>Top Performers</strong>
+
+            <div class="small-text" style="margin-top:6px; opacity:.85;">
+              Average skill score based on recent encounters.
+            </div>
+
+            <div id="mbLeaderboard" style="margin-top:10px;"></div>
+          </div>
+
+          <div class="card" style="margin-top:12px;">
+            <strong>Weekly Training Report</strong>
+
+            <div class="small-text" style="margin-top:6px; opacity:.85;">
+              Summary of team progress over the last 7 days.
+            </div>
+
+            <div id="mbWeeklyReport" style="margin-top:10px;">
+              <div class="small-text" style="opacity:.7;">Loading report…</div>
             </div>
           </div>
         </div>
@@ -598,18 +653,14 @@ document.querySelector("#app").innerHTML = `
           </div>
         </div>
 
-        <div id="mbTab_history" class="mbTab hidden">
-          <div class="card">
-            <strong>Performance History</strong>
-            <div class="small-text" style="margin-top:6px; opacity:.85;">
-              Skill growth over time.
+        <div id="mbTab_enterprise" class="mbTab hidden">
+          <div id="mbEnterprisePanel" style="margin-top:12px;">
+            <div class="card" style="padding:12px;">
+              <div style="font-weight:600;">Enterprise</div>
+              <div class="small-text" style="margin-top:8px; opacity:.8;">
+                Enterprise-level controls will appear here for enterpriser roles.
+              </div>
             </div>
-            <select id="mbHistoryUser" class="input" style="margin-top:10px;"></select>
-            <canvas id="mbHistoryChart"
-              width="600"
-              height="280"
-              style="margin-top:12px;">
-            </canvas>
           </div>
         </div>
 
@@ -2820,10 +2871,8 @@ function renderManagerBoardAbilitiesTab(family, targetId) {
 
 function renderManagerBoardAbilityTabs() {
   renderManagerBoardOverviewLiveEffects();
-  renderManagerBoardOverviewTimedChallenge();
-  renderManagerBoardRecentChallenges();
-  renderManagerBoardAbilitiesTab("attribute", "mbTab_attribute_abilities");
-  renderManagerBoardAbilitiesTab("area", "mbTab_area_abilities");
+  renderManagerBoardAbilitiesTab("attribute", "mbAttributeAbilitiesPanel");
+  renderManagerBoardAbilitiesTab("area", "mbAreaAbilitiesPanel");
 }
 
 function tickManagerBoardAbilities() {
@@ -2836,22 +2885,21 @@ function tickManagerBoardAbilities() {
 
     const overview = document.getElementById("mbTab_overview");
     const messenger = document.getElementById("mbTab_messenger");
-    const attr = document.getElementById("mbTab_attribute_abilities");
-    const area = document.getElementById("mbTab_area_abilities");
+    const liveControls = document.getElementById("mbTab_live_controls");
     const overviewVisible = overview && !overview.classList.contains("hidden");
     const messengerVisible = messenger && !messenger.classList.contains("hidden");
-    const attrVisible = attr && !attr.classList.contains("hidden");
-    const areaVisible = area && !area.classList.contains("hidden");
+    const liveControlsVisible = liveControls && !liveControls.classList.contains("hidden");
 
     if (overviewVisible) {
-      renderManagerBoardOverviewLiveEffects();
       renderManagerBoardOverviewTimedChallenge();
       renderManagerBoardRecentChallenges();
+      renderManagerDrillSummary();
     }
     if (messengerVisible) {
       renderTimedChallengeRecentSummary();
+      renderManagerDrillSummary();
     }
-    if (attrVisible || areaVisible) {
+    if (liveControlsVisible) {
       renderManagerBoardAbilityTabs();
     }
   }, 1000);
@@ -4996,58 +5044,26 @@ function sendPremiumNav(action) {
 }
 
 function wireParentButtons() {
-  const btnSetup = document.getElementById("btnGoSetupPremium");
   const btnManagerBoard = document.getElementById("btnManagerBoard");
-  const btnFiveMinRep = document.getElementById("btnFiveMinRep");
+  const btnOpenProfile = document.getElementById("btnOpenProfile");
   const btnOpenMessages = document.getElementById("btnOpenMessages");
-
-  if (btnSetup && !btnSetup.__bcBound) {
-    btnSetup.__bcBound = true;
-    btnSetup.addEventListener("click", () => {
-      const caps = getPremiumRoleCapabilities(appState?.profile);
-      if (!caps.canOpenSetupPremium) return;
-      showScreen("screenPremiumApp");
-      postToGame("nav", { target: "setup_premium" });
-    });
-  }
 
   if (btnManagerBoard && !btnManagerBoard.__bcBound) {
     btnManagerBoard.__bcBound = true;
     btnManagerBoard.addEventListener("click", () => {
       const caps = getPremiumRoleCapabilities(appState?.profile);
       if (!caps.canAccessManagerBoard) return;
-      showScreen("screenManagerBoard");
-      wireManagerBoardMenu?.();
-      loadManagerBoardData?.();
+      routeManagerBoard?.("nav_button");
     });
   }
 
-  if (btnFiveMinRep && !btnFiveMinRep.__bcBound) {
-    btnFiveMinRep.__bcBound = true;
-    btnFiveMinRep.addEventListener("click", async () => {
-      const roleNow = String(appState?.profile?.role || "").toLowerCase();
-      const isWaiter = roleNow === "waiter";
-      const drill = window.__BC_DRILL_CONFIG__ || window.BC_DRILL_CONFIG || null;
-
-      showScreen("screenPremiumApp");
-
-      const backTo = isWaiter ? "screenPremiumApp" : "screenManagerBoard";
-      mountPremiumGameIframe({ showBack: true, backTo });
-
-      postToGameAfterLoad({
-        type: "drill_config",
-        drill: drill || null
-      });
-
-      postToGameAfterLoad({
-        type: "start_drill",
-        repTarget: drill?.repTarget ?? 3,
-        focus: drill?.focus ?? "read",
-        pool: drill?.pool ?? ["decider", "bargain_smart", "griever"],
-        durationSec: drill?.durationSec ?? 300,
-        tier: drill?.tier ?? 1,
-        mode: "premium"
-      });
+  if (btnOpenProfile && !btnOpenProfile.__bcBound) {
+    btnOpenProfile.__bcBound = true;
+    btnOpenProfile.addEventListener("click", async () => {
+      await loadAuthedState?.("openProfile");
+      await ensureManagerRestaurantChoices?.();
+      renderProfileScreen();
+      showScreen("screenProfile");
     });
   }
 
@@ -6172,26 +6188,46 @@ function wireManagerBoardBillingAccess() {
   loadManagerBoardSeats();
 }
 
+function normalizeManagerBoardTab(tabLike) {
+  const raw = String(tabLike || "overview").toLowerCase();
+  const aliases = {
+    staff: "people",
+    history: "performance",
+    insights: "performance",
+    attribute_abilities: "live_controls",
+    area_abilities: "live_controls",
+  };
+  return aliases[raw] || raw;
+}
+
 function wireManagerBoardMenu() {
   const menu = document.getElementById("mbMenu");
   if (!menu || menu.__bcBound) return;
   menu.__bcBound = true;
+  window.__BC_MB_NORMALIZETAB__ = normalizeManagerBoardTab;
 
   function showTab(name) {
+    const normalized = normalizeManagerBoardTab(name);
     document.querySelectorAll("#mbPanels .mbTab").forEach((el) => el.classList.add("hidden"));
-    document.getElementById(`mbTab_${name}`)?.classList.remove("hidden");
+    document.getElementById(`mbTab_${normalized}`)?.classList.remove("hidden");
   }
   window.__BC_MB_SHOWTAB__ = showTab;
   window.__BC_MB_LOADTAB__ = async function(name) {
-    if (!name) return;
-    if (name === "overview") {
+    const normalized = normalizeManagerBoardTab(name);
+    if (!normalized) return;
+    if (normalized === "overview") {
       await loadManagerBoardData();
       await loadWeeklySummaryTop();
       return;
     }
-    if (name === "billing") return loadManagerBoardSeats?.();
-    if (name === "insights") return loadManagerInsights();
-    if (name === "history") {
+    if (normalized === "people") {
+      await loadManagerBoardData();
+      renderManagerPeopleSummary();
+      return;
+    }
+    if (normalized === "billing") return loadManagerBoardSeats?.();
+    if (normalized === "performance") {
+      await loadManagerInsights();
       await loadHistoryWaiters();
       const select = document.getElementById("mbHistoryUser");
       if (select && !select.__wired) {
@@ -6205,12 +6241,12 @@ function wireManagerBoardMenu() {
       }
       return;
     }
-    if (name === "messenger") {
+    if (normalized === "messenger") {
       renderTimedChallengeComposer();
       wireManagerBoardMessenger();
       return loadManagerMessenger();
     }
-    if (name === "attribute_abilities" || name === "area_abilities") {
+    if (normalized === "live_controls") {
       renderManagerBoardAbilityTabs();
       return;
     }
@@ -6219,7 +6255,7 @@ function wireManagerBoardMenu() {
   menu.addEventListener("click", async (e) => {
     const btn = e.target?.closest?.("[data-mbtab]");
     if (!btn) return;
-    const tab = btn.getAttribute("data-mbtab");
+    const tab = normalizeManagerBoardTab(btn.getAttribute("data-mbtab"));
 
     showTab(tab);
 
@@ -6227,9 +6263,13 @@ function wireManagerBoardMenu() {
       await loadManagerBoardData();
       await loadWeeklySummaryTop();
     }
+    if (tab === "people") {
+      await loadManagerBoardData();
+      renderManagerPeopleSummary();
+    }
     if (tab === "billing") await loadManagerBoardSeats?.();
-    if (tab === "insights") await loadManagerInsights();
-    if (tab === "history") {
+    if (tab === "performance") {
+      await loadManagerInsights();
       await loadHistoryWaiters();
 
       const select = document.getElementById("mbHistoryUser");
@@ -6250,7 +6290,7 @@ function wireManagerBoardMenu() {
       wireManagerBoardMessenger();
       await loadManagerMessenger();
     }
-    if (tab === "attribute_abilities" || tab === "area_abilities") {
+    if (tab === "live_controls") {
       renderManagerBoardAbilityTabs();
     }
   });
@@ -6729,23 +6769,20 @@ function applyManagerBoardVisibility() {
   const profile = appState.profile || {};
   const caps = getPremiumRoleCapabilities(profile);
 
-  const listingBtn = document.querySelector('#mbMenu [data-mbtab="listing"]');
-  if (listingBtn) listingBtn.style.display = "";
   const billingBtn = document.querySelector('#mbMenu [data-mbtab="billing"]');
   if (billingBtn) billingBtn.style.display = "";
-  const provisionBtn = document.querySelector('#mbMenu [data-mbtab="provision"]');
-  if (provisionBtn) {
-    provisionBtn.style.display = caps.canUseEnterpriseControls ? "" : "none";
-  }
-
-  const multiRestaurantBtn = document.querySelector('#mbMenu [data-mbtab="restaurants"]');
-  if (multiRestaurantBtn) {
-    multiRestaurantBtn.style.display = caps.canManageMultipleRestaurants ? "" : "none";
-  }
-
+  const peopleBtn = document.querySelector('#mbMenu [data-mbtab="people"]');
+  if (peopleBtn) peopleBtn.style.display = "";
+  const messengerBtn = document.querySelector('#mbMenu [data-mbtab="messenger"]');
+  if (messengerBtn) messengerBtn.style.display = "";
+  const liveControlsBtn = document.querySelector('#mbMenu [data-mbtab="live_controls"]');
+  if (liveControlsBtn) liveControlsBtn.style.display = "";
+  const performanceBtn = document.querySelector('#mbMenu [data-mbtab="performance"]');
+  if (performanceBtn) performanceBtn.style.display = "";
   const enterpriseBtn = document.querySelector('#mbMenu [data-mbtab="enterprise"]');
   if (enterpriseBtn) {
     enterpriseBtn.style.display = caps.canUseEnterpriseControls ? "" : "none";
+    enterpriseBtn.classList.toggle("hidden", !caps.canUseEnterpriseControls);
   }
 }
 
@@ -6830,7 +6867,7 @@ function userLabel(userId, nameMap) {
 }
 
 function ensureInsightsShell() {
-  const host = document.getElementById("mbTab_insights");
+  const host = document.getElementById("mbInsightsPanel");
   if (!host) return null;
 
   if (!host.__bcInit) {
@@ -8623,9 +8660,6 @@ function renderManagerThreadRecommendation(thread) {
 }
 
 function renderManagerDrillSummary() {
-  const root = mbEl("mbDrillSummary");
-  if (!root) return;
-
   const lastAssigned = getRecentDrillAssignedRow();
   const lastCompleted = getRecentDrillCompletedRow();
 
@@ -8654,10 +8688,118 @@ function renderManagerDrillSummary() {
       })()
     : "None";
 
-  root.innerHTML = `
+  const summaryHtml = `
     <div><b>Last assigned:</b> ${escapeHtml(assignedText)}</div>
     <div style="margin-top:4px;"><b>Last completed:</b> ${escapeHtml(completedText)}</div>
   `;
+
+  const overviewRoot = mbEl("mbDrillSummary");
+  if (overviewRoot) {
+    overviewRoot.innerHTML = `
+      <div class="card" style="display:flex; flex-direction:column; gap:8px; padding:12px;">
+        <div style="font-weight:600;">Drill Summary</div>
+        ${summaryHtml}
+      </div>
+    `;
+  }
+
+  const messengerRoot = mbEl("mbThreadDrillSummary");
+  if (messengerRoot) messengerRoot.innerHTML = summaryHtml;
+}
+
+function renderManagerPeopleSummary() {
+  const root = document.getElementById("mbPeopleSummary");
+  if (!root) return;
+
+  const rows = Array.isArray(window.__BC_MB_STAFF_ROWS__) ? window.__BC_MB_STAFF_ROWS__ : [];
+  const waiters = rows.filter((row) => normalizeMembershipRole(row) === "waiter").length;
+  const managers = rows.length - waiters;
+  const invites = getManagerBoardInvites();
+  const pendingInvites = invites.filter((row) => String(row?.status || "") === "pending").length;
+
+  root.innerHTML = `
+    <div class="card" style="display:flex; flex-direction:column; gap:8px; padding:12px;">
+      <div style="font-weight:600;">People</div>
+      <div><b>Members:</b> ${rows.length}</div>
+      <div><b>Waiters:</b> ${waiters}</div>
+      <div><b>Managers:</b> ${managers}</div>
+      <div><b>Pending invites:</b> ${pendingInvites}</div>
+    </div>
+  `;
+}
+
+function renderManagerLiveControlPanels() {
+  const drillRoot = document.getElementById("mbDrillQuickActionsPanel");
+  if (drillRoot) {
+    drillRoot.innerHTML = `
+      <div class="card" style="display:flex; flex-direction:column; gap:8px; padding:12px;">
+        <div style="font-weight:600;">Drill Quick Actions</div>
+        <div class="small-text" style="opacity:.8;">
+          Use Messenger drill controls to assign focused drills to a waiter in the active restaurant.
+        </div>
+      </div>
+    `;
+  }
+
+  const challengeRoot = document.getElementById("mbTimedChallengeQuickActionsPanel");
+  if (challengeRoot) {
+    challengeRoot.innerHTML = `
+      <div class="card" style="display:flex; flex-direction:column; gap:8px; padding:12px;">
+        <div style="font-weight:600;">Timed Challenge Quick Actions</div>
+        <div class="small-text" style="opacity:.8;">
+          Use Messenger timed challenge controls to target a waiter in the active restaurant context.
+        </div>
+      </div>
+    `;
+  }
+}
+
+function renderProfileScreen() {
+  const profile = appState?.profile || {};
+  const restaurant = appState?.restaurant || {};
+  const roleLabel = getDisplayRoleLabel(profile);
+
+  const displayNameEl = document.getElementById("profileDisplayName");
+  const roleEl = document.getElementById("profileRole");
+  const restaurantEl = document.getElementById("profileRestaurant");
+  const scopeTypeEl = document.getElementById("profileScopeType");
+  const scopeIdEl = document.getElementById("profileScopeId");
+  const accessTierEl = document.getElementById("profileAccessTier");
+
+  if (displayNameEl) {
+    displayNameEl.textContent =
+      profile?.display_name ||
+      profile?.displayName ||
+      appState?.session?.user?.email ||
+      "-";
+  }
+
+  if (roleEl) roleEl.textContent = roleLabel || "-";
+  if (restaurantEl) restaurantEl.textContent = restaurant?.name || restaurant?.id || "-";
+  if (scopeTypeEl) scopeTypeEl.textContent = profile?.scope_type || profile?.scopeType || "-";
+  if (scopeIdEl) scopeIdEl.textContent = profile?.scope_id || profile?.scopeId || "-";
+  if (accessTierEl) accessTierEl.textContent = profile?.access_tier || profile?.accessTier || "-";
+
+  const multiCard = document.getElementById("profileMultiRestaurantCard");
+  if (multiCard) {
+    const caps = getPremiumRoleCapabilities(profile);
+
+    if (!caps.canManageMultipleRestaurants) {
+      multiCard.innerHTML = "";
+    } else {
+      const rows = getAllowedRestaurantRows?.() || [];
+      multiCard.innerHTML = `
+        <div class="card">
+          <div style="font-weight:600; margin-bottom:8px;">Managed Restaurants</div>
+          ${
+            rows.length
+              ? rows.map((row) => `<div class="small">${escapeHtml(row?.name || row?.id || "-")}</div>`).join("")
+              : `<div class="small" style="opacity:.75;">No restaurant scope loaded.</div>`
+          }
+        </div>
+      `;
+    }
+  }
 }
 
 function renderManagerActiveThread(nameMap) {
@@ -9238,7 +9380,7 @@ function wireManagerBoardMessenger() {
 }
 
 async function loadManagerBoardMembers() {
-  const rid = window.appState?.activeRestaurantId || window.appState?.profile?.restaurant_id || null;
+  const rid = getManagerActiveRestaurantId() || window.appState?.profile?.restaurant_id || null;
   const box = document.getElementById("mbMembersList");
   const msg = document.getElementById("mbMembersMsg");
   if (!box || !msg) return;
@@ -9290,6 +9432,7 @@ async function loadManagerBoardMembers() {
 
   box.innerHTML = rows.join("") || `<div class="small-text">No members found.</div>`;
   msg.textContent = `${(data || []).length} member(s) loaded.`;
+  renderManagerPeopleSummary();
   renderTimedChallengeTargetOptions();
 }
 
@@ -10652,12 +10795,17 @@ async function refreshManagerBoardScopedViews(restaurantId = null) {
   renderGroupMetricsCard?.();
   renderGroupRestaurantComparisonCard?.();
   wireGroupRestaurantComparisonCard?.();
+  renderManagerPeopleSummary?.();
   renderInvitesList?.();
   renderManagerBoardInviteSummary?.();
+  renderManagerBoardOverviewLiveEffects?.();
+  renderManagerBoardAbilityTabs?.();
   renderManagerBoardOverviewTimedChallenge?.();
   renderManagerBoardRecentChallenges?.();
   renderTimedChallengeRecentSummary?.();
   renderManagerDrillSummary?.();
+  renderManagerLiveControlPanels?.();
+  renderProfileScreen?.();
   renderHud?.();
 }
 
@@ -11432,6 +11580,12 @@ document.getElementById("btnCloseHud")?.addEventListener("click", () => {
 document.getElementById("hudBackdrop")?.addEventListener("click", closeHud);
 document.getElementById("btnBackToPremium")?.addEventListener("click", () => {
   showScreen("screenPremiumApp");
+});
+document.getElementById("btnBackFromProfile")?.addEventListener("click", () => {
+  showScreen("screenPremiumApp");
+});
+document.getElementById("btnLogoutProfile")?.addEventListener("click", async () => {
+  await doLogout("profile_logout");
 });
 
 document.getElementById("btnCopyHudCode").addEventListener("click", async () => {

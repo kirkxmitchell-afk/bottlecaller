@@ -232,11 +232,218 @@
         return window;
       }
     }
+    function getRailEl(id) {
+      return document.getElementById(id);
+    }
     function getActiveTimedChallenge() {
       return window.__BC_ACTIVE_TIMED_CHALLENGE__ || getTimedChallengeHost().__BC_ACTIVE_TIMED_CHALLENGE__ || null;
     }
+    function getLastTimedChallengeStatus() {
+      return window.__BC_LAST_TIMED_CHALLENGE_STATUS__ || null;
+    }
     function getLastTimedChallengeResult() {
       return window.__BC_LAST_TIMED_CHALLENGE_RESULT__ || getTimedChallengeHost().__BC_LAST_TIMED_CHALLENGE_RESULT__ || null;
+    }
+    function getActiveAssignedDrill() {
+      return window.__BC_LAST_ASSIGNED_DRILL__ || null;
+    }
+    function getLastDrillCompletionStatus() {
+      return window.__BC_LAST_DRILL_COMPLETION_STATUS__ || null;
+    }
+    function getAttributeEffectsState() {
+      const explicit = window.__BC_ATTRIBUTE_EFFECTS__ || [];
+      if (Array.isArray(explicit) && explicit.length) return explicit;
+      try {
+        return (typeof getActiveAbilities === "function" ? getActiveAbilities() : [])
+          .filter((effect) => String(effect?.family || "") === "attribute");
+      } catch {
+        return [];
+      }
+    }
+    function getAreaEffectsState() {
+      const explicit = window.__BC_AREA_EFFECTS__ || [];
+      if (Array.isArray(explicit) && explicit.length) return explicit;
+      try {
+        return (typeof getActiveAbilities === "function" ? getActiveAbilities() : [])
+          .filter((effect) => String(effect?.family || "") === "area");
+      } catch {
+        return [];
+      }
+    }
+    function renderRailActiveChallenge() {
+      const root = getRailEl("railActiveChallenge");
+      if (!root) return;
+
+      const active = getActiveTimedChallenge();
+      const status = getLastTimedChallengeStatus();
+
+      if (!active) {
+        if (status?.ok === false) {
+          root.innerHTML = `
+            <div class="small-text" style="opacity:.9;">
+              Last challenge result failed to send.
+            </div>
+            <div class="small-text" style="opacity:.7; margin-top:6px;">
+              Error: ${escapeHtml(String(status?.error || "unknown"))}
+            </div>
+          `;
+          return;
+        }
+
+        if (status?.expired) {
+          root.innerHTML = `
+            <div class="small-text" style="opacity:.9;">Timed challenge expired.</div>
+          `;
+          return;
+        }
+
+        root.innerHTML = `
+          <div class="small-text" style="opacity:.75;">No active challenge.</div>
+        `;
+        return;
+      }
+
+      const title = String(active?.title || active?.label || "Timed Challenge");
+      const body = String(active?.body || active?.description || active?.instruction || "");
+      const durationSec = Number(active?.durationSec || active?.duration_sec || 0);
+      const startedAt = Number(active?.startedAt || active?.started_at || 0);
+      const elapsedSec = startedAt ? Math.max(0, Math.floor((Date.now() - startedAt) / 1000)) : 0;
+      const remainingSec = durationSec ? Math.max(0, durationSec - elapsedSec) : 0;
+      const mins = Math.floor(remainingSec / 60);
+      const secs = remainingSec % 60;
+
+      root.innerHTML = `
+        <div style="font-weight:600;">${escapeHtml(title)}</div>
+        <div class="small-text" style="margin-top:6px; opacity:.9;">
+          ${escapeHtml(body || "Complete the challenge objective in the current encounter.")}
+        </div>
+        <div class="small-text" style="margin-top:8px; opacity:.85;">
+          Time left: ${escapeHtml(`${mins}m ${secs}s`)}
+        </div>
+      `;
+    }
+    function renderRailActiveDrill() {
+      const root = getRailEl("railActiveDrill");
+      if (!root) return;
+
+      const active = getActiveAssignedDrill();
+      const status = getLastDrillCompletionStatus();
+
+      if (!active) {
+        if (status?.ok) {
+          root.innerHTML = `
+            <div class="small-text" style="opacity:.9;">Last drill completion sent ✅</div>
+          `;
+          return;
+        }
+
+        if (status?.ok === false) {
+          root.innerHTML = `
+            <div class="small-text" style="opacity:.9;">Could not send drill completion.</div>
+            <div class="small-text" style="opacity:.7; margin-top:6px;">
+              Error: ${escapeHtml(String(status?.error || "unknown"))}
+            </div>
+          `;
+          return;
+        }
+
+        root.innerHTML = `
+          <div class="small-text" style="opacity:.75;">No active drill.</div>
+        `;
+        return;
+      }
+
+      const drill = active?.drill || active?.payload?.drill || {};
+      const focus = String(drill?.focus || "-");
+      const reps = Number(drill?.repTarget || drill?.rep_target || 0) || "-";
+      const durationSec = Number(drill?.durationSec || drill?.duration_sec || 0) || 0;
+      const mins = durationSec ? Math.floor(durationSec / 60) : 0;
+      const secs = durationSec ? durationSec % 60 : 0;
+
+      root.innerHTML = `
+        <div style="font-weight:600;">Assigned Drill</div>
+        <div class="small-text" style="margin-top:6px; opacity:.9;">
+          Focus: ${escapeHtml(focus)}
+        </div>
+        <div class="small-text" style="opacity:.9;">
+          Reps: ${escapeHtml(String(reps))}
+        </div>
+        <div class="small-text" style="opacity:.9;">
+          Duration: ${escapeHtml(durationSec ? `${mins}m ${secs}s` : "-")}
+        </div>
+      `;
+    }
+    function renderRailAttributeEffects() {
+      const root = getRailEl("railAttributeEffects");
+      if (!root) return;
+
+      const effects = getAttributeEffectsState();
+      if (!Array.isArray(effects) || !effects.length) {
+        root.innerHTML = `
+          <div class="small-text" style="opacity:.75;">No attribute effects loaded.</div>
+        `;
+        return;
+      }
+
+      root.innerHTML = effects.map((effect) => {
+        const name = String(effect?.name || effect?.id || "Effect");
+        const desc = String(effect?.description || effect?.body || "");
+        const active = !!effect?.active;
+
+        return `
+          <div style="
+            padding:8px;
+            border:1px solid rgba(255,255,255,0.10);
+            border-radius:10px;
+            background:${active ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.03)"};
+            margin-bottom:8px;
+          ">
+            <div style="font-weight:600;">${escapeHtml(name)}</div>
+            <div class="small-text" style="margin-top:4px; opacity:.85;">
+              ${escapeHtml(desc || "No description.")}
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+    function renderRailAreaEffects() {
+      const root = getRailEl("railAreaEffects");
+      if (!root) return;
+
+      const effects = getAreaEffectsState();
+      if (!Array.isArray(effects) || !effects.length) {
+        root.innerHTML = `
+          <div class="small-text" style="opacity:.75;">No area effects loaded.</div>
+        `;
+        return;
+      }
+
+      root.innerHTML = effects.map((effect) => {
+        const name = String(effect?.name || effect?.id || "Area Effect");
+        const desc = String(effect?.description || effect?.body || "");
+        const active = !!effect?.active;
+
+        return `
+          <div style="
+            padding:8px;
+            border:1px solid rgba(255,255,255,0.10);
+            border-radius:10px;
+            background:${active ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.03)"};
+            margin-bottom:8px;
+          ">
+            <div style="font-weight:600;">${escapeHtml(name)}</div>
+            <div class="small-text" style="margin-top:4px; opacity:.85;">
+              ${escapeHtml(desc || "No description.")}
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+    function renderGameplayRail() {
+      renderRailActiveChallenge?.();
+      renderRailActiveDrill?.();
+      renderRailAttributeEffects?.();
+      renderRailAreaEffects?.();
     }
     function renderTimedChallengeSurfaces() {
       const host = getTimedChallengeHost();
@@ -300,10 +507,18 @@
 
       window.__BC_LAST_TIMED_CHALLENGE_RESULT__ = result;
       host.__BC_LAST_TIMED_CHALLENGE_RESULT__ = result;
+      window.__BC_LAST_TIMED_CHALLENGE_STATUS__ = {
+        ok: null,
+        error: null,
+        expired: result.status === "expired",
+        status: result.status,
+        at: Date.now(),
+      };
       window.__BC_ACTIVE_TIMED_CHALLENGE__ = null;
       host.__BC_ACTIVE_TIMED_CHALLENGE__ = null;
 
       renderTimedChallengeSurfaces();
+      renderGameplayRail();
 
       if (result.status === "expired") {
         window.showToast?.("Timed challenge expired.");
@@ -385,9 +600,17 @@
 
         window.__BC_ACTIVE_TIMED_CHALLENGE__ = challenge;
         host.__BC_ACTIVE_TIMED_CHALLENGE__ = challenge;
+        window.__BC_LAST_TIMED_CHALLENGE_STATUS__ = {
+          ok: null,
+          error: null,
+          expired: false,
+          status: "active",
+          at: Date.now(),
+        };
 
         console.log("[TIMED CHALLENGE] applied ✅", challenge);
         renderTimedChallengeSurfaces();
+        renderGameplayRail();
         window.showToast?.("Timed manager challenge started ✅");
 
         return true;
@@ -1031,6 +1254,7 @@
           payload: message?.payload || {},
           drill
         };
+        renderGameplayRail();
 
         await logDrillRunStart(drill, messageId);
 
@@ -1124,6 +1348,7 @@
           payload: { drill },
           drill
         };
+        renderGameplayRail();
         await logDrillRunStart(drill, assignedMessageId);
 
         const started = launchAssignedDrill(drill);
@@ -1202,7 +1427,15 @@
           };
           window.__BC_LAST_TIMED_CHALLENGE_RESULT__ = next;
           try { getTimedChallengeHost().__BC_LAST_TIMED_CHALLENGE_RESULT__ = next; } catch {}
+          window.__BC_LAST_TIMED_CHALLENGE_STATUS__ = {
+            ok: !!msg.ok,
+            error: msg.ok ? null : (msg?.error || "unknown"),
+            expired: String(next?.status || "").toLowerCase() === "expired",
+            status: next?.status || null,
+            at: Date.now(),
+          };
           renderTimedChallengeSurfaces();
+          renderGameplayRail();
         }
 
         if (msg.ok) {
@@ -1216,7 +1449,7 @@
         }
         return;
       }
-      if (msg.type === "drill_run_completed_result") {
+        if (msg.type === "drill_run_completed_result") {
         if (msg.ok) {
           window.showToast?.("Drill completion sent ✅");
           window.__BC_LAST_DRILL_COMPLETION_STATUS__ = {
@@ -1245,6 +1478,7 @@
             at: Date.now(),
           };
         }
+        renderGameplayRail();
         return;
       }
     });
@@ -1254,6 +1488,9 @@
     }
     startUnreadMessagesPolling();
     tickTimedChallenge();
+    setTimeout(() => {
+      try { renderGameplayRail?.(); } catch {}
+    }, 0);
     window.submitProgressReport = submitProgressReport;
     window.submitProgressReportToManager = submitProgressReportToManager;
     window.getTierUnlocked = function getTierUnlocked() {
@@ -1747,6 +1984,34 @@
         <div class="bc-card bc-rail-card">
           <div class="bc-rail-title">Progress</div>
           <div class="bc-rail-body" id="railProgress">-</div>
+        </div>
+
+        <div class="bc-card bc-rail-card">
+          <div class="bc-rail-title">Active Challenge</div>
+          <div class="bc-rail-body" id="railActiveChallenge">
+            <div class="small-text" style="opacity:.75;">No active challenge.</div>
+          </div>
+        </div>
+
+        <div class="bc-card bc-rail-card">
+          <div class="bc-rail-title">Active Drill</div>
+          <div class="bc-rail-body" id="railActiveDrill">
+            <div class="small-text" style="opacity:.75;">No active drill.</div>
+          </div>
+        </div>
+
+        <div class="bc-card bc-rail-card">
+          <div class="bc-rail-title">Attribute Effects</div>
+          <div class="bc-rail-body" id="railAttributeEffects">
+            <div class="small-text" style="opacity:.75;">No attribute effects loaded.</div>
+          </div>
+        </div>
+
+        <div class="bc-card bc-rail-card">
+          <div class="bc-rail-title">Area Effects</div>
+          <div class="bc-rail-body" id="railAreaEffects">
+            <div class="small-text" style="opacity:.75;">No area effects loaded.</div>
+          </div>
         </div>
       </aside>
 
@@ -5191,6 +5456,7 @@ function ensureProgLoaded() {
           membership_role: membershipRole || "",
           role: membershipRole || role || ""
         });
+        renderGameplayRail?.();
         exportRuntimeIdentity(window.__BC_CTX__);
         console.log("[BC][POST_EXPORT_DUMP]", window.__BC_RUNTIME_DUMP__?.());
         console.log("[BC][APPLY_CTX][AFTER_EXPORT]", {
