@@ -406,6 +406,8 @@ document.querySelector("#app").innerHTML = `
 
           <div id="mbRestaurantContextCard" style="margin-top:12px;"></div>
           <div id="mbGroupOverviewCard" style="margin-top:12px;"></div>
+          <div id="mbGroupMetricsCard" style="margin-top:12px;"></div>
+          <div id="mbGroupRestaurantComparisonCard" style="margin-top:12px;"></div>
           <div id="mbOverviewLiveEffects" style="margin-top:12px;"></div>
           <div id="mbOverviewTimedChallenge" style="margin-top:12px;"></div>
           <div id="mbOverviewRecentChallenges" style="margin-top:12px;"></div>
@@ -545,7 +547,7 @@ document.querySelector("#app").innerHTML = `
 
                 <div id="mbThreadMessages"
                   style="flex:1; padding:10px; display:flex; flex-direction:column; gap:8px; overflow-y:auto; min-height:280px;">
-                  <div class="small-text" style="opacity:.8;">Select a waiter thread to view messages.</div>
+                  <div class="small-text" style="opacity:.8;">Select a waiter thread in this restaurant to assign a timed challenge.</div>
                 </div>
 
                 <div style="padding:10px; border-top:1px solid rgba(255,255,255,0.10); display:flex; flex-direction:column; gap:10px;">
@@ -6472,6 +6474,232 @@ function renderGroupOverviewCard() {
   `;
 }
 
+function renderGroupMetricsCard() {
+  const root = document.getElementById("mbGroupMetricsCard");
+  if (!root) return;
+
+  const profile = appState?.profile || {};
+  const caps = getPremiumRoleCapabilities(profile);
+
+  if (!caps.canManageMultipleRestaurants) {
+    root.innerHTML = "";
+    return;
+  }
+
+  const metrics = getGroupManagerMetrics();
+
+  root.innerHTML = `
+    <div class="card" style="display:flex; flex-direction:column; gap:8px; padding:12px;">
+      <div style="font-weight:600;">Cross-Restaurant Metrics</div>
+      <div><b>Accessible restaurants:</b> ${metrics.restaurantsCount}</div>
+      <div><b>Pending invites:</b> ${metrics.pendingInvitesCount}</div>
+      <div><b>Recent timed challenge activity:</b> ${metrics.recentTimedChallengesCount}</div>
+      <div><b>Recent drill completions:</b> ${metrics.recentDrillCompletionsCount}</div>
+      <div class="small" style="opacity:.75;">
+        These metrics reflect the current allowed restaurant scope.
+      </div>
+    </div>
+  `;
+}
+
+function renderGroupRestaurantComparisonCard() {
+  const root = document.getElementById("mbGroupRestaurantComparisonCard");
+  if (!root) return;
+
+  const profile = appState?.profile || {};
+  const caps = getPremiumRoleCapabilities(profile);
+
+  if (!caps.canManageMultipleRestaurants) {
+    root.innerHTML = "";
+    return;
+  }
+
+  const rows = getGroupRestaurantComparisonRows();
+
+  if (!rows.length) {
+    root.innerHTML = `
+      <div class="card" style="padding:12px;">
+        <div style="font-weight:600;">Restaurant Comparison</div>
+        <div class="small" style="opacity:.75; margin-top:8px;">
+          No scoped restaurant data available.
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  const inner = rows.map((row) => {
+    return `
+      <div
+        data-mb-restaurant-row="${escapeHtml(row.restaurantId)}"
+        style="
+          padding:10px;
+          border:1px solid rgba(255,255,255,0.10);
+          border-radius:10px;
+          background:${row.isActive ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.03)"};
+        "
+      >
+        <div style="display:flex; justify-content:space-between; gap:8px; align-items:center;">
+          <div style="font-weight:600;">${escapeHtml(row.name)}</div>
+          <div class="small" style="opacity:.75;">${row.isActive ? "ACTIVE" : ""}</div>
+        </div>
+
+        <div class="small" style="opacity:.9; margin-top:6px;">
+          Pending invites: ${row.pendingInvites}
+        </div>
+        <div class="small" style="opacity:.9;">
+          Timed challenge activity: ${row.timedChallengeActivity}
+        </div>
+        <div class="small" style="opacity:.9;">
+          Drill completions: ${row.drillCompletions}
+        </div>
+
+        <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+          <button
+            type="button"
+            data-mb-switch-restaurant="${escapeHtml(row.restaurantId)}"
+            class="btn-ghost"
+          >
+            Open restaurant
+          </button>
+
+          <button
+            type="button"
+            data-mb-open-challenge="${escapeHtml(row.restaurantId)}"
+            class="btn"
+          >
+            Assign challenge
+          </button>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  root.innerHTML = `
+    <div class="card" style="display:flex; flex-direction:column; gap:10px; padding:12px;">
+      <div style="font-weight:600;">Restaurant Comparison</div>
+      <div class="small" style="opacity:.75;">
+        Click a restaurant to switch your active control target.
+      </div>
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        ${inner}
+      </div>
+    </div>
+  `;
+}
+
+function focusTimedChallengeComposer() {
+  const section = document.getElementById("mbTimedChallengeComposer");
+  if (section) {
+    section.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  const firstInput =
+    document.getElementById("mbTimedChallengeTitle") ||
+    document.getElementById("mbTimedChallengeFocus");
+  firstInput?.focus?.();
+}
+
+async function openManagerRestaurantChallengeContext(restaurantId) {
+  const rid = String(restaurantId || "");
+  if (!rid) return false;
+
+  if (!setManagerActiveRestaurantId(rid)) return false;
+
+  const picker = document.getElementById("mbRestaurantPicker");
+  if (picker) picker.value = rid;
+
+  resetManagerBoardScopedState();
+  resetManagerMessengerState();
+
+  try {
+    const restaurant = await loadRestaurant(rid);
+    if (restaurant) appState.restaurant = restaurant;
+  } catch (e) {
+    console.warn("[MB] loadRestaurant before challenge context failed", e);
+  }
+
+  await loadManagerBoardData?.(rid);
+  await refreshManagerBoardScopedViews?.(rid);
+
+  window.__BC_MB_DEFAULTTAB__ = "messenger";
+  window.__BC_MB_SHOWTAB__?.("messenger");
+  await window.__BC_MB_LOADTAB__?.("messenger");
+
+  const status = document.getElementById("mbTimedChallengeStatus");
+  if (status) {
+    status.textContent = `Active restaurant set to ${getAllowedRestaurantName(rid)}. Select a waiter thread to assign a challenge.`;
+  }
+
+  focusTimedChallengeComposer();
+  return true;
+}
+
+function wireGroupRestaurantComparisonCard() {
+  const root = document.getElementById("mbGroupRestaurantComparisonCard");
+  if (!root || root.__wired) return;
+
+  root.__wired = true;
+  root.addEventListener("click", async (event) => {
+    const openChallengeBtn = event.target?.closest?.("[data-mb-open-challenge]");
+    if (openChallengeBtn) {
+      const rid = String(openChallengeBtn.getAttribute("data-mb-open-challenge") || "");
+      if (!rid) return;
+      await openManagerRestaurantChallengeContext(rid);
+      return;
+    }
+
+    const switchBtn = event.target?.closest?.("[data-mb-switch-restaurant]");
+    if (switchBtn) {
+      const rid = String(switchBtn.getAttribute("data-mb-switch-restaurant") || "");
+      if (!rid) return;
+
+      if (!setManagerActiveRestaurantId(rid)) return;
+
+      const picker = document.getElementById("mbRestaurantPicker");
+      if (picker) picker.value = rid;
+
+      resetManagerBoardScopedState();
+      resetManagerMessengerState();
+
+      try {
+        const restaurant = await loadRestaurant(rid);
+        if (restaurant) appState.restaurant = restaurant;
+      } catch (e) {
+        console.warn("[MB] loadRestaurant after comparison switch failed", e);
+      }
+
+      await loadManagerBoardData?.(rid);
+      await refreshManagerBoardScopedViews?.(rid);
+      return;
+    }
+
+    const rowEl = event.target?.closest?.("[data-mb-restaurant-row]");
+    if (!rowEl) return;
+
+    const rid = String(rowEl.getAttribute("data-mb-restaurant-row") || "");
+    if (!rid) return;
+
+    if (!setManagerActiveRestaurantId(rid)) return;
+
+    const picker = document.getElementById("mbRestaurantPicker");
+    if (picker) picker.value = rid;
+
+    resetManagerBoardScopedState();
+    resetManagerMessengerState();
+
+    try {
+      const restaurant = await loadRestaurant(rid);
+      if (restaurant) appState.restaurant = restaurant;
+    } catch (e) {
+      console.warn("[MB] loadRestaurant after comparison row click failed", e);
+    }
+
+    await loadManagerBoardData?.(rid);
+    await refreshManagerBoardScopedViews?.(rid);
+  });
+}
+
 function wireManagerRestaurantPicker() {
   const select = document.getElementById("mbRestaurantPicker");
   if (!select || select.__wired) return;
@@ -7499,6 +7727,8 @@ function resetManagerBoardScopedState() {
   window.__BC_MB_LAST_TIMED_CHALLENGE_RESULT__ = null;
   window.__BC_MB_LAST_DRILL_ASSIGNMENT__ = null;
   window.__BC_MB_LAST_DRILL_COMPLETION__ = null;
+  window.__BC_GROUP_MANAGER_METRICS__ = null;
+  window.__BC_GROUP_RESTAURANT_COMPARISON_ROWS__ = [];
 }
 
 function setManagerBoardInvites(rows) {
@@ -7517,6 +7747,12 @@ function getAllowedRestaurantRows() {
     : [];
 }
 
+function getAllowedRestaurantIds() {
+  return Array.isArray(window.__BC_ALLOWED_RESTAURANT_IDS__)
+    ? window.__BC_ALLOWED_RESTAURANT_IDS__
+    : [];
+}
+
 function getAllowedRestaurantName(restaurantId) {
   const rid = String(restaurantId || "");
   if (!rid) return "-";
@@ -7527,6 +7763,167 @@ function getAllowedRestaurantName(restaurantId) {
   });
 
   return row?.name || row?.restaurant_name || `Restaurant ${rid.slice(0, 8)}`;
+}
+
+function setGroupManagerMetrics(metrics) {
+  window.__BC_GROUP_MANAGER_METRICS__ = metrics || {
+    restaurantsCount: 0,
+    pendingInvitesCount: 0,
+    recentTimedChallengesCount: 0,
+    recentDrillCompletionsCount: 0,
+  };
+}
+
+function getGroupManagerMetrics() {
+  return window.__BC_GROUP_MANAGER_METRICS__ || {
+    restaurantsCount: 0,
+    pendingInvitesCount: 0,
+    recentTimedChallengesCount: 0,
+    recentDrillCompletionsCount: 0,
+  };
+}
+
+function setGroupRestaurantComparisonRows(rows) {
+  window.__BC_GROUP_RESTAURANT_COMPARISON_ROWS__ = Array.isArray(rows) ? rows : [];
+}
+
+function getGroupRestaurantComparisonRows() {
+  return Array.isArray(window.__BC_GROUP_RESTAURANT_COMPARISON_ROWS__)
+    ? window.__BC_GROUP_RESTAURANT_COMPARISON_ROWS__
+    : [];
+}
+
+async function loadGroupManagerMetrics() {
+  const profile = appState?.profile || {};
+  const caps = getPremiumRoleCapabilities(profile);
+
+  if (!caps.canManageMultipleRestaurants) {
+    return {
+      restaurantsCount: 0,
+      pendingInvitesCount: 0,
+      recentTimedChallengesCount: 0,
+      recentDrillCompletionsCount: 0,
+    };
+  }
+
+  const restaurantIds = getAllowedRestaurantIds();
+  if (!restaurantIds.length) {
+    return {
+      restaurantsCount: 0,
+      pendingInvitesCount: 0,
+      recentTimedChallengesCount: 0,
+      recentDrillCompletionsCount: 0,
+    };
+  }
+
+  const sinceIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  const [invitesRes, messagesRes] = await Promise.all([
+    withTimeout(
+      supabase
+        .from("restaurant_invites")
+        .select("restaurant_id,status")
+        .in("restaurant_id", restaurantIds),
+      12000,
+      "groupMetrics.invites"
+    ),
+    withTimeout(
+      supabase
+        .from("bc_messages_v1")
+        .select("restaurant_id,type,created_at")
+        .in("restaurant_id", restaurantIds)
+        .in("type", ["timed_challenge", "timed_challenge_completed", "timed_challenge_expired", "drill_completed"])
+        .gte("created_at", sinceIso),
+      12000,
+      "groupMetrics.messages"
+    ),
+  ]);
+
+  if (invitesRes.error) throw invitesRes.error;
+  if (messagesRes.error) throw messagesRes.error;
+
+  const inviteRows = invitesRes.data || [];
+  const messageRows = messagesRes.data || [];
+
+  return {
+    restaurantsCount: restaurantIds.length,
+    pendingInvitesCount: inviteRows.filter((x) => String(x?.status || "") === "pending").length,
+    recentTimedChallengesCount: messageRows.filter((x) => {
+      const t = String(x?.type || "");
+      return t === "timed_challenge" || t === "timed_challenge_completed" || t === "timed_challenge_expired";
+    }).length,
+    recentDrillCompletionsCount: messageRows.filter((x) => String(x?.type || "") === "drill_completed").length,
+  };
+}
+
+async function loadGroupManagerRestaurantComparisonRows() {
+  const profile = appState?.profile || {};
+  const caps = getPremiumRoleCapabilities(profile);
+
+  if (!caps.canManageMultipleRestaurants) return [];
+
+  const restaurantRows = getAllowedRestaurantRows();
+  const restaurantIds = restaurantRows.map((x) => String(x?.id || "")).filter(Boolean);
+  if (!restaurantIds.length) return [];
+
+  const sinceIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  const [invitesRes, messagesRes] = await Promise.all([
+    withTimeout(
+      supabase
+        .from("restaurant_invites")
+        .select("restaurant_id,status")
+        .in("restaurant_id", restaurantIds),
+      12000,
+      "groupComparison.invites"
+    ),
+    withTimeout(
+      supabase
+        .from("bc_messages_v1")
+        .select("restaurant_id,type,created_at")
+        .in("restaurant_id", restaurantIds)
+        .in("type", ["timed_challenge", "timed_challenge_completed", "timed_challenge_expired", "drill_completed"])
+        .gte("created_at", sinceIso),
+      12000,
+      "groupComparison.messages"
+    ),
+  ]);
+
+  if (invitesRes.error) throw invitesRes.error;
+  if (messagesRes.error) throw messagesRes.error;
+
+  const inviteRows = invitesRes.data || [];
+  const messageRows = messagesRes.data || [];
+
+  return restaurantRows.map((row) => {
+    const rid = String(row?.id || "");
+    const name = row?.name || `Restaurant ${rid.slice(0, 8)}`;
+
+    const pendingInvites = inviteRows.filter(
+      (x) => String(x?.restaurant_id || "") === rid && String(x?.status || "") === "pending"
+    ).length;
+
+    const timedChallengeActivity = messageRows.filter((x) => {
+      const t = String(x?.type || "");
+      return (
+        String(x?.restaurant_id || "") === rid &&
+        (t === "timed_challenge" || t === "timed_challenge_completed" || t === "timed_challenge_expired")
+      );
+    }).length;
+
+    const drillCompletions = messageRows.filter(
+      (x) => String(x?.restaurant_id || "") === rid && String(x?.type || "") === "drill_completed"
+    ).length;
+
+    return {
+      restaurantId: rid,
+      name,
+      pendingInvites,
+      timedChallengeActivity,
+      drillCompletions,
+      isActive: String(getManagerActiveRestaurantId() || "") === rid,
+    };
+  });
 }
 
 function resetManagerMessengerState(opts = {}) {
@@ -7552,7 +7949,7 @@ function resetManagerMessengerState(opts = {}) {
   if (feed) {
     feed.innerHTML = `
       <div class="small-text" style="opacity:.75;">
-        Select a waiter thread for this restaurant.
+        Select a waiter thread in this restaurant to assign a timed challenge.
       </div>
     `;
   }
@@ -8275,7 +8672,7 @@ function renderManagerActiveThread(nameMap) {
   if (!thread) {
     if (titleEl) titleEl.textContent = "Select a waiter";
     if (metaEl) metaEl.textContent = "";
-    if (msgEl) msgEl.innerHTML = `<div class="small-text" style="opacity:.8;">Select a waiter thread to view messages.</div>`;
+    if (msgEl) msgEl.innerHTML = `<div class="small-text" style="opacity:.8;">Select a waiter thread in this restaurant to assign a timed challenge.</div>`;
     renderManagerDrillSummary();
     return;
   }
@@ -8334,7 +8731,7 @@ async function loadManagerMessenger(restaurantId = null) {
 
   if (listEl) listEl.innerHTML = `<div class="small-text" style="padding:10px; opacity:.85;">Loading…</div>`;
   if (emptyEl) emptyEl.style.display = "none";
-  if (msgEl) msgEl.innerHTML = `<div class="small-text" style="opacity:.8;">Select a waiter thread to view messages.</div>`;
+  if (msgEl) msgEl.innerHTML = `<div class="small-text" style="opacity:.8;">Select a waiter thread in this restaurant to assign a timed challenge.</div>`;
   if (titleEl) titleEl.textContent = "Select a waiter";
   if (metaEl) metaEl.textContent = "";
 
@@ -10225,9 +10622,36 @@ async function refreshManagerBoardScopedViews(restaurantId = null) {
 
   await loadManagerMessenger(rid);
 
+  const profile = appState?.profile || {};
+  const caps = getPremiumRoleCapabilities(profile);
+
+  if (caps.canManageMultipleRestaurants) {
+    try {
+      const metrics = await loadGroupManagerMetrics();
+      setGroupManagerMetrics(metrics);
+    } catch (e) {
+      console.warn("[MB] loadGroupManagerMetrics failed", e);
+      setGroupManagerMetrics(null);
+    }
+
+    try {
+      const comparisonRows = await loadGroupManagerRestaurantComparisonRows();
+      setGroupRestaurantComparisonRows(comparisonRows);
+    } catch (e) {
+      console.warn("[MB] loadGroupManagerRestaurantComparisonRows failed", e);
+      setGroupRestaurantComparisonRows([]);
+    }
+  } else {
+    setGroupManagerMetrics(null);
+    setGroupRestaurantComparisonRows([]);
+  }
+
   renderManagerRestaurantPicker?.();
   renderManagerRestaurantContextCard?.();
   renderGroupOverviewCard?.();
+  renderGroupMetricsCard?.();
+  renderGroupRestaurantComparisonCard?.();
+  wireGroupRestaurantComparisonCard?.();
   renderInvitesList?.();
   renderManagerBoardInviteSummary?.();
   renderManagerBoardOverviewTimedChallenge?.();
