@@ -250,6 +250,291 @@
     function getLastDrillCompletionStatus() {
       return window.__BC_LAST_DRILL_COMPLETION_STATUS__ || null;
     }
+    function getTimedChallengeCopy(challenge = {}) {
+      const key = String(
+        challenge?.challengeKey ||
+        challenge?.payload?.challengeKey ||
+        challenge?.focus ||
+        ""
+      ).toLowerCase();
+
+      const map = {
+        closing_push: {
+          label: "Closing Push",
+          cue: "This challenge rewards strong closing.",
+          next: "Prioritize clear, decisive finishes.",
+        },
+        recovery_window: {
+          label: "Recovery Window",
+          cue: "This challenge rewards strong recovery.",
+          next: "If a moment goes weak, regain control cleanly.",
+        },
+        closing: {
+          label: "Closing Push",
+          cue: "This challenge rewards strong closing.",
+          next: "Prioritize clear, decisive finishes.",
+        },
+        recovery: {
+          label: "Recovery Window",
+          cue: "This challenge rewards strong recovery.",
+          next: "If a moment goes weak, regain control cleanly.",
+        },
+      };
+
+      return map[key] || {
+        label: String(challenge?.title || "Timed Challenge"),
+        cue: "Complete the objective before time runs out.",
+        next: "Play deliberately and lean into the target skill.",
+      };
+    }
+    function getTimedChallengeRailViewModel() {
+      const active = getActiveTimedChallenge?.() || null;
+      const status = getLastTimedChallengeStatus?.() || null;
+
+      if (!active) {
+        if (status?.ok === false) {
+          return {
+            state: "error",
+            title: "Challenge Update Failed",
+            body: "Last challenge result failed to send.",
+            error: String(status?.error || "unknown"),
+            timerText: "",
+            cueText: "",
+            nextText: "",
+            rewardText: "",
+          };
+        }
+
+        if (status?.expired) {
+          return {
+            state: "expired",
+            title: "Challenge Expired",
+            body: "The timed challenge window has ended.",
+            error: "",
+            timerText: "",
+            cueText: "",
+            nextText: "",
+            rewardText: "",
+          };
+        }
+
+        if (status?.ok) {
+          return {
+            state: "completed",
+            title: "Challenge Complete",
+            body: "Last challenge result sent ✅",
+            error: "",
+            timerText: "",
+            cueText: "",
+            nextText: "",
+            rewardText: "",
+          };
+        }
+
+        return {
+          state: "idle",
+          title: "No Live Objective",
+          body: "No live objective right now.",
+          error: "",
+          timerText: "",
+          cueText: "",
+          nextText: "",
+          rewardText: "",
+        };
+      }
+
+      const durationSec = Number(active?.durationSec || active?.duration_sec || 0) || 0;
+      const startedAt = Number(active?.startedAt || active?.started_at || 0) || 0;
+      const elapsedSec = startedAt ? Math.max(0, Math.floor((Date.now() - startedAt) / 1000)) : 0;
+      const remainingSec = durationSec ? Math.max(0, durationSec - elapsedSec) : 0;
+      const mins = Math.floor(remainingSec / 60);
+      const secs = remainingSec % 60;
+
+      const copy = getTimedChallengeCopy(active);
+      const rewardPoints = Number(active?.rewardPoints || active?.reward_points || 0) || 0;
+      const focus = String(active?.focus || "").toLowerCase();
+
+      return {
+        state: "active",
+        title: copy.label,
+        body: "A live challenge is active for this encounter window.",
+        error: "",
+        timerText: durationSec ? `${mins}m ${secs}s remaining` : "",
+        cueText: copy.cue,
+        nextText: copy.next,
+        rewardText: rewardPoints > 0 ? `Reward: ${rewardPoints} pts` : "",
+        focusLabel: focus ? focus.charAt(0).toUpperCase() + focus.slice(1) : "",
+        remainingSec,
+      };
+    }
+    function getDrillFocusCopy(focus = "") {
+      const key = String(focus || "").toLowerCase();
+
+      const map = {
+        read: {
+          label: "Read",
+          cue: "Focus on reading the guest correctly before shaping the pitch.",
+          next: "Slow down and identify the table energy first.",
+        },
+        frame: {
+          label: "Frame",
+          cue: "Focus on matching the recommendation frame to the guest.",
+          next: "Choose the right angle before you start selling.",
+        },
+        delivery: {
+          label: "Delivery",
+          cue: "Focus on confident, clean delivery.",
+          next: "Keep the recommendation sharp and easy to follow.",
+        },
+        recovery: {
+          label: "Recovery",
+          cue: "Focus on regaining control after a weak moment.",
+          next: "If you slip, simplify and recover calmly.",
+        },
+        closing: {
+          label: "Closing",
+          cue: "Focus on finishing the recommendation decisively.",
+          next: "Close clearly and don’t leave the table hanging.",
+        },
+      };
+
+      return map[key] || {
+        label: focus || "Drill",
+        cue: "Focus on the current practice objective.",
+        next: "Stay composed and complete the reps cleanly.",
+      };
+    }
+    function getDrillRailViewModel() {
+      const assigned = getActiveAssignedDrill();
+      const completionStatus = getLastDrillCompletionStatus();
+      const runtime = (typeof DRILL !== "undefined" && DRILL) ? DRILL : null;
+
+      if (!assigned) {
+        if (completionStatus?.ok) {
+          return {
+            state: "completed",
+            title: "Drill Complete",
+            body: "Last drill completion sent ✅",
+            error: "",
+            progressText: "",
+            timerText: "",
+            cueText: "",
+            nextText: "",
+          };
+        }
+
+        if (completionStatus?.ok === false) {
+          return {
+            state: "error",
+            title: "Drill Update Failed",
+            body: "Could not send drill completion.",
+            error: String(completionStatus?.error || "unknown"),
+            progressText: "",
+            timerText: "",
+            cueText: "",
+            nextText: "",
+          };
+        }
+
+        return {
+          state: "idle",
+          title: "No Training Objective",
+          body: "No training objective right now.",
+          error: "",
+          progressText: "",
+          timerText: "",
+          cueText: "",
+          nextText: "",
+        };
+      }
+
+      const drill = assigned?.drill || assigned?.payload?.drill || {};
+      const assignedId = assigned?.id || null;
+      const focus = String(runtime?.focus || drill?.focus || "").toLowerCase();
+      const repTarget = Number(
+        runtime?.repTarget ??
+        drill?.repTarget ??
+        drill?.rep_target ??
+        0
+      ) || 0;
+      const repDone = Number(runtime?.repDone ?? 0) || 0;
+      const durationSec = Number(
+        drill?.durationSec ??
+        drill?.duration_sec ??
+        0
+      ) || 0;
+      const startedAt = Number(runtime?.startedAt || 0) || 0;
+      const elapsedSec = startedAt ? Math.max(0, Math.floor((Date.now() - startedAt) / 1000)) : 0;
+      const remainingSec = durationSec && startedAt
+        ? Math.max(0, durationSec - elapsedSec)
+        : durationSec || 0;
+      const mins = remainingSec ? Math.floor(remainingSec / 60) : 0;
+      const secs = remainingSec ? remainingSec % 60 : 0;
+      const focusCopy = getDrillFocusCopy(focus);
+      const completed = !!runtime && repTarget > 0 && repDone >= repTarget;
+      const inProgress = !!runtime && repTarget > 0 && repDone < repTarget;
+      const assignedOnly = !inProgress && !completed;
+
+      let state = "assigned";
+      if (completed) state = "completed";
+      else if (inProgress) state = "in_progress";
+
+      let title = "Assigned Drill";
+      if (completed) title = "Drill Complete";
+      else if (inProgress) title = "Drill In Progress";
+
+      const body = assignedOnly
+        ? "A manager assigned you a focused practice block."
+        : completed
+          ? "You completed this drill and the result is being recorded."
+          : "You’re currently working through this drill.";
+
+      const progressText = repTarget > 0
+        ? `Rep ${Math.min(repDone, repTarget)} / ${repTarget}`
+        : "";
+
+      const timerText = durationSec
+        ? `${mins}m ${secs}s remaining`
+        : "";
+
+      const nextText = assignedOnly
+        ? "Use Quick Actions to start or resume the drill."
+        : completed
+          ? "Return to the floor or wait for the next assignment."
+          : focusCopy.next;
+
+      return {
+        state,
+        title,
+        body,
+        error: "",
+        assignedId,
+        focusLabel: focusCopy.label,
+        cueText: focusCopy.cue,
+        nextText,
+        progressText,
+        timerText,
+        repDone,
+        repTarget,
+        durationSec,
+        remainingSec,
+      };
+    }
+    function clearRailObjectiveTicker() {
+      if (!window.__BC_RAIL_OBJECTIVE_TICKER__) return;
+      clearInterval(window.__BC_RAIL_OBJECTIVE_TICKER__);
+      window.__BC_RAIL_OBJECTIVE_TICKER__ = null;
+    }
+    function ensureRailObjectiveTicker() {
+      if (window.__BC_RAIL_OBJECTIVE_TICKER__) return;
+
+      window.__BC_RAIL_OBJECTIVE_TICKER__ = setInterval(() => {
+        try {
+          renderRailActiveChallenge?.();
+          renderRailActiveDrill?.();
+        } catch {}
+      }, 1000);
+    }
     function getLiveEffectsState() {
       if (!window.__BC_LIVE_EFFECTS_STATE__) {
         window.__BC_LIVE_EFFECTS_STATE__ = {
@@ -444,7 +729,16 @@
       };
     }
     function getWaiterLiveEffectsToastMessage(nextState = {}) {
-      const prevIds = getActiveLiveEffectIds().slice().sort();
+      const prevState = getLiveEffectsState?.() || {
+        attributeEffects: [],
+        areaEffects: [],
+      };
+
+      const prevIds = [
+        ...((prevState.attributeEffects || []).filter((effect) => !!effect?.active).map((effect) => String(effect?.id || ""))),
+        ...((prevState.areaEffects || []).filter((effect) => !!effect?.active).map((effect) => String(effect?.id || ""))),
+      ].filter(Boolean).sort();
+
       const nextAttribute = Array.isArray(nextState.attributeEffects)
         ? nextState.attributeEffects.filter((effect) => !!effect?.active)
         : [];
@@ -465,7 +759,7 @@
       );
 
       if (newlyActive.length === 1 && nextIds.length === 1) {
-        const family = String(newlyActive[0]?.family || "").toLowerCase() === "area"
+        const family = String(newlyActive[0]?.family || newlyActive[0]?.__waiterFamily || "").toLowerCase() === "area"
           ? "area"
           : "attribute";
         const copy = getWaiterEffectCopy(newlyActive[0], family);
@@ -478,103 +772,167 @@
       const root = getRailEl("railActiveChallenge");
       if (!root) return;
 
-      const active = getActiveTimedChallenge();
-      const status = getLastTimedChallengeStatus();
+      const vm = getTimedChallengeRailViewModel();
 
-      if (!active) {
-        if (status?.ok === false) {
-          root.innerHTML = `
-            <div class="small-text" style="opacity:.9;">
-              Last challenge result failed to send.
-            </div>
-            <div class="small-text" style="opacity:.7; margin-top:6px;">
-              Error: ${escapeHtml(String(status?.error || "unknown"))}
-            </div>
-          `;
-          return;
-        }
-
-        if (status?.expired) {
-          root.innerHTML = `
-            <div class="small-text" style="opacity:.9;">Timed challenge expired.</div>
-          `;
-          return;
-        }
-
+      if (vm.state === "idle") {
         root.innerHTML = `
-          <div class="small-text" style="opacity:.75;">No active challenge.</div>
+          <div class="small-text" style="opacity:.75;">${escapeHtml(vm.body)}</div>
         `;
         return;
       }
 
-      const title = String(active?.title || active?.label || "Timed Challenge");
-      const body = String(active?.body || active?.description || active?.instruction || "");
-      const durationSec = Number(active?.durationSec || active?.duration_sec || 0);
-      const startedAt = Number(active?.startedAt || active?.started_at || 0);
-      const elapsedSec = startedAt ? Math.max(0, Math.floor((Date.now() - startedAt) / 1000)) : 0;
-      const remainingSec = durationSec ? Math.max(0, durationSec - elapsedSec) : 0;
-      const mins = Math.floor(remainingSec / 60);
-      const secs = remainingSec % 60;
+      if (vm.state === "completed") {
+        root.innerHTML = `
+          <div style="font-weight:600;">${escapeHtml(vm.title)}</div>
+          <div class="small-text" style="margin-top:6px; opacity:.9;">
+            ${escapeHtml(vm.body)}
+          </div>
+        `;
+        return;
+      }
+
+      if (vm.state === "expired") {
+        root.innerHTML = `
+          <div style="font-weight:600;">${escapeHtml(vm.title)}</div>
+          <div class="small-text" style="margin-top:6px; opacity:.9;">
+            ${escapeHtml(vm.body)}
+          </div>
+        `;
+        return;
+      }
+
+      if (vm.state === "error") {
+        root.innerHTML = `
+          <div style="font-weight:600;">${escapeHtml(vm.title)}</div>
+          <div class="small-text" style="margin-top:6px; opacity:.9;">
+            ${escapeHtml(vm.body)}
+          </div>
+          <div class="small-text" style="margin-top:6px; opacity:.7;">
+            Error: ${escapeHtml(vm.error)}
+          </div>
+        `;
+        return;
+      }
 
       root.innerHTML = `
-        <div style="font-weight:600;">${escapeHtml(title)}</div>
+        <div style="display:flex; justify-content:space-between; gap:8px; align-items:center;">
+          <div style="font-weight:600;">${escapeHtml(vm.title)}</div>
+          <div class="small-text" style="opacity:.72;">Active</div>
+        </div>
+
         <div class="small-text" style="margin-top:6px; opacity:.9;">
-          ${escapeHtml(body || "Complete the challenge objective in the current encounter.")}
+          ${escapeHtml(vm.body)}
         </div>
-        <div class="small-text" style="margin-top:8px; opacity:.85;">
-          Time left: ${escapeHtml(`${mins}m ${secs}s`)}
-        </div>
+
+        ${vm.focusLabel ? `
+          <div class="small-text" style="margin-top:8px; opacity:.9;">
+            Focus: ${escapeHtml(vm.focusLabel)}
+          </div>
+        ` : ``}
+
+        ${vm.timerText ? `
+          <div class="small-text" style="opacity:.9;">
+            ${escapeHtml(vm.timerText)}
+          </div>
+        ` : ``}
+
+        ${vm.rewardText ? `
+          <div class="small-text" style="opacity:.9;">
+            ${escapeHtml(vm.rewardText)}
+          </div>
+        ` : ``}
+
+        ${vm.cueText ? `
+          <div class="small-text" style="margin-top:8px; opacity:.85;">
+            ${escapeHtml(vm.cueText)}
+          </div>
+        ` : ``}
+
+        ${vm.nextText ? `
+          <div class="small-text" style="margin-top:4px; opacity:.72;">
+            ${escapeHtml(vm.nextText)}
+          </div>
+        ` : ``}
       `;
     }
     function renderRailActiveDrill() {
       const root = getRailEl("railActiveDrill");
       if (!root) return;
 
-      const active = getActiveAssignedDrill();
-      const status = getLastDrillCompletionStatus();
+      const vm = getDrillRailViewModel();
 
-      if (!active) {
-        if (status?.ok) {
-          root.innerHTML = `
-            <div class="small-text" style="opacity:.9;">Last drill completion sent ✅</div>
-          `;
-          return;
-        }
-
-        if (status?.ok === false) {
-          root.innerHTML = `
-            <div class="small-text" style="opacity:.9;">Could not send drill completion.</div>
-            <div class="small-text" style="opacity:.7; margin-top:6px;">
-              Error: ${escapeHtml(String(status?.error || "unknown"))}
-            </div>
-          `;
-          return;
-        }
-
+      if (vm.state === "idle") {
         root.innerHTML = `
-          <div class="small-text" style="opacity:.75;">No active drill.</div>
+          <div class="small-text" style="opacity:.75;">${escapeHtml(vm.body)}</div>
         `;
         return;
       }
 
-      const drill = active?.drill || active?.payload?.drill || {};
-      const focus = String(drill?.focus || "-");
-      const reps = Number(drill?.repTarget || drill?.rep_target || 0) || "-";
-      const durationSec = Number(drill?.durationSec || drill?.duration_sec || 0) || 0;
-      const mins = durationSec ? Math.floor(durationSec / 60) : 0;
-      const secs = durationSec ? durationSec % 60 : 0;
+      if (vm.state === "completed") {
+        root.innerHTML = `
+          <div style="font-weight:600;">${escapeHtml(vm.title)}</div>
+          <div class="small-text" style="margin-top:6px; opacity:.9;">
+            ${escapeHtml(vm.body)}
+          </div>
+        `;
+        return;
+      }
+
+      if (vm.state === "error") {
+        root.innerHTML = `
+          <div style="font-weight:600;">${escapeHtml(vm.title)}</div>
+          <div class="small-text" style="margin-top:6px; opacity:.9;">
+            ${escapeHtml(vm.body)}
+          </div>
+          <div class="small-text" style="margin-top:6px; opacity:.7;">
+            Error: ${escapeHtml(vm.error)}
+          </div>
+        `;
+        return;
+      }
+
+      const badgeLabel =
+        vm.state === "in_progress"
+          ? "In Progress"
+          : "Assigned";
 
       root.innerHTML = `
-        <div style="font-weight:600;">Assigned Drill</div>
+        <div style="display:flex; justify-content:space-between; gap:8px; align-items:center;">
+          <div style="font-weight:600;">${escapeHtml(vm.title)}</div>
+          <div class="small-text" style="opacity:.72;">${escapeHtml(badgeLabel)}</div>
+        </div>
+
         <div class="small-text" style="margin-top:6px; opacity:.9;">
-          Focus: ${escapeHtml(focus)}
+          ${escapeHtml(vm.body)}
         </div>
-        <div class="small-text" style="opacity:.9;">
-          Reps: ${escapeHtml(String(reps))}
+
+        <div class="small-text" style="margin-top:8px; opacity:.9;">
+          Focus: ${escapeHtml(vm.focusLabel)}
         </div>
-        <div class="small-text" style="opacity:.9;">
-          Duration: ${escapeHtml(durationSec ? `${mins}m ${secs}s` : "-")}
-        </div>
+
+        ${vm.progressText ? `
+          <div class="small-text" style="opacity:.9;">
+            ${escapeHtml(vm.progressText)}
+          </div>
+        ` : ``}
+
+        ${vm.timerText ? `
+          <div class="small-text" style="opacity:.9;">
+            ${escapeHtml(vm.timerText)}
+          </div>
+        ` : ``}
+
+        ${vm.cueText ? `
+          <div class="small-text" style="margin-top:8px; opacity:.85;">
+            ${escapeHtml(vm.cueText)}
+          </div>
+        ` : ``}
+
+        ${vm.nextText ? `
+          <div class="small-text" style="margin-top:4px; opacity:.72;">
+            ${escapeHtml(vm.nextText)}
+          </div>
+        ` : ``}
       `;
     }
     function renderRailLiveEffects() {
@@ -592,7 +950,7 @@
           ...effect,
           __waiterFamily: "area",
         }))),
-      ];
+      ].filter((effect) => !!effect?.active);
 
       if (!effects.length) {
         root.innerHTML = `
@@ -602,29 +960,24 @@
       }
 
       root.innerHTML = effects.map((effect) => {
-        const active = !!effect?.active;
         const family = String(effect?.__waiterFamily || effect?.family || "").toLowerCase() === "area"
           ? "area"
           : "attribute";
         const copy = getWaiterEffectCopy(effect, family);
-        const familyLabel = family === "area" ? "Floor" : "Tactical";
 
         return `
           <div style="
             padding:8px;
             border:1px solid rgba(255,255,255,0.10);
             border-radius:10px;
-            background:${active ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.03)"};
+            background:rgba(255,255,255,0.08);
             margin-bottom:8px;
           ">
             <div style="display:flex; justify-content:space-between; gap:8px; align-items:center;">
               <div style="font-weight:600;">${escapeHtml(copy.name)}</div>
               <div class="small-text" style="opacity:.72;">
-                ${active ? "Active" : "Queued"}
+                Active
               </div>
-            </div>
-            <div class="small-text" style="margin-top:4px; opacity:.68;">
-              ${escapeHtml(familyLabel)} effect
             </div>
             <div class="small-text" style="margin-top:4px; opacity:.9;">
               ${escapeHtml(copy.body)}
@@ -773,10 +1126,13 @@
       wireRailQuickActions?.();
     }
     function renderGameplayRail() {
+      ensureRailObjectiveTicker?.();
       renderRailActiveChallenge?.();
       renderRailActiveDrill?.();
       renderRailLiveEffects?.();
       renderRailQuickActions?.();
+      try { window.renderRailProgress?.(); } catch {}
+      try { window.renderRailWineNotes?.(); } catch {}
     }
     function renderTimedChallengeSurfaces() {
       const host = getTimedChallengeHost();
@@ -2394,27 +2750,17 @@
       </main>
 
       <aside id="bcRail" class="bc-rail">
-        <div class="bc-card bc-rail-card">
-          <div class="bc-rail-title">Wine Notes</div>
-          <div class="bc-rail-body" id="railWineNotes">-</div>
-        </div>
-
-        <div class="bc-card bc-rail-card">
-          <div class="bc-rail-title">Progress</div>
-          <div class="bc-rail-body" id="railProgress">-</div>
-        </div>
-
-        <div class="bc-card bc-rail-card">
-          <div class="bc-rail-title">Active Challenge</div>
+        <div class="bc-card bc-rail-card bc-rail-card-priority">
+          <div class="bc-rail-title">Live Objective</div>
           <div class="bc-rail-body" id="railActiveChallenge">
-            <div class="small-text" style="opacity:.75;">No active challenge.</div>
+            <div class="small-text" style="opacity:.75;">No live objective right now.</div>
           </div>
         </div>
 
-        <div class="bc-card bc-rail-card">
-          <div class="bc-rail-title">Active Drill</div>
+        <div class="bc-card bc-rail-card bc-rail-card-priority">
+          <div class="bc-rail-title">Training Objective</div>
           <div class="bc-rail-body" id="railActiveDrill">
-            <div class="small-text" style="opacity:.75;">No active drill.</div>
+            <div class="small-text" style="opacity:.75;">No training objective right now.</div>
           </div>
         </div>
 
@@ -2433,6 +2779,16 @@
               <button id="btnRailBackToHome" type="button" class="btn-ghost">Back to Premium Home</button>
             </div>
           </div>
+        </div>
+
+        <div class="bc-card bc-rail-card">
+          <div class="bc-rail-title">Progress</div>
+          <div class="bc-rail-body" id="railProgress">-</div>
+        </div>
+
+        <div class="bc-card bc-rail-card">
+          <div class="bc-rail-title">Wine Notes</div>
+          <div class="bc-rail-body" id="railWineNotes">-</div>
         </div>
       </aside>
 
@@ -6637,6 +6993,7 @@ function ensureProgLoaded() {
         resetNavState();
         showScreen("screenDrill");
         renderDrillRepCounter();
+        try { renderGameplayRail?.(); } catch {}
         drillStartStep1();
       }
 
@@ -6984,6 +7341,7 @@ function ensureProgLoaded() {
 
         DRILL.repDone += 1;
         encounterIndex += 1;
+        try { renderRailActiveDrill?.(); } catch {}
 
         if (DRILL.repDone >= DRILL.repTarget) {
 

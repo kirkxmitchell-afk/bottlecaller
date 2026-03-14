@@ -1,0 +1,16 @@
+my-vite-app/game/game.html:779:    function renderGameplayRail() {
+my-vite-app/game/game.html:858:      renderGameplayRail();
+my-vite-app/game/game.html:950:        renderGameplayRail();
+my-vite-app/game/game.html:1646:        renderGameplayRail();
+my-vite-app/game/game.html:1773:        renderGameplayRail();
+my-vite-app/game/game.html:1860:          renderGameplayRail();
+my-vite-app/game/game.html:1903:        renderGameplayRail();
+my-vite-app/game/game.html:2402:          <div class="bc-rail-title">Wine Notes</div>
+my-vite-app/game/game.html:2407:          <div class="bc-rail-title">Progress</div>
+my-vite-app/game/game.html:2412:          <div class="bc-rail-title">Active Challenge</div>
+my-vite-app/game/game.html:2419:          <div class="bc-rail-title">Active Drill</div>
+my-vite-app/game/game.html:2426:          <div class="bc-rail-title">Live Effects</div>
+my-vite-app/game/game.html:2433:          <div class="bc-rail-title">Quick Actions</div>
+my-vite-app/game/game.html:6108:      let DRILL = null;
+my-vite-app/game/game.html:7028:          showScreen("screenDrillSummary");
+my-vite-app/game/game.html:8797:        showScreen("screenDrillSummary");
