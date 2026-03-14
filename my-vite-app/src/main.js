@@ -2993,11 +2993,11 @@ function tickManagerBoardAbilities() {
     if (overviewVisible) {
       renderManagerBoardOverviewTimedChallenge();
       renderManagerBoardRecentChallenges();
-      renderManagerDrillSummary();
+      renderManagerBoardDrillSummary();
     }
     if (messengerVisible) {
       renderTimedChallengeRecentSummary();
-      renderManagerDrillSummary();
+      renderManagerBoardDrillSummary();
       renderManagerThreadDrillSummary();
     }
     if (liveControlsVisible) {
@@ -9453,7 +9453,7 @@ function renderManagerThreadDrillSummary() {
   `;
 }
 
-function renderManagerDrillSummary() {
+function renderManagerBoardDrillSummary() {
   const lastAssigned = getRecentDrillAssignedRow();
   const lastCompleted = getRecentDrillCompletedRow();
 
@@ -9496,6 +9496,10 @@ function renderManagerDrillSummary() {
       </div>
     `;
   }
+}
+
+function renderManagerDrillSummary() {
+  return renderManagerBoardDrillSummary?.();
 }
 
 function renderManagerPeopleSummary() {
@@ -9890,8 +9894,8 @@ function renderManagerActiveThread(nameMap) {
     if (titleEl) titleEl.textContent = "Select a waiter";
     if (metaEl) metaEl.textContent = "";
     if (msgEl) msgEl.innerHTML = `<div class="small-text" style="opacity:.8;">Select a waiter thread in this restaurant to assign a timed challenge.</div>`;
-    renderManagerDrillSummary();
-    renderManagerThreadDrillSummary();
+    window.__BC_MB_ACTIVE_THREAD_ROWS__ = [];
+    renderManagerThreadDrillSummary?.();
     return;
   }
 
@@ -9920,8 +9924,7 @@ function renderManagerActiveThread(nameMap) {
   }
 
   buildManagerSuggestedPrompts(thread);
-  renderManagerDrillSummary();
-  renderManagerThreadDrillSummary();
+  renderManagerThreadDrillSummary?.();
 }
 
 async function loadManagerMessenger(restaurantId = null) {
