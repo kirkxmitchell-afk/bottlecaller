@@ -1416,30 +1416,98 @@
         const challenge = result?.challenge || host.__BC_LAST_TIMED_CHALLENGE_RESULT__ || null;
         if (!challenge) return false;
 
+        const encounter = result?.encounter || window.currentEncounter || window.__BC_LAST_ENCOUNTER__ || null;
+        const checks = result?.checks || (
+          encounter && typeof buildReactionChecksFromEncounter === "function"
+            ? buildReactionChecksFromEncounter(encounter, window.PROG || window.__BC_PROG__ || null)
+            : {}
+        );
+
+        const strongestSkill = result?.strongestSkill || null;
+        const outcome = result?.outcome || encounter?.finalOutcome || encounter?.outcome || null;
+        const chainSignal =
+          result?.chainSignal ||
+          encounter?.chainSignal ||
+          encounter?.__reaction?.chainSignal ||
+          null;
+        const chainScore =
+          result?.chainScore ??
+          encounter?.chainScore ??
+          null;
+
+        const deliveryScore =
+          result?.deliveryScore ??
+          (encounter && typeof getDeliveryScore === "function" ? getDeliveryScore(encounter) : null);
+
+        const guestReadCorrect =
+          result?.guestReadCorrect ??
+          checks?.guestRead ??
+          null;
+
+        const resetUsed =
+          result?.resetUsed ??
+          checks?.resetUsed ??
+          encounter?.resetUsed ??
+          null;
+
+        const premiumSuccess =
+          result?.premiumSuccess ??
+          encounter?.premiumOpportunityHit ??
+          encounter?.premiumRollSuccess ??
+          false;
+
+        const strongPillars =
+          result?.strongPillars ??
+          (encounter && typeof getEncounterStrongPillars === "function"
+            ? getEncounterStrongPillars(encounter, checks)
+            : null);
+
+        const evaluationPayload = {
+          strongestSkill,
+          outcome,
+          chainSignal,
+          chainScore,
+          guestReadCorrect,
+          deliveryScore,
+          resetUsed,
+          premiumSuccess,
+          strongPillars,
+        };
+
+        const success = typeof evaluateTimedChallengeSuccess === "function"
+          ? evaluateTimedChallengeSuccess(challenge, encounter || {}, checks || {}, evaluationPayload)
+          : String(strongestSkill || "").toLowerCase() === String(challenge?.successRule?.value || "").toLowerCase();
+
+        const payload = {
+          challengeKey: challenge.challengeKey || null,
+          title: challenge.title || null,
+          status: success ? "completed" : "expired",
+          completedAt: result?.completedAt || Date.now(),
+          strongestSkill,
+          outcome,
+          chainSignal,
+          chainScore,
+          guestReadCorrect,
+          deliveryScore,
+          resetUsed,
+          premiumSuccess,
+          strongPillars,
+          rewardPoints:
+            result?.rewardPoints ??
+            challenge?.rewardPoints ??
+            challenge?.payload?.rewardPoints ??
+            null,
+          targetUserId: challenge.targetUserId || null,
+          restaurantId: challenge.restaurantId || null,
+        };
+
         window.parent?.postMessage(
           {
             source: "BC_MSG",
             v: 1,
             type: "timed_challenge_result",
             challengeId: challenge.challengeId || challenge.id || null,
-            payload: {
-              challengeKey: challenge.challengeKey || null,
-              title: challenge.title || null,
-              status: result?.status || challenge.status || null,
-              completedAt: result?.completedAt || Date.now(),
-              strongestSkill: result?.strongestSkill || null,
-              outcome: result?.outcome || null,
-              chainSignal: result?.chainSignal || null,
-              chainScore: result?.chainScore ?? null,
-              guestReadCorrect: result?.guestReadCorrect ?? null,
-              deliveryScore: result?.deliveryScore ?? null,
-              resetUsed: result?.resetUsed ?? null,
-              premiumSuccess: result?.premiumSuccess ?? null,
-              strongPillars: result?.strongPillars ?? null,
-              rewardPoints: result?.rewardPoints ?? challenge?.rewardPoints ?? challenge?.payload?.rewardPoints ?? null,
-              targetUserId: challenge.targetUserId || null,
-              restaurantId: challenge.restaurantId || null,
-            },
+            payload,
             epoch: Number(window.__BC_IFRAME_EPOCH__ || window.__BC_EPOCH__ || 0),
           },
           window.location.origin
