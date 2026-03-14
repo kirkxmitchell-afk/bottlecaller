@@ -569,9 +569,100 @@
         `;
       }).join("");
     }
+    function goBackToPremiumHome() {
+      try {
+        const epoch = Number(window.__BC_EPOCH__ || window.__BC_IFRAME_EPOCH__ || 0);
+
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage(
+            {
+              source: "BC_MSG",
+              v: 1,
+              type: "nav_back",
+              backTo: "screenPremiumApp",
+              epoch,
+              mode: String(window.bcMode || "premium"),
+            },
+            window.location.origin
+          );
+          return true;
+        }
+
+        if (typeof showScreen === "function") {
+          showScreen("screenPremiumApp");
+          return true;
+        }
+
+        return false;
+      } catch (e) {
+        console.warn("[RAIL] goBackToPremiumHome failed", e);
+        return false;
+      }
+    }
+    function startFiveMinDrillFromRail() {
+      try {
+        const canStart =
+          typeof startFiveMinuteDrill === "function" ||
+          typeof startDrill === "function";
+
+        if (!canStart) {
+          console.warn("[RAIL] 5-Min Drill unavailable");
+          return false;
+        }
+
+        if (typeof startFiveMinuteDrill === "function") {
+          startFiveMinuteDrill();
+          return true;
+        }
+
+        if (typeof startDrill === "function") {
+          startDrill(3);
+          return true;
+        }
+
+        return false;
+      } catch (e) {
+        console.warn("[RAIL] startFiveMinDrillFromRail failed", e);
+        return false;
+      }
+    }
+    function wireRailQuickActions() {
+      const btnDrill = document.getElementById("btnRailFiveMinDrill");
+      if (btnDrill && !btnDrill.__wired) {
+        btnDrill.__wired = true;
+        bindInput(btnDrill, () => {
+          startFiveMinDrillFromRail?.();
+        });
+      }
+
+      const btnBack = document.getElementById("btnRailBackToHome");
+      if (btnBack && !btnBack.__wired) {
+        btnBack.__wired = true;
+        bindInput(btnBack, () => {
+          goBackToPremiumHome?.();
+        });
+      }
+    }
+    function renderRailQuickActions() {
+      const root = getRailEl("railQuickActions");
+      if (!root) return;
+
+      const role = String(window.__BC_CTX__?.membershipRole || window.__BC_CTX__?.role || "").toLowerCase();
+      const showDrill = !["manager", "group_manager", "enterpriser"].includes(role);
+
+      root.innerHTML = `
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          ${showDrill ? '<button id="btnRailFiveMinDrill" type="button" class="btn-ghost">Start 5-Min Drill</button>' : ""}
+          <button id="btnRailBackToHome" type="button" class="btn-ghost">Back to Premium Home</button>
+        </div>
+      `;
+
+      wireRailQuickActions?.();
+    }
     function renderGameplayRail() {
       renderRailActiveChallenge?.();
       renderRailActiveDrill?.();
+      renderRailQuickActions?.();
       renderRailAttributeEffects?.();
       renderRailAreaEffects?.();
     }
@@ -2206,6 +2297,13 @@
           <div class="bc-rail-title">Active Drill</div>
           <div class="bc-rail-body" id="railActiveDrill">
             <div class="small-text" style="opacity:.75;">No active drill.</div>
+          </div>
+        </div>
+
+        <div class="bc-card bc-rail-card">
+          <div class="bc-rail-title">Quick Actions</div>
+          <div class="bc-rail-body" id="railQuickActions">
+            <div class="small-text" style="opacity:.75;">No quick actions available.</div>
           </div>
         </div>
 
@@ -15749,6 +15847,10 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
       wireIframeLogout();
       applyDemoUIRestrictions();
       applyDemoHomeUI();
+      setTimeout(() => {
+        try { renderRailQuickActions?.(); } catch {}
+        try { wireRailQuickActions?.(); } catch {}
+      }, 0);
       document.addEventListener("DOMContentLoaded", applyDemoHomeUI, { once: true });
       try { wireDrillBack_FIXED(); } catch (e) { console.warn("[DRILL] wireDrillBack_FIXED failed", e); }
       applyRoleGatingToSetupUI();
