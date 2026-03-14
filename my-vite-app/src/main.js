@@ -404,6 +404,8 @@ document.querySelector("#app").innerHTML = `
             <div class="score-row">Total drills: <span id="mbDrillsTotal">-</span></div>
           </div>
 
+          <div id="mbRestaurantContextCard" style="margin-top:12px;"></div>
+          <div id="mbGroupOverviewCard" style="margin-top:12px;"></div>
           <div id="mbOverviewLiveEffects" style="margin-top:12px;"></div>
           <div id="mbOverviewTimedChallenge" style="margin-top:12px;"></div>
           <div id="mbOverviewRecentChallenges" style="margin-top:12px;"></div>
@@ -6339,18 +6341,31 @@ async function ensureManagerRestaurantChoices() {
       profile?.restaurantId ||
       ""
     );
-    window.__BC_ALLOWED_RESTAURANT_IDS__ = ownRestaurantId ? [ownRestaurantId] : [];
-    return window.__BC_ALLOWED_RESTAURANT_IDS__;
+    const ownName =
+      appState?.restaurant?.name ||
+      "My Restaurant";
+
+    const rows = ownRestaurantId
+      ? [{ id: ownRestaurantId, name: ownName }]
+      : [];
+
+    window.__BC_ALLOWED_RESTAURANT_ROWS__ = rows;
+    window.__BC_ALLOWED_RESTAURANT_IDS__ = rows.map((x) => String(x.id));
+    return rows;
   }
 
   try {
     if (typeof loadGroupRestaurantsForPicker === "function") {
-      const rows = await loadGroupRestaurantsForPicker();
-      const ids = Array.isArray(rows)
-        ? rows.map((x) => String(x?.id || x?.restaurant_id || "")).filter(Boolean)
+      const rowsRaw = await loadGroupRestaurantsForPicker();
+      const rows = Array.isArray(rowsRaw)
+        ? rowsRaw.map((x) => ({
+            id: String(x?.id || x?.restaurant_id || ""),
+            name: x?.name || x?.restaurant_name || null,
+          })).filter((x) => x.id)
         : [];
-      window.__BC_ALLOWED_RESTAURANT_IDS__ = ids;
-      return ids;
+      window.__BC_ALLOWED_RESTAURANT_ROWS__ = rows;
+      window.__BC_ALLOWED_RESTAURANT_IDS__ = rows.map((x) => String(x.id));
+      return rows;
     }
   } catch (e) {
     console.warn("[MB] loadGroupRestaurantsForPicker failed", e);
@@ -6361,8 +6376,17 @@ async function ensureManagerRestaurantChoices() {
     profile?.restaurantId ||
     ""
   );
-  window.__BC_ALLOWED_RESTAURANT_IDS__ = ownRestaurantId ? [ownRestaurantId] : [];
-  return window.__BC_ALLOWED_RESTAURANT_IDS__;
+  const ownName =
+    appState?.restaurant?.name ||
+    "My Restaurant";
+
+  const fallbackRows = ownRestaurantId
+    ? [{ id: ownRestaurantId, name: ownName }]
+    : [];
+
+  window.__BC_ALLOWED_RESTAURANT_ROWS__ = fallbackRows;
+  window.__BC_ALLOWED_RESTAURANT_IDS__ = fallbackRows.map((x) => String(x.id));
+  return fallbackRows;
 }
 
 function renderManagerRestaurantPicker() {
@@ -6377,21 +6401,75 @@ function renderManagerRestaurantPicker() {
     return;
   }
 
-  const ids = Array.isArray(window.__BC_ALLOWED_RESTAURANT_IDS__)
-    ? window.__BC_ALLOWED_RESTAURANT_IDS__
-    : [];
+  const rows = getAllowedRestaurantRows();
 
   select.innerHTML = "";
-  ids.forEach((rid) => {
+  rows.forEach((row) => {
+    const rid = String(row?.id || "");
+    if (!rid) return;
     const opt = document.createElement("option");
     opt.value = rid;
-    opt.textContent = rid;
+    opt.textContent = row?.name || `Restaurant ${rid.slice(0, 8)}`;
     select.appendChild(opt);
   });
 
   const active = getManagerActiveRestaurantId();
   if (active) select.value = active;
   select.classList.remove("hidden");
+}
+
+function renderManagerRestaurantContextCard() {
+  const root = document.getElementById("mbRestaurantContextCard");
+  if (!root) return;
+
+  const profile = appState?.profile || {};
+  const caps = getPremiumRoleCapabilities(profile);
+  const roleLabel = getDisplayRoleLabel(profile);
+  const rid = getManagerActiveRestaurantId();
+  const name = getAllowedRestaurantName(rid);
+
+  root.innerHTML = `
+    <div class="card" style="display:flex; flex-direction:column; gap:8px; padding:12px;">
+      <div style="font-weight:600;">Restaurant Context</div>
+      <div><b>Role:</b> ${escapeHtml(roleLabel)}</div>
+      <div><b>Active restaurant:</b> ${escapeHtml(name)}</div>
+      <div class="small" style="opacity:.75;">
+        ${
+          caps.canManageMultipleRestaurants
+            ? "You can switch between restaurants in your allowed scope."
+            : "You are currently scoped to one restaurant."
+        }
+      </div>
+    </div>
+  `;
+}
+
+function renderGroupOverviewCard() {
+  const root = document.getElementById("mbGroupOverviewCard");
+  if (!root) return;
+
+  const profile = appState?.profile || {};
+  const caps = getPremiumRoleCapabilities(profile);
+
+  if (!caps.canManageMultipleRestaurants) {
+    root.innerHTML = "";
+    return;
+  }
+
+  const rows = getAllowedRestaurantRows();
+  const activeRid = getManagerActiveRestaurantId();
+  const activeName = getAllowedRestaurantName(activeRid);
+
+  root.innerHTML = `
+    <div class="card" style="display:flex; flex-direction:column; gap:8px; padding:12px;">
+      <div style="font-weight:600;">Group Overview</div>
+      <div><b>Accessible restaurants:</b> ${rows.length}</div>
+      <div><b>Current control target:</b> ${escapeHtml(activeName)}</div>
+      <div class="small" style="opacity:.75;">
+        Group-level multi-restaurant summaries and comparisons will appear here.
+      </div>
+    </div>
+  `;
 }
 
 function wireManagerRestaurantPicker() {
@@ -7431,6 +7509,24 @@ function getManagerBoardInvites() {
   return Array.isArray(window.__BC_MB_INVITES__)
     ? window.__BC_MB_INVITES__
     : [];
+}
+
+function getAllowedRestaurantRows() {
+  return Array.isArray(window.__BC_ALLOWED_RESTAURANT_ROWS__)
+    ? window.__BC_ALLOWED_RESTAURANT_ROWS__
+    : [];
+}
+
+function getAllowedRestaurantName(restaurantId) {
+  const rid = String(restaurantId || "");
+  if (!rid) return "-";
+
+  const row = getAllowedRestaurantRows().find((x) => {
+    const id = String(x?.id || x?.restaurant_id || "");
+    return id === rid;
+  });
+
+  return row?.name || row?.restaurant_name || `Restaurant ${rid.slice(0, 8)}`;
 }
 
 function resetManagerMessengerState(opts = {}) {
@@ -9926,16 +10022,14 @@ async function routeManagerBoard(reason = "manual") {
 
   await ensureActiveRestaurantReady();
 
-  const rid = getManagerActiveRestaurantId();
   resetManagerBoardScopedState();
   resetManagerMessengerState({ keepStatus: true });
+  const rid = requireManagerRestaurantId();
 
   // ✅ load the selected tab without requiring a click
   window.__BC_MB_SHOWTAB__?.(window.__BC_MB_DEFAULTTAB__);
   await (window.__BC_MB_LOADTAB__?.(window.__BC_MB_DEFAULTTAB__) || loadManagerBoardData(rid));
-  if (rid) {
-    await refreshManagerBoardScopedViews?.(rid);
-  }
+  await refreshManagerBoardScopedViews?.(rid);
 
   wireManagerBoardMessenger();
   wireManagerBoardBillingAccess();
@@ -10131,6 +10225,9 @@ async function refreshManagerBoardScopedViews(restaurantId = null) {
 
   await loadManagerMessenger(rid);
 
+  renderManagerRestaurantPicker?.();
+  renderManagerRestaurantContextCard?.();
+  renderGroupOverviewCard?.();
   renderInvitesList?.();
   renderManagerBoardInviteSummary?.();
   renderManagerBoardOverviewTimedChallenge?.();
