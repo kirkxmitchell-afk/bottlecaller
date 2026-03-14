@@ -14382,9 +14382,42 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
           const closingThresholdDelta = Number(abilityFx.closingThresholdDelta || 0);
           const recoveryThresholdDelta = Number(abilityFx.recoveryThresholdDelta || 0);
-          const cleanCloseThreshold = clampNumber(6 + (0.5 * closingThresholdDelta), 1, 10);
-          const softCloseThreshold = clampNumber(4 + (0.5 * closingThresholdDelta), 1, 10);
+          const reactionSignal = String(
+            enc?.chainSignal ||
+            enc?.__reaction?.chainSignal ||
+            ""
+          ).toLowerCase();
+          const readCorrect = readTier === "right";
+          const deliveryStrong = Number(delivery || 0) >= 2;
+          const modeDamaging = modeTier === "damaging" || modeTier === "wrong";
+          const hookDamaging = hookTier === "damaging" || hookTier === "wrong";
+          const strongPillars =
+            (readCorrect ? 1 : 0) +
+            (modeTier === "right" ? 1 : 0) +
+            (hookTier === "right" ? 1 : 0) +
+            (deliveryStrong ? 1 : 0);
+          const wrongReadThresholdPenalty = readCorrect ? 0 : 1;
+          const cleanCloseThreshold = clampNumber(
+            6 + (0.5 * closingThresholdDelta) + wrongReadThresholdPenalty,
+            1,
+            10
+          );
+          const softCloseThreshold = clampNumber(
+            5 + (0.5 * closingThresholdDelta) + wrongReadThresholdPenalty,
+            1,
+            10
+          );
           const recoveryPivotThreshold = clampNumber(1 + (0.5 * recoveryThresholdDelta), 0, 10);
+          const cleanEligible =
+            readCorrect &&
+            deliveryStrong &&
+            !modeDamaging &&
+            !hookDamaging &&
+            strongPillars >= 2;
+          const softEligible =
+            strongPillars >= 1 &&
+            !(modeDamaging && hookDamaging && !readCorrect && !deliveryStrong);
+          const redSignalDowngrade = reactionSignal === "red";
 
           if (abilityFx.closingSurge) {
             recordAbilityImpact({
@@ -14405,8 +14438,18 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             });
           }
 
-          if (total >= cleanCloseThreshold) return { outcome: "clean_close", score: total };
-          if (total >= softCloseThreshold) return { outcome: "soft_close", score: total };
+          if (total >= cleanCloseThreshold && cleanEligible) {
+            if (redSignalDowngrade) return { outcome: "soft_close", score: total };
+            return { outcome: "clean_close", score: total };
+          }
+          if (total >= softCloseThreshold && softEligible) {
+            if (redSignalDowngrade) {
+              return pivotPlanned
+                ? { outcome: "pivot", score: total }
+                : { outcome: "recovery", score: total };
+            }
+            return { outcome: "soft_close", score: total };
+          }
           if (total >= recoveryPivotThreshold) {
             return pivotPlanned
               ? { outcome: "pivot", score: total }
