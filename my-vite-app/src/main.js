@@ -593,6 +593,7 @@ document.querySelector("#app").innerHTML = `
 
         <div id="mbTab_live_controls" class="mbTab hidden">
           <div id="mbOverviewLiveEffects" style="margin-top:12px;"></div>
+          <div id="mbOverviewAbilityEconomy" style="margin-top:12px;"></div>
           <div id="mbAttributeAbilitiesPanel" style="margin-top:12px;"></div>
           <div id="mbAreaAbilitiesPanel" style="margin-top:12px;"></div>
           <div id="mbDrillQuickActionsPanel" style="margin-top:12px;"></div>
@@ -8487,6 +8488,184 @@ function getAutomaticDrillRecommendationForThread(thread) {
     : null;
 }
 
+function getManagerChallengeRecommendationCandidates(threadRows = []) {
+  const rows = Array.isArray(threadRows) ? threadRows : [];
+
+  const latestProgress = [...rows]
+    .filter((row) => String(row?.type || "") === "progress_report" && row?.payload)
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+    .slice(-1)[0] || null;
+
+  const latestChallenge = [...rows]
+    .filter((row) => String(row?.type || "").startsWith("timed_challenge"))
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+    .slice(-1)[0] || null;
+
+  const p = latestProgress?.payload || {};
+  const skills = p?.skills || {};
+
+  const weakestSkill = String(p?.weakestSkill || "").toLowerCase();
+  const strongestSkill = String(p?.strongestSkill || "").toLowerCase();
+  const outcome = String(p?.outcome || "").toLowerCase();
+  const chainSignal = String(p?.chainSignal || "").toLowerCase();
+  const guest = String(p?.guestStateActual || "").toLowerCase();
+  const resetUsed = !!p?.resetUsed;
+  const deliveryScore = Number(p?.deliveryScore || 0) || 0;
+  const guestReadCorrect = !!p?.guestReadCorrect;
+  const chainScore = Number(p?.chainScore || 0) || 0;
+
+  const recentChallengeKey = String(
+    latestChallenge?.payload?.challengeKey ||
+    latestChallenge?.payload?.challenge_key ||
+    ""
+  ).toLowerCase();
+
+  return {
+    latestProgress,
+    weakestSkill,
+    strongestSkill,
+    outcome,
+    chainSignal,
+    guest,
+    resetUsed,
+    deliveryScore,
+    guestReadCorrect,
+    chainScore,
+    recentChallengeKey,
+    skills,
+  };
+}
+
+function getManagerChallengeRecommendations(threadRows = []) {
+  const c = getManagerChallengeRecommendationCandidates(threadRows);
+  const suggestions = [];
+
+  const pushUnique = (item) => {
+    if (!item?.key) return;
+    if (suggestions.some((x) => String(x.key) === String(item.key))) return;
+    suggestions.push(item);
+  };
+
+  if (c.weakestSkill === "read" || !c.guestReadCorrect) {
+    pushUnique({
+      key: "read_first",
+      label: "Read First",
+      reason: "Latest report suggests weak guest reading.",
+    });
+  }
+
+  if (c.weakestSkill === "delivery" || c.deliveryScore < 2) {
+    pushUnique({
+      key: "full_delivery",
+      label: "Full Delivery",
+      reason: "Latest report suggests incomplete delivery execution.",
+    });
+  }
+
+  if (c.weakestSkill === "recovery" || c.outcome === "recovery" || c.outcome === "pivot") {
+    pushUnique({
+      key: "recovery_window",
+      label: "Recovery Window",
+      reason: "Recent encounter suggests recovery needs work.",
+    });
+  }
+
+  if (c.weakestSkill === "closing" || c.outcome === "soft_close") {
+    pushUnique({
+      key: "closing_push",
+      label: "Closing Push",
+      reason: "Recent encounter suggests weak finishing pressure.",
+    });
+  }
+
+  if (c.resetUsed) {
+    pushUnique({
+      key: "no_reset_run",
+      label: "No Reset Run",
+      reason: "Latest interaction relied on reset.",
+    });
+  }
+
+  if (c.chainSignal === "red") {
+    pushUnique({
+      key: "stable_signal",
+      label: "Stable Signal",
+      reason: "Latest interaction fell into a red signal state.",
+    });
+  }
+
+  if (c.chainScore > 0 && c.chainScore < 6) {
+    pushUnique({
+      key: "solid_interaction",
+      label: "Solid Interaction",
+      reason: "Latest interaction lacked enough overall structure.",
+    });
+  }
+
+  if (c.outcome && c.outcome !== "clean_close") {
+    pushUnique({
+      key: "clean_close",
+      label: "Clean Close",
+      reason: "Latest outcome did not reach a clean close.",
+    });
+  }
+
+  if (c.guest === "decider" && c.outcome !== "clean_close") {
+    pushUnique({
+      key: "clean_close",
+      label: "Clean Close",
+      reason: "Decider tables reward strong, decisive finishes.",
+    });
+  }
+
+  if (c.guest === "griever" && !c.guestReadCorrect) {
+    pushUnique({
+      key: "read_first",
+      label: "Read First",
+      reason: "Griever tables punish poor emotional reads.",
+    });
+  }
+
+  const filtered = suggestions.sort((a, b) => {
+    const aRecentPenalty = a.key === c.recentChallengeKey ? 1 : 0;
+    const bRecentPenalty = b.key === c.recentChallengeKey ? 1 : 0;
+    return aRecentPenalty - bRecentPenalty;
+  });
+
+  return filtered.slice(0, 3);
+}
+
+function renderManagerChallengeRecommendations(threadRows = []) {
+  const recs = getManagerChallengeRecommendations(threadRows);
+
+  if (!recs.length) {
+    return `
+      <div class="small-text" style="opacity:.75;">
+        No recommendation yet.
+      </div>
+    `;
+  }
+
+  return `
+    <div style="display:flex; flex-direction:column; gap:8px; margin-top:8px;">
+      ${recs.map((rec) => `
+        <button
+          type="button"
+          class="btn-ghost mbChallengeSuggestion"
+          data-challenge-key="${escapeHtml(rec.key)}"
+          title="${escapeHtml(rec.reason)}"
+          style="text-align:left;"
+        >
+          <div style="font-weight:600;">${escapeHtml(rec.label)}</div>
+          <div class="small-text" style="opacity:.75; margin-top:2px;">
+            ${escapeHtml(rec.reason)}
+          </div>
+        </button>
+      `).join("")}
+    </div>
+  `;
+}
+
 function wireMbCoachSuggestionButtons() {
   document.querySelectorAll(".mbCoachSuggestion").forEach((btn) => {
     btn.onclick = () => {
@@ -8513,6 +8692,32 @@ function wireMbCoachSuggestionButtons() {
 
       bodyInput.focus();
     };
+  });
+}
+
+function wireManagerChallengeSuggestionButtons() {
+  const buttons = document.querySelectorAll(".mbChallengeSuggestion");
+  buttons.forEach((btn) => {
+    if (btn.__wired) return;
+    btn.__wired = true;
+
+    btn.addEventListener("click", () => {
+      const key = String(btn.getAttribute("data-challenge-key") || "");
+
+      const messengerSelect = document.getElementById("mbTimedChallengeType");
+      const liveControlsSelect = document.getElementById("mbLcTimedChallengeType");
+
+      if (messengerSelect) messengerSelect.value = key;
+      if (liveControlsSelect) liveControlsSelect.value = key;
+
+      const statusEl =
+        document.getElementById("mbTimedChallengeStatus") ||
+        document.getElementById("mbLcTimedChallengeStatus");
+
+      if (statusEl) {
+        statusEl.textContent = `Selected recommended challenge: ${btn.querySelector("div")?.textContent || key}`;
+      }
+    });
   });
 }
 
@@ -9658,6 +9863,193 @@ function updateManagerLiveEffectsState(patch = {}) {
   });
 }
 
+function getManagerAbilityEconomyState() {
+  if (!window.__BC_MANAGER_ABILITY_ECONOMY__) {
+    window.__BC_MANAGER_ABILITY_ECONOMY__ = {
+      influence: 5,
+      maxInfluence: 5,
+      cooldowns: {},
+      updatedAt: Date.now(),
+    };
+  }
+  return window.__BC_MANAGER_ABILITY_ECONOMY__;
+}
+
+function setManagerAbilityEconomyState(nextState = {}) {
+  const prev = getManagerAbilityEconomyState();
+
+  window.__BC_MANAGER_ABILITY_ECONOMY__ = {
+    influence: Number.isFinite(nextState.influence) ? Number(nextState.influence) : prev.influence,
+    maxInfluence: Number.isFinite(nextState.maxInfluence) ? Number(nextState.maxInfluence) : prev.maxInfluence,
+    cooldowns: nextState.cooldowns && typeof nextState.cooldowns === "object"
+      ? { ...nextState.cooldowns }
+      : { ...prev.cooldowns },
+    updatedAt: Date.now(),
+  };
+
+  return window.__BC_MANAGER_ABILITY_ECONOMY__;
+}
+
+const MANAGER_EFFECT_COSTS = Object.freeze({
+  closing_surge: 2,
+  recovery_focus: 2,
+  premium_window: 3,
+  calm_floor: 2,
+});
+
+const MANAGER_CHALLENGE_COSTS = Object.freeze({
+  closing_push: 1,
+  recovery_window: 1,
+  clean_close: 2,
+  read_first: 1,
+  full_delivery: 1,
+  no_reset_run: 1,
+});
+
+const MANAGER_EFFECT_COOLDOWNS_SEC = Object.freeze({
+  closing_surge: 30,
+  recovery_focus: 30,
+  premium_window: 45,
+  calm_floor: 30,
+});
+
+const MANAGER_CHALLENGE_COOLDOWNS_SEC = Object.freeze({
+  closing_push: 20,
+  recovery_window: 20,
+  clean_close: 30,
+  read_first: 15,
+  full_delivery: 15,
+  no_reset_run: 15,
+});
+
+function getManagerCooldownRemaining(key = "") {
+  const state = getManagerAbilityEconomyState();
+  const expiresAt = Number(state?.cooldowns?.[key] || 0);
+  if (!expiresAt) return 0;
+  return Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
+}
+
+function isManagerActionOnCooldown(key = "") {
+  return getManagerCooldownRemaining(key) > 0;
+}
+
+function canManagerSpendInfluence(cost = 0) {
+  const state = getManagerAbilityEconomyState();
+  return Number(state?.influence || 0) >= Number(cost || 0);
+}
+
+function spendManagerInfluence(cost = 0) {
+  const state = getManagerAbilityEconomyState();
+  const nextInfluence = Math.max(0, Number(state.influence || 0) - Number(cost || 0));
+  setManagerAbilityEconomyState({
+    ...state,
+    influence: nextInfluence,
+  });
+}
+
+function startManagerCooldown(key = "", durationSec = 0) {
+  if (!key || !durationSec) return;
+  const state = getManagerAbilityEconomyState();
+  const cooldowns = { ...(state.cooldowns || {}) };
+  cooldowns[key] = Date.now() + (Number(durationSec) * 1000);
+  setManagerAbilityEconomyState({
+    ...state,
+    cooldowns,
+  });
+}
+
+function formatManagerActionCost(cost = 0) {
+  return `${Number(cost || 0)} inf`;
+}
+
+function formatManagerCooldownLabel(key = "") {
+  const remaining = getManagerCooldownRemaining(key);
+  return remaining > 0 ? `${remaining}s cd` : "";
+}
+
+function getManagerActionMetaLabel(key = "", cost = 0) {
+  const cooldown = formatManagerCooldownLabel(key);
+  const costLabel = formatManagerActionCost(cost);
+
+  return cooldown
+    ? `${costLabel} • ${cooldown}`
+    : costLabel;
+}
+
+function refillManagerInfluenceForTesting() {
+  const state = getManagerAbilityEconomyState();
+  setManagerAbilityEconomyState({
+    ...state,
+    influence: state.maxInfluence,
+  });
+  renderManagerAbilityEconomyPanel?.();
+}
+
+function wireManagerAbilityEconomyPanel() {
+  const btn = document.getElementById("mbRefillInfluence");
+  if (!btn || btn.__wired) return;
+  btn.__wired = true;
+  btn.addEventListener("click", () => {
+    refillManagerInfluenceForTesting();
+  });
+}
+
+function renderManagerAbilityEconomyPanel() {
+  const root = document.getElementById("mbOverviewAbilityEconomy");
+  if (!root) return;
+
+  const state = getManagerAbilityEconomyState();
+
+  root.innerHTML = `
+    <div class="card" style="display:flex; flex-direction:column; gap:8px; padding:12px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+        <div style="font-weight:600;">Manager Influence</div>
+        <button id="mbRefillInfluence" class="btn-ghost" type="button">Refill</button>
+      </div>
+
+      <div class="small-text" style="opacity:.8;">
+        Spend influence on live effects and timed challenges.
+      </div>
+
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <div style="
+          padding:8px 10px;
+          border:1px solid rgba(255,255,255,0.10);
+          border-radius:999px;
+        " class="small-text">
+          Influence: ${escapeHtml(String(state.influence))} / ${escapeHtml(String(state.maxInfluence))}
+        </div>
+      </div>
+    </div>
+  `;
+
+  wireManagerAbilityEconomyPanel?.();
+}
+
+function tryActivateManagerEffect(effect) {
+  const effectId = String(effect?.id || "");
+  const cost = Number(MANAGER_EFFECT_COSTS?.[effectId] || 0);
+  const cooldownSec = Number(MANAGER_EFFECT_COOLDOWNS_SEC?.[effectId] || 0);
+
+  if (isManagerActionOnCooldown(effectId)) {
+    const remaining = getManagerCooldownRemaining(effectId);
+    window.showToast?.(`${effect.name || effectId} is on cooldown (${remaining}s)`);
+    return false;
+  }
+
+  if (!canManagerSpendInfluence(cost)) {
+    window.showToast?.(`Not enough influence for ${effect.name || effectId}`);
+    return false;
+  }
+
+  spendManagerInfluence(cost);
+  startManagerCooldown(effectId, cooldownSec);
+  renderManagerAbilityEconomyPanel?.();
+  renderManagerAttributeEffectsPanel?.();
+  renderManagerAreaEffectsPanel?.();
+  return true;
+}
+
 function makeLiveEffect(def = {}) {
   return {
     id: String(def.id || `effect_${Math.random().toString(16).slice(2)}`),
@@ -9773,13 +10165,15 @@ function wireManagerAttributeEffectsPanel() {
   if (addClosingSurge && !addClosingSurge.__wired) {
     addClosingSurge.__wired = true;
     addClosingSurge.addEventListener("click", () => {
-      addManagerAttributeEffect({
+      const effect = {
         id: "closing_surge",
         name: "Closing Surge",
         kind: "attribute",
         description: "Improves closing pressure conversion for the current encounter window.",
         active: true,
-      });
+      };
+      if (!tryActivateManagerEffect(effect)) return;
+      addManagerAttributeEffect(effect);
     });
   }
 
@@ -9787,13 +10181,15 @@ function wireManagerAttributeEffectsPanel() {
   if (addRecoveryFocus && !addRecoveryFocus.__wired) {
     addRecoveryFocus.__wired = true;
     addRecoveryFocus.addEventListener("click", () => {
-      addManagerAttributeEffect({
+      const effect = {
         id: "recovery_focus",
         name: "Recovery Focus",
         kind: "attribute",
         description: "Improves recovery-related response shaping during tense guest states.",
         active: true,
-      });
+      };
+      if (!tryActivateManagerEffect(effect)) return;
+      addManagerAttributeEffect(effect);
     });
   }
 
@@ -9805,13 +10201,15 @@ function wireManagerAreaEffectsPanel() {
   if (addPremiumWindow && !addPremiumWindow.__wired) {
     addPremiumWindow.__wired = true;
     addPremiumWindow.addEventListener("click", () => {
-      addManagerAreaEffect({
+      const effect = {
         id: "premium_window",
         name: "Premium Window",
         kind: "area",
         description: "Improves premium-upgrade opportunity during the active encounter phase.",
         active: true,
-      });
+      };
+      if (!tryActivateManagerEffect(effect)) return;
+      addManagerAreaEffect(effect);
     });
   }
 
@@ -9819,13 +10217,15 @@ function wireManagerAreaEffectsPanel() {
   if (addCalmFloor && !addCalmFloor.__wired) {
     addCalmFloor.__wired = true;
     addCalmFloor.addEventListener("click", () => {
-      addManagerAreaEffect({
+      const effect = {
         id: "calm_floor",
         name: "Calm Floor",
         kind: "area",
         description: "Reduces pressure escalation and stabilizes the encounter atmosphere.",
         active: true,
-      });
+      };
+      if (!tryActivateManagerEffect(effect)) return;
+      addManagerAreaEffect(effect);
     });
   }
 
@@ -9838,6 +10238,14 @@ function renderManagerAttributeEffectsPanel() {
 
   const state = getManagerLiveEffectsState();
   const effects = Array.isArray(state.attributeEffects) ? state.attributeEffects : [];
+  const closingMeta = getManagerActionMetaLabel(
+    "closing_surge",
+    MANAGER_EFFECT_COSTS?.closing_surge || 0
+  );
+  const recoveryMeta = getManagerActionMetaLabel(
+    "recovery_focus",
+    MANAGER_EFFECT_COSTS?.recovery_focus || 0
+  );
 
   root.innerHTML = `
     <div class="card">
@@ -9845,14 +10253,23 @@ function renderManagerAttributeEffectsPanel() {
       <div class="small" style="opacity:.75; margin-bottom:8px;">
         Tactical, targeted effects that influence player-facing encounter attributes.
       </div>
+
       <div style="display:flex; flex-direction:column; gap:8px;">
         ${effects.length ? effects.map(renderManagerEffectRow).join("") : `
           <div class="small" style="opacity:.75;">No attribute effects loaded.</div>
         `}
       </div>
+
       <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;">
-        <button type="button" class="btn-ghost" id="btnAddClosingSurge">Add Closing Surge</button>
-        <button type="button" class="btn-ghost" id="btnAddRecoveryFocus">Add Recovery Focus</button>
+        <button type="button" class="btn-ghost" id="btnAddClosingSurge">
+          Closing Surge
+          <span class="small-text" style="opacity:.7;"> • ${escapeHtml(closingMeta)}</span>
+        </button>
+
+        <button type="button" class="btn-ghost" id="btnAddRecoveryFocus">
+          Recovery Focus
+          <span class="small-text" style="opacity:.7;"> • ${escapeHtml(recoveryMeta)}</span>
+        </button>
       </div>
     </div>
   `;
@@ -9866,6 +10283,14 @@ function renderManagerAreaEffectsPanel() {
 
   const state = getManagerLiveEffectsState();
   const effects = Array.isArray(state.areaEffects) ? state.areaEffects : [];
+  const premiumMeta = getManagerActionMetaLabel(
+    "premium_window",
+    MANAGER_EFFECT_COSTS?.premium_window || 0
+  );
+  const calmMeta = getManagerActionMetaLabel(
+    "calm_floor",
+    MANAGER_EFFECT_COSTS?.calm_floor || 0
+  );
 
   root.innerHTML = `
     <div class="card">
@@ -9873,14 +10298,23 @@ function renderManagerAreaEffectsPanel() {
       <div class="small" style="opacity:.75; margin-bottom:8px;">
         Broader environmental effects that shape the encounter atmosphere.
       </div>
+
       <div style="display:flex; flex-direction:column; gap:8px;">
         ${effects.length ? effects.map(renderManagerEffectRow).join("") : `
           <div class="small" style="opacity:.75;">No area effects loaded.</div>
         `}
       </div>
+
       <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;">
-        <button type="button" class="btn-ghost" id="btnAddPremiumWindow">Add Premium Window</button>
-        <button type="button" class="btn-ghost" id="btnAddCalmFloor">Add Calm Floor</button>
+        <button type="button" class="btn-ghost" id="btnAddPremiumWindow">
+          Premium Window
+          <span class="small-text" style="opacity:.7;"> • ${escapeHtml(premiumMeta)}</span>
+        </button>
+
+        <button type="button" class="btn-ghost" id="btnAddCalmFloor">
+          Calm Floor
+          <span class="small-text" style="opacity:.7;"> • ${escapeHtml(calmMeta)}</span>
+        </button>
       </div>
     </div>
   `;
@@ -9889,6 +10323,7 @@ function renderManagerAreaEffectsPanel() {
 }
 
 function renderManagerLiveControlPanels() {
+  renderManagerAbilityEconomyPanel?.();
   renderManagerAttributeEffectsPanel?.();
   renderManagerAreaEffectsPanel?.();
   renderManagerTimedChallengeActionPanel?.();
@@ -9969,6 +10404,12 @@ function renderManagerActiveThread(nameMap) {
     "renderManagerThreadRecommendation",
     () => renderManagerThreadRecommendation(thread)
   ) || "";
+  const challengeRecommendationHtml = `
+    <div style="margin-top:12px;">
+      <div style="font-weight:600;">Suggested Challenges</div>
+      ${renderManagerChallengeRecommendations(ordered)}
+    </div>
+  `;
 
   if (msgEl) {
     const groupedHtml = safeCall(
@@ -9976,10 +10417,11 @@ function renderManagerActiveThread(nameMap) {
       () => renderManagerThreadMessagesGrouped(ordered, nameMap)
     ) || "";
 
-    msgEl.innerHTML = `${groupedHtml}${recommendationHtml}`;
+    msgEl.innerHTML = `${groupedHtml}${recommendationHtml}${challengeRecommendationHtml}`;
     msgEl.scrollTop = msgEl.scrollHeight;
     safeCall("wireMbCoachSuggestionButtons", () => wireMbCoachSuggestionButtons());
     safeCall("wireMbAutoDrillButtons", () => wireMbAutoDrillButtons());
+    safeCall("wireManagerChallengeSuggestionButtons", () => wireManagerChallengeSuggestionButtons());
     setTimeout(() => {
       const canvases = msgEl.querySelectorAll(".mbSkillRadar");
       const skillRows = ordered.filter((row) => row?.payload?.skills);
@@ -10363,16 +10805,40 @@ async function sendTimedChallengeFromManagerWithValues(values = {}) {
   const payload = buildTimedChallengePayloadFromValues(values);
   const profile = appState?.profile || {};
   const caps = getPremiumRoleCapabilities(profile);
+  const messengerStatusEl = document.getElementById("mbTimedChallengeStatus");
+  const liveStatusEl = document.getElementById("mbLcTimedChallengeStatus");
+  const setStatus = (text) => {
+    if (messengerStatusEl) messengerStatusEl.textContent = text;
+    if (liveStatusEl) liveStatusEl.textContent = text;
+  };
 
   if (!caps.canAssignTimedChallenges) {
+    setStatus("Role cannot assign timed challenges.");
     return false;
   }
 
   if (!payload) {
+    setStatus("Missing target or restaurant.");
     return false;
   }
 
   if (!canActOnRestaurant(profile, profile, payload.restaurantId)) {
+    setStatus("Role cannot act on this restaurant.");
+    return false;
+  }
+
+  const challengeKey = String(payload?.challengeKey || "");
+  const cost = Number(MANAGER_CHALLENGE_COSTS?.[challengeKey] || 0);
+  const cooldownSec = Number(MANAGER_CHALLENGE_COOLDOWNS_SEC?.[challengeKey] || 0);
+
+  if (isManagerActionOnCooldown(challengeKey)) {
+    const remaining = getManagerCooldownRemaining(challengeKey);
+    setStatus(`Challenge on cooldown (${remaining}s)`);
+    return false;
+  }
+
+  if (!canManagerSpendInfluence(cost)) {
+    setStatus("Not enough influence.");
     return false;
   }
 
@@ -10380,6 +10846,7 @@ async function sendTimedChallengeFromManagerWithValues(values = {}) {
     const liveAuth = await getLiveAuthOrNull();
     const userId = liveAuth?.userId || null;
     if (!userId) {
+      setStatus("No active session.");
       return false;
     }
 
@@ -10407,10 +10874,11 @@ async function sendTimedChallengeFromManagerWithValues(values = {}) {
 
     if (error) throw error;
 
-    const messengerStatusEl = document.getElementById("mbTimedChallengeStatus");
-    if (messengerStatusEl) {
-      messengerStatusEl.textContent = `Challenge Sent • ${payload.title} • ${Math.round(payload.durationSec / 60)} min • Reward ${Number(payload.rewardPoints || 0)}`;
-    }
+    spendManagerInfluence(cost);
+    startManagerCooldown(challengeKey, cooldownSec);
+    renderManagerAbilityEconomyPanel?.();
+
+    setStatus(`${payload.title} sent ✅`);
 
     renderTimedChallengeRecentSummary();
     await loadManagerMessenger(payload.restaurantId);
@@ -10418,12 +10886,7 @@ async function sendTimedChallengeFromManagerWithValues(values = {}) {
     return true;
   } catch (e) {
     console.warn("[TIMED CHALLENGE] send failed", e);
-
-    const messengerStatusEl = document.getElementById("mbTimedChallengeStatus");
-    if (messengerStatusEl) {
-      messengerStatusEl.textContent = "Could not send challenge.";
-    }
-
+    setStatus("Could not send challenge.");
     return false;
   }
 }
