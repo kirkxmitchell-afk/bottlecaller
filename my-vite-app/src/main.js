@@ -4055,6 +4055,11 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
       if (msg.type === "drill_run_started") {
         console.log("[PARENT] drill_run_started received ✅", { msg });
+        window.__BC_PARENT_LAST_DRILL_STARTED__ = {
+          assignedMessageId: msg?.assignedMessageId || null,
+          payload: msg?.payload || {},
+          at: Date.now(),
+        };
         return;
       }
 

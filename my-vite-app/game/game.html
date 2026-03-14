@@ -1052,6 +1052,64 @@
     }
     function startFiveMinDrillFromRail() {
       try {
+        const action = getRailPrimaryDrillAction?.() || { kind: "start_generic" };
+
+        if (action.kind === "start_assigned" || action.kind === "resume_assigned") {
+          const assigned = action.assignedDrill || null;
+          const drill = assigned?.drill || assigned?.payload?.drill || null;
+
+          if (drill && typeof launchAssignedDrill === "function") {
+            const started = launchAssignedDrill(drill);
+
+            if (started) {
+              try { renderGameplayRail?.(); } catch {}
+              window.showToast?.(
+                action.kind === "resume_assigned"
+                  ? "Resuming training objective"
+                  : "Starting training objective"
+              );
+              return true;
+            }
+          }
+
+          console.warn("[RAIL] assigned drill launch unavailable");
+          window.showToast?.("Could not start assigned drill.");
+          return false;
+        }
+
+        if (action.kind === "resume_runtime") {
+          if (typeof window.__BC_NAV__?.fiveMinDrill === "function") {
+            window.__BC_NAV__.fiveMinDrill();
+            try { renderGameplayRail?.(); } catch {}
+            window.showToast?.("Resuming 5-Min Drill");
+            return true;
+          }
+
+          if (typeof startDrill === "function") {
+            const runtime = action.runtimeDrill || {};
+            startDrill(
+              Number(runtime?.repTarget ?? 3),
+              runtime?.focus ?? "read",
+              runtime?.starter ?? "single_manager",
+              Number(runtime?.tier ?? 1)
+            );
+            try { renderGameplayRail?.(); } catch {}
+            window.showToast?.("Resuming 5-Min Drill");
+            return true;
+          }
+
+          if (typeof startFiveMinuteDrill === "function") {
+            startFiveMinuteDrill();
+            try { renderGameplayRail?.(); } catch {}
+            window.showToast?.("Resuming 5-Min Drill");
+            return true;
+          }
+
+          console.warn("[RAIL] runtime drill resume unavailable");
+          window.showToast?.("Could not resume drill.");
+          return false;
+        }
+
         const canStart =
           typeof window.__BC_NAV__?.fiveMinDrill === "function" ||
           typeof startDrill === "function" ||
@@ -1065,23 +1123,29 @@
 
         if (typeof window.__BC_NAV__?.fiveMinDrill === "function") {
           window.__BC_NAV__.fiveMinDrill();
+          try { renderGameplayRail?.(); } catch {}
+          window.showToast?.("Starting 5-Min Drill");
           return true;
         }
 
         if (typeof startDrill === "function") {
           startDrill(3);
+          try { renderGameplayRail?.(); } catch {}
+          window.showToast?.("Starting 5-Min Drill");
           return true;
         }
 
         if (typeof startFiveMinuteDrill === "function") {
           startFiveMinuteDrill();
+          try { renderGameplayRail?.(); } catch {}
+          window.showToast?.("Starting 5-Min Drill");
           return true;
         }
 
         return false;
       } catch (e) {
         console.warn("[RAIL] startFiveMinDrillFromRail failed", e);
-        window.showToast?.("Could not start 5-Min Drill.");
+        window.showToast?.("Could not start drill.");
         return false;
       }
     }
@@ -1102,24 +1166,81 @@
         });
       }
     }
+    function getActiveRuntimeDrill() {
+      return (typeof DRILL !== "undefined" && DRILL) ? DRILL : null;
+    }
+    function getRailPrimaryDrillAction() {
+      const assignedDrill = getActiveAssignedDrill?.() || null;
+      const runtimeDrill = getActiveRuntimeDrill?.() || null;
+
+      if (assignedDrill) {
+        return {
+          kind: runtimeDrill ? "resume_assigned" : "start_assigned",
+          assignedDrill,
+          runtimeDrill,
+        };
+      }
+
+      if (runtimeDrill) {
+        return {
+          kind: "resume_runtime",
+          assignedDrill: null,
+          runtimeDrill,
+        };
+      }
+
+      return {
+        kind: "start_generic",
+        assignedDrill: null,
+        runtimeDrill: null,
+      };
+    }
+    function getRailQuickActionsViewModel() {
+      const action = getRailPrimaryDrillAction?.() || { kind: "start_generic" };
+      const activeChallenge = getActiveTimedChallenge?.() || null;
+
+      let primaryLabel = "Start 5-Min Drill";
+      if (action.kind === "start_assigned") {
+        primaryLabel = "Start Training Objective";
+      } else if (action.kind === "resume_assigned") {
+        primaryLabel = "Resume Training Objective";
+      } else if (action.kind === "resume_runtime") {
+        primaryLabel = "Resume 5-Min Drill";
+      }
+
+      let helperText = "";
+      if ((action.kind === "start_assigned" || action.kind === "resume_assigned") && activeChallenge) {
+        helperText = "You have both a live objective and a training objective active.";
+      } else if (action.kind === "start_assigned" || action.kind === "resume_assigned") {
+        helperText = "You have a training objective ready.";
+      } else if (activeChallenge) {
+        helperText = "You have a live objective active right now.";
+      } else if (action.kind === "resume_runtime") {
+        helperText = "You have a drill session in progress.";
+      }
+
+      return {
+        primaryLabel,
+        helperText,
+        actionKind: action.kind,
+      };
+    }
     function renderRailQuickActions() {
       const root = getRailEl("railQuickActions");
       if (!root) return;
 
-      const role = String(
-        window.__BC_CTX__?.membershipRole ||
-        window.__BC_CTX__?.membership_role ||
-        window.__BC_CTX__?.role ||
-        ""
-      ).toLowerCase();
-      const showFiveMinDrill = true;
-      const activeDrill = getActiveAssignedDrill?.() || null;
-      const fiveMinLabel = activeDrill ? "Resume Drill" : "Start 5-Min Drill";
+      const vm = getRailQuickActionsViewModel();
 
       root.innerHTML = `
         <div style="display:flex; flex-direction:column; gap:8px;">
-          ${showFiveMinDrill ? `<button id="btnRailFiveMinDrill" type="button" class="btn-ghost">${fiveMinLabel}</button>` : ``}
+          <button id="btnRailFiveMinDrill" type="button" class="btn-ghost">${escapeHtml(vm.primaryLabel)}</button>
           <button id="btnRailBackToHome" type="button" class="btn-ghost">Back to Premium Home</button>
+
+          ${vm.helperText ? `
+            <div class="small-text" style="opacity:.75; margin-top:2px;">
+              ${escapeHtml(vm.helperText)}
+            </div>
+          ` : ``}
         </div>
       `;
 
@@ -1877,6 +1998,41 @@
         return false;
       }
     }
+    function getDrillStartToastMessage(drill = {}) {
+      const focus = String(drill?.focus || "").toLowerCase();
+
+      const map = {
+        read: "Training objective started: Read",
+        frame: "Training objective started: Frame",
+        delivery: "Training objective started: Delivery",
+        recovery: "Training objective started: Recovery",
+        closing: "Training objective started: Closing",
+      };
+
+      return map[focus] || "Training objective started";
+    }
+    function emitDrillRunStarted(drill = {}, assignedMessageId = null) {
+      try {
+        window.parent?.postMessage(
+          {
+            source: "BC_MSG",
+            v: 1,
+            type: "drill_run_started",
+            assignedMessageId: assignedMessageId || null,
+            payload: {
+              focus: drill?.focus ?? null,
+              repTarget: drill?.repTarget ?? drill?.rep_target ?? null,
+              durationSec: drill?.durationSec ?? drill?.duration_sec ?? null,
+              tier: drill?.tier ?? null,
+              startedAt: Date.now(),
+            },
+          },
+          window.location.origin
+        );
+      } catch (e) {
+        console.warn("[DRILL RUN] could not emit drill_run_started", e);
+      }
+    }
     function logDrillRunComplete(details = {}) {
       try {
         const assignedMessageId = window.__BC_LAST_ASSIGNED_DRILL__?.id || null;
@@ -1911,6 +2067,29 @@
         console.warn("[DRILL RUN] completion log failed", e);
       }
     }
+    function getDrillCompletionToastMessage(status = {}, assignedDrill = null) {
+      if (status?.ok) {
+        const drill = assignedDrill?.drill || assignedDrill?.payload?.drill || {};
+        const focus = String(drill?.focus || "").toLowerCase();
+
+        const labelMap = {
+          read: "Read",
+          frame: "Frame",
+          delivery: "Delivery",
+          recovery: "Recovery",
+          closing: "Closing",
+        };
+
+        const focusLabel = labelMap[focus] || "Drill";
+        return `${focusLabel} training complete ✅`;
+      }
+
+      if (status?.ok === false) {
+        return "Could not send drill completion";
+      }
+
+      return "";
+    }
     function launchAssignedDrill(drill) {
       try {
         if (!drill || typeof drill !== "object") return false;
@@ -1920,6 +2099,8 @@
 
         console.log("[GAME] launchAssignedDrill ✅", cfg);
 
+        let started = false;
+
         if (typeof startDrill === "function") {
           try {
             startDrill(
@@ -1928,37 +2109,53 @@
               "single_manager",
               Number(drill?.tier ?? 1)
             );
-            return true;
+            started = true;
           } catch (e) {
             console.warn("[GAME] startDrill failed", e);
           }
         }
 
-        if (typeof startDrillSession === "function") {
+        if (!started && typeof startDrillSession === "function") {
           try {
             startDrillSession(drill?.repTarget ?? 3);
-            return true;
+            started = true;
           } catch (e) {
             console.warn("[GAME] startDrillSession failed", e);
           }
         }
 
-        window.postMessage(
-          {
-            source: "BC_MSG",
-            v: 1,
-            type: "start_drill",
-            repTarget: drill?.repTarget ?? 3,
-            focus: drill?.focus ?? "read",
-            pool: drill?.pool ?? ["decider", "bargain_smart", "griever"],
-            durationSec: drill?.durationSec ?? 300,
-            tier: drill?.tier ?? 1,
-            mode: "premium",
-            drill
-          },
-          window.location.origin
-        );
-        return true;
+        if (!started) {
+          try {
+            window.postMessage(
+              {
+                source: "BC_MSG",
+                v: 1,
+                type: "start_drill",
+                repTarget: drill?.repTarget ?? 3,
+                focus: drill?.focus ?? "read",
+                pool: drill?.pool ?? ["decider", "bargain_smart", "griever"],
+                durationSec: drill?.durationSec ?? 300,
+                tier: drill?.tier ?? 1,
+                mode: "premium",
+                drill
+              },
+              window.location.origin
+            );
+            started = true;
+          } catch (e) {
+            console.warn("[GAME] start_drill postMessage failed", e);
+          }
+        }
+
+        if (started) {
+          const assignedMessageId = window.__BC_LAST_ASSIGNED_DRILL__?.id || null;
+          emitDrillRunStarted(drill, assignedMessageId);
+          renderGameplayRail?.();
+          window.showToast?.(getDrillStartToastMessage(drill));
+          return true;
+        }
+
+        return false;
 
       } catch (e) {
         console.warn("[GAME] launchAssignedDrill failed", e);
@@ -1996,8 +2193,6 @@
           drill
         };
         renderGameplayRail();
-
-        await logDrillRunStart(drill, messageId);
 
         const started = launchAssignedDrill(drill);
         console.log("[GAME] assigned drill auto-start", { started, focus: drill?.focus, messageId });
@@ -2123,8 +2318,6 @@
           drill
         };
         renderGameplayRail();
-        await logDrillRunStart(drill, assignedMessageId);
-
         const started = launchAssignedDrill(drill);
         console.log("[GAME] launch_assigned_drill_request", { started, drill, assignedMessageId });
 
@@ -2224,14 +2417,18 @@
         return;
       }
         if (msg.type === "drill_run_completed_result") {
+        const assigned = window.__BC_LAST_ASSIGNED_DRILL__ || null;
         if (msg.ok) {
-          window.showToast?.("Drill completion sent ✅");
           window.__BC_LAST_DRILL_COMPLETION_STATUS__ = {
             ok: true,
             assignedMessageId: msg.assignedMessageId || null,
             managerUserId: msg.managerUserId || null,
             at: Date.now(),
           };
+          try {
+            const toast = getDrillCompletionToastMessage(window.__BC_LAST_DRILL_COMPLETION_STATUS__, assigned);
+            if (toast) window.showToast?.(toast);
+          } catch {}
           window.__BC_LAST_ASSIGNED_DRILL_COMPLETED__ = {
             assignedMessageId: msg.assignedMessageId || null,
             at: Date.now(),
@@ -2244,13 +2441,16 @@
             window.__BC_LAST_ASSIGNED_DRILL__ = null;
           }
         } else {
-          window.showToast?.("Could not send drill completion.");
           window.__BC_LAST_DRILL_COMPLETION_STATUS__ = {
             ok: false,
             assignedMessageId: msg.assignedMessageId || null,
             error: msg.error || "unknown",
             at: Date.now(),
           };
+          try {
+            const toast = getDrillCompletionToastMessage(window.__BC_LAST_DRILL_COMPLETION_STATUS__, assigned);
+            if (toast) window.showToast?.(toast);
+          } catch {}
         }
         renderGameplayRail();
         return;
