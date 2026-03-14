@@ -15,14 +15,44 @@
   </script>
 
   <script>
-    function escapeHtml(value) {
+    window.escapeHtml = window.escapeHtml || function escapeHtml(value) {
       return String(value ?? "")
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#39;");
+    };
+  </script>
+
+  <script>
+    function safeCall(label, fn) {
+      try {
+        return typeof fn === "function" ? fn() : undefined;
+      } catch (err) {
+        console.error(`[BC][SAFE_CALL] ${label} failed`, err);
+        return undefined;
+      }
     }
+
+    const escapeHtml = window.escapeHtml;
+
+    window.__BC_DEBUG_STATE__ = function () {
+      return {
+        epoch: window.__BC_EPOCH__ || 0,
+        ctx: window.__BC_CTX__ || null,
+        activeAssignedDrill: window.__BC_LAST_ASSIGNED_DRILL__ || null,
+        lastDrillStartedStatus: window.__BC_LAST_DRILL_STARTED_STATUS__ || null,
+        lastDrillCompletionStatus: window.__BC_LAST_DRILL_COMPLETION_STATUS__ || null,
+        liveEffectsState: window.__BC_LIVE_EFFECTS_STATE__ || null,
+        managerLiveEffectsState: window.__BC_MANAGER_LIVE_EFFECTS_STATE__ || null,
+        activeThreadUserId: window.__BC_MB_ACTIVE_THREAD_USER_ID__ || "",
+        activeThreadRowsCount: Array.isArray(window.__BC_MB_ACTIVE_THREAD_ROWS__)
+          ? window.__BC_MB_ACTIVE_THREAD_ROWS__.length
+          : 0,
+        runtimeDrill: (typeof DRILL !== "undefined" ? DRILL : null),
+      };
+    };
   </script>
 
   <script>
@@ -283,15 +313,25 @@
           cue: "This challenge rewards strong recovery.",
           next: "If a moment goes weak, regain control cleanly.",
         },
-        closing: {
-          label: "Closing Push",
-          cue: "This challenge rewards strong closing.",
-          next: "Prioritize clear, decisive finishes.",
+        clean_close: {
+          label: "Clean Close",
+          cue: "This challenge rewards a full clean close.",
+          next: "Build the table well and finish strong.",
         },
-        recovery: {
-          label: "Recovery Window",
-          cue: "This challenge rewards strong recovery.",
-          next: "If a moment goes weak, regain control cleanly.",
+        read_first: {
+          label: "Read First",
+          cue: "This challenge rewards reading the guest correctly.",
+          next: "Identify the table before shaping your recommendation.",
+        },
+        full_delivery: {
+          label: "Full Delivery",
+          cue: "This challenge rewards a complete delivery sequence.",
+          next: "Keep both delivery beats clean and accurate.",
+        },
+        no_reset_run: {
+          label: "No Reset Run",
+          cue: "This challenge rewards clean play without reset.",
+          next: "Stay composed and commit to the right line.",
         },
       };
 
@@ -300,6 +340,89 @@
         cue: "Complete the objective before time runs out.",
         next: "Play deliberately and lean into the target skill.",
       };
+    }
+    function evaluateTimedChallengeSuccess(challenge = {}, encounter = {}, checks = {}, report = {}) {
+      const rule = challenge?.successRule || {};
+      const type = String(rule?.type || "").toLowerCase();
+      const expected = rule?.value;
+      const outcome = String(
+        report?.outcome ||
+        encounter?.finalOutcome ||
+        encounter?.outcome ||
+        ""
+      ).toLowerCase();
+      const reactionSignal = String(
+        encounter?.chainSignal ||
+        encounter?.__reaction?.chainSignal ||
+        report?.chainSignal ||
+        ""
+      ).toLowerCase();
+      const strongestSkill = String(report?.strongestSkill || "").toLowerCase();
+      const deliveryScore = Number(
+        encounter?.__tiers?.delivery ??
+        (typeof getDeliveryScore === "function" ? getDeliveryScore(encounter) : 0) ??
+        0
+      );
+      const guestReadCorrect = !!(
+        checks?.guestRead ??
+        encounter?.guestReadCorrect ??
+        false
+      );
+      const resetUsed = !!(
+        checks?.resetUsed ??
+        encounter?.resetUsed ??
+        false
+      );
+      const premiumSuccess = !!(
+        encounter?.premiumOpportunityHit ??
+        encounter?.premiumRollSuccess ??
+        false
+      );
+      const chainScore = Number(
+        encounter?.chainScore ??
+        report?.chainScore ??
+        0
+      );
+      const strongPillars = Number(
+        report?.strongPillars ??
+        0
+      );
+
+      switch (type) {
+        case "strongest_skill_equals":
+          return strongestSkill === String(expected || "").toLowerCase();
+        case "outcome_equals":
+          return outcome === String(expected || "").toLowerCase();
+        case "reaction_signal_equals":
+          return reactionSignal === String(expected || "").toLowerCase();
+        case "delivery_score_gte":
+          return deliveryScore >= Number(expected || 0);
+        case "guest_read_correct":
+          return guestReadCorrect === !!expected;
+        case "no_reset_used":
+          return (!resetUsed) === !!expected;
+        case "premium_roll_success":
+          return premiumSuccess === !!expected;
+        case "chain_score_gte":
+          return chainScore >= Number(expected || 0);
+        case "strong_pillars_gte":
+          return strongPillars >= Number(expected || 0);
+        default:
+          return strongestSkill === String(expected || "").toLowerCase();
+      }
+    }
+    function getEncounterStrongPillars(enc = {}, checks = {}) {
+      const readCorrect = !!checks?.guestRead;
+      const modeTier = typeof getModeTier === "function" ? getModeTier(checks) : "wrong";
+      const hookTier = typeof getHookTier === "function" ? getHookTier(checks) : "wrong";
+      const deliveryStrong = (typeof getDeliveryScore === "function" ? getDeliveryScore(enc) : 0) >= 2;
+
+      return (
+        (readCorrect ? 1 : 0) +
+        (modeTier === "right" ? 1 : 0) +
+        (hookTier === "right" ? 1 : 0) +
+        (deliveryStrong ? 1 : 0)
+      );
     }
     function getTimedChallengeRailViewModel() {
       const active = getActiveTimedChallenge?.() || null;
@@ -1178,13 +1301,31 @@
     function getActiveRuntimeDrill() {
       return (typeof DRILL !== "undefined" && DRILL) ? DRILL : null;
     }
+    function doesRuntimeDrillMatchAssignedDrill(runtimeDrill, assignedDrill) {
+      if (!runtimeDrill || !assignedDrill) return false;
+
+      const assigned = assignedDrill?.drill || assignedDrill?.payload?.drill || {};
+      const runtimeFocus = String(runtimeDrill?.focus || "").toLowerCase();
+      const assignedFocus = String(assigned?.focus || "").toLowerCase();
+      const runtimeRepTarget = Number(runtimeDrill?.repTarget ?? 0);
+      const assignedRepTarget = Number(assigned?.repTarget ?? assigned?.rep_target ?? 0);
+      const runtimeTier = Number(runtimeDrill?.tier ?? 0);
+      const assignedTier = Number(assigned?.tier ?? 0);
+
+      return (
+        runtimeFocus === assignedFocus &&
+        runtimeRepTarget === assignedRepTarget &&
+        runtimeTier === assignedTier
+      );
+    }
     function getRailPrimaryDrillAction() {
       const assignedDrill = getActiveAssignedDrill?.() || null;
       const runtimeDrill = getActiveRuntimeDrill?.() || null;
 
       if (assignedDrill) {
+        const matchesAssigned = doesRuntimeDrillMatchAssignedDrill(runtimeDrill, assignedDrill);
         return {
-          kind: runtimeDrill ? "resume_assigned" : "start_assigned",
+          kind: matchesAssigned ? "resume_assigned" : "start_assigned",
           assignedDrill,
           runtimeDrill,
         };
@@ -1257,12 +1398,12 @@
     }
     function renderGameplayRail() {
       ensureRailObjectiveTicker?.();
-      renderRailActiveChallenge?.();
-      renderRailActiveDrill?.();
-      renderRailLiveEffects?.();
-      renderRailQuickActions?.();
-      try { window.renderRailProgress?.(); } catch {}
-      try { window.renderRailWineNotes?.(); } catch {}
+      safeCall("renderRailActiveChallenge", () => renderRailActiveChallenge?.());
+      safeCall("renderRailActiveDrill", () => renderRailActiveDrill?.());
+      safeCall("renderRailLiveEffects", () => renderRailLiveEffects?.());
+      safeCall("renderRailQuickActions", () => renderRailQuickActions?.());
+      safeCall("renderRailProgress", () => window.renderRailProgress?.());
+      safeCall("renderRailWineNotes", () => window.renderRailWineNotes?.());
     }
     function renderTimedChallengeSurfaces() {
       const host = getTimedChallengeHost();
@@ -1280,14 +1421,22 @@
             source: "BC_MSG",
             v: 1,
             type: "timed_challenge_result",
-            challengeId: challenge.id || null,
+            challengeId: challenge.challengeId || challenge.id || null,
             payload: {
               challengeKey: challenge.challengeKey || null,
               title: challenge.title || null,
               status: result?.status || challenge.status || null,
               completedAt: result?.completedAt || Date.now(),
               strongestSkill: result?.strongestSkill || null,
-              rewardPoints: result?.rewardPoints ?? challenge?.payload?.rewardPoints ?? null,
+              outcome: result?.outcome || null,
+              chainSignal: result?.chainSignal || null,
+              chainScore: result?.chainScore ?? null,
+              guestReadCorrect: result?.guestReadCorrect ?? null,
+              deliveryScore: result?.deliveryScore ?? null,
+              resetUsed: result?.resetUsed ?? null,
+              premiumSuccess: result?.premiumSuccess ?? null,
+              strongPillars: result?.strongPillars ?? null,
+              rewardPoints: result?.rewardPoints ?? challenge?.rewardPoints ?? challenge?.payload?.rewardPoints ?? null,
               targetUserId: challenge.targetUserId || null,
               restaurantId: challenge.restaurantId || null,
             },
@@ -1308,14 +1457,15 @@
       if (!challenge) return false;
 
       const result = {
-        id: challenge.id,
+        id: challenge.id || challenge.challengeId || null,
+        challengeId: challenge.challengeId || challenge.id || null,
         challengeKey: challenge.challengeKey,
         title: challenge.title,
         status: String(status || "expired"),
         completedAt: Date.now(),
         targetUserId: challenge.targetUserId || null,
         restaurantId: challenge.restaurantId || null,
-        rewardPoints: challenge?.payload?.rewardPoints ?? null,
+        rewardPoints: challenge?.rewardPoints ?? challenge?.payload?.rewardPoints ?? null,
         ackPending: true,
         ackOk: null,
         ackError: null,
@@ -1350,25 +1500,45 @@
       const challenge = window.__BC_ACTIVE_TIMED_CHALLENGE__ || getActiveTimedChallenge();
       if (!challenge) return false;
 
-      const p = payload || {};
-      const challengeKey = String(challenge?.challengeKey || "").toLowerCase();
-      const strongestSkill = String(p?.strongestSkill || "").toLowerCase();
+      const encounter = window.currentEncounter || null;
+      const checks = encounter
+        ? buildReactionChecksFromEncounter(encounter, PROG)
+        : {};
+      const outcomeResult = encounter && typeof resolveOutcome === "function"
+        ? resolveOutcome(encounter, checks)
+        : { outcome: encounter?.outcome || "" };
+      const deliveryScore = encounter && typeof getDeliveryScore === "function"
+        ? getDeliveryScore(encounter)
+        : 0;
+      const reportPayload = {
+        challengeKey: challenge?.challengeKey || null,
+        title: challenge?.title || "Timed Challenge",
+        targetUserId: challenge?.targetUserId || null,
+        restaurantId: challenge?.restaurantId || null,
+        rewardPoints: Number(challenge?.rewardPoints || 0),
+        strongestSkill: payload?.strongestSkill || null,
+        outcome: outcomeResult?.outcome || null,
+        chainSignal: encounter?.chainSignal || encounter?.__reaction?.chainSignal || null,
+        chainScore: Number(encounter?.chainScore || 0),
+        guestReadCorrect: !!checks?.guestRead,
+        deliveryScore,
+        resetUsed: !!checks?.resetUsed,
+        premiumSuccess: !!(encounter?.premiumOpportunityHit || encounter?.premiumRollSuccess || false),
+        strongPillars: getEncounterStrongPillars(encounter, checks),
+      };
 
-      if (challengeKey === "closing_push" && strongestSkill === "closing") {
-        return completeTimedChallengeLocally("completed", {
-          strongestSkill,
-          rewardPoints: challenge?.payload?.rewardPoints ?? null,
-        });
-      }
+      const success = evaluateTimedChallengeSuccess(
+        challenge,
+        encounter,
+        checks,
+        reportPayload
+      );
+      if (!success) return false;
 
-      if (challengeKey === "recovery_window" && strongestSkill === "recovery") {
-        return completeTimedChallengeLocally("completed", {
-          strongestSkill,
-          rewardPoints: challenge?.payload?.rewardPoints ?? null,
-        });
-      }
+      reportPayload.status = success ? "completed" : "expired";
+      reportPayload.completedAt = Date.now();
 
-      return false;
+      return completeTimedChallengeLocally(reportPayload.status, reportPayload);
     }
     function applyTimedChallengeFromMessage(message) {
       try {
@@ -1406,6 +1576,7 @@
         const startedAt = Date.now();
         const challenge = {
           id: message?.id || crypto.randomUUID(),
+          challengeId: message?.id || null,
           title: payload?.title || "Timed Challenge",
           challengeKey,
           targetUserId,
@@ -1413,6 +1584,9 @@
           startedAt,
           expiresAt: startedAt + durationSec * 1000,
           durationSec,
+          focus: payload?.focus || null,
+          rewardPoints: Number(payload?.rewardPoints || 0),
+          successRule: payload?.successRule || {},
           status: "active",
           payload,
         };
@@ -1862,6 +2036,14 @@
         const labels = pickStrongestWeakest(snapshotFromFn);
         const strongestSkill = labels.strongest;
         const weakestSkill = labels.weakest;
+        const checks = encounter ? buildReactionChecksFromEncounter(encounter) : {};
+        const deliveryScore = encounter?.__tiers?.delivery ?? (encounter ? getDeliveryScore(encounter) : 0);
+        const strongPillars = Number(
+          (checks?.guestRead ? 1 : 0) +
+          (encounter?.__tiers?.modeTier === "right" ? 1 : 0) +
+          (encounter?.__tiers?.hookTier === "right" ? 1 : 0) +
+          (Number(deliveryScore || 0) >= 2 ? 1 : 0)
+        );
 
         console.log("[REPORT] raw skill snapshot", {
           snapshotFromFn,
@@ -1881,6 +2063,19 @@
             encounter?.chainScore ??
             encounter?.__reaction?.chainScore ??
             null,
+          outcome:
+            encounter?.outcome ??
+            encounter?.finalOutcome ??
+            null,
+          guestReadCorrect: !!checks?.guestRead,
+          deliveryScore,
+          resetUsed: !!(checks?.resetUsed ?? encounter?.resetUsed ?? false),
+          premiumSuccess: !!(
+            encounter?.premiumOpportunityHit ??
+            encounter?.premiumRollSuccess ??
+            false
+          ),
+          strongPillars,
 
           skills: snapshotFromFn,
 
@@ -7233,7 +7428,7 @@ function ensureProgLoaded() {
           guestRead: (typeof isCorrectGuestRead === "function")
             ? isCorrectGuestRead(enc)
             : (String(enc?.guestReadSelected || "").toLowerCase() === String(enc?.guestStateActual || "").toLowerCase()),
-          deliveryCorrect: true,
+          deliveryCorrect: getDeliveryScore(enc) >= 2,
           deciderMode: mode,
           deciderHookText: hookMeta?.text || "",
           deciderHookType: hookMeta?.hookType || "",
@@ -15041,13 +15236,22 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             (hookTier === "right" ? 1 : 0) +
             (deliveryStrong ? 1 : 0);
           const wrongReadThresholdPenalty = readCorrect ? 0 : 1;
+          const difficultyLevel = Number(policy?.d || enc?.difficulty || 1);
+          const cleanDifficultyDelta =
+            difficultyLevel <= 2 ? -0.25 :
+            difficultyLevel <= 4 ? 0 :
+            difficultyLevel <= 6 ? 0.5 : 1;
+          const softDifficultyDelta =
+            difficultyLevel <= 2 ? -0.25 :
+            difficultyLevel <= 4 ? 0 :
+            difficultyLevel <= 6 ? 0.5 : 1;
           const cleanCloseThreshold = clampNumber(
-            6 + (0.5 * closingThresholdDelta) + wrongReadThresholdPenalty,
+            6 + cleanDifficultyDelta + (0.5 * closingThresholdDelta) + wrongReadThresholdPenalty,
             1,
             10
           );
           const softCloseThreshold = clampNumber(
-            5 + (0.5 * closingThresholdDelta) + wrongReadThresholdPenalty,
+            5 + softDifficultyDelta + (0.5 * closingThresholdDelta) + wrongReadThresholdPenalty,
             1,
             10
           );
@@ -15062,6 +15266,13 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             strongPillars >= 1 &&
             !(modeDamaging && hookDamaging && !readCorrect && !deliveryStrong);
           const redSignalDowngrade = reactionSignal === "red";
+          const pivotViable =
+            readCorrect ||
+            deliveryStrong ||
+            modeTier === "right" ||
+            hookTier === "right" ||
+            (!modeDamaging && !hookDamaging);
+          const pivotAllowed = pivotPlanned && pivotViable;
 
           if (abilityFx.closingSurge) {
             recordAbilityImpact({
@@ -15088,16 +15299,20 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           }
           if (total >= softCloseThreshold && softEligible) {
             if (redSignalDowngrade) {
-              return pivotPlanned
+              return pivotAllowed
                 ? { outcome: "pivot", score: total }
                 : { outcome: "recovery", score: total };
             }
             return { outcome: "soft_close", score: total };
           }
           if (total >= recoveryPivotThreshold) {
-            return pivotPlanned
-              ? { outcome: "pivot", score: total }
-              : { outcome: "soft_close", score: total };
+            if (pivotAllowed) {
+              return { outcome: "pivot", score: total };
+            }
+            if (softEligible && strongPillars >= 2) {
+              return { outcome: "soft_close", score: total };
+            }
+            return { outcome: "recovery", score: total };
           }
           return { outcome: "recovery", score: total };
         }

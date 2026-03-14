@@ -56,6 +56,15 @@ window.escapeHtml =
 // Keep existing calls working: escapeHtml("x")
 var escapeHtml = window.escapeHtml;
 
+function safeCall(label, fn) {
+  try {
+    return typeof fn === "function" ? fn() : undefined;
+  } catch (err) {
+    console.error(`[BC][SAFE_CALL] ${label} failed`, err);
+    return undefined;
+  }
+}
+
 if (window.__BOTTLECALLER_BOOTED__) {
   throw new Error("BottleCaller boot attempted twice.");
 }
@@ -478,6 +487,10 @@ document.querySelector("#app").innerHTML = `
                 <select id="mbTimedChallengeType">
                   <option value="closing_push">Closing Push</option>
                   <option value="recovery_window">Recovery Window</option>
+                  <option value="clean_close">Clean Close</option>
+                  <option value="read_first">Read First</option>
+                  <option value="full_delivery">Full Delivery</option>
+                  <option value="no_reset_run">No Reset Run</option>
                 </select>
 
                 <select id="mbTimedChallengeDuration">
@@ -2438,14 +2451,21 @@ function renderHudTimedChallenge() {
 }
 
 function getTimedChallengeLabel(challengeKey) {
-  switch (String(challengeKey || "").toLowerCase()) {
-    case "closing_push":
-      return "Closing Push";
-    case "recovery_window":
-      return "Recovery Window";
-    default:
-      return "Timed Challenge";
-  }
+  const key = String(challengeKey || "").toLowerCase();
+  const map = {
+    closing_push: "Closing Push",
+    recovery_window: "Recovery Window",
+    clean_close: "Clean Close",
+    read_first: "Read First",
+    full_delivery: "Full Delivery",
+    stable_signal: "Stable Signal",
+    no_reset_run: "No Reset Run",
+    premium_moment: "Premium Moment",
+  };
+
+  return map[key] || (key
+    ? key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+    : "Timed Challenge");
 }
 
 function getTimedChallengeResultLabel(status) {
@@ -4191,7 +4211,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
             at: Date.now(),
           };
 
-          try { renderManagerThreadDrillSummary?.(); } catch {}
+          safeCall("renderManagerThreadDrillSummary", () => renderManagerThreadDrillSummary?.());
 
           replyResult({ ok: true, managerUserId, duplicate: true });
           return;
@@ -4235,7 +4255,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
           at: Date.now(),
         };
 
-        try { renderManagerThreadDrillSummary?.(); } catch {}
+        safeCall("renderManagerThreadDrillSummary", () => renderManagerThreadDrillSummary?.());
 
         replyResult({ ok: true, managerUserId });
         return;
@@ -6530,8 +6550,8 @@ function wireManagerBoardMenu() {
       return loadManagerMessenger();
     }
     if (normalized === "live_controls") {
-      renderManagerBoardOverviewLiveEffects?.();
-      renderManagerLiveEffectsPanels?.();
+      safeCall("renderManagerBoardOverviewLiveEffects", () => renderManagerBoardOverviewLiveEffects?.());
+      safeCall("renderManagerLiveEffectsPanels", () => renderManagerLiveEffectsPanels?.());
       return;
     }
   };
@@ -6575,8 +6595,8 @@ function wireManagerBoardMenu() {
       await loadManagerMessenger();
     }
     if (tab === "live_controls") {
-      renderManagerBoardOverviewLiveEffects?.();
-      renderManagerLiveEffectsPanels?.();
+      safeCall("renderManagerBoardOverviewLiveEffects", () => renderManagerBoardOverviewLiveEffects?.());
+      safeCall("renderManagerLiveEffectsPanels", () => renderManagerLiveEffectsPanels?.());
     }
   });
 
@@ -8251,8 +8271,7 @@ async function loadGroupManagerRestaurantComparisonRows() {
 function resetManagerMessengerState(opts = {}) {
   const keepStatus = !!opts.keepStatus;
 
-  window.__BC_MB_ACTIVE_THREAD_USER_ID__ = null;
-  window.__BC_MB_ACTIVE_THREAD_ROWS__ = [];
+  setActiveManagerThreadState({ userId: "", rows: [] });
   window.__BC_MB_ACTIVE_THREAD_EMAIL__ = null;
   window.__BC_MB_ACTIVE_THREAD_RESTAURANT_ID__ = null;
   window.__BC_MB_THREADS__ = [];
@@ -8321,6 +8340,22 @@ window.__BC_MB_THREADS__ = [];
 window.__BC_MB_ACTIVE_THREAD_USER_ID__ = null;
 window.__BC_MB_ACTIVE_THREAD_ROWS__ = [];
 window.__MB_LAST_MESSAGES__ = [];
+
+function setActiveManagerThreadState({ userId = "", rows = [] } = {}) {
+  window.__BC_MB_ACTIVE_THREAD_USER_ID__ = String(userId || "");
+  window.__BC_MB_ACTIVE_THREAD_ROWS__ = Array.isArray(rows) ? rows : [];
+}
+
+window.__BC_MANAGER_DEBUG_STATE__ = function () {
+  return {
+    activeThreadUserId: window.__BC_MB_ACTIVE_THREAD_USER_ID__ || "",
+    activeThreadRowsCount: Array.isArray(window.__BC_MB_ACTIVE_THREAD_ROWS__)
+      ? window.__BC_MB_ACTIVE_THREAD_ROWS__.length
+      : 0,
+    parentLastDrillStarted: window.__BC_PARENT_LAST_DRILL_STARTED__ || null,
+    managerLiveEffectsState: window.__BC_MANAGER_LIVE_EFFECTS_STATE__ || null,
+  };
+};
 
 function getCoachingSuggestionsFromReport(payload) {
   if (!payload || !payload.skills) return [];
@@ -9581,9 +9616,9 @@ function setManagerLiveEffectsState(nextState = {}) {
     updatedAt: Date.now(),
   };
 
-  renderManagerLiveEffectsPanels?.();
-  renderManagerBoardOverviewLiveEffects?.();
-  pushLiveEffectsToGame?.();
+  safeCall("renderManagerLiveEffectsPanels", () => renderManagerLiveEffectsPanels?.());
+  safeCall("renderManagerBoardOverviewLiveEffects", () => renderManagerBoardOverviewLiveEffects?.());
+  safeCall("pushLiveEffectsToGame", () => pushLiveEffectsToGame?.());
 
   return window.__BC_MANAGER_LIVE_EFFECTS_STATE__;
 }
@@ -9894,24 +9929,30 @@ function renderManagerActiveThread(nameMap) {
     if (titleEl) titleEl.textContent = "Select a waiter";
     if (metaEl) metaEl.textContent = "";
     if (msgEl) msgEl.innerHTML = `<div class="small-text" style="opacity:.8;">Select a waiter thread in this restaurant to assign a timed challenge.</div>`;
-    window.__BC_MB_ACTIVE_THREAD_ROWS__ = [];
-    renderManagerThreadDrillSummary?.();
+    setActiveManagerThreadState({ userId: "", rows: [] });
+    safeCall("renderManagerThreadDrillSummary", () => renderManagerThreadDrillSummary?.());
     return;
   }
 
   const ordered = [...thread.rows].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-  window.__BC_MB_ACTIVE_THREAD_ROWS__ = ordered;
+  setActiveManagerThreadState({ userId: thread.userId, rows: ordered });
   if (titleEl) titleEl.textContent = userLabel(thread.userId, nameMap);
   if (metaEl) metaEl.textContent = getManagerThreadMetaSummary(ordered);
-  const recommendationHtml = renderManagerThreadRecommendation(thread);
+  const recommendationHtml = safeCall(
+    "renderManagerThreadRecommendation",
+    () => renderManagerThreadRecommendation(thread)
+  ) || "";
 
   if (msgEl) {
-    const groupedHtml = renderManagerThreadMessagesGrouped(ordered, nameMap);
+    const groupedHtml = safeCall(
+      "renderManagerThreadMessagesGrouped",
+      () => renderManagerThreadMessagesGrouped(ordered, nameMap)
+    ) || "";
 
     msgEl.innerHTML = `${groupedHtml}${recommendationHtml}`;
     msgEl.scrollTop = msgEl.scrollHeight;
-    wireMbCoachSuggestionButtons();
-    wireMbAutoDrillButtons();
+    safeCall("wireMbCoachSuggestionButtons", () => wireMbCoachSuggestionButtons());
+    safeCall("wireMbAutoDrillButtons", () => wireMbAutoDrillButtons());
     setTimeout(() => {
       const canvases = msgEl.querySelectorAll(".mbSkillRadar");
       const skillRows = ordered.filter((row) => row?.payload?.skills);
@@ -9923,8 +9964,8 @@ function renderManagerActiveThread(nameMap) {
     }, 0);
   }
 
-  buildManagerSuggestedPrompts(thread);
-  renderManagerThreadDrillSummary?.();
+  safeCall("buildManagerSuggestedPrompts", () => buildManagerSuggestedPrompts(thread));
+  safeCall("renderManagerThreadDrillSummary", () => renderManagerThreadDrillSummary?.());
 }
 
 async function loadManagerMessenger(restaurantId = null) {
@@ -10041,12 +10082,15 @@ async function loadManagerMessenger(restaurantId = null) {
   }
 
   if (!window.__BC_MB_ACTIVE_THREAD_USER_ID__ && window.__BC_MB_THREADS__[0]) {
-    window.__BC_MB_ACTIVE_THREAD_USER_ID__ = window.__BC_MB_THREADS__[0].userId;
+    setActiveManagerThreadState({
+      userId: window.__BC_MB_THREADS__[0].userId,
+      rows: window.__BC_MB_THREADS__[0].rows || [],
+    });
   }
 
   reconcileManagerMessengerSelection();
-  renderManagerActiveThread(nameMap);
-  try { renderManagerThreadDrillSummary?.(); } catch {}
+  safeCall("renderManagerActiveThread", () => renderManagerActiveThread(nameMap));
+  safeCall("renderManagerThreadDrillSummary", () => renderManagerThreadDrillSummary?.());
   renderTimedChallengeComposer();
   wireMbCoachSuggestionButtons();
   return window.__BC_MB_THREADS__;
@@ -10162,6 +10206,38 @@ function buildTimedChallengePayloadFromValues(values = {}) {
       successRule: {
         type: "strongest_skill_equals",
         value: "recovery",
+      },
+    },
+    clean_close: {
+      title: "Clean Close",
+      focus: "closing",
+      successRule: {
+        type: "outcome_equals",
+        value: "clean_close",
+      },
+    },
+    read_first: {
+      title: "Read First",
+      focus: "read",
+      successRule: {
+        type: "guest_read_correct",
+        value: true,
+      },
+    },
+    full_delivery: {
+      title: "Full Delivery",
+      focus: "delivery",
+      successRule: {
+        type: "delivery_score_gte",
+        value: 2,
+      },
+    },
+    no_reset_run: {
+      title: "No Reset Run",
+      focus: "delivery",
+      successRule: {
+        type: "no_reset_used",
+        value: true,
       },
     },
   };
@@ -10369,6 +10445,10 @@ function renderManagerTimedChallengeActionPanel() {
         <select id="mbLcTimedChallengeType">
           <option value="closing_push">Closing Push</option>
           <option value="recovery_window">Recovery Window</option>
+          <option value="clean_close">Clean Close</option>
+          <option value="read_first">Read First</option>
+          <option value="full_delivery">Full Delivery</option>
+          <option value="no_reset_run">No Reset Run</option>
         </select>
         <select id="mbLcTimedChallengeDuration">
           <option value="300">5 min</option>
@@ -10607,7 +10687,7 @@ async function mbSendDrillOverride(opts = {}) {
 
   if (status && !opts.silentStatus) status.textContent = "Drill sent ✅";
   await loadManagerMessenger(restaurantId);
-  try { renderManagerThreadDrillSummary?.(); } catch {}
+  safeCall("renderManagerThreadDrillSummary", () => renderManagerThreadDrillSummary?.());
   return true;
 }
 
@@ -10783,9 +10863,15 @@ function wireManagerBoardMessenger() {
       const btn = e.target?.closest?.("[data-thread-user-id]");
       if (!btn) return;
 
-      window.__BC_MB_ACTIVE_THREAD_USER_ID__ = btn.getAttribute("data-thread-user-id");
-
       const threads = window.__BC_MB_THREADS__ || [];
+      const nextUserId = btn.getAttribute("data-thread-user-id") || "";
+      const nextThread = threads.find(
+        (t) => String(t?.userId || "") === String(nextUserId)
+      );
+      setActiveManagerThreadState({
+        userId: nextUserId,
+        rows: nextThread?.rows || [],
+      });
       const ids = threads.map((t) => t.userId);
       const nameMap = await mapUserIdsToNames(ids);
 
@@ -10794,8 +10880,8 @@ function wireManagerBoardMessenger() {
         listEl.innerHTML = threads.map((t) => renderManagerThreadListItem(t, nameMap)).join("");
       }
 
-      renderManagerActiveThread(nameMap);
-      try { renderManagerThreadDrillSummary?.(); } catch {}
+      safeCall("renderManagerActiveThread", () => renderManagerActiveThread(nameMap));
+      safeCall("renderManagerThreadDrillSummary", () => renderManagerThreadDrillSummary?.());
       const target = document.getElementById("mbTimedChallengeTarget");
       if (target) target.value = String(window.__BC_MB_ACTIVE_THREAD_USER_ID__ || "");
       renderTimedChallengeComposer();
@@ -12215,19 +12301,19 @@ async function refreshManagerBoardScopedViews(restaurantId = null) {
 
   renderManagerRestaurantPicker?.();
   renderManagerRestaurantContextCard?.();
-  renderGroupOverviewCard?.();
-  renderGroupMetricsCard?.();
-  renderGroupRestaurantComparisonCard?.();
-  wireGroupRestaurantComparisonCard?.();
-  renderManagerPeopleSummary?.();
-  renderInvitesList?.();
-  renderManagerBoardInviteSummary?.();
-  renderManagerBoardOverviewLiveEffects?.();
-  renderManagerLiveEffectsPanels?.();
-  pushLiveEffectsToGame?.();
-  renderManagerBoardOverviewTimedChallenge?.();
-  renderManagerBoardRecentChallenges?.();
-  renderTimedChallengeRecentSummary?.();
+  safeCall("renderGroupOverviewCard", () => renderGroupOverviewCard?.());
+  safeCall("renderGroupMetricsCard", () => renderGroupMetricsCard?.());
+  safeCall("renderGroupRestaurantComparisonCard", () => renderGroupRestaurantComparisonCard?.());
+  safeCall("wireGroupRestaurantComparisonCard", () => wireGroupRestaurantComparisonCard?.());
+  safeCall("renderManagerPeopleSummary", () => renderManagerPeopleSummary?.());
+  safeCall("renderInvitesList", () => renderInvitesList?.());
+  safeCall("renderManagerBoardInviteSummary", () => renderManagerBoardInviteSummary?.());
+  safeCall("renderManagerBoardOverviewLiveEffects", () => renderManagerBoardOverviewLiveEffects?.());
+  safeCall("renderManagerLiveEffectsPanels", () => renderManagerLiveEffectsPanels?.());
+  safeCall("pushLiveEffectsToGame", () => pushLiveEffectsToGame?.());
+  safeCall("renderManagerBoardOverviewTimedChallenge", () => renderManagerBoardOverviewTimedChallenge?.());
+  safeCall("renderManagerBoardRecentChallenges", () => renderManagerBoardRecentChallenges?.());
+  safeCall("renderTimedChallengeRecentSummary", () => renderTimedChallengeRecentSummary?.());
   renderManagerDrillSummary?.();
   renderManagerLiveControlPanels?.();
   renderProfileScreen?.();
