@@ -8641,6 +8641,30 @@ function getManagerChallengeRecommendationCandidates(threadRows = []) {
     .filter((row) => String(row?.type || "").startsWith("timed_challenge"))
     .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
     .slice(-1)[0] || null;
+  const latestChallengeSent = [...rows]
+    .filter((row) => String(row?.type || "") === "timed_challenge")
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+    .slice(-1)[0] || null;
+  const latestChallengeCompleted = [...rows]
+    .filter((row) => String(row?.type || "") === "timed_challenge_completed")
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+    .slice(-1)[0] || null;
+  const latestChallengeExpired = [...rows]
+    .filter((row) => String(row?.type || "") === "timed_challenge_expired")
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+    .slice(-1)[0] || null;
+  const latestDrillOverride = [...rows]
+    .filter((row) => String(row?.type || "") === "drill_override")
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+    .slice(-1)[0] || null;
+  const latestDrillStarted = [...rows]
+    .filter((row) => String(row?.type || "") === "drill_started")
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+    .slice(-1)[0] || null;
+  const latestDrillCompleted = [...rows]
+    .filter((row) => String(row?.type || "") === "drill_completed")
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+    .slice(-1)[0] || null;
 
   const p = latestProgress?.payload || {};
   const skills = p?.skills || {};
@@ -8654,12 +8678,53 @@ function getManagerChallengeRecommendationCandidates(threadRows = []) {
   const deliveryScore = Number(p?.deliveryScore || 0) || 0;
   const guestReadCorrect = !!p?.guestReadCorrect;
   const chainScore = Number(p?.chainScore || 0) || 0;
+  const strongPillars = Number(p?.strongPillars || 0) || 0;
 
   const recentChallengeKey = String(
     latestChallenge?.payload?.challengeKey ||
     latestChallenge?.payload?.challenge_key ||
     ""
   ).toLowerCase();
+  const recentChallengeHistory = [...rows]
+    .filter((row) => String(row?.type || "") === "timed_challenge")
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+    .slice(-5)
+    .map((row) => String(
+      row?.payload?.challengeKey ||
+      row?.payload?.challenge_key ||
+      ""
+    ).toLowerCase())
+    .filter(Boolean);
+
+  const challengeSentAt = latestChallengeSent ? new Date(latestChallengeSent.created_at || 0).getTime() : 0;
+  const challengeCompletedAt = latestChallengeCompleted ? new Date(latestChallengeCompleted.created_at || 0).getTime() : 0;
+  const challengeExpiredAt = latestChallengeExpired ? new Date(latestChallengeExpired.created_at || 0).getTime() : 0;
+
+  const drillAssignedAt = latestDrillOverride ? new Date(latestDrillOverride.created_at || 0).getTime() : 0;
+  const drillStartedAt = latestDrillStarted
+    ? (
+      Number(latestDrillStarted?.payload?.startedAt || 0) ||
+      new Date(latestDrillStarted.created_at || 0).getTime()
+    )
+    : 0;
+  const drillCompletedAt = latestDrillCompleted ? new Date(latestDrillCompleted.created_at || 0).getTime() : 0;
+
+  const challengeCurrentlyActive =
+    !!challengeSentAt && challengeSentAt > Math.max(challengeCompletedAt, challengeExpiredAt);
+
+  const drillCurrentlyActive =
+    Math.max(drillAssignedAt, drillStartedAt) > drillCompletedAt;
+
+  const activeChallengeFocus = challengeCurrentlyActive
+    ? String(latestChallengeSent?.payload?.focus || "").toLowerCase()
+    : "";
+  const activeDrillFocus = drillCurrentlyActive
+    ? String(
+      latestDrillStarted?.payload?.focus ||
+      latestDrillOverride?.payload?.drill?.focus ||
+      ""
+    ).toLowerCase()
+    : "";
 
   return {
     latestProgress,
@@ -8672,111 +8737,163 @@ function getManagerChallengeRecommendationCandidates(threadRows = []) {
     deliveryScore,
     guestReadCorrect,
     chainScore,
+    strongPillars,
     recentChallengeKey,
+    recentChallengeHistory,
     skills,
+    challengeCurrentlyActive,
+    drillCurrentlyActive,
+    activeChallengeFocus,
+    activeDrillFocus,
   };
 }
 
 function getManagerChallengeRecommendations(threadRows = []) {
   const c = getManagerChallengeRecommendationCandidates(threadRows);
-  const suggestions = [];
   const state = getManagerAbilityEconomyState();
   const influence = Number(state?.influence || 0);
-
-  const pushUnique = (item) => {
-    if (!item?.key) return;
-    if (suggestions.some((x) => String(x.key) === String(item.key))) return;
-    suggestions.push(item);
+  const challengeFocusByKey = {
+    read_first: "read",
+    full_delivery: "delivery",
+    recovery_window: "recovery",
+    closing_push: "closing",
+    clean_close: "closing",
+    no_reset_run: "delivery",
+    stable_signal: "recovery",
+    solid_interaction: "recovery",
   };
 
-  if (c.weakestSkill === "read" || !c.guestReadCorrect) {
-    pushUnique({
-      key: "read_first",
-      label: "Read First",
-      reason: "Latest report suggests weak guest reading.",
-    });
-  }
+  const defs = [
+    { key: "read_first", label: "Read First" },
+    { key: "full_delivery", label: "Full Delivery" },
+    { key: "recovery_window", label: "Recovery Window" },
+    { key: "closing_push", label: "Closing Push" },
+    { key: "clean_close", label: "Clean Close" },
+    { key: "no_reset_run", label: "No Reset Run" },
+    { key: "stable_signal", label: "Stable Signal" },
+    { key: "solid_interaction", label: "Solid Interaction" },
+  ];
 
-  if (c.weakestSkill === "delivery" || c.deliveryScore < 2) {
-    pushUnique({
-      key: "full_delivery",
-      label: "Full Delivery",
-      reason: "Latest report suggests incomplete delivery execution.",
-    });
-  }
+  const scored = defs.map((item) => {
+    let score = 0;
+    const reasons = [];
+    const itemFocus = challengeFocusByKey[item.key] || "";
+    const recentReuseCount = c.recentChallengeHistory.filter((key) => key === item.key).length;
 
-  if (c.weakestSkill === "recovery" || c.outcome === "recovery" || c.outcome === "pivot") {
-    pushUnique({
-      key: "recovery_window",
-      label: "Recovery Window",
-      reason: "Recent encounter suggests recovery needs work.",
-    });
-  }
+    if (item.key === "read_first" && (c.weakestSkill === "read" || !c.guestReadCorrect)) {
+      score += 5;
+      reasons.push("Weak guest reading in latest report.");
+    }
 
-  if (c.weakestSkill === "closing" || c.outcome === "soft_close") {
-    pushUnique({
-      key: "closing_push",
-      label: "Closing Push",
-      reason: "Recent encounter suggests weak finishing pressure.",
-    });
-  }
+    if (item.key === "full_delivery" && (c.weakestSkill === "delivery" || c.deliveryScore < 2)) {
+      score += 5;
+      reasons.push("Latest interaction showed incomplete delivery.");
+    }
 
-  if (c.resetUsed) {
-    pushUnique({
-      key: "no_reset_run",
-      label: "No Reset Run",
-      reason: "Latest interaction relied on reset.",
-    });
-  }
+    if (item.key === "recovery_window" && (c.weakestSkill === "recovery" || c.outcome === "recovery" || c.outcome === "pivot")) {
+      score += 5;
+      reasons.push("Recent outcome suggests recovery weakness.");
+    }
 
-  if (c.chainSignal === "red") {
-    pushUnique({
-      key: "stable_signal",
-      label: "Stable Signal",
-      reason: "Latest interaction fell into a red signal state.",
-    });
-  }
+    if (item.key === "closing_push" && (c.weakestSkill === "closing" || c.outcome === "soft_close")) {
+      score += 5;
+      reasons.push("Recent interaction suggests weak finishing pressure.");
+    }
 
-  if (c.chainScore > 0 && c.chainScore < 6) {
-    pushUnique({
-      key: "solid_interaction",
-      label: "Solid Interaction",
-      reason: "Latest interaction lacked enough overall structure.",
-    });
-  }
+    if (item.key === "clean_close" && c.outcome && c.outcome !== "clean_close") {
+      score += 4;
+      reasons.push("Latest outcome did not reach a clean close.");
+    }
 
-  if (c.outcome && c.outcome !== "clean_close") {
-    pushUnique({
-      key: "clean_close",
-      label: "Clean Close",
-      reason: "Latest outcome did not reach a clean close.",
-    });
-  }
+    if (item.key === "no_reset_run" && c.resetUsed) {
+      score += 4;
+      reasons.push("Latest interaction relied on reset.");
+    }
 
-  const filtered = suggestions
-    .map((item) => {
-      const cost = Number(MANAGER_CHALLENGE_COSTS?.[item.key] || 0);
-      const cooldown = getManagerCooldownRemaining(item.key);
-      const affordable = influence >= cost;
+    if (item.key === "stable_signal" && c.chainSignal === "red") {
+      score += 4;
+      reasons.push("Latest interaction fell into a red signal state.");
+    }
 
-      return {
-        ...item,
-        cost,
-        cooldown,
-        affordable,
-      };
-    })
-    .sort((a, b) => {
-      const aBlocked = (a.cooldown > 0 || !a.affordable) ? 1 : 0;
-      const bBlocked = (b.cooldown > 0 || !b.affordable) ? 1 : 0;
-      if (aBlocked !== bBlocked) return aBlocked - bBlocked;
+    if (item.key === "solid_interaction" && c.chainScore > 0 && c.chainScore < 6) {
+      score += 3;
+      reasons.push("Latest interaction lacked enough overall structure.");
+    }
 
-      const aRecentPenalty = a.key === c.recentChallengeKey ? 1 : 0;
-      const bRecentPenalty = b.key === c.recentChallengeKey ? 1 : 0;
-      return aRecentPenalty - bRecentPenalty;
-    });
+    if (itemFocus && itemFocus === c.strongestSkill && c.strongPillars >= 3) {
+      score += 2;
+      reasons.push("Builds on the waiter's current strongest area.");
+    }
 
-  return filtered.slice(0, 3);
+    if (item.key === "clean_close" && c.guest === "decider") {
+      score += 2;
+      reasons.push("Decider tables reward decisive finishes.");
+    }
+
+    if (item.key === "read_first" && c.guest === "griever") {
+      score += 2;
+      reasons.push("Griever tables punish poor emotional reads.");
+    }
+
+    if (item.key === "full_delivery" && c.guest === "fancy") {
+      score += 2;
+      reasons.push("Fancy tables reward complete delivery confidence.");
+    }
+
+    if (itemFocus && c.activeDrillFocus && itemFocus === c.activeDrillFocus) {
+      score += 3;
+      reasons.push("Matches the current drill focus.");
+    }
+
+    if (itemFocus && c.activeChallengeFocus && itemFocus === c.activeChallengeFocus) {
+      score += 1;
+      reasons.push("Aligns with the current live challenge theme.");
+    }
+
+    if (c.challengeCurrentlyActive) {
+      score -= 2;
+      reasons.push("A challenge is already active.");
+    }
+
+    if (c.drillCurrentlyActive && (item.key === "read_first" || item.key === "full_delivery")) {
+      score -= 1;
+      reasons.push("A drill is already in progress.");
+    }
+
+    if (item.key === c.recentChallengeKey) {
+      score -= 3;
+      reasons.push("This was the most recent challenge.");
+    }
+
+    if (recentReuseCount > 1) {
+      score -= recentReuseCount;
+      reasons.push("This challenge has been used repeatedly in recent history.");
+    }
+
+    const cost = Number(MANAGER_CHALLENGE_COSTS?.[item.key] || 0);
+    const cooldown = getManagerCooldownRemaining(item.key);
+    const affordable = influence >= cost;
+
+    if (!affordable) score -= 4;
+    if (cooldown > 0) score -= 5;
+
+    const primaryReason =
+      reasons[0] ||
+      "Good fit for the current training state.";
+
+    return {
+      ...item,
+      score,
+      reason: primaryReason,
+      cost,
+      cooldown,
+      affordable,
+    };
+  });
+
+  return scored
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3);
 }
 
 function renderManagerChallengeRecommendations(threadRows = []) {
@@ -8823,6 +8940,219 @@ function renderManagerChallengeRecommendations(threadRows = []) {
           <div class="small-text" style="opacity:.75; margin-top:2px;">
             ${escapeHtml(rec.reason)}
           </div>
+
+          <div class="small-text" style="opacity:.6; margin-top:4px;">
+            Score: ${escapeHtml(String(rec.score))}
+          </div>
+        </button>
+      `).join("")}
+    </div>
+  `;
+}
+
+function getManagerEffectRecommendationCandidates(threadRows = []) {
+  const rows = Array.isArray(threadRows) ? threadRows : [];
+
+  const latestProgress = [...rows]
+    .filter((row) => String(row?.type || "") === "progress_report" && row?.payload)
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+    .slice(-1)[0] || null;
+
+  const p = latestProgress?.payload || {};
+
+  const weakestSkill = String(p?.weakestSkill || "").toLowerCase();
+  const strongestSkill = String(p?.strongestSkill || "").toLowerCase();
+  const outcome = String(p?.outcome || "").toLowerCase();
+  const chainSignal = String(p?.chainSignal || "").toLowerCase();
+  const guest = String(p?.guestStateActual || "").toLowerCase();
+  const resetUsed = !!p?.resetUsed;
+  const deliveryScore = Number(p?.deliveryScore || 0) || 0;
+  const guestReadCorrect = !!p?.guestReadCorrect;
+  const chainScore = Number(p?.chainScore || 0) || 0;
+  const strongPillars = Number(p?.strongPillars || 0) || 0;
+  const premiumSuccess = !!p?.premiumSuccess;
+
+  const activeEffectsState = getManagerLiveEffectsState?.() || {
+    attributeEffects: [],
+    areaEffects: [],
+  };
+
+  const activeEffectIds = [
+    ...((activeEffectsState.attributeEffects || []).filter((x) => !!x?.active).map((x) => String(x?.id || "").toLowerCase())),
+    ...((activeEffectsState.areaEffects || []).filter((x) => !!x?.active).map((x) => String(x?.id || "").toLowerCase())),
+  ];
+
+  return {
+    latestProgress,
+    weakestSkill,
+    strongestSkill,
+    outcome,
+    chainSignal,
+    guest,
+    resetUsed,
+    deliveryScore,
+    guestReadCorrect,
+    chainScore,
+    strongPillars,
+    premiumSuccess,
+    activeEffectIds,
+  };
+}
+
+function getManagerEffectRecommendations(threadRows = []) {
+  const c = getManagerEffectRecommendationCandidates(threadRows);
+  const state = getManagerAbilityEconomyState();
+  const influence = Number(state?.influence || 0);
+
+  const defs = [
+    { key: "closing_surge", label: "Closing Surge", family: "attribute" },
+    { key: "recovery_focus", label: "Recovery Focus", family: "attribute" },
+    { key: "premium_window", label: "Premium Window", family: "area" },
+    { key: "calm_floor", label: "Calm Floor", family: "area" },
+  ];
+
+  const scored = defs.map((item) => {
+    let score = 0;
+    const reasons = [];
+
+    const isAlreadyActive = c.activeEffectIds.includes(item.key);
+
+    if (item.key === "closing_surge" && (c.weakestSkill === "closing" || c.outcome === "soft_close")) {
+      score += 5;
+      reasons.push("Recent interaction suggests weak finishing pressure.");
+    }
+
+    if (item.key === "recovery_focus" && (c.weakestSkill === "recovery" || c.outcome === "recovery" || c.outcome === "pivot")) {
+      score += 5;
+      reasons.push("Recent encounter suggests recovery weakness.");
+    }
+
+    if (item.key === "premium_window" && (
+      c.guest === "celebrator" ||
+      c.guest === "fancy" ||
+      (c.chainSignal === "green" && c.strongPillars >= 2 && !c.premiumSuccess)
+    )) {
+      score += 4;
+      reasons.push("Current interaction shape supports an upgrade window.");
+    }
+
+    if (item.key === "calm_floor" && (
+      c.chainSignal === "red" ||
+      c.resetUsed ||
+      c.guest === "griever"
+    )) {
+      score += 4;
+      reasons.push("The table likely needs stabilization.");
+    }
+
+    if (item.key === "closing_surge" && c.guest === "decider") {
+      score += 2;
+      reasons.push("Decider tables reward clear finishes.");
+    }
+
+    if (item.key === "recovery_focus" && c.guest === "griever") {
+      score += 2;
+      reasons.push("Griever tables punish rough recovery.");
+    }
+
+    if (item.key === "premium_window" && c.guest === "celebrator") {
+      score += 2;
+      reasons.push("Celebrator tables are more open to premium moves.");
+    }
+
+    if (item.key === "calm_floor" && c.guest === "griever") {
+      score += 2;
+      reasons.push("Griever tables benefit from lower pressure.");
+    }
+
+    if (isAlreadyActive) {
+      score -= 6;
+      reasons.push("This effect is already active.");
+    }
+
+    const cost = Number(MANAGER_EFFECT_COSTS?.[item.key] || 0);
+    const cooldown = getManagerCooldownRemaining(item.key);
+    const affordable = influence >= cost;
+    const blockedByCap = !canManagerActivateAnotherEffect() && !isAlreadyActive;
+
+    if (!affordable) score -= 4;
+    if (cooldown > 0) score -= 5;
+    if (blockedByCap) score -= 5;
+
+    const reason =
+      reasons.find(Boolean) ||
+      "Useful support effect for the current table.";
+
+    return {
+      ...item,
+      score,
+      reason,
+      cost,
+      cooldown,
+      affordable,
+      blockedByCap,
+      isAlreadyActive,
+    };
+  });
+
+  return scored
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3);
+}
+
+function renderManagerEffectRecommendations(threadRows = []) {
+  const recs = getManagerEffectRecommendations(threadRows);
+
+  if (!recs.length) {
+    return `
+      <div class="small-text" style="opacity:.75;">
+        No effect recommendation yet.
+      </div>
+    `;
+  }
+
+  const bestIndex = recs.findIndex((rec) =>
+    rec.cooldown <= 0 &&
+    rec.affordable &&
+    !rec.blockedByCap &&
+    !rec.isAlreadyActive
+  );
+
+  return `
+    <div style="display:flex; flex-direction:column; gap:8px; margin-top:8px;">
+      ${recs.map((rec, index) => `
+        <button
+          type="button"
+          class="btn-ghost mbEffectSuggestion"
+          data-effect-key="${escapeHtml(rec.key)}"
+          title="${escapeHtml(rec.reason)}"
+          style="
+            text-align:left;
+            opacity:${rec.cooldown > 0 || !rec.affordable || rec.blockedByCap || rec.isAlreadyActive ? "0.7" : "1"};
+            border:1px solid rgba(255,255,255,0.08);
+            background:rgba(255,255,255,0.03);
+            border-radius:10px;
+            padding:8px;
+          "
+        >
+          <div style="display:flex; justify-content:space-between; gap:8px; align-items:center;">
+            <div style="font-weight:600;">
+              ${escapeHtml(rec.label)}
+              ${index === bestIndex ? `<span class="small-text" style="opacity:.75;"> • Recommended</span>` : ``}
+            </div>
+
+            <div class="small-text" style="opacity:.7;">
+              ${escapeHtml(formatManagerActionCost(rec.cost))}
+              ${rec.cooldown > 0 ? ` • ${escapeHtml(`${rec.cooldown}s cd`)}` : ``}
+              ${rec.isAlreadyActive ? ` • active` : ``}
+              ${rec.blockedByCap ? ` • cap` : ``}
+              ${!rec.affordable ? ` • blocked` : ``}
+            </div>
+          </div>
+
+          <div class="small-text" style="opacity:.75; margin-top:2px;">
+            ${escapeHtml(rec.reason)}
+          </div>
         </button>
       `).join("")}
     </div>
@@ -8858,11 +9188,21 @@ function renderManagerThreadRecommendationsPanel(thread) {
   const rows = Array.isArray(thread?.rows) ? thread.rows : [];
 
   root.innerHTML = `
-    <div style="display:flex; flex-direction:column; gap:8px;">
-      <div style="font-weight:600;">Suggested Challenges</div>
-      ${renderManagerChallengeRecommendations(rows)}
+    <div style="display:flex; flex-direction:column; gap:12px;">
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <div style="font-weight:600;">Suggested Challenges</div>
+        ${renderManagerChallengeRecommendations(rows)}
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <div style="font-weight:600;">Suggested Live Effects</div>
+        ${renderManagerEffectRecommendations(rows)}
+      </div>
     </div>
   `;
+
+  wireManagerChallengeSuggestionButtons?.();
+  wireManagerEffectSuggestionButtons?.();
 }
 
 function wireMbCoachSuggestionButtons() {
@@ -8896,12 +9236,19 @@ function wireMbCoachSuggestionButtons() {
 
 function wireManagerChallengeSuggestionButtons() {
   const buttons = document.querySelectorAll(".mbChallengeSuggestion");
+
   buttons.forEach((btn) => {
     if (btn.__wired) return;
     btn.__wired = true;
 
     btn.addEventListener("click", () => {
       const key = String(btn.getAttribute("data-challenge-key") || "");
+      const cost = Number(MANAGER_CHALLENGE_COSTS?.[key] || 0);
+      const blockReason = getManagerActionBlockReason({
+        key,
+        cost,
+        type: "challenge",
+      });
 
       const messengerSelect = document.getElementById("mbTimedChallengeType");
       const liveControlsSelect = document.getElementById("mbLcTimedChallengeType");
@@ -8909,12 +9256,60 @@ function wireManagerChallengeSuggestionButtons() {
       if (messengerSelect) messengerSelect.value = key;
       if (liveControlsSelect) liveControlsSelect.value = key;
 
+      renderManagerTimedChallengeActionMeta?.();
+      renderMessengerTimedChallengeMeta?.();
+
       const statusEl =
         document.getElementById("mbTimedChallengeStatus") ||
         document.getElementById("mbLcTimedChallengeStatus");
 
       if (statusEl) {
-        statusEl.textContent = `Selected recommended challenge: ${btn.querySelector("div")?.textContent || key}`;
+        statusEl.textContent = blockReason
+          ? `Selected recommended challenge: ${key} • ${blockReason}`
+          : `Selected recommended challenge: ${key}`;
+      }
+    });
+  });
+}
+
+function wireManagerEffectSuggestionButtons() {
+  const buttons = document.querySelectorAll(".mbEffectSuggestion");
+
+  buttons.forEach((btn) => {
+    if (btn.__wired) return;
+    btn.__wired = true;
+
+    btn.addEventListener("click", () => {
+      const key = String(btn.getAttribute("data-effect-key") || "");
+      const cost = Number(MANAGER_EFFECT_COSTS?.[key] || 0);
+      const blockReason = getManagerActionBlockReason({
+        key,
+        cost,
+        type: "effect",
+      });
+
+      const targetButtonIdMap = {
+        closing_surge: "btnAddClosingSurge",
+        recovery_focus: "btnAddRecoveryFocus",
+        premium_window: "btnAddPremiumWindow",
+        calm_floor: "btnAddCalmFloor",
+      };
+
+      const targetId = targetButtonIdMap[key] || "";
+      const targetBtn = document.getElementById(targetId);
+
+      if (targetBtn) {
+        targetBtn.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+
+      const statusEl =
+        document.getElementById("mbLcTimedChallengeStatus") ||
+        document.getElementById("mbTimedChallengeStatus");
+
+      if (statusEl) {
+        statusEl.textContent = blockReason
+          ? `Recommended effect: ${key} • ${blockReason}`
+          : `Recommended effect: ${key}`;
       }
     });
   });
@@ -10112,6 +10507,8 @@ const MANAGER_CHALLENGE_COSTS = Object.freeze({
   read_first: 1,
   full_delivery: 1,
   no_reset_run: 1,
+  stable_signal: 1,
+  solid_interaction: 1,
 });
 
 const MANAGER_EFFECT_COOLDOWNS_SEC = Object.freeze({
@@ -10128,6 +10525,8 @@ const MANAGER_CHALLENGE_COOLDOWNS_SEC = Object.freeze({
   read_first: 15,
   full_delivery: 15,
   no_reset_run: 15,
+  stable_signal: 15,
+  solid_interaction: 15,
 });
 
 function getManagerCooldownRemaining(key = "") {
