@@ -400,6 +400,80 @@
         return [];
       }
     }
+    function getWaiterEffectCopy(effect = {}, family = "attribute") {
+      const id = String(effect?.id || "").toLowerCase();
+
+      const fallbackName =
+        family === "area"
+          ? "Floor Effect"
+          : "Tactical Effect";
+
+      const map = {
+        closing_surge: {
+          name: "Closing Surge",
+          body: "Strong delivery matters more right now.",
+          cue: "Keep your close clean and confident.",
+        },
+        recovery_focus: {
+          name: "Recovery Focus",
+          body: "Mistakes are easier to recover from right now.",
+          cue: "If you slip, simplify and regain control.",
+        },
+        premium_window: {
+          name: "Premium Window",
+          body: "Guests are more open to upgrades right now.",
+          cue: "Watch for a confident premium recommendation.",
+        },
+        calm_floor: {
+          name: "Calm Floor",
+          body: "Tables are less reactive under pressure right now.",
+          cue: "Slow down and stay composed.",
+        },
+      };
+
+      const resolved = map[id] || null;
+
+      if (resolved) return resolved;
+
+      return {
+        name: String(effect?.name || effect?.id || fallbackName),
+        body: String(effect?.description || effect?.body || "A live effect is shaping this encounter."),
+        cue: family === "area"
+          ? "Adjust your pace to the table."
+          : "Use this moment to sharpen your play.",
+      };
+    }
+    function getWaiterLiveEffectsToastMessage(nextState = {}) {
+      const prevIds = getActiveLiveEffectIds().slice().sort();
+      const nextAttribute = Array.isArray(nextState.attributeEffects)
+        ? nextState.attributeEffects.filter((effect) => !!effect?.active)
+        : [];
+      const nextArea = Array.isArray(nextState.areaEffects)
+        ? nextState.areaEffects.filter((effect) => !!effect?.active)
+        : [];
+      const nextAll = [...nextAttribute, ...nextArea];
+      const nextIds = nextAll.map((effect) => String(effect?.id || "")).filter(Boolean).sort();
+
+      const unchanged =
+        prevIds.length === nextIds.length &&
+        prevIds.every((id, index) => id === nextIds[index]);
+
+      if (unchanged) return "";
+
+      const newlyActive = nextAll.filter(
+        (effect) => !prevIds.includes(String(effect?.id || ""))
+      );
+
+      if (newlyActive.length === 1 && nextIds.length === 1) {
+        const family = String(newlyActive[0]?.family || "").toLowerCase() === "area"
+          ? "area"
+          : "attribute";
+        const copy = getWaiterEffectCopy(newlyActive[0], family);
+        return `${copy.name} active`;
+      }
+
+      return "Live effects updated";
+    }
     function renderRailActiveChallenge() {
       const root = getRailEl("railActiveChallenge");
       if (!root) return;
@@ -503,22 +577,37 @@
         </div>
       `;
     }
-    function renderRailAttributeEffects() {
-      const root = getRailEl("railAttributeEffects");
+    function renderRailLiveEffects() {
+      const root = getRailEl("railLiveEffects");
       if (!root) return;
 
-      const effects = getAttributeEffectsState();
-      if (!Array.isArray(effects) || !effects.length) {
+      const attributeEffects = getAttributeEffectsState();
+      const areaEffects = getAreaEffectsState();
+      const effects = [
+        ...((Array.isArray(attributeEffects) ? attributeEffects : []).map((effect) => ({
+          ...effect,
+          __waiterFamily: "attribute",
+        }))),
+        ...((Array.isArray(areaEffects) ? areaEffects : []).map((effect) => ({
+          ...effect,
+          __waiterFamily: "area",
+        }))),
+      ];
+
+      if (!effects.length) {
         root.innerHTML = `
-          <div class="small-text" style="opacity:.75;">No attribute effects loaded.</div>
+          <div class="small-text" style="opacity:.75;">No live effects right now.</div>
         `;
         return;
       }
 
       root.innerHTML = effects.map((effect) => {
-        const name = String(effect?.name || effect?.id || "Effect");
-        const desc = String(effect?.description || effect?.body || "");
         const active = !!effect?.active;
+        const family = String(effect?.__waiterFamily || effect?.family || "").toLowerCase() === "area"
+          ? "area"
+          : "attribute";
+        const copy = getWaiterEffectCopy(effect, family);
+        const familyLabel = family === "area" ? "Floor" : "Tactical";
 
         return `
           <div style="
@@ -528,42 +617,20 @@
             background:${active ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.03)"};
             margin-bottom:8px;
           ">
-            <div style="font-weight:600;">${escapeHtml(name)}</div>
-            <div class="small-text" style="margin-top:4px; opacity:.85;">
-              ${escapeHtml(desc || "No description.")}
+            <div style="display:flex; justify-content:space-between; gap:8px; align-items:center;">
+              <div style="font-weight:600;">${escapeHtml(copy.name)}</div>
+              <div class="small-text" style="opacity:.72;">
+                ${active ? "Active" : "Queued"}
+              </div>
             </div>
-          </div>
-        `;
-      }).join("");
-    }
-    function renderRailAreaEffects() {
-      const root = getRailEl("railAreaEffects");
-      if (!root) return;
-
-      const effects = getAreaEffectsState();
-      if (!Array.isArray(effects) || !effects.length) {
-        root.innerHTML = `
-          <div class="small-text" style="opacity:.75;">No area effects loaded.</div>
-        `;
-        return;
-      }
-
-      root.innerHTML = effects.map((effect) => {
-        const name = String(effect?.name || effect?.id || "Area Effect");
-        const desc = String(effect?.description || effect?.body || "");
-        const active = !!effect?.active;
-
-        return `
-          <div style="
-            padding:8px;
-            border:1px solid rgba(255,255,255,0.10);
-            border-radius:10px;
-            background:${active ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.03)"};
-            margin-bottom:8px;
-          ">
-            <div style="font-weight:600;">${escapeHtml(name)}</div>
-            <div class="small-text" style="margin-top:4px; opacity:.85;">
-              ${escapeHtml(desc || "No description.")}
+            <div class="small-text" style="margin-top:4px; opacity:.68;">
+              ${escapeHtml(familyLabel)} effect
+            </div>
+            <div class="small-text" style="margin-top:4px; opacity:.9;">
+              ${escapeHtml(copy.body)}
+            </div>
+            <div class="small-text" style="margin-top:4px; opacity:.75;">
+              ${escapeHtml(copy.cue)}
             </div>
           </div>
         `;
@@ -708,8 +775,7 @@
     function renderGameplayRail() {
       renderRailActiveChallenge?.();
       renderRailActiveDrill?.();
-      renderRailAttributeEffects?.();
-      renderRailAreaEffects?.();
+      renderRailLiveEffects?.();
       renderRailQuickActions?.();
     }
     function renderTimedChallengeSurfaces() {
@@ -1646,11 +1712,14 @@
           return;
         }
 
+        const nextLiveEffectsState = {
+          attributeEffects: Array.isArray(msg.attributeEffects) ? msg.attributeEffects : [],
+          areaEffects: Array.isArray(msg.areaEffects) ? msg.areaEffects : [],
+        };
+        const liveEffectsToast = getWaiterLiveEffectsToastMessage(nextLiveEffectsState);
+
         setLiveEffectsState(
-          {
-            attributeEffects: Array.isArray(msg.attributeEffects) ? msg.attributeEffects : [],
-            areaEffects: Array.isArray(msg.areaEffects) ? msg.areaEffects : [],
-          },
+          nextLiveEffectsState,
           { source: "parent_sync" }
         );
         try {
@@ -1658,6 +1727,9 @@
             ...getEncounterEffectDebugPayload(),
             runtime: getActiveAbilityRuntime(),
           });
+        } catch {}
+        try {
+          if (liveEffectsToast) window.showToast?.(liveEffectsToast);
         } catch {}
         try { updateCounts?.(); } catch {}
         try { renderGameplayRail?.(); } catch {}
@@ -2347,16 +2419,9 @@
         </div>
 
         <div class="bc-card bc-rail-card">
-          <div class="bc-rail-title">Attribute Effects</div>
-          <div class="bc-rail-body" id="railAttributeEffects">
-            <div class="small-text" style="opacity:.75;">No attribute effects loaded.</div>
-          </div>
-        </div>
-
-        <div class="bc-card bc-rail-card">
-          <div class="bc-rail-title">Area Effects</div>
-          <div class="bc-rail-body" id="railAreaEffects">
-            <div class="small-text" style="opacity:.75;">No area effects loaded.</div>
+          <div class="bc-rail-title">Live Effects</div>
+          <div class="bc-rail-body" id="railLiveEffects">
+            <div class="small-text" style="opacity:.75;">No live effects right now.</div>
           </div>
         </div>
 
