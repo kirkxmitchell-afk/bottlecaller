@@ -42,6 +42,7 @@
         epoch: window.__BC_EPOCH__ || 0,
         ctx: window.__BC_CTX__ || null,
         activeAssignedDrill: window.__BC_LAST_ASSIGNED_DRILL__ || null,
+        activeTimedChallenge: window.__BC_ACTIVE_TIMED_CHALLENGE__ || null,
         lastDrillStartedStatus: window.__BC_LAST_DRILL_STARTED_STATUS__ || null,
         lastDrillCompletionStatus: window.__BC_LAST_DRILL_COMPLETION_STATUS__ || null,
         liveEffectsState: window.__BC_LIVE_EFFECTS_STATE__ || null,
@@ -276,6 +277,12 @@
     function getRailEl(id) {
       return document.getElementById(id);
     }
+    function setActiveTimedChallengeState(nextChallenge = null) {
+      const host = getTimedChallengeHost();
+      window.__BC_ACTIVE_TIMED_CHALLENGE__ = nextChallenge || null;
+      try { host.__BC_ACTIVE_TIMED_CHALLENGE__ = nextChallenge || null; } catch {}
+      return window.__BC_ACTIVE_TIMED_CHALLENGE__;
+    }
     function getActiveTimedChallenge() {
       return window.__BC_ACTIVE_TIMED_CHALLENGE__ || getTimedChallengeHost().__BC_ACTIVE_TIMED_CHALLENGE__ || null;
     }
@@ -285,6 +292,10 @@
     function getLastTimedChallengeResult() {
       return window.__BC_LAST_TIMED_CHALLENGE_RESULT__ || getTimedChallengeHost().__BC_LAST_TIMED_CHALLENGE_RESULT__ || null;
     }
+    function setActiveAssignedDrill(nextDrill = null) {
+      window.__BC_LAST_ASSIGNED_DRILL__ = nextDrill || null;
+      return window.__BC_LAST_ASSIGNED_DRILL__;
+    }
     function getActiveAssignedDrill() {
       return window.__BC_LAST_ASSIGNED_DRILL__ || null;
     }
@@ -293,6 +304,50 @@
     }
     function getLastDrillStartedStatus() {
       return window.__BC_LAST_DRILL_STARTED_STATUS__ || null;
+    }
+    function cleanupWaiterTransientState() {
+      const started = window.__BC_LAST_DRILL_STARTED_STATUS__ || null;
+      const completed = window.__BC_LAST_DRILL_COMPLETION_STATUS__ || null;
+
+      const tooOld = (ts, maxAgeMs = 1000 * 60 * 30) => {
+        const n = Number(ts || 0);
+        if (!n) return false;
+        return (Date.now() - n) > maxAgeMs;
+      };
+
+      if (started && tooOld(started.at)) {
+        window.__BC_LAST_DRILL_STARTED_STATUS__ = null;
+      }
+
+      if (completed && tooOld(completed.at)) {
+        window.__BC_LAST_DRILL_COMPLETION_STATUS__ = null;
+      }
+    }
+    function validateWaiterStateInvariants() {
+      const assigned = getActiveAssignedDrill?.();
+      const runtime = typeof DRILL !== "undefined" ? DRILL : null;
+
+      if (runtime && assigned && !doesRuntimeDrillMatchAssignedDrill?.(runtime, assigned)) {
+        console.warn("[BC][INV] runtime drill does not match assigned drill", { runtime, assigned });
+      }
+    }
+    function refreshWaiterRuntimeSurfaces(opts = {}) {
+      const {
+        rail = true,
+        counts = true,
+      } = opts || {};
+
+      cleanupWaiterTransientState?.();
+
+      if (rail) {
+        safeCall?.("renderGameplayRail", () => renderGameplayRail?.());
+      }
+
+      if (counts) {
+        safeCall?.("updateCounts", () => updateCounts?.());
+      }
+
+      validateWaiterStateInvariants?.();
     }
     function getTimedChallengeCopy(challenge = {}) {
       const key = String(
@@ -1556,7 +1611,7 @@
     }
     function completeTimedChallengeLocally(status, extra = {}) {
       const host = getTimedChallengeHost();
-      const challenge = window.__BC_ACTIVE_TIMED_CHALLENGE__ || host.__BC_ACTIVE_TIMED_CHALLENGE__ || null;
+      const challenge = getActiveTimedChallenge?.() || host.__BC_ACTIVE_TIMED_CHALLENGE__ || null;
       if (!challenge) return false;
 
       const result = {
@@ -1586,11 +1641,10 @@
         status: result.status,
         at: Date.now(),
       };
-      window.__BC_ACTIVE_TIMED_CHALLENGE__ = null;
-      host.__BC_ACTIVE_TIMED_CHALLENGE__ = null;
+      setActiveTimedChallengeState(null);
 
       renderTimedChallengeSurfaces();
-      renderGameplayRail();
+      refreshWaiterRuntimeSurfaces?.({ rail: true, counts: false });
 
       if (result.status === "expired") {
         window.showToast?.("Timed challenge expired.");
@@ -1600,7 +1654,7 @@
       return true;
     }
     function evaluateTimedChallengeAgainstProgress(payload) {
-      const challenge = window.__BC_ACTIVE_TIMED_CHALLENGE__ || getActiveTimedChallenge();
+      const challenge = getActiveTimedChallenge?.() || null;
       if (!challenge) return false;
 
       const encounter = window.currentEncounter || null;
@@ -1664,7 +1718,7 @@
         if (String(restaurantId) !== String(currentRestaurantId || "")) return false;
 
         const host = getTimedChallengeHost();
-        const current = window.__BC_ACTIVE_TIMED_CHALLENGE__ || host.__BC_ACTIVE_TIMED_CHALLENGE__ || null;
+        const current = getActiveTimedChallenge?.() || host.__BC_ACTIVE_TIMED_CHALLENGE__ || null;
         if (current?.id && message?.id && String(current.id) === String(message.id)) {
           console.log("[TIMED CHALLENGE] skipped (already active)", { id: message.id });
           return true;
@@ -1694,8 +1748,7 @@
           payload,
         };
 
-        window.__BC_ACTIVE_TIMED_CHALLENGE__ = challenge;
-        host.__BC_ACTIVE_TIMED_CHALLENGE__ = challenge;
+        setActiveTimedChallengeState(challenge);
         window.__BC_LAST_TIMED_CHALLENGE_STATUS__ = {
           ok: null,
           error: null,
@@ -1706,7 +1759,7 @@
 
         console.log("[TIMED CHALLENGE] applied ✅", challenge);
         renderTimedChallengeSurfaces();
-        renderGameplayRail();
+        refreshWaiterRuntimeSurfaces?.();
         window.showToast?.("Timed manager challenge started ✅");
 
         return true;
@@ -2342,7 +2395,7 @@
     }
     function logDrillRunComplete(details = {}) {
       try {
-        const assignedMessageId = window.__BC_LAST_ASSIGNED_DRILL__?.id || null;
+        const assignedMessageId = getActiveAssignedDrill?.()?.id || null;
         const completedAssignedMessageId = window.__BC_LAST_ASSIGNED_DRILL_COMPLETED__?.assignedMessageId || null;
         if (assignedMessageId && completedAssignedMessageId && String(assignedMessageId) === String(completedAssignedMessageId)) {
           console.log("[DRILL RUN] completion already acknowledged, skipping duplicate send", {
@@ -2352,7 +2405,7 @@
         }
         console.log("[DRILL RUN] logDrillRunComplete called ✅", {
           details,
-          assignedMessageId: window.__BC_LAST_ASSIGNED_DRILL__?.id || null
+          assignedMessageId: getActiveAssignedDrill?.()?.id || null
         });
 
         window.parent?.postMessage(
@@ -2455,9 +2508,9 @@
         }
 
         if (started) {
-          const assignedMessageId = window.__BC_LAST_ASSIGNED_DRILL__?.id || null;
+          const assignedMessageId = getActiveAssignedDrill?.()?.id || null;
           emitDrillRunStarted(drill, assignedMessageId);
-          renderGameplayRail?.();
+          refreshWaiterRuntimeSurfaces?.();
           window.showToast?.(getDrillStartToastMessage(drill));
           return true;
         }
@@ -2475,7 +2528,7 @@
         const drill = message?.payload?.drill || null;
         if (!drill || typeof drill !== "object") return false;
 
-        const activeAssignedId = window.__BC_LAST_ASSIGNED_DRILL__?.id || null;
+        const activeAssignedId = getActiveAssignedDrill?.()?.id || null;
         if (messageId && activeAssignedId && String(messageId) === String(activeAssignedId)) {
           console.log("[GAME] drill_override skipped (already active)", { messageId });
           return false;
@@ -2493,13 +2546,13 @@
         console.log("[GAME] drill_override applied ✅", cfg);
         window.showToast?.("Manager updated your drill ✅");
 
-        window.__BC_LAST_ASSIGNED_DRILL__ = {
+        setActiveAssignedDrill({
           id: messageId,
           body: message?.body || "",
           payload: message?.payload || {},
           drill
-        };
-        renderGameplayRail();
+        });
+        refreshWaiterRuntimeSurfaces?.();
 
         const started = launchAssignedDrill(drill);
         console.log("[GAME] assigned drill auto-start", { started, focus: drill?.focus, messageId });
@@ -2589,8 +2642,7 @@
         try {
           if (liveEffectsToast) window.showToast?.(liveEffectsToast);
         } catch {}
-        try { updateCounts?.(); } catch {}
-        try { renderGameplayRail?.(); } catch {}
+        refreshWaiterRuntimeSurfaces?.();
 
         return;
       }
@@ -2618,13 +2670,13 @@
         if (!drill) return;
         const assignedMessageId = msg?.assignedMessageId || null;
 
-        window.__BC_LAST_ASSIGNED_DRILL__ = {
+        setActiveAssignedDrill({
           id: assignedMessageId,
           body: "",
           payload: { drill },
           drill
-        };
-        renderGameplayRail();
+        });
+        refreshWaiterRuntimeSurfaces?.({ rail: true, counts: false });
         const started = launchAssignedDrill(drill);
         console.log("[GAME] launch_assigned_drill_request", { started, drill, assignedMessageId });
 
@@ -2645,7 +2697,7 @@
           let shouldMarkRead = true;
 
           if (rowType === "drill_override") {
-            const activeAssignedId = window.__BC_LAST_ASSIGNED_DRILL__?.id || null;
+            const activeAssignedId = getActiveAssignedDrill?.()?.id || null;
             const completedAssignedId = window.__BC_LAST_ASSIGNED_DRILL_COMPLETED__?.assignedMessageId || null;
 
             const duplicateActive =
@@ -2695,7 +2747,7 @@
           at: Date.now(),
         };
 
-        try { renderGameplayRail?.(); } catch {}
+        refreshWaiterRuntimeSurfaces?.({ rail: true, counts: false });
         return;
       }
       if (msg.type === "timed_challenge_result_ack") {
@@ -2721,7 +2773,7 @@
             at: Date.now(),
           };
           renderTimedChallengeSurfaces();
-          renderGameplayRail();
+          refreshWaiterRuntimeSurfaces?.({ rail: true, counts: false });
         }
 
         if (msg.ok) {
@@ -2736,7 +2788,7 @@
         return;
       }
         if (msg.type === "drill_run_completed_result") {
-        const assigned = window.__BC_LAST_ASSIGNED_DRILL__ || null;
+        const assigned = getActiveAssignedDrill?.() || null;
         if (msg.ok) {
           window.__BC_LAST_DRILL_COMPLETION_STATUS__ = {
             ok: true,
@@ -2753,11 +2805,11 @@
             at: Date.now(),
           };
           if (
-            window.__BC_LAST_ASSIGNED_DRILL__?.id &&
+            getActiveAssignedDrill?.()?.id &&
             msg.assignedMessageId &&
-            String(window.__BC_LAST_ASSIGNED_DRILL__.id) === String(msg.assignedMessageId)
+            String(getActiveAssignedDrill().id) === String(msg.assignedMessageId)
           ) {
-            window.__BC_LAST_ASSIGNED_DRILL__ = null;
+            setActiveAssignedDrill(null);
           }
         } else {
           window.__BC_LAST_DRILL_COMPLETION_STATUS__ = {
@@ -2771,7 +2823,7 @@
             if (toast) window.showToast?.(toast);
           } catch {}
         }
-        renderGameplayRail();
+        refreshWaiterRuntimeSurfaces?.({ rail: true, counts: false });
         return;
       }
     });
@@ -2782,7 +2834,7 @@
     startUnreadMessagesPolling();
     tickTimedChallenge();
     setTimeout(() => {
-      try { renderGameplayRail?.(); } catch {}
+      refreshWaiterRuntimeSurfaces?.({ rail: true, counts: false });
     }, 0);
     window.submitProgressReport = submitProgressReport;
     window.submitProgressReportToManager = submitProgressReportToManager;
