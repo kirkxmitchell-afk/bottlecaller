@@ -564,13 +564,18 @@ document.querySelector("#app").innerHTML = `
                 </div>
 
                 <div style="padding:10px; border-top:1px solid rgba(255,255,255,0.10); display:flex; flex-direction:column; gap:10px;">
-                  <div>
-                    <strong>Suggested prompts</strong>
-                    <div id="mbSuggestedPrompts" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;"></div>
+                  <div id="mbThreadStatePanel" class="card" style="padding:10px;"></div>
+
+                  <div id="mbThreadRecommendationsPanel" class="card" style="padding:10px;">
+                    <div>
+                      <strong>Suggested prompts</strong>
+                      <div id="mbSuggestedPrompts" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;"></div>
+                    </div>
+
+                    <div id="mbThreadChallengeRecommendations" style="margin-top:12px;"></div>
                   </div>
 
-                  <div id="mbThreadDrillSummary" class="small-text" style="opacity:.85;"></div>
-
+                  <div class="small-text" style="opacity:.75;">Actions</div>
                   <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
                     <button id="mbInstrRunDrill" class="btn-ghost" type="button">Run Drill</button>
                     <button id="mbInstrUseSuggestion" class="btn-ghost" type="button">Use Suggestion</button>
@@ -8795,7 +8800,14 @@ function renderManagerChallengeRecommendations(threadRows = []) {
           class="btn-ghost mbChallengeSuggestion"
           data-challenge-key="${escapeHtml(rec.key)}"
           title="${escapeHtml(rec.reason)}"
-          style="text-align:left; opacity:${rec.cooldown > 0 || !rec.affordable ? "0.7" : "1"};"
+          style="
+            text-align:left;
+            opacity:${rec.cooldown > 0 || !rec.affordable ? "0.7" : "1"};
+            border:1px solid rgba(255,255,255,0.08);
+            background:rgba(255,255,255,0.03);
+            border-radius:10px;
+            padding:8px;
+          "
         >
           <div style="display:flex; justify-content:space-between; gap:8px; align-items:center;">
             <div style="font-weight:600;">
@@ -8813,6 +8825,42 @@ function renderManagerChallengeRecommendations(threadRows = []) {
           </div>
         </button>
       `).join("")}
+    </div>
+  `;
+}
+
+function renderManagerThreadStatePanel() {
+  const root = document.getElementById("mbThreadStatePanel");
+  if (!root) return;
+
+  const metaText = String(document.getElementById("mbThreadMeta")?.textContent || "").trim();
+  const drillSummaryHtml = String(document.getElementById("mbThreadDrillSummary")?.innerHTML || "").trim();
+
+  root.innerHTML = `
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      <div style="font-weight:600;">Current Coaching State</div>
+
+      <div class="small-text" style="opacity:.9;">
+        ${escapeHtml(metaText || "No current objective")}
+      </div>
+
+      <div class="small-text" style="opacity:.82;">
+        ${drillSummaryHtml || `<span style="opacity:.75;">No drill lifecycle yet for this waiter.</span>`}
+      </div>
+    </div>
+  `;
+}
+
+function renderManagerThreadRecommendationsPanel(thread) {
+  const root = document.getElementById("mbThreadChallengeRecommendations");
+  if (!root) return;
+
+  const rows = Array.isArray(thread?.rows) ? thread.rows : [];
+
+  root.innerHTML = `
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      <div style="font-weight:600;">Suggested Challenges</div>
+      ${renderManagerChallengeRecommendations(rows)}
     </div>
   `;
 }
@@ -10723,6 +10771,8 @@ function renderManagerActiveThread(nameMap) {
   const msgEl = mbEl("mbThreadMessages");
   const titleEl = mbEl("mbThreadTitle");
   const metaEl = mbEl("mbThreadMeta");
+  const statePanelEl = mbEl("mbThreadStatePanel");
+  const recPanelEl = mbEl("mbThreadChallengeRecommendations");
 
   const activeUserId = window.__BC_MB_ACTIVE_THREAD_USER_ID__;
   const threads = window.__BC_MB_THREADS__ || [];
@@ -10732,6 +10782,21 @@ function renderManagerActiveThread(nameMap) {
     if (titleEl) titleEl.textContent = "Select a waiter";
     if (metaEl) metaEl.textContent = "";
     if (msgEl) msgEl.innerHTML = `<div class="small-text" style="opacity:.8;">Select a waiter thread in this restaurant to assign a timed challenge.</div>`;
+    if (statePanelEl) {
+      statePanelEl.innerHTML = `
+        <div style="font-weight:600;">Current Coaching State</div>
+        <div class="small-text" style="margin-top:6px; opacity:.75;">
+          Select a waiter to view current objective state.
+        </div>
+      `;
+    }
+    if (recPanelEl) {
+      recPanelEl.innerHTML = `
+        <div class="small-text" style="opacity:.75;">
+          Select a waiter to view recommendations.
+        </div>
+      `;
+    }
     setActiveManagerThreadState({ userId: "", rows: [] });
     safeCall("renderManagerThreadDrillSummary", () => renderManagerThreadDrillSummary?.());
     return;
@@ -10745,12 +10810,6 @@ function renderManagerActiveThread(nameMap) {
     "renderManagerThreadRecommendation",
     () => renderManagerThreadRecommendation(thread)
   ) || "";
-  const challengeRecommendationHtml = `
-    <div style="margin-top:12px;">
-      <div style="font-weight:600;">Suggested Challenges</div>
-      ${renderManagerChallengeRecommendations(ordered)}
-    </div>
-  `;
 
   if (msgEl) {
     const groupedHtml = safeCall(
@@ -10758,7 +10817,7 @@ function renderManagerActiveThread(nameMap) {
       () => renderManagerThreadMessagesGrouped(ordered, nameMap)
     ) || "";
 
-    msgEl.innerHTML = `${groupedHtml}${recommendationHtml}${challengeRecommendationHtml}`;
+    msgEl.innerHTML = `${groupedHtml}${recommendationHtml}`;
     msgEl.scrollTop = msgEl.scrollHeight;
     safeCall("wireMbCoachSuggestionButtons", () => wireMbCoachSuggestionButtons());
     safeCall("wireMbAutoDrillButtons", () => wireMbAutoDrillButtons());
@@ -10776,6 +10835,8 @@ function renderManagerActiveThread(nameMap) {
 
   safeCall("buildManagerSuggestedPrompts", () => buildManagerSuggestedPrompts(thread));
   safeCall("renderManagerThreadDrillSummary", () => renderManagerThreadDrillSummary?.());
+  safeCall("renderManagerThreadStatePanel", () => renderManagerThreadStatePanel?.());
+  safeCall("renderManagerThreadRecommendationsPanel", () => renderManagerThreadRecommendationsPanel?.(thread));
 }
 
 async function loadManagerMessenger(restaurantId = null) {
