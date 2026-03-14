@@ -2173,43 +2173,128 @@ function renderManagerBoardOverviewLiveEffects() {
   const root = document.getElementById("mbOverviewLiveEffects");
   if (!root) return;
 
-  const active = getActiveAbilities();
-  const attribute = active.find((x) => String(x?.family || "") === "attribute") || null;
-  const area = active.find((x) => String(x?.family || "") === "area") || null;
-  const lastUsed = window.__BC_LAST_USED_ABILITY__ || null;
-  const lastUsedAbility = lastUsed?.id ? getAbilityById(lastUsed.id) : null;
+  const synced = getManagerLiveEffectsState?.() || {
+    attributeEffects: [],
+    areaEffects: [],
+    updatedAt: 0,
+  };
 
-  const getSecsLeft = (entry) =>
-    Math.max(0, Math.ceil(((entry?.expiresAt || 0) - Date.now()) / 1000));
+  const runtimeActive = Array.isArray(getActiveAbilities?.())
+    ? getActiveAbilities()
+    : [];
+
+  const syncedAttribute = (synced.attributeEffects || []).filter((x) => !!x?.active);
+  const syncedArea = (synced.areaEffects || []).filter((x) => !!x?.active);
+
+  const runtimeAttribute = runtimeActive.filter(
+    (x) => String(x?.family || "").toLowerCase() === "attribute"
+  );
+  const runtimeArea = runtimeActive.filter(
+    (x) => String(x?.family || "").toLowerCase() === "area"
+  );
+
+  const syncedIds = [
+    ...syncedAttribute.map((x) => String(x?.id || "")),
+    ...syncedArea.map((x) => String(x?.id || "")),
+  ].filter(Boolean).sort();
+
+  const runtimeIds = [
+    ...runtimeAttribute.map((x) => String(x?.id || "")),
+    ...runtimeArea.map((x) => String(x?.id || "")),
+  ].filter(Boolean).sort();
+
+  const syncedCount = syncedIds.length;
+  const runtimeCount = runtimeIds.length;
+
+  const idsEqual =
+    syncedIds.length === runtimeIds.length &&
+    syncedIds.every((id, i) => id === runtimeIds[i]);
+
+  let syncLabel = "In sync";
+  if (syncedCount === 0 && runtimeCount === 0) {
+    syncLabel = "No active effects";
+  } else if (syncedCount > 0 && runtimeCount === 0) {
+    syncLabel = "Sent, waiting on runtime";
+  } else if (syncedCount === 0 && runtimeCount > 0) {
+    syncLabel = "Runtime active without synced state";
+  } else if (!idsEqual) {
+    syncLabel = "Mismatch detected";
+  }
+
+  const renderEffectList = (items = [], emptyText = "None") => {
+    if (!items.length) {
+      return `<div class="small-text" style="opacity:.7;">${escapeHtml(emptyText)}</div>`;
+    }
+
+    return items.map((item) => {
+      const expiresAt = Number(item?.expiresAt || 0);
+      const secsLeft = expiresAt
+        ? Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000))
+        : null;
+      const name = item?.title || item?.name || item?.id || "Effect";
+      const desc = item?.description || item?.body || "";
+
+      return `
+        <div style="padding:8px; border:1px solid rgba(255,255,255,0.08); border-radius:10px;">
+          <div style="display:flex; justify-content:space-between; gap:8px; align-items:center;">
+            <div style="font-weight:600;">${escapeHtml(name)}</div>
+            <div class="small-text" style="opacity:.75;">
+              ${secsLeft != null ? `${secsLeft}s left` : "active"}
+            </div>
+          </div>
+          ${desc ? `<div class="small-text" style="opacity:.8; margin-top:4px;">${escapeHtml(desc)}</div>` : ``}
+        </div>
+      `;
+    }).join("");
+  };
 
   root.innerHTML = `
-    <div class="card" style="display:flex; flex-direction:column; gap:10px; padding:12px;">
-      <div style="font-weight:600;">Live Effects</div>
-      <div class="small" style="opacity:.8;">
-        Active ability state from the current runtime.
-      </div>
-      <div style="display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:10px;">
-        <div style="padding:10px; border:1px solid rgba(255,255,255,0.08); border-radius:10px;">
-          <div class="small" style="opacity:.7;">Active Attribute</div>
-          <div style="font-weight:600; margin-top:4px;">
-            ${attribute ? escapeHtml(attribute.title || attribute.id || "Attribute") : "None"}
-          </div>
-          <div class="small" style="opacity:.8; margin-top:4px;">
-            ${attribute ? `${getSecsLeft(attribute)}s left` : "No active attribute effect"}
-          </div>
-        </div>
-        <div style="padding:10px; border:1px solid rgba(255,255,255,0.08); border-radius:10px;">
-          <div class="small" style="opacity:.7;">Active Area</div>
-          <div style="font-weight:600; margin-top:4px;">
-            ${area ? escapeHtml(area.title || area.id || "Area") : "None"}
-          </div>
-          <div class="small" style="opacity:.8; margin-top:4px;">
-            ${area ? `${getSecsLeft(area)}s left` : "No active area effect"}
-          </div>
+    <div class="card" style="display:flex; flex-direction:column; gap:12px; padding:12px;">
+      <div style="display:flex; justify-content:space-between; gap:10px; align-items:center;">
+        <div style="font-weight:600;">Live Effects</div>
+        <div class="small-text" style="opacity:.75;">
+          Last manager update ${synced.updatedAt ? new Date(synced.updatedAt).toLocaleTimeString() : "just now"}
         </div>
       </div>
-      <div class="small" style="opacity:.8;">
-        Last used: ${escapeHtml(lastUsedAbility?.title || lastUsed?.id || "None")}
+
+      <div class="small-text" style="opacity:.82;">
+        Live Controls effects sent to the waiter experience, compared with the current game runtime.
+      </div>
+
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <div style="padding:8px 10px; border:1px solid rgba(255,255,255,0.08); border-radius:999px;" class="small-text">
+          Sent: ${syncedCount}
+        </div>
+        <div style="padding:8px 10px; border:1px solid rgba(255,255,255,0.08); border-radius:999px;" class="small-text">
+          Runtime: ${runtimeCount}
+        </div>
+        <div style="padding:8px 10px; border:1px solid rgba(255,255,255,0.08); border-radius:999px;" class="small-text">
+          Status: ${escapeHtml(syncLabel)}
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:12px;">
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <div style="font-weight:600;">Sent to Game: Attribute</div>
+          ${renderEffectList(syncedAttribute, "No attribute effects sent")}
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <div style="font-weight:600;">Sent to Game: Area</div>
+          ${renderEffectList(syncedArea, "No area effects sent")}
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:12px;">
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <div style="font-weight:600;">Game Runtime: Attribute</div>
+          ${renderEffectList(runtimeAttribute, "No runtime attribute effects")}
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <div style="font-weight:600;">Game Runtime: Area</div>
+          ${renderEffectList(runtimeArea, "No runtime area effects")}
+        </div>
       </div>
     </div>
   `;
@@ -6262,6 +6347,7 @@ function wireManagerBoardMenu() {
       return loadManagerMessenger();
     }
     if (normalized === "live_controls") {
+      renderManagerBoardOverviewLiveEffects?.();
       renderManagerLiveEffectsPanels?.();
       return;
     }
@@ -6306,6 +6392,7 @@ function wireManagerBoardMenu() {
       await loadManagerMessenger();
     }
     if (tab === "live_controls") {
+      renderManagerBoardOverviewLiveEffects?.();
       renderManagerLiveEffectsPanels?.();
     }
   });
@@ -8825,6 +8912,7 @@ function setManagerLiveEffectsState(nextState = {}) {
   };
 
   renderManagerLiveEffectsPanels?.();
+  renderManagerBoardOverviewLiveEffects?.();
   pushLiveEffectsToGame?.();
 
   return window.__BC_MANAGER_LIVE_EFFECTS_STATE__;
