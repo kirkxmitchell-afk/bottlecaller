@@ -350,6 +350,24 @@
         calmFloor: ids.has("calm_floor"),
       };
     }
+    function getLiveEffectsAbilityRuntimePatch() {
+      const liveFx = getEncounterEffectModifiers();
+
+      return {
+        closingSurge: !!liveFx.closingSurge,
+        recoveryFocus: !!liveFx.recoveryFocus,
+        premiumWindow: !!liveFx.premiumWindow,
+        calmFloor: !!liveFx.calmFloor,
+        reactionClosingBonus: liveFx.closingSurge ? 1 : 0,
+        closingThresholdDelta: liveFx.closingSurge ? 1 : 0,
+        recoveryPressureRelief: liveFx.recoveryFocus ? 1 : 0.5,
+        recoveryThresholdDelta: liveFx.recoveryFocus ? 1 : 0,
+        premiumChanceBonus: liveFx.premiumWindow ? 1 : 0,
+        opennessBonus: liveFx.premiumWindow ? 0.5 : 0,
+        pressureInitRelief: liveFx.calmFloor ? 1 : 0,
+        pressureEscalationDelta: liveFx.calmFloor ? -1 : 0,
+      };
+    }
     function getEncounterEffectDebugPayload() {
       const liveFx = getEncounterEffectModifiers();
       const ids = getActiveLiveEffectIds();
@@ -850,8 +868,7 @@
       const recoveryFocus = has("recovery_focus");
       const calmFloor = has("calm_floor");
       const premiumWindow = has("premium_window");
-
-      return {
+      const base = {
         active,
         closingSurge,
         recoveryFocus,
@@ -865,6 +882,47 @@
         pressureEscalationDelta: read("calm_floor", "pressureEscalationDelta", 0),
         premiumChanceBonus: read("premium_window", "premiumChanceBonus", 0),
         opennessBonus: read("premium_window", "opennessBonus", 0),
+      };
+      const livePatch = getLiveEffectsAbilityRuntimePatch();
+
+      return {
+        ...base,
+        closingSurge: !!(base?.closingSurge || livePatch.closingSurge),
+        recoveryFocus: !!(base?.recoveryFocus || livePatch.recoveryFocus),
+        premiumWindow: !!(base?.premiumWindow || livePatch.premiumWindow),
+        calmFloor: !!(base?.calmFloor || livePatch.calmFloor),
+        reactionClosingBonus: Math.max(
+          Number(base?.reactionClosingBonus || 0),
+          Number(livePatch.reactionClosingBonus || 0)
+        ),
+        closingThresholdDelta: Math.max(
+          Number(base?.closingThresholdDelta || 0),
+          Number(livePatch.closingThresholdDelta || 0)
+        ),
+        recoveryPressureRelief: Math.max(
+          Number(base?.recoveryPressureRelief || 0),
+          Number(livePatch.recoveryPressureRelief || 0)
+        ),
+        recoveryThresholdDelta: Math.max(
+          Number(base?.recoveryThresholdDelta || 0),
+          Number(livePatch.recoveryThresholdDelta || 0)
+        ),
+        premiumChanceBonus: Math.max(
+          Number(base?.premiumChanceBonus || 0),
+          Number(livePatch.premiumChanceBonus || 0)
+        ),
+        opennessBonus: Math.max(
+          Number(base?.opennessBonus || 0),
+          Number(livePatch.opennessBonus || 0)
+        ),
+        pressureInitRelief: Math.max(
+          Number(base?.pressureInitRelief || 0),
+          Number(livePatch.pressureInitRelief || 0)
+        ),
+        pressureEscalationDelta: Math.min(
+          Number(base?.pressureEscalationDelta || 0),
+          Number(livePatch.pressureEscalationDelta || 0)
+        ),
       };
     }
 
@@ -881,7 +939,8 @@
       const runtime = getActiveAbilityRuntime();
       console.log("[BC][LIVE_FX]", {
         hook: "reaction_eval",
-        ...getEncounterEffectDebugPayload()
+        ...getEncounterEffectDebugPayload(),
+        runtime,
       });
       const next = { ...result };
 
@@ -934,7 +993,8 @@
       const runtime = getActiveAbilityRuntime();
       console.log("[BC][LIVE_FX]", {
         hook: "premium_roll",
-        ...getEncounterEffectDebugPayload()
+        ...getEncounterEffectDebugPayload(),
+        runtime,
       });
       const pressure = encounter?.guestPressure || initGuestPressureState(encounter);
       const signal = String(result?.chainSignal || "").toLowerCase();
@@ -1456,6 +1516,12 @@
           },
           { source: "parent_sync" }
         );
+        try {
+          console.log("[BC][LIVE_FX_SYNC]", {
+            ...getEncounterEffectDebugPayload(),
+            runtime: getActiveAbilityRuntime(),
+          });
+        } catch {}
         try { updateCounts?.(); } catch {}
         try { renderGameplayRail?.(); } catch {}
 
@@ -6627,7 +6693,8 @@ function ensureProgLoaded() {
           const liveFx = getEncounterEffectModifiers();
           console.log("[BC][LIVE_FX]", {
             hook: "reaction_eval_bridge",
-            ...getEncounterEffectDebugPayload()
+            ...getEncounterEffectDebugPayload(),
+            runtime: getActiveAbilityRuntime(),
           });
 
           const result = window.EngineBridge?.computeReaction
@@ -9763,7 +9830,8 @@ body.difficulty-hard .option-btn.selected {
         const abilityFx = getActiveAbilityRuntime();
         console.log("[BC][LIVE_FX]", {
           hook: "pressure_init",
-          ...getEncounterEffectDebugPayload()
+          ...getEncounterEffectDebugPayload(),
+          runtime: abilityFx,
         });
 
         const baseByGuest = {
@@ -9867,7 +9935,8 @@ body.difficulty-hard .option-btn.selected {
         const abilityFx = getActiveAbilityRuntime();
         console.log("[BC][LIVE_FX]", {
           hook: "pressure_update",
-          ...getEncounterEffectDebugPayload()
+          ...getEncounterEffectDebugPayload(),
+          runtime: abilityFx,
         });
 
         const next = { ...p };
@@ -13242,7 +13311,8 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             const liveFx = getEncounterEffectModifiers();
             console.log("[BC][LIVE_FX]", {
               hook: "reaction_eval_bridge",
-              ...getEncounterEffectDebugPayload()
+              ...getEncounterEffectDebugPayload(),
+              runtime: getActiveAbilityRuntime(),
             });
             result = window.EngineBridge.computeReaction({
               ...reactionChecks,
@@ -14044,7 +14114,8 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           const abilityFx = getActiveAbilityRuntime();
           console.log("[BC][LIVE_FX]", {
             hook: "outcome_eval",
-            ...getEncounterEffectDebugPayload()
+            ...getEncounterEffectDebugPayload(),
+            runtime: abilityFx,
           });
           const pivotPlanned =
             (enc?.pivotPlanned != null)
