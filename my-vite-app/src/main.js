@@ -8689,11 +8689,35 @@ function renderMbMessageItem(row, nameMap) {
   const when = escapeHtml(
     String(formatManagerTimeShort(row?.created_at) || row?.created_at || "")
   );
+  const meta = getManagerMessageKindMeta(row);
   const display = getManagerMessageDisplayBody(row);
   const badgeHtml = renderManagerMessageBadge(row);
   const titleHtml = escapeHtml(String(display?.title || row?.body || "Message"));
   const detailHtml = escapeHtml(String(display?.detail || ""));
   const noteHtml = escapeHtml(String(row?.body || ""));
+  const toneStyles = {
+    success: {
+      border: "1px solid rgba(34,197,94,0.20)",
+      bg: "rgba(34,197,94,0.06)",
+    },
+    warning: {
+      border: "1px solid rgba(245,158,11,0.20)",
+      bg: "rgba(245,158,11,0.06)",
+    },
+    info: {
+      border: "1px solid rgba(96,165,250,0.20)",
+      bg: "rgba(96,165,250,0.06)",
+    },
+    neutral: {
+      border: "1px solid rgba(255,255,255,0.10)",
+      bg: "rgba(255,255,255,0.04)",
+    },
+    default: {
+      border: "1px solid rgba(255,255,255,0.10)",
+      bg: "rgba(255,255,255,0.04)",
+    },
+  };
+  const toneStyle = toneStyles[meta?.tone] || toneStyles.default;
 
   let payloadHtml = "";
 
@@ -8762,18 +8786,19 @@ ${escapeHtml(s.label)}
 
   return `
     <div data-msg-id="${escapeHtml(String(row?.id ?? ""))}" style="
-      border:1px solid rgba(255,255,255,0.10);
+      ${toneStyle.border};
       border-radius:12px;
       padding:10px;
-      background:rgba(255,255,255,0.04);
+      background:${toneStyle.bg};
+      margin-bottom:8px;
     ">
       <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
         <div class="small-text" style="opacity:.75;">${escapeHtml(who)}</div>
-        ${badgeHtml}
+        ${badgeHtml ? `<div>${badgeHtml}</div>` : ``}
       </div>
       <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-top:6px;">
         <div style="font-weight:600;">${titleHtml}</div>
-        <div class="small-text" style="opacity:.6;">${when}</div>
+        <div class="small-text" style="opacity:.6; white-space:nowrap;">${when}</div>
       </div>
       ${detailHtml ? `
         <div class="small-text" style="margin-top:4px; opacity:.82;">
@@ -8788,6 +8813,84 @@ ${escapeHtml(s.label)}
       ${payloadHtml}
     </div>
   `;
+}
+
+function getManagerThreadRowGroup(row = {}) {
+  const type = String(row?.type || "").toLowerCase();
+
+  if (
+    type === "drill_override" ||
+    type === "drill_started" ||
+    type === "drill_completed" ||
+    type === "timed_challenge" ||
+    type === "timed_challenge_completed" ||
+    type === "timed_challenge_expired"
+  ) {
+    return "objective_timeline";
+  }
+
+  if (type === "instruction") {
+    return "coaching_notes";
+  }
+
+  if (type === "progress_report") {
+    return "performance_reports";
+  }
+
+  return "other";
+}
+
+function renderManagerThreadGroupDivider(group = "") {
+  const labelMap = {
+    objective_timeline: "Objective Timeline",
+    coaching_notes: "Coaching Notes",
+    performance_reports: "Performance Reports",
+    other: "Other Activity",
+  };
+
+  const label = labelMap[group] || "Thread Activity";
+
+  return `
+    <div style="
+      display:flex;
+      align-items:center;
+      gap:8px;
+      margin:12px 0 6px 0;
+    ">
+      <div class="small-text" style="
+        opacity:.78;
+        font-weight:700;
+        letter-spacing:.02em;
+        white-space:nowrap;
+      ">
+        ${escapeHtml(label)}
+      </div>
+      <div style="
+        height:1px;
+        flex:1;
+        background:rgba(255,255,255,0.10);
+      "></div>
+    </div>
+  `;
+}
+
+function renderManagerThreadMessagesGrouped(rows = [], nameMap = {}) {
+  const ordered = Array.isArray(rows) ? rows : [];
+  let html = "";
+  let lastGroup = "";
+
+  for (const row of ordered) {
+    const group = getManagerThreadRowGroup(row);
+
+    if (group !== lastGroup) {
+      html += renderManagerThreadGroupDivider(group);
+      lastGroup = group;
+    }
+
+    html += renderMbMessageItem(row, nameMap);
+  }
+
+  return html;
 }
 
 function renderManagerThreadListItem(thread, nameMap) {
@@ -8951,8 +9054,8 @@ function getManagerMessageKindMeta(row = {}) {
       title: "Instruction Sent",
     },
     progress_report: {
-      badge: "",
-      tone: "default",
+      badge: "REPORT",
+      tone: "info",
       title: "Progress Report",
     },
   };
@@ -9088,6 +9191,21 @@ function getManagerMessageDisplayBody(row = {}) {
   };
 }
 
+function getManagerChallengeLabel(payload = {}) {
+  const title = String(payload?.title || "").trim();
+  if (title) return title;
+
+  const key = String(payload?.challengeKey || "").trim().toLowerCase();
+  const map = {
+    closing_push: "Closing Push",
+    recovery_window: "Recovery Window",
+  };
+
+  return map[key] || (key
+    ? key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+    : "Challenge");
+}
+
 function getManagerThreadMetaSummary(threadRows = []) {
   const rows = Array.isArray(threadRows) ? threadRows : [];
   const latestChallenge = [...rows]
@@ -9116,7 +9234,12 @@ function getManagerThreadMetaSummary(threadRows = []) {
     .slice(-1)[0] || null;
 
   const drillCompletedAt = latestDrillCompleted ? new Date(latestDrillCompleted.created_at || 0).getTime() : 0;
-  const drillStartedAt = latestDrillStarted ? new Date(latestDrillStarted.created_at || 0).getTime() : 0;
+  const drillStartedAt = latestDrillStarted
+    ? (
+        Number(latestDrillStarted?.payload?.startedAt || 0) ||
+        new Date(latestDrillStarted.created_at || 0).getTime()
+      )
+    : 0;
   const drillOverrideAt = latestDrillOverride ? new Date(latestDrillOverride.created_at || 0).getTime() : 0;
 
   const challengeCompletedAt = latestChallengeCompleted ? new Date(latestChallengeCompleted.created_at || 0).getTime() : 0;
@@ -9126,19 +9249,32 @@ function getManagerThreadMetaSummary(threadRows = []) {
   const parts = [];
 
   if (drillCompletedAt && drillCompletedAt >= Math.max(drillStartedAt, drillOverrideAt)) {
-    parts.push("Last drill completed");
+    const payload = latestDrillCompleted?.payload || {};
+    const focusLabel = getManagerDrillFocusLabel(payload?.focus || "");
+    parts.push(`${focusLabel} drill completed`);
   } else if (drillStartedAt && drillStartedAt >= drillOverrideAt) {
-    parts.push("Drill in progress");
+    const payload = latestDrillStarted?.payload || {};
+    const focusLabel = getManagerDrillFocusLabel(payload?.focus || "");
+    parts.push(`${focusLabel} drill in progress`);
   } else if (drillOverrideAt) {
-    parts.push("Assigned drill ready");
+    const payload = latestDrillOverride?.payload || {};
+    const drill = payload?.drill || {};
+    const focusLabel = getManagerDrillFocusLabel(drill?.focus || "");
+    parts.push(`${focusLabel} drill ready`);
   }
 
   if (challengeCompletedAt && challengeCompletedAt >= Math.max(challengeAssignedAt, challengeExpiredAt)) {
-    parts.push("Challenge completed");
+    const payload = latestChallengeCompleted?.payload || {};
+    const label = getManagerChallengeLabel(payload);
+    parts.push(`${label} completed`);
   } else if (challengeExpiredAt && challengeExpiredAt >= challengeAssignedAt) {
-    parts.push("Challenge expired");
+    const payload = latestChallengeExpired?.payload || {};
+    const label = getManagerChallengeLabel(payload);
+    parts.push(`${label} expired`);
   } else if (challengeAssignedAt) {
-    parts.push("Challenge active");
+    const payload = latestChallenge?.payload || {};
+    const label = getManagerChallengeLabel(payload);
+    parts.push(`${label} active`);
   }
 
   return parts.join(" • ") || "No current objective";
@@ -9761,13 +9897,15 @@ function renderManagerActiveThread(nameMap) {
   }
 
   const ordered = [...thread.rows].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  window.__BC_MB_ACTIVE_THREAD_ROWS__ = ordered;
   if (titleEl) titleEl.textContent = userLabel(thread.userId, nameMap);
   if (metaEl) metaEl.textContent = getManagerThreadMetaSummary(ordered);
-  window.__BC_MB_ACTIVE_THREAD_ROWS__ = ordered;
   const recommendationHtml = renderManagerThreadRecommendation(thread);
 
   if (msgEl) {
-    msgEl.innerHTML = `${ordered.map((m) => renderMbMessageItem(m, nameMap)).join("")}${recommendationHtml}`;
+    const groupedHtml = renderManagerThreadMessagesGrouped(ordered, nameMap);
+
+    msgEl.innerHTML = `${groupedHtml}${recommendationHtml}`;
     msgEl.scrollTop = msgEl.scrollHeight;
     wireMbCoachSuggestionButtons();
     wireMbAutoDrillButtons();
