@@ -485,12 +485,27 @@ document.querySelector("#app").innerHTML = `
                 <select id="mbTimedChallengeTarget" style="min-width:180px;"></select>
 
                 <select id="mbTimedChallengeType">
-                  <option value="closing_push">Closing Push</option>
-                  <option value="recovery_window">Recovery Window</option>
-                  <option value="clean_close">Clean Close</option>
-                  <option value="read_first">Read First</option>
-                  <option value="full_delivery">Full Delivery</option>
-                  <option value="no_reset_run">No Reset Run</option>
+                  <optgroup label="Skill Focus">
+                    <option value="closing_push">Closing Push</option>
+                    <option value="recovery_window">Recovery Window</option>
+                    <option value="read_first">Read First</option>
+                    <option value="full_delivery">Full Delivery</option>
+                  </optgroup>
+                  <optgroup label="Outcome">
+                    <option value="clean_close">Clean Close</option>
+                    <option value="soft_close">Soft Close</option>
+                    <option value="successful_pivot">Successful Pivot</option>
+                  </optgroup>
+                  <optgroup label="Discipline">
+                    <option value="no_reset_run">No Reset Run</option>
+                    <option value="stable_signal">Stable Signal</option>
+                    <option value="controlled_table">Controlled Table</option>
+                  </optgroup>
+                  <optgroup label="Momentum">
+                    <option value="solid_interaction">Solid Interaction</option>
+                    <option value="premium_moment">Premium Moment</option>
+                    <option value="commanding_presence">Commanding Presence</option>
+                  </optgroup>
                 </select>
 
                 <select id="mbTimedChallengeDuration">
@@ -511,7 +526,7 @@ document.querySelector("#app").innerHTML = `
               </div>
 
               <div class="small" style="opacity:.8;">
-                Assign a timed objective to one waiter. First version uses Closing Push.
+                Assign a live objective by skill focus, outcome, discipline, or momentum.
               </div>
 
               <div class="row" style="display:flex; gap:8px; align-items:center;">
@@ -2456,11 +2471,16 @@ function getTimedChallengeLabel(challengeKey) {
     closing_push: "Closing Push",
     recovery_window: "Recovery Window",
     clean_close: "Clean Close",
+    soft_close: "Soft Close",
+    successful_pivot: "Successful Pivot",
     read_first: "Read First",
     full_delivery: "Full Delivery",
-    stable_signal: "Stable Signal",
     no_reset_run: "No Reset Run",
+    stable_signal: "Stable Signal",
+    controlled_table: "Controlled Table",
+    solid_interaction: "Solid Interaction",
     premium_moment: "Premium Moment",
+    commanding_presence: "Commanding Presence",
   };
 
   return map[key] || (key
@@ -2777,7 +2797,7 @@ function getTimedChallengeMessageMeta(row) {
   if (type === "timed_challenge") {
     return {
       kind: "assigned",
-      label: "Challenge assigned",
+      label: "Challenge Sent",
       title: label,
       strongestSkill: null,
     };
@@ -2786,7 +2806,7 @@ function getTimedChallengeMessageMeta(row) {
   if (type === "timed_challenge_completed") {
     return {
       kind: "completed",
-      label: "Challenge completed",
+      label: "Completed",
       title: label,
       strongestSkill: payload?.strongestSkill || null,
     };
@@ -2795,7 +2815,7 @@ function getTimedChallengeMessageMeta(row) {
   if (type === "timed_challenge_expired") {
     return {
       kind: "expired",
-      label: "Challenge expired",
+      label: "Expired",
       title: label,
       strongestSkill: null,
     };
@@ -4311,10 +4331,11 @@ if (!window.__BC_PARENT_BRIDGE__) {
         const p = msg?.payload || {};
         const challengeKey = p?.challengeKey || null;
         const status = String(p?.status || "").toLowerCase();
-        const title = String(p?.title || "Timed Challenge");
+        const title = String(p?.title || getTimedChallengeLabel(challengeKey) || "Timed Challenge");
         const targetUserId = p?.targetUserId || ctx.userId;
         const restaurantId = p?.restaurantId || ctx.restaurantId;
         const rewardPoints = Number(p?.rewardPoints || 0);
+        const outcome = p?.outcome || null;
 
         if (!challengeId) {
           replyResult({ ok: false, error: "missing_challenge_id" });
@@ -4351,8 +4372,8 @@ if (!window.__BC_PARENT_BRIDGE__) {
 
         const body =
           status === "completed"
-            ? `${title} completed`
-            : `${title} expired`;
+            ? `Completed ${title}`
+            : "Challenge Expired";
 
         const resultRow = {
           scope_type: "restaurant",
@@ -4366,9 +4387,18 @@ if (!window.__BC_PARENT_BRIDGE__) {
           payload: {
             challengeId,
             challengeKey,
+            title,
             status,
             rewardPoints,
             strongestSkill: p?.strongestSkill || null,
+            outcome,
+            chainSignal: p?.chainSignal || null,
+            chainScore: p?.chainScore ?? null,
+            guestReadCorrect: p?.guestReadCorrect ?? null,
+            deliveryScore: p?.deliveryScore ?? null,
+            resetUsed: p?.resetUsed ?? null,
+            premiumSuccess: p?.premiumSuccess ?? null,
+            strongPillars: p?.strongPillars ?? null,
             completedAt: p?.completedAt || Date.now(),
           },
         };
@@ -9180,13 +9210,14 @@ function getManagerMessageDisplayBody(row = {}) {
   }
 
   if (type === "timed_challenge") {
-    const title = String(payload?.title || "Timed challenge");
+    const title = getManagerChallengeLabel(payload);
     const durationSec = Number(payload?.durationSec || 0) || null;
     const reward = Number(payload?.rewardPoints || 0) || null;
     const mins = durationSec ? Math.floor(durationSec / 60) : null;
     return {
-      title: `Sent ${title}`,
+      title: "Challenge Sent",
       detail: [
+        title,
         mins ? `${mins} min` : "",
         reward ? `Reward ${reward}` : "",
       ].filter(Boolean).join(" • "),
@@ -9194,23 +9225,26 @@ function getManagerMessageDisplayBody(row = {}) {
   }
 
   if (type === "timed_challenge_completed") {
-    const challengeKey = String(payload?.challengeKey || "challenge");
+    const title = getManagerChallengeLabel(payload);
     const reward = Number(payload?.rewardPoints || 0) || null;
-    const strongestSkill = String(payload?.strongestSkill || "");
+    const outcome = getTimedChallengeLabel(payload?.outcome || "");
     return {
-      title: `Completed ${challengeKey.replaceAll("_", " ")}`,
+      title: `Completed ${title}`,
       detail: [
+        payload?.outcome ? `Outcome: ${outcome}` : "",
         reward ? `Reward ${reward}` : "",
-        strongestSkill ? `Strongest: ${strongestSkill}` : "",
       ].filter(Boolean).join(" • "),
     };
   }
 
   if (type === "timed_challenge_expired") {
-    const challengeKey = String(payload?.challengeKey || "challenge");
+    const title = getManagerChallengeLabel(payload);
     return {
-      title: `Expired ${challengeKey.replaceAll("_", " ")}`,
-      detail: "",
+      title: "Challenge Expired",
+      detail: [
+        title,
+        "Time ran out",
+      ].filter(Boolean).join(" • "),
     };
   }
 
@@ -9232,14 +9266,7 @@ function getManagerChallengeLabel(payload = {}) {
   if (title) return title;
 
   const key = String(payload?.challengeKey || "").trim().toLowerCase();
-  const map = {
-    closing_push: "Closing Push",
-    recovery_window: "Recovery Window",
-  };
-
-  return map[key] || (key
-    ? key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
-    : "Challenge");
+  return getTimedChallengeLabel(key || "challenge");
 }
 
 function getManagerThreadMetaSummary(threadRows = []) {
@@ -10216,6 +10243,22 @@ function buildTimedChallengePayloadFromValues(values = {}) {
         value: "clean_close",
       },
     },
+    soft_close: {
+      title: "Soft Close",
+      focus: "closing",
+      successRule: {
+        type: "outcome_equals",
+        value: "soft_close",
+      },
+    },
+    successful_pivot: {
+      title: "Successful Pivot",
+      focus: "recovery",
+      successRule: {
+        type: "outcome_equals",
+        value: "pivot",
+      },
+    },
     read_first: {
       title: "Read First",
       focus: "read",
@@ -10238,6 +10281,46 @@ function buildTimedChallengePayloadFromValues(values = {}) {
       successRule: {
         type: "no_reset_used",
         value: true,
+      },
+    },
+    stable_signal: {
+      title: "Stable Signal",
+      focus: "recovery",
+      successRule: {
+        type: "reaction_signal_equals",
+        value: "green",
+      },
+    },
+    controlled_table: {
+      title: "Controlled Table",
+      focus: "delivery",
+      successRule: {
+        type: "strong_pillars_gte",
+        value: 3,
+      },
+    },
+    solid_interaction: {
+      title: "Solid Interaction",
+      focus: "recovery",
+      successRule: {
+        type: "chain_score_gte",
+        value: 6,
+      },
+    },
+    premium_moment: {
+      title: "Premium Moment",
+      focus: "closing",
+      successRule: {
+        type: "premium_roll_success",
+        value: true,
+      },
+    },
+    commanding_presence: {
+      title: "Commanding Presence",
+      focus: "delivery",
+      successRule: {
+        type: "strong_pillars_gte",
+        value: 4,
       },
     },
   };
@@ -10326,7 +10409,7 @@ async function sendTimedChallengeFromManagerWithValues(values = {}) {
 
     const messengerStatusEl = document.getElementById("mbTimedChallengeStatus");
     if (messengerStatusEl) {
-      messengerStatusEl.textContent = `${payload.title} sent ✅`;
+      messengerStatusEl.textContent = `Challenge Sent • ${payload.title} • ${Math.round(payload.durationSec / 60)} min • Reward ${Number(payload.rewardPoints || 0)}`;
     }
 
     renderTimedChallengeRecentSummary();
@@ -10353,7 +10436,9 @@ async function sendTimedChallengeFromManager() {
   const ok = await sendTimedChallengeFromManagerWithValues(values);
 
   if (ok) {
-    if (statusEl) statusEl.textContent = "Challenge sent ✅";
+    if (statusEl) {
+      statusEl.textContent = `Challenge Sent • ${values.challengeKey ? getTimedChallengeLabel(values.challengeKey) : "Timed Challenge"} • ${Math.round(Number(values.durationSec || 0) / 60)} min • Reward ${Number(values.rewardPoints || 0)}`;
+    }
     return true;
   }
 
@@ -10386,7 +10471,11 @@ function wireManagerTimedChallengeActionPanel() {
         const ok = await sendTimedChallengeFromManagerWithValues(values);
 
         if (ok) {
-          setManagerStatus(statusEl, "success", "Challenge sent ✅");
+          setManagerStatus(
+            statusEl,
+            "success",
+            `Challenge Sent • ${getTimedChallengeLabel(values.challengeKey)} • ${Math.round(Number(values.durationSec || 0) / 60)} min • Reward ${Number(values.rewardPoints || 0)}`
+          );
 
           const src = document.getElementById("mbTimedChallengeRecentSummary");
           const dst = document.getElementById("mbLcTimedChallengeRecentSummary");
@@ -10443,12 +10532,27 @@ function renderManagerTimedChallengeActionPanel() {
       <div class="row" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
         <select id="mbLcTimedChallengeTarget" style="min-width:180px;"></select>
         <select id="mbLcTimedChallengeType">
-          <option value="closing_push">Closing Push</option>
-          <option value="recovery_window">Recovery Window</option>
-          <option value="clean_close">Clean Close</option>
-          <option value="read_first">Read First</option>
-          <option value="full_delivery">Full Delivery</option>
-          <option value="no_reset_run">No Reset Run</option>
+          <optgroup label="Skill Focus">
+            <option value="closing_push">Closing Push</option>
+            <option value="recovery_window">Recovery Window</option>
+            <option value="read_first">Read First</option>
+            <option value="full_delivery">Full Delivery</option>
+          </optgroup>
+          <optgroup label="Outcome">
+            <option value="clean_close">Clean Close</option>
+            <option value="soft_close">Soft Close</option>
+            <option value="successful_pivot">Successful Pivot</option>
+          </optgroup>
+          <optgroup label="Discipline">
+            <option value="no_reset_run">No Reset Run</option>
+            <option value="stable_signal">Stable Signal</option>
+            <option value="controlled_table">Controlled Table</option>
+          </optgroup>
+          <optgroup label="Momentum">
+            <option value="solid_interaction">Solid Interaction</option>
+            <option value="premium_moment">Premium Moment</option>
+            <option value="commanding_presence">Commanding Presence</option>
+          </optgroup>
         </select>
         <select id="mbLcTimedChallengeDuration">
           <option value="300">5 min</option>
