@@ -250,6 +250,9 @@
     function getLastDrillCompletionStatus() {
       return window.__BC_LAST_DRILL_COMPLETION_STATUS__ || null;
     }
+    function getLastDrillStartedStatus() {
+      return window.__BC_LAST_DRILL_STARTED_STATUS__ || null;
+    }
     function getTimedChallengeCopy(challenge = {}) {
       const key = String(
         challenge?.challengeKey ||
@@ -1063,11 +1066,6 @@
 
             if (started) {
               try { renderGameplayRail?.(); } catch {}
-              window.showToast?.(
-                action.kind === "resume_assigned"
-                  ? "Resuming training objective"
-                  : "Starting training objective"
-              );
               return true;
             }
           }
@@ -2378,6 +2376,18 @@
       }
       if (msg.type === "message_mark_read_result") {
         if (!msg.ok) console.warn("[GAME] message_mark_read_result failed", msg?.error || "unknown", msg?.id);
+      }
+      if (msg.type === "drill_run_started_result") {
+        window.__BC_LAST_DRILL_STARTED_STATUS__ = {
+          ok: !!msg?.ok,
+          assignedMessageId: msg?.assignedMessageId || null,
+          managerUserId: msg?.managerUserId || null,
+          error: msg?.error || null,
+          at: Date.now(),
+        };
+
+        try { renderGameplayRail?.(); } catch {}
+        return;
       }
       if (msg.type === "timed_challenge_result_ack") {
         const last = window.__BC_LAST_TIMED_CHALLENGE_RESULT__ || null;

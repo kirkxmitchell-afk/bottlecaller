@@ -4054,12 +4054,189 @@ if (!window.__BC_PARENT_BRIDGE__) {
       }
 
       if (msg.type === "drill_run_started") {
-        console.log("[PARENT] drill_run_started received ✅", { msg });
+        const replyType = "drill_run_started_result";
+        const assignedMessageId = msg?.assignedMessageId || null;
+        const senderCtx = getSourceCtx(event.source);
+
+        const replyResult = (payload = {}) => {
+          try {
+            event.source?.postMessage(
+              {
+                source: "BC_MSG",
+                v: 1,
+                type: replyType,
+                assignedMessageId,
+                ...payload,
+              },
+              event.origin
+            );
+          } catch {}
+        };
+
+        console.log("[PARENT] drill_run_started received ✅", { msg, senderCtx });
+
+        if (isDemoMsg(msg, senderCtx)) {
+          replyResult({ ok: true, demo: true });
+          return;
+        }
+
+        if (rejectIfEpochMismatch(event, msg, replyType, { assignedMessageId })) return;
+
+        const ctx = getSenderCtxOrReject(
+          event,
+          senderCtx,
+          replyType,
+          { assignedMessageId },
+          { requireRestaurant: true, allowedRoles: ["waiter", "single_manager", "group_manager", "enterpriser"] }
+        );
+        if (!ctx) {
+          console.warn("[DRILL START] ctx rejected");
+          return;
+        }
+
+        const liveAuthNow = await getLiveAuthOrNull();
+        const authed = liveAuthNow?.userId || null;
+        if (!authed) {
+          console.warn("[DRILL START] no session");
+          replyResult({ ok: false, error: "no_session" });
+          return;
+        }
+        if (String(authed) !== String(ctx.userId)) {
+          console.warn("[DRILL START] forbidden/no session", {
+            authed,
+            ctxUserId: ctx.userId,
+          });
+          replyResult({ ok: false, error: "forbidden_user" });
+          return;
+        }
+
+        const p = msg?.payload || {};
+
+        if (!assignedMessageId) {
+          console.warn("[DRILL START] missing assignedMessageId");
+          replyResult({ ok: false, error: "missing_assigned_message_id" });
+          return;
+        }
+
+        const { data: assignedMsg, error: assignedErr } = await supabase
+          .from("bc_messages_v1")
+          .select("id, sender_user_id, receiver_user_id, restaurant_id, type, body, payload")
+          .eq("id", assignedMessageId)
+          .eq("type", "drill_override")
+          .maybeSingle();
+
+        if (assignedErr) {
+          console.warn("[DRILL START] assigned message lookup failed", assignedErr);
+          replyResult({ ok: false, error: "assigned_message_lookup_failed" });
+          return;
+        }
+
+        if (!assignedMsg?.id) {
+          console.warn("[DRILL START] assigned drill message not found", { assignedMessageId });
+          replyResult({ ok: false, error: "assigned_message_not_found" });
+          return;
+        }
+
+        if (String(assignedMsg.receiver_user_id || "") !== String(ctx.userId || "")) {
+          console.warn("[DRILL START] assigned drill receiver mismatch", {
+            assignedReceiver: assignedMsg.receiver_user_id,
+            ctxUserId: ctx.userId,
+          });
+          replyResult({ ok: false, error: "assigned_message_receiver_mismatch" });
+          return;
+        }
+
+        if (String(assignedMsg.restaurant_id || "") !== String(ctx.restaurantId || "")) {
+          console.warn("[DRILL START] assigned drill restaurant mismatch", {
+            assignedRestaurantId: assignedMsg.restaurant_id,
+            ctxRestaurantId: ctx.restaurantId,
+          });
+          replyResult({ ok: false, error: "assigned_message_restaurant_mismatch" });
+          return;
+        }
+
+        const managerUserId = assignedMsg.sender_user_id || null;
+        if (!managerUserId) {
+          console.warn("[DRILL START] assigned drill message has no sender_user_id", assignedMsg);
+          replyResult({ ok: false, error: "assigned_message_missing_sender" });
+          return;
+        }
+
+        const { data: existingStartedRows, error: existingStartedErr } = await supabase
+          .from("bc_messages_v1")
+          .select("id, payload, created_at")
+          .eq("type", "drill_started")
+          .eq("sender_user_id", ctx.userId)
+          .eq("receiver_user_id", managerUserId)
+          .eq("restaurant_id", ctx.restaurantId)
+          .order("created_at", { ascending: false })
+          .limit(10);
+
+        if (existingStartedErr) {
+          console.warn("[DRILL START] existing started lookup failed", existingStartedErr);
+          replyResult({ ok: false, error: "existing_started_lookup_failed" });
+          return;
+        }
+
+        const duplicateStarted = (existingStartedRows || []).some(
+          (row) => String(row?.payload?.assignedMessageId || "") === String(assignedMessageId || "")
+        );
+
+        if (duplicateStarted) {
+          window.__BC_PARENT_LAST_DRILL_STARTED__ = {
+            assignedMessageId,
+            payload: p,
+            senderCtx: senderCtx || null,
+            at: Date.now(),
+          };
+
+          try { renderManagerThreadDrillSummary?.(); } catch {}
+
+          replyResult({ ok: true, managerUserId, duplicate: true });
+          return;
+        }
+
+        const body = `Drill started • ${p?.focus || "drill"} • ${p?.repTarget ?? 0} reps`;
+
+        const startedRow = {
+          scope_type: "restaurant",
+          scope_id: ctx.scopeId || ctx.restaurantId,
+          restaurant_id: ctx.restaurantId,
+          sender_user_id: ctx.userId,
+          receiver_user_id: managerUserId,
+          sender_role: ctx.membershipRole || ctx.role || "waiter",
+          type: "drill_started",
+          body,
+          payload: {
+            focus: p?.focus ?? null,
+            repTarget: p?.repTarget ?? null,
+            durationSec: p?.durationSec ?? null,
+            tier: p?.tier ?? null,
+            startedAt: p?.startedAt || Date.now(),
+            assignedMessageId,
+          },
+        };
+
+        const { error: insertErr } = await supabase
+          .from("bc_messages_v1")
+          .insert(startedRow);
+
+        if (insertErr) {
+          console.warn("[DRILL START] insert failed", insertErr);
+          replyResult({ ok: false, error: "started_insert_failed" });
+          return;
+        }
+
         window.__BC_PARENT_LAST_DRILL_STARTED__ = {
-          assignedMessageId: msg?.assignedMessageId || null,
-          payload: msg?.payload || {},
+          assignedMessageId,
+          payload: p,
+          senderCtx: senderCtx || null,
           at: Date.now(),
         };
+
+        try { renderManagerThreadDrillSummary?.(); } catch {}
+
+        replyResult({ ok: true, managerUserId });
         return;
       }
 
@@ -8074,6 +8251,7 @@ function resetManagerMessengerState(opts = {}) {
   const keepStatus = !!opts.keepStatus;
 
   window.__BC_MB_ACTIVE_THREAD_USER_ID__ = null;
+  window.__BC_MB_ACTIVE_THREAD_ROWS__ = [];
   window.__BC_MB_ACTIVE_THREAD_EMAIL__ = null;
   window.__BC_MB_ACTIVE_THREAD_RESTAURANT_ID__ = null;
   window.__BC_MB_THREADS__ = [];
@@ -8140,6 +8318,7 @@ function mbEl(id) {
 }
 window.__BC_MB_THREADS__ = [];
 window.__BC_MB_ACTIVE_THREAD_USER_ID__ = null;
+window.__BC_MB_ACTIVE_THREAD_ROWS__ = [];
 window.__MB_LAST_MESSAGES__ = [];
 
 function getCoachingSuggestionsFromReport(payload) {
@@ -8507,85 +8686,18 @@ function drawPerformanceHistoryChart(rows) {
 function renderMbMessageItem(row, nameMap) {
   const who = userLabel(row?.sender_user_id, nameMap);
   const kind = String(row?.type || "message");
-  const body = escapeHtml(String(row?.body || ""));
-  const when = escapeHtml(String(row?.created_at || ""));
-  const timedMeta = getTimedChallengeMessageMeta(row);
-
-  let badge = "MSG";
-  if (kind === "progress_report") badge = "REPORT";
-  if (kind === "instruction") badge = "INSTRUCTION";
-  if (kind === "drill_override") badge = "DRILL";
-  if (kind === "drill_completed") badge = "COMPLETE";
-  if (kind === "timed_challenge") badge = "CHALLENGE";
-  if (kind === "timed_challenge_completed") badge = "COMPLETE";
-  if (kind === "timed_challenge_expired") badge = "EXPIRED";
+  const when = escapeHtml(
+    String(formatManagerTimeShort(row?.created_at) || row?.created_at || "")
+  );
+  const display = getManagerMessageDisplayBody(row);
+  const badgeHtml = renderManagerMessageBadge(row);
+  const titleHtml = escapeHtml(String(display?.title || row?.body || "Message"));
+  const detailHtml = escapeHtml(String(display?.detail || ""));
+  const noteHtml = escapeHtml(String(row?.body || ""));
 
   let payloadHtml = "";
 
-  if (kind === "drill_override" && row?.payload?.drill) {
-    const d = row.payload.drill || {};
-    const pool = Array.isArray(d.pool) ? d.pool.join(", ") : "-";
-    const focus = escapeHtml(String(d.focus || "-"));
-    const reps = escapeHtml(String(d.repTarget ?? "-"));
-    const duration = escapeHtml(String(d.durationSec ?? "-"));
-    const tier = escapeHtml(String(d.tier ?? "-"));
-    const reason = escapeHtml(String(row?.payload?.reason || ""));
-    const targetName = escapeHtml(
-      userLabel(row?.receiver_user_id, nameMap) || "waiter"
-    );
-
-    payloadHtml = `
-      <div style="
-        margin-top:8px;
-        padding:10px;
-        border:1px solid rgba(255,255,255,0.10);
-        border-radius:10px;
-        background:rgba(255,255,255,0.04);
-      ">
-        <div><strong>Assigned drill</strong></div>
-        <div class="small-text" style="margin-top:6px; opacity:.9;">
-          Assigned to: ${targetName}
-        </div>
-        <div class="small-text" style="opacity:.9;">Focus: ${focus}</div>
-        <div class="small-text" style="opacity:.9;">Pool: ${escapeHtml(pool)}</div>
-        <div class="small-text" style="opacity:.9;">Reps: ${reps}</div>
-        <div class="small-text" style="opacity:.9;">Duration: ${duration}s</div>
-        <div class="small-text" style="opacity:.9;">Tier: ${tier}</div>
-        ${reason ? `<div class="small-text" style="margin-top:8px; opacity:.75;">${reason}</div>` : ""}
-      </div>
-    `;
-  } else if (timedMeta) {
-    const payload = row?.payload || {};
-    const actorLabel = getTimedChallengeActorLabel(row);
-    const strongestSkillText = timedMeta.strongestSkill
-      ? ` • Strongest skill: ${timedMeta.strongestSkill}`
-      : "";
-    const rewardPoints = Number(payload?.rewardPoints || 0);
-    const completedAt = payload?.completedAt
-      ? new Date(payload.completedAt).toLocaleString()
-      : "";
-
-    payloadHtml = `
-      <div style="
-        margin-top:8px;
-        padding:10px;
-        border:1px solid rgba(255,255,255,0.10);
-        border-radius:10px;
-        background:rgba(255,255,255,0.04);
-        ${getTimedChallengeTone(timedMeta.kind)}
-      ">
-        <div style="font-weight:600;">${escapeHtml(timedMeta.label)}</div>
-        <div class="small-text" style="opacity:.85; margin-top:4px;">
-          ${escapeHtml(timedMeta.title)} • ${escapeHtml(actorLabel)}${escapeHtml(strongestSkillText)}
-        </div>
-        <div class="small-text" style="opacity:.75; margin-top:4px;">
-          ${escapeHtml(row.body || "")}
-        </div>
-        ${rewardPoints ? `<div class="small-text" style="opacity:.9;">Reward: ${rewardPoints} pts</div>` : ""}
-        ${completedAt ? `<div class="small-text" style="opacity:.75; margin-top:8px;">When: ${escapeHtml(completedAt)}</div>` : ""}
-      </div>
-    `;
-  } else if (kind === "progress_report" && row?.payload && typeof row.payload === "object" && Object.keys(row.payload).length) {
+  if (kind === "progress_report" && row?.payload && typeof row.payload === "object" && Object.keys(row.payload).length) {
     const p = row.payload || {};
     const skills = p.skills || {};
     const suggestions = getCoachingSuggestionsFromReport(p);
@@ -8656,13 +8768,23 @@ ${escapeHtml(s.label)}
       background:rgba(255,255,255,0.04);
     ">
       <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
-        <div style="display:flex; align-items:center; gap:8px;">
-          <span class="badge">${badge}</span>
-          <b>${escapeHtml(who)}</b>
-        </div>
+        <div class="small-text" style="opacity:.75;">${escapeHtml(who)}</div>
+        ${badgeHtml}
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-top:6px;">
+        <div style="font-weight:600;">${titleHtml}</div>
         <div class="small-text" style="opacity:.6;">${when}</div>
       </div>
-      <div style="margin-top:8px; white-space:pre-wrap;">${body}</div>
+      ${detailHtml ? `
+        <div class="small-text" style="margin-top:4px; opacity:.82;">
+          ${detailHtml}
+        </div>
+      ` : ""}
+      ${kind === "instruction" ? `
+        <div class="small-text" style="margin-top:6px; opacity:.92; white-space:pre-wrap;">
+          ${noteHtml}
+        </div>
+      ` : ""}
       ${payloadHtml}
     </div>
   `;
@@ -8789,6 +8911,411 @@ function renderManagerThreadRecommendation(thread) {
   `;
 }
 
+function getManagerMessageKindMeta(row = {}) {
+  const type = String(row?.type || "").toLowerCase();
+
+  const map = {
+    drill_override: {
+      badge: "ASSIGNED",
+      tone: "neutral",
+      title: "Assigned Drill",
+    },
+    drill_started: {
+      badge: "STARTED",
+      tone: "info",
+      title: "Drill Started",
+    },
+    drill_completed: {
+      badge: "COMPLETE",
+      tone: "success",
+      title: "Drill Completed",
+    },
+    timed_challenge: {
+      badge: "CHALLENGE",
+      tone: "neutral",
+      title: "Timed Challenge Sent",
+    },
+    timed_challenge_completed: {
+      badge: "WON",
+      tone: "success",
+      title: "Challenge Completed",
+    },
+    timed_challenge_expired: {
+      badge: "EXPIRED",
+      tone: "warning",
+      title: "Challenge Expired",
+    },
+    instruction: {
+      badge: "NOTE",
+      tone: "neutral",
+      title: "Instruction Sent",
+    },
+    progress_report: {
+      badge: "",
+      tone: "default",
+      title: "Progress Report",
+    },
+  };
+
+  return map[type] || {
+    badge: "",
+    tone: "default",
+    title: "",
+  };
+}
+
+function renderManagerMessageBadge(row = {}) {
+  const meta = getManagerMessageKindMeta(row);
+  if (!meta.badge) return "";
+
+  const toneStyles = {
+    success: "background:rgba(34,197,94,0.16); border:1px solid rgba(34,197,94,0.35);",
+    warning: "background:rgba(245,158,11,0.16); border:1px solid rgba(245,158,11,0.35);",
+    info: "background:rgba(96,165,250,0.16); border:1px solid rgba(96,165,250,0.35);",
+    neutral: "background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.12);",
+    default: "background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.10);",
+  };
+
+  const style = toneStyles[meta.tone] || toneStyles.default;
+
+  return `
+    <span style="
+      display:inline-flex;
+      align-items:center;
+      padding:3px 8px;
+      border-radius:999px;
+      font-size:11px;
+      font-weight:700;
+      letter-spacing:.03em;
+      ${style}
+    ">
+      ${escapeHtml(meta.badge)}
+    </span>
+  `;
+}
+
+function getManagerMessageDisplayBody(row = {}) {
+  const type = String(row?.type || "").toLowerCase();
+  const payload = row?.payload || {};
+
+  if (type === "drill_override") {
+    const drill = payload?.drill || {};
+    const focus = getManagerDrillFocusLabel(drill?.focus || "");
+    const reps = Number(drill?.repTarget || drill?.rep_target || 0) || null;
+    const durationSec = Number(drill?.durationSec || drill?.duration_sec || 0) || null;
+    const mins = durationSec ? Math.floor(durationSec / 60) : null;
+    return {
+      title: `Assigned ${focus} drill`,
+      detail: [
+        reps ? `${reps} reps` : "",
+        mins ? `${mins} min` : "",
+      ].filter(Boolean).join(" • "),
+    };
+  }
+
+  if (type === "drill_started") {
+    const focus = getManagerDrillFocusLabel(payload?.focus || "");
+    const reps = Number(payload?.repTarget || 0) || null;
+    const time = formatManagerTimeShort(payload?.startedAt || row?.created_at);
+    return {
+      title: `Started ${focus} drill`,
+      detail: [
+        reps ? `${reps} reps` : "",
+        time || "",
+      ].filter(Boolean).join(" • "),
+    };
+  }
+
+  if (type === "drill_completed") {
+    const focus = getManagerDrillFocusLabel(payload?.focus || "");
+    const repsDone = Number(payload?.repsDone || 0) || null;
+    const repTarget = Number(payload?.repTarget || 0) || null;
+    const completedTime = formatManagerTimeShort(payload?.completedAt || row?.created_at);
+    return {
+      title: `Completed ${focus} drill`,
+      detail: [
+        repsDone && repTarget ? `${repsDone}/${repTarget} reps` : "",
+        completedTime || "",
+      ].filter(Boolean).join(" • "),
+    };
+  }
+
+  if (type === "timed_challenge") {
+    const title = String(payload?.title || "Timed challenge");
+    const durationSec = Number(payload?.durationSec || 0) || null;
+    const reward = Number(payload?.rewardPoints || 0) || null;
+    const mins = durationSec ? Math.floor(durationSec / 60) : null;
+    return {
+      title: `Sent ${title}`,
+      detail: [
+        mins ? `${mins} min` : "",
+        reward ? `Reward ${reward}` : "",
+      ].filter(Boolean).join(" • "),
+    };
+  }
+
+  if (type === "timed_challenge_completed") {
+    const challengeKey = String(payload?.challengeKey || "challenge");
+    const reward = Number(payload?.rewardPoints || 0) || null;
+    const strongestSkill = String(payload?.strongestSkill || "");
+    return {
+      title: `Completed ${challengeKey.replaceAll("_", " ")}`,
+      detail: [
+        reward ? `Reward ${reward}` : "",
+        strongestSkill ? `Strongest: ${strongestSkill}` : "",
+      ].filter(Boolean).join(" • "),
+    };
+  }
+
+  if (type === "timed_challenge_expired") {
+    const challengeKey = String(payload?.challengeKey || "challenge");
+    return {
+      title: `Expired ${challengeKey.replaceAll("_", " ")}`,
+      detail: "",
+    };
+  }
+
+  if (type === "instruction") {
+    return {
+      title: "Instruction sent",
+      detail: String(row?.body || ""),
+    };
+  }
+
+  return {
+    title: String(row?.body || "Message"),
+    detail: "",
+  };
+}
+
+function getManagerThreadMetaSummary(threadRows = []) {
+  const rows = Array.isArray(threadRows) ? threadRows : [];
+  const latestChallenge = [...rows]
+    .filter((row) => String(row?.type || "") === "timed_challenge")
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+    .slice(-1)[0] || null;
+  const latestChallengeCompleted = [...rows]
+    .filter((row) => String(row?.type || "") === "timed_challenge_completed")
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+    .slice(-1)[0] || null;
+  const latestChallengeExpired = [...rows]
+    .filter((row) => String(row?.type || "") === "timed_challenge_expired")
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+    .slice(-1)[0] || null;
+  const latestDrillOverride = [...rows]
+    .filter((row) => String(row?.type || "") === "drill_override")
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+    .slice(-1)[0] || null;
+  const latestDrillStarted = [...rows]
+    .filter((row) => String(row?.type || "") === "drill_started")
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+    .slice(-1)[0] || null;
+  const latestDrillCompleted = [...rows]
+    .filter((row) => String(row?.type || "") === "drill_completed")
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+    .slice(-1)[0] || null;
+
+  const drillCompletedAt = latestDrillCompleted ? new Date(latestDrillCompleted.created_at || 0).getTime() : 0;
+  const drillStartedAt = latestDrillStarted ? new Date(latestDrillStarted.created_at || 0).getTime() : 0;
+  const drillOverrideAt = latestDrillOverride ? new Date(latestDrillOverride.created_at || 0).getTime() : 0;
+
+  const challengeCompletedAt = latestChallengeCompleted ? new Date(latestChallengeCompleted.created_at || 0).getTime() : 0;
+  const challengeExpiredAt = latestChallengeExpired ? new Date(latestChallengeExpired.created_at || 0).getTime() : 0;
+  const challengeAssignedAt = latestChallenge ? new Date(latestChallenge.created_at || 0).getTime() : 0;
+
+  const parts = [];
+
+  if (drillCompletedAt && drillCompletedAt >= Math.max(drillStartedAt, drillOverrideAt)) {
+    parts.push("Last drill completed");
+  } else if (drillStartedAt && drillStartedAt >= drillOverrideAt) {
+    parts.push("Drill in progress");
+  } else if (drillOverrideAt) {
+    parts.push("Assigned drill ready");
+  }
+
+  if (challengeCompletedAt && challengeCompletedAt >= Math.max(challengeAssignedAt, challengeExpiredAt)) {
+    parts.push("Challenge completed");
+  } else if (challengeExpiredAt && challengeExpiredAt >= challengeAssignedAt) {
+    parts.push("Challenge expired");
+  } else if (challengeAssignedAt) {
+    parts.push("Challenge active");
+  }
+
+  return parts.join(" • ") || "No current objective";
+}
+
+function getManagerDrillFocusLabel(focus = "") {
+  const key = String(focus || "").toLowerCase();
+
+  const map = {
+    read: "Read",
+    frame: "Frame",
+    delivery: "Delivery",
+    recovery: "Recovery",
+    closing: "Closing",
+  };
+
+  return map[key] || (focus ? String(focus) : "Drill");
+}
+
+function formatManagerTimeShort(ts) {
+  if (!ts) return "";
+
+  let ms = Number(ts);
+  if (!Number.isFinite(ms) || ms <= 0) {
+    ms = new Date(ts).getTime();
+  }
+  if (!Number.isFinite(ms) || ms <= 0) return "";
+
+  try {
+    return new Date(ms).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return "";
+  }
+}
+
+function getTransientStartedDrillSummaryForActiveThread() {
+  const started = window.__BC_PARENT_LAST_DRILL_STARTED__ || null;
+  if (!started) return null;
+
+  const activeUserId = String(window.__BC_MB_ACTIVE_THREAD_USER_ID__ || "");
+  if (!activeUserId) return null;
+
+  const assignedMessageId = String(started?.assignedMessageId || "");
+  if (!assignedMessageId) return null;
+
+  const threadRows = Array.isArray(window.__BC_MB_ACTIVE_THREAD_ROWS__)
+    ? window.__BC_MB_ACTIVE_THREAD_ROWS__
+    : [];
+
+  const matchingRow = threadRows.find(
+    (row) =>
+      String(row?.id || "") === assignedMessageId &&
+      String(row?.type || "") === "drill_override"
+  );
+
+  if (!matchingRow) return null;
+
+  const rowReceiverId = String(matchingRow?.receiver_user_id || "");
+  if (rowReceiverId && activeUserId && rowReceiverId !== activeUserId) {
+    return null;
+  }
+
+  const at = Number(started?.at || 0);
+  const ageMs = at ? (Date.now() - at) : Infinity;
+
+  if (!Number.isFinite(ageMs) || ageMs > 1000 * 60 * 20) {
+    return null;
+  }
+
+  return {
+    assignedMessageId,
+    focus: String(started?.payload?.focus || ""),
+    repTarget: Number(started?.payload?.repTarget || 0) || null,
+    at,
+  };
+}
+
+function renderManagerThreadDrillSummary() {
+  const root = document.getElementById("mbThreadDrillSummary");
+  if (!root) return;
+
+  const activeUserId = String(window.__BC_MB_ACTIVE_THREAD_USER_ID__ || "");
+  if (!activeUserId) {
+    root.textContent = "";
+    return;
+  }
+
+  const threadRows = Array.isArray(window.__BC_MB_ACTIVE_THREAD_ROWS__)
+    ? window.__BC_MB_ACTIVE_THREAD_ROWS__
+    : [];
+
+  const latestDrillOverride = [...threadRows]
+    .filter((row) => String(row?.type || "") === "drill_override")
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+    .slice(-1)[0] || null;
+
+  const latestDrillCompleted = [...threadRows]
+    .filter((row) => String(row?.type || "") === "drill_completed")
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+    .slice(-1)[0] || null;
+
+  const latestDrillStarted = [...threadRows]
+    .filter((row) => String(row?.type || "") === "drill_started")
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+    .slice(-1)[0] || null;
+
+  const transientStarted = getTransientStartedDrillSummaryForActiveThread();
+
+  const completedAt = latestDrillCompleted ? new Date(latestDrillCompleted.created_at || 0).getTime() : 0;
+  const startedAt = latestDrillStarted
+    ? (
+        Number(latestDrillStarted?.payload?.startedAt || 0) ||
+        new Date(latestDrillStarted.created_at || 0).getTime()
+      )
+    : 0;
+
+  if (latestDrillCompleted && completedAt >= startedAt) {
+    const payload = latestDrillCompleted?.payload || {};
+    const focusLabel = getManagerDrillFocusLabel(payload?.focus || "");
+    const repsDone = Number(payload?.repsDone || 0) || null;
+    const repTarget = Number(payload?.repTarget || 0) || null;
+
+    root.innerHTML = `
+      <span style="opacity:.95;">Last drill completed</span>
+      ${focusLabel ? `<span style="opacity:.75;"> • ${escapeHtml(focusLabel)}</span>` : ``}
+      ${(repsDone && repTarget) ? `<span style="opacity:.7;"> • ${escapeHtml(`${repsDone}/${repTarget} reps`)}</span>` : ``}
+    `;
+    return;
+  }
+
+  if (latestDrillStarted) {
+    const payload = latestDrillStarted?.payload || {};
+    const focusLabel = getManagerDrillFocusLabel(payload?.focus || "");
+    const timeLabel = formatManagerTimeShort(payload?.startedAt || latestDrillStarted?.created_at);
+
+    root.innerHTML = `
+      <span style="opacity:.95;">Waiter started assigned drill</span>
+      ${focusLabel ? `<span style="opacity:.75;"> • ${escapeHtml(focusLabel)}</span>` : ``}
+      ${timeLabel ? `<span style="opacity:.7;"> • ${escapeHtml(timeLabel)}</span>` : ``}
+    `;
+    return;
+  }
+
+  if (transientStarted) {
+    const focusLabel = getManagerDrillFocusLabel(transientStarted.focus);
+    const timeLabel = formatManagerTimeShort(transientStarted.at);
+
+    root.innerHTML = `
+      <span style="opacity:.95;">Waiter started assigned drill</span>
+      <span style="opacity:.75;"> • ${escapeHtml(focusLabel)}</span>
+      ${timeLabel ? `<span style="opacity:.7;"> • ${escapeHtml(timeLabel)}</span>` : ``}
+    `;
+    return;
+  }
+
+  if (latestDrillOverride) {
+    const payload = latestDrillOverride?.payload || {};
+    const drill = payload?.drill || {};
+    const focusLabel = getManagerDrillFocusLabel(drill?.focus || "");
+    const repTarget = Number(drill?.repTarget || drill?.rep_target || 0) || null;
+
+    root.innerHTML = `
+      <span style="opacity:.95;">Assigned drill ready</span>
+      ${focusLabel ? `<span style="opacity:.75;"> • ${escapeHtml(focusLabel)}</span>` : ``}
+      ${repTarget ? `<span style="opacity:.7;"> • ${escapeHtml(`${repTarget} reps`)}</span>` : ``}
+    `;
+    return;
+  }
+
+  root.innerHTML = `
+    <span style="opacity:.75;">No drill activity yet for this thread.</span>
+  `;
+}
+
 function renderManagerDrillSummary() {
   const lastAssigned = getRecentDrillAssignedRow();
   const lastCompleted = getRecentDrillCompletedRow();
@@ -8834,7 +9361,7 @@ function renderManagerDrillSummary() {
   }
 
   const messengerRoot = mbEl("mbThreadDrillSummary");
-  if (messengerRoot) messengerRoot.innerHTML = summaryHtml;
+  if (messengerRoot) renderManagerThreadDrillSummary();
 }
 
 function renderManagerPeopleSummary() {
@@ -9233,10 +9760,10 @@ function renderManagerActiveThread(nameMap) {
     return;
   }
 
-  if (titleEl) titleEl.textContent = userLabel(thread.userId, nameMap);
-  if (metaEl) metaEl.textContent = `${thread.rows.length} message(s)`;
-
   const ordered = [...thread.rows].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  if (titleEl) titleEl.textContent = userLabel(thread.userId, nameMap);
+  if (metaEl) metaEl.textContent = getManagerThreadMetaSummary(ordered);
+  window.__BC_MB_ACTIVE_THREAD_ROWS__ = ordered;
   const recommendationHtml = renderManagerThreadRecommendation(thread);
 
   if (msgEl) {
@@ -9378,6 +9905,7 @@ async function loadManagerMessenger(restaurantId = null) {
 
   reconcileManagerMessengerSelection();
   renderManagerActiveThread(nameMap);
+  try { renderManagerThreadDrillSummary?.(); } catch {}
   renderTimedChallengeComposer();
   wireMbCoachSuggestionButtons();
   return window.__BC_MB_THREADS__;
@@ -9938,6 +10466,7 @@ async function mbSendDrillOverride(opts = {}) {
 
   if (status && !opts.silentStatus) status.textContent = "Drill sent ✅";
   await loadManagerMessenger(restaurantId);
+  try { renderManagerThreadDrillSummary?.(); } catch {}
   return true;
 }
 
@@ -10125,6 +10654,7 @@ function wireManagerBoardMessenger() {
       }
 
       renderManagerActiveThread(nameMap);
+      try { renderManagerThreadDrillSummary?.(); } catch {}
       const target = document.getElementById("mbTimedChallengeTarget");
       if (target) target.value = String(window.__BC_MB_ACTIVE_THREAD_USER_ID__ || "");
       renderTimedChallengeComposer();
