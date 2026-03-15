@@ -578,8 +578,8 @@
 
         return {
           state: "idle",
-          title: "No Live Objective",
-          body: "No live objective right now.",
+          title: "No Current Objective",
+          body: "No current objective right now.",
           error: "",
           timerText: "",
           cueText: "",
@@ -658,8 +658,8 @@
         if (completionStatus?.ok) {
           return {
             state: "completed",
-            title: "Drill Complete",
-            body: "Last drill completion sent ✅",
+            title: "Practice Complete",
+            body: "Last practice run recorded ✅",
             error: "",
             progressText: "",
             timerText: "",
@@ -671,8 +671,8 @@
         if (completionStatus?.ok === false) {
           return {
             state: "error",
-            title: "Drill Update Failed",
-            body: "Could not send drill completion.",
+            title: "Practice Update Failed",
+            body: "Could not record practice completion.",
             error: String(completionStatus?.error || "unknown"),
             progressText: "",
             timerText: "",
@@ -683,8 +683,8 @@
 
         return {
           state: "idle",
-          title: "No Training Objective",
-          body: "No training objective right now.",
+          title: "No Practice Focus",
+          body: "No practice focus right now.",
           error: "",
           progressText: "",
           timerText: "",
@@ -724,15 +724,15 @@
       if (completed) state = "completed";
       else if (inProgress) state = "in_progress";
 
-      let title = "Assigned Drill";
-      if (completed) title = "Drill Complete";
-      else if (inProgress) title = "Drill In Progress";
+      let title = "Assigned Practice";
+      if (completed) title = "Practice Complete";
+      else if (inProgress) title = "Practice In Progress";
 
       const body = assignedOnly
         ? "A manager assigned you a focused practice block."
         : completed
-          ? "You completed this drill and the result is being recorded."
-          : "You’re currently working through this drill.";
+          ? "You completed this practice focus and the result is being recorded."
+          : "You’re currently working through this practice focus.";
 
       const progressText = repTarget > 0
         ? `Rep ${Math.min(repDone, repTarget)} / ${repTarget}`
@@ -743,7 +743,7 @@
         : "";
 
       const nextText = assignedOnly
-        ? "Use Quick Actions to start or resume the drill."
+        ? "Use Next Step to start or resume the practice focus."
         : completed
           ? "Return to the floor or wait for the next assignment."
           : focusCopy.next;
@@ -935,8 +935,8 @@
 
       const fallbackName =
         family === "area"
-          ? "Floor Effect"
-          : "Tactical Effect";
+          ? "Table Support"
+          : "Skill Support";
 
       const map = {
         closing_surge: {
@@ -1199,7 +1199,7 @@
 
       if (!effects.length) {
         root.innerHTML = `
-          <div class="small-text" style="opacity:.75;">No live effects right now.</div>
+          <div class="small-text" style="opacity:.75;">No manager support active right now.</div>
         `;
         return;
       }
@@ -1208,6 +1208,7 @@
         const family = String(effect?.__waiterFamily || effect?.family || "").toLowerCase() === "area"
           ? "area"
           : "attribute";
+        const familyLabel = family === "area" ? "Table support" : "Skill support";
         const copy = getWaiterEffectCopy(effect, family);
 
         return `
@@ -1221,7 +1222,7 @@
             <div style="display:flex; justify-content:space-between; gap:8px; align-items:center;">
               <div style="font-weight:600;">${escapeHtml(copy.name)}</div>
               <div class="small-text" style="opacity:.72;">
-                Active
+                ${escapeHtml(familyLabel)}
               </div>
             </div>
             <div class="small-text" style="margin-top:4px; opacity:.9;">
@@ -1233,6 +1234,68 @@
           </div>
         `;
       }).join("");
+    }
+    function renderRailProgress() {
+      const root = getRailEl("railProgress");
+      if (!root) return;
+
+      let s = null;
+      try {
+        s = typeof bcSnapshot === "function" ? bcSnapshot() : null;
+      } catch (e) {
+        console.warn("[BC] bcSnapshot failed for rail progress", e);
+      }
+
+      if (!s) {
+        root.innerHTML = `
+          <div class="small-text" style="opacity:.75;">No run data yet.</div>
+        `;
+        return;
+      }
+
+      const encounterRange = Array.isArray(s.encounterRange)
+        ? `${s.encounterRange[0]}-${s.encounterRange[1]}`
+        : String(s.encounterRange ?? "-");
+
+      const guests = Array.isArray(s.guests) && s.guests.length
+        ? s.guests.join(", ")
+        : "-";
+
+      const drillText = s.activeDrill
+        ? `${String(s.activeDrill.focus || "drill")} • ${Number(s.activeDrill.repDone || 0)}/${Number(s.activeDrill.repTarget || 0)} reps`
+        : "";
+
+      root.innerHTML = `
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <div class="small-text" style="opacity:.92;">
+            Encounter ${escapeHtml(String(s.encounterNumber ?? "-"))} • Step ${escapeHtml(String(s.step ?? "-"))}
+          </div>
+
+          <div class="small-text" style="opacity:.9;">
+            Tier ${escapeHtml(String(s.tier ?? "-"))} • ${escapeHtml(String(s.points ?? 0))} pts
+          </div>
+
+          <hr style="opacity:.15; margin:2px 0;">
+
+          <div class="small-text" style="opacity:.82;">
+            Range: ${escapeHtml(encounterRange)}
+          </div>
+          <div class="small-text" style="opacity:.82;">
+            Guests: ${escapeHtml(guests)}
+          </div>
+
+          <div class="small-text" style="opacity:.78;">
+            Difficulty: ${escapeHtml(String(s.effectiveDifficulty ?? "-"))}
+          </div>
+
+          ${drillText ? `
+            <hr style="opacity:.15; margin:2px 0;">
+            <div class="small-text" style="opacity:.82;">
+              Drill: ${escapeHtml(drillText)}
+            </div>
+          ` : ``}
+        </div>
+      `;
     }
     function goBackToPremiumHome() {
       try {
@@ -1459,22 +1522,22 @@
 
       let primaryLabel = "Start 5-Min Drill";
       if (action.kind === "start_assigned") {
-        primaryLabel = "Start Training Objective";
+        primaryLabel = "Start Practice Focus";
       } else if (action.kind === "resume_assigned") {
-        primaryLabel = "Resume Training Objective";
+        primaryLabel = "Resume Practice Focus";
       } else if (action.kind === "resume_runtime") {
         primaryLabel = "Resume 5-Min Drill";
       }
 
       let helperText = "";
       if ((action.kind === "start_assigned" || action.kind === "resume_assigned") && activeChallenge) {
-        helperText = "You have both a live objective and a training objective active.";
+        helperText = "You have both a current objective and a practice focus active.";
       } else if (action.kind === "start_assigned" || action.kind === "resume_assigned") {
-        helperText = "You have a training objective ready.";
+        helperText = "You have a practice focus ready.";
       } else if (activeChallenge) {
-        helperText = "You have a live objective active right now.";
+        helperText = "You have a current objective active right now.";
       } else if (action.kind === "resume_runtime") {
-        helperText = "You have a drill session in progress.";
+        helperText = "You have a practice run in progress.";
       }
 
       return {
@@ -1508,9 +1571,9 @@
       ensureRailObjectiveTicker?.();
       safeCall("renderRailActiveChallenge", () => renderRailActiveChallenge?.());
       safeCall("renderRailActiveDrill", () => renderRailActiveDrill?.());
+      safeCall("renderRailProgress", () => renderRailProgress?.());
       safeCall("renderRailLiveEffects", () => renderRailLiveEffects?.());
       safeCall("renderRailQuickActions", () => renderRailQuickActions?.());
-      safeCall("renderRailProgress", () => window.renderRailProgress?.());
       safeCall("renderRailWineNotes", () => window.renderRailWineNotes?.());
     }
     function renderTimedChallengeSurfaces() {
@@ -1665,7 +1728,7 @@
       refreshWaiterRuntimeSurfaces?.({ rail: true, counts: false });
 
       if (result.status === "expired") {
-        window.showToast?.("Timed challenge expired.");
+        window.showToast?.("This objective expired.");
       }
 
       logTimedChallengeResult(result);
@@ -2380,14 +2443,14 @@
       const focus = String(drill?.focus || "").toLowerCase();
 
       const map = {
-        read: "Training objective started: Read",
-        frame: "Training objective started: Frame",
-        delivery: "Training objective started: Delivery",
-        recovery: "Training objective started: Recovery",
-        closing: "Training objective started: Closing",
+        read: "Practice focus started: Read",
+        frame: "Practice focus started: Frame",
+        delivery: "Practice focus started: Delivery",
+        recovery: "Practice focus started: Recovery",
+        closing: "Practice focus started: Closing",
       };
 
-      return map[focus] || "Training objective started";
+      return map[focus] || "Practice focus started";
     }
     function emitDrillRunStarted(drill = {}, assignedMessageId = null) {
       try {
@@ -2459,11 +2522,11 @@
         };
 
         const focusLabel = labelMap[focus] || "Drill";
-        return `${focusLabel} training complete ✅`;
+        return `${focusLabel} practice complete ✅`;
       }
 
       if (status?.ok === false) {
-        return "Could not send drill completion";
+        return "Could not record practice completion";
       }
 
       return "";
@@ -3360,39 +3423,41 @@
 
       <aside id="bcRail" class="bc-rail">
         <div class="bc-card bc-rail-card bc-rail-card-priority">
-          <div class="bc-rail-title">Live Objective</div>
+          <div class="bc-rail-title">Current Objective</div>
           <div class="bc-rail-body" id="railActiveChallenge">
-            <div class="small-text" style="opacity:.75;">No live objective right now.</div>
+            <div class="small-text" style="opacity:.75;">No current objective right now.</div>
           </div>
         </div>
 
         <div class="bc-card bc-rail-card bc-rail-card-priority">
-          <div class="bc-rail-title">Training Objective</div>
+          <div class="bc-rail-title">Practice Focus</div>
           <div class="bc-rail-body" id="railActiveDrill">
-            <div class="small-text" style="opacity:.75;">No training objective right now.</div>
+            <div class="small-text" style="opacity:.75;">No practice focus right now.</div>
           </div>
         </div>
 
         <div class="bc-card bc-rail-card">
-          <div class="bc-rail-title">Live Effects</div>
+          <div class="bc-rail-title">Run Progress</div>
+          <div class="bc-rail-body" id="railProgress">
+            <div class="small-text" style="opacity:.75;">No run data yet.</div>
+          </div>
+        </div>
+
+        <div class="bc-card bc-rail-card">
+          <div class="bc-rail-title">Manager Support</div>
           <div class="bc-rail-body" id="railLiveEffects">
-            <div class="small-text" style="opacity:.75;">No live effects right now.</div>
+            <div class="small-text" style="opacity:.75;">No manager support active right now.</div>
           </div>
         </div>
 
         <div class="bc-card bc-rail-card">
-          <div class="bc-rail-title">Quick Actions</div>
+          <div class="bc-rail-title">Next Step</div>
           <div class="bc-rail-body" id="railQuickActions">
             <div style="display:flex; flex-direction:column; gap:8px;">
               <button id="btnRailFiveMinDrill" type="button" class="btn-ghost">Start 5-Min Drill</button>
               <button id="btnRailBackToHome" type="button" class="btn-ghost">Back to Premium Home</button>
             </div>
           </div>
-        </div>
-
-        <div class="bc-card bc-rail-card">
-          <div class="bc-rail-title">Progress</div>
-          <div class="bc-rail-body" id="railProgress">-</div>
         </div>
 
         <div class="bc-card bc-rail-card">
@@ -4337,30 +4402,69 @@ function isDrillMode() {
       }
 
       function bcSnapshot() {
-        const prog = getProgressionMonitorSnapshot();
-        const points = prog?.points ?? null;
-        const tier = prog?.tier ?? null;
-        const guests = prog?.allowedGuestTypes ?? null;
-
-        const d = window.__BC_DIFFICULTY__ || null;
-
-        const encNum = (typeof currentEncounter !== "undefined" && currentEncounter?.encounterNumber)
-          ? currentEncounter.encounterNumber
-          : (typeof encounterIndex !== "undefined" ? (encounterIndex + 1) : null);
-
-        const step = (typeof currentStep !== "undefined") ? currentStep : null;
+        const spineProg = getProgressionMonitorSnapshot() || {};
+        const prog = window.__BC_PROG__ || window.PROG || spineProg || {};
+        const encounter =
+          window.currentEncounter ||
+          window.__BC_LAST_ENCOUNTER__ ||
+          (typeof currentEncounter !== "undefined" ? currentEncounter : null) ||
+          {};
+        const runtimeDrill = (typeof DRILL !== "undefined") ? DRILL : null;
+        const resolvedDifficulty =
+          prog?.effectiveDifficulty ??
+          spineProg?.effectiveDifficulty ??
+          encounter?.effectiveDifficulty ??
+          encounter?.difficulty ??
+          1;
 
         return {
-          points,
-          tier,
-          guests,
-          difficultySeed: prog?.difficultySeed ?? null,
-          effectiveDifficulty: prog?.effectiveDifficulty ?? null,
-          encounterRange: prog?.encounterRange ?? null,
-          state: prog?.state ?? null,
-          difficulty: d ? { d: d.d, pressure: d.pressure } : null,
-          encounterNumber: encNum,
-          step
+          encounterNumber:
+            encounter?.encounterNumber ??
+            encounter?.number ??
+            prog?.encounterNumber ??
+            spineProg?.encounterNumber ??
+            (typeof encounterIndex !== "undefined" ? (encounterIndex + 1) : "-"),
+
+          step:
+            typeof window.currentStep !== "undefined"
+              ? window.currentStep
+              : (typeof currentStep !== "undefined" ? currentStep : "-"),
+
+          points: Number(prog?.points ?? spineProg?.points ?? 0),
+          tier: Number(prog?.tier ?? spineProg?.tier ?? 1),
+
+          encounterRange:
+            prog?.encounterRange ||
+            spineProg?.encounterRange ||
+            encounter?.encounterRange ||
+            [1, 5],
+
+          guests:
+            prog?.allowedGuestTypes ||
+            spineProg?.allowedGuestTypes ||
+            encounter?.allowedGuestTypes ||
+            [],
+
+          difficultySeed:
+            prog?.difficultySeed ??
+            spineProg?.difficultySeed ??
+            encounter?.difficultySeed ??
+            1,
+
+          effectiveDifficulty: resolvedDifficulty,
+
+          difficulty:
+            (typeof difficultyPolicy === "function")
+              ? difficultyPolicy(resolvedDifficulty)
+              : null,
+
+          activeDrill: runtimeDrill
+            ? {
+                focus: runtimeDrill?.focus || null,
+                repDone: Number(runtimeDrill?.repDone || 0),
+                repTarget: Number(runtimeDrill?.repTarget || 0),
+              }
+            : null,
         };
       }
 
@@ -4379,15 +4483,26 @@ function isDrillMode() {
 
       function bcRenderHud(label = "") {
         const s = bcSnapshot();
-        const hud = bcEnsureHud();
-        hud.textContent =
-          `BottleCaller Status ${label ? "— " + label : ""}\n` +
-          `enc=${s.encounterNumber} step=${s.step}\n` +
-          `points=${s.points} tier=${s.tier}\n` +
-          `encounterRange=${Array.isArray(s.encounterRange) ? s.encounterRange.join("..") : s.encounterRange}\n` +
-          `guests=${Array.isArray(s.guests) ? s.guests.join(",") : s.guests}\n` +
-          `difficultySeed=${s.difficultySeed} effectiveDifficulty=${s.effectiveDifficulty}\n` +
-          `difficulty=${s.difficulty ? `d=${s.difficulty.d} pressure=${s.difficulty.pressure}` : "none"}`;
+
+        try {
+          renderRailProgress?.();
+        } catch (e) {
+          console.warn("[BC] renderRailProgress failed from bcRenderHud", e);
+        }
+
+        if (window.__BC_DEBUG_FLOATING_HUD__ === true) {
+          const hud = bcEnsureHud();
+          hud.textContent =
+            `BottleCaller Status ${label ? "— " + label : ""}\n` +
+            `enc=${s.encounterNumber} step=${s.step}\n` +
+            `points=${s.points} tier=${s.tier}\n` +
+            `encounterRange=${Array.isArray(s.encounterRange) ? s.encounterRange.join("..") : s.encounterRange}\n` +
+            `guests=${Array.isArray(s.guests) ? s.guests.join(",") : s.guests}\n` +
+            `difficultySeed=${s.difficultySeed} effectiveDifficulty=${s.effectiveDifficulty}`;
+        } else {
+          const hud = document.getElementById("bcProgressHud");
+          if (hud) hud.remove();
+        }
         return s;
       }
 
