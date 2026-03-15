@@ -10262,7 +10262,11 @@ body.difficulty-hard .option-btn.selected {
         const countEl = document.getElementById(ids.cardCount);
         const runsEl = document.getElementById(ids.cardRuns);
         if (countEl) countEl.innerText = W.length + " / " + LIMIT;
-        if (runsEl) runsEl.innerText = runs.length;
+        const allRuns = Array.isArray(runs) ? runs : [];
+        const modeEncounterRuns = allRuns.filter(
+          (r) => r && r.tier === bcMode && (r.sessionType || "progression") === "progression"
+        );
+        if (runsEl) runsEl.innerText = modeEncounterRuns.length;
       }
 
       function updateCounts() {
