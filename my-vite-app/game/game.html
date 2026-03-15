@@ -5649,15 +5649,7 @@ function ensureProgLoaded() {
 
       function replayFromStage1() {
         try {
-          const spine = getProgressionSpine({ allowNull: true });
-          if (!spine?.actions?.resetEncounterFlow) return false;
-          console.log("[RESET FLOW][BEFORE]", spine.selectors.points(), spine.getState());
-          spine.actions.resetEncounterFlow();
-          if (spine?.actions?.resetRunScoring) {
-            spine.actions.resetRunScoring();
-          }
-          console.log("[RESET FLOW][AFTER]", spine.selectors.points(), spine.getState());
-          return true;
+          return beginFreshProgressionRun({ resetEncounterFlow: true });
         } catch (e) {
           console.warn("[PROG] resetEncounterFlow failed", e);
           return false;
@@ -8133,6 +8125,7 @@ function ensureProgLoaded() {
 
       async function startProgressionSession() {
         sessionType = "progression";
+        window.__BC_SESSION_TYPE__ = "progression";
         drillRepDone = 0;
         window._bc_sessions = window._bc_sessions || {};
         const modeKey = window.bcMode || "premium";
@@ -8147,6 +8140,7 @@ function ensureProgLoaded() {
         };
         window.__BC_SESSION__ = window._bc_sessions[modeKey];
         resetNavState();
+        beginFreshProgressionRun();
         await startPlayWithReadyGate();
       }
 
@@ -9279,33 +9273,22 @@ function ensureProgLoaded() {
         stepContent.appendChild(badge);
       }
 
-      function pointsFromEncounter({ checks, gradeObj, difficulty }) {
-        const d = Math.max(1, Math.min(7, difficulty || 1));
-
-        const s =
-          (checks.guestRead ? 0.20 : 0) +
-          (checks.modeStatus === "optimal" ? 0.25 : checks.modeStatus === "neutral" ? 0.12 : 0) +
-          (checks.hookStatus === "optimal" ? 0.25 : checks.hookStatus === "neutral" ? 0.12 : 0) +
-          (checks.deliveryCorrect ? 0.30 : 0);
-
-        const mult =
-          d <= 2 ? 0.6 :
-          d <= 4 ? 1.0 :
-          d <= 6 ? 1.35 : 1.6;
-
-        const base = 10;
-
-        const pts = Math.round(base * s * mult);
-        return { pts, quality: s, mult };
-      }
-
-      function awardProgressionPoints(pts) {
-        const prog = ensureProgLoaded();
-        prog.meta = prog.meta || {};
-        prog.meta.pointsTotal = Number(prog.meta.pointsTotal || 0) + (Number(pts) || 0);
-        saveProg();
-        renderProgressStatusWindow();
-        return prog.meta.pointsTotal;
+      function beginFreshProgressionRun({ resetEncounterFlow = false } = {}) {
+        if (window.isDemo || window.bcMode === "demo") return false;
+        if (sessionType === "drill") return false;
+        const spine = getProgressionSpine({ allowNull: true });
+        if (!spine?.actions?.resetRunScoring) return false;
+        console.log("[PROG] beginFreshProgressionRun", {
+          resetEncounterFlow,
+          prevRunId: spine?.getState?.()?.run?.runId ?? null
+        });
+        if (resetEncounterFlow) {
+          spine.actions.resetEncounterFlow?.();
+        }
+        spine.actions.resetRunScoring();
+        sessionType = "progression";
+        window.__BC_SESSION_TYPE__ = "progression";
+        return true;
       }
 
       function applyDifficultyToEncounter(enc, policy) {
@@ -13618,8 +13601,9 @@ body.difficulty-hard .option-btn.selected {
               currentEncounter?.difficulty ??
               1,
             progress: (() => {
+              const spine = getProgressionSpine({ allowNull: true });
               const prog = loadProg();
-              const points = Number(prog?.meta?.pointsTotal || 0);
+              const points = Number(spine?.selectors?.points?.() ?? 0);
               return {
                 pointsTotal: points,
                 dims: {
@@ -16178,9 +16162,10 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
                       : (enc.difficulty ?? 1)));
           enc.difficulty = enc.difficulty ?? policySeed ?? 1;
           policy = difficultyPolicy(enc.difficulty);
+          const spineTier = Number(getProgressionSpine({ allowNull: true })?.selectors?.tier?.() ?? 1);
           window.__BC_DIFFICULTY__ = {
             ...policy,
-            tierUnlocked: PROG?.meta?.tierUnlocked || 1,
+            tierUnlocked: spineTier,
             pressure: PROG?.guard?.pressureLevel || 0
           };
           if (window.PROG?.meta) {
@@ -16587,6 +16572,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             showScreen("screenHome");
             return;
           }
+          beginFreshProgressionRun();
           await startPlayWithReadyGate();
         });
         console.log("[WAITER] Play button wired ✅");
@@ -16659,6 +16645,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             btnGoPremium.__bcBound = false;
             bindInput(btnGoPremium, async () => {
               resetNavState();
+              beginFreshProgressionRun();
               await startPlayWithReadyGate();
             });
           }
@@ -16695,6 +16682,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           if (isManagerLike) {
             bindInput(btnGoPremium, async () => {
               resetNavState();
+              beginFreshProgressionRun();
               await startPlayWithReadyGate();
             });
           }
@@ -16897,6 +16885,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
               return;
             }
             resetNavState();
+            beginFreshProgressionRun();
             await startPlayWithReadyGate();
           });
         }
@@ -16929,6 +16918,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             }
 
             // PREMIUM: ensure ctx/wines are ready then start
+            beginFreshProgressionRun();
             await startPlayWithReadyGate();
           });
 
@@ -16993,6 +16983,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           encounterIndex = 0;
           saveEncounterIndex(encounterIndex);
 
+          beginFreshProgressionRun();
           await startPlayWithReadyGate();
         });
 
