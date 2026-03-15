@@ -10292,6 +10292,9 @@ body.difficulty-hard .option-btn.selected {
         try { renderHomeCounts(); }
         catch (e) { console.error("[BC] renderHomeCounts crashed", e); }
 
+        try { renderRunsCount?.(); }
+        catch (e) { console.error("[BC] renderRunsCount crashed", e); }
+
         try { renderProgressStatusWindow(); }
         catch (e) { console.error("[BC] renderProgressStatusWindow crashed", e); }
 
