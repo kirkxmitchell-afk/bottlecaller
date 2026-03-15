@@ -12258,44 +12258,6 @@ body.difficulty-hard .option-btn.selected {
         renderEncounterStep();
       }
 
-      function deriveEncounterPhaseFromStep(step) {
-        switch (step) {
-          case 1: return "read";
-          case 2: return "mode";
-          case 3: return "hook";
-          case 4: return "delivery";
-          case 5:
-          case 6: return "resolve";
-          case 65: return "recovery";
-          case 7: return "reflection";
-          default: return null;
-        }
-      }
-
-      function deriveStepFromEncounterPhase(phase) {
-        switch (phase) {
-          case "read": return 1;
-          case "mode": return 2;
-          case "hook": return 3;
-          case "delivery": return 4;
-          case "resolve": return 5;
-          case "recovery": return 65;
-          case "reflection": return 7;
-          default: return currentStep;
-        }
-      }
-
-      function setEncounterPhase(phase) {
-        if (!currentEncounter) return;
-        currentEncounter.phase = phase;
-        currentStep = deriveStepFromEncounterPhase(phase);
-        renderEncounterPhase();
-      }
-
-      function renderEncounterPhase() {
-        renderEncounterStep();
-      }
-
       function renderBcStage() {
         const enc = bcActiveEncounter;
         if (!enc) return;
@@ -14191,7 +14153,6 @@ body.difficulty-hard .option-btn.selected {
         box.textContent =
 `BC STATE
 step=${currentStep}
-phase=${enc?.phase ?? "—"}
 encounterIndex=${encounterIndex}
 encounterNumber=${enc?.encounterNumber ?? "—"}
 encounterId=${enc?.id ?? "—"}
@@ -14219,10 +14180,6 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
       function renderEncounterStep() {
         if (window.__BC3__?.active) return;
         clearStepHighlights();
-        if (currentEncounter) {
-          const derivedPhase = deriveEncounterPhaseFromStep(currentStep);
-          if (derivedPhase) currentEncounter.phase = derivedPhase;
-        }
         console.log("[RENDER] currentStep =", currentStep, "enc#", currentEncounter?.encounterNumber);
         if (typeof syncProgressReportButtonVisibility === "function") {
           syncProgressReportButtonVisibility();
@@ -15460,7 +15417,8 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           if (outcome.outcome === "recovery") {
             currentEncounter.pivotType = currentEncounter.pivotType || "recovery";
             currentEncounter.__pendingRecovery = true;
-            setEncounterPhase("recovery");
+            currentStep = 65;
+            renderEncounterStep();
             return;
           }
 
@@ -15786,7 +15744,8 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
               // Reflection step performs the final encounter log.
               addStepButton("CONTINUE TO REFLECTION", () => {
                 currentEncounter.__pendingRecovery = false;
-                setEncounterPhase("reflection");
+                currentStep = 7;
+                renderEncounterStep();
               }, stepButtons);
             });
 
@@ -15796,7 +15755,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           stepContent.appendChild(card);
         }
 
-        if (currentEncounter?.phase === "recovery") {
+        if (currentStep === 65) {
           try {
             renderRecoveryStep(stepContent, stepButtons, currentEncounter, inDrill);
           } catch (e) {
@@ -15813,17 +15772,32 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             btn.innerText = "CONTINUE TO REFLECTION";
             btn.onclick = () => {
               currentEncounter.__pendingRecovery = false;
-              setEncounterPhase("reflection");
+              currentStep = 7;
+              renderEncounterStep();
             };
             stepButtons.appendChild(btn);
           }
           return;
         }
 
-        if (currentEncounter?.phase === "reflection") {
+        if (currentStep === 7) {
+          ensureProgLoaded();
+
+          const checks = buildReactionChecksFromEncounter(currentEncounter, PROG);
+
+          const modeBestResolved = resolveCorrectModeForPlayer(
+            currentEncounter?.modeBestResolved ||
+            currentEncounter?.modeBestRaw ||
+            currentEncounter?.modeBest ||
+            null,
+            getUnlockedModesForCurrentPlayer()
+          );
+
           console.log("[REPORT UI] Step 7 rendered ✅", {
             encounter: currentEncounter?.encounterNumber,
-            currentEncounter
+            currentEncounter,
+            checks,
+            modeBestResolved
           });
           setTimeout(() => {
             const btn = document.getElementById("btnSendProgressReport");
@@ -15846,7 +15820,6 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
             console.log("[REPORT UI] Step 7 button wired ✅");
           }, 0);
-
           const reflectionTitle = document.createElement("h3");
           reflectionTitle.innerText = "What just happened";
           stepContent.appendChild(reflectionTitle);
@@ -15858,15 +15831,19 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           anchor.style.opacity = "0.9";
           anchor.innerText = bcReflectionAnchor(checks, currentEncounter);
           stepContent.appendChild(anchor);
+
           renderDynamicGuestLineBlock(stepContent, currentEncounter, checks, {
             compact: false
           });
+
           renderDynamicGuestReactionBlock(stepContent, currentEncounter, checks, {
             compact: false
           });
+
           if (window.__BC_DEBUG_PRESSURE__ === true) {
             renderGuestPressureDebug(stepContent, currentEncounter);
           }
+
           logEncounterStateAudit("before_reflection_render", currentEncounter);
 
           renderStrengthFixBlock(stepContent, checks, currentEncounter);
@@ -15998,8 +15975,65 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           currentEncounter.performanceGrade = gradeObj.grade;
           renderPerformanceGradeBlock(stepContent, gradeObj);
           renderCoachLineBlock(stepContent, currentEncounter, checks);
-          ensureProgLoaded();
-          finalizeEncounter(currentEncounter, checks);
+
+          const scored = scoreEncounterForGuard(currentEncounter, checks);
+
+          try {
+            if (!currentEncounter.__progressionApplied) {
+              currentEncounter.__progressionApplied = true;
+
+              const didWin =
+                !!checks.guestRead &&
+                checks.modeStatus !== "damaging" &&
+                checks.hookStatus !== "damaging" &&
+                !!checks.deliveryCorrect;
+
+              const encounterIdRaw =
+                currentEncounter?.encounterId ??
+                currentEncounter?.id ??
+                currentEncounter?.encounterNumber;
+
+              if (encounterIdRaw == null) throw new Error("Missing encounterId on currentEncounter");
+
+              const encounterId = String(encounterIdRaw);
+              const spine = getProgressionSpine({ allowNull: true });
+
+              console.log("[PROG] encounter scoring check", {
+                encounterId,
+                didWin,
+                pointEligible: didWin,
+                scoredThisRun: spine?.getState?.()?.run?.scoredThisRun || null
+              });
+
+              spine?.actions?.applyEncounterResult?.({
+                encounterId,
+                success: didWin,
+                pointEligible: didWin
+              });
+
+              const premiumSuccess = !!(
+                currentEncounter?.premiumOpportunityHit ||
+                currentEncounter?.premiumRollSuccess
+              );
+
+              if (premiumSuccess) {
+                spine?.actions?.applyPremiumBonus?.({
+                  encounterId,
+                  bonusPoints: 1
+                });
+              }
+            }
+          } catch (e) {
+            console.warn("[PROG] applyEncounterResult failed", e);
+          }
+
+          updateGuestRankFromEncounter(currentEncounter, checks, scored);
+          bcRenderHud("encounter resolved");
+          bcToast("Encounter resolved");
+          renderProgressStatusWindow();
+
+          const spineNow = getProgressionSpine({ allowNull: true });
+          console.log("[PROG] earned", { pointsTotal: spineNow?.selectors?.points?.() ?? 0 });
 
           mastery = loadMastery();
           const strengthFix = getStrengthAndFix(mastery);
@@ -16030,21 +16064,193 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
           stepContent.appendChild(sfBlock);
 
-          if (!currentEncounter.__logged) {
-            currentEncounter.__logged = true;
-            logEncounter();
-          }
-
           const streakInfo = window.__BC_DEBUG__?.updateStreakAfterEncounter
             ? window.__BC_DEBUG__.updateStreakAfterEncounter(currentEncounter, checks)
             : { signal: "missing", streak: 0, best: 0, changed: false };
 
           console.log("[BC] streakInfo", streakInfo);
           renderStreakBlock(stepContent, streakInfo);
+
           const unlock = tryUnlockNextTier();
           if (unlock.unlocked) {
             console.log("[BC] Tier unlocked ✅", unlock.tier);
           }
+
+          const guardState = loadGuardState();
+          const rawTier = resolveTierForSession(sessionType, currentEncounter?.encounterNumber);
+          const tierNow = Math.min(rawTier, getMaxUnlockedTier());
+
+          guardState.last3.push(scored);
+          if (guardState.last3.length > 3) guardState.last3 = guardState.last3.slice(-3);
+
+          const decision = progressionGuard({
+            tier: tierNow,
+            streakValue: streakInfo?.streak || 0,
+            last3: guardState.last3
+          });
+
+          console.log("[GUARD] scored last3", guardState.last3.map(x => ({
+            pts: x.pts, outcome: x.outcome, damage: x.damage,
+            mode: x.modeStatus, hook: x.hookStatus, delivery: x.deliveryCorrect
+          })));
+
+          console.log("[GUARD] decision", {
+            action: decision.action,
+            focus: decision.focus,
+            reasons: decision.reasons,
+            signal: decision.signal
+          });
+
+          if ((guardState.graceNext || 0) > 0 && decision.action === "escalate") {
+            decision.action = "hold";
+            decision.reasons = [...(decision.reasons || []), "H_GRACE_NEXT"];
+          }
+
+          guardState.graceNext = Math.max(0, (guardState.graceNext || 0) - 1);
+
+          const abilityFx = getActiveAbilityRuntime();
+          const pressureBefore = guardState.pressureLevel;
+
+          if (decision.action === "escalate") guardState.pressureLevel += 1;
+          else if (decision.action === "deload") guardState.pressureLevel -= 1;
+          else if (decision.action === "intervention") guardState.pressureLevel = Math.min(guardState.pressureLevel, 0);
+
+          if (abilityFx.calmFloor) {
+            guardState.pressureLevel += Number(abilityFx.pressureEscalationDelta || 0);
+            recordAbilityImpact({
+              abilityId: "calm_floor",
+              hook: "pressure_guard",
+              value: abilityFx.pressureEscalationDelta,
+              pressureBefore,
+              pressureAfter: guardState.pressureLevel,
+            });
+          }
+
+          guardState.pressureLevel = clampPressureByTier(tierNow, guardState.pressureLevel);
+
+          const baseDiff = baseDifficultyFromTier(tierNow);
+          const finalDifficulty = computeFinalDifficulty({
+            tier: tierNow,
+            pressureLevel: guardState.pressureLevel
+          });
+
+          currentEncounter.nextEncounterDifficulty = finalDifficulty;
+
+          console.log("[GUARD] tier/base/pressure/final", {
+            tierNow,
+            baseDiff,
+            pressureBefore,
+            pressureAfter: guardState.pressureLevel,
+            finalDifficulty
+          });
+
+          updateDifficultyBadge(finalDifficulty);
+          guardState.nextDifficulty = finalDifficulty;
+          saveAccountDifficulty(finalDifficulty);
+
+          guardState.lastDecision = decision;
+          guardState.tier = tierNow;
+          guardState.baseDiff = baseDiff;
+          guardState.finalDifficulty = finalDifficulty;
+          guardState.graceNext = (decision.action === "escalate") ? 1 : guardState.graceNext;
+
+          const policy = difficultyPolicy(finalDifficulty);
+          guardState.streakRules = {
+            gate: policy.streakGate,
+            hookStrict: policy.hookStrict,
+            deliveryStrict: policy.deliveryStrict
+          };
+
+          window.__BC_DIFFICULTY__ = {
+            ...policy,
+            tier: tierNow,
+            pressure: guardState.pressureLevel,
+            lastDecision: decision
+          };
+
+          saveGuardState(guardState);
+          window.__BC_GUARD__ = guardState;
+
+          ensureProgMeta();
+          PROG.guard.pressureLevel = guardState.pressureLevel;
+          PROG.guard.finalDifficulty = finalDifficulty;
+          PROG.meta.difficultySeed = finalDifficulty;
+          PROG.guard.last3 = guardState.last3;
+          saveProg();
+
+          console.log("[GUARD] policy", window.__BC_DIFFICULTY__);
+
+          const done = isSessionComplete({ tier: tierNow, guardState });
+          console.log("[SESSION] completionCheck", done);
+
+          if (done.done) {
+            renderSessionComplete(stepContent, {
+              reason: done.reason,
+              tier: tierNow,
+              difficulty: guardState?.finalDifficulty ?? currentEncounter?.difficulty ?? 1,
+              guardState
+            });
+            return;
+          }
+
+          const isDemoNow = (window.isDemo || window.bcMode === "demo");
+          const done2 = Number(window.__BC_DEMO_DONE__ || 0);
+          const target = Number(window.__BC_DEMO_TARGET__ || 3);
+          const demoComplete = isDemoNow && !inDrill && done2 >= target;
+
+          addStepButton(
+            inDrill ? "NEXT REP" : (demoComplete ? "BACK HOME" : "NEXT ENCOUNTER"),
+            () => {
+              if (!currentEncounter.__logged) {
+                try { logEncounter(); } catch (e) { console.warn("[BC] logEncounter failed", e); }
+                currentEncounter.__logged = true;
+              }
+
+              if (demoComplete) {
+                resetNavState();
+                showScreen("screenHome");
+                return;
+              }
+
+              if (window.__NEXT_LOCK__) return;
+              window.__NEXT_LOCK__ = true;
+              setTimeout(() => { window.__NEXT_LOCK__ = false; }, 150);
+
+              encounterIndex = (encounterIndex ?? 0) + 1;
+
+              if (!isDemo) {
+                const clamped = clampEncounterIndexToUnlockedTier(encounterIndex);
+
+                if (clamped !== encounterIndex) {
+                  const targetTierRaw = getTierFromEncounterNumber(encounterIndex + 1);
+                  const targetTier = Math.min(2, targetTierRaw);
+
+                  if (targetTierRaw >= 3) {
+                    alert("Not yet.\n\nNew pressure scenarios will come later. For now, keep building clean reps.");
+                  } else if (targetTier === 2) {
+                    alert(
+                      "Not yet.\n\n" +
+                      "Tier 2 introduces recovery under pressure.\n" +
+                      "Clean reads and calm delivery come first.\n\n" +
+                      "Repeat this tier until the sequence feels automatic."
+                    );
+                  } else {
+                    alert("Not yet. Keep playing encounters.");
+                  }
+
+                  encounterIndex = clamped;
+                  saveEncounterIndex(encounterIndex);
+                  resetNavState();
+                  showScreen("screenHome");
+                  return;
+                }
+              }
+
+              saveEncounterIndex(encounterIndex);
+              startEncounter();
+            },
+            stepButtons
+          );
 
           return;
         }
@@ -16480,8 +16686,8 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
         currentEncounter = {
           runId: encounterRunId,
-          phase: "read",
           __logged: false,
+          __progressionApplied: false,
           __finalized: false,
           __recoveryLocked: false,
           id: encounterIdStable,
