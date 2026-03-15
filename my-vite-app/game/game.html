@@ -15048,6 +15048,12 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             if (encounterIdRaw == null) throw new Error("Missing encounterId on currentEncounter");
             const encounterId = String(encounterIdRaw);
             const spine = getProgressionSpine({ allowNull: true });
+            console.log("[PROG] encounter scoring check", {
+              encounterId,
+              didWin,
+              pointEligible: didWin,
+              scoredThisRun: spine?.getState?.()?.run?.scoredThisRun || null
+            });
             spine?.actions?.applyEncounterResult?.({
               encounterId,
               success: didWin,

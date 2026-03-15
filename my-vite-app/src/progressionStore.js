@@ -170,6 +170,10 @@ export function createProgressionStore(storage = window.localStorage) {
   }
 
   function resetRunScoring() {
+    console.log("[PROG] resetRunScoring", {
+      prevRunId: state.run?.runId || 0,
+      nextRunId: (state.run?.runId || 0) + 1
+    });
     state.run = state.run || {};
     state.run.scoredThisRun = {};
     state.run.runId = (state.run.runId || 0) + 1;
@@ -217,7 +221,16 @@ export function createProgressionStore(storage = window.localStorage) {
     state.difficulty.lastUpdatedAt = now;
     state.run = state.run || {};
     state.run.scoredThisRun = state.run.scoredThisRun || {};
-    const encId = String(encounterId ?? "");
+    const runKey = String(state.run.runId || 0);
+    console.log("[PROG] applyEncounterResult", {
+      encounterId,
+      success,
+      pointEligible,
+      runId: state.run.runId,
+      runKey,
+      alreadyScored: !!state.run.scoredThisRun[runKey],
+      points: state.points
+    });
 
     if (success) {
       state.history.successCount += 1;
@@ -226,9 +239,9 @@ export function createProgressionStore(storage = window.localStorage) {
         state.history.completedEncounterIds.push(encounterId);
       }
 
-      if (pointEligible && !state.run.scoredThisRun[encId]) {
+      if (pointEligible && !state.run.scoredThisRun[runKey]) {
         grantPoints(1);
-        state.run.scoredThisRun[encId] = true;
+        state.run.scoredThisRun[runKey] = true;
       }
 
       // boring difficulty update (don’t tune yet)
