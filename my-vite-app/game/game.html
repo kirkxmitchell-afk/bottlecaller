@@ -15364,7 +15364,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           if (outcome.outcome === "recovery") {
             currentEncounter.pivotType = currentEncounter.pivotType || "recovery";
             currentEncounter.__pendingRecovery = true;
-            currentStep = 7;
+            currentStep = 65;
             renderEncounterStep();
             return;
           }
@@ -15693,23 +15693,10 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
                 console.error("[BC] logEncounter crashed in Recovery step", e);
                 // Do not crash the game because logging/scoring failed
               }
-              if (maybeEndDemoRunAndReturnHome()) return;
-
-              const isDemoNow = (window.isDemo || window.bcMode === "demo");
-              const done = Number(window.__BC_DEMO_DONE__ || 0);
-              const target = Number(window.__BC_DEMO_TARGET__ || 3);
-              const demoComplete = isDemoNow && !inDrill && done >= target;
-              addStepButton(inDrill ? "NEXT REP" : (demoComplete ? "BACK HOME" : "NEXT ENCOUNTER"), () => {
-                if (demoComplete) {
-                  resetNavState();
-                  showScreen("screenHome");
-                  return;
-                }
-                if (window.__NEXT_LOCK__) return;
-                window.__NEXT_LOCK__ = true;
-                setTimeout(() => { window.__NEXT_LOCK__ = false; }, 150);
-                encounterIndex = (encounterIndex ?? 0) + 1;
-                startEncounter();
+              addStepButton("CONTINUE TO REFLECTION", () => {
+                currentEncounter.__pendingRecovery = false;
+                currentStep = 7;
+                renderEncounterStep();
               }, stepButtons);
             });
 
@@ -15717,6 +15704,31 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           });
 
           stepContent.appendChild(card);
+        }
+
+        if (currentStep === 65) {
+          try {
+            renderRecoveryStep(stepContent, stepButtons, currentEncounter, inDrill);
+          } catch (e) {
+            console.error("[BC] renderRecoveryStep crashed", e);
+
+            stepContent.innerHTML = "";
+            const p = document.createElement("p");
+            p.innerText = "Recovery step failed to render. You can still continue to reflection.";
+            stepContent.appendChild(p);
+
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "primary";
+            btn.innerText = "CONTINUE TO REFLECTION";
+            btn.onclick = () => {
+              currentEncounter.__pendingRecovery = false;
+              currentStep = 7;
+              renderEncounterStep();
+            };
+            stepButtons.appendChild(btn);
+          }
+          return;
         }
 
         if (currentStep === 7) {
@@ -15745,26 +15757,10 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
             console.log("[REPORT UI] Step 7 button wired ✅");
           }, 0);
-          try {
-            renderRecoveryStep(stepContent, stepButtons, currentEncounter, inDrill);
-          } catch (e) {
-            console.error("[BC] renderRecoveryStep crashed", e);
 
-            stepContent.innerHTML = "";
-            const p = document.createElement("p");
-            p.innerText = "Recovery step failed to render (rule lookup missing). You can still continue.";
-            stepContent.appendChild(p);
+          // Keep your full Step 7 reflection rendering here.
+          // Do NOT call renderRecoveryStep here anymore.
 
-            const btn = document.createElement("button");
-            btn.type = "button";
-            btn.className = "primary";
-            btn.innerText = "FINISH ENCOUNTER";
-            btn.onclick = () => {
-              currentStep = 6;
-              renderEncounterStep();
-            };
-            stepButtons.appendChild(btn);
-          }
           return;
         }
       }
