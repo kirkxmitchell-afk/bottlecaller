@@ -51,12 +51,7 @@ export function createProgressionStore(storage = window.localStorage) {
   }
 
   function unlockedModes(points) {
-    const pts = Number(points || 0);
-    const tier = pts >= 10 ? 3 : pts >= 5 ? 2 : 1;
-
-    if (tier <= 1) return ["scout", "guide", "charm"];
-    if (tier === 2) return ["scout", "guide", "charm", "authority"];
-    return ["scout", "guide", "charm", "authority"];
+    return getUnlockedModesForPoints(points);
   }
 
   function clampEncounterByTier(encounterId, points) {
@@ -78,7 +73,7 @@ export function createProgressionStore(storage = window.localStorage) {
       session: {
         currentEncounterId: 1,
         mode: "scout",
-        guestTypeSelected: "Decider",
+        guestTypeSelected: "decider",
         runEase: 1.0,
         runEaseRemaining: 0
       },
@@ -113,7 +108,7 @@ export function createProgressionStore(storage = window.localStorage) {
     s.session = s.session || {};
     s.session.currentEncounterId = Number.isFinite(s.session.currentEncounterId) ? s.session.currentEncounterId : 1;
     s.session.mode = typeof s.session.mode === "string" ? s.session.mode : "scout";
-    s.session.guestTypeSelected = typeof s.session.guestTypeSelected === "string" ? s.session.guestTypeSelected : "Decider";
+    s.session.guestTypeSelected = typeof s.session.guestTypeSelected === "string" ? s.session.guestTypeSelected.toLowerCase() : "decider";
     if (!Number.isFinite(s.session.runEase)) s.session.runEase = 1.0;
     if (!Number.isFinite(s.session.runEaseRemaining)) s.session.runEaseRemaining = 0;
 
