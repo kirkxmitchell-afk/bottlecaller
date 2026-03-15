@@ -2783,6 +2783,17 @@
           };
           window.__BC_LAST_TIMED_CHALLENGE_RESULT__ = next;
           try { getTimedChallengeHost().__BC_LAST_TIMED_CHALLENGE_RESULT__ = next; } catch {}
+          if (msg.ok && String(next?.status || "").toLowerCase() === "completed") {
+            try {
+              const spine = getProgressionSpine({ allowNull: true });
+              spine?.actions?.applyTimedChallengeReward?.({
+                challengeId: next.challengeId || next.id || null,
+                rewardPoints: Number(next.rewardPoints || 0)
+              });
+            } catch (e) {
+              console.warn("[TIMED CHALLENGE] reward apply failed", e);
+            }
+          }
           window.__BC_LAST_TIMED_CHALLENGE_STATUS__ = {
             ok: !!msg.ok,
             error: msg.ok ? null : (msg?.error || "unknown"),
@@ -2814,6 +2825,15 @@
             managerUserId: msg.managerUserId || null,
             at: Date.now(),
           };
+          try {
+            const spine = getProgressionSpine({ allowNull: true });
+            spine?.actions?.applyDrillReward?.({
+              assignedMessageId: msg.assignedMessageId || null,
+              rewardPoints: 2
+            });
+          } catch (e) {
+            console.warn("[DRILL RUN] reward apply failed", e);
+          }
           try {
             const toast = getDrillCompletionToastMessage(window.__BC_LAST_DRILL_COMPLETION_STATUS__, assigned);
             if (toast) window.showToast?.(toast);
@@ -5518,6 +5538,9 @@ function ensureProgLoaded() {
           if (!spine?.actions?.resetEncounterFlow) return false;
           console.log("[RESET FLOW][BEFORE]", spine.selectors.points(), spine.getState());
           spine.actions.resetEncounterFlow();
+          if (spine?.actions?.resetRunScoring) {
+            spine.actions.resetRunScoring();
+          }
           console.log("[RESET FLOW][AFTER]", spine.selectors.points(), spine.getState());
           return true;
         } catch (e) {
@@ -15013,6 +15036,18 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
               success: didWin,
               pointEligible: didWin
             });
+
+            const premiumSuccess = !!(
+              currentEncounter?.premiumOpportunityHit ||
+              currentEncounter?.premiumRollSuccess
+            );
+
+            if (premiumSuccess) {
+              spine?.actions?.applyPremiumBonus?.({
+                encounterId,
+                bonusPoints: 1
+              });
+            }
           } catch (e) {
             console.warn("[PROG] applyEncounterResult failed", e);
           }

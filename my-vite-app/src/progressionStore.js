@@ -85,6 +85,11 @@ export function createProgressionStore(storage = window.localStorage) {
       run: {
         runId: 0,
         scoredThisRun: {}
+      },
+      rewards: {
+        timedChallenges: {},
+        drills: {},
+        premiumByEncounter: {}
       }
     };
   }
@@ -115,6 +120,20 @@ export function createProgressionStore(storage = window.localStorage) {
     s.run = s.run || {};
     s.run.runId = Number.isFinite(s.run.runId) ? s.run.runId : 0;
     s.run.scoredThisRun = s.run.scoredThisRun && typeof s.run.scoredThisRun === "object" ? s.run.scoredThisRun : {};
+
+    s.rewards = s.rewards || {};
+    s.rewards.timedChallenges =
+      s.rewards.timedChallenges && typeof s.rewards.timedChallenges === "object"
+        ? s.rewards.timedChallenges
+        : {};
+    s.rewards.drills =
+      s.rewards.drills && typeof s.rewards.drills === "object"
+        ? s.rewards.drills
+        : {};
+    s.rewards.premiumByEncounter =
+      s.rewards.premiumByEncounter && typeof s.rewards.premiumByEncounter === "object"
+        ? s.rewards.premiumByEncounter
+        : {};
 
     // clamp to allowed by tier/points
     s.session.currentEncounterId = clampEncounterByTier(s.session.currentEncounterId, s.points);
@@ -163,6 +182,25 @@ export function createProgressionStore(storage = window.localStorage) {
     emit();
   }
 
+  function grantPoints(pts) {
+    const n = Math.max(0, Number(pts || 0));
+    if (!n) return false;
+    state.points += n;
+    state.session.currentEncounterId = clampEncounterByTier(state.session.currentEncounterId, state.points);
+
+    const allowedGT = unlockedGuestTypes(state.points);
+    if (!allowedGT.includes(state.session.guestTypeSelected)) {
+      state.session.guestTypeSelected = allowedGT[0];
+    }
+
+    const allowedModes = unlockedModes(state.points);
+    if (!allowedModes.includes(state.session.mode)) {
+      state.session.mode = allowedModes[0];
+    }
+
+    return true;
+  }
+
   function setSessionSelection({ encounterId, mode, guestType }) {
     if (encounterId != null) {
       state.session.currentEncounterId = clampEncounterByTier(encounterId, state.points);
@@ -194,7 +232,7 @@ export function createProgressionStore(storage = window.localStorage) {
       }
 
       if (pointEligible && !state.run.scoredThisRun[encId]) {
-        state.points += 1; // points drive tier unlocks
+        grantPoints(1);
         state.run.scoredThisRun[encId] = true;
       }
 
@@ -223,6 +261,75 @@ export function createProgressionStore(storage = window.localStorage) {
     emit();
   }
 
+  function applyTimedChallengeReward({ challengeId, rewardPoints }) {
+    const id = String(challengeId || "");
+    const pts = Math.max(0, Number(rewardPoints || 0));
+    if (!id || !pts) return { ok: false, reason: "invalid" };
+
+    state.rewards = state.rewards || {};
+    state.rewards.timedChallenges = state.rewards.timedChallenges || {};
+
+    if (state.rewards.timedChallenges[id]) {
+      return { ok: true, duplicate: true, points: state.points };
+    }
+
+    grantPoints(pts);
+    state.rewards.timedChallenges[id] = {
+      rewardPoints: pts,
+      rewardedAt: Date.now()
+    };
+
+    save();
+    emit();
+    return { ok: true, duplicate: false, points: state.points };
+  }
+
+  function applyDrillReward({ assignedMessageId, rewardPoints }) {
+    const id = String(assignedMessageId || "");
+    const pts = Math.max(0, Number(rewardPoints || 0));
+    if (!id || !pts) return { ok: false, reason: "invalid" };
+
+    state.rewards = state.rewards || {};
+    state.rewards.drills = state.rewards.drills || {};
+
+    if (state.rewards.drills[id]) {
+      return { ok: true, duplicate: true, points: state.points };
+    }
+
+    grantPoints(pts);
+    state.rewards.drills[id] = {
+      rewardPoints: pts,
+      rewardedAt: Date.now()
+    };
+
+    save();
+    emit();
+    return { ok: true, duplicate: false, points: state.points };
+  }
+
+  function applyPremiumBonus({ encounterId, bonusPoints }) {
+    const id = String(encounterId || "");
+    const pts = Math.max(0, Number(bonusPoints || 0));
+    if (!id || !pts) return { ok: false, reason: "invalid" };
+
+    state.rewards = state.rewards || {};
+    state.rewards.premiumByEncounter = state.rewards.premiumByEncounter || {};
+
+    if (state.rewards.premiumByEncounter[id]) {
+      return { ok: true, duplicate: true, points: state.points };
+    }
+
+    grantPoints(pts);
+    state.rewards.premiumByEncounter[id] = {
+      rewardPoints: pts,
+      rewardedAt: Date.now()
+    };
+
+    save();
+    emit();
+    return { ok: true, duplicate: false, points: state.points };
+  }
+
   function getSelectors() {
     return {
       subscribe,
@@ -238,7 +345,15 @@ export function createProgressionStore(storage = window.localStorage) {
         modes: () => unlockedModes(state.points),
         encounterRange: () => encounterRangeForPoints(state.points)
       },
-      actions: { resetEncounterFlow, resetRunScoring, setSessionSelection, applyEncounterResult }
+      actions: {
+        resetEncounterFlow,
+        resetRunScoring,
+        setSessionSelection,
+        applyEncounterResult,
+        applyTimedChallengeReward,
+        applyDrillReward,
+        applyPremiumBonus
+      }
     };
   }
 

@@ -4426,6 +4426,30 @@ if (!window.__BC_PARENT_BRIDGE__) {
             ? "timed_challenge_completed"
             : "timed_challenge_expired";
 
+        const { data: existingRows, error: existingErr } = await supabase
+          .from("bc_messages_v1")
+          .select("id, payload, created_at")
+          .eq("type", resultType)
+          .eq("sender_user_id", targetUserId)
+          .eq("receiver_user_id", managerUserId)
+          .eq("restaurant_id", restaurantId)
+          .order("created_at", { ascending: false })
+          .limit(20);
+
+        if (existingErr) {
+          replyResult({ ok: false, error: "existing_result_lookup_failed" });
+          return;
+        }
+
+        const duplicateResult = (existingRows || []).some(
+          (row) => String(row?.payload?.challengeId || "") === String(challengeId || "")
+        );
+
+        if (duplicateResult) {
+          replyResult({ ok: true, managerUserId, resultType, duplicate: true });
+          return;
+        }
+
         const body =
           status === "completed"
             ? `Completed ${title}`
@@ -4563,6 +4587,30 @@ if (!window.__BC_PARENT_BRIDGE__) {
         if (!managerUserId) {
           console.warn("[DRILL RUN] assigned drill message has no sender_user_id", assignedMsg);
           replyResult({ ok: false, error: "assigned_message_missing_sender" });
+          return;
+        }
+
+        const { data: existingCompletedRows, error: existingCompletedErr } = await supabase
+          .from("bc_messages_v1")
+          .select("id, payload, created_at")
+          .eq("type", "drill_completed")
+          .eq("sender_user_id", ctx.userId)
+          .eq("receiver_user_id", managerUserId)
+          .eq("restaurant_id", ctx.restaurantId)
+          .order("created_at", { ascending: false })
+          .limit(10);
+
+        if (existingCompletedErr) {
+          replyResult({ ok: false, error: "existing_completed_lookup_failed" });
+          return;
+        }
+
+        const duplicateCompleted = (existingCompletedRows || []).some(
+          (row) => String(row?.payload?.assignedMessageId || "") === String(assignedMessageId || "")
+        );
+
+        if (duplicateCompleted) {
+          replyResult({ ok: true, managerUserId, duplicate: true });
           return;
         }
 
