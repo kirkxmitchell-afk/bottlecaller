@@ -12258,6 +12258,44 @@ body.difficulty-hard .option-btn.selected {
         renderEncounterStep();
       }
 
+      function deriveEncounterPhaseFromStep(step) {
+        switch (step) {
+          case 1: return "read";
+          case 2: return "mode";
+          case 3: return "hook";
+          case 4: return "delivery";
+          case 5:
+          case 6: return "resolve";
+          case 65: return "recovery";
+          case 7: return "reflection";
+          default: return null;
+        }
+      }
+
+      function deriveStepFromEncounterPhase(phase) {
+        switch (phase) {
+          case "read": return 1;
+          case "mode": return 2;
+          case "hook": return 3;
+          case "delivery": return 4;
+          case "resolve": return 5;
+          case "recovery": return 65;
+          case "reflection": return 7;
+          default: return currentStep;
+        }
+      }
+
+      function setEncounterPhase(phase) {
+        if (!currentEncounter) return;
+        currentEncounter.phase = phase;
+        currentStep = deriveStepFromEncounterPhase(phase);
+        renderEncounterPhase();
+      }
+
+      function renderEncounterPhase() {
+        renderEncounterStep();
+      }
+
       function renderBcStage() {
         const enc = bcActiveEncounter;
         if (!enc) return;
@@ -12363,18 +12401,6 @@ body.difficulty-hard .option-btn.selected {
 
         saveEncounterIndex(encounterIndex);
         startEncounter();
-      }
-
-      function finalizeEncounter(enc, results) {
-        // TODO: apply skill deltas + update points + move to next encounter
-        console.log("[BC][steps] finalizeEncounter", {
-          encounterNumber: enc?.encounterNumber,
-          results
-        });
-        bcActiveEncounter = null;
-        bcStepIndex = 0;
-        bcStageResults = [];
-        advanceToNextEncounter();
       }
 
       function scoreSymbol(status) {
@@ -13682,6 +13708,75 @@ body.difficulty-hard .option-btn.selected {
         updateCounts();
       }
 
+      function finalizeEncounter(enc, checks) {
+        if (!enc) return;
+        if (enc.__finalized) return;
+        enc.__finalized = true;
+
+        console.log("[BC] finalizeEncounter", enc.encounterNumber);
+
+        const didWin = encounterCountsAsWin(enc?.outcome ? { outcome: enc.outcome } : null);
+
+        const encounterIdRaw =
+          enc?.encounterId ??
+          enc?.id ??
+          enc?.encounterNumber;
+
+        if (encounterIdRaw == null) {
+          console.warn("[BC] finalizeEncounter missing encounterId");
+          return;
+        }
+
+        const encounterId = String(encounterIdRaw);
+        const spine = getProgressionSpine({ allowNull: true });
+
+        spine?.actions?.applyEncounterResult?.({
+          encounterId,
+          success: didWin,
+          pointEligible: didWin
+        });
+
+        const premiumSuccess = !!(
+          enc?.premiumOpportunityHit ||
+          enc?.premiumRollSuccess
+        );
+
+        if (premiumSuccess) {
+          spine?.actions?.applyPremiumBonus?.({
+            encounterId,
+            bonusPoints: 1
+          });
+        }
+
+        console.log("[PROG] earned", {
+          pointsTotal: spine?.selectors?.points?.() ?? 0
+        });
+
+        bcRenderHud("encounter resolved");
+        bcToast("Encounter resolved");
+        renderProgressStatusWindow();
+
+        const scored = scoreEncounterForGuard(enc, checks);
+        updateGuestRankFromEncounter(enc, checks, scored);
+
+        console.log("[BC] encounter summary", {
+          guest: enc.guestStateActual,
+          outcome: enc.outcome,
+          recovery: enc.recoveryChoice,
+          grade: enc.performanceGrade
+        });
+      }
+
+      function encounterCountsAsWin(outcome) {
+        const winOutcomes = [
+          "clean_close",
+          "soft_close",
+          "pivot"
+        ];
+
+        return winOutcomes.includes(outcome?.outcome);
+      }
+
       function maybeEndDemoRunAndReturnHome() {
         const isDemoNow = (window.isDemo || window.bcMode === "demo");
         if (!isDemoNow) return false;
@@ -14096,6 +14191,7 @@ body.difficulty-hard .option-btn.selected {
         box.textContent =
 `BC STATE
 step=${currentStep}
+phase=${enc?.phase ?? "—"}
 encounterIndex=${encounterIndex}
 encounterNumber=${enc?.encounterNumber ?? "—"}
 encounterId=${enc?.id ?? "—"}
@@ -14123,6 +14219,10 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
       function renderEncounterStep() {
         if (window.__BC3__?.active) return;
         clearStepHighlights();
+        if (currentEncounter) {
+          const derivedPhase = deriveEncounterPhaseFromStep(currentStep);
+          if (derivedPhase) currentEncounter.phase = derivedPhase;
+        }
         console.log("[RENDER] currentStep =", currentStep, "enc#", currentEncounter?.encounterNumber);
         if (typeof syncProgressReportButtonVisibility === "function") {
           syncProgressReportButtonVisibility();
@@ -15134,12 +15234,9 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           renderCoachLineBlock(stepContent, currentEncounter, checks);
           ensureProgLoaded();
           const scored = scoreEncounterForGuard(currentEncounter, checks);
+          const outcome = resolveOutcome(currentEncounter, checks);
           try {
-            const didWin =
-              !!checks.guestRead &&
-              checks.modeStatus !== "damaging" &&
-              checks.hookStatus !== "damaging" &&
-              !!checks.deliveryCorrect;
+            const didWin = encounterCountsAsWin(outcome);
             const encounterIdRaw =
               currentEncounter?.encounterId ??
               currentEncounter?.id ??
@@ -15324,7 +15421,6 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
           console.log("[BC] DIFF", describeDifficultyState());
 
-          const outcome = resolveOutcome(currentEncounter, checks);
           console.log("[BC] outcome", outcome, currentEncounter.__tiers);
           try {
             currentEncounter.outcome = outcome?.outcome || null;
@@ -15364,8 +15460,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           if (outcome.outcome === "recovery") {
             currentEncounter.pivotType = currentEncounter.pivotType || "recovery";
             currentEncounter.__pendingRecovery = true;
-            currentStep = 65;
-            renderEncounterStep();
+            setEncounterPhase("recovery");
             return;
           }
 
@@ -15687,16 +15782,11 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
               enc.recoveryWhy = "";
               enc.recoveryCorrect = (c.id === best);
 
-              try {
-                logEncounter();
-              } catch (e) {
-                console.error("[BC] logEncounter crashed in Recovery step", e);
-                // Do not crash the game because logging/scoring failed
-              }
+              // Do not log here. Recovery feeds into reflection.
+              // Reflection step performs the final encounter log.
               addStepButton("CONTINUE TO REFLECTION", () => {
                 currentEncounter.__pendingRecovery = false;
-                currentStep = 7;
-                renderEncounterStep();
+                setEncounterPhase("reflection");
               }, stepButtons);
             });
 
@@ -15706,7 +15796,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           stepContent.appendChild(card);
         }
 
-        if (currentStep === 65) {
+        if (currentEncounter?.phase === "recovery") {
           try {
             renderRecoveryStep(stepContent, stepButtons, currentEncounter, inDrill);
           } catch (e) {
@@ -15723,15 +15813,14 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             btn.innerText = "CONTINUE TO REFLECTION";
             btn.onclick = () => {
               currentEncounter.__pendingRecovery = false;
-              currentStep = 7;
-              renderEncounterStep();
+              setEncounterPhase("reflection");
             };
             stepButtons.appendChild(btn);
           }
           return;
         }
 
-        if (currentStep === 7) {
+        if (currentEncounter?.phase === "reflection") {
           console.log("[REPORT UI] Step 7 rendered ✅", {
             encounter: currentEncounter?.encounterNumber,
             currentEncounter
@@ -15758,8 +15847,204 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             console.log("[REPORT UI] Step 7 button wired ✅");
           }, 0);
 
-          // Keep your full Step 7 reflection rendering here.
-          // Do NOT call renderRecoveryStep here anymore.
+          const reflectionTitle = document.createElement("h3");
+          reflectionTitle.innerText = "What just happened";
+          stepContent.appendChild(reflectionTitle);
+          renderStrictBadge(stepContent);
+
+          const anchor = document.createElement("div");
+          anchor.className = "small-text";
+          anchor.style.marginTop = "6px";
+          anchor.style.opacity = "0.9";
+          anchor.innerText = bcReflectionAnchor(checks, currentEncounter);
+          stepContent.appendChild(anchor);
+          renderDynamicGuestLineBlock(stepContent, currentEncounter, checks, {
+            compact: false
+          });
+          renderDynamicGuestReactionBlock(stepContent, currentEncounter, checks, {
+            compact: false
+          });
+          if (window.__BC_DEBUG_PRESSURE__ === true) {
+            renderGuestPressureDebug(stepContent, currentEncounter);
+          }
+          logEncounterStateAudit("before_reflection_render", currentEncounter);
+
+          renderStrengthFixBlock(stepContent, checks, currentEncounter);
+
+          console.log("[BC] Step6 summary", currentEncounter.__uxSummary);
+          if (currentEncounter.__uxSummary) {
+            renderUxSummary(stepContent, currentEncounter.__uxSummary, {
+              title: "Summary to lock it in",
+              compact: false
+            });
+          }
+
+          addReflectionBlock(
+            stepContent,
+            "Guest Read",
+            checks.guestRead ? "✅" : "❌",
+            `Guest type: ${currentEncounter.guestStateActual || "—"}. You read them as: ${currentEncounter.guestReadSelected || "—"}.`
+          );
+
+          addReflectionBlock(
+            stepContent,
+            "Mode",
+            scoreSymbol(checks.modeStatus),
+            `Best approach: ${modeBestResolved ? uiModeLabel(modeBestResolved, "game") : "—"}. ` +
+            modeWhyWithChoice(currentEncounter.guestStateActual, currentEncounter.modeSelected)
+          );
+
+          const hookRuleForGuest = getHookRuleForGuest(currentEncounter.guestStateActual);
+          assertHookConsistency(hookRuleForGuest, {
+            encounterNumber: currentEncounter?.encounterNumber,
+            guest: currentEncounter?.guestStateActual,
+            source: "reflection_hook"
+          });
+
+          const bestHook = hookRuleForGuest?.optimal || "—";
+
+          addReflectionBlock(
+            stepContent,
+            "Hook",
+            scoreSymbol(checks.hookStatus),
+            `Best opening: "${bestHook}". ` + hookWhyWithChoice(
+              currentEncounter.guestStateActual,
+              getSelectedHookType(currentEncounter)
+            )
+          );
+
+          const correctS1 =
+            currentEncounter.correctDeliveryLine1 ||
+            currentEncounter.deliverOptionsS1?.[currentEncounter.correctSlotS1] ||
+            "—";
+
+          const correctS2 =
+            currentEncounter.correctDeliveryLine2 ||
+            currentEncounter.deliverOptionsS2?.[currentEncounter.correctSlotS2] ||
+            "—";
+
+          const chosenS1 =
+            currentEncounter.selectedDeliveryLine1 ||
+            currentEncounter.deliveryLine1 ||
+            currentEncounter.deliverOptionsS1?.[currentEncounter.selectedS1] ||
+            "—";
+
+          const chosenS2 =
+            currentEncounter.selectedDeliveryLine2 ||
+            currentEncounter.deliveryLine2 ||
+            currentEncounter.deliverOptionsS2?.[currentEncounter.selectedS2] ||
+            "—";
+
+          addReflectionBlock(
+            stepContent,
+            "Delivery",
+            checks.deliveryCorrect ? "✅" : "❌",
+            `Best pair: "${correctS1}" / "${correctS2}". You chose: "${chosenS1}" / "${chosenS2}". The stronger pair made the recommendation feel clearer and more natural.`
+          );
+
+          if (currentEncounter.chainSignal) {
+            addReflectionBlock(
+              stepContent,
+              "Momentum",
+              momentumLabel(currentEncounter.chainSignal),
+              sessionSignalDetail(currentEncounter.chainSignal)
+            );
+          }
+
+          if (currentEncounter.recoveryText) {
+            const unlockedModes = getUnlockedModesForCurrentPlayer();
+
+            const recoveryBest = resolveCorrectModeForPlayer(
+              currentEncounter.recoveryCorrectModeResolved ||
+              currentEncounter.recoveryCorrectModeRaw ||
+              currentEncounter.recoveryCorrectMode ||
+              null,
+              unlockedModes
+            );
+
+            currentEncounter.recoveryCorrectModeResolved = recoveryBest;
+            currentEncounter.recoveryCorrect =
+              !!currentEncounter.recoveryChoice &&
+              canonicalModeFromUi(currentEncounter.recoveryChoice) === canonicalModeFromUi(recoveryBest);
+
+            assertModeConsistency(unlockedModes, recoveryBest, {
+              encounterNumber: currentEncounter?.encounterNumber,
+              tier: getProgressionSpine({ allowNull: true })?.selectors?.tier?.(),
+              points: getProgressionSpine({ allowNull: true })?.selectors?.points?.(),
+              source: "reflection_pivot"
+            });
+
+            addReflectionBlock(
+              stepContent,
+              "Pivot",
+              currentEncounter.recoveryCorrect ? "✅" : (currentEncounter.recoveryChoice ? "❌" : "—"),
+              `Scenario: ${currentEncounter.recoveryText || "—"}. ` +
+              `Best recovery: ${recoveryBest ? uiModeLabel(recoveryBest, "game") : "—"}. ` +
+              `You chose: ${currentEncounter.recoveryChoice ? uiModeLabel(currentEncounter.recoveryChoice, "game") : "—"}. ` +
+              `Why: ${pivotWhyWithChoice(currentEncounter)}`
+            );
+          }
+
+          if (currentEncounter.resetUsed) {
+            addReflectionBlock(
+              stepContent,
+              "Reset",
+              "✅",
+              "You used reset (only allowed if first mode was HOLD)."
+            );
+          }
+
+          const gradeObj = computePerformanceGrade(currentEncounter, checks);
+          currentEncounter.performanceGrade = gradeObj.grade;
+          renderPerformanceGradeBlock(stepContent, gradeObj);
+          renderCoachLineBlock(stepContent, currentEncounter, checks);
+          ensureProgLoaded();
+          finalizeEncounter(currentEncounter, checks);
+
+          mastery = loadMastery();
+          const strengthFix = getStrengthAndFix(mastery);
+
+          const sfBlock = document.createElement("div");
+          sfBlock.className = "card";
+
+          const sfTitle = document.createElement("strong");
+          sfTitle.innerText = "Strength + Fix";
+          sfBlock.appendChild(sfTitle);
+
+          const sfLine1 = document.createElement("div");
+          sfLine1.className = "small-text";
+          sfLine1.innerText =
+            `Strength: ${strengthFix.strongest.toUpperCase()} (${strengthFix.strongestPct}%)  |  Fix: ${strengthFix.weakest.toUpperCase()} (${strengthFix.weakestPct}%)`;
+          sfBlock.appendChild(sfLine1);
+
+          const sfLine2 = document.createElement("div");
+          sfLine2.style.marginTop = "8px";
+          sfLine2.innerText = strengthFix.fixText;
+          sfBlock.appendChild(sfLine2);
+
+          const sfLine3 = document.createElement("div");
+          sfLine3.className = "small-text";
+          sfLine3.style.marginTop = "8px";
+          sfLine3.innerText = `This encounter trained: ${(currentEncounter.skillFocus || "read").toUpperCase()}`;
+          sfBlock.appendChild(sfLine3);
+
+          stepContent.appendChild(sfBlock);
+
+          if (!currentEncounter.__logged) {
+            currentEncounter.__logged = true;
+            logEncounter();
+          }
+
+          const streakInfo = window.__BC_DEBUG__?.updateStreakAfterEncounter
+            ? window.__BC_DEBUG__.updateStreakAfterEncounter(currentEncounter, checks)
+            : { signal: "missing", streak: 0, best: 0, changed: false };
+
+          console.log("[BC] streakInfo", streakInfo);
+          renderStreakBlock(stepContent, streakInfo);
+          const unlock = tryUnlockNextTier();
+          if (unlock.unlocked) {
+            console.log("[BC] Tier unlocked ✅", unlock.tier);
+          }
 
           return;
         }
@@ -16195,7 +16480,10 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
         currentEncounter = {
           runId: encounterRunId,
+          phase: "read",
           __logged: false,
+          __finalized: false,
+          __recoveryLocked: false,
           id: encounterIdStable,
           encounterId: encounterIdStable,
 
