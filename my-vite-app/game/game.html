@@ -6703,11 +6703,17 @@ function ensureProgLoaded() {
       })();
 
       function renderRunsCount(n) {
-        const value = String(Number(n || 0));
+        const premiumValue = String(getEncounterRunCountForMode("premium"));
+        const demoValue = String(getEncounterRunCountForMode("demo"));
+        const activeValue = String(getEncounterRunCountForMode(bcMode));
+        const elHomePremium = document.getElementById("homePremiumRuns");
+        const elHomeDemo = document.getElementById("homeDemoRuns");
         const elPremium = document.getElementById("bcSavedRunsPremium");
         const elGeneric = document.getElementById("bcSavedRuns");
-        if (elPremium) elPremium.textContent = value;
-        if (elGeneric) elGeneric.textContent = value;
+        if (elHomePremium) elHomePremium.textContent = premiumValue;
+        if (elHomeDemo) elHomeDemo.textContent = demoValue;
+        if (elPremium) elPremium.textContent = premiumValue;
+        if (elGeneric) elGeneric.textContent = activeValue;
         console.log("[BC][UI] rendering runs_count", {
           runtime: window.__BC_RUNS_COUNT__,
           ctx: window.__BC_CTX__
@@ -10234,6 +10240,14 @@ body.difficulty-hard .option-btn.selected {
         return arr[Math.floor(Math.random() * arr.length)];
       }
 
+      function getEncounterRunCountForMode(mode = "") {
+        const targetMode = String(mode || "").toLowerCase();
+        const allRuns = Array.isArray(runs) ? runs : [];
+        return allRuns.filter(
+          (r) => r && String(r.tier || "").toLowerCase() === targetMode && (r.sessionType || "progression") === "progression"
+        ).length;
+      }
+
       // In premium waiter mode, disable setup edits
       function applyRoleGatingToSetupUI() {
         if (isDemo) return; // demo doesn't care
@@ -10262,11 +10276,7 @@ body.difficulty-hard .option-btn.selected {
         const countEl = document.getElementById(ids.cardCount);
         const runsEl = document.getElementById(ids.cardRuns);
         if (countEl) countEl.innerText = W.length + " / " + LIMIT;
-        const allRuns = Array.isArray(runs) ? runs : [];
-        const modeEncounterRuns = allRuns.filter(
-          (r) => r && r.tier === bcMode && (r.sessionType || "progression") === "progression"
-        );
-        if (runsEl) runsEl.innerText = modeEncounterRuns.length;
+        if (runsEl) runsEl.innerText = getEncounterRunCountForMode(bcMode);
       }
 
       function updateCounts() {
