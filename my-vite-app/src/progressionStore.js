@@ -303,9 +303,11 @@ export function createProgressionStore(storage = window.localStorage) {
   }
 
   function applyPremiumBonus({ encounterId, bonusPoints }) {
-    const id = String(encounterId || "");
+    const encounterKey = String(encounterId || "");
+    const runId = Number(state?.run?.runId || 0);
+    const id = `${runId}:${encounterKey}`;
     const pts = Math.max(0, Number(bonusPoints || 0));
-    if (!id || !pts) return { ok: false, reason: "invalid" };
+    if (!encounterKey || !pts) return { ok: false, reason: "invalid" };
 
     state.rewards = state.rewards || {};
     state.rewards.premiumByEncounter = state.rewards.premiumByEncounter || {};
@@ -316,6 +318,8 @@ export function createProgressionStore(storage = window.localStorage) {
 
     grantPoints(pts);
     state.rewards.premiumByEncounter[id] = {
+      encounterId: encounterKey,
+      runId,
       rewardPoints: pts,
       rewardedAt: Date.now()
     };
