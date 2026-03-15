@@ -35,6 +35,24 @@
       }
     }
 
+    function getDeliveryScore(enc) {
+      if (!enc || typeof enc !== "object") return 0;
+
+      const s1ok =
+        Array.isArray(enc?.deliverOptionsS1) &&
+        enc?.correctSlotS1 != null &&
+        enc?.selectedS1 != null &&
+        String(enc.selectedS1) === String(enc.correctSlotS1);
+
+      const s2ok =
+        Array.isArray(enc?.deliverOptionsS2) &&
+        enc?.correctSlotS2 != null &&
+        enc?.selectedS2 != null &&
+        String(enc.selectedS2) === String(enc.correctSlotS2);
+
+      return (s1ok ? 1 : 0) + (s2ok ? 1 : 0);
+    }
+
     const escapeHtml = window.escapeHtml;
 
     window.__BC_DEBUG_STATE__ = function () {
@@ -15290,22 +15308,6 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           if (hs === true) return "right";
           if (hs === false) return "wrong";
           return hs || "wrong";
-        }
-
-        function getDeliveryScore(enc) {
-          const s1ok =
-            enc?.deliverOptionsS1 &&
-            enc?.correctSlotS1 != null &&
-            enc?.selectedS1 != null &&
-            String(enc.selectedS1) === String(enc.correctSlotS1);
-
-          const s2ok =
-            enc?.deliverOptionsS2 &&
-            enc?.correctSlotS2 != null &&
-            enc?.selectedS2 != null &&
-            String(enc.selectedS2) === String(enc.correctSlotS2);
-
-          return (s1ok ? 1 : 0) + (s2ok ? 1 : 0);
         }
 
         function choosePivot(enc, policyOverride) {
