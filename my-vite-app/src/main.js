@@ -5999,31 +5999,8 @@ function wireWaiterMessagesPanel() {
     sendBtn.addEventListener("click", () => {
       console.log("[WAITER PANEL] Send Progress clicked ✅");
       const status = document.getElementById("waiterSendProgressStatus");
-      try {
-        const reqId = "hud_pr_" + Math.random().toString(16).slice(2);
-        const frame = document.getElementById("premiumRootFrame");
-        console.log("[WAITER PANEL] premiumRootFrame", frame);
-        if (!frame || !frame.contentWindow) {
-          if (status) status.textContent = "Game not ready.";
-          console.warn("[WAITER PANEL] no iframe/contentWindow");
-          return;
-        }
-
-        frame.contentWindow.postMessage(
-          {
-            source: "BC_MSG",
-            v: 1,
-            type: "hud_send_progress_request",
-            reqId,
-          },
-          window.location.origin
-        );
-        console.log("[WAITER PANEL] hud_send_progress_request posted ✅", { reqId });
-
-        if (status) status.textContent = "Checking encounter…";
-      } catch (e) {
-        console.warn("waiter send progress failed", e);
-        if (status) status.textContent = "Could not send progress.";
+      if (status) {
+        status.textContent = "Send progress from Encounter Step 7.";
       }
     });
   }
@@ -6044,7 +6021,9 @@ window.addEventListener("message", (event) => {
     const hudStatus = document.getElementById("hudSendProgressStatus");
 
     const text = msg.ok
-      ? `Sent to manager${msg.inserted ? ` (${msg.inserted})` : ""} ✅`
+      ? (msg.snapshotOk === false
+          ? `Sent to manager, but snapshot failed${msg.snapshotError ? `: ${msg.snapshotError}` : "."}`
+          : `Sent to manager${msg.inserted ? ` (${msg.inserted})` : ""} ✅`)
       : `Send failed: ${msg.error || "unknown error"}`;
 
     if (status) status.textContent = text;
@@ -6066,29 +6045,7 @@ function wireHudSendProgressButton() {
   btn.__wired = true;
 
   btn.addEventListener("click", () => {
-    try {
-      const frame = document.getElementById("premiumRootFrame");
-      if (!frame || !frame.contentWindow) {
-        if (status) status.textContent = "Game not ready.";
-        return;
-      }
-
-      const reqId = "hud_pr_" + Math.random().toString(16).slice(2);
-      frame.contentWindow.postMessage(
-        {
-          source: "BC_MSG",
-          v: 1,
-          type: "hud_send_progress_request",
-          reqId,
-        },
-        window.location.origin
-      );
-
-      if (status) status.textContent = "Sending progress...";
-    } catch (e) {
-      console.warn("wireHudSendProgressButton failed", e);
-      if (status) status.textContent = "Could not send progress.";
-    }
+    if (status) status.textContent = "Send progress from Encounter Step 7.";
   });
 }
 
@@ -14141,7 +14098,7 @@ function renderHudTimeline(rows) {
 
         <div style="display:flex; justify-content:space-between;">
           <div>${time}</div>
-          <div style="opacity:.7;">Report</div>
+          <div style="opacity:.7;">Encounter Report</div>
         </div>
 
         <div style="margin-top:4px;">

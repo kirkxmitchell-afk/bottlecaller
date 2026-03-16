@@ -38,7 +38,7 @@ async function insertSkillSnapshotAndDrillEffect({
 
   if (snapError) {
     console.warn("[SNAPSHOT] parent insert failed", snapError);
-    return;
+    return { ok: false, error: snapError.message || String(snapError) };
   }
 
   console.log("[SNAPSHOT] parent insert success ✅", {
@@ -60,7 +60,7 @@ async function insertSkillSnapshotAndDrillEffect({
       .maybeSingle();
 
     if (recentDrillError || !recentDrill?.id || !recentDrill?.focus) {
-      return;
+      return { ok: true };
     }
 
     const focusMap = {
@@ -76,7 +76,7 @@ async function insertSkillSnapshotAndDrillEffect({
     const currentSkillValue = skillKey ? Number(skills?.[skillKey] || 0) : null;
 
     if (!skillKey || currentSkillValue == null) {
-      return;
+      return { ok: true };
     }
 
     const { data: beforeSnap, error: beforeSnapError } = await supabase
@@ -90,7 +90,7 @@ async function insertSkillSnapshotAndDrillEffect({
       .maybeSingle();
 
     if (beforeSnapError || !beforeSnap) {
-      return;
+      return { ok: true };
     }
 
     const beforeMap = {
@@ -121,7 +121,7 @@ async function insertSkillSnapshotAndDrillEffect({
 
     if (effError) {
       console.warn("[DRILL EFFECT] update failed", effError);
-      return;
+      return { ok: true };
     }
 
     console.log("[DRILL EFFECT] updated ✅", {
@@ -153,6 +153,8 @@ async function insertSkillSnapshotAndDrillEffect({
   } catch (e) {
     console.warn("[DRILL EFFECT] exception", e);
   }
+
+  return { ok: true };
 }
 
 export function makeProgressReportSubmitHandler({
@@ -248,7 +250,7 @@ export function makeProgressReportSubmitHandler({
 
       const inserted = Number(data || 0);
 
-      await insertSkillSnapshotAndDrillEffect({
+      const snapshotResult = await insertSkillSnapshotAndDrillEffect({
         supabase,
         ctx,
         payload,
@@ -258,6 +260,8 @@ export function makeProgressReportSubmitHandler({
         reqId,
         ok: true,
         inserted,
+        snapshotOk: !!snapshotResult?.ok,
+        snapshotError: snapshotResult?.ok ? null : (snapshotResult?.error || "snapshot_insert_failed"),
       });
     } catch (e) {
       reply(replyType, {

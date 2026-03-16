@@ -2213,8 +2213,22 @@
       try {
         const encounter = window.currentEncounter || currentEncounter || null;
         if (!encounter) {
-          console.warn("[REPORT] no currentEncounter", { source });
           return { ok: false, error: "no_current_encounter" };
+        }
+
+        if (!canSendProgressForEncounter(encounter)) {
+          return { ok: false, error: "already_sent_for_encounter" };
+        }
+
+        const resolved =
+          !!encounter?.outcome ||
+          !!encounter?.finalOutcome ||
+          !!encounter?.chainSignal ||
+          currentStep === 7 ||
+          currentStep === 65;
+
+        if (!resolved) {
+          return { ok: false, error: "encounter_not_resolved" };
         }
 
         let snapshotFromFn = {
@@ -2251,15 +2265,12 @@
 
         if (allZero) {
           snapshotFromFn = buildEncounterSkillFallback(encounter);
-          console.log("[REPORT] using encounter-derived fallback snapshot ✅", snapshotFromFn);
         }
 
         const labels = pickStrongestWeakest(snapshotFromFn);
         const strongestSkill = labels.strongest;
         const weakestSkill = labels.weakest;
         const checks = (() => {
-          if (!encounter) return {};
-
           try {
             if (typeof buildReactionChecksFromEncounter === "function") {
               return buildReactionChecksFromEncounter(encounter);
@@ -2329,17 +2340,11 @@
           weakestSkill
         };
 
-        evaluateTimedChallengeAgainstProgress(payload);
-
-        window.parent?.postMessage(
-          {
-            source: "BC_MSG",
-            v: 1,
-            type: "debug_progress_payload",
-            payload,
-          },
-          window.location.origin
-        );
+        if (typeof evaluateTimedChallengeAgainstProgress === "function") {
+          try { evaluateTimedChallengeAgainstProgress(payload); } catch (e) {
+            console.warn("[REPORT] timed challenge eval failed", e);
+          }
+        }
 
         const body =
           `Progress update • Encounter ${payload.encounterNumber} • ` +
@@ -2347,18 +2352,41 @@
           `Signal: ${payload.chainSignal}`;
 
         const reqId = submitProgressReportToManager({ body, payload });
-        console.log("[REPORT] submitProgressReportToManager returned", { reqId });
-
-        return { ok: !!reqId, reqId };
+        const result = { ok: !!reqId, reqId };
+        if (result.ok) {
+          markProgressSentForEncounter(encounter, result);
+        }
+        return result;
       } catch (e) {
-        console.warn("[REPORT] sendLiveProgressReport failed", {
-          source,
-          message: e?.message,
-          stack: e?.stack,
-          error: e
-        });
+        console.warn("[REPORT] sendLiveProgressReport failed", e);
         return { ok: false, error: e?.message || String(e) };
       }
+    }
+    function getEncounterReportKey(encounter) {
+      if (!encounter || typeof encounter !== "object") return null;
+      return String(
+        encounter?.encounterId ??
+        encounter?.id ??
+        encounter?.encounterNumber ??
+        ""
+      ) || null;
+    }
+    function canSendProgressForEncounter(encounter) {
+      const key = getEncounterReportKey(encounter);
+      if (!key) return false;
+
+      window.__BC_SENT_PROGRESS_KEYS__ = window.__BC_SENT_PROGRESS_KEYS__ || {};
+      return !window.__BC_SENT_PROGRESS_KEYS__[key];
+    }
+    function markProgressSentForEncounter(encounter, result = {}) {
+      const key = getEncounterReportKey(encounter);
+      if (!key) return;
+
+      window.__BC_SENT_PROGRESS_KEYS__ = window.__BC_SENT_PROGRESS_KEYS__ || {};
+      window.__BC_SENT_PROGRESS_KEYS__[key] = {
+        at: Date.now(),
+        result: result || null
+      };
     }
     function canAutoSendProgressForCurrentUser() {
       const ctx = window.__BC_CTX__ || {};
@@ -2386,62 +2414,35 @@
 
       return role === "waiter";
     }
+    function getDisplayStepNumber(step) {
+      if (step === 65) return 7;
+      if (step >= 7) return 7;
+      return step + 1;
+    }
+    function getDisplayStepLabel(step) {
+      if (step === 65) return "Recovery";
+      if (step === 7) return "Reflection";
+      return "";
+    }
     function maybeAutoSendProgressReport(encounter, source = "post_encounter_completion") {
-      if (!encounter || typeof encounter !== "object") {
-        return { skipped: true, reason: "no_encounter" };
-      }
-
-      if (!canAutoSendProgressForCurrentUser()) {
-        return { skipped: true, reason: "role_not_allowed" };
-      }
-
-      if (encounter.__progressAutoSendStarted) {
-        return { skipped: true, reason: "already_started" };
-      }
+      if (!encounter || typeof encounter !== "object") return;
+      if (!canAutoSendProgressForCurrentUser()) return;
+      if (encounter.__progressAutoSendStarted) return;
 
       encounter.__progressAutoSendStarted = true;
 
       setTimeout(async () => {
-        try {
-          const result = await sendLiveProgressReport(source);
-          console.log("[REPORT] auto-send result", { source, result });
+        const result = await sendLiveProgressReport(source);
+        encounter.__progressAutoSendDone = true;
+        encounter.__progressAutoSendResult = result || null;
 
-          encounter.__progressAutoSendResult = result || null;
-          encounter.__progressAutoSendDone = true;
-
-          const status = document.getElementById("progressReportStatus");
-          if (status) {
-            if (result?.ok) {
-              status.textContent = "Progress sent automatically ✅";
-            } else {
-              status.textContent = `Auto-send failed${result?.error ? `: ${result.error}` : "."}`;
-            }
-          }
-
-          try {
-            window.parent?.postMessage(
-              {
-                source: "BC_MSG",
-                v: 1,
-                type: "hud_send_progress_feedback",
-                result: result || { ok: false, error: "unknown" }
-              },
-              window.location.origin
-            );
-          } catch {}
-        } catch (e) {
-          console.warn("[REPORT] auto-send exception", e);
-          encounter.__progressAutoSendDone = true;
-          encounter.__progressAutoSendResult = { ok: false, error: e?.message || String(e) };
-
-          const status = document.getElementById("progressReportStatus");
-          if (status) {
-            status.textContent = "Auto-send failed.";
-          }
+        const status = document.getElementById("progressReportStatus");
+        if (status) {
+          status.textContent = result?.ok
+            ? "Progress sent automatically ✅"
+            : `Auto-send failed${result?.error ? `: ${result.error}` : "."}`;
         }
       }, 100);
-
-      return { skipped: false, reason: null };
     }
     function wireProgressReportButton() {
       const btn = document.getElementById("btnSendProgressReport");
@@ -2449,8 +2450,14 @@
       if (!btn || btn.__wired) return;
       btn.__wired = true;
 
+      const ctx = window.__BC_CTX__ || {};
+      const role = String(ctx.membershipRole || ctx.membership_role || ctx.role || "").toLowerCase();
+      const isWaiter = role === "waiter";
+
+      btn.style.display = isWaiter ? "" : "none";
+      if (!isWaiter) return;
+
       btn.onclick = async () => {
-        console.log("[REPORT UI] Step 7 send clicked ✅");
         try {
           const result = await sendLiveProgressReport("step7_button");
           if (status) {
@@ -2781,7 +2788,11 @@
         const status = document.getElementById("progressReportStatus");
         if (status) {
           if (msg.ok) {
-            status.textContent = `Sent to manager${msg.inserted ? ` (${msg.inserted})` : ""} ✅`;
+            if (msg.snapshotOk === false) {
+              status.textContent = `Sent to manager, but snapshot failed${msg.snapshotError ? `: ${msg.snapshotError}` : "."}`;
+            } else {
+              status.textContent = `Sent to manager${msg.inserted ? ` (${msg.inserted})` : ""} ✅`;
+            }
           } else {
             status.textContent = `Send failed: ${msg.error || "unknown error"}`;
           }
@@ -8246,12 +8257,6 @@ function ensureProgLoaded() {
             });
           } catch (e) {
             console.warn("[DRILL RUN] completion log failed", e);
-          }
-
-          try {
-            maybeAutoSendProgressReport(currentEncounter, "post_drill_completion");
-          } catch (e) {
-            console.warn("[DRILL RUN] auto progress send failed", e);
           }
 
           showScreen("screenDrillSummary");
@@ -14161,8 +14166,10 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         if (currentEncounter.__drillRep) chipParts.push(`Rep ${currentEncounter.__drillRep}/3`);
 
         // Header line + chip line (two-line header)
+        const displayStep = getDisplayStepNumber(currentStep);
+        const displayLabel = getDisplayStepLabel(currentStep) || stepLabels[currentStep] || "";
         stepHeader.innerText =
-          "Step " + (currentStep + 1) + " of 7: " + stepLabels[currentStep] +
+          "Step " + displayStep + " of 7" + (displayLabel ? ": " + displayLabel : "") +
           (chipParts.length ? "\n" + chipParts.join(" • ") : "");
         updateDifficultyBadge(currentEncounter?.difficulty ?? 1);
 
@@ -15720,27 +15727,6 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             checks,
             modeBestResolved
           });
-          setTimeout(() => {
-            const btn = document.getElementById("btnSendProgressReport");
-            const status = document.getElementById("progressReportStatus");
-
-            if (!btn) {
-              console.warn("[REPORT UI] Step 7 button not found");
-              return;
-            }
-
-            btn.onclick = async () => {
-              console.log("[REPORT UI] Step 7 send clicked ✅");
-              const result = await sendLiveProgressReport("step7_button");
-              if (status) {
-                status.textContent = result?.ok
-                  ? "Sending progress…"
-                  : `Could not send progress${result?.error ? `: ${result.error}` : "."}`;
-              }
-            };
-
-            console.log("[REPORT UI] Step 7 button wired ✅");
-          }, 0);
           maybeAutoSendProgressReport(currentEncounter, "post_encounter_completion");
           const reflectionTitle = document.createElement("h3");
           reflectionTitle.innerText = "What just happened";
@@ -16613,6 +16599,9 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           __progressionApplied: false,
           __finalized: false,
           __recoveryLocked: false,
+          __progressAutoSendStarted: false,
+          __progressAutoSendDone: false,
+          __progressAutoSendResult: null,
           id: encounterIdStable,
           encounterId: encounterIdStable,
 
