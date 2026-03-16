@@ -2229,11 +2229,11 @@
           role === "group_manager" ||
           role === "enterpriser";
 
-        if (isWaiter && source !== "messenger_button") {
+        if (isWaiter && source !== "waiter_messenger") {
           return { ok: false, error: "waiter_messenger_only" };
         }
 
-        if (isManagerLike && source !== "auto_send") {
+        if (isManagerLike && source !== "manager_auto_send") {
           return { ok: false, error: "manager_auto_only" };
         }
 
@@ -2445,26 +2445,25 @@
       return "";
     }
     function maybeAutoSendProgressReport(encounter) {
-      const ctx = window.__BC_CTX__ || {};
-      const role = String(
-        ctx.membershipRole ||
-        ctx.membership_role ||
-        ctx.role ||
-        ""
-      ).toLowerCase();
-
-      const isManagerLike =
-        role === "single_manager" ||
-        role === "group_manager" ||
-        role === "enterpriser";
-
-      if (!isManagerLike) return;
       if (!encounter) return;
-      if (hasEncounterAlreadySent(encounter)) return;
+      if (!canAutoSendProgressForCurrentUser()) return;
+
+      const key = String(
+        encounter?.encounterId ??
+        encounter?.id ??
+        encounter?.encounterNumber ??
+        ""
+      );
+
+      if (!key) return;
+
+      window.__BC_AUTO_SENT_KEYS__ = window.__BC_AUTO_SENT_KEYS__ || {};
+      if (window.__BC_AUTO_SENT_KEYS__[key]) return;
+
+      window.__BC_AUTO_SENT_KEYS__[key] = true;
 
       setTimeout(async () => {
-        if (hasEncounterAlreadySent(encounter)) return;
-        await sendLiveProgressReport("auto_send");
+        await sendLiveProgressReport("manager_auto_send");
       }, 100);
     }
     function wireProgressReportButton() {
@@ -2832,7 +2831,7 @@
       }
       if (msg.type === "waiter_messenger_send") {
         (async () => {
-          const result = await sendLiveProgressReport("messenger_button");
+          const result = await sendLiveProgressReport("waiter_messenger");
 
           try {
             window.parent.postMessage(

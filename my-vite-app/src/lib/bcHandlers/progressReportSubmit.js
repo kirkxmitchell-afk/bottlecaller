@@ -230,34 +230,121 @@ export function makeProgressReportSubmitHandler({
     const payload = msg?.payload ?? null;
 
     try {
-      const { data, error } = await supabase.rpc("bc_send_progress_report_v1", {
-        p_scope_type: scopeType,
-        p_scope_id: scopeId,
-        p_restaurant_id: ctx.restaurantId,
-        p_body: body,
-        p_payload: payload,
-      });
+      const managerRoles = ["single_manager", "group_manager", "enterpriser"];
 
-      if (error) {
+      const { data: managerMemberships, error: managerLookupError } = await supabase
+        .from("restaurant_memberships_v1")
+        .select("user_id, role")
+        .eq("restaurant_id", ctx.restaurantId)
+        .in("role", managerRoles);
+
+      if (managerLookupError) {
         reply(replyType, {
           reqId,
           ok: false,
           inserted: 0,
-          error: error.message || String(error),
+          error: managerLookupError.message || String(managerLookupError),
         });
         return;
       }
 
-      const inserted = Number(data || 0);
-      console.log("[PROGRESS REPORT][RPC RESULT]", {
-        inserted,
-        ctx,
-        scopeType,
-        scopeId,
-        restaurantId: ctx.restaurantId,
-        body,
-        payload
-      });
+      const managerUserIds = Array.from(
+        new Set((managerMemberships || []).map((r) => String(r.user_id || "")).filter(Boolean))
+      );
+
+      if (!managerUserIds.length) {
+        reply(replyType, {
+          reqId,
+          ok: false,
+          inserted: 0,
+          error: "no_manager_receivers",
+        });
+        return;
+      }
+
+      let inserted = 0;
+
+      for (const managerUserId of managerUserIds) {
+        const templateKey = `progress_report:${ctx.userId}:${managerUserId}:${ctx.restaurantId}`;
+
+        const { data: existingRows, error: existingError } = await supabase
+          .from("bc_messages_v1")
+          .select("id")
+          .eq("restaurant_id", ctx.restaurantId)
+          .eq("sender_user_id", ctx.userId)
+          .eq("receiver_user_id", managerUserId)
+          .eq("type", "progress_report")
+          .eq("scope_type", scopeType)
+          .eq("scope_id", scopeId)
+          .contains("payload", { templateKey })
+          .order("created_at", { ascending: false })
+          .limit(1);
+
+        if (existingError) {
+          reply(replyType, {
+            reqId,
+            ok: false,
+            inserted: 0,
+            error: existingError.message || String(existingError),
+          });
+          return;
+        }
+
+        const existing = Array.isArray(existingRows) ? existingRows[0] : null;
+
+        const nextPayload = {
+          ...(payload || {}),
+          templateKey,
+          updatedAt: Date.now()
+        };
+
+        if (existing?.id) {
+          const { error: updateError } = await supabase
+            .from("bc_messages_v1")
+            .update({
+              body,
+              payload: nextPayload,
+              read_at: null,
+            })
+            .eq("id", existing.id);
+
+          if (updateError) {
+            reply(replyType, {
+              reqId,
+              ok: false,
+              inserted: 0,
+              error: updateError.message || String(updateError),
+            });
+            return;
+          }
+        } else {
+          const { error: insertError } = await supabase
+            .from("bc_messages_v1")
+            .insert({
+              scope_type: scopeType,
+              scope_id: scopeId,
+              restaurant_id: ctx.restaurantId,
+              sender_user_id: ctx.userId,
+              receiver_user_id: managerUserId,
+              sender_role: ctx.membershipRole || ctx.role || "waiter",
+              type: "progress_report",
+              body,
+              payload: nextPayload,
+            });
+
+          if (insertError) {
+            reply(replyType, {
+              reqId,
+              ok: false,
+              inserted: 0,
+              error: insertError.message || String(insertError),
+            });
+            return;
+          }
+
+          inserted += 1;
+        }
+      }
 
       const snapshotResult = await insertSkillSnapshotAndDrillEffect({
         supabase,

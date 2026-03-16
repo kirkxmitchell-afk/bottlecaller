@@ -6035,8 +6035,8 @@ window.addEventListener("message", (event) => {
 
     const text = msg.ok
       ? (msg.snapshotOk === false
-          ? `Sent to manager, but snapshot failed${msg.snapshotError ? `: ${msg.snapshotError}` : "."}`
-          : `Sent to manager${msg.inserted ? ` (${msg.inserted})` : ""} ✅`)
+          ? `Sent, but snapshot failed${msg.snapshotError ? `: ${msg.snapshotError}` : "."}`
+          : `Progress updated${msg.inserted ? ` (${msg.inserted})` : ""} ✅`)
       : `Send failed: ${msg.error || "unknown error"}`;
 
     if (status) status.textContent = text;
@@ -14111,7 +14111,7 @@ function renderHudTimeline(rows) {
 
         <div style="display:flex; justify-content:space-between;">
           <div>${time}</div>
-          <div style="opacity:.7;">Encounter Report</div>
+          <div style="opacity:.7;">Encounter Progress</div>
         </div>
 
         <div style="margin-top:4px;">
