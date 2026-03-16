@@ -5995,12 +5995,7 @@ function wireWaiterMessagesPanel() {
   }
 
   if (sendBtn && !sendBtn.__bcBound) {
-    sendBtn.__bcBound = true;
-    sendBtn.addEventListener("click", () => {
-      const status = document.getElementById("waiterSendProgressStatus");
-      if (status) status.textContent = "Use Encounter Step 7 to send progress.";
-    });
-    sendBtn.disabled = true;
+    sendBtn.remove();
   }
 }
 
@@ -6038,14 +6033,7 @@ window.addEventListener("message", (event) => {
 
 function wireHudSendProgressButton() {
   const btn = document.getElementById("btnHudSendProgress");
-  const status = document.getElementById("hudSendProgressStatus");
-  if (!btn || btn.__wired) return;
-  btn.__wired = true;
-
-  btn.disabled = true;
-  btn.addEventListener("click", () => {
-    if (status) status.textContent = "Use Encounter Step 7 to send progress.";
-  });
+  if (btn) btn.remove();
 }
 
 function setHudOpen(isOpen) {
@@ -11294,6 +11282,12 @@ async function loadManagerMessenger(restaurantId = null) {
     appState?.session?.user?.id ||
     appState?.session?.userId ||
     null;
+  console.log("[MANAGER MESSENGER][ROWS]", {
+    rid,
+    managerId,
+    count: rows.length,
+    rows
+  });
 
   const grouped = new Map();
 

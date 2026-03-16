@@ -2221,7 +2221,7 @@
         const isWaiter = role === "waiter";
 
         if (isWaiter && source !== "step7_button") {
-          return { ok: false, error: "waiter_send_restricted_to_step7" };
+          return { ok: false, error: "waiter_send_disabled_outside_step7" };
         }
 
         if (!canSendProgressForEncounter(encounter)) {

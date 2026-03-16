@@ -249,6 +249,15 @@ export function makeProgressReportSubmitHandler({
       }
 
       const inserted = Number(data || 0);
+      console.log("[PROGRESS REPORT][RPC RESULT]", {
+        inserted,
+        ctx,
+        scopeType,
+        scopeId,
+        restaurantId: ctx.restaurantId,
+        body,
+        payload
+      });
 
       const snapshotResult = await insertSkillSnapshotAndDrillEffect({
         supabase,
