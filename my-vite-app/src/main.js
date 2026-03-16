@@ -816,8 +816,10 @@ document.querySelector("#app").innerHTML = `
       <canvas id="hudSkillRadar" width="240" height="240" style="display:block; margin:0 auto;"></canvas>
 
       <div id="hudSkillTimeline" style="margin-top:12px;">
-
-        <div style="font-weight:600; margin-bottom:6px;">Recent Progress</div>
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:6px;">
+          <div id="hudTimelineTitle" style="font-weight:600;">Recent Progress</div>
+          <select id="hudTimelineUserSelect" class="hidden" style="max-width:180px;"></select>
+        </div>
 
         <div id="hudTimelineList" class="small-text" style="display:flex; flex-direction:column; gap:6px;">
           <div style="opacity:.7;">No history yet.</div>
@@ -6101,6 +6103,13 @@ function setHudOpen(isOpen) {
 
   if (frame) frame.style.pointerEvents = isOpen ? "none" : "auto";
   if (root) root.style.pointerEvents = isOpen ? "none" : "auto";
+}
+
+window.__BC_HUD_TIMELINE_TARGET_USER_ID__ = window.__BC_HUD_TIMELINE_TARGET_USER_ID__ || null;
+
+function getHudTimelineTargetUserId() {
+  const ctx = window.__BC_CTX__ || {};
+  return window.__BC_HUD_TIMELINE_TARGET_USER_ID__ || ctx.userId || null;
 }
 
 function isPremiumPlayVisible() {
@@ -13988,7 +13997,10 @@ function wireHudDifficultyControls() {
 
 async function loadHudSkillTimeline() {
   const ctx = window.__BC_CTX__ || {};
-  if (!ctx.userId || !ctx.restaurantId) return;
+  const targetUserId = getHudTimelineTargetUserId();
+  const restaurantId = ctx.restaurantId || null;
+
+  if (!targetUserId || !restaurantId) return;
 
   const { data, error } = await supabase
     .from("bc_skill_snapshots_v1")
@@ -14000,8 +14012,8 @@ async function loadHudSkillTimeline() {
       recovery_pct,
       closing_pct
     `)
-    .eq("user_id", ctx.userId)
-    .eq("restaurant_id", ctx.restaurantId)
+    .eq("user_id", targetUserId)
+    .eq("restaurant_id", restaurantId)
     .order("created_at", { ascending: false })
     .limit(5);
 
@@ -14011,6 +14023,85 @@ async function loadHudSkillTimeline() {
   }
 
   renderHudTimeline(data || []);
+}
+
+async function renderHudTimelineUserSelect() {
+  const select = document.getElementById("hudTimelineUserSelect");
+  const title = document.getElementById("hudTimelineTitle");
+  if (!select) return;
+
+  const profile = appState.profile || {};
+  const normalizedRole = String(normalizeMembershipRole(profile) || "").toLowerCase();
+  const isManagerLike =
+    normalizedRole === "single_manager" ||
+    normalizedRole === "group_manager" ||
+    normalizedRole === "enterpriser";
+
+  if (!isManagerLike) {
+    select.classList.add("hidden");
+    select.style.display = "none";
+    if (title) title.textContent = "Recent Progress";
+    return;
+  }
+
+  const activeRestaurantId = getManagerActiveRestaurantId?.() || appState?.restaurant?.id || null;
+  if (!activeRestaurantId) {
+    select.classList.add("hidden");
+    select.style.display = "none";
+    if (title) title.textContent = "Recent Progress";
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from("restaurant_memberships_v1")
+    .select("user_id, display_name, full_name, role")
+    .eq("restaurant_id", activeRestaurantId)
+    .order("display_name", { ascending: true });
+
+  if (error) {
+    console.warn("[HUD TIMELINE SELECT]", error);
+    select.classList.add("hidden");
+    select.style.display = "none";
+    if (title) title.textContent = "Recent Progress";
+    return;
+  }
+
+  const rows = Array.isArray(data) ? data : [];
+  const currentUserId = (window.__BC_CTX__ || {}).userId || null;
+
+  const options = rows.map((row) => {
+    const uid = String(row.user_id || "");
+    const label =
+      row.display_name ||
+      row.full_name ||
+      uid ||
+      "Unknown";
+    return { uid, label };
+  }).filter((x) => x.uid);
+
+  if (!options.length) {
+    select.classList.add("hidden");
+    select.style.display = "none";
+    if (title) title.textContent = "Recent Progress";
+    return;
+  }
+
+  select.innerHTML = options.map((opt) => {
+    const selected =
+      String(window.__BC_HUD_TIMELINE_TARGET_USER_ID__ || currentUserId || "") === String(opt.uid)
+        ? " selected"
+        : "";
+    return `<option value="${opt.uid}"${selected}>${escapeHtml(opt.label)}</option>`;
+  }).join("");
+
+  select.classList.remove("hidden");
+  select.style.display = "inline-block";
+  if (title) title.textContent = "Performance History";
+
+  select.onchange = () => {
+    window.__BC_HUD_TIMELINE_TARGET_USER_ID__ = select.value || currentUserId || null;
+    loadHudSkillTimeline();
+  };
 }
 
 function renderHudTimeline(rows) {
@@ -14089,6 +14180,22 @@ function renderHud() {
   const badge = document.getElementById("premiumBadge");
   if (badge) badge.textContent = `PREMIUM • ${String(normalizedRole).toUpperCase()}`;
 
+  const skillsTitle = document.querySelector("#hudSkillsCard > div");
+  const timelineTitle = document.getElementById("hudTimelineTitle");
+  const normalizedRoleLower = String(normalizedRole || "").toLowerCase();
+  const isManagerLikeRole =
+    normalizedRoleLower === "single_manager" ||
+    normalizedRoleLower === "group_manager" ||
+    normalizedRoleLower === "enterpriser";
+
+  if (skillsTitle) {
+    skillsTitle.textContent = isManagerLikeRole ? "Your Personal Skills" : "Your Skills";
+  }
+
+  if (timelineTitle && !isManagerLikeRole) {
+    timelineTitle.textContent = "Recent Progress";
+  }
+
   const managerBlock = document.getElementById("managerOnlyBlock");
   const joinRow = document.getElementById("hudJoinRow");
   const copyRow = document.getElementById("hudCopyRow");
@@ -14105,6 +14212,7 @@ function renderHud() {
   if (seatInput && r) seatInput.value = String(r.seat_limit ?? "");
 
   renderInvitesList();
+  renderHudTimelineUserSelect?.();
   renderHudSkillDashboard();
   renderHudAbilities();
   renderHudDifficultyControls?.();
