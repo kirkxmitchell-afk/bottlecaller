@@ -9942,34 +9942,6 @@ function ensureProgLoaded() {
         return "Reading guest intent";
       }
 
-      // ✅ Local, non-blocking fallback.
-      // If a real getPlayerProgressionView exists elsewhere later, we use it.
-      function getPlayerProgressionView(runtime) {
-        // If another script defines it, prefer that version.
-        if (typeof window.getPlayerProgressionView === "function" && window.getPlayerProgressionView !== getPlayerProgressionView) {
-          return window.getPlayerProgressionView(runtime);
-        }
-
-        const hydrated = runtime?.ctxStatus === "hydrated";
-        const tierAllowed = runtime?.progression?.tierAllowed ?? 1;
-
-        if (!hydrated) {
-          return {
-            level: "Building recognition",
-            focus: "Reading guest intent",
-            next: "Keep playing encounters",
-            note: "Progress updates after a few sessions"
-          };
-        }
-
-        return {
-          level: tierToLabel(tierAllowed),
-          focus: tierToFocus(tierAllowed),
-          next: runtime?.progression?.reasonsHuman?.[0] || "Keep playing",
-          note: null
-        };
-      }
-
       async function getCtxStrict(timeoutMs = 1500) {
         if (window.__BC_CTX__?.userId && window.__BC_CTX__?.restaurantId) return window.__BC_CTX__;
 
@@ -9982,41 +9954,6 @@ function ensureProgLoaded() {
           throw new Error("ctx_missing");
         }
         return window.__BC_CTX__;
-      }
-
-      async function renderProgressMeterUnderBackButton() {
-        const el = document.getElementById("progressMeter");
-        if (!el) return;
-
-        // ctx must exist in the iframe
-        const desiredTier = getTierFromEncounterNumber((encounterIndex ?? 0) + 1);
-        el.innerHTML = `<div class="muted">Waiting for login context…</div>`;
-
-        try {
-          const ctx = await getCtxStrict();
-          if (!window.ProgressionBridge?.decideAllowedTier) {
-            el.innerHTML = `<div class="muted">Progression status not ready yet.</div>`;
-            return;
-          }
-
-          const res = await window.ProgressionBridge.decideAllowedTier({
-            desiredTier,
-            userId: ctx.userId,
-            restaurantId: ctx.restaurantId
-          });
-
-          const tierToServe = res?.tierToServe ?? 1;
-          const reasonsHuman = Array.isArray(res?.reasonsHuman) ? res.reasonsHuman : [];
-
-          el.innerHTML = `
-            <div><strong>Allowed Tier:</strong> ${tierToServe}</div>
-            <div><strong>Requested Tier:</strong> ${desiredTier}</div>
-            ${reasonsHuman.length ? `<div style="margin-top:8px;"><strong>Blocked by:</strong><ul>${reasonsHuman.map(x=>`<li>${x}</li>`).join("")}</ul></div>` : `<div class="muted" style="margin-top:8px;">No blocks.</div>`}
-          `;
-        } catch (e) {
-          console.warn("[BC] renderProgressMeter failed:", e);
-          el.innerHTML = `<div class="muted">Progression status unavailable (ctx missing).</div>`;
-        }
       }
 
       async function guardTier(desiredTier) {
