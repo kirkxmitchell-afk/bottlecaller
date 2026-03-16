@@ -282,25 +282,6 @@ document.querySelector("#app").innerHTML = `
         </div>
       </div>
 
-      <div id="bcProgressionCard" class="bc-prog-card">
-        <div class="bc-prog-title">Progression Status</div>
-
-        <div class="bc-prog-line">
-          <div class="bc-prog-k">Level</div>
-          <div id="bcProgLevelParent" class="bc-prog-v">Building recognition</div>
-        </div>
-        <div class="bc-prog-line">
-          <div class="bc-prog-k">Focus</div>
-          <div id="bcProgFocusParent" class="bc-prog-v">Reading guest intent</div>
-        </div>
-        <div class="bc-prog-line">
-          <div class="bc-prog-k">Next</div>
-          <div id="bcProgNextParent" class="bc-prog-v">Keep playing encounters</div>
-        </div>
-
-        <div id="bcProgNoteParent" class="bc-prog-note" style="display:none;"></div>
-      </div>
-
       <div id="bcUnlockNotice" class="bc-unlock" style="display:none;"></div>
 
       <!-- Game lives here (isolated) -->
