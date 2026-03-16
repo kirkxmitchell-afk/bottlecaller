@@ -2257,12 +2257,37 @@
         const labels = pickStrongestWeakest(snapshotFromFn);
         const strongestSkill = labels.strongest;
         const weakestSkill = labels.weakest;
-        const checks = encounter ? buildReactionChecksFromEncounter(encounter) : {};
-        const deliveryScore = encounter?.__tiers?.delivery ?? (encounter ? getDeliveryScore(encounter) : 0);
+        const checks = (() => {
+          if (!encounter) return {};
+
+          try {
+            if (typeof buildReactionChecksFromEncounter === "function") {
+              return buildReactionChecksFromEncounter(encounter);
+            }
+          } catch (e) {
+            console.warn("[REPORT] buildReactionChecksFromEncounter failed, using fallback", e);
+          }
+
+          return {
+            guestRead:
+              String(encounter?.guestReadSelected || "").toLowerCase() ===
+              String(encounter?.guestStateActual || "").toLowerCase(),
+
+            deliveryCorrect:
+              typeof getDeliveryScore === "function"
+                ? getDeliveryScore(encounter) >= 2
+                : false,
+
+            resetUsed: !!encounter?.resetUsed
+          };
+        })();
+        const deliveryScore =
+          encounter?.__tiers?.delivery ??
+          (typeof getDeliveryScore === "function" ? getDeliveryScore(encounter) : 0);
         const strongPillars = Number(
           (checks?.guestRead ? 1 : 0) +
-          (encounter?.__tiers?.modeTier === "right" ? 1 : 0) +
-          (encounter?.__tiers?.hookTier === "right" ? 1 : 0) +
+          (String(encounter?.__tiers?.modeTier || "").toLowerCase() === "right" ? 1 : 0) +
+          (String(encounter?.__tiers?.hookTier || "").toLowerCase() === "right" ? 1 : 0) +
           (Number(deliveryScore || 0) >= 2 ? 1 : 0)
         );
 
@@ -2334,6 +2359,89 @@
         });
         return { ok: false, error: e?.message || String(e) };
       }
+    }
+    function canAutoSendProgressForCurrentUser() {
+      const ctx = window.__BC_CTX__ || {};
+      const role = String(
+        ctx.membershipRole ||
+        ctx.membership_role ||
+        ctx.role ||
+        ""
+      ).toLowerCase();
+
+      return (
+        role === "single_manager" ||
+        role === "group_manager" ||
+        role === "enterpriser"
+      );
+    }
+    function shouldShowManualProgressSend() {
+      const ctx = window.__BC_CTX__ || {};
+      const role = String(
+        ctx.membershipRole ||
+        ctx.membership_role ||
+        ctx.role ||
+        ""
+      ).toLowerCase();
+
+      return role === "waiter";
+    }
+    function maybeAutoSendProgressReport(encounter, source = "post_encounter_completion") {
+      if (!encounter || typeof encounter !== "object") {
+        return { skipped: true, reason: "no_encounter" };
+      }
+
+      if (!canAutoSendProgressForCurrentUser()) {
+        return { skipped: true, reason: "role_not_allowed" };
+      }
+
+      if (encounter.__progressAutoSendStarted) {
+        return { skipped: true, reason: "already_started" };
+      }
+
+      encounter.__progressAutoSendStarted = true;
+
+      setTimeout(async () => {
+        try {
+          const result = await sendLiveProgressReport(source);
+          console.log("[REPORT] auto-send result", { source, result });
+
+          encounter.__progressAutoSendResult = result || null;
+          encounter.__progressAutoSendDone = true;
+
+          const status = document.getElementById("progressReportStatus");
+          if (status) {
+            if (result?.ok) {
+              status.textContent = "Progress sent automatically ✅";
+            } else {
+              status.textContent = `Auto-send failed${result?.error ? `: ${result.error}` : "."}`;
+            }
+          }
+
+          try {
+            window.parent?.postMessage(
+              {
+                source: "BC_MSG",
+                v: 1,
+                type: "hud_send_progress_feedback",
+                result: result || { ok: false, error: "unknown" }
+              },
+              window.location.origin
+            );
+          } catch {}
+        } catch (e) {
+          console.warn("[REPORT] auto-send exception", e);
+          encounter.__progressAutoSendDone = true;
+          encounter.__progressAutoSendResult = { ok: false, error: e?.message || String(e) };
+
+          const status = document.getElementById("progressReportStatus");
+          if (status) {
+            status.textContent = "Auto-send failed.";
+          }
+        }
+      }, 100);
+
+      return { skipped: false, reason: null };
     }
     function wireProgressReportButton() {
       const btn = document.getElementById("btnSendProgressReport");
@@ -8096,22 +8204,7 @@ function ensureProgLoaded() {
           }
 
           try {
-            setTimeout(async () => {
-              const result = await sendLiveProgressReport("post_drill_completion");
-              console.log("[DRILL RUN] auto progress after completion", result);
-
-              try {
-                window.parent?.postMessage(
-                  {
-                    source: "BC_MSG",
-                    v: 1,
-                    type: "hud_send_progress_feedback",
-                    result
-                  },
-                  window.location.origin
-                );
-              } catch {}
-            }, 250);
+            maybeAutoSendProgressReport(currentEncounter, "post_drill_completion");
           } catch (e) {
             console.warn("[DRILL RUN] auto progress send failed", e);
           }
@@ -15603,6 +15696,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
             console.log("[REPORT UI] Step 7 button wired ✅");
           }, 0);
+          maybeAutoSendProgressReport(currentEncounter, "post_encounter_completion");
           const reflectionTitle = document.createElement("h3");
           reflectionTitle.innerText = "What just happened";
           stepContent.appendChild(reflectionTitle);
@@ -16046,7 +16140,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
         if (!btn) return;
 
-        const show = false;
+        const show = shouldShowManualProgressSend();
 
         btn.style.display = show ? "inline-flex" : "none";
 
