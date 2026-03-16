@@ -5408,6 +5408,7 @@ function ensureProgLoaded() {
           membership_role: ctx?.membership_role || ctx?.membershipRole || "",
           role
         });
+        applyRoleTemplate();
         console.log("[BC] ctx (after READY):", {
           role,
           restaurantId,
@@ -17021,7 +17022,8 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         console.log("[BC][ROLE_TEMPLATE]", {
           identity,
           isWaiterNow,
-          isManagerLike
+          isManagerLike,
+          ctx: window.__BC_CTX__ || null
         });
         const btnWelcomeBackToSetup = document.getElementById("btnWelcomeBackToSetup");
         const btnGoPremium = document.getElementById("btnGoPremium");
