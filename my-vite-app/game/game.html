@@ -1240,25 +1240,45 @@
       if (!el) return;
 
       try {
-        const prog = getProgressionMonitorSnapshot();
+        const prog = getProgressionMonitorSnapshot?.() || null;
         const points = Number(prog?.points ?? 0);
         const tier = Number(prog?.tier ?? 1);
-        const encounterRange = prog?.encounterRange ?? [1, 5];
-        const allowedGuestTypes = prog?.allowedGuestTypes ?? [];
         const difficultySeed = Number(prog?.difficultySeed ?? 1);
         const effectiveDifficulty = Number(prog?.effectiveDifficulty ?? 1);
-        const runs = Number(getEncounterRunCountForMode?.(bcMode) || 0);
+        const encounterRange = prog?.encounterRange ?? [1, 5];
+        const allowedGuestTypes = prog?.allowedGuestTypes ?? [];
+
+        let level = `Tier ${tier}`;
+        let focus = `d=${difficultySeed} / eff=${effectiveDifficulty}`;
+        let next = `${encounterRange[0]}-${encounterRange[1]} | ${allowedGuestTypes.join(", ") || "—"}`;
+
+        if (points <= 0) {
+          level = "Building recognition";
+          focus = "Reading guest intent";
+          next = "Keep playing encounters";
+        }
 
         el.innerHTML = `
-          <div class="small-text">Level: Tier ${tier}</div>
-          <div class="small-text">Points: ${points}</div>
-          <div class="small-text">Runs: ${runs}</div>
-          <div class="small-text">Difficulty: d=${difficultySeed} / eff=${effectiveDifficulty}</div>
-          <div class="small-text">Range: ${encounterRange[0]}-${encounterRange[1]}</div>
-          <div class="small-text">Guests: ${allowedGuestTypes.join(", ") || "—"}</div>
+          <div class="small-text"><strong>Level</strong></div>
+          <div style="margin-bottom:10px;">${level}</div>
+
+          <div class="small-text"><strong>Focus</strong></div>
+          <div style="margin-bottom:10px;">${focus}</div>
+
+          <div class="small-text"><strong>Next</strong></div>
+          <div>${next}</div>
         `;
       } catch (e) {
-        el.innerHTML = `<div class="small-text" style="opacity:.75;">No run data yet.</div>`;
+        el.innerHTML = `
+          <div class="small-text"><strong>Level</strong></div>
+          <div style="margin-bottom:10px;">Building recognition</div>
+
+          <div class="small-text"><strong>Focus</strong></div>
+          <div style="margin-bottom:10px;">Reading guest intent</div>
+
+          <div class="small-text"><strong>Next</strong></div>
+          <div>Keep playing encounters</div>
+        `;
       }
     }
     function goBackToPremiumHome() {
@@ -3400,7 +3420,7 @@
         </div>
 
         <div class="bc-card bc-rail-card">
-          <div class="bc-rail-title">Run Progress</div>
+          <div class="bc-rail-title">Progression Status</div>
           <div class="bc-rail-body" id="railProgress">
             <div class="small-text" style="opacity:.75;">No run data yet.</div>
           </div>
