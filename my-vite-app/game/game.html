@@ -2216,6 +2216,14 @@
           return { ok: false, error: "no_current_encounter" };
         }
 
+        const ctx = window.__BC_CTX__ || {};
+        const role = String(ctx.membershipRole || ctx.membership_role || ctx.role || "").toLowerCase();
+        const isWaiter = role === "waiter";
+
+        if (isWaiter && source !== "step7_button") {
+          return { ok: false, error: "waiter_send_restricted_to_step7" };
+        }
+
         if (!canSendProgressForEncounter(encounter)) {
           return { ok: false, error: "already_sent_for_encounter" };
         }

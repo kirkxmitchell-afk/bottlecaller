@@ -5997,12 +5997,10 @@ function wireWaiterMessagesPanel() {
   if (sendBtn && !sendBtn.__bcBound) {
     sendBtn.__bcBound = true;
     sendBtn.addEventListener("click", () => {
-      console.log("[WAITER PANEL] Send Progress clicked ✅");
       const status = document.getElementById("waiterSendProgressStatus");
-      if (status) {
-        status.textContent = "Send progress from Encounter Step 7.";
-      }
+      if (status) status.textContent = "Use Encounter Step 7 to send progress.";
     });
+    sendBtn.disabled = true;
   }
 }
 
@@ -6044,8 +6042,9 @@ function wireHudSendProgressButton() {
   if (!btn || btn.__wired) return;
   btn.__wired = true;
 
+  btn.disabled = true;
   btn.addEventListener("click", () => {
-    if (status) status.textContent = "Send progress from Encounter Step 7.";
+    if (status) status.textContent = "Use Encounter Step 7 to send progress.";
   });
 }
 

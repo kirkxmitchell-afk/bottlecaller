@@ -20,7 +20,7 @@ async function insertSkillSnapshotAndDrillEffect({
 
     encounter_number: p?.encounterNumber ?? null,
     guest_state: p?.guestStateActual ?? null,
-    difficulty: p?.difficulty ?? null,
+    difficulty: Number.isFinite(Number(p?.difficulty)) ? Math.round(Number(p.difficulty)) : null,
     chain_signal: p?.chainSignal ?? null,
     chain_score: p?.chainScore ?? null,
 
