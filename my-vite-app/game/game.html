@@ -3203,7 +3203,6 @@
           <strong>Progress</strong>
         <div class="small-text">Level: <span id="progressNamePremium">—</span></div>
         <div class="small-text">Points: <span id="progressPointsPremium">0</span></div>
-        <div class="small-text">Total runs: <span id="bcSavedRunsPremium">0</span></div>
       </div>
         <div class="button-row" id="premiumButtons">
           <button id="btnGoPremium" type="button">Setup</button>
@@ -6809,17 +6808,29 @@ function ensureProgLoaded() {
         window.__BC_RESOLVE_CTX_READY__ = () => { try { _resolve?.(); } catch {} };
       })();
 
+      function getUnifiedProgressSnapshot() {
+        return {
+          progress: getProgressionMonitorSnapshot(),
+          runs: {
+            premium: getEncounterRunCountForMode("premium"),
+            demo: getEncounterRunCountForMode("demo"),
+            active: getEncounterRunCountForMode(bcMode),
+          },
+          identity: getGameplayIdentity(),
+          difficulty: getCurrentDifficultyMode(),
+        };
+      }
+
       function renderRunsCount(n) {
-        const premiumValue = String(getEncounterRunCountForMode("premium"));
-        const demoValue = String(getEncounterRunCountForMode("demo"));
-        const activeValue = String(getEncounterRunCountForMode(bcMode));
+        const snapshot = getUnifiedProgressSnapshot();
+        const premiumValue = String(snapshot.runs.premium);
+        const demoValue = String(snapshot.runs.demo);
+        const activeValue = String(snapshot.runs.active);
         const elHomePremium = document.getElementById("homePremiumRuns");
         const elHomeDemo = document.getElementById("homeDemoRuns");
-        const elPremium = document.getElementById("bcSavedRunsPremium");
         const elGeneric = document.getElementById("bcSavedRuns");
         if (elHomePremium) elHomePremium.textContent = premiumValue;
         if (elHomeDemo) elHomeDemo.textContent = demoValue;
-        if (elPremium) elPremium.textContent = premiumValue;
         if (elGeneric) elGeneric.textContent = activeValue;
         console.log("[BC][UI] rendering runs_count", {
           runtime: window.__BC_RUNS_COUNT__,
@@ -8406,7 +8417,6 @@ function ensureProgLoaded() {
         applyDifficultyTheme(mode);
         const hudStats = document.querySelector("#bcHudTop .bc-stats");
         if (hudStats) renderDifficultyBadge(hudStats);
-        if (screenId === "screenHome") renderDifficultyToggleHome();
       }
 
       window.__BC_UI__ = {
@@ -9391,183 +9401,9 @@ function ensureProgLoaded() {
         badge.innerText = "Difficulty: " + diff.toUpperCase();
       }
 
-      function ensureDifficultyStyles() {
-        if (document.getElementById("bcDifficultyStyles")) return;
-        const style = document.createElement("style");
-        style.id = "bcDifficultyStyles";
-        style.textContent = `
-.difficulty-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-}
-
-.difficulty-card {
-  border-radius: 12px;
-  padding: 16px;
-  text-align: left;
-  border: 2px solid transparent;
-  background: #111;
-  color: #ddd;
-  transition: all .18s ease;
-}
-
-.difficulty-card:hover {
-  transform: translateY(-2px);
-}
-
-.difficulty-card.active {
-  transform: scale(1.03);
-}
-
-.difficulty-title {
-  font-weight: 700;
-}
-
-.difficulty-sub {
-  margin-top: 4px;
-  font-size: 12px;
-  opacity: 0.85;
-}
-
-.difficulty-desc {
-  margin-top: 6px;
-  font-size: 12px;
-  opacity: 0.72;
-}
-
-.diff-easy {
-  border-color: #2ecc71;
-}
-
-body.difficulty-easy .bc-card {
-  border-color: #2ecc71;
-}
-
-body.difficulty-easy .option-btn.selected {
-  background: #1f6f4a;
-}
-
-.diff-medium {
-  border-color: #3498db;
-}
-
-body.difficulty-medium .bc-card {
-  border-color: #3498db;
-}
-
-body.difficulty-medium .option-btn.selected {
-  background: #1e4f73;
-}
-
-.diff-hard {
-  border-color: #e74c3c;
-}
-
-body.difficulty-hard .bc-card {
-  border-color: #e74c3c;
-}
-
-body.difficulty-hard .option-btn.selected {
-  background: #7a1f1f;
-}
-
-.difficulty-badge {
-  font-size: 11px;
-  letter-spacing: .12em;
-  opacity: .8;
-}
-
-.difficulty-mode-badge {
-  margin-left: 8px;
-}
-`;
-        document.head.appendChild(style);
-      }
-
-      function renderDifficultyToggle(container, current) {
-        const modes = [
-          {
-            key: "easy",
-            title: "Easy",
-            subtitle: "Practice Mode",
-            desc: "Guided play with softer mistakes",
-            class: "diff-easy"
-          },
-          {
-            key: "medium",
-            title: "Medium",
-            subtitle: "Standard",
-            desc: "Balanced challenge",
-            class: "diff-medium"
-          },
-          {
-            key: "hard",
-            title: "Hard",
-            subtitle: "Elite Mode",
-            desc: "Sharper penalties and tougher reads",
-            class: "diff-hard"
-          }
-        ];
-
-        const wrap = document.createElement("div");
-        wrap.className = "difficulty-grid";
-
-        modes.forEach(m => {
-          const btn = document.createElement("button");
-          btn.type = "button";
-
-          btn.className =
-            "difficulty-card " +
-            m.class +
-            (current === m.key ? " active" : "");
-
-          btn.innerHTML = `
-      <div class="difficulty-title">${m.title}</div>
-      <div class="difficulty-sub">${m.subtitle}</div>
-      <div class="difficulty-desc">${m.desc}</div>
-    `;
-
-          bindInput(btn, () => {
-            setDifficulty(m.key);
-            renderApp();
-          });
-
-          wrap.appendChild(btn);
-        });
-
-        container.appendChild(wrap);
-      }
-
-      function renderDifficultyToggleHome() {
-        const homePanel = document.querySelector("#screenHome .panel");
-        if (!homePanel) return;
-        ensureDifficultyStyles();
-        let card = document.getElementById("difficultyToggleCard");
-        if (!card) {
-          card = document.createElement("div");
-          card.id = "difficultyToggleCard";
-          card.className = "card";
-          card.style.marginTop = "12px";
-          const title = document.createElement("strong");
-          title.innerText = "Difficulty";
-          card.appendChild(title);
-          const body = document.createElement("div");
-          body.id = "difficultyToggleBody";
-          body.style.marginTop = "10px";
-          card.appendChild(body);
-          homePanel.appendChild(card);
-        }
-        const body = card.querySelector("#difficultyToggleBody");
-        if (!body) return;
-        body.innerHTML = "";
-        renderDifficultyToggle(body, getCurrentDifficultyMode());
-      }
-
       function renderApp() {
         updateCounts();
         applyDemoHomeUI();
-        renderDifficultyToggleHome();
         const mode = getCurrentDifficultyMode();
         applyDifficultyTheme(mode);
         const hudStats = document.querySelector("#bcHudTop .bc-stats");
@@ -10370,11 +10206,12 @@ body.difficulty-hard .option-btn.selected {
 
       // ---------- UI: counts ----------
       function renderHomeCounts() {
+        const snapshot = getUnifiedProgressSnapshot();
         const W = getWinesSafe();
         const countEl = document.getElementById(ids.cardCount);
         const runsEl = document.getElementById(ids.cardRuns);
         if (countEl) countEl.innerText = W.length + " / " + LIMIT;
-        if (runsEl) runsEl.innerText = getEncounterRunCountForMode(bcMode);
+        if (runsEl) runsEl.innerText = snapshot.runs.active;
       }
 
       function updateCounts() {
@@ -10414,7 +10251,8 @@ body.difficulty-hard .option-btn.selected {
         if (!nameEl && !focusEl && !nextEl && !pointsEl) return;
 
         try {
-          const prog = getProgressionMonitorSnapshot();
+          const snapshot = getUnifiedProgressSnapshot();
+          const prog = snapshot.progress;
           const points = prog?.points ?? 0;
           const tier = prog?.tier ?? 1;
           const encounterRange = prog?.encounterRange ?? [1, 5];
@@ -17077,6 +16915,20 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         ra?.closest(".button-row")?.remove();
       }
 
+      function bindPremiumEntryButton(btn, isManagerLike) {
+        if (!btn) return;
+        btn.textContent = isManagerLike ? "Play" : "Play";
+        btn.classList.remove("hidden");
+        btn.disabled = false;
+        btn.onclick = null;
+        btn.__bcBound = false;
+        bindInput(btn, async () => {
+          resetNavState();
+          beginFreshProgressionRun();
+          await startPlayWithReadyGate();
+        });
+      }
+
       function applyRoleTemplate() {
         // Remove Reset All globally (all templates)
         removeResetAllContainer();
@@ -17126,19 +16978,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         if (isWaiterNow) {
           btnWelcomeBackToSetup?.classList.add("hidden");
           bindWaiterStart();
-
-          if (btnGoPremium) {
-            btnGoPremium.textContent = "Play";
-            btnGoPremium.classList.remove("hidden");
-            btnGoPremium.disabled = false;
-            btnGoPremium.onclick = null;
-            btnGoPremium.__bcBound = false;
-            bindInput(btnGoPremium, async () => {
-              resetNavState();
-              beginFreshProgressionRun();
-              await startPlayWithReadyGate();
-            });
-          }
+          bindPremiumEntryButton(btnGoPremium, isManagerLike);
 
           document.querySelectorAll('[data-role="manager"]').forEach((el) => el.classList.add("hidden"));
           document.querySelectorAll('[data-nav="screenSetupPremium"]').forEach((el) => {
@@ -17164,18 +17004,12 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         }
 
         btnWelcomeBackToSetup?.classList.remove("hidden");
-        if (btnGoPremium) {
-          btnGoPremium.textContent = isManagerLike ? "Play" : "Setup";
+        if (isManagerLike) {
+          bindPremiumEntryButton(btnGoPremium, isManagerLike);
+        } else if (btnGoPremium) {
+          btnGoPremium.textContent = "Setup";
           btnGoPremium.onclick = null;
           btnGoPremium.__bcBound = false;
-
-          if (isManagerLike) {
-            bindInput(btnGoPremium, async () => {
-              resetNavState();
-              beginFreshProgressionRun();
-              await startPlayWithReadyGate();
-            });
-          }
         }
       }
 
