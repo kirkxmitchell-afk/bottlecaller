@@ -1239,63 +1239,27 @@
       const root = getRailEl("railProgress");
       if (!root) return;
 
-      let s = null;
       try {
-        s = typeof bcSnapshot === "function" ? bcSnapshot() : null;
-      } catch (e) {
-        console.warn("[BC] bcSnapshot failed for rail progress", e);
-      }
+        const snap = getUnifiedProgressSnapshot();
+        const encounterRange = Array.isArray(snap.encounterRange)
+          ? `${snap.encounterRange[0]}-${snap.encounterRange[1]}`
+          : String(snap.encounterRange ?? "-");
 
-      if (!s) {
+        root.innerHTML = `
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <div class="small-text">Tier: ${escapeHtml(String(snap.tier ?? "-"))}</div>
+            <div class="small-text">Points: ${escapeHtml(String(snap.points ?? 0))}</div>
+            <div class="small-text">Runs: ${escapeHtml(String(snap.runs?.active ?? 0))}</div>
+            <div class="small-text">Difficulty: d=${escapeHtml(String(snap.difficultySeed ?? "-"))} / eff=${escapeHtml(String(snap.effectiveDifficulty ?? "-"))}</div>
+            <div class="small-text">Range: ${escapeHtml(encounterRange)}</div>
+          </div>
+        `;
+      } catch (e) {
+        console.warn("[BC] renderRailProgress failed", e);
         root.innerHTML = `
           <div class="small-text" style="opacity:.75;">No run data yet.</div>
         `;
-        return;
       }
-
-      const encounterRange = Array.isArray(s.encounterRange)
-        ? `${s.encounterRange[0]}-${s.encounterRange[1]}`
-        : String(s.encounterRange ?? "-");
-
-      const guests = Array.isArray(s.guests) && s.guests.length
-        ? s.guests.join(", ")
-        : "-";
-
-      const drillText = s.activeDrill
-        ? `${String(s.activeDrill.focus || "drill")} • ${Number(s.activeDrill.repDone || 0)}/${Number(s.activeDrill.repTarget || 0)} reps`
-        : "";
-
-      root.innerHTML = `
-        <div style="display:flex; flex-direction:column; gap:8px;">
-          <div class="small-text" style="opacity:.92;">
-            Encounter ${escapeHtml(String(s.encounterNumber ?? "-"))} • Step ${escapeHtml(String(s.step ?? "-"))}
-          </div>
-
-          <div class="small-text" style="opacity:.9;">
-            Tier ${escapeHtml(String(s.tier ?? "-"))} • ${escapeHtml(String(s.points ?? 0))} pts
-          </div>
-
-          <hr style="opacity:.15; margin:2px 0;">
-
-          <div class="small-text" style="opacity:.82;">
-            Range: ${escapeHtml(encounterRange)}
-          </div>
-          <div class="small-text" style="opacity:.82;">
-            Guests: ${escapeHtml(guests)}
-          </div>
-
-          <div class="small-text" style="opacity:.78;">
-            Difficulty: ${escapeHtml(String(s.effectiveDifficulty ?? "-"))}
-          </div>
-
-          ${drillText ? `
-            <hr style="opacity:.15; margin:2px 0;">
-            <div class="small-text" style="opacity:.82;">
-              Drill: ${escapeHtml(drillText)}
-            </div>
-          ` : ``}
-        </div>
-      `;
     }
     function goBackToPremiumHome() {
       try {
@@ -4401,8 +4365,7 @@ function isDrillMode() {
       }
 
       function bcSnapshot() {
-        const spineProg = getProgressionMonitorSnapshot() || {};
-        const prog = window.__BC_PROG__ || window.PROG || spineProg || {};
+        const snap = getUnifiedProgressSnapshot();
         const encounter =
           window.currentEncounter ||
           window.__BC_LAST_ENCOUNTER__ ||
@@ -4420,8 +4383,6 @@ function isDrillMode() {
           encounterNumber:
             encounter?.encounterNumber ??
             encounter?.number ??
-            prog?.encounterNumber ??
-            spineProg?.encounterNumber ??
             (typeof encounterIndex !== "undefined" ? (encounterIndex + 1) : "-"),
 
           step:
@@ -4429,32 +4390,17 @@ function isDrillMode() {
               ? window.currentStep
               : (typeof currentStep !== "undefined" ? currentStep : "-"),
 
-          points: Number(prog?.points ?? spineProg?.points ?? 0),
-          tier: Number(prog?.tier ?? spineProg?.tier ?? 1),
-
-          encounterRange:
-            prog?.encounterRange ||
-            spineProg?.encounterRange ||
-            encounter?.encounterRange ||
-            [1, 5],
-
-          guests:
-            prog?.allowedGuestTypes ||
-            spineProg?.allowedGuestTypes ||
-            encounter?.allowedGuestTypes ||
-            [],
-
-          difficultySeed:
-            prog?.difficultySeed ??
-            spineProg?.difficultySeed ??
-            encounter?.difficultySeed ??
-            1,
-
-          effectiveDifficulty: resolvedDifficulty,
+          points: Number(snap?.points ?? 0),
+          tier: Number(snap?.tier ?? 1),
+          encounterRange: snap?.encounterRange || [1, 5],
+          guests: snap?.allowedGuestTypes || [],
+          difficultySeed: Number(snap?.difficultySeed ?? 1),
+          effectiveDifficulty: Number(snap?.effectiveDifficulty ?? resolvedDifficulty),
+          runs: snap?.runs || { premium: 0, demo: 0, active: 0 },
 
           difficulty:
             (typeof difficultyPolicy === "function")
-              ? difficultyPolicy(resolvedDifficulty)
+              ? difficultyPolicy(Number(snap?.effectiveDifficulty ?? resolvedDifficulty))
               : null,
 
           activeDrill: runtimeDrill
@@ -4482,6 +4428,14 @@ function isDrillMode() {
 
       function bcRenderHud(label = "") {
         const s = bcSnapshot();
+        const snap = getUnifiedProgressSnapshot();
+        const tierChip = document.getElementById("tierChip");
+        const pointsChip = document.getElementById("pointsChip");
+        const streakChip = document.getElementById("streakChip");
+
+        if (tierChip) tierChip.textContent = `Tier ${snap.tier}`;
+        if (pointsChip) pointsChip.textContent = `Points ${snap.points}`;
+        if (streakChip) streakChip.textContent = `Streak ${loadInt(streakKey, 0)}`;
 
         try {
           renderRailProgress?.();
@@ -6809,35 +6763,82 @@ function ensureProgLoaded() {
       })();
 
       function getUnifiedProgressSnapshot() {
+        const spine = getProgressionSpine({ allowNull: true });
+        const prog = getProgressionMonitorSnapshot?.() || null;
+        const premiumRuns = Number(getEncounterRunCountForMode?.("premium") || 0);
+        const demoRuns = Number(getEncounterRunCountForMode?.("demo") || 0);
+        const activeRuns = Number(getEncounterRunCountForMode?.(bcMode) || 0);
+        const points =
+          Number(prog?.points ?? spine?.selectors?.points?.() ?? 0);
+        const tier =
+          Number(prog?.tier ?? spine?.selectors?.tier?.() ?? 1);
+        const difficultySeed =
+          Number(prog?.difficultySeed ?? spine?.selectors?.difficultySeed?.() ?? 1);
+        const effectiveDifficulty =
+          Number(prog?.effectiveDifficulty ?? spine?.selectors?.effectiveDifficultySeed?.() ?? difficultySeed);
+        const encounterRange =
+          prog?.encounterRange ??
+          spine?.selectors?.encounterRange?.() ??
+          [1, 5];
+        const allowedGuestTypes =
+          prog?.allowedGuestTypes ??
+          spine?.selectors?.guestTypes?.() ??
+          [];
+
         return {
-          progress: getProgressionMonitorSnapshot(),
+          mode: bcMode,
+          points,
+          tier,
+          difficultySeed,
+          effectiveDifficulty,
+          encounterRange,
+          allowedGuestTypes,
           runs: {
-            premium: getEncounterRunCountForMode("premium"),
-            demo: getEncounterRunCountForMode("demo"),
-            active: getEncounterRunCountForMode(bcMode),
+            premium: premiumRuns,
+            demo: demoRuns,
+            active: activeRuns,
           },
           identity: getGameplayIdentity(),
           difficulty: getCurrentDifficultyMode(),
         };
       }
 
+      function getManagerAnalyticsSnapshot() {
+        const rows = Array.isArray(loadRuns?.()) ? loadRuns() : [];
+        const activeModeRows = rows.filter((r) => r && r.tier === "premium");
+        const last14Cutoff = Date.now() - (14 * 24 * 60 * 60 * 1000);
+        const last14 = activeModeRows.filter((r) => Number(r?.endedAtMs || r?.endedAt || 0) >= last14Cutoff);
+        const byGuestType = {};
+        const bySessionType = {};
+        let total = 0;
+
+        for (const row of activeModeRows) {
+          total += 1;
+          const guest = String(row?.guestStateActual || row?.guestType || "unknown");
+          byGuestType[guest] = (byGuestType[guest] || 0) + 1;
+
+          const sessionType = String(row?.sessionType || "progression");
+          bySessionType[sessionType] = (bySessionType[sessionType] || 0) + 1;
+        }
+
+        return {
+          totalRuns: total,
+          byGuestType,
+          bySessionType,
+          trend14d: last14.length,
+          rows: activeModeRows,
+        };
+      }
+
       function renderRunsCount() {
-        const premiumValue = String(getEncounterRunCountForMode("premium"));
-        const demoValue = String(getEncounterRunCountForMode("demo"));
-        const activeValue = String(getEncounterRunCountForMode(bcMode));
+        const snap = getUnifiedProgressSnapshot();
         const elHomePremium = document.getElementById("homePremiumRuns");
         const elHomeDemo = document.getElementById("homeDemoRuns");
         const elGeneric = document.getElementById("bcSavedRuns");
-        if (elHomePremium) elHomePremium.textContent = premiumValue;
-        if (elHomeDemo) elHomeDemo.textContent = demoValue;
-        if (elGeneric) elGeneric.textContent = activeValue;
-        console.log("[BC][UI] rendering runs_count", {
-          premiumValue,
-          demoValue,
-          activeValue,
-          runtime: window.__BC_RUNS_COUNT__,
-          ctx: window.__BC_CTX__
-        });
+        if (elHomePremium) elHomePremium.textContent = String(snap.runs.premium);
+        if (elHomeDemo) elHomeDemo.textContent = String(snap.runs.demo);
+        if (elGeneric) elGeneric.textContent = String(snap.runs.active);
+        console.log("[BC][UI] rendering runs_count", snap.runs);
       }
 
       function requestRunsCountFromParent() {
@@ -10253,18 +10254,11 @@ function ensureProgLoaded() {
         if (!nameEl && !focusEl && !nextEl && !pointsEl) return;
 
         try {
-          const snapshot = getUnifiedProgressSnapshot();
-          const prog = snapshot.progress;
-          const points = prog?.points ?? 0;
-          const tier = prog?.tier ?? 1;
-          const encounterRange = prog?.encounterRange ?? [1, 5];
-          const allowedGuestTypes = prog?.allowedGuestTypes ?? [];
-          const difficultySeed = prog?.difficultySeed ?? 1;
-          const effectiveDifficulty = prog?.effectiveDifficulty ?? 1;
-          if (nameEl) nameEl.innerText = `Tier ${tier}`;
-          if (focusEl) focusEl.innerText = `d=${difficultySeed} / eff=${effectiveDifficulty}`;
-          if (nextEl) nextEl.innerText = `${encounterRange[0]}-${encounterRange[1]} | ${allowedGuestTypes.join(", ")}`;
-          if (pointsEl) pointsEl.innerText = String(points);
+          const snap = getUnifiedProgressSnapshot();
+          if (nameEl) nameEl.innerText = `Tier ${snap.tier}`;
+          if (focusEl) focusEl.innerText = `d=${snap.difficultySeed} / eff=${snap.effectiveDifficulty}`;
+          if (nextEl) nextEl.innerText = `${snap.encounterRange[0]}-${snap.encounterRange[1]} | ${snap.allowedGuestTypes.join(", ")}`;
+          if (pointsEl) pointsEl.innerText = String(snap.points);
         } catch (e) {
           if (nameEl) nameEl.innerText = "—";
           if (focusEl) focusEl.innerText = "—";
