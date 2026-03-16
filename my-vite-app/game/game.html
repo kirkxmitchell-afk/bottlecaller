@@ -3201,9 +3201,9 @@
         <div class="score-row">Runs total: <span id="homePremiumRuns">0</span></div>
         <div class="card" style="margin-top:10px;">
           <strong>Progress</strong>
-        <div class="small-text">Level: <span id="progressNamePremium">—</span></div>
-        <div class="small-text">Points: <span id="progressPointsPremium">0</span></div>
-      </div>
+          <div class="small-text">Level: <span id="progressNamePremium">—</span></div>
+          <div class="small-text">Points: <span id="progressPointsPremium">0</span></div>
+        </div>
         <div class="button-row" id="premiumButtons">
           <button id="btnGoPremium" type="button">Setup</button>
           <button id="btnViewHistoryPremium" type="button">View History</button>
@@ -4279,25 +4279,39 @@ function isDrillMode() {
         window.isWaiter = isWaiter;
         return identity;
       }
-      function getGameplayIdentity() {
-        const ctx =
-          window.__BC_CTX__ ||
-          window.BC_CTX ||
-          {};
-
-        if (ctx.identity && typeof ctx.identity === "object") return ctx.identity;
+      function getEffectiveGameplayIdentity() {
+        const ctx = window.__BC_CTX__ || window.BC_CTX || {};
+        if (ctx.identity && typeof ctx.identity === "object") {
+          return resolveGameplayIdentity({
+            membershipRole:
+              ctx.identity.membershipRole ||
+              ctx.identity.rawRole ||
+              ctx.membershipRole ||
+              ctx.membership_role ||
+              ctx.role ||
+              "",
+            role:
+              ctx.identity.gameplayRole ||
+              ctx.identity.membershipRole ||
+              ctx.role ||
+              ""
+          });
+        }
 
         return resolveGameplayIdentity({
-          membership_role: ctx.membership_role || ctx.membershipRole || "",
+          membershipRole: ctx.membershipRole || ctx.membership_role || ctx.role || "",
           role: ctx.role || ""
         });
+      }
+      function getGameplayIdentity() {
+        return getEffectiveGameplayIdentity();
       }
       if (isDemo) {
         restaurantId = "demo";
         role = "demo";
         sessionType = null;
       }
-      applyGameplayIdentity({ role });
+      applyGameplayIdentity(window.__BC_CTX__ || {});
       window.resolveRoleState = resolveRoleState;
       window.__BC_CTX_DUMP__ = () => structuredClone(window.__BC_CTX__ || {});
       window.__BC_RUNTIME_DUMP__ = () => ({
@@ -16794,6 +16808,25 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         return await startEncounter();
       }
 
+      function renderSkillSnapshotCard(container) {
+        if (!container) return;
+
+        const snap = getSkillSnapshot();
+        const card = document.createElement("div");
+        card.className = "card";
+        card.style.marginBottom = "12px";
+        card.innerHTML = `
+          <strong>Skill Snapshot</strong>
+          <div class="small-text" style="margin-top:8px;">Read: ${snap.read}%</div>
+          <div class="small-text">Framing: ${snap.framing}%</div>
+          <div class="small-text">Delivery: ${snap.delivery}%</div>
+          <div class="small-text">Recovery: ${snap.recovery}%</div>
+          <div class="small-text">Closing: ${snap.closing}%</div>
+        `;
+
+        container.appendChild(card);
+      }
+
       function renderHistory() {
         const historyList = document.getElementById("historyList");
         const historyTitle = document.getElementById("historyTitle");
@@ -16801,6 +16834,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
         historyTitle.innerText = "History";
         historyList.innerText = "";
+        renderSkillSnapshotCard(historyList);
 
         const list = (runs || []).slice(-20).reverse();
 
@@ -16984,6 +17018,11 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         const identity = getGameplayIdentity();
         const isWaiterNow = !!identity.isWaiter;
         const isManagerLike = isManagerLikeIdentity(identity);
+        console.log("[BC][ROLE_TEMPLATE]", {
+          identity,
+          isWaiterNow,
+          isManagerLike
+        });
         const btnWelcomeBackToSetup = document.getElementById("btnWelcomeBackToSetup");
         const btnGoPremium = document.getElementById("btnGoPremium");
 
