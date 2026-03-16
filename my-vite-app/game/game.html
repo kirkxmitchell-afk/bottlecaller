@@ -6821,11 +6821,10 @@ function ensureProgLoaded() {
         };
       }
 
-      function renderRunsCount(n) {
-        const snapshot = getUnifiedProgressSnapshot();
-        const premiumValue = String(snapshot.runs.premium);
-        const demoValue = String(snapshot.runs.demo);
-        const activeValue = String(snapshot.runs.active);
+      function renderRunsCount() {
+        const premiumValue = String(getEncounterRunCountForMode("premium"));
+        const demoValue = String(getEncounterRunCountForMode("demo"));
+        const activeValue = String(getEncounterRunCountForMode(bcMode));
         const elHomePremium = document.getElementById("homePremiumRuns");
         const elHomeDemo = document.getElementById("homeDemoRuns");
         const elGeneric = document.getElementById("bcSavedRuns");
@@ -6833,6 +6832,9 @@ function ensureProgLoaded() {
         if (elHomeDemo) elHomeDemo.textContent = demoValue;
         if (elGeneric) elGeneric.textContent = activeValue;
         console.log("[BC][UI] rendering runs_count", {
+          premiumValue,
+          demoValue,
+          activeValue,
           runtime: window.__BC_RUNS_COUNT__,
           ctx: window.__BC_CTX__
         });
@@ -16915,16 +16917,16 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         ra?.closest(".button-row")?.remove();
       }
 
-      function bindPremiumEntryButton(btn, isManagerLike) {
+      function bindPremiumEntryButton(btn, { startFreshRun = true } = {}) {
         if (!btn) return;
-        btn.textContent = isManagerLike ? "Play" : "Play";
+        btn.textContent = "Play";
         btn.classList.remove("hidden");
         btn.disabled = false;
         btn.onclick = null;
         btn.__bcBound = false;
         bindInput(btn, async () => {
           resetNavState();
-          beginFreshProgressionRun();
+          if (startFreshRun) beginFreshProgressionRun();
           await startPlayWithReadyGate();
         });
       }
@@ -16978,7 +16980,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         if (isWaiterNow) {
           btnWelcomeBackToSetup?.classList.add("hidden");
           bindWaiterStart();
-          bindPremiumEntryButton(btnGoPremium, isManagerLike);
+          bindPremiumEntryButton(btnGoPremium, { startFreshRun: true });
 
           document.querySelectorAll('[data-role="manager"]').forEach((el) => el.classList.add("hidden"));
           document.querySelectorAll('[data-nav="screenSetupPremium"]').forEach((el) => {
@@ -17005,7 +17007,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
         btnWelcomeBackToSetup?.classList.remove("hidden");
         if (isManagerLike) {
-          bindPremiumEntryButton(btnGoPremium, isManagerLike);
+          bindPremiumEntryButton(btnGoPremium, { startFreshRun: true });
         } else if (btnGoPremium) {
           btnGoPremium.textContent = "Setup";
           btnGoPremium.onclick = null;
