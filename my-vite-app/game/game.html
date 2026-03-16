@@ -1236,66 +1236,30 @@
       }).join("");
     }
     function renderRailProgress() {
-      const root = getRailEl("railProgress");
-      if (!root) return;
+      const el = document.getElementById("railProgress");
+      if (!el) return;
 
-      let s = null;
       try {
-        s = typeof bcSnapshot === "function" ? bcSnapshot() : null;
-      } catch (e) {
-        console.warn("[BC] bcSnapshot failed for rail progress", e);
-      }
+        const prog = getProgressionMonitorSnapshot();
+        const points = Number(prog?.points ?? 0);
+        const tier = Number(prog?.tier ?? 1);
+        const encounterRange = prog?.encounterRange ?? [1, 5];
+        const allowedGuestTypes = prog?.allowedGuestTypes ?? [];
+        const difficultySeed = Number(prog?.difficultySeed ?? 1);
+        const effectiveDifficulty = Number(prog?.effectiveDifficulty ?? 1);
+        const runs = Number(getEncounterRunCountForMode?.(bcMode) || 0);
 
-      if (!s) {
-        root.innerHTML = `
-          <div class="small-text" style="opacity:.75;">No run data yet.</div>
+        el.innerHTML = `
+          <div class="small-text">Level: Tier ${tier}</div>
+          <div class="small-text">Points: ${points}</div>
+          <div class="small-text">Runs: ${runs}</div>
+          <div class="small-text">Difficulty: d=${difficultySeed} / eff=${effectiveDifficulty}</div>
+          <div class="small-text">Range: ${encounterRange[0]}-${encounterRange[1]}</div>
+          <div class="small-text">Guests: ${allowedGuestTypes.join(", ") || "—"}</div>
         `;
-        return;
+      } catch (e) {
+        el.innerHTML = `<div class="small-text" style="opacity:.75;">No run data yet.</div>`;
       }
-
-      const encounterRange = Array.isArray(s.encounterRange)
-        ? `${s.encounterRange[0]}-${s.encounterRange[1]}`
-        : String(s.encounterRange ?? "-");
-
-      const guests = Array.isArray(s.guests) && s.guests.length
-        ? s.guests.join(", ")
-        : "-";
-
-      const drillText = s.activeDrill
-        ? `${String(s.activeDrill.focus || "drill")} • ${Number(s.activeDrill.repDone || 0)}/${Number(s.activeDrill.repTarget || 0)} reps`
-        : "";
-
-      root.innerHTML = `
-        <div style="display:flex; flex-direction:column; gap:8px;">
-          <div class="small-text" style="opacity:.92;">
-            Encounter ${escapeHtml(String(s.encounterNumber ?? "-"))} • Step ${escapeHtml(String(s.step ?? "-"))}
-          </div>
-
-          <div class="small-text" style="opacity:.9;">
-            Tier ${escapeHtml(String(s.tier ?? "-"))} • ${escapeHtml(String(s.points ?? 0))} pts
-          </div>
-
-          <hr style="opacity:.15; margin:2px 0;">
-
-          <div class="small-text" style="opacity:.82;">
-            Range: ${escapeHtml(encounterRange)}
-          </div>
-          <div class="small-text" style="opacity:.82;">
-            Guests: ${escapeHtml(guests)}
-          </div>
-
-          <div class="small-text" style="opacity:.78;">
-            Difficulty: ${escapeHtml(String(s.effectiveDifficulty ?? "-"))}
-          </div>
-
-          ${drillText ? `
-            <hr style="opacity:.15; margin:2px 0;">
-            <div class="small-text" style="opacity:.82;">
-              Drill: ${escapeHtml(drillText)}
-            </div>
-          ` : ``}
-        </div>
-      `;
     }
     function goBackToPremiumHome() {
       try {
@@ -3179,11 +3143,6 @@
         <strong>Demo</strong>
         <div class="score-row">Wines saved: <span id="homeDemoCount">0 / 3</span></div>
         <div class="score-row">Runs total: <span id="homeDemoRuns">0</span></div>
-        <div class="card" style="margin-top:10px;">
-          <strong>Progress</strong>
-          <div class="small-text">Level: <span id="progressNameDemo">—</span></div>
-          <div class="small-text">Points: <span id="progressPointsDemo">0</span></div>
-        </div>
         <div class="button-row" id="demoButtons">
           <button id="btnGoDemo" type="button">Setup</button>
           <button id="btnStartDrillDemo" type="button">5-Minute Drill</button>
@@ -3199,11 +3158,6 @@
         <strong>Premium</strong>
         <div class="score-row">Wines saved: <span id="homePremiumCount">0 / 10</span></div>
         <div class="score-row">Runs total: <span id="homePremiumRuns">0</span></div>
-        <div class="card" style="margin-top:10px;">
-          <strong>Progress</strong>
-          <div class="small-text">Level: <span id="progressNamePremium">—</span></div>
-          <div class="small-text">Points: <span id="progressPointsPremium">0</span></div>
-        </div>
         <div class="button-row" id="premiumButtons">
           <button id="btnGoPremium" type="button">Setup</button>
           <button id="btnViewHistoryPremium" type="button">View History</button>
@@ -10152,6 +10106,7 @@ function ensureProgLoaded() {
 
       async function startPlayWithReadyGate(timeoutMs = 1500) {
         showScreen("screenPlay");
+        renderRailProgress();
 
         const g = await waitForCtxAndWines(timeoutMs);
         console.log("[START][GATE]", g);
@@ -10162,6 +10117,7 @@ function ensureProgLoaded() {
         }
 
         await startEncounter();
+        renderRailProgress();
         return true;
       }
 
@@ -10249,6 +10205,9 @@ function ensureProgLoaded() {
 
         try { renderProgressStatusWindow(); }
         catch (e) { console.error("[BC] renderProgressStatusWindow crashed", e); }
+
+        try { renderRailProgress(); }
+        catch (e) { console.error("[BC] renderRailProgress crashed", e); }
 
         const btnContinue = document.getElementById(ids.btnContinue);
         if (btnContinue) {
@@ -13572,6 +13531,7 @@ function ensureProgLoaded() {
         bcRenderHud("encounter resolved");
         bcToast("Encounter resolved");
         renderProgressStatusWindow();
+        renderRailProgress();
 
         const scored = scoreEncounterForGuard(enc, checks);
         updateGuestRankFromEncounter(enc, checks, scored);
@@ -15086,6 +15046,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           bcRenderHud("encounter resolved");
           bcToast("Encounter resolved");
           renderProgressStatusWindow();
+          renderRailProgress();
           const spineNow = getProgressionSpine({ allowNull: true });
           console.log("[PROG] earned", { pointsTotal: spineNow?.selectors?.points?.() ?? 0 });
 
@@ -15886,6 +15847,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           bcRenderHud("encounter resolved");
           bcToast("Encounter resolved");
           renderProgressStatusWindow();
+          renderRailProgress();
 
           const spineNow = getProgressionSpine({ allowNull: true });
           console.log("[PROG] earned", { pointsTotal: spineNow?.selectors?.points?.() ?? 0 });
