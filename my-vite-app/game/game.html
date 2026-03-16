@@ -2217,14 +2217,27 @@
         }
 
         const ctx = window.__BC_CTX__ || {};
-        const role = String(ctx.membershipRole || ctx.membership_role || ctx.role || "").toLowerCase();
+        const role = String(
+          ctx.membershipRole ||
+          ctx.membership_role ||
+          ctx.role ||
+          ""
+        ).toLowerCase();
         const isWaiter = role === "waiter";
+        const isManagerLike =
+          role === "single_manager" ||
+          role === "group_manager" ||
+          role === "enterpriser";
 
-        if (isWaiter && source !== "step7_button") {
-          return { ok: false, error: "waiter_send_disabled_outside_step7" };
+        if (isWaiter && source !== "messenger_button") {
+          return { ok: false, error: "waiter_messenger_only" };
         }
 
-        if (!canSendProgressForEncounter(encounter)) {
+        if (isManagerLike && source !== "auto_send") {
+          return { ok: false, error: "manager_auto_only" };
+        }
+
+        if (hasEncounterAlreadySent(encounter)) {
           return { ok: false, error: "already_sent_for_encounter" };
         }
 
@@ -2362,7 +2375,7 @@
         const reqId = submitProgressReportToManager({ body, payload });
         const result = { ok: !!reqId, reqId };
         if (result.ok) {
-          markProgressSentForEncounter(encounter, result);
+          markEncounterAsSent(encounter, result);
         }
         return result;
       } catch (e) {
@@ -2370,7 +2383,7 @@
         return { ok: false, error: e?.message || String(e) };
       }
     }
-    function getEncounterReportKey(encounter) {
+    function getEncounterSendKey(encounter) {
       if (!encounter || typeof encounter !== "object") return null;
       return String(
         encounter?.encounterId ??
@@ -2379,15 +2392,14 @@
         ""
       ) || null;
     }
-    function canSendProgressForEncounter(encounter) {
-      const key = getEncounterReportKey(encounter);
+    function hasEncounterAlreadySent(encounter) {
+      const key = getEncounterSendKey(encounter);
       if (!key) return false;
-
       window.__BC_SENT_PROGRESS_KEYS__ = window.__BC_SENT_PROGRESS_KEYS__ || {};
-      return !window.__BC_SENT_PROGRESS_KEYS__[key];
+      return !!window.__BC_SENT_PROGRESS_KEYS__[key];
     }
-    function markProgressSentForEncounter(encounter, result = {}) {
-      const key = getEncounterReportKey(encounter);
+    function markEncounterAsSent(encounter, result = null) {
+      const key = getEncounterSendKey(encounter);
       if (!key) return;
 
       window.__BC_SENT_PROGRESS_KEYS__ = window.__BC_SENT_PROGRESS_KEYS__ || {};
@@ -2432,52 +2444,32 @@
       if (step === 7) return "Reflection";
       return "";
     }
-    function maybeAutoSendProgressReport(encounter, source = "post_encounter_completion") {
-      if (!encounter || typeof encounter !== "object") return;
-      if (!canAutoSendProgressForCurrentUser()) return;
-      if (encounter.__progressAutoSendStarted) return;
+    function maybeAutoSendProgressReport(encounter) {
+      const ctx = window.__BC_CTX__ || {};
+      const role = String(
+        ctx.membershipRole ||
+        ctx.membership_role ||
+        ctx.role ||
+        ""
+      ).toLowerCase();
 
-      encounter.__progressAutoSendStarted = true;
+      const isManagerLike =
+        role === "single_manager" ||
+        role === "group_manager" ||
+        role === "enterpriser";
+
+      if (!isManagerLike) return;
+      if (!encounter) return;
+      if (hasEncounterAlreadySent(encounter)) return;
 
       setTimeout(async () => {
-        const result = await sendLiveProgressReport(source);
-        encounter.__progressAutoSendDone = true;
-        encounter.__progressAutoSendResult = result || null;
-
-        const status = document.getElementById("progressReportStatus");
-        if (status) {
-          status.textContent = result?.ok
-            ? "Progress sent automatically ✅"
-            : `Auto-send failed${result?.error ? `: ${result.error}` : "."}`;
-        }
+        if (hasEncounterAlreadySent(encounter)) return;
+        await sendLiveProgressReport("auto_send");
       }, 100);
     }
     function wireProgressReportButton() {
       const btn = document.getElementById("btnSendProgressReport");
-      const status = document.getElementById("progressReportStatus");
-      if (!btn || btn.__wired) return;
-      btn.__wired = true;
-
-      const ctx = window.__BC_CTX__ || {};
-      const role = String(ctx.membershipRole || ctx.membership_role || ctx.role || "").toLowerCase();
-      const isWaiter = role === "waiter";
-
-      btn.style.display = isWaiter ? "" : "none";
-      if (!isWaiter) return;
-
-      btn.onclick = async () => {
-        try {
-          const result = await sendLiveProgressReport("step7_button");
-          if (status) {
-            status.textContent = result?.ok
-              ? "Sending progress…"
-              : `Could not send progress${result?.error ? `: ${result.error}` : "."}`;
-          }
-        } catch (e) {
-          console.warn("wireProgressReportButton click failed", e);
-          if (status) status.textContent = "Could not send progress.";
-        }
-      };
+      if (btn) btn.remove();
     }
     function requestUnreadMessages() {
       try {
@@ -2835,6 +2827,25 @@
           if (liveEffectsToast) window.showToast?.(liveEffectsToast);
         } catch {}
         refreshWaiterRuntimeSurfaces?.();
+
+        return;
+      }
+      if (msg.type === "waiter_messenger_send") {
+        (async () => {
+          const result = await sendLiveProgressReport("messenger_button");
+
+          try {
+            window.parent.postMessage(
+              {
+                source: "BC_MSG",
+                v: 1,
+                type: "hud_send_progress_feedback",
+                result
+              },
+              window.location.origin
+            );
+          } catch {}
+        })();
 
         return;
       }
@@ -15735,7 +15746,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             checks,
             modeBestResolved
           });
-          maybeAutoSendProgressReport(currentEncounter, "post_encounter_completion");
+          maybeAutoSendProgressReport(currentEncounter);
           const reflectionTitle = document.createElement("h3");
           reflectionTitle.innerText = "What just happened";
           stepContent.appendChild(reflectionTitle);

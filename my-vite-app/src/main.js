@@ -5995,7 +5995,27 @@ function wireWaiterMessagesPanel() {
   }
 
   if (sendBtn && !sendBtn.__bcBound) {
-    sendBtn.remove();
+    sendBtn.__bcBound = true;
+    sendBtn.addEventListener("click", async () => {
+      const frame = document.getElementById("premiumRootFrame");
+      const status = document.getElementById("waiterSendProgressStatus");
+
+      if (!frame || !frame.contentWindow) {
+        if (status) status.textContent = "Game not ready.";
+        return;
+      }
+
+      frame.contentWindow.postMessage(
+        {
+          source: "BC_MSG",
+          v: 1,
+          type: "waiter_messenger_send",
+        },
+        window.location.origin
+      );
+
+      if (status) status.textContent = "Sending progress…";
+    });
   }
 }
 
