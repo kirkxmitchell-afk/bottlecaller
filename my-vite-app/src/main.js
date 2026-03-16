@@ -13818,39 +13818,55 @@ async function refreshManagerBoardScopedViews(restaurantId = null) {
   renderHud?.();
 }
 
-function renderHudSkillDashboard() {
-  const localSkillSnapshot = () => {
-    try {
-      const uid = appState?.session?.user?.id || appState?.session?.userId || null;
-      const rid = window.getActiveRestaurantId?.() || appState?.profile?.restaurant_id || null;
-      if (!uid || !rid) {
-        return { read: 0, framing: 0, delivery: 0, recovery: 0, closing: 0 };
-      }
-      const key = `bc_skills_v1_${uid}_${rid}`;
-      const raw = localStorage.getItem(key);
-      if (!raw) return { read: 0, framing: 0, delivery: 0, recovery: 0, closing: 0 };
-      const t = JSON.parse(raw);
-      const pct = (node) => {
-        const p = Number(node?.points || 0);
-        const a = Number(node?.attempts || 0);
-        if (!a) return 0;
-        return Math.max(0, Math.min(100, Math.round((p / a) * 100)));
-      };
-      return {
-        read: pct(t.read),
-        framing: pct(t.framing),
-        delivery: pct(t.delivery),
-        recovery: pct(t.recovery),
-        closing: pct(t.closing),
-      };
-    } catch {
-      return { read: 0, framing: 0, delivery: 0, recovery: 0, closing: 0 };
-    }
-  };
+async function loadHudSkillSnapshot() {
+  const ctx = window.__BC_CTX__ || {};
+  if (!ctx.userId || !ctx.restaurantId) {
+    return {
+      read: 0,
+      framing: 0,
+      delivery: 0,
+      recovery: 0,
+      closing: 0,
+    };
+  }
 
-  const snap = (typeof getSkillSnapshot === "function")
-    ? getSkillSnapshot()
-    : localSkillSnapshot();
+  const { data, error } = await supabase
+    .from("bc_skill_snapshots_v1")
+    .select(`
+      read_pct,
+      framing_pct,
+      delivery_pct,
+      recovery_pct,
+      closing_pct,
+      created_at
+    `)
+    .eq("user_id", ctx.userId)
+    .eq("restaurant_id", ctx.restaurantId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) {
+    return {
+      read: 0,
+      framing: 0,
+      delivery: 0,
+      recovery: 0,
+      closing: 0,
+    };
+  }
+
+  return {
+    read: Number(data.read_pct || 0),
+    framing: Number(data.framing_pct || 0),
+    delivery: Number(data.delivery_pct || 0),
+    recovery: Number(data.recovery_pct || 0),
+    closing: Number(data.closing_pct || 0),
+  };
+}
+
+async function renderHudSkillDashboard() {
+  const snap = await loadHudSkillSnapshot();
 
   const setText = (id, value) => {
     const el = document.getElementById(id);

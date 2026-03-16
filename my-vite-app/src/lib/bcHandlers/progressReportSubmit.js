@@ -230,25 +230,36 @@ export function makeProgressReportSubmitHandler({
     const payload = msg?.payload ?? null;
 
     try {
-      const { data, error } = await supabase.rpc("bc_send_progress_report_v1", {
-        p_scope_type: scopeType,
-        p_scope_id: scopeId,
-        p_restaurant_id: ctx.restaurantId,
-        p_body: body,
-        p_payload: payload,
-      });
+      const nextPayload = {
+        ...(payload || {}),
+        updatedAt: Date.now()
+      };
 
-      if (error) {
+      const { error: insertError } = await supabase
+        .from("bc_messages_v1")
+        .insert({
+          scope_type: scopeType,
+          scope_id: scopeId,
+          restaurant_id: ctx.restaurantId,
+          sender_user_id: ctx.userId,
+          receiver_user_id: null,
+          sender_role: ctx.membershipRole || ctx.role || "waiter",
+          type: "progress_report",
+          body,
+          payload: nextPayload,
+        });
+
+      if (insertError) {
         reply(replyType, {
           reqId,
           ok: false,
           inserted: 0,
-          error: error.message || String(error),
+          error: insertError.message || String(insertError),
         });
         return;
       }
 
-      const inserted = Number(data || 0);
+      const inserted = 1;
 
       const snapshotResult = await insertSkillSnapshotAndDrillEffect({
         supabase,
