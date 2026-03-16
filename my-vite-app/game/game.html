@@ -2822,6 +2822,51 @@
       if (msg.type === "hud_send_progress_request") {
         console.log("[REPORT] hud_send_progress_request received ✅", msg);
         (async () => {
+          const encounter = window.currentEncounter || currentEncounter || null;
+
+          if (!encounter) {
+            const result = { ok: false, error: "no_current_encounter" };
+            console.warn("[REPORT] hud_send_progress_request blocked", result);
+
+            try {
+              window.parent?.postMessage(
+                {
+                  source: "BC_MSG",
+                  v: 1,
+                  type: "hud_send_progress_feedback",
+                  result
+                },
+                window.location.origin
+              );
+            } catch {}
+            return;
+          }
+
+          const resolved =
+            !!encounter?.outcome ||
+            !!encounter?.finalOutcome ||
+            !!encounter?.chainSignal ||
+            currentStep === 7 ||
+            currentStep === 65;
+
+          if (!resolved) {
+            const result = { ok: false, error: "encounter_not_resolved" };
+            console.warn("[REPORT] hud_send_progress_request blocked", result);
+
+            try {
+              window.parent?.postMessage(
+                {
+                  source: "BC_MSG",
+                  v: 1,
+                  type: "hud_send_progress_feedback",
+                  result
+                },
+                window.location.origin
+              );
+            } catch {}
+            return;
+          }
+
           const result = await sendLiveProgressReport("hud_request");
           console.log("[REPORT] hud_send_progress_request result", result);
           try {

@@ -6020,7 +6020,7 @@ function wireWaiterMessagesPanel() {
         );
         console.log("[WAITER PANEL] hud_send_progress_request posted ✅", { reqId });
 
-        if (status) status.textContent = "Sending…";
+        if (status) status.textContent = "Checking encounter…";
       } catch (e) {
         console.warn("waiter send progress failed", e);
         if (status) status.textContent = "Could not send progress.";
