@@ -9453,16 +9453,88 @@ async function loadHistoryWaiters() {
 
   if (!restaurantId || !select) return;
 
-  const { data } = await supabase
-    .from("profiles")
-    .select("user_id, display_name")
-    .eq("restaurant_id", restaurantId)
-    .eq("role", "waiter");
+  const currentUserId =
+    appState?.session?.user?.id ||
+    appState?.session?.userId ||
+    null;
+  const currentProfile = appState?.profile || {};
+  const currentRole = String(normalizeMembershipRole(currentProfile) || currentProfile?.role || "").toLowerCase();
 
-  const rows = Array.isArray(data) ? data : [];
-  select.innerHTML = rows.map((w) =>
-    `<option value="${w.user_id}">${escapeHtml(w.display_name || w.user_id)}</option>`
-  ).join("");
+  const [profilesRes, snapshotsRes] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("user_id, display_name, role")
+      .eq("restaurant_id", restaurantId)
+      .order("display_name", { ascending: true }),
+    supabase
+      .from("bc_skill_snapshots_v1")
+      .select("user_id, created_at")
+      .eq("restaurant_id", restaurantId)
+      .order("created_at", { ascending: false })
+      .limit(500),
+  ]);
+
+  if (profilesRes.error) {
+    console.warn("[PERF HISTORY SELECT]", profilesRes.error);
+    select.innerHTML = "";
+    return;
+  }
+
+  if (snapshotsRes.error) {
+    console.warn("[PERF HISTORY SELECT][SNAPSHOTS]", snapshotsRes.error);
+  }
+
+  const optionMap = new Map();
+  const profileRows = Array.isArray(profilesRes.data) ? profilesRes.data : [];
+  const snapshotRows = Array.isArray(snapshotsRes.data) ? snapshotsRes.data : [];
+
+  for (const row of profileRows) {
+    const role = String(row?.role || "").toLowerCase();
+    if (role === "demo") continue;
+    const uid = String(row?.user_id || "");
+    if (!uid) continue;
+    optionMap.set(uid, {
+      uid,
+      label: row?.display_name || uid,
+    });
+  }
+
+  for (const row of snapshotRows) {
+    const uid = String(row?.user_id || "");
+    if (!uid || optionMap.has(uid)) continue;
+    optionMap.set(uid, { uid, label: uid });
+  }
+
+  if (currentUserId && currentRole !== "demo" && !optionMap.has(String(currentUserId))) {
+    const fallbackCurrentLabel =
+      currentProfile?.display_name ||
+      appState?.session?.user?.user_metadata?.display_name ||
+      appState?.session?.user?.user_metadata?.full_name ||
+      (appState?.session?.user?.email ? String(appState.session.user.email).split("@")[0] : "") ||
+      String(currentUserId);
+    optionMap.set(String(currentUserId), {
+      uid: String(currentUserId),
+      label: fallbackCurrentLabel,
+    });
+  }
+
+  const ids = Array.from(optionMap.keys());
+  const nameMap = await mapUserIdsToNames(ids);
+  const selectedUserId = String(select.value || currentUserId || "");
+  const options = ids
+    .map((uid) => {
+      const base = optionMap.get(uid);
+      return {
+        uid,
+        label: nameMap.get(uid) || base?.label || uid,
+      };
+    })
+    .sort((a, b) => String(a.label).localeCompare(String(b.label)));
+
+  select.innerHTML = options.map((opt) => {
+    const selected = String(opt.uid) === selectedUserId ? " selected" : "";
+    return `<option value="${opt.uid}"${selected}>${escapeHtml(opt.label || opt.uid)}</option>`;
+  }).join("");
 }
 
 async function loadPerformanceHistory(userId) {
