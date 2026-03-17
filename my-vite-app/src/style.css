@@ -1921,10 +1921,10 @@ button:hover, .btn:hover, .btn-ghost:hover{
   color: rgba(244,246,247,0.58);
 }
 
-#screenManagerBoard #mbRestaurantContextCard::before{ content: "Context"; }
+#screenManagerBoard #mbRestaurantContextCard::before{ content: "Restaurant Context"; }
 #screenManagerBoard #mbGroupOverviewCard::before{ content: "Group Overview"; }
 #screenManagerBoard #mbGroupMetricsCard::before{ content: "Metrics"; }
-#screenManagerBoard #mbGroupRestaurantComparisonCard::before{ content: "Comparison"; }
+#screenManagerBoard #mbGroupRestaurantComparisonCard::before{ content: "Restaurant Comparison"; }
 #screenManagerBoard #mbOverviewTimedChallenge::before{ content: "Timed Challenge"; }
 #screenManagerBoard #mbOverviewRecentChallenges::before{ content: "Recent Challenges"; }
 #screenManagerBoard #mbInviteSummary::before{ content: "Invites"; }
@@ -1942,6 +1942,7 @@ button:hover, .btn:hover, .btn-ghost:hover{
 #screenManagerBoard #mbRestaurantContextCard > .card > div:first-child[style*="font-weight:600"],
 #screenManagerBoard #mbGroupOverviewCard > .card > div:first-child[style*="font-weight:600"],
 #screenManagerBoard #mbGroupMetricsCard > .card > div:first-child[style*="font-weight:600"],
+#screenManagerBoard #mbGroupRestaurantComparisonCard > .card > div:first-child[style*="font-weight:600"],
 #screenManagerBoard #mbOverviewTimedChallenge > .card > div:first-child[style*="font-weight:600"],
 #screenManagerBoard #mbDrillSummary > .card > div:first-child[style*="font-weight:600"],
 #screenManagerBoard #mbAttributeAbilitiesPanel .card > div:first-child[style*="font-weight:600"],
