@@ -1061,6 +1061,22 @@ button:hover, .btn:hover, .btn-ghost:hover{
   color: rgba(236,247,255,0.94) !important;
 }
 
+#screenHome #tabRoleWaiter.active{
+  border-color: rgba(94,234,212,0.22) !important;
+  background:
+    linear-gradient(180deg, rgba(94,234,212,0.18), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.03) !important;
+  color: rgba(235,255,250,0.94) !important;
+}
+
+#screenHome #tabRoleManager.active{
+  border-color: rgba(245,194,107,0.22) !important;
+  background:
+    linear-gradient(180deg, rgba(245,194,107,0.20), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.03) !important;
+  color: rgba(255,247,232,0.94) !important;
+}
+
 #screenHome #btnAuthSubmit{
   width: 100%;
   min-height: 56px;
