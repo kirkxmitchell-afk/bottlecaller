@@ -652,10 +652,16 @@ document.querySelector("#app").innerHTML = `
             <div id="mbNeedsCoaching" style="opacity:.9;">-</div>
           </div>
 
-          <div class="card">
-            <h3 style="margin:0 0 8px 0;">Recent activity</h3>
-            <div id="mbRecent" class="small" style="opacity:.9;">Loading…</div>
-          </div>
+          <details class="card mb-disclosure">
+            <summary class="mb-disclosure-summary">
+              <div>
+                <strong>Recent Activity</strong>
+              </div>
+            </summary>
+            <div class="mb-disclosure-body">
+              <div id="mbRecent" class="small" style="opacity:.9;">Loading…</div>
+            </div>
+          </details>
 
           <div class="card" style="margin-top:12px;">
             <strong>Top Performers</strong>
