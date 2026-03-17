@@ -614,7 +614,7 @@ document.querySelector("#app").innerHTML = `
         <div id="mbTab_performance" class="mbTab hidden">
           <div id="mbInsightsPanel" style="margin-top:12px;"></div>
           <div id="mbPerformanceHistoryPanel" style="margin-top:12px;">
-            <details class="card mb-disclosure" open>
+            <details class="card mb-disclosure">
               <summary class="mb-disclosure-summary">
                 <div>
                   <strong>Performance History</strong>
