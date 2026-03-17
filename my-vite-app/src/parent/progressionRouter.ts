@@ -8,6 +8,7 @@ export type DecideAllowedTierInput = {
   restaurantId?: string | null;
 
   desiredTier: Tier;
+  pointsTotal?: number | null;
 
   encountersTotal?: number | null;
   last10Count?: number | null;
@@ -28,14 +29,50 @@ export type DecideAllowedTierOutput = {
   snapshot: ProgressionSnapshot;
 };
 
+function buildSnapshotFromPoints(pointsTotal: number): ProgressionSnapshot {
+  const points = Math.max(0, Math.floor(Number(pointsTotal || 0)));
+
+  if (points >= 10) {
+    return {
+      encountersTotal: 12,
+      last10Count: 10,
+      last10Greens: 10,
+      last10Reds: 0,
+      anyRedT2Plus: false,
+      pivotsTaken: 1,
+      pivotsSuccess: 1,
+    };
+  }
+
+  if (points >= 5) {
+    return {
+      encountersTotal: 5,
+      last10Count: Math.min(10, Math.max(points, 5)),
+      last10Greens: Math.min(10, Math.max(points, 5)),
+      last10Reds: 0,
+      anyRedT2Plus: false,
+      pivotsTaken: 0,
+      pivotsSuccess: 0,
+    };
+  }
+
+  return {
+    encountersTotal: points,
+    last10Count: Math.min(points, 4),
+    last10Greens: Math.min(points, 4),
+    last10Reds: 0,
+    anyRedT2Plus: false,
+    pivotsTaken: 0,
+    pivotsSuccess: 0,
+  };
+}
+
 export async function decideAllowedTier(
   input: DecideAllowedTierInput
 ): Promise<DecideAllowedTierOutput> {
-  const supabase = getSupabaseParent();
   const desiredTier: Tier =
     input.desiredTier === 3 ? 3 : input.desiredTier === 2 ? 2 : 1;
 
-  // --- DB READ (bc_readiness_v1) ---
   let snap: ProgressionSnapshot = {
     encountersTotal: 0,
     last10Count: 0,
@@ -46,7 +83,13 @@ export async function decideAllowedTier(
     pivotsSuccess: 0,
   };
 
-  if (input.userId && input.restaurantId) {
+  const pointsTotal = Number(input.pointsTotal);
+  if (Number.isFinite(pointsTotal) && pointsTotal >= 0) {
+    snap = buildSnapshotFromPoints(pointsTotal);
+  } else if (input.userId && input.restaurantId) {
+    const supabase = getSupabaseParent();
+
+    // Fallback legacy DB views if no points-backed spine is available.
     const { data: r, error: rErr } = await supabase
       .from("bc_readiness_v1")
       .select("last10_count,last10_greens,last10_reds,session_any_red_t2plus")

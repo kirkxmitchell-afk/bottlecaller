@@ -5,6 +5,66 @@ function normalizeAllowedScopeType(value, fallback = "restaurant") {
   return s || fallback;
 }
 
+async function upsertProgressReportMessage({
+  supabase,
+  ctx,
+  scopeType,
+  scopeId,
+  body,
+  payload,
+}) {
+  const baseRow = {
+    scope_type: scopeType,
+    scope_id: scopeId,
+    restaurant_id: ctx.restaurantId,
+    sender_user_id: ctx.userId,
+    receiver_user_id: ctx.userId,
+    sender_role: ctx.membershipRole || ctx.role || "waiter",
+    type: "progress_report",
+    body,
+    payload,
+  };
+
+  const { data: existingRow, error: existingError } = await supabase
+    .from("bc_messages_v1")
+    .select("id")
+    .eq("restaurant_id", ctx.restaurantId)
+    .eq("sender_user_id", ctx.userId)
+    .eq("receiver_user_id", ctx.userId)
+    .eq("type", "progress_report")
+    .is("archived_at", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existingError) {
+    return { ok: false, error: existingError.message || String(existingError), inserted: 0 };
+  }
+
+  if (existingRow?.id) {
+    const { error: updateError } = await supabase
+      .from("bc_messages_v1")
+      .update(baseRow)
+      .eq("id", existingRow.id);
+
+    if (updateError) {
+      return { ok: false, error: updateError.message || String(updateError), inserted: 0 };
+    }
+
+    return { ok: true, inserted: 0, updated: true };
+  }
+
+  const { error: insertError } = await supabase
+    .from("bc_messages_v1")
+    .insert(baseRow);
+
+  if (insertError) {
+    return { ok: false, error: insertError.message || String(insertError), inserted: 0 };
+  }
+
+  return { ok: true, inserted: 1, updated: false };
+}
+
 async function insertSkillSnapshotAndDrillEffect({
   supabase,
   ctx,
@@ -235,31 +295,26 @@ export function makeProgressReportSubmitHandler({
         updatedAt: Date.now()
       };
 
-      const { error: insertError } = await supabase
-        .from("bc_messages_v1")
-        .insert({
-          scope_type: scopeType,
-          scope_id: scopeId,
-          restaurant_id: ctx.restaurantId,
-          sender_user_id: ctx.userId,
-          receiver_user_id: ctx.userId,
-          sender_role: ctx.membershipRole || ctx.role || "waiter",
-          type: "progress_report",
-          body,
-          payload: nextPayload,
-        });
+      const writeResult = await upsertProgressReportMessage({
+        supabase,
+        ctx,
+        scopeType,
+        scopeId,
+        body,
+        payload: nextPayload,
+      });
 
-      if (insertError) {
+      if (!writeResult?.ok) {
         reply(replyType, {
           reqId,
           ok: false,
           inserted: 0,
-          error: insertError.message || String(insertError),
+          error: writeResult?.error || "progress_report_write_failed",
         });
         return;
       }
 
-      const inserted = 1;
+      const inserted = Number(writeResult?.inserted || 0);
 
       const snapshotResult = await insertSkillSnapshotAndDrillEffect({
         supabase,
@@ -271,6 +326,7 @@ export function makeProgressReportSubmitHandler({
         reqId,
         ok: true,
         inserted,
+        updated: !!writeResult?.updated,
         snapshotOk: !!snapshotResult?.ok,
         snapshotError: snapshotResult?.ok ? null : (snapshotResult?.error || "snapshot_insert_failed"),
       });

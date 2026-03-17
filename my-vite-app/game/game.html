@@ -2802,6 +2802,14 @@
             status.textContent = `Send failed: ${msg.error || "unknown error"}`;
           }
         }
+        if (msg.ok && typeof window.ProgressionBridge?.requestProgressionSnapshot === "function") {
+          try {
+            const payload = await window.ProgressionBridge.requestProgressionSnapshot(3);
+            if (payload) window.__BC_PROGRESSION__ = payload;
+          } catch (e) {
+            console.warn("[BC] progression snapshot refresh after progress send failed", e);
+          }
+        }
       }
       if (msg.type === "live_effects_sync") {
         const myEpoch = Number(window.__BC_EPOCH__ || 0);
@@ -4549,6 +4557,46 @@ function isDrillMode() {
 
       function tryGetProgressionSpine() {
         return getProgressionSpine({ allowNull: true });
+      }
+
+      function getAuthoritativeProgressionPayload() {
+        const payload = window.__BC_PROGRESSION__ || null;
+        return payload && typeof payload === "object" ? payload : null;
+      }
+
+      function getAuthoritativeTierToServe(fallbackTier = null) {
+        const payload = getAuthoritativeProgressionPayload();
+        const tierRaw =
+          payload?.tierToServe ??
+          payload?.tier_to_serve ??
+          payload?.result?.tierToServe ??
+          payload?.result?.tier_to_serve ??
+          fallbackTier;
+        const tierNum = Number(tierRaw);
+        if (!Number.isFinite(tierNum)) return null;
+        if (tierNum <= 1) return 1;
+        if (tierNum >= 3) return 3;
+        return 2;
+      }
+
+      function getTierRangeAndGuests(tier) {
+        const t = Number(tier || 1);
+        if (t >= 3) {
+          return {
+            encounterRange: [1, 20],
+            guestTypes: ["decider", "bargain_smart", "griever", "budget_guard", "make_it_easy"],
+          };
+        }
+        if (t >= 2) {
+          return {
+            encounterRange: [1, 12],
+            guestTypes: ["decider", "bargain_smart", "griever", "budget_guard"],
+          };
+        }
+        return {
+          encounterRange: [1, 5],
+          guestTypes: ["decider", "bargain_smart", "griever"],
+        };
       }
 
       // ===============================
@@ -16339,6 +16387,17 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           if (Array.isArray(range) && range.length === 2) {
             minEncounter = Number(range[0] ?? 1);
             maxEncounter = Number(range[1] ?? Number.MAX_SAFE_INTEGER);
+          }
+          const authoritativeTier = getAuthoritativeTierToServe(null);
+          if (authoritativeTier != null) {
+            const authority = getTierRangeAndGuests(authoritativeTier);
+            minEncounter = Math.max(minEncounter, Number(authority.encounterRange[0] ?? 1));
+            maxEncounter = Math.min(maxEncounter, Number(authority.encounterRange[1] ?? Number.MAX_SAFE_INTEGER));
+            if (Array.isArray(allowedGuestTypes) && allowedGuestTypes.length) {
+              allowedGuestTypes = allowedGuestTypes.filter((guestType) => authority.guestTypes.includes(guestType));
+            } else {
+              allowedGuestTypes = authority.guestTypes.slice();
+            }
           }
           const encounterNumber = encounterIndex + 1;
           if (encounterNumber < minEncounter) encounterIndex = minEncounter - 1;

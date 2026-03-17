@@ -71,7 +71,7 @@ function getCtxFromWindow() {
   window.ProgressionBridge = ProgressionBridge;
 
   ProgressionBridge.onProgressionSnapshot((payload: any) => {
-    window.__BC_PROGRESSION__ = payload?.snapshot || null;
+    window.__BC_PROGRESSION__ = payload || null;
     console.log("[BC] progression snapshot updated", {
       ok: !!payload?.ok,
       demo: !!payload?.demo,
@@ -82,7 +82,7 @@ function getCtxFromWindow() {
   async function refreshProgressionSnapshot() {
     try {
       const payload = await ProgressionBridge.requestProgressionSnapshot(3);
-      window.__BC_PROGRESSION__ = payload?.snapshot || null;
+      window.__BC_PROGRESSION__ = payload || null;
     } catch {}
   }
 

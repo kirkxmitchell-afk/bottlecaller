@@ -4681,10 +4681,13 @@ if (!window.__BC_PARENT_BRIDGE__) {
 // Progression Snapshot Provider (PARENT) -> used by progressionRouter
 // ------------------------------------------------------------
 async function buildProgressionResult({ userId, restaurantId, desiredTier = 3 }) {
+  const spine = initProgressionSpineFromState();
+  const currentPoints = Number(spine?.selectors?.points?.() ?? NaN);
   return await decideAllowedTier({
     desiredTier: desiredTier === 1 ? 1 : desiredTier === 2 ? 2 : 3,
     userId,
     restaurantId,
+    pointsTotal: Number.isFinite(currentPoints) ? currentPoints : null,
   });
 }
 
@@ -5143,10 +5146,13 @@ async function refreshParentProgressionFromDb() {
     }
 
     const desiredTier = 2;
+    const spine = initProgressionSpineFromState();
+    const currentPoints = Number(spine?.selectors?.points?.() ?? NaN);
     const result = await decideAllowedTier({
       desiredTier,
       userId,
       restaurantId,
+      pointsTotal: Number.isFinite(currentPoints) ? currentPoints : null,
       role: appState.profile?.role,
       mode: "premium"
     });
@@ -6046,6 +6052,7 @@ window.addEventListener("message", (event) => {
     if (msg.ok) {
       loadHudSkillTimeline().catch(console.error);
       loadWaiterMessagesThread().catch(console.error);
+      refreshParentProgressionFromDb().catch(console.error);
     }
   }
 
@@ -6071,8 +6078,27 @@ function setHudOpen(isOpen) {
 
 window.__BC_HUD_TIMELINE_TARGET_USER_ID__ = window.__BC_HUD_TIMELINE_TARGET_USER_ID__ || null;
 
+function getHudActorContext() {
+  const sessionUserId =
+    appState?.session?.user?.id ||
+    appState?.session?.userId ||
+    null;
+  const activeRestaurantId =
+    getManagerActiveRestaurantId?.() ||
+    appState?.restaurant?.id ||
+    appState?.activeRestaurantId ||
+    appState?.profile?.restaurant_id ||
+    appState?.profile?.restaurantId ||
+    null;
+
+  return {
+    userId: sessionUserId || null,
+    restaurantId: activeRestaurantId || null,
+  };
+}
+
 function getHudTimelineTargetUserId() {
-  const ctx = window.__BC_CTX__ || {};
+  const ctx = getHudActorContext();
   return window.__BC_HUD_TIMELINE_TARGET_USER_ID__ || ctx.userId || null;
 }
 
@@ -12780,10 +12806,38 @@ async function maybeSendWeeklyManagerSummary(rows) {
       },
     };
 
-    const { error } = await supabase.from("bc_messages_v1").insert(row);
-    if (error) {
-      console.warn("[WEEKLY SUMMARY] insert failed", error);
+    const { data: existingRow, error: existingError } = await supabase
+      .from("bc_messages_v1")
+      .select("id")
+      .eq("restaurant_id", restaurantId)
+      .eq("receiver_user_id", managerId)
+      .eq("type", "weekly_summary")
+      .is("archived_at", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (existingError) {
+      console.warn("[WEEKLY SUMMARY] lookup failed", existingError);
       return;
+    }
+
+    if (existingRow?.id) {
+      const { error: updateError } = await supabase
+        .from("bc_messages_v1")
+        .update(row)
+        .eq("id", existingRow.id);
+
+      if (updateError) {
+        console.warn("[WEEKLY SUMMARY] update failed", updateError);
+        return;
+      }
+    } else {
+      const { error } = await supabase.from("bc_messages_v1").insert(row);
+      if (error) {
+        console.warn("[WEEKLY SUMMARY] insert failed", error);
+        return;
+      }
     }
 
     localStorage.setItem(sentKey, "1");
@@ -12810,17 +12864,12 @@ async function loadWeeklySummaryTop() {
     return;
   }
 
-  const now = new Date();
-  const weekStart = new Date(now);
-  weekStart.setDate(now.getDate() - 7);
-
   const { data, error } = await supabase
     .from("bc_messages_v1")
     .select("id, created_at, body, payload")
     .eq("restaurant_id", restaurantId)
     .eq("receiver_user_id", managerId)
     .eq("type", "weekly_summary")
-    .gte("created_at", weekStart.toISOString())
     .is("archived_at", null)
     .order("created_at", { ascending: false })
     .limit(1);
@@ -13831,7 +13880,7 @@ async function refreshManagerBoardScopedViews(restaurantId = null) {
 }
 
 async function loadHudSkillSnapshot() {
-  const ctx = window.__BC_CTX__ || {};
+  const ctx = getHudActorContext();
   if (!ctx.userId || !ctx.restaurantId) {
     return {
       read: 0,
@@ -13994,7 +14043,7 @@ function wireHudDifficultyControls() {
 }
 
 async function loadHudSkillTimeline() {
-  const ctx = window.__BC_CTX__ || {};
+  const ctx = getHudActorContext();
   const targetUserId = getHudTimelineTargetUserId();
   const restaurantId = ctx.restaurantId || null;
 
@@ -14065,7 +14114,7 @@ async function renderHudTimelineUserSelect() {
   }
 
   const rows = Array.isArray(data) ? data : [];
-  const currentUserId = (window.__BC_CTX__ || {}).userId || null;
+  const currentUserId = getHudActorContext().userId || null;
 
   const options = rows.map((row) => {
     const uid = String(row.user_id || "");

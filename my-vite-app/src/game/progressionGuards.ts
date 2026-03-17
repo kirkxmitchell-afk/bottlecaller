@@ -229,6 +229,8 @@ function sanitize(intent: ProgressionDecision): ProgressionDecision {
 }
 
 export function installProgressionGuards(getCtx: () => BcCtx | null) {
+  const baseBridge = (window as any).ProgressionBridge || {};
+
   // runtime assertions you want the game to obey
   function assertCtx() {
     const w = window as any;
@@ -246,27 +248,54 @@ export function installProgressionGuards(getCtx: () => BcCtx | null) {
 
   // expose a single callable “contract” API inside the iframe
   const ProgressionBridge = {
+    ...baseBridge,
     getCtx: () => getCtx(),
     assertCtx,
 
-    // Example guard: forbid Tier2+ if not enough Tier1 reps (you can swap your logic in here)
-    decideAllowedTier(stats: {
-      tier1Wins: number;
-      tier2Wins: number;
-      tier3Wins: number;
-      last10Greens: number;
-      anyRedT2Plus: boolean;
+    async decideAllowedTier(input: {
+      desiredTier?: Tier;
+      userId?: string | null;
+      restaurantId?: string | null;
+      tier1Wins?: number;
+      tier2Wins?: number;
+      tier3Wins?: number;
+      last10Greens?: number;
+      anyRedT2Plus?: boolean;
     }) {
       const ctx = assertCtx();
+      const desiredTier = clampTier(Number(input?.desiredTier || 1));
 
       // demo: lock at tier1
-      if (ctx.mode === "demo") return 1;
+      if (ctx.mode === "demo") {
+        return {
+          ok: true,
+          demo: true,
+          tierToServe: 1,
+          reasons: [],
+          snapshot: null,
+        };
+      }
 
-      // premium: example rule (replace with your “contract”)
-      if (stats.anyRedT2Plus) return 1;
-      if (stats.tier1Wins < 3) return 1;
-      if (stats.tier2Wins < 2) return 2;
-      return 3;
+      if (typeof baseBridge.requestProgressionSnapshot === "function") {
+        return await baseBridge.requestProgressionSnapshot(desiredTier);
+      }
+
+      // Legacy local fallback if the parent snapshot bridge is unavailable.
+      const tier1Wins = Number(input?.tier1Wins || 0);
+      const tier2Wins = Number(input?.tier2Wins || 0);
+      const anyRedT2Plus = !!input?.anyRedT2Plus;
+
+      let tierToServe: Tier = 3;
+      if (anyRedT2Plus) tierToServe = 1;
+      else if (tier1Wins < 3) tierToServe = 1;
+      else if (tier2Wins < 2) tierToServe = 2;
+
+      return {
+        ok: true,
+        tierToServe,
+        reasons: [],
+        snapshot: null,
+      };
     },
   };
 
