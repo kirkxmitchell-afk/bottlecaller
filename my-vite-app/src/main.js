@@ -6633,6 +6633,11 @@ function wireManagerBoardMenu() {
 
   function showTab(name) {
     const normalized = normalizeManagerBoardTab(name);
+    menu.querySelectorAll("[data-mbtab]").forEach((btn) => {
+      const isActive = normalizeManagerBoardTab(btn.getAttribute("data-mbtab")) === normalized;
+      btn.classList.toggle("is-active", isActive);
+      btn.setAttribute("aria-selected", isActive ? "true" : "false");
+    });
     document.querySelectorAll("#mbPanels .mbTab").forEach((el) => el.classList.add("hidden"));
     document.getElementById(`mbTab_${normalized}`)?.classList.remove("hidden");
   }
