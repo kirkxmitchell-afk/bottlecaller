@@ -7403,7 +7403,6 @@ function ensureInsightsShell() {
       <div class="card">
         <div style="display:flex; justify-content:space-between; gap:12px; align-items:center;">
           <div>
-            <div style="font-weight:700;">Insights</div>
             <div class="small-text" style="opacity:.8;">What breaks under pressure — and what drill fixes it.</div>
           </div>
           <button id="mbInsightsRefresh" class="btn" type="button">Refresh</button>
