@@ -235,12 +235,12 @@ document.querySelector("#app").innerHTML = `
         </div>
 
         <!-- Tabs UNDER fields -->
-        <div class="tabs" id="roleTabs" style="margin-top:10px;">
+        <div class="tabs" id="roleTabs" data-selected="waiter" style="margin-top:10px;">
           <button id="tabRoleWaiter" class="tab active" type="button">Waiter</button>
           <button id="tabRoleManager" class="tab" type="button">Manager</button>
         </div>
 
-        <div class="tabs">
+        <div class="tabs" id="modeTabs" data-selected="login">
           <button id="tabModeLogin" class="tab active" type="button">Login</button>
           <button id="tabModeSignup" class="tab" type="button">Sign up</button>
         </div>
@@ -13511,8 +13511,10 @@ function setRole(role) {
   // UI uses a simplified waiter/manager choice.
   // Runtime premium role for manager signup maps to single_manager.
   uiState.role = isManagerRole(role) ? "manager" : "waiter";
+  const roleTabs = document.getElementById("roleTabs");
   const w = document.getElementById("tabRoleWaiter");
   const m = document.getElementById("tabRoleManager");
+  if (roleTabs) roleTabs.dataset.selected = uiState.role;
   if (uiState.role === "waiter") {
     w.classList.add("active");
     m.classList.remove("active");
@@ -13524,8 +13526,10 @@ function setRole(role) {
 
 function setMode(mode) {
   uiState.mode = mode === "signup" ? "signup" : "login";
+  const modeTabs = document.getElementById("modeTabs");
   const l = document.getElementById("tabModeLogin");
   const s = document.getElementById("tabModeSignup");
+  if (modeTabs) modeTabs.dataset.selected = uiState.mode;
   if (uiState.mode === "login") {
     l.classList.add("active");
     s.classList.remove("active");

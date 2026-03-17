@@ -1019,6 +1019,7 @@ button:hover, .btn:hover, .btn-ghost:hover{
 }
 
 #screenHome .tabs{
+  position: relative;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
@@ -1028,6 +1029,45 @@ button:hover, .btn:hover, .btn-ghost:hover{
   background:
     linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015)),
     rgba(255,255,255,0.02);
+}
+
+#screenHome #roleTabs::before,
+#screenHome #modeTabs::before{
+  content: "";
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  left: 6px;
+  width: calc(50% - 7px);
+  border-radius: 14px;
+  transition: transform 180ms ease, background 180ms ease, border-color 180ms ease;
+  z-index: 0;
+}
+
+#screenHome #modeTabs::before{
+  border: 1px solid rgba(125,211,252,0.20);
+  background:
+    linear-gradient(180deg, rgba(125,211,252,0.18), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.03);
+}
+
+#screenHome #roleTabs::before{
+  border: 1px solid rgba(94,234,212,0.22);
+  background:
+    linear-gradient(180deg, rgba(94,234,212,0.18), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.03);
+}
+
+#screenHome #roleTabs[data-selected="manager"]::before,
+#screenHome #modeTabs[data-selected="signup"]::before{
+  transform: translateX(calc(100% + 8px));
+}
+
+#screenHome #roleTabs[data-selected="manager"]::before{
+  border-color: rgba(245,194,107,0.22);
+  background:
+    linear-gradient(180deg, rgba(245,194,107,0.20), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.03);
 }
 
 #screenHome #roleTabs,
@@ -1043,9 +1083,11 @@ button:hover, .btn:hover, .btn-ghost:hover{
 }
 
 #screenHome .tab{
+  position: relative;
+  z-index: 1;
   min-height: 44px;
   border-radius: 14px !important;
-  border: 1px solid rgba(255,255,255,0.08) !important;
+  border: 1px solid transparent !important;
   background: transparent !important;
   color: rgba(244,246,247,0.78) !important;
   font-weight: 700;
@@ -1054,26 +1096,15 @@ button:hover, .btn:hover, .btn-ghost:hover{
 }
 
 #screenHome .tab.active{
-  border-color: rgba(125,211,252,0.20) !important;
-  background:
-    linear-gradient(180deg, rgba(125,211,252,0.18), rgba(255,255,255,0.03)),
-    rgba(255,255,255,0.03) !important;
-  color: rgba(236,247,255,0.94) !important;
+  background: transparent !important;
+  color: rgba(248,249,250,0.96) !important;
 }
 
 #screenHome #tabRoleWaiter.active{
-  border-color: rgba(94,234,212,0.22) !important;
-  background:
-    linear-gradient(180deg, rgba(94,234,212,0.18), rgba(255,255,255,0.03)),
-    rgba(255,255,255,0.03) !important;
   color: rgba(235,255,250,0.94) !important;
 }
 
 #screenHome #tabRoleManager.active{
-  border-color: rgba(245,194,107,0.22) !important;
-  background:
-    linear-gradient(180deg, rgba(245,194,107,0.20), rgba(255,255,255,0.03)),
-    rgba(255,255,255,0.03) !important;
   color: rgba(255,247,232,0.94) !important;
 }
 
