@@ -14756,6 +14756,51 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           });
       }
 
+      function getEncounterPresentationStage(step = currentStep) {
+        if (step === 65) return "recovery";
+        if (step === 7) return "summary";
+
+        switch (step) {
+          case 0: return "load";
+          case 1: return "observe";
+          case 2: return "mode";
+          case 3: return "hook";
+          case 4: return "delivery";
+          case 5: return "reaction";
+          case 6: return "reflection";
+          default: return "default";
+        }
+      }
+
+      function updateEncounterPresentationState(step = currentStep) {
+        const panel = document.getElementById("encounterPanel");
+        if (!panel) return;
+
+        const stage = getEncounterPresentationStage(step);
+        panel.dataset.stage = stage;
+
+        const guestType = normalizeGuestType(currentEncounter?.guestStateActual || "");
+        if (guestType) panel.dataset.guest = guestType;
+        else delete panel.dataset.guest;
+
+        const signalRaw =
+          currentEncounter?.chainSignal ||
+          currentEncounter?.__reaction?.chainSignal ||
+          "";
+        const signal = String(signalRaw).toLowerCase();
+        if (signal === "green" || signal === "yellow" || signal === "red") {
+          panel.dataset.signal = signal;
+        } else {
+          delete panel.dataset.signal;
+        }
+
+        const skillFocus = String(currentEncounter?.skillFocus || "").toLowerCase();
+        if (skillFocus) panel.dataset.focus = skillFocus;
+        else delete panel.dataset.focus;
+
+        panel.dataset.session = (sessionType === "drill") ? "drill" : "service";
+      }
+
       function updateEncounterStageHeader(stepHeader, wineDisplayName, wineBadges) {
         const wine = currentEncounter?.wineSelected || { name: "DRILL" };
         const inDrill = sessionType === "drill";
@@ -15466,6 +15511,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
         const { checksRaw, reactionChecks } = getReactionChecksForCurrentEncounter();
         const result = computeEncounterReaction(reactionChecks);
+        updateEncounterPresentationState(5);
         return renderReactionResolvedUI(stepContent, bar, checksRaw, reactionChecks, result);
       }
 
@@ -15868,6 +15914,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
         const inDrill = sessionType === "drill";
         updateEncounterStageHeader(stepHeader, wineDisplayName, wineBadges);
+        updateEncounterPresentationState(currentStep);
 
         // ---- in-game Progression Status UI DISABLED (parent owns progression UX) ----
         if (true) { /* intentionally disabled */ }
