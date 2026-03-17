@@ -242,7 +242,7 @@ export function makeProgressReportSubmitHandler({
           scope_id: scopeId,
           restaurant_id: ctx.restaurantId,
           sender_user_id: ctx.userId,
-          receiver_user_id: null,
+          receiver_user_id: ctx.userId,
           sender_role: ctx.membershipRole || ctx.role || "waiter",
           type: "progress_report",
           body,

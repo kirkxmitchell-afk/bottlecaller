@@ -2228,12 +2228,18 @@
           role === "single_manager" ||
           role === "group_manager" ||
           role === "enterpriser";
+        const isManualSend =
+          source === "waiter_messenger" ||
+          source === "hud_request";
+        const isManagerSend =
+          source === "manager_auto_send" ||
+          isManualSend;
 
-        if (isWaiter && source !== "waiter_messenger") {
+        if (isWaiter && !isManualSend) {
           return { ok: false, error: "waiter_messenger_only" };
         }
 
-        if (isManagerLike && source !== "manager_auto_send") {
+        if (isManagerLike && !isManagerSend) {
           return { ok: false, error: "manager_auto_only" };
         }
 

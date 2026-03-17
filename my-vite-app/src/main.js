@@ -9762,7 +9762,7 @@ function renderManagerThreadMessagesGrouped(rows = [], nameMap = {}) {
 
 function renderManagerThreadListItem(thread, nameMap) {
   const active = String(window.__BC_MB_ACTIVE_THREAD_USER_ID__ || "") === String(thread.userId || "");
-  const name = escapeHtml(userLabel(thread.userId, nameMap));
+  const name = escapeHtml(String(thread?.title || userLabel(thread.userId, nameMap)));
   const preview = escapeHtml(String(thread.latestBody || "").slice(0, 80));
   const when = escapeHtml(String(thread.latestAt || ""));
   const type = String(thread.latestType || "message").toUpperCase();
@@ -11205,7 +11205,7 @@ function renderManagerActiveThread(nameMap) {
 
   const ordered = [...thread.rows].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
   setActiveManagerThreadState({ userId: thread.userId, rows: ordered });
-  if (titleEl) titleEl.textContent = userLabel(thread.userId, nameMap);
+  if (titleEl) titleEl.textContent = String(thread?.title || userLabel(thread.userId, nameMap));
   if (metaEl) metaEl.textContent = getManagerThreadMetaSummary(ordered);
   const recommendationHtml = safeCall(
     "renderManagerThreadRecommendation",
@@ -11315,13 +11315,23 @@ async function loadManagerMessenger(restaurantId = null) {
     const sender = row.sender_user_id;
     const receiver = row.receiver_user_id;
 
-    const otherUserId =
+    let threadUserId =
       String(sender) === String(managerId) ? receiver : sender;
+    let threadTitle = "";
+    let isSelfThread = false;
 
-    if (!otherUserId) continue;
+    if (!threadUserId && String(row?.type || "").toLowerCase() === "progress_report") {
+      threadUserId = managerId;
+      threadTitle = "Your Play";
+      isSelfThread = true;
+    }
 
-    const entry = grouped.get(otherUserId) || {
-      userId: otherUserId,
+    if (!threadUserId) continue;
+
+    const entry = grouped.get(threadUserId) || {
+      userId: threadUserId,
+      title: threadTitle,
+      isSelfThread,
       latestAt: row.created_at,
       latestBody: row.body || "",
       latestType: row.type || "message",
@@ -11329,6 +11339,8 @@ async function loadManagerMessenger(restaurantId = null) {
     };
 
     entry.rows.push(row);
+    if (!entry.title && threadTitle) entry.title = threadTitle;
+    if (isSelfThread) entry.isSelfThread = true;
 
     if (new Date(row.created_at) > new Date(entry.latestAt)) {
       entry.latestAt = row.created_at;
@@ -11336,7 +11348,7 @@ async function loadManagerMessenger(restaurantId = null) {
       entry.latestType = row.type || "message";
     }
 
-    grouped.set(otherUserId, entry);
+    grouped.set(threadUserId, entry);
   }
 
   const threads = Array.from(grouped.values())
