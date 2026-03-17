@@ -13513,7 +13513,7 @@ async function loadAuthedState(reason = "manual") {
 function setRole(role) {
   // UI uses a simplified waiter/manager choice.
   // Runtime premium role for manager signup maps to single_manager.
-  uiState.role = isManagerRole(role) ? "manager" : "waiter";
+  uiState.role = String(role || "").trim().toLowerCase() === "manager" ? "manager" : "waiter";
   const roleTabs = document.getElementById("roleTabs");
   const w = document.getElementById("tabRoleWaiter");
   const m = document.getElementById("tabRoleManager");
