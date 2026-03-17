@@ -1912,13 +1912,65 @@ button:hover, .btn:hover, .btn-ghost:hover{
 #screenManagerBoard #mbTab_live_controls > div[id^="mb"]::before,
 #screenManagerBoard #mbTab_performance > div[id^="mb"]::before,
 #screenManagerBoard #mbTab_enterprise > div[id^="mb"]::before{
-  display: block;
-  margin-bottom: 10px;
-  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  margin-bottom: 12px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02)),
+    rgba(255,255,255,0.02);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.04),
+    0 10px 22px rgba(0,0,0,0.12);
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: rgba(244,246,247,0.58);
+  color: rgba(244,246,247,0.72);
+}
+
+#screenManagerBoard #mbTab_overview > div[id^="mb"]::before{
+  border-color: rgba(125,211,252,0.18);
+  background:
+    linear-gradient(180deg, rgba(125,211,252,0.18), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.02);
+  color: rgba(232,245,255,0.84);
+}
+
+#screenManagerBoard #mbTab_people > div[id^="mb"]::before{
+  border-color: rgba(94,234,212,0.18);
+  background:
+    linear-gradient(180deg, rgba(94,234,212,0.18), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.02);
+  color: rgba(233,255,250,0.84);
+}
+
+#screenManagerBoard #mbTab_live_controls > div[id^="mb"]::before{
+  border-color: rgba(251,113,133,0.18);
+  background:
+    linear-gradient(180deg, rgba(251,113,133,0.18), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.02);
+  color: rgba(255,237,241,0.84);
+}
+
+#screenManagerBoard #mbTab_performance > div[id^="mb"]::before{
+  border-color: rgba(196,181,253,0.18);
+  background:
+    linear-gradient(180deg, rgba(196,181,253,0.18), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.02);
+  color: rgba(243,239,255,0.84);
+}
+
+#screenManagerBoard #mbTab_enterprise > div[id^="mb"]::before{
+  border-color: rgba(244,114,182,0.18);
+  background:
+    linear-gradient(180deg, rgba(244,114,182,0.18), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.02);
+  color: rgba(255,237,247,0.84);
 }
 
 #screenManagerBoard #mbRestaurantContextCard::before{ content: "Restaurant Context"; }
@@ -1949,6 +2001,7 @@ button:hover, .btn:hover, .btn-ghost:hover{
 #screenManagerBoard #mbAreaAbilitiesPanel .card > div:first-child[style*="font-weight:600"],
 #screenManagerBoard #mbTimedChallengeQuickActionsPanel > .card > div:first-child[style*="font-weight:600"],
 #screenManagerBoard #mbInsightsPanel .card > div:first-child[style*="font-weight:700"],
+#screenManagerBoard #mbInsightsPanel > .card > div:first-child[style*="font-weight:700"],
 #screenManagerBoard #mbEnterprisePanel .card > div:first-child[style*="font-weight:600"]{
   display: none !important;
 }
