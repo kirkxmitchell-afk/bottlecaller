@@ -14812,42 +14812,173 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         }
       }
 
+      const ENCOUNTER_STAGE_THEME = Object.freeze({
+        default: Object.freeze({
+          tone: "default",
+          accentRgb: "125, 211, 252",
+          ink: "rgba(236, 249, 255, 0.97)",
+        }),
+        load: Object.freeze({
+          tone: "anticipation",
+          accentRgb: "196, 181, 253",
+          ink: "rgba(247, 244, 255, 0.97)",
+        }),
+        observe: Object.freeze({
+          tone: "read",
+          accentRgb: "125, 211, 252",
+          ink: "rgba(236, 249, 255, 0.97)",
+        }),
+        mode: Object.freeze({
+          tone: "control",
+          accentRgb: "103, 232, 249",
+          ink: "rgba(232, 253, 255, 0.97)",
+        }),
+        hook: Object.freeze({
+          tone: "framing",
+          accentRgb: "251, 146, 60",
+          ink: "rgba(255, 243, 232, 0.97)",
+        }),
+        delivery: Object.freeze({
+          tone: "close",
+          accentRgb: "245, 194, 107",
+          ink: "rgba(255, 248, 233, 0.97)",
+        }),
+        reaction: Object.freeze({
+          tone: "tension",
+          accentRgb: "244, 114, 182",
+          ink: "rgba(255, 239, 249, 0.97)",
+        }),
+        reflection: Object.freeze({
+          tone: "analysis",
+          accentRgb: "52, 211, 153",
+          ink: "rgba(234, 255, 247, 0.97)",
+        }),
+        recovery: Object.freeze({
+          tone: "repair",
+          accentRgb: "251, 113, 133",
+          ink: "rgba(255, 239, 244, 0.97)",
+        }),
+        summary: Object.freeze({
+          tone: "summary",
+          accentRgb: "94, 234, 212",
+          ink: "rgba(236, 255, 252, 0.97)",
+        }),
+      });
+
+      const ENCOUNTER_SIGNAL_THEME = Object.freeze({
+        green: Object.freeze({
+          accentRgb: "52, 211, 153",
+          ink: "rgba(234, 255, 247, 0.98)",
+          mood: "secured",
+        }),
+        yellow: Object.freeze({
+          accentRgb: "245, 194, 107",
+          ink: "rgba(255, 249, 235, 0.98)",
+          mood: "unstable",
+        }),
+        red: Object.freeze({
+          accentRgb: "251, 113, 133",
+          ink: "rgba(255, 238, 243, 0.98)",
+          mood: "broken",
+        }),
+      });
+
+      function resolveEncounterPresentation(encounter, step = currentStep) {
+        const stage = getEncounterPresentationStage(step);
+        const stageTheme = ENCOUNTER_STAGE_THEME[stage] || ENCOUNTER_STAGE_THEME.default;
+        const guest = normalizeGuestType(encounter?.guestStateActual || "");
+        const focus = String(encounter?.skillFocus || "").toLowerCase();
+        const signalRaw =
+          encounter?.chainSignal ||
+          encounter?.__reaction?.chainSignal ||
+          "";
+        const signal = String(signalRaw).toLowerCase();
+        const signalTheme = ENCOUNTER_SIGNAL_THEME[signal] || null;
+        const session = (sessionType === "drill") ? "drill" : "service";
+
+        return {
+          stage,
+          tone: stageTheme.tone,
+          mood: signalTheme?.mood || (stage === "recovery" ? "repair" : stageTheme.tone),
+          guest,
+          focus,
+          session,
+          signal: signalTheme ? signal : "",
+          accentRgb: signalTheme?.accentRgb || stageTheme.accentRgb,
+          ink: signalTheme?.ink || stageTheme.ink,
+        };
+      }
+
+      function refreshEncounterPresentation(encounter = currentEncounter, step = currentStep) {
+        if (!encounter) return null;
+        const presentation = resolveEncounterPresentation(encounter, step);
+        encounter.presentation = presentation;
+        return presentation;
+      }
+
       function updateEncounterPresentationState(step = currentStep) {
+        const shell = document.getElementById("bcShell");
+        const rail = document.getElementById("bcRail");
+        const hudTop = document.getElementById("bcHudTop");
+        const hudBottom = document.getElementById("bcHudBottom");
         const panel = document.getElementById("encounterPanel");
         const stepContent = document.getElementById("stepContent");
         if (!panel) return;
 
-        const stage = getEncounterPresentationStage(step);
-        panel.dataset.stage = stage;
-        if (stepContent) stepContent.dataset.stage = stage;
+        const presentation = refreshEncounterPresentation(currentEncounter, step);
+        if (!presentation) return;
 
-        const guestType = normalizeGuestType(currentEncounter?.guestStateActual || "");
-        if (guestType) panel.dataset.guest = guestType;
+        panel.dataset.stage = presentation.stage;
+        panel.dataset.tone = presentation.tone;
+        panel.dataset.mood = presentation.mood;
+        panel.dataset.session = presentation.session;
+        panel.style.setProperty("--stage-accent-rgb", presentation.accentRgb);
+        panel.style.setProperty("--stage-ink", presentation.ink);
+
+        const shellNodes = [shell, rail, hudTop, hudBottom].filter(Boolean);
+        shellNodes.forEach((node) => {
+          node.dataset.stage = presentation.stage;
+          node.dataset.tone = presentation.tone;
+          node.dataset.mood = presentation.mood;
+          node.dataset.session = presentation.session;
+          node.style.setProperty("--stage-accent-rgb", presentation.accentRgb);
+          node.style.setProperty("--stage-ink", presentation.ink);
+        });
+
+        if (presentation.guest) panel.dataset.guest = presentation.guest;
         else delete panel.dataset.guest;
 
-        const signalRaw =
-          currentEncounter?.chainSignal ||
-          currentEncounter?.__reaction?.chainSignal ||
-          "";
-        const signal = String(signalRaw).toLowerCase();
-        if (signal === "green" || signal === "yellow" || signal === "red") {
-          panel.dataset.signal = signal;
-          if (stepContent) stepContent.dataset.signal = signal;
-        } else {
-          delete panel.dataset.signal;
-          if (stepContent) delete stepContent.dataset.signal;
-        }
+        shellNodes.forEach((node) => {
+          if (presentation.guest) node.dataset.guest = presentation.guest;
+          else delete node.dataset.guest;
+        });
 
-        const skillFocus = String(currentEncounter?.skillFocus || "").toLowerCase();
-        if (skillFocus) panel.dataset.focus = skillFocus;
+        if (presentation.focus) panel.dataset.focus = presentation.focus;
         else delete panel.dataset.focus;
-        if (stepContent) {
-          if (skillFocus) stepContent.dataset.focus = skillFocus;
-          else delete stepContent.dataset.focus;
-        }
 
-        panel.dataset.session = (sessionType === "drill") ? "drill" : "service";
-        if (stepContent) stepContent.dataset.session = panel.dataset.session;
+        shellNodes.forEach((node) => {
+          if (presentation.focus) node.dataset.focus = presentation.focus;
+          else delete node.dataset.focus;
+        });
+
+        if (presentation.signal) panel.dataset.signal = presentation.signal;
+        else delete panel.dataset.signal;
+
+        shellNodes.forEach((node) => {
+          if (presentation.signal) node.dataset.signal = presentation.signal;
+          else delete node.dataset.signal;
+        });
+
+        if (stepContent) {
+          stepContent.dataset.stage = presentation.stage;
+          stepContent.dataset.tone = presentation.tone;
+          stepContent.dataset.mood = presentation.mood;
+          stepContent.dataset.session = presentation.session;
+          if (presentation.focus) stepContent.dataset.focus = presentation.focus;
+          else delete stepContent.dataset.focus;
+          if (presentation.signal) stepContent.dataset.signal = presentation.signal;
+          else delete stepContent.dataset.signal;
+        }
       }
 
       function updateEncounterStageHeader(stepHeader, wineDisplayName, wineBadges) {
@@ -16322,6 +16453,418 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         }
       }
 
+      function getEncounterProgressionWindow(isDemoNow, list) {
+        let points = 0;
+        let allowedGuestTypes = [];
+        let minEncounter = 1;
+        let maxEncounter = Number.MAX_SAFE_INTEGER;
+
+        if (!isDemoNow) {
+          const progression = getNormalizedProgressionState();
+          points = Number(progression?.economy?.points ?? 0);
+          allowedGuestTypes = Array.isArray(progression?.economy?.allowedGuestTypes)
+            ? progression.economy.allowedGuestTypes.slice()
+            : [];
+          const range = progression?.economy?.encounterRange;
+          if (Array.isArray(range) && range.length === 2) {
+            minEncounter = Number(range[0] ?? 1);
+            maxEncounter = Number(range[1] ?? Number.MAX_SAFE_INTEGER);
+          }
+          const encounterNumber = encounterIndex + 1;
+          if (encounterNumber < minEncounter) encounterIndex = minEncounter - 1;
+          if (encounterNumber > maxEncounter) encounterIndex = maxEncounter - 1;
+        }
+
+        if (!isDemoNow && encounterIndex >= list.length) {
+          resetNavState();
+          showScreen("screenHome");
+          return null;
+        }
+
+        return {
+          points,
+          allowedGuestTypes,
+          minEncounter,
+          maxEncounter,
+        };
+      }
+
+      function selectEncounterCandidate(list, isDemoNow, progressionWindow) {
+        const { points, allowedGuestTypes, minEncounter, maxEncounter } = progressionWindow;
+        let idx = 0;
+        let enc = null;
+
+        if (sessionType === "drill") {
+          const drill = getDrillConfig() || {};
+          const drillPool = Array.isArray(drill.pool) ? drill.pool.map(normalizeGuestType) : [];
+
+          let src = Array.isArray(list) ? list : [];
+          src = src.filter((e) => {
+            const guestType = normalizeGuestType(e?.guestStateActual);
+            const encounterNo = Number(e?.encounterNumber);
+            const inDrillPool = !drillPool.length || drillPool.includes(guestType);
+            const guestAllowed = !allowedGuestTypes.length || allowedGuestTypes.includes(guestType);
+            const encounterAllowed =
+              !Number.isFinite(encounterNo) ||
+              (encounterNo >= minEncounter && encounterNo <= maxEncounter);
+
+            return inDrillPool && guestAllowed && encounterAllowed;
+          });
+
+          if (!src.length) {
+            src = (Array.isArray(list) ? list : []).filter((e) => {
+              const guestType = normalizeGuestType(e?.guestStateActual);
+              const encounterNo = Number(e?.encounterNumber);
+              const guestAllowed = !allowedGuestTypes.length || allowedGuestTypes.includes(guestType);
+              const encounterAllowed =
+                !Number.isFinite(encounterNo) ||
+                (encounterNo >= minEncounter && encounterNo <= maxEncounter);
+              return guestAllowed && encounterAllowed;
+            });
+
+            console.warn("[DRILL] drill pool produced no progression-safe encounters; using progression-safe fallback", {
+              drillPool,
+              allowedGuestTypes,
+              encounterRange: [minEncounter, maxEncounter],
+              fallbackCount: src.length
+            });
+          }
+
+          const use = (Array.isArray(src) && src.length) ? src : list;
+          idx = (typeof encounterIndex === "number" ? encounterIndex : 0) % use.length;
+          enc = use[idx] || use[0] || null;
+
+          console.log("[DRILL] selected encounter candidates", {
+            drillPool,
+            allowedGuestTypes,
+            encounterRange: [minEncounter, maxEncounter],
+            poolSize: Array.isArray(src) ? src.length : 0,
+            allSize: Array.isArray(list) ? list.length : 0,
+            selectedEncounter: enc?.encounterNumber ?? null,
+            selectedGuest: normalizeGuestType(enc?.guestStateActual)
+          });
+        } else {
+          let src = list;
+          if (!isDemoNow) {
+            src = (Array.isArray(list) ? list : []).filter((e) => {
+              const guestType = normalizeGuestType(e?.guestStateActual);
+              const encounterNo = Number(e?.encounterNumber);
+              const guestAllowed = !allowedGuestTypes.length || allowedGuestTypes.includes(guestType);
+              const encounterAllowed =
+                !Number.isFinite(encounterNo) ||
+                (encounterNo >= minEncounter && encounterNo <= maxEncounter);
+              return guestAllowed && encounterAllowed;
+            });
+            console.log("[PROG] encounter candidates", {
+              points,
+              allowedGuestTypes,
+              encounterRange: [minEncounter, maxEncounter],
+              poolSize: src.length,
+              allSize: Array.isArray(list) ? list.length : 0,
+            });
+          }
+          src = (Array.isArray(src) && src.length) ? src : list;
+          idx = (Number.isFinite(encounterIndex) ? encounterIndex : 0) % src.length;
+          enc = src[idx] || list[0] || null;
+        }
+
+        return { idx, enc };
+      }
+
+      function selectEncounterWine(isDemoNow) {
+        if (sessionType === "drill") {
+          return { name: "DRILL", varietal: "", region: "", story: "" };
+        }
+
+        const wine = isDemoNow
+          ? (wines[(encounterIndex % wines.length)] || wines[0] || null)
+          : pickRandomPremiumEncounterWine();
+
+        return wine || null;
+      }
+
+      function prepareEncounterForRun(enc, prevEncounterState) {
+        enc = normalizeEncounterSchema(enc);
+        enc.encounterNumber = enc.encounterNumber ?? (encounterIndex + 1);
+
+        const encounterIdStable =
+          enc.id ||
+          enc.encounterId ||
+          `${bcMode}_${String(enc.encounterNumber ?? (encounterIndex + 1))}`;
+        const runIndex = Number.isFinite(encounterIndex) ? encounterIndex : 0;
+        const encounterRunId = `${encounterIdStable}::i_${runIndex}`;
+        const variationSeed = `${encounterRunId}::${enc.guestStateActual || ""}::${getEncounterSessionNonce()}`;
+        const selectedVariation = pickEncounterVariation(enc, variationSeed);
+        enc = applyEncounterVariation(enc, selectedVariation);
+        enc.encounterNumber = enc.encounterNumber ?? (encounterIndex + 1);
+        enc.guestStateActual = normalizeGuestType(enc.guestStateActual);
+        enc = enforceGuestPoolByTier(enc);
+        enc = normalizeEncounterSchema(enc);
+
+        console.log("[START_ENCOUNTER][ENC_READY]", {
+          encounterNumber: enc?.encounterNumber,
+          guestStateActual: enc?.guestStateActual,
+          difficulty: enc?.difficulty,
+          toneTag: enc?.toneTag,
+          tags: enc?.tags,
+          meta: enc?.meta,
+          variationId: enc?.variationId,
+          variationLabel: enc?.variationLabel,
+          trapProfile: enc?.trapProfile,
+          pressureBias: enc?.pressureBias,
+          physicalCues: enc?.physicalCues,
+          verbalCues: enc?.verbalCues
+        });
+
+        console.assert(
+          typeof enc.encounterNumber === "number",
+          "[BC] Encounter missing encounterNumber",
+          enc
+        );
+
+        const preferNonEmpty = (next, prev) =>
+          (next != null && String(next).trim() !== "") ? next : prev;
+
+        const variantSeed = `${encounterIdStable}::${encounterRunId}::${enc.guestStateActual || ""}`;
+        const presentationCtx = getEncounterPresentationContext();
+
+        enc.contextLine = pickEncounterVariant(
+          enc.contextLine,
+          getContextLineVariants(enc.guestStateActual, presentationCtx),
+          variantSeed + "::context"
+        );
+
+        enc.guestLine = pickEncounterVariant(
+          enc.guestLine,
+          getGuestLineVariants(enc.guestStateActual, presentationCtx),
+          variantSeed + "::guest"
+        );
+
+        if (enc.verbalCues.length) {
+          const extraCue = pickEncounterVariant(
+            enc.verbalCues[0],
+            getVerbalCueVariants(enc.guestStateActual, presentationCtx),
+            `${encounterIdStable}::${encounterRunId}::cue`
+          );
+
+          if (extraCue && !enc.verbalCues.includes(extraCue)) {
+            enc.verbalCues = [extraCue, ...enc.verbalCues].slice(0, 3);
+          }
+        }
+
+        const sameEncounter = !!prevEncounterState?.runId && prevEncounterState.runId === encounterRunId;
+        const carry = sameEncounter ? buildCarryEncounterState(prevEncounterState, encounterRunId) : null;
+
+        return {
+          enc,
+          encounterIdStable,
+          encounterRunId,
+          sameEncounter,
+          carry,
+          preferNonEmpty,
+        };
+      }
+
+      function resolveEncounterPolicy(enc, isDemoNow) {
+        let policy = difficultyPolicy(enc.difficulty ?? 1);
+
+        if (!isDemoNow) {
+          ensureProgLoaded();
+          const spine = getProgressionSpine({ allowNull: true });
+          const seedFromProg = Number(spine?.selectors?.effectiveDifficultySeed?.() ?? 1);
+          const policySeed =
+            (window.__BC_GUARD__ && Number.isFinite(window.__BC_GUARD__.finalDifficulty))
+              ? window.__BC_GUARD__.finalDifficulty
+              : ((window.__BC_DIFFICULTY__ && Number.isFinite(window.__BC_DIFFICULTY__.d))
+                  ? window.__BC_DIFFICULTY__.d
+                  : (Number.isFinite(seedFromProg) ? seedFromProg : (enc.difficulty ?? 1)));
+          enc.difficulty = enc.difficulty ?? policySeed ?? 1;
+          policy = difficultyPolicy(enc.difficulty);
+          const spineTier = Number(spine?.selectors?.tier?.() ?? 1);
+          window.__BC_DIFFICULTY__ = {
+            ...policy,
+            tierUnlocked: spineTier,
+            pressure: getNormalizedProgressionState()?.session?.pressureLevel || 0
+          };
+          syncProgressionStateMirror({
+            difficultySeed: policy.d,
+            persistGuard: false
+          });
+        } else {
+          enc.difficulty = enc.difficulty ?? 1;
+          window.__BC_DIFFICULTY__ = {
+            d: 1,
+            pivotChance: 0.2,
+            hookStrictness: "lenient",
+            hookStrict: false,
+            deliveryStrict: false,
+            deliveryNoise: 0,
+            timeLimitSec: null,
+            streakGate: "relaxed",
+            streakPenaltyMultiplier: 1,
+            tierUnlocked: 1,
+            pressure: 0
+          };
+        }
+
+        return policy;
+      }
+
+      function buildEncounterRuntimeState(enc, wine, carry, sameEncounter, encounterIdStable, encounterRunId, policy, preferNonEmpty) {
+        const pivotPlanned = sameEncounter
+          ? (carry?.pivotPlanned ?? false)
+          : (Math.random() < (policy.pivotChance ?? 0));
+        const pivotBias =
+          policy.d >= 6 ? "hard" :
+          policy.d >= 4 ? "medium" :
+          "soft";
+
+        const encounter = {
+          runId: encounterRunId,
+          __logged: false,
+          __progressionApplied: false,
+          __finalized: false,
+          __recoveryLocked: false,
+          __progressAutoSendStarted: false,
+          __progressAutoSendDone: false,
+          __progressAutoSendResult: null,
+          id: encounterIdStable,
+          encounterId: encounterIdStable,
+
+          encounterNumber: enc.encounterNumber ?? (encounterIndex + 1),
+          steps: Array.isArray(enc.steps) ? enc.steps : [],
+          meta: enc.meta || null,
+          skillFocus: (enc.meta && enc.meta.skillFocus) ? enc.meta.skillFocus : "read",
+          guestStateActual: window.normalizeGuestType(preferNonEmpty(enc.guestStateActual, "")),
+          contextLine: preferNonEmpty(enc.contextLine, ""),
+          guestLine: preferNonEmpty(enc.guestLine, ""),
+          physicalCues: Array.isArray(enc.physicalCues) ? enc.physicalCues : [],
+          verbalCues: Array.isArray(enc.verbalCues) ? enc.verbalCues : [],
+          variations: Array.isArray(enc.variations) ? enc.variations : [],
+          toneTag: enc.toneTag || "",
+
+          difficulty: enc.difficulty,
+          tags: Array.isArray(enc.tags) ? [...enc.tags] : [],
+          variationId: enc.variationId || "",
+          variationLabel: enc.variationLabel || "",
+          variationNotes: enc.variationNotes || "",
+          pressureBias: enc.pressureBias || null,
+          trapProfile: enc.trapProfile || null,
+          policy,
+          showStrictBadge: (policy.d ?? enc.difficulty ?? 1) >= 4,
+          pivotPlanned,
+          pivotBias,
+          pivotType: "",
+          recoveryText: "",
+          recoveryWhy: "",
+          recoveryCorrectMode: "",
+          recoveryCorrectModeRaw: "",
+
+          wineSelected: wine,
+
+          guestReadSelected: carry?.guestReadSelected || "",
+          modeSelected: carry?.modeSelected || "",
+          hookSelected: carry?.hookSelected || "",
+          hookSelectedKey: carry?.hookSelectedKey || "",
+          hookMeta: carry?.hookMeta || null,
+
+          selectedS1: carry?.selectedS1 ?? null,
+          selectedS2: carry?.selectedS2 ?? null,
+          deliveryLine1: carry?.deliveryLine1 || "",
+          deliveryLine2: carry?.deliveryLine2 || "",
+          deliveryLine1Key: carry?.deliveryLine1Key || "",
+          deliveryLine2Key: carry?.deliveryLine2Key || "",
+          recoveryChoice: carry?.recoveryChoice || "",
+
+          hookOptions: carry?.hookOptions || null,
+          deliverOptionsS1: carry?.deliverOptionsS1 || null,
+          deliverOptionsS2: carry?.deliverOptionsS2 || null,
+
+          correctSlotS1: carry?.correctSlotS1 ?? null,
+          correctSlotS2: carry?.correctSlotS2 ?? null,
+          correctDeliveryLine1: carry?.correctDeliveryLine1 || "",
+          correctDeliveryLine2: carry?.correctDeliveryLine2 || "",
+          correctDeliveryLine1Key: carry?.correctDeliveryLine1Key || "",
+          correctDeliveryLine2Key: carry?.correctDeliveryLine2Key || "",
+
+          correctModeResolved: "",
+          correctModeNeutralResolved: "",
+          correctHookResolved: "",
+          correctHookNeutralResolved: "",
+          recoveryCorrectModeResolved: "",
+
+          readCorrect: false,
+          modeStatus: "neutral",
+          hookStatus: "neutral",
+          deliveryCorrect: false,
+          recoveryCorrect: false,
+
+          chainScore: null,
+          chainSignal: "",
+          resetUsed: false,
+          guestPressure: initGuestPressureState(enc),
+
+          __reactionComputed: false,
+          __uxSummaryBuilt: false,
+          __recoveryLocked: false,
+          __resolvedLogged: false,
+          __reaction: null,
+          __uxSummary: null,
+          presentation: null
+        };
+
+        if (!sameEncounter) {
+          resetEncounterVolatileState(encounter);
+        }
+
+        const unlockedModesNow = getUnlockedModesForCurrentPlayer();
+        if (encounter.correctMode) {
+          encounter.correctModeResolved = resolveCorrectModeForPlayer(
+            encounter.correctMode,
+            unlockedModesNow
+          );
+        }
+
+        if (encounter.recoveryCorrectMode || encounter.recoveryCorrectModeRaw) {
+          encounter.recoveryCorrectModeResolved = resolveCorrectModeForPlayer(
+            encounter.recoveryCorrectMode || encounter.recoveryCorrectModeRaw,
+            unlockedModesNow
+          );
+        }
+
+        assertModeConsistency(unlockedModesNow, encounter.correctModeResolved, {
+          encounterNumber: encounter?.encounterNumber,
+          tier: getProgressionSpine({ allowNull: true })?.selectors?.tier?.(),
+          points: getProgressionSpine({ allowNull: true })?.selectors?.points?.(),
+          source: "startEncounter_sanitize"
+        });
+
+        encounter.presentation = resolveEncounterPresentation(encounter, 0);
+
+        return encounter;
+      }
+
+      function resetLegacyBc3StageState(encounter) {
+        window.__BC_LAST_ENCOUNTER__ = encounter;
+
+        try {
+          if (window.__BC3__) {
+            window.__BC3__.active = false;
+            window.__BC3__.enc = null;
+            window.__BC3__.step = 0;
+          }
+
+          window.bc3Active = false;
+          window.bc3Enc = null;
+          window.bc3Step = 0;
+          window.bcActiveEncounter = null;
+          window.bcStepIndex = 0;
+          window.bcStageResults = [];
+        } catch (e) {
+          console.warn("[BC3] reset warn", e);
+        }
+      }
+
       async function startEncounter() {
         // DEMO FORCE
         if (window.isDemo || window.bcMode === "demo") forceDemoLocals();
@@ -16446,127 +16989,11 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         bcRenderHud("start");
 
         console.log("[DEMO_SPINE_GUARD]", { isDemo: window.isDemo, bcMode: window.bcMode });
-        let points = 0;
-        let allowedGuestTypes = [];
-        let minEncounter = 1;
-        let maxEncounter = Number.MAX_SAFE_INTEGER;
-        if (!isDemoNow) {
-          const progression = getNormalizedProgressionState();
-          points = Number(progression?.economy?.points ?? 0);
-          allowedGuestTypes = Array.isArray(progression?.economy?.allowedGuestTypes)
-            ? progression.economy.allowedGuestTypes.slice()
-            : [];
-          const range = progression?.economy?.encounterRange;
-          if (Array.isArray(range) && range.length === 2) {
-            minEncounter = Number(range[0] ?? 1);
-            maxEncounter = Number(range[1] ?? Number.MAX_SAFE_INTEGER);
-          }
-          const encounterNumber = encounterIndex + 1;
-          if (encounterNumber < minEncounter) encounterIndex = minEncounter - 1;
-          if (encounterNumber > maxEncounter) encounterIndex = maxEncounter - 1;
-        }
+        const progressionWindow = getEncounterProgressionWindow(isDemoNow, list);
+        if (!progressionWindow) return;
 
-        // ----------------------------
-        // Index rules (progression)
-        // ----------------------------
-        // Premium: STOP when complete (finite)
-        if (!isDemoNow && encounterIndex >= list.length) {
-          resetNavState();
-          showScreen("screenHome");
-          return;
-        }
-
-        let idx = 0;
-        let enc = null;
         const prevEncounterState = currentEncounter || null;
-
-        if (sessionType === "drill") {
-          const drill = getDrillConfig() || {};
-          const drillPool = Array.isArray(drill.pool) ? drill.pool.map(normalizeGuestType) : [];
-
-          let src = Array.isArray(list) ? list : [];
-
-          // Drill must still respect main progression standard.
-          src = src.filter((e) => {
-            const guestType = normalizeGuestType(e?.guestStateActual);
-            const encounterNo = Number(e?.encounterNumber);
-
-            const inDrillPool =
-              !drillPool.length || drillPool.includes(guestType);
-
-            const guestAllowed =
-              !allowedGuestTypes.length || allowedGuestTypes.includes(guestType);
-
-            const encounterAllowed =
-              !Number.isFinite(encounterNo) ||
-              (encounterNo >= minEncounter && encounterNo <= maxEncounter);
-
-            return inDrillPool && guestAllowed && encounterAllowed;
-          });
-
-          // Fallback 1: if drill pool is too strict, fall back to progression-safe candidates
-          if (!src.length) {
-            src = (Array.isArray(list) ? list : []).filter((e) => {
-              const guestType = normalizeGuestType(e?.guestStateActual);
-              const encounterNo = Number(e?.encounterNumber);
-
-              const guestAllowed =
-                !allowedGuestTypes.length || allowedGuestTypes.includes(guestType);
-
-              const encounterAllowed =
-                !Number.isFinite(encounterNo) ||
-                (encounterNo >= minEncounter && encounterNo <= maxEncounter);
-
-              return guestAllowed && encounterAllowed;
-            });
-
-            console.warn("[DRILL] drill pool produced no progression-safe encounters; using progression-safe fallback", {
-              drillPool,
-              allowedGuestTypes,
-              encounterRange: [minEncounter, maxEncounter],
-              fallbackCount: src.length
-            });
-          }
-
-          // Fallback 2: final fallback to list if absolutely nothing matched
-          // (should be rare; keeps app from crashing)
-          const use = (Array.isArray(src) && src.length) ? src : list;
-
-          idx = (typeof encounterIndex === "number" ? encounterIndex : 0) % use.length;
-          enc = use[idx] || use[0] || null;
-
-          console.log("[DRILL] selected encounter candidates", {
-            drillPool,
-            allowedGuestTypes,
-            encounterRange: [minEncounter, maxEncounter],
-            poolSize: Array.isArray(src) ? src.length : 0,
-            allSize: Array.isArray(list) ? list.length : 0,
-            selectedEncounter: enc?.encounterNumber ?? null,
-            selectedGuest: normalizeGuestType(enc?.guestStateActual)
-          });
-        } else {
-          let src = list;
-          if (!isDemoNow) {
-            src = (Array.isArray(list) ? list : []).filter((e) => {
-              const guestType = normalizeGuestType(e?.guestStateActual);
-              const encounterNo = Number(e?.encounterNumber);
-              const guestAllowed = !allowedGuestTypes.length || allowedGuestTypes.includes(guestType);
-              const encounterAllowed = !Number.isFinite(encounterNo) || (encounterNo >= minEncounter && encounterNo <= maxEncounter);
-              return guestAllowed && encounterAllowed;
-            });
-            console.log("[PROG] encounter candidates", {
-              points,
-              allowedGuestTypes,
-              encounterRange: [minEncounter, maxEncounter],
-              poolSize: src.length,
-              allSize: Array.isArray(list) ? list.length : 0,
-            });
-          }
-          src = (Array.isArray(src) && src.length) ? src : list;
-
-          idx = (Number.isFinite(encounterIndex) ? encounterIndex : 0) % src.length;
-          enc = src[idx] || list[0] || null;
-        }
+        const { enc } = selectEncounterCandidate(list, isDemoNow, progressionWindow);
 
         // --- BC3 FORCE ROUTE (authoritative) ---
         currentEncounter = enc;
@@ -16586,286 +17013,28 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         // ----------------------------
         // Wine selection
         // ----------------------------
-        let wine = null;
-        if (sessionType === "drill") {
-          // Placeholder for drill so renderers can read wineSelected.name safely.
-          wine = { name: "DRILL", varietal: "", region: "", story: "" };
-        } else {
-          if (isDemoNow) {
-            // Demo: wine matches encounter index (same pacing)
-            wine = wines[(encounterIndex % wines.length)] || wines[0] || null;
-          } else {
-            // Premium: randomize bottle per encounter, avoiding immediate repeats when possible.
-            wine = pickRandomPremiumEncounterWine();
-          }
-
-          if (!wine) {
-            alert("No wine available. Please add wines first.");
-            return;
-          }
+        const wine = selectEncounterWine(isDemoNow);
+        if (!wine) {
+          alert("No wine available. Please add wines first.");
+          return;
         }
 
         // ----------------------------
         // Normalize encounter -> UI state
         // ----------------------------
-        enc = normalizeEncounterSchema(enc);
-        enc.encounterNumber = enc.encounterNumber ?? (encounterIndex + 1);
-        const encounterIdStable =
-          enc.id ||
-          enc.encounterId ||
-          `${bcMode}_${String(enc.encounterNumber ?? (encounterIndex + 1))}`;
-        const runIndex = Number.isFinite(encounterIndex) ? encounterIndex : 0;
-        const encounterRunId = `${encounterIdStable}::i_${runIndex}`;
-        const variationSeed = `${encounterRunId}::${enc.guestStateActual || ""}::${getEncounterSessionNonce()}`;
-        const selectedVariation = pickEncounterVariation(enc, variationSeed);
-        enc = applyEncounterVariation(enc, selectedVariation);
-        enc.encounterNumber = enc.encounterNumber ?? (encounterIndex + 1);
-        enc.guestStateActual = normalizeGuestType(enc.guestStateActual);
-        enc = enforceGuestPoolByTier(enc);
-        enc = normalizeEncounterSchema(enc);
-        console.log("[START_ENCOUNTER][ENC_READY]", {
-          encounterNumber: enc?.encounterNumber,
-          guestStateActual: enc?.guestStateActual,
-          difficulty: enc?.difficulty,
-          toneTag: enc?.toneTag,
-          tags: enc?.tags,
-          meta: enc?.meta,
-          variationId: enc?.variationId,
-          variationLabel: enc?.variationLabel,
-          trapProfile: enc?.trapProfile,
-          pressureBias: enc?.pressureBias,
-          physicalCues: enc?.physicalCues,
-          verbalCues: enc?.verbalCues
-        });
-
-        console.assert(
-          typeof enc.encounterNumber === "number",
-          "[BC] Encounter missing encounterNumber",
-          enc
-        );
-        function preferNonEmpty(next, prev) {
-          return (next != null && String(next).trim() !== "") ? next : prev;
-        }
-
-        // NEW: run-unique id so "NEXT ENCOUNTER" is always a fresh attempt,
-        // even if the same template repeats due to tier filtering.
-        const variantSeed = `${encounterIdStable}::${encounterRunId}::${enc.guestStateActual || ""}`;
-        const presentationCtx = getEncounterPresentationContext();
-
-        enc.contextLine = pickEncounterVariant(
-          enc.contextLine,
-          getContextLineVariants(enc.guestStateActual, presentationCtx),
-          variantSeed + "::context"
-        );
-
-        enc.guestLine = pickEncounterVariant(
-          enc.guestLine,
-          getGuestLineVariants(enc.guestStateActual, presentationCtx),
-          variantSeed + "::guest"
-        );
-
-        if (enc.verbalCues.length) {
-          const presentationCtx = getEncounterPresentationContext();
-          const variantSeed = `${encounterIdStable}::${encounterRunId}::cue`;
-
-          const extraCue = pickEncounterVariant(
-            enc.verbalCues[0],
-            getVerbalCueVariants(enc.guestStateActual, presentationCtx),
-            variantSeed
-          );
-
-          if (extraCue && !enc.verbalCues.includes(extraCue)) {
-            enc.verbalCues = [extraCue, ...enc.verbalCues].slice(0, 3);
-          }
-        }
-
-        const prev = prevEncounterState;
-        const sameEncounter = !!prev?.runId && prev.runId === encounterRunId;
-        const carry = sameEncounter ? buildCarryEncounterState(prev, encounterRunId) : null;
-
-        let policy = difficultyPolicy(enc.difficulty ?? 1);
-        if (!isDemoNow) {
-          ensureProgLoaded();
-          let seedFromProg = 1;
-          if (!isDemoNow) {
-            const spine = getProgressionSpine({ allowNull: true });
-            seedFromProg = Number(spine?.selectors?.effectiveDifficultySeed?.() ?? 1);
-          }
-          const policySeed =
-            (window.__BC_GUARD__ && Number.isFinite(window.__BC_GUARD__.finalDifficulty))
-              ? window.__BC_GUARD__.finalDifficulty
-              : ((window.__BC_DIFFICULTY__ && Number.isFinite(window.__BC_DIFFICULTY__.d))
-                  ? window.__BC_DIFFICULTY__.d
-                  : (Number.isFinite(seedFromProg)
-                      ? seedFromProg
-                      : (enc.difficulty ?? 1)));
-          enc.difficulty = enc.difficulty ?? policySeed ?? 1;
-          policy = difficultyPolicy(enc.difficulty);
-          const spineTier = Number(getProgressionSpine({ allowNull: true })?.selectors?.tier?.() ?? 1);
-          window.__BC_DIFFICULTY__ = {
-            ...policy,
-            tierUnlocked: spineTier,
-            pressure: getNormalizedProgressionState()?.session?.pressureLevel || 0
-          };
-          syncProgressionStateMirror({
-            difficultySeed: policy.d,
-            persistGuard: false
-          });
-        } else {
-          enc.difficulty = enc.difficulty ?? 1;
-          window.__BC_DIFFICULTY__ = {
-            d: 1,
-            pivotChance: 0.2,
-            hookStrictness: "lenient",
-            hookStrict: false,
-            deliveryStrict: false,
-            deliveryNoise: 0,
-            timeLimitSec: null,
-            streakGate: "relaxed",
-            streakPenaltyMultiplier: 1,
-            tierUnlocked: 1,
-            pressure: 0
-          };
-        }
-        const pivotPlanned = sameEncounter
-          ? (carry?.pivotPlanned ?? false)
-          : (Math.random() < (policy.pivotChance ?? 0));
-        const pivotBias =
-          policy.d >= 6 ? "hard" :
-          policy.d >= 4 ? "medium" :
-          "soft";
-
-        currentEncounter = {
-          runId: encounterRunId,
-          __logged: false,
-          __progressionApplied: false,
-          __finalized: false,
-          __recoveryLocked: false,
-          __progressAutoSendStarted: false,
-          __progressAutoSendDone: false,
-          __progressAutoSendResult: null,
-          id: encounterIdStable,
-          encounterId: encounterIdStable,
-
-          // Encounter content
-          encounterNumber: enc.encounterNumber ?? (encounterIndex + 1),
-          steps: Array.isArray(enc.steps) ? enc.steps : [],
-          meta: enc.meta || null,
-          skillFocus: (enc.meta && enc.meta.skillFocus) ? enc.meta.skillFocus : "read",
-          guestStateActual: window.normalizeGuestType(
-            preferNonEmpty(enc.guestStateActual, "")
-          ),
-          contextLine: preferNonEmpty(enc.contextLine, ""),
-          guestLine: preferNonEmpty(enc.guestLine, ""),
-          physicalCues: Array.isArray(enc.physicalCues) ? enc.physicalCues : [],
-          verbalCues: Array.isArray(enc.verbalCues) ? enc.verbalCues : [],
-          variations: Array.isArray(enc.variations) ? enc.variations : [],
-          toneTag: enc.toneTag || "",
-
-          // Metadata
-          difficulty: enc.difficulty,
-          tags: Array.isArray(enc.tags) ? [...enc.tags] : [],
-          variationId: enc.variationId || "",
-          variationLabel: enc.variationLabel || "",
-          variationNotes: enc.variationNotes || "",
-          pressureBias: enc.pressureBias || null,
-          trapProfile: enc.trapProfile || null,
+        const prepared = prepareEncounterForRun(enc, prevEncounterState);
+        enc = prepared.enc;
+        const policy = resolveEncounterPolicy(enc, isDemoNow);
+        currentEncounter = buildEncounterRuntimeState(
+          enc,
+          wine,
+          prepared.carry,
+          prepared.sameEncounter,
+          prepared.encounterIdStable,
+          prepared.encounterRunId,
           policy,
-          showStrictBadge: (policy.d ?? enc.difficulty ?? 1) >= 4,
-          pivotPlanned,
-          pivotBias,
-          pivotType: "",
-          recoveryText: "",
-          recoveryWhy: "",
-          recoveryCorrectMode: "",
-          recoveryCorrectModeRaw: "",
-
-          // Wine
-          wineSelected: wine,
-
-          // Player selection state
-          guestReadSelected: carry?.guestReadSelected || "",
-          modeSelected: carry?.modeSelected || "",
-          hookSelected: carry?.hookSelected || "",
-          hookSelectedKey: carry?.hookSelectedKey || "",
-          hookMeta: carry?.hookMeta || null,
-
-          selectedS1: carry?.selectedS1 ?? null,
-          selectedS2: carry?.selectedS2 ?? null,
-          deliveryLine1: carry?.deliveryLine1 || "",
-          deliveryLine2: carry?.deliveryLine2 || "",
-          deliveryLine1Key: carry?.deliveryLine1Key || "",
-          deliveryLine2Key: carry?.deliveryLine2Key || "",
-
-          recoveryChoice: carry?.recoveryChoice || "",
-
-          // Generated option sets (same-run only)
-          hookOptions: carry?.hookOptions || null,
-          deliverOptionsS1: carry?.deliverOptionsS1 || null,
-          deliverOptionsS2: carry?.deliverOptionsS2 || null,
-
-          // Correct slot / semantic truth (same-run only)
-          correctSlotS1: carry?.correctSlotS1 ?? null,
-          correctSlotS2: carry?.correctSlotS2 ?? null,
-          correctDeliveryLine1: carry?.correctDeliveryLine1 || "",
-          correctDeliveryLine2: carry?.correctDeliveryLine2 || "",
-          correctDeliveryLine1Key: carry?.correctDeliveryLine1Key || "",
-          correctDeliveryLine2Key: carry?.correctDeliveryLine2Key || "",
-
-          // Resolved truth / outputs — always recomputed
-          correctModeResolved: "",
-          correctModeNeutralResolved: "",
-          correctHookResolved: "",
-          correctHookNeutralResolved: "",
-          recoveryCorrectModeResolved: "",
-
-          readCorrect: false,
-          modeStatus: "neutral",
-          hookStatus: "neutral",
-          deliveryCorrect: false,
-          recoveryCorrect: false,
-
-          // Engine telemetry
-          chainScore: null,
-          chainSignal: "",
-          resetUsed: false,
-          guestPressure: initGuestPressureState(enc),
-
-          // Internal UX/eval state
-          __reactionComputed: false,
-          __uxSummaryBuilt: false,
-          __recoveryLocked: false,
-          __resolvedLogged: false,
-          __reaction: null,
-          __uxSummary: null
-        };
-        if (!sameEncounter) {
-          resetEncounterVolatileState(currentEncounter);
-        }
-        {
-          const unlockedModesNow = getUnlockedModesForCurrentPlayer();
-
-          if (currentEncounter.correctMode) {
-            currentEncounter.correctModeResolved = resolveCorrectModeForPlayer(
-              currentEncounter.correctMode,
-              unlockedModesNow
-            );
-          }
-
-          if (currentEncounter.recoveryCorrectMode || currentEncounter.recoveryCorrectModeRaw) {
-            currentEncounter.recoveryCorrectModeResolved = resolveCorrectModeForPlayer(
-              currentEncounter.recoveryCorrectMode || currentEncounter.recoveryCorrectModeRaw,
-              unlockedModesNow
-            );
-          }
-
-          assertModeConsistency(unlockedModesNow, currentEncounter.correctModeResolved, {
-            encounterNumber: currentEncounter?.encounterNumber,
-            tier: getProgressionSpine({ allowNull: true })?.selectors?.tier?.(),
-            points: getProgressionSpine({ allowNull: true })?.selectors?.points?.(),
-            source: "startEncounter_sanitize"
-          });
-        }
+          prepared.preferNonEmpty
+        );
         window.currentEncounter = currentEncounter;
         currentEncounter = applyDifficultyToEncounter(currentEncounter, policy);
         logEncounterStateAudit("built", currentEncounter);
@@ -16873,35 +17042,13 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           id: currentEncounter.encounterId,
           runId: currentEncounter.runId,
           encounterIndex,
-          sameEncounter,
-          carriedHook: !!carry?.hookMeta,
+          sameEncounter: prepared.sameEncounter,
+          carriedHook: !!prepared.carry?.hookMeta,
           hookNow: !!currentEncounter.hookMeta,
           s1: currentEncounter.selectedS1,
           s2: currentEncounter.selectedS2,
         });
-          window.__BC_LAST_ENCOUNTER__ = currentEncounter;
-
-          // --- BC3 HARD RESET (so it can’t interfere with legacy 7-step) ---
-          try {
-            // global marker object (if you created one)
-            if (window.__BC3__) {
-              window.__BC3__.active = false;
-              window.__BC3__.enc = null;
-              window.__BC3__.step = 0;
-            }
-
-            // common globals you introduced during BC3 work
-            window.bc3Active = false;
-            window.bc3Enc = null;
-            window.bc3Step = 0;
-
-            // any “bc stage” state you added
-            window.bcActiveEncounter = null;
-            window.bcStepIndex = 0;
-            window.bcStageResults = [];
-          } catch (e) {
-            console.warn("[BC3] reset warn", e);
-          }
+          resetLegacyBc3StageState(currentEncounter);
 
           // FORCE legacy 7-step renderer only
           console.log("[BC3] disabled -> using legacy 7-step", { encNum: currentEncounter?.encounterNumber });
