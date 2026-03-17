@@ -7020,6 +7020,48 @@ function ensureProgLoaded() {
         return pickDeterministicDrillWine();
       }
 
+      function activePremiumWineKey(rid) {
+        return `bc_active_premium_wine__${rid || "unknown"}`;
+      }
+
+      function setActiveWineForPremium(wine) {
+        const rid = restaurantId || window.__BC_CTX__?.restaurantId || null;
+        window.__BC_ACTIVE_PREMIUM_WINE__ = wine || null;
+        try {
+          if (!rid) return;
+          if (wine?.id) localStorage.setItem(activePremiumWineKey(rid), String(wine.id));
+          else localStorage.removeItem(activePremiumWineKey(rid));
+        } catch {}
+      }
+
+      function getActiveWineForPremium() {
+        if (window.isDemo || window.bcMode === "demo") return null;
+
+        const live = window.__BC_ACTIVE_PREMIUM_WINE__;
+        if (live?.id) {
+          const foundLive = getWineById(live.id);
+          if (foundLive) return foundLive;
+        }
+
+        const rid = restaurantId || window.__BC_CTX__?.restaurantId || null;
+        let storedId = null;
+        try {
+          if (rid) storedId = localStorage.getItem(activePremiumWineKey(rid));
+        } catch {}
+
+        if (storedId) {
+          const storedWine = getWineById(storedId);
+          if (storedWine) {
+            window.__BC_ACTIVE_PREMIUM_WINE__ = storedWine;
+            return storedWine;
+          }
+        }
+
+        const fallback = (Array.isArray(wines) && wines.length) ? (wines[0] || null) : null;
+        if (fallback) setActiveWineForPremium(fallback);
+        return fallback;
+      }
+
       function resetSessionState() {
         sessionId = null;
         sessionType = null;
@@ -7677,6 +7719,7 @@ function ensureProgLoaded() {
               // if you have a “selected wine” preview / form hydrate
               if (wines.length) {
                 selectedWineIndex = 0;
+                getActiveWineForPremium();
                 hydrateSetupFormFromWine(bcMode, wines[0]);
               }
             }, 0);
@@ -10503,6 +10546,7 @@ function ensureProgLoaded() {
           const tr = document.createElement("tr");
           tr.addEventListener("click", () => {
             selectedWineIndex = idx;
+            setActiveWineForPremium(wine);
             hydrateSetupFormFromWine(bcMode, wine);
           });
           const cols = [
@@ -10549,6 +10593,7 @@ function ensureProgLoaded() {
           card.className = "wine-card";
           card.addEventListener("click", () => {
             selectedWineIndex = idx;
+            setActiveWineForPremium(wine);
             hydrateSetupFormFromWine(bcMode, wine);
           });
 
@@ -16533,8 +16578,8 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             // Demo: wine matches encounter index (same pacing)
             wine = wines[(encounterIndex % wines.length)] || wines[0] || null;
           } else {
-            // Premium: rotate through wines
-            wine = wines[(encounterIndex % wines.length)] || wines[0] || null;
+            // Premium: use the active bottle selected for play.
+            wine = getActiveWineForPremium();
           }
 
           if (!wine) {
