@@ -176,6 +176,31 @@ window.setDefaultDrillConfig =
 // UI
 // ------------------------------------------------------------
 document.querySelector("#app").innerHTML = `
+  <div class="app-chrome">
+    <div class="app-chrome-brand">
+      <div class="app-chrome-eyebrow">Service Training Cockpit</div>
+      <div class="app-chrome-title-row">
+        <div class="app-chrome-title">BottleCaller</div>
+        <span class="app-chrome-badge" id="appChromeStatus">Public Access</span>
+      </div>
+      <div class="app-chrome-copy">A premium shell for live service training, guided reps, and manager-side coaching.</div>
+    </div>
+    <div class="app-chrome-context">
+      <div class="app-chrome-chip">
+        <span class="app-chrome-chip-label">Surface</span>
+        <strong id="appChromeSurface">Lobby</strong>
+      </div>
+      <div class="app-chrome-chip">
+        <span class="app-chrome-chip-label">Role</span>
+        <strong id="appChromeRole">Guest</strong>
+      </div>
+      <div class="app-chrome-chip">
+        <span class="app-chrome-chip-label">Restaurant</span>
+        <strong id="appChromeRestaurant">Not bound</strong>
+      </div>
+    </div>
+  </div>
+
   <!-- FACE WINDOW -->
   <section id="screenHome" class="screen">
     <div class="panel stack">
@@ -4744,6 +4769,46 @@ function showScreen(id) {
     document.getElementById("btnHomeLogout")?.classList.add("hidden");
     document.getElementById("btnHomeExitPremium")?.classList.add("hidden");
   }
+
+  try { renderAppChrome?.(); } catch {}
+}
+
+function renderAppChrome() {
+  const surfaceEl = document.getElementById("appChromeSurface");
+  const roleEl = document.getElementById("appChromeRole");
+  const restaurantEl = document.getElementById("appChromeRestaurant");
+  const statusEl = document.getElementById("appChromeStatus");
+  if (!surfaceEl && !roleEl && !restaurantEl && !statusEl) return;
+
+  const visibleScreens = Array.from(document.querySelectorAll(".screen:not(.hidden)"));
+  const hasProfileOverlay = !document.getElementById("screenProfile")?.classList.contains("hidden");
+  const currentScreenId = hasProfileOverlay
+    ? "screenProfile"
+    : (visibleScreens[0]?.id || "screenHome");
+
+  const surfaceMap = {
+    screenHome: "Lobby",
+    screenCreateRestaurant: "Restaurant Setup",
+    screenPremiumApp: "Premium Floor",
+    screenProfile: "Profile",
+    screenSetupPremium: "Wine Setup",
+    screenManagerBoard: "Manager Board",
+    screenGameDemo: "Demo Floor",
+  };
+
+  const profile = appState?.profile || {};
+  const restaurant = appState?.restaurant || {};
+  const roleLabel = getDisplayRoleLabel?.(profile) || "Guest";
+  const restaurantLabel = restaurant?.name || restaurant?.id || "Not bound";
+  const hasSession = !!appState?.session?.user;
+  const statusLabel = hasSession
+    ? ((profile?.access_tier || profile?.accessTier || "premium").toString().toUpperCase())
+    : "Public Access";
+
+  if (surfaceEl) surfaceEl.textContent = surfaceMap[currentScreenId] || "Workspace";
+  if (roleEl) roleEl.textContent = roleLabel;
+  if (restaurantEl) restaurantEl.textContent = restaurantLabel;
+  if (statusEl) statusEl.textContent = statusLabel;
 }
 
 function removeGlobalResetButtons() {
@@ -5527,6 +5592,8 @@ function setHomeAuthUI(isAuthed) {
     badge?.classList.add("hidden");
     logoutBtn?.classList.add("hidden");
   }
+
+  try { renderAppChrome?.(); } catch {}
 }
 
 function hideAllLogoutButtons() {
@@ -6097,10 +6164,12 @@ function setProfileOpen(isOpen) {
 function openProfilePanel() {
   closeHud?.();
   setProfileOpen(true);
+  renderAppChrome?.();
 }
 
 function closeProfilePanel() {
   setProfileOpen(false);
+  renderAppChrome?.();
 }
 
 window.__BC_HUD_TIMELINE_TARGET_USER_ID__ = window.__BC_HUD_TIMELINE_TARGET_USER_ID__ || null;
@@ -13359,6 +13428,7 @@ async function loadAuthedState(reason = "manual") {
   wireHudSendProgressButton();
   wireWaiterMessagesPanel();
   applyRoleTemplateGates();
+  renderAppChrome?.();
 
   // (ctx push removed here; only iframe onload + bc_ctx_request reply are allowed)
 }

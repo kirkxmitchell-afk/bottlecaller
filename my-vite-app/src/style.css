@@ -46,13 +46,144 @@ button, input { font-family: inherit; }
 #app {
   min-height: 100%;
   display: flex;
-  align-items: flex-start;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
+  gap: 18px;
   padding: 22px;
 }
 
 .screen { width: min(980px, 100%); }
 .hidden { display: none !important; }
+
+.app-chrome{
+  width: min(1480px, 100%);
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) auto;
+  gap: 18px;
+  align-items: end;
+  padding: 18px 20px;
+  border-radius: 30px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background:
+    radial-gradient(1000px 280px at 0% 0%, rgba(125,211,252,0.14), transparent 56%),
+    radial-gradient(900px 260px at 100% 12%, rgba(94,234,212,0.10), transparent 58%),
+    linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.015)),
+    rgba(8,12,17,0.72);
+  box-shadow:
+    0 28px 70px rgba(0,0,0,0.34),
+    inset 0 1px 0 rgba(255,255,255,0.05);
+  backdrop-filter: blur(12px);
+  position: relative;
+  overflow: hidden;
+}
+
+.app-chrome::after{
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.07), transparent 34%),
+    radial-gradient(60% 100% at 100% 100%, rgba(255,196,121,0.06), transparent 65%);
+}
+
+.app-chrome-brand,
+.app-chrome-context{
+  position: relative;
+  z-index: 1;
+}
+
+.app-chrome-eyebrow{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(125,211,252,0.16);
+  background:
+    linear-gradient(180deg, rgba(125,211,252,0.14), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.03);
+  color: rgba(232,246,255,0.86);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.app-chrome-title-row{
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.app-chrome-title{
+  font-size: clamp(32px, 5vw, 52px);
+  line-height: 0.98;
+  letter-spacing: -0.03em;
+  font-weight: 800;
+  color: rgba(245,247,248,0.98);
+}
+
+.app-chrome-badge{
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02)),
+    rgba(255,255,255,0.03);
+  color: rgba(244,246,247,0.86);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.app-chrome-copy{
+  margin-top: 10px;
+  max-width: 62ch;
+  color: rgba(244,246,247,0.72);
+  line-height: 1.6;
+}
+
+.app-chrome-context{
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.app-chrome-chip{
+  min-width: 152px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02)),
+    rgba(255,255,255,0.02);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.04),
+    0 14px 30px rgba(0,0,0,0.16);
+}
+
+.app-chrome-chip-label{
+  display: block;
+  margin-bottom: 6px;
+  color: rgba(244,246,247,0.56);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.app-chrome-chip strong{
+  display: block;
+  color: rgba(244,246,247,0.94);
+  font-size: 14px;
+  line-height: 1.3;
+}
 
 .panel {
   background:
@@ -1454,6 +1585,23 @@ button:hover, .btn:hover, .btn-ghost:hover{
   #screenProfile .card .score-row{
     grid-template-columns: 1fr;
     gap: 4px;
+  }
+}
+
+@media (max-width: 980px){
+  #app{
+    padding: 16px;
+    gap: 14px;
+  }
+
+  .app-chrome{
+    grid-template-columns: 1fr;
+    align-items: start;
+    padding: 16px;
+  }
+
+  .app-chrome-context{
+    justify-content: flex-start;
   }
 }
 
