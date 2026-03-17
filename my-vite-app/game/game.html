@@ -3273,44 +3273,54 @@
 
   <section id="screenWelcome" class="screen">
     <div class="bc-shell bc-shell-center">
-      <div class="bc-card bc-stage-card panel cover-screen">
-        <h2>Welcome to BottleCaller</h2>
-        <p>BottleCaller trains servers to sell the right wine by matching guest psychology with the right delivery style — in under 5 minutes.</p>
+      <div class="bc-card bc-stage-card panel cover-screen app-welcome-shell">
+        <div class="app-welcome-header">
+          <h2>Welcome to BottleCaller</h2>
+          <p class="app-welcome-subtitle">BottleCaller trains servers to sell the right wine by matching guest psychology with the right delivery style — in under 5 minutes.</p>
+        </div>
         <ul class="cover-list" id="welcomeBulletList">
           <li>Diagnose the guest</li>
           <li id="welcomeBulletModeHook">Choose Hook</li>
           <li>Deliver in 2 sentences</li>
         </ul>
-        <div class="button-row">
+        <div class="button-row app-welcome-actions">
           <button id="btnWelcomeStart" type="button">Start</button>
           <button
             id="btnWelcomeBackToSetup"
             type="button"
             class="btn-ghost"
-          >
+        >
             Back to Setup
           </button>
         </div>
-        <div class="small-text" id="welcomeFooterNote"></div>
+        <div class="small-text app-welcome-note" id="welcomeFooterNote"></div>
       </div>
     </div>
   </section>
 
   <section id="screenHome" class="screen">
-    <div class="panel">
-      <h2>BottleCaller</h2>
+    <div class="panel app-home-shell">
+      <div class="app-home-header">
+        <h2>BottleCaller</h2>
+        <p class="app-home-subtitle">Train the floor. Build cleaner reads. Sharpen the close.</p>
+      </div>
+
+      <div class="app-home-grid">
 
       <!-- Demo card -->
-      <div class="card" id="cardDemo">
-        <strong>Demo</strong>
-        <div class="score-row">Wines saved: <span id="homeDemoCount">0 / 3</span></div>
-        <div class="score-row">Runs total: <span id="homeDemoRuns">0</span></div>
-        <div class="card progress-card">
-          <strong>Progress</strong>
+      <div class="card app-mode-card" id="cardDemo" data-home-mode="demo">
+        <div class="app-mode-header">
+          <strong class="app-mode-title">Demo</strong>
+          <div class="app-mode-kicker">Fast reps</div>
+        </div>
+        <div class="score-row app-score-row">Wines saved: <span id="homeDemoCount">0 / 3</span></div>
+        <div class="score-row app-score-row">Runs total: <span id="homeDemoRuns">0</span></div>
+        <div class="card progress-card app-progress-card">
+          <strong class="app-progress-title">Progress</strong>
           <div class="small-text">Level: <span id="progressNameDemo">—</span></div>
           <div class="small-text">Points: <span id="progressPointsDemo">0</span></div>
         </div>
-        <div class="button-row" id="demoButtons">
+        <div class="button-row app-home-actions" id="demoButtons">
           <button id="btnGoDemo" type="button">Setup</button>
           <button id="btnStartDrillDemo" type="button">5-Minute Drill</button>
           <button id="btnViewHistoryDemo" type="button">View History</button>
@@ -3321,16 +3331,19 @@
       </div>
 
       <!-- Premium card -->
-      <div class="card" id="cardPremium">
-        <strong>Premium</strong>
-        <div class="score-row">Wines saved: <span id="homePremiumCount">0 / 10</span></div>
-        <div class="score-row">Runs total: <span id="homePremiumRuns">0</span></div>
-        <div class="card progress-card">
-          <strong>Progress</strong>
+      <div class="card app-mode-card" id="cardPremium" data-home-mode="premium">
+        <div class="app-mode-header">
+          <strong class="app-mode-title">Premium</strong>
+          <div class="app-mode-kicker">Full service pressure</div>
+        </div>
+        <div class="score-row app-score-row">Wines saved: <span id="homePremiumCount">0 / 10</span></div>
+        <div class="score-row app-score-row">Runs total: <span id="homePremiumRuns">0</span></div>
+        <div class="card progress-card app-progress-card">
+          <strong class="app-progress-title">Progress</strong>
           <div class="small-text">Level: <span id="progressNamePremium">—</span></div>
           <div class="small-text">Points: <span id="progressPointsPremium">0</span></div>
         </div>
-        <div class="button-row" id="premiumButtons">
+        <div class="button-row app-home-actions" id="premiumButtons">
           <button id="btnGoPremium" type="button">Setup</button>
           <button id="btnViewHistoryPremium" type="button">View History</button>
           <button id="btnResetRunsPremium" type="button">Reset Runs Only</button>
@@ -3339,35 +3352,38 @@
         </div>
       </div>
 
+      </div>
     </div>
   </section>
 
   <section id="screenSetupDemo" class="screen">
-    <div class="panel">
-      <h2>Setup</h2>
-      <div class="score-row">Wines added: <span id="wineCountDemo">0 / 3</span></div>
+    <div class="panel app-setup-shell">
+      <div class="app-setup-header">
+        <h2>Setup</h2>
+        <div class="score-row app-score-row">Wines added: <span id="wineCountDemo">0 / 3</span></div>
+      </div>
 
-      <div class="manager-row">
+      <div class="manager-row app-form-row">
         <input type="text" id="wineNameInputDemo" placeholder="Wine Name (required)" />
         <input type="text" id="wineVarietalInputDemo" placeholder="Varietal (required)" />
       </div>
 
-      <div class="manager-row">
+      <div class="manager-row app-form-row app-form-section">
         <strong>Fruit Profile (choose up to 2):</strong>
         <div class="option-grid" id="fruitOptionsDemo"></div>
       </div>
 
-      <div class="manager-row">
+      <div class="manager-row app-form-row app-form-section">
         <strong>Structure/Texture (choose up to 2):</strong>
         <div class="option-grid" id="textureOptionsDemo"></div>
       </div>
 
-      <div class="manager-row">
+      <div class="manager-row app-form-row app-form-section">
         <strong>Oak Level (choose 1):</strong>
         <div class="option-grid" id="oakOptionsDemo"></div>
       </div>
 
-      <div class="manager-row">
+      <div class="manager-row app-form-row app-form-section">
         <strong>Process (optional):</strong>
         <select id="processInputDemo">
           <option value="">Select process</option>
@@ -3382,12 +3398,12 @@
         <input type="text" id="regionInputDemo" placeholder="Region (optional)" />
       </div>
 
-      <div class="manager-row">
+      <div class="manager-row app-form-row">
         <textarea id="storyInputDemo" placeholder="Story (optional, 1 sentence)"></textarea>
         <button id="addWineBtnDemo" type="button">Add Wine</button>
       </div>
 
-      <div class="manager-panel">
+      <div class="manager-panel app-setup-list">
         <h3>Wine List</h3>
         <table class="wine-table">
           <thead>
@@ -3400,7 +3416,7 @@
         <div id="demoWineCards" class="wine-cards"></div>
       </div>
 
-      <div class="button-row">
+      <div class="button-row app-setup-actions">
         <button id="btnContinueDemo" type="button">Start</button>
         <button id="btnBackHomeFromSetupDemo" type="button">Back</button>
       </div>
@@ -3408,46 +3424,48 @@
   </section>
 
   <section id="screenSetupPremium" class="screen">
-    <div class="panel">
-      <h2>Setup</h2>
-      <div class="score-row">
+    <div class="panel app-setup-shell">
+      <div class="app-setup-header">
+        <h2>Setup</h2>
+        <div class="score-row app-score-row">
         Wines added: <span id="wineCountPremium">0 / 10</span>
+        </div>
       </div>
 
       <!-- WINE LIST PANEL -->
-      <div class="manager-panel">
+      <div class="manager-panel app-setup-list">
         <h3>Wine List</h3>
 
         <!-- 1) SHORT FORM FIRST (CARDS) -->
         <div id="premiumWineCards" class="wine-cards"></div>
 
         <!-- 2) DROPDOWN UNDER CARDS -->
-        <details id="premiumWineAdvanced" class="wine-advanced panel-spaced">
+        <details id="premiumWineAdvanced" class="wine-advanced panel-spaced app-advanced-panel">
           <summary>Advanced (add wines + table)</summary>
 
           <!-- INPUT FORM INSIDE DROPDOWN -->
-          <div id="wineAdminPanel" class="panel-spaced">
-            <div class="manager-row">
+          <div id="wineAdminPanel" class="panel-spaced app-admin-panel">
+            <div class="manager-row app-form-row">
               <input type="text" id="wineNameInputPremium" placeholder="Wine Name (required)" />
               <input type="text" id="wineVarietalInputPremium" placeholder="Varietal (required)" />
             </div>
 
-            <div class="manager-row">
+            <div class="manager-row app-form-row app-form-section">
               <strong>Fruit Profile (choose up to 2):</strong>
               <div class="option-grid" id="fruitOptionsPremium"></div>
             </div>
 
-            <div class="manager-row">
+            <div class="manager-row app-form-row app-form-section">
               <strong>Structure/Texture (choose up to 2):</strong>
               <div class="option-grid" id="textureOptionsPremium"></div>
             </div>
 
-            <div class="manager-row">
+            <div class="manager-row app-form-row app-form-section">
               <strong>Oak Level (choose 1):</strong>
               <div class="option-grid" id="oakOptionsPremium"></div>
             </div>
 
-            <div class="manager-row">
+            <div class="manager-row app-form-row app-form-section">
               <strong>Process (optional):</strong>
               <select id="processInputPremium">
                 <option value="">Select process</option>
@@ -3462,7 +3480,7 @@
               <input type="text" id="regionInputPremium" placeholder="Region (optional)" />
             </div>
 
-            <div class="manager-row">
+            <div class="manager-row app-form-row">
               <textarea id="storyInputPremium" placeholder="Story (optional, 1 sentence)"></textarea>
               <button id="addWineBtnPremium" type="button">Add Wine</button>
             </div>
@@ -3488,7 +3506,7 @@
         </details>
       </div>
 
-      <div class="button-row">
+      <div class="button-row app-setup-actions">
         <button id="btnContinuePremium" type="button">Start</button>
         <button id="btnBackHomeFromSetupPremium" type="button">Back</button>
       </div>
@@ -3513,8 +3531,10 @@
       <header id="bcHudTop" class="bc-hud bc-hud-top">
         <div class="bc-brand">
           <div class="bc-dot"></div>
-          <div class="bc-title">BottleCaller</div>
-          <div class="bc-subtitle" id="bcModePill">Premium</div>
+          <div class="bc-brand-copy">
+            <div class="bc-title">BottleCaller</div>
+            <div class="bc-subtitle" id="bcModePill">Premium</div>
+          </div>
         </div>
 
         <div class="bc-stats">
@@ -3594,8 +3614,10 @@
       </aside>
 
       <footer id="bcHudBottom" class="bc-hud bc-hud-bottom">
-        <div class="bc-hint" id="bcHintLine">Read the guest. Choose the hook.</div>
-        <div>
+        <div class="bc-hint-wrap">
+          <div class="bc-hint" id="bcHintLine">Read the guest. Choose the hook.</div>
+        </div>
+        <div class="bc-status-wrap">
           <div id="progressReportStatus" class="small-text progress-report-status"></div>
         </div>
       </footer>
@@ -3603,21 +3625,27 @@
   </section>
 
   <section id="screenHistory" class="screen">
-    <div class="panel">
-      <h2 id="historyTitle">Session History</h2>
+    <div class="panel app-history-shell">
+      <div class="app-history-header">
+        <h2 id="historyTitle">Session History</h2>
+        <p class="app-history-subtitle">Review recent encounters, patterns, and recovery choices.</p>
+      </div>
       <div id="historyList"></div>
-      <div class="button-row">
+      <div class="button-row app-history-actions">
         <button id="btnBackHomeFromHistory" type="button">Back</button>
       </div>
     </div>
   </section>
 
   <section id="screenDrillSummary" class="screen">
-    <div class="panel">
-      <h2>Drill Complete</h2>
+    <div class="panel app-summary-shell">
+      <div class="app-summary-header">
+        <h2>Drill Complete</h2>
+        <p class="app-summary-subtitle">Review the rep, then reset for another focused cycle.</p>
+      </div>
       <div id="drillSummary"></div>
       <div id="drillSummaryBody"></div>
-      <div class="button-row">
+      <div class="button-row app-summary-actions">
         <button id="btnExitDrill" type="button">Exit</button>
         <button id="btnBackHomeFromDrillSummary" type="button">Back</button>
         <button id="btnStartAnotherDrill" type="button">Another 5-Minute Drill</button>
