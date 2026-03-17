@@ -235,12 +235,12 @@ document.querySelector("#app").innerHTML = `
         </div>
 
         <!-- Tabs UNDER fields -->
-        <div class="tabs" id="roleTabs" data-selected="waiter" style="margin-top:10px;">
+        <div class="tabs" id="roleTabs" data-selected="waiter" style="margin-top:10px; --selector-x: 0px;">
           <button id="tabRoleWaiter" class="tab active" type="button">Waiter</button>
           <button id="tabRoleManager" class="tab" type="button">Manager</button>
         </div>
 
-        <div class="tabs" id="modeTabs" data-selected="login">
+        <div class="tabs" id="modeTabs" data-selected="login" style="--selector-x: 0px;">
           <button id="tabModeLogin" class="tab active" type="button">Login</button>
           <button id="tabModeSignup" class="tab" type="button">Sign up</button>
         </div>
@@ -13514,7 +13514,10 @@ function setRole(role) {
   const roleTabs = document.getElementById("roleTabs");
   const w = document.getElementById("tabRoleWaiter");
   const m = document.getElementById("tabRoleManager");
-  if (roleTabs) roleTabs.dataset.selected = uiState.role;
+  if (roleTabs) {
+    roleTabs.dataset.selected = uiState.role;
+    roleTabs.style.setProperty("--selector-x", uiState.role === "manager" ? "calc(100% + 8px)" : "0px");
+  }
   if (uiState.role === "waiter") {
     w.classList.add("active");
     m.classList.remove("active");
@@ -13529,7 +13532,10 @@ function setMode(mode) {
   const modeTabs = document.getElementById("modeTabs");
   const l = document.getElementById("tabModeLogin");
   const s = document.getElementById("tabModeSignup");
-  if (modeTabs) modeTabs.dataset.selected = uiState.mode;
+  if (modeTabs) {
+    modeTabs.dataset.selected = uiState.mode;
+    modeTabs.style.setProperty("--selector-x", uiState.mode === "signup" ? "calc(100% + 8px)" : "0px");
+  }
   if (uiState.mode === "login") {
     l.classList.add("active");
     s.classList.remove("active");

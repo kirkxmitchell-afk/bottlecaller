@@ -1040,6 +1040,7 @@ button:hover, .btn:hover, .btn-ghost:hover{
   left: 6px;
   width: calc(50% - 7px);
   border-radius: 14px;
+  transform: translateX(var(--selector-x, 0px));
   transition: transform 180ms ease, background 180ms ease, border-color 180ms ease;
   z-index: 0;
 }
@@ -1056,11 +1057,6 @@ button:hover, .btn:hover, .btn-ghost:hover{
   background:
     linear-gradient(180deg, rgba(94,234,212,0.18), rgba(255,255,255,0.03)),
     rgba(255,255,255,0.03);
-}
-
-#screenHome #roleTabs[data-selected="manager"]::before,
-#screenHome #modeTabs[data-selected="signup"]::before{
-  transform: translateX(calc(100% + 8px));
 }
 
 #screenHome #roleTabs[data-selected="manager"]::before{
