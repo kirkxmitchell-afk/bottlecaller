@@ -235,7 +235,7 @@ document.querySelector("#app").innerHTML = `
         </div>
 
         <!-- Tabs UNDER fields -->
-        <div class="tabs" id="roleTabs" data-selected="waiter" style="margin-top:10px; --selector-x: 0px;">
+        <div class="tabs hidden" id="roleTabs" data-selected="waiter" style="margin-top:10px; --selector-x: 0px;">
           <button id="tabRoleWaiter" class="tab active" type="button">Waiter</button>
           <button id="tabRoleManager" class="tab" type="button">Manager</button>
         </div>
@@ -13530,6 +13530,7 @@ function setRole(role) {
 function setMode(mode) {
   uiState.mode = mode === "signup" ? "signup" : "login";
   const modeTabs = document.getElementById("modeTabs");
+  const roleTabs = document.getElementById("roleTabs");
   const l = document.getElementById("tabModeLogin");
   const s = document.getElementById("tabModeSignup");
   if (modeTabs) {
@@ -13545,8 +13546,15 @@ function setMode(mode) {
   }
 
   const wrap = document.getElementById("displayNameWrap");
-  if (uiState.mode === "signup") wrap.classList.remove("hidden");
-  else wrap.classList.add("hidden");
+  if (uiState.mode === "signup") {
+    if (roleTabs) roleTabs.classList.remove("hidden");
+    setRole("waiter");
+    wrap.classList.remove("hidden");
+  } else {
+    if (roleTabs) roleTabs.classList.add("hidden");
+    setRole("waiter");
+    wrap.classList.add("hidden");
+  }
 }
 
 // ------------------------------------------------------------
