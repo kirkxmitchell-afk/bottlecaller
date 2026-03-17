@@ -16993,7 +16993,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         if (!progressionWindow) return;
 
         const prevEncounterState = currentEncounter || null;
-        const { enc } = selectEncounterCandidate(list, isDemoNow, progressionWindow);
+        let { enc } = selectEncounterCandidate(list, isDemoNow, progressionWindow);
 
         // --- BC3 FORCE ROUTE (authoritative) ---
         currentEncounter = enc;

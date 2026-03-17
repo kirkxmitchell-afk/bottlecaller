@@ -2697,3 +2697,83 @@ html, body{ height:100%; }
   box-shadow: none !important;
   padding: 0 !important;
 }
+
+/* =========================================================
+   HOME SCREEN LAYOUT FIX
+   Keep this last so it beats the older iframe home rules.
+   ========================================================= */
+
+#screenHome .app-home-shell{
+  width: 100%;
+  max-width: none;
+}
+
+#screenHome .app-home-grid{
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  align-items: stretch;
+  gap: 18px !important;
+}
+
+#screenHome .app-mode-card{
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  padding: 20px !important;
+}
+
+#screenHome .app-score-row{
+  width: 100%;
+}
+
+#screenHome .app-progress-card{
+  margin-top: 14px !important;
+}
+
+#screenHome .app-home-actions{
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+  width: 100%;
+  margin-top: auto !important;
+  padding-top: 16px;
+}
+
+#screenHome .app-home-actions > *{
+  min-width: 0;
+}
+
+#screenHome .app-home-actions button,
+#screenHome .app-home-actions .btn,
+#screenHome .app-home-actions .btn-ghost{
+  width: 100% !important;
+  min-height: 52px;
+  display: flex !important;
+  align-items: center;
+  justify-content: flex-start;
+  text-align: left !important;
+}
+
+#screenHome .app-home-actions button:first-child{
+  grid-column: 1 / -1;
+  min-height: 58px;
+  background:
+    linear-gradient(180deg, rgba(125,211,252,0.18), rgba(255,255,255,0.04)) !important;
+  border-color: rgba(125,211,252,0.24) !important;
+}
+
+@media (max-width: 980px){
+  #screenHome .app-home-grid{
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 640px){
+  #screenHome .app-home-actions{
+    grid-template-columns: 1fr !important;
+  }
+
+  #screenHome .app-home-actions button:first-child{
+    grid-column: auto;
+  }
+}
