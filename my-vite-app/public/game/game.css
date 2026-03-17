@@ -79,6 +79,31 @@ h3 {
 
 p { margin: 0; color: var(--muted); line-height: 1.5; }
 
+.app-game-masthead{
+  width: min(980px, calc(100% - 32px));
+  margin: 18px auto 4px;
+  padding: 16px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  border-radius: 24px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background:
+    radial-gradient(920px 220px at 0% 0%, rgba(125,211,252,0.14), transparent 58%),
+    radial-gradient(760px 200px at 100% 10%, rgba(94,234,212,0.10), transparent 60%),
+    linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.015)),
+    rgba(8,12,17,0.52);
+  box-shadow:
+    0 20px 48px rgba(0,0,0,0.30),
+    inset 0 1px 0 rgba(255,255,255,0.05);
+  color: rgba(245,247,248,0.96);
+  font-size: clamp(24px, 3.2vw, 34px);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-weight: 800;
+}
+
 .small-text,
 .small { font-size: 12px; color: var(--faint); line-height: 1.4; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
