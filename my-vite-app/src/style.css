@@ -2026,6 +2026,50 @@ button:hover, .btn:hover, .btn-ghost:hover{
     rgba(255,255,255,0.02) !important;
 }
 
+#screenManagerBoard #mbPerformanceHistoryPanel .mb-disclosure{
+  overflow: hidden;
+}
+
+#screenManagerBoard #mbPerformanceHistoryPanel .mb-disclosure-summary{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  list-style: none;
+  cursor: pointer;
+}
+
+#screenManagerBoard #mbPerformanceHistoryPanel .mb-disclosure-summary::-webkit-details-marker{
+  display: none;
+}
+
+#screenManagerBoard #mbPerformanceHistoryPanel .mb-disclosure-summary::after{
+  content: "▾";
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid rgba(196,181,253,0.18);
+  background:
+    linear-gradient(180deg, rgba(196,181,253,0.16), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.02);
+  color: rgba(243,239,255,0.86);
+  font-size: 14px;
+  transition: transform 140ms ease;
+}
+
+#screenManagerBoard #mbPerformanceHistoryPanel .mb-disclosure:not([open]) .mb-disclosure-summary::after{
+  transform: rotate(-90deg);
+}
+
+#screenManagerBoard #mbPerformanceHistoryPanel .mb-disclosure-body{
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+
 #screenManagerBoard #mbTab_performance #mbWeeklySummaryTop,
 #screenManagerBoard #mbTab_performance #mbBestStreaks,
 #screenManagerBoard #mbTab_performance #mbNeedsCoaching,

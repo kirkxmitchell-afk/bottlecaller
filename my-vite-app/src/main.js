@@ -614,19 +614,25 @@ document.querySelector("#app").innerHTML = `
         <div id="mbTab_performance" class="mbTab hidden">
           <div id="mbInsightsPanel" style="margin-top:12px;"></div>
           <div id="mbPerformanceHistoryPanel" style="margin-top:12px;">
-            <div class="card">
-              <strong>Performance History</strong>
-              <div class="small-text" style="margin-top:6px; opacity:.85;">
-                Skill growth over time.
+            <details class="card mb-disclosure" open>
+              <summary class="mb-disclosure-summary">
+                <div>
+                  <strong>Performance History</strong>
+                  <div class="small-text" style="margin-top:6px; opacity:.85;">
+                    Skill growth over time.
+                  </div>
+                </div>
+              </summary>
+              <div class="mb-disclosure-body">
+                <select id="mbHistoryUser" class="input" style="margin-top:10px;"></select>
+                <canvas id="mbHistoryChart"
+                  width="600"
+                  height="280"
+                  style="margin-top:12px;">
+                </canvas>
+                <div id="mbPerformanceLegend" style="margin-top:8px;"></div>
               </div>
-              <select id="mbHistoryUser" class="input" style="margin-top:10px;"></select>
-              <canvas id="mbHistoryChart"
-                width="600"
-                height="280"
-                style="margin-top:12px;">
-              </canvas>
-              <div id="mbPerformanceLegend" style="margin-top:8px;"></div>
-            </div>
+            </details>
           </div>
 
           <div class="card" style="margin-top:12px;">
