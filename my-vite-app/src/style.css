@@ -789,6 +789,250 @@ button:hover, .btn:hover, .btn-ghost:hover{
   background: rgba(0,0,0,0.18);
 }
 
+/* =========================================================
+   PARENT NAV REFINEMENT
+   Premium menu, manager board tabs, and messages surfaces.
+   Keep this last so it beats older premium-parent overrides.
+   ========================================================= */
+
+#screenPremiumApp,
+#screenManagerBoard{
+  width: min(1500px, 100%);
+  margin: 0 auto;
+  padding: 16px 14px 28px;
+}
+
+#screenPremiumApp > .panel.stack,
+#screenManagerBoard > .panel.stack{
+  gap: 12px !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+#screenPremiumApp .topbar,
+#screenManagerBoard .topbar{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px !important;
+  border-radius: 28px !important;
+  border: 1px solid rgba(255,255,255,0.12);
+  background:
+    radial-gradient(900px 280px at 12% 0%, rgba(125,211,252,0.12), transparent 58%),
+    radial-gradient(780px 240px at 100% 12%, rgba(94,234,212,0.10), transparent 60%),
+    linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.015)),
+    rgba(6,10,14,0.50);
+  box-shadow:
+    0 24px 60px rgba(0,0,0,0.44),
+    inset 0 1px 0 rgba(255,255,255,0.05);
+  backdrop-filter: blur(10px);
+}
+
+#screenPremiumApp .topbar .brand,
+#screenManagerBoard .topbar .brand{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#screenPremiumApp .topbar .brand h2,
+#screenManagerBoard .topbar .brand h2{
+  margin: 0;
+  font-size: 18px;
+  letter-spacing: 0.02em;
+}
+
+#screenPremiumApp .topbar .brand .badge,
+#screenManagerBoard .topbar .brand .badge,
+#screenPremiumApp #premiumBadge.badge{
+  padding: 6px 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(125,211,252,0.18);
+  background:
+    linear-gradient(180deg, rgba(125,211,252,0.18), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.03);
+  color: rgba(234,246,255,0.88);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+#screenPremiumApp .topbar .row,
+#screenManagerBoard .topbar .row{
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 6px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015)),
+    rgba(4,9,13,0.34);
+}
+
+#screenPremiumApp .topbar .row button,
+#screenPremiumApp .topbar .row .btn-ghost,
+#screenPremiumApp .topbar .row .btn-danger,
+#screenManagerBoard .topbar .row button,
+#screenManagerBoard .topbar .row .btn-ghost,
+#screenManagerBoard .topbar .row .btn-danger{
+  min-height: 44px;
+  padding: 11px 14px !important;
+  border-radius: 16px !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02)),
+    rgba(255,255,255,0.02) !important;
+  color: rgba(245,247,248,0.92) !important;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.04),
+    0 10px 22px rgba(0,0,0,0.16);
+}
+
+#screenPremiumApp .topbar .row .btn-danger,
+#screenManagerBoard .topbar .row .btn-danger{
+  background:
+    linear-gradient(180deg, rgba(251,113,133,0.22), rgba(255,255,255,0.03)),
+    rgba(251,113,133,0.10) !important;
+  border-color: rgba(251,113,133,0.34) !important;
+}
+
+#screenPremiumApp .topbar .row button:hover,
+#screenPremiumApp .topbar .row .btn-ghost:hover,
+#screenPremiumApp .topbar .row .btn-danger:hover,
+#screenManagerBoard .topbar .row button:hover,
+#screenManagerBoard .topbar .row .btn-ghost:hover,
+#screenManagerBoard .topbar .row .btn-danger:hover{
+  transform: translateY(-1px);
+  border-color: rgba(125,211,252,0.24) !important;
+  background:
+    linear-gradient(180deg, rgba(125,211,252,0.18), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.04) !important;
+}
+
+#screenPremiumApp #btnOpenHud,
+#screenPremiumApp #btnOpenMessages,
+#screenPremiumApp #btnManagerBoard{
+  border-color: rgba(125,211,252,0.18) !important;
+}
+
+#screenPremiumApp #btnOpenMessages{
+  background:
+    linear-gradient(180deg, rgba(94,234,212,0.18), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.03) !important;
+}
+
+#screenPremiumApp #btnManagerBoard{
+  background:
+    linear-gradient(180deg, rgba(245,194,107,0.18), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.03) !important;
+}
+
+#screenManagerBoard #mbMenu{
+  display: flex !important;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px !important;
+  margin-top: 2px;
+  padding: 12px !important;
+  border-radius: 24px !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
+  background:
+    radial-gradient(900px 240px at 0% 0%, rgba(125,211,252,0.10), transparent 58%),
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015)),
+    rgba(7,11,15,0.44) !important;
+  box-shadow:
+    0 20px 44px rgba(0,0,0,0.28),
+    inset 0 1px 0 rgba(255,255,255,0.04) !important;
+}
+
+#screenManagerBoard #mbMenu [data-mbtab]{
+  min-height: 42px;
+  padding: 10px 14px !important;
+  border-radius: 16px !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02)),
+    rgba(255,255,255,0.02) !important;
+  color: rgba(244,246,247,0.90) !important;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+#screenManagerBoard #mbMenu [data-mbtab].is-active,
+#screenManagerBoard #mbMenu [data-mbtab][aria-selected="true"]{
+  border-color: rgba(125,211,252,0.28) !important;
+  background:
+    linear-gradient(180deg, rgba(125,211,252,0.20), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.04) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.06),
+    0 10px 20px rgba(0,0,0,0.18);
+}
+
+#screenManagerBoard #mbRestaurantPicker{
+  margin-left: auto !important;
+  min-width: 240px !important;
+  min-height: 42px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(10,16,22,0.78);
+  color: rgba(244,246,247,0.92);
+}
+
+#waiterMessagesPanel{
+  background:
+    radial-gradient(760px 220px at 0% 0%, rgba(94,234,212,0.10), transparent 60%),
+    linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.015)),
+    rgba(9,13,18,0.94) !important;
+  border-radius: 24px !important;
+  padding: 14px !important;
+  box-shadow:
+    0 28px 70px rgba(0,0,0,0.48),
+    inset 0 1px 0 rgba(255,255,255,0.05) !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
+}
+
+#waiterMessagesPanel #btnCloseMessages{
+  min-height: 36px;
+  padding: 8px 12px !important;
+  border-radius: 14px !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
+  background: rgba(255,255,255,0.04) !important;
+  color: rgba(244,246,247,0.92) !important;
+}
+
+#waiterMessagesThread{
+  margin-top: 14px !important;
+  gap: 10px !important;
+}
+
+@media (max-width: 980px){
+  #screenPremiumApp .topbar,
+  #screenManagerBoard .topbar{
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  #screenPremiumApp .topbar .row,
+  #screenManagerBoard .topbar .row{
+    justify-content: flex-start;
+  }
+
+  #screenManagerBoard #mbRestaurantPicker{
+    margin-left: 0 !important;
+    width: 100%;
+  }
+}
+
 /* premiumRoot should NOT look like a card/box */
 #premiumRoot{
   margin-top: 14px;
