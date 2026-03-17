@@ -1675,6 +1675,145 @@ html, body{ height:100%; }
   }
 }
 
+/* Navigation language */
+#bcHudTop .bc-actions{
+  padding: 6px;
+  border-radius: 20px;
+  border: 1px solid rgba(var(--stage-accent-rgb),0.14);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02)),
+    rgba(5,12,18,0.34);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.04),
+    0 16px 28px rgba(0,0,0,0.18);
+}
+
+#bcHudTop .bc-actions .btn{
+  min-width: 132px;
+  min-height: 46px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+#railQuickActions .rail-action-stack{
+  gap: 12px;
+}
+
+#railQuickActions .rail-action-stack > button{
+  min-height: 50px;
+  border-radius: 18px;
+  border: 1px solid rgba(var(--stage-accent-rgb),0.16);
+  background:
+    linear-gradient(180deg, rgba(var(--stage-accent-rgb),0.16), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.02);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.04),
+    0 12px 24px rgba(0,0,0,0.16);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+#railQuickActions .rail-action-stack > button:hover{
+  transform: translateY(-2px);
+  border-color: rgba(var(--stage-accent-rgb),0.26);
+}
+
+.app-welcome-actions,
+.app-setup-actions,
+.app-history-actions,
+.app-summary-actions{
+  display: flex !important;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px !important;
+  margin-top: 22px;
+  padding: 12px;
+  border-radius: 22px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015)),
+    rgba(6,12,18,0.24);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.04),
+    0 18px 36px rgba(0,0,0,0.14);
+}
+
+.app-welcome-actions > button,
+.app-setup-actions > button,
+.app-history-actions > button,
+.app-summary-actions > button{
+  flex: 1 1 190px;
+  min-height: 52px;
+  border-radius: 18px !important;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+
+#btnWelcomeBackToSetup,
+#btnBackHomeFromSetupDemo,
+#btnBackHomeFromSetupPremium,
+#btnBackHomeFromHistory,
+#btnBackHomeFromDrillSummary,
+#btnExitDrill,
+#btnBackHomeFromPlay,
+#btnRailBackToHome,
+#btnParamBack{
+  position: relative;
+  overflow: hidden;
+}
+
+#btnWelcomeBackToSetup::before,
+#btnBackHomeFromSetupDemo::before,
+#btnBackHomeFromSetupPremium::before,
+#btnBackHomeFromHistory::before,
+#btnBackHomeFromDrillSummary::before,
+#btnExitDrill::before,
+#btnBackHomeFromPlay::before,
+#btnRailBackToHome::before,
+#btnParamBack::before{
+  content: "←";
+  margin-right: 8px;
+  font-weight: 900;
+}
+
+#btnWelcomeStart,
+#btnContinueDemo,
+#btnContinuePremium,
+#btnGoDemo,
+#btnGoPremium,
+#btnStartAnotherDrill{
+  position: relative;
+}
+
+#btnWelcomeStart::after,
+#btnContinueDemo::after,
+#btnContinuePremium::after,
+#btnGoDemo::after,
+#btnGoPremium::after,
+#btnStartAnotherDrill::after{
+  content: "↗";
+  margin-left: 8px;
+  font-weight: 900;
+}
+
+@media (max-width: 860px){
+  .app-welcome-actions,
+  .app-setup-actions,
+  .app-history-actions,
+  .app-summary-actions{
+    padding: 10px;
+  }
+
+  .app-welcome-actions > button,
+  .app-setup-actions > button,
+  .app-history-actions > button,
+  .app-summary-actions > button,
+  #bcHudTop .bc-actions .btn{
+    flex-basis: 100%;
+    min-width: 0;
+  }
+}
+
 #encounterPanel[data-stage="load"]{
   --stage-accent-rgb: 196, 181, 253;
   --stage-ink: rgba(247, 244, 255, 0.97);
