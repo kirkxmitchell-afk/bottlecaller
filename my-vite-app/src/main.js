@@ -9520,7 +9520,10 @@ async function loadHistoryWaiters() {
 
   const ids = Array.from(optionMap.keys());
   const nameMap = await mapUserIdsToNames(ids);
-  const selectedUserId = String(select.value || currentUserId || "");
+  const selectedUserId =
+    currentUserId && currentRole !== "demo"
+      ? String(currentUserId)
+      : String(select.value || "");
   const options = ids
     .map((uid) => {
       const base = optionMap.get(uid);
@@ -9535,6 +9538,10 @@ async function loadHistoryWaiters() {
     const selected = String(opt.uid) === selectedUserId ? " selected" : "";
     return `<option value="${opt.uid}"${selected}>${escapeHtml(opt.label || opt.uid)}</option>`;
   }).join("");
+
+  if (selectedUserId) {
+    select.value = selectedUserId;
+  }
 }
 
 async function loadPerformanceHistory(userId) {

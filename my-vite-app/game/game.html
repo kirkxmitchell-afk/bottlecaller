@@ -55,6 +55,19 @@
 
     const escapeHtml = window.escapeHtml;
 
+    function railLine(text, classes = "small-text rail-copy") {
+      return `<div class="${classes}">${escapeHtml(text)}</div>`;
+    }
+
+    function railHeader(title, badge = "") {
+      return `
+        <div class="rail-header">
+          <div class="rail-title-text">${escapeHtml(title)}</div>
+          ${badge ? `<div class="small-text rail-badge">${escapeHtml(badge)}</div>` : ""}
+        </div>
+      `;
+    }
+
     window.__BC_DEBUG_STATE__ = function () {
       return {
         epoch: window.__BC_EPOCH__ || 0,
@@ -1020,83 +1033,57 @@
       const vm = getTimedChallengeRailViewModel();
 
       if (vm.state === "idle") {
-        root.innerHTML = `
-          <div class="small-text" style="opacity:.75;">${escapeHtml(vm.body)}</div>
-        `;
+        root.innerHTML = railLine(vm.body, "small-text rail-copy rail-copy-muted");
         return;
       }
 
       if (vm.state === "completed") {
         root.innerHTML = `
-          <div style="font-weight:600;">${escapeHtml(vm.title)}</div>
-          <div class="small-text" style="margin-top:6px; opacity:.9;">
-            ${escapeHtml(vm.body)}
-          </div>
+          ${railHeader(vm.title)}
+          ${railLine(vm.body, "small-text rail-copy rail-copy-spaced")}
         `;
         return;
       }
 
       if (vm.state === "expired") {
         root.innerHTML = `
-          <div style="font-weight:600;">${escapeHtml(vm.title)}</div>
-          <div class="small-text" style="margin-top:6px; opacity:.9;">
-            ${escapeHtml(vm.body)}
-          </div>
+          ${railHeader(vm.title)}
+          ${railLine(vm.body, "small-text rail-copy rail-copy-spaced")}
         `;
         return;
       }
 
       if (vm.state === "error") {
         root.innerHTML = `
-          <div style="font-weight:600;">${escapeHtml(vm.title)}</div>
-          <div class="small-text" style="margin-top:6px; opacity:.9;">
-            ${escapeHtml(vm.body)}
-          </div>
-          <div class="small-text" style="margin-top:6px; opacity:.7;">
-            Error: ${escapeHtml(vm.error)}
-          </div>
+          ${railHeader(vm.title)}
+          ${railLine(vm.body, "small-text rail-copy rail-copy-spaced")}
+          ${railLine(`Error: ${vm.error}`, "small-text rail-copy rail-copy-subtle rail-copy-spaced")}
         `;
         return;
       }
 
       root.innerHTML = `
-        <div style="display:flex; justify-content:space-between; gap:8px; align-items:center;">
-          <div style="font-weight:600;">${escapeHtml(vm.title)}</div>
-          <div class="small-text" style="opacity:.72;">Active</div>
-        </div>
-
-        <div class="small-text" style="margin-top:6px; opacity:.9;">
-          ${escapeHtml(vm.body)}
-        </div>
+        ${railHeader(vm.title, "Active")}
+        ${railLine(vm.body, "small-text rail-copy rail-copy-spaced")}
 
         ${vm.focusLabel ? `
-          <div class="small-text" style="margin-top:8px; opacity:.9;">
-            Focus: ${escapeHtml(vm.focusLabel)}
-          </div>
+          ${railLine(`Focus: ${vm.focusLabel}`, "small-text rail-copy rail-copy-block")}
         ` : ``}
 
         ${vm.timerText ? `
-          <div class="small-text" style="opacity:.9;">
-            ${escapeHtml(vm.timerText)}
-          </div>
+          ${railLine(vm.timerText)}
         ` : ``}
 
         ${vm.rewardText ? `
-          <div class="small-text" style="opacity:.9;">
-            ${escapeHtml(vm.rewardText)}
-          </div>
+          ${railLine(vm.rewardText)}
         ` : ``}
 
         ${vm.cueText ? `
-          <div class="small-text" style="margin-top:8px; opacity:.85;">
-            ${escapeHtml(vm.cueText)}
-          </div>
+          ${railLine(vm.cueText, "small-text rail-copy rail-copy-block rail-copy-soft")}
         ` : ``}
 
         ${vm.nextText ? `
-          <div class="small-text" style="margin-top:4px; opacity:.72;">
-            ${escapeHtml(vm.nextText)}
-          </div>
+          ${railLine(vm.nextText, "small-text rail-copy rail-copy-tight rail-copy-subtle")}
         ` : ``}
       `;
     }
@@ -1107,31 +1094,23 @@
       const vm = getDrillRailViewModel();
 
       if (vm.state === "idle") {
-        root.innerHTML = `
-          <div class="small-text" style="opacity:.75;">${escapeHtml(vm.body)}</div>
-        `;
+        root.innerHTML = railLine(vm.body, "small-text rail-copy rail-copy-muted");
         return;
       }
 
       if (vm.state === "completed") {
         root.innerHTML = `
-          <div style="font-weight:600;">${escapeHtml(vm.title)}</div>
-          <div class="small-text" style="margin-top:6px; opacity:.9;">
-            ${escapeHtml(vm.body)}
-          </div>
+          ${railHeader(vm.title)}
+          ${railLine(vm.body, "small-text rail-copy rail-copy-spaced")}
         `;
         return;
       }
 
       if (vm.state === "error") {
         root.innerHTML = `
-          <div style="font-weight:600;">${escapeHtml(vm.title)}</div>
-          <div class="small-text" style="margin-top:6px; opacity:.9;">
-            ${escapeHtml(vm.body)}
-          </div>
-          <div class="small-text" style="margin-top:6px; opacity:.7;">
-            Error: ${escapeHtml(vm.error)}
-          </div>
+          ${railHeader(vm.title)}
+          ${railLine(vm.body, "small-text rail-copy rail-copy-spaced")}
+          ${railLine(`Error: ${vm.error}`, "small-text rail-copy rail-copy-subtle rail-copy-spaced")}
         `;
         return;
       }
@@ -1142,41 +1121,24 @@
           : "Assigned";
 
       root.innerHTML = `
-        <div style="display:flex; justify-content:space-between; gap:8px; align-items:center;">
-          <div style="font-weight:600;">${escapeHtml(vm.title)}</div>
-          <div class="small-text" style="opacity:.72;">${escapeHtml(badgeLabel)}</div>
-        </div>
-
-        <div class="small-text" style="margin-top:6px; opacity:.9;">
-          ${escapeHtml(vm.body)}
-        </div>
-
-        <div class="small-text" style="margin-top:8px; opacity:.9;">
-          Focus: ${escapeHtml(vm.focusLabel)}
-        </div>
+        ${railHeader(vm.title, badgeLabel)}
+        ${railLine(vm.body, "small-text rail-copy rail-copy-spaced")}
+        ${railLine(`Focus: ${vm.focusLabel}`, "small-text rail-copy rail-copy-block")}
 
         ${vm.progressText ? `
-          <div class="small-text" style="opacity:.9;">
-            ${escapeHtml(vm.progressText)}
-          </div>
+          ${railLine(vm.progressText)}
         ` : ``}
 
         ${vm.timerText ? `
-          <div class="small-text" style="opacity:.9;">
-            ${escapeHtml(vm.timerText)}
-          </div>
+          ${railLine(vm.timerText)}
         ` : ``}
 
         ${vm.cueText ? `
-          <div class="small-text" style="margin-top:8px; opacity:.85;">
-            ${escapeHtml(vm.cueText)}
-          </div>
+          ${railLine(vm.cueText, "small-text rail-copy rail-copy-block rail-copy-soft")}
         ` : ``}
 
         ${vm.nextText ? `
-          <div class="small-text" style="margin-top:4px; opacity:.72;">
-            ${escapeHtml(vm.nextText)}
-          </div>
+          ${railLine(vm.nextText, "small-text rail-copy rail-copy-tight rail-copy-subtle")}
         ` : ``}
       `;
     }
@@ -1198,9 +1160,7 @@
       ].filter((effect) => !!effect?.active);
 
       if (!effects.length) {
-        root.innerHTML = `
-          <div class="small-text" style="opacity:.75;">No manager support active right now.</div>
-        `;
+        root.innerHTML = railLine("No manager support active right now.", "small-text rail-copy rail-copy-muted");
         return;
       }
 
@@ -1212,25 +1172,10 @@
         const copy = getWaiterEffectCopy(effect, family);
 
         return `
-          <div style="
-            padding:8px;
-            border:1px solid rgba(255,255,255,0.10);
-            border-radius:10px;
-            background:rgba(255,255,255,0.08);
-            margin-bottom:8px;
-          ">
-            <div style="display:flex; justify-content:space-between; gap:8px; align-items:center;">
-              <div style="font-weight:600;">${escapeHtml(copy.name)}</div>
-              <div class="small-text" style="opacity:.72;">
-                ${escapeHtml(familyLabel)}
-              </div>
-            </div>
-            <div class="small-text" style="margin-top:4px; opacity:.9;">
-              ${escapeHtml(copy.body)}
-            </div>
-            <div class="small-text" style="margin-top:4px; opacity:.75;">
-              ${escapeHtml(copy.cue)}
-            </div>
+          <div class="rail-effect-card">
+            ${railHeader(copy.name, familyLabel)}
+            ${railLine(copy.body, "small-text rail-copy rail-copy-tight")}
+            ${railLine(copy.cue, "small-text rail-copy rail-copy-tight rail-copy-subtle")}
           </div>
         `;
       }).join("");
@@ -1260,10 +1205,10 @@
 
         el.innerHTML = `
           <div class="small-text"><strong>Level</strong></div>
-          <div style="margin-bottom:10px;">${level}</div>
+          <div class="rail-progress-value">${level}</div>
 
           <div class="small-text"><strong>Focus</strong></div>
-          <div style="margin-bottom:10px;">${focus}</div>
+          <div class="rail-progress-value">${focus}</div>
 
           <div class="small-text"><strong>Next</strong></div>
           <div>${next}</div>
@@ -1271,10 +1216,10 @@
       } catch (e) {
         el.innerHTML = `
           <div class="small-text"><strong>Level</strong></div>
-          <div style="margin-bottom:10px;">Building recognition</div>
+          <div class="rail-progress-value">Building recognition</div>
 
           <div class="small-text"><strong>Focus</strong></div>
-          <div style="margin-bottom:10px;">Reading guest intent</div>
+          <div class="rail-progress-value">Reading guest intent</div>
 
           <div class="small-text"><strong>Next</strong></div>
           <div>Keep playing encounters</div>
@@ -1537,12 +1482,12 @@
       const vm = getRailQuickActionsViewModel();
 
       root.innerHTML = `
-        <div style="display:flex; flex-direction:column; gap:8px;">
+        <div class="rail-action-stack">
           <button id="btnRailFiveMinDrill" type="button" class="btn-ghost">${escapeHtml(vm.primaryLabel)}</button>
           <button id="btnRailBackToHome" type="button" class="btn-ghost">Back to Premium Home</button>
 
           ${vm.helperText ? `
-            <div class="small-text" style="opacity:.75; margin-top:2px;">
+            <div class="small-text rail-copy rail-copy-muted rail-copy-helper">
               ${escapeHtml(vm.helperText)}
             </div>
           ` : ``}
@@ -3249,10 +3194,7 @@
         btn.type = "button";
         btn.id = "btnParamBack";
         btn.textContent = "Back";
-        btn.style.cssText =
-          "position:fixed;top:12px;left:12px;z-index:999999;" +
-          "padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.2);" +
-          "background:rgba(0,0,0,.55);color:white;cursor:pointer;";
+        btn.className = "floating-back-button floating-back-button-left";
 
         bindInput(btn, () => {
           btn.remove();
@@ -3360,7 +3302,7 @@
         <strong>Demo</strong>
         <div class="score-row">Wines saved: <span id="homeDemoCount">0 / 3</span></div>
         <div class="score-row">Runs total: <span id="homeDemoRuns">0</span></div>
-        <div class="card" style="margin-top:10px;">
+        <div class="card progress-card">
           <strong>Progress</strong>
           <div class="small-text">Level: <span id="progressNameDemo">—</span></div>
           <div class="small-text">Points: <span id="progressPointsDemo">0</span></div>
@@ -3380,7 +3322,7 @@
         <strong>Premium</strong>
         <div class="score-row">Wines saved: <span id="homePremiumCount">0 / 10</span></div>
         <div class="score-row">Runs total: <span id="homePremiumRuns">0</span></div>
-        <div class="card" style="margin-top:10px;">
+        <div class="card progress-card">
           <strong>Progress</strong>
           <div class="small-text">Level: <span id="progressNamePremium">—</span></div>
           <div class="small-text">Points: <span id="progressPointsPremium">0</span></div>
@@ -3477,11 +3419,11 @@
         <div id="premiumWineCards" class="wine-cards"></div>
 
         <!-- 2) DROPDOWN UNDER CARDS -->
-        <details id="premiumWineAdvanced" class="wine-advanced" style="margin-top:12px;">
+        <details id="premiumWineAdvanced" class="wine-advanced panel-spaced">
           <summary>Advanced (add wines + table)</summary>
 
           <!-- INPUT FORM INSIDE DROPDOWN -->
-          <div id="wineAdminPanel" style="margin-top:12px;">
+          <div id="wineAdminPanel" class="panel-spaced">
             <div class="manager-row">
               <input type="text" id="wineNameInputPremium" placeholder="Wine Name (required)" />
               <input type="text" id="wineVarietalInputPremium" placeholder="Varietal (required)" />
@@ -3524,7 +3466,7 @@
           </div>
 
           <!-- TABLE VIEW INSIDE DROPDOWN -->
-          <table class="wine-table" style="margin-top:12px;">
+          <table class="wine-table table-spaced">
             <thead>
               <tr>
                 <th>Name</th>
@@ -3605,35 +3547,35 @@
         <div class="bc-card bc-rail-card bc-rail-card-priority">
           <div class="bc-rail-title">Current Objective</div>
           <div class="bc-rail-body" id="railActiveChallenge">
-            <div class="small-text" style="opacity:.75;">No current objective right now.</div>
+            <div class="small-text rail-copy rail-copy-muted">No current objective right now.</div>
           </div>
         </div>
 
         <div class="bc-card bc-rail-card bc-rail-card-priority">
           <div class="bc-rail-title">Practice Focus</div>
           <div class="bc-rail-body" id="railActiveDrill">
-            <div class="small-text" style="opacity:.75;">No practice focus right now.</div>
+            <div class="small-text rail-copy rail-copy-muted">No practice focus right now.</div>
           </div>
         </div>
 
         <div class="bc-card bc-rail-card">
           <div class="bc-rail-title">Progression Status</div>
           <div class="bc-rail-body" id="railProgress">
-            <div class="small-text" style="opacity:.75;">No run data yet.</div>
+            <div class="small-text rail-copy rail-copy-muted">No run data yet.</div>
           </div>
         </div>
 
         <div class="bc-card bc-rail-card">
           <div class="bc-rail-title">Manager Support</div>
           <div class="bc-rail-body" id="railLiveEffects">
-            <div class="small-text" style="opacity:.75;">No manager support active right now.</div>
+            <div class="small-text rail-copy rail-copy-muted">No manager support active right now.</div>
           </div>
         </div>
 
         <div class="bc-card bc-rail-card">
           <div class="bc-rail-title">Next Step</div>
           <div class="bc-rail-body" id="railQuickActions">
-            <div style="display:flex; flex-direction:column; gap:8px;">
+            <div class="rail-action-stack">
               <button id="btnRailFiveMinDrill" type="button" class="btn-ghost">Start 5-Min Drill</button>
               <button id="btnRailBackToHome" type="button" class="btn-ghost">Back to Premium Home</button>
             </div>
@@ -3649,7 +3591,7 @@
       <footer id="bcHudBottom" class="bc-hud bc-hud-bottom">
         <div class="bc-hint" id="bcHintLine">Read the guest. Choose the hook.</div>
         <div>
-          <div id="progressReportStatus" class="small-text" style="margin-top:6px; opacity:.85;"></div>
+          <div id="progressReportStatus" class="small-text progress-report-status"></div>
         </div>
       </footer>
     </div>
@@ -4515,13 +4457,13 @@ function isDrillMode() {
       // Crash becomes visible (iframe)
       window.addEventListener("error", (e) => {
         const el = document.createElement("div");
-        el.style.cssText = "position:fixed;inset:0;background:#111;color:#fff;padding:16px;z-index:999999;font:14px/1.4 monospace;";
+        el.className = "bc-crash-overlay";
         el.textContent = "BottleCaller crashed:\n\n" + (e.error?.stack || e.message || String(e));
         document.body.appendChild(el);
       });
       window.addEventListener("unhandledrejection", (e) => {
         const el = document.createElement("div");
-        el.style.cssText = "position:fixed;inset:0;background:#111;color:#fff;padding:16px;z-index:999999;font:14px/1.4 monospace;";
+        el.className = "bc-crash-overlay";
         el.textContent = "BottleCaller crashed (promise):\n\n" + (e.reason?.stack || e.reason || String(e.reason));
         document.body.appendChild(el);
       });
@@ -4805,9 +4747,7 @@ function isDrillMode() {
         if (!hud) {
           hud = document.createElement("div");
           hud.id = "bcProgressHud";
-          hud.style.cssText =
-            "position:fixed;top:10px;right:10px;z-index:99999;max-width:420px;" +
-            "padding:10px;border:1px solid #333;background:#111;color:#ddd;font:12px/1.35 monospace;opacity:0.95";
+          hud.className = "bc-floating-hud";
           document.body.appendChild(hud);
         }
         return hud;
@@ -4843,9 +4783,7 @@ function isDrillMode() {
         if (!t) {
           t = document.createElement("div");
           t.id = "bcToast";
-          t.style.cssText =
-            "position:fixed;bottom:10px;left:10px;z-index:99999;max-width:520px;" +
-            "padding:10px 12px;border:1px solid #333;background:#111;color:#ddd;font:13px/1.35 system-ui;opacity:0.98";
+          t.className = "bc-toast";
           document.body.appendChild(t);
         }
         t.textContent = msg;
@@ -7784,19 +7722,7 @@ function ensureProgLoaded() {
         btn.id = "__BC_DRILL_BACK__";
         btn.type = "button";
         btn.textContent = "Back";
-        btn.style.position = "fixed";
-        btn.style.top = "12px";
-        btn.style.right = "12px";
-        btn.style.left = "auto";
-        btn.style.zIndex = "2147483647";
-        btn.style.pointerEvents = "auto";
-        btn.style.padding = "10px 12px";
-        btn.style.borderRadius = "12px";
-        btn.style.border = "1px solid rgba(255,255,255,0.22)";
-        btn.style.background = "rgba(0,0,0,0.55)";
-        btn.style.color = "#fff";
-        btn.style.fontWeight = "600";
-        btn.style.cursor = "pointer";
+        btn.className = "floating-back-button floating-back-button-right";
 
         btn.onclick = () => {
           btn.remove();
@@ -9641,13 +9567,13 @@ function ensureProgLoaded() {
         block.appendChild(title);
 
         const stats = document.createElement("div");
-        stats.style.marginTop = "8px";
+        stats.className = "summary-followup";
         stats.innerText = `Current: ${info.streak}  |  Best: ${info.best}`;
         block.appendChild(stats);
 
         if (info.pass === false && info.reasonText) {
           const why = document.createElement("div");
-          why.style.marginTop = "8px";
+          why.className = "summary-followup";
           why.innerText = info.reasonText;
           block.appendChild(why);
         }
@@ -9804,19 +9730,8 @@ function ensureProgLoaded() {
         if (!strictHook && !strictDelivery) return;
 
         const badge = document.createElement("div");
-        badge.className = "bc-badge-strict";
+        badge.className = "bc-badge-strict strict-rules-badge";
         badge.textContent = strictDelivery ? "⚠ stricter rules (hook + delivery)" : "⚠ stricter rules (hook)";
-
-        badge.style.marginTop = "6px";
-        badge.style.display = "inline-flex";
-        badge.style.alignItems = "center";
-        badge.style.gap = "6px";
-        badge.style.fontSize = "12px";
-        badge.style.padding = "4px 8px";
-        badge.style.borderRadius = "999px";
-        badge.style.border = "1px solid rgba(255,255,255,0.18)";
-        badge.style.background = "rgba(255,255,255,0.06)";
-        badge.style.opacity = "0.92";
 
         stepContent.appendChild(badge);
       }
@@ -9969,14 +9884,7 @@ function ensureProgLoaded() {
         const badge = document.createElement("span");
         badge.setAttribute("data-bc-strict-badge", "1");
         badge.textContent = "⚠ stricter rules";
-        badge.className = "small-text";
-        badge.style.display = "inline-block";
-        badge.style.margin = "6px 0";
-        badge.style.padding = "4px 8px";
-        badge.style.borderRadius = "999px";
-        badge.style.fontSize = "12px";
-        badge.style.border = "1px solid rgba(255,255,255,0.25)";
-        badge.style.opacity = "0.9";
+        badge.className = "small-text strict-badge-inline";
 
         stepContent.prepend(badge);
       }
@@ -10034,26 +9942,23 @@ function ensureProgLoaded() {
         card.appendChild(title);
 
         const line1 = document.createElement("div");
-        line1.className = "small-text";
-        line1.style.marginTop = "6px";
+        line1.className = "small-text result-meta-line";
         line1.innerText = `Tier reached: ${tier}  •  Difficulty: ${difficulty}`;
         card.appendChild(line1);
 
         const line2 = document.createElement("div");
-        line2.className = "small-text";
-        line2.style.marginTop = "6px";
+        line2.className = "small-text result-meta-line";
         line2.innerText = `Strength: ${sf.strongest.toUpperCase()} (${sf.strongestPct}%)  |  Fix: ${sf.weakest.toUpperCase()} (${sf.weakestPct}%)`;
         card.appendChild(line2);
 
         const next = document.createElement("div");
-        next.style.marginTop = "10px";
+        next.className = "result-next-line";
         next.innerText = sf.fixText;
         card.appendChild(next);
 
         if (guardState?.lastDecision?.action) {
           const gd = document.createElement("div");
-          gd.className = "small-text";
-          gd.style.marginTop = "10px";
+          gd.className = "small-text result-guard-line";
           gd.innerText = `Guard: ${guardState.lastDecision.action.toUpperCase()} (${(guardState.lastDecision.reasons || []).join(", ")})`;
           card.appendChild(gd);
         }
@@ -10177,7 +10082,7 @@ function ensureProgLoaded() {
         sfBlock.appendChild(l1);
 
         const l2 = document.createElement("div");
-        l2.style.marginTop = "8px";
+        l2.className = "summary-followup";
         l2.innerText = sf.fixText || "Fix: run the drill again clean.";
         sfBlock.appendChild(l2);
 
@@ -10301,8 +10206,7 @@ function ensureProgLoaded() {
 
       function appendFeedbackLine(stepContent, text) {
         const line = document.createElement("div");
-        line.style.marginTop = "10px";
-        line.style.opacity = "0.85";
+        line.className = "feedback-line";
         line.textContent = text;
         stepContent.appendChild(line);
       }
@@ -12401,7 +12305,6 @@ function ensureProgLoaded() {
           bar = document.createElement("div");
           bar.className = "step-buttons";
           bar.id = "stepButtons";
-          bar.style.marginTop = "12px";
           screen.appendChild(bar);
         }
         return bar;
@@ -13045,7 +12948,7 @@ function ensureProgLoaded() {
 
         const block = document.createElement("div");
         block.className = "small-text";
-        block.style.marginTop = "10px";
+        block.classList.add("feedback-block");
         block.innerText = line;
         container.appendChild(block);
       }
@@ -13429,14 +13332,13 @@ function ensureProgLoaded() {
           : (reaction.combined || "The guest gives very little away.");
 
         const block = document.createElement("div");
-        block.className = "notice";
-        block.style.marginTop = "10px";
+        block.className = "notice notice-spaced";
 
         const title = document.createElement("div");
         title.innerHTML = "<strong>Guest Reaction</strong>";
 
         const body = document.createElement("div");
-        body.style.marginTop = "6px";
+        body.className = "notice-body";
         body.innerText = text;
 
         block.appendChild(title);
@@ -13456,14 +13358,13 @@ function ensureProgLoaded() {
           : (lineData.combined || "The guest gives little away.");
 
         const block = document.createElement("div");
-        block.className = "notice";
-        block.style.marginTop = "10px";
+        block.className = "notice notice-spaced";
 
         const title = document.createElement("div");
         title.innerHTML = "<strong>What the guest says</strong>";
 
         const body = document.createElement("div");
-        body.style.marginTop = "6px";
+        body.className = "notice-body";
         body.innerText = `"${text}"`;
 
         block.appendChild(title);
@@ -13478,9 +13379,7 @@ function ensureProgLoaded() {
         const pressureTags = getPressureProfile(encounter).join(",");
 
         const block = document.createElement("div");
-        block.className = "small-text";
-        block.style.marginTop = "8px";
-        block.style.opacity = "0.7";
+        block.className = "small-text pressure-debug-line";
         block.innerText =
           `pressure -> openness:${p.openness.toFixed(2)} ` +
           `resistance:${p.resistance.toFixed(2)} ` +
@@ -13580,7 +13479,7 @@ function ensureProgLoaded() {
 
         const head = document.createElement("div");
         head.className = "notice";
-        head.style.marginTop = "8px";
+        head.classList.add("summary-head");
         head.innerText = summary.header || "Resolved encounter feedback";
         wrap.appendChild(head);
 
@@ -13596,10 +13495,10 @@ function ensureProgLoaded() {
 
         const makeList = (label, items) => {
           const block = document.createElement("div");
-          block.style.marginTop = "10px";
+          block.className = "ux-summary-section";
 
           const lbl = document.createElement("div");
-          lbl.style.fontWeight = "700";
+          lbl.className = "ux-summary-label";
           lbl.innerText = label;
           block.appendChild(lbl);
 
@@ -13711,12 +13610,251 @@ function ensureProgLoaded() {
         strength.innerHTML = `<strong>You did well:</strong> ${summary.strength}`;
 
         const fix = document.createElement("div");
-        fix.style.marginTop = "8px";
+        fix.className = "strength-fix-next";
         fix.innerHTML = `<strong>Next fix:</strong> ${summary.fix}`;
 
         block.appendChild(strength);
         block.appendChild(fix);
         container.appendChild(block);
+      }
+
+      function renderReflectionOverview(container, encounter, checks, modeBestResolved) {
+        const reflectionTitle = document.createElement("h3");
+        reflectionTitle.innerText = "What just happened";
+        container.appendChild(reflectionTitle);
+        renderStrictBadge(container);
+
+        const anchor = document.createElement("div");
+        anchor.className = "small-text reflection-anchor";
+        anchor.innerText = bcReflectionAnchor(checks, encounter);
+        container.appendChild(anchor);
+
+        renderDynamicGuestLineBlock(container, encounter, checks, { compact: false });
+        renderDynamicGuestReactionBlock(container, encounter, checks, { compact: false });
+
+        if (window.__BC_DEBUG_PRESSURE__ === true) {
+          renderGuestPressureDebug(container, encounter);
+        }
+
+        logEncounterStateAudit("before_reflection_render", encounter);
+        renderStrengthFixBlock(container, checks, encounter);
+
+        console.log("[BC] Step6 summary", encounter.__uxSummary);
+        if (encounter.__uxSummary) {
+          renderUxSummary(container, encounter.__uxSummary, {
+            title: "Summary to lock it in",
+            compact: false
+          });
+        }
+
+        addReflectionBlock(
+          container,
+          "Guest Read",
+          checks.guestRead ? "✅" : "❌",
+          `Guest type: ${encounter.guestStateActual || "—"}. You read them as: ${encounter.guestReadSelected || "—"}.`
+        );
+
+        addReflectionBlock(
+          container,
+          "Mode",
+          scoreSymbol(checks.modeStatus),
+          `Best approach: ${modeBestResolved ? uiModeLabel(modeBestResolved, "game") : "—"}. ` +
+          modeWhyWithChoice(encounter.guestStateActual, encounter.modeSelected)
+        );
+
+        const hookRuleForGuest = getHookRuleForGuest(encounter.guestStateActual);
+        assertHookConsistency(hookRuleForGuest, {
+          encounterNumber: encounter?.encounterNumber,
+          guest: encounter?.guestStateActual,
+          source: "reflection_hook"
+        });
+
+        const bestHook = hookRuleForGuest?.optimal || "—";
+
+        addReflectionBlock(
+          container,
+          "Hook",
+          scoreSymbol(checks.hookStatus),
+          `Best opening: "${bestHook}". ` + hookWhyWithChoice(
+            encounter.guestStateActual,
+            getSelectedHookType(encounter)
+          )
+        );
+
+        const correctS1 =
+          encounter.correctDeliveryLine1 ||
+          encounter.deliverOptionsS1?.[encounter.correctSlotS1] ||
+          "—";
+        const correctS2 =
+          encounter.correctDeliveryLine2 ||
+          encounter.deliverOptionsS2?.[encounter.correctSlotS2] ||
+          "—";
+        const chosenS1 =
+          encounter.selectedDeliveryLine1 ||
+          encounter.deliveryLine1 ||
+          encounter.deliverOptionsS1?.[encounter.selectedS1] ||
+          "—";
+        const chosenS2 =
+          encounter.selectedDeliveryLine2 ||
+          encounter.deliveryLine2 ||
+          encounter.deliverOptionsS2?.[encounter.selectedS2] ||
+          "—";
+
+        addReflectionBlock(
+          container,
+          "Delivery",
+          checks.deliveryCorrect ? "✅" : "❌",
+          `Best pair: "${correctS1}" / "${correctS2}". You chose: "${chosenS1}" / "${chosenS2}". The stronger pair made the recommendation feel clearer and more natural.`
+        );
+
+        if (encounter.chainSignal) {
+          addReflectionBlock(
+            container,
+            "Momentum",
+            momentumLabel(encounter.chainSignal),
+            sessionSignalDetail(encounter.chainSignal)
+          );
+        }
+
+        if (encounter.recoveryText) {
+          const unlockedModes = getUnlockedModesForCurrentPlayer();
+          const recoveryBest = resolveCorrectModeForPlayer(
+            encounter.recoveryCorrectModeResolved ||
+            encounter.recoveryCorrectModeRaw ||
+            encounter.recoveryCorrectMode ||
+            null,
+            unlockedModes
+          );
+
+          encounter.recoveryCorrectModeResolved = recoveryBest;
+          encounter.recoveryCorrect =
+            !!encounter.recoveryChoice &&
+            canonicalModeFromUi(encounter.recoveryChoice) === canonicalModeFromUi(recoveryBest);
+
+          assertModeConsistency(unlockedModes, recoveryBest, {
+            encounterNumber: encounter?.encounterNumber,
+            tier: getProgressionSpine({ allowNull: true })?.selectors?.tier?.(),
+            points: getProgressionSpine({ allowNull: true })?.selectors?.points?.(),
+            source: "reflection_pivot"
+          });
+
+          addReflectionBlock(
+            container,
+            "Pivot",
+            encounter.recoveryCorrect ? "✅" : (encounter.recoveryChoice ? "❌" : "—"),
+            `Scenario: ${encounter.recoveryText || "—"}. ` +
+            `Best recovery: ${recoveryBest ? uiModeLabel(recoveryBest, "game") : "—"}. ` +
+            `You chose: ${encounter.recoveryChoice ? uiModeLabel(encounter.recoveryChoice, "game") : "—"}. ` +
+            `Why: ${pivotWhyWithChoice(encounter)}`
+          );
+        }
+
+        if (encounter.resetUsed) {
+          addReflectionBlock(
+            container,
+            "Reset",
+            "✅",
+            "You used reset (only allowed if first mode was HOLD)."
+          );
+        }
+
+        const gradeObj = computePerformanceGrade(encounter, checks);
+        encounter.performanceGrade = gradeObj.grade;
+        renderPerformanceGradeBlock(container, gradeObj);
+        renderCoachLineBlock(container, encounter, checks);
+
+        return gradeObj;
+      }
+
+      function renderMasterySnapshotCard(container, encounter) {
+        mastery = loadMastery();
+        const strengthFix = getStrengthAndFix(mastery);
+
+        const sfBlock = document.createElement("div");
+        sfBlock.className = "card";
+
+        const sfTitle = document.createElement("strong");
+        sfTitle.innerText = "Strength + Fix";
+        sfBlock.appendChild(sfTitle);
+
+        const sfLine1 = document.createElement("div");
+        sfLine1.className = "small-text";
+        sfLine1.innerText =
+          `Strength: ${strengthFix.strongest.toUpperCase()} (${strengthFix.strongestPct}%)  |  Fix: ${strengthFix.weakest.toUpperCase()} (${strengthFix.weakestPct}%)`;
+        sfBlock.appendChild(sfLine1);
+
+        const sfLine2 = document.createElement("div");
+        sfLine2.className = "summary-followup";
+        sfLine2.innerText = strengthFix.fixText;
+        sfBlock.appendChild(sfLine2);
+
+        const sfLine3 = document.createElement("div");
+        sfLine3.className = "small-text summary-context-line";
+        sfLine3.innerText = `This encounter trained: ${(encounter.skillFocus || "read").toUpperCase()}`;
+        sfBlock.appendChild(sfLine3);
+
+        container.appendChild(sfBlock);
+        return strengthFix;
+      }
+
+      function addAdvanceEncounterButton(stepButtons, inDrill, currentEncounter) {
+        const isDemoNow = (window.isDemo || window.bcMode === "demo");
+        const done2 = Number(window.__BC_DEMO_DONE__ || 0);
+        const target = Number(window.__BC_DEMO_TARGET__ || 3);
+        const demoComplete = isDemoNow && !inDrill && done2 >= target;
+
+        addStepButton(
+          inDrill ? "NEXT REP" : (demoComplete ? "BACK HOME" : "NEXT ENCOUNTER"),
+          () => {
+            if (!currentEncounter.__logged) {
+              try { logEncounter(); } catch (e) { console.warn("[BC] logEncounter failed", e); }
+              currentEncounter.__logged = true;
+            }
+
+            if (demoComplete) {
+              resetNavState();
+              showScreen("screenHome");
+              return;
+            }
+
+            if (window.__NEXT_LOCK__) return;
+            window.__NEXT_LOCK__ = true;
+            setTimeout(() => { window.__NEXT_LOCK__ = false; }, 150);
+
+            encounterIndex = (encounterIndex ?? 0) + 1;
+
+            if (!isDemoNow) {
+              const clamped = clampEncounterIndexToUnlockedTier(encounterIndex);
+              if (clamped !== encounterIndex) {
+                const targetTierRaw = getTierFromEncounterNumber(encounterIndex + 1);
+                const targetTier = Math.min(2, targetTierRaw);
+
+                if (targetTierRaw >= 3) {
+                  alert("Not yet.\n\nNew pressure scenarios will come later. For now, keep building clean reps.");
+                } else if (targetTier === 2) {
+                  alert(
+                    "Not yet.\n\n" +
+                    "Tier 2 introduces recovery under pressure.\n" +
+                    "Clean reads and calm delivery come first.\n\n" +
+                    "Repeat this tier until the sequence feels automatic."
+                  );
+                } else {
+                  alert("Not yet. Keep playing encounters.");
+                }
+
+                encounterIndex = clamped;
+                saveEncounterIndex(encounterIndex);
+                resetNavState();
+                showScreen("screenHome");
+                return;
+              }
+            }
+
+            saveEncounterIndex(encounterIndex);
+            startEncounter();
+          },
+          stepButtons
+        );
       }
 
       function getTierLabel(enc) {
@@ -13816,13 +13954,13 @@ function ensureProgLoaded() {
         block.appendChild(meta);
 
         const headline = document.createElement("div");
-        headline.style.marginTop = "6px";
+        headline.className = "performance-headline";
         headline.innerText = gradeObj.headline;
         block.appendChild(headline);
 
         if (!gradeObj.clean) {
           const ul = document.createElement("ul");
-          ul.style.marginTop = "8px";
+          ul.className = "performance-list";
           gradeObj.why.slice(0, 3).forEach(reason => { // keep it tight
             const li = document.createElement("li");
             li.innerText = reason;
@@ -14298,14 +14436,13 @@ function ensureProgLoaded() {
 
       function renderModeHelp(stepContent) {
         const wrap = document.createElement("div");
-        wrap.className = "notice";
-        wrap.style.marginTop = "10px";
+        wrap.className = "notice notice-spaced";
 
         wrap.innerHTML = `
-          <div><strong>Scout</strong> — Ask one more question when you still need a better read on the guest.</div>
-          <div style="margin-top:8px;"><strong>Guide</strong> — Gently steer the guest when they need help getting to a clear choice.</div>
-          <div style="margin-top:8px;"><strong>Charm</strong> — Warm the moment up when connection and ease matter most.</div>
-          <div style="margin-top:8px;"><strong>Authority</strong> — Lead with certainty when the guest wants someone decisive.</div>
+          <div class="notice-copy-block"><strong>Scout</strong> — Ask one more question when you still need a better read on the guest.</div>
+          <div class="notice-copy-block"><strong>Guide</strong> — Gently steer the guest when they need help getting to a clear choice.</div>
+          <div class="notice-copy-block"><strong>Charm</strong> — Warm the moment up when connection and ease matter most.</div>
+          <div class="notice-copy-block"><strong>Authority</strong> — Lead with certainty when the guest wants someone decisive.</div>
         `;
 
         stepContent.appendChild(wrap);
@@ -14313,15 +14450,14 @@ function ensureProgLoaded() {
 
       function renderHookHelp(stepContent) {
         const wrap = document.createElement("div");
-        wrap.className = "notice";
-        wrap.style.marginTop = "10px";
+        wrap.className = "notice notice-spaced";
 
         wrap.innerHTML = `
-          <div><strong>By the Glass</strong> — Lower the commitment and make the choice feel safer.</div>
-          <div style="margin-top:8px;"><strong>Trusted Pick</strong> — Use confidence and dependability to reduce hesitation.</div>
-          <div style="margin-top:8px;"><strong>Popular Choice</strong> — Use social proof when the guest wants reassurance.</div>
-          <div style="margin-top:8px;"><strong>Special Occasion</strong> — Match the emotional weight of the moment.</div>
-          <div style="margin-top:8px;"><strong>Staff Favourite</strong> — Offer an insider recommendation that feels personal.</div>
+          <div class="notice-copy-block"><strong>By the Glass</strong> — Lower the commitment and make the choice feel safer.</div>
+          <div class="notice-copy-block"><strong>Trusted Pick</strong> — Use confidence and dependability to reduce hesitation.</div>
+          <div class="notice-copy-block"><strong>Popular Choice</strong> — Use social proof when the guest wants reassurance.</div>
+          <div class="notice-copy-block"><strong>Special Occasion</strong> — Match the emotional weight of the moment.</div>
+          <div class="notice-copy-block"><strong>Staff Favourite</strong> — Offer an insider recommendation that feels personal.</div>
         `;
 
         stepContent.appendChild(wrap);
@@ -14332,22 +14468,29 @@ function ensureProgLoaded() {
         const tier = Number(pctx?.tier ?? 1);
 
         const wrap = document.createElement("div");
-        wrap.className = "notice";
-        wrap.style.marginTop = "10px";
+        wrap.className = "notice notice-spaced";
 
         const extra =
           tier >= 2
-            ? `<div style="margin-top:8px;"><strong>Higher-tier rule</strong> — As the game gets tougher, good delivery should still feel natural, but more polished and intentional.</div>`
+            ? `<div class="notice-copy-block"><strong>Higher-tier rule</strong> — As the game gets tougher, good delivery should still feel natural, but more polished and intentional.</div>`
             : "";
 
         wrap.innerHTML = `
-          <div><strong>Sentence 1</strong> — Create emotional fit first. Make the guest feel understood, reassured, interested, or excited.</div>
-          <div style="margin-top:8px;"><strong>Sentence 2</strong> — Add structural clarity. Make the recommendation easy to understand and act on.</div>
-          <div style="margin-top:8px;"><strong>Good delivery rule</strong> — First make the bottle feel right, then make the choice feel easy.</div>
+          <div class="notice-copy-block"><strong>Sentence 1</strong> — Create emotional fit first. Make the guest feel understood, reassured, interested, or excited.</div>
+          <div class="notice-copy-block"><strong>Sentence 2</strong> — Add structural clarity. Make the recommendation easy to understand and act on.</div>
+          <div class="notice-copy-block"><strong>Good delivery rule</strong> — First make the bottle feel right, then make the choice feel easy.</div>
           ${extra}
         `;
 
         stepContent.appendChild(wrap);
+      }
+
+      function createHelpIconButton() {
+        const helpBtn = document.createElement("button");
+        helpBtn.type = "button";
+        helpBtn.className = "small-btn help-icon-btn";
+        helpBtn.innerText = "?";
+        return helpBtn;
       }
 
       const HOOK_FRAMES = [
@@ -14577,13 +14720,7 @@ function ensureProgLoaded() {
         if (!box) {
           box = document.createElement("pre");
           box.id = "bcDebugState";
-          box.style.whiteSpace = "pre-wrap";
-          box.style.fontSize = "12px";
-          box.style.opacity = "0.85";
-          box.style.border = "1px solid rgba(255,255,255,0.15)";
-          box.style.padding = "10px";
-          box.style.marginTop = "10px";
-          box.style.borderRadius = "10px";
+          box.className = "bc-debug-box";
           const root = document.getElementById("screenPlay") || document.body;
           root.appendChild(box);
         }
@@ -14619,6 +14756,1087 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           });
       }
 
+      function updateEncounterStageHeader(stepHeader, wineDisplayName, wineBadges) {
+        const wine = currentEncounter?.wineSelected || { name: "DRILL" };
+        const inDrill = sessionType === "drill";
+
+        if (inDrill) {
+          wineDisplayName.textContent = "5-Min Drill";
+          wineBadges.textContent = "";
+        } else {
+          wineDisplayName.textContent = `Wine: ${wine.name} (${wine.varietal || ""})`;
+          wineBadges.textContent = "";
+          addBadge(wineBadges, (wine.fruitTags || []).join(", "));
+          addBadge(wineBadges, (wine.textureTags || []).join(", "));
+          addBadge(wineBadges, wine.oakLevel || "");
+          if (wine.process) addBadge(wineBadges, wine.process);
+        }
+
+        const stepLabels = ["Load", "Observe", "Mode", "Hook", "Deliver", "Reaction", "Reflect"];
+        const meta = (currentEncounter && currentEncounter.meta) ? currentEncounter.meta : null;
+        const tier = meta && meta.tier ? meta.tier : "";
+        const diff = meta && (meta.difficulty || meta.difficulty === 0) ? meta.difficulty : "";
+        const trap = meta && meta.trapType ? meta.trapType : "";
+
+        const chipParts = [];
+        if (tier) chipParts.push(`Tier ${tier}`);
+        let diffNum = (diff === "" ? "" : Number(diff));
+        if (diffNum !== "" && Number.isFinite(diffNum)) diffNum = Math.min(2, Math.max(1, diffNum));
+        const diffLabel = (diffNum === "" ? "" : diffNum);
+        if (diffLabel !== "") chipParts.push(`Difficulty ${diffLabel}`);
+        if (trap && trap !== "none") chipParts.push(`Trap: ${trap}`);
+        if (currentEncounter.__drillRep) chipParts.push(`Rep ${currentEncounter.__drillRep}/3`);
+
+        const displayStep = getDisplayStepNumber(currentStep);
+        const displayLabel = getDisplayStepLabel(currentStep) || stepLabels[currentStep] || "";
+        stepHeader.innerText =
+          "Step " + displayStep + " of 7" + (displayLabel ? ": " + displayLabel : "") +
+          (chipParts.length ? "\n" + chipParts.join(" • ") : "");
+        updateDifficultyBadge(currentEncounter?.difficulty ?? 1);
+      }
+
+      function renderStepLoad(stepContent, stepButtons) {
+        const p = document.createElement("p");
+        p.innerText = "Encounter loaded. Press BEGIN to observe the guest.";
+        stepContent.appendChild(p);
+        addStepButton("BEGIN", () => { currentStep = 1; renderEncounterStep(); }, stepButtons);
+      }
+
+      function renderStepObserve(stepContent, stepButtons) {
+        const context = document.createElement("p");
+        context.innerText = currentEncounter.contextLine;
+        const guest = document.createElement("p");
+        guest.innerText = "Guest: " + currentEncounter.guestLine;
+        stepContent.appendChild(context);
+        stepContent.appendChild(guest);
+
+        const cuePanel = document.createElement("div");
+        cuePanel.className = "card";
+        const cueTitle = document.createElement("strong");
+        cueTitle.innerText = "Cues";
+        cuePanel.appendChild(cueTitle);
+
+        const cuesNoise = currentEncounter.cueNoise ?? 0;
+        const physical = sliceCuesByNoise(currentEncounter.physicalCues, cuesNoise);
+        const verbal = sliceCuesByNoise(currentEncounter.verbalCues, cuesNoise);
+
+        const phys = document.createElement("div");
+        phys.className = "small-text";
+        phys.innerText = "Physical: " + (physical || []).join(", ");
+        cuePanel.appendChild(phys);
+
+        const verb = document.createElement("div");
+        verb.className = "small-text";
+        verb.innerText = "Verbal: " + (verbal || []).join(", ");
+        cuePanel.appendChild(verb);
+
+        stepContent.appendChild(cuePanel);
+
+        const prompt = document.createElement("p");
+        prompt.innerText = "What kind of guest are you dealing with?";
+        stepContent.appendChild(prompt);
+
+        const hint = document.createElement("div");
+        hint.className = "small-text";
+        hint.innerText = "Watch their cues. The right read makes every decision easier.";
+        stepContent.appendChild(hint);
+
+        const options = document.createElement("div");
+        options.className = "option-grid";
+        let allowedReads;
+
+        try {
+          allowedReads = window.getAllowedGuestTypes?.();
+        } catch (e) {
+          console.warn("[BC] getAllowedGuestTypes threw", e);
+          allowedReads = null;
+        }
+
+        if (!Array.isArray(allowedReads) || allowedReads.length === 0) {
+          allowedReads = [window.GUEST.DECIDER, window.GUEST.BARGAIN_SMART, window.GUEST.GRIEVER];
+        }
+
+        const tierUnlocked =
+          (window.isDemo || window.bcMode === "demo")
+            ? 1
+            : (typeof window.getTierUnlocked === "function" ? window.getTierUnlocked() : 1);
+
+        console.log("[BC][GUEST_UNLOCK]", {
+          encounterIndex,
+          encounterNumber: currentEncounter?.encounterNumber,
+          tierUnlocked,
+          allowedReads,
+          allowedCount: allowedReads?.length
+        });
+
+        if (currentEncounter.guestReadSelected && !allowedReads.includes(currentEncounter.guestReadSelected)) {
+          currentEncounter.guestReadSelected = "";
+        }
+
+        allowedReads.forEach(state => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "option-btn" + (currentEncounter.guestReadSelected === state ? " selected" : "");
+          btn.innerText = state;
+          bindInput(btn, () => {
+            currentEncounter.guestReadSelected = state;
+            renderEncounterStep();
+          });
+          options.appendChild(btn);
+        });
+        stepContent.appendChild(options);
+
+        try { pruneGuestReadButtons(options, allowedReads); } catch {}
+        if (currentEncounter.guestReadSelected && !allowedReads.includes(currentEncounter.guestReadSelected)) {
+          currentEncounter.guestReadSelected = "";
+        }
+
+        const lockInBtn = addStepButton("LOCK IN", () => { currentStep = 2; renderEncounterStep(); }, stepButtons);
+        if (!currentEncounter.guestReadSelected) lockInBtn.disabled = true;
+      }
+
+      function renderStepMode(stepContent, stepButtons) {
+        const topRow = document.createElement("div");
+        topRow.className = "history-row";
+
+        const prompt = document.createElement("div");
+        prompt.innerText = "How do you want to handle this guest?";
+        topRow.appendChild(prompt);
+
+        const helpBtn = createHelpIconButton();
+        topRow.appendChild(helpBtn);
+        stepContent.appendChild(topRow);
+
+        const hint = document.createElement("div");
+        hint.className = "small-text";
+        hint.innerText = "Match the tone of your approach to the guest in front of you.";
+        stepContent.appendChild(hint);
+
+        bindInput(helpBtn, () => {
+          currentEncounter.showModeHelp = !currentEncounter.showModeHelp;
+          renderEncounterStep();
+        });
+
+        if (currentEncounter.showModeHelp) renderModeHelp(stepContent);
+
+        const options = document.createElement("div");
+        options.className = "option-grid";
+        const unlockedModes = getUnlockedModesForCurrentPlayer();
+        const allowedModes = unlockedModes.length
+          ? unlockedModes
+          : [window.MODES.SCOUT, window.MODES.GUIDE, window.MODES.CHARM]
+              .map(canonicalModeFromUi)
+              .filter(Boolean);
+
+        allowedModes.forEach(mode => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "option-btn" + (currentEncounter.modeSelected === mode ? " selected" : "");
+
+          const primary = document.createElement("div");
+          primary.className = "option-title";
+          primary.innerText = uiModeIntentLabel(mode, currentEncounter.guestStateActual, "game");
+
+          const secondary = document.createElement("div");
+          secondary.className = "option-subtitle";
+          secondary.innerText = uiModeLabel(mode, "game");
+
+          btn.innerHTML = "";
+          btn.appendChild(primary);
+          btn.appendChild(secondary);
+
+          bindInput(btn, () => {
+            currentEncounter.modeSelected = mode;
+            renderEncounterStep();
+          });
+          options.appendChild(btn);
+        });
+        stepContent.appendChild(options);
+
+        const contBtn = addStepButton("CONTINUE", () => { currentStep = 3; renderEncounterStep(); }, stepButtons);
+        if (!currentEncounter.modeSelected) contBtn.disabled = true;
+      }
+
+      function renderStepHook(stepContent, stepButtons) {
+        debugHookStrictness(currentEncounter);
+
+        const topRow = document.createElement("div");
+        topRow.className = "history-row";
+
+        const prompt = document.createElement("div");
+        prompt.innerText = "Choose your opening angle.";
+        topRow.appendChild(prompt);
+
+        const helpBtn = createHelpIconButton();
+        topRow.appendChild(helpBtn);
+        stepContent.appendChild(topRow);
+
+        const hint = document.createElement("div");
+        hint.className = "small-text";
+        hint.innerText = "Your first sentence should make the guest lean in.";
+        stepContent.appendChild(hint);
+
+        bindInput(helpBtn, () => {
+          currentEncounter.showHookHelp = !currentEncounter.showHookHelp;
+          renderEncounterStep();
+        });
+
+        if (currentEncounter.showHookHelp) renderHookHelp(stepContent);
+
+        renderStrictRulesBadge(stepContent, currentEncounter);
+
+        const wine = currentEncounter?.wineSelected || {};
+        if (!Array.isArray(currentEncounter.hookOptions) || currentEncounter.hookOptions.length === 0) {
+          currentEncounter.hookOptions = hookPolicy(currentEncounter, wine);
+        }
+        const opts = currentEncounter.hookOptions;
+
+        const options = document.createElement("div");
+        options.className = "option-grid";
+
+        console.log("[DRILL] hook opts", opts);
+
+        opts.forEach((opt) => {
+          console.log("[HOOK_OPTION]", opt.id, opt.hookType, "tier:", opt.tier);
+
+          const hookType = String(opt.hookType || opt.id || opt.text || "").trim();
+          const key = String(opt.id || "") + "::" + hookType;
+          const btn = document.createElement("button");
+          btn.type = "button";
+
+          const selected = String(currentEncounter.hookSelectedKey || "") === key;
+          btn.className = "option-btn" + (selected ? " selected" : "");
+
+          const primary = document.createElement("div");
+          primary.className = "option-title";
+          primary.innerText = uiHookIntentLabelScaled(
+            hookType,
+            currentEncounter.guestStateActual,
+            currentEncounter,
+            "game"
+          );
+
+          const secondary = document.createElement("div");
+          secondary.className = "option-subtitle";
+          secondary.innerText = uiHookSubtitleLabel(hookType);
+
+          btn.innerHTML = "";
+          btn.appendChild(primary);
+          btn.appendChild(secondary);
+
+          if (opt.text) {
+            const preview = document.createElement("div");
+            preview.className = "option-preview";
+            preview.innerText = String(opt.text).trim();
+            btn.appendChild(preview);
+          }
+
+          bindInput(btn, () => {
+            currentEncounter.hookSelectedKey = key;
+            currentEncounter.hookSelected = hookType;
+            currentEncounter.hookMeta = {
+              ...opt,
+              hookType
+            };
+            renderEncounterStep();
+          });
+
+          options.appendChild(btn);
+        });
+
+        stepContent.appendChild(options);
+
+        const contBtn = addStepButton(
+          "CONTINUE",
+          () => {
+            currentStep = 4;
+            renderEncounterStep();
+          },
+          stepButtons
+        );
+
+        const ready = !!currentEncounter.hookSelected;
+        contBtn.disabled = !ready;
+        if (ready) contBtn.removeAttribute("disabled");
+      }
+
+      function renderStepDelivery(stepContent, stepButtons) {
+        const topRow = document.createElement("div");
+        topRow.className = "history-row";
+
+        const prompt = document.createElement("div");
+        prompt.innerText = "Build the 2-sentence delivery.";
+        topRow.appendChild(prompt);
+
+        const helpBtn = createHelpIconButton();
+        topRow.appendChild(helpBtn);
+        stepContent.appendChild(topRow);
+
+        bindInput(helpBtn, () => {
+          currentEncounter.showDeliveryHelp = !currentEncounter.showDeliveryHelp;
+          renderEncounterStep();
+        });
+
+        if (currentEncounter.showDeliveryHelp) renderDeliveryHelp(stepContent);
+
+        const reminder = document.createElement("div");
+        reminder.className = "notice";
+        reminder.innerText = "First create emotional fit, then make the recommendation clear.";
+        stepContent.appendChild(reminder);
+
+        if (!currentEncounter.deliverOptionsS1 || !currentEncounter.deliverOptionsS2) initDeliverOptions(currentEncounter);
+
+        const line1Title = document.createElement("p");
+        line1Title.innerText = "Sentence 1 — Create emotional fit";
+        stepContent.appendChild(line1Title);
+
+        const line1Options = document.createElement("div");
+        line1Options.className = "option-grid";
+        Object.keys(currentEncounter.deliverOptionsS1 || {}).forEach(slot => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "option-btn" + (String(currentEncounter.selectedS1) === String(slot) ? " selected" : "");
+          btn.innerText = slot + ": " + currentEncounter.deliverOptionsS1[slot];
+          btn.dataset.bc = "deliver_s1";
+          btn.dataset.slot = String(slot);
+          bindInput(btn, () => {
+            currentEncounter.selectedS1 = slot;
+            currentEncounter.deliveryLine1 = currentEncounter.deliverOptionsS1[slot];
+            currentEncounter.deliveryLine1Key = canonicalDeliveryLine(currentEncounter.deliverOptionsS1[slot]);
+            console.log("[STEP4] S1 handler ran ✅", slot);
+            renderEncounterStep();
+          });
+          line1Options.appendChild(btn);
+        });
+        stepContent.appendChild(line1Options);
+
+        const line2Title = document.createElement("p");
+        line2Title.innerText = "Sentence 2 — Make the choice clear";
+        stepContent.appendChild(line2Title);
+
+        const line2Options = document.createElement("div");
+        line2Options.className = "option-grid";
+        Object.keys(currentEncounter.deliverOptionsS2 || {}).forEach(slot => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "option-btn" + (String(currentEncounter.selectedS2) === String(slot) ? " selected" : "");
+          btn.innerText = slot + ": " + currentEncounter.deliverOptionsS2[slot];
+          btn.dataset.bc = "deliver_s2";
+          btn.dataset.slot = String(slot);
+          bindInput(btn, () => {
+            currentEncounter.selectedS2 = slot;
+            currentEncounter.deliveryLine2 = currentEncounter.deliverOptionsS2[slot];
+            currentEncounter.deliveryLine2Key = canonicalDeliveryLine(currentEncounter.deliverOptionsS2[slot]);
+            console.log("[STEP4] S2 handler ran ✅", slot);
+            renderEncounterStep();
+          });
+          line2Options.appendChild(btn);
+        });
+        stepContent.appendChild(line2Options);
+
+        const sayBtn = addStepButton("SAY IT", () => { currentStep = 5; renderEncounterStep(); }, stepButtons);
+        const ready =
+          (currentEncounter.selectedS1 != null) &&
+          (currentEncounter.selectedS2 != null);
+        console.log("[STEP4] READY?", ready, {
+          selectedS1: currentEncounter.selectedS1,
+          selectedS2: currentEncounter.selectedS2
+        });
+        sayBtn.disabled = !ready;
+        if (ready) sayBtn.removeAttribute("disabled");
+      }
+
+      function getReactionChecksForCurrentEncounter() {
+        const checksRaw = window.evaluateChecks(window.currentEncounter || currentEncounter);
+        const guestPressure = updateGuestPressureState(currentEncounter, checksRaw);
+        currentEncounter.guestPressure = guestPressure;
+        ensurePressureDrivenPivot(currentEncounter);
+        currentEncounter.dynamicGuestReaction = buildDynamicGuestReaction(currentEncounter, checksRaw);
+        currentEncounter.dynamicGuestLine = buildDynamicGuestLine(currentEncounter, checksRaw);
+
+        const rep = getDrillRep();
+        let guestRead = checksRaw.guestRead;
+        let modeStatus = checksRaw.modeStatus;
+        let hookStatus = checksRaw.hookStatus;
+        let deliveryCorrect = checksRaw.deliveryCorrect;
+
+        if (rep === 1) {
+          if (!deliveryCorrect && guestRead && modeStatus !== "damaging" && hookStatus !== "damaging") {
+            deliveryCorrect = true;
+          }
+        }
+
+        if (rep === 2 && hookStatus === "damaging") {
+          modeStatus = "damaging";
+        }
+
+        if (rep === 3) {
+          if (!guestRead) modeStatus = "damaging";
+          if (!deliveryCorrect) hookStatus = "damaging";
+        }
+
+        currentEncounter.__drillRep = rep || null;
+
+        return {
+          checksRaw,
+          rep,
+          reactionChecks: {
+            ...buildReactionChecksFromEncounter(currentEncounter, PROG),
+            guestRead,
+            modeStatus,
+            hookStatus,
+            deliveryCorrect,
+            firstMode: currentEncounter.firstMode || currentEncounter.modeSelected || ""
+          }
+        };
+      }
+
+      function computeEncounterReaction(reactionChecks) {
+        if (!window.EngineBridge || typeof window.EngineBridge.computeReaction !== "function") {
+          const scriptTagHint = "<script type='module' src='/src/game/gameEntry.ts'><" + "/script>";
+          throw new Error(
+            "EngineBridge not loaded. Confirm the module is loading: " +
+            scriptTagHint +
+            " and that gameEntry installs window.EngineBridge."
+          );
+        }
+
+        let result = currentEncounter.__reaction;
+        if (!currentEncounter.__reactionComputed || !result) {
+          currentEncounter.__reactionComputed = true;
+          const liveFx = getEncounterEffectModifiers();
+          console.log("[BC][LIVE_FX]", {
+            hook: "reaction_eval_bridge",
+            ...getEncounterEffectDebugPayload(),
+            runtime: getActiveAbilityRuntime(),
+          });
+          result = window.EngineBridge.computeReaction({
+            ...reactionChecks,
+            liveFx,
+          });
+          result = applyAbilityRuntimeToReaction(result, currentEncounter, reactionChecks);
+          if (result.__recoveryFocusApplied) {
+            currentEncounter.pivotPlanned = true;
+          }
+          currentEncounter.__reaction = result;
+          result.pivotUnlocked = !!currentEncounter.pivotPlanned && result.pivotUnlocked;
+          console.log("[BC] computeReaction result =", result);
+          commitReaction(result, currentEncounter, reactionChecks);
+          try { logEncounter(); } catch (e) { console.warn("[BC] logEncounter failed", e); }
+        } else {
+          console.log("[BC] Reaction already computed for this step (skipping compute) ✅");
+        }
+
+        currentEncounter.chainScore = result.chainScore;
+        currentEncounter.chainSignal = result.chainSignal;
+        currentEncounter.__decider = result.__decider;
+        if (result.__decider?.signal === "DECIDER_FRICTION") {
+          currentEncounter.chainSignalDetail =
+            "They’re not resisting the wine — they’re resisting time waste. Tighten the path.";
+        }
+        if (result.__decider?.signal === "DECIDER_TRUST_GAINED") {
+          currentEncounter.chainSignalDetail =
+            "They relax because you made it fast, safe, and inevitable.";
+        }
+
+        return result;
+      }
+
+      function renderReactionResolvedUI(stepContent, bar, checksRaw, reactionChecks, result) {
+        renderDynamicGuestLineBlock(stepContent, currentEncounter, checksRaw, {
+          compact: true
+        });
+
+        renderDynamicGuestReactionBlock(stepContent, currentEncounter, checksRaw, {
+          compact: true
+        });
+
+        const teaser = document.createElement("div");
+        teaser.className = "small-text";
+        teaser.innerText = "Streak updates after Reflection (Step 7).";
+        stepContent.appendChild(teaser);
+
+        console.log("[BC] UX summary build", { checksRaw, result });
+        const summary = buildStrengthFixSummary(currentEncounter, checksRaw);
+        const fb = getResolvedEncounterFeedback(currentEncounter, checksRaw);
+
+        currentEncounter.__uxSummary = {
+          guest: fb.guest,
+          chosenMode: fb.chosen.mode,
+          bestMode: fb.best.mode,
+          chosenHook: fb.chosen.hook,
+          bestHook: fb.best.hook,
+          chosenDelivery1: fb.chosen.delivery1,
+          chosenDelivery2: fb.chosen.delivery2,
+          bestDelivery1: fb.best.delivery1,
+          bestDelivery2: fb.best.delivery2,
+          chosenPivot: fb.chosen.pivot,
+          bestPivot: fb.best.pivot,
+          modeStatus: fb.result.modeStatus,
+          hookStatus: fb.result.hookStatus,
+          deliveryCorrect: fb.result.deliveryCorrect,
+          pivotCorrect: fb.result.pivotCorrect,
+          strength: summary.strength,
+          fix: summary.fix,
+          strengths: summary.strengths,
+          fixes: summary.fixes
+        };
+        renderUxSummary(stepContent, summary, { title: "In-the-moment feedback", compact: true });
+
+        const signalChip = document.createElement("div");
+        signalChip.className = "notice";
+        signalChip.innerText = "Signal: " + String(result.chainSignal || "").toUpperCase() +
+          " (score " + Number(result.chainScore).toFixed(1) + " / 4.0)";
+        stepContent.appendChild(signalChip);
+
+        if (result.deliveryCorrect) {
+          const upgraded = rollPremiumOpportunity(result, currentEncounter);
+          stepContent.appendChild(document.createTextNode(upgraded ? "✅ Upgrade. “Nice — that’s the move.”" : "✅ Nod. “Perfect.”"));
+          appendFeedbackLine(stepContent, bcFeedbackFromOutcome(reactionChecks, result));
+          addStepButton("REFLECT", () => { goToStep(6); }, bar);
+          return true;
+        }
+
+        if (result.pivotUnlocked) {
+          if (!currentEncounter.recoveryText) {
+            ensurePressureDrivenPivot(currentEncounter);
+            const unlockedModes = getUnlockedModesForCurrentPlayer();
+            const resolvedMode = resolveCorrectModeForPlayer(
+              currentEncounter.recoveryCorrectModeResolved ||
+              currentEncounter.recoveryCorrectModeRaw ||
+              currentEncounter.recoveryCorrectMode ||
+              null,
+              unlockedModes
+            );
+            currentEncounter.recoveryCorrectMode = resolvedMode;
+            currentEncounter.recoveryCorrectModeResolved = resolvedMode;
+            currentEncounter.recoveryChoice = "";
+            currentEncounter.recoveryCorrect = false;
+            currentEncounter.resetUsed = false;
+            assertModeConsistency(unlockedModes, resolvedMode, {
+              encounterNumber: currentEncounter?.encounterNumber,
+              tier: getProgressionSpine({ allowNull: true })?.selectors?.tier?.(),
+              points: getProgressionSpine({ allowNull: true })?.selectors?.points?.(),
+              source: "pivot_scenario"
+            });
+          }
+
+          const pivotLabel =
+            result.pivotType === "POWER_MOVE_PIVOT" ? "POWER MOVE PIVOT" : "RECOVERY PIVOT";
+
+          const header = document.createElement("p");
+          header.innerText =
+            result.chainSignal === "green"
+              ? "🟢 They’re with you — but you can still tighten the close."
+              : result.chainSignal === "yellow"
+                ? "🟡 Hesitates… you can recover this."
+                : "🔴 Pushback… you need a recovery pivot.";
+          stepContent.appendChild(header);
+
+          const box = document.createElement("div");
+          box.className = "card";
+          box.innerHTML =
+            "<strong>" + pivotLabel + " (" + (currentEncounter.pivotType || "pivot") + ")</strong>" +
+            "<div class='notice-body'>" + currentEncounter.recoveryText + "</div>";
+          stepContent.appendChild(box);
+
+          const prompt = document.createElement("p");
+          prompt.innerText = "Choose the Mode that closes the gap:";
+          stepContent.appendChild(prompt);
+
+          const options = document.createElement("div");
+          options.className = "option-grid";
+
+          const unlockedModes = getUnlockedModesForCurrentPlayer();
+          const recoveryModes = unlockedModes.length ? unlockedModes : [MODES.SCOUT, MODES.GUIDE, MODES.CHARM];
+          recoveryModes.forEach(mode => {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "option-btn" + (currentEncounter.recoveryChoice === mode ? " selected" : "");
+            btn.innerText = uiModeLabel(mode, "game");
+            bindInput(btn, () => {
+              currentEncounter.recoveryChoice = mode;
+              const unlockedModes = getUnlockedModesForCurrentPlayer();
+
+              const recoveryBest = resolveCorrectModeForPlayer(
+                currentEncounter.recoveryCorrectModeResolved ||
+                currentEncounter.recoveryCorrectModeRaw ||
+                currentEncounter.recoveryCorrectMode ||
+                null,
+                unlockedModes
+              );
+
+              currentEncounter.recoveryCorrectModeResolved = recoveryBest;
+              currentEncounter.recoveryCorrect =
+                !!currentEncounter.recoveryChoice &&
+                canonicalModeFromUi(currentEncounter.recoveryChoice) === canonicalModeFromUi(recoveryBest);
+              renderEncounterStep();
+            });
+            options.appendChild(btn);
+          });
+
+          stepContent.appendChild(options);
+
+          const resetAllowed = !!result.resetAllowed;
+          const resetRow = document.createElement("div");
+          resetRow.className = "notice";
+          resetRow.innerText = resetAllowed
+            ? "Reset available: because you started with HOLD (scout-mapped)."
+            : "Reset not available: only if you started with HOLD (scout-mapped).";
+          stepContent.appendChild(resetRow);
+
+          const resetBtn = addStepButton("RESET (only if HOLD)", () => {
+            if (!resetAllowed) return;
+
+            currentEncounter.resetUsed = true;
+            currentEncounter.guestReadSelected = "";
+            currentEncounter.modeSelected = "";
+            currentEncounter.hookSelected = "";
+            currentEncounter.deliveryLine1 = "";
+            currentEncounter.deliveryLine2 = "";
+            currentEncounter.deliverOptionsS1 = null;
+            currentEncounter.deliverOptionsS2 = null;
+            currentEncounter.selectedS1 = null;
+            currentEncounter.selectedS2 = null;
+            currentEncounter.correctSlotS1 = null;
+            currentEncounter.correctSlotS2 = null;
+            currentEncounter.showModeHelp = false;
+            currentEncounter.recoveryChoice = "";
+            currentEncounter.recoveryCorrect = false;
+
+            scrubEncounterDerivedState(currentEncounter);
+            currentStep = 1;
+            renderEncounterStep();
+          }, bar);
+
+          if (!resetAllowed) resetBtn.disabled = true;
+
+          if (currentEncounter.recoveryChoice) {
+            const unlockedModes = getUnlockedModesForCurrentPlayer();
+            const recoveryBest = resolveCorrectModeForPlayer(
+              currentEncounter.recoveryCorrectModeResolved ||
+              currentEncounter.recoveryCorrectModeRaw ||
+              currentEncounter.recoveryCorrectMode ||
+              null,
+              unlockedModes
+            );
+            currentEncounter.recoveryCorrectModeResolved = recoveryBest;
+            currentEncounter.recoveryCorrect =
+              !!currentEncounter.recoveryChoice &&
+              canonicalModeFromUi(currentEncounter.recoveryChoice) === canonicalModeFromUi(recoveryBest);
+            assertModeConsistency(unlockedModes, recoveryBest, {
+              encounterNumber: currentEncounter?.encounterNumber,
+              tier: getProgressionSpine({ allowNull: true })?.selectors?.tier?.(),
+              points: getProgressionSpine({ allowNull: true })?.selectors?.points?.(),
+              source: "pivot_explain"
+            });
+            const explain = document.createElement("div");
+            explain.className = "notice";
+            explain.innerText =
+              "Best is " + uiModeLabel(recoveryBest, "game") +
+              " — " + currentEncounter.recoveryWhy;
+            stepContent.appendChild(explain);
+          }
+
+          appendFeedbackLine(stepContent, bcFeedbackFromOutcome(reactionChecks, result));
+
+          const cont = addStepButton("CONTINUE TO REFLECTION", () => { goToStep(6); }, bar);
+          if (!currentEncounter.recoveryChoice && !currentEncounter.resetUsed) cont.disabled = true;
+          return true;
+        }
+
+        stepContent.innerText = "❌ “We’ll choose, thanks.”";
+        appendFeedbackLine(stepContent, bcFeedbackFromOutcome(reactionChecks, result));
+        addStepButton("REFLECT", () => { goToStep(6); }, bar);
+        return true;
+      }
+
+      function renderStepReaction(stepContent) {
+        const bar = ensureStepButtonsContainer();
+        bar.innerHTML = "";
+
+        const reactionTitle = document.createElement("h3");
+        reactionTitle.innerText = "Guest Reaction";
+        stepContent.appendChild(reactionTitle);
+
+        const reactionHint = document.createElement("div");
+        reactionHint.className = "small-text";
+        reactionHint.innerText = "Your choices shape how the guest responds.";
+        stepContent.appendChild(reactionHint);
+
+        const { checksRaw, reactionChecks } = getReactionChecksForCurrentEncounter();
+        const result = computeEncounterReaction(reactionChecks);
+        return renderReactionResolvedUI(stepContent, bar, checksRaw, reactionChecks, result);
+      }
+
+      function applyProgressionEncounterResult(didWin) {
+        try {
+          const encounterIdRaw =
+            currentEncounter?.encounterId ??
+            currentEncounter?.id ??
+            currentEncounter?.encounterNumber;
+          if (encounterIdRaw == null) throw new Error("Missing encounterId on currentEncounter");
+          const encounterId = String(encounterIdRaw);
+          const spine = getProgressionSpine({ allowNull: true });
+          console.log("[PROG] encounter scoring check", {
+            encounterId,
+            didWin,
+            pointEligible: didWin,
+            scoredThisRun: spine?.getState?.()?.run?.scoredThisRun || null
+          });
+          spine?.actions?.applyEncounterResult?.({
+            encounterId,
+            success: didWin,
+            pointEligible: didWin
+          });
+
+          const premiumSuccess = !!(
+            currentEncounter?.premiumOpportunityHit ||
+            currentEncounter?.premiumRollSuccess
+          );
+
+          if (premiumSuccess) {
+            spine?.actions?.applyPremiumBonus?.({
+              encounterId,
+              bonusPoints: 1
+            });
+          }
+        } catch (e) {
+          console.warn("[PROG] applyEncounterResult failed", e);
+        }
+      }
+
+      function renderEncounterProgressSummary(stepContent, checks, scored) {
+        updateGuestRankFromEncounter(currentEncounter, checks, scored);
+        bcRenderHud("encounter resolved");
+        bcToast("Encounter resolved");
+        renderProgressStatusWindow();
+        renderRailProgress();
+
+        const spineNow = getProgressionSpine({ allowNull: true });
+        console.log("[PROG] earned", { pointsTotal: spineNow?.selectors?.points?.() ?? 0 });
+
+        renderMasterySnapshotCard(stepContent, currentEncounter);
+
+        const streakInfo = window.__BC_DEBUG__?.updateStreakAfterEncounter
+          ? window.__BC_DEBUG__.updateStreakAfterEncounter(currentEncounter, checks)
+          : { signal: "missing", streak: 0, best: 0, changed: false };
+
+        console.log("[BC] streakInfo", streakInfo);
+        renderStreakBlock(stepContent, streakInfo);
+
+        const unlock = tryUnlockNextTier();
+        if (unlock.unlocked) {
+          console.log("[BC] Tier unlocked ✅", unlock.tier);
+        }
+
+        return { streakInfo, unlock };
+      }
+
+      function computeAndStoreCompletionState(scored, streakInfo, unlock) {
+        const guardState = loadGuardState();
+        const rawTier = resolveTierForSession(sessionType, currentEncounter?.encounterNumber);
+        const tierNow = Math.min(rawTier, getMaxUnlockedTier());
+        guardState.last3.push(scored);
+        if (guardState.last3.length > 3) guardState.last3 = guardState.last3.slice(-3);
+
+        const decision = progressionGuard({
+          tier: tierNow,
+          streakValue: streakInfo?.streak || 0,
+          last3: guardState.last3
+        });
+        console.log("[GUARD] scored last3", guardState.last3.map(x => ({
+          pts: x.pts, outcome: x.outcome, damage: x.damage,
+          mode: x.modeStatus, hook: x.hookStatus, delivery: x.deliveryCorrect
+        })));
+        console.log("[GUARD] decision", {
+          action: decision.action,
+          focus: decision.focus,
+          reasons: decision.reasons,
+          signal: decision.signal
+        });
+
+        if ((guardState.graceNext || 0) > 0 && decision.action === "escalate") {
+          decision.action = "hold";
+          decision.reasons = [...(decision.reasons || []), "H_GRACE_NEXT"];
+        }
+        guardState.graceNext = Math.max(0, (guardState.graceNext || 0) - 1);
+
+        const abilityFx = getActiveAbilityRuntime();
+        const pressureBefore = guardState.pressureLevel;
+        if (decision.action === "escalate") guardState.pressureLevel += 1;
+        else if (decision.action === "deload") guardState.pressureLevel -= 1;
+        else if (decision.action === "intervention") guardState.pressureLevel = Math.min(guardState.pressureLevel, 0);
+        if (abilityFx.calmFloor) {
+          guardState.pressureLevel += Number(abilityFx.pressureEscalationDelta || 0);
+          recordAbilityImpact({
+            abilityId: "calm_floor",
+            hook: "pressure_guard",
+            value: abilityFx.pressureEscalationDelta,
+            pressureBefore,
+            pressureAfter: guardState.pressureLevel,
+          });
+        }
+        guardState.pressureLevel = clampPressureByTier(tierNow, guardState.pressureLevel);
+
+        const baseDiff = baseDifficultyFromTier(tierNow);
+        const finalDifficulty = computeFinalDifficulty({
+          tier: tierNow,
+          pressureLevel: guardState.pressureLevel
+        });
+        currentEncounter.nextEncounterDifficulty = finalDifficulty;
+        console.log("[GUARD] tier/base/pressure/final", {
+          tierNow,
+          baseDiff,
+          pressureBefore,
+          pressureAfter: guardState.pressureLevel,
+          finalDifficulty
+        });
+        updateDifficultyBadge(finalDifficulty);
+        guardState.nextDifficulty = finalDifficulty;
+        saveAccountDifficulty(finalDifficulty);
+
+        guardState.lastDecision = decision;
+        guardState.tier = tierNow;
+        guardState.baseDiff = baseDiff;
+        guardState.finalDifficulty = finalDifficulty;
+        guardState.graceNext = (decision.action === "escalate") ? 1 : guardState.graceNext;
+
+        const policy = difficultyPolicy(finalDifficulty);
+        guardState.streakRules = {
+          gate: policy.streakGate,
+          hookStrict: policy.hookStrict,
+          deliveryStrict: policy.deliveryStrict
+        };
+        window.__BC_DIFFICULTY__ = {
+          ...policy,
+          tier: tierNow,
+          pressure: guardState.pressureLevel,
+          lastDecision: decision
+        };
+        syncProgressionStateMirror({
+          guardState: { ...guardState },
+          difficultySeed: finalDifficulty,
+          persistGuard: true
+        });
+        console.log("[GUARD] policy", window.__BC_DIFFICULTY__);
+
+        const done = isSessionComplete({ tier: tierNow, guardState });
+        const completionState = {
+          streakInfo,
+          unlock,
+          done,
+          tierNow,
+          guardState: { ...guardState },
+        };
+        currentEncounter.__completionState = completionState;
+        console.log("[SESSION] completionCheck", done);
+        return completionState;
+      }
+
+      function finalizeEncounterOutcome(stepButtons, inDrill, outcome) {
+        console.log("[BC] DIFF", describeDifficultyState());
+        console.log("[BC] outcome", outcome, currentEncounter.__tiers);
+
+        try {
+          currentEncounter.outcome = outcome?.outcome || null;
+          currentEncounter.chainSignal =
+            currentEncounter.chainSignal ||
+            currentEncounter?.__reaction?.chainSignal ||
+            null;
+          try {
+            logEncounterEffectAudit("outcome", currentEncounter, {
+              outcome: outcome?.outcome || null,
+              finalScore: outcome?.score,
+            });
+          } catch (e) {
+            console.warn("[BC] effect audit failed", e);
+          }
+
+          const prevSnapshot = getSkillSnapshot();
+          const skillTree = updateSkillTreeFromEncounter(currentEncounter);
+          const newSnapshot = getSkillSnapshot();
+          checkSkillMilestones(prevSnapshot, newSnapshot);
+
+          console.log("[SKILLS] updated", {
+            tree: skillTree,
+            snapshot: newSnapshot
+          });
+        } catch (e) {
+          console.warn("[SKILLS] update failed", e);
+        }
+
+        if (outcome.outcome === "pivot") {
+          const p = choosePivot(currentEncounter, currentEncounter.policy);
+          currentEncounter.pivotType = currentEncounter.pivotType || p.pivotType;
+          currentEncounter.nextGuestStateActual =
+            currentEncounter.nextGuestStateActual || p.next || currentEncounter.guestStateActual || "";
+        }
+
+        if (outcome.outcome === "recovery") {
+          currentEncounter.pivotType = currentEncounter.pivotType || "recovery";
+          currentEncounter.__pendingRecovery = true;
+          currentStep = 65;
+          renderEncounterStep();
+          return true;
+        }
+
+        logEncounter();
+        if (maybeEndDemoRunAndReturnHome()) return true;
+
+        if (inDrill) {
+          drillRepDone += 1;
+          if (window.__BC_SESSION__ && window.__BC_SESSION__.type === "drill") {
+            window.__BC_SESSION__.repDone = drillRepDone;
+          }
+
+          if (drillRepDone >= drillRepTarget) {
+            finishDrillSession();
+            endDrillSession();
+            return true;
+          }
+        }
+
+        addAdvanceEncounterButton(stepButtons, inDrill, currentEncounter);
+        return true;
+      }
+
+      function renderStepReflection(stepContent, stepButtons, inDrill) {
+        const checks = window.evaluateChecks(window.currentEncounter || currentEncounter);
+        const guestPressure =
+          currentEncounter.guestPressure || updateGuestPressureState(currentEncounter, checks);
+        currentEncounter.guestPressure = guestPressure;
+        ensurePressureDrivenPivot(currentEncounter);
+        currentEncounter.dynamicGuestReaction = buildDynamicGuestReaction(currentEncounter, checks);
+        currentEncounter.dynamicGuestLine = buildDynamicGuestLine(currentEncounter, checks);
+        logEncounterStateAudit("evaluated", currentEncounter);
+
+        const unlockedModes = getUnlockedModesForCurrentPlayer();
+        const modeRuleForPlayer = getModeRuleForCurrentPlayer(currentEncounter.guestStateActual);
+        const modeBestResolved =
+          currentEncounter.correctModeResolved ||
+          modeRuleForPlayer?.optimal ||
+          null;
+
+        currentEncounter.correctModeResolved = modeBestResolved;
+        assertModeConsistency(unlockedModes, modeBestResolved, {
+          encounterNumber: currentEncounter?.encounterNumber,
+          tier: getProgressionSpine({ allowNull: true })?.selectors?.tier?.(),
+          points: getProgressionSpine({ allowNull: true })?.selectors?.points?.(),
+          source: "reflection_mode"
+        });
+
+        const chain = resolveChainFromChecks(currentEncounter, checks);
+        console.log("[BC] chain", chain);
+        console.log("[BC][CHECKS]", {
+          enc: currentEncounter.encounterNumber,
+          guestActual: currentEncounter.guestStateActual,
+          guestRead: currentEncounter.guestReadSelected,
+          mode: currentEncounter.modeSelected,
+          hook: currentEncounter.hookSelected,
+          readCorrect: currentEncounter.readCorrect,
+          modeStatus: currentEncounter.modeStatus,
+          hookStatus: currentEncounter.hookStatus,
+          deliveryCorrect: currentEncounter.deliveryCorrect,
+          chainScore: currentEncounter.chainScore,
+          chainSignal: currentEncounter.chainSignal
+        });
+        window.__BC_LAST_ENCOUNTER__ = currentEncounter;
+
+        updateMasteryFromEncounter(currentEncounter.skillFocus || "read", checks, currentEncounter);
+        renderReflectionOverview(stepContent, currentEncounter, checks, modeBestResolved);
+
+        ensureProgLoaded();
+        const scored = scoreEncounterForGuard(currentEncounter, checks);
+        const outcome = resolveOutcome(currentEncounter, checks);
+        applyProgressionEncounterResult(encounterCountsAsWin(outcome));
+
+        const { streakInfo, unlock } = renderEncounterProgressSummary(stepContent, checks, scored);
+        const completionState = computeAndStoreCompletionState(scored, streakInfo, unlock);
+
+        if (completionState.done.done) {
+          renderSessionComplete(stepContent, {
+            reason: completionState.done.reason,
+            tier: completionState.tierNow,
+            difficulty: completionState.guardState?.finalDifficulty ?? currentEncounter?.difficulty ?? 1,
+            guardState: completionState.guardState
+          });
+          return;
+        }
+
+        finalizeEncounterOutcome(stepButtons, inDrill, outcome);
+      }
+
+      function renderStepSessionSummary(stepContent, stepButtons, inDrill) {
+        ensureProgLoaded();
+
+        const checks = buildReactionChecksFromEncounter(currentEncounter, PROG);
+        const modeBestResolved = resolveCorrectModeForPlayer(
+          currentEncounter?.modeBestResolved ||
+          currentEncounter?.modeBestRaw ||
+          currentEncounter?.modeBest ||
+          null,
+          getUnlockedModesForCurrentPlayer()
+        );
+
+        console.log("[REPORT UI] Step 7 rendered ✅", {
+          encounter: currentEncounter?.encounterNumber,
+          currentEncounter,
+          checks,
+          modeBestResolved
+        });
+        maybeAutoSendProgressReport(currentEncounter);
+        renderReflectionOverview(stepContent, currentEncounter, checks, modeBestResolved);
+
+        const scored = scoreEncounterForGuard(currentEncounter, checks);
+        const completionState = currentEncounter.__completionState || null;
+
+        if (completionState) {
+          if (completionState.streakInfo) {
+            console.log("[BC] streakInfo (reused)", completionState.streakInfo);
+            renderStreakBlock(stepContent, completionState.streakInfo);
+          }
+
+          if (completionState.done?.done) {
+            renderSessionComplete(stepContent, {
+              reason: completionState.done.reason,
+              tier: completionState.tierNow ?? 1,
+              difficulty: completionState.guardState?.finalDifficulty ?? currentEncounter?.difficulty ?? 1,
+              guardState: completionState.guardState || null
+            });
+            return;
+          }
+
+          addAdvanceEncounterButton(stepButtons, inDrill, currentEncounter);
+          return;
+        }
+
+        if (!currentEncounter.__progressionApplied) {
+          currentEncounter.__progressionApplied = true;
+          const didWin =
+            !!checks.guestRead &&
+            checks.modeStatus !== "damaging" &&
+            checks.hookStatus !== "damaging" &&
+            !!checks.deliveryCorrect;
+          applyProgressionEncounterResult(didWin);
+        }
+
+        const { streakInfo, unlock } = renderEncounterProgressSummary(stepContent, checks, scored);
+        const nextCompletionState = computeAndStoreCompletionState(scored, streakInfo, unlock);
+
+        if (nextCompletionState.done.done) {
+          renderSessionComplete(stepContent, {
+            reason: nextCompletionState.done.reason,
+            tier: nextCompletionState.tierNow,
+            difficulty: nextCompletionState.guardState?.finalDifficulty ?? currentEncounter?.difficulty ?? 1,
+            guardState: nextCompletionState.guardState
+          });
+          return;
+        }
+
+        addAdvanceEncounterButton(stepButtons, inDrill, currentEncounter);
+      }
+
       function renderEncounterStep() {
         if (window.__BC3__?.active) return;
         clearStepHighlights();
@@ -14648,1295 +15866,44 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
         renderDebugStateBox();
 
-        const wine = currentEncounter?.wineSelected || { name: "DRILL" };
         const inDrill = sessionType === "drill";
-        if (inDrill) {
-          wineDisplayName.textContent = "5-Min Drill";
-          wineBadges.textContent = "";
-        } else {
-          wineDisplayName.textContent = `Wine: ${wine.name} (${wine.varietal || ""})`;
-          wineBadges.textContent = "";
-          addBadge(wineBadges, (wine.fruitTags || []).join(", "));
-          addBadge(wineBadges, (wine.textureTags || []).join(", "));
-          addBadge(wineBadges, wine.oakLevel || "");
-          if (wine.process) addBadge(wineBadges, wine.process);
-        }
-
-        const stepLabels = ["Load", "Observe", "Mode", "Hook", "Deliver", "Reaction", "Reflect"];
-
-        // --- NEW: tier/difficulty/focus/trap chip ---
-        const meta = (currentEncounter && currentEncounter.meta) ? currentEncounter.meta : null;
-        const tier = meta && meta.tier ? meta.tier : "";
-        const diff = meta && (meta.difficulty || meta.difficulty === 0) ? meta.difficulty : "";
-        const focus = meta && meta.skillFocus ? meta.skillFocus : "";
-        const trap = meta && meta.trapType ? meta.trapType : "";
-
-        const chipParts = [];
-        if (tier) chipParts.push(`Tier ${tier}`);
-        // Phase 0/1 clamp: never show/assume difficulty above 2 yet
-        let diffNum = (diff === "" ? "" : Number(diff));
-        if (diffNum !== "" && Number.isFinite(diffNum)) diffNum = Math.min(2, Math.max(1, diffNum));
-        const diffLabel = (diffNum === "" ? "" : diffNum);
-        if (diffLabel !== "") chipParts.push(`Difficulty ${diffLabel}`);
-        // Focus intentionally not shown in the in-game progress widget
-        if (trap && trap !== "none") chipParts.push(`Trap: ${trap}`);
-        if (currentEncounter.__drillRep) chipParts.push(`Rep ${currentEncounter.__drillRep}/3`);
-
-        // Header line + chip line (two-line header)
-        const displayStep = getDisplayStepNumber(currentStep);
-        const displayLabel = getDisplayStepLabel(currentStep) || stepLabels[currentStep] || "";
-        stepHeader.innerText =
-          "Step " + displayStep + " of 7" + (displayLabel ? ": " + displayLabel : "") +
-          (chipParts.length ? "\n" + chipParts.join(" • ") : "");
-        updateDifficultyBadge(currentEncounter?.difficulty ?? 1);
+        updateEncounterStageHeader(stepHeader, wineDisplayName, wineBadges);
 
         // ---- in-game Progression Status UI DISABLED (parent owns progression UX) ----
         if (true) { /* intentionally disabled */ }
 
         if (currentStep === 0) {
-          const p = document.createElement("p");
-          p.innerText = "Encounter loaded. Press BEGIN to observe the guest.";
-          stepContent.appendChild(p);
-          addStepButton("BEGIN", () => { currentStep = 1; renderEncounterStep(); }, stepButtons);
+          renderStepLoad(stepContent, stepButtons);
           return;
         }
 
         if (currentStep === 1) {
-          const context = document.createElement("p");
-          context.innerText = currentEncounter.contextLine;
-          const guest = document.createElement("p");
-          guest.innerText = "Guest: " + currentEncounter.guestLine;
-          stepContent.appendChild(context);
-          stepContent.appendChild(guest);
-
-          const cuePanel = document.createElement("div");
-          cuePanel.className = "card";
-          const cueTitle = document.createElement("strong");
-          cueTitle.innerText = "Cues";
-          cuePanel.appendChild(cueTitle);
-
-          const cuesNoise = currentEncounter.cueNoise ?? 0;
-          const physical = sliceCuesByNoise(currentEncounter.physicalCues, cuesNoise);
-          const verbal = sliceCuesByNoise(currentEncounter.verbalCues, cuesNoise);
-
-          const phys = document.createElement("div");
-          phys.className = "small-text";
-          phys.innerText = "Physical: " + (physical || []).join(", ");
-          cuePanel.appendChild(phys);
-
-          const verb = document.createElement("div");
-          verb.className = "small-text";
-          verb.innerText = "Verbal: " + (verbal || []).join(", ");
-          cuePanel.appendChild(verb);
-
-          stepContent.appendChild(cuePanel);
-
-          const prompt = document.createElement("p");
-          prompt.innerText = "What kind of guest are you dealing with?";
-          stepContent.appendChild(prompt);
-
-          const hint = document.createElement("div");
-          hint.className = "small-text";
-          hint.innerText = "Watch their cues. The right read makes every decision easier.";
-          stepContent.appendChild(hint);
-
-          const options = document.createElement("div");
-          options.className = "option-grid";
-          let allowedReads;
-
-          try {
-            allowedReads = window.getAllowedGuestTypes?.();
-          } catch (e) {
-            console.warn("[BC] getAllowedGuestTypes threw", e);
-            allowedReads = null;
-          }
-
-          // HARD FALLBACK: never blank, never crash
-          if (!Array.isArray(allowedReads) || allowedReads.length === 0) {
-            allowedReads = [window.GUEST.DECIDER, window.GUEST.BARGAIN_SMART, window.GUEST.GRIEVER];
-          }
-
-          const tierUnlocked =
-            (window.isDemo || window.bcMode === "demo")
-              ? 1
-              : (typeof window.getTierUnlocked === "function" ? window.getTierUnlocked() : 1);
-
-          console.log("[BC][GUEST_UNLOCK]", {
-            encounterIndex,
-            encounterNumber: currentEncounter?.encounterNumber,
-            tierUnlocked,
-            allowedReads,
-            allowedCount: allowedReads?.length
-          });
-          if (currentEncounter.guestReadSelected && !allowedReads.includes(currentEncounter.guestReadSelected)) {
-            currentEncounter.guestReadSelected = "";
-          }
-          allowedReads.forEach(state => {
-            const btn = document.createElement("button");
-            btn.type = "button";
-            btn.className = "option-btn" + (currentEncounter.guestReadSelected === state ? " selected" : "");
-            btn.innerText = state;
-            bindInput(btn, () => {
-              currentEncounter.guestReadSelected = state;
-              renderEncounterStep();
-            });
-            options.appendChild(btn);
-          });
-          stepContent.appendChild(options);
-          // ✅ Hard-enforce tier guest read availability (even if another path rendered extra buttons)
-          try { pruneGuestReadButtons(options, allowedReads); } catch {}
-          if (currentEncounter.guestReadSelected && !allowedReads.includes(currentEncounter.guestReadSelected)) {
-            currentEncounter.guestReadSelected = "";
-          }
-
-          const lockInBtn = addStepButton("LOCK IN", () => { currentStep = 2; renderEncounterStep(); }, stepButtons);
-          if (!currentEncounter.guestReadSelected) lockInBtn.disabled = true;
+          renderStepObserve(stepContent, stepButtons);
           return;
         }
 
         if (currentStep === 2) {
-          const topRow = document.createElement("div");
-          topRow.className = "history-row";
-
-          const prompt = document.createElement("div");
-          prompt.innerText = "How do you want to handle this guest?";
-          topRow.appendChild(prompt);
-
-          const helpBtn = document.createElement("button");
-          helpBtn.type = "button";
-          helpBtn.className = "small-btn";
-          helpBtn.innerText = "?";
-          helpBtn.style.width = "32px";
-          helpBtn.style.height = "32px";
-          helpBtn.style.minWidth = "32px";
-          helpBtn.style.minHeight = "32px";
-          helpBtn.style.maxWidth = "32px";
-          helpBtn.style.maxHeight = "32px";
-          helpBtn.style.padding = "0";
-          helpBtn.style.borderRadius = "999px";
-          helpBtn.style.display = "inline-flex";
-          helpBtn.style.alignItems = "center";
-          helpBtn.style.justifyContent = "center";
-          helpBtn.style.lineHeight = "1";
-          helpBtn.style.flex = "0 0 auto";
-
-          topRow.appendChild(helpBtn);
-          stepContent.appendChild(topRow);
-
-          const hint = document.createElement("div");
-          hint.className = "small-text";
-          hint.innerText = "Match the tone of your approach to the guest in front of you.";
-          stepContent.appendChild(hint);
-
-          bindInput(helpBtn, () => {
-            currentEncounter.showModeHelp = !currentEncounter.showModeHelp;
-            renderEncounterStep();
-          });
-
-          if (currentEncounter.showModeHelp) renderModeHelp(stepContent);
-
-          const options = document.createElement("div");
-          options.className = "option-grid";
-          const unlockedModes = getUnlockedModesForCurrentPlayer();
-          const allowedModes = unlockedModes.length
-            ? unlockedModes
-            : [window.MODES.SCOUT, window.MODES.GUIDE, window.MODES.CHARM]
-                .map(canonicalModeFromUi)
-                .filter(Boolean);
-          allowedModes.forEach(mode => {
-            const btn = document.createElement("button");
-            btn.type = "button";
-            btn.className = "option-btn" + (currentEncounter.modeSelected === mode ? " selected" : "");
-
-            const primary = document.createElement("div");
-            primary.className = "option-title";
-            primary.innerText = uiModeIntentLabel(mode, currentEncounter.guestStateActual, "game");
-
-            const secondary = document.createElement("div");
-            secondary.className = "option-subtitle";
-            secondary.innerText = uiModeLabel(mode, "game");
-
-            btn.innerHTML = "";
-            btn.appendChild(primary);
-            btn.appendChild(secondary);
-
-            bindInput(btn, () => {
-              currentEncounter.modeSelected = mode;
-              renderEncounterStep();
-            });
-            options.appendChild(btn);
-          });
-          stepContent.appendChild(options);
-
-          const contBtn = addStepButton("CONTINUE", () => { currentStep = 3; renderEncounterStep(); }, stepButtons);
-          if (!currentEncounter.modeSelected) contBtn.disabled = true;
+          renderStepMode(stepContent, stepButtons);
           return;
         }
 
         if (currentStep === 3) {
-          debugHookStrictness(currentEncounter);
-
-          const topRow = document.createElement("div");
-          topRow.className = "history-row";
-
-          const prompt = document.createElement("div");
-          prompt.innerText = "Choose your opening angle.";
-          topRow.appendChild(prompt);
-
-          const helpBtn = document.createElement("button");
-          helpBtn.type = "button";
-          helpBtn.className = "small-btn";
-          helpBtn.innerText = "?";
-          helpBtn.style.width = "32px";
-          helpBtn.style.height = "32px";
-          helpBtn.style.minWidth = "32px";
-          helpBtn.style.minHeight = "32px";
-          helpBtn.style.maxWidth = "32px";
-          helpBtn.style.maxHeight = "32px";
-          helpBtn.style.padding = "0";
-          helpBtn.style.borderRadius = "999px";
-          helpBtn.style.display = "inline-flex";
-          helpBtn.style.alignItems = "center";
-          helpBtn.style.justifyContent = "center";
-          helpBtn.style.lineHeight = "1";
-          helpBtn.style.flex = "0 0 auto";
-
-          topRow.appendChild(helpBtn);
-          stepContent.appendChild(topRow);
-
-          const hint = document.createElement("div");
-          hint.className = "small-text";
-          hint.innerText = "Your first sentence should make the guest lean in.";
-          stepContent.appendChild(hint);
-
-          bindInput(helpBtn, () => {
-            currentEncounter.showHookHelp = !currentEncounter.showHookHelp;
-            renderEncounterStep();
-          });
-
-          if (currentEncounter.showHookHelp) renderHookHelp(stepContent);
-
-          renderStrictRulesBadge(stepContent, currentEncounter);
-
-          const wine = currentEncounter?.wineSelected || {};
-          if (!Array.isArray(currentEncounter.hookOptions) || currentEncounter.hookOptions.length === 0) {
-            currentEncounter.hookOptions = hookPolicy(currentEncounter, wine);
-          }
-          const opts = currentEncounter.hookOptions;
-
-          const options = document.createElement("div");
-          options.className = "option-grid";
-
-          console.log("[DRILL] hook opts", opts);
-
-          opts.forEach((opt) => {
-            console.log("[HOOK_OPTION]", opt.id, opt.hookType, "tier:", opt.tier);
-
-            const hookType = String(opt.hookType || opt.id || opt.text || "").trim();
-            const key = String(opt.id || "") + "::" + hookType;
-
-            const btn = document.createElement("button");
-            btn.type = "button";
-
-            const selected =
-              String(currentEncounter.hookSelectedKey || "") === key;
-
-            btn.className = "option-btn" + (selected ? " selected" : "");
-
-            const primary = document.createElement("div");
-            primary.className = "option-title";
-            primary.innerText = uiHookIntentLabelScaled(
-              hookType,
-              currentEncounter.guestStateActual,
-              currentEncounter,
-              "game"
-            );
-
-            const secondary = document.createElement("div");
-            secondary.className = "option-subtitle";
-            secondary.innerText = uiHookSubtitleLabel(hookType);
-
-            btn.innerHTML = "";
-            btn.appendChild(primary);
-            btn.appendChild(secondary);
-
-            if (opt.text) {
-              const preview = document.createElement("div");
-              preview.className = "option-preview";
-              preview.innerText = String(opt.text).trim();
-              btn.appendChild(preview);
-            }
-
-            bindInput(btn, () => {
-              currentEncounter.hookSelectedKey = key;              // UI identity
-              currentEncounter.hookSelected = hookType;            // scoring/reflection truth
-              currentEncounter.hookMeta = {
-                ...opt,
-                hookType
-              };
-              renderEncounterStep();
-            });
-
-            options.appendChild(btn);
-          });
-
-          stepContent.appendChild(options);
-
-          const contBtn = addStepButton(
-            "CONTINUE",
-            () => {
-              currentStep = 4;
-              renderEncounterStep();
-            },
-            stepButtons
-          );
-
-          const ready = !!currentEncounter.hookSelected;
-          contBtn.disabled = !ready;
-          if (ready) contBtn.removeAttribute("disabled");
-
+          renderStepHook(stepContent, stepButtons);
           return;
         }
 
         if (currentStep === 4) {
-          const topRow = document.createElement("div");
-          topRow.className = "history-row";
-
-          const prompt = document.createElement("div");
-          prompt.innerText = "Build the 2-sentence delivery.";
-          topRow.appendChild(prompt);
-
-          const helpBtn = document.createElement("button");
-          helpBtn.type = "button";
-          helpBtn.className = "small-btn";
-          helpBtn.innerText = "?";
-          helpBtn.style.width = "32px";
-          helpBtn.style.height = "32px";
-          helpBtn.style.minWidth = "32px";
-          helpBtn.style.minHeight = "32px";
-          helpBtn.style.maxWidth = "32px";
-          helpBtn.style.maxHeight = "32px";
-          helpBtn.style.padding = "0";
-          helpBtn.style.borderRadius = "999px";
-          helpBtn.style.display = "inline-flex";
-          helpBtn.style.alignItems = "center";
-          helpBtn.style.justifyContent = "center";
-          helpBtn.style.lineHeight = "1";
-          helpBtn.style.flex = "0 0 auto";
-
-          topRow.appendChild(helpBtn);
-          stepContent.appendChild(topRow);
-
-          bindInput(helpBtn, () => {
-            currentEncounter.showDeliveryHelp = !currentEncounter.showDeliveryHelp;
-            renderEncounterStep();
-          });
-
-          if (currentEncounter.showDeliveryHelp) renderDeliveryHelp(stepContent);
-
-          const reminder = document.createElement("div");
-          reminder.className = "notice";
-          reminder.innerText = "First create emotional fit, then make the recommendation clear.";
-          stepContent.appendChild(reminder);
-
-          if (!currentEncounter.deliverOptionsS1 || !currentEncounter.deliverOptionsS2) initDeliverOptions(currentEncounter);
-
-          const line1Title = document.createElement("p");
-          line1Title.innerText = "Sentence 1 — Create emotional fit";
-          stepContent.appendChild(line1Title);
-
-          const line1Options = document.createElement("div");
-          line1Options.className = "option-grid";
-          const slots1 = Object.keys(currentEncounter.deliverOptionsS1 || {});
-          slots1.forEach(slot => {
-            const btn = document.createElement("button");
-            btn.type = "button";
-            btn.className = "option-btn" + (String(currentEncounter.selectedS1) === String(slot) ? " selected" : "");
-            btn.innerText = slot + ": " + currentEncounter.deliverOptionsS1[slot];
-            btn.dataset.bc = "deliver_s1";
-            btn.dataset.slot = String(slot);
-            bindInput(btn, () => {
-              currentEncounter.selectedS1 = slot;
-              currentEncounter.deliveryLine1 = currentEncounter.deliverOptionsS1[slot];
-              currentEncounter.deliveryLine1Key = canonicalDeliveryLine(currentEncounter.deliverOptionsS1[slot]);
-              console.log("[STEP4] S1 handler ran ✅", slot);
-              renderEncounterStep();
-            });
-            line1Options.appendChild(btn);
-          });
-          stepContent.appendChild(line1Options);
-
-          const line2Title = document.createElement("p");
-          line2Title.innerText = "Sentence 2 — Make the choice clear";
-          stepContent.appendChild(line2Title);
-
-          const line2Options = document.createElement("div");
-          line2Options.className = "option-grid";
-          const slots2 = Object.keys(currentEncounter.deliverOptionsS2 || {});
-          slots2.forEach(slot => {
-            const btn = document.createElement("button");
-            btn.type = "button";
-            btn.className = "option-btn" + (String(currentEncounter.selectedS2) === String(slot) ? " selected" : "");
-            btn.innerText = slot + ": " + currentEncounter.deliverOptionsS2[slot];
-            btn.dataset.bc = "deliver_s2";
-            btn.dataset.slot = String(slot);
-            bindInput(btn, () => {
-              currentEncounter.selectedS2 = slot;
-              currentEncounter.deliveryLine2 = currentEncounter.deliverOptionsS2[slot];
-              currentEncounter.deliveryLine2Key = canonicalDeliveryLine(currentEncounter.deliverOptionsS2[slot]);
-              console.log("[STEP4] S2 handler ran ✅", slot);
-              renderEncounterStep();
-            });
-            line2Options.appendChild(btn);
-          });
-          stepContent.appendChild(line2Options);
-
-          const sayBtn = addStepButton("SAY IT", () => { currentStep = 5; renderEncounterStep(); }, stepButtons);
-          const ready =
-            (currentEncounter.selectedS1 != null) &&
-            (currentEncounter.selectedS2 != null);
-          console.log("[STEP4] READY?", ready, {
-            selectedS1: currentEncounter.selectedS1,
-            selectedS2: currentEncounter.selectedS2
-          });
-          sayBtn.disabled = !ready;
-          if (ready) sayBtn.removeAttribute("disabled");
+          renderStepDelivery(stepContent, stepButtons);
           return;
         }
 
-        // ============================================================
-        // STEP 5: Reaction (driven by EngineBridge)
-        // ============================================================
         if (currentStep === 5) {
-          const bar = ensureStepButtonsContainer();
-          bar.innerHTML = "";
-
-          const reactionTitle = document.createElement("h3");
-          reactionTitle.innerText = "Guest Reaction";
-          stepContent.appendChild(reactionTitle);
-
-          const reactionHint = document.createElement("div");
-          reactionHint.className = "small-text";
-          reactionHint.innerText = "Your choices shape how the guest responds.";
-          stepContent.appendChild(reactionHint);
-
-          const checksRaw = window.evaluateChecks(window.currentEncounter || currentEncounter);
-          const guestPressure = updateGuestPressureState(currentEncounter, checksRaw);
-          currentEncounter.guestPressure = guestPressure;
-          ensurePressureDrivenPivot(currentEncounter);
-          currentEncounter.dynamicGuestReaction = buildDynamicGuestReaction(currentEncounter, checksRaw);
-          currentEncounter.dynamicGuestLine = buildDynamicGuestLine(currentEncounter, checksRaw);
-
-          const rep = getDrillRep(); // null if not in drill
-
-          let guestRead = checksRaw.guestRead;
-          let modeStatus = checksRaw.modeStatus;
-          let hookStatus = checksRaw.hookStatus;
-          let deliveryCorrect = checksRaw.deliveryCorrect;
-
-          // ---- 3-rep tightening rules ----
-          // Rep 1: forgiving (yellow is acceptable if read+mode are decent)
-          // Rep 2: medium (delivery matters more)
-          // Rep 3: strict (any damaging or delivery miss becomes red pressure)
-          if (rep === 1) {
-            // allow a delivery miss to be treated as "neutral" pressure if everything else is good
-            // (we do that by temporarily treating delivery as correct for scoring purposes)
-            if (!deliveryCorrect && guestRead && modeStatus !== "damaging" && hookStatus !== "damaging") {
-              deliveryCorrect = true;
-            }
-          }
-
-          if (rep === 2) {
-            // if hook is damaging, treat it as worse (force red behaviour)
-            if (hookStatus === "damaging") {
-              modeStatus = "damaging"; // pushes overall chain down
-            }
-          }
-
-          if (rep === 3) {
-            // strict: any miss becomes hard
-            if (!guestRead) modeStatus = "damaging";
-            if (!deliveryCorrect) hookStatus = "damaging";
-          }
-
-          const reactionChecks = {
-            ...buildReactionChecksFromEncounter(currentEncounter, PROG),
-            guestRead,
-            modeStatus,
-            hookStatus,
-            deliveryCorrect,
-            firstMode: currentEncounter.firstMode || currentEncounter.modeSelected || ""
-          };
-
-          currentEncounter.__drillRep = rep || null;
-
-          if (!window.EngineBridge || typeof window.EngineBridge.computeReaction !== "function") {
-            const scriptTagHint = "<script type='module' src='/src/game/gameEntry.ts'><" + "/script>";
-            throw new Error(
-              "EngineBridge not loaded. Confirm the module is loading: " +
-              scriptTagHint +
-              " and that gameEntry installs window.EngineBridge."
-            );
-          }
-
-          let result = currentEncounter.__reaction;
-          if (!currentEncounter.__reactionComputed || !result) {
-            currentEncounter.__reactionComputed = true;
-            const liveFx = getEncounterEffectModifiers();
-            console.log("[BC][LIVE_FX]", {
-              hook: "reaction_eval_bridge",
-              ...getEncounterEffectDebugPayload(),
-              runtime: getActiveAbilityRuntime(),
-            });
-            result = window.EngineBridge.computeReaction({
-              ...reactionChecks,
-              liveFx,
-            });
-            result = applyAbilityRuntimeToReaction(result, currentEncounter, reactionChecks);
-            if (result.__recoveryFocusApplied) {
-              currentEncounter.pivotPlanned = true;
-            }
-            currentEncounter.__reaction = result;
-            result.pivotUnlocked = !!currentEncounter.pivotPlanned && result.pivotUnlocked;
-            // TEMP DEBUG (remove later)
-            console.log("[BC] computeReaction result =", result);
-            commitReaction(result, currentEncounter, reactionChecks);
-            try { logEncounter(); } catch (e) { console.warn("[BC] logEncounter failed", e); }
-          } else {
-            console.log("[BC] Reaction already computed for this step (skipping compute) ✅");
-          }
-          // Persist telemetry on encounter for history + reflection
-          currentEncounter.chainScore = result.chainScore;
-          currentEncounter.chainSignal = result.chainSignal;
-          currentEncounter.__decider = result.__decider;
-          if (result.__decider?.signal === "DECIDER_FRICTION") {
-            currentEncounter.chainSignalDetail =
-              "They’re not resisting the wine — they’re resisting time waste. Tighten the path.";
-          }
-          if (result.__decider?.signal === "DECIDER_TRUST_GAINED") {
-            currentEncounter.chainSignalDetail =
-              "They relax because you made it fast, safe, and inevitable.";
-          }
-
-          renderDynamicGuestLineBlock(stepContent, currentEncounter, checksRaw, {
-            compact: true
-          });
-
-          renderDynamicGuestReactionBlock(stepContent, currentEncounter, checksRaw, {
-            compact: true
-          });
-
-          const teaser = document.createElement("div");
-          teaser.className = "small-text";
-          teaser.innerText = "Streak updates after Reflection (Step 7).";
-          stepContent.appendChild(teaser);
-
-          // ✅ ADD THIS (debug + summary render)
-          console.log("[BC] UX summary build", { checksRaw, result });
-          const summary = buildStrengthFixSummary(currentEncounter, checksRaw);
-          const fb = getResolvedEncounterFeedback(currentEncounter, checksRaw);
-
-          currentEncounter.__uxSummary = {
-            guest: fb.guest,
-            chosenMode: fb.chosen.mode,
-            bestMode: fb.best.mode,
-            chosenHook: fb.chosen.hook,
-            bestHook: fb.best.hook,
-            chosenDelivery1: fb.chosen.delivery1,
-            chosenDelivery2: fb.chosen.delivery2,
-            bestDelivery1: fb.best.delivery1,
-            bestDelivery2: fb.best.delivery2,
-            chosenPivot: fb.chosen.pivot,
-            bestPivot: fb.best.pivot,
-            modeStatus: fb.result.modeStatus,
-            hookStatus: fb.result.hookStatus,
-            deliveryCorrect: fb.result.deliveryCorrect,
-            pivotCorrect: fb.result.pivotCorrect,
-            strength: summary.strength,
-            fix: summary.fix,
-            strengths: summary.strengths,
-            fixes: summary.fixes
-          };
-          renderUxSummary(stepContent, summary, { title: "In-the-moment feedback", compact: true });
-
-          const signalChip = document.createElement("div");
-          signalChip.className = "notice";
-          signalChip.innerText = "Signal: " + String(result.chainSignal || "").toUpperCase() +
-            " (score " + Number(result.chainScore).toFixed(1) + " / 4.0)";
-          stepContent.appendChild(signalChip);
-
-          if (result.deliveryCorrect) {
-            const upgraded = rollPremiumOpportunity(result, currentEncounter);
-            stepContent.appendChild(document.createTextNode(upgraded ? "✅ Upgrade. “Nice — that’s the move.”" : "✅ Nod. “Perfect.”"));
-            appendFeedbackLine(stepContent, bcFeedbackFromOutcome(reactionChecks, result));
-            addStepButton("REFLECT", () => { goToStep(6); }, bar);
-            return;
-          }
-
-          if (result.pivotUnlocked) {
-            if (!currentEncounter.recoveryText) {
-              ensurePressureDrivenPivot(currentEncounter);
-              const unlockedModes = getUnlockedModesForCurrentPlayer();
-              const resolvedMode = resolveCorrectModeForPlayer(
-                currentEncounter.recoveryCorrectModeResolved ||
-                currentEncounter.recoveryCorrectModeRaw ||
-                currentEncounter.recoveryCorrectMode ||
-                null,
-                unlockedModes
-              );
-              currentEncounter.recoveryCorrectMode = resolvedMode;
-              currentEncounter.recoveryCorrectModeResolved = resolvedMode;
-              currentEncounter.recoveryChoice = "";
-              currentEncounter.recoveryCorrect = false;
-              currentEncounter.resetUsed = false;
-              assertModeConsistency(unlockedModes, resolvedMode, {
-                encounterNumber: currentEncounter?.encounterNumber,
-                tier: getProgressionSpine({ allowNull: true })?.selectors?.tier?.(),
-                points: getProgressionSpine({ allowNull: true })?.selectors?.points?.(),
-                source: "pivot_scenario"
-              });
-            }
-
-            const pivotLabel =
-              result.pivotType === "POWER_MOVE_PIVOT" ? "POWER MOVE PIVOT" : "RECOVERY PIVOT";
-
-            const header = document.createElement("p");
-            header.innerText =
-              result.chainSignal === "green"
-                ? "🟢 They’re with you — but you can still tighten the close."
-                : result.chainSignal === "yellow"
-                  ? "🟡 Hesitates… you can recover this."
-                  : "🔴 Pushback… you need a recovery pivot.";
-            stepContent.appendChild(header);
-
-            const box = document.createElement("div");
-            box.className = "card";
-            box.innerHTML =
-              "<strong>" + pivotLabel + " (" + (currentEncounter.pivotType || "pivot") + ")</strong>" +
-              "<div style='margin-top:6px;'>" + currentEncounter.recoveryText + "</div>";
-            stepContent.appendChild(box);
-
-            const prompt = document.createElement("p");
-            prompt.innerText = "Choose the Mode that closes the gap:";
-            stepContent.appendChild(prompt);
-
-            const options = document.createElement("div");
-            options.className = "option-grid";
-
-            const unlockedModes = getUnlockedModesForCurrentPlayer();
-            const recoveryModes = unlockedModes.length ? unlockedModes : [MODES.SCOUT, MODES.GUIDE, MODES.CHARM];
-            recoveryModes.forEach(mode => {
-              const btn = document.createElement("button");
-              btn.type = "button";
-              btn.className = "option-btn" + (currentEncounter.recoveryChoice === mode ? " selected" : "");
-              btn.innerText = uiModeLabel(mode, "game");
-              bindInput(btn, () => {
-                currentEncounter.recoveryChoice = mode;
-                const unlockedModes = getUnlockedModesForCurrentPlayer();
-
-                const recoveryBest = resolveCorrectModeForPlayer(
-                  currentEncounter.recoveryCorrectModeResolved ||
-                  currentEncounter.recoveryCorrectModeRaw ||
-                  currentEncounter.recoveryCorrectMode ||
-                  null,
-                  unlockedModes
-                );
-
-                currentEncounter.recoveryCorrectModeResolved = recoveryBest;
-                currentEncounter.recoveryCorrect =
-                  !!currentEncounter.recoveryChoice &&
-                  canonicalModeFromUi(currentEncounter.recoveryChoice) === canonicalModeFromUi(recoveryBest);
-                renderEncounterStep();
-              });
-              options.appendChild(btn);
-            });
-
-            stepContent.appendChild(options);
-
-            const resetAllowed = !!result.resetAllowed;
-
-            const resetRow = document.createElement("div");
-            resetRow.className = "notice";
-            resetRow.innerText = resetAllowed
-              ? "Reset available: because you started with HOLD (scout-mapped)."
-              : "Reset not available: only if you started with HOLD (scout-mapped).";
-            stepContent.appendChild(resetRow);
-
-            const resetBtn = addStepButton("RESET (only if HOLD)", () => {
-              if (!resetAllowed) return;
-
-              currentEncounter.resetUsed = true;
-
-              currentEncounter.guestReadSelected = "";
-              currentEncounter.modeSelected = "";
-              currentEncounter.hookSelected = "";
-              currentEncounter.deliveryLine1 = "";
-              currentEncounter.deliveryLine2 = "";
-              currentEncounter.deliverOptionsS1 = null;
-              currentEncounter.deliverOptionsS2 = null;
-              currentEncounter.selectedS1 = null;
-              currentEncounter.selectedS2 = null;
-              currentEncounter.correctSlotS1 = null;
-              currentEncounter.correctSlotS2 = null;
-              currentEncounter.showModeHelp = false;
-
-              currentEncounter.recoveryChoice = "";
-              currentEncounter.recoveryCorrect = false;
-
-              scrubEncounterDerivedState(currentEncounter);
-              currentStep = 1;
-              renderEncounterStep();
-            }, bar);
-
-            if (!resetAllowed) resetBtn.disabled = true;
-
-            if (currentEncounter.recoveryChoice) {
-              const unlockedModes = getUnlockedModesForCurrentPlayer();
-              const recoveryBest = resolveCorrectModeForPlayer(
-                currentEncounter.recoveryCorrectModeResolved ||
-                currentEncounter.recoveryCorrectModeRaw ||
-                currentEncounter.recoveryCorrectMode ||
-                null,
-                unlockedModes
-              );
-              currentEncounter.recoveryCorrectModeResolved = recoveryBest;
-              currentEncounter.recoveryCorrect =
-                !!currentEncounter.recoveryChoice &&
-                canonicalModeFromUi(currentEncounter.recoveryChoice) === canonicalModeFromUi(recoveryBest);
-              assertModeConsistency(unlockedModes, recoveryBest, {
-                encounterNumber: currentEncounter?.encounterNumber,
-                tier: getProgressionSpine({ allowNull: true })?.selectors?.tier?.(),
-                points: getProgressionSpine({ allowNull: true })?.selectors?.points?.(),
-                source: "pivot_explain"
-              });
-              const explain = document.createElement("div");
-              explain.className = "notice";
-              explain.innerText =
-                "Best is " + uiModeLabel(recoveryBest, "game") +
-                " — " + currentEncounter.recoveryWhy;
-              stepContent.appendChild(explain);
-            }
-
-            appendFeedbackLine(stepContent, bcFeedbackFromOutcome(reactionChecks, result));
-
-            const cont = addStepButton("CONTINUE TO REFLECTION", () => { goToStep(6); }, bar);
-            if (!currentEncounter.recoveryChoice && !currentEncounter.resetUsed) cont.disabled = true;
-            return;
-          }
-
-          stepContent.innerText = "❌ “We’ll choose, thanks.”";
-          appendFeedbackLine(stepContent, bcFeedbackFromOutcome(reactionChecks, result));
-          addStepButton("REFLECT", () => { goToStep(6); }, bar);
+          renderStepReaction(stepContent);
           return;
         }
 
         if (currentStep === 6) {
-          const checks = window.evaluateChecks(window.currentEncounter || currentEncounter);
-          const guestPressure =
-            currentEncounter.guestPressure || updateGuestPressureState(currentEncounter, checks);
-          currentEncounter.guestPressure = guestPressure;
-          ensurePressureDrivenPivot(currentEncounter);
-          const dynamicReaction = buildDynamicGuestReaction(currentEncounter, checks);
-          currentEncounter.dynamicGuestReaction = dynamicReaction;
-          const dynamicGuestLine = buildDynamicGuestLine(currentEncounter, checks);
-          currentEncounter.dynamicGuestLine = dynamicGuestLine;
-          logEncounterStateAudit("evaluated", currentEncounter);
-          const unlockedModes = getUnlockedModesForCurrentPlayer();
-          const modeRuleForPlayer = getModeRuleForCurrentPlayer(currentEncounter.guestStateActual);
-
-          const modeBestResolved =
-            currentEncounter.correctModeResolved ||
-            modeRuleForPlayer?.optimal ||
-            null;
-
-          currentEncounter.correctModeResolved = modeBestResolved;
-          assertModeConsistency(unlockedModes, modeBestResolved, {
-            encounterNumber: currentEncounter?.encounterNumber,
-            tier: getProgressionSpine({ allowNull: true })?.selectors?.tier?.(),
-            points: getProgressionSpine({ allowNull: true })?.selectors?.points?.(),
-            source: "reflection_mode"
-          });
-          const chain = resolveChainFromChecks(currentEncounter, checks);
-          console.log("[BC] chain", chain);
-          console.log("[BC][CHECKS]", {
-            enc: currentEncounter.encounterNumber,
-            guestActual: currentEncounter.guestStateActual,
-            guestRead: currentEncounter.guestReadSelected,
-            mode: currentEncounter.modeSelected,
-            hook: currentEncounter.hookSelected,
-            readCorrect: currentEncounter.readCorrect,
-            modeStatus: currentEncounter.modeStatus,
-            hookStatus: currentEncounter.hookStatus,
-            deliveryCorrect: currentEncounter.deliveryCorrect,
-            chainScore: currentEncounter.chainScore,
-            chainSignal: currentEncounter.chainSignal
-          });
-          // Make the last encounter available for console checks
-          window.__BC_LAST_ENCOUNTER__ = currentEncounter;
-          // ✅ Update mastery for this encounter's skillFocus
-          updateMasteryFromEncounter(currentEncounter.skillFocus || "read", checks, currentEncounter);
-
-          const reflectionTitle = document.createElement("h3");
-          reflectionTitle.innerText = "What just happened";
-          stepContent.appendChild(reflectionTitle);
-          renderStrictBadge(stepContent);
-
-          const anchor = document.createElement("div");
-          anchor.className = "small-text";
-          anchor.style.marginTop = "6px";
-          anchor.style.opacity = "0.9";
-          anchor.innerText = bcReflectionAnchor(checks, currentEncounter);
-          stepContent.appendChild(anchor);
-          renderDynamicGuestLineBlock(stepContent, currentEncounter, checks, {
-            compact: false
-          });
-          renderDynamicGuestReactionBlock(stepContent, currentEncounter, checks, {
-            compact: false
-          });
-          if (window.__BC_DEBUG_PRESSURE__ === true) {
-            renderGuestPressureDebug(stepContent, currentEncounter);
-          }
-          logEncounterStateAudit("before_reflection_render", currentEncounter);
-
-          // ✅ NEW: Strength + Fix (end of reflection)
-          renderStrengthFixBlock(stepContent, checks, currentEncounter);
-
-          // ✅ ADD THIS (debug + summary render)
-          console.log("[BC] Step6 summary", currentEncounter.__uxSummary);
-          if (currentEncounter.__uxSummary) {
-            renderUxSummary(stepContent, currentEncounter.__uxSummary, {
-              title: "Summary to lock it in",
-              compact: false
-            });
-          }
-
-          addReflectionBlock(
-            stepContent,
-            "Guest Read",
-            checks.guestRead ? "✅" : "❌",
-            `Guest type: ${currentEncounter.guestStateActual || "—"}. You read them as: ${currentEncounter.guestReadSelected || "—"}.`
-          );
-
-          addReflectionBlock(
-            stepContent,
-            "Mode",
-            scoreSymbol(checks.modeStatus),
-            `Best approach: ${modeBestResolved ? uiModeLabel(modeBestResolved, "game") : "—"}. ` +
-            modeWhyWithChoice(currentEncounter.guestStateActual, currentEncounter.modeSelected)
-          );
-
-          const hookRuleForGuest = getHookRuleForGuest(currentEncounter.guestStateActual);
-          assertHookConsistency(hookRuleForGuest, {
-            encounterNumber: currentEncounter?.encounterNumber,
-            guest: currentEncounter?.guestStateActual,
-            source: "reflection_hook"
-          });
-
-          const bestHook = hookRuleForGuest?.optimal || "—";
-
-          addReflectionBlock(
-            stepContent,
-            "Hook",
-            scoreSymbol(checks.hookStatus),
-            `Best opening: "${bestHook}". ` + hookWhyWithChoice(
-              currentEncounter.guestStateActual,
-              getSelectedHookType(currentEncounter)
-            )
-          );
-
-          const correctS1 =
-            currentEncounter.correctDeliveryLine1 ||
-            currentEncounter.deliverOptionsS1?.[currentEncounter.correctSlotS1] ||
-            "—";
-
-          const correctS2 =
-            currentEncounter.correctDeliveryLine2 ||
-            currentEncounter.deliverOptionsS2?.[currentEncounter.correctSlotS2] ||
-            "—";
-
-          const chosenS1 =
-            currentEncounter.selectedDeliveryLine1 ||
-            currentEncounter.deliveryLine1 ||
-            currentEncounter.deliverOptionsS1?.[currentEncounter.selectedS1] ||
-            "—";
-
-          const chosenS2 =
-            currentEncounter.selectedDeliveryLine2 ||
-            currentEncounter.deliveryLine2 ||
-            currentEncounter.deliverOptionsS2?.[currentEncounter.selectedS2] ||
-            "—";
-
-          addReflectionBlock(
-            stepContent,
-            "Delivery",
-            checks.deliveryCorrect ? "✅" : "❌",
-            `Best pair: "${correctS1}" / "${correctS2}". You chose: "${chosenS1}" / "${chosenS2}". The stronger pair made the recommendation feel clearer and more natural.`
-          );
-
-          if (currentEncounter.chainSignal) {
-            addReflectionBlock(
-              stepContent,
-              "Momentum",
-              momentumLabel(currentEncounter.chainSignal),
-              sessionSignalDetail(currentEncounter.chainSignal)
-            );
-          }
-
-          if (currentEncounter.recoveryText) {
-            const unlockedModes = getUnlockedModesForCurrentPlayer();
-
-            const recoveryBest = resolveCorrectModeForPlayer(
-              currentEncounter.recoveryCorrectModeResolved ||
-              currentEncounter.recoveryCorrectModeRaw ||
-              currentEncounter.recoveryCorrectMode ||
-              null,
-              unlockedModes
-            );
-
-            currentEncounter.recoveryCorrectModeResolved = recoveryBest;
-            currentEncounter.recoveryCorrect =
-              !!currentEncounter.recoveryChoice &&
-              canonicalModeFromUi(currentEncounter.recoveryChoice) === canonicalModeFromUi(recoveryBest);
-
-            assertModeConsistency(unlockedModes, recoveryBest, {
-              encounterNumber: currentEncounter?.encounterNumber,
-              tier: getProgressionSpine({ allowNull: true })?.selectors?.tier?.(),
-              points: getProgressionSpine({ allowNull: true })?.selectors?.points?.(),
-              source: "reflection_pivot"
-            });
-
-            addReflectionBlock(
-              stepContent,
-              "Pivot",
-              currentEncounter.recoveryCorrect ? "✅" : (currentEncounter.recoveryChoice ? "❌" : "—"),
-              `Scenario: ${currentEncounter.recoveryText || "—"}. ` +
-              `Best recovery: ${recoveryBest ? uiModeLabel(recoveryBest, "game") : "—"}. ` +
-              `You chose: ${currentEncounter.recoveryChoice ? uiModeLabel(currentEncounter.recoveryChoice, "game") : "—"}. ` +
-              `Why: ${pivotWhyWithChoice(currentEncounter)}`
-            );
-          }
-
-          if (currentEncounter.resetUsed) {
-            addReflectionBlock(
-              stepContent,
-              "Reset",
-              "✅",
-              "You used reset (only allowed if first mode was HOLD)."
-            );
-          }
-
-          const gradeObj = computePerformanceGrade(currentEncounter, checks);
-          currentEncounter.performanceGrade = gradeObj.grade;
-          renderPerformanceGradeBlock(stepContent, gradeObj);
-          renderCoachLineBlock(stepContent, currentEncounter, checks);
-          ensureProgLoaded();
-          const scored = scoreEncounterForGuard(currentEncounter, checks);
-          const outcome = resolveOutcome(currentEncounter, checks);
-          try {
-            const didWin = encounterCountsAsWin(outcome);
-            const encounterIdRaw =
-              currentEncounter?.encounterId ??
-              currentEncounter?.id ??
-              currentEncounter?.encounterNumber;
-            if (encounterIdRaw == null) throw new Error("Missing encounterId on currentEncounter");
-            const encounterId = String(encounterIdRaw);
-            const spine = getProgressionSpine({ allowNull: true });
-            console.log("[PROG] encounter scoring check", {
-              encounterId,
-              didWin,
-              pointEligible: didWin,
-              scoredThisRun: spine?.getState?.()?.run?.scoredThisRun || null
-            });
-            spine?.actions?.applyEncounterResult?.({
-              encounterId,
-              success: didWin,
-              pointEligible: didWin
-            });
-
-            const premiumSuccess = !!(
-              currentEncounter?.premiumOpportunityHit ||
-              currentEncounter?.premiumRollSuccess
-            );
-
-            if (premiumSuccess) {
-              spine?.actions?.applyPremiumBonus?.({
-                encounterId,
-                bonusPoints: 1
-              });
-            }
-          } catch (e) {
-            console.warn("[PROG] applyEncounterResult failed", e);
-          }
-          updateGuestRankFromEncounter(currentEncounter, checks, scored);
-          bcRenderHud("encounter resolved");
-          bcToast("Encounter resolved");
-          renderProgressStatusWindow();
-          renderRailProgress();
-          const spineNow = getProgressionSpine({ allowNull: true });
-          console.log("[PROG] earned", { pointsTotal: spineNow?.selectors?.points?.() ?? 0 });
-
-          // ============================================================
-          // ✅ Strength + Fix (Mastery snapshot)
-          // ============================================================
-          mastery = loadMastery(); // reload latest
-          const strengthFix = getStrengthAndFix(mastery);
-
-          const sfBlock = document.createElement("div");
-          sfBlock.className = "card";
-
-          const sfTitle = document.createElement("strong");
-          sfTitle.innerText = "Strength + Fix";
-          sfBlock.appendChild(sfTitle);
-
-          const sfLine1 = document.createElement("div");
-          sfLine1.className = "small-text";
-          sfLine1.innerText =
-            `Strength: ${strengthFix.strongest.toUpperCase()} (${strengthFix.strongestPct}%)  |  Fix: ${strengthFix.weakest.toUpperCase()} (${strengthFix.weakestPct}%)`;
-          sfBlock.appendChild(sfLine1);
-
-          const sfLine2 = document.createElement("div");
-          sfLine2.style.marginTop = "8px";
-          sfLine2.innerText = strengthFix.fixText;
-          sfBlock.appendChild(sfLine2);
-
-          // Optional: show what THIS encounter trained
-          const sfLine3 = document.createElement("div");
-          sfLine3.className = "small-text";
-          sfLine3.style.marginTop = "8px";
-          sfLine3.innerText = `This encounter trained: ${(currentEncounter.skillFocus || "read").toUpperCase()}`;
-          sfBlock.appendChild(sfLine3);
-
-          stepContent.appendChild(sfBlock);
-
-          // ✅ STREAK (Rule B) — update after reflection only
-          const streakInfo = window.__BC_DEBUG__?.updateStreakAfterEncounter
-            ? window.__BC_DEBUG__.updateStreakAfterEncounter(currentEncounter, checks)
-            : { signal: "missing", streak: 0, best: 0, changed: false };
-
-          console.log("[BC] streakInfo", streakInfo);
-          renderStreakBlock(stepContent, streakInfo);
-          const unlock = tryUnlockNextTier();
-          if (unlock.unlocked) {
-            console.log("[BC] Tier unlocked ✅", unlock.tier);
-          }
-
-          const guardState = loadGuardState();
-          const rawTier = resolveTierForSession(sessionType, currentEncounter?.encounterNumber);
-          const tierNow = Math.min(rawTier, getMaxUnlockedTier());
-          guardState.last3.push(scored);
-          if (guardState.last3.length > 3) guardState.last3 = guardState.last3.slice(-3);
-
-          const decision = progressionGuard({
-            tier: tierNow,
-            streakValue: streakInfo?.streak || 0,
-            last3: guardState.last3
-          });
-          console.log("[GUARD] scored last3", guardState.last3.map(x => ({
-            pts: x.pts, outcome: x.outcome, damage: x.damage,
-            mode: x.modeStatus, hook: x.hookStatus, delivery: x.deliveryCorrect
-          })));
-          console.log("[GUARD] decision", {
-            action: decision.action,
-            focus: decision.focus,
-            reasons: decision.reasons,
-            signal: decision.signal
-          });
-
-          if ((guardState.graceNext || 0) > 0 && decision.action === "escalate") {
-            decision.action = "hold";
-            decision.reasons = [...(decision.reasons || []), "H_GRACE_NEXT"];
-          }
-          guardState.graceNext = Math.max(0, (guardState.graceNext || 0) - 1);
-
-          const abilityFx = getActiveAbilityRuntime();
-          const pressureBefore = guardState.pressureLevel;
-          if (decision.action === "escalate") guardState.pressureLevel += 1;
-          else if (decision.action === "deload") guardState.pressureLevel -= 1;
-          else if (decision.action === "intervention") guardState.pressureLevel = Math.min(guardState.pressureLevel, 0);
-          if (abilityFx.calmFloor) {
-            guardState.pressureLevel += Number(abilityFx.pressureEscalationDelta || 0);
-            recordAbilityImpact({
-              abilityId: "calm_floor",
-              hook: "pressure_guard",
-              value: abilityFx.pressureEscalationDelta,
-              pressureBefore,
-              pressureAfter: guardState.pressureLevel,
-            });
-          }
-          guardState.pressureLevel = clampPressureByTier(tierNow, guardState.pressureLevel);
-
-          const baseDiff = baseDifficultyFromTier(tierNow);
-          const finalDifficulty = computeFinalDifficulty({ tier: tierNow, pressureLevel: guardState.pressureLevel });
-          currentEncounter.nextEncounterDifficulty = finalDifficulty;
-          console.log("[GUARD] tier/base/pressure/final", {
-            tierNow,
-            baseDiff,
-            pressureBefore,
-            pressureAfter: guardState.pressureLevel,
-            finalDifficulty
-          });
-          updateDifficultyBadge(finalDifficulty);
-          guardState.nextDifficulty = finalDifficulty;
-          saveAccountDifficulty(finalDifficulty);
-
-          // unlocks are derived from progression points; no per-encounter unlock meta required
-
-          guardState.lastDecision = decision;
-          guardState.tier = tierNow;
-          guardState.baseDiff = baseDiff;
-          guardState.finalDifficulty = finalDifficulty;
-          guardState.graceNext = (decision.action === "escalate") ? 1 : guardState.graceNext;
-
-          const policy = difficultyPolicy(finalDifficulty);
-          guardState.streakRules = {
-            gate: policy.streakGate,
-            hookStrict: policy.hookStrict,
-            deliveryStrict: policy.deliveryStrict
-          };
-          window.__BC_DIFFICULTY__ = { ...policy, tier: tierNow, pressure: guardState.pressureLevel, lastDecision: decision };
-          syncProgressionStateMirror({
-            guardState: { ...guardState },
-            difficultySeed: finalDifficulty,
-            persistGuard: true
-          });
-          console.log("[GUARD] policy", window.__BC_DIFFICULTY__);
-
-          const done = isSessionComplete({ tier: tierNow, guardState });
-          currentEncounter.__completionState = {
-            streakInfo,
-            unlock,
-            done,
-            tierNow,
-            guardState: { ...guardState },
-          };
-          console.log("[SESSION] completionCheck", done);
-          if (done.done) {
-            renderSessionComplete(stepContent, {
-              reason: done.reason,
-              tier: tierNow,
-              difficulty: guardState?.finalDifficulty ?? currentEncounter?.difficulty ?? 1,
-              guardState
-            });
-            return;
-          }
-
-          console.log("[BC] DIFF", describeDifficultyState());
-
-          console.log("[BC] outcome", outcome, currentEncounter.__tiers);
-          try {
-            currentEncounter.outcome = outcome?.outcome || null;
-            currentEncounter.chainSignal =
-              currentEncounter.chainSignal ||
-              currentEncounter?.__reaction?.chainSignal ||
-              null;
-            try {
-              logEncounterEffectAudit("outcome", currentEncounter, {
-                outcome: outcome?.outcome || null,
-                finalScore: outcome?.score,
-              });
-            } catch (e) {
-              console.warn("[BC] effect audit failed", e);
-            }
-
-            const prevSnapshot = getSkillSnapshot();
-            const skillTree = updateSkillTreeFromEncounter(currentEncounter);
-            const newSnapshot = getSkillSnapshot();
-            checkSkillMilestones(prevSnapshot, newSnapshot);
-
-            console.log("[SKILLS] updated", {
-              tree: skillTree,
-              snapshot: newSnapshot
-            });
-          } catch (e) {
-            console.warn("[SKILLS] update failed", e);
-          }
-
-          if (outcome.outcome === "pivot") {
-            const p = choosePivot(currentEncounter, currentEncounter.policy);
-            currentEncounter.pivotType = currentEncounter.pivotType || p.pivotType;
-            currentEncounter.nextGuestStateActual =
-              currentEncounter.nextGuestStateActual || p.next || currentEncounter.guestStateActual || "";
-          }
-
-          if (outcome.outcome === "recovery") {
-            currentEncounter.pivotType = currentEncounter.pivotType || "recovery";
-            currentEncounter.__pendingRecovery = true;
-            currentStep = 65;
-            renderEncounterStep();
-            return;
-          }
-
-          logEncounter();
-          if (maybeEndDemoRunAndReturnHome()) return;
-
-          // ============================================================
-          // ✅ DRILL REP ACCOUNTING (3 reps then stop)
-          // ============================================================
-          if (inDrill) {
-            drillRepDone += 1;
-            if (window.__BC_SESSION__ && window.__BC_SESSION__.type === "drill") {
-              window.__BC_SESSION__.repDone = drillRepDone;
-            }
-
-            // If drill complete -> end session now (no next encounter)
-            if (drillRepDone >= drillRepTarget) {
-              finishDrillSession();
-              endDrillSession();
-              return;
-            }
-          }
-
-          const isDemoNow = (window.isDemo || window.bcMode === "demo");
-          const done2 = Number(window.__BC_DEMO_DONE__ || 0);
-          const target = Number(window.__BC_DEMO_TARGET__ || 3);
-          const demoComplete = isDemoNow && !inDrill && done2 >= target;
-          addStepButton(inDrill ? "NEXT REP" : (demoComplete ? "BACK HOME" : "NEXT ENCOUNTER"), () => {
-            try { logEncounter(); } catch (e) { console.warn("[BC] logEncounter failed", e); }
-            if (demoComplete) {
-              resetNavState();
-              showScreen("screenHome");
-              return;
-            }
-            if (window.__NEXT_LOCK__) return;
-            window.__NEXT_LOCK__ = true;
-            setTimeout(() => { window.__NEXT_LOCK__ = false; }, 150);
-            encounterIndex = (encounterIndex ?? 0) + 1;
-
-            // Strict tier gating applies to premium only
-            if (!isDemo) {
-              const clamped = clampEncounterIndexToUnlockedTier(encounterIndex);
-
-              if (clamped !== encounterIndex) {
-                // They tried to push into a locked tier
-                const targetTierRaw = getTierFromEncounterNumber(encounterIndex + 1);
-                const targetTier = Math.min(2, targetTierRaw);
-
-                // Phase 0/1/2: never talk about Tier 3
-                if (targetTierRaw >= 3) {
-                  alert("Not yet.\n\nNew pressure scenarios will come later. For now, keep building clean reps.");
-                } else if (targetTier === 2) {
-                  alert(
-                    "Not yet.\n\n" +
-                    "Tier 2 introduces recovery under pressure.\n" +
-                    "Clean reads and calm delivery come first.\n\n" +
-                    "Repeat this tier until the sequence feels automatic."
-                  );
-                } else {
-                  alert("Not yet. Keep playing encounters.");
-                }
-
-                encounterIndex = clamped;
-                saveEncounterIndex(encounterIndex);
-                resetNavState();
-                showScreen("screenHome");
-                return;
-              }
-            }
-
-            saveEncounterIndex(encounterIndex);
-            startEncounter();
-          }, stepButtons);
-
+          renderStepReflection(stepContent, stepButtons, inDrill);
           return;
         }
 
@@ -16142,8 +16109,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           stepContent.appendChild(title);
 
           const desc = document.createElement("div");
-          desc.className = "small-text";
-          desc.style.marginTop = "6px";
+          desc.className = "small-text recovery-desc";
           desc.innerText =
             "You lost control of the table. Pick one line to regain it. One is correct.";
           stepContent.appendChild(desc);
@@ -16168,8 +16134,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           enc.recoveryText = enc.recoveryText || "Pressure spike — you must recover the frame.";
 
           const card = document.createElement("div");
-          card.className = "card";
-          card.style.marginTop = "10px";
+          card.className = "card recovery-card";
 
           const prompt = document.createElement("div");
           prompt.innerText = enc.recoveryText;
@@ -16178,10 +16143,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           choices.forEach((c) => {
             const btn = document.createElement("button");
             btn.type = "button";
-            btn.className = "btn btnChoice";
-            btn.style.display = "block";
-            btn.style.width = "100%";
-            btn.style.marginTop = "8px";
+            btn.className = "btn btnChoice recovery-choice-btn";
             btn.innerText = `${c.label}: ${c.line}`;
 
             btn.addEventListener("click", () => {
@@ -16233,532 +16195,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         }
 
         if (currentStep === 7) {
-          ensureProgLoaded();
-
-          const checks = buildReactionChecksFromEncounter(currentEncounter, PROG);
-
-          const modeBestResolved = resolveCorrectModeForPlayer(
-            currentEncounter?.modeBestResolved ||
-            currentEncounter?.modeBestRaw ||
-            currentEncounter?.modeBest ||
-            null,
-            getUnlockedModesForCurrentPlayer()
-          );
-
-          console.log("[REPORT UI] Step 7 rendered ✅", {
-            encounter: currentEncounter?.encounterNumber,
-            currentEncounter,
-            checks,
-            modeBestResolved
-          });
-          maybeAutoSendProgressReport(currentEncounter);
-          const reflectionTitle = document.createElement("h3");
-          reflectionTitle.innerText = "What just happened";
-          stepContent.appendChild(reflectionTitle);
-          renderStrictBadge(stepContent);
-
-          const anchor = document.createElement("div");
-          anchor.className = "small-text";
-          anchor.style.marginTop = "6px";
-          anchor.style.opacity = "0.9";
-          anchor.innerText = bcReflectionAnchor(checks, currentEncounter);
-          stepContent.appendChild(anchor);
-
-          renderDynamicGuestLineBlock(stepContent, currentEncounter, checks, {
-            compact: false
-          });
-
-          renderDynamicGuestReactionBlock(stepContent, currentEncounter, checks, {
-            compact: false
-          });
-
-          if (window.__BC_DEBUG_PRESSURE__ === true) {
-            renderGuestPressureDebug(stepContent, currentEncounter);
-          }
-
-          logEncounterStateAudit("before_reflection_render", currentEncounter);
-
-          renderStrengthFixBlock(stepContent, checks, currentEncounter);
-
-          console.log("[BC] Step6 summary", currentEncounter.__uxSummary);
-          if (currentEncounter.__uxSummary) {
-            renderUxSummary(stepContent, currentEncounter.__uxSummary, {
-              title: "Summary to lock it in",
-              compact: false
-            });
-          }
-
-          addReflectionBlock(
-            stepContent,
-            "Guest Read",
-            checks.guestRead ? "✅" : "❌",
-            `Guest type: ${currentEncounter.guestStateActual || "—"}. You read them as: ${currentEncounter.guestReadSelected || "—"}.`
-          );
-
-          addReflectionBlock(
-            stepContent,
-            "Mode",
-            scoreSymbol(checks.modeStatus),
-            `Best approach: ${modeBestResolved ? uiModeLabel(modeBestResolved, "game") : "—"}. ` +
-            modeWhyWithChoice(currentEncounter.guestStateActual, currentEncounter.modeSelected)
-          );
-
-          const hookRuleForGuest = getHookRuleForGuest(currentEncounter.guestStateActual);
-          assertHookConsistency(hookRuleForGuest, {
-            encounterNumber: currentEncounter?.encounterNumber,
-            guest: currentEncounter?.guestStateActual,
-            source: "reflection_hook"
-          });
-
-          const bestHook = hookRuleForGuest?.optimal || "—";
-
-          addReflectionBlock(
-            stepContent,
-            "Hook",
-            scoreSymbol(checks.hookStatus),
-            `Best opening: "${bestHook}". ` + hookWhyWithChoice(
-              currentEncounter.guestStateActual,
-              getSelectedHookType(currentEncounter)
-            )
-          );
-
-          const correctS1 =
-            currentEncounter.correctDeliveryLine1 ||
-            currentEncounter.deliverOptionsS1?.[currentEncounter.correctSlotS1] ||
-            "—";
-
-          const correctS2 =
-            currentEncounter.correctDeliveryLine2 ||
-            currentEncounter.deliverOptionsS2?.[currentEncounter.correctSlotS2] ||
-            "—";
-
-          const chosenS1 =
-            currentEncounter.selectedDeliveryLine1 ||
-            currentEncounter.deliveryLine1 ||
-            currentEncounter.deliverOptionsS1?.[currentEncounter.selectedS1] ||
-            "—";
-
-          const chosenS2 =
-            currentEncounter.selectedDeliveryLine2 ||
-            currentEncounter.deliveryLine2 ||
-            currentEncounter.deliverOptionsS2?.[currentEncounter.selectedS2] ||
-            "—";
-
-          addReflectionBlock(
-            stepContent,
-            "Delivery",
-            checks.deliveryCorrect ? "✅" : "❌",
-            `Best pair: "${correctS1}" / "${correctS2}". You chose: "${chosenS1}" / "${chosenS2}". The stronger pair made the recommendation feel clearer and more natural.`
-          );
-
-          if (currentEncounter.chainSignal) {
-            addReflectionBlock(
-              stepContent,
-              "Momentum",
-              momentumLabel(currentEncounter.chainSignal),
-              sessionSignalDetail(currentEncounter.chainSignal)
-            );
-          }
-
-          if (currentEncounter.recoveryText) {
-            const unlockedModes = getUnlockedModesForCurrentPlayer();
-
-            const recoveryBest = resolveCorrectModeForPlayer(
-              currentEncounter.recoveryCorrectModeResolved ||
-              currentEncounter.recoveryCorrectModeRaw ||
-              currentEncounter.recoveryCorrectMode ||
-              null,
-              unlockedModes
-            );
-
-            currentEncounter.recoveryCorrectModeResolved = recoveryBest;
-            currentEncounter.recoveryCorrect =
-              !!currentEncounter.recoveryChoice &&
-              canonicalModeFromUi(currentEncounter.recoveryChoice) === canonicalModeFromUi(recoveryBest);
-
-            assertModeConsistency(unlockedModes, recoveryBest, {
-              encounterNumber: currentEncounter?.encounterNumber,
-              tier: getProgressionSpine({ allowNull: true })?.selectors?.tier?.(),
-              points: getProgressionSpine({ allowNull: true })?.selectors?.points?.(),
-              source: "reflection_pivot"
-            });
-
-            addReflectionBlock(
-              stepContent,
-              "Pivot",
-              currentEncounter.recoveryCorrect ? "✅" : (currentEncounter.recoveryChoice ? "❌" : "—"),
-              `Scenario: ${currentEncounter.recoveryText || "—"}. ` +
-              `Best recovery: ${recoveryBest ? uiModeLabel(recoveryBest, "game") : "—"}. ` +
-              `You chose: ${currentEncounter.recoveryChoice ? uiModeLabel(currentEncounter.recoveryChoice, "game") : "—"}. ` +
-              `Why: ${pivotWhyWithChoice(currentEncounter)}`
-            );
-          }
-
-          if (currentEncounter.resetUsed) {
-            addReflectionBlock(
-              stepContent,
-              "Reset",
-              "✅",
-              "You used reset (only allowed if first mode was HOLD)."
-            );
-          }
-
-          const gradeObj = computePerformanceGrade(currentEncounter, checks);
-          currentEncounter.performanceGrade = gradeObj.grade;
-          renderPerformanceGradeBlock(stepContent, gradeObj);
-          renderCoachLineBlock(stepContent, currentEncounter, checks);
-
-          const scored = scoreEncounterForGuard(currentEncounter, checks);
-          const completionState = currentEncounter.__completionState || null;
-
-          if (completionState) {
-            if (completionState.streakInfo) {
-              console.log("[BC] streakInfo (reused)", completionState.streakInfo);
-              renderStreakBlock(stepContent, completionState.streakInfo);
-            }
-
-            if (completionState.done?.done) {
-              renderSessionComplete(stepContent, {
-                reason: completionState.done.reason,
-                tier: completionState.tierNow ?? 1,
-                difficulty: completionState.guardState?.finalDifficulty ?? currentEncounter?.difficulty ?? 1,
-                guardState: completionState.guardState || null
-              });
-              return;
-            }
-
-            const isDemoNow = (window.isDemo || window.bcMode === "demo");
-            const done2 = Number(window.__BC_DEMO_DONE__ || 0);
-            const target = Number(window.__BC_DEMO_TARGET__ || 3);
-            const demoComplete = isDemoNow && !inDrill && done2 >= target;
-
-            addStepButton(
-              inDrill ? "NEXT REP" : (demoComplete ? "BACK HOME" : "NEXT ENCOUNTER"),
-              () => {
-                if (!currentEncounter.__logged) {
-                  try { logEncounter(); } catch (e) { console.warn("[BC] logEncounter failed", e); }
-                  currentEncounter.__logged = true;
-                }
-
-                if (demoComplete) {
-                  resetNavState();
-                  showScreen("screenHome");
-                  return;
-                }
-
-                if (window.__NEXT_LOCK__) return;
-                window.__NEXT_LOCK__ = true;
-                setTimeout(() => { window.__NEXT_LOCK__ = false; }, 150);
-
-                encounterIndex = (encounterIndex ?? 0) + 1;
-
-                if (!isDemo) {
-                  const clamped = clampEncounterIndexToUnlockedTier(encounterIndex);
-
-                  if (clamped !== encounterIndex) {
-                    const targetTierRaw = getTierFromEncounterNumber(encounterIndex + 1);
-                    const targetTier = Math.min(2, targetTierRaw);
-
-                    if (targetTierRaw >= 3) {
-                      alert("Not yet.\n\nNew pressure scenarios will come later. For now, keep building clean reps.");
-                    } else if (targetTier === 2) {
-                      alert(
-                        "Not yet.\n\n" +
-                        "Tier 2 introduces recovery under pressure.\n" +
-                        "Clean reads and calm delivery come first.\n\n" +
-                        "Repeat this tier until the sequence feels automatic."
-                      );
-                    } else {
-                      alert("Not yet. Keep playing encounters.");
-                    }
-
-                    encounterIndex = clamped;
-                    saveEncounterIndex(encounterIndex);
-                    resetNavState();
-                    showScreen("screenHome");
-                    return;
-                  }
-                }
-
-                saveEncounterIndex(encounterIndex);
-                startEncounter();
-              },
-              stepButtons
-            );
-
-            return;
-          }
-
-          try {
-            if (!currentEncounter.__progressionApplied) {
-              currentEncounter.__progressionApplied = true;
-
-              const didWin =
-                !!checks.guestRead &&
-                checks.modeStatus !== "damaging" &&
-                checks.hookStatus !== "damaging" &&
-                !!checks.deliveryCorrect;
-
-              const encounterIdRaw =
-                currentEncounter?.encounterId ??
-                currentEncounter?.id ??
-                currentEncounter?.encounterNumber;
-
-              if (encounterIdRaw == null) throw new Error("Missing encounterId on currentEncounter");
-
-              const encounterId = String(encounterIdRaw);
-              const spine = getProgressionSpine({ allowNull: true });
-
-              console.log("[PROG] encounter scoring check", {
-                encounterId,
-                didWin,
-                pointEligible: didWin,
-                scoredThisRun: spine?.getState?.()?.run?.scoredThisRun || null
-              });
-
-              spine?.actions?.applyEncounterResult?.({
-                encounterId,
-                success: didWin,
-                pointEligible: didWin
-              });
-
-              const premiumSuccess = !!(
-                currentEncounter?.premiumOpportunityHit ||
-                currentEncounter?.premiumRollSuccess
-              );
-
-              if (premiumSuccess) {
-                spine?.actions?.applyPremiumBonus?.({
-                  encounterId,
-                  bonusPoints: 1
-                });
-              }
-            }
-          } catch (e) {
-            console.warn("[PROG] applyEncounterResult failed", e);
-          }
-
-          updateGuestRankFromEncounter(currentEncounter, checks, scored);
-          bcRenderHud("encounter resolved");
-          bcToast("Encounter resolved");
-          renderProgressStatusWindow();
-          renderRailProgress();
-
-          const spineNow = getProgressionSpine({ allowNull: true });
-          console.log("[PROG] earned", { pointsTotal: spineNow?.selectors?.points?.() ?? 0 });
-
-          mastery = loadMastery();
-          const strengthFix = getStrengthAndFix(mastery);
-
-          const sfBlock = document.createElement("div");
-          sfBlock.className = "card";
-
-          const sfTitle = document.createElement("strong");
-          sfTitle.innerText = "Strength + Fix";
-          sfBlock.appendChild(sfTitle);
-
-          const sfLine1 = document.createElement("div");
-          sfLine1.className = "small-text";
-          sfLine1.innerText =
-            `Strength: ${strengthFix.strongest.toUpperCase()} (${strengthFix.strongestPct}%)  |  Fix: ${strengthFix.weakest.toUpperCase()} (${strengthFix.weakestPct}%)`;
-          sfBlock.appendChild(sfLine1);
-
-          const sfLine2 = document.createElement("div");
-          sfLine2.style.marginTop = "8px";
-          sfLine2.innerText = strengthFix.fixText;
-          sfBlock.appendChild(sfLine2);
-
-          const sfLine3 = document.createElement("div");
-          sfLine3.className = "small-text";
-          sfLine3.style.marginTop = "8px";
-          sfLine3.innerText = `This encounter trained: ${(currentEncounter.skillFocus || "read").toUpperCase()}`;
-          sfBlock.appendChild(sfLine3);
-
-          stepContent.appendChild(sfBlock);
-
-          const streakInfo = window.__BC_DEBUG__?.updateStreakAfterEncounter
-            ? window.__BC_DEBUG__.updateStreakAfterEncounter(currentEncounter, checks)
-            : { signal: "missing", streak: 0, best: 0, changed: false };
-
-          console.log("[BC] streakInfo", streakInfo);
-          renderStreakBlock(stepContent, streakInfo);
-
-          const unlock = tryUnlockNextTier();
-          if (unlock.unlocked) {
-            console.log("[BC] Tier unlocked ✅", unlock.tier);
-          }
-
-          const guardState = loadGuardState();
-          const rawTier = resolveTierForSession(sessionType, currentEncounter?.encounterNumber);
-          const tierNow = Math.min(rawTier, getMaxUnlockedTier());
-
-          guardState.last3.push(scored);
-          if (guardState.last3.length > 3) guardState.last3 = guardState.last3.slice(-3);
-
-          const decision = progressionGuard({
-            tier: tierNow,
-            streakValue: streakInfo?.streak || 0,
-            last3: guardState.last3
-          });
-
-          console.log("[GUARD] scored last3", guardState.last3.map(x => ({
-            pts: x.pts, outcome: x.outcome, damage: x.damage,
-            mode: x.modeStatus, hook: x.hookStatus, delivery: x.deliveryCorrect
-          })));
-
-          console.log("[GUARD] decision", {
-            action: decision.action,
-            focus: decision.focus,
-            reasons: decision.reasons,
-            signal: decision.signal
-          });
-
-          if ((guardState.graceNext || 0) > 0 && decision.action === "escalate") {
-            decision.action = "hold";
-            decision.reasons = [...(decision.reasons || []), "H_GRACE_NEXT"];
-          }
-
-          guardState.graceNext = Math.max(0, (guardState.graceNext || 0) - 1);
-
-          const abilityFx = getActiveAbilityRuntime();
-          const pressureBefore = guardState.pressureLevel;
-
-          if (decision.action === "escalate") guardState.pressureLevel += 1;
-          else if (decision.action === "deload") guardState.pressureLevel -= 1;
-          else if (decision.action === "intervention") guardState.pressureLevel = Math.min(guardState.pressureLevel, 0);
-
-          if (abilityFx.calmFloor) {
-            guardState.pressureLevel += Number(abilityFx.pressureEscalationDelta || 0);
-            recordAbilityImpact({
-              abilityId: "calm_floor",
-              hook: "pressure_guard",
-              value: abilityFx.pressureEscalationDelta,
-              pressureBefore,
-              pressureAfter: guardState.pressureLevel,
-            });
-          }
-
-          guardState.pressureLevel = clampPressureByTier(tierNow, guardState.pressureLevel);
-
-          const baseDiff = baseDifficultyFromTier(tierNow);
-          const finalDifficulty = computeFinalDifficulty({
-            tier: tierNow,
-            pressureLevel: guardState.pressureLevel
-          });
-
-          currentEncounter.nextEncounterDifficulty = finalDifficulty;
-
-          console.log("[GUARD] tier/base/pressure/final", {
-            tierNow,
-            baseDiff,
-            pressureBefore,
-            pressureAfter: guardState.pressureLevel,
-            finalDifficulty
-          });
-
-          updateDifficultyBadge(finalDifficulty);
-          guardState.nextDifficulty = finalDifficulty;
-          saveAccountDifficulty(finalDifficulty);
-
-          guardState.lastDecision = decision;
-          guardState.tier = tierNow;
-          guardState.baseDiff = baseDiff;
-          guardState.finalDifficulty = finalDifficulty;
-          guardState.graceNext = (decision.action === "escalate") ? 1 : guardState.graceNext;
-
-          const policy = difficultyPolicy(finalDifficulty);
-          guardState.streakRules = {
-            gate: policy.streakGate,
-            hookStrict: policy.hookStrict,
-            deliveryStrict: policy.deliveryStrict
-          };
-
-          window.__BC_DIFFICULTY__ = {
-            ...policy,
-            tier: tierNow,
-            pressure: guardState.pressureLevel,
-            lastDecision: decision
-          };
-          syncProgressionStateMirror({
-            guardState: { ...guardState },
-            difficultySeed: finalDifficulty,
-            persistGuard: true
-          });
-
-          console.log("[GUARD] policy", window.__BC_DIFFICULTY__);
-
-          const done = isSessionComplete({ tier: tierNow, guardState });
-          console.log("[SESSION] completionCheck", done);
-
-          if (done.done) {
-            renderSessionComplete(stepContent, {
-              reason: done.reason,
-              tier: tierNow,
-              difficulty: guardState?.finalDifficulty ?? currentEncounter?.difficulty ?? 1,
-              guardState
-            });
-            return;
-          }
-
-          const isDemoNow = (window.isDemo || window.bcMode === "demo");
-          const done2 = Number(window.__BC_DEMO_DONE__ || 0);
-          const target = Number(window.__BC_DEMO_TARGET__ || 3);
-          const demoComplete = isDemoNow && !inDrill && done2 >= target;
-
-          addStepButton(
-            inDrill ? "NEXT REP" : (demoComplete ? "BACK HOME" : "NEXT ENCOUNTER"),
-            () => {
-              if (!currentEncounter.__logged) {
-                try { logEncounter(); } catch (e) { console.warn("[BC] logEncounter failed", e); }
-                currentEncounter.__logged = true;
-              }
-
-              if (demoComplete) {
-                resetNavState();
-                showScreen("screenHome");
-                return;
-              }
-
-              if (window.__NEXT_LOCK__) return;
-              window.__NEXT_LOCK__ = true;
-              setTimeout(() => { window.__NEXT_LOCK__ = false; }, 150);
-
-              encounterIndex = (encounterIndex ?? 0) + 1;
-
-              if (!isDemo) {
-                const clamped = clampEncounterIndexToUnlockedTier(encounterIndex);
-
-                if (clamped !== encounterIndex) {
-                  const targetTierRaw = getTierFromEncounterNumber(encounterIndex + 1);
-                  const targetTier = Math.min(2, targetTierRaw);
-
-                  if (targetTierRaw >= 3) {
-                    alert("Not yet.\n\nNew pressure scenarios will come later. For now, keep building clean reps.");
-                  } else if (targetTier === 2) {
-                    alert(
-                      "Not yet.\n\n" +
-                      "Tier 2 introduces recovery under pressure.\n" +
-                      "Clean reads and calm delivery come first.\n\n" +
-                      "Repeat this tier until the sequence feels automatic."
-                    );
-                  } else {
-                    alert("Not yet. Keep playing encounters.");
-                  }
-
-                  encounterIndex = clamped;
-                  saveEncounterIndex(encounterIndex);
-                  resetNavState();
-                  showScreen("screenHome");
-                  return;
-                }
-              }
-
-              saveEncounterIndex(encounterIndex);
-              startEncounter();
-            },
-            stepButtons
-          );
-
+          renderStepSessionSummary(stepContent, stepButtons, inDrill);
           return;
         }
       }
@@ -17469,11 +16906,10 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
         const snap = getSkillSnapshot();
         const card = document.createElement("div");
-        card.className = "card";
-        card.style.marginBottom = "12px";
+        card.className = "card skill-snapshot-card";
         card.innerHTML = `
           <strong>Skill Snapshot</strong>
-          <div class="small-text" style="margin-top:8px;">Read: ${snap.read}%</div>
+          <div class="small-text skill-snapshot-line skill-snapshot-line-first">Read: ${snap.read}%</div>
           <div class="small-text">Framing: ${snap.framing}%</div>
           <div class="small-text">Delivery: ${snap.delivery}%</div>
           <div class="small-text">Recovery: ${snap.recovery}%</div>
@@ -17513,8 +16949,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           toggleBtn.innerText = "View Details";
 
           const details = document.createElement("div");
-          details.className = "history-details";
-          details.style.display = "none";
+          details.className = "history-details is-collapsed";
 
           const recoveryLine = entry.recoveryText
             ? "\nPivot: " + (entry.pivotType || "—") +
@@ -17553,8 +16988,8 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           historyList.appendChild(item);
 
           bindInput(toggleBtn, () => {
-            const isHidden = details.style.display === "none";
-            details.style.display = isHidden ? "block" : "none";
+            const isHidden = details.classList.contains("is-collapsed");
+            details.classList.toggle("is-collapsed", !isHidden);
             toggleBtn.innerText = isHidden ? "Hide Details" : "View Details";
           });
         });
