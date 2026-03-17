@@ -68,6 +68,15 @@
       `;
     }
 
+    function railStat(label, value) {
+      return `
+        <div class="rail-stat">
+          <div class="small-text rail-stat-label">${escapeHtml(label)}</div>
+          <div class="rail-stat-value">${escapeHtml(value)}</div>
+        </div>
+      `;
+    }
+
     window.__BC_DEBUG_STATE__ = function () {
       return {
         epoch: window.__BC_EPOCH__ || 0,
@@ -1204,25 +1213,19 @@
         }
 
         el.innerHTML = `
-          <div class="small-text"><strong>Level</strong></div>
-          <div class="rail-progress-value">${level}</div>
-
-          <div class="small-text"><strong>Focus</strong></div>
-          <div class="rail-progress-value">${focus}</div>
-
-          <div class="small-text"><strong>Next</strong></div>
-          <div>${next}</div>
+          <div class="rail-stat-grid">
+            ${railStat("Level", level)}
+            ${railStat("Focus", focus)}
+            ${railStat("Next", next)}
+          </div>
         `;
       } catch (e) {
         el.innerHTML = `
-          <div class="small-text"><strong>Level</strong></div>
-          <div class="rail-progress-value">Building recognition</div>
-
-          <div class="small-text"><strong>Focus</strong></div>
-          <div class="rail-progress-value">Reading guest intent</div>
-
-          <div class="small-text"><strong>Next</strong></div>
-          <div>Keep playing encounters</div>
+          <div class="rail-stat-grid">
+            ${railStat("Level", "Building recognition")}
+            ${railStat("Focus", "Reading guest intent")}
+            ${railStat("Next", "Keep playing encounters")}
+          </div>
         `;
       }
     }
@@ -3544,35 +3547,35 @@
       </main>
 
       <aside id="bcRail" class="bc-rail">
-        <div class="bc-card bc-rail-card bc-rail-card-priority">
+        <div class="bc-card bc-rail-card bc-rail-card-priority" data-rail-kind="objective">
           <div class="bc-rail-title">Current Objective</div>
           <div class="bc-rail-body" id="railActiveChallenge">
-            <div class="small-text rail-copy rail-copy-muted">No current objective right now.</div>
+            <div class="small-text rail-copy rail-copy-muted rail-empty-state">No current objective right now.</div>
           </div>
         </div>
 
-        <div class="bc-card bc-rail-card bc-rail-card-priority">
+        <div class="bc-card bc-rail-card bc-rail-card-priority" data-rail-kind="practice">
           <div class="bc-rail-title">Practice Focus</div>
           <div class="bc-rail-body" id="railActiveDrill">
-            <div class="small-text rail-copy rail-copy-muted">No practice focus right now.</div>
+            <div class="small-text rail-copy rail-copy-muted rail-empty-state">No practice focus right now.</div>
           </div>
         </div>
 
-        <div class="bc-card bc-rail-card">
+        <div class="bc-card bc-rail-card" data-rail-kind="progress">
           <div class="bc-rail-title">Progression Status</div>
           <div class="bc-rail-body" id="railProgress">
-            <div class="small-text rail-copy rail-copy-muted">No run data yet.</div>
+            <div class="small-text rail-copy rail-copy-muted rail-empty-state">No run data yet.</div>
           </div>
         </div>
 
-        <div class="bc-card bc-rail-card">
+        <div class="bc-card bc-rail-card" data-rail-kind="support">
           <div class="bc-rail-title">Manager Support</div>
           <div class="bc-rail-body" id="railLiveEffects">
-            <div class="small-text rail-copy rail-copy-muted">No manager support active right now.</div>
+            <div class="small-text rail-copy rail-copy-muted rail-empty-state">No manager support active right now.</div>
           </div>
         </div>
 
-        <div class="bc-card bc-rail-card">
+        <div class="bc-card bc-rail-card" data-rail-kind="actions">
           <div class="bc-rail-title">Next Step</div>
           <div class="bc-rail-body" id="railQuickActions">
             <div class="rail-action-stack">
@@ -3582,9 +3585,11 @@
           </div>
         </div>
 
-        <div class="bc-card bc-rail-card">
+        <div class="bc-card bc-rail-card" data-rail-kind="notes">
           <div class="bc-rail-title">Wine Notes</div>
-          <div class="bc-rail-body" id="railWineNotes">-</div>
+          <div class="bc-rail-body" id="railWineNotes">
+            <div class="small-text rail-copy rail-copy-muted rail-empty-state">No wine notes loaded yet.</div>
+          </div>
         </div>
       </aside>
 
@@ -13332,9 +13337,10 @@ function ensureProgLoaded() {
           : (reaction.combined || "The guest gives very little away.");
 
         const block = document.createElement("div");
-        block.className = "notice notice-spaced";
+        block.className = "notice notice-spaced encounter-quote-block";
 
         const title = document.createElement("div");
+        title.className = "encounter-block-title";
         title.innerHTML = "<strong>Guest Reaction</strong>";
 
         const body = document.createElement("div");
@@ -13358,9 +13364,10 @@ function ensureProgLoaded() {
           : (lineData.combined || "The guest gives little away.");
 
         const block = document.createElement("div");
-        block.className = "notice notice-spaced";
+        block.className = "notice notice-spaced encounter-quote-block";
 
         const title = document.createElement("div");
+        title.className = "encounter-block-title";
         title.innerHTML = "<strong>What the guest says</strong>";
 
         const body = document.createElement("div");
@@ -13471,9 +13478,10 @@ function ensureProgLoaded() {
         if (!container || !summary) return;
 
         const wrap = document.createElement("div");
-        wrap.className = "card";
+        wrap.className = "card ux-summary-card";
 
         const title = document.createElement("strong");
+        title.className = "encounter-section-title";
         title.innerText = opts.title || "Scoring Summary";
         wrap.appendChild(title);
 
@@ -13522,13 +13530,15 @@ function ensureProgLoaded() {
 
       function addReflectionBlock(container, title, status, detail) {
         const block = document.createElement("div");
-        block.className = "card";
+        block.className = "card reflection-detail-card";
 
         const header = document.createElement("strong");
+        header.className = "encounter-section-title";
         header.innerText = title + ": " + status;
         block.appendChild(header);
 
         const line = document.createElement("div");
+        line.className = "reflection-detail-copy";
         line.innerText = detail;
         block.appendChild(line);
 
@@ -13604,7 +13614,7 @@ function ensureProgLoaded() {
         const summary = buildStrengthFixSummary(encounter, checks);
 
         const block = document.createElement("div");
-        block.className = "notice";
+        block.className = "notice strength-fix-block";
 
         const strength = document.createElement("div");
         strength.innerHTML = `<strong>You did well:</strong> ${summary.strength}`;
@@ -13620,6 +13630,7 @@ function ensureProgLoaded() {
 
       function renderReflectionOverview(container, encounter, checks, modeBestResolved) {
         const reflectionTitle = document.createElement("h3");
+        reflectionTitle.className = "encounter-stage-title";
         reflectionTitle.innerText = "What just happened";
         container.appendChild(reflectionTitle);
         renderStrictBadge(container);
@@ -13771,9 +13782,10 @@ function ensureProgLoaded() {
         const strengthFix = getStrengthAndFix(mastery);
 
         const sfBlock = document.createElement("div");
-        sfBlock.className = "card";
+        sfBlock.className = "card mastery-card";
 
         const sfTitle = document.createElement("strong");
+        sfTitle.className = "encounter-section-title";
         sfTitle.innerText = "Strength + Fix";
         sfBlock.appendChild(sfTitle);
 
@@ -14774,10 +14786,12 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
       function updateEncounterPresentationState(step = currentStep) {
         const panel = document.getElementById("encounterPanel");
+        const stepContent = document.getElementById("stepContent");
         if (!panel) return;
 
         const stage = getEncounterPresentationStage(step);
         panel.dataset.stage = stage;
+        if (stepContent) stepContent.dataset.stage = stage;
 
         const guestType = normalizeGuestType(currentEncounter?.guestStateActual || "");
         if (guestType) panel.dataset.guest = guestType;
@@ -14790,15 +14804,22 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         const signal = String(signalRaw).toLowerCase();
         if (signal === "green" || signal === "yellow" || signal === "red") {
           panel.dataset.signal = signal;
+          if (stepContent) stepContent.dataset.signal = signal;
         } else {
           delete panel.dataset.signal;
+          if (stepContent) delete stepContent.dataset.signal;
         }
 
         const skillFocus = String(currentEncounter?.skillFocus || "").toLowerCase();
         if (skillFocus) panel.dataset.focus = skillFocus;
         else delete panel.dataset.focus;
+        if (stepContent) {
+          if (skillFocus) stepContent.dataset.focus = skillFocus;
+          else delete stepContent.dataset.focus;
+        }
 
         panel.dataset.session = (sessionType === "drill") ? "drill" : "service";
+        if (stepContent) stepContent.dataset.session = panel.dataset.session;
       }
 
       function updateEncounterStageHeader(stepHeader, wineDisplayName, wineBadges) {
@@ -14842,6 +14863,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
       function renderStepLoad(stepContent, stepButtons) {
         const p = document.createElement("p");
+        p.className = "encounter-lead";
         p.innerText = "Encounter loaded. Press BEGIN to observe the guest.";
         stepContent.appendChild(p);
         addStepButton("BEGIN", () => { currentStep = 1; renderEncounterStep(); }, stepButtons);
@@ -14849,15 +14871,18 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
       function renderStepObserve(stepContent, stepButtons) {
         const context = document.createElement("p");
+        context.className = "encounter-lead";
         context.innerText = currentEncounter.contextLine;
         const guest = document.createElement("p");
+        guest.className = "encounter-voice";
         guest.innerText = "Guest: " + currentEncounter.guestLine;
         stepContent.appendChild(context);
         stepContent.appendChild(guest);
 
         const cuePanel = document.createElement("div");
-        cuePanel.className = "card";
+        cuePanel.className = "card cue-card";
         const cueTitle = document.createElement("strong");
+        cueTitle.className = "encounter-section-title";
         cueTitle.innerText = "Cues";
         cuePanel.appendChild(cueTitle);
 
@@ -14866,23 +14891,24 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         const verbal = sliceCuesByNoise(currentEncounter.verbalCues, cuesNoise);
 
         const phys = document.createElement("div");
-        phys.className = "small-text";
+        phys.className = "small-text cue-line";
         phys.innerText = "Physical: " + (physical || []).join(", ");
         cuePanel.appendChild(phys);
 
         const verb = document.createElement("div");
-        verb.className = "small-text";
+        verb.className = "small-text cue-line";
         verb.innerText = "Verbal: " + (verbal || []).join(", ");
         cuePanel.appendChild(verb);
 
         stepContent.appendChild(cuePanel);
 
         const prompt = document.createElement("p");
+        prompt.className = "encounter-prompt";
         prompt.innerText = "What kind of guest are you dealing with?";
         stepContent.appendChild(prompt);
 
         const hint = document.createElement("div");
-        hint.className = "small-text";
+        hint.className = "small-text encounter-hint";
         hint.innerText = "Watch their cues. The right read makes every decision easier.";
         stepContent.appendChild(hint);
 
@@ -14942,9 +14968,10 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
       function renderStepMode(stepContent, stepButtons) {
         const topRow = document.createElement("div");
-        topRow.className = "history-row";
+        topRow.className = "history-row encounter-top-row";
 
         const prompt = document.createElement("div");
+        prompt.className = "encounter-prompt";
         prompt.innerText = "How do you want to handle this guest?";
         topRow.appendChild(prompt);
 
@@ -14953,7 +14980,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         stepContent.appendChild(topRow);
 
         const hint = document.createElement("div");
-        hint.className = "small-text";
+        hint.className = "small-text encounter-hint";
         hint.innerText = "Match the tone of your approach to the guest in front of you.";
         stepContent.appendChild(hint);
 
@@ -15006,9 +15033,10 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         debugHookStrictness(currentEncounter);
 
         const topRow = document.createElement("div");
-        topRow.className = "history-row";
+        topRow.className = "history-row encounter-top-row";
 
         const prompt = document.createElement("div");
+        prompt.className = "encounter-prompt";
         prompt.innerText = "Choose your opening angle.";
         topRow.appendChild(prompt);
 
@@ -15017,7 +15045,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         stepContent.appendChild(topRow);
 
         const hint = document.createElement("div");
-        hint.className = "small-text";
+        hint.className = "small-text encounter-hint";
         hint.innerText = "Your first sentence should make the guest lean in.";
         stepContent.appendChild(hint);
 
@@ -15107,9 +15135,10 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
       function renderStepDelivery(stepContent, stepButtons) {
         const topRow = document.createElement("div");
-        topRow.className = "history-row";
+        topRow.className = "history-row encounter-top-row";
 
         const prompt = document.createElement("div");
+        prompt.className = "encounter-prompt";
         prompt.innerText = "Build the 2-sentence delivery.";
         topRow.appendChild(prompt);
 
@@ -15125,13 +15154,14 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         if (currentEncounter.showDeliveryHelp) renderDeliveryHelp(stepContent);
 
         const reminder = document.createElement("div");
-        reminder.className = "notice";
+        reminder.className = "notice encounter-reminder";
         reminder.innerText = "First create emotional fit, then make the recommendation clear.";
         stepContent.appendChild(reminder);
 
         if (!currentEncounter.deliverOptionsS1 || !currentEncounter.deliverOptionsS2) initDeliverOptions(currentEncounter);
 
         const line1Title = document.createElement("p");
+        line1Title.className = "encounter-section-title encounter-section-title-spaced";
         line1Title.innerText = "Sentence 1 — Create emotional fit";
         stepContent.appendChild(line1Title);
 
@@ -15156,6 +15186,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         stepContent.appendChild(line1Options);
 
         const line2Title = document.createElement("p");
+        line2Title.className = "encounter-section-title encounter-section-title-spaced";
         line2Title.innerText = "Sentence 2 — Make the choice clear";
         stepContent.appendChild(line2Title);
 
@@ -15501,11 +15532,12 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         bar.innerHTML = "";
 
         const reactionTitle = document.createElement("h3");
+        reactionTitle.className = "encounter-stage-title";
         reactionTitle.innerText = "Guest Reaction";
         stepContent.appendChild(reactionTitle);
 
         const reactionHint = document.createElement("div");
-        reactionHint.className = "small-text";
+        reactionHint.className = "small-text encounter-hint";
         reactionHint.innerText = "Your choices shape how the guest responds.";
         stepContent.appendChild(reactionHint);
 
