@@ -1605,6 +1605,399 @@ button:hover, .btn:hover, .btn-ghost:hover{
   }
 }
 
+/* =========================================================
+   MANAGER BOARD CONTENTS
+   Content styling for overview, people, messenger, live controls,
+   performance, billing, and enterprise tabs.
+   ========================================================= */
+
+#screenManagerBoard #mbPanels{
+  display: grid;
+  gap: 14px;
+}
+
+#screenManagerBoard .mbTab{
+  display: grid;
+  gap: 14px;
+}
+
+#screenManagerBoard .mbTab.hidden{
+  display: none !important;
+}
+
+#screenManagerBoard .mbTab > .card,
+#screenManagerBoard [id^="mbTab_"] .card,
+#screenManagerBoard [id^="mbOverview"],
+#screenManagerBoard [id^="mbGroup"],
+#screenManagerBoard #mbPeopleSummary,
+#screenManagerBoard #mbRestaurantContextCard,
+#screenManagerBoard #mbInviteSummary,
+#screenManagerBoard #mbDrillSummary,
+#screenManagerBoard #mbOverviewLiveEffects,
+#screenManagerBoard #mbOverviewAbilityEconomy,
+#screenManagerBoard #mbAttributeAbilitiesPanel,
+#screenManagerBoard #mbAreaAbilitiesPanel,
+#screenManagerBoard #mbDrillQuickActionsPanel,
+#screenManagerBoard #mbTimedChallengeQuickActionsPanel,
+#screenManagerBoard #mbInsightsPanel,
+#screenManagerBoard #mbEnterprisePanel{
+  border-radius: 24px;
+}
+
+#screenManagerBoard .card,
+#screenManagerBoard [id^="mbOverview"],
+#screenManagerBoard [id^="mbGroup"],
+#screenManagerBoard #mbPeopleSummary,
+#screenManagerBoard #mbRestaurantContextCard,
+#screenManagerBoard #mbInviteSummary,
+#screenManagerBoard #mbDrillSummary,
+#screenManagerBoard #mbOverviewLiveEffects,
+#screenManagerBoard #mbOverviewAbilityEconomy,
+#screenManagerBoard #mbAttributeAbilitiesPanel,
+#screenManagerBoard #mbAreaAbilitiesPanel,
+#screenManagerBoard #mbDrillQuickActionsPanel,
+#screenManagerBoard #mbTimedChallengeQuickActionsPanel,
+#screenManagerBoard #mbInsightsPanel,
+#screenManagerBoard #mbEnterprisePanel{
+  border: 1px solid rgba(255,255,255,0.10) !important;
+  background:
+    radial-gradient(900px 240px at 0% 0%, rgba(125,211,252,0.08), transparent 58%),
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015)),
+    rgba(9,13,18,0.56) !important;
+  box-shadow:
+    0 20px 42px rgba(0,0,0,0.20),
+    inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+#screenManagerBoard .card strong,
+#screenManagerBoard .card h3,
+#screenManagerBoard [id^="mbTab_"] > div > div[style*="font-weight:600"],
+#screenManagerBoard [id^="mbTab_"] > div strong{
+  color: rgba(242,247,250,0.95);
+}
+
+#screenManagerBoard .score-row{
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 12px;
+  align-items: baseline;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+#screenManagerBoard .score-row:last-child{
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+#screenManagerBoard .score-row:first-child{
+  padding-top: 0;
+}
+
+#screenManagerBoard .score-row span{
+  color: rgba(244,246,247,0.92);
+}
+
+#screenManagerBoard #mbTab_people #mbInvitesPanel > .card,
+#screenManagerBoard #mbTab_people #mbMembersCard,
+#screenManagerBoard #mbBillingAccess,
+#screenManagerBoard #mbTab_enterprise .card{
+  padding: 14px !important;
+}
+
+#screenManagerBoard #mbTab_messenger > .card{
+  padding: 16px !important;
+}
+
+#screenManagerBoard #mbTimedChallengeComposer{
+  border-radius: 20px !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  background:
+    linear-gradient(180deg, rgba(94,234,212,0.08), rgba(255,255,255,0.02)),
+    rgba(255,255,255,0.02) !important;
+}
+
+#screenManagerBoard #mbThreadList,
+#screenManagerBoard #mbThreadMessages,
+#screenManagerBoard #mbSuggestedPrompts,
+#screenManagerBoard #mbMembersList,
+#screenManagerBoard #invitesList,
+#screenManagerBoard #mbLeaderboard,
+#screenManagerBoard #mbWeeklyReport,
+#screenManagerBoard #mbBestStreaks,
+#screenManagerBoard #mbNeedsCoaching,
+#screenManagerBoard #mbRecent,
+#screenManagerBoard #mbWeeklySummaryTop{
+  border-radius: 18px;
+}
+
+#screenManagerBoard #mbThreadList,
+#screenManagerBoard #mbThreadMessages,
+#screenManagerBoard #mbMembersList,
+#screenManagerBoard #invitesList,
+#screenManagerBoard #mbLeaderboard,
+#screenManagerBoard #mbWeeklyReport,
+#screenManagerBoard #mbBestStreaks,
+#screenManagerBoard #mbNeedsCoaching,
+#screenManagerBoard #mbRecent,
+#screenManagerBoard #mbWeeklySummaryTop{
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015)),
+    rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.08);
+  padding: 12px;
+}
+
+#screenManagerBoard #mbTab_messenger > .card > div[style*="grid-template-columns: 280px 1fr"]{
+  align-items: stretch;
+}
+
+#screenManagerBoard #mbTab_messenger > .card > div[style*="grid-template-columns: 280px 1fr"] > div{
+  border-radius: 22px !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015)),
+    rgba(255,255,255,0.02) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+#screenManagerBoard #mbThreadStatePanel,
+#screenManagerBoard #mbThreadRecommendationsPanel{
+  border-radius: 18px !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  background:
+    linear-gradient(180deg, rgba(125,211,252,0.08), rgba(255,255,255,0.02)),
+    rgba(255,255,255,0.02) !important;
+}
+
+#screenManagerBoard #mbHistoryChart{
+  width: 100%;
+  max-width: 100%;
+  padding: 10px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015)),
+    rgba(4,9,13,0.40);
+}
+
+#screenManagerBoard .small-text,
+#screenManagerBoard .small{
+  color: rgba(244,246,247,0.74);
+  line-height: 1.5;
+}
+
+#screenManagerBoard select,
+#screenManagerBoard input,
+#screenManagerBoard textarea{
+  border-radius: 14px !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
+  background: rgba(7,12,16,0.82) !important;
+  color: rgba(244,246,247,0.94) !important;
+}
+
+#screenManagerBoard textarea{
+  padding: 12px !important;
+}
+
+#screenManagerBoard button{
+  border-radius: 15px !important;
+}
+
+#screenManagerBoard #mbMsgRefresh,
+#screenManagerBoard #mbRefreshMembers,
+#screenManagerBoard #mbRefreshSeats{
+  border-color: rgba(125,211,252,0.18) !important;
+}
+
+#screenManagerBoard #btnSendTimedChallenge,
+#screenManagerBoard #mbInstrSend,
+#screenManagerBoard #mbRedeemEnterprise,
+#screenManagerBoard #mbRedeemGroupSetup{
+  border-color: rgba(94,234,212,0.18) !important;
+  background:
+    linear-gradient(180deg, rgba(94,234,212,0.18), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.03) !important;
+}
+
+#screenManagerBoard #mbSeat15,
+#screenManagerBoard #mbSeat30,
+#screenManagerBoard #mbSeat60{
+  border-color: rgba(245,194,107,0.18) !important;
+}
+
+@media (max-width: 980px){
+  #screenManagerBoard .score-row{
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  #screenManagerBoard #mbTab_messenger > .card > div[style*="grid-template-columns: 280px 1fr"]{
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Tab-specific identities */
+#screenManagerBoard #mbTab_overview > .card,
+#screenManagerBoard #mbTab_overview > div[id^="mb"]{
+  background:
+    radial-gradient(900px 260px at 0% 0%, rgba(125,211,252,0.12), transparent 58%),
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015)),
+    rgba(9,13,18,0.58) !important;
+}
+
+#screenManagerBoard #mbTab_people #mbPeopleSummary,
+#screenManagerBoard #mbTab_people #mbInvitesPanel > .card,
+#screenManagerBoard #mbTab_people #mbMembersCard{
+  background:
+    radial-gradient(900px 260px at 0% 0%, rgba(94,234,212,0.10), transparent 58%),
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015)),
+    rgba(9,13,18,0.58) !important;
+}
+
+#screenManagerBoard #mbTab_messenger > .card{
+  background:
+    radial-gradient(900px 280px at 0% 0%, rgba(245,194,107,0.10), transparent 58%),
+    radial-gradient(760px 240px at 100% 0%, rgba(125,211,252,0.08), transparent 62%),
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015)),
+    rgba(9,13,18,0.60) !important;
+}
+
+#screenManagerBoard #mbTab_live_controls > div{
+  background:
+    radial-gradient(920px 260px at 0% 0%, rgba(251,113,133,0.10), transparent 58%),
+    radial-gradient(780px 220px at 100% 8%, rgba(245,194,107,0.08), transparent 60%),
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015)),
+    rgba(9,13,18,0.60) !important;
+}
+
+#screenManagerBoard #mbTab_performance > .card,
+#screenManagerBoard #mbTab_performance > div{
+  background:
+    radial-gradient(920px 260px at 0% 0%, rgba(196,181,253,0.12), transparent 58%),
+    radial-gradient(780px 220px at 100% 10%, rgba(125,211,252,0.08), transparent 60%),
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015)),
+    rgba(9,13,18,0.60) !important;
+}
+
+#screenManagerBoard #mbTab_billing > .card,
+#screenManagerBoard #mbBillingAccess{
+  background:
+    radial-gradient(920px 260px at 0% 0%, rgba(245,194,107,0.12), transparent 58%),
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015)),
+    rgba(9,13,18,0.60) !important;
+}
+
+#screenManagerBoard #mbTab_enterprise .card,
+#screenManagerBoard #mbEnterprisePanel{
+  background:
+    radial-gradient(920px 260px at 0% 0%, rgba(244,114,182,0.10), transparent 58%),
+    radial-gradient(780px 220px at 100% 10%, rgba(94,234,212,0.08), transparent 60%),
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015)),
+    rgba(9,13,18,0.60) !important;
+}
+
+#screenManagerBoard #mbTab_overview{
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+#screenManagerBoard #mbTab_overview > .card:first-child,
+#screenManagerBoard #mbTab_overview > #mbRestaurantContextCard,
+#screenManagerBoard #mbTab_overview > #mbGroupRestaurantComparisonCard{
+  grid-column: 1 / -1;
+}
+
+#screenManagerBoard #mbTab_overview > div[id^="mb"]::before,
+#screenManagerBoard #mbTab_people > div[id^="mb"]::before,
+#screenManagerBoard #mbTab_live_controls > div[id^="mb"]::before,
+#screenManagerBoard #mbTab_performance > div[id^="mb"]::before,
+#screenManagerBoard #mbTab_enterprise > div[id^="mb"]::before{
+  display: block;
+  margin-bottom: 10px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(244,246,247,0.58);
+}
+
+#screenManagerBoard #mbRestaurantContextCard::before{ content: "Context"; }
+#screenManagerBoard #mbGroupOverviewCard::before{ content: "Group Overview"; }
+#screenManagerBoard #mbGroupMetricsCard::before{ content: "Metrics"; }
+#screenManagerBoard #mbGroupRestaurantComparisonCard::before{ content: "Comparison"; }
+#screenManagerBoard #mbOverviewTimedChallenge::before{ content: "Timed Challenge"; }
+#screenManagerBoard #mbOverviewRecentChallenges::before{ content: "Recent Challenges"; }
+#screenManagerBoard #mbInviteSummary::before{ content: "Invites"; }
+#screenManagerBoard #mbDrillSummary::before{ content: "Drill Summary"; }
+#screenManagerBoard #mbPeopleSummary::before{ content: "Roster Snapshot"; }
+#screenManagerBoard #mbOverviewLiveEffects::before{ content: "Live Effects"; }
+#screenManagerBoard #mbOverviewAbilityEconomy::before{ content: "Ability Economy"; }
+#screenManagerBoard #mbAttributeAbilitiesPanel::before{ content: "Attribute Controls"; }
+#screenManagerBoard #mbAreaAbilitiesPanel::before{ content: "Area Controls"; }
+#screenManagerBoard #mbDrillQuickActionsPanel::before{ content: "Drill Actions"; }
+#screenManagerBoard #mbTimedChallengeQuickActionsPanel::before{ content: "Challenge Actions"; }
+#screenManagerBoard #mbInsightsPanel::before{ content: "Insights"; }
+#screenManagerBoard #mbEnterprisePanel::before{ content: "Enterprise Control"; }
+
+#screenManagerBoard #mbTab_messenger #mbThreadList,
+#screenManagerBoard #mbTab_messenger #mbThreadMessages{
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015)),
+    rgba(10,14,19,0.62);
+}
+
+#screenManagerBoard #mbTab_messenger #mbThreadRecommendationsPanel{
+  background:
+    linear-gradient(180deg, rgba(245,194,107,0.10), rgba(255,255,255,0.02)),
+    rgba(255,255,255,0.02) !important;
+}
+
+#screenManagerBoard #mbTab_performance #mbPerformanceHistoryPanel > .card{
+  background:
+    linear-gradient(180deg, rgba(196,181,253,0.10), rgba(255,255,255,0.02)),
+    rgba(255,255,255,0.02) !important;
+}
+
+#screenManagerBoard #mbTab_performance #mbWeeklySummaryTop,
+#screenManagerBoard #mbTab_performance #mbBestStreaks,
+#screenManagerBoard #mbTab_performance #mbNeedsCoaching,
+#screenManagerBoard #mbTab_performance #mbRecent,
+#screenManagerBoard #mbTab_performance #mbLeaderboard,
+#screenManagerBoard #mbTab_performance #mbWeeklyReport{
+  background:
+    linear-gradient(180deg, rgba(196,181,253,0.08), rgba(255,255,255,0.02)),
+    rgba(255,255,255,0.02);
+}
+
+#screenManagerBoard #mbTab_billing #mbSeatStatus{
+  border-color: rgba(245,194,107,0.24);
+  background:
+    linear-gradient(180deg, rgba(245,194,107,0.18), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.03);
+  color: rgba(255,247,232,0.92);
+}
+
+#screenManagerBoard #mbTab_enterprise .card{
+  position: relative;
+  overflow: hidden;
+}
+
+#screenManagerBoard #mbTab_enterprise .card::after{
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.05), transparent 40%),
+    radial-gradient(55% 90% at 100% 100%, rgba(244,114,182,0.08), transparent 70%);
+}
+
+@media (max-width: 980px){
+  #screenManagerBoard #mbTab_overview{
+    grid-template-columns: 1fr;
+  }
+}
+
 /* premiumRoot should NOT look like a card/box */
 #premiumRoot{
   margin-top: 14px;
