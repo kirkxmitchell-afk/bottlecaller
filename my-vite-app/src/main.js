@@ -656,6 +656,9 @@ document.querySelector("#app").innerHTML = `
             <summary class="mb-disclosure-summary">
               <div>
                 <strong>Recent Activity</strong>
+                <div class="small-text" style="margin-top:6px; opacity:.85;">
+                  Latest reporting and training events.
+                </div>
               </div>
             </summary>
             <div class="mb-disclosure-body">
