@@ -7062,6 +7062,19 @@ function ensureProgLoaded() {
         return fallback;
       }
 
+      function pickRandomPremiumEncounterWine() {
+        if (!Array.isArray(wines) || wines.length === 0) return null;
+        if (wines.length === 1) return wines[0] || null;
+
+        const lastWineId = String(window.__BC_LAST_PREMIUM_WINE_ID__ || "");
+        const pool = wines.filter((wine) => String(wine?.id || "") !== lastWineId);
+        const source = pool.length ? pool : wines;
+        const idx = Math.floor(Math.random() * source.length);
+        const chosen = source[idx] || source[0] || null;
+        window.__BC_LAST_PREMIUM_WINE_ID__ = chosen?.id || null;
+        return chosen;
+      }
+
       function resetSessionState() {
         sessionId = null;
         sessionType = null;
@@ -15409,6 +15422,13 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           console.log("[GUARD] policy", window.__BC_DIFFICULTY__);
 
           const done = isSessionComplete({ tier: tierNow, guardState });
+          currentEncounter.__completionState = {
+            streakInfo,
+            unlock,
+            done,
+            tierNow,
+            guardState: { ...guardState },
+          };
           console.log("[SESSION] completionCheck", done);
           if (done.done) {
             renderSessionComplete(stepContent, {
@@ -16001,6 +16021,85 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           renderCoachLineBlock(stepContent, currentEncounter, checks);
 
           const scored = scoreEncounterForGuard(currentEncounter, checks);
+          const completionState = currentEncounter.__completionState || null;
+
+          if (completionState) {
+            if (completionState.streakInfo) {
+              console.log("[BC] streakInfo (reused)", completionState.streakInfo);
+              renderStreakBlock(stepContent, completionState.streakInfo);
+            }
+
+            if (completionState.done?.done) {
+              renderSessionComplete(stepContent, {
+                reason: completionState.done.reason,
+                tier: completionState.tierNow ?? 1,
+                difficulty: completionState.guardState?.finalDifficulty ?? currentEncounter?.difficulty ?? 1,
+                guardState: completionState.guardState || null
+              });
+              return;
+            }
+
+            const isDemoNow = (window.isDemo || window.bcMode === "demo");
+            const done2 = Number(window.__BC_DEMO_DONE__ || 0);
+            const target = Number(window.__BC_DEMO_TARGET__ || 3);
+            const demoComplete = isDemoNow && !inDrill && done2 >= target;
+
+            addStepButton(
+              inDrill ? "NEXT REP" : (demoComplete ? "BACK HOME" : "NEXT ENCOUNTER"),
+              () => {
+                if (!currentEncounter.__logged) {
+                  try { logEncounter(); } catch (e) { console.warn("[BC] logEncounter failed", e); }
+                  currentEncounter.__logged = true;
+                }
+
+                if (demoComplete) {
+                  resetNavState();
+                  showScreen("screenHome");
+                  return;
+                }
+
+                if (window.__NEXT_LOCK__) return;
+                window.__NEXT_LOCK__ = true;
+                setTimeout(() => { window.__NEXT_LOCK__ = false; }, 150);
+
+                encounterIndex = (encounterIndex ?? 0) + 1;
+
+                if (!isDemo) {
+                  const clamped = clampEncounterIndexToUnlockedTier(encounterIndex);
+
+                  if (clamped !== encounterIndex) {
+                    const targetTierRaw = getTierFromEncounterNumber(encounterIndex + 1);
+                    const targetTier = Math.min(2, targetTierRaw);
+
+                    if (targetTierRaw >= 3) {
+                      alert("Not yet.\n\nNew pressure scenarios will come later. For now, keep building clean reps.");
+                    } else if (targetTier === 2) {
+                      alert(
+                        "Not yet.\n\n" +
+                        "Tier 2 introduces recovery under pressure.\n" +
+                        "Clean reads and calm delivery come first.\n\n" +
+                        "Repeat this tier until the sequence feels automatic."
+                      );
+                    } else {
+                      alert("Not yet. Keep playing encounters.");
+                    }
+
+                    encounterIndex = clamped;
+                    saveEncounterIndex(encounterIndex);
+                    resetNavState();
+                    showScreen("screenHome");
+                    return;
+                  }
+                }
+
+                saveEncounterIndex(encounterIndex);
+                startEncounter();
+              },
+              stepButtons
+            );
+
+            return;
+          }
 
           try {
             if (!currentEncounter.__progressionApplied) {
@@ -16578,8 +16677,8 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             // Demo: wine matches encounter index (same pacing)
             wine = wines[(encounterIndex % wines.length)] || wines[0] || null;
           } else {
-            // Premium: use the active bottle selected for play.
-            wine = getActiveWineForPremium();
+            // Premium: randomize bottle per encounter, avoiding immediate repeats when possible.
+            wine = pickRandomPremiumEncounterWine();
           }
 
           if (!wine) {
