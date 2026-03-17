@@ -13537,13 +13537,6 @@ function setMode(mode) {
   const wrap = document.getElementById("displayNameWrap");
   if (uiState.mode === "signup") wrap.classList.remove("hidden");
   else wrap.classList.add("hidden");
-
-  // ✅ Role tabs only matter for signup; hide them during login
-  const roleTabs = document.getElementById("roleTabs");
-  if (roleTabs) {
-    if (uiState.mode === "login") roleTabs.classList.add("hidden");
-    else roleTabs.classList.remove("hidden");
-  }
 }
 
 // ------------------------------------------------------------

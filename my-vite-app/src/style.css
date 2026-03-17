@@ -931,8 +931,8 @@ button:hover, .btn:hover, .btn-ghost:hover{
 
 #screenHome > .panel.stack{
   display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
-  gap: 22px !important;
+  grid-template-columns: 1fr;
+  gap: 18px !important;
   padding: 24px !important;
   border-radius: 32px !important;
   background:
@@ -957,17 +957,21 @@ button:hover, .btn:hover, .btn-ghost:hover{
   line-height: 0.96;
   letter-spacing: -0.03em;
   color: rgba(247,248,249,0.98);
-  max-width: 10ch;
+  max-width: 12ch;
 }
 
 #screenHome .subtle{
-  max-width: 54ch;
+  max-width: 72ch;
   font-size: 15px;
   line-height: 1.65;
   color: rgba(244,246,247,0.74);
 }
 
 #screenHome #authFields{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 12px;
   margin-top: 0 !important;
   padding: 18px;
   border-radius: 26px;
@@ -980,8 +984,8 @@ button:hover, .btn:hover, .btn-ghost:hover{
     0 18px 38px rgba(0,0,0,0.16);
 }
 
-#screenHome #authFields > * + *{
-  margin-top: 12px;
+#screenHome #authFields > *{
+  margin-top: 0 !important;
 }
 
 #screenHome #authEmail,
@@ -997,6 +1001,7 @@ button:hover, .btn:hover, .btn-ghost:hover{
 }
 
 #screenHome #premiumIntentBlock{
+  grid-column: 1 / -1;
   padding: 14px;
   border-radius: 20px;
   border: 1px solid rgba(245,194,107,0.18);
@@ -1023,6 +1028,18 @@ button:hover, .btn:hover, .btn-ghost:hover{
   background:
     linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015)),
     rgba(255,255,255,0.02);
+}
+
+#screenHome #roleTabs,
+#screenHome .tabs,
+#screenHome #displayNameWrap,
+#screenHome #authFields .row,
+#screenHome #authMsg{
+  grid-column: 1 / -1;
+}
+
+#screenHome #authFields .row{
+  margin-top: 4px !important;
 }
 
 #screenHome .tab{
@@ -1063,12 +1080,15 @@ button:hover, .btn:hover, .btn-ghost:hover{
 
 @media (max-width: 980px){
   #screenHome > .panel.stack{
-    grid-template-columns: 1fr;
     padding: 18px !important;
   }
 
   #screenHome .title{
     max-width: none;
+  }
+
+  #screenHome #authFields{
+    grid-template-columns: 1fr;
   }
 }
 
