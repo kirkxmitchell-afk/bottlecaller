@@ -14983,7 +14983,7 @@ document.getElementById("btnOpenHud")?.addEventListener("click", () => {
 });
 
 document.getElementById("btnCloseHud")?.addEventListener("click", () => {
-  document.getElementById("hudPanel")?.classList.add("hidden");
+  closeHud();
   showScreen("screenPremiumApp");
 });
 document.getElementById("hudBackdrop")?.addEventListener("click", closeHud);
