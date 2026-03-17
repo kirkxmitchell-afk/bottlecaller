@@ -7,26 +7,160 @@ export async function handleEventLog({
   ctx,
   replyType = "event_log_ack",
 }) {
-  async function upsertEncounterResolutionRow(resRow) {
+  function isRetryableEncounterResolutionError(error) {
+    const code = String(error?.code || "").toUpperCase();
+    const msg = String(error?.message || "").toLowerCase();
+    return (
+      code === "42P01" ||
+      code === "42703" ||
+      msg.includes("does not exist") ||
+      msg.includes("relation") ||
+      msg.includes("schema cache") ||
+      msg.includes("column") ||
+      msg.includes("could not find")
+    );
+  }
+
+  async function upsertEncounterResolutionRow({
+    payload = {},
+    eventId = null,
+    userId = null,
+    restaurantId = null,
+    occurredAt = null,
+  } = {}) {
+    const p = payload || {};
+    const checks = p.checks || {};
+    const chosen = p.chosen || {};
+    const actual = p.actual || {};
+
+    const performanceGrade =
+      p.performanceGrade ??
+      p.performance_grade ??
+      null;
+    const chainScore =
+      p.chainScore ??
+      p.chain_score ??
+      null;
+    const chainSignal =
+      p.chainSignal ??
+      p.chain_signal ??
+      null;
+    const modeStatus =
+      checks.modeStatus ??
+      p.modeStatus ??
+      p.mode_status ??
+      null;
+    const hookStatus =
+      checks.hookStatus ??
+      p.hookStatus ??
+      p.hook_status ??
+      null;
+    const readCorrect =
+      checks.readCorrect ??
+      p.guestReadCorrect ??
+      p.readCorrect ??
+      p.read_correct ??
+      null;
+    const deliveryCorrect =
+      checks.deliveryCorrect ??
+      p.deliveryCorrect ??
+      p.delivery_correct ??
+      null;
+    const actualGuestTypeNorm =
+      actual.guestTypeNorm ??
+      p.actualGuestTypeNorm ??
+      p.actual_guest_type_norm ??
+      p.actualGuestType ??
+      p.actual_guest_type ??
+      null;
+    const chosenGuestTypeNorm =
+      chosen.guestTypeNorm ??
+      p.chosenGuestTypeNorm ??
+      p.chosen_guest_type_norm ??
+      chosen.guestType ??
+      p.chosenGuestType ??
+      p.chosen_guest_type ??
+      null;
+
     const tableCandidates = [
-      "bc_encounter_resolutions",
-      "bc_encounter_resolutions_v1",
+      {
+        table: "bc_encounter_resolutions_v2",
+        row: {
+          event_id: eventId,
+          user_id: userId,
+          restaurant_id: restaurantId,
+          occurred_at: occurredAt,
+          actual_guest_type_norm: actualGuestTypeNorm,
+          chain_score: chainScore,
+          is_green: performanceGrade === "green",
+          is_red: performanceGrade === "red",
+          read_correct: readCorrect,
+          delivery_correct: deliveryCorrect,
+          mode_optimal: modeStatus === "right",
+          hook_optimal: hookStatus === "right",
+          mode_status: modeStatus,
+          hook_status: hookStatus,
+          chain_signal: chainSignal,
+          performance_grade: performanceGrade,
+          tier: p.tier ?? null,
+          encounter_number: p.encounterNumber ?? p.encounter_number ?? null,
+          session_id: p.sessionId ?? p.session_id ?? null,
+        },
+      },
+      {
+        table: "bc_encounter_resolutions_v1",
+        row: {
+          event_id: eventId,
+          user_id: userId,
+          restaurant_id: restaurantId,
+          occurred_at: occurredAt,
+          encounter_id: p.encounterId ?? p.encounter_id ?? null,
+          encounter_number: p.encounterNumber ?? p.encounter_number ?? null,
+          session_id: p.sessionId ?? p.session_id ?? null,
+          role: p.role ?? null,
+          guest_state_actual: actualGuestTypeNorm,
+          guest_read: chosenGuestTypeNorm,
+          mode_selected: chosen.mode ?? p.chosenMode ?? p.chosen_mode ?? null,
+          hook_selected: chosen.hook ?? p.chosenHook ?? p.chosen_hook ?? null,
+          delivery_correct: deliveryCorrect,
+          chain_score: chainScore,
+          chain_signal: chainSignal,
+          outcome: p.outcome ?? chainSignal ?? null,
+          score: p.score ?? chainScore ?? null,
+        },
+      },
+      {
+        table: "bc_encounter_resolutions",
+        row: {
+          event_id: eventId,
+          user_id: userId,
+          restaurant_id: restaurantId,
+          occurred_at: occurredAt,
+          encounter_id: p.encounterId ?? p.encounter_id ?? null,
+          encounter_number: p.encounterNumber ?? p.encounter_number ?? null,
+          session_id: p.sessionId ?? p.session_id ?? null,
+          role: p.role ?? null,
+          guest_state_actual: actualGuestTypeNorm,
+          guest_read: chosenGuestTypeNorm,
+          mode_selected: chosen.mode ?? p.chosenMode ?? p.chosen_mode ?? null,
+          hook_selected: chosen.hook ?? p.chosenHook ?? p.chosen_hook ?? null,
+          delivery_correct: deliveryCorrect,
+          chain_score: chainScore,
+          chain_signal: chainSignal,
+          outcome: p.outcome ?? chainSignal ?? null,
+          score: p.score ?? chainScore ?? null,
+        },
+      },
     ];
 
     let lastError = null;
-    for (const table of tableCandidates) {
+    for (const { table, row } of tableCandidates) {
       const up = await supabase
         .from(table)
-        .upsert([resRow], { onConflict: "event_id" });
+        .upsert([row], { onConflict: "event_id" });
       if (!up.error) return { ok: true, table };
       lastError = up.error;
-
-      const msg = String(up.error?.message || "").toLowerCase();
-      const isMissingRelation =
-        msg.includes("does not exist") ||
-        msg.includes("relation") ||
-        msg.includes("schema cache");
-      if (!isMissingRelation) break;
+      if (!isRetryableEncounterResolutionError(up.error)) break;
     }
 
     return { ok: false, error: lastError };
@@ -74,39 +208,13 @@ export async function handleEventLog({
 
     // 2) encounter resolution (only for that event type)
     if (eventType === "encounter_resolved") {
-      const p = payload || {};
-
-      const resRow = {
-        event_id: eventId,
-        user_id: userId,
-        restaurant_id: restaurantId,
-        occurred_at: occurredAt,
-        encounter_id: p.encounterId ?? p.encounter_id ?? null,
-        encounter_number: p.encounterNumber ?? p.encounter_number ?? null,
-        session_id: p.sessionId ?? p.session_id ?? null,
-        role: p.role ?? null,
-        guest_state_actual:
-          p.actualGuestType ??
-          p.actual_guest_type ??
-          p.actualGuestTypeNorm ??
-          p.actual_guest_type_norm ??
-          null,
-        guest_read:
-          p.chosenGuestType ??
-          p.chosen_guest_type ??
-          p.chosenGuestTypeNorm ??
-          p.chosen_guest_type_norm ??
-          null,
-        mode_selected: p.chosenMode ?? p.chosen_mode ?? null,
-        hook_selected: p.chosenHook ?? p.chosen_hook ?? null,
-        delivery_correct: p.deliveryCorrect ?? p.delivery_correct ?? null,
-        chain_score: p.chainScore ?? p.chain_score ?? null,
-        chain_signal: p.chainSignal ?? p.chain_signal ?? null,
-        outcome: p.outcome ?? p.chainSignal ?? p.chain_signal ?? null,
-        score: p.score ?? p.chainScore ?? p.chain_score ?? null,
-      };
-
-      const up = await upsertEncounterResolutionRow(resRow);
+      const up = await upsertEncounterResolutionRow({
+        payload: payload || {},
+        eventId,
+        userId,
+        restaurantId,
+        occurredAt,
+      });
 
       if (!up.ok) console.warn("[BC] encounter_resolutions upsert failed", up.error);
     }

@@ -362,7 +362,7 @@
       }
 
       if (counts) {
-        safeCall?.("updateCounts", () => updateCounts?.());
+        safeCall?.("updateCounts", () => window.updateCounts?.());
       }
 
       validateWaiterStateInvariants?.();
@@ -2362,7 +2362,7 @@
           strongPillars,
 
           skills: snapshotFromFn,
-          progressionState: buildCanonicalProgressionState(),
+          progressionState: window.buildCanonicalProgressionState?.() || null,
 
           strongestSkill,
           weakestSkill
@@ -7375,6 +7375,7 @@ function ensureProgLoaded() {
           }
         };
       }
+      window.buildCanonicalProgressionState = buildCanonicalProgressionState;
 
       function renderRunsCount() {
         const premiumValue = String(getEncounterRunCountForMode("premium"));
@@ -10720,6 +10721,7 @@ function ensureProgLoaded() {
           btnContinue.disabled = !ok;
         }
       }
+      window.updateCounts = updateCounts;
 
       function renderProgressStatusWindow() {
         if (!ids) return;

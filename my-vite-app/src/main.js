@@ -1520,6 +1520,12 @@ function initProgressionSpineFromState() {
   return progressionSpine;
 }
 
+function isMissingRelationError(error) {
+  const code = String(error?.code || "").toUpperCase();
+  const message = String(error?.message || "");
+  return code === "42P01" || /does not exist|undefined table|schema cache/i.test(message);
+}
+
 async function hydrateProgressionSpineFromLatestSnapshot({
   userId = null,
   restaurantId = null,
@@ -1544,6 +1550,10 @@ async function hydrateProgressionSpineFromLatestSnapshot({
       .eq("user_id", uid)
       .eq("restaurant_id", rid)
       .maybeSingle();
+
+    if (error && !isMissingRelationError(error)) {
+      console.warn("[PROGRESSION STATE] dedicated load failed", error);
+    }
 
     if (!error && data?.canonical_state && typeof data.canonical_state === "object") {
       return hydrate(data.canonical_state);
@@ -3098,7 +3108,7 @@ function renderManagerBoardAbilitiesTab(family, targetId) {
 
 function renderManagerBoardAbilityTabs() {
   renderManagerBoardOverviewLiveEffects();
-  renderManagerLiveEffectsPanels();
+  safeCall("renderManagerLiveEffectsPanels", () => renderManagerLiveEffectsPanels?.());
 }
 
 function tickManagerBoardAbilities() {
@@ -3829,6 +3839,8 @@ if (!window.__BC_PARENT_BRIDGE__) {
       return { ok: true, count };
     }
 
+    // Types in this set are owned by the generic bridge above.
+    // Keep them out of the legacy fallback listener below.
     const handledTypes = new Set([
       BC_TYPES.LOGOUT_REQUEST,
       BC_TYPES.CTX_REQUEST,
@@ -3841,9 +3853,155 @@ if (!window.__BC_PARENT_BRIDGE__) {
       BC_TYPES.LEADERBOARD_REQUEST,
       BC_TYPES.PROGRESSION_SNAPSHOT_REQUEST,
       BC_TYPES.PROGRESS_REPORT_SUBMIT,
+      "event_log",
+      "drill_run_started",
+      "timed_challenge_result",
+      "drill_run_completed",
       "logout",
     ]);
     window.__BC_BRIDGE_HANDLED_TYPES__ = handledTypes;
+
+    async function getBridgeAuthedCtx({
+      msg,
+      event,
+      replyType,
+      extra = {},
+      allowedRoles = ["waiter", "single_manager", "group_manager", "enterpriser"],
+      demoPayload = {},
+      onCtxRejected = null,
+    } = {}) {
+      const senderCtx = getSourceCtx(event.source);
+
+      const replyDirect = (payload = {}) => {
+        try {
+          event.source?.postMessage(
+            { source: "BC_MSG", v: 1, type: replyType, ...payload },
+            event.origin
+          );
+        } catch {}
+      };
+
+      if (isDemoMsg(msg, senderCtx)) {
+        replyDirect({ ok: true, demo: true, ...extra, ...demoPayload });
+        return { ok: false, demo: true, senderCtx };
+      }
+
+      if (rejectIfEpochMismatch(event, msg, replyType, extra)) {
+        return { ok: false, senderCtx };
+      }
+
+      const ctx = getSenderCtxOrReject(
+        event,
+        senderCtx,
+        replyType,
+        extra,
+        { requireRestaurant: true, allowedRoles }
+      );
+      if (!ctx) {
+        try { onCtxRejected?.(); } catch {}
+        return { ok: false, senderCtx };
+      }
+
+      const liveAuthNow = await getLiveAuthOrNull();
+      const authed = liveAuthNow?.userId || null;
+      if (!authed) {
+        replyDirect({ ok: false, error: "no_session", ...extra });
+        return { ok: false, senderCtx, ctx };
+      }
+      if (String(authed) !== String(ctx.userId)) {
+        replyDirect({ ok: false, error: "forbidden_user", ...extra });
+        return { ok: false, senderCtx, ctx, liveAuthNow };
+      }
+
+      return { ok: true, ctx, senderCtx, liveAuthNow, replyDirect };
+    }
+
+    function makeBridgeReply(event, replyType, basePayload = {}) {
+      return (payload = {}) => {
+        try {
+          event.source?.postMessage(
+            {
+              source: "BC_MSG",
+              v: 1,
+              type: replyType,
+              ...basePayload,
+              ...payload,
+            },
+            event.origin
+          );
+        } catch {}
+      };
+    }
+
+    async function loadAssignedMessage({
+      id,
+      expectedType,
+      lookupErrorCode,
+      notFoundErrorCode,
+      missingSenderErrorCode,
+      replyResult,
+      logLabel,
+    }) {
+      const { data: assignedMsg, error: assignedErr } = await supabase
+        .from("bc_messages_v1")
+        .select("id, sender_user_id, receiver_user_id, restaurant_id, type, body, payload")
+        .eq("id", id)
+        .eq("type", expectedType)
+        .maybeSingle();
+
+      if (assignedErr) {
+        console.warn(`${logLabel} assigned message lookup failed`, assignedErr);
+        replyResult({ ok: false, error: lookupErrorCode });
+        return null;
+      }
+
+      if (!assignedMsg?.id) {
+        console.warn(`${logLabel} assigned message not found`, { id, expectedType });
+        replyResult({ ok: false, error: notFoundErrorCode });
+        return null;
+      }
+
+      const managerUserId = assignedMsg.sender_user_id || null;
+      if (!managerUserId) {
+        console.warn(`${logLabel} assigned message has no sender_user_id`, assignedMsg);
+        replyResult({ ok: false, error: missingSenderErrorCode });
+        return null;
+      }
+
+      return { assignedMsg, managerUserId };
+    }
+
+    async function hasDuplicateMessageResult({
+      type,
+      senderUserId,
+      receiverUserId,
+      restaurantId,
+      limit = 10,
+      keyName,
+      keyValue,
+      lookupErrorCode,
+      replyResult,
+    }) {
+      const { data: rows, error } = await supabase
+        .from("bc_messages_v1")
+        .select("id, payload, created_at")
+        .eq("type", type)
+        .eq("sender_user_id", senderUserId)
+        .eq("receiver_user_id", receiverUserId)
+        .eq("restaurant_id", restaurantId)
+        .order("created_at", { ascending: false })
+        .limit(limit);
+
+      if (error) {
+        replyResult({ ok: false, error: lookupErrorCode });
+        return { ok: false, duplicate: false };
+      }
+
+      const duplicate = (rows || []).some(
+        (row) => String(row?.payload?.[keyName] || "") === String(keyValue || "")
+      );
+      return { ok: true, duplicate };
+    }
 
     const bridge = createBcBridge({
       allowedOrigin: window.location.origin,
@@ -3913,6 +4071,368 @@ if (!window.__BC_PARENT_BRIDGE__) {
           getSenderCtxOrReject,
           getLiveAuthOrNull,
         }),
+        event_log: async ({ msg, event }) => {
+          const replyType = "event_log_ack";
+          const eventType = msg?.eventType || null;
+          const gate = await getBridgeAuthedCtx({
+            msg,
+            event,
+            replyType,
+            extra: { eventType },
+            demoPayload: { eventType },
+          });
+          if (!gate.ok) return;
+
+          await handleEventLog({
+            msg,
+            event,
+            supabase,
+            tagSource,
+            ctx: gate.ctx,
+            replyType,
+          });
+        },
+        drill_run_started: async ({ msg, event }) => {
+          const replyType = "drill_run_started_result";
+          const assignedMessageId = msg?.assignedMessageId || null;
+          const replyResult = makeBridgeReply(event, replyType, { assignedMessageId });
+
+          const gate = await getBridgeAuthedCtx({
+            msg,
+            event,
+            replyType,
+            extra: { assignedMessageId },
+            demoPayload: { assignedMessageId },
+            onCtxRejected: () => console.warn("[DRILL START] ctx rejected"),
+          });
+          console.log("[PARENT] drill_run_started received ✅", { msg, senderCtx: gate.senderCtx });
+          if (gate.demo) return;
+          if (!gate.ok) return;
+          const ctx = gate.ctx;
+
+          const p = msg?.payload || {};
+
+          if (!assignedMessageId) {
+            console.warn("[DRILL START] missing assignedMessageId");
+            replyResult({ ok: false, error: "missing_assigned_message_id" });
+            return;
+          }
+
+          const assignment = await loadAssignedMessage({
+            id: assignedMessageId,
+            expectedType: "drill_override",
+            lookupErrorCode: "assigned_message_lookup_failed",
+            notFoundErrorCode: "assigned_message_not_found",
+            missingSenderErrorCode: "assigned_message_missing_sender",
+            replyResult,
+            logLabel: "[DRILL START]",
+          });
+          if (!assignment) return;
+          const { assignedMsg, managerUserId } = assignment;
+
+          if (String(assignedMsg.receiver_user_id || "") !== String(ctx.userId || "")) {
+            console.warn("[DRILL START] assigned drill receiver mismatch", {
+              assignedReceiver: assignedMsg.receiver_user_id,
+              ctxUserId: ctx.userId,
+            });
+            replyResult({ ok: false, error: "assigned_message_receiver_mismatch" });
+            return;
+          }
+
+          if (String(assignedMsg.restaurant_id || "") !== String(ctx.restaurantId || "")) {
+            console.warn("[DRILL START] assigned drill restaurant mismatch", {
+              assignedRestaurantId: assignedMsg.restaurant_id,
+              ctxRestaurantId: ctx.restaurantId,
+            });
+            replyResult({ ok: false, error: "assigned_message_restaurant_mismatch" });
+            return;
+          }
+
+          const duplicateCheck = await hasDuplicateMessageResult({
+            type: "drill_started",
+            senderUserId: ctx.userId,
+            receiverUserId: managerUserId,
+            restaurantId: ctx.restaurantId,
+            limit: 10,
+            keyName: "assignedMessageId",
+            keyValue: assignedMessageId,
+            lookupErrorCode: "existing_started_lookup_failed",
+            replyResult,
+          });
+          if (!duplicateCheck.ok) return;
+
+          if (duplicateCheck.duplicate) {
+            window.__BC_PARENT_LAST_DRILL_STARTED__ = {
+              assignedMessageId,
+              payload: p,
+              senderCtx: gate.senderCtx || null,
+              at: Date.now(),
+            };
+            refreshManagerRuntimeSurfaces?.({
+              thread: true,
+              board: false,
+              economy: false,
+              liveControls: false,
+              challengeMeta: false,
+            });
+
+            replyResult({ ok: true, managerUserId, duplicate: true });
+            return;
+          }
+
+          const body = `Drill started • ${p?.focus || "drill"} • ${p?.repTarget ?? 0} reps`;
+
+          const startedRow = {
+            scope_type: "restaurant",
+            scope_id: ctx.scopeId || ctx.restaurantId,
+            restaurant_id: ctx.restaurantId,
+            sender_user_id: ctx.userId,
+            receiver_user_id: managerUserId,
+            sender_role: ctx.membershipRole || ctx.role || "waiter",
+            type: "drill_started",
+            body,
+            payload: {
+              focus: p?.focus ?? null,
+              repTarget: p?.repTarget ?? null,
+              durationSec: p?.durationSec ?? null,
+              tier: p?.tier ?? null,
+              startedAt: p?.startedAt || Date.now(),
+              assignedMessageId,
+            },
+          };
+
+          const { error: insertErr } = await supabase
+            .from("bc_messages_v1")
+            .insert(startedRow);
+
+          if (insertErr) {
+            console.warn("[DRILL START] insert failed", insertErr);
+            replyResult({ ok: false, error: "started_insert_failed" });
+            return;
+          }
+
+          window.__BC_PARENT_LAST_DRILL_STARTED__ = {
+            assignedMessageId,
+            payload: p,
+            senderCtx: gate.senderCtx || null,
+            at: Date.now(),
+          };
+          refreshManagerRuntimeSurfaces?.({
+            thread: true,
+            board: false,
+            economy: false,
+            liveControls: false,
+            challengeMeta: false,
+          });
+
+          replyResult({ ok: true, managerUserId });
+        },
+        timed_challenge_result: async ({ msg, event }) => {
+          const replyType = "timed_challenge_result_ack";
+          const challengeId = msg?.challengeId || null;
+          const replyResult = makeBridgeReply(event, replyType, { challengeId });
+
+          const gate = await getBridgeAuthedCtx({
+            msg,
+            event,
+            replyType,
+            extra: { challengeId },
+            demoPayload: { challengeId },
+          });
+          if (gate.demo) return;
+          if (!gate.ok) return;
+          const ctx = gate.ctx;
+
+          const p = msg?.payload || {};
+          const challengeKey = p?.challengeKey || null;
+          const status = String(p?.status || "").toLowerCase();
+          const title = String(p?.title || getTimedChallengeLabel(challengeKey) || "Timed Challenge");
+          const targetUserId = p?.targetUserId || ctx.userId;
+          const restaurantId = p?.restaurantId || ctx.restaurantId;
+          const rewardPoints = Number(p?.rewardPoints || 0);
+          const outcome = p?.outcome || null;
+
+          if (!challengeId) {
+            replyResult({ ok: false, error: "missing_challenge_id" });
+            return;
+          }
+
+          const assignment = await loadAssignedMessage({
+            id: challengeId,
+            expectedType: "timed_challenge",
+            lookupErrorCode: "challenge_lookup_failed",
+            notFoundErrorCode: "challenge_not_found",
+            missingSenderErrorCode: "challenge_missing_sender",
+            replyResult,
+            logLabel: "[TIMED CHALLENGE]",
+          });
+          if (!assignment) return;
+          const { managerUserId } = assignment;
+
+          const resultType =
+            status === "completed"
+              ? "timed_challenge_completed"
+              : "timed_challenge_expired";
+
+          const duplicateCheck = await hasDuplicateMessageResult({
+            type: resultType,
+            senderUserId: targetUserId,
+            receiverUserId: managerUserId,
+            restaurantId,
+            limit: 20,
+            keyName: "challengeId",
+            keyValue: challengeId,
+            lookupErrorCode: "existing_result_lookup_failed",
+            replyResult,
+          });
+          if (!duplicateCheck.ok) return;
+
+          if (duplicateCheck.duplicate) {
+            replyResult({ ok: true, managerUserId, resultType, duplicate: true });
+            return;
+          }
+
+          const body =
+            status === "completed"
+              ? `Completed ${title}`
+              : "Challenge Expired";
+
+          const resultRow = {
+            scope_type: "restaurant",
+            scope_id: restaurantId,
+            restaurant_id: restaurantId,
+            sender_user_id: targetUserId,
+            receiver_user_id: managerUserId,
+            sender_role: ctx.membershipRole || ctx.role || "waiter",
+            type: resultType,
+            body,
+            payload: {
+              challengeId,
+              challengeKey,
+              title,
+              status,
+              rewardPoints,
+              strongestSkill: p?.strongestSkill || null,
+              outcome,
+              chainSignal: p?.chainSignal || null,
+              chainScore: p?.chainScore ?? null,
+              guestReadCorrect: p?.guestReadCorrect ?? null,
+              deliveryScore: p?.deliveryScore ?? null,
+              resetUsed: p?.resetUsed ?? null,
+              premiumSuccess: p?.premiumSuccess ?? null,
+              strongPillars: p?.strongPillars ?? null,
+              completedAt: p?.completedAt || Date.now(),
+            },
+          };
+
+          const { error: insertErr } = await supabase
+            .from("bc_messages_v1")
+            .insert(resultRow);
+
+          if (insertErr) {
+            replyResult({ ok: false, error: "result_insert_failed" });
+            return;
+          }
+
+          replyResult({
+            ok: true,
+            managerUserId,
+            resultType,
+          });
+        },
+        drill_run_completed: async ({ msg, event }) => {
+          const replyType = "drill_run_completed_result";
+          const assignedMessageId = msg?.assignedMessageId || null;
+          const replyResult = makeBridgeReply(event, replyType, { assignedMessageId });
+          const gate = await getBridgeAuthedCtx({
+            msg,
+            event,
+            replyType,
+            extra: { assignedMessageId },
+            demoPayload: { assignedMessageId },
+            onCtxRejected: () => console.warn("[DRILL RUN] ctx rejected"),
+          });
+          console.log("[PARENT] drill_run_completed received ✅", { msg, senderCtx: gate.senderCtx });
+          if (gate.demo) return;
+          if (!gate.ok) return;
+          const ctx = gate.ctx;
+
+          const p = msg?.payload || {};
+
+          if (!assignedMessageId) {
+            console.warn("[DRILL RUN] missing assignedMessageId");
+            replyResult({ ok: false, error: "missing_assigned_message_id" });
+            return;
+          }
+
+          const assignment = await loadAssignedMessage({
+            id: assignedMessageId,
+            expectedType: "drill_override",
+            lookupErrorCode: "assigned_message_lookup_failed",
+            notFoundErrorCode: "assigned_message_not_found",
+            missingSenderErrorCode: "assigned_message_missing_sender",
+            replyResult,
+            logLabel: "[DRILL RUN]",
+          });
+          if (!assignment) return;
+          const { managerUserId } = assignment;
+
+          const duplicateCheck = await hasDuplicateMessageResult({
+            type: "drill_completed",
+            senderUserId: ctx.userId,
+            receiverUserId: managerUserId,
+            restaurantId: ctx.restaurantId,
+            limit: 10,
+            keyName: "assignedMessageId",
+            keyValue: assignedMessageId,
+            lookupErrorCode: "existing_completed_lookup_failed",
+            replyResult,
+          });
+          if (!duplicateCheck.ok) return;
+
+          if (duplicateCheck.duplicate) {
+            replyResult({ ok: true, managerUserId, duplicate: true });
+            return;
+          }
+
+          const body = `Drill completed • ${p?.focus || "drill"} • ${p?.repsDone ?? 0}/${p?.repTarget ?? 0} reps`;
+
+          const completionRow = {
+            scope_type: "restaurant",
+            scope_id: ctx.scopeId || ctx.restaurantId,
+            restaurant_id: ctx.restaurantId,
+            sender_user_id: ctx.userId,
+            receiver_user_id: managerUserId,
+            sender_role: ctx.membershipRole || ctx.role || "waiter",
+            type: "drill_completed",
+            body,
+            payload: {
+              focus: p?.focus ?? null,
+              repsDone: p?.repsDone ?? null,
+              repTarget: p?.repTarget ?? null,
+              durationSec: p?.durationSec ?? null,
+              assignedMessageId
+            }
+          };
+
+          console.log("[DRILL RUN] inserting completion row ✅", completionRow);
+
+          const { error: insertErr } = await supabase
+            .from("bc_messages_v1")
+            .insert(completionRow);
+
+          if (insertErr) {
+            console.warn("[DRILL RUN] completion message insert failed", insertErr);
+            replyResult({ ok: false, error: "completion_insert_failed" });
+            return;
+          }
+
+          console.log("[DRILL RUN] drill_completed message inserted ✅", {
+            managerUserId,
+            assignedMessageId
+          });
+          replyResult({ ok: true, managerUserId });
+        },
       },
     });
     window.__BC_BRIDGE__ = bridge;
@@ -4121,577 +4641,6 @@ if (!window.__BC_PARENT_BRIDGE__) {
       if (msg.type === "drill_pick") {
         window.__BC_PARENT_LAST_ENCOUNTER__ = msg;
         console.log("[PARENT] drill_pick stored ✅", msg);
-        return;
-      }
-
-      if (msg.type === "event_log") {
-        const replyType = "event_log_ack";
-        const eventType = msg?.eventType || null;
-        if (isDemoMsg(msg, senderCtx)) {
-          event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: replyType, ok: true, demo: true, eventType },
-            event.origin
-          );
-          return;
-        }
-        if (rejectIfEpochMismatch(event, msg, replyType, { eventType })) return;
-
-        const ctx = getSenderCtxOrReject(
-          event,
-          senderCtx,
-          replyType,
-          { eventType },
-          { requireRestaurant: true, allowedRoles: ["waiter", "single_manager", "group_manager", "enterpriser"] }
-        );
-        if (!ctx) return;
-
-        const liveAuthNow = await getLiveAuthOrNull();
-        const authed = liveAuthNow?.userId || null;
-        if (!authed) {
-          event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: replyType, ok: false, error: "no_session", eventType },
-            event.origin
-          );
-          return;
-        }
-        if (String(authed) !== String(ctx.userId)) {
-          event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: replyType, ok: false, error: "forbidden_user", eventType },
-            event.origin
-          );
-          return;
-        }
-
-        try {
-          await handleEventLog({
-            msg,
-            event,
-            supabase,
-            tagSource,
-            ctx,
-            replyType,
-          });
-        } catch (e) {
-          event.source?.postMessage(
-            { source: "BC_MSG", v: 1, type: replyType, ok: false, error: e?.message || String(e), eventType },
-            event.origin
-          );
-        }
-        return;
-      }
-
-      if (msg.type === "drill_run_started") {
-        const replyType = "drill_run_started_result";
-        const assignedMessageId = msg?.assignedMessageId || null;
-        const senderCtx = getSourceCtx(event.source);
-
-        const replyResult = (payload = {}) => {
-          try {
-            event.source?.postMessage(
-              {
-                source: "BC_MSG",
-                v: 1,
-                type: replyType,
-                assignedMessageId,
-                ...payload,
-              },
-              event.origin
-            );
-          } catch {}
-        };
-
-        console.log("[PARENT] drill_run_started received ✅", { msg, senderCtx });
-
-        if (isDemoMsg(msg, senderCtx)) {
-          replyResult({ ok: true, demo: true });
-          return;
-        }
-
-        if (rejectIfEpochMismatch(event, msg, replyType, { assignedMessageId })) return;
-
-        const ctx = getSenderCtxOrReject(
-          event,
-          senderCtx,
-          replyType,
-          { assignedMessageId },
-          { requireRestaurant: true, allowedRoles: ["waiter", "single_manager", "group_manager", "enterpriser"] }
-        );
-        if (!ctx) {
-          console.warn("[DRILL START] ctx rejected");
-          return;
-        }
-
-        const liveAuthNow = await getLiveAuthOrNull();
-        const authed = liveAuthNow?.userId || null;
-        if (!authed) {
-          console.warn("[DRILL START] no session");
-          replyResult({ ok: false, error: "no_session" });
-          return;
-        }
-        if (String(authed) !== String(ctx.userId)) {
-          console.warn("[DRILL START] forbidden/no session", {
-            authed,
-            ctxUserId: ctx.userId,
-          });
-          replyResult({ ok: false, error: "forbidden_user" });
-          return;
-        }
-
-        const p = msg?.payload || {};
-
-        if (!assignedMessageId) {
-          console.warn("[DRILL START] missing assignedMessageId");
-          replyResult({ ok: false, error: "missing_assigned_message_id" });
-          return;
-        }
-
-        const { data: assignedMsg, error: assignedErr } = await supabase
-          .from("bc_messages_v1")
-          .select("id, sender_user_id, receiver_user_id, restaurant_id, type, body, payload")
-          .eq("id", assignedMessageId)
-          .eq("type", "drill_override")
-          .maybeSingle();
-
-        if (assignedErr) {
-          console.warn("[DRILL START] assigned message lookup failed", assignedErr);
-          replyResult({ ok: false, error: "assigned_message_lookup_failed" });
-          return;
-        }
-
-        if (!assignedMsg?.id) {
-          console.warn("[DRILL START] assigned drill message not found", { assignedMessageId });
-          replyResult({ ok: false, error: "assigned_message_not_found" });
-          return;
-        }
-
-        if (String(assignedMsg.receiver_user_id || "") !== String(ctx.userId || "")) {
-          console.warn("[DRILL START] assigned drill receiver mismatch", {
-            assignedReceiver: assignedMsg.receiver_user_id,
-            ctxUserId: ctx.userId,
-          });
-          replyResult({ ok: false, error: "assigned_message_receiver_mismatch" });
-          return;
-        }
-
-        if (String(assignedMsg.restaurant_id || "") !== String(ctx.restaurantId || "")) {
-          console.warn("[DRILL START] assigned drill restaurant mismatch", {
-            assignedRestaurantId: assignedMsg.restaurant_id,
-            ctxRestaurantId: ctx.restaurantId,
-          });
-          replyResult({ ok: false, error: "assigned_message_restaurant_mismatch" });
-          return;
-        }
-
-        const managerUserId = assignedMsg.sender_user_id || null;
-        if (!managerUserId) {
-          console.warn("[DRILL START] assigned drill message has no sender_user_id", assignedMsg);
-          replyResult({ ok: false, error: "assigned_message_missing_sender" });
-          return;
-        }
-
-        const { data: existingStartedRows, error: existingStartedErr } = await supabase
-          .from("bc_messages_v1")
-          .select("id, payload, created_at")
-          .eq("type", "drill_started")
-          .eq("sender_user_id", ctx.userId)
-          .eq("receiver_user_id", managerUserId)
-          .eq("restaurant_id", ctx.restaurantId)
-          .order("created_at", { ascending: false })
-          .limit(10);
-
-        if (existingStartedErr) {
-          console.warn("[DRILL START] existing started lookup failed", existingStartedErr);
-          replyResult({ ok: false, error: "existing_started_lookup_failed" });
-          return;
-        }
-
-        const duplicateStarted = (existingStartedRows || []).some(
-          (row) => String(row?.payload?.assignedMessageId || "") === String(assignedMessageId || "")
-        );
-
-        if (duplicateStarted) {
-          window.__BC_PARENT_LAST_DRILL_STARTED__ = {
-            assignedMessageId,
-            payload: p,
-            senderCtx: senderCtx || null,
-            at: Date.now(),
-          };
-          refreshManagerRuntimeSurfaces?.({
-            thread: true,
-            board: false,
-            economy: false,
-            liveControls: false,
-            challengeMeta: false,
-          });
-
-          replyResult({ ok: true, managerUserId, duplicate: true });
-          return;
-        }
-
-        const body = `Drill started • ${p?.focus || "drill"} • ${p?.repTarget ?? 0} reps`;
-
-        const startedRow = {
-          scope_type: "restaurant",
-          scope_id: ctx.scopeId || ctx.restaurantId,
-          restaurant_id: ctx.restaurantId,
-          sender_user_id: ctx.userId,
-          receiver_user_id: managerUserId,
-          sender_role: ctx.membershipRole || ctx.role || "waiter",
-          type: "drill_started",
-          body,
-          payload: {
-            focus: p?.focus ?? null,
-            repTarget: p?.repTarget ?? null,
-            durationSec: p?.durationSec ?? null,
-            tier: p?.tier ?? null,
-            startedAt: p?.startedAt || Date.now(),
-            assignedMessageId,
-          },
-        };
-
-        const { error: insertErr } = await supabase
-          .from("bc_messages_v1")
-          .insert(startedRow);
-
-        if (insertErr) {
-          console.warn("[DRILL START] insert failed", insertErr);
-          replyResult({ ok: false, error: "started_insert_failed" });
-          return;
-        }
-
-        window.__BC_PARENT_LAST_DRILL_STARTED__ = {
-          assignedMessageId,
-          payload: p,
-          senderCtx: senderCtx || null,
-          at: Date.now(),
-        };
-        refreshManagerRuntimeSurfaces?.({
-          thread: true,
-          board: false,
-          economy: false,
-          liveControls: false,
-          challengeMeta: false,
-        });
-
-        replyResult({ ok: true, managerUserId });
-        return;
-      }
-
-      if (msg.type === "timed_challenge_result") {
-        const replyType = "timed_challenge_result_ack";
-        const challengeId = msg?.challengeId || null;
-        const senderCtx = getSourceCtx(event.source);
-
-        const replyResult = (payload = {}) => {
-          try {
-            event.source?.postMessage(
-              {
-                source: "BC_MSG",
-                v: 1,
-                type: replyType,
-                challengeId,
-                ...payload,
-              },
-              event.origin
-            );
-          } catch {}
-        };
-
-        if (isDemoMsg(msg, senderCtx)) {
-          replyResult({ ok: true, demo: true });
-          return;
-        }
-
-        if (rejectIfEpochMismatch(event, msg, replyType, { challengeId })) return;
-
-        const ctx = getSenderCtxOrReject(
-          event,
-          senderCtx,
-          replyType,
-          { challengeId },
-          { requireRestaurant: true, allowedRoles: ["waiter", "single_manager", "group_manager", "enterpriser"] }
-        );
-        if (!ctx) return;
-
-        const liveAuthNow = await getLiveAuthOrNull();
-        const authed = liveAuthNow?.userId || null;
-        if (!authed) {
-          replyResult({ ok: false, error: "no_session" });
-          return;
-        }
-        if (String(authed) !== String(ctx.userId)) {
-          replyResult({ ok: false, error: "forbidden_user" });
-          return;
-        }
-
-        const p = msg?.payload || {};
-        const challengeKey = p?.challengeKey || null;
-        const status = String(p?.status || "").toLowerCase();
-        const title = String(p?.title || getTimedChallengeLabel(challengeKey) || "Timed Challenge");
-        const targetUserId = p?.targetUserId || ctx.userId;
-        const restaurantId = p?.restaurantId || ctx.restaurantId;
-        const rewardPoints = Number(p?.rewardPoints || 0);
-        const outcome = p?.outcome || null;
-
-        if (!challengeId) {
-          replyResult({ ok: false, error: "missing_challenge_id" });
-          return;
-        }
-
-        const { data: assignedMsg, error: assignedErr } = await supabase
-          .from("bc_messages_v1")
-          .select("id, sender_user_id, receiver_user_id, restaurant_id, type, body, payload")
-          .eq("id", challengeId)
-          .eq("type", "timed_challenge")
-          .maybeSingle();
-
-        if (assignedErr) {
-          replyResult({ ok: false, error: "challenge_lookup_failed" });
-          return;
-        }
-
-        if (!assignedMsg?.id) {
-          replyResult({ ok: false, error: "challenge_not_found" });
-          return;
-        }
-
-        const managerUserId = assignedMsg.sender_user_id || null;
-        if (!managerUserId) {
-          replyResult({ ok: false, error: "challenge_missing_sender" });
-          return;
-        }
-
-        const resultType =
-          status === "completed"
-            ? "timed_challenge_completed"
-            : "timed_challenge_expired";
-
-        const { data: existingRows, error: existingErr } = await supabase
-          .from("bc_messages_v1")
-          .select("id, payload, created_at")
-          .eq("type", resultType)
-          .eq("sender_user_id", targetUserId)
-          .eq("receiver_user_id", managerUserId)
-          .eq("restaurant_id", restaurantId)
-          .order("created_at", { ascending: false })
-          .limit(20);
-
-        if (existingErr) {
-          replyResult({ ok: false, error: "existing_result_lookup_failed" });
-          return;
-        }
-
-        const duplicateResult = (existingRows || []).some(
-          (row) => String(row?.payload?.challengeId || "") === String(challengeId || "")
-        );
-
-        if (duplicateResult) {
-          replyResult({ ok: true, managerUserId, resultType, duplicate: true });
-          return;
-        }
-
-        const body =
-          status === "completed"
-            ? `Completed ${title}`
-            : "Challenge Expired";
-
-        const resultRow = {
-          scope_type: "restaurant",
-          scope_id: restaurantId,
-          restaurant_id: restaurantId,
-          sender_user_id: targetUserId,
-          receiver_user_id: managerUserId,
-          sender_role: ctx.membershipRole || ctx.role || "waiter",
-          type: resultType,
-          body,
-          payload: {
-            challengeId,
-            challengeKey,
-            title,
-            status,
-            rewardPoints,
-            strongestSkill: p?.strongestSkill || null,
-            outcome,
-            chainSignal: p?.chainSignal || null,
-            chainScore: p?.chainScore ?? null,
-            guestReadCorrect: p?.guestReadCorrect ?? null,
-            deliveryScore: p?.deliveryScore ?? null,
-            resetUsed: p?.resetUsed ?? null,
-            premiumSuccess: p?.premiumSuccess ?? null,
-            strongPillars: p?.strongPillars ?? null,
-            completedAt: p?.completedAt || Date.now(),
-          },
-        };
-
-        const { error: insertErr } = await supabase
-          .from("bc_messages_v1")
-          .insert(resultRow);
-
-        if (insertErr) {
-          replyResult({ ok: false, error: "result_insert_failed" });
-          return;
-        }
-
-        replyResult({
-          ok: true,
-          managerUserId,
-          resultType,
-        });
-        return;
-      }
-
-      if (msg.type === "drill_run_completed") {
-        const replyType = "drill_run_completed_result";
-        const assignedMessageId = msg?.assignedMessageId || null;
-        const replyResult = (payload = {}) => {
-          try {
-            event.source?.postMessage(
-              {
-                source: "BC_MSG",
-                v: 1,
-                type: replyType,
-                assignedMessageId,
-                ...payload,
-              },
-              event.origin
-            );
-          } catch {}
-        };
-        console.log("[PARENT] drill_run_completed received ✅", { msg, senderCtx });
-
-        if (isDemoMsg(msg, senderCtx)) {
-          replyResult({ ok: true, demo: true });
-          return;
-        }
-
-        if (rejectIfEpochMismatch(event, msg, replyType, { assignedMessageId })) return;
-
-        const ctx = getSenderCtxOrReject(
-          event,
-          senderCtx,
-          replyType,
-          { assignedMessageId },
-          { requireRestaurant: true, allowedRoles: ["waiter", "single_manager", "group_manager", "enterpriser"] }
-        );
-        if (!ctx) {
-          console.warn("[DRILL RUN] ctx rejected");
-          return;
-        }
-
-        const liveAuthNow = await getLiveAuthOrNull();
-        const authed = liveAuthNow?.userId || null;
-        if (!authed) {
-          console.warn("[DRILL RUN] no session");
-          replyResult({ ok: false, error: "no_session" });
-          return;
-        }
-        if (String(authed) !== String(ctx.userId)) {
-          console.warn("[DRILL RUN] forbidden/no session", {
-            authed,
-            ctxUserId: ctx.userId,
-          });
-          replyResult({ ok: false, error: "forbidden_user" });
-          return;
-        }
-
-        const p = msg?.payload || {};
-
-        if (!assignedMessageId) {
-          console.warn("[DRILL RUN] missing assignedMessageId");
-          replyResult({ ok: false, error: "missing_assigned_message_id" });
-          return;
-        }
-
-        // 1) Look up the original drill assignment row
-        const { data: assignedMsg, error: assignedErr } = await supabase
-          .from("bc_messages_v1")
-          .select("id, sender_user_id, receiver_user_id, restaurant_id, type, body, payload")
-          .eq("id", assignedMessageId)
-          .eq("type", "drill_override")
-          .maybeSingle();
-
-        if (assignedErr) {
-          console.warn("[DRILL RUN] assigned message lookup failed", assignedErr);
-          replyResult({ ok: false, error: "assigned_message_lookup_failed" });
-          return;
-        }
-
-        if (!assignedMsg?.id) {
-          console.warn("[DRILL RUN] assigned drill message not found", { assignedMessageId });
-          replyResult({ ok: false, error: "assigned_message_not_found" });
-          return;
-        }
-
-        // sender_user_id on the drill_override row is the manager who assigned it
-        const managerUserId = assignedMsg.sender_user_id || null;
-        if (!managerUserId) {
-          console.warn("[DRILL RUN] assigned drill message has no sender_user_id", assignedMsg);
-          replyResult({ ok: false, error: "assigned_message_missing_sender" });
-          return;
-        }
-
-        const { data: existingCompletedRows, error: existingCompletedErr } = await supabase
-          .from("bc_messages_v1")
-          .select("id, payload, created_at")
-          .eq("type", "drill_completed")
-          .eq("sender_user_id", ctx.userId)
-          .eq("receiver_user_id", managerUserId)
-          .eq("restaurant_id", ctx.restaurantId)
-          .order("created_at", { ascending: false })
-          .limit(10);
-
-        if (existingCompletedErr) {
-          replyResult({ ok: false, error: "existing_completed_lookup_failed" });
-          return;
-        }
-
-        const duplicateCompleted = (existingCompletedRows || []).some(
-          (row) => String(row?.payload?.assignedMessageId || "") === String(assignedMessageId || "")
-        );
-
-        if (duplicateCompleted) {
-          replyResult({ ok: true, managerUserId, duplicate: true });
-          return;
-        }
-
-        const body = `Drill completed • ${p?.focus || "drill"} • ${p?.repsDone ?? 0}/${p?.repTarget ?? 0} reps`;
-
-        const completionRow = {
-          scope_type: "restaurant",
-          scope_id: ctx.scopeId || ctx.restaurantId,
-          restaurant_id: ctx.restaurantId,
-          sender_user_id: ctx.userId,
-          receiver_user_id: managerUserId,
-          sender_role: ctx.membershipRole || ctx.role || "waiter",
-          type: "drill_completed",
-          body,
-          payload: {
-            focus: p?.focus ?? null,
-            repsDone: p?.repsDone ?? null,
-            repTarget: p?.repTarget ?? null,
-            durationSec: p?.durationSec ?? null,
-            assignedMessageId
-          }
-        };
-
-        console.log("[DRILL RUN] inserting completion row ✅", completionRow);
-
-        const { error: insertErr } = await supabase
-          .from("bc_messages_v1")
-          .insert(completionRow);
-
-        if (insertErr) {
-          console.warn("[DRILL RUN] completion message insert failed", insertErr);
-          replyResult({ ok: false, error: "completion_insert_failed" });
-          return;
-        }
-
-        console.log("[DRILL RUN] drill_completed message inserted ✅", {
-          managerUserId,
-          assignedMessageId
-        });
-        replyResult({ ok: true, managerUserId });
-
         return;
       }
 
@@ -12584,8 +12533,7 @@ async function loadLeaderboard() {
       framing_pct,
       delivery_pct,
       recovery_pct,
-      closing_pct,
-      profiles(display_name)
+      closing_pct
     `)
     .eq("restaurant_id", restaurantId)
     .order("created_at", { ascending: false })
@@ -12597,14 +12545,14 @@ async function loadLeaderboard() {
   }
 
   const map = {};
+  const nameMap = await mapUserIdsToNames((data || []).map((row) => row?.user_id).filter(Boolean));
 
   (data || []).forEach((row) => {
     const id = row.user_id;
 
     if (!map[id]) {
-      const profileObj = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
       map[id] = {
-        name: profileObj?.display_name || id,
+        name: nameMap.get(id) || id,
         total: 0,
         count: 0
       };
@@ -12652,11 +12600,10 @@ function renderWeeklyTrainingReport(rows) {
 
   rows.forEach((r) => {
     const id = r.user_id;
-    const profileObj = Array.isArray(r.profiles) ? r.profiles[0] : r.profiles;
 
     if (!waiterMap[id]) {
       waiterMap[id] = {
-        name: profileObj?.display_name || id,
+        name: r.__displayName || id,
         total: 0,
         count: 0
       };
@@ -12736,8 +12683,7 @@ async function loadWeeklyTrainingReport() {
       delivery_pct,
       recovery_pct,
       closing_pct,
-      created_at,
-      profiles(display_name)
+      created_at
     `)
     .eq("restaurant_id", restaurantId)
     .gte("created_at", sevenDaysAgo.toISOString());
@@ -12748,8 +12694,13 @@ async function loadWeeklyTrainingReport() {
   }
 
   const rows = data || [];
-  renderWeeklyTrainingReport(rows);
-  return rows;
+  const nameMap = await mapUserIdsToNames(rows.map((row) => row?.user_id).filter(Boolean));
+  const namedRows = rows.map((row) => ({
+    ...row,
+    __displayName: nameMap.get(row?.user_id) || row?.user_id || null,
+  }));
+  renderWeeklyTrainingReport(namedRows);
+  return namedRows;
 }
 
 function getWeekStartIso(d = new Date()) {
@@ -12789,9 +12740,8 @@ async function maybeSendWeeklyManagerSummary(rows) {
 
     rows.forEach((r) => {
       const id = r.user_id;
-      const profileObj = Array.isArray(r.profiles) ? r.profiles[0] : r.profiles;
       if (!waiterMap[id]) {
-        waiterMap[id] = { name: profileObj?.display_name || id, total: 0, count: 0 };
+        waiterMap[id] = { name: r.__displayName || id, total: 0, count: 0 };
       }
       const score =
         (r.read_pct + r.framing_pct + r.delivery_pct + r.recovery_pct + r.closing_pct) / 5;
@@ -12987,9 +12937,9 @@ async function loadManagerBoardData(restaurantId = null) {
     renderManagerBoardAbilityTabs();
 
     // Views you actually have
-    const RUNS_TABLE = "bc_sessions_v1";                 // sessions summary
-    const DRILLS_TABLE = "bc_event_log";                 // drill events
-    const STREAK_TABLE = "bc_encounter_resolutions_v1";  // chain signal source
+    const RUNS_TABLE = "bc_sessions_v1";                  // sessions summary
+    const DRILLS_TABLE = "bc_messages_v1";               // drill completion messages
+    const STREAK_TABLE = "bc_encounter_resolutions_v2";  // green/red source
 
     // -----------------------------
     // Totals
@@ -13001,9 +12951,10 @@ async function loadManagerBoardData(restaurantId = null) {
 
     const drillsRes = await supabase
       .from(DRILLS_TABLE)
-      .select("event_id", { count: "exact", head: true })
+      .select("id", { count: "exact", head: true })
       .eq("restaurant_id", rid)
-      .eq("event_type", "drill_completed");
+      .eq("type", "drill_completed")
+      .is("archived_at", null);
 
     if (runsRes.error) throw runsRes.error;
     if (drillsRes.error) throw drillsRes.error;
@@ -13023,10 +12974,11 @@ async function loadManagerBoardData(restaurantId = null) {
 
     const recentDrills = await supabase
       .from(DRILLS_TABLE)
-      .select("occurred_at, user_id, payload")
+      .select("created_at, sender_user_id, payload")
       .eq("restaurant_id", rid)
-      .eq("event_type", "drill_completed")
-      .order("occurred_at", { ascending: false })
+      .eq("type", "drill_completed")
+      .is("archived_at", null)
+      .order("created_at", { ascending: false })
       .limit(5);
 
     if (recentRuns.error) throw recentRuns.error;
@@ -13034,7 +12986,7 @@ async function loadManagerBoardData(restaurantId = null) {
 
     const userIds = [
       ...(recentRuns.data || []).map(x => x.user_id).filter(Boolean),
-      ...(recentDrills.data || []).map(x => x.user_id).filter(Boolean),
+      ...(recentDrills.data || []).map(x => x.sender_user_id).filter(Boolean),
     ];
     const nameMap = await mapUserIdsToNames(userIds);
     console.log("[MB] nameMap", { requested: userIds.length, resolved: nameMap.size });
@@ -13045,8 +12997,8 @@ async function loadManagerBoardData(restaurantId = null) {
         line: `Session • ${userLabel(x.user_id, nameMap)} • ${x.encounters_resolved ?? 0} resolved • avg chain score ${(Number(x.avg_chain_score ?? 0)).toFixed(2)} • G/Y/R ratio: ${x.greens ?? 0}/${x.yellows ?? 0}/${x.reds ?? 0}`,
       })),
       ...(recentDrills.data || []).map((x) => ({
-        t: x.occurred_at,
-        line: `Drill • ${userLabel(x.user_id, nameMap)} • reps ${x.payload?.repDone ?? "-"} / ${x.payload?.repTarget ?? "-"}`,
+        t: x.created_at,
+        line: `Drill • ${userLabel(x.sender_user_id, nameMap)} • reps ${x.payload?.repsDone ?? "-"} / ${x.payload?.repTarget ?? "-"}`,
       })),
     ]
       .filter((i) => i.t)
@@ -13076,7 +13028,7 @@ async function loadManagerBoardData(restaurantId = null) {
     const STREAK_LIMIT = 800; // adjust later; 800 is fine for small restaurants
     const streakRes = await supabase
       .from(STREAK_TABLE)
-      .select("user_id, occurred_at, chain_signal")
+      .select("user_id, occurred_at, is_green")
       .eq("restaurant_id", rid)
       .order("occurred_at", { ascending: false })
       .limit(STREAK_LIMIT);
@@ -13093,19 +13045,19 @@ async function loadManagerBoardData(restaurantId = null) {
 
     function computeStreaks(rowsDesc) {
       // rowsDesc: most recent first
-      const sigs = rowsDesc.map((r) => String(r.chain_signal || "").toLowerCase());
+      const sigs = rowsDesc.map((r) => !!r.is_green);
 
       // current: count greens from start until first non-green
       let current = 0;
       for (const s of sigs) {
-        if (s === "green") current++;
+        if (s) current++;
         else break;
       }
 
       // best: max consecutive greens anywhere
       let best = 0, run = 0;
       for (const s of sigs) {
-        if (s === "green") {
+        if (s) {
           run++;
           if (run > best) best = run;
         } else {
@@ -14158,32 +14110,81 @@ async function renderHudTimelineUserSelect() {
     return;
   }
 
-  const { data, error } = await supabase
-    .from("restaurant_memberships_v1")
-    .select("user_id, display_name, full_name, role")
-    .eq("restaurant_id", activeRestaurantId)
-    .order("display_name", { ascending: true });
+  const currentUserId = getHudActorContext().userId || null;
+  const currentProfile = appState.profile || {};
 
-  if (error) {
-    console.warn("[HUD TIMELINE SELECT]", error);
+  const [profilesRes, snapshotsRes] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("user_id, display_name, role")
+      .eq("restaurant_id", activeRestaurantId)
+      .order("display_name", { ascending: true }),
+    supabase
+      .from("bc_skill_snapshots_v1")
+      .select("user_id, created_at")
+      .eq("restaurant_id", activeRestaurantId)
+      .order("created_at", { ascending: false })
+      .limit(500),
+  ]);
+
+  if (profilesRes.error) {
+    console.warn("[HUD TIMELINE SELECT]", profilesRes.error);
     select.classList.add("hidden");
     select.style.display = "none";
     if (title) title.textContent = "Recent Progress";
     return;
   }
 
-  const rows = Array.isArray(data) ? data : [];
-  const currentUserId = getHudActorContext().userId || null;
+  if (snapshotsRes.error) {
+    console.warn("[HUD TIMELINE SELECT][SNAPSHOTS]", snapshotsRes.error);
+  }
 
-  const options = rows.map((row) => {
-    const uid = String(row.user_id || "");
-    const label =
-      row.display_name ||
-      row.full_name ||
-      uid ||
-      "Unknown";
-    return { uid, label };
-  }).filter((x) => x.uid);
+  const profileRows = Array.isArray(profilesRes.data) ? profilesRes.data : [];
+  const snapshotRows = Array.isArray(snapshotsRes.data) ? snapshotsRes.data : [];
+  const optionMap = new Map();
+
+  for (const row of profileRows) {
+    const role = String(row?.role || "").toLowerCase();
+    if (role === "demo") continue;
+    const uid = String(row?.user_id || "");
+    if (!uid) continue;
+    optionMap.set(uid, {
+      uid,
+      label: row?.display_name || uid,
+    });
+  }
+
+  for (const row of snapshotRows) {
+    const uid = String(row?.user_id || "");
+    if (!uid || optionMap.has(uid)) continue;
+    optionMap.set(uid, { uid, label: uid });
+  }
+
+  const currentRole = String(normalizeMembershipRole(currentProfile) || currentProfile?.role || "").toLowerCase();
+  if (currentUserId && currentRole !== "demo" && !optionMap.has(String(currentUserId))) {
+    const fallbackCurrentLabel =
+      currentProfile?.display_name ||
+      appState?.session?.user?.user_metadata?.display_name ||
+      appState?.session?.user?.user_metadata?.full_name ||
+      (appState?.session?.user?.email ? String(appState.session.user.email).split("@")[0] : "") ||
+      String(currentUserId);
+    optionMap.set(String(currentUserId), {
+      uid: String(currentUserId),
+      label: fallbackCurrentLabel,
+    });
+  }
+
+  const optionIdsNeedingNames = Array.from(optionMap.keys());
+  const nameMap = await mapUserIdsToNames(optionIdsNeedingNames);
+  const options = optionIdsNeedingNames
+    .map((uid) => {
+      const base = optionMap.get(uid);
+      return {
+        uid,
+        label: nameMap.get(uid) || base?.label || uid || "Unknown",
+      };
+    })
+    .sort((a, b) => String(a.label).localeCompare(String(b.label)));
 
   if (!options.length) {
     select.classList.add("hidden");
