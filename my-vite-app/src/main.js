@@ -5497,7 +5497,7 @@ function wireParentButtons() {
       await loadAuthedState?.("openProfile");
       await ensureManagerRestaurantChoices?.();
       renderProfileScreen();
-      showScreen("screenProfile");
+      openProfilePanel();
     });
   }
 
@@ -6082,6 +6082,25 @@ function setHudOpen(isOpen) {
 
   if (frame) frame.style.pointerEvents = isOpen ? "none" : "auto";
   if (root) root.style.pointerEvents = isOpen ? "none" : "auto";
+}
+
+function setProfileOpen(isOpen) {
+  const panel = document.getElementById("screenProfile");
+  const frame = document.getElementById("premiumRootFrame");
+  const root = document.getElementById("premiumRoot");
+
+  if (panel) panel.classList.toggle("hidden", !isOpen);
+  if (frame) frame.style.pointerEvents = isOpen ? "none" : "auto";
+  if (root) root.style.pointerEvents = isOpen ? "none" : "auto";
+}
+
+function openProfilePanel() {
+  closeHud?.();
+  setProfileOpen(true);
+}
+
+function closeProfilePanel() {
+  setProfileOpen(false);
 }
 
 window.__BC_HUD_TIMELINE_TARGET_USER_ID__ = window.__BC_HUD_TIMELINE_TARGET_USER_ID__ || null;
@@ -14990,8 +15009,9 @@ document.getElementById("hudBackdrop")?.addEventListener("click", closeHud);
 document.getElementById("btnBackToPremium")?.addEventListener("click", () => {
   showScreen("screenPremiumApp");
 });
-document.getElementById("btnBackFromProfile")?.addEventListener("click", () => {
-  showScreen("screenPremiumApp");
+document.getElementById("btnBackFromProfile")?.addEventListener("click", closeProfilePanel);
+document.getElementById("screenProfile")?.addEventListener("click", (e) => {
+  if (e.target?.id === "screenProfile") closeProfilePanel();
 });
 document.getElementById("btnLogoutProfile")?.addEventListener("click", async () => {
   await doLogout("profile_logout");

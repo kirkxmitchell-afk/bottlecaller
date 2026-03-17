@@ -1290,6 +1290,173 @@ button:hover, .btn:hover, .btn-ghost:hover{
   }
 }
 
+/* =========================================================
+   PROFILE WINDOW
+   Same overlay language as the premium menu.
+   ========================================================= */
+
+#screenProfile{
+  position: fixed;
+  inset: 0;
+  z-index: 2147482998;
+  padding: 18px;
+  overflow-y: auto;
+  background: rgba(0,0,0,0.42);
+  backdrop-filter: blur(4px);
+}
+
+#screenProfile.hidden{
+  display: none !important;
+}
+
+#screenProfile > .panel.stack{
+  width: min(680px, calc(100vw - 24px));
+  margin: 0 12px 0 auto;
+  padding: 14px !important;
+  border-radius: 28px !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
+  background:
+    radial-gradient(760px 240px at 0% 0%, rgba(125,211,252,0.12), transparent 58%),
+    radial-gradient(680px 220px at 100% 12%, rgba(94,234,212,0.10), transparent 60%),
+    linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.015)),
+    rgba(8,12,17,0.95) !important;
+  box-shadow:
+    0 30px 80px rgba(0,0,0,0.52),
+    inset 0 1px 0 rgba(255,255,255,0.05) !important;
+}
+
+#screenProfile .topbar{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 0 12px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border-bottom: 1px solid rgba(255,255,255,0.08) !important;
+}
+
+#screenProfile .topbar .brand{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#screenProfile .topbar .brand h2{
+  margin: 0;
+  font-size: 16px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(236,246,255,0.92);
+}
+
+#screenProfile .topbar .badge{
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(125,211,252,0.18);
+  background:
+    linear-gradient(180deg, rgba(125,211,252,0.16), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.03);
+  color: rgba(234,246,255,0.86);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+#screenProfile .topbar .row{
+  display: flex;
+  gap: 10px;
+}
+
+#screenProfile .topbar .row button{
+  min-height: 38px;
+  padding: 8px 12px !important;
+  border-radius: 14px !important;
+}
+
+#screenProfile .card{
+  margin-top: 14px;
+  padding: 14px !important;
+  border-radius: 22px !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015)),
+    rgba(255,255,255,0.02) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.04),
+    0 18px 36px rgba(0,0,0,0.18);
+}
+
+#screenProfile .card .score-row{
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 12px;
+  align-items: baseline;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+#screenProfile .card .score-row:last-child{
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+#screenProfile .card .score-row:first-child{
+  padding-top: 0;
+}
+
+#screenProfile .card .score-row span{
+  color: rgba(244,246,247,0.92);
+  word-break: break-word;
+}
+
+#profileMultiRestaurantCard{
+  margin-top: 14px !important;
+}
+
+#profileMultiRestaurantCard .card{
+  margin-top: 0;
+}
+
+#profileMultiRestaurantCard .card > div:first-child{
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(236,246,255,0.88);
+  margin-bottom: 10px !important;
+}
+
+#profileMultiRestaurantCard .small{
+  padding: 9px 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.06);
+  background: rgba(255,255,255,0.02);
+  color: rgba(244,246,247,0.84);
+}
+
+#profileMultiRestaurantCard .small + .small{
+  margin-top: 8px;
+}
+
+@media (max-width: 760px){
+  #screenProfile{
+    padding: 12px;
+  }
+
+  #screenProfile > .panel.stack{
+    width: min(100vw - 16px, 680px);
+    margin: 0 auto;
+  }
+
+  #screenProfile .card .score-row{
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}
+
 /* premiumRoot should NOT look like a card/box */
 #premiumRoot{
   margin-top: 14px;
