@@ -234,15 +234,18 @@ document.querySelector("#app").innerHTML = `
           </div>
         </div>
 
-        <!-- Tabs UNDER fields -->
-        <div class="tabs hidden" id="roleTabs" data-selected="waiter" style="margin-top:10px; --selector-x: 0px;">
-          <button id="tabRoleWaiter" class="tab active" type="button">Waiter</button>
-          <button id="tabRoleManager" class="tab" type="button">Manager</button>
-        </div>
-
+        <!-- Auth mode first; signup reveals the role selector underneath -->
         <div class="tabs" id="modeTabs" data-selected="login" style="--selector-x: 0px;">
           <button id="tabModeLogin" class="tab active" type="button">Login</button>
           <button id="tabModeSignup" class="tab" type="button">Sign up</button>
+        </div>
+
+        <div id="roleTabsWrap" class="hidden">
+          <div class="small auth-subselector-label">Choose role</div>
+          <div class="tabs" id="roleTabs" data-selected="waiter" style="margin-top:10px; --selector-x: 0px;">
+            <button id="tabRoleWaiter" class="tab active" type="button">Waiter</button>
+            <button id="tabRoleManager" class="tab" type="button">Manager</button>
+          </div>
         </div>
 
         <div id="displayNameWrap" class="hidden">
@@ -13530,7 +13533,7 @@ function setRole(role) {
 function setMode(mode) {
   uiState.mode = mode === "signup" ? "signup" : "login";
   const modeTabs = document.getElementById("modeTabs");
-  const roleTabs = document.getElementById("roleTabs");
+  const roleTabsWrap = document.getElementById("roleTabsWrap");
   const l = document.getElementById("tabModeLogin");
   const s = document.getElementById("tabModeSignup");
   if (modeTabs) {
@@ -13547,11 +13550,11 @@ function setMode(mode) {
 
   const wrap = document.getElementById("displayNameWrap");
   if (uiState.mode === "signup") {
-    if (roleTabs) roleTabs.classList.remove("hidden");
+    if (roleTabsWrap) roleTabsWrap.classList.remove("hidden");
     setRole("waiter");
     wrap.classList.remove("hidden");
   } else {
-    if (roleTabs) roleTabs.classList.add("hidden");
+    if (roleTabsWrap) roleTabsWrap.classList.add("hidden");
     setRole("waiter");
     wrap.classList.add("hidden");
   }

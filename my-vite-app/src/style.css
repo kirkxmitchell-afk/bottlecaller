@@ -1045,6 +1045,16 @@ button:hover, .btn:hover, .btn-ghost:hover{
   z-index: 0;
 }
 
+#screenHome #modeTabs[data-selected="login"]::before,
+#screenHome #roleTabs[data-selected="waiter"]::before{
+  transform: translateX(0);
+}
+
+#screenHome #modeTabs[data-selected="signup"]::before,
+#screenHome #roleTabs[data-selected="manager"]::before{
+  transform: translateX(calc(100% + 8px));
+}
+
 #screenHome #modeTabs::before{
   border: 1px solid rgba(125,211,252,0.20);
   background:
@@ -1068,10 +1078,24 @@ button:hover, .btn:hover, .btn-ghost:hover{
 
 #screenHome #roleTabs,
 #screenHome .tabs,
+#screenHome #roleTabsWrap,
 #screenHome #displayNameWrap,
 #screenHome #authFields .row,
 #screenHome #authMsg{
   grid-column: 1 / -1;
+}
+
+#screenHome #roleTabsWrap{
+  margin-top: 4px;
+}
+
+#screenHome .auth-subselector-label{
+  margin: 0 0 8px;
+  color: rgba(244,246,247,0.68);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 
 #screenHome #authFields .row{
