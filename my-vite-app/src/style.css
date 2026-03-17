@@ -2002,6 +2002,7 @@ button:hover, .btn:hover, .btn-ghost:hover{
 #screenManagerBoard #mbTimedChallengeQuickActionsPanel > .card > div:first-child[style*="font-weight:600"],
 #screenManagerBoard #mbInsightsPanel .card > div:first-child[style*="font-weight:700"],
 #screenManagerBoard #mbInsightsPanel > .card > div:first-child[style*="font-weight:700"],
+#screenManagerBoard #mbInsightsPanel > .card:first-child > div:first-child > div:first-child[style*="font-weight:700"],
 #screenManagerBoard #mbEnterprisePanel .card > div:first-child[style*="font-weight:600"]{
   display: none !important;
 }
