@@ -7412,13 +7412,17 @@ function ensureInsightsShell() {
       </div>
 
       <div class="card" style="margin-top:12px;">
-        <div style="font-weight:700;">Guest Type Breakdown</div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+          <select id="mbInsightsViewSelect" class="input" style="min-width:220px;">
+            <option value="guest">Guest Type Breakdown</option>
+            <option value="trend">Trend (14 days)</option>
+          </select>
+          <select id="mbInsightsUserSelect" class="input" style="min-width:220px;">
+            <option value="all">All staff</option>
+          </select>
+        </div>
         <div id="mbInsightsLegend" class="small-text" style="margin-top:6px; opacity:.8;"></div>
         <div id="mbInsightsGuestTable" style="margin-top:10px;"></div>
-      </div>
-
-      <div class="card" style="margin-top:12px;">
-        <div style="font-weight:700;">Trend (14 days)</div>
         <div id="mbInsightsTrendTable" style="margin-top:10px;"></div>
       </div>
     `;
@@ -7427,6 +7431,17 @@ function ensureInsightsShell() {
     if (b && !b.__bcBound) {
       b.__bcBound = true;
       b.onclick = () => loadManagerInsights();
+    }
+
+    const viewSelect = document.getElementById("mbInsightsViewSelect");
+    const userSelect = document.getElementById("mbInsightsUserSelect");
+    if (viewSelect && !viewSelect.__bcBound) {
+      viewSelect.__bcBound = true;
+      viewSelect.addEventListener("change", () => refreshInsightsExplorer());
+    }
+    if (userSelect && !userSelect.__bcBound) {
+      userSelect.__bcBound = true;
+      userSelect.addEventListener("change", () => refreshInsightsExplorer());
     }
   }
 
@@ -7491,7 +7506,7 @@ function buildRecommendedDrillPlan({ guestRows, weakRows }) {
   };
 }
 
-function renderGuestInsightsTable(rows, nameMap = new Map()) {
+function renderGuestInsightsTable(rows, nameMap = new Map(), selectedUserId = "all") {
   const normalizeGuest = (x) =>
     String(x || "unknown").trim().toLowerCase().replace(/[\s-]+/g, "_");
 
@@ -7520,9 +7535,13 @@ function renderGuestInsightsTable(rows, nameMap = new Map()) {
     u.byGuest.set(guest, s);
   }
 
-  const users = Array.from(byUser.values()).sort((a, b) =>
+  let users = Array.from(byUser.values()).sort((a, b) =>
     String(a.display).localeCompare(String(b.display))
   );
+
+  if (selectedUserId && selectedUserId !== "all") {
+    users = users.filter((u) => String(u.uid) === String(selectedUserId));
+  }
 
   if (!users.length) return `<div class="small-text" style="opacity:.8;">No encounter data yet.</div>`;
 
@@ -7575,7 +7594,7 @@ function renderGuestInsightsTable(rows, nameMap = new Map()) {
   return blocks;
 }
 
-function renderTrendTable(rows, nameMap = new Map()) {
+function renderTrendTable(rows, nameMap = new Map(), selectedUserId = "all") {
   const byUserDay = new Map();
 
   for (const r of rows || []) {
@@ -7592,7 +7611,7 @@ function renderTrendTable(rows, nameMap = new Map()) {
     byDay.set(day, s);
   }
 
-  const users = Array.from(byUserDay.entries())
+  let users = Array.from(byUserDay.entries())
     .map(([uid, byDay]) => ({
       uid,
       display: nameMap.get(uid) || uid,
@@ -7602,6 +7621,10 @@ function renderTrendTable(rows, nameMap = new Map()) {
         .slice(0, 14),
     }))
     .sort((a, b) => String(a.display).localeCompare(String(b.display)));
+
+  if (selectedUserId && selectedUserId !== "all") {
+    users = users.filter((u) => String(u.uid) === String(selectedUserId));
+  }
 
   if (!users.length) return `<div class="small-text" style="opacity:.8;">No trend data yet.</div>`;
 
@@ -7690,6 +7713,32 @@ function wireInsightsCTAs(plan) {
   }
 }
 
+function refreshInsightsExplorer() {
+  const state = window.__BC_MB_INSIGHTS_STATE__ || null;
+  const guestEl = document.getElementById("mbInsightsGuestTable");
+  const trendEl = document.getElementById("mbInsightsTrendTable");
+  const legendEl = document.getElementById("mbInsightsLegend");
+  const viewSelect = document.getElementById("mbInsightsViewSelect");
+  const userSelect = document.getElementById("mbInsightsUserSelect");
+  if (!state || !guestEl || !trendEl || !legendEl || !viewSelect || !userSelect) return;
+
+  const selectedView = String(viewSelect.value || "guest");
+  const selectedUserId = String(userSelect.value || "all");
+
+  if (selectedView === "trend") {
+    legendEl.textContent = "Daily attempts, average chain score, and green rate over the last 14 days.";
+    guestEl.classList.add("hidden");
+    trendEl.classList.remove("hidden");
+    trendEl.innerHTML = renderTrendTable(state.rows, state.nameMap, selectedUserId);
+  } else {
+    legendEl.textContent =
+      "avg = average chain_score. green/red = outcome flags. read/delivery/mode/hook = % correct/optimal on that step.";
+    trendEl.classList.add("hidden");
+    guestEl.classList.remove("hidden");
+    guestEl.innerHTML = renderGuestInsightsTable(state.rows, state.nameMap, selectedUserId);
+  }
+}
+
 async function loadManagerInsights() {
   ensureInsightsShell();
 
@@ -7697,6 +7746,8 @@ async function loadManagerInsights() {
   const guestEl = document.getElementById("mbInsightsGuestTable");
   const trendEl = document.getElementById("mbInsightsTrendTable");
   const legendEl = document.getElementById("mbInsightsLegend");
+  const userSelect = document.getElementById("mbInsightsUserSelect");
+  const viewSelect = document.getElementById("mbInsightsViewSelect");
 
   const restaurantId =
     window.getActiveRestaurantId?.() ||
@@ -7708,10 +7759,7 @@ async function loadManagerInsights() {
   }
 
   if (msgEl) msgEl.textContent = "Loading insights…";
-  if (legendEl) {
-    legendEl.textContent =
-      "avg = average chain_score. green/red = outcome flags. read/delivery/mode/hook = % correct/optimal on that step.";
-  }
+  if (legendEl) legendEl.textContent = "";
 
   const DRILL_POOL_T1 = ["decider", "bargain_smart", "griever"];
   const sinceIso = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
@@ -7784,13 +7832,22 @@ async function loadManagerInsights() {
 
   plans.sort((a, b) => (b.guestRows.length - a.guestRows.length));
 
-  if (guestEl) {
-    guestEl.innerHTML = renderGuestInsightsTable(rows, nameMap);
+  if (userSelect) {
+    const currentValue = String(userSelect.value || "all");
+    const options = [
+      `<option value="all">All staff</option>`,
+      ...userIds
+        .sort((a, b) => String(nameMap.get(a) || a).localeCompare(String(nameMap.get(b) || b)))
+        .map((uid) => `<option value="${escapeHtml(uid)}">${escapeHtml(nameMap.get(uid) || String(uid).slice(0, 8))}</option>`)
+    ].join("");
+    userSelect.innerHTML = options;
+    userSelect.value = userIds.some((uid) => String(uid) === currentValue) ? currentValue : "all";
   }
 
-  if (trendEl) {
-    trendEl.innerHTML = renderTrendTable(rows, nameMap);
-  }
+  if (viewSelect && !viewSelect.value) viewSelect.value = "guest";
+
+  window.__BC_MB_INSIGHTS_STATE__ = { rows, nameMap };
+  refreshInsightsExplorer();
 
   if (guestEl && !guestEl.__bcBound) {
     guestEl.__bcBound = true;

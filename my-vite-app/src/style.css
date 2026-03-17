@@ -2037,6 +2037,19 @@ button:hover, .btn:hover, .btn-ghost:hover{
     rgba(255,255,255,0.02);
 }
 
+#screenManagerBoard #mbInsightsViewSelect,
+#screenManagerBoard #mbInsightsUserSelect{
+  border-color: rgba(196,181,253,0.18) !important;
+  background:
+    linear-gradient(180deg, rgba(196,181,253,0.14), rgba(255,255,255,0.03)),
+    rgba(8,12,17,0.82) !important;
+}
+
+#screenManagerBoard #mbInsightsGuestTable.hidden,
+#screenManagerBoard #mbInsightsTrendTable.hidden{
+  display: none !important;
+}
+
 #screenManagerBoard #mbTab_billing #mbSeatStatus{
   border-color: rgba(245,194,107,0.24);
   background:
