@@ -2362,6 +2362,7 @@
           strongPillars,
 
           skills: snapshotFromFn,
+          progressionState: buildCanonicalProgressionState(),
 
           strongestSkill,
           weakestSkill
@@ -4599,6 +4600,109 @@ function isDrillMode() {
         };
       }
 
+      function getNormalizedProgressionState() {
+        const spine = bcGetSpineHost();
+        const selectors = spine?.selectors || {};
+        const state = spine?.getState?.() || null;
+        const prog = window.__BC_PROG__ || window.PROG || {};
+        const meta = prog?.meta || {};
+        const guard =
+          window.__BC_GUARD__ ||
+          prog?.guard ||
+          { pressureLevel: 0, finalDifficulty: 1, last3: [] };
+
+        const points = Number(
+          selectors.points?.() ??
+          meta.pointsTotal ??
+          prog?.points ??
+          0
+        );
+        const tier = Number(
+          selectors.tier?.() ??
+          meta.tierUnlocked ??
+          prog?.tier ??
+          1
+        );
+        const difficultySeed = Number(
+          selectors.difficultySeed?.() ??
+          meta.difficultySeed ??
+          1
+        );
+        const effectiveDifficulty = Number(
+          selectors.effectiveDifficultySeed?.() ??
+          guard?.finalDifficulty ??
+          difficultySeed
+        );
+        const spineRange = selectors.encounterRange?.();
+        const spineGuests = selectors.guestTypes?.();
+        const modes = selectors.modes?.() || [];
+        const authoritativePayload = getAuthoritativeProgressionPayload();
+        const authoritativeTier = getAuthoritativeTierToServe(tier);
+        const authoritativeBounds = getTierRangeAndGuests(authoritativeTier ?? tier);
+
+        let encounterRange = Array.isArray(spineRange) && spineRange.length === 2
+          ? [Number(spineRange[0] ?? 1), Number(spineRange[1] ?? Number.MAX_SAFE_INTEGER)]
+          : authoritativeBounds.encounterRange.slice();
+
+        if (authoritativeTier != null) {
+          encounterRange = [
+            Math.max(Number(encounterRange[0] ?? 1), Number(authoritativeBounds.encounterRange[0] ?? 1)),
+            Math.min(Number(encounterRange[1] ?? Number.MAX_SAFE_INTEGER), Number(authoritativeBounds.encounterRange[1] ?? Number.MAX_SAFE_INTEGER))
+          ];
+        }
+
+        let allowedGuestTypes = Array.isArray(spineGuests) ? spineGuests.slice() : [];
+        if (authoritativeTier != null) {
+          if (allowedGuestTypes.length) {
+            allowedGuestTypes = allowedGuestTypes.filter((guestType) => authoritativeBounds.guestTypes.includes(guestType));
+          } else {
+            allowedGuestTypes = authoritativeBounds.guestTypes.slice();
+          }
+        }
+        if (!allowedGuestTypes.length) {
+          allowedGuestTypes = authoritativeBounds.guestTypes.slice();
+        }
+
+        let pressureBand = "low";
+        if (effectiveDifficulty >= 5) pressureBand = "high";
+        else if (effectiveDifficulty >= 3) pressureBand = "mid";
+
+        return {
+          state,
+          economy: {
+            points,
+            tier,
+            encounterRange,
+            allowedGuestTypes,
+            modes,
+          },
+          session: {
+            runId: Number(state?.run?.runId || 0),
+            runEase: Number(selectors.runEase?.() ?? state?.session?.runEase ?? 1),
+            runEaseRemaining: Number(selectors.runEaseRemaining?.() ?? state?.session?.runEaseRemaining ?? 0),
+            pressureLevel: Number(guard?.pressureLevel ?? 0),
+            finalDifficulty: effectiveDifficulty,
+            last3: Array.isArray(guard?.last3) ? guard.last3 : [],
+          },
+          authority: {
+            payload: authoritativePayload,
+            tierToServe: authoritativeTier,
+            encounterRange: authoritativeBounds.encounterRange.slice(),
+            guestTypes: authoritativeBounds.guestTypes.slice(),
+          },
+          display: {
+            difficultySeed,
+            effectiveDifficulty,
+            pressureBand,
+          },
+          raw: {
+            spine,
+            prog,
+            guard,
+          }
+        };
+      }
+
       // ===============================
       // BC PROGRESS HUD + TOAST (v1)
       // ===============================
@@ -4611,29 +4715,23 @@ function isDrillMode() {
       }
 
       function getProgressionMonitorSnapshot() {
-        const spine = bcGetSpineHost();
-        if (!spine) return null;
-        const selectors = spine.selectors || {};
-        const state = spine.getState?.();
-        const points = selectors.points?.();
-        const tier = selectors.tier?.();
-        const difficultySeed = selectors.difficultySeed?.();
-        const effectiveDifficulty = selectors.effectiveDifficultySeed?.();
-        const encounterRange = selectors.encounterRange?.();
-        const allowedGuestTypes = selectors.guestTypes?.();
-
+        const normalized = getNormalizedProgressionState();
         return {
-          state,
-          points,
-          tier,
-          difficultySeed,
-          effectiveDifficulty,
-          encounterRange,
-          allowedGuestTypes,
+          state: normalized.state,
+          points: normalized.economy.points,
+          tier: normalized.economy.tier,
+          difficultySeed: normalized.display.difficultySeed,
+          effectiveDifficulty: normalized.display.effectiveDifficulty,
+          encounterRange: normalized.economy.encounterRange,
+          allowedGuestTypes: normalized.economy.allowedGuestTypes,
+          modes: normalized.economy.modes,
+          authoritativeTier: normalized.authority.tierToServe,
+          pressureLevel: normalized.session.pressureLevel,
         };
       }
 
       function bcSnapshot() {
+        const normalized = getNormalizedProgressionState();
         const spineProg = getProgressionMonitorSnapshot() || {};
         const prog = window.__BC_PROG__ || window.PROG || spineProg || {};
         const encounter =
@@ -4663,18 +4761,20 @@ function isDrillMode() {
               : (typeof currentStep !== "undefined" ? currentStep : "-"),
 
           points: Number(prog?.points ?? spineProg?.points ?? 0),
-          tier: Number(prog?.tier ?? spineProg?.tier ?? 1),
+          tier: Number(prog?.tier ?? spineProg?.tier ?? normalized.economy.tier ?? 1),
 
           encounterRange:
             prog?.encounterRange ||
             spineProg?.encounterRange ||
             encounter?.encounterRange ||
+            normalized.economy.encounterRange ||
             [1, 5],
 
           guests:
             prog?.allowedGuestTypes ||
             spineProg?.allowedGuestTypes ||
             encounter?.allowedGuestTypes ||
+            normalized.economy.allowedGuestTypes ||
             [],
 
           difficultySeed:
@@ -5012,14 +5112,9 @@ function isDrillMode() {
           PROG.unlocks.singleVariableHooks = PROG.axes.compression >= 4;
         }
 
-        const isDemoNow = (window.isDemo || window.bcMode === "demo");
-        let pts = 0;
-        let tier = 1;
-        if (!isDemoNow) {
-          const spineSafe = getProgressionSpine({ allowNull: true });
-          pts = Number(spineSafe?.selectors?.points?.() ?? 0);
-          tier = Number(spineSafe?.selectors?.tier?.() ?? 1);
-        }
+        const normalized = getNormalizedProgressionState();
+        const pts = Number(normalized?.economy?.points ?? 0);
+        const tier = Number(normalized?.economy?.tier ?? 1);
         const fancyUnlocked = tier >= 2;
         const celebratorUnlocked = tier >= 3;
         PROG.unlocks.fancy = fancyUnlocked;
@@ -5999,6 +6094,37 @@ function ensureProgLoaded() {
         localStorage.setItem(guardKey(), JSON.stringify(state));
       }
 
+      function syncProgressionStateMirror({ guardState = null, difficultySeed = null, persistGuard = true } = {}) {
+        ensureProgLoaded?.();
+        ensureProgMeta?.();
+
+        const nextGuard = guardState || window.__BC_GUARD__ || loadGuardState();
+        if (nextGuard && typeof nextGuard === "object") {
+          if (!Array.isArray(nextGuard.last3)) nextGuard.last3 = [];
+          if (!Number.isFinite(nextGuard.pressureLevel)) nextGuard.pressureLevel = 0;
+          window.__BC_GUARD__ = nextGuard;
+          if (persistGuard) saveGuardState(nextGuard);
+          PROG.guard.pressureLevel = Number(nextGuard.pressureLevel ?? 0);
+          PROG.guard.finalDifficulty = Number(
+            nextGuard.finalDifficulty ??
+            difficultySeed ??
+            PROG.guard.finalDifficulty ??
+            1
+          );
+          PROG.guard.last3 = Array.isArray(nextGuard.last3) ? nextGuard.last3.slice() : [];
+        }
+
+        if (Number.isFinite(Number(difficultySeed))) {
+          PROG.meta.difficultySeed = Number(difficultySeed);
+        } else if (Number.isFinite(Number(window.__BC_GUARD__?.finalDifficulty))) {
+          PROG.meta.difficultySeed = Number(window.__BC_GUARD__.finalDifficulty);
+        }
+
+        PROG.meta.lastUpdatedMs = Date.now();
+        saveProg();
+        return getNormalizedProgressionState();
+      }
+
       const ENCOUNTERS_BY_MODE = (window.__BC_ENCOUNTERS__ || {});
       const ENCOUNTERS = Array.isArray(ENCOUNTERS_BY_MODE[bcMode]) ? ENCOUNTERS_BY_MODE[bcMode] : [];
       const ENCOUNTER_COUNT = ENCOUNTERS.length;
@@ -6337,6 +6463,99 @@ function ensureProgLoaded() {
           .trim();
       }
 
+      function getEncounterSessionNonce() {
+        if (!window.__BC_ENCOUNTER_SESSION_NONCE__) {
+          window.__BC_ENCOUNTER_SESSION_NONCE__ = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+        }
+        return window.__BC_ENCOUNTER_SESSION_NONCE__;
+      }
+
+      function getEncounterRecentState() {
+        if (!window.__BC_RECENT_ENCOUNTER_STATE__) {
+          window.__BC_RECENT_ENCOUNTER_STATE__ = Object.create(null);
+        }
+        return window.__BC_RECENT_ENCOUNTER_STATE__;
+      }
+
+      function getEncounterRecentBucket(key) {
+        const state = getEncounterRecentState();
+        const bucketKey = String(key || "default");
+        if (!Array.isArray(state[bucketKey])) {
+          state[bucketKey] = [];
+        }
+        return state[bucketKey];
+      }
+
+      function rememberEncounterRecentValue(key, value, limit = 6) {
+        const bucket = getEncounterRecentBucket(key);
+        const nextValue = String(value || "").trim();
+        if (!nextValue) return;
+
+        const filtered = bucket.filter((entry) => entry !== nextValue);
+        filtered.push(nextValue);
+        while (filtered.length > limit) filtered.shift();
+        bucket.splice(0, bucket.length, ...filtered);
+      }
+
+      function seededHash(input) {
+        const seed = String(input || "");
+        let hash = 0;
+        for (let i = 0; i < seed.length; i++) {
+          hash = ((hash << 5) - hash) + seed.charCodeAt(i);
+          hash |= 0;
+        }
+        return Math.abs(hash);
+      }
+
+      function pickRecentAware(pool, opts = {}) {
+        const list = Array.isArray(pool) ? pool.filter(Boolean) : [];
+        if (!list.length) return null;
+
+        const {
+          memoryKey = "",
+          seedHint = "",
+          limit = 6,
+          getKey = (value) => String(value || "")
+        } = opts;
+
+        const recent = memoryKey ? getEncounterRecentBucket(memoryKey) : [];
+        const nonce = getEncounterSessionNonce();
+
+        const scored = list.map((value, index) => {
+          const key = String(getKey(value) || "");
+          const recentIdx = recent.lastIndexOf(key);
+          return {
+            value,
+            key,
+            fresh: recentIdx === -1 ? 1 : 0,
+            age: recentIdx === -1 ? Number.MAX_SAFE_INTEGER : (recent.length - recentIdx),
+            hash: seededHash(`${nonce}::${seedHint}::${key}::${index}`)
+          };
+        });
+
+        scored.sort((a, b) => {
+          if (a.fresh !== b.fresh) return b.fresh - a.fresh;
+          if (a.age !== b.age) return b.age - a.age;
+          return a.hash - b.hash;
+        });
+
+        const chosen = scored[0] || null;
+        if (chosen?.key && memoryKey) {
+          rememberEncounterRecentValue(memoryKey, chosen.key, limit);
+        }
+        return chosen?.value || null;
+      }
+
+      function dedupeStringPool(values = []) {
+        const seen = new Set();
+        return values.filter((value) => {
+          const key = canonicalDeliveryLine(value);
+          if (!key || seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+      }
+
       function getSelectedHookType(encounter) {
         if (!encounter) return "";
 
@@ -6654,28 +6873,22 @@ function ensureProgLoaded() {
 
         if (!pool.length) return "";
 
-        const seed = String(seedHint || "") + "::" + String(baseValue || "");
-        let hash = 0;
-        for (let i = 0; i < seed.length; i++) {
-          hash = ((hash << 5) - hash) + seed.charCodeAt(i);
-          hash |= 0;
-        }
-
-        const idx = Math.abs(hash) % pool.length;
-        return pool[idx] || null;
+        const memoryKey = `encounter_variant_text::${String(baseValue || "").slice(0, 80)}`;
+        return pickRecentAware(pool, {
+          memoryKey,
+          seedHint: `${seedHint}::${baseValue || ""}`,
+          limit: 5,
+          getKey: (value) => canonicalDeliveryLine(value)
+        }) || "";
       }
 
       function getEncounterPresentationContext() {
-        const spine = getProgressionSpine({ allowNull: true });
-
-        const tier = Number(spine?.selectors?.tier?.() ?? 1);
-        const points = Number(spine?.selectors?.points?.() ?? 0);
-        const effectiveDifficulty = Number(spine?.selectors?.effectiveDifficultySeed?.() ?? 1);
-        const difficultySeed = Number(spine?.selectors?.difficultySeed?.() ?? 1);
-
-        let pressureBand = "low";
-        if (effectiveDifficulty >= 5) pressureBand = "high";
-        else if (effectiveDifficulty >= 3) pressureBand = "mid";
+        const normalized = getNormalizedProgressionState();
+        const tier = Number(normalized?.economy?.tier ?? 1);
+        const points = Number(normalized?.economy?.points ?? 0);
+        const effectiveDifficulty = Number(normalized?.display?.effectiveDifficulty ?? 1);
+        const difficultySeed = Number(normalized?.display?.difficultySeed ?? 1);
+        const pressureBand = String(normalized?.display?.pressureBand || "low");
 
         return {
           tier,
@@ -7098,8 +7311,10 @@ function ensureProgLoaded() {
       })();
 
       function getUnifiedProgressSnapshot() {
+        const normalized = getNormalizedProgressionState();
         return {
           progress: getProgressionMonitorSnapshot(),
+          progressionState: normalized,
           runs: {
             premium: getEncounterRunCountForMode("premium"),
             demo: getEncounterRunCountForMode("demo"),
@@ -7107,6 +7322,57 @@ function ensureProgLoaded() {
           },
           identity: getGameplayIdentity(),
           difficulty: getCurrentDifficultyMode(),
+        };
+      }
+
+      function buildCanonicalProgressionState() {
+        const normalized = getNormalizedProgressionState();
+        const currentEncounterId =
+          Number(currentEncounter?.encounterNumber) ||
+          Number(encounterIndex + 1) ||
+          Number(normalized?.state?.session?.currentEncounterId) ||
+          1;
+
+        return {
+          version: 1,
+          capturedAt: Date.now(),
+          economy: {
+            points: Number(normalized?.economy?.points ?? 0),
+            tier: Number(normalized?.economy?.tier ?? 1),
+            encounterRange: Array.isArray(normalized?.economy?.encounterRange)
+              ? normalized.economy.encounterRange.slice()
+              : [1, 5],
+            allowedGuestTypes: Array.isArray(normalized?.economy?.allowedGuestTypes)
+              ? normalized.economy.allowedGuestTypes.slice()
+              : [],
+            modes: Array.isArray(normalized?.economy?.modes)
+              ? normalized.economy.modes.slice()
+              : []
+          },
+          session: {
+            runId: Number(normalized?.session?.runId ?? 0),
+            runEase: Number(normalized?.session?.runEase ?? 1),
+            runEaseRemaining: Number(normalized?.session?.runEaseRemaining ?? 0),
+            pressureLevel: Number(normalized?.session?.pressureLevel ?? 0),
+            finalDifficulty: Number(normalized?.session?.finalDifficulty ?? normalized?.display?.effectiveDifficulty ?? 1),
+            currentEncounterId,
+            mode: String(normalized?.state?.session?.mode || ""),
+            guestTypeSelected: String(normalized?.state?.session?.guestTypeSelected || "")
+          },
+          authority: {
+            tierToServe: Number(normalized?.authority?.tierToServe ?? normalized?.economy?.tier ?? 1),
+            encounterRange: Array.isArray(normalized?.authority?.encounterRange)
+              ? normalized.authority.encounterRange.slice()
+              : [1, 5],
+            guestTypes: Array.isArray(normalized?.authority?.guestTypes)
+              ? normalized.authority.guestTypes.slice()
+              : []
+          },
+          display: {
+            difficultySeed: Number(normalized?.display?.difficultySeed ?? 1),
+            effectiveDifficulty: Number(normalized?.display?.effectiveDifficulty ?? 1),
+            pressureBand: String(normalized?.display?.pressureBand || "low")
+          }
         };
       }
 
@@ -11064,6 +11330,50 @@ function ensureProgLoaded() {
         return [scored[n - 1].w, scored[n - 2].w];
       }
 
+      function pickWrongLinesWithMemory(wrongs, correct, noise, memoryKey = "", count = 2) {
+        const unique = dedupeStringPool(Array.isArray(wrongs) ? wrongs : [])
+          .filter((line) => canonicalDeliveryLine(line) !== canonicalDeliveryLine(correct));
+
+        if (!unique.length) return [];
+
+        const scored = unique.map((line) => {
+          const overlap = wordOverlapScore(line, correct);
+          let distance = overlap;
+          if (noise === 1) distance = Math.abs(overlap - 2);
+          if (noise >= 2) distance = -overlap;
+          return { line, overlap, distance };
+        });
+
+        scored.sort((a, b) => {
+          if (a.distance !== b.distance) return a.distance - b.distance;
+          return seededHash(`${memoryKey}::${a.line}`) - seededHash(`${memoryKey}::${b.line}`);
+        });
+
+        const recent = memoryKey ? getEncounterRecentBucket(memoryKey) : [];
+        const chosen = [];
+        const used = new Set();
+
+        function consider(pool) {
+          for (const item of pool) {
+            const key = canonicalDeliveryLine(item.line);
+            if (!key || used.has(key)) continue;
+            used.add(key);
+            chosen.push(item.line);
+            if (chosen.length >= count) return true;
+          }
+          return false;
+        }
+
+        const freshPool = scored.filter((item) => !recent.includes(canonicalDeliveryLine(item.line)));
+        if (!consider(freshPool)) consider(scored);
+
+        chosen.forEach((line) => {
+          if (memoryKey) rememberEncounterRecentValue(memoryKey, canonicalDeliveryLine(line), 10);
+        });
+
+        return chosen;
+      }
+
       function stylizeDeliveryLine(line, kind = "emotional", encounter = null) {
         const raw = String(line || "").trim();
         if (!raw) return raw;
@@ -11135,13 +11445,15 @@ function ensureProgLoaded() {
         const wrongs1Base = buildSentence1Wrong(encounter);
         const wrongs1Pressure = buildSentence1WrongByPressure(encounter);
         const wrongs1Raw = mergeWeightedWrongPools(wrongs1Base, wrongs1Pressure, 2);
-        const [wrong1aRaw, wrong1bRaw] = pickWrongPairByNoise(wrongs1Raw, correct1Raw, noise);
+        const wrong1MemoryKey = `delivery_wrong_s1::${normalizeGuestType(encounter?.guestStateActual)}::${getDeliveryDistractorProfile(encounter)}`;
+        const [wrong1aRaw, wrong1bRaw] = pickWrongLinesWithMemory(wrongs1Raw, correct1Raw, noise, wrong1MemoryKey, 2);
 
         const correct2Raw = buildSentence2Correct(encounter);
         const wrongs2Base = buildSentence2Wrong();
         const wrongs2Pressure = buildSentence2WrongByPressure(encounter);
         const wrongs2Raw = mergeWeightedWrongPools(wrongs2Base, wrongs2Pressure, 2);
-        const [wrong2aRaw, wrong2bRaw] = pickWrongPairByNoise(wrongs2Raw, correct2Raw, noise);
+        const wrong2MemoryKey = `delivery_wrong_s2::${getSelectedHookType(encounter) || "default"}::${getDeliveryDistractorProfile(encounter)}`;
+        const [wrong2aRaw, wrong2bRaw] = pickWrongLinesWithMemory(wrongs2Raw, correct2Raw, noise, wrong2MemoryKey, 2);
 
         const correct1 = stylizeDeliveryLine(correct1Raw, "emotional", encounter);
         const wrongs1 = wrongs1Raw.map((line) => stylizeDeliveryLine(line, "emotional", encounter));
@@ -11822,15 +12134,12 @@ function ensureProgLoaded() {
 
         if (!pool.length) return null;
 
-        const seed = `${encounter?.encounterNumber || ""}::${runSeed}::${diff}`;
-        let hash = 0;
-        for (let i = 0; i < seed.length; i++) {
-          hash = ((hash << 5) - hash) + seed.charCodeAt(i);
-          hash |= 0;
-        }
-
-        const idx = Math.abs(hash) % pool.length;
-        return pool[idx];
+        return pickRecentAware(pool, {
+          memoryKey: `encounter_variation::${encounter?.encounterNumber || "unknown"}::${diff}`,
+          seedHint: `${runSeed}::${encounter?.encounterNumber || ""}::${diff}`,
+          limit: Math.max(3, Math.min(pool.length, 5)),
+          getKey: (variation) => String(variation?.id || variation?.label || "")
+        }) || pool[0] || null;
       }
 
       function applyEncounterVariation(baseEncounter, variation) {
@@ -14113,6 +14422,63 @@ function ensureProgLoaded() {
         return options[Math.floor(Math.random() * options.length)];
       }
 
+      function getHookWineDetail(wine, hookType) {
+        const w = wine || {};
+        const name = w.name || "this bottle";
+        const varietal = w.varietal || "wine";
+        const region = w.region || w.origin || w.country || "";
+        const fruit = describeFruitAbstract(w);
+        const texture = describeTexture(w);
+        const valueCue = getValueCue(w);
+        const story = String(w.story || "").trim();
+
+        if (hookType === "VALUE") {
+          return pickRecentAware(
+            [
+              `it gives you ${valueCue}`,
+              `it lands as ${texture} without feeling overdone`,
+              region ? `it drinks above its price with a ${region} feel` : "",
+              `it feels considered rather than expensive`
+            ].filter(Boolean),
+            {
+              memoryKey: `hook_detail_value::${name}`,
+              seedHint: `${name}::value`,
+              limit: 4
+            }
+          ) || `it gives you ${valueCue}`;
+        }
+
+        if (hookType === "STORY") {
+          return pickRecentAware(
+            [
+              story ? story : "",
+              region ? `there's a ${region} angle that gives it character` : "",
+              `it feels more distinctive than the obvious pick`,
+              `there's a bit more identity to it than the usual crowd-pleaser`
+            ].filter(Boolean),
+            {
+              memoryKey: `hook_detail_story::${name}`,
+              seedHint: `${name}::story`,
+              limit: 4
+            }
+          ) || `it feels more distinctive than the obvious pick`;
+        }
+
+        return pickRecentAware(
+          [
+            `${fruit} with a ${texture} line`,
+            region ? `${fruit} and a ${region} edge` : "",
+            `${texture} and easy to read in the glass`,
+            `${fruit} without losing shape`
+          ].filter(Boolean),
+          {
+            memoryKey: `hook_detail_flavour::${name}`,
+            seedHint: `${name}::flavour`,
+            limit: 4
+          }
+        ) || `${fruit} with a ${texture} line`;
+      }
+
       function pickHookSignalForGuest(hookType, guestType) {
         const type = String(hookType || "FLAVOUR").toUpperCase();
         const guest = normalizeGuestType(guestType);
@@ -14125,10 +14491,30 @@ function ensureProgLoaded() {
       }
 
       function generateHook(encounter, wine, hookType) {
-        const frame = HOOK_FRAMES[Math.floor(Math.random() * HOOK_FRAMES.length)];
         const signal = pickHookSignalForGuest(hookType, encounter?.guestStateActual);
         const direction = hookDirection(encounter, wine);
-        return `${frame} ${signal}, ${direction}.`;
+        const detail = getHookWineDetail(wine, hookType);
+        const name = wine?.name || "this bottle";
+        const varietal = wine?.varietal || "wine";
+        const frame = pickRecentAware(HOOK_FRAMES, {
+          memoryKey: `hook_frame::${normalizeGuestType(encounter?.guestStateActual)}::${hookType}`,
+          seedHint: `${name}::${hookType}::frame`,
+          limit: 5
+        }) || HOOK_FRAMES[0];
+
+        const candidates = [
+          `${frame} ${signal}, ${direction}.`,
+          `${name} is a strong call if you want something ${signal}.`,
+          `For this table, ${name} works because ${detail}.`,
+          `I'd point you to the ${varietal} here: ${detail}.`,
+          `${direction}, especially because ${detail}.`
+        ].filter(Boolean);
+
+        return pickRecentAware(candidates, {
+          memoryKey: `hook_line::${normalizeGuestType(encounter?.guestStateActual)}::${wine?.id || name}::${hookType}`,
+          seedHint: `${name}::${hookType}::line`,
+          limit: 6
+        }) || candidates[0] || `${frame} ${signal}, ${direction}.`;
       }
 
       function hookPolicy(encounter, wine, tierNow, progState) {
@@ -14882,7 +15268,6 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             stepContent.appendChild(document.createTextNode(upgraded ? "✅ Upgrade. “Nice — that’s the move.”" : "✅ Nod. “Perfect.”"));
             appendFeedbackLine(stepContent, bcFeedbackFromOutcome(reactionChecks, result));
             addStepButton("REFLECT", () => { goToStep(6); }, bar);
-            addStepButton("NEXT", () => { goToStep(6); }, bar);
             return;
           }
 
@@ -15034,15 +15419,12 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
 
             const cont = addStepButton("CONTINUE TO REFLECTION", () => { goToStep(6); }, bar);
             if (!currentEncounter.recoveryChoice && !currentEncounter.resetUsed) cont.disabled = true;
-
-            addStepButton("NEXT", () => { goToStep(6); }, bar);
             return;
           }
 
           stepContent.innerText = "❌ “We’ll choose, thanks.”";
           appendFeedbackLine(stepContent, bcFeedbackFromOutcome(reactionChecks, result));
           addStepButton("REFLECT", () => { goToStep(6); }, bar);
-          addStepButton("NEXT", () => { goToStep(6); }, bar);
           return;
         }
 
@@ -15410,15 +15792,11 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             deliveryStrict: policy.deliveryStrict
           };
           window.__BC_DIFFICULTY__ = { ...policy, tier: tierNow, pressure: guardState.pressureLevel, lastDecision: decision };
-          saveGuardState(guardState);
-          window.__BC_GUARD__ = guardState;
-          ensureProgLoaded();
-          ensureProgMeta();
-          PROG.guard.pressureLevel = guardState.pressureLevel;
-          PROG.guard.finalDifficulty = finalDifficulty;
-          PROG.meta.difficultySeed = finalDifficulty;
-          PROG.guard.last3 = guardState.last3;
-          saveProg();
+          syncProgressionStateMirror({
+            guardState: { ...guardState },
+            difficultySeed: finalDifficulty,
+            persistGuard: true
+          });
           console.log("[GUARD] policy", window.__BC_DIFFICULTY__);
 
           const done = isSessionComplete({ tier: tierNow, guardState });
@@ -15703,7 +16081,11 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             modeTier === "right" ||
             hookTier === "right" ||
             (!modeDamaging && !hookDamaging);
-          const pivotAllowed = pivotPlanned && pivotViable;
+          const recoverySelective =
+            reactionSignal === "red" ||
+            strongPillars <= 1 ||
+            (!readCorrect && (modeDamaging || hookDamaging));
+          const pivotAllowed = pivotPlanned && recoverySelective && pivotViable;
 
           if (abilityFx.closingSurge) {
             recordAbilityImpact({
@@ -15732,7 +16114,7 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             if (redSignalDowngrade) {
               return pivotAllowed
                 ? { outcome: "pivot", score: total }
-                : { outcome: "recovery", score: total };
+                : { outcome: "soft_close", score: total };
             }
             return { outcome: "soft_close", score: total };
           }
@@ -15743,9 +16125,13 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             if (softEligible && strongPillars >= 2) {
               return { outcome: "soft_close", score: total };
             }
-            return { outcome: "recovery", score: total };
+            return recoverySelective
+              ? { outcome: "recovery", score: total }
+              : { outcome: "soft_close", score: total };
           }
-          return { outcome: "recovery", score: total };
+          return recoverySelective
+            ? { outcome: "recovery", score: total }
+            : { outcome: "soft_close", score: total };
         }
 
         function renderRecoveryStep(stepContent, stepButtons, enc, inDrill) {
@@ -16291,16 +16677,11 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
             pressure: guardState.pressureLevel,
             lastDecision: decision
           };
-
-          saveGuardState(guardState);
-          window.__BC_GUARD__ = guardState;
-
-          ensureProgMeta();
-          PROG.guard.pressureLevel = guardState.pressureLevel;
-          PROG.guard.finalDifficulty = finalDifficulty;
-          PROG.meta.difficultySeed = finalDifficulty;
-          PROG.guard.last3 = guardState.last3;
-          saveProg();
+          syncProgressionStateMirror({
+            guardState: { ...guardState },
+            difficultySeed: finalDifficulty,
+            persistGuard: true
+          });
 
           console.log("[GUARD] policy", window.__BC_DIFFICULTY__);
 
@@ -16524,24 +16905,15 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         let minEncounter = 1;
         let maxEncounter = Number.MAX_SAFE_INTEGER;
         if (!isDemoNow) {
-          const spine = getProgressionSpine({ allowNull: true });
-          points = Number(spine?.selectors?.points?.() ?? 0);
-          allowedGuestTypes = Array.isArray(spine?.selectors?.guestTypes?.()) ? spine.selectors.guestTypes() : [];
-          const range = spine?.selectors?.encounterRange?.();
+          const progression = getNormalizedProgressionState();
+          points = Number(progression?.economy?.points ?? 0);
+          allowedGuestTypes = Array.isArray(progression?.economy?.allowedGuestTypes)
+            ? progression.economy.allowedGuestTypes.slice()
+            : [];
+          const range = progression?.economy?.encounterRange;
           if (Array.isArray(range) && range.length === 2) {
             minEncounter = Number(range[0] ?? 1);
             maxEncounter = Number(range[1] ?? Number.MAX_SAFE_INTEGER);
-          }
-          const authoritativeTier = getAuthoritativeTierToServe(null);
-          if (authoritativeTier != null) {
-            const authority = getTierRangeAndGuests(authoritativeTier);
-            minEncounter = Math.max(minEncounter, Number(authority.encounterRange[0] ?? 1));
-            maxEncounter = Math.min(maxEncounter, Number(authority.encounterRange[1] ?? Number.MAX_SAFE_INTEGER));
-            if (Array.isArray(allowedGuestTypes) && allowedGuestTypes.length) {
-              allowedGuestTypes = allowedGuestTypes.filter((guestType) => authority.guestTypes.includes(guestType));
-            } else {
-              allowedGuestTypes = authority.guestTypes.slice();
-            }
           }
           const encounterNumber = encounterIndex + 1;
           if (encounterNumber < minEncounter) encounterIndex = minEncounter - 1;
@@ -16691,9 +17063,14 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
         // Normalize encounter -> UI state
         // ----------------------------
         enc = normalizeEncounterSchema(enc);
-        const variationSeed = String(
-          Number.isFinite(encounterIndex) ? encounterIndex : 0
-        );
+        enc.encounterNumber = enc.encounterNumber ?? (encounterIndex + 1);
+        const encounterIdStable =
+          enc.id ||
+          enc.encounterId ||
+          `${bcMode}_${String(enc.encounterNumber ?? (encounterIndex + 1))}`;
+        const runIndex = Number.isFinite(encounterIndex) ? encounterIndex : 0;
+        const encounterRunId = `${encounterIdStable}::i_${runIndex}`;
+        const variationSeed = `${encounterRunId}::${enc.guestStateActual || ""}::${getEncounterSessionNonce()}`;
         const selectedVariation = pickEncounterVariation(enc, variationSeed);
         enc = applyEncounterVariation(enc, selectedVariation);
         enc.encounterNumber = enc.encounterNumber ?? (encounterIndex + 1);
@@ -16720,18 +17097,12 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           "[BC] Encounter missing encounterNumber",
           enc
         );
-        const encounterIdStable =
-          enc.id ||
-          enc.encounterId ||
-          `${bcMode}_${String(enc.encounterNumber ?? (encounterIndex + 1))}`;
         function preferNonEmpty(next, prev) {
           return (next != null && String(next).trim() !== "") ? next : prev;
         }
 
         // NEW: run-unique id so "NEXT ENCOUNTER" is always a fresh attempt,
         // even if the same template repeats due to tier filtering.
-        const runIndex = Number.isFinite(encounterIndex) ? encounterIndex : 0;
-        const encounterRunId = `${encounterIdStable}::i_${runIndex}`;
         const variantSeed = `${encounterIdStable}::${encounterRunId}::${enc.guestStateActual || ""}`;
         const presentationCtx = getEncounterPresentationContext();
 
@@ -16788,13 +17159,12 @@ ${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
           window.__BC_DIFFICULTY__ = {
             ...policy,
             tierUnlocked: spineTier,
-            pressure: PROG?.guard?.pressureLevel || 0
+            pressure: getNormalizedProgressionState()?.session?.pressureLevel || 0
           };
-          if (window.PROG?.meta) {
-            window.PROG.meta.difficultySeed = policy.d;
-            window.PROG.meta.lastUpdatedMs = Date.now();
-            saveProg();
-          }
+          syncProgressionStateMirror({
+            difficultySeed: policy.d,
+            persistGuard: false
+          });
         } else {
           enc.difficulty = enc.difficulty ?? 1;
           window.__BC_DIFFICULTY__ = {

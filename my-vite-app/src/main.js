@@ -1520,6 +1520,63 @@ function initProgressionSpineFromState() {
   return progressionSpine;
 }
 
+async function hydrateProgressionSpineFromLatestSnapshot({
+  userId = null,
+  restaurantId = null,
+} = {}) {
+  const uid = userId || appState.session?.user?.id || null;
+  const rid =
+    restaurantId ||
+    appState.activeRestaurantId ||
+    appState.profile?.restaurant_id ||
+    null;
+
+  if (!uid || !rid) return null;
+
+  const spine = initProgressionSpineFromState();
+  const hydrate = spine?.actions?.hydrateFromCanonicalState;
+  if (typeof hydrate !== "function") return null;
+
+  try {
+    const { data, error } = await supabase
+      .from("bc_progression_state_v1")
+      .select("canonical_state, updated_at")
+      .eq("user_id", uid)
+      .eq("restaurant_id", rid)
+      .maybeSingle();
+
+    if (!error && data?.canonical_state && typeof data.canonical_state === "object") {
+      return hydrate(data.canonical_state);
+    }
+  } catch (e) {
+    console.warn("[PROGRESSION STATE] dedicated load failed, falling back", e);
+  }
+
+  const { data, error } = await supabase
+    .from("bc_skill_snapshots_v1")
+    .select("payload, created_at")
+    .eq("user_id", uid)
+    .eq("restaurant_id", rid)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data?.payload || typeof data.payload !== "object") {
+    return null;
+  }
+
+  const canonicalState =
+    data.payload.progressionState ||
+    data.payload.progression_state ||
+    null;
+
+  if (!canonicalState || typeof canonicalState !== "object") {
+    return null;
+  }
+
+  return hydrate(canonicalState);
+}
+
 // ---- expose restaurantId getter globally (for debug + bridge) ----
 window.getActiveRestaurantId =
   window.getActiveRestaurantId ||
@@ -4681,6 +4738,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
 // Progression Snapshot Provider (PARENT) -> used by progressionRouter
 // ------------------------------------------------------------
 async function buildProgressionResult({ userId, restaurantId, desiredTier = 3 }) {
+  await hydrateProgressionSpineFromLatestSnapshot({ userId, restaurantId });
   const spine = initProgressionSpineFromState();
   const currentPoints = Number(spine?.selectors?.points?.() ?? NaN);
   return await decideAllowedTier({
@@ -5146,6 +5204,7 @@ async function refreshParentProgressionFromDb() {
     }
 
     const desiredTier = 2;
+    await hydrateProgressionSpineFromLatestSnapshot({ userId, restaurantId });
     const spine = initProgressionSpineFromState();
     const currentPoints = Number(spine?.selectors?.points?.() ?? NaN);
     const result = await decideAllowedTier({

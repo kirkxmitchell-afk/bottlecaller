@@ -216,19 +216,74 @@ export function createProgressionStore(storage = window.localStorage) {
     emit();
   }
 
+  function hydrateFromCanonicalState(canonicalState) {
+    const c = canonicalState && typeof canonicalState === "object" ? canonicalState : null;
+    if (!c) return { ok: false, reason: "missing" };
+
+    const economy = c.economy && typeof c.economy === "object" ? c.economy : {};
+    const session = c.session && typeof c.session === "object" ? c.session : {};
+    const display = c.display && typeof c.display === "object" ? c.display : {};
+
+    if (Number.isFinite(Number(economy.points))) {
+      state.points = Math.max(0, Math.floor(Number(economy.points)));
+    }
+
+    if (Number.isFinite(Number(display.difficultySeed))) {
+      state.difficulty.seed = Math.max(1, Number(display.difficultySeed));
+      state.difficulty.lastUpdatedAt = Date.now();
+    }
+
+    if (Number.isFinite(Number(session.runEase))) {
+      state.session.runEase = Number(session.runEase);
+    }
+
+    if (Number.isFinite(Number(session.runEaseRemaining))) {
+      state.session.runEaseRemaining = Math.max(0, Number(session.runEaseRemaining));
+    }
+
+    if (Number.isFinite(Number(session.currentEncounterId ?? session.encounterId))) {
+      state.session.currentEncounterId = Number(session.currentEncounterId ?? session.encounterId);
+    } else if (Array.isArray(economy.encounterRange) && economy.encounterRange.length === 2) {
+      state.session.currentEncounterId = Math.max(
+        Number(economy.encounterRange[0] ?? 1),
+        Number(state.session.currentEncounterId ?? 1)
+      );
+    }
+
+    if (typeof session.mode === "string" && session.mode.trim()) {
+      state.session.mode = session.mode.trim().toLowerCase();
+    }
+
+    if (typeof session.guestTypeSelected === "string" && session.guestTypeSelected.trim()) {
+      state.session.guestTypeSelected = session.guestTypeSelected.trim().toLowerCase();
+    }
+
+    if (Number.isFinite(Number(session.runId))) {
+      state.run.runId = Math.max(state.run.runId || 0, Number(session.runId));
+    }
+
+    state = normalize(state, state.identity);
+    save();
+    emit();
+    return { ok: true, points: state.points, tier: deriveTier(state.points) };
+  }
+
   function applyEncounterResult({ encounterId, success, pointEligible }) {
     const now = Date.now();
     state.difficulty.lastUpdatedAt = now;
     state.run = state.run || {};
     state.run.scoredThisRun = state.run.scoredThisRun || {};
     const runKey = String(state.run.runId || 0);
+    const encounterKey = String(encounterId || "");
+    const scoreKey = `${runKey}:${encounterKey}`;
     console.log("[PROG] applyEncounterResult", {
       encounterId,
       success,
       pointEligible,
       runId: state.run.runId,
       runKey,
-      alreadyScored: !!state.run.scoredThisRun[runKey],
+      scoreKey,
+      alreadyScored: !!state.run.scoredThisRun[scoreKey],
       points: state.points
     });
 
@@ -239,9 +294,9 @@ export function createProgressionStore(storage = window.localStorage) {
         state.history.completedEncounterIds.push(encounterId);
       }
 
-      if (pointEligible && !state.run.scoredThisRun[runKey]) {
+      if (pointEligible && encounterKey && !state.run.scoredThisRun[scoreKey]) {
         grantPoints(1);
-        state.run.scoredThisRun[runKey] = true;
+        state.run.scoredThisRun[scoreKey] = true;
       }
 
       // boring difficulty update (don’t tune yet)
@@ -361,6 +416,7 @@ export function createProgressionStore(storage = window.localStorage) {
         resetEncounterFlow,
         resetRunScoring,
         setSessionSelection,
+        hydrateFromCanonicalState,
         applyEncounterResult,
         applyTimedChallengeReward,
         applyDrillReward,

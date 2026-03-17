@@ -1,5 +1,11 @@
 import { BC_TYPES } from "../bcMessages";
 
+function isMissingRelationError(error) {
+  const code = String(error?.code || "");
+  const message = String(error?.message || "");
+  return code === "42P01" || /does not exist|undefined table/i.test(message);
+}
+
 function normalizeAllowedScopeType(value, fallback = "restaurant") {
   const s = String(value || "").trim().toLowerCase();
   return s || fallback;
@@ -217,6 +223,45 @@ async function insertSkillSnapshotAndDrillEffect({
   return { ok: true };
 }
 
+async function upsertCanonicalProgressionState({
+  supabase,
+  ctx,
+  payload,
+}) {
+  const canonicalState =
+    payload?.progressionState ||
+    payload?.progression_state ||
+    null;
+
+  if (!canonicalState || typeof canonicalState !== "object") {
+    return { ok: false, skipped: true, reason: "missing_progression_state" };
+  }
+
+  const row = {
+    user_id: ctx.userId,
+    restaurant_id: ctx.restaurantId,
+    scope_id: ctx.scopeId || null,
+    canonical_state: canonicalState,
+    source_type: "progress_report",
+    updated_at: new Date().toISOString(),
+  };
+
+  const { error } = await supabase
+    .from("bc_progression_state_v1")
+    .upsert(row, { onConflict: "user_id,restaurant_id" });
+
+  if (error) {
+    if (isMissingRelationError(error)) {
+      console.warn("[PROGRESSION STATE] dedicated table missing, using snapshot payload fallback");
+      return { ok: false, skipped: true, reason: "missing_table" };
+    }
+    console.warn("[PROGRESSION STATE] upsert failed", error);
+    return { ok: false, error: error.message || String(error) };
+  }
+
+  return { ok: true };
+}
+
 export function makeProgressReportSubmitHandler({
   supabase,
   getSourceCtx,
@@ -316,6 +361,12 @@ export function makeProgressReportSubmitHandler({
 
       const inserted = Number(writeResult?.inserted || 0);
 
+      const progressionStateResult = await upsertCanonicalProgressionState({
+        supabase,
+        ctx,
+        payload: nextPayload,
+      });
+
       const snapshotResult = await insertSkillSnapshotAndDrillEffect({
         supabase,
         ctx,
@@ -327,6 +378,12 @@ export function makeProgressReportSubmitHandler({
         ok: true,
         inserted,
         updated: !!writeResult?.updated,
+        progressionStateOk: !!progressionStateResult?.ok,
+        progressionStateSkipped: !!progressionStateResult?.skipped,
+        progressionStateError:
+          progressionStateResult?.ok || progressionStateResult?.skipped
+            ? null
+            : (progressionStateResult?.error || "progression_state_write_failed"),
         snapshotOk: !!snapshotResult?.ok,
         snapshotError: snapshotResult?.ok ? null : (snapshotResult?.error || "snapshot_insert_failed"),
       });
