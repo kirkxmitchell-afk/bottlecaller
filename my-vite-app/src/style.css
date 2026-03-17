@@ -1939,6 +1939,19 @@ button:hover, .btn:hover, .btn-ghost:hover{
 #screenManagerBoard #mbInsightsPanel::before{ content: "Insights"; }
 #screenManagerBoard #mbEnterprisePanel::before{ content: "Enterprise Control"; }
 
+#screenManagerBoard #mbRestaurantContextCard > .card > div:first-child[style*="font-weight:600"],
+#screenManagerBoard #mbGroupOverviewCard > .card > div:first-child[style*="font-weight:600"],
+#screenManagerBoard #mbGroupMetricsCard > .card > div:first-child[style*="font-weight:600"],
+#screenManagerBoard #mbOverviewTimedChallenge > .card > div:first-child[style*="font-weight:600"],
+#screenManagerBoard #mbDrillSummary > .card > div:first-child[style*="font-weight:600"],
+#screenManagerBoard #mbAttributeAbilitiesPanel .card > div:first-child[style*="font-weight:600"],
+#screenManagerBoard #mbAreaAbilitiesPanel .card > div:first-child[style*="font-weight:600"],
+#screenManagerBoard #mbTimedChallengeQuickActionsPanel > .card > div:first-child[style*="font-weight:600"],
+#screenManagerBoard #mbInsightsPanel .card > div:first-child[style*="font-weight:700"],
+#screenManagerBoard #mbEnterprisePanel .card > div:first-child[style*="font-weight:600"]{
+  display: none !important;
+}
+
 #screenManagerBoard #mbTab_messenger #mbThreadList,
 #screenManagerBoard #mbTab_messenger #mbThreadMessages{
   background:
