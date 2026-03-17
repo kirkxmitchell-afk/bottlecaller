@@ -2813,12 +2813,49 @@ html, body{ height:100%; }
   grid-column: 1 / -1;
 }
 
+#screenHome .app-premium-hero{
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr);
+  gap: 24px;
+  align-items: stretch;
+  margin-bottom: 10px;
+}
+
+#screenHome .app-premium-lead{
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 100%;
+  padding: 8px 4px 8px 0;
+  text-align: left;
+}
+
+#screenHome .app-premium-status{
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border-radius: 24px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.025)),
+    rgba(6,12,18,0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.05),
+    0 20px 44px rgba(0,0,0,0.22);
+}
+
 #screenHome .app-mode-header{
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 10px;
   margin-bottom: 18px;
+}
+
+#screenHome #cardPremium .app-mode-header{
+  align-items: flex-start;
+  text-align: left;
+  margin-bottom: 16px;
 }
 
 #screenHome .app-mode-title{
@@ -2841,9 +2878,10 @@ html, body{ height:100%; }
 
 #screenHome #cardPremium .app-mode-copy{
   max-width: 60ch;
-  margin-left: auto;
-  margin-right: auto;
+  margin-left: 0;
+  margin-right: 0;
   font-size: 14px;
+  text-align: left;
 }
 
 #screenHome #cardDemo .app-mode-copy{
@@ -2873,6 +2911,110 @@ html, body{ height:100%; }
   background:
     linear-gradient(180deg, rgba(125,211,252,0.14), rgba(255,255,255,0.03)),
     rgba(255,255,255,0.02) !important;
+}
+
+#screenHome #cardPremium .app-score-row,
+#screenHome #cardPremium .app-progress-card{
+  margin-top: 0 !important;
+}
+
+#screenHome #cardPremium .app-progress-card{
+  padding: 20px 18px !important;
+  background:
+    linear-gradient(180deg, rgba(94,234,212,0.12), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.02) !important;
+}
+
+#screenHome .app-progress-meter-wrap{
+  display: grid;
+  gap: 10px;
+  margin: 4px 0 14px;
+}
+
+#screenHome .app-progress-meter{
+  position: relative;
+  width: 100%;
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015)),
+    rgba(4,10,16,0.52);
+}
+
+#screenHome .app-progress-meter-bar{
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background:
+    linear-gradient(90deg, rgba(94,234,212,0.78), rgba(125,211,252,0.95) 65%, rgba(255,196,121,0.90));
+  box-shadow:
+    0 0 22px rgba(94,234,212,0.28),
+    inset 0 1px 0 rgba(255,255,255,0.18);
+  transition: width 180ms ease;
+}
+
+#screenHome .app-progress-meter-head{
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+#screenHome .app-progress-chip-row{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 12px;
+}
+
+#screenHome .app-progress-chip{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02)),
+    rgba(7,14,20,0.44);
+  color: rgba(236,255,252,0.86);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+#screenHome .app-progress-percent{
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: rgba(236,255,252,0.96);
+}
+
+#screenHome .app-progress-notice{
+  color: rgba(236,255,252,0.72) !important;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+#screenHome .app-progress-detail{
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+#screenHome .app-progress-label{
+  color: rgba(244,246,247,0.56);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 10px;
+  font-weight: 800;
 }
 
 #screenHome .app-home-actions{
@@ -2975,6 +3117,27 @@ html, body{ height:100%; }
 
   #screenHome #cardPremium .app-home-actions{
     grid-template-columns: 1fr !important;
+  }
+
+  #screenHome .app-premium-hero{
+    grid-template-columns: 1fr;
+  }
+
+  #screenHome .app-premium-lead,
+  #screenHome #cardPremium .app-mode-header,
+  #screenHome #cardPremium .app-mode-copy{
+    text-align: center;
+    align-items: center;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  #screenHome .app-progress-meter-head,
+  #screenHome .app-progress-detail,
+  #screenHome .app-progress-chip-row{
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
   }
 
   #screenHome .app-home-header h2{

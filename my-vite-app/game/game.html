@@ -3334,17 +3334,38 @@
 
       <!-- Premium card -->
       <div class="card app-mode-card" id="cardPremium" data-home-mode="premium">
-        <div class="app-mode-header">
-          <strong class="app-mode-title">Premium</strong>
-          <div class="app-mode-kicker">Full service pressure</div>
-        </div>
-        <p class="app-mode-copy">Run the full sequence with progression pressure, tighter reads, stronger delivery demands, and the real table-close loop.</p>
-        <div class="score-row app-score-row">Wines saved: <span id="homePremiumCount">0 / 10</span></div>
-        <div class="score-row app-score-row">Runs total: <span id="homePremiumRuns">0</span></div>
-        <div class="card progress-card app-progress-card">
-          <strong class="app-progress-title">Progress</strong>
-          <div class="small-text">Level: <span id="progressNamePremium">—</span></div>
-          <div class="small-text">Points: <span id="progressPointsPremium">0</span></div>
+        <div class="app-premium-hero">
+          <div class="app-premium-lead">
+            <div class="app-mode-header">
+              <strong class="app-mode-title">Premium</strong>
+              <div class="app-mode-kicker">Full service pressure</div>
+            </div>
+            <p class="app-mode-copy">Run the full sequence with progression pressure, tighter reads, stronger delivery demands, and the real table-close loop.</p>
+          </div>
+          <div class="app-premium-status">
+            <div class="score-row app-score-row">Wines saved: <span id="homePremiumCount">0 / 10</span></div>
+            <div class="score-row app-score-row">Runs total: <span id="homePremiumRuns">0</span></div>
+            <div class="card progress-card app-progress-card">
+              <strong class="app-progress-title">Progress</strong>
+              <div class="app-progress-meter-wrap">
+                <div class="app-progress-meter" aria-hidden="true">
+                  <div class="app-progress-meter-bar" id="progressBarPremium"></div>
+                </div>
+                <div class="app-progress-meter-head">
+                  <strong class="app-progress-percent" id="progressPercentPremium">0%</strong>
+                  <span class="small-text app-progress-notice" id="progressNoticePremium">Opening service band</span>
+                </div>
+              </div>
+              <div class="app-progress-chip-row">
+                <span class="app-progress-chip" id="premiumPressureChip">Pressure: Low band</span>
+                <span class="app-progress-chip" id="premiumGuestChip">Guests: Core floor reads</span>
+              </div>
+              <div class="small-text">Level: <span id="progressNamePremium">—</span></div>
+              <div class="small-text">Points: <span id="progressPointsPremium">0</span></div>
+              <div class="small-text app-progress-detail"><span class="app-progress-label">Focus</span><span id="progressFocusPremium">—</span></div>
+              <div class="small-text app-progress-detail"><span class="app-progress-label">Window</span><span id="progressNextPremium">—</span></div>
+            </div>
+          </div>
         </div>
         <div class="button-row app-home-actions" id="premiumButtons">
           <button id="btnGoPremium" type="button">Setup</button>
@@ -10663,13 +10684,28 @@ function ensureProgLoaded() {
       }
       window.updateCounts = updateCounts;
 
+      function formatGuestTypeBadgeLabel(guestType) {
+        const raw = String(guestType || "").trim();
+        if (!raw) return "";
+        return raw
+          .split("_")
+          .filter(Boolean)
+          .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+          .join(" ");
+      }
+
       function renderProgressStatusWindow() {
         if (!ids) return;
         const nameEl = document.getElementById(ids.progressName);
+        const percentEl = document.getElementById(ids.progressPercent);
+        const barEl = document.getElementById(ids.progressBar);
+        const noticeEl = document.getElementById(ids.progressNotice);
         const focusEl = document.getElementById(ids.progressFocus);
         const nextEl = document.getElementById(ids.progressNext);
         const pointsEl = document.getElementById(ids.progressPoints);
-        if (!nameEl && !focusEl && !nextEl && !pointsEl) return;
+        const pressureChipEl = document.getElementById("premiumPressureChip");
+        const guestChipEl = document.getElementById("premiumGuestChip");
+        if (!nameEl && !percentEl && !barEl && !noticeEl && !focusEl && !nextEl && !pointsEl) return;
 
         try {
           const snapshot = getUnifiedProgressSnapshot();
@@ -10680,12 +10716,47 @@ function ensureProgLoaded() {
           const allowedGuestTypes = prog?.allowedGuestTypes ?? [];
           const difficultySeed = prog?.difficultySeed ?? 1;
           const effectiveDifficulty = prog?.effectiveDifficulty ?? 1;
+          const pressureBand = String(snapshot?.progressionState?.display?.pressureBand || "low");
+          const encounterCeiling = (window.bcMode === "demo") ? 5 : 20;
+          const unlockedCeiling = Number(encounterRange?.[1] ?? 5);
+          const percent = Math.max(0, Math.min(100, Math.round((unlockedCeiling / encounterCeiling) * 100)));
+          const notice = points <= 0
+            ? "Opening service band"
+            : `Tier ${tier} service window`;
+          const pressureLabel =
+            pressureBand === "high" ? "Pressure: High band" :
+            pressureBand === "mid" ? "Pressure: Mid band" :
+            "Pressure: Low band";
+          const guestPreview = allowedGuestTypes
+            .slice(0, 2)
+            .map(formatGuestTypeBadgeLabel)
+            .filter(Boolean)
+            .join(" + ");
+          const guestLabel = guestPreview
+            ? `Guests: ${guestPreview}${allowedGuestTypes.length > 2 ? " +" : ""}`
+            : "Guests: Core floor reads";
           if (nameEl) nameEl.innerText = `Tier ${tier}`;
+          if (percentEl) percentEl.innerText = `${percent}%`;
+          if (barEl) {
+            barEl.style.width = `${percent}%`;
+            barEl.setAttribute("aria-valuenow", String(percent));
+          }
+          if (noticeEl) noticeEl.innerText = notice;
+          if (pressureChipEl) pressureChipEl.innerText = pressureLabel;
+          if (guestChipEl) guestChipEl.innerText = guestLabel;
           if (focusEl) focusEl.innerText = `d=${difficultySeed} / eff=${effectiveDifficulty}`;
           if (nextEl) nextEl.innerText = `${encounterRange[0]}-${encounterRange[1]} | ${allowedGuestTypes.join(", ")}`;
           if (pointsEl) pointsEl.innerText = String(points);
         } catch (e) {
           if (nameEl) nameEl.innerText = "—";
+          if (percentEl) percentEl.innerText = "0%";
+          if (barEl) {
+            barEl.style.width = "0%";
+            barEl.setAttribute("aria-valuenow", "0");
+          }
+          if (noticeEl) noticeEl.innerText = "Opening service band";
+          if (pressureChipEl) pressureChipEl.innerText = "Pressure: Low band";
+          if (guestChipEl) guestChipEl.innerText = "Guests: Core floor reads";
           if (focusEl) focusEl.innerText = "—";
           if (nextEl) nextEl.innerText = "—";
           if (pointsEl) pointsEl.innerText = "0";
