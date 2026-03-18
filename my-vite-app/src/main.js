@@ -5642,6 +5642,11 @@ function wireParentButtons() {
   if (btnPremiumWineSetup && !btnPremiumWineSetup.__bcBound) {
     btnPremiumWineSetup.__bcBound = true;
     btnPremiumWineSetup.addEventListener("click", async () => {
+      const frameWindow = getPremiumFrameWindow?.();
+      if (frameWindow) {
+        sendPremiumNav("setup_premium");
+        return;
+      }
       await openPremiumSetupScreen();
     });
   }
