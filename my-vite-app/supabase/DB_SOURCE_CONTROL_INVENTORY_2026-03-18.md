@@ -39,9 +39,20 @@ These function definitions appear in the Supabase backup snapshot, but are not a
 These are referenced by repo migrations, but no authoritative definition currently exists in repo migrations, and they were not present in the backup reconstruction file either:
 
 - `public.create_restaurant_invite(uuid, text)`
+
+Live lookup result: not found with that exact signature in `public`.
+
+Important note:
+
+- `create_restaurant_invite` is still called by the app code, so this is an active gap that should be implemented or retrieved intentionally.
+
+## Stale Repo References
+
+These names are referenced in repo migrations but were not found live in Supabase with the expected signatures:
+
 - `public.bc_get_restaurant_manager_ids(uuid)`
 
-These should be retrieved from Supabase directly before any further refactor so they can be source-controlled intentionally.
+Current repo scan found no app call site for `bc_get_restaurant_manager_ids`, so it currently looks like a stale migration reference rather than an active production dependency.
 
 ## Live Policies Still Not Clearly Source-Controlled
 
@@ -97,9 +108,9 @@ These policy areas still exist live in Supabase, but are not fully represented b
 
 If you want to continue source-controlling the DB in a disciplined way, the next order should be:
 
-1. Retrieve and source-control the unresolved function definitions:
+1. Resolve the active missing function definition:
    - `create_restaurant_invite`
-   - `bc_get_restaurant_manager_ids`
+   This is called by the app and was not found live with the expected signature.
 
 2. Source-control the high-impact lifecycle functions from the backup snapshot:
    - `claim_license_code`
@@ -110,13 +121,16 @@ If you want to continue source-controlling the DB in a disciplined way, the next
    - `set_active_restaurant_for_scope`
    - `add_restaurant_to_scope`
 
-3. Normalize role naming inside those functions to the current canonical model:
+3. Remove stale migration references such as:
+   - `bc_get_restaurant_manager_ids`
+
+4. Normalize role naming inside those functions to the current canonical model:
    - `single_manager`
    - `group_manager`
    - `enterpriser`
    - `waiter`
 
-4. Consolidate duplicated live policies on:
+5. Consolidate duplicated live policies on:
    - `profiles`
    - `bc_drill_runs_v1`
    - `bc_skill_snapshots_v1`
