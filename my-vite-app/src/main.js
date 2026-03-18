@@ -6022,7 +6022,7 @@ async function loadWaiterMessagesThread() {
     .eq("restaurant_id", restaurantId)
     .or(`sender_user_id.eq.${selfUserId},receiver_user_id.eq.${selfUserId}`)
     .is("archived_at", null)
-    .order("created_at", { ascending: true })
+    .order("created_at", { ascending: false })
     .limit(100);
 
   if (error) {
@@ -6046,7 +6046,7 @@ async function loadWaiterMessagesThread() {
   threadEl.innerHTML = rows
     .map((row) => renderWaiterThreadItem(row, selfUserId, nameMap))
     .join("");
-  threadEl.scrollTop = threadEl.scrollHeight;
+  threadEl.scrollTop = 0;
   wireWaiterThreadButtons();
 }
 

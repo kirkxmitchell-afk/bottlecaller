@@ -15,6 +15,17 @@ These are now clearly represented by repo migrations:
 - `public.get_allowed_restaurants_for_current_user()`
 - `public.admin_set_seat_limit(uuid, integer)`
 - `public.is_manager_in_restaurant(uuid)`
+- `public.create_restaurant_invite(uuid, text)`
+- `public.claim_license_code(text, text)`
+- `public.redeem_code(text)`
+- `public.add_restaurant_to_scope(uuid, uuid)`
+- `public.admin_attach_restaurant_to_scope(uuid, uuid)`
+- `public.bc_get_restaurant_manager_targets_v1(uuid)`
+- `public.create_restaurant(text)`
+- `public.create_restaurant_from_code(text, text)`
+- `public.get_scope_restaurants(uuid)`
+- `public.join_restaurant_by_code(text)`
+- `public.set_active_restaurant_for_scope(uuid)`
 - scope-table RLS on `bc_scope_restaurants`, `bc_scope_memberships`, `bc_scopes`
 - hardening/cleanup policies on `bc_event_log`, `bc_messages_v1`, `bc_progression_state_v1`, `restaurant_invites`, `bc_wines`, `wines`
 - view `security_invoker` changes in phase 2
@@ -23,16 +34,10 @@ These are now clearly represented by repo migrations:
 
 These function definitions appear in the Supabase backup snapshot, but are not authored as first-class repo migrations today:
 
-- `public.add_restaurant_to_scope(uuid, uuid)`
-- `public.admin_attach_restaurant_to_scope(uuid, uuid)`
-- `public.bc_get_restaurant_manager_targets_v1(uuid)`
-- `public.claim_license_code(text, text)`
-- `public.create_restaurant(text)`
-- `public.create_restaurant_from_code(text, text)`
-- `public.get_scope_restaurants(uuid)`
-- `public.join_restaurant_by_code(text)`
-- `public.redeem_code(text)`
-- `public.set_active_restaurant_for_scope(uuid)`
+None from the previously identified high-impact lifecycle set.
+
+The backup snapshot still remains useful as a historical reference, but the
+main app-used lifecycle functions have now been brought under repo control.
 
 ## Functions Referenced But Still Unresolved
 
@@ -144,6 +149,6 @@ Current status:
 
 - security posture: much better
 - operational risk: reduced
-- source-control completeness: still partial
+- source-control completeness: improved, but still partial
 
 The next project is no longer emergency security response. It is controlled database codification.
