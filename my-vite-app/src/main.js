@@ -566,11 +566,12 @@ document.querySelector("#app").innerHTML = `
                 <input
                   id="mbTimedChallengeReward"
                   type="number"
-                  min="0"
-                  step="10"
-                  value="50"
+                  min="1"
+                  max="5"
+                  step="1"
+                  value="5"
                   style="width:110px;"
-                  placeholder="Reward"
+                  placeholder="Points"
                 />
               </div>
 
@@ -11827,7 +11828,7 @@ function getTimedChallengeComposerValues(source = "messenger") {
     targetUserId: String(targetEl?.value || "").trim() || null,
     challengeKey: String(typeEl?.value || "closing_push"),
     durationSec: Number(durationEl?.value || 600),
-    rewardPoints: Number(rewardEl?.value || 50),
+    rewardPoints: Math.max(1, Math.min(5, Number(rewardEl?.value || 5))),
   };
 }
 
@@ -12299,11 +12300,12 @@ function renderManagerTimedChallengeActionPanel() {
         <input
           id="mbLcTimedChallengeReward"
           type="number"
-          min="0"
-          step="10"
-          value="50"
+          min="1"
+          max="5"
+          step="1"
+          value="5"
           style="width:110px;"
-          placeholder="Reward"
+          placeholder="Points"
         />
       </div>
 
