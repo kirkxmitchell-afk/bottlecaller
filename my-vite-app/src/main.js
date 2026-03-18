@@ -6117,6 +6117,7 @@ async function openWaiterMessages() {
   document.getElementById("waiterMessagesPanel")?.classList.remove("hidden");
   const status = document.getElementById("waiterSendProgressStatus");
   if (status) status.textContent = "";
+  syncWaiterMessengerComposerVisibility();
   try {
     await loadWaiterMessagesThread();
   } catch (e) {
@@ -6129,6 +6130,26 @@ function closeWaiterMessages() {
   document.getElementById("waiterMessagesPanel")?.classList.add("hidden");
   const status = document.getElementById("waiterSendProgressStatus");
   if (status) status.textContent = "";
+}
+
+function syncWaiterMessengerComposerVisibility() {
+  const profile = appState?.profile || {};
+  const membershipRole = normalizeMembershipRole(profile);
+  const roleAliases = roleAliasesForMatching(profile);
+  const isManagerLikeRole = roleAliases.some((role) =>
+    ["manager", "single_manager", "group_manager", "enterprise_admin", "enterpriser"].includes(role)
+  );
+  const isWaiter = membershipRole === "waiter" && !isManagerLikeRole;
+  const sendBtn = document.getElementById("btnWaiterSendProgress");
+  const status = document.getElementById("waiterSendProgressStatus");
+  const composerBlock = sendBtn?.parentElement || null;
+
+  if (composerBlock) {
+    composerBlock.classList.toggle("hidden", !isWaiter);
+    composerBlock.style.display = isWaiter ? "" : "none";
+  }
+
+  if (!isWaiter && status) status.textContent = "";
 }
 
 function wireWaiterMessagesPanel() {
