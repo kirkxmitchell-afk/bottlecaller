@@ -3285,6 +3285,7 @@
         </ul>
         <div class="button-row app-welcome-actions">
           <button id="btnWelcomeStart" type="button">Start</button>
+          <button id="btnWelcomeHome" type="button" class="btn-ghost">Home</button>
           <button
             id="btnWelcomeBackToSetup"
             type="button"
@@ -17578,6 +17579,7 @@ function ensureProgLoaded() {
       // ---------- Buttons ----------
       function initButtons() {
         const btnWelcomeStart = document.getElementById("btnWelcomeStart");
+        const btnWelcomeHome = document.getElementById("btnWelcomeHome");
         const btnResetApp = document.getElementById("btnResetApp");
         const btnBackToSetup = document.getElementById("btnWelcomeBackToSetup");
 
@@ -17700,6 +17702,17 @@ function ensureProgLoaded() {
           });
 
           console.log("[BOOT] btnWelcomeStart wired ✅", { mode: window.bcMode, isDemo: window.isDemo });
+        }
+
+        if (btnWelcomeHome) {
+          btnWelcomeHome.onclick = null;
+          btnWelcomeHome.__bcBound = false;
+
+          bindInput(btnWelcomeHome, () => {
+            try { localStorage.setItem(coverKey, "true"); } catch {}
+            resetNavState();
+            showScreen("screenHome");
+          });
         }
 
         if (!isWaiter) {
