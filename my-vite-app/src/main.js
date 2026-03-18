@@ -1061,33 +1061,14 @@ document.querySelector("#app").innerHTML = `
 
     <div id="hudMsg" class="small" style="margin-top:10px;"></div>
   </div>
-
-  <!-- MANAGER BOARD MODAL -->
-  <!-- DEBUG PANEL -->
-  <pre id="debugPanel"
-    style="
-      position: fixed; right: 12px; bottom: 12px;
-      width: min(560px, 92vw);
-      max-height: 42vh;
-      overflow: auto;
-      z-index: 99997;
-      white-space: pre-wrap;
-      background: rgba(0,0,0,0.92);
-      color: #00ff66;
-      padding: 10px;
-      border-radius: 12px;
-      font-size: 12px;
-    "></pre>
 `;
 
 // ------------------------------------------------------------
 // Debug + global crash catcher
 // ------------------------------------------------------------
-const debugEl = document.getElementById("debugPanel");
 function setDebug(obj) {
-  debugEl.textContent = JSON.stringify(obj, null, 2);
+  return obj;
 }
-debugEl.textContent = "Debug panel live ✅";
 
 window.addEventListener("error", (e) => {
   setDebug({
