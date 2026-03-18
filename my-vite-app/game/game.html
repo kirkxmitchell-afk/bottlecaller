@@ -14838,36 +14838,7 @@ function ensureProgLoaded() {
       }
 
       function renderDebugStateBox() {
-        let box = document.getElementById("bcDebugState");
-        if (!box) {
-          box = document.createElement("pre");
-          box.id = "bcDebugState";
-          box.className = "bc-debug-box";
-          const root = document.getElementById("screenPlay") || document.body;
-          root.appendChild(box);
-        }
-
-        const enc = currentEncounter;
-        const diff = window.__BC_DIFFICULTY__;
-        const checks = (typeof window.evaluateChecks === "function") ? window.evaluateChecks(enc) : null;
-
-        box.textContent =
-`BC STATE
-step=${currentStep}
-encounterIndex=${encounterIndex}
-encounterNumber=${enc?.encounterNumber ?? "—"}
-encounterId=${enc?.id ?? "—"}
-guestActual=${enc?.guestStateActual ?? "—"}
-modeSelected=${enc?.modeSelected ?? "—"}
-hookSelected=${enc?.hookSelected ?? "—"}
-delivery=${enc?.selectedS1 ?? "—"} / ${enc?.selectedS2 ?? "—"}
-
-DIFFICULTY
-d=${diff?.d ?? "—"} pressure=${diff?.pressure ?? "—"} hookStrict=${diff?.hookStrictness ?? "—"}
-
-CHECKS
-${checks ? JSON.stringify(checks, null, 2) : "checks unavailable"}
-`;
+        document.getElementById("bcDebugState")?.remove();
       }
 
       function clearStepHighlights() {
