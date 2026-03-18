@@ -252,6 +252,8 @@ grant execute on function public.bc_get_restaurant_manager_targets_v1(uuid) to a
 -- caller (p_new_limit), and support the canonical manager role set.
 -- ---------------------------------------------------------------------------
 
+drop function if exists public.admin_set_seat_limit(uuid, integer);
+
 create or replace function public.admin_set_seat_limit(p_restaurant_id uuid, p_new_limit integer)
 returns json
 language plpgsql
@@ -322,6 +324,10 @@ begin
   );
 end;
 $function$;
+
+revoke all on function public.admin_set_seat_limit(uuid, integer) from public;
+revoke all on function public.admin_set_seat_limit(uuid, integer) from anon;
+grant execute on function public.admin_set_seat_limit(uuid, integer) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- Wines: fix the always-true policy warning on legacy public.wines and align
