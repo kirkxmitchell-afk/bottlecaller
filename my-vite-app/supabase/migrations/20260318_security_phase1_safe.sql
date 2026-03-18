@@ -61,28 +61,41 @@ as $$
       p.restaurant_id as active_restaurant_id
     from public.profiles p
     where p.user_id = auth.uid()
+  ),
+  allowed_restaurants as (
+    select
+      sr.scope_id,
+      me.scope_type,
+      r.id as restaurant_id,
+      r.name as restaurant_name,
+      r.code as restaurant_code,
+      r.seat_limit,
+      r.require_invite,
+      (r.id = me.active_restaurant_id) as is_active,
+      r.created_at
+    from me
+    join public.bc_scope_restaurants sr
+      on (
+        (me.scope_type = 'restaurant' and sr.scope_id = me.scope_id and sr.restaurant_id = me.active_restaurant_id)
+        or
+        (me.scope_type in ('group', 'enterprise') and sr.scope_id = me.scope_id)
+      )
+    join public.restaurants r
+      on r.id = sr.restaurant_id
   )
   select distinct
-    sr.scope_id,
-    me.scope_type,
-    r.id as restaurant_id,
-    r.name as restaurant_name,
-    r.code as restaurant_code,
-    r.seat_limit,
-    r.require_invite,
-    (r.id = me.active_restaurant_id) as is_active
-  from me
-  join public.bc_scope_restaurants sr
-    on (
-      (me.scope_type = 'restaurant' and sr.scope_id = me.scope_id and sr.restaurant_id = me.active_restaurant_id)
-      or
-      (me.scope_type in ('group', 'enterprise') and sr.scope_id = me.scope_id)
-    )
-  join public.restaurants r
-    on r.id = sr.restaurant_id
+    ar.scope_id,
+    ar.scope_type,
+    ar.restaurant_id,
+    ar.restaurant_name,
+    ar.restaurant_code,
+    ar.seat_limit,
+    ar.require_invite,
+    ar.is_active
+  from allowed_restaurants ar
   order by
-    (r.id = me.active_restaurant_id) desc,
-    r.created_at asc
+    ar.is_active desc,
+    ar.restaurant_name asc
 $$;
 
 revoke all on function public.get_allowed_restaurants_for_current_user() from public;
