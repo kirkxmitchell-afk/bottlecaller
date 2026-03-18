@@ -11729,25 +11729,50 @@ async function loadManagerMessenger(restaurantId = null) {
 }
 
 function getManagerWaiterOptions() {
+  const currentUserId = String(
+    appState?.session?.user?.id ||
+    appState?.session?.userId ||
+    ""
+  );
+  const staffRows = Array.isArray(window.__BC_MB_STAFF_ROWS__) ? window.__BC_MB_STAFF_ROWS__ : [];
+
+  if (staffRows.length) {
+    return staffRows
+      .map((row) => {
+        const role = String(row?.role || "").toLowerCase();
+        const userId = String(row?.user_id || "").trim();
+        if (!userId || role === "demo" || userId === currentUserId) return null;
+
+        const displayName = String(row?.display_name || "").trim();
+        return {
+          userId,
+          label: displayName ? `${displayName} • ${userId}` : userId,
+        };
+      })
+      .filter((x) => x?.userId);
+  }
+
   const threads = Array.isArray(window.__BC_MB_THREADS__) ? window.__BC_MB_THREADS__ : [];
 
   return threads
     .map((t) => {
-      const userId = t?.userId || t?.receiver_user_id || t?.sender_user_id || "";
+      const userId = String(t?.userId || t?.receiver_user_id || t?.sender_user_id || "").trim();
+      if (!userId || userId === currentUserId) return null;
+
       const name =
         t?.title ||
         t?.name ||
         t?.userName ||
         t?.displayName ||
         t?.waiterName ||
-        `Waiter ${String(userId).slice(0, 6)}`;
+        "";
 
       return {
-        userId: String(userId || ""),
-        label: String(name || "Unknown waiter"),
+        userId,
+        label: name ? `${String(name).trim()} • ${userId}` : userId,
       };
     })
-    .filter((x) => x.userId);
+    .filter((x) => x?.userId);
 }
 
 function getManagerBoardWaiterOptions() {
@@ -11758,7 +11783,7 @@ function renderManagerWaiterSelectOptions(selectEl, options = {}) {
   if (!selectEl) return;
 
   const waiterOptions = getManagerWaiterOptions();
-  const placeholder = String(options.placeholder || "Select waiter");
+  const placeholder = String(options.placeholder || "Select staff");
   const preferredUserId = String(
     options.selectedUserId ||
     window.__BC_MB_ACTIVE_THREAD_USER_ID__ ||
@@ -12263,7 +12288,7 @@ function renderManagerTimedChallengeActionPanel() {
     <div class="card" style="display:flex; flex-direction:column; gap:10px; padding:12px;">
       <div style="font-weight:600;">Timed Challenge</div>
       <div class="small-text" style="opacity:.8;">
-        Send a live objective to a waiter in the active restaurant.
+        Send a live objective to a staff member in the active restaurant.
       </div>
 
       <div class="row" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
