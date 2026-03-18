@@ -1374,6 +1374,7 @@ button:hover, .btn:hover, .btn-ghost:hover{
 
 #screenPremiumApp #btnOpenHud,
 #screenPremiumApp #btnOpenMessages,
+#screenPremiumApp #btnPremiumWineSetup,
 #screenPremiumApp #btnManagerBoard{
   border-color: rgba(125,211,252,0.18) !important;
 }
@@ -1385,6 +1386,12 @@ button:hover, .btn:hover, .btn-ghost:hover{
 }
 
 #screenPremiumApp #btnManagerBoard{
+  background:
+    linear-gradient(180deg, rgba(245,194,107,0.18), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.03) !important;
+}
+
+#screenPremiumApp #btnPremiumWineSetup{
   background:
     linear-gradient(180deg, rgba(245,194,107,0.18), rgba(255,255,255,0.03)),
     rgba(255,255,255,0.03) !important;

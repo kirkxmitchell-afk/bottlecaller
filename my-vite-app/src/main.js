@@ -343,6 +343,7 @@ document.querySelector("#app").innerHTML = `
         <div class="row">
           <button id="btnOpenHud" class="btn-ghost" type="button">Menu</button>
           <button id="btnOpenMessages" class="btn-ghost" type="button">Messages</button>
+          <button id="btnPremiumWineSetup" class="btn-ghost" type="button">Wine Setup</button>
           <button id="btnManagerBoard" class="btn-ghost" type="button">Manager Board</button>
           <button id="btnOpenProfile" class="btn-ghost" type="button">Profile</button>
           <button id="btnLogoutPremium" class="btn-danger" type="button">Logout</button>
@@ -5116,6 +5117,7 @@ function applyRoleTemplateGates() {
   window.requirePower = requirePower;
 
   const idsToHideForWaiter = [
+    "btnPremiumWineSetup",
     "btnWineSetup",
     "btnGoSetup",
     "btnSetupWines",
@@ -5607,6 +5609,7 @@ function wireParentButtons() {
   const btnManagerBoard = document.getElementById("btnManagerBoard");
   const btnOpenProfile = document.getElementById("btnOpenProfile");
   const btnOpenMessages = document.getElementById("btnOpenMessages");
+  const btnPremiumWineSetup = document.getElementById("btnPremiumWineSetup");
 
   if (btnManagerBoard && !btnManagerBoard.__bcBound) {
     btnManagerBoard.__bcBound = true;
@@ -5633,6 +5636,13 @@ function wireParentButtons() {
     btnOpenMessages.addEventListener("click", () => {
       closeHud?.();
       openWaiterMessages();
+    });
+  }
+
+  if (btnPremiumWineSetup && !btnPremiumWineSetup.__bcBound) {
+    btnPremiumWineSetup.__bcBound = true;
+    btnPremiumWineSetup.addEventListener("click", async () => {
+      await openPremiumSetupScreen();
     });
   }
 
