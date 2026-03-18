@@ -1203,7 +1203,7 @@
         const allowedGuestTypes = prog?.allowedGuestTypes ?? [];
 
         let level = `Tier ${tier}`;
-        let focus = `d=${difficultySeed} / eff=${effectiveDifficulty}`;
+        let focus = formatProgressFocusStatus(difficultySeed, effectiveDifficulty);
         let next = `${encounterRange[0]}-${encounterRange[1]} | ${allowedGuestTypes.join(", ") || "—"}`;
 
         if (points <= 0) {
@@ -10692,6 +10692,16 @@ function ensureProgLoaded() {
           .join(" ");
       }
 
+      function formatProgressFocusStatus(difficultySeed, effectiveDifficulty) {
+        const base = Number(difficultySeed ?? 1);
+        const effective = Number(effectiveDifficulty ?? base);
+
+        if (effective <= 0.85) return "Light pressure practice";
+        if (effective <= 1.1) return "Standard service pressure";
+        if (effective <= 1.35) return "Elevated pressure reps";
+        return "High pressure reps";
+      }
+
       function renderProgressStatusWindow() {
         if (!ids) return;
         const nameEl = document.getElementById(ids.progressName);
@@ -10742,7 +10752,7 @@ function ensureProgLoaded() {
           if (noticeEl) noticeEl.innerText = notice;
           if (pressureChipEl) pressureChipEl.innerText = pressureLabel;
           if (guestChipEl) guestChipEl.innerText = guestLabel;
-          if (focusEl) focusEl.innerText = `d=${difficultySeed} / eff=${effectiveDifficulty}`;
+          if (focusEl) focusEl.innerText = formatProgressFocusStatus(difficultySeed, effectiveDifficulty);
           if (nextEl) nextEl.innerText = `${encounterRange[0]}-${encounterRange[1]} | ${allowedGuestTypes.join(", ")}`;
           if (pointsEl) pointsEl.innerText = String(points);
         } catch (e) {
