@@ -225,10 +225,11 @@ document.querySelector("#app").innerHTML = `
         <input id="authEmail" type="email" placeholder="Email" />
         <input id="authPassword" type="password" placeholder="Password" />
 
-        <!-- ✅ Premium intent extras (only visible when Premium is selected) -->
+        <!-- ✅ Premium intent extras -->
         <div id="premiumIntentBlock" class="hidden" style="margin-top:10px;color:#fff;">
-          <input id="premiumLicenseCode" type="text" placeholder="Enter Premium code" />
-          <div class="small" style="margin-top:8px;">
+          <div class="small auth-subselector-label">Premium Access</div>
+          <input id="premiumLicenseCode" type="text" placeholder="Enter your join or license code" />
+          <div class="small premium-contact-copy" style="margin-top:8px;">
             Contact us for purchase:
             <a href="mailto:hello@bottlecaller.com" style="color:#fff;">hello@bottlecaller.com</a>
           </div>
@@ -252,6 +253,44 @@ document.querySelector("#app").innerHTML = `
           <input id="authDisplayName" type="text" placeholder="Display name (optional)" />
         </div>
 
+        <div id="signupContactBlock" class="hidden">
+          <div class="small auth-subselector-label">Contact Us</div>
+          <div class="small premium-contact-copy">
+            Email <a href="mailto:hello@bottlecaller.com">hello@bottlecaller.com</a> with the setup you want and we will send the matching join or license code.
+          </div>
+        </div>
+
+        <div id="managerSignupConfig" class="hidden">
+          <div class="small auth-subselector-label">Premium Manager Setup</div>
+          <div class="premium-signup-card">
+            <div class="premium-signup-copy">
+              Choose the manager package and seat plan you want provisioned. Keep this setup selected when you enter the code we issue for your account.
+            </div>
+
+            <div class="small auth-subselector-label">Manager Tier</div>
+            <div class="tabs tabs-3" id="managerPackageTabs" data-selected="single_manager">
+              <button id="tabManagerSingle" class="tab active" type="button">Single</button>
+              <button id="tabManagerGroup" class="tab" type="button">Group</button>
+              <button id="tabManagerEnterprise" class="tab" type="button">Enterpriser</button>
+            </div>
+
+            <div class="small auth-subselector-label">Seat Plan</div>
+            <div class="tabs tabs-3" id="seatPlanTabs" data-selected="15">
+              <button id="tabSeat15" class="tab active" type="button">15 Seats</button>
+              <button id="tabSeat30" class="tab" type="button">30 Seats</button>
+              <button id="tabSeat60" class="tab" type="button">60 Seats</button>
+            </div>
+
+            <div id="premiumRestaurantNameWrap" class="hidden">
+              <input id="premiumRestaurantName" type="text" placeholder="Restaurant name for single-manager setup" />
+            </div>
+
+            <div class="small premium-contact-copy">
+              Contact us at <a href="mailto:hello@bottlecaller.com">hello@bottlecaller.com</a> with your desired package and seat plan. We will email back the correct code for this setup.
+            </div>
+          </div>
+        </div>
+
         <div class="row">
           <button id="btnAuthSubmit" class="btn-primary" type="button">Continue</button>
         </div>
@@ -272,7 +311,7 @@ document.querySelector("#app").innerHTML = `
         <button id="btnLogoutCreate" class="btn-danger" type="button">Logout</button>
       </div>
 
-      <p class="small">Default 15 seats • Invite required ON (editable in menu)</p>
+      <p class="small">Seat provisioning now starts from Premium signup and your issued license code.</p>
 
       <input id="restName" type="text" placeholder="Restaurant name" />
       <button id="btnCreateRestaurant" class="btn-primary" type="button">Create</button>
@@ -704,10 +743,10 @@ document.querySelector("#app").innerHTML = `
             </div>
 
             <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
-              <button id="mbSeat15" class="btn-ghost" type="button">Set seats: 15</button>
-              <button id="mbSeat30" class="btn-ghost" type="button">Set seats: 30</button>
-              <button id="mbSeat60" class="btn-ghost" type="button">Set seats: 60</button>
               <button id="mbRefreshSeats" class="btn-ghost" type="button">Refresh</button>
+            </div>
+            <div class="small-text premium-contact-copy" style="margin-top:10px;">
+              Seat plans are now provisioned through Premium signup and licensing. Contact <a href="mailto:hello@bottlecaller.com">hello@bottlecaller.com</a> if you need a different seat package issued.
             </div>
           </div>
         </div>
@@ -950,18 +989,13 @@ document.querySelector("#app").innerHTML = `
         <button id="btnSaveRequireInvite" class="btn-primary" type="button">Save</button>
       </div>
 
-      <div style="margin-top:10px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-        <input id="seatLimitInput" type="number" placeholder="Seat limit" style="max-width:160px;" />
-        <button id="btnSaveSeatLimit" class="btn-primary" type="button">Save seat limit</button>
-        <span style="font-size:12px; opacity:.75;">(RLS may block updates — debug will show)</span>
-      </div>
-
       <hr style="opacity:.25; margin:12px 0;" />
+      <div id="managerSetupSection">
       <h3 style="margin:0;">Manager setup codes</h3>
       <div class="small-text" style="margin-top:6px; opacity:.9;">
         Redeem Group / Enterprise manager_setup codes.
       </div>
-      <div class="card" style="margin-top:10px;">
+      <div id="mbGroupSetupCard" class="card" style="margin-top:10px;">
         <strong>Group Manager Signup</strong>
         <div class="small-text" style="margin-top:6px;">
           Paste a GROUP manager_setup code to create/upgrade a manager scope for multi-restaurant control.
@@ -973,6 +1007,9 @@ document.querySelector("#app").innerHTML = `
         </div>
 
         <div id="mbGroupSetupMsg" class="small-text" style="margin-top:8px;"></div>
+        <div class="small-text premium-contact-copy" style="margin-top:10px;">
+          Contact us at <a href="mailto:hello@bottlecaller.com">hello@bottlecaller.com</a> with the upgrade and seat plan you want. We will issue the matching code for this profile.
+        </div>
       </div>
 
       <div id="mbProvisionAccess" class="card" style="margin-top:12px;">
@@ -987,6 +1024,10 @@ document.querySelector("#app").innerHTML = `
         </div>
 
         <div id="mbEnterpriseMsg" class="small-text" style="margin-top:8px;"></div>
+        <div class="small-text premium-contact-copy" style="margin-top:10px;">
+          Contact us at <a href="mailto:hello@bottlecaller.com">hello@bottlecaller.com</a> for enterprise provisioning. We will send the correct enterprise code for this account.
+        </div>
+      </div>
       </div>
 
       <hr style="opacity:.25; margin:12px 0;" />
@@ -1071,6 +1112,8 @@ let authIntent = "login"; // login/public | premium
 const uiState = {
   role: "waiter", // waiter | manager (used only for signup UI)
   mode: "login", // login | signup
+  managerPackage: "single_manager", // single_manager | group_manager | enterpriser
+  seatPlan: "15", // provisioning preference only
 };
 
 const appState = {
@@ -4964,7 +5007,7 @@ const MEMBERSHIP_UI_GATES = {
       progress: true,
       skills: true,
       messages: true,
-      restaurant: false,
+      restaurant: true,
       restaurants: true,
       waiterInvites: true,
       managerBoard: true,
@@ -4993,7 +5036,7 @@ const MEMBERSHIP_UI_GATES = {
       progress: true,
       skills: true,
       messages: true,
-      restaurant: false,
+      restaurant: true,
       restaurants: true,
       waiterInvites: true,
       managerBoard: true,
@@ -5738,12 +5781,7 @@ function setAuthIntent(next) {
     if (exitBtn) exitBtn.classList.add("hidden");
   }
 
-  // ✅ show/hide premium code + contact block
-  const premiumIntentBlock = document.getElementById("premiumIntentBlock");
-  if (premiumIntentBlock) {
-    if (authIntent === "premium") premiumIntentBlock.classList.remove("hidden");
-    else premiumIntentBlock.classList.add("hidden");
-  }
+  updateAuthSignupUI();
 }
 
 // ------------------------------------------------------------
@@ -13528,6 +13566,10 @@ function setRole(role) {
     m.classList.add("active");
     w.classList.remove("active");
   }
+  if (uiState.role === "manager" && !uiState.managerPackage) {
+    uiState.managerPackage = "single_manager";
+  }
+  updateAuthSignupUI();
 }
 
 function setMode(mode) {
@@ -13557,6 +13599,52 @@ function setMode(mode) {
     if (roleTabsWrap) roleTabsWrap.classList.add("hidden");
     setRole("waiter");
     wrap.classList.add("hidden");
+  }
+  updateAuthSignupUI();
+}
+
+function setManagerPackage(pkg) {
+  const next = ["single_manager", "group_manager", "enterpriser"].includes(String(pkg || "").trim().toLowerCase())
+    ? String(pkg).trim().toLowerCase()
+    : "single_manager";
+  uiState.managerPackage = next;
+  const tabs = document.getElementById("managerPackageTabs");
+  const single = document.getElementById("tabManagerSingle");
+  const group = document.getElementById("tabManagerGroup");
+  const enterprise = document.getElementById("tabManagerEnterprise");
+  if (tabs) tabs.dataset.selected = next;
+  single?.classList.toggle("active", next === "single_manager");
+  group?.classList.toggle("active", next === "group_manager");
+  enterprise?.classList.toggle("active", next === "enterpriser");
+  updateAuthSignupUI();
+}
+
+function setSeatPlan(plan) {
+  const next = ["15", "30", "60"].includes(String(plan || "")) ? String(plan) : "15";
+  uiState.seatPlan = next;
+  const tabs = document.getElementById("seatPlanTabs");
+  const s15 = document.getElementById("tabSeat15");
+  const s30 = document.getElementById("tabSeat30");
+  const s60 = document.getElementById("tabSeat60");
+  if (tabs) tabs.dataset.selected = next;
+  s15?.classList.toggle("active", next === "15");
+  s30?.classList.toggle("active", next === "30");
+  s60?.classList.toggle("active", next === "60");
+}
+
+function updateAuthSignupUI() {
+  const isSignup = uiState.mode === "signup";
+  const isManagerSignup = isSignup && uiState.role === "manager";
+  const premiumIntentBlock = document.getElementById("premiumIntentBlock");
+  const signupContactBlock = document.getElementById("signupContactBlock");
+  const managerSignupConfig = document.getElementById("managerSignupConfig");
+  const premiumRestaurantNameWrap = document.getElementById("premiumRestaurantNameWrap");
+
+  if (premiumIntentBlock) premiumIntentBlock.classList.toggle("hidden", authIntent !== "premium");
+  if (signupContactBlock) signupContactBlock.classList.toggle("hidden", !isSignup);
+  if (managerSignupConfig) managerSignupConfig.classList.toggle("hidden", !isManagerSignup);
+  if (premiumRestaurantNameWrap) {
+    premiumRestaurantNameWrap.classList.toggle("hidden", !(isManagerSignup && uiState.managerPackage === "single_manager"));
   }
 }
 
@@ -14576,12 +14664,28 @@ function renderHud() {
   const seatInput = document.getElementById("seatLimitInput");
   if (seatInput && r) seatInput.value = String(r.seat_limit ?? "");
 
+  renderManagerUpgradeAccess();
   renderInvitesList();
   renderHudTimelineUserSelect?.();
   renderHudSkillDashboard();
   renderHudAbilities();
   renderHudDifficultyControls?.();
   wireHudDifficultyControls?.();
+}
+
+function renderManagerUpgradeAccess() {
+  const normalizedRole = normalizeMembershipRole(appState?.profile || null) || "waiter";
+  const section = document.getElementById("managerSetupSection");
+  const groupCard = document.getElementById("mbGroupSetupCard");
+  const enterpriseCard = document.getElementById("mbProvisionAccess");
+
+  const showGroup = normalizedRole === "single_manager";
+  const showEnterprise = normalizedRole === "single_manager" || normalizedRole === "group_manager";
+  const showSection = showGroup || showEnterprise;
+
+  section?.classList.toggle("hidden", !showSection);
+  groupCard?.classList.toggle("hidden", !showGroup);
+  enterpriseCard?.classList.toggle("hidden", !showEnterprise);
 }
 
 // ------------------------------------------------------------
@@ -14815,7 +14919,7 @@ async function submitAuth() {
     if (!email) throw new Error("Enter email.");
     if (!password) throw new Error("Enter password.");
 
-    const roleForSignup = uiState.role === "waiter" ? "waiter" : "single_manager";
+    const roleForSignup = uiState.role === "waiter" ? "waiter" : uiState.managerPackage;
 
     if (uiState.mode === "login") {
       setMsg("authMsg", "Logging in...");
@@ -14847,11 +14951,31 @@ async function submitAuth() {
     // signup
     setMsg("authMsg", "Creating account...");
     const { error } = await withTimeout(
-      parentSignUp(email, password, { role: roleForSignup, display_name: displayName || null }),
+      parentSignUp(email, password, {
+        role: roleForSignup,
+        display_name: displayName || null,
+        desired_package_tier: uiState.role === "manager" ? uiState.managerPackage : null,
+        desired_seat_plan: uiState.role === "manager" ? uiState.seatPlan : null,
+        access_intent: authIntent,
+      }),
       15000,
       "auth.signUp"
     );
     if (error) throw error;
+
+    const { session } = await parentGetSession();
+    if (session?.user && authIntent === "premium") {
+      const codeEntered = normCode(document.getElementById("premiumLicenseCode")?.value);
+      if (codeEntered) {
+        setMsg("authMsg", "Account created. Applying Premium code...");
+        await loadAuthedState("signup.ok");
+        await redeemPremiumCodeIfProvided();
+        await loadAuthedState("signup.claim.refresh");
+        setMsg("authMsg", "Account created and Premium code applied ✅", "success");
+        await decideRoute("signup.ok.decideRoute");
+        return;
+      }
+    }
 
     setMsg("authMsg", "Account created. If email confirmation is ON, confirm then Login.", "success");
     setMode("login");
@@ -15125,6 +15249,12 @@ document.getElementById("tabRoleWaiter").addEventListener("click", () => setRole
 document.getElementById("tabRoleManager").addEventListener("click", () => setRole("manager"));
 document.getElementById("tabModeLogin").addEventListener("click", () => setMode("login"));
 document.getElementById("tabModeSignup").addEventListener("click", () => setMode("signup"));
+document.getElementById("tabManagerSingle")?.addEventListener("click", () => setManagerPackage("single_manager"));
+document.getElementById("tabManagerGroup")?.addEventListener("click", () => setManagerPackage("group_manager"));
+document.getElementById("tabManagerEnterprise")?.addEventListener("click", () => setManagerPackage("enterpriser"));
+document.getElementById("tabSeat15")?.addEventListener("click", () => setSeatPlan("15"));
+document.getElementById("tabSeat30")?.addEventListener("click", () => setSeatPlan("30"));
+document.getElementById("tabSeat60")?.addEventListener("click", () => setSeatPlan("60"));
 
 document.getElementById("btnDemoJoin").addEventListener("click", demoJoinRestaurantByCode);
 
@@ -15189,7 +15319,7 @@ document.getElementById("btnAddInvite").addEventListener("click", async () => {
   document.getElementById("inviteEmailInput").value = "";
 });
 document.getElementById("btnSaveRequireInvite").addEventListener("click", adminSaveRequireInvite);
-document.getElementById("btnSaveSeatLimit").addEventListener("click", adminSaveSeatLimit);
+document.getElementById("btnSaveSeatLimit")?.addEventListener("click", adminSaveSeatLimit);
 
 // Debug + cross-module access (safe to ship)
 window.__BC_MB__ = window.__BC_MB__ || {};
@@ -15343,6 +15473,8 @@ if (!window.__BC_TRACE_TRAPS__) {
 }
 
 showScreen("screenHome");
+setManagerPackage("single_manager");
+setSeatPlan("15");
 setRole("waiter");
 setMode("login");
 setAuthIntent("login");

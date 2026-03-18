@@ -991,7 +991,8 @@ button:hover, .btn:hover, .btn-ghost:hover{
 #screenHome #authEmail,
 #screenHome #authPassword,
 #screenHome #authDisplayName,
-#screenHome #premiumLicenseCode{
+#screenHome #premiumLicenseCode,
+#screenHome #premiumRestaurantName{
   min-height: 52px;
   border-radius: 16px;
   border-color: rgba(255,255,255,0.10);
@@ -1014,8 +1015,44 @@ button:hover, .btn:hover, .btn-ghost:hover{
   color: rgba(255,246,231,0.76);
 }
 
+#screenHome #signupContactBlock,
+#screenHome #managerSignupConfig{
+  grid-column: 1 / -1;
+}
+
+#screenHome #signupContactBlock{
+  padding: 12px 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(125,211,252,0.16);
+  background:
+    linear-gradient(180deg, rgba(125,211,252,0.10), rgba(255,255,255,0.02)),
+    rgba(255,255,255,0.02);
+}
+
+#screenHome .premium-signup-card{
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(245,194,107,0.18);
+  background:
+    radial-gradient(780px 220px at 0% 0%, rgba(245,194,107,0.10), transparent 56%),
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)),
+    rgba(255,255,255,0.02);
+}
+
+#screenHome .premium-signup-copy,
+#screenHome .premium-contact-copy{
+  color: rgba(248,243,233,0.78);
+  line-height: 1.6;
+}
+
 #screenHome #premiumIntentBlock a{
   color: rgba(255,248,236,0.92) !important;
+}
+
+#screenHome .premium-contact-copy a{
+  color: rgba(255,248,236,0.96) !important;
 }
 
 #screenHome .tabs{
@@ -1029,6 +1066,10 @@ button:hover, .btn:hover, .btn-ghost:hover{
   background:
     linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015)),
     rgba(255,255,255,0.02);
+}
+
+#screenHome .tabs.tabs-3{
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 #screenHome #roleTabs::before,
@@ -1045,6 +1086,33 @@ button:hover, .btn:hover, .btn-ghost:hover{
   z-index: 0;
 }
 
+#screenHome #managerPackageTabs::before,
+#screenHome #seatPlanTabs::before{
+  content: "";
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  left: 6px;
+  width: calc((100% - 28px) / 3);
+  border-radius: 14px;
+  z-index: 0;
+  transition: transform 180ms ease, background 180ms ease, border-color 180ms ease;
+}
+
+#screenHome #managerPackageTabs::before{
+  border: 1px solid rgba(245,194,107,0.22);
+  background:
+    linear-gradient(180deg, rgba(245,194,107,0.18), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.03);
+}
+
+#screenHome #seatPlanTabs::before{
+  border: 1px solid rgba(125,211,252,0.20);
+  background:
+    linear-gradient(180deg, rgba(125,211,252,0.18), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.03);
+}
+
 #screenHome #modeTabs[data-selected="login"]::before,
 #screenHome #roleTabs[data-selected="waiter"]::before{
   transform: translateX(0);
@@ -1053,6 +1121,21 @@ button:hover, .btn:hover, .btn-ghost:hover{
 #screenHome #modeTabs[data-selected="signup"]::before,
 #screenHome #roleTabs[data-selected="manager"]::before{
   transform: translateX(calc(100% + 8px));
+}
+
+#screenHome #managerPackageTabs[data-selected="single_manager"]::before,
+#screenHome #seatPlanTabs[data-selected="15"]::before{
+  transform: translateX(0);
+}
+
+#screenHome #managerPackageTabs[data-selected="group_manager"]::before,
+#screenHome #seatPlanTabs[data-selected="30"]::before{
+  transform: translateX(calc(100% + 8px));
+}
+
+#screenHome #managerPackageTabs[data-selected="enterpriser"]::before,
+#screenHome #seatPlanTabs[data-selected="60"]::before{
+  transform: translateX(calc(200% + 16px));
 }
 
 #screenHome #modeTabs::before{
@@ -1079,6 +1162,8 @@ button:hover, .btn:hover, .btn-ghost:hover{
 #screenHome #roleTabs,
 #screenHome .tabs,
 #screenHome #roleTabsWrap,
+#screenHome #signupContactBlock,
+#screenHome #managerSignupConfig,
 #screenHome #displayNameWrap,
 #screenHome #authFields .row,
 #screenHome #authMsg{
@@ -2063,6 +2148,20 @@ button:hover, .btn:hover, .btn-ghost:hover{
 #screenManagerBoard #mbSeat30,
 #screenManagerBoard #mbSeat60{
   border-color: rgba(245,194,107,0.18) !important;
+}
+
+#hudPanel .premium-contact-copy{
+  color: rgba(244,246,247,0.78);
+  line-height: 1.55;
+}
+
+#hudPanel .premium-contact-copy a,
+#screenManagerBoard .premium-contact-copy a{
+  color: rgba(248,243,233,0.96) !important;
+}
+
+#hudPanel #managerSetupSection.hidden{
+  display: none !important;
 }
 
 @media (max-width: 980px){
