@@ -7669,7 +7669,11 @@ function ensureProgLoaded() {
           1;
 
         const buildRewardsSummary = (state) => {
-          const encounterEntries = Object.values(state?.run?.scoredThisRun || {});
+          const encounterEntries = Object.values(
+            state?.rewards?.encounters ||
+            state?.run?.scoredThisRun ||
+            {}
+          );
           const drillEntries = Object.values(state?.rewards?.drills || {});
           const challengeEntries = Object.values(state?.rewards?.timedChallenges || {});
           const premiumEntries = Object.values(state?.rewards?.premiumByEncounter || {});
@@ -7751,6 +7755,9 @@ function ensureProgLoaded() {
               : {},
           },
           rewards: {
+            encounters: rawState?.rewards?.encounters && typeof rawState.rewards.encounters === "object"
+              ? structuredClone(rawState.rewards.encounters)
+              : {},
             drills: rawState?.rewards?.drills && typeof rawState.rewards.drills === "object"
               ? structuredClone(rawState.rewards.drills)
               : {},

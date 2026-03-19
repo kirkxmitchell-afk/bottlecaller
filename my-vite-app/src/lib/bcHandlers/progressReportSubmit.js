@@ -238,7 +238,11 @@ async function upsertCanonicalProgressionState({
   }
 
   const buildRewardsSummary = (state) => {
-    const encounterEntries = Object.values(state?.run?.scoredThisRun || {});
+    const encounterEntries = Object.values(
+      state?.rewards?.encounters ||
+      state?.run?.scoredThisRun ||
+      {}
+    );
     const drillEntries = Object.values(state?.rewards?.drills || {});
     const challengeEntries = Object.values(state?.rewards?.timedChallenges || {});
     const premiumEntries = Object.values(state?.rewards?.premiumByEncounter || {});

@@ -98,6 +98,19 @@ export function roundReward(value) {
   return Math.max(0, Math.round(n * 10) / 10);
 }
 
+export function round1(value) {
+  const n = Number(value || 0);
+  return Math.round(n * 10) / 10;
+}
+
+export function sumRewardPoints(rows) {
+  return round1(
+    (rows || []).reduce((sum, row) => {
+      return sum + Number(row?.rewardPoints || row?.reward?.totalPoints || 0);
+    }, 0)
+  );
+}
+
 export function calculateRewardValue({
   activityType,
   tier = 1,
@@ -179,30 +192,31 @@ export function resolveEncounterQualityState({
 }
 
 export function buildRewardsSummary(state = {}) {
-  const encounterEntries = Object.values(state?.run?.scoredThisRun || {});
+  const encounterEntries = Object.values(
+    state?.rewards?.encounters ||
+    state?.run?.scoredThisRun ||
+    {}
+  );
   const drillEntries = Object.values(state?.rewards?.drills || {});
   const challengeEntries = Object.values(state?.rewards?.timedChallenges || {});
   const premiumEntries = Object.values(state?.rewards?.premiumByEncounter || {});
 
-  const sumRewardPoints = (rows) =>
-    rows.reduce((sum, row) => sum + Number(row?.rewardPoints || row?.reward?.totalPoints || 0), 0);
-
   return {
     encounters: {
       count: encounterEntries.length,
-      totalPoints: roundReward(sumRewardPoints(encounterEntries)),
+      totalPoints: sumRewardPoints(encounterEntries),
     },
     drills: {
       count: drillEntries.length,
-      totalPoints: roundReward(sumRewardPoints(drillEntries)),
+      totalPoints: sumRewardPoints(drillEntries),
     },
     timedChallenges: {
       count: challengeEntries.length,
-      totalPoints: roundReward(sumRewardPoints(challengeEntries)),
+      totalPoints: sumRewardPoints(challengeEntries),
     },
     premium: {
       count: premiumEntries.length,
-      totalPoints: roundReward(sumRewardPoints(premiumEntries)),
+      totalPoints: sumRewardPoints(premiumEntries),
     },
   };
 }
@@ -256,6 +270,7 @@ export function createProgressionStore(storage = window.localStorage) {
         scoredThisRun: {}
       },
       rewards: {
+        encounters: {},
         timedChallenges: {},
         drills: {},
         premiumByEncounter: {}
@@ -291,6 +306,10 @@ export function createProgressionStore(storage = window.localStorage) {
     s.run.scoredThisRun = s.run.scoredThisRun && typeof s.run.scoredThisRun === "object" ? s.run.scoredThisRun : {};
 
     s.rewards = s.rewards || {};
+    s.rewards.encounters =
+      s.rewards.encounters && typeof s.rewards.encounters === "object"
+        ? s.rewards.encounters
+        : {};
     s.rewards.timedChallenges =
       s.rewards.timedChallenges && typeof s.rewards.timedChallenges === "object"
         ? s.rewards.timedChallenges
@@ -442,6 +461,9 @@ export function createProgressionStore(storage = window.localStorage) {
     }
 
     const canonicalRewards = c.rewards && typeof c.rewards === "object" ? c.rewards : {};
+    if (canonicalRewards.encounters && typeof canonicalRewards.encounters === "object") {
+      state.rewards.encounters = structuredClone(canonicalRewards.encounters);
+    }
     if (canonicalRewards.drills && typeof canonicalRewards.drills === "object") {
       state.rewards.drills = structuredClone(canonicalRewards.drills);
     }
@@ -475,6 +497,8 @@ export function createProgressionStore(storage = window.localStorage) {
     state.difficulty.lastUpdatedAt = Date.now();
     state.run = state.run || {};
     state.run.scoredThisRun = state.run.scoredThisRun || {};
+    if (!state.rewards) state.rewards = {};
+    if (!state.rewards.encounters) state.rewards.encounters = {};
 
     if (success) {
       state.history.successCount += 1;
@@ -512,6 +536,14 @@ export function createProgressionStore(storage = window.localStorage) {
         state.run.scoredThisRun[scoreKey] = {
           rewardedAt: Date.now(),
           encounterId: id || null,
+          rewardPoints: reward.totalPoints,
+          reward,
+        };
+
+        state.rewards.encounters[scoreKey] = {
+          rewardedAt: Date.now(),
+          encounterId: id || null,
+          rewardPoints: reward.totalPoints,
           reward,
         };
       }
