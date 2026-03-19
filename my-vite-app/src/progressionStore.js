@@ -33,6 +33,151 @@ export function getUnlockedModesForPoints(points) {
   return getUnlockedModesForTier(tier);
 }
 
+export function getBaseReward(activityType) {
+  switch (String(activityType || "").toLowerCase()) {
+    case "drill":
+      return 1;
+    case "encounter":
+      return 1;
+    case "timed_challenge":
+      return 2;
+    default:
+      return 1;
+  }
+}
+
+export function getTierMultiplier(tier) {
+  const t = Number(tier || 1);
+  if (t >= 3) return 1.5;
+  if (t === 2) return 1.25;
+  return 1.0;
+}
+
+export function getDifficultyMultiplier(effectiveDifficulty) {
+  const d = Number(effectiveDifficulty || 0);
+  if (!Number.isFinite(d) || d <= 0) return 1.0;
+  if (d >= 8) return 1.2;
+  if (d >= 5) return 1.1;
+  return 1.0;
+}
+
+export function getPressureMultiplier(pressureLevel) {
+  const p = Number(pressureLevel || 0);
+  if (!Number.isFinite(p) || p <= 0) return 1.0;
+  if (p >= 3) return 1.1;
+  if (p >= 2) return 1.05;
+  return 1.0;
+}
+
+export function getQualityMultiplier(qualityState) {
+  switch (String(qualityState || "").toLowerCase()) {
+    case "mastered":
+      return 1.25;
+    case "passed":
+      return 1.0;
+    case "completed":
+      return 0.0;
+    default:
+      return 1.0;
+  }
+}
+
+export function getCompetitionMultiplier(competitionType) {
+  switch (String(competitionType || "").toLowerCase()) {
+    case "tournament":
+      return 1.5;
+    case "timed_challenge":
+      return 1.25;
+    default:
+      return 1.0;
+  }
+}
+
+export function roundReward(value) {
+  const n = Number(value || 0);
+  return Math.max(0, Math.round(n * 10) / 10);
+}
+
+export function calculateRewardValue({
+  activityType,
+  tier = 1,
+  effectiveDifficulty = null,
+  pressureLevel = null,
+  qualityState = "passed",
+  competitionType = "normal",
+  premiumBonus = 0,
+} = {}) {
+  const baseReward = getBaseReward(activityType);
+  const tierMultiplier = getTierMultiplier(tier);
+  const difficultyMultiplier = getDifficultyMultiplier(effectiveDifficulty);
+  const pressureMultiplier = getPressureMultiplier(pressureLevel);
+  const qualityMultiplier = getQualityMultiplier(qualityState);
+  const competitionMultiplier = getCompetitionMultiplier(competitionType);
+
+  const rawValue =
+    baseReward *
+    tierMultiplier *
+    difficultyMultiplier *
+    pressureMultiplier *
+    qualityMultiplier *
+    competitionMultiplier;
+
+  const totalPoints = roundReward(rawValue + Number(premiumBonus || 0));
+
+  return {
+    activityType,
+    tier: Number(tier || 1),
+    effectiveDifficulty: Number.isFinite(Number(effectiveDifficulty))
+      ? Number(effectiveDifficulty)
+      : null,
+    pressureLevel: Number.isFinite(Number(pressureLevel))
+      ? Number(pressureLevel)
+      : null,
+    qualityState,
+    competitionType,
+    baseReward,
+    tierMultiplier,
+    difficultyMultiplier,
+    pressureMultiplier,
+    qualityMultiplier,
+    competitionMultiplier,
+    premiumBonus: Number(premiumBonus || 0),
+    rawValue,
+    totalPoints,
+  };
+}
+
+export function resolveDrillQualityState({
+  repsDone,
+  repTarget,
+  accuracy = null,
+  qualityScore = null,
+} = {}) {
+  const reps = Number(repsDone || 0);
+  const target = Number(repTarget || 0);
+  const completed = target > 0 && reps >= target;
+  if (!completed) return "completed";
+
+  const score = Number.isFinite(Number(accuracy))
+    ? Number(accuracy)
+    : Number(qualityScore);
+  if (!Number.isFinite(score)) return "completed";
+  if (score >= 0.9) return "mastered";
+  if (score >= 0.7) return "passed";
+  return "completed";
+}
+
+export function resolveEncounterQualityState({
+  performanceGrade,
+  success,
+} = {}) {
+  if (!success) return "completed";
+  const grade = String(performanceGrade || "").toUpperCase();
+  if (grade === "A") return "mastered";
+  if (grade === "B") return "passed";
+  return "completed";
+}
+
 export function createProgressionStore(storage = window.localStorage) {
   let state = null;
   let storageKey = null;
@@ -184,7 +329,7 @@ export function createProgressionStore(storage = window.localStorage) {
   function grantPoints(pts) {
     const n = Math.max(0, Number(pts || 0));
     if (!n) return false;
-    state.points += n;
+    state.points = Number(state.points || 0) + n;
     state.session.currentEncounterId = clampEncounterByTier(state.session.currentEncounterId, state.points);
 
     const allowedGT = unlockedGuestTypes(state.points);
@@ -268,35 +413,62 @@ export function createProgressionStore(storage = window.localStorage) {
     return { ok: true, points: state.points, tier: deriveTier(state.points) };
   }
 
-  function applyEncounterResult({ encounterId, success, pointEligible }) {
-    const now = Date.now();
-    state.difficulty.lastUpdatedAt = now;
+  function applyEncounterResult({
+    encounterId,
+    success,
+    pointEligible,
+    encounterKey = null,
+    tier = null,
+    effectiveDifficulty = null,
+    pressureLevel = null,
+    performanceGrade = null,
+    premiumAchieved = false,
+  } = {}) {
+    const id = String(encounterId || "").trim();
+    const scoreKey = String(encounterKey || id || "").trim();
+
+    state.difficulty.lastUpdatedAt = Date.now();
     state.run = state.run || {};
     state.run.scoredThisRun = state.run.scoredThisRun || {};
-    const runKey = String(state.run.runId || 0);
-    const encounterKey = String(encounterId || "");
-    const scoreKey = `${runKey}:${encounterKey}`;
-    console.log("[PROG] applyEncounterResult", {
-      encounterId,
-      success,
-      pointEligible,
-      runId: state.run.runId,
-      runKey,
-      scoreKey,
-      alreadyScored: !!state.run.scoredThisRun[scoreKey],
-      points: state.points
-    });
 
     if (success) {
       state.history.successCount += 1;
 
-      if (!state.history.completedEncounterIds.includes(encounterId)) {
-        state.history.completedEncounterIds.push(encounterId);
+      if (id && !state.history.completedEncounterIds.includes(id)) {
+        state.history.completedEncounterIds.push(id);
       }
 
-      if (pointEligible && encounterKey && !state.run.scoredThisRun[scoreKey]) {
-        grantPoints(1);
-        state.run.scoredThisRun[scoreKey] = true;
+      if (pointEligible && scoreKey && !state.run.scoredThisRun[scoreKey]) {
+        const resolvedTier = Number(
+          tier ||
+          deriveTier(Number(state.points || 0))
+        );
+
+        const resolvedQuality = resolveEncounterQualityState({
+          performanceGrade,
+          success,
+        });
+
+        const reward = calculateRewardValue({
+          activityType: "encounter",
+          tier: resolvedTier,
+          effectiveDifficulty,
+          pressureLevel,
+          qualityState: resolvedQuality,
+          competitionType: "normal",
+          premiumBonus: premiumAchieved ? 1 : 0,
+        });
+        console.log("[BC reward output][encounter]", reward);
+
+        if (reward.totalPoints > 0) {
+          grantPoints(reward.totalPoints);
+        }
+
+        state.run.scoredThisRun[scoreKey] = {
+          rewardedAt: Date.now(),
+          encounterId: id || null,
+          reward,
+        };
       }
 
       // boring difficulty update (don’t tune yet)
@@ -324,77 +496,170 @@ export function createProgressionStore(storage = window.localStorage) {
     emit();
   }
 
-  function applyTimedChallengeReward({ challengeId, rewardPoints }) {
-    const id = String(challengeId || "");
-    const pts = Math.max(0, Number(rewardPoints || 0));
-    if (!id || !pts) return { ok: false, reason: "invalid" };
+  function applyTimedChallengeReward({
+    challengeId,
+    qualityState = "passed",
+    tier = null,
+    effectiveDifficulty = null,
+    pressureLevel = null,
+    premiumAchieved = false,
+  } = {}) {
+    const id = String(challengeId || "").trim();
+    if (!id) {
+      return { ok: false, reason: "missing_challenge_id", points: Number(state.points || 0) };
+    }
 
     state.rewards = state.rewards || {};
     state.rewards.timedChallenges = state.rewards.timedChallenges || {};
 
     if (state.rewards.timedChallenges[id]) {
-      return { ok: true, duplicate: true, points: state.points };
+      return {
+        ok: true,
+        duplicate: true,
+        points: Number(state.points || 0),
+        reward: state.rewards.timedChallenges[id]?.reward || null,
+      };
     }
 
-    grantPoints(pts);
+    const resolvedTier = Number(
+      tier ||
+      deriveTier(Number(state.points || 0))
+    );
+
+    const reward = calculateRewardValue({
+      activityType: "timed_challenge",
+      tier: resolvedTier,
+      effectiveDifficulty,
+      pressureLevel,
+      qualityState: qualityState || "passed",
+      competitionType: "timed_challenge",
+      premiumBonus: premiumAchieved ? 1 : 0,
+    });
+    console.log("[BC reward output][timed_challenge]", reward);
+
+    if (reward.totalPoints > 0) {
+      grantPoints(reward.totalPoints);
+    }
+
     state.rewards.timedChallenges[id] = {
-      rewardPoints: pts,
-      rewardedAt: Date.now()
+      challengeId: id,
+      qualityState: qualityState || "passed",
+      rewardedAt: Date.now(),
+      rewardPoints: reward.totalPoints,
+      reward,
     };
 
     save();
     emit();
-    return { ok: true, duplicate: false, points: state.points };
+    return { ok: true, duplicate: false, points: Number(state.points || 0), reward };
   }
 
-  function applyDrillReward({ assignedMessageId, rewardPoints }) {
-    const id = String(assignedMessageId || "");
-    const pts = Math.max(0, Number(rewardPoints || 0));
-    if (!id || !pts) return { ok: false, reason: "invalid" };
+  function applyDrillReward({
+    assignedMessageId,
+    repsDone,
+    repTarget,
+    accuracy = null,
+    qualityScore = null,
+    tier = null,
+    effectiveDifficulty = null,
+    pressureLevel = null,
+  } = {}) {
+    const id = String(assignedMessageId || "").trim();
+    if (!id) {
+      return { ok: false, reason: "missing_assigned_message_id", points: Number(state.points || 0) };
+    }
 
     state.rewards = state.rewards || {};
     state.rewards.drills = state.rewards.drills || {};
 
     if (state.rewards.drills[id]) {
-      return { ok: true, duplicate: true, points: state.points };
+      return {
+        ok: true,
+        duplicate: true,
+        points: Number(state.points || 0),
+        reward: state.rewards.drills[id]?.reward || null,
+      };
     }
 
-    grantPoints(pts);
+    const resolvedTier = Number(
+      tier ||
+      deriveTier(Number(state.points || 0))
+    );
+
+    const qualityState = resolveDrillQualityState({
+      repsDone,
+      repTarget,
+      accuracy,
+      qualityScore,
+    });
+
+    const reward = calculateRewardValue({
+      activityType: "drill",
+      tier: resolvedTier,
+      effectiveDifficulty,
+      pressureLevel,
+      qualityState,
+      competitionType: "normal",
+      premiumBonus: 0,
+    });
+    console.log("[BC reward output][drill]", reward);
+
+    if (reward.totalPoints > 0) {
+      grantPoints(reward.totalPoints);
+    }
+
     state.rewards.drills[id] = {
-      rewardPoints: pts,
-      rewardedAt: Date.now()
+      assignedMessageId: id,
+      repsDone: Number(repsDone || 0),
+      repTarget: Number(repTarget || 0),
+      accuracy: Number.isFinite(Number(accuracy)) ? Number(accuracy) : null,
+      qualityScore: Number.isFinite(Number(qualityScore)) ? Number(qualityScore) : null,
+      qualityState,
+      rewardedAt: Date.now(),
+      rewardPoints: reward.totalPoints,
+      reward,
     };
 
     save();
     emit();
-    return { ok: true, duplicate: false, points: state.points };
+    return { ok: true, duplicate: false, points: Number(state.points || 0), reward };
   }
 
-  function applyPremiumBonus({ encounterId, bonusPoints }) {
-    const encounterKey = String(encounterId || "");
-    const runId = Number(state?.run?.runId || 0);
-    const id = `${runId}:${encounterKey}`;
+  function applyPremiumBonus({ encounterId, bonusPoints = 1 }) {
+    const id = String(encounterId || "").trim();
     const pts = Math.max(0, Number(bonusPoints || 0));
-    if (!encounterKey || !pts) return { ok: false, reason: "invalid" };
+    if (!id) {
+      return {
+        ok: false,
+        reason: "missing_encounter_id",
+        points: Number(state.points || 0),
+      };
+    }
+    if (!pts) {
+      return {
+        ok: false,
+        reason: "no_bonus_points",
+        points: Number(state.points || 0),
+      };
+    }
 
     state.rewards = state.rewards || {};
     state.rewards.premiumByEncounter = state.rewards.premiumByEncounter || {};
 
     if (state.rewards.premiumByEncounter[id]) {
-      return { ok: true, duplicate: true, points: state.points };
+      return { ok: true, duplicate: true, points: Number(state.points || 0) };
     }
 
     grantPoints(pts);
     state.rewards.premiumByEncounter[id] = {
-      encounterId: encounterKey,
-      runId,
+      encounterId: id,
       rewardPoints: pts,
-      rewardedAt: Date.now()
+      rewardedAt: Date.now(),
     };
 
     save();
     emit();
-    return { ok: true, duplicate: false, points: state.points };
+    return { ok: true, duplicate: false, points: Number(state.points || 0) };
   }
 
   function getSelectors() {
