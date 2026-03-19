@@ -11,32 +11,37 @@ function normalizeAllowedScopeType(value, fallback = "restaurant") {
   return s || fallback;
 }
 
-function resolveProgressionStateUserId(ctx, payload) {
-  return (
-    payload?.targetUserId ||
-    payload?.waiterUserId ||
-    payload?.receiver_user_id ||
-    payload?.receiverUserId ||
-    payload?.user_id ||
-    payload?.userId ||
-    ctx?.progressionOwnerUserId ||
-    ctx?.profileUserId ||
-    ctx?.activeProfileUserId ||
-    ctx?.membershipUserId ||
-    ctx?.waiterUserId ||
-    ctx?.userId ||
-    null
-  );
-}
+function resolveProgressionWriteOwner({
+  targetUserId = null,
+  waiterUserId = null,
+  receiver_user_id = null,
+  activeProfile = null,
+  profile = null,
+  membership = null,
+  restaurantId = null,
+} = {}, session = null) {
+  const w = globalThis?.window;
+  const userId =
+    targetUserId ||
+    waiterUserId ||
+    receiver_user_id ||
+    activeProfile?.user_id ||
+    membership?.user_id ||
+    w?.__BC_PROGRESS_OWNER_USER_ID__ ||
+    w?.__BC_ACTIVE_WAITER_USER_ID__ ||
+    profile?.user_id ||
+    session?.user?.id ||
+    null;
 
-function resolveProgressionStateRestaurantId(ctx, payload) {
-  return (
-    payload?.restaurantId ||
-    payload?.restaurant_id ||
-    ctx?.progressionOwnerRestaurantId ||
-    ctx?.restaurantId ||
-    null
-  );
+  const resolvedRestaurantId =
+    restaurantId ||
+    activeProfile?.restaurant_id ||
+    membership?.restaurant_id ||
+    w?.__BC_ACTIVE_WAITER_RESTAURANT_ID__ ||
+    profile?.restaurant_id ||
+    null;
+
+  return { userId, restaurantId: resolvedRestaurantId };
 }
 
 async function upsertProgressReportMessage({
@@ -310,44 +315,51 @@ async function upsertCanonicalProgressionState({
         : buildRewardsSummary(canonicalStateRaw),
   };
 
-  const progressionUserId = resolveProgressionStateUserId(ctx, payload);
-  if (!progressionUserId) {
-    return { ok: false, error: "missing_progression_user_id" };
-  }
+  const session = globalThis?.appState?.session || null;
+  const profile = globalThis?.appState?.profile || null;
+  const { userId: progressionOwnerUserId, restaurantId: progressionOwnerRestaurantId } =
+    resolveProgressionWriteOwner({
+      targetUserId: payload?.targetUserId || null,
+      waiterUserId: payload?.waiterUserId || null,
+      receiver_user_id: payload?.receiver_user_id || null,
+      activeProfile: payload?.activeProfile || null,
+      profile,
+      membership: payload?.membership || null,
+      restaurantId:
+        payload?.restaurantId ||
+        payload?.restaurant_id ||
+        profile?.restaurant_id ||
+        null,
+    }, session);
 
-  console.log("[BC active progression owner]", {
-    targetUserId: payload?.targetUserId ?? null,
-    waiterUserId: payload?.waiterUserId ?? null,
-    receiver_user_id: payload?.receiver_user_id ?? null,
-    activeProfileUserId:
-      ctx?.profileUserId ||
-      ctx?.activeProfileUserId ||
-      null,
-    progressionOwnerUserId: ctx?.progressionOwnerUserId ?? null,
-    progressionOwnerRestaurantId: ctx?.progressionOwnerRestaurantId ?? null,
-    authUserId: authUserId || null,
+  console.log("[BC progression upsert target]", {
+    authUserId: session?.user?.id || authUserId || null,
+    authProfileUserId: profile?.user_id || null,
+    progressionOwnerUserId,
+    progressionOwnerRestaurantId,
+    canonicalPoints: canonicalState?.economy?.points ?? null,
+    rewardsSummary: canonicalState?.rewardsSummary ?? null,
   });
 
-  const progressionRestaurantId = resolveProgressionStateRestaurantId(ctx, payload);
-  if (!progressionRestaurantId) {
-    return { ok: false, error: "missing_progression_restaurant_id" };
+  if (!progressionOwnerUserId || !progressionOwnerRestaurantId) {
+    console.warn("[BC progression upsert] missing owner identity", {
+      authUserId: session?.user?.id || authUserId || null,
+      authProfileUserId: profile?.user_id || null,
+      progressionOwnerUserId,
+      progressionOwnerRestaurantId,
+      payload,
+    });
+    return { ok: false, error: "missing_progression_owner_identity" };
   }
 
   const row = {
-    user_id: progressionUserId,
-    restaurant_id: progressionRestaurantId,
+    user_id: progressionOwnerUserId,
+    restaurant_id: progressionOwnerRestaurantId,
     scope_id: ctx.scopeId || null,
     canonical_state: canonicalState,
     source_type: "progress_report",
     updated_at: new Date().toISOString(),
   };
-
-  console.log("[BC progression upsert target]", {
-    user_id_for_upsert: row.user_id,
-    restaurant_id_for_upsert: row.restaurant_id,
-    canonical_points: canonicalState?.economy?.points ?? null,
-    canonical_rewards_summary: canonicalState?.rewardsSummary ?? null,
-  });
 
   const { error } = await supabase
     .from("bc_progression_state_v1")
