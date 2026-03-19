@@ -5671,6 +5671,58 @@ function isDrillMode() {
         else if (outcome === "break") gr.break += 1;
       }
 
+      function applyCanonicalProgMirror({ force = false } = {}) {
+        if (window.isDemo || window.bcMode === "demo") return false;
+        if (window.isDrillMode && window.isDrillMode()) return false;
+
+        let spineState = null;
+        try {
+          const spine = getProgressionSpine({ allowNull: true });
+          spineState = spine?.getState?.() || null;
+        } catch {
+          return false;
+        }
+
+        const mirror =
+          spineState?.mirror && typeof spineState.mirror === "object"
+            ? spineState.mirror
+            : null;
+        if (!mirror) return false;
+
+        const capturedAt = Number(mirror?.capturedAt || 0);
+        const mirrorStamp = `${progKey()}::${Number.isFinite(capturedAt) ? capturedAt : 0}`;
+        if (!force && PROG?.__canonicalMirrorStamp === mirrorStamp) return false;
+
+        PROG = ensureProgShape(PROG || defaultProg());
+        PROG.meta = { ...(PROG.meta || {}), ...(mirror.meta || {}) };
+        PROG.axes = { ...(PROG.axes || {}), ...(mirror.axes || {}) };
+        PROG.counters = { ...(PROG.counters || {}), ...(mirror.counters || {}) };
+        PROG.flags = { ...(PROG.flags || {}), ...(mirror.flags || {}) };
+        PROG.unlocks = { ...(PROG.unlocks || {}), ...(mirror.unlocks || {}) };
+        PROG.drift = { ...(PROG.drift || {}), ...(mirror.drift || {}) };
+        PROG.recovery = { ...(PROG.recovery || {}), ...(mirror.recovery || {}) };
+        PROG.guestRanks = { ...(PROG.guestRanks || {}) };
+
+        const mirrorGuestRanks =
+          mirror.guestRanks && typeof mirror.guestRanks === "object"
+            ? mirror.guestRanks
+            : {};
+        Object.keys(PROG.guestRanks || {}).forEach((guestType) => {
+          PROG.guestRanks[guestType] = {
+            ...(PROG.guestRanks[guestType] || makeGuestRank()),
+            ...(mirrorGuestRanks[guestType] || {}),
+          };
+        });
+
+        PROG.__canonicalMirrorStamp = mirrorStamp;
+        console.log("[PROG] canonical mirror applied ✅", {
+          mirrorStamp,
+          axes: PROG.axes,
+          counters: PROG.counters,
+        });
+        return true;
+      }
+
       function awardPointsForEncounter(enc, checks) {
         if (!checks) return 0;
         const cleared =
@@ -5802,6 +5854,11 @@ function ensureProgLoaded() {
 
   PROG = ensureProgShape(PROG);
   ensureProgMeta();
+  try {
+    applyCanonicalProgMirror({ force: !PROG.__canonicalMirrorStamp });
+  } catch (e) {
+    console.warn("[PROG] canonical mirror apply failed", e);
+  }
   if (typeof PROG.unlocks.guestFancy !== "boolean") PROG.unlocks.guestFancy = false;
   if (typeof PROG.unlocks.guestCelebrator !== "boolean") PROG.unlocks.guestCelebrator = false;
 
@@ -7766,6 +7823,8 @@ function ensureProgLoaded() {
 
       function buildCanonicalProgressionState() {
         const normalized = getNormalizedProgressionState();
+        const progMirror = window.__BC_PROG__ || window.PROG || {};
+        const capturedAt = Date.now();
         const rawState =
           normalized?.state && typeof normalized.state === "object"
             ? normalized.state
@@ -7785,6 +7844,7 @@ function ensureProgLoaded() {
           const drillEntries = Object.values(state?.rewards?.drills || {});
           const challengeEntries = Object.values(state?.rewards?.timedChallenges || {});
           const premiumEntries = Object.values(state?.rewards?.premiumByEncounter || {});
+          const legacyEntries = Object.values(state?.rewards?.legacy || {});
 
           const sumRewardPoints = (rows) =>
             rows.reduce((sum, row) => sum + Number(row?.rewardPoints || row?.reward?.totalPoints || 0), 0);
@@ -7811,6 +7871,10 @@ function ensureProgLoaded() {
               count: premiumEntries.length,
               totalPoints: roundReward(sumRewardPoints(premiumEntries)),
             },
+            legacy: {
+              count: legacyEntries.length,
+              totalPoints: roundReward(sumRewardPoints(legacyEntries)),
+            },
           };
         };
 
@@ -7818,7 +7882,7 @@ function ensureProgLoaded() {
 
         return {
           version: 1,
-          capturedAt: Date.now(),
+          capturedAt,
           economy: {
             points: Number(normalized?.economy?.points ?? 0),
             tier: Number(normalized?.economy?.tier ?? 1),
@@ -7875,8 +7939,22 @@ function ensureProgLoaded() {
             premiumByEncounter: rawState?.rewards?.premiumByEncounter && typeof rawState.rewards.premiumByEncounter === "object"
               ? structuredClone(rawState.rewards.premiumByEncounter)
               : {},
+            legacy: rawState?.rewards?.legacy && typeof rawState.rewards.legacy === "object"
+              ? structuredClone(rawState.rewards.legacy)
+              : {},
           },
           rewardsSummary,
+          mirror: {
+            capturedAt,
+            meta: structuredClone(progMirror?.meta || {}),
+            axes: structuredClone(progMirror?.axes || {}),
+            counters: structuredClone(progMirror?.counters || {}),
+            flags: structuredClone(progMirror?.flags || {}),
+            unlocks: structuredClone(progMirror?.unlocks || {}),
+            drift: structuredClone(progMirror?.drift || {}),
+            recovery: structuredClone(progMirror?.recovery || {}),
+            guestRanks: structuredClone(progMirror?.guestRanks || {}),
+          },
         };
       }
       window.buildCanonicalProgressionState = buildCanonicalProgressionState;

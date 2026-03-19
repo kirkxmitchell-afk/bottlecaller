@@ -302,7 +302,8 @@ export function createProgressionStore(storage = window.localStorage) {
         timedChallenges: {},
         drills: {},
         premiumByEncounter: {}
-      }
+      },
+      mirror: {}
     };
   }
 
@@ -353,6 +354,10 @@ export function createProgressionStore(storage = window.localStorage) {
     s.rewards.legacy =
       s.rewards.legacy && typeof s.rewards.legacy === "object"
         ? s.rewards.legacy
+        : {};
+    s.mirror =
+      s.mirror && typeof s.mirror === "object"
+        ? s.mirror
         : {};
 
     // clamp to allowed by tier/points
@@ -493,6 +498,7 @@ export function createProgressionStore(storage = window.localStorage) {
     }
 
     const canonicalRewards = c.rewards && typeof c.rewards === "object" ? c.rewards : {};
+    const canonicalMirror = c.mirror && typeof c.mirror === "object" ? c.mirror : null;
     if (canonicalRewards.encounters && typeof canonicalRewards.encounters === "object") {
       state.rewards.encounters = structuredClone(canonicalRewards.encounters);
     }
@@ -507,6 +513,9 @@ export function createProgressionStore(storage = window.localStorage) {
     }
     if (canonicalRewards.legacy && typeof canonicalRewards.legacy === "object") {
       state.rewards.legacy = structuredClone(canonicalRewards.legacy);
+    }
+    if (canonicalMirror) {
+      state.mirror = structuredClone(canonicalMirror);
     }
 
     state = normalize(state, state.identity);
