@@ -228,14 +228,54 @@ async function upsertCanonicalProgressionState({
   ctx,
   payload,
 }) {
-  const canonicalState =
+  const canonicalStateRaw =
     payload?.progressionState ||
     payload?.progression_state ||
     null;
 
-  if (!canonicalState || typeof canonicalState !== "object") {
+  if (!canonicalStateRaw || typeof canonicalStateRaw !== "object") {
     return { ok: false, skipped: true, reason: "missing_progression_state" };
   }
+
+  const buildRewardsSummary = (state) => {
+    const encounterEntries = Object.values(state?.run?.scoredThisRun || {});
+    const drillEntries = Object.values(state?.rewards?.drills || {});
+    const challengeEntries = Object.values(state?.rewards?.timedChallenges || {});
+    const premiumEntries = Object.values(state?.rewards?.premiumByEncounter || {});
+    const sumRewardPoints = (rows) =>
+      rows.reduce((sum, row) => sum + Number(row?.rewardPoints || row?.reward?.totalPoints || 0), 0);
+    const roundReward = (value) => {
+      const n = Number(value || 0);
+      return Math.max(0, Math.round(n * 10) / 10);
+    };
+
+    return {
+      encounters: {
+        count: encounterEntries.length,
+        totalPoints: roundReward(sumRewardPoints(encounterEntries)),
+      },
+      drills: {
+        count: drillEntries.length,
+        totalPoints: roundReward(sumRewardPoints(drillEntries)),
+      },
+      timedChallenges: {
+        count: challengeEntries.length,
+        totalPoints: roundReward(sumRewardPoints(challengeEntries)),
+      },
+      premium: {
+        count: premiumEntries.length,
+        totalPoints: roundReward(sumRewardPoints(premiumEntries)),
+      },
+    };
+  };
+
+  const canonicalState = {
+    ...canonicalStateRaw,
+    rewardsSummary:
+      canonicalStateRaw?.rewardsSummary && typeof canonicalStateRaw.rewardsSummary === "object"
+        ? canonicalStateRaw.rewardsSummary
+        : buildRewardsSummary(canonicalStateRaw),
+  };
 
   const row = {
     user_id: ctx.userId,

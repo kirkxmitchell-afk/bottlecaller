@@ -7658,11 +7658,51 @@ function ensureProgLoaded() {
 
       function buildCanonicalProgressionState() {
         const normalized = getNormalizedProgressionState();
+        const rawState =
+          normalized?.state && typeof normalized.state === "object"
+            ? normalized.state
+            : {};
         const currentEncounterId =
           Number(currentEncounter?.encounterNumber) ||
           Number(encounterIndex + 1) ||
           Number(normalized?.state?.session?.currentEncounterId) ||
           1;
+
+        const buildRewardsSummary = (state) => {
+          const encounterEntries = Object.values(state?.run?.scoredThisRun || {});
+          const drillEntries = Object.values(state?.rewards?.drills || {});
+          const challengeEntries = Object.values(state?.rewards?.timedChallenges || {});
+          const premiumEntries = Object.values(state?.rewards?.premiumByEncounter || {});
+
+          const sumRewardPoints = (rows) =>
+            rows.reduce((sum, row) => sum + Number(row?.rewardPoints || row?.reward?.totalPoints || 0), 0);
+
+          const roundReward = (value) => {
+            const n = Number(value || 0);
+            return Math.max(0, Math.round(n * 10) / 10);
+          };
+
+          return {
+            encounters: {
+              count: encounterEntries.length,
+              totalPoints: roundReward(sumRewardPoints(encounterEntries)),
+            },
+            drills: {
+              count: drillEntries.length,
+              totalPoints: roundReward(sumRewardPoints(drillEntries)),
+            },
+            timedChallenges: {
+              count: challengeEntries.length,
+              totalPoints: roundReward(sumRewardPoints(challengeEntries)),
+            },
+            premium: {
+              count: premiumEntries.length,
+              totalPoints: roundReward(sumRewardPoints(premiumEntries)),
+            },
+          };
+        };
+
+        const rewardsSummary = buildRewardsSummary(rawState);
 
         return {
           version: 1,
@@ -7703,7 +7743,25 @@ function ensureProgLoaded() {
             difficultySeed: Number(normalized?.display?.difficultySeed ?? 1),
             effectiveDifficulty: Number(normalized?.display?.effectiveDifficulty ?? 1),
             pressureBand: String(normalized?.display?.pressureBand || "low")
-          }
+          },
+          run: {
+            runId: Number(rawState?.run?.runId ?? normalized?.session?.runId ?? 0),
+            scoredThisRun: rawState?.run?.scoredThisRun && typeof rawState.run.scoredThisRun === "object"
+              ? structuredClone(rawState.run.scoredThisRun)
+              : {},
+          },
+          rewards: {
+            drills: rawState?.rewards?.drills && typeof rawState.rewards.drills === "object"
+              ? structuredClone(rawState.rewards.drills)
+              : {},
+            timedChallenges: rawState?.rewards?.timedChallenges && typeof rawState.rewards.timedChallenges === "object"
+              ? structuredClone(rawState.rewards.timedChallenges)
+              : {},
+            premiumByEncounter: rawState?.rewards?.premiumByEncounter && typeof rawState.rewards.premiumByEncounter === "object"
+              ? structuredClone(rawState.rewards.premiumByEncounter)
+              : {},
+          },
+          rewardsSummary,
         };
       }
       window.buildCanonicalProgressionState = buildCanonicalProgressionState;

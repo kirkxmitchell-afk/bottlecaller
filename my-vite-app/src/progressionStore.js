@@ -178,6 +178,35 @@ export function resolveEncounterQualityState({
   return "completed";
 }
 
+export function buildRewardsSummary(state = {}) {
+  const encounterEntries = Object.values(state?.run?.scoredThisRun || {});
+  const drillEntries = Object.values(state?.rewards?.drills || {});
+  const challengeEntries = Object.values(state?.rewards?.timedChallenges || {});
+  const premiumEntries = Object.values(state?.rewards?.premiumByEncounter || {});
+
+  const sumRewardPoints = (rows) =>
+    rows.reduce((sum, row) => sum + Number(row?.rewardPoints || row?.reward?.totalPoints || 0), 0);
+
+  return {
+    encounters: {
+      count: encounterEntries.length,
+      totalPoints: roundReward(sumRewardPoints(encounterEntries)),
+    },
+    drills: {
+      count: drillEntries.length,
+      totalPoints: roundReward(sumRewardPoints(drillEntries)),
+    },
+    timedChallenges: {
+      count: challengeEntries.length,
+      totalPoints: roundReward(sumRewardPoints(challengeEntries)),
+    },
+    premium: {
+      count: premiumEntries.length,
+      totalPoints: roundReward(sumRewardPoints(premiumEntries)),
+    },
+  };
+}
+
 export function createProgressionStore(storage = window.localStorage) {
   let state = null;
   let storageKey = null;
@@ -405,6 +434,22 @@ export function createProgressionStore(storage = window.localStorage) {
 
     if (Number.isFinite(Number(session.runId))) {
       state.run.runId = Math.max(state.run.runId || 0, Number(session.runId));
+    }
+
+    const canonicalRun = c.run && typeof c.run === "object" ? c.run : {};
+    if (canonicalRun.scoredThisRun && typeof canonicalRun.scoredThisRun === "object") {
+      state.run.scoredThisRun = structuredClone(canonicalRun.scoredThisRun);
+    }
+
+    const canonicalRewards = c.rewards && typeof c.rewards === "object" ? c.rewards : {};
+    if (canonicalRewards.drills && typeof canonicalRewards.drills === "object") {
+      state.rewards.drills = structuredClone(canonicalRewards.drills);
+    }
+    if (canonicalRewards.timedChallenges && typeof canonicalRewards.timedChallenges === "object") {
+      state.rewards.timedChallenges = structuredClone(canonicalRewards.timedChallenges);
+    }
+    if (canonicalRewards.premiumByEncounter && typeof canonicalRewards.premiumByEncounter === "object") {
+      state.rewards.premiumByEncounter = structuredClone(canonicalRewards.premiumByEncounter);
     }
 
     state = normalize(state, state.identity);
