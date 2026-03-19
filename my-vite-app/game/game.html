@@ -2173,6 +2173,7 @@
 
       const hasOutcome =
         !!enc?.outcome ||
+        !!enc?.finalOutcome ||
         !!enc?.__reaction?.outcome ||
         !!enc?.chainSignal ||
         !!enc?.__reaction?.chainSignal;
@@ -2181,7 +2182,14 @@
         enc?.chainScore !== null &&
         enc?.chainScore !== undefined;
 
-      return !!(hasOutcome || hasScore);
+      const hasResolvedRuntimeMarkers =
+        !!enc?.__reactionComputed ||
+        !!enc?.__completionState ||
+        !!enc?.__progressionApplied ||
+        !!enc?.__uxSummary ||
+        !!enc?.__tiers;
+
+      return !!(hasOutcome || hasScore || hasResolvedRuntimeMarkers);
     }
 
     async function sendLiveProgressReport(source = "unknown") {
