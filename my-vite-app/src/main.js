@@ -4880,7 +4880,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
         } else if (result?.error === "encounter_not_resolved") {
           setAll("Finish the encounter first, then send progress.");
         } else {
-          setAll("Could not send progress.");
+          setAll(describeProgressSendError(result?.error));
         }
 
         return;
@@ -6393,6 +6393,17 @@ function wireWaiterMessagesPanel() {
   }
 }
 
+function describeProgressSendError(errorCode = "") {
+  const code = String(errorCode || "").toLowerCase();
+  if (code === "encounter_not_resolved") return "Finish the encounter first, then send progress.";
+  if (code === "no_current_encounter") return "No active encounter to send yet.";
+  if (code === "already_sent_for_encounter") return "Progress was already sent for this encounter.";
+  if (code === "waiter_messenger_only") return "Use the waiter messenger to send progress.";
+  if (code === "manager_auto_only") return "This progress send is manager-controlled.";
+  if (!code) return "Could not send progress.";
+  return `Could not send progress: ${code}`;
+}
+
 window.addEventListener("message", (event) => {
   const msg = event?.data;
   if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
@@ -6411,7 +6422,7 @@ window.addEventListener("message", (event) => {
       ? (msg.snapshotOk === false
           ? `Sent, but snapshot failed${msg.snapshotError ? `: ${msg.snapshotError}` : "."}`
           : `Progress updated${msg.inserted ? ` (${msg.inserted})` : ""} ✅`)
-      : `Send failed: ${msg.error || "unknown error"}`;
+      : describeProgressSendError(msg.error || "unknown_error");
 
     if (status) status.textContent = text;
     if (hudStatus) hudStatus.textContent = text;
