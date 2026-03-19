@@ -16538,6 +16538,7 @@ function ensureProgLoaded() {
         const completionState = computeAndStoreCompletionState(scored, streakInfo, unlock);
 
         if (completionState.done.done) {
+          maybeAutoSendProgressReport(currentEncounter);
           renderSessionComplete(stepContent, {
             reason: completionState.done.reason,
             tier: completionState.tierNow,
