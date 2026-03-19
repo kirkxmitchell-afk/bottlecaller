@@ -3036,7 +3036,11 @@
           if (msg.ok && String(next?.status || "").toLowerCase() === "completed") {
             try {
               const spine = getProgressionSpine({ allowNull: true });
-              const rewardInput = buildTimedChallengeRewardInput(next);
+              const rewardInput = buildTimedChallengeRewardInput({
+                ...next,
+                ...msg,
+                success: true,
+              });
               spine?.actions?.applyTimedChallengeReward?.(rewardInput);
             } catch (e) {
               console.warn("[TIMED CHALLENGE] reward apply failed", e);
@@ -3077,7 +3081,8 @@
             const spine = getProgressionSpine({ allowNull: true });
             const rewardInput = buildDrillRewardInput({
               ...(window.__BC_LAST_DRILL_RUN_COMPLETION__ || {}),
-              assignedMessageId: msg.assignedMessageId || null,
+              ...(assigned || {}),
+              assignedMessageId: msg.assignedMessageId || assigned?.id || null,
             });
             spine?.actions?.applyDrillReward?.(rewardInput);
           } catch (e) {
@@ -4814,7 +4819,12 @@ function isDrillMode() {
 
       function buildEncounterRewardInput(result = {}) {
         const ctx = getRewardRuntimeContext();
-        const encounter = result?.encounter || window.currentEncounter || window.__BC_LAST_ENCOUNTER__ || null;
+        const encounter =
+          result?.encounter ||
+          window.currentEncounter ||
+          window.__BC_LAST_ENCOUNTER__ ||
+          null;
+
         const resolvedEncounterId = String(
           result?.encounterId ||
           encounter?.encounterId ||
@@ -4823,10 +4833,63 @@ function isDrillMode() {
           ""
         );
 
+        const resolvedTier = Number(
+          result?.tier ??
+          result?.servedTier ??
+          result?.tierToServe ??
+          encounter?.tier ??
+          encounter?.servedTier ??
+          ctx.tier ??
+          1
+        );
+
+        const resolvedEffectiveDifficulty =
+          Number.isFinite(Number(result?.effectiveDifficulty))
+            ? Number(result.effectiveDifficulty)
+            : Number.isFinite(Number(result?.eff))
+              ? Number(result.eff)
+              : Number.isFinite(Number(encounter?.finalDifficulty))
+                ? Number(encounter.finalDifficulty)
+                : Number.isFinite(Number(encounter?.difficulty))
+                  ? Number(encounter.difficulty)
+                  : Number.isFinite(Number(window.__BC_GUARD__?.finalDifficulty))
+                    ? Number(window.__BC_GUARD__.finalDifficulty)
+                    : ctx.effectiveDifficulty;
+
+        const resolvedPressureLevel =
+          Number.isFinite(Number(result?.pressureLevel))
+            ? Number(result.pressureLevel)
+            : Number.isFinite(Number(result?.pressure))
+              ? Number(result.pressure)
+              : Number.isFinite(Number(encounter?.pressureLevel))
+                ? Number(encounter.pressureLevel)
+                : Number.isFinite(Number(window.__BC_GUARD__?.pressureLevel))
+                  ? Number(window.__BC_GUARD__.pressureLevel)
+                  : Number.isFinite(Number(window.__BC_DIFFICULTY__?.pressure))
+                    ? Number(window.__BC_DIFFICULTY__.pressure)
+                    : ctx.pressureLevel;
+
+        const resolvedPerformanceGrade =
+          result?.performanceGrade ||
+          result?.grade ||
+          encounter?.performanceGrade ||
+          encounter?.grade ||
+          null;
+
+        const resolvedPremiumAchieved = Boolean(
+          result?.premiumAchieved ??
+          result?.premiumSuccess ??
+          result?.premiumConverted ??
+          encounter?.premiumOpportunityHit ??
+          encounter?.premiumRollSuccess ??
+          encounter?.premiumSuccess ??
+          false
+        );
+
         const input = {
           encounterId: resolvedEncounterId,
           success: Boolean(result?.success),
-          pointEligible: Boolean(result?.pointEligible ?? true),
+          pointEligible: Boolean(result?.pointEligible ?? result?.success ?? true),
           encounterKey: String(
             result?.encounterKey ||
             result?.sessionId ||
@@ -4835,40 +4898,11 @@ function isDrillMode() {
             resolvedEncounterId ||
             ""
           ),
-          tier: Number(
-            result?.tier ??
-            result?.servedTier ??
-            result?.tierToServe ??
-            ctx.tier ??
-            1
-          ),
-          effectiveDifficulty: Number.isFinite(Number(result?.effectiveDifficulty))
-            ? Number(result.effectiveDifficulty)
-            : Number.isFinite(Number(result?.eff))
-              ? Number(result.eff)
-              : Number.isFinite(Number(encounter?.finalDifficulty))
-                ? Number(encounter.finalDifficulty)
-                : Number.isFinite(Number(encounter?.difficulty))
-                  ? Number(encounter.difficulty)
-                  : ctx.effectiveDifficulty,
-          pressureLevel: Number.isFinite(Number(result?.pressureLevel))
-            ? Number(result.pressureLevel)
-            : Number.isFinite(Number(result?.pressure))
-              ? Number(result.pressure)
-              : ctx.pressureLevel,
-          performanceGrade:
-            result?.performanceGrade ||
-            result?.grade ||
-            encounter?.performanceGrade ||
-            null,
-          premiumAchieved: Boolean(
-            result?.premiumAchieved ??
-            result?.premiumSuccess ??
-            result?.premiumConverted ??
-            encounter?.premiumOpportunityHit ??
-            encounter?.premiumRollSuccess ??
-            false
-          ),
+          tier: resolvedTier,
+          effectiveDifficulty: resolvedEffectiveDifficulty,
+          pressureLevel: resolvedPressureLevel,
+          performanceGrade: resolvedPerformanceGrade,
+          premiumAchieved: resolvedPremiumAchieved,
         };
 
         console.log("[BC reward input][encounter]", input);
@@ -4877,54 +4911,93 @@ function isDrillMode() {
 
       function buildDrillRewardInput(drillResult = {}) {
         const ctx = getRewardRuntimeContext();
-        const encounter = drillResult?.encounter || window.currentEncounter || window.__BC_LAST_ENCOUNTER__ || null;
+        const encounter =
+          drillResult?.encounter ||
+          window.currentEncounter ||
+          window.__BC_LAST_ENCOUNTER__ ||
+          null;
+
         const gradeQualityScore = mapGradeToQualityScore(
           drillResult?.performanceGrade ||
           encounter?.performanceGrade ||
           null
         );
 
-        const input = {
-          assignedMessageId: String(
-            drillResult?.assignedMessageId ||
-            ""
-          ),
-          repsDone: Number(
-            drillResult?.repsDone ??
-            drillResult?.completedReps ??
-            0
-          ),
-          repTarget: Number(
-            drillResult?.repTarget ??
-            drillResult?.targetReps ??
-            0
-          ),
-          accuracy: Number.isFinite(Number(drillResult?.accuracy))
+        const resolvedAssignedMessageId = String(
+          drillResult?.assignedMessageId ||
+          drillResult?.id ||
+          ""
+        );
+
+        const resolvedRepsDone = Number(
+          drillResult?.repsDone ??
+          drillResult?.completedReps ??
+          drillResult?.reps_completed ??
+          0
+        );
+
+        const resolvedRepTarget = Number(
+          drillResult?.repTarget ??
+          drillResult?.targetReps ??
+          drillResult?.rep_target ??
+          0
+        );
+
+        const resolvedAccuracy =
+          Number.isFinite(Number(drillResult?.accuracy))
             ? Number(drillResult.accuracy)
-            : null,
-          qualityScore: Number.isFinite(Number(drillResult?.qualityScore))
+            : Number.isFinite(Number(drillResult?.passRate))
+              ? Number(drillResult.passRate)
+              : null;
+
+        const resolvedQualityScore =
+          Number.isFinite(Number(drillResult?.qualityScore))
             ? Number(drillResult.qualityScore)
             : Number.isFinite(Number(drillResult?.score))
               ? Number(drillResult.score)
-              : gradeQualityScore,
-          tier: Number(
-            drillResult?.tier ??
-            drillResult?.servedTier ??
-            drillResult?.drillTier ??
-            (typeof DRILL !== "undefined" && Number.isFinite(Number(DRILL?.tier)) ? Number(DRILL.tier) : null) ??
-            ctx.tier ??
-            1
-          ),
-          effectiveDifficulty: Number.isFinite(Number(drillResult?.effectiveDifficulty))
+              : Number.isFinite(Number(drillResult?.phraseQuality))
+                ? Number(drillResult.phraseQuality)
+                : Number.isFinite(Number(drillResult?.deliveryQuality))
+                  ? Number(drillResult.deliveryQuality)
+                  : Number.isFinite(Number(drillResult?.modeMatch))
+                    ? Number(drillResult.modeMatch)
+                    : gradeQualityScore;
+
+        const resolvedTier = Number(
+          drillResult?.tier ??
+          drillResult?.servedTier ??
+          drillResult?.drillTier ??
+          (typeof DRILL !== "undefined" && Number.isFinite(Number(DRILL?.tier)) ? Number(DRILL.tier) : null) ??
+          encounter?.tier ??
+          ctx.tier ??
+          1
+        );
+
+        const resolvedEffectiveDifficulty =
+          Number.isFinite(Number(drillResult?.effectiveDifficulty))
             ? Number(drillResult.effectiveDifficulty)
             : Number.isFinite(Number(drillResult?.eff))
               ? Number(drillResult.eff)
-              : ctx.effectiveDifficulty,
-          pressureLevel: Number.isFinite(Number(drillResult?.pressureLevel))
+              : Number.isFinite(Number(DRILL?.effectiveDifficulty))
+                ? Number(DRILL.effectiveDifficulty)
+                : ctx.effectiveDifficulty;
+
+        const resolvedPressureLevel =
+          Number.isFinite(Number(drillResult?.pressureLevel))
             ? Number(drillResult.pressureLevel)
             : Number.isFinite(Number(drillResult?.pressure))
               ? Number(drillResult.pressure)
-              : ctx.pressureLevel,
+              : ctx.pressureLevel;
+
+        const input = {
+          assignedMessageId: resolvedAssignedMessageId,
+          repsDone: resolvedRepsDone,
+          repTarget: resolvedRepTarget,
+          accuracy: resolvedAccuracy,
+          qualityScore: resolvedQualityScore,
+          tier: resolvedTier,
+          effectiveDifficulty: resolvedEffectiveDifficulty,
+          pressureLevel: resolvedPressureLevel,
         };
 
         console.log("[BC reward input][drill]", input);
@@ -4933,16 +5006,27 @@ function isDrillMode() {
 
       function buildTimedChallengeRewardInput(result = {}) {
         const ctx = getRewardRuntimeContext();
-        const performanceGrade = String(result?.performanceGrade || result?.grade || "").toUpperCase();
+        const performanceGrade = String(
+          result?.performanceGrade ||
+          result?.grade ||
+          ""
+        ).toUpperCase();
+
         const explicitQuality = String(
           result?.qualityState ||
           result?.completionQuality ||
           ""
         ).toLowerCase();
+
+        const resolvedSuccess = Boolean(
+          result?.success ??
+          (String(result?.status || "").toLowerCase() === "completed")
+        );
+
         const fallbackQuality =
           performanceGrade === "A" ? "mastered" :
           performanceGrade === "B" ? "passed" :
-          (result?.status === "completed" && result?.success) ? "passed" :
+          resolvedSuccess ? "passed" :
           "completed";
 
         const input = {
@@ -14585,21 +14669,6 @@ function ensureProgLoaded() {
           success: didWin,
           pointEligible: didWin,
           encounterKey: String(sessionId || encounterId || ""),
-          tier: getTierFromEncounterNumber(enc?.encounterNumber ?? 1),
-          effectiveDifficulty:
-            window.__BC_GUARD__?.finalDifficulty ??
-            enc?.policy?.d ??
-            enc?.difficulty ??
-            null,
-          pressureLevel:
-            window.__BC_GUARD__?.pressureLevel ??
-            window.__BC_DIFFICULTY__?.pressure ??
-            null,
-          performanceGrade: enc?.performanceGrade || null,
-          premiumAchieved: !!(
-            enc?.premiumOpportunityHit ||
-            enc?.premiumRollSuccess
-          ),
           encounter: enc,
           sessionId,
         });
@@ -16051,21 +16120,6 @@ function ensureProgLoaded() {
             success: didWin,
             pointEligible: didWin,
             encounterKey: String(sessionId || encounterId || ""),
-            tier: getTierFromEncounterNumber(currentEncounter?.encounterNumber ?? 1),
-            effectiveDifficulty:
-              window.__BC_GUARD__?.finalDifficulty ??
-              currentEncounter?.policy?.d ??
-              currentEncounter?.difficulty ??
-              null,
-            pressureLevel:
-              window.__BC_GUARD__?.pressureLevel ??
-              window.__BC_DIFFICULTY__?.pressure ??
-              null,
-            performanceGrade: currentEncounter?.performanceGrade || null,
-            premiumAchieved: !!(
-              currentEncounter?.premiumOpportunityHit ||
-              currentEncounter?.premiumRollSuccess
-            ),
             encounter: currentEncounter,
             sessionId,
           });
