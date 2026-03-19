@@ -3725,6 +3725,14 @@ function getSenderCtxOrReject(event, senderCtx, replyType, extra = {}, opts = {}
   return {
     userId,
     profileUserId: senderCtx?.profileUserId ?? senderCtx?.profile_user_id ?? userId,
+    progressionOwnerUserId:
+      senderCtx?.progressionOwnerUserId ??
+      senderCtx?.progression_owner_user_id ??
+      null,
+    progressionOwnerRestaurantId:
+      senderCtx?.progressionOwnerRestaurantId ??
+      senderCtx?.progression_owner_restaurant_id ??
+      null,
     restaurantId,
     role,
     membershipRole: senderCtx?.membershipRole ?? senderCtx?.membership_role ?? role,
@@ -3809,6 +3817,7 @@ async function buildBcCtxSafe(requestedMode = null) {
   const gameplayRole = membershipRole;
   const scopeType = profile?.scope_type ?? null;
   const accessTier = profile?.access_tier ?? "demo";
+  const progressionOwner = getActiveProgressionOwnerContext();
 
   const mode = String(requestedMode || "").toLowerCase();
   const isDemo = mode === "demo";
@@ -3818,6 +3827,8 @@ async function buildBcCtxSafe(requestedMode = null) {
     return {
       userId,
       profileUserId: profile?.user_id ?? userId,
+      progressionOwnerUserId: progressionOwner.userId || profile?.user_id || userId,
+      progressionOwnerRestaurantId: progressionOwner.restaurantId || null,
       restaurantId: null,
       scopeId: null,
       scopeType: null,
@@ -3838,6 +3849,8 @@ async function buildBcCtxSafe(requestedMode = null) {
   return {
     userId,
     profileUserId: profile?.user_id ?? userId,
+    progressionOwnerUserId: progressionOwner.userId || profile?.user_id || userId,
+    progressionOwnerRestaurantId: progressionOwner.restaurantId || restaurantId,
     restaurantId,
     scopeId: profile?.scope_id ?? null,
     scopeType,
@@ -3871,6 +3884,14 @@ if (!window.__BC_PARENT_BRIDGE__) {
         mode: String(ctx.mode || ""),
         userId: ctx.userId || null,
         profileUserId: ctx.profileUserId || ctx.profile_user_id || ctx.userId || null,
+        progressionOwnerUserId:
+          ctx.progressionOwnerUserId ||
+          ctx.progression_owner_user_id ||
+          null,
+        progressionOwnerRestaurantId:
+          ctx.progressionOwnerRestaurantId ||
+          ctx.progression_owner_restaurant_id ||
+          null,
         restaurantId: ctx.restaurantId || null,
         role: ctx.role || null,
         membershipRole: ctx.membershipRole || ctx.membership_role || null,
@@ -9067,6 +9088,7 @@ function pushCtxToPremiumIframe(source = "manual") {
 
   const uid = appState.session?.user?.id || null;
   const profileUserId = appState.profile?.user_id || uid;
+  const progressionOwner = getActiveProgressionOwnerContext();
   const membershipRole = normalizeMembershipRole(appState.profile || null) || appState.profile?.role || "waiter";
   const activeRestaurantId = window.getActiveRestaurantId?.() || appState.profile?.restaurant_id || null;
   const scopeId = appState.profile?.scope_id || null;
@@ -9081,6 +9103,8 @@ function pushCtxToPremiumIframe(source = "manual") {
       mode: "premium",
       userId: uid,
       profileUserId,
+      progressionOwnerUserId: progressionOwner.userId || profileUserId,
+      progressionOwnerRestaurantId: progressionOwner.restaurantId || activeRestaurantId,
       restaurantId: activeRestaurantId,
       scopeId,
       scopeType,
@@ -9194,6 +9218,9 @@ function mountPremiumGameIframe({
     return;
   }
   const roleNow = String(appState?.profile?.role || "").toLowerCase();
+  if (roleNow === "waiter" && appState?.profile) {
+    setActiveProgressionOwner(appState.profile);
+  }
   const resolvedBackTo = roleNow === "waiter"
     ? "screenPremiumApp"
     : (backTo || "screenManagerBoard");

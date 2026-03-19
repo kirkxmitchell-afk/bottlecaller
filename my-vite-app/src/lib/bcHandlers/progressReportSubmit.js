@@ -19,11 +19,22 @@ function resolveProgressionStateUserId(ctx, payload) {
     payload?.receiverUserId ||
     payload?.user_id ||
     payload?.userId ||
+    ctx?.progressionOwnerUserId ||
     ctx?.profileUserId ||
     ctx?.activeProfileUserId ||
     ctx?.membershipUserId ||
     ctx?.waiterUserId ||
     ctx?.userId ||
+    null
+  );
+}
+
+function resolveProgressionStateRestaurantId(ctx, payload) {
+  return (
+    payload?.restaurantId ||
+    payload?.restaurant_id ||
+    ctx?.progressionOwnerRestaurantId ||
+    ctx?.restaurantId ||
     null
   );
 }
@@ -312,12 +323,19 @@ async function upsertCanonicalProgressionState({
       ctx?.profileUserId ||
       ctx?.activeProfileUserId ||
       null,
+    progressionOwnerUserId: ctx?.progressionOwnerUserId ?? null,
+    progressionOwnerRestaurantId: ctx?.progressionOwnerRestaurantId ?? null,
     authUserId: authUserId || null,
   });
 
+  const progressionRestaurantId = resolveProgressionStateRestaurantId(ctx, payload);
+  if (!progressionRestaurantId) {
+    return { ok: false, error: "missing_progression_restaurant_id" };
+  }
+
   const row = {
     user_id: progressionUserId,
-    restaurant_id: ctx.restaurantId,
+    restaurant_id: progressionRestaurantId,
     scope_id: ctx.scopeId || null,
     canonical_state: canonicalState,
     source_type: "progress_report",
