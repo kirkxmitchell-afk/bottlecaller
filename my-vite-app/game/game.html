@@ -2228,9 +2228,11 @@
         }
 
         const resolved =
+          canSendResolvedProgress() ||
           !!encounter?.outcome ||
           !!encounter?.finalOutcome ||
           !!encounter?.chainSignal ||
+          activeStep === 6 ||
           activeStep === 7 ||
           activeStep === 65;
 
@@ -2902,9 +2904,11 @@
           }
 
           const resolved =
+            canSendResolvedProgress() ||
             !!encounter?.outcome ||
             !!encounter?.finalOutcome ||
             !!encounter?.chainSignal ||
+            activeStep === 6 ||
             activeStep === 7 ||
             activeStep === 65;
 
