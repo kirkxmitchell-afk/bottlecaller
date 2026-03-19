@@ -2191,6 +2191,11 @@
           return { ok: false, error: "no_current_encounter" };
         }
 
+        const activeStep =
+          typeof window.currentStep !== "undefined"
+            ? window.currentStep
+            : (typeof currentStep !== "undefined" ? currentStep : null);
+
         const ctx = window.__BC_CTX__ || {};
         const role = String(
           ctx.membershipRole ||
@@ -2226,8 +2231,8 @@
           !!encounter?.outcome ||
           !!encounter?.finalOutcome ||
           !!encounter?.chainSignal ||
-          currentStep === 7 ||
-          currentStep === 65;
+          activeStep === 7 ||
+          activeStep === 65;
 
         if (!resolved) {
           return { ok: false, error: "encounter_not_resolved" };
@@ -2873,6 +2878,10 @@
         console.log("[REPORT] hud_send_progress_request received ✅", msg);
         (async () => {
           const encounter = window.currentEncounter || currentEncounter || null;
+          const activeStep =
+            typeof window.currentStep !== "undefined"
+              ? window.currentStep
+              : (typeof currentStep !== "undefined" ? currentStep : null);
 
           if (!encounter) {
             const result = { ok: false, error: "no_current_encounter" };
@@ -2896,8 +2905,8 @@
             !!encounter?.outcome ||
             !!encounter?.finalOutcome ||
             !!encounter?.chainSignal ||
-            currentStep === 7 ||
-            currentStep === 65;
+            activeStep === 7 ||
+            activeStep === 65;
 
           if (!resolved) {
             const result = { ok: false, error: "encounter_not_resolved" };
