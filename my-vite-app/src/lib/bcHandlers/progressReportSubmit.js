@@ -11,8 +11,14 @@ function normalizeAllowedScopeType(value, fallback = "restaurant") {
   return s || fallback;
 }
 
-function resolveProgressionStateUserId(ctx) {
+function resolveProgressionStateUserId(ctx, payload) {
   return (
+    payload?.targetUserId ||
+    payload?.waiterUserId ||
+    payload?.receiver_user_id ||
+    payload?.receiverUserId ||
+    payload?.user_id ||
+    payload?.userId ||
     ctx?.profileUserId ||
     ctx?.activeProfileUserId ||
     ctx?.membershipUserId ||
@@ -238,6 +244,7 @@ async function upsertCanonicalProgressionState({
   supabase,
   ctx,
   payload,
+  authUserId = null,
 }) {
   const canonicalStateRaw =
     payload?.progressionState ||
@@ -292,10 +299,21 @@ async function upsertCanonicalProgressionState({
         : buildRewardsSummary(canonicalStateRaw),
   };
 
-  const progressionUserId = resolveProgressionStateUserId(ctx);
+  const progressionUserId = resolveProgressionStateUserId(ctx, payload);
   if (!progressionUserId) {
     return { ok: false, error: "missing_progression_user_id" };
   }
+
+  console.log("[BC active progression owner]", {
+    targetUserId: payload?.targetUserId ?? null,
+    waiterUserId: payload?.waiterUserId ?? null,
+    receiver_user_id: payload?.receiver_user_id ?? null,
+    activeProfileUserId:
+      ctx?.profileUserId ||
+      ctx?.activeProfileUserId ||
+      null,
+    authUserId: authUserId || null,
+  });
 
   const row = {
     user_id: progressionUserId,
@@ -305,6 +323,13 @@ async function upsertCanonicalProgressionState({
     source_type: "progress_report",
     updated_at: new Date().toISOString(),
   };
+
+  console.log("[BC progression upsert target]", {
+    user_id_for_upsert: row.user_id,
+    restaurant_id_for_upsert: row.restaurant_id,
+    canonical_points: canonicalState?.economy?.points ?? null,
+    canonical_rewards_summary: canonicalState?.rewardsSummary ?? null,
+  });
 
   const { error } = await supabase
     .from("bc_progression_state_v1")
@@ -425,6 +450,7 @@ export function makeProgressReportSubmitHandler({
         supabase,
         ctx,
         payload: nextPayload,
+        authUserId: authed,
       });
 
       const snapshotResult = await insertSkillSnapshotAndDrillEffect({

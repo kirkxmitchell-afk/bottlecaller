@@ -1591,37 +1591,108 @@ function isMissingRelationError(error) {
   return code === "42P01" || /does not exist|undefined table|schema cache/i.test(message);
 }
 
+function resolveProgressionOwnerUserId(ctx = {}, session = null) {
+  return (
+    ctx?.targetUserId ||
+    ctx?.waiterUserId ||
+    ctx?.receiver_user_id ||
+    ctx?.activeProfile?.user_id ||
+    ctx?.profile?.user_id ||
+    ctx?.membership?.user_id ||
+    window.__BC_ACTIVE_WAITER_USER_ID__ ||
+    window.__BC_PROGRESS_OWNER_USER_ID__ ||
+    session?.user?.id ||
+    null
+  );
+}
+
+function resolveProgressionOwnerRestaurantId(ctx = {}) {
+  return (
+    ctx?.restaurantId ||
+    ctx?.activeProfile?.restaurant_id ||
+    ctx?.profile?.restaurant_id ||
+    ctx?.membership?.restaurant_id ||
+    window.__BC_ACTIVE_WAITER_RESTAURANT_ID__ ||
+    null
+  );
+}
+
 async function hydrateProgressionSpineFromLatestSnapshot({
   userId = null,
   restaurantId = null,
 } = {}) {
-  const uid = userId || appState.session?.user?.id || null;
-  const rid =
-    restaurantId ||
-    appState.activeRestaurantId ||
-    appState.profile?.restaurant_id ||
-    null;
+  const session = appState.session || null;
+  const profile = appState.profile || null;
+  const targetUserId = userId || null;
+  const waiterUserId = null;
+  const receiver_user_id = null;
+  const activeProfile = null;
+  const membership = null;
+  const progressionOwnerUserId = resolveProgressionOwnerUserId({
+    targetUserId,
+    waiterUserId,
+    receiver_user_id,
+    activeProfile,
+    profile,
+    membership,
+    restaurantId:
+      restaurantId ||
+      appState.activeRestaurantId ||
+      profile?.restaurant_id ||
+      null,
+  }, session);
+  const progressionOwnerRestaurantId = resolveProgressionOwnerRestaurantId({
+    restaurantId:
+      restaurantId ||
+      appState.activeRestaurantId ||
+      profile?.restaurant_id ||
+      null,
+    activeProfile,
+    profile,
+    membership,
+  });
 
-  if (!uid || !rid) return null;
+  console.log("[BC progression hydrate target]", {
+    authUserId: session?.user?.id || null,
+    progressionOwnerUserId,
+    progressionOwnerRestaurantId,
+  });
+
+  if (!progressionOwnerUserId || !progressionOwnerRestaurantId) {
+    console.warn("[BC progression hydrate] missing owner identity", {
+      authUserId: session?.user?.id || null,
+      progressionOwnerUserId,
+      progressionOwnerRestaurantId,
+    });
+    return null;
+  }
 
   const spine = initProgressionSpineFromState();
   const hydrate = spine?.actions?.hydrateFromCanonicalState;
   if (typeof hydrate !== "function") return null;
 
   try {
-    const { data, error } = await supabase
+    const { data: progressionRow, error } = await supabase
       .from("bc_progression_state_v1")
-      .select("canonical_state, updated_at")
-      .eq("user_id", uid)
-      .eq("restaurant_id", rid)
+      .select("*")
+      .eq("user_id", progressionOwnerUserId)
+      .eq("restaurant_id", progressionOwnerRestaurantId)
       .maybeSingle();
+
+    console.log("[BC progression hydrate result]", {
+      authUserId: session?.user?.id || null,
+      progressionOwnerUserId,
+      progressionOwnerRestaurantId,
+      found: !!progressionRow,
+      error: error?.message || null,
+    });
 
     if (error && !isMissingRelationError(error)) {
       console.warn("[PROGRESSION STATE] dedicated load failed", error);
     }
 
-    if (!error && data?.canonical_state && typeof data.canonical_state === "object") {
-      return hydrate(data.canonical_state);
+    if (!error && progressionRow?.canonical_state && typeof progressionRow.canonical_state === "object") {
+      return hydrate(progressionRow.canonical_state);
     }
   } catch (e) {
     console.warn("[PROGRESSION STATE] dedicated load failed, falling back", e);
@@ -1630,8 +1701,8 @@ async function hydrateProgressionSpineFromLatestSnapshot({
   const { data, error } = await supabase
     .from("bc_skill_snapshots_v1")
     .select("payload, created_at")
-    .eq("user_id", uid)
-    .eq("restaurant_id", rid)
+    .eq("user_id", progressionOwnerUserId)
+    .eq("restaurant_id", progressionOwnerRestaurantId)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -3032,6 +3103,9 @@ function applyTimedChallengeFromMessage(message) {
     };
 
     window.__BC_ACTIVE_TIMED_CHALLENGE__ = challenge;
+    window.__BC_PROGRESS_OWNER_USER_ID__ = targetUserId;
+    window.__BC_ACTIVE_WAITER_USER_ID__ = targetUserId;
+    window.__BC_ACTIVE_WAITER_RESTAURANT_ID__ = restaurantId;
     console.log("[TIMED CHALLENGE] applied ✅", challenge);
     renderHudTimedChallenge();
     renderManagerBoardOverviewTimedChallenge();
@@ -4767,20 +4841,69 @@ async function buildProgressionResult({ userId, restaurantId, desiredTier = 3 })
   });
 }
 
-window.__BC_GET_PROGRESSION_SNAPSHOT__ = async ({ userId, restaurantId }) => {
-  // Basic sanity
-  if (!userId || !restaurantId) return null;
+window.__BC_GET_PROGRESSION_SNAPSHOT__ = async function (opts = {}) {
+  const session = appState.session || null;
+  const authUserId = session?.user?.id || null;
 
-  // IMPORTANT: do NOT trust caller userId; force current authed user
-  const authedUserId = appState.session?.user?.id || null;
-  const authedRestaurantId = appState.profile?.restaurant_id || null;
+  const progressionOwnerUserId = resolveProgressionOwnerUserId({
+    targetUserId: opts?.targetUserId,
+    waiterUserId: opts?.waiterUserId,
+    receiver_user_id: opts?.receiver_user_id,
+    activeProfile: opts?.activeProfile,
+    profile: opts?.profile,
+    membership: opts?.membership,
+    restaurantId: opts?.restaurantId,
+  }, session);
 
-  if (!authedUserId) return null;
-  if (authedUserId !== userId) return null;                 // prevent spoofing
-  if (authedRestaurantId !== restaurantId) return null;     // prevent spoofing
+  const progressionOwnerRestaurantId = resolveProgressionOwnerRestaurantId({
+    restaurantId: opts?.restaurantId,
+    activeProfile: opts?.activeProfile,
+    profile: opts?.profile,
+    membership: opts?.membership,
+  });
 
-  const result = await buildProgressionResult({ userId, restaurantId, desiredTier: 3 });
-  return result?.snapshot || null;
+  console.log("[BC snapshot target]", {
+    authUserId,
+    progressionOwnerUserId,
+    progressionOwnerRestaurantId,
+    opts,
+  });
+
+  if (!authUserId) {
+    console.warn("[BC snapshot] blocked: no auth user");
+    return null;
+  }
+
+  if (!progressionOwnerUserId || !progressionOwnerRestaurantId) {
+    console.warn("[BC snapshot] blocked: missing progression owner identity", {
+      authUserId,
+      progressionOwnerUserId,
+      progressionOwnerRestaurantId,
+    });
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from("bc_progression_state_v1")
+    .select("*")
+    .eq("user_id", progressionOwnerUserId)
+    .eq("restaurant_id", progressionOwnerRestaurantId)
+    .maybeSingle();
+
+  console.log("[BC snapshot result]", {
+    authUserId,
+    progressionOwnerUserId,
+    progressionOwnerRestaurantId,
+    found: !!data,
+    error: error?.message || null,
+  });
+
+  if (error) {
+    console.warn("[BC snapshot] fetch failed", error);
+    return null;
+  }
+
+  return data || null;
 };
 
 // ------------------------------------------------------------
@@ -5248,8 +5371,13 @@ async function refreshParentProgressionFromDb() {
   if (_progInflight) return;
   _progInflight = true;
   try {
-    const userId = appState.session?.user?.id || null;
-    const restaurantId = appState.profile?.restaurant_id || null;
+    const session = appState.session || null;
+    const profile = appState.profile || null;
+    const userId = resolveProgressionOwnerUserId({ profile }, session);
+    const restaurantId = resolveProgressionOwnerRestaurantId({
+      restaurantId: appState.profile?.restaurant_id || null,
+      profile,
+    });
 
     if (!userId || !restaurantId) {
       appState.progressionView = {
@@ -9475,6 +9603,13 @@ window.__MB_LAST_MESSAGES__ = [];
 function setActiveManagerThreadState({ userId = "", rows = [] } = {}) {
   window.__BC_MB_ACTIVE_THREAD_USER_ID__ = String(userId || "");
   window.__BC_MB_ACTIVE_THREAD_ROWS__ = Array.isArray(rows) ? rows : [];
+  window.__BC_PROGRESS_OWNER_USER_ID__ = String(userId || "") || null;
+  window.__BC_ACTIVE_WAITER_USER_ID__ = String(userId || "") || null;
+  window.__BC_ACTIVE_WAITER_RESTAURANT_ID__ =
+    window.getActiveRestaurantId?.() ||
+    appState?.activeRestaurantId ||
+    appState?.profile?.restaurant_id ||
+    null;
 }
 
 function isRecentTransientTimestamp(ts, maxAgeMs = 1000 * 60 * 20) {
