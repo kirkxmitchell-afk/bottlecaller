@@ -9230,7 +9230,10 @@ function mountPremiumGameIframe({
   }
   const roleNow = String(appState?.profile?.role || "").toLowerCase();
   if (roleNow === "waiter" && appState?.profile) {
-    setActiveProgressionOwner(appState.profile);
+    setActiveProgressionOwner({
+      user_id: appState.profile.user_id || null,
+      restaurant_id: appState.profile.restaurant_id || null,
+    });
   }
   const resolvedBackTo = roleNow === "waiter"
     ? "screenPremiumApp"

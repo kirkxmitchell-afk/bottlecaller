@@ -16,29 +16,27 @@ function resolveProgressionWriteOwner({
   waiterUserId = null,
   receiver_user_id = null,
   activeProfile = null,
-  profile = null,
+  progressionOwnerUserId = null,
+  progressionOwnerRestaurantId = null,
   membership = null,
   restaurantId = null,
-} = {}, session = null) {
+} = {}) {
   const w = globalThis?.window;
   const userId =
     targetUserId ||
     waiterUserId ||
     receiver_user_id ||
     activeProfile?.user_id ||
-    membership?.user_id ||
+    progressionOwnerUserId ||
     w?.__BC_PROGRESS_OWNER_USER_ID__ ||
     w?.__BC_ACTIVE_WAITER_USER_ID__ ||
-    profile?.user_id ||
-    session?.user?.id ||
     null;
 
   const resolvedRestaurantId =
     restaurantId ||
     activeProfile?.restaurant_id ||
-    membership?.restaurant_id ||
+    progressionOwnerRestaurantId ||
     w?.__BC_ACTIVE_WAITER_RESTAURANT_ID__ ||
-    profile?.restaurant_id ||
     null;
 
   return { userId, restaurantId: resolvedRestaurantId };
@@ -323,14 +321,15 @@ async function upsertCanonicalProgressionState({
       waiterUserId: payload?.waiterUserId || null,
       receiver_user_id: payload?.receiver_user_id || null,
       activeProfile: payload?.activeProfile || null,
-      profile,
+      progressionOwnerUserId: ctx?.progressionOwnerUserId || null,
+      progressionOwnerRestaurantId: ctx?.progressionOwnerRestaurantId || null,
       membership: payload?.membership || null,
       restaurantId:
         payload?.restaurantId ||
         payload?.restaurant_id ||
-        profile?.restaurant_id ||
+        ctx?.progressionOwnerRestaurantId ||
         null,
-    }, session);
+    });
 
   console.log("[BC progression upsert target]", {
     authUserId: session?.user?.id || authUserId || null,
@@ -347,9 +346,10 @@ async function upsertCanonicalProgressionState({
       authProfileUserId: profile?.user_id || null,
       progressionOwnerUserId,
       progressionOwnerRestaurantId,
+      ctx,
       payload,
     });
-    return { ok: false, error: "missing_progression_owner_identity" };
+    throw new Error("Missing waiter-owned progression target");
   }
 
   const row = {
