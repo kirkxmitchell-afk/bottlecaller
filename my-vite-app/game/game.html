@@ -2206,10 +2206,145 @@
       return current || last || null;
     }
 
+    function buildProgressReportDraft(encounter, overrides = {}) {
+      if (!encounter || typeof encounter !== "object") return null;
+
+      let snapshotFromFn = {
+        read: 0,
+        framing: 0,
+        delivery: 0,
+        recovery: 0,
+        closing: 0
+      };
+
+      try {
+        if (typeof getSkillSnapshot === "function") {
+          const maybe = getSkillSnapshot();
+          if (maybe && typeof maybe === "object") {
+            snapshotFromFn = {
+              read: Number(maybe.read || 0),
+              framing: Number(maybe.framing || 0),
+              delivery: Number(maybe.delivery || 0),
+              recovery: Number(maybe.recovery || 0),
+              closing: Number(maybe.closing || 0),
+            };
+          }
+        }
+      } catch (skillErr) {
+        console.warn("[REPORT] getSkillSnapshot failed, using zero fallback", skillErr);
+      }
+
+      const allZero =
+        !snapshotFromFn.read &&
+        !snapshotFromFn.framing &&
+        !snapshotFromFn.delivery &&
+        !snapshotFromFn.recovery &&
+        !snapshotFromFn.closing;
+
+      if (allZero) {
+        snapshotFromFn = buildEncounterSkillFallback(encounter);
+      }
+
+      const labels = pickStrongestWeakest(snapshotFromFn);
+      const checks = overrides.checks || (() => {
+        try {
+          if (typeof buildReactionChecksFromEncounter === "function") {
+            return buildReactionChecksFromEncounter(encounter);
+          }
+        } catch (e) {
+          console.warn("[REPORT] buildReactionChecksFromEncounter failed, using fallback", e);
+        }
+
+        return {
+          guestRead:
+            String(encounter?.guestReadSelected || "").toLowerCase() ===
+            String(encounter?.guestStateActual || "").toLowerCase(),
+          deliveryCorrect:
+            typeof getDeliveryScore === "function"
+              ? getDeliveryScore(encounter) >= 2
+              : false,
+          resetUsed: !!encounter?.resetUsed
+        };
+      })();
+
+      const deliveryScore =
+        overrides.deliveryScore ??
+        encounter?.__tiers?.delivery ??
+        (typeof getDeliveryScore === "function" ? getDeliveryScore(encounter) : 0);
+      const strongPillars = Number(
+        (checks?.guestRead ? 1 : 0) +
+        (String(encounter?.__tiers?.modeTier || "").toLowerCase() === "right" ? 1 : 0) +
+        (String(encounter?.__tiers?.hookTier || "").toLowerCase() === "right" ? 1 : 0) +
+        (Number(deliveryScore || 0) >= 2 ? 1 : 0)
+      );
+
+      const payload = {
+        encounterNumber: encounter?.encounterNumber ?? null,
+        guestStateActual: encounter?.guestStateActual ?? null,
+        difficulty: encounter?.difficulty ?? null,
+        chainSignal:
+          overrides.chainSignal ??
+          encounter?.chainSignal ??
+          encounter?.__reaction?.chainSignal ??
+          null,
+        chainScore:
+          overrides.chainScore ??
+          encounter?.chainScore ??
+          encounter?.__reaction?.chainScore ??
+          null,
+        outcome:
+          overrides.outcome ??
+          encounter?.outcome ??
+          encounter?.finalOutcome ??
+          encounter?.__reaction?.outcome ??
+          null,
+        guestReadCorrect: !!checks?.guestRead,
+        deliveryScore,
+        resetUsed: !!(checks?.resetUsed ?? encounter?.resetUsed ?? false),
+        premiumSuccess: !!(
+          encounter?.premiumOpportunityHit ??
+          encounter?.premiumRollSuccess ??
+          false
+        ),
+        strongPillars,
+        skills: snapshotFromFn,
+        progressionState: window.buildCanonicalProgressionState?.() || null,
+        strongestSkill: labels.strongest,
+        weakestSkill: labels.weakest
+      };
+
+      const body =
+        `Progress update • Encounter ${payload.encounterNumber} • ` +
+        `Guest: ${payload.guestStateActual} • ` +
+        `Signal: ${payload.chainSignal}`;
+
+      return { payload, body };
+    }
+
+    function cacheSendableProgressDraft(encounter, overrides = {}) {
+      const draft = buildProgressReportDraft(encounter, overrides);
+      if (!draft) return null;
+
+      const sendKey = String(
+        encounter?.encounterId ??
+        encounter?.id ??
+        encounter?.encounterNumber ??
+        ""
+      ) || null;
+
+      window.__BC_LAST_SENDABLE_PROGRESS__ = {
+        ...draft,
+        sendKey,
+        encounter
+      };
+      return window.__BC_LAST_SENDABLE_PROGRESS__;
+    }
+
     async function sendLiveProgressReport(source = "unknown") {
       try {
-        const encounter = getProgressSendEncounter();
-        if (!encounter) {
+        const cachedDraft = window.__BC_LAST_SENDABLE_PROGRESS__ || null;
+        const encounter = getProgressSendEncounter() || cachedDraft?.encounter || null;
+        if (!encounter && !cachedDraft) {
           return { ok: false, error: "no_current_encounter" };
         }
 
@@ -2245,11 +2380,13 @@
           return { ok: false, error: "manager_auto_only" };
         }
 
-        if (hasEncounterAlreadySent(encounter)) {
+        const encounterForSendKey = encounter || cachedDraft?.encounter || null;
+        if (hasEncounterAlreadySent(encounterForSendKey)) {
           return { ok: false, error: "already_sent_for_encounter" };
         }
 
         const resolved =
+          !!cachedDraft?.payload ||
           canSendResolvedProgress(encounter) ||
           !!encounter?.outcome ||
           !!encounter?.finalOutcome ||
@@ -2262,116 +2399,31 @@
           return { ok: false, error: "encounter_not_resolved" };
         }
 
-        let snapshotFromFn = {
-          read: 0,
-          framing: 0,
-          delivery: 0,
-          recovery: 0,
-          closing: 0
-        };
+        const encounterSendKey = String(
+          encounterForSendKey?.encounterId ??
+          encounterForSendKey?.id ??
+          encounterForSendKey?.encounterNumber ??
+          ""
+        ) || null;
+        const draft =
+          cachedDraft?.sendKey && cachedDraft.sendKey === encounterSendKey
+            ? cachedDraft
+            : cacheSendableProgressDraft(encounterForSendKey);
 
-        try {
-          if (typeof getSkillSnapshot === "function") {
-            const maybe = getSkillSnapshot();
-            if (maybe && typeof maybe === "object") {
-              snapshotFromFn = {
-                read: Number(maybe.read || 0),
-                framing: Number(maybe.framing || 0),
-                delivery: Number(maybe.delivery || 0),
-                recovery: Number(maybe.recovery || 0),
-                closing: Number(maybe.closing || 0),
-              };
-            }
-          }
-        } catch (skillErr) {
-          console.warn("[REPORT] getSkillSnapshot failed, using zero fallback", skillErr);
-        }
-
-        const allZero =
-          !snapshotFromFn.read &&
-          !snapshotFromFn.framing &&
-          !snapshotFromFn.delivery &&
-          !snapshotFromFn.recovery &&
-          !snapshotFromFn.closing;
-
-        if (allZero) {
-          snapshotFromFn = buildEncounterSkillFallback(encounter);
-        }
-
-        const labels = pickStrongestWeakest(snapshotFromFn);
-        const strongestSkill = labels.strongest;
-        const weakestSkill = labels.weakest;
-        const checks = (() => {
-          try {
-            if (typeof buildReactionChecksFromEncounter === "function") {
-              return buildReactionChecksFromEncounter(encounter);
-            }
-          } catch (e) {
-            console.warn("[REPORT] buildReactionChecksFromEncounter failed, using fallback", e);
-          }
-
-          return {
-            guestRead:
-              String(encounter?.guestReadSelected || "").toLowerCase() ===
-              String(encounter?.guestStateActual || "").toLowerCase(),
-
-            deliveryCorrect:
-              typeof getDeliveryScore === "function"
-                ? getDeliveryScore(encounter) >= 2
-                : false,
-
-            resetUsed: !!encounter?.resetUsed
-          };
-        })();
-        const deliveryScore =
-          encounter?.__tiers?.delivery ??
-          (typeof getDeliveryScore === "function" ? getDeliveryScore(encounter) : 0);
-        const strongPillars = Number(
-          (checks?.guestRead ? 1 : 0) +
-          (String(encounter?.__tiers?.modeTier || "").toLowerCase() === "right" ? 1 : 0) +
-          (String(encounter?.__tiers?.hookTier || "").toLowerCase() === "right" ? 1 : 0) +
-          (Number(deliveryScore || 0) >= 2 ? 1 : 0)
-        );
+        const payload = draft?.payload || null;
+        const body = draft?.body || "Progress report";
 
         console.log("[REPORT] raw skill snapshot", {
-          snapshotFromFn,
+          payload,
           ctx: window.__BC_CTX__ || null,
-          encounter: encounter?.encounterNumber,
-          usingLastEncounter: encounter === (window.__BC_LAST_ENCOUNTER__ || null)
+          encounter: encounterForSendKey?.encounterNumber,
+          usingLastEncounter: encounterForSendKey === (window.__BC_LAST_ENCOUNTER__ || null),
+          usingCachedDraft: !!draft,
         });
 
-        const payload = {
-          encounterNumber: encounter?.encounterNumber ?? null,
-          guestStateActual: encounter?.guestStateActual ?? null,
-          difficulty: encounter?.difficulty ?? null,
-          chainSignal:
-            encounter?.chainSignal ||
-            encounter?.__reaction?.chainSignal ||
-            null,
-          chainScore:
-            encounter?.chainScore ??
-            encounter?.__reaction?.chainScore ??
-            null,
-          outcome:
-            encounter?.outcome ??
-            encounter?.finalOutcome ??
-            null,
-          guestReadCorrect: !!checks?.guestRead,
-          deliveryScore,
-          resetUsed: !!(checks?.resetUsed ?? encounter?.resetUsed ?? false),
-          premiumSuccess: !!(
-            encounter?.premiumOpportunityHit ??
-            encounter?.premiumRollSuccess ??
-            false
-          ),
-          strongPillars,
-
-          skills: snapshotFromFn,
-          progressionState: window.buildCanonicalProgressionState?.() || null,
-
-          strongestSkill,
-          weakestSkill
-        };
+        if (!payload) {
+          return { ok: false, error: "missing_progress_payload" };
+        }
 
         if (typeof evaluateTimedChallengeAgainstProgress === "function") {
           try { evaluateTimedChallengeAgainstProgress(payload); } catch (e) {
@@ -2379,15 +2431,10 @@
           }
         }
 
-        const body =
-          `Progress update • Encounter ${payload.encounterNumber} • ` +
-          `Guest: ${payload.guestStateActual} • ` +
-          `Signal: ${payload.chainSignal}`;
-
         const reqId = submitProgressReportToManager({ body, payload });
         const result = { ok: !!reqId, reqId };
         if (result.ok) {
-          markEncounterAsSent(encounter, result);
+          markEncounterAsSent(encounterForSendKey, result);
         }
         return result;
       } catch (e) {
@@ -16473,6 +16520,18 @@ function ensureProgLoaded() {
         ensureProgLoaded();
         const scored = scoreEncounterForGuard(currentEncounter, checks);
         const outcome = resolveOutcome(currentEncounter, checks);
+        cacheSendableProgressDraft(currentEncounter, {
+          checks,
+          outcome: outcome?.outcome || null,
+          chainSignal:
+            currentEncounter?.chainSignal ||
+            currentEncounter?.__reaction?.chainSignal ||
+            null,
+          chainScore:
+            currentEncounter?.chainScore ??
+            currentEncounter?.__reaction?.chainScore ??
+            null,
+        });
         applyProgressionEncounterResult(encounterCountsAsWin(outcome));
 
         const { streakInfo, unlock } = renderEncounterProgressSummary(stepContent, checks, scored);
