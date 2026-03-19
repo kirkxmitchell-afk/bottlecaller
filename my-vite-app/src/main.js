@@ -1719,6 +1719,11 @@ async function hydrateProgressionSpineFromLatestSnapshot({
     return null;
   }
 
+  setActiveProgressionOwner({
+    user_id: progressionOwnerUserId,
+    restaurant_id: progressionOwnerRestaurantId,
+  });
+
   const spine = initProgressionSpineFromState();
   const hydrate = spine?.actions?.hydrateFromCanonicalState;
   if (typeof hydrate !== "function") return null;
@@ -4974,6 +4979,11 @@ window.__BC_GET_PROGRESSION_SNAPSHOT__ = async function (opts = {}) {
     return null;
   }
 
+  setActiveProgressionOwner({
+    user_id: progressionOwnerUserId,
+    restaurant_id: progressionOwnerRestaurantId,
+  });
+
   const { data, error } = await supabase
     .from("bc_progression_state_v1")
     .select("*")
@@ -5464,9 +5474,20 @@ async function refreshParentProgressionFromDb() {
   try {
     const session = appState.session || null;
     const profile = appState.profile || null;
-    const userId = resolveProgressionOwnerUserId({ profile }, session);
+    const ownerCtx = getActiveProgressionOwnerContext();
+    const userId = resolveProgressionOwnerUserId({
+      targetUserId: ownerCtx.userId || null,
+      restaurantId:
+        ownerCtx.restaurantId ||
+        appState.profile?.restaurant_id ||
+        null,
+      profile,
+    }, session);
     const restaurantId = resolveProgressionOwnerRestaurantId({
-      restaurantId: appState.profile?.restaurant_id || null,
+      restaurantId:
+        ownerCtx.restaurantId ||
+        appState.profile?.restaurant_id ||
+        null,
       profile,
     });
 

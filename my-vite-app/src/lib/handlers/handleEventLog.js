@@ -21,6 +21,14 @@ export async function handleEventLog({
     );
   }
 
+  function parseMissingColumnFromError(error) {
+    const message = String(error?.message || "");
+    const match =
+      message.match(/Could not find the '([^']+)' column/i) ||
+      message.match(/column "?([^"\s]+)"? does not exist/i);
+    return match?.[1] ? String(match[1]) : null;
+  }
+
   async function upsertEncounterResolutionRow({
     payload = {},
     eventId = null,
@@ -155,12 +163,26 @@ export async function handleEventLog({
 
     let lastError = null;
     for (const { table, row } of tableCandidates) {
-      const up = await supabase
-        .from(table)
-        .upsert([row], { onConflict: "event_id" });
-      if (!up.error) return { ok: true, table };
-      lastError = up.error;
-      if (!isRetryableEncounterResolutionError(up.error)) break;
+      let candidateRow = { ...row };
+
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        const up = await supabase
+          .from(table)
+          .upsert([candidateRow], { onConflict: "event_id" });
+        if (!up.error) return { ok: true, table };
+
+        lastError = up.error;
+        if (!isRetryableEncounterResolutionError(up.error)) break;
+
+        const missingColumn = parseMissingColumnFromError(up.error);
+        if (!missingColumn || !(missingColumn in candidateRow)) break;
+
+        console.warn("[BC] encounter_resolutions retry without missing column", {
+          table,
+          missingColumn,
+        });
+        delete candidateRow[missingColumn];
+      }
     }
 
     return { ok: false, error: lastError };

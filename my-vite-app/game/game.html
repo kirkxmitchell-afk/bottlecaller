@@ -2168,10 +2168,14 @@
     }
 
     function canSendResolvedProgress(encounterOverride = null) {
+      const runtimeCurrentEncounter =
+        typeof currentEncounter !== "undefined"
+          ? currentEncounter
+          : null;
       const enc =
         encounterOverride ||
         window.currentEncounter ||
-        currentEncounter ||
+        runtimeCurrentEncounter ||
         window.__BC_LAST_ENCOUNTER__ ||
         null;
       if (!enc) return false;
@@ -2198,7 +2202,11 @@
     }
 
     function getProgressSendEncounter() {
-      const current = window.currentEncounter || currentEncounter || null;
+      const runtimeCurrentEncounter =
+        typeof currentEncounter !== "undefined"
+          ? currentEncounter
+          : null;
+      const current = window.currentEncounter || runtimeCurrentEncounter || null;
       const last = window.__BC_LAST_ENCOUNTER__ || null;
 
       if (canSendResolvedProgress(current)) return current;
