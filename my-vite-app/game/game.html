@@ -6475,7 +6475,24 @@ function ensureProgLoaded() {
           const hasFallback = !!localStorage.getItem(fallbackKey);
 
           if (!hasReal && hasFallback) {
-            localStorage.setItem(realKey, localStorage.getItem(fallbackKey));
+            const fallbackRaw = localStorage.getItem(fallbackKey);
+            let fallbackState = null;
+            try {
+              fallbackState = fallbackRaw ? JSON.parse(fallbackRaw) : null;
+            } catch (parseError) {
+              console.warn("[PROG][FALLBACK_MIGRATE_CHECK] parse failed", {
+                fallbackKey,
+                error: parseError?.message || String(parseError),
+              });
+            }
+
+            console.log("[PROG][FALLBACK_MIGRATE_CHECK]", {
+              fallbackKey,
+              points: fallbackState?.economy?.points,
+              summary: fallbackState?.rewardsSummary,
+            });
+
+            localStorage.setItem(realKey, fallbackRaw);
             console.log("[PROG] migrated fallback -> real ✅", { fallbackKey, realKey });
           }
 
