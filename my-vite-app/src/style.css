@@ -2365,6 +2365,159 @@ button:hover, .btn:hover, .btn-ghost:hover{
     rgba(255,255,255,0.02) !important;
 }
 
+#screenManagerBoard .mb-section-header{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+
+#screenManagerBoard .mb-section-header strong{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  font-size:15px;
+  line-height:1.1;
+  color:rgba(248,244,255,0.96);
+}
+
+#screenManagerBoard .mb-performance-card-grid,
+#screenManagerBoard .mb-selection-preview-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));
+  gap:12px;
+}
+
+#screenManagerBoard .mb-performance-card,
+#screenManagerBoard .mb-user-metric-card,
+#screenManagerBoard .mb-selection-preview-card,
+#screenManagerBoard .mb-coach-note{
+  padding:12px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:
+    linear-gradient(180deg, rgba(196,181,253,0.10), rgba(255,255,255,0.02)),
+    rgba(255,255,255,0.03);
+}
+
+#screenManagerBoard .mb-coach-note + .mb-coach-note{
+  margin-top:10px;
+}
+
+#screenManagerBoard .mb-performance-table-wrap{
+  overflow-x:auto;
+}
+
+#screenManagerBoard .mb-performance-table{
+  width:100%;
+  min-width:960px;
+  border-collapse:collapse;
+}
+
+#screenManagerBoard .mb-performance-table th,
+#screenManagerBoard .mb-performance-table td{
+  padding:10px 12px;
+  text-align:left;
+  border-bottom:1px solid rgba(255,255,255,0.08);
+  vertical-align:top;
+}
+
+#screenManagerBoard .mb-performance-table th{
+  color:rgba(241,237,255,0.72);
+  font-size:12px;
+  text-transform:uppercase;
+  letter-spacing:0.04em;
+}
+
+#screenManagerBoard .mb-user-expand-btn{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:0;
+  border:0;
+  background:transparent;
+  color:inherit;
+  font:inherit;
+  cursor:pointer;
+}
+
+#screenManagerBoard .mb-user-avatar{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:26px;
+  height:26px;
+  border-radius:999px;
+  background:rgba(255,255,255,0.08);
+  font-size:11px;
+  letter-spacing:0.05em;
+}
+
+#screenManagerBoard .mb-chevron{
+  display:inline-block;
+  transition:transform 220ms ease;
+}
+
+#screenManagerBoard .mb-user-expand-btn.is-open .mb-chevron{
+  transform:rotate(90deg);
+}
+
+#screenManagerBoard .mb-user-detail-row.hidden{
+  display:none;
+}
+
+#screenManagerBoard .mb-user-detail-panel{
+  display:grid;
+  grid-template-columns:240px 1fr;
+  gap:16px;
+  padding:14px 0 6px;
+  opacity:0;
+  transform:scale(0.96);
+  animation:mbDetailFadeIn 180ms ease forwards;
+}
+
+#screenManagerBoard .mb-user-detail-chart-card{
+  padding:12px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:
+    radial-gradient(circle at top, rgba(96,165,250,0.10), transparent 60%),
+    rgba(255,255,255,0.03);
+}
+
+#screenManagerBoard .mb-user-metric-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(120px, 1fr));
+  gap:10px;
+}
+
+#screenManagerBoard .mb-user-badge-row,
+#screenManagerBoard .mb-history-summary-strip{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+
+#screenManagerBoard .mb-badge{
+  display:inline-flex;
+  align-items:center;
+  padding:6px 10px;
+  border-radius:999px;
+  background:rgba(255,255,255,0.07);
+  border:1px solid rgba(255,255,255,0.08);
+  font-size:12px;
+}
+
+@keyframes mbDetailFadeIn{
+  from{
+    opacity:0;
+    transform:translateY(-4px) scale(0.96);
+  }
+  to{
+    opacity:1;
+    transform:translateY(0) scale(1);
+  }
+}
+
 #screenManagerBoard #mbTab_performance #mbPerformanceHistoryPanel > .card{
   background:
     linear-gradient(180deg, rgba(196,181,253,0.10), rgba(255,255,255,0.02)),
@@ -2455,7 +2608,6 @@ button:hover, .btn:hover, .btn-ghost:hover{
 #screenManagerBoard #mbTab_performance #mbBestStreaks,
 #screenManagerBoard #mbTab_performance #mbNeedsCoaching,
 #screenManagerBoard #mbTab_performance #mbRecent,
-#screenManagerBoard #mbTab_performance #mbLeaderboard,
 #screenManagerBoard #mbTab_performance #mbWeeklyReport{
   background:
     linear-gradient(180deg, rgba(196,181,253,0.08), rgba(255,255,255,0.02)),
@@ -2473,6 +2625,12 @@ button:hover, .btn:hover, .btn-ghost:hover{
 #screenManagerBoard #mbInsightsGuestTable.hidden,
 #screenManagerBoard #mbInsightsTrendTable.hidden{
   display: none !important;
+}
+
+@media (max-width: 880px){
+  #screenManagerBoard .mb-user-detail-panel{
+    grid-template-columns:1fr;
+  }
 }
 
 #screenManagerBoard #mbTab_billing #mbSeatStatus{

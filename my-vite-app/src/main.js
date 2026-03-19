@@ -470,6 +470,7 @@ document.querySelector("#app").innerHTML = `
         <button class="btn" type="button" data-mbtab="messenger">Messenger</button>
         <button class="btn" type="button" data-mbtab="live_controls">Live Controls</button>
         <button class="btn" type="button" data-mbtab="performance">Performance</button>
+        <button class="btn" type="button" data-mbtab="selection">Selection</button>
         <button class="btn" type="button" data-mbtab="billing">Listing</button>
         <button class="btn hidden" type="button" data-mbtab="enterprise" id="mbEnterpriseTabBtn">Enterprise</button>
         <select id="mbRestaurantPicker" class="hidden input" style="margin-left:auto; min-width:220px;"></select>
@@ -675,6 +676,7 @@ document.querySelector("#app").innerHTML = `
                   style="margin-top:12px;">
                 </canvas>
                 <div id="mbPerformanceLegend" style="margin-top:8px;"></div>
+                <div id="mbHistorySummaryStrip" style="margin-top:10px;"></div>
               </div>
             </details>
           </div>
@@ -711,16 +713,6 @@ document.querySelector("#app").innerHTML = `
           </details>
 
           <div class="card" style="margin-top:12px;">
-            <strong>Top Performers</strong>
-
-            <div class="small-text" style="margin-top:6px; opacity:.85;">
-              Average skill score based on recent encounters.
-            </div>
-
-            <div id="mbLeaderboard" style="margin-top:10px;"></div>
-          </div>
-
-          <div class="card" style="margin-top:12px;">
             <strong>Weekly Training Report</strong>
 
             <div class="small-text" style="margin-top:6px; opacity:.85;">
@@ -731,6 +723,10 @@ document.querySelector("#app").innerHTML = `
               <div class="small-text" style="opacity:.7;">Loading report…</div>
             </div>
           </div>
+        </div>
+
+        <div id="mbTab_selection" class="mbTab hidden">
+          <div id="mbSelectionPanel" style="margin-top:12px;"></div>
         </div>
 
         <div id="mbTab_billing" class="mbTab hidden">
@@ -6781,6 +6777,8 @@ function normalizeManagerBoardTab(tabLike) {
     staff: "people",
     history: "performance",
     insights: "performance",
+    tournament: "selection",
+    tournament_setup: "selection",
     attribute_abilities: "live_controls",
     area_abilities: "live_controls",
   };
@@ -6833,6 +6831,10 @@ function wireManagerBoardMenu() {
       }
       return;
     }
+    if (normalized === "selection") {
+      await loadSelectionTab();
+      return;
+    }
     if (normalized === "messenger") {
       renderTimedChallengeComposer();
       wireManagerBoardMessenger();
@@ -6877,6 +6879,9 @@ function wireManagerBoardMenu() {
       if (select?.value) {
         await loadPerformanceHistory(select.value);
       }
+    }
+    if (tab === "selection") {
+      await loadSelectionTab();
     }
     if (tab === "messenger") {
       renderTimedChallengeComposer();
@@ -7467,6 +7472,125 @@ function userLabel(userId, nameMap) {
   return (n && String(n).trim()) ? n : String(userId || "-").slice(0, 8);
 }
 
+const MANAGER_PERFORMANCE_SKILLS = [
+  { key: "read", label: "READ", color: "#60a5fa" },
+  { key: "framing", label: "FRAME", color: "#34d399" },
+  { key: "delivery", label: "DELIVER", color: "#f59e0b" },
+  { key: "recovery", label: "RECOVER", color: "#f472b6" },
+  { key: "closing", label: "CLOSE", color: "#a78bfa" },
+];
+
+function firstFinite(...values) {
+  for (const value of values) {
+    if (value == null || value === "") continue;
+    const num = Number(value);
+    if (Number.isFinite(num)) return num;
+  }
+  return null;
+}
+
+function firstNonEmpty(...values) {
+  for (const value of values) {
+    if (value == null) continue;
+    const str = String(value).trim();
+    if (str) return str;
+  }
+  return "";
+}
+
+function formatPercent(value, digits = 0) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return "—";
+  const normalized = num <= 1 ? num * 100 : num;
+  return `${normalized.toFixed(digits)}%`;
+}
+
+function formatMetricNumber(value, digits = 1) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num.toFixed(digits) : "—";
+}
+
+function formatRelativeTime(isoString) {
+  if (!isoString) return "—";
+  const ts = new Date(isoString).getTime();
+  if (!Number.isFinite(ts)) return "—";
+
+  const diff = Date.now() - ts;
+  const abs = Math.abs(diff);
+  const units = [
+    { label: "d", ms: 24 * 60 * 60 * 1000 },
+    { label: "h", ms: 60 * 60 * 1000 },
+    { label: "m", ms: 60 * 1000 },
+  ];
+
+  for (const unit of units) {
+    if (abs >= unit.ms) {
+      const value = Math.round(abs / unit.ms);
+      return diff >= 0 ? `${value}${unit.label} ago` : `in ${value}${unit.label}`;
+    }
+  }
+
+  const secs = Math.max(1, Math.round(abs / 1000));
+  return diff >= 0 ? `${secs}s ago` : `in ${secs}s`;
+}
+
+function formatDateTime(isoString) {
+  if (!isoString) return "—";
+  const date = new Date(isoString);
+  if (!Number.isFinite(date.getTime())) return "—";
+  return date.toLocaleString();
+}
+
+function averageSkillShape(rows = []) {
+  const source = Array.isArray(rows) ? rows.slice(0, 5) : [];
+  const totals = {
+    read: 0,
+    framing: 0,
+    delivery: 0,
+    recovery: 0,
+    closing: 0,
+  };
+
+  if (!source.length) return totals;
+
+  source.forEach((row) => {
+    totals.read += Number(row?.read_pct || row?.read || 0);
+    totals.framing += Number(row?.framing_pct || row?.framing || 0);
+    totals.delivery += Number(row?.delivery_pct || row?.delivery || 0);
+    totals.recovery += Number(row?.recovery_pct || row?.recovery || 0);
+    totals.closing += Number(row?.closing_pct || row?.closing || 0);
+  });
+
+  const count = source.length;
+  Object.keys(totals).forEach((key) => {
+    totals[key] = Math.round(totals[key] / count);
+  });
+
+  return totals;
+}
+
+function describeReadiness(readinessScore, readinessLabel = "") {
+  const score = Number(readinessScore || 0);
+  const label = String(readinessLabel || "").toUpperCase();
+  if (label === "STABLE" || score >= 0.8) return "Stable";
+  if (label === "GROWING" || score >= 0.62) return "Growing";
+  if (label === "FRAGILE" || score > 0) return "Fragile";
+  return "Unknown";
+}
+
+function getSkillExtremes(skillShape = {}) {
+  const pairs = MANAGER_PERFORMANCE_SKILLS.map(({ key, label }) => ({
+    key,
+    label,
+    value: Number(skillShape?.[key] || 0),
+  }));
+  const sorted = pairs.slice().sort((a, b) => b.value - a.value);
+  return {
+    strongestSkill: sorted[0]?.label || "—",
+    weakestSkill: sorted[sorted.length - 1]?.label || "—",
+  };
+}
+
 function ensureInsightsShell() {
   const host = document.getElementById("mbInsightsPanel");
   if (!host) return null;
@@ -7814,150 +7938,799 @@ function refreshInsightsExplorer() {
 }
 
 async function loadManagerInsights() {
-  ensureInsightsShell();
+  const root = document.getElementById("mbInsightsPanel");
+  if (!root) return;
 
-  const msgEl = document.getElementById("mbInsightsMsg");
-  const guestEl = document.getElementById("mbInsightsGuestTable");
-  const trendEl = document.getElementById("mbInsightsTrendTable");
-  const legendEl = document.getElementById("mbInsightsLegend");
-  const userSelect = document.getElementById("mbInsightsUserSelect");
-  const viewSelect = document.getElementById("mbInsightsViewSelect");
+  root.innerHTML = `<div class="card"><div class="small-text">Loading performance…</div></div>`;
 
-  const restaurantId =
-    window.getActiveRestaurantId?.() ||
-    appState.activeRestaurantId ||
-    appState.profile?.restaurant_id;
-  if (!isUuid(restaurantId)) {
-    if (msgEl) msgEl.textContent = "Insights unavailable (no active restaurant).";
-    return;
+  try {
+    const model = await getManagerPerformanceModel({ force: true });
+    window.__BC_MB_PERFORMANCE_MODEL__ = model;
+    window.__BC_MB_SELECTION_MODEL__ = normalizeSelectionData(model);
+
+    root.innerHTML = `
+      <div class="mb-performance-overview card">
+        <div class="mb-section-header">
+          <strong>Team Performance</strong>
+          <div class="small-text">Live performance snapshot for the current restaurant.</div>
+        </div>
+        <div id="mbPerformanceCards" class="mb-performance-card-grid" style="margin-top:12px;"></div>
+      </div>
+
+      <div class="mb-performance-leaderboard card" style="margin-top:12px;">
+        <div class="mb-section-header">
+          <strong>Performance Leaderboard</strong>
+          <div class="small-text">Ranked by total points with quality and readiness context.</div>
+        </div>
+        <div class="mb-performance-table-wrap" style="margin-top:12px;">
+          <table class="mb-performance-table">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Waiter</th>
+                <th>Total Points</th>
+                <th>Drill Pass %</th>
+                <th>Encounter Pass %</th>
+                <th>Challenge Success %</th>
+                <th>Premium Success %</th>
+                <th>Mastery %</th>
+                <th>Last Active</th>
+              </tr>
+            </thead>
+            <tbody id="mbPerformanceRows"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="mb-performance-insights card" style="margin-top:12px;">
+        <div class="mb-section-header">
+          <strong>Coach Notes</strong>
+          <div class="small-text">Quick patterns worth manager attention.</div>
+        </div>
+        <div id="mbPerformanceCoachNotes" style="margin-top:12px;"></div>
+      </div>
+    `;
+
+    renderManagerPerformanceOverview(model.summary);
+    renderManagerPerformanceTable(model.users);
+    renderManagerCoachNotes(model.notes);
+    wirePerformanceRowExpansion(
+      Object.fromEntries(model.users.map((user) => [user.userId, user]))
+    );
+    renderPerformanceHistorySummaryStrip(document.getElementById("mbHistoryUser")?.value || model.users[0]?.userId || "");
+  } catch (error) {
+    console.error("[MB] loadManagerInsights failed", error);
+    root.innerHTML = `
+      <div class="card">
+        <div class="small-text">Failed to load performance.</div>
+        <div class="small-text" style="margin-top:6px; opacity:.75;">${escapeHtml(error?.message || String(error || "Unknown error"))}</div>
+      </div>
+    `;
+  }
+}
+
+async function getManagerPerformanceModel({ force = false } = {}) {
+  const { restaurantId } = getManagerBoardFilter();
+  if (!restaurantId) {
+    return {
+      restaurantId: null,
+      summary: {
+        activeWaiters: 0,
+        avgTotalPoints: 0,
+        avgDrillPassRate: 0,
+        avgEncounterPassRate: 0,
+        avgChallengeSuccessRate: 0,
+        avgPremiumSuccessRate: 0,
+      },
+      users: [],
+      notes: ["No active restaurant selected."],
+    };
   }
 
-  if (msgEl) msgEl.textContent = "Loading insights…";
-  if (legendEl) legendEl.textContent = "";
+  const cached = window.__BC_MB_PERFORMANCE_MODEL__ || null;
+  if (!force && cached?.restaurantId === restaurantId) return cached;
 
-  const DRILL_POOL_T1 = ["decider", "bargain_smart", "griever"];
-  const sinceIso = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+  const sinceIso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const [
+    profilesRes,
+    leaderboardRes,
+    readinessRes,
+    totalsRes,
+    latestRes,
+    snapshotsRes,
+    encountersRes,
+    messagesRes,
+  ] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("user_id, display_name, role")
+      .eq("restaurant_id", restaurantId)
+      .order("display_name", { ascending: true }),
+    supabase
+      .from("bc_waiter_leaderboard_v1")
+      .select("*")
+      .eq("restaurant_id", restaurantId)
+      .order("total_points", { ascending: false })
+      .order("last_activity_at", { ascending: false })
+      .limit(200),
+    supabase
+      .from("bc_readiness_v1")
+      .select("*")
+      .eq("restaurant_id", restaurantId)
+      .limit(200),
+    supabase
+      .from("bc_totals_v1")
+      .select("*")
+      .eq("restaurant_id", restaurantId)
+      .limit(200),
+    supabase
+      .from("bc_user_latest_v1")
+      .select("*")
+      .eq("restaurant_id", restaurantId)
+      .order("latest_occurred_at", { ascending: false })
+      .limit(200),
+    supabase
+      .from("bc_skill_snapshots_v1")
+      .select("user_id, created_at, read_pct, framing_pct, delivery_pct, recovery_pct, closing_pct")
+      .eq("restaurant_id", restaurantId)
+      .order("created_at", { ascending: false })
+      .limit(2000),
+    supabase
+      .from("bc_encounter_resolutions_v2")
+      .select("user_id, occurred_at, performance_grade, chain_signal, chain_score, is_green, is_red, tier")
+      .eq("restaurant_id", restaurantId)
+      .neq("mode", "demo")
+      .gte("occurred_at", sinceIso)
+      .order("occurred_at", { ascending: false })
+      .limit(2000),
+    supabase
+      .from("bc_messages_v1")
+      .select("sender_user_id, created_at, type, payload, body")
+      .eq("restaurant_id", restaurantId)
+      .in("type", ["drill_completed", "timed_challenge_completed", "timed_challenge_expired"])
+      .gte("created_at", sinceIso)
+      .is("archived_at", null)
+      .order("created_at", { ascending: false })
+      .limit(2000),
+  ]);
 
-  const baseRes = await supabase
-    .from("bc_encounter_resolutions_v2")
-    .select([
-      "user_id",
-      "occurred_at",
-      "actual_guest_type_norm",
-      "chain_score",
-      "is_green",
-      "is_red",
-      "read_correct",
-      "delivery_correct",
-      "mode_optimal",
-      "hook_optimal",
-      "mode_status",
-      "hook_status",
-      "chain_signal",
-      "performance_grade",
-      "tier",
-      "encounter_number",
-      "session_id",
-    ].join(","))
-    .eq("restaurant_id", restaurantId)
-    .neq("mode", "demo")
-    .gte("occurred_at", sinceIso)
-    .order("occurred_at", { ascending: false })
-    .limit(2000);
-
-  if (baseRes.error) {
-    if (msgEl) msgEl.textContent = "Failed: " + baseRes.error.message;
-    return;
-  }
-
-  const rows = baseRes.data || [];
-  const resolves = rows.length;
-  const users = new Set(rows.map((r) => r?.user_id).filter(Boolean)).size;
-  console.log("[MB] insights query stats", {
-    restaurantId,
-    resolves,
-    users,
+  [
+    ["profiles", profilesRes],
+    ["bc_waiter_leaderboard_v1", leaderboardRes],
+    ["bc_readiness_v1", readinessRes],
+    ["bc_totals_v1", totalsRes],
+    ["bc_user_latest_v1", latestRes],
+    ["bc_skill_snapshots_v1", snapshotsRes],
+    ["bc_encounter_resolutions_v2", encountersRes],
+    ["bc_messages_v1", messagesRes],
+  ].forEach(([label, res]) => {
+    if (res?.error) console.warn(`[MB][PERFORMANCE] ${label} query failed`, res.error);
   });
 
-  const byUser = new Map();
-  for (const r of rows) {
-    const uid = r?.user_id || null;
-    if (!uid) continue;
-    const arr = byUser.get(uid) || [];
-    arr.push(r);
-    byUser.set(uid, arr);
-  }
+  const profileRows = Array.isArray(profilesRes?.data) ? profilesRes.data : [];
+  const leaderboardRows = Array.isArray(leaderboardRes?.data) ? leaderboardRes.data : [];
+  const readinessRows = Array.isArray(readinessRes?.data) ? readinessRes.data : [];
+  const totalsRows = Array.isArray(totalsRes?.data) ? totalsRes.data : [];
+  const latestRows = Array.isArray(latestRes?.data) ? latestRes.data : [];
+  const snapshotRows = Array.isArray(snapshotsRes?.data) ? snapshotsRes.data : [];
+  const encounterRows = Array.isArray(encountersRes?.data) ? encountersRes.data : [];
+  const messageRows = Array.isArray(messagesRes?.data) ? messagesRes.data : [];
 
-  const userIds = [...byUser.keys()];
-  const nameMap = await mapUserIdsToNames(userIds);
+  const userIds = new Set();
+  const profileNameMap = new Map();
 
-  const plans = [];
-  for (const [uid, urows] of byUser.entries()) {
-    const plan = buildRecommendedDrillPlan({ guestRows: urows, weakRows: urows });
-    plans.push({
-      user_id: uid,
-      name: nameMap.get(uid) || String(uid).slice(0, 8),
-      guestRows: urows,
-      weakRows: urows,
-      trendRows: urows,
-      plan,
+  profileRows.forEach((row) => {
+    const uid = String(row?.user_id || "");
+    if (!uid || String(row?.role || "").toLowerCase() === "demo") return;
+    userIds.add(uid);
+    if (row?.display_name) profileNameMap.set(uid, row.display_name);
+  });
+
+  [leaderboardRows, readinessRows, totalsRows, latestRows, snapshotRows, encounterRows].forEach((rows) => {
+    rows.forEach((row) => {
+      const uid = String(row?.user_id || "");
+      if (uid) userIds.add(uid);
     });
-  }
+  });
+  messageRows.forEach((row) => {
+    const uid = String(row?.sender_user_id || "");
+    if (uid) userIds.add(uid);
+  });
 
-  plans.sort((a, b) => (b.guestRows.length - a.guestRows.length));
+  const resolvedNames = await mapUserIdsToNames(Array.from(userIds));
+  const nameMap = new Map();
+  userIds.forEach((uid) => {
+    nameMap.set(uid, firstNonEmpty(profileNameMap.get(uid), resolvedNames.get(uid), uid.slice(0, 8)));
+  });
 
-  if (userSelect) {
-    const currentValue = String(userSelect.value || "all");
-    const options = [
-      `<option value="all">All staff</option>`,
-      ...userIds
-        .sort((a, b) => String(nameMap.get(a) || a).localeCompare(String(nameMap.get(b) || b)))
-        .map((uid) => `<option value="${escapeHtml(uid)}">${escapeHtml(nameMap.get(uid) || String(uid).slice(0, 8))}</option>`)
-    ].join("");
-    userSelect.innerHTML = options;
-    userSelect.value = userIds.some((uid) => String(uid) === currentValue) ? currentValue : "all";
-  }
-
-  if (viewSelect && !viewSelect.value) viewSelect.value = "guest";
-
-  window.__BC_MB_INSIGHTS_STATE__ = { rows, nameMap };
-  refreshInsightsExplorer();
-
-  if (guestEl && !guestEl.__bcBound) {
-    guestEl.__bcBound = true;
-    guestEl.addEventListener("click", (e) => {
-      const btn = e.target?.closest?.("[data-insights-drill-user]");
-      if (!btn) return;
-
-      const uid = btn.getAttribute("data-insights-drill-user");
-      const entry = plans.find((x) => String(x.user_id) === String(uid));
-      if (!entry) return;
-
-      window.setDefaultDrillConfig?.({
-        focus: entry.plan?.weakest || "read",
-        pool: DRILL_POOL_T1,
-        durationSec: 300,
-      });
-
-      showScreen("screenPlay");
-      mountPremiumGameIframe({ showBack: true, backTo: "screenManagerBoard" });
-
-      const drillMsg = {
-        type: "start_drill",
-        repTarget: 3,
-        focus: entry.plan?.weakest || "read",
-        pool: DRILL_POOL_T1,
-        durationSec: 300,
-        starter: "manager",
-        tier: 1,
-      };
-
-      postToGameAfterLoad({ type: "drill_config", drill: window.__BC_DRILL_CONFIG__ || window.BC_DRILL_CONFIG || null });
-      postToGameAfterLoad(drillMsg);
+  const byUserFrom = (rows, key = "user_id") => {
+    const map = new Map();
+    rows.forEach((row) => {
+      const uid = String(row?.[key] || "");
+      if (!uid) return;
+      const arr = map.get(uid) || [];
+      arr.push(row);
+      map.set(uid, arr);
     });
+    return map;
+  };
+
+  const readinessByUser = byUserFrom(readinessRows);
+  const totalsByUser = byUserFrom(totalsRows);
+  const latestByUser = byUserFrom(latestRows);
+  const snapshotsByUser = byUserFrom(snapshotRows);
+  const encountersByUser = byUserFrom(encounterRows);
+  const messagesByUser = byUserFrom(messageRows, "sender_user_id");
+  const leaderboardByUser = byUserFrom(leaderboardRows);
+
+  const users = Array.from(userIds).map((uid) => {
+    const leaderboardRow = leaderboardByUser.get(uid)?.[0] || {};
+    const readinessRow = readinessByUser.get(uid)?.[0] || {};
+    const totalsRow = totalsByUser.get(uid)?.[0] || {};
+    const latestRow = latestByUser.get(uid)?.[0] || {};
+    const userSnapshots = snapshotsByUser.get(uid) || [];
+    const userEncounters = encountersByUser.get(uid) || [];
+    const userMessages = messagesByUser.get(uid) || [];
+
+    const skillShape = averageSkillShape(userSnapshots);
+    const skillAvg =
+      MANAGER_PERFORMANCE_SKILLS.reduce((sum, skill) => sum + Number(skillShape?.[skill.key] || 0), 0) /
+      MANAGER_PERFORMANCE_SKILLS.length;
+
+    const drillRows = userMessages.filter((row) => String(row?.type || "") === "drill_completed");
+    const challengeCompleted = userMessages.filter((row) => String(row?.type || "") === "timed_challenge_completed");
+    const challengeExpired = userMessages.filter((row) => String(row?.type || "") === "timed_challenge_expired");
+    const challengeRows = challengeCompleted.length + challengeExpired.length;
+
+    const drillPasses = drillRows.filter((row) => {
+      const repsDone = Number(row?.payload?.repsDone || 0);
+      const repTarget = Number(row?.payload?.repTarget || 0);
+      return repTarget > 0 && repsDone >= repTarget;
+    }).length;
+
+    const encounterPasses = userEncounters.filter((row) => {
+      const grade = String(row?.performance_grade || row?.latest_grade || "").toUpperCase();
+      return grade === "A" || grade === "B" || String(row?.chain_signal || "").toLowerCase() === "green" || !!row?.is_green;
+    }).length;
+
+    const encounterMastery = userEncounters.filter((row) => String(row?.performance_grade || "").toUpperCase() === "A").length;
+    const premiumSuccesses = challengeCompleted.filter((row) => !!row?.payload?.premiumSuccess).length;
+
+    const drillPassRate = drillRows.length ? drillPasses / drillRows.length : 0;
+    const encounterPassRate = userEncounters.length ? encounterPasses / userEncounters.length : 0;
+    const challengeSuccessRate = challengeRows ? challengeCompleted.length / challengeRows : 0;
+    const premiumSuccessRate = challengeCompleted.length ? premiumSuccesses / challengeCompleted.length : 0;
+    const masteryRate = userEncounters.length ? encounterMastery / userEncounters.length : skillAvg / 100;
+
+    const readinessBase = firstFinite(
+      readinessRow?.readiness_score,
+      readinessRow?.readiness_pct,
+      latestRow?.readiness_score
+    );
+    const readinessFromWindow = (() => {
+      const n = firstFinite(readinessRow?.last10_count, latestRow?.last10_count);
+      const greens = firstFinite(readinessRow?.last10_greens, latestRow?.last10_greens);
+      const yellows = firstFinite(readinessRow?.last10_yellows, latestRow?.last10_yellows);
+      if (n && n > 0) {
+        return Math.max(0, Math.min(1, ((greens || 0) + ((yellows || 0) * 0.5)) / n));
+      }
+      return null;
+    })();
+    const readinessLabel = firstNonEmpty(readinessRow?.readiness, latestRow?.readiness);
+    const readiness = Math.max(0, Math.min(1, firstFinite(
+      readinessBase != null ? (readinessBase > 1 ? readinessBase / 100 : readinessBase) : null,
+      readinessFromWindow,
+      readinessLabel === "STABLE" ? 0.84 : null,
+      readinessLabel === "GROWING" ? 0.68 : null,
+      readinessLabel === "FRAGILE" ? 0.42 : null,
+      skillAvg / 100
+    ) || 0));
+
+    const totalPoints = firstFinite(
+      leaderboardRow?.total_points,
+      totalsRow?.total_points,
+      totalsRow?.points_total,
+      latestRow?.total_points,
+      (skillAvg / 10) + (challengeCompleted.length * 0.9) + (drillPasses * 0.4)
+    ) || 0;
+
+    const lastActiveAt = firstNonEmpty(
+      leaderboardRow?.last_activity_at,
+      latestRow?.latest_occurred_at,
+      userSnapshots[0]?.created_at,
+      userEncounters[0]?.occurred_at,
+      userMessages[0]?.created_at
+    );
+
+    const eligibilityTier = totalPoints >= 10 || readiness >= 0.8
+      ? 3
+      : totalPoints >= 5 || readiness >= 0.62
+        ? 2
+        : 1;
+
+    const servedTier = Math.max(
+      1,
+      Math.min(
+        3,
+        Math.round(firstFinite(
+          latestRow?.latest_tier,
+          leaderboardRow?.tier_to_serve,
+          leaderboardRow?.served_tier,
+          eligibilityTier
+        ) || eligibilityTier)
+      )
+    );
+
+    const challengeReadiness = Math.max(
+      0,
+      Math.min(1, (readiness * 0.45) + (encounterPassRate * 0.35) + (challengeSuccessRate * 0.20))
+    );
+
+    const extremes = getSkillExtremes(skillShape);
+
+    return {
+      userId: uid,
+      displayName: nameMap.get(uid) || uid,
+      totalPoints,
+      drillPassRate,
+      encounterPassRate,
+      challengeSuccessRate,
+      premiumSuccessRate,
+      masteryRate,
+      lastActiveAt,
+      eligibilityTier,
+      readiness,
+      readinessLabel,
+      servedTier,
+      challengeReadiness,
+      strongestSkill: extremes.strongestSkill,
+      weakestSkill: extremes.weakestSkill,
+      skillShape,
+    };
+  })
+    .filter((user) => user.displayName)
+    .sort((a, b) => (b.totalPoints - a.totalPoints) || ((new Date(b.lastActiveAt).getTime() || 0) - (new Date(a.lastActiveAt).getTime() || 0)))
+    .map((user, index) => ({
+      ...user,
+      rank: index + 1,
+    }));
+
+  return {
+    restaurantId,
+    summary: buildPerformanceSummary(users),
+    users,
+    notes: buildPerformanceCoachNotes(users),
+  };
+}
+
+function buildPerformanceSummary(users = []) {
+  const avg = (getter) => users.length
+    ? users.reduce((sum, user) => sum + Number(getter(user) || 0), 0) / users.length
+    : 0;
+
+  return {
+    activeWaiters: users.filter((user) => !!user.lastActiveAt).length,
+    avgTotalPoints: avg((user) => user.totalPoints),
+    avgDrillPassRate: avg((user) => user.drillPassRate),
+    avgEncounterPassRate: avg((user) => user.encounterPassRate),
+    avgChallengeSuccessRate: avg((user) => user.challengeSuccessRate),
+    avgPremiumSuccessRate: avg((user) => user.premiumSuccessRate),
+  };
+}
+
+function buildPerformanceCoachNotes(users = []) {
+  if (!users.length) return ["No performance data yet."];
+
+  const notes = [];
+  const drillStrongEncounterWeak = users.filter((user) => user.drillPassRate >= 0.75 && user.encounterPassRate < 0.6);
+  const highPointsLowChallenge = users.filter((user) => user.totalPoints >= 8 && user.challengeSuccessRate < 0.5);
+  const premiumReady = users.filter((user) => user.premiumSuccessRate >= 0.4);
+  const coachingFocus = users.slice().sort((a, b) => a.challengeReadiness - b.challengeReadiness).slice(0, 2);
+
+  if (drillStrongEncounterWeak.length) notes.push(`${drillStrongEncounterWeak.length} waiter(s) convert drills better than live encounters.`);
+  if (highPointsLowChallenge.length) notes.push(`${highPointsLowChallenge.length} high-point waiter(s) still need cleaner challenge execution.`);
+  if (premiumReady.length) notes.push(`${premiumReady.length} waiter(s) are consistently converting premium moments.`);
+  if (coachingFocus.length) notes.push(`Focus next coaching on ${coachingFocus.map((user) => user.displayName).join(" and ")}.`);
+
+  return notes.slice(0, 4);
+}
+
+function renderManagerPerformanceOverview(summary = {}) {
+  const el = document.getElementById("mbPerformanceCards");
+  if (!el) return;
+
+  const cards = [
+    ["Active Waiters", summary.activeWaiters ?? 0],
+    ["Avg Total Points", formatMetricNumber(summary.avgTotalPoints, 1)],
+    ["Avg Drill Pass Rate", formatPercent(summary.avgDrillPassRate)],
+    ["Avg Encounter Pass Rate", formatPercent(summary.avgEncounterPassRate)],
+    ["Avg Challenge Success Rate", formatPercent(summary.avgChallengeSuccessRate)],
+    ["Avg Premium Success Rate", formatPercent(summary.avgPremiumSuccessRate)],
+  ];
+
+  el.innerHTML = cards.map(([label, value]) => `
+    <div class="mb-performance-card">
+      <div class="small-text">${escapeHtml(label)}</div>
+      <strong>${escapeHtml(String(value))}</strong>
+    </div>
+  `).join("");
+}
+
+function renderManagerPerformanceTable(users = []) {
+  const tbody = document.getElementById("mbPerformanceRows");
+  if (!tbody) return;
+
+  tbody.innerHTML = users.map((user) => `
+    <tr class="mb-user-row" data-user-id="${escapeHtml(user.userId)}">
+      <td>${user.rank}</td>
+      <td>
+        <button
+          type="button"
+          class="mb-user-expand-btn"
+          data-user-id="${escapeHtml(user.userId)}"
+          aria-expanded="false"
+        >
+          <span class="mb-chevron">▶</span>
+          <span class="mb-user-avatar">${escapeHtml((user.displayName || "?").slice(0, 2).toUpperCase())}</span>
+          <span class="mb-user-name">${escapeHtml(user.displayName || "Unknown")}</span>
+        </button>
+      </td>
+      <td>${formatMetricNumber(user.totalPoints, 1)}</td>
+      <td>${formatPercent(user.drillPassRate)}</td>
+      <td>${formatPercent(user.encounterPassRate)}</td>
+      <td>${formatPercent(user.challengeSuccessRate)}</td>
+      <td>${formatPercent(user.premiumSuccessRate)}</td>
+      <td>${formatPercent(user.masteryRate)}</td>
+      <td>${formatRelativeTime(user.lastActiveAt)}</td>
+    </tr>
+    <tr class="mb-user-detail-row hidden" data-user-detail-id="${escapeHtml(user.userId)}">
+      <td colspan="9">
+        <div class="mb-user-detail-panel">
+          <div class="mb-user-detail-left">
+            <div class="mb-user-detail-chart-card">
+              <div class="small-text" style="margin-bottom:8px;">Current Skill Shape</div>
+              <canvas id="mbUserSkillPie_${escapeHtml(user.userId)}" class="mb-user-skill-pie" width="220" height="220"></canvas>
+            </div>
+          </div>
+          <div class="mb-user-detail-right">
+            <div class="mb-user-metric-grid">
+              <div class="mb-user-metric-card"><div class="small-text">Total Points</div><strong>${formatMetricNumber(user.totalPoints, 1)}</strong></div>
+              <div class="mb-user-metric-card"><div class="small-text">Eligibility Tier</div><strong>T${user.eligibilityTier}</strong></div>
+              <div class="mb-user-metric-card"><div class="small-text">Readiness</div><strong>${formatPercent(user.readiness)}</strong></div>
+              <div class="mb-user-metric-card"><div class="small-text">Drill Pass</div><strong>${formatPercent(user.drillPassRate)}</strong></div>
+              <div class="mb-user-metric-card"><div class="small-text">Encounter Pass</div><strong>${formatPercent(user.encounterPassRate)}</strong></div>
+              <div class="mb-user-metric-card"><div class="small-text">Challenge Success</div><strong>${formatPercent(user.challengeSuccessRate)}</strong></div>
+              <div class="mb-user-metric-card"><div class="small-text">Premium Success</div><strong>${formatPercent(user.premiumSuccessRate)}</strong></div>
+              <div class="mb-user-metric-card"><div class="small-text">Mastery</div><strong>${formatPercent(user.masteryRate)}</strong></div>
+              <div class="mb-user-metric-card"><div class="small-text">Last Active</div><strong>${escapeHtml(formatRelativeTime(user.lastActiveAt))}</strong></div>
+            </div>
+            <div class="mb-user-badge-row" style="margin-top:12px;">
+              <span class="mb-badge">Strongest: ${escapeHtml(user.strongestSkill || "—")}</span>
+              <span class="mb-badge">Weakest: ${escapeHtml(user.weakestSkill || "—")}</span>
+              <span class="mb-badge">${escapeHtml(user.challengeReadiness >= 0.7 ? "Challenge Ready" : "Needs Build-Up")}</span>
+              <span class="mb-badge">Readiness: ${escapeHtml(describeReadiness(user.readiness, user.readinessLabel))}</span>
+            </div>
+          </div>
+        </div>
+      </td>
+    </tr>
+  `).join("");
+}
+
+function renderManagerCoachNotes(notes = []) {
+  const root = document.getElementById("mbPerformanceCoachNotes");
+  if (!root) return;
+  root.innerHTML = notes.length
+    ? notes.map((note) => `<div class="mb-coach-note">${escapeHtml(String(note || ""))}</div>`).join("")
+    : `<div class="small-text">No coach notes yet.</div>`;
+}
+
+function wirePerformanceRowExpansion(usersById = {}) {
+  document.querySelectorAll(".mb-user-expand-btn").forEach((button) => {
+    if (button.__wired) return;
+    button.__wired = true;
+    button.addEventListener("click", async () => {
+      await togglePerformanceUserDetail(button.dataset.userId, usersById);
+    });
+  });
+}
+
+async function togglePerformanceUserDetail(userId, usersById = {}) {
+  const button = document.querySelector(`.mb-user-expand-btn[data-user-id="${CSS.escape(String(userId || ""))}"]`);
+  const row = document.querySelector(`.mb-user-detail-row[data-user-detail-id="${CSS.escape(String(userId || ""))}"]`);
+  if (!button || !row) return;
+
+  const isOpen = !row.classList.contains("hidden");
+  if (isOpen) {
+    row.classList.add("hidden");
+    button.classList.remove("is-open");
+    button.setAttribute("aria-expanded", "false");
+    return;
   }
 
-  if (msgEl) msgEl.textContent = `✅ Loaded • ${resolves} resolves • ${users} user(s)`;
+  closeAllPerformanceUserDetails(userId);
+  row.classList.remove("hidden");
+  button.classList.add("is-open");
+  button.setAttribute("aria-expanded", "true");
+
+  const user = usersById?.[userId];
+  const canvas = document.getElementById(`mbUserSkillPie_${userId}`);
+  if (canvas && user && !canvas.__drawn) {
+    drawUserSkillPieChart(canvas, user.skillShape, {
+      centerTop: `T${user.eligibilityTier || 1}`,
+      centerBottom: `${Math.round(Number(user.readiness || 0) * 100)}%`,
+    });
+    canvas.__drawn = true;
+  }
+}
+
+function closeAllPerformanceUserDetails(exceptUserId = null) {
+  document.querySelectorAll(".mb-user-detail-row").forEach((row) => {
+    if (exceptUserId && row.dataset.userDetailId === exceptUserId) return;
+    row.classList.add("hidden");
+  });
+  document.querySelectorAll(".mb-user-expand-btn").forEach((button) => {
+    if (exceptUserId && button.dataset.userId === exceptUserId) return;
+    button.classList.remove("is-open");
+    button.setAttribute("aria-expanded", "false");
+  });
+}
+
+function drawUserSkillPieChart(canvas, skillShape, options = {}) {
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const width = canvas.width;
+  const height = canvas.height;
+  const cx = width / 2;
+  const cy = height / 2;
+  const radius = Math.min(width, height) * 0.32;
+
+  ctx.clearRect(0, 0, width, height);
+  ctx.lineWidth = 26;
+  ctx.lineCap = "round";
+
+  const slices = MANAGER_PERFORMANCE_SKILLS.map((skill) => ({
+    ...skill,
+    value: Math.max(0, Number(skillShape?.[skill.key] || 0)),
+  }));
+  const total = slices.reduce((sum, slice) => sum + slice.value, 0);
+
+  if (!total) {
+    ctx.fillStyle = "rgba(255,255,255,0.72)";
+    ctx.font = "13px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("No skill data", cx, cy);
+    return;
+  }
+
+  let angle = -Math.PI / 2;
+  slices.forEach((slice) => {
+    const nextAngle = angle + ((slice.value / total) * Math.PI * 2);
+    ctx.beginPath();
+    ctx.strokeStyle = slice.color;
+    ctx.arc(cx, cy, radius, angle, nextAngle);
+    ctx.stroke();
+
+    const mid = angle + ((nextAngle - angle) / 2);
+    const lx = cx + Math.cos(mid) * (radius + 28);
+    const ly = cy + Math.sin(mid) * (radius + 28);
+    ctx.fillStyle = "rgba(255,255,255,0.82)";
+    ctx.font = "10px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(slice.label, lx, ly);
+    angle = nextAngle;
+  });
+
+  ctx.fillStyle = "rgba(4,7,12,0.9)";
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius - 22, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#fff";
+  ctx.textAlign = "center";
+  ctx.font = "bold 18px sans-serif";
+  ctx.fillText(String(options.centerTop || ""), cx, cy - 4);
+  ctx.font = "12px sans-serif";
+  ctx.fillText(String(options.centerBottom || ""), cx, cy + 16);
+}
+
+function renderPerformanceHistorySummaryStrip(userId) {
+  const strip = document.getElementById("mbHistorySummaryStrip");
+  const model = window.__BC_MB_PERFORMANCE_MODEL__ || null;
+  if (!strip) return;
+
+  const user = model?.users?.find((entry) => String(entry.userId) === String(userId || ""));
+  if (!user) {
+    strip.innerHTML = "";
+    return;
+  }
+
+  strip.innerHTML = `
+    <div class="mb-history-summary-strip">
+      <span class="mb-badge">${escapeHtml(user.displayName)}</span>
+      <span class="mb-badge">Points: ${formatMetricNumber(user.totalPoints, 1)}</span>
+      <span class="mb-badge">Readiness: ${formatPercent(user.readiness)}</span>
+      <span class="mb-badge">Mastery: ${formatPercent(user.masteryRate)}</span>
+      <span class="mb-badge">Last Active: ${escapeHtml(formatRelativeTime(user.lastActiveAt))}</span>
+    </div>
+  `;
+}
+
+function normalizeSelectionData(performanceModel) {
+  const users = Array.isArray(performanceModel?.users) ? performanceModel.users : [];
+  const rows = users.map((user) => {
+    const selectionStatus =
+      user.eligibilityTier >= 3 && user.challengeReadiness >= 0.74
+        ? "Eligible"
+        : user.eligibilityTier >= 2 && user.challengeReadiness >= 0.62
+          ? "Reserve"
+          : "Hold";
+
+    return {
+      userId: user.userId,
+      displayName: user.displayName,
+      eligibilityTier: user.eligibilityTier,
+      readiness: user.readiness,
+      servedTier: user.servedTier,
+      challengeReadiness: user.challengeReadiness,
+      pointsRank: user.rank,
+      selectionStatus,
+      selectionReason:
+        selectionStatus === "Eligible"
+          ? "High readiness with stable encounter quality and challenge execution."
+          : selectionStatus === "Reserve"
+            ? "Close to selection line but still needs cleaner consistency."
+            : "Hold back until readiness and recency improve.",
+      lastActiveAt: user.lastActiveAt,
+    };
+  });
+
+  return {
+    summary: {
+      tier3EligibleCount: rows.filter((row) => row.eligibilityTier === 3).length,
+      tier2EligibleCount: rows.filter((row) => row.eligibilityTier === 2).length,
+      borderlineCount: rows.filter((row) => row.selectionStatus === "Reserve").length,
+      notEligibleCount: rows.filter((row) => row.selectionStatus === "Hold").length,
+    },
+    rows,
+    preview: {
+      recommended: rows.filter((row) => row.selectionStatus === "Eligible").map((row) => row.userId),
+      reserves: rows.filter((row) => row.selectionStatus === "Reserve").map((row) => row.userId),
+      hold: rows.filter((row) => row.selectionStatus === "Hold").map((row) => row.userId),
+    },
+  };
+}
+
+async function loadSelectionTab() {
+  const root = document.getElementById("mbSelectionPanel");
+  if (!root) return;
+
+  root.innerHTML = `<div class="card"><div class="small-text">Loading selection…</div></div>`;
+
+  try {
+    const performanceModel = await getManagerPerformanceModel({ force: false });
+    window.__BC_MB_PERFORMANCE_MODEL__ = performanceModel;
+    const model = normalizeSelectionData(performanceModel);
+    window.__BC_MB_SELECTION_MODEL__ = model;
+
+    root.innerHTML = `
+      <div class="mb-selection-overview card">
+        <div class="mb-section-header">
+          <strong>Tournament Setup & Selection</strong>
+          <div class="small-text">Qualification, readiness, and selection guidance.</div>
+        </div>
+        <div id="mbSelectionCards" class="mb-performance-card-grid" style="margin-top:12px;"></div>
+      </div>
+
+      <div class="mb-selection-table-wrap card" style="margin-top:12px;">
+        <div class="mb-section-header">
+          <strong>Selection Table</strong>
+          <div class="small-text">Use readiness and eligibility to identify tournament candidates.</div>
+        </div>
+        <div style="margin-top:12px;">
+          <table class="mb-performance-table">
+            <thead>
+              <tr>
+                <th>Waiter</th>
+                <th>Eligibility Tier</th>
+                <th>Readiness</th>
+                <th>Served Tier</th>
+                <th>Challenge Readiness</th>
+                <th>Points Rank</th>
+                <th>Selection Status</th>
+                <th>Selection Reason</th>
+                <th>Last Active</th>
+              </tr>
+            </thead>
+            <tbody id="mbSelectionRows"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="mb-selection-preview card" style="margin-top:12px;">
+        <div class="mb-section-header">
+          <strong>Auto-Select Preview</strong>
+          <div class="small-text">Recommended cohort, reserves, and hold list.</div>
+        </div>
+        <div id="mbSelectionPreview" style="margin-top:12px;"></div>
+      </div>
+    `;
+
+    renderSelectionOverview(model.summary);
+    renderSelectionTable(model.rows);
+    renderSelectionPreview(model.preview, performanceModel.users);
+  } catch (error) {
+    console.error("[MB] loadSelectionTab failed", error);
+    root.innerHTML = `
+      <div class="card">
+        <div class="small-text">Failed to load selection.</div>
+        <div class="small-text" style="margin-top:6px; opacity:.75;">${escapeHtml(error?.message || String(error || "Unknown error"))}</div>
+      </div>
+    `;
+  }
+}
+
+function renderSelectionOverview(summary = {}) {
+  const root = document.getElementById("mbSelectionCards");
+  if (!root) return;
+  const cards = [
+    ["Eligible Tier 3", summary.tier3EligibleCount ?? 0],
+    ["Eligible Tier 2", summary.tier2EligibleCount ?? 0],
+    ["Borderline", summary.borderlineCount ?? 0],
+    ["Not Eligible", summary.notEligibleCount ?? 0],
+  ];
+
+  root.innerHTML = cards.map(([label, value]) => `
+    <div class="mb-performance-card">
+      <div class="small-text">${escapeHtml(label)}</div>
+      <strong>${escapeHtml(String(value))}</strong>
+    </div>
+  `).join("");
+}
+
+function renderSelectionTable(rows = []) {
+  const tbody = document.getElementById("mbSelectionRows");
+  if (!tbody) return;
+  tbody.innerHTML = rows.map((row) => `
+    <tr>
+      <td>${escapeHtml(row.displayName || "Unknown")}</td>
+      <td>T${row.eligibilityTier || 1}</td>
+      <td>${formatPercent(row.readiness)}</td>
+      <td>T${row.servedTier || 1}</td>
+      <td>${formatPercent(row.challengeReadiness)}</td>
+      <td>#${row.pointsRank || "—"}</td>
+      <td><span class="mb-badge">${escapeHtml(row.selectionStatus || "Hold")}</span></td>
+      <td>${escapeHtml(row.selectionReason || "—")}</td>
+      <td>${escapeHtml(formatRelativeTime(row.lastActiveAt))}</td>
+    </tr>
+  `).join("");
+}
+
+function renderSelectionPreview(preview = {}, users = []) {
+  const root = document.getElementById("mbSelectionPreview");
+  if (!root) return;
+
+  const nameFor = (userId) => users.find((user) => String(user.userId) === String(userId))?.displayName || String(userId || "—");
+  const groups = [
+    ["Recommended Cohort", preview.recommended || []],
+    ["Reserve List", preview.reserves || []],
+    ["Held Back", preview.hold || []],
+  ];
+
+  root.innerHTML = `
+    <div class="mb-selection-preview-grid">
+      ${groups.map(([label, ids]) => `
+        <div class="mb-selection-preview-card">
+          <div style="font-weight:600;">${escapeHtml(label)}</div>
+          <div class="small-text" style="margin-top:8px;">
+            ${ids.length
+              ? ids.map((id) => `<div style="padding:4px 0;">${escapeHtml(nameFor(id))}</div>`).join("")
+              : `<div>No users</div>`}
+          </div>
+        </div>
+      `).join("")}
+    </div>
+  `;
 }
 
 async function loadGroupRestaurantsForPicker() {
@@ -9765,10 +10538,13 @@ async function loadHistoryWaiters() {
   if (selectedUserId) {
     select.value = selectedUserId;
   }
+
+  renderPerformanceHistorySummaryStrip(select.value);
 }
 
 async function loadPerformanceHistory(userId) {
   const { restaurantId } = getManagerBoardFilter();
+  renderPerformanceHistorySummaryStrip(userId);
 
   const { data } = await supabase
     .from("bc_skill_snapshots_v1")
