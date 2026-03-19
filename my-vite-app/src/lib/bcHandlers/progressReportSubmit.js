@@ -11,6 +11,17 @@ function normalizeAllowedScopeType(value, fallback = "restaurant") {
   return s || fallback;
 }
 
+function resolveProgressionStateUserId(ctx) {
+  return (
+    ctx?.profileUserId ||
+    ctx?.activeProfileUserId ||
+    ctx?.membershipUserId ||
+    ctx?.waiterUserId ||
+    ctx?.userId ||
+    null
+  );
+}
+
 async function upsertProgressReportMessage({
   supabase,
   ctx,
@@ -281,8 +292,13 @@ async function upsertCanonicalProgressionState({
         : buildRewardsSummary(canonicalStateRaw),
   };
 
+  const progressionUserId = resolveProgressionStateUserId(ctx);
+  if (!progressionUserId) {
+    return { ok: false, error: "missing_progression_user_id" };
+  }
+
   const row = {
-    user_id: ctx.userId,
+    user_id: progressionUserId,
     restaurant_id: ctx.restaurantId,
     scope_id: ctx.scopeId || null,
     canonical_state: canonicalState,

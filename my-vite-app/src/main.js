@@ -3597,6 +3597,7 @@ function getSenderCtxOrReject(event, senderCtx, replyType, extra = {}, opts = {}
 
   return {
     userId,
+    profileUserId: senderCtx?.profileUserId ?? senderCtx?.profile_user_id ?? userId,
     restaurantId,
     role,
     membershipRole: senderCtx?.membershipRole ?? senderCtx?.membership_role ?? role,
@@ -3689,6 +3690,7 @@ async function buildBcCtxSafe(requestedMode = null) {
   if (isDemo) {
     return {
       userId,
+      profileUserId: profile?.user_id ?? userId,
       restaurantId: null,
       scopeId: null,
       scopeType: null,
@@ -3708,6 +3710,7 @@ async function buildBcCtxSafe(requestedMode = null) {
 
   return {
     userId,
+    profileUserId: profile?.user_id ?? userId,
     restaurantId,
     scopeId: profile?.scope_id ?? null,
     scopeType,
@@ -3740,6 +3743,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
         epoch: Number(window.__BC_IFRAME_EPOCH__ || 0),
         mode: String(ctx.mode || ""),
         userId: ctx.userId || null,
+        profileUserId: ctx.profileUserId || ctx.profile_user_id || ctx.userId || null,
         restaurantId: ctx.restaurantId || null,
         role: ctx.role || null,
         membershipRole: ctx.membershipRole || ctx.membership_role || null,
@@ -8864,6 +8868,7 @@ function pushCtxToPremiumIframe(source = "manual") {
   if (!iframe || !iframe.contentWindow) return;
 
   const uid = appState.session?.user?.id || null;
+  const profileUserId = appState.profile?.user_id || uid;
   const membershipRole = normalizeMembershipRole(appState.profile || null) || appState.profile?.role || "waiter";
   const activeRestaurantId = window.getActiveRestaurantId?.() || appState.profile?.restaurant_id || null;
   const scopeId = appState.profile?.scope_id || null;
@@ -8877,6 +8882,7 @@ function pushCtxToPremiumIframe(source = "manual") {
       type: "bc_ctx",
       mode: "premium",
       userId: uid,
+      profileUserId,
       restaurantId: activeRestaurantId,
       scopeId,
       scopeType,
