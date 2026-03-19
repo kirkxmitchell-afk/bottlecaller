@@ -1591,16 +1591,50 @@ function isMissingRelationError(error) {
   return code === "42P01" || /does not exist|undefined table|schema cache/i.test(message);
 }
 
+function setActiveProgressionOwner(profileLike = null) {
+  const userId =
+    profileLike?.user_id ||
+    profileLike?.userId ||
+    null;
+
+  const restaurantId =
+    profileLike?.restaurant_id ||
+    profileLike?.restaurantId ||
+    null;
+
+  window.__BC_PROGRESS_OWNER_USER_ID__ = userId;
+  window.__BC_ACTIVE_WAITER_USER_ID__ = userId;
+  window.__BC_ACTIVE_WAITER_RESTAURANT_ID__ = restaurantId;
+
+  console.log("[BC progression owner set]", {
+    userId,
+    restaurantId,
+    source: profileLike,
+  });
+}
+
+function getActiveProgressionOwnerContext() {
+  return {
+    userId:
+      window.__BC_PROGRESS_OWNER_USER_ID__ ||
+      window.__BC_ACTIVE_WAITER_USER_ID__ ||
+      null,
+    restaurantId:
+      window.__BC_ACTIVE_WAITER_RESTAURANT_ID__ ||
+      null,
+  };
+}
+
 function resolveProgressionOwnerUserId(ctx = {}, session = null) {
   return (
     ctx?.targetUserId ||
     ctx?.waiterUserId ||
     ctx?.receiver_user_id ||
     ctx?.activeProfile?.user_id ||
-    ctx?.profile?.user_id ||
     ctx?.membership?.user_id ||
-    window.__BC_ACTIVE_WAITER_USER_ID__ ||
     window.__BC_PROGRESS_OWNER_USER_ID__ ||
+    window.__BC_ACTIVE_WAITER_USER_ID__ ||
+    ctx?.profile?.user_id ||
     session?.user?.id ||
     null
   );
@@ -1610,9 +1644,9 @@ function resolveProgressionOwnerRestaurantId(ctx = {}) {
   return (
     ctx?.restaurantId ||
     ctx?.activeProfile?.restaurant_id ||
-    ctx?.profile?.restaurant_id ||
     ctx?.membership?.restaurant_id ||
     window.__BC_ACTIVE_WAITER_RESTAURANT_ID__ ||
+    ctx?.profile?.restaurant_id ||
     null
   );
 }
@@ -1620,42 +1654,60 @@ function resolveProgressionOwnerRestaurantId(ctx = {}) {
 async function hydrateProgressionSpineFromLatestSnapshot({
   userId = null,
   restaurantId = null,
+  activeProfile = null,
+  membership = null,
+  targetUserId = null,
+  waiterUserId = null,
+  receiver_user_id = null,
 } = {}) {
   const session = appState.session || null;
-  const profile = appState.profile || null;
-  const targetUserId = userId || null;
-  const waiterUserId = null;
-  const receiver_user_id = null;
-  const activeProfile = null;
-  const membership = null;
+  const authProfile = appState.profile || null;
+  const ownerCtx = getActiveProgressionOwnerContext();
   const progressionOwnerUserId = resolveProgressionOwnerUserId({
-    targetUserId,
+    targetUserId: targetUserId || userId || ownerCtx.userId || null,
     waiterUserId,
     receiver_user_id,
     activeProfile,
-    profile,
+    profile: activeProfile || authProfile || null,
     membership,
     restaurantId:
       restaurantId ||
+      activeProfile?.restaurant_id ||
+      membership?.restaurant_id ||
+      ownerCtx.restaurantId ||
       appState.activeRestaurantId ||
-      profile?.restaurant_id ||
+      authProfile?.restaurant_id ||
       null,
   }, session);
   const progressionOwnerRestaurantId = resolveProgressionOwnerRestaurantId({
     restaurantId:
       restaurantId ||
+      activeProfile?.restaurant_id ||
+      membership?.restaurant_id ||
+      ownerCtx.restaurantId ||
       appState.activeRestaurantId ||
-      profile?.restaurant_id ||
+      authProfile?.restaurant_id ||
       null,
     activeProfile,
-    profile,
+    profile: activeProfile || authProfile || null,
     membership,
   });
 
   console.log("[BC progression hydrate target]", {
     authUserId: session?.user?.id || null,
+    authProfileUserId: authProfile?.user_id || null,
     progressionOwnerUserId,
     progressionOwnerRestaurantId,
+    ownerCtx,
+    explicitArgs: {
+      userId,
+      restaurantId,
+      targetUserId,
+      waiterUserId,
+      receiver_user_id,
+      activeProfile,
+      membership,
+    },
   });
 
   if (!progressionOwnerUserId || !progressionOwnerRestaurantId) {
@@ -3103,9 +3155,10 @@ function applyTimedChallengeFromMessage(message) {
     };
 
     window.__BC_ACTIVE_TIMED_CHALLENGE__ = challenge;
-    window.__BC_PROGRESS_OWNER_USER_ID__ = targetUserId;
-    window.__BC_ACTIVE_WAITER_USER_ID__ = targetUserId;
-    window.__BC_ACTIVE_WAITER_RESTAURANT_ID__ = restaurantId;
+    setActiveProgressionOwner({
+      user_id: targetUserId,
+      restaurant_id: restaurantId,
+    });
     console.log("[TIMED CHALLENGE] applied ✅", challenge);
     renderHudTimedChallenge();
     renderManagerBoardOverviewTimedChallenge();
@@ -4843,29 +4896,45 @@ async function buildProgressionResult({ userId, restaurantId, desiredTier = 3 })
 
 window.__BC_GET_PROGRESSION_SNAPSHOT__ = async function (opts = {}) {
   const session = appState.session || null;
+  const authProfile = appState.profile || null;
   const authUserId = session?.user?.id || null;
+  const ownerCtx = getActiveProgressionOwnerContext();
 
   const progressionOwnerUserId = resolveProgressionOwnerUserId({
-    targetUserId: opts?.targetUserId,
+    targetUserId: opts?.targetUserId || ownerCtx.userId || null,
     waiterUserId: opts?.waiterUserId,
     receiver_user_id: opts?.receiver_user_id,
-    activeProfile: opts?.activeProfile,
-    profile: opts?.profile,
-    membership: opts?.membership,
-    restaurantId: opts?.restaurantId,
+    activeProfile: opts?.activeProfile || null,
+    profile: opts?.activeProfile || opts?.profile || authProfile || null,
+    membership: opts?.membership || null,
+    restaurantId:
+      opts?.restaurantId ||
+      opts?.activeProfile?.restaurant_id ||
+      opts?.membership?.restaurant_id ||
+      ownerCtx.restaurantId ||
+      authProfile?.restaurant_id ||
+      null,
   }, session);
 
   const progressionOwnerRestaurantId = resolveProgressionOwnerRestaurantId({
-    restaurantId: opts?.restaurantId,
-    activeProfile: opts?.activeProfile,
-    profile: opts?.profile,
-    membership: opts?.membership,
+    restaurantId:
+      opts?.restaurantId ||
+      opts?.activeProfile?.restaurant_id ||
+      opts?.membership?.restaurant_id ||
+      ownerCtx.restaurantId ||
+      authProfile?.restaurant_id ||
+      null,
+    activeProfile: opts?.activeProfile || null,
+    profile: opts?.activeProfile || opts?.profile || authProfile || null,
+    membership: opts?.membership || null,
   });
 
   console.log("[BC snapshot target]", {
     authUserId,
+    authProfileUserId: authProfile?.user_id || null,
     progressionOwnerUserId,
     progressionOwnerRestaurantId,
+    ownerCtx,
     opts,
   });
 
@@ -4879,6 +4948,7 @@ window.__BC_GET_PROGRESSION_SNAPSHOT__ = async function (opts = {}) {
       authUserId,
       progressionOwnerUserId,
       progressionOwnerRestaurantId,
+      ownerCtx,
     });
     return null;
   }
@@ -9603,13 +9673,14 @@ window.__MB_LAST_MESSAGES__ = [];
 function setActiveManagerThreadState({ userId = "", rows = [] } = {}) {
   window.__BC_MB_ACTIVE_THREAD_USER_ID__ = String(userId || "");
   window.__BC_MB_ACTIVE_THREAD_ROWS__ = Array.isArray(rows) ? rows : [];
-  window.__BC_PROGRESS_OWNER_USER_ID__ = String(userId || "") || null;
-  window.__BC_ACTIVE_WAITER_USER_ID__ = String(userId || "") || null;
-  window.__BC_ACTIVE_WAITER_RESTAURANT_ID__ =
-    window.getActiveRestaurantId?.() ||
-    appState?.activeRestaurantId ||
-    appState?.profile?.restaurant_id ||
-    null;
+  setActiveProgressionOwner({
+    user_id: String(userId || "") || null,
+    restaurant_id:
+      window.getActiveRestaurantId?.() ||
+      appState?.activeRestaurantId ||
+      appState?.profile?.restaurant_id ||
+      null,
+  });
 }
 
 function isRecentTransientTimestamp(ts, maxAgeMs = 1000 * 60 * 20) {
