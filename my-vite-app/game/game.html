@@ -2167,8 +2167,13 @@
       return { strongest, weakest };
     }
 
-    function canSendResolvedProgress() {
-      const enc = window.currentEncounter || currentEncounter || null;
+    function canSendResolvedProgress(encounterOverride = null) {
+      const enc =
+        encounterOverride ||
+        window.currentEncounter ||
+        currentEncounter ||
+        window.__BC_LAST_ENCOUNTER__ ||
+        null;
       if (!enc) return false;
 
       const hasOutcome =
@@ -2192,9 +2197,18 @@
       return !!(hasOutcome || hasScore || hasResolvedRuntimeMarkers);
     }
 
+    function getProgressSendEncounter() {
+      const current = window.currentEncounter || currentEncounter || null;
+      const last = window.__BC_LAST_ENCOUNTER__ || null;
+
+      if (canSendResolvedProgress(current)) return current;
+      if (canSendResolvedProgress(last)) return last;
+      return current || last || null;
+    }
+
     async function sendLiveProgressReport(source = "unknown") {
       try {
-        const encounter = window.currentEncounter || currentEncounter || null;
+        const encounter = getProgressSendEncounter();
         if (!encounter) {
           return { ok: false, error: "no_current_encounter" };
         }
@@ -2236,7 +2250,7 @@
         }
 
         const resolved =
-          canSendResolvedProgress() ||
+          canSendResolvedProgress(encounter) ||
           !!encounter?.outcome ||
           !!encounter?.finalOutcome ||
           !!encounter?.chainSignal ||
@@ -2322,7 +2336,8 @@
         console.log("[REPORT] raw skill snapshot", {
           snapshotFromFn,
           ctx: window.__BC_CTX__ || null,
-          encounter: encounter?.encounterNumber
+          encounter: encounter?.encounterNumber,
+          usingLastEncounter: encounter === (window.__BC_LAST_ENCOUNTER__ || null)
         });
 
         const payload = {
@@ -2887,7 +2902,7 @@
       if (msg.type === "hud_send_progress_request") {
         console.log("[REPORT] hud_send_progress_request received ✅", msg);
         (async () => {
-          const encounter = window.currentEncounter || currentEncounter || null;
+          const encounter = getProgressSendEncounter();
           const activeStep =
             typeof window.currentStep !== "undefined"
               ? window.currentStep
@@ -2912,7 +2927,7 @@
           }
 
           const resolved =
-            canSendResolvedProgress() ||
+            canSendResolvedProgress(encounter) ||
             !!encounter?.outcome ||
             !!encounter?.finalOutcome ||
             !!encounter?.chainSignal ||
