@@ -6314,6 +6314,12 @@ function wireWaiterThreadButtons() {
 }
 
 async function openWaiterMessages() {
+  if (appState?.profile) {
+    setActiveProgressionOwner({
+      user_id: appState.profile.user_id || null,
+      restaurant_id: appState.profile.restaurant_id || null,
+    });
+  }
   document.getElementById("waiterMessagesBackdrop")?.classList.remove("hidden");
   document.getElementById("waiterMessagesPanel")?.classList.remove("hidden");
   const status = document.getElementById("waiterSendProgressStatus");

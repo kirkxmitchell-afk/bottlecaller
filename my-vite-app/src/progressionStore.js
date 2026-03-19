@@ -200,6 +200,7 @@ export function buildRewardsSummary(state = {}) {
   const drillEntries = Object.values(state?.rewards?.drills || {});
   const challengeEntries = Object.values(state?.rewards?.timedChallenges || {});
   const premiumEntries = Object.values(state?.rewards?.premiumByEncounter || {});
+  const legacyEntries = Object.values(state?.rewards?.legacy || {});
 
   return {
     encounters: {
@@ -218,7 +219,34 @@ export function buildRewardsSummary(state = {}) {
       count: premiumEntries.length,
       totalPoints: sumRewardPoints(premiumEntries),
     },
+    legacy: {
+      count: legacyEntries.length,
+      totalPoints: sumRewardPoints(legacyEntries),
+    },
   };
+}
+
+export function calculateRewardSummaryTotal(summary = {}) {
+  return round1(
+    Number(summary?.encounters?.totalPoints || 0) +
+    Number(summary?.drills?.totalPoints || 0) +
+    Number(summary?.timedChallenges?.totalPoints || 0) +
+    Number(summary?.premium?.totalPoints || 0) +
+    Number(summary?.legacy?.totalPoints || 0)
+  );
+}
+
+export function logProgressionConsistency(state) {
+  const rewardsSummary = buildRewardsSummary(state);
+  const points = round1(Number(state?.economy?.points ?? state?.points ?? 0));
+  const summaryTotal = calculateRewardSummaryTotal(rewardsSummary);
+
+  console.log("[BC progression consistency]", {
+    points,
+    summaryTotal,
+    delta: round1(points - summaryTotal),
+    rewardsSummary,
+  });
 }
 
 export function createProgressionStore(storage = window.localStorage) {
@@ -321,6 +349,10 @@ export function createProgressionStore(storage = window.localStorage) {
     s.rewards.premiumByEncounter =
       s.rewards.premiumByEncounter && typeof s.rewards.premiumByEncounter === "object"
         ? s.rewards.premiumByEncounter
+        : {};
+    s.rewards.legacy =
+      s.rewards.legacy && typeof s.rewards.legacy === "object"
+        ? s.rewards.legacy
         : {};
 
     // clamp to allowed by tier/points
@@ -473,8 +505,12 @@ export function createProgressionStore(storage = window.localStorage) {
     if (canonicalRewards.premiumByEncounter && typeof canonicalRewards.premiumByEncounter === "object") {
       state.rewards.premiumByEncounter = structuredClone(canonicalRewards.premiumByEncounter);
     }
+    if (canonicalRewards.legacy && typeof canonicalRewards.legacy === "object") {
+      state.rewards.legacy = structuredClone(canonicalRewards.legacy);
+    }
 
     state = normalize(state, state.identity);
+    logProgressionConsistency(state);
     save();
     emit();
     return { ok: true, points: state.points, tier: deriveTier(state.points) };
@@ -569,6 +605,7 @@ export function createProgressionStore(storage = window.localStorage) {
     const allowedGT = unlockedGuestTypes(state.points);
     if (!allowedGT.includes(state.session.guestTypeSelected)) state.session.guestTypeSelected = allowedGT[0];
 
+    logProgressionConsistency(state);
     save();
     emit();
   }
@@ -626,6 +663,7 @@ export function createProgressionStore(storage = window.localStorage) {
       reward,
     };
 
+    logProgressionConsistency(state);
     save();
     emit();
     return { ok: true, duplicate: false, points: Number(state.points || 0), reward };
@@ -697,6 +735,7 @@ export function createProgressionStore(storage = window.localStorage) {
       reward,
     };
 
+    logProgressionConsistency(state);
     save();
     emit();
     return { ok: true, duplicate: false, points: Number(state.points || 0), reward };
@@ -734,6 +773,7 @@ export function createProgressionStore(storage = window.localStorage) {
       rewardedAt: Date.now(),
     };
 
+    logProgressionConsistency(state);
     save();
     emit();
     return { ok: true, duplicate: false, points: Number(state.points || 0) };
