@@ -11497,7 +11497,9 @@ function ensureProgLoaded() {
           const pressureBand = String(snapshot?.progressionState?.display?.pressureBand || "low");
           const encounterCeiling = (window.bcMode === "demo") ? 5 : 20;
           const unlockedCeiling = Number(encounterRange?.[1] ?? 5);
-          const percent = Math.max(0, Math.min(100, Math.round((unlockedCeiling / encounterCeiling) * 100)));
+          const percent = points <= 0
+            ? 0
+            : Math.max(0, Math.min(100, Math.round((unlockedCeiling / encounterCeiling) * 100)));
           const notice = points <= 0
             ? "Opening service band"
             : `Tier ${tier} service window`;
@@ -18197,6 +18199,10 @@ function ensureProgLoaded() {
           if (isWaiterNow) bindWaiterStart();
           bindPremiumEntryButton(btnGoPremium);
 
+          const btnResetProgress = document.getElementById("btnResetProgressPremium");
+          const btnHardResetProgression = document.getElementById("btnHardResetProgressionPremium");
+          const btnResetRuns = document.getElementById("btnResetRunsPremium");
+
           if (isWaiterNow) {
             document.querySelectorAll('[data-role="manager"]').forEach((el) => el.classList.add("hidden"));
           }
@@ -18206,7 +18212,6 @@ function ensureProgLoaded() {
           });
 
           if (isWaiterNow) {
-            const btnResetProgress = document.getElementById("btnResetProgressPremium");
             if (btnResetProgress) {
               btnResetProgress.classList.remove("hidden");
               btnResetProgress.disabled = false;
@@ -18214,7 +18219,6 @@ function ensureProgLoaded() {
               btnResetProgress.__bcBound = false;
               bindInput(btnResetProgress, () => restartEncounterFlowOnly());
             }
-            const btnHardResetProgression = document.getElementById("btnHardResetProgressionPremium");
             if (btnHardResetProgression) {
               btnHardResetProgression.classList.remove("hidden");
               btnHardResetProgression.disabled = false;
@@ -18222,12 +18226,27 @@ function ensureProgLoaded() {
               btnHardResetProgression.__bcBound = false;
               bindInput(btnHardResetProgression, () => hardResetProgressionOptionA());
             }
-            const btnResetRuns = document.getElementById("btnResetRunsPremium");
             if (btnResetRuns) {
               btnResetRuns.classList.remove("hidden");
               btnResetRuns.disabled = false;
             }
             document.getElementById("btnResetWinesPremium")?.remove();
+          } else {
+            if (btnResetProgress) {
+              btnResetProgress.classList.add("hidden");
+              btnResetProgress.onclick = null;
+              btnResetProgress.__bcBound = false;
+            }
+            if (btnHardResetProgression) {
+              btnHardResetProgression.classList.add("hidden");
+              btnHardResetProgression.onclick = null;
+              btnHardResetProgression.__bcBound = false;
+            }
+            if (btnResetRuns) {
+              btnResetRuns.classList.add("hidden");
+              btnResetRuns.onclick = null;
+              btnResetRuns.__bcBound = false;
+            }
           }
           document.getElementById("screenSetupPremium")?.classList.add("hidden");
           return;

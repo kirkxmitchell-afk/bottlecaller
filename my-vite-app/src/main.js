@@ -5108,7 +5108,12 @@ async function rehydrateBlankProgressionState({ userId, restaurantId }) {
   try { localStorage.removeItem(resetMarkerKey); } catch {}
 }
 
-async function hardResetProgressionStateOnly({ userId, restaurantId, scopeId = null } = {}) {
+async function hardResetProgressionStateOnly({
+  userId,
+  restaurantId,
+  scopeId = null,
+  refreshParentView = true,
+} = {}) {
   if (!userId || !restaurantId) {
     throw new Error("missing_reset_target");
   }
@@ -5122,6 +5127,9 @@ async function hardResetProgressionStateOnly({ userId, restaurantId, scopeId = n
     await resetCanonicalProgressionRow(sb, { userId, restaurantId, scopeId });
     await clearProgressionSnapshots(sb, { userId, restaurantId });
     await rehydrateBlankProgressionState({ userId, restaurantId });
+    if (refreshParentView) {
+      await refreshParentProgressionFromDb?.();
+    }
 
     return {
       ok: true,
@@ -5135,6 +5143,117 @@ async function hardResetProgressionStateOnly({ userId, restaurantId, scopeId = n
       if (localKeys?.resetMarkerKey) localStorage.removeItem(localKeys.resetMarkerKey);
     } catch {}
     throw error;
+  }
+}
+
+function invalidateManagerBoardProgressionModels() {
+  window.__BC_MB_PERFORMANCE_MODEL__ = null;
+  window.__BC_MB_SELECTION_MODEL__ = null;
+}
+
+function getVisibleManagerBoardTab() {
+  const visible = document.querySelector("#mbPanels .mbTab:not(.hidden)");
+  const id = String(visible?.id || "");
+  if (!id.startsWith("mbTab_")) return "overview";
+  return normalizeManagerBoardTab(id.slice("mbTab_".length));
+}
+
+async function refreshManagerBoardAfterProgressionReset() {
+  invalidateManagerBoardProgressionModels();
+
+  const activeTab = getVisibleManagerBoardTab();
+  if (activeTab === "performance") {
+    await loadManagerInsights();
+    await loadHistoryWaiters();
+    const select = document.getElementById("mbHistoryUser");
+    if (select?.value) {
+      await loadPerformanceHistory(select.value);
+    }
+    return;
+  }
+
+  if (activeTab === "selection") {
+    await loadSelectionTab();
+    return;
+  }
+
+  await loadManagerBoardMembers();
+  renderManagerPeopleSummary?.();
+}
+
+async function hardResetWaiterProgressionAsManager({ userId, restaurantId = null } = {}) {
+  const profile = appState.profile || null;
+  const managerRole = normalizeMembershipRole(profile);
+  if (!["single_manager", "group_manager", "enterpriser"].includes(managerRole)) {
+    throw new Error("forbidden_role");
+  }
+
+  const activeRestaurantId =
+    getManagerActiveRestaurantId?.() ||
+    window.getActiveRestaurantId?.() ||
+    profile?.restaurant_id ||
+    null;
+  const targetRestaurantId = restaurantId || activeRestaurantId || null;
+
+  if (!userId || !targetRestaurantId) {
+    throw new Error("missing_reset_target");
+  }
+
+  if (activeRestaurantId && String(targetRestaurantId) !== String(activeRestaurantId)) {
+    throw new Error("forbidden_target_restaurant");
+  }
+
+  let targetProfile = (window.__BC_MB_STAFF_ROWS__ || []).find(
+    (row) => String(row?.user_id || "") === String(userId)
+  ) || null;
+
+  if (!targetProfile) {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("user_id, restaurant_id, role")
+      .eq("user_id", userId)
+      .eq("restaurant_id", targetRestaurantId)
+      .maybeSingle();
+
+    if (error) throw error;
+    targetProfile = data || null;
+  }
+
+  if (!targetProfile) {
+    throw new Error("target_not_found");
+  }
+
+  if (normalizeMembershipRole(targetProfile) !== "waiter") {
+    throw new Error("target_not_waiter");
+  }
+
+  const ownerCtx = getActiveProgressionOwnerContext();
+  const ownerRestoreUserId =
+    ownerCtx?.userId ||
+    profile?.user_id ||
+    appState.session?.user?.id ||
+    null;
+  const ownerRestoreRestaurantId =
+    ownerCtx?.restaurantId ||
+    activeRestaurantId ||
+    targetRestaurantId;
+
+  try {
+    const result = await hardResetProgressionStateOnly({
+      userId,
+      restaurantId: targetRestaurantId,
+      scopeId: profile?.scope_id || targetRestaurantId,
+      refreshParentView: false,
+    });
+
+    return result;
+  } finally {
+    setActiveProgressionOwner({
+      user_id: ownerRestoreUserId,
+      restaurant_id: ownerRestoreRestaurantId,
+      source: { reason: "manager_progression_reset_restore" },
+    });
+    await refreshManagerBoardAfterProgressionReset();
   }
 }
 
@@ -8512,6 +8631,7 @@ async function getManagerPerformanceModel({ force = false } = {}) {
   const sinceIso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
   const [
     profilesRes,
+    progressionStateRes,
     leaderboardRes,
     readinessRes,
     totalsRes,
@@ -8525,6 +8645,12 @@ async function getManagerPerformanceModel({ force = false } = {}) {
       .select("user_id, display_name, role")
       .eq("restaurant_id", restaurantId)
       .order("display_name", { ascending: true }),
+    supabase
+      .from("bc_progression_state_v1")
+      .select("user_id, canonical_state, updated_at")
+      .eq("restaurant_id", restaurantId)
+      .order("updated_at", { ascending: false })
+      .limit(200),
     supabase
       .from("bc_waiter_leaderboard_v1")
       .select("*")
@@ -8575,6 +8701,7 @@ async function getManagerPerformanceModel({ force = false } = {}) {
 
   [
     ["profiles", profilesRes],
+    ["bc_progression_state_v1", progressionStateRes],
     ["bc_waiter_leaderboard_v1", leaderboardRes],
     ["bc_readiness_v1", readinessRes],
     ["bc_totals_v1", totalsRes],
@@ -8587,6 +8714,7 @@ async function getManagerPerformanceModel({ force = false } = {}) {
   });
 
   const profileRows = Array.isArray(profilesRes?.data) ? profilesRes.data : [];
+  const progressionStateRows = Array.isArray(progressionStateRes?.data) ? progressionStateRes.data : [];
   const leaderboardRows = Array.isArray(leaderboardRes?.data) ? leaderboardRes.data : [];
   const readinessRows = Array.isArray(readinessRes?.data) ? readinessRes.data : [];
   const totalsRows = Array.isArray(totalsRes?.data) ? totalsRes.data : [];
@@ -8605,7 +8733,7 @@ async function getManagerPerformanceModel({ force = false } = {}) {
     if (row?.display_name) profileNameMap.set(uid, row.display_name);
   });
 
-  [leaderboardRows, readinessRows, totalsRows, latestRows, snapshotRows, encounterRows].forEach((rows) => {
+  [progressionStateRows, leaderboardRows, readinessRows, totalsRows, latestRows, snapshotRows, encounterRows].forEach((rows) => {
     rows.forEach((row) => {
       const uid = String(row?.user_id || "");
       if (uid) userIds.add(uid);
@@ -8634,6 +8762,7 @@ async function getManagerPerformanceModel({ force = false } = {}) {
     return map;
   };
 
+  const progressionStateByUser = byUserFrom(progressionStateRows);
   const readinessByUser = byUserFrom(readinessRows);
   const totalsByUser = byUserFrom(totalsRows);
   const latestByUser = byUserFrom(latestRows);
@@ -8643,6 +8772,7 @@ async function getManagerPerformanceModel({ force = false } = {}) {
   const leaderboardByUser = byUserFrom(leaderboardRows);
 
   const users = Array.from(userIds).map((uid) => {
+    const progressionStateRow = progressionStateByUser.get(uid)?.[0] || {};
     const leaderboardRow = leaderboardByUser.get(uid)?.[0] || {};
     const readinessRow = readinessByUser.get(uid)?.[0] || {};
     const totalsRow = totalsByUser.get(uid)?.[0] || {};
@@ -8650,6 +8780,29 @@ async function getManagerPerformanceModel({ force = false } = {}) {
     const userSnapshots = snapshotsByUser.get(uid) || [];
     const userEncounters = encountersByUser.get(uid) || [];
     const userMessages = messagesByUser.get(uid) || [];
+    const canonicalState =
+      progressionStateRow?.canonical_state && typeof progressionStateRow.canonical_state === "object"
+        ? progressionStateRow.canonical_state
+        : null;
+    const canonicalEconomy =
+      canonicalState?.economy && typeof canonicalState.economy === "object"
+        ? canonicalState.economy
+        : {};
+    const canonicalAuthority =
+      canonicalState?.authority && typeof canonicalState.authority === "object"
+        ? canonicalState.authority
+        : {};
+    const canonicalPointsRaw = Number(canonicalEconomy?.points);
+    const canonicalTierRaw = firstFinite(
+      canonicalAuthority?.tierToServe,
+      canonicalEconomy?.tier
+    );
+    const canonicalPoints = Number.isFinite(canonicalPointsRaw)
+      ? Math.max(0, canonicalPointsRaw)
+      : null;
+    const canonicalServedTier = Number.isFinite(canonicalTierRaw)
+      ? Math.max(1, Math.min(3, Math.round(canonicalTierRaw)))
+      : null;
 
     const skillShape = averageSkillShape(userSnapshots);
     const skillAvg =
@@ -8706,6 +8859,7 @@ async function getManagerPerformanceModel({ force = false } = {}) {
     ) || 0));
 
     const totalPoints = firstFinite(
+      canonicalPoints,
       leaderboardRow?.total_points,
       totalsRow?.total_points,
       totalsRow?.points_total,
@@ -8714,6 +8868,7 @@ async function getManagerPerformanceModel({ force = false } = {}) {
     ) || 0;
 
     const lastActiveAt = firstNonEmpty(
+      progressionStateRow?.updated_at,
       leaderboardRow?.last_activity_at,
       latestRow?.latest_occurred_at,
       userSnapshots[0]?.created_at,
@@ -8732,6 +8887,7 @@ async function getManagerPerformanceModel({ force = false } = {}) {
       Math.min(
         3,
         Math.round(firstFinite(
+          canonicalServedTier,
           latestRow?.latest_tier,
           leaderboardRow?.tier_to_serve,
           leaderboardRow?.served_tier,
@@ -14059,10 +14215,27 @@ async function loadManagerBoardMembers() {
   window.__BC_MB_WAITERS__ = (data || []).filter(
     (p) => String(p?.role || "").toLowerCase() === "waiter"
   );
+  const canResetWaiterProgression = ["single_manager", "group_manager", "enterpriser"].includes(
+    normalizeMembershipRole(appState?.profile || null)
+  );
 
   const rows = (data || []).map((p) => {
     const name = String(p?.display_name || "").trim() || "(no name)";
     const badge = getDisplayRoleLabel(p?.role);
+    const isWaiter = normalizeMembershipRole(p) === "waiter";
+    const actionHtml = (canResetWaiterProgression && isWaiter)
+      ? `
+          <button
+            type="button"
+            class="btn-ghost mb-reset-waiter-progression"
+            data-user-id="${escapeHtml(String(p?.user_id || ""))}"
+            data-restaurant-id="${escapeHtml(String(rid || ""))}"
+            data-display-name="${escapeHtml(name)}"
+          >
+            Reset progression
+          </button>
+        `
+      : "";
 
     return `
       <div class="card" style="padding:10px; border-radius:12px;">
@@ -14073,13 +14246,45 @@ async function loadManagerBoardMembers() {
             </div>
             <div class="small-text" style="margin-top:2px;">${escapeHtml(p?.user_id || "")}</div>
           </div>
-          <div class="small-text" style="white-space:nowrap; opacity:0.9;">${escapeHtml(badge)}</div>
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
+            <div class="small-text" style="white-space:nowrap; opacity:0.9;">${escapeHtml(badge)}</div>
+            ${actionHtml}
+          </div>
         </div>
       </div>
     `;
   });
 
   box.innerHTML = rows.join("") || `<div class="small-text">No members found.</div>`;
+  box.querySelectorAll(".mb-reset-waiter-progression").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const targetUserId = btn.getAttribute("data-user-id") || "";
+      const targetRestaurantId = btn.getAttribute("data-restaurant-id") || "";
+      const targetName = btn.getAttribute("data-display-name") || "this waiter";
+
+      if (!targetUserId || !targetRestaurantId) return;
+      const confirmed = window.confirm(`Reset progression for ${targetName}?`);
+      if (!confirmed) return;
+
+      const previousText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = "Resetting…";
+      msg.textContent = `Resetting progression for ${targetName}…`;
+
+      try {
+        await hardResetWaiterProgressionAsManager({
+          userId: targetUserId,
+          restaurantId: targetRestaurantId,
+        });
+        msg.textContent = `Progression reset for ${targetName}.`;
+      } catch (error) {
+        msg.textContent = `Failed to reset ${targetName}: ${error?.message || String(error)}`;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = previousText;
+      }
+    });
+  });
   msg.textContent = `${(data || []).length} member(s) loaded.`;
   renderManagerPeopleSummary();
   renderTimedChallengeTargetOptions();
