@@ -23,6 +23,7 @@ export const BC_TYPES = Object.freeze({
   LEADERBOARD_REQUEST: "leaderboard_request",
   PROGRESSION_SNAPSHOT_REQUEST: "progression_snapshot_request",
   PROGRESS_REPORT_SUBMIT: "progress_report_submit",
+  HARD_RESET_PROGRESSION: "hard_reset_progression",
 
   // responses
   CTX: "bc_ctx",
@@ -38,6 +39,7 @@ export const BC_TYPES = Object.freeze({
   LEADERBOARD_RESPONSE: "leaderboard_response",
   PROGRESSION_SNAPSHOT: "progression_snapshot",
   PROGRESS_REPORT_SUBMIT_RESULT: "progress_report_submit_result",
+  HARD_RESET_PROGRESSION_RESULT: "hard_reset_progression_result",
 
   ERROR: "bc_error",
 });

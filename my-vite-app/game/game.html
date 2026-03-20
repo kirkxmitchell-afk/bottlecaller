@@ -2880,6 +2880,20 @@
       if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
       if (event.origin !== window.location.origin) return;
 
+      if (msg.type === "hard_reset_progression_result") {
+        const pendingReqId = window.__BC_PENDING_HARD_RESET_REQ_ID__ || null;
+        if (pendingReqId && msg.reqId && String(pendingReqId) !== String(msg.reqId)) return;
+        window.__BC_PENDING_HARD_RESET_REQ_ID__ = null;
+
+        if (msg.ok) {
+          console.log("[PROG] hard reset progression result ✅", msg);
+          applyBlankProgressionResetLocally();
+        } else {
+          console.warn("[PROG] hard reset progression failed", msg);
+        }
+        return;
+      }
+
       if (msg.type === "progress_report_submit_result") {
         console.log("[GAME] progress report result", msg);
         const status = document.getElementById("progressReportStatus");
@@ -3480,7 +3494,7 @@
           <button id="btnGoDemo" type="button">Setup</button>
           <button id="btnStartDrillDemo" type="button">5-Minute Drill</button>
           <button id="btnViewHistoryDemo" type="button">View History</button>
-          <button id="btnResetProgressDemo" type="button">Start from Encounter 1</button>
+          <button id="btnResetProgressDemo" type="button">Restart Encounter Flow</button>
           <button id="btnResetWinesDemo" type="button" data-role="manager">Reset Wines Only</button>
         </div>
       </div>
@@ -3523,7 +3537,8 @@
         <div class="button-row app-home-actions" id="premiumButtons">
           <button id="btnGoPremium" type="button">Setup</button>
           <button id="btnViewHistoryPremium" type="button">View History</button>
-          <button id="btnResetProgressPremium" type="button">Start from Encounter 1</button>
+          <button id="btnResetProgressPremium" type="button">Restart Encounter Flow</button>
+          <button id="btnHardResetProgressionPremium" type="button" class="hidden">Reset Waiter Progression</button>
           <button id="btnResetWinesPremium" type="button" data-role="manager">Reset Wines Only</button>
         </div>
       </div>
@@ -6463,11 +6478,103 @@ function ensureProgLoaded() {
         }
       }
 
-      function resetProgressToStart() {
-        void startFromEncounter1_GRIND();
+      function getProgressResetMarkerKey() {
+        const uid = window.__BC_CTX__?.userId || null;
+        const rid = window.__BC_CTX__?.restaurantId || null;
+        if (!uid || !rid) return null;
+        return `bc_prog_reset_marker_${uid}_${rid}`;
       }
 
-      async function startFromEncounter1_GRIND() {
+      function restartEncounterFlowOnly() {
+        void restartEncounterFlowOnlyAsync();
+      }
+
+      function applyBlankProgressionResetLocally() {
+        const uid = window.__BC_CTX__?.userId || null;
+        const rid = window.__BC_CTX__?.restaurantId || null;
+        const realProgKey = (uid && rid) ? `bc_prog_v1_${uid}_${rid}` : null;
+        const skillsKey = (uid && rid) ? `bc_skills_v2_${uid}_${rid}` : null;
+        const resetMarkerKey = getProgressResetMarkerKey();
+
+        try { if (realProgKey) localStorage.removeItem(realProgKey); } catch {}
+        try { localStorage.removeItem("bc_prog_v1_fallback_premium"); } catch {}
+        try { localStorage.removeItem("bc_premium_encounter_index"); } catch {}
+        try { if (skillsKey) localStorage.removeItem(skillsKey); } catch {}
+        try { localStorage.removeItem(guardKey()); } catch {}
+        try { localStorage.removeItem(unlockTierKey); } catch {}
+        try { localStorage.removeItem(accountDifficultyKey); } catch {}
+
+        window.__NEXT_LOCK__ = false;
+        window.__BC_DEMO_DONE__ = 0;
+        currentStep = 0;
+        currentEncounter = null;
+        encounterIndex = 0;
+        saveEncounterIndex(0);
+
+        PROG = ensureProgShape(defaultProg());
+        PROG.__key = progKey();
+        delete PROG.__canonicalMirrorStamp;
+        ensureProgMeta();
+        window.PROG = PROG;
+        window.__BC_PROG__ = PROG;
+
+        window.__BC_GUARD__ = { last3: [], pressureLevel: 0, finalDifficulty: 1, nextDifficulty: 1 };
+        try { saveGuardState(window.__BC_GUARD__); } catch {}
+        try { setMaxUnlockedTier(1); } catch {}
+        try { saveAccountDifficulty(1); } catch {}
+        try { saveProg(); } catch {}
+        try { if (resetMarkerKey) localStorage.removeItem(resetMarkerKey); } catch {}
+
+        try {
+          window.__BC_PROGRESSION__ = null;
+          if (typeof window.ProgressionBridge?.requestProgressionSnapshot === "function") {
+            void window.ProgressionBridge.requestProgressionSnapshot(3).then((payload) => {
+              if (payload) window.__BC_PROGRESSION__ = payload;
+            });
+          }
+        } catch (e) {
+          console.warn("[PROG] progression snapshot refresh after hard reset failed", e);
+        }
+
+        try { renderProgressStatusWindow?.(); } catch {}
+        try { renderRailProgress?.(); } catch {}
+        try { updateCounts?.(); } catch {}
+        try { showScreen("screenHome"); } catch {}
+      }
+
+      function requestHardResetProgressionStateOnly() {
+        const userId = window.__BC_CTX__?.userId || null;
+        const restaurantId = window.__BC_CTX__?.restaurantId || null;
+
+        if (!userId || !restaurantId) {
+          console.warn("[PROG] hard reset blocked: missing waiter ctx", { userId, restaurantId });
+          return;
+        }
+
+        const reqId = `hrp_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+        window.__BC_PENDING_HARD_RESET_REQ_ID__ = reqId;
+
+        try {
+          window.parent?.postMessage(
+            {
+              source: "BC_MSG",
+              v: 1,
+              type: "hard_reset_progression",
+              resetMode: "progression_only",
+              reqId,
+              userId,
+              restaurantId,
+              epoch: Number(window.__BC_EPOCH__ || 0),
+              mode: String(window.bcMode || "premium"),
+            },
+            window.location.origin
+          );
+        } catch (e) {
+          console.warn("[PROG] hard reset request failed", e);
+        }
+      }
+
+      async function restartEncounterFlowOnlyAsync() {
         // Premium progression path: reset flow only, preserving progression identity/state.
         if (replayFromStage1()) {
           window.__NEXT_LOCK__ = false;
@@ -6525,8 +6632,21 @@ function ensureProgLoaded() {
           if (!uid || !rid) return { ok: true, migrated: false, reason: "no_ctx" };
 
           const realKey = `bc_prog_v1_${uid}_${rid}`;
+          const resetMarkerKey = `bc_prog_reset_marker_${uid}_${rid}`;
           const fallbackMode = (new URLSearchParams(location.search).get("mode")) || "unknown";
           const fallbackKey = `bc_prog_v1_fallback_${fallbackMode}`;
+          const hasRecentResetMarker = !!localStorage.getItem(resetMarkerKey);
+
+          if (hasRecentResetMarker) {
+            console.log("[PROG] fallback migration blocked by reset marker", {
+              resetMarkerKey,
+              realKey,
+              fallbackKey,
+            });
+            ensureProgLoaded?.();
+            window.__BC_ENSURE_PROG__?.();
+            return { ok: true, migrated: false, blockedByReset: true };
+          }
 
           const hasReal = !!localStorage.getItem(realKey);
           const hasFallback = !!localStorage.getItem(fallbackKey);
@@ -18042,7 +18162,15 @@ function ensureProgLoaded() {
               btnResetProgress.disabled = false;
               btnResetProgress.onclick = null;
               btnResetProgress.__bcBound = false;
-              bindInput(btnResetProgress, () => resetProgressToStart());
+              bindInput(btnResetProgress, () => restartEncounterFlowOnly());
+            }
+            const btnHardResetProgression = document.getElementById("btnHardResetProgressionPremium");
+            if (btnHardResetProgression) {
+              btnHardResetProgression.classList.remove("hidden");
+              btnHardResetProgression.disabled = false;
+              btnHardResetProgression.onclick = null;
+              btnHardResetProgression.__bcBound = false;
+              bindInput(btnHardResetProgression, () => requestHardResetProgressionStateOnly());
             }
             const btnResetRuns = document.getElementById("btnResetRunsPremium");
             if (btnResetRuns) {
@@ -18192,6 +18320,7 @@ function ensureProgLoaded() {
         const btnResetProgress = document.getElementById(
           isDemo ? "btnResetProgressDemo" : "btnResetProgressPremium"
         );
+        const btnHardResetProgression = isDemo ? null : document.getElementById("btnHardResetProgressionPremium");
         const btnBackHomeFromDrillSummary = document.getElementById("btnBackHomeFromDrillSummary");
         const btnExitDrill = document.getElementById("btnExitDrill");
         const btnStartAnotherDrill = document.getElementById("btnStartAnotherDrill");
@@ -18464,7 +18593,8 @@ function ensureProgLoaded() {
         }
 
         rebind(btnResetRuns, () => resetRunsOnly());
-        rebind(btnResetProgress, () => resetProgressToStart());
+        rebind(btnResetProgress, () => restartEncounterFlowOnly());
+        rebind(btnHardResetProgression, () => requestHardResetProgressionStateOnly());
         rebind(btnResetWines, () => resetWinesOnly());
 
         const addWineBtn = document.getElementById(ids.addWineBtn);

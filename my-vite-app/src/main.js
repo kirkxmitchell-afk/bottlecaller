@@ -15,6 +15,7 @@ import { makeMessageMarkReadHandler } from "./lib/bcHandlers/messagesMarkRead.js
 import { makeLeaderboardHandler } from "./lib/bcHandlers/leaderboard.js";
 import { makeProgressionSnapshotHandler } from "./lib/bcHandlers/progressionSnapshot.js";
 import { makeProgressReportSubmitHandler } from "./lib/bcHandlers/progressReportSubmit.js";
+import { makeHardResetProgressionHandler } from "./lib/bcHandlers/hardResetProgression.js";
 import { handleEventLog } from "./lib/handlers/handleEventLog.js";
 import { decideAllowedTier } from "./parent/progressionRouter";
 import { createProgressionStore } from "./progressionStore.js";
@@ -4293,6 +4294,14 @@ if (!window.__BC_PARENT_BRIDGE__) {
           getSenderCtxOrReject,
           getLiveAuthOrNull,
         }),
+        [BC_TYPES.HARD_RESET_PROGRESSION]: makeHardResetProgressionHandler({
+          getSourceCtx,
+          isDemoMsg,
+          rejectIfEpochMismatch,
+          getSenderCtxOrReject,
+          getLiveAuthOrNull,
+          hardResetProgressionStateOnly,
+        }),
         event_log: async ({ msg, event }) => {
           const replyType = "event_log_ack";
           const eventType = msg?.eventType || null;
@@ -4918,6 +4927,191 @@ async function buildProgressionResult({ userId, restaurantId, desiredTier = 3 })
     restaurantId,
     pointsTotal: Number.isFinite(currentPoints) ? currentPoints : null,
   });
+}
+
+function makeBlankGuestRank() {
+  return {
+    seen: 0,
+    attempts: 0,
+    readCorrect: 0,
+    modeOptimal: 0,
+    modeNeutral: 0,
+    modeDamaging: 0,
+    hookOptimal: 0,
+    hookNeutral: 0,
+    hookDamaging: 0,
+    deliveryCorrect: 0,
+    clean: 0,
+    ok: 0,
+    shaky: 0,
+    break: 0,
+  };
+}
+
+function buildBlankCanonicalProgressionState() {
+  const capturedAt = Date.now();
+  return {
+    version: 1,
+    capturedAt,
+    economy: {
+      points: 0,
+      tier: 1,
+      encounterRange: [1, 5],
+      allowedGuestTypes: ["decider", "bargain_smart", "griever"],
+      modes: ["scout", "guide", "charm"],
+    },
+    session: {
+      runId: 0,
+      runEase: 1,
+      runEaseRemaining: 0,
+      pressureLevel: 0,
+      finalDifficulty: 1,
+      currentEncounterId: 1,
+      mode: "scout",
+      guestTypeSelected: "decider",
+    },
+    authority: {
+      tierToServe: 1,
+      encounterRange: [1, 5],
+      guestTypes: ["decider", "bargain_smart", "griever"],
+    },
+    display: {
+      difficultySeed: 1,
+      effectiveDifficulty: 1,
+      pressureBand: "low",
+    },
+    run: {
+      runId: 0,
+      scoredThisRun: {},
+    },
+    rewards: {
+      encounters: {},
+      drills: {},
+      timedChallenges: {},
+      premiumByEncounter: {},
+      legacy: {},
+    },
+    rewardsSummary: {
+      encounters: { count: 0, totalPoints: 0 },
+      drills: { count: 0, totalPoints: 0 },
+      timedChallenges: { count: 0, totalPoints: 0 },
+      premium: { count: 0, totalPoints: 0 },
+      legacy: { count: 0, totalPoints: 0 },
+    },
+    mirror: {
+      capturedAt,
+      meta: {
+        pointsTotal: 0,
+        encountersCleared: 0,
+        lastUpdatedMs: capturedAt,
+        tierUnlocked: 1,
+        difficultySeed: 1,
+      },
+      axes: { control: 0, selectivity: 0, compression: 0 },
+      counters: { deciderGood: 0, browserGood: 0, analystGood: 0 },
+      flags: { resetDebt: 0 },
+      unlocks: {
+        authorityMode: false,
+        compressedQuestions: false,
+        powerMovePivot: false,
+        explorationSafeHooks: false,
+        singleVariableHooks: false,
+        fancy: false,
+        celebrator: false,
+        guestFancy: false,
+        guestCelebrator: false,
+      },
+      drift: { vec: 0, ttl: 0 },
+      recovery: { type: null, step: 0, ttl: 0 },
+      guestRanks: {
+        decider: makeBlankGuestRank(),
+        bargain_smart: makeBlankGuestRank(),
+        griever: makeBlankGuestRank(),
+        fancy: makeBlankGuestRank(),
+        celebrator: makeBlankGuestRank(),
+      },
+    },
+  };
+}
+
+function clearLocalProgressionKeys({ userId, restaurantId }) {
+  if (!userId || !restaurantId) return null;
+  const progKey = `bc_prog_v1_${userId}_${restaurantId}`;
+  const skillsKey = `bc_skills_v2_${userId}_${restaurantId}`;
+  const resetMarkerKey = `bc_prog_reset_marker_${userId}_${restaurantId}`;
+
+  try { localStorage.removeItem(progKey); } catch {}
+  try { localStorage.removeItem("bc_prog_v1_fallback_premium"); } catch {}
+  try { localStorage.removeItem("bc_premium_encounter_index"); } catch {}
+  try { localStorage.removeItem(skillsKey); } catch {}
+  try { localStorage.setItem(resetMarkerKey, String(Date.now())); } catch {}
+
+  return { progKey, skillsKey, resetMarkerKey };
+}
+
+async function hardResetProgressionStateOnly({ userId, restaurantId, scopeId = null } = {}) {
+  if (!userId || !restaurantId) {
+    throw new Error("missing_reset_target");
+  }
+
+  const localKeys = clearLocalProgressionKeys({ userId, restaurantId });
+
+  try {
+    const canonicalState = buildBlankCanonicalProgressionState();
+    const { error: progressionError } = await supabase
+      .from("bc_progression_state_v1")
+      .upsert(
+        {
+          user_id: userId,
+          restaurant_id: restaurantId,
+          scope_id: scopeId || restaurantId,
+          canonical_state: canonicalState,
+          source_type: "hard_reset_progression",
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id,restaurant_id" }
+      );
+
+    if (progressionError) throw progressionError;
+
+    const { error: snapshotError } = await supabase
+      .from("bc_skill_snapshots_v1")
+      .delete()
+      .eq("user_id", userId)
+      .eq("restaurant_id", restaurantId);
+
+    if (snapshotError) throw snapshotError;
+
+    setActiveProgressionOwner({
+      user_id: userId,
+      restaurant_id: restaurantId,
+      source: { reason: "hard_reset_progression_option_a" },
+    });
+
+    await hydrateProgressionSpineFromLatestSnapshot({ userId, restaurantId });
+    try {
+      await window.__BC_GET_PROGRESSION_SNAPSHOT__?.({
+        forceRefresh: true,
+        userId,
+        restaurantId,
+      });
+    } catch (snapshotRefreshError) {
+      console.warn("[BC hard reset] snapshot refresh failed", snapshotRefreshError);
+    }
+
+    return {
+      ok: true,
+      userId,
+      restaurantId,
+      resetType: "progression_only",
+      resetMarkerKey: localKeys?.resetMarkerKey || null,
+    };
+  } catch (error) {
+    try {
+      if (localKeys?.resetMarkerKey) localStorage.removeItem(localKeys.resetMarkerKey);
+    } catch {}
+    throw error;
+  }
 }
 
 window.__BC_GET_PROGRESSION_SNAPSHOT__ = async function (opts = {}) {
