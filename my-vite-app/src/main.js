@@ -641,6 +641,7 @@ document.querySelector("#app").innerHTML = `
                     <button id="mbInstrSend" class="btn" type="button">Send Message</button>
                   </div>
 
+                  <div class="small-text" id="mbInstrQuota" style="opacity:.78;"></div>
                   <div class="small-text" id="mbInstrStatus" style="opacity:.85;"></div>
                 </div>
               </div>
@@ -7492,9 +7493,10 @@ function wireManagerBoardMenu() {
     if (tab === "selection") {
       await loadSelectionTab();
     }
-    if (tab === "messenger") {
+  if (tab === "messenger") {
       renderTimedChallengeComposer();
       wireManagerBoardMessenger();
+      await refreshManagerMessageQuotaUi();
       await loadManagerMessenger();
       refreshManagerRuntimeSurfaces?.({
         thread: true,
@@ -10118,6 +10120,80 @@ function getScopeIdSafe() {
     window.appState?.profile?.group_id ||
     null
   );
+}
+
+const FREE_MANAGER_MESSAGES_PER_DAY = 2;
+
+function getLocalDayIsoRange(date = new Date()) {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  return {
+    startIso: start.toISOString(),
+    endIso: end.toISOString(),
+  };
+}
+
+async function getFreeMessageUsageToday({ senderUserId = null } = {}) {
+  const userId = String(senderUserId || appState?.session?.user?.id || appState?.session?.userId || "").trim();
+  if (!userId) {
+    return {
+      used: 0,
+      remaining: FREE_MANAGER_MESSAGES_PER_DAY,
+      limit: FREE_MANAGER_MESSAGES_PER_DAY,
+    };
+  }
+
+  const { startIso, endIso } = getLocalDayIsoRange();
+  const { count, error } = await supabase
+    .from("bc_messages_v1")
+    .select("id", { count: "exact", head: true })
+    .eq("sender_user_id", userId)
+    .eq("type", "instruction")
+    .is("archived_at", null)
+    .gte("created_at", startIso)
+    .lt("created_at", endIso);
+
+  if (error) throw error;
+
+  const used = Math.max(0, Number(count || 0));
+  return {
+    used,
+    remaining: Math.max(0, FREE_MANAGER_MESSAGES_PER_DAY - used),
+    limit: FREE_MANAGER_MESSAGES_PER_DAY,
+  };
+}
+
+async function refreshManagerMessageQuotaUi() {
+  const quotaEl = mbEl("mbInstrQuota");
+  const sendBtn = mbEl("mbInstrSend");
+  if (!quotaEl && !sendBtn) return null;
+
+  try {
+    const quota = await getFreeMessageUsageToday();
+    window.__BC_MANAGER_MESSAGE_QUOTA__ = quota;
+
+    if (quotaEl) {
+      quotaEl.textContent = quota.remaining > 0
+        ? `${quota.remaining} free messages left today`
+        : "Daily free message limit reached";
+    }
+
+    if (sendBtn) {
+      const blocked = quota.remaining <= 0;
+      sendBtn.disabled = blocked;
+      sendBtn.style.opacity = blocked ? ".6" : "1";
+      sendBtn.style.cursor = blocked ? "not-allowed" : "";
+      sendBtn.title = blocked ? "Daily free message limit reached" : "Send message";
+    }
+
+    return quota;
+  } catch (error) {
+    console.warn("[MESSENGER QUOTA] refresh failed", error);
+    if (quotaEl) quotaEl.textContent = "Could not load message limit.";
+    return null;
+  }
 }
 
 function mbEl(id) {
@@ -13074,6 +13150,7 @@ async function loadManagerMessenger(restaurantId = null) {
   window.__BC_MB_LAST_DRILL_COMPLETION__ = getRecentDrillCompletedRow();
   renderTimedChallengeTargetOptions();
   wireTimedChallengeComposer();
+  refreshManagerMessageQuotaUi?.();
   if (!rows.length) {
     resetManagerMessengerState({ keepStatus: true });
     if (emptyEl) emptyEl.style.display = "block";
@@ -13821,6 +13898,12 @@ async function mbSendInstruction() {
   const senderRole = String(appState?.profile?.role || "");
   if (!senderId) throw new Error("No session");
 
+  const quota = await getFreeMessageUsageToday({ senderUserId: senderId });
+  if (quota.remaining <= 0) {
+    await refreshManagerMessageQuotaUi();
+    throw new Error("Daily free message limit reached");
+  }
+
   const row = {
     scope_type: "restaurant",
     scope_id: restaurantId,
@@ -13838,6 +13921,7 @@ async function mbSendInstruction() {
 
   if (status) status.textContent = "Sent ✅";
   try { mbEl("mbInstrBody").value = ""; } catch {}
+  await refreshManagerMessageQuotaUi();
   await loadManagerMessenger(restaurantId);
   refreshManagerRuntimeSurfaces?.({
     thread: true,
