@@ -8768,9 +8768,13 @@ function ensureProgLoaded() {
 
         if (msg.type === "bc_ctx") {
           console.log("[IFRAME] received bc_ctx", {
+            epoch: msg.epoch || null,
             hasDrill: !!msg.drill,
             drill: msg.drill
           });
+          if (Number(msg?.epoch || 0) > 0) {
+            window.__BC_EPOCH__ = Number(msg.epoch);
+          }
           applyBcCtx(msg);
           await ensureWinesLoadedReadOnly();
           console.log("[CTX APPLIED]", {

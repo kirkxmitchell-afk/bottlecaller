@@ -130,11 +130,15 @@ export function mountBcParentBridge({
         return;
       }
 
-      const epoch = Number(window.__BC_IFRAME_EPOCH__ || 0);
+      const epoch = Number(window.__BC_IFRAME_EPOCH__ || prem?.dataset?.bcEpoch || 0);
       const msgEpoch = Number(msg?.epoch || 0);
-      if (msgEpoch !== epoch) {
+      const recoveredZeroEpoch = !msgEpoch && !!epoch;
+      if (msgEpoch !== epoch && !recoveredZeroEpoch) {
         console.warn("[PARENT] denied bc_ctx_request: epoch mismatch", { msgEpoch, epoch });
         return;
+      }
+      if (recoveredZeroEpoch) {
+        console.warn("[PARENT] recovered bc_ctx_request with missing iframe epoch", { epoch });
       }
 
       const requestedMode = String(msg?.mode || msg?.requestedMode || "").toLowerCase();
@@ -143,7 +147,7 @@ export function mountBcParentBridge({
         window.__BC_LAST_CTX_MODE__ = "demo";
         const demoCtx = await buildBcCtxSafe("demo");
         if (!demoCtx?.userId || !demoCtx?.role) return;
-        event.source?.postMessage({ source: "BC_MSG", v: 1, type: "bc_ctx", ...demoCtx, drill: null }, event.origin);
+        event.source?.postMessage({ source: "BC_MSG", v: 1, type: "bc_ctx", epoch, ...demoCtx, drill: null }, event.origin);
         setSourceCtx(event.source, demoCtx);
         return;
       }
@@ -198,7 +202,7 @@ export function mountBcParentBridge({
         return;
       }
 
-      event.source?.postMessage({ source: "BC_MSG", v: 1, type: "bc_ctx", ...bcCtx }, event.origin);
+      event.source?.postMessage({ source: "BC_MSG", v: 1, type: "bc_ctx", epoch, ...bcCtx }, event.origin);
       setSourceCtx(event.source, bcCtx);
     },
 
