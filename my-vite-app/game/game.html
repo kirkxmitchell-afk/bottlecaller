@@ -160,6 +160,13 @@
           epoch = Number(window.frameElement?.dataset?.bcEpoch || 0);
         } catch {}
       }
+      if (!epoch) {
+        try {
+          if (window.parent && window.parent !== window) {
+            epoch = Number(window.parent.__BC_IFRAME_EPOCH__ || 0);
+          }
+        } catch {}
+      }
       window.__BC_EPOCH__ = epoch;
       console.log("[BC] epoch from URL =", epoch);
     })();
@@ -6235,7 +6242,15 @@ function ensureProgLoaded() {
           window.__BC_CTX_REQUESTED__ = true;
 
           // hard requirement for premium
-          const epoch = Number(window.__BC_EPOCH__ || window.frameElement?.dataset?.bcEpoch || 0);
+          const epoch = Number(
+            window.__BC_EPOCH__ ||
+            window.frameElement?.dataset?.bcEpoch ||
+            window.parent?.__BC_IFRAME_EPOCH__ ||
+            0
+          );
+          if (!window.__BC_EPOCH__ && epoch) {
+            window.__BC_EPOCH__ = epoch;
+          }
           if (!epoch) {
             console.warn("[BC] bc_ctx_request blocked: missing epoch");
             window.__BC_CTX_REQUESTED__ = false; // allow retry once epoch exists

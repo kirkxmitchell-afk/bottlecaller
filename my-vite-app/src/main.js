@@ -9570,6 +9570,7 @@ async function resolveInitialRestaurantForScope(profile) {
 function pushCtxToPremiumIframe(source = "manual") {
   const iframe = document.querySelector("#premiumRoot iframe") || document.getElementById("premiumRootFrame");
   if (!iframe || !iframe.contentWindow) return;
+  const epoch = Number(window.__BC_IFRAME_EPOCH__ || iframe.dataset?.bcEpoch || 0);
 
   const uid = appState.session?.user?.id || null;
   const profileUserId = appState.profile?.user_id || uid;
@@ -9599,10 +9600,58 @@ function pushCtxToPremiumIframe(source = "manual") {
       role: membershipRole,
       gameplayRole: membershipRole,
       gameplay_role: membershipRole,
+      epoch,
       _from: source,
     },
-    "*"
+    window.location.origin
   );
+
+  try {
+    setSourceCtx(iframe.contentWindow, {
+      userId: uid,
+      profileUserId,
+      progressionOwnerUserId: progressionOwner.userId || profileUserId,
+      progressionOwnerRestaurantId: progressionOwner.restaurantId || activeRestaurantId,
+      restaurantId: activeRestaurantId,
+      scopeId,
+      scopeType,
+      accessTier,
+      membershipRole,
+      membership_role: membershipRole,
+      role: membershipRole,
+      gameplayRole: membershipRole,
+      gameplay_role: membershipRole,
+      mode: "premium",
+      epoch,
+    });
+  } catch {}
+}
+
+function schedulePremiumCtxPush(source = "manual", attempt = 0) {
+  const iframe = document.getElementById("premiumRootFrame");
+  if (!iframe?.contentWindow) return false;
+  if (!appState?.session || isHardLoggedOut?.() || isLoggingOut?.()) return false;
+
+  const targetEpoch = Number(window.__BC_IFRAME_EPOCH__ || iframe.dataset?.bcEpoch || 0);
+  const frameCtx = iframe.contentWindow.__BC_CTX__ || null;
+  const frameEpoch = Number(iframe.contentWindow.__BC_EPOCH__ || 0);
+  const ready =
+    !!frameCtx?.userId &&
+    !!frameCtx?.restaurantId &&
+    !!frameCtx?.role &&
+    (!!targetEpoch ? frameEpoch === targetEpoch : true);
+
+  if (ready) return true;
+
+  pushCtxToPremiumIframe(`${source}#${attempt}`);
+
+  if (attempt >= 7) return false;
+
+  window.setTimeout(() => {
+    try { schedulePremiumCtxPush(source, attempt + 1); } catch {}
+  }, 250 * (attempt + 1));
+
+  return true;
 }
 
 function postToPremiumIframeSafe(type, payload = {}) {
@@ -9688,6 +9737,7 @@ function mountPremiumGameIframe({
   const hasLiveGameSrc = iframeSrcNow.includes("/game/game.html");
   if (iframe && !forceRemount && hasLiveGameSrc) {
     if (isHardLoggedOut()) return;
+    schedulePremiumCtxPush("mount.existing");
     pushPremiumDrill();
     return;
   }
@@ -9756,6 +9806,12 @@ function mountPremiumGameIframe({
       // demo never gets ctx
       const modeFromSrc = String(new URL(iframe.src, window.location.href).searchParams.get("mode") || "").toLowerCase();
       if (modeFromSrc === "demo") return;
+
+      try {
+        schedulePremiumCtxPush("iframe.load");
+      } catch (e) {
+        console.warn("[PARENT] bc_ctx push on iframe load failed", e);
+      }
 
       pushPremiumDrill();
       console.log("[PARENT] premium iframe loaded ✅ (ctx/drill pushed)", { epoch: myEpoch });
