@@ -1644,14 +1644,6 @@ function clearLocalProgressionKeysForReset({ userId, restaurantId }) {
 
   try { localStorage.setItem(resetMarkerKey, String(Date.now())); } catch {}
 
-  console.log("[BC reset] local progression cleared", {
-    userId,
-    restaurantId,
-    progKey,
-    skillsKey,
-    resetMarkerKey,
-  });
-
   return { progKey, skillsKey, resetMarkerKey };
 }
 
@@ -1777,8 +1769,6 @@ async function hydrateProgressionSpineFromLatestSnapshot({
     if (error && !isMissingRelationError(error)) {
       console.warn("[PROGRESSION STATE] dedicated load failed", error);
     }
-
-    console.log("[BC progression hydrate raw row]", progressionRow);
 
     if (!error && progressionRow?.canonical_state && typeof progressionRow.canonical_state === "object") {
       return hydrate(progressionRow.canonical_state);
@@ -5076,18 +5066,11 @@ async function resetCanonicalProgressionRow(sb, { userId, restaurantId, scopeId 
     updated_at: new Date().toISOString(),
   };
 
-  console.log("[BC reset] blank row payload", blankRow);
-
   const { error } = await sb
     .from("bc_progression_state_v1")
     .upsert(blankRow, { onConflict: "user_id,restaurant_id" });
 
   if (error) throw error;
-
-  console.log("[BC reset] canonical progression row reset", {
-    userId,
-    restaurantId,
-  });
 }
 
 async function clearProgressionSnapshots(sb, { userId, restaurantId }) {
@@ -5098,11 +5081,6 @@ async function clearProgressionSnapshots(sb, { userId, restaurantId }) {
     .eq("restaurant_id", restaurantId);
 
   if (error) throw error;
-
-  console.log("[BC reset] progression snapshots cleared", {
-    userId,
-    restaurantId,
-  });
 }
 
 async function rehydrateBlankProgressionState({ userId, restaurantId }) {
@@ -5128,11 +5106,6 @@ async function rehydrateBlankProgressionState({ userId, restaurantId }) {
 
   const resetMarkerKey = getProgressionResetMarkerKey(userId, restaurantId);
   try { localStorage.removeItem(resetMarkerKey); } catch {}
-
-  console.log("[BC reset] blank progression rehydrated", {
-    userId,
-    restaurantId,
-  });
 }
 
 async function hardResetProgressionStateOnly({ userId, restaurantId, scopeId = null } = {}) {
@@ -5142,11 +5115,6 @@ async function hardResetProgressionStateOnly({ userId, restaurantId, scopeId = n
 
   const sb = window.supabase || window.__BC_SUPABASE__ || supabase;
   if (!sb) throw new Error("missing_supabase_client");
-
-  console.warn("[BC reset] starting progression-only reset", {
-    userId,
-    restaurantId,
-  });
 
   const localKeys = clearLocalProgressionKeysForReset({ userId, restaurantId });
 
