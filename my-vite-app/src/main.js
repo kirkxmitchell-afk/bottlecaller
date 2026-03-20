@@ -1626,6 +1626,35 @@ function getActiveProgressionOwnerContext() {
   };
 }
 
+function getProgressionResetMarkerKey(userId, restaurantId) {
+  return `bc_prog_reset_marker_${userId}_${restaurantId}`;
+}
+
+function clearLocalProgressionKeysForReset({ userId, restaurantId }) {
+  if (!userId || !restaurantId) return null;
+
+  const progKey = `bc_prog_v1_${userId}_${restaurantId}`;
+  const skillsKey = `bc_skills_v2_${userId}_${restaurantId}`;
+  const resetMarkerKey = getProgressionResetMarkerKey(userId, restaurantId);
+
+  try { localStorage.removeItem(progKey); } catch {}
+  try { localStorage.removeItem("bc_prog_v1_fallback_premium"); } catch {}
+  try { localStorage.removeItem("bc_premium_encounter_index"); } catch {}
+  try { localStorage.removeItem(skillsKey); } catch {}
+
+  try { localStorage.setItem(resetMarkerKey, String(Date.now())); } catch {}
+
+  console.log("[BC reset] local progression cleared", {
+    userId,
+    restaurantId,
+    progKey,
+    skillsKey,
+    resetMarkerKey,
+  });
+
+  return { progKey, skillsKey, resetMarkerKey };
+}
+
 function resolveProgressionOwnerUserId(ctx = {}, session = null) {
   return (
     ctx?.targetUserId ||
@@ -1748,6 +1777,8 @@ async function hydrateProgressionSpineFromLatestSnapshot({
     if (error && !isMissingRelationError(error)) {
       console.warn("[PROGRESSION STATE] dedicated load failed", error);
     }
+
+    console.log("[BC progression hydrate raw row]", progressionRow);
 
     if (!error && progressionRow?.canonical_state && typeof progressionRow.canonical_state === "object") {
       return hydrate(progressionRow.canonical_state);
@@ -5034,19 +5065,73 @@ function buildBlankCanonicalProgressionState() {
   };
 }
 
-function clearLocalProgressionKeys({ userId, restaurantId }) {
-  if (!userId || !restaurantId) return null;
-  const progKey = `bc_prog_v1_${userId}_${restaurantId}`;
-  const skillsKey = `bc_skills_v2_${userId}_${restaurantId}`;
-  const resetMarkerKey = `bc_prog_reset_marker_${userId}_${restaurantId}`;
+async function resetCanonicalProgressionRow(sb, { userId, restaurantId, scopeId = null }) {
+  const blankRow = {
+    user_id: userId,
+    restaurant_id: restaurantId,
+    scope_id: scopeId || restaurantId,
+    canonical_state: buildBlankCanonicalProgressionState(),
+    source_type: "hard_reset_progression",
+    updated_at: new Date().toISOString(),
+  };
 
-  try { localStorage.removeItem(progKey); } catch {}
-  try { localStorage.removeItem("bc_prog_v1_fallback_premium"); } catch {}
-  try { localStorage.removeItem("bc_premium_encounter_index"); } catch {}
-  try { localStorage.removeItem(skillsKey); } catch {}
-  try { localStorage.setItem(resetMarkerKey, String(Date.now())); } catch {}
+  console.log("[BC reset] blank row payload", blankRow);
 
-  return { progKey, skillsKey, resetMarkerKey };
+  const { error } = await sb
+    .from("bc_progression_state_v1")
+    .upsert(blankRow, { onConflict: "user_id,restaurant_id" });
+
+  if (error) throw error;
+
+  console.log("[BC reset] canonical progression row reset", {
+    userId,
+    restaurantId,
+  });
+}
+
+async function clearProgressionSnapshots(sb, { userId, restaurantId }) {
+  const { error } = await sb
+    .from("bc_skill_snapshots_v1")
+    .delete()
+    .eq("user_id", userId)
+    .eq("restaurant_id", restaurantId);
+
+  if (error) throw error;
+
+  console.log("[BC reset] progression snapshots cleared", {
+    userId,
+    restaurantId,
+  });
+}
+
+async function rehydrateBlankProgressionState({ userId, restaurantId }) {
+  try {
+    setActiveProgressionOwner({
+      user_id: userId,
+      restaurant_id: restaurantId,
+      source: { reason: "hard_reset_progression_option_a" },
+    });
+  } catch {}
+
+  await hydrateProgressionSpineFromLatestSnapshot({ userId, restaurantId });
+
+  try {
+    await window.__BC_GET_PROGRESSION_SNAPSHOT__?.({
+      forceRefresh: true,
+      userId,
+      restaurantId,
+    });
+  } catch (snapshotRefreshError) {
+    console.warn("[BC hard reset] snapshot refresh failed", snapshotRefreshError);
+  }
+
+  const resetMarkerKey = getProgressionResetMarkerKey(userId, restaurantId);
+  try { localStorage.removeItem(resetMarkerKey); } catch {}
+
+  console.log("[BC reset] blank progression rehydrated", {
+    userId,
+    restaurantId,
+  });
 }
 
 async function hardResetProgressionStateOnly({ userId, restaurantId, scopeId = null } = {}) {
@@ -5054,56 +5139,26 @@ async function hardResetProgressionStateOnly({ userId, restaurantId, scopeId = n
     throw new Error("missing_reset_target");
   }
 
-  const localKeys = clearLocalProgressionKeys({ userId, restaurantId });
+  const sb = window.supabase || window.__BC_SUPABASE__ || supabase;
+  if (!sb) throw new Error("missing_supabase_client");
+
+  console.warn("[BC reset] starting progression-only reset", {
+    userId,
+    restaurantId,
+  });
+
+  const localKeys = clearLocalProgressionKeysForReset({ userId, restaurantId });
 
   try {
-    const canonicalState = buildBlankCanonicalProgressionState();
-    const { error: progressionError } = await supabase
-      .from("bc_progression_state_v1")
-      .upsert(
-        {
-          user_id: userId,
-          restaurant_id: restaurantId,
-          scope_id: scopeId || restaurantId,
-          canonical_state: canonicalState,
-          source_type: "hard_reset_progression",
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id,restaurant_id" }
-      );
-
-    if (progressionError) throw progressionError;
-
-    const { error: snapshotError } = await supabase
-      .from("bc_skill_snapshots_v1")
-      .delete()
-      .eq("user_id", userId)
-      .eq("restaurant_id", restaurantId);
-
-    if (snapshotError) throw snapshotError;
-
-    setActiveProgressionOwner({
-      user_id: userId,
-      restaurant_id: restaurantId,
-      source: { reason: "hard_reset_progression_option_a" },
-    });
-
-    await hydrateProgressionSpineFromLatestSnapshot({ userId, restaurantId });
-    try {
-      await window.__BC_GET_PROGRESSION_SNAPSHOT__?.({
-        forceRefresh: true,
-        userId,
-        restaurantId,
-      });
-    } catch (snapshotRefreshError) {
-      console.warn("[BC hard reset] snapshot refresh failed", snapshotRefreshError);
-    }
+    await resetCanonicalProgressionRow(sb, { userId, restaurantId, scopeId });
+    await clearProgressionSnapshots(sb, { userId, restaurantId });
+    await rehydrateBlankProgressionState({ userId, restaurantId });
 
     return {
       ok: true,
       userId,
       restaurantId,
-      resetType: "progression_only",
+      resetMode: "progression_only",
       resetMarkerKey: localKeys?.resetMarkerKey || null,
     };
   } catch (error) {

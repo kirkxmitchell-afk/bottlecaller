@@ -2884,13 +2884,7 @@
         const pendingReqId = window.__BC_PENDING_HARD_RESET_REQ_ID__ || null;
         if (pendingReqId && msg.reqId && String(pendingReqId) !== String(msg.reqId)) return;
         window.__BC_PENDING_HARD_RESET_REQ_ID__ = null;
-
-        if (msg.ok) {
-          console.log("[PROG] hard reset progression result ✅", msg);
-          applyBlankProgressionResetLocally();
-        } else {
-          console.warn("[PROG] hard reset progression failed", msg);
-        }
+        console.log("[PROG] hard reset progression result", msg);
         return;
       }
 
@@ -3494,7 +3488,7 @@
           <button id="btnGoDemo" type="button">Setup</button>
           <button id="btnStartDrillDemo" type="button">5-Minute Drill</button>
           <button id="btnViewHistoryDemo" type="button">View History</button>
-          <button id="btnResetProgressDemo" type="button">Restart Encounter Flow</button>
+          <button id="btnResetProgressDemo" type="button">Restart encounter flow</button>
           <button id="btnResetWinesDemo" type="button" data-role="manager">Reset Wines Only</button>
         </div>
       </div>
@@ -3537,8 +3531,8 @@
         <div class="button-row app-home-actions" id="premiumButtons">
           <button id="btnGoPremium" type="button">Setup</button>
           <button id="btnViewHistoryPremium" type="button">View History</button>
-          <button id="btnResetProgressPremium" type="button">Restart Encounter Flow</button>
-          <button id="btnHardResetProgressionPremium" type="button" class="hidden">Reset Waiter Progression</button>
+          <button id="btnResetProgressPremium" type="button">Restart encounter flow</button>
+          <button id="btnHardResetProgressionPremium" type="button" class="hidden">Reset waiter progression</button>
           <button id="btnResetWinesPremium" type="button" data-role="manager">Reset Wines Only</button>
         </div>
       </div>
@@ -6478,11 +6472,8 @@ function ensureProgLoaded() {
         }
       }
 
-      function getProgressResetMarkerKey() {
-        const uid = window.__BC_CTX__?.userId || null;
-        const rid = window.__BC_CTX__?.restaurantId || null;
-        if (!uid || !rid) return null;
-        return `bc_prog_reset_marker_${uid}_${rid}`;
+      function getProgressionResetMarkerKey(userId, restaurantId) {
+        return `bc_prog_reset_marker_${userId}_${restaurantId}`;
       }
 
       function restartEncounterFlowOnly() {
@@ -6494,7 +6485,9 @@ function ensureProgLoaded() {
         const rid = window.__BC_CTX__?.restaurantId || null;
         const realProgKey = (uid && rid) ? `bc_prog_v1_${uid}_${rid}` : null;
         const skillsKey = (uid && rid) ? `bc_skills_v2_${uid}_${rid}` : null;
-        const resetMarkerKey = getProgressResetMarkerKey();
+        const resetMarkerKey = (uid && rid)
+          ? getProgressionResetMarkerKey(uid, rid)
+          : null;
 
         try { if (realProgKey) localStorage.removeItem(realProgKey); } catch {}
         try { localStorage.removeItem("bc_prog_v1_fallback_premium"); } catch {}
@@ -6542,36 +6535,91 @@ function ensureProgLoaded() {
         try { showScreen("screenHome"); } catch {}
       }
 
-      function requestHardResetProgressionStateOnly() {
-        const userId = window.__BC_CTX__?.userId || null;
-        const restaurantId = window.__BC_CTX__?.restaurantId || null;
+      function requestHardResetProgression({ userId, restaurantId }) {
+        return new Promise((resolve) => {
+          const reqId = `reset_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+          window.__BC_PENDING_HARD_RESET_REQ_ID__ = reqId;
 
-        if (!userId || !restaurantId) {
-          console.warn("[PROG] hard reset blocked: missing waiter ctx", { userId, restaurantId });
-          return;
-        }
+          function onMessage(ev) {
+            const msg = ev?.data;
+            if (!msg || msg.source !== "BC_MSG") return;
+            if (msg.type !== "hard_reset_progression_result") return;
+            if (msg.reqId !== reqId) return;
 
-        const reqId = `hrp_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-        window.__BC_PENDING_HARD_RESET_REQ_ID__ = reqId;
+            window.removeEventListener("message", onMessage);
+            resolve(msg);
+          }
 
-        try {
-          window.parent?.postMessage(
-            {
+          window.addEventListener("message", onMessage);
+
+          try {
+            window.parent.postMessage({
               source: "BC_MSG",
               v: 1,
               type: "hard_reset_progression",
-              resetMode: "progression_only",
               reqId,
+              resetMode: "progression_only",
               userId,
               restaurantId,
-              epoch: Number(window.__BC_EPOCH__ || 0),
-              mode: String(window.bcMode || "premium"),
-            },
-            window.location.origin
-          );
-        } catch (e) {
-          console.warn("[PROG] hard reset request failed", e);
+            }, "*");
+          } catch (e) {
+            window.removeEventListener("message", onMessage);
+            console.warn("[BC reset] hard reset request failed", e);
+            resolve({
+              source: "BC_MSG",
+              v: 1,
+              type: "hard_reset_progression_result",
+              reqId,
+              ok: false,
+              error: e?.message || "hard_reset_request_failed",
+            });
+          }
+        });
+      }
+
+      async function hardResetProgressionOptionA() {
+        const ctx = window.__BC_CTX__ || null;
+        const userId = ctx?.userId || ctx?.profileUserId || null;
+        const restaurantId = ctx?.restaurantId || ctx?.scopeId || null;
+
+        if (!userId || !restaurantId) {
+          console.warn("[BC reset] missing ctx for hard reset", { userId, restaurantId, ctx });
+          return;
         }
+
+        console.warn("[BC reset] requesting progression-only reset", {
+          userId,
+          restaurantId,
+        });
+
+        const result = await requestHardResetProgression({ userId, restaurantId });
+
+        console.log("[BC reset] parent reset result", result);
+
+        if (!result?.ok) {
+          console.error("[BC reset] failed", result);
+          return;
+        }
+
+        applyBlankProgressionResetLocally();
+
+        currentStep = 0;
+        currentEncounter = null;
+        encounterIndex = 0;
+
+        try { PROG = null; } catch {}
+        try { currentRunScoring = null; } catch {}
+
+        if (typeof ensureProgLoaded === "function") {
+          await ensureProgLoaded(true);
+        }
+
+        if (typeof requestProgressionSnapshot === "function") {
+          await requestProgressionSnapshot();
+        }
+
+        console.log("[BC reset] progression-only reset complete");
+        showScreen("screenHome");
       }
 
       async function restartEncounterFlowOnlyAsync() {
@@ -6632,16 +6680,16 @@ function ensureProgLoaded() {
           if (!uid || !rid) return { ok: true, migrated: false, reason: "no_ctx" };
 
           const realKey = `bc_prog_v1_${uid}_${rid}`;
-          const resetMarkerKey = `bc_prog_reset_marker_${uid}_${rid}`;
+          const resetMarkerKey = getProgressionResetMarkerKey(uid, rid);
           const fallbackMode = (new URLSearchParams(location.search).get("mode")) || "unknown";
           const fallbackKey = `bc_prog_v1_fallback_${fallbackMode}`;
           const hasRecentResetMarker = !!localStorage.getItem(resetMarkerKey);
 
           if (hasRecentResetMarker) {
             console.log("[PROG] fallback migration blocked by reset marker", {
+              userId: uid,
+              restaurantId: rid,
               resetMarkerKey,
-              realKey,
-              fallbackKey,
             });
             ensureProgLoaded?.();
             window.__BC_ENSURE_PROG__?.();
@@ -18170,7 +18218,7 @@ function ensureProgLoaded() {
               btnHardResetProgression.disabled = false;
               btnHardResetProgression.onclick = null;
               btnHardResetProgression.__bcBound = false;
-              bindInput(btnHardResetProgression, () => requestHardResetProgressionStateOnly());
+              bindInput(btnHardResetProgression, () => hardResetProgressionOptionA());
             }
             const btnResetRuns = document.getElementById("btnResetRunsPremium");
             if (btnResetRuns) {
@@ -18594,7 +18642,7 @@ function ensureProgLoaded() {
 
         rebind(btnResetRuns, () => resetRunsOnly());
         rebind(btnResetProgress, () => restartEncounterFlowOnly());
-        rebind(btnHardResetProgression, () => requestHardResetProgressionStateOnly());
+        rebind(btnHardResetProgression, () => hardResetProgressionOptionA());
         rebind(btnResetWines, () => resetWinesOnly());
 
         const addWineBtn = document.getElementById(ids.addWineBtn);

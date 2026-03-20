@@ -89,9 +89,7 @@ export function makeHardResetProgressionHandler({
       reply(replyType, {
         reqId,
         ok: true,
-        resetMode: "progression_only",
-        userId: result?.userId || userId,
-        restaurantId: result?.restaurantId || restaurantId,
+        ...result,
       });
     } catch (e) {
       reply(replyType, {
