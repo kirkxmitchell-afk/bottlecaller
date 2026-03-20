@@ -18222,6 +18222,7 @@ function ensureProgLoaded() {
             if (btnHardResetProgression) {
               btnHardResetProgression.classList.remove("hidden");
               btnHardResetProgression.disabled = false;
+              btnHardResetProgression.textContent = "Reset waiter progression";
               btnHardResetProgression.onclick = null;
               btnHardResetProgression.__bcBound = false;
               bindInput(btnHardResetProgression, () => hardResetProgressionOptionA());
@@ -18232,15 +18233,18 @@ function ensureProgLoaded() {
             }
             document.getElementById("btnResetWinesPremium")?.remove();
           } else {
+            if (btnHardResetProgression) {
+              btnHardResetProgression.classList.remove("hidden");
+              btnHardResetProgression.disabled = false;
+              btnHardResetProgression.textContent = "Reset manager progression";
+              btnHardResetProgression.onclick = null;
+              btnHardResetProgression.__bcBound = false;
+              bindInput(btnHardResetProgression, () => hardResetProgressionOptionA());
+            }
             if (btnResetProgress) {
               btnResetProgress.classList.add("hidden");
               btnResetProgress.onclick = null;
               btnResetProgress.__bcBound = false;
-            }
-            if (btnHardResetProgression) {
-              btnHardResetProgression.classList.add("hidden");
-              btnHardResetProgression.onclick = null;
-              btnHardResetProgression.__bcBound = false;
             }
             if (btnResetRuns) {
               btnResetRuns.classList.add("hidden");
