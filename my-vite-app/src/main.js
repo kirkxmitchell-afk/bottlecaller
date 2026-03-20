@@ -4107,6 +4107,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
       BC_TYPES.LEADERBOARD_REQUEST,
       BC_TYPES.PROGRESSION_SNAPSHOT_REQUEST,
       BC_TYPES.PROGRESS_REPORT_SUBMIT,
+      BC_TYPES.HARD_RESET_PROGRESSION,
       "event_log",
       "drill_run_started",
       "timed_challenge_result",

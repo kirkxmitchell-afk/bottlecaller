@@ -6561,7 +6561,9 @@ function ensureProgLoaded() {
               resetMode: "progression_only",
               userId,
               restaurantId,
-            }, "*");
+              epoch: Number(window.__BC_EPOCH__ || 0),
+              mode: String(window.bcMode || "premium"),
+            }, window.location.origin);
           } catch (e) {
             window.removeEventListener("message", onMessage);
             console.warn("[BC reset] hard reset request failed", e);
