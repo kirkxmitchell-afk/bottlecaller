@@ -155,6 +155,11 @@
         const qs = new URLSearchParams(location.search);
         epoch = Number(qs.get("epoch") || 0);
       } catch {}
+      if (!epoch) {
+        try {
+          epoch = Number(window.frameElement?.dataset?.bcEpoch || 0);
+        } catch {}
+      }
       window.__BC_EPOCH__ = epoch;
       console.log("[BC] epoch from URL =", epoch);
     })();
@@ -6230,7 +6235,7 @@ function ensureProgLoaded() {
           window.__BC_CTX_REQUESTED__ = true;
 
           // hard requirement for premium
-          const epoch = Number(window.__BC_EPOCH__ || 0);
+          const epoch = Number(window.__BC_EPOCH__ || window.frameElement?.dataset?.bcEpoch || 0);
           if (!epoch) {
             console.warn("[BC] bc_ctx_request blocked: missing epoch");
             window.__BC_CTX_REQUESTED__ = false; // allow retry once epoch exists
