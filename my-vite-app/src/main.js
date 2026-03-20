@@ -2721,7 +2721,18 @@ function renderHudTimedChallenge() {
   if (!statusEl || !bodyEl) return;
 
   const challenge = getActiveTimedChallenge();
+  const pending = window.__BC_PENDING_TIMED_CHALLENGE__ || null;
   if (!challenge) {
+    if (pending) {
+      statusEl.textContent = "Queued • Starts after encounter 1";
+      bodyEl.innerHTML = `
+        <div><b>${escapeHtml(pending.title || "Timed Challenge")}</b></div>
+        <div style="opacity:.85;">Focus: ${escapeHtml(pending?.payload?.focus || pending?.focus || "-")}</div>
+        <div style="opacity:.85;">Reward: ${Number(pending?.payload?.rewardPoints || pending?.rewardPoints || 0)} pts</div>
+      `;
+      return;
+    }
+
     statusEl.textContent = "No active challenge";
     bodyEl.innerHTML = '<div style="opacity:.7;">No challenge assigned.</div>';
     return;
@@ -8784,6 +8795,7 @@ async function getManagerPerformanceModel({ force = false } = {}) {
       progressionStateRow?.canonical_state && typeof progressionStateRow.canonical_state === "object"
         ? progressionStateRow.canonical_state
         : null;
+    const hasCanonicalProgression = !!canonicalState;
     const canonicalEconomy =
       canonicalState?.economy && typeof canonicalState.economy === "object"
         ? canonicalState.economy
@@ -8858,14 +8870,17 @@ async function getManagerPerformanceModel({ force = false } = {}) {
       skillAvg / 100
     ) || 0));
 
-    const totalPoints = firstFinite(
-      canonicalPoints,
-      leaderboardRow?.total_points,
-      totalsRow?.total_points,
-      totalsRow?.points_total,
-      latestRow?.total_points,
-      (skillAvg / 10) + (challengeCompleted.length * 0.9) + (drillPasses * 0.4)
-    ) || 0;
+    const totalPoints = hasCanonicalProgression
+      ? Math.max(0, canonicalPoints ?? 0)
+      : (
+          firstFinite(
+            leaderboardRow?.total_points,
+            totalsRow?.total_points,
+            totalsRow?.points_total,
+            latestRow?.total_points,
+            (skillAvg / 10) + (challengeCompleted.length * 0.9) + (drillPasses * 0.4)
+          ) || 0
+        );
 
     const lastActiveAt = firstNonEmpty(
       progressionStateRow?.updated_at,
@@ -8882,19 +8897,20 @@ async function getManagerPerformanceModel({ force = false } = {}) {
         ? 2
         : 1;
 
-    const servedTier = Math.max(
-      1,
-      Math.min(
-        3,
-        Math.round(firstFinite(
-          canonicalServedTier,
-          latestRow?.latest_tier,
-          leaderboardRow?.tier_to_serve,
-          leaderboardRow?.served_tier,
-          eligibilityTier
-        ) || eligibilityTier)
-      )
-    );
+    const servedTier = hasCanonicalProgression
+      ? Math.max(1, Math.min(3, Math.round(canonicalServedTier ?? eligibilityTier)))
+      : Math.max(
+          1,
+          Math.min(
+            3,
+            Math.round(firstFinite(
+              latestRow?.latest_tier,
+              leaderboardRow?.tier_to_serve,
+              leaderboardRow?.served_tier,
+              eligibilityTier
+            ) || eligibilityTier)
+          )
+        );
 
     const challengeReadiness = Math.max(
       0,
@@ -13247,12 +13263,14 @@ function getTimedChallengeComposerValues(source = "messenger") {
         type: "mbLcTimedChallengeType",
         duration: "mbLcTimedChallengeDuration",
         reward: "mbLcTimedChallengeReward",
+        placement: "mbLcTimedChallengePlacement",
       }
     : {
         target: "mbTimedChallengeTarget",
         type: "mbTimedChallengeType",
         duration: "mbTimedChallengeDuration",
         reward: "mbTimedChallengeReward",
+        placement: null,
       };
 
   const targetEl = document.getElementById(ids.target);
@@ -13263,16 +13281,18 @@ function getTimedChallengeComposerValues(source = "messenger") {
   return {
     targetUserId: String(targetEl?.value || "").trim() || null,
     challengeKey: String(typeEl?.value || "closing_push"),
-    durationSec: Number(durationEl?.value || 600),
+    durationSec: Math.max(60, Math.min(300, Number(durationEl?.value || 300))),
     rewardPoints: Math.max(1, Math.min(5, Number(rewardEl?.value || 5))),
+    placement: String(document.getElementById(ids.placement)?.value || "before_start"),
   };
 }
 
 function buildTimedChallengePayloadFromValues(values = {}) {
   const targetUserId = values.targetUserId || null;
   const challengeKey = values.challengeKey || "closing_push";
-  const durationSec = Number(values.durationSec || 600);
+  const durationSec = Math.max(60, Math.min(300, Number(values.durationSec || 300)));
   const rewardPoints = Number(values.rewardPoints || 50);
+  const placement = String(values.placement || "before_start");
   const restaurantId = getManagerActiveRestaurantId();
 
   if (!targetUserId) return null;
@@ -13393,6 +13413,7 @@ function buildTimedChallengePayloadFromValues(values = {}) {
     targetUserId,
     restaurantId,
     durationSec,
+    placement,
     focus: def.focus,
     rewardPoints,
     successRule: def.successRule,
@@ -13530,7 +13551,11 @@ async function sendTimedChallengeFromManager() {
 
   if (ok) {
     if (statusEl) {
-      statusEl.textContent = `Challenge Sent • ${values.challengeKey ? getTimedChallengeLabel(values.challengeKey) : "Timed Challenge"} • ${Math.round(Number(values.durationSec || 0) / 60)} min • Reward ${Number(values.rewardPoints || 0)}`;
+      const placementLabel =
+        String(values.placement || "before_start") === "after_first_encounter"
+          ? "After encounter 1"
+          : "Before encounter 1";
+      statusEl.textContent = `Challenge Sent • ${values.challengeKey ? getTimedChallengeLabel(values.challengeKey) : "Timed Challenge"} • ${Math.round(Number(values.durationSec || 0) / 60)} min • ${placementLabel} • Reward ${Number(values.rewardPoints || 0)}`;
     }
     return true;
   }
@@ -13729,9 +13754,13 @@ function renderManagerTimedChallengeActionPanel() {
         </select>
 
         <select id="mbLcTimedChallengeDuration">
-          <option value="300">5 min</option>
-          <option value="600" selected>10 min</option>
-          <option value="900">15 min</option>
+          <option value="60">1 min</option>
+          <option value="180">3 min</option>
+          <option value="300" selected>5 min</option>
+        </select>
+        <select id="mbLcTimedChallengePlacement">
+          <option value="before_start" selected>Before encounter 1</option>
+          <option value="after_first_encounter">After encounter 1</option>
         </select>
         <input
           id="mbLcTimedChallengeReward"

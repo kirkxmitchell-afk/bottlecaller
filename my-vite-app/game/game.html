@@ -323,8 +323,17 @@
       try { host.__BC_ACTIVE_TIMED_CHALLENGE__ = nextChallenge || null; } catch {}
       return window.__BC_ACTIVE_TIMED_CHALLENGE__;
     }
+    function setPendingTimedChallengeState(nextChallenge = null) {
+      const host = getTimedChallengeHost();
+      window.__BC_PENDING_TIMED_CHALLENGE__ = nextChallenge || null;
+      try { host.__BC_PENDING_TIMED_CHALLENGE__ = nextChallenge || null; } catch {}
+      return window.__BC_PENDING_TIMED_CHALLENGE__;
+    }
     function getActiveTimedChallenge() {
       return window.__BC_ACTIVE_TIMED_CHALLENGE__ || getTimedChallengeHost().__BC_ACTIVE_TIMED_CHALLENGE__ || null;
+    }
+    function getPendingTimedChallenge() {
+      return window.__BC_PENDING_TIMED_CHALLENGE__ || getTimedChallengeHost().__BC_PENDING_TIMED_CHALLENGE__ || null;
     }
     function getLastTimedChallengeStatus() {
       return window.__BC_LAST_TIMED_CHALLENGE_STATUS__ || null;
@@ -556,9 +565,25 @@
     }
     function getTimedChallengeRailViewModel() {
       const active = getActiveTimedChallenge?.() || null;
+      const pending = getPendingTimedChallenge?.() || null;
       const status = getLastTimedChallengeStatus?.() || null;
 
       if (!active) {
+        if (pending) {
+          const rewardPoints = Number(pending?.rewardPoints || pending?.reward_points || 0) || 0;
+          const copy = getTimedChallengeCopy(pending);
+          return {
+            state: "pending",
+            title: `${copy.label} (Queued)`,
+            body: "This timed challenge will begin after encounter 1.",
+            error: "",
+            timerText: "",
+            cueText: copy.cue,
+            nextText: "Complete encounter 1 to activate this challenge.",
+            rewardText: rewardPoints > 0 ? `Reward: ${rewardPoints} pts` : "",
+          };
+        }
+
         if (status?.ok === false) {
           return {
             state: "error",
@@ -1451,6 +1476,7 @@
     function getRailQuickActionsViewModel() {
       const action = getRailPrimaryDrillAction?.() || { kind: "start_generic" };
       const activeChallenge = getActiveTimedChallenge?.() || null;
+      const pendingChallenge = getPendingTimedChallenge?.() || null;
 
       let primaryLabel = "Start 5-Min Drill";
       if (action.kind === "start_assigned") {
@@ -1462,12 +1488,14 @@
       }
 
       let helperText = "";
-      if ((action.kind === "start_assigned" || action.kind === "resume_assigned") && activeChallenge) {
+      if ((action.kind === "start_assigned" || action.kind === "resume_assigned") && (activeChallenge || pendingChallenge)) {
         helperText = "You have both a current objective and a practice focus active.";
       } else if (action.kind === "start_assigned" || action.kind === "resume_assigned") {
         helperText = "You have a practice focus ready.";
       } else if (activeChallenge) {
         helperText = "You have a current objective active right now.";
+      } else if (pendingChallenge) {
+        helperText = "You have a timed objective queued for after encounter 1.";
       } else if (action.kind === "resume_runtime") {
         helperText = "You have a practice run in progress.";
       }
@@ -1512,6 +1540,46 @@
       const host = getTimedChallengeHost();
       try { host.renderHudTimedChallenge?.(); } catch {}
       try { host.renderManagerBoardOverviewTimedChallenge?.(); } catch {}
+    }
+    function startTimedChallenge(challenge) {
+      if (!challenge) return false;
+
+      setPendingTimedChallengeState(null);
+      setActiveTimedChallengeState(challenge);
+      window.__BC_LAST_TIMED_CHALLENGE_STATUS__ = {
+        ok: null,
+        error: null,
+        expired: false,
+        status: "active",
+        at: Date.now(),
+      };
+
+      console.log("[TIMED CHALLENGE] applied ✅", challenge);
+      renderTimedChallengeSurfaces();
+      refreshWaiterRuntimeSurfaces?.();
+      window.showToast?.("Timed manager challenge started ✅");
+      return true;
+    }
+    function maybeActivatePendingTimedChallenge(encounter = null) {
+      const pending = getPendingTimedChallenge?.() || null;
+      if (!pending) return false;
+      if (getActiveTimedChallenge?.()) return false;
+
+      const placement = String(pending?.placement || pending?.payload?.placement || "before_start");
+      if (placement !== "after_first_encounter") {
+        return startTimedChallenge(pending);
+      }
+
+      const encounterNumber = Number(encounter?.encounterNumber ?? encounter?.encounter ?? 0);
+      if (encounterNumber !== 1) return false;
+
+      const startedAt = Date.now();
+      return startTimedChallenge({
+        ...pending,
+        startedAt,
+        expiresAt: startedAt + Number(pending.durationSec || 0) * 1000,
+        status: "active",
+      });
     }
     function logTimedChallengeResult(result = {}) {
       try {
@@ -1744,6 +1812,7 @@
         const targetUserId = payload?.targetUserId || null;
         const restaurantId = payload?.restaurantId || null;
         const durationSec = Number(payload?.durationSec || 0);
+        const placement = String(payload?.placement || "before_start");
 
         const ctx = window.__BC_CTX__ || {};
         const currentUserId = ctx.userId || null;
@@ -1781,6 +1850,7 @@
           startedAt,
           expiresAt: startedAt + durationSec * 1000,
           durationSec,
+          placement,
           focus: payload?.focus || null,
           rewardPoints: Number(payload?.rewardPoints || 0),
           successRule: payload?.successRule || {},
@@ -1788,19 +1858,27 @@
           payload,
         };
 
-        setActiveTimedChallengeState(challenge);
-        window.__BC_LAST_TIMED_CHALLENGE_STATUS__ = {
-          ok: null,
-          error: null,
-          expired: false,
-          status: "active",
-          at: Date.now(),
-        };
+        if (placement === "after_first_encounter" && Number(window.encounterIndex || 0) < 1) {
+          setPendingTimedChallengeState({
+            ...challenge,
+            status: "pending",
+          });
+          window.__BC_LAST_TIMED_CHALLENGE_STATUS__ = {
+            ok: null,
+            error: null,
+            expired: false,
+            status: "pending",
+            at: Date.now(),
+          };
 
-        console.log("[TIMED CHALLENGE] applied ✅", challenge);
-        renderTimedChallengeSurfaces();
-        refreshWaiterRuntimeSurfaces?.();
-        window.showToast?.("Timed manager challenge started ✅");
+          console.log("[TIMED CHALLENGE] queued for after encounter 1 ✅", challenge);
+          renderTimedChallengeSurfaces();
+          refreshWaiterRuntimeSurfaces?.();
+          window.showToast?.("Timed manager challenge queued for encounter 2 ✅");
+          return true;
+        }
+
+        startTimedChallenge(challenge);
 
         return true;
       } catch (e) {
@@ -16814,6 +16892,7 @@ function ensureProgLoaded() {
 
         if (completionState.done.done) {
           maybeAutoSendProgressReport(currentEncounter);
+          maybeActivatePendingTimedChallenge(currentEncounter);
           renderSessionComplete(stepContent, {
             reason: completionState.done.reason,
             tier: completionState.tierNow,
@@ -16845,6 +16924,7 @@ function ensureProgLoaded() {
           modeBestResolved
         });
         maybeAutoSendProgressReport(currentEncounter);
+        maybeActivatePendingTimedChallenge(currentEncounter);
         renderReflectionOverview(stepContent, currentEncounter, checks, modeBestResolved);
 
         const scored = scoreEncounterForGuard(currentEncounter, checks);
