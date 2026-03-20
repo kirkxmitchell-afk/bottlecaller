@@ -9065,7 +9065,8 @@ function renderManagerPerformanceTable(users = []) {
           <div class="mb-user-detail-left">
             <div class="mb-user-detail-chart-card">
               <div class="small-text" style="margin-bottom:8px;">Current Skill Shape</div>
-              <canvas id="mbUserSkillPie_${escapeHtml(user.userId)}" class="mb-user-skill-pie" width="220" height="220"></canvas>
+              <canvas id="mbUserSkillPie_${escapeHtml(user.userId)}" class="mb-user-skill-pie" width="240" height="240"></canvas>
+              <div id="mbUserSkillLegend_${escapeHtml(user.userId)}" style="margin-top:12px;"></div>
             </div>
           </div>
           <div class="mb-user-detail-right">
@@ -9131,12 +9132,19 @@ async function togglePerformanceUserDetail(userId, usersById = {}) {
 
   const user = usersById?.[userId];
   const canvas = document.getElementById(`mbUserSkillPie_${userId}`);
+  const legend = document.getElementById(`mbUserSkillLegend_${userId}`);
   if (canvas && user && !canvas.__drawn) {
     drawUserSkillPieChart(canvas, user.skillShape, {
       centerTop: `T${user.eligibilityTier || 1}`,
       centerBottom: `${Math.round(Number(user.readiness || 0) * 100)}%`,
     });
     canvas.__drawn = true;
+  }
+  if (legend && user) {
+    renderUserSkillShapeLegend(legend, user.skillShape, {
+      strongestSkill: user.strongestSkill,
+      weakestSkill: user.weakestSkill,
+    });
   }
 }
 
@@ -9159,7 +9167,7 @@ function drawUserSkillPieChart(canvas, skillShape, options = {}) {
   const height = canvas.height;
   const cx = width / 2;
   const cy = height / 2;
-  const radius = Math.min(width, height) * 0.32;
+  const radius = Math.min(width, height) * 0.28;
 
   ctx.clearRect(0, 0, width, height);
   ctx.lineWidth = 26;
@@ -9186,14 +9194,6 @@ function drawUserSkillPieChart(canvas, skillShape, options = {}) {
     ctx.strokeStyle = slice.color;
     ctx.arc(cx, cy, radius, angle, nextAngle);
     ctx.stroke();
-
-    const mid = angle + ((nextAngle - angle) / 2);
-    const lx = cx + Math.cos(mid) * (radius + 28);
-    const ly = cy + Math.sin(mid) * (radius + 28);
-    ctx.fillStyle = "rgba(255,255,255,0.82)";
-    ctx.font = "10px sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText(slice.label, lx, ly);
     angle = nextAngle;
   });
 
@@ -9208,6 +9208,33 @@ function drawUserSkillPieChart(canvas, skillShape, options = {}) {
   ctx.fillText(String(options.centerTop || ""), cx, cy - 4);
   ctx.font = "12px sans-serif";
   ctx.fillText(String(options.centerBottom || ""), cx, cy + 16);
+}
+
+function renderUserSkillShapeLegend(root, skillShape = {}, options = {}) {
+  if (!root) return;
+
+  const strongest = String(options?.strongestSkill || "").toUpperCase();
+  const weakest = String(options?.weakestSkill || "").toUpperCase();
+
+  root.innerHTML = `
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      ${MANAGER_PERFORMANCE_SKILLS.map((skill) => {
+        const value = Math.max(0, Number(skillShape?.[skill.key] || 0));
+        const isStrongest = strongest && strongest === String(skill.label || "").toUpperCase();
+        const isWeakest = weakest && weakest === String(skill.label || "").toUpperCase();
+        const note = isStrongest ? "Strongest" : isWeakest ? "Weakest" : "";
+
+        return `
+          <div style="display:grid; grid-template-columns:auto 1fr auto auto; gap:8px; align-items:center;">
+            <span style="width:10px; height:10px; border-radius:999px; background:${escapeHtml(skill.color)};"></span>
+            <span class="small-text" style="opacity:.92;">${escapeHtml(skill.label)}</span>
+            <span class="small-text" style="opacity:.82;">${escapeHtml(String(value))}%</span>
+            <span class="small-text" style="opacity:.7; min-width:56px; text-align:right;">${escapeHtml(note)}</span>
+          </div>
+        `;
+      }).join("")}
+    </div>
+  `;
 }
 
 function renderPerformanceHistorySummaryStrip(userId) {
