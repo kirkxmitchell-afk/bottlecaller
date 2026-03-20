@@ -570,9 +570,14 @@ document.querySelector("#app").innerHTML = `
                 </select>
 
                 <select id="mbTimedChallengeDuration">
-                  <option value="300">5 min</option>
-                  <option value="600" selected>10 min</option>
-                  <option value="900">15 min</option>
+                  <option value="60">1 min</option>
+                  <option value="180">3 min</option>
+                  <option value="300" selected>5 min</option>
+                </select>
+
+                <select id="mbTimedChallengePlacement">
+                  <option value="before_start" selected>Before encounter 1</option>
+                  <option value="after_first_encounter">After encounter 1</option>
                 </select>
 
                 <input
@@ -13547,7 +13552,7 @@ function getTimedChallengeComposerValues(source = "messenger") {
         type: "mbTimedChallengeType",
         duration: "mbTimedChallengeDuration",
         reward: "mbTimedChallengeReward",
-        placement: null,
+        placement: "mbTimedChallengePlacement",
       };
 
   const targetEl = document.getElementById(ids.target);

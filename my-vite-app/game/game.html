@@ -39,13 +39,15 @@
       if (!enc || typeof enc !== "object") return 0;
 
       const s1ok =
-        Array.isArray(enc?.deliverOptionsS1) &&
+        enc?.deliverOptionsS1 &&
+        typeof enc.deliverOptionsS1 === "object" &&
         enc?.correctSlotS1 != null &&
         enc?.selectedS1 != null &&
         String(enc.selectedS1) === String(enc.correctSlotS1);
 
       const s2ok =
-        Array.isArray(enc?.deliverOptionsS2) &&
+        enc?.deliverOptionsS2 &&
+        typeof enc.deliverOptionsS2 === "object" &&
         enc?.correctSlotS2 != null &&
         enc?.selectedS2 != null &&
         String(enc.selectedS2) === String(enc.correctSlotS2);
@@ -12157,6 +12159,143 @@ function ensureProgLoaded() {
         return merged;
       }
 
+      function getDeliveryContextTokens(encounter, kind = "emotional") {
+        const guest = normalizeGuestType(encounter?.guestStateActual);
+        const mode = encounter?.modeSelected || "";
+        const hook = getSelectedHookType(encounter) || encounter?.hookSelected || "";
+        const pressureProfile = getDeliveryDistractorProfile(encounter);
+        const wine = encounter?.wineSelected || {};
+
+        const liked = new Set();
+        const risky = new Set();
+
+        if (kind === "emotional") {
+          if (mode === MODES.AUTH) {
+            ["fastest", "quick", "clear", "confident", "strong", "direction", "call"].forEach((t) => liked.add(t));
+            ["depends", "several", "couple", "open", "broad", "later"].forEach((t) => risky.add(t));
+          } else if (mode === MODES.GUIDE) {
+            ["match", "aligned", "fit", "taste", "style", "vibe", "intentional"].forEach((t) => liked.add(t));
+            ["gamble", "expensive", "stuck", "everything"].forEach((t) => risky.add(t));
+          } else {
+            ["calm", "gentle", "safe", "easy", "simple", "low", "pressure"].forEach((t) => liked.add(t));
+            ["push", "clearly", "trust", "just"].forEach((t) => risky.add(t));
+          }
+
+          if (guest === window.GUEST.DECIDER) {
+            ["direct", "decisive", "clear", "confident"].forEach((t) => liked.add(t));
+            ["several", "couple", "open", "depends"].forEach((t) => risky.add(t));
+          } else if (guest === window.GUEST.GRIEVER) {
+            ["gentle", "soft", "patient", "easy"].forEach((t) => liked.add(t));
+            ["quickly", "trust", "clearly", "should"].forEach((t) => risky.add(t));
+          } else if (guest === window.GUEST.CELEBRATOR) {
+            ["upbeat", "playful", "energy"].forEach((t) => liked.add(t));
+          }
+        } else {
+          if (hook === "FLAVOUR") {
+            ["fruit", "line", "texture", "finish"].forEach((t) => liked.add(t));
+            ["process", "oak", "story", "random"].forEach((t) => risky.add(t));
+          } else if (hook === "VALUE") {
+            ["process", "oak", "finish", "shows"].forEach((t) => liked.add(t));
+            ["random", "gamble", "later", "loud"].forEach((t) => risky.add(t));
+          } else {
+            ["story", "made", "approach", "quiet", "thoughtful"].forEach((t) => liked.add(t));
+            ["dominate", "random", "complicated"].forEach((t) => risky.add(t));
+          }
+
+          const storyTokens = tokenizeWords(wine.story || "");
+          storyTokens.slice(0, 4).forEach((t) => liked.add(t));
+          tokenizeWords(describeFruitAbstract(wine)).forEach((t) => liked.add(t));
+          tokenizeWords(describeTexture(wine)).forEach((t) => liked.add(t));
+          tokenizeWords(getValueCue(wine)).forEach((t) => liked.add(t));
+        }
+
+        if (pressureProfile === "pushy") {
+          ["trust", "clearly", "obviously", "best"].forEach((t) => risky.add(t));
+        } else if (pressureProfile === "vague") {
+          ["general", "kind", "could", "maybe", "overall"].forEach((t) => risky.add(t));
+        } else if (pressureProfile === "rushed") {
+          ["quickly", "move", "efficient", "job"].forEach((t) => risky.add(t));
+        } else if (pressureProfile === "romantic") {
+          ["beautiful", "lovely", "atmosphere", "feels"].forEach((t) => risky.add(t));
+        }
+
+        return { liked, risky };
+      }
+
+      function scoreDeliveryLineSensitivity(line, encounter, kind = "emotional") {
+        const tokens = tokenizeWords(line);
+        const { liked, risky } = getDeliveryContextTokens(encounter, kind);
+        let score = 0;
+
+        tokens.forEach((token) => {
+          if (liked.has(token)) score += 2;
+          if (risky.has(token)) score -= 2;
+        });
+
+        if (kind === "structural") {
+          if (tokens.includes("random")) score -= 3;
+          if (tokens.includes("story") && (getSelectedHookType(encounter) || encounter?.hookSelected || "") !== "STORY") {
+            score -= 2;
+          }
+        }
+
+        return score;
+      }
+
+      function pickSensitiveDeliveryLines(wrongs, correct, encounter, kind, noise, memoryKey = "", count = 2) {
+        const unique = dedupeStringPool(Array.isArray(wrongs) ? wrongs : [])
+          .filter((line) => canonicalDeliveryLine(line) !== canonicalDeliveryLine(correct));
+
+        if (!unique.length) return [];
+
+        const scored = unique.map((line) => {
+          const overlap = wordOverlapScore(line, correct);
+          const sensitivity = scoreDeliveryLineSensitivity(line, encounter, kind);
+          let difficultyDistance = 0;
+
+          if (noise <= 0) {
+            difficultyDistance = Math.abs(overlap - 1) + Math.max(0, sensitivity);
+          } else if (noise === 1) {
+            difficultyDistance = Math.abs(overlap - 2) + Math.abs(sensitivity - 1);
+          } else {
+            difficultyDistance = Math.abs(overlap - 3) + Math.abs(sensitivity - 2);
+          }
+
+          return { line, overlap, sensitivity, difficultyDistance };
+        });
+
+        scored.sort((a, b) => {
+          if (a.difficultyDistance !== b.difficultyDistance) return a.difficultyDistance - b.difficultyDistance;
+          if (noise >= 2 && a.sensitivity !== b.sensitivity) return b.sensitivity - a.sensitivity;
+          if (a.overlap !== b.overlap) return b.overlap - a.overlap;
+          return seededHash(`${memoryKey}::${a.line}`) - seededHash(`${memoryKey}::${b.line}`);
+        });
+
+        const recent = memoryKey ? getEncounterRecentBucket(memoryKey) : [];
+        const chosen = [];
+        const used = new Set();
+
+        function consider(pool) {
+          for (const item of pool) {
+            const key = canonicalDeliveryLine(item.line);
+            if (!key || used.has(key)) continue;
+            used.add(key);
+            chosen.push(item.line);
+            if (chosen.length >= count) return true;
+          }
+          return false;
+        }
+
+        const freshPool = scored.filter((item) => !recent.includes(canonicalDeliveryLine(item.line)));
+        if (!consider(freshPool)) consider(scored);
+
+        chosen.forEach((line) => {
+          if (memoryKey) rememberEncounterRecentValue(memoryKey, canonicalDeliveryLine(line), 10);
+        });
+
+        return chosen;
+      }
+
       function getSlots(n) {
         return n === 3 ? ["A", "B", "C"] : ["A", "B"];
       }
@@ -12316,15 +12455,31 @@ function ensureProgLoaded() {
         const wrongs1Base = buildSentence1Wrong(encounter);
         const wrongs1Pressure = buildSentence1WrongByPressure(encounter);
         const wrongs1Raw = mergeWeightedWrongPools(wrongs1Base, wrongs1Pressure, 2);
-        const wrong1MemoryKey = `delivery_wrong_s1::${normalizeGuestType(encounter?.guestStateActual)}::${getDeliveryDistractorProfile(encounter)}`;
-        const [wrong1aRaw, wrong1bRaw] = pickWrongLinesWithMemory(wrongs1Raw, correct1Raw, noise, wrong1MemoryKey, 2);
+        const wrong1MemoryKey = `delivery_wrong_s1::${normalizeGuestType(encounter?.guestStateActual)}::${encounter?.modeSelected || "default"}::${getDeliveryDistractorProfile(encounter)}`;
+        const [wrong1aRaw, wrong1bRaw] = pickSensitiveDeliveryLines(
+          wrongs1Raw,
+          correct1Raw,
+          encounter,
+          "emotional",
+          noise,
+          wrong1MemoryKey,
+          2
+        );
 
         const correct2Raw = buildSentence2Correct(encounter);
         const wrongs2Base = buildSentence2Wrong();
         const wrongs2Pressure = buildSentence2WrongByPressure(encounter);
         const wrongs2Raw = mergeWeightedWrongPools(wrongs2Base, wrongs2Pressure, 2);
         const wrong2MemoryKey = `delivery_wrong_s2::${getSelectedHookType(encounter) || "default"}::${getDeliveryDistractorProfile(encounter)}`;
-        const [wrong2aRaw, wrong2bRaw] = pickWrongLinesWithMemory(wrongs2Raw, correct2Raw, noise, wrong2MemoryKey, 2);
+        const [wrong2aRaw, wrong2bRaw] = pickSensitiveDeliveryLines(
+          wrongs2Raw,
+          correct2Raw,
+          encounter,
+          "structural",
+          noise,
+          wrong2MemoryKey,
+          2
+        );
 
         const correct1 = stylizeDeliveryLine(correct1Raw, "emotional", encounter);
         const wrongs1 = wrongs1Raw.map((line) => stylizeDeliveryLine(line, "emotional", encounter));
@@ -16188,6 +16343,34 @@ function ensureProgLoaded() {
       }
 
       function renderStepDelivery(stepContent, stepButtons) {
+        function renderDeliverySelectionPreview() {
+          const preview = document.createElement("div");
+          preview.className = "card";
+          preview.style.marginTop = "14px";
+          preview.style.padding = "12px";
+
+          const line1 = String(currentEncounter.deliveryLine1 || "").trim();
+          const line2 = String(currentEncounter.deliveryLine2 || "").trim();
+          const hasAny = !!line1 || !!line2;
+
+          preview.innerHTML = `
+            <div class="small-text" style="opacity:.72; margin-bottom:8px;">Current delivery</div>
+            <div style="display:flex; flex-direction:column; gap:8px;">
+              <div class="small-text" style="opacity:${line1 ? ".96" : ".58"};">
+                <strong>Line 1:</strong> ${escapeHtml(line1 || "Choose the emotional-fit sentence.")}
+              </div>
+              <div class="small-text" style="opacity:${line2 ? ".96" : ".58"};">
+                <strong>Line 2:</strong> ${escapeHtml(line2 || "Choose the recommendation sentence.")}
+              </div>
+            </div>
+            <div class="small-text" style="margin-top:10px; opacity:.7;">
+              ${hasAny ? "Tap a selected option again to change your phrasing." : "Build the full two-sentence recommendation before you say it."}
+            </div>
+          `;
+
+          stepContent.appendChild(preview);
+        }
+
         const topRow = document.createElement("div");
         topRow.className = "history-row encounter-top-row";
 
@@ -16225,13 +16408,22 @@ function ensureProgLoaded() {
           const btn = document.createElement("button");
           btn.type = "button";
           btn.className = "option-btn" + (String(currentEncounter.selectedS1) === String(slot) ? " selected" : "");
-          btn.innerText = slot + ": " + currentEncounter.deliverOptionsS1[slot];
+          btn.innerHTML = `
+            <div class="option-title">Option ${escapeHtml(String(slot))}</div>
+            <div class="option-preview">${escapeHtml(currentEncounter.deliverOptionsS1[slot])}</div>
+          `;
           btn.dataset.bc = "deliver_s1";
           btn.dataset.slot = String(slot);
           bindInput(btn, () => {
-            currentEncounter.selectedS1 = slot;
-            currentEncounter.deliveryLine1 = currentEncounter.deliverOptionsS1[slot];
-            currentEncounter.deliveryLine1Key = canonicalDeliveryLine(currentEncounter.deliverOptionsS1[slot]);
+            if (String(currentEncounter.selectedS1) === String(slot)) {
+              currentEncounter.selectedS1 = null;
+              currentEncounter.deliveryLine1 = "";
+              currentEncounter.deliveryLine1Key = "";
+            } else {
+              currentEncounter.selectedS1 = slot;
+              currentEncounter.deliveryLine1 = currentEncounter.deliverOptionsS1[slot];
+              currentEncounter.deliveryLine1Key = canonicalDeliveryLine(currentEncounter.deliverOptionsS1[slot]);
+            }
             console.log("[STEP4] S1 handler ran ✅", slot);
             renderEncounterStep();
           });
@@ -16250,19 +16442,30 @@ function ensureProgLoaded() {
           const btn = document.createElement("button");
           btn.type = "button";
           btn.className = "option-btn" + (String(currentEncounter.selectedS2) === String(slot) ? " selected" : "");
-          btn.innerText = slot + ": " + currentEncounter.deliverOptionsS2[slot];
+          btn.innerHTML = `
+            <div class="option-title">Option ${escapeHtml(String(slot))}</div>
+            <div class="option-preview">${escapeHtml(currentEncounter.deliverOptionsS2[slot])}</div>
+          `;
           btn.dataset.bc = "deliver_s2";
           btn.dataset.slot = String(slot);
           bindInput(btn, () => {
-            currentEncounter.selectedS2 = slot;
-            currentEncounter.deliveryLine2 = currentEncounter.deliverOptionsS2[slot];
-            currentEncounter.deliveryLine2Key = canonicalDeliveryLine(currentEncounter.deliverOptionsS2[slot]);
+            if (String(currentEncounter.selectedS2) === String(slot)) {
+              currentEncounter.selectedS2 = null;
+              currentEncounter.deliveryLine2 = "";
+              currentEncounter.deliveryLine2Key = "";
+            } else {
+              currentEncounter.selectedS2 = slot;
+              currentEncounter.deliveryLine2 = currentEncounter.deliverOptionsS2[slot];
+              currentEncounter.deliveryLine2Key = canonicalDeliveryLine(currentEncounter.deliverOptionsS2[slot]);
+            }
             console.log("[STEP4] S2 handler ran ✅", slot);
             renderEncounterStep();
           });
           line2Options.appendChild(btn);
         });
         stepContent.appendChild(line2Options);
+
+        renderDeliverySelectionPreview();
 
         const sayBtn = addStepButton("SAY IT", () => { currentStep = 5; renderEncounterStep(); }, stepButtons);
         const ready =
