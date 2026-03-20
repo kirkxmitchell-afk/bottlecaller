@@ -16404,7 +16404,9 @@ function ensureProgLoaded() {
 
         const line1Options = document.createElement("div");
         line1Options.className = "option-grid";
-        Object.keys(currentEncounter.deliverOptionsS1 || {}).forEach(slot => {
+        Object.keys(currentEncounter.deliverOptionsS1 || {})
+          .sort((a, b) => String(a).localeCompare(String(b)))
+          .forEach(slot => {
           const btn = document.createElement("button");
           btn.type = "button";
           btn.className = "option-btn" + (String(currentEncounter.selectedS1) === String(slot) ? " selected" : "");
@@ -16428,7 +16430,7 @@ function ensureProgLoaded() {
             renderEncounterStep();
           });
           line1Options.appendChild(btn);
-        });
+          });
         stepContent.appendChild(line1Options);
 
         const line2Title = document.createElement("p");
@@ -16438,7 +16440,9 @@ function ensureProgLoaded() {
 
         const line2Options = document.createElement("div");
         line2Options.className = "option-grid";
-        Object.keys(currentEncounter.deliverOptionsS2 || {}).forEach(slot => {
+        Object.keys(currentEncounter.deliverOptionsS2 || {})
+          .sort((a, b) => String(a).localeCompare(String(b)))
+          .forEach(slot => {
           const btn = document.createElement("button");
           btn.type = "button";
           btn.className = "option-btn" + (String(currentEncounter.selectedS2) === String(slot) ? " selected" : "");
@@ -16462,7 +16466,7 @@ function ensureProgLoaded() {
             renderEncounterStep();
           });
           line2Options.appendChild(btn);
-        });
+          });
         stepContent.appendChild(line2Options);
 
         renderDeliverySelectionPreview();
