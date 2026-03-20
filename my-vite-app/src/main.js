@@ -511,6 +511,16 @@ document.querySelector("#app").innerHTML = `
                 <strong>Members</strong>
                 <button id="mbRefreshMembers" class="btn" type="button">Refresh</button>
               </div>
+              <div style="display:flex; gap:8px; margin-top:10px; align-items:center;">
+                <input
+                  id="mbPeopleSearch"
+                  class="input"
+                  type="search"
+                  placeholder="Search people by name, role, or user id"
+                  style="width:100%;"
+                />
+                <button id="mbPeopleSearchClear" class="btn-ghost" type="button" title="Clear people search">Clear</button>
+              </div>
               <div id="mbMembersMsg" class="small-text" style="margin-top:6px;"></div>
               <div id="mbMembersList" style="margin-top:10px; display:flex; flex-direction:column; gap:8px;"></div>
             </div>
@@ -591,8 +601,21 @@ document.querySelector("#app").innerHTML = `
 
             <div style="display:grid; grid-template-columns: 280px 1fr; gap:12px; margin-top:12px;">
               <div style="border:1px solid rgba(255,255,255,0.10); border-radius:12px; overflow:hidden;">
-                <div style="padding:10px; border-bottom:1px solid rgba(255,255,255,0.10); font-weight:600;">
+              <div style="padding:10px; border-bottom:1px solid rgba(255,255,255,0.10); font-weight:600;">
                   Staff Threads
+                </div>
+
+                <div style="padding:10px; border-bottom:1px solid rgba(255,255,255,0.10);">
+                  <div style="display:flex; gap:8px; align-items:center;">
+                    <input
+                      id="mbMessengerSearch"
+                      class="input"
+                      type="search"
+                      placeholder="Search threads by person, message, or type"
+                      style="width:100%;"
+                    />
+                    <button id="mbMessengerSearchClear" class="btn-ghost" type="button" title="Clear thread search">Clear</button>
+                  </div>
                 </div>
 
                 <div id="mbThreadList" style="display:flex; flex-direction:column; gap:0;"></div>
@@ -10200,9 +10223,12 @@ function mbEl(id) {
   return document.getElementById(id);
 }
 window.__BC_MB_THREADS__ = [];
+window.__BC_MB_THREADS_ALL__ = [];
 window.__BC_MB_ACTIVE_THREAD_USER_ID__ = null;
 window.__BC_MB_ACTIVE_THREAD_ROWS__ = [];
 window.__MB_LAST_MESSAGES__ = [];
+window.__BC_MB_PEOPLE_SEARCH__ = "";
+window.__BC_MB_MESSENGER_SEARCH__ = "";
 
 function setActiveManagerThreadState({ userId = "", rows = [] } = {}) {
   window.__BC_MB_ACTIVE_THREAD_USER_ID__ = String(userId || "");
@@ -10215,6 +10241,154 @@ function setActiveManagerThreadState({ userId = "", rows = [] } = {}) {
       appState?.profile?.restaurant_id ||
       null,
   });
+}
+
+function normalizeManagerBoardSearchTerm(value = "") {
+  return String(value || "").trim().toLowerCase();
+}
+
+function getManagerPeopleSearchTerm() {
+  return normalizeManagerBoardSearchTerm(
+    window.__BC_MB_PEOPLE_SEARCH__ || document.getElementById("mbPeopleSearch")?.value || ""
+  );
+}
+
+function getManagerMessengerSearchTerm() {
+  return normalizeManagerBoardSearchTerm(
+    window.__BC_MB_MESSENGER_SEARCH__ || document.getElementById("mbMessengerSearch")?.value || ""
+  );
+}
+
+function filterManagerStaffRows(rows = [], searchTerm = "") {
+  const term = normalizeManagerBoardSearchTerm(searchTerm);
+  if (!term) return Array.isArray(rows) ? rows : [];
+
+  return (Array.isArray(rows) ? rows : []).filter((row) => {
+    const haystack = [
+      row?.display_name,
+      row?.user_id,
+      row?.role,
+      getDisplayRoleLabel(row?.role),
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    return haystack.includes(term);
+  });
+}
+
+function filterManagerThreads(threads = [], nameMap = {}, searchTerm = "") {
+  const term = normalizeManagerBoardSearchTerm(searchTerm);
+  if (!term) return Array.isArray(threads) ? threads : [];
+
+  return (Array.isArray(threads) ? threads : []).filter((thread) => {
+    const label = String(thread?.title || userLabel(thread?.userId, nameMap) || "");
+    const preview = String(thread?.latestBody || "");
+    const type = String(thread?.latestType || "");
+    const userId = String(thread?.userId || "");
+    const haystack = `${label} ${preview} ${type} ${userId}`.toLowerCase();
+    return haystack.includes(term);
+  });
+}
+
+function renderManagerThreadList(threads = [], nameMap = {}) {
+  const listEl = mbEl("mbThreadList");
+  const emptyEl = mbEl("mbThreadEmpty");
+  if (!listEl || !emptyEl) return;
+
+  const filtered = filterManagerThreads(threads, nameMap, getManagerMessengerSearchTerm());
+  window.__BC_MB_THREADS__ = filtered;
+
+  listEl.innerHTML = filtered.map((t) => renderManagerThreadListItem(t, nameMap)).join("");
+  emptyEl.style.display = filtered.length ? "none" : "block";
+  emptyEl.textContent = getManagerMessengerSearchTerm()
+    ? "No threads match your search."
+    : "No waiter threads yet.";
+
+  if (!filtered.length) {
+    setActiveManagerThreadState({ userId: "", rows: [] });
+    safeCall("renderManagerActiveThread", () => renderManagerActiveThread(nameMap));
+    return;
+  }
+
+  const activeUserId = String(window.__BC_MB_ACTIVE_THREAD_USER_ID__ || "");
+  const stillVisible = filtered.some((thread) => String(thread?.userId || "") === activeUserId);
+  if (!stillVisible) {
+    setActiveManagerThreadState({
+      userId: filtered[0]?.userId || "",
+      rows: filtered[0]?.rows || [],
+    });
+  }
+}
+
+function wireManagerBoardSearches() {
+  const peopleSearch = mbEl("mbPeopleSearch");
+  const peopleClear = mbEl("mbPeopleSearchClear");
+  if (peopleSearch && !peopleSearch.__wired) {
+    peopleSearch.__wired = true;
+    peopleSearch.addEventListener("input", () => {
+      window.__BC_MB_PEOPLE_SEARCH__ = String(peopleSearch.value || "");
+      loadManagerBoardMembers().catch(console.error);
+    });
+    peopleSearch.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape") return;
+      if (!peopleSearch.value) return;
+      event.preventDefault();
+      peopleSearch.value = "";
+      window.__BC_MB_PEOPLE_SEARCH__ = "";
+      loadManagerBoardMembers().catch(console.error);
+    });
+  }
+  if (peopleClear && !peopleClear.__wired) {
+    peopleClear.__wired = true;
+    peopleClear.addEventListener("click", () => {
+      if (peopleSearch) peopleSearch.value = "";
+      window.__BC_MB_PEOPLE_SEARCH__ = "";
+      loadManagerBoardMembers().catch(console.error);
+      peopleSearch?.focus();
+    });
+  }
+
+  const messengerSearch = mbEl("mbMessengerSearch");
+  const messengerClear = mbEl("mbMessengerSearchClear");
+  if (messengerSearch && !messengerSearch.__wired) {
+    messengerSearch.__wired = true;
+    const runMessengerFilter = async () => {
+      window.__BC_MB_MESSENGER_SEARCH__ = String(messengerSearch.value || "");
+      const threads = Array.isArray(window.__BC_MB_THREADS_ALL__) ? window.__BC_MB_THREADS_ALL__ : [];
+      const nameMap = await mapUserIdsToNames(threads.map((thread) => thread.userId));
+      renderManagerThreadList(threads, nameMap);
+      safeCall("renderManagerActiveThread", () => renderManagerActiveThread(nameMap));
+      renderTimedChallengeComposer();
+    };
+    messengerSearch.addEventListener("input", () => {
+      runMessengerFilter().catch(console.error);
+    });
+    messengerSearch.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape") return;
+      if (!messengerSearch.value) return;
+      event.preventDefault();
+      messengerSearch.value = "";
+      runMessengerFilter().catch(console.error);
+    });
+  }
+  if (messengerClear && !messengerClear.__wired) {
+    messengerClear.__wired = true;
+    messengerClear.addEventListener("click", () => {
+      if (messengerSearch) messengerSearch.value = "";
+      window.__BC_MB_MESSENGER_SEARCH__ = "";
+      const threads = Array.isArray(window.__BC_MB_THREADS_ALL__) ? window.__BC_MB_THREADS_ALL__ : [];
+      mapUserIdsToNames(threads.map((thread) => thread.userId))
+        .then((nameMap) => {
+          renderManagerThreadList(threads, nameMap);
+          safeCall("renderManagerActiveThread", () => renderManagerActiveThread(nameMap));
+          renderTimedChallengeComposer();
+          messengerSearch?.focus();
+        })
+        .catch(console.error);
+    });
+  }
 }
 
 function isRecentTransientTimestamp(ts, maxAgeMs = 1000 * 60 * 20) {
@@ -13213,6 +13387,7 @@ async function loadManagerMessenger(restaurantId = null) {
   const threads = Array.from(grouped.values())
     .sort((a, b) => new Date(b.latestAt) - new Date(a.latestAt));
 
+  window.__BC_MB_THREADS_ALL__ = Array.isArray(threads) ? threads : [];
   window.__BC_MB_THREADS__ = Array.isArray(threads) ? threads : [];
   window.__BC_MB_MESSAGES__ = Array.isArray(rows) ? rows : [];
   window.__BC_MESSENGER_ROWS__ = Array.isArray(rows) ? rows : [];
@@ -13223,12 +13398,10 @@ async function loadManagerMessenger(restaurantId = null) {
     return window.__BC_MB_THREADS__;
   }
 
-  const userIds = window.__BC_MB_THREADS__.map((t) => t.userId);
+  const userIds = window.__BC_MB_THREADS_ALL__.map((t) => t.userId);
   const nameMap = await mapUserIdsToNames(userIds);
 
-  if (listEl) {
-    listEl.innerHTML = window.__BC_MB_THREADS__.map((t) => renderManagerThreadListItem(t, nameMap)).join("");
-  }
+  renderManagerThreadList(window.__BC_MB_THREADS_ALL__, nameMap);
 
   if (!window.__BC_MB_ACTIVE_THREAD_USER_ID__ && window.__BC_MB_THREADS__[0]) {
     setActiveManagerThreadState({
@@ -14209,6 +14382,7 @@ function wireManagerDrillActionPanel() {
 }
 
 function wireManagerBoardMessenger() {
+  wireManagerBoardSearches();
   const btn = mbEl("mbMsgRefresh");
   if (btn && !btn.__wired) {
     btn.__wired = true;
@@ -14283,10 +14457,7 @@ function wireManagerBoardMessenger() {
       const ids = threads.map((t) => t.userId);
       const nameMap = await mapUserIdsToNames(ids);
 
-      const listEl = mbEl("mbThreadList");
-      if (listEl) {
-        listEl.innerHTML = threads.map((t) => renderManagerThreadListItem(t, nameMap)).join("");
-      }
+      renderManagerThreadList(window.__BC_MB_THREADS_ALL__ || threads, nameMap);
 
       safeCall("renderManagerActiveThread", () => renderManagerActiveThread(nameMap));
       safeCall("renderManagerThreadDrillSummary", () => renderManagerThreadDrillSummary?.());
@@ -14301,7 +14472,13 @@ async function loadManagerBoardMembers() {
   const rid = getManagerActiveRestaurantId() || window.appState?.profile?.restaurant_id || null;
   const box = document.getElementById("mbMembersList");
   const msg = document.getElementById("mbMembersMsg");
+  const searchInput = document.getElementById("mbPeopleSearch");
   if (!box || !msg) return;
+
+  wireManagerBoardSearches();
+  if (searchInput && searchInput.value !== String(window.__BC_MB_PEOPLE_SEARCH__ || "")) {
+    searchInput.value = String(window.__BC_MB_PEOPLE_SEARCH__ || "");
+  }
 
   box.innerHTML = "";
   msg.textContent = "";
@@ -14324,15 +14501,18 @@ async function loadManagerBoardMembers() {
     return;
   }
 
-  window.__BC_MB_STAFF_ROWS__ = data || [];
-  window.__BC_MB_WAITERS__ = (data || []).filter(
+  const staffRows = data || [];
+  const filteredStaffRows = filterManagerStaffRows(staffRows, getManagerPeopleSearchTerm());
+
+  window.__BC_MB_STAFF_ROWS__ = staffRows;
+  window.__BC_MB_WAITERS__ = staffRows.filter(
     (p) => String(p?.role || "").toLowerCase() === "waiter"
   );
   const canResetWaiterProgression = ["single_manager", "group_manager", "enterpriser"].includes(
     normalizeMembershipRole(appState?.profile || null)
   );
 
-  const rows = (data || []).map((p) => {
+  const rows = filteredStaffRows.map((p) => {
     const name = String(p?.display_name || "").trim() || "(no name)";
     const badge = getDisplayRoleLabel(p?.role);
     const isWaiter = normalizeMembershipRole(p) === "waiter";
@@ -14398,7 +14578,9 @@ async function loadManagerBoardMembers() {
       }
     });
   });
-  msg.textContent = `${(data || []).length} member(s) loaded.`;
+  msg.textContent = getManagerPeopleSearchTerm()
+    ? `${filteredStaffRows.length} of ${staffRows.length} member(s) shown.`
+    : `${staffRows.length} member(s) loaded.`;
   renderManagerPeopleSummary();
   renderTimedChallengeTargetOptions();
 }
