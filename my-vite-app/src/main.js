@@ -7475,6 +7475,41 @@ function mergeWaiterLeaderboardUsers(baseUsers = [], associatedManagers = []) {
     }));
 }
 
+async function hydrateLeaderboardDisplayNames(users = []) {
+  const out = [];
+
+  for (const user of users || []) {
+    const userId = String(user?.userId || "").trim();
+    const displayName = String(user?.displayName || "").trim();
+    const looksLikeFallback =
+      !displayName ||
+      displayName === userId ||
+      (userId && displayName === userId.slice(0, 8));
+
+    if (!userId || !looksLikeFallback) {
+      out.push(user);
+      continue;
+    }
+
+    try {
+      const profile = await loadProfile(userId);
+      const profileName = String(profile?.display_name || "").trim();
+      out.push({
+        ...user,
+        displayName: profileName || (["single_manager", "group_manager", "enterpriser"].includes(String(user?.role || "").toLowerCase()) ? "Manager" : user.displayName),
+      });
+    } catch (error) {
+      console.warn("[LEADERBOARD] row display name hydrate failed", { userId, error });
+      out.push({
+        ...user,
+        displayName: ["single_manager", "group_manager", "enterpriser"].includes(String(user?.role || "").toLowerCase()) ? "Manager" : user.displayName,
+      });
+    }
+  }
+
+  return out;
+}
+
 async function renderWaiterPerformanceLeaderboardWindow() {
   const labelEl = document.getElementById("waiterLeaderboardRestaurantLabel");
   const managerContextEl = document.getElementById("waiterLeaderboardManagerContext");
@@ -7516,7 +7551,9 @@ async function renderWaiterPerformanceLeaderboardWindow() {
       managerMap.set(String(manager.userId), manager);
     });
     const managerUsers = Array.from(managerMap.values());
-    const visibleUsers = mergeWaiterLeaderboardUsers(model?.users || [], associatedManagers || []);
+    const visibleUsers = await hydrateLeaderboardDisplayNames(
+      mergeWaiterLeaderboardUsers(model?.users || [], associatedManagers || [])
+    );
     managerContextEl.textContent = managerUsers.length
       ? `Managers linked here: ${managerUsers.map((user) => `${user.displayName} (${getDisplayRoleLabel(user.role || "waiter")})`).join(", ")}`
       : "Managers linked here are not currently ranked in this leaderboard view.";
