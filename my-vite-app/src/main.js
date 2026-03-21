@@ -7510,6 +7510,22 @@ async function loadRestaurantEnvironmentProfiles(restaurantId = null) {
   };
 
   try {
+    const rpcRes = await withTimeout(
+      supabase.rpc("bc_get_restaurant_environment_profiles_v1", {
+        p_restaurant_id: rid,
+      }),
+      12000,
+      "rpc.restaurant_environment_profiles"
+    );
+    if (!rpcRes?.error && Array.isArray(rpcRes.data) && rpcRes.data.length) {
+      rpcRes.data.forEach(addRow);
+      return Array.from(roster.values());
+    }
+  } catch (error) {
+    console.warn("[LEADERBOARD] restaurant environment rpc failed", error);
+  }
+
+  try {
     const directProfilesRes = await withTimeout(
       supabase
         .from("profiles")
