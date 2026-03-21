@@ -7925,7 +7925,9 @@ function wireManagerBoardMenu() {
     }
     if (normalized === "billing") return loadManagerBoardSeats?.();
     if (normalized === "performance") {
-      await loadManagerInsights();
+      const leaderboardOnly = !!window.__BC_WAITER_PERFORMANCE_LEADERBOARD_ONLY__;
+      await loadManagerInsights({ leaderboardOnly });
+      if (leaderboardOnly) return;
       await loadHistoryWaiters();
       const select = document.getElementById("mbHistoryUser");
       if (select && !select.__wired) {
@@ -7973,7 +7975,9 @@ function wireManagerBoardMenu() {
     }
     if (tab === "billing") await loadManagerBoardSeats?.();
     if (tab === "performance") {
-      await loadManagerInsights();
+      const leaderboardOnly = !!window.__BC_WAITER_PERFORMANCE_LEADERBOARD_ONLY__;
+      await loadManagerInsights({ leaderboardOnly });
+      if (leaderboardOnly) return;
       await loadHistoryWaiters();
 
       const select = document.getElementById("mbHistoryUser");
@@ -9056,9 +9060,10 @@ function refreshInsightsExplorer() {
   }
 }
 
-async function loadManagerInsights() {
+async function loadManagerInsights(opts = {}) {
   const root = document.getElementById("mbInsightsPanel");
   if (!root) return;
+  const leaderboardOnly = !!opts?.leaderboardOnly;
 
   root.innerHTML = `<div class="card"><div class="small-text">Loading performance…</div></div>`;
 
@@ -9068,6 +9073,7 @@ async function loadManagerInsights() {
     window.__BC_MB_SELECTION_MODEL__ = normalizeSelectionData(model);
 
     root.innerHTML = `
+      ${leaderboardOnly ? "" : `
       <div class="mb-performance-overview card">
         <div class="mb-section-header">
           <strong>Team Performance</strong>
@@ -9075,8 +9081,9 @@ async function loadManagerInsights() {
         </div>
         <div id="mbPerformanceCards" class="mb-performance-card-grid" style="margin-top:12px;"></div>
       </div>
+      `}
 
-      <div class="mb-performance-leaderboard card" style="margin-top:12px;">
+      <div class="mb-performance-leaderboard card" style="margin-top:${leaderboardOnly ? "0" : "12px"};">
         <div class="mb-section-header">
           <strong>Performance Leaderboard</strong>
           <div class="small-text">Ranked by total points with quality and readiness context.</div>
@@ -9101,6 +9108,7 @@ async function loadManagerInsights() {
         </div>
       </div>
 
+      ${leaderboardOnly ? "" : `
       <div class="mb-performance-insights card" style="margin-top:12px;">
         <div class="mb-section-header">
           <strong>Coach Notes</strong>
@@ -9108,15 +9116,22 @@ async function loadManagerInsights() {
         </div>
         <div id="mbPerformanceCoachNotes" style="margin-top:12px;"></div>
       </div>
+      `}
     `;
 
-    renderManagerPerformanceOverview(model.summary);
+    if (!leaderboardOnly) {
+      renderManagerPerformanceOverview(model.summary);
+    }
     renderManagerPerformanceTable(model.users);
-    renderManagerCoachNotes(model.notes);
+    if (!leaderboardOnly) {
+      renderManagerCoachNotes(model.notes);
+    }
     wirePerformanceRowExpansion(
       Object.fromEntries(model.users.map((user) => [user.userId, user]))
     );
-    renderPerformanceHistorySummaryStrip(document.getElementById("mbHistoryUser")?.value || model.users[0]?.userId || "");
+    if (!leaderboardOnly) {
+      renderPerformanceHistorySummaryStrip(document.getElementById("mbHistoryUser")?.value || model.users[0]?.userId || "");
+    }
   } catch (error) {
     console.error("[MB] loadManagerInsights failed", error);
     root.innerHTML = `
@@ -17094,6 +17109,7 @@ async function routePremium(reason = "manual") {
 async function routeManagerBoard(reason = "manual") {
   clearMsgs();
   closeHud();
+  window.__BC_WAITER_PERFORMANCE_LEADERBOARD_ONLY__ = false;
 
   await loadAuthedState(`routeManagerBoard:${reason}`);
 
@@ -17182,6 +17198,7 @@ async function routeProfilePerformanceLeaderboard(reason = "profile_leaderboard"
   window.__BC_MB_DEFAULTTAB__ = "performance";
 
   if (membershipRole === "waiter") {
+    window.__BC_WAITER_PERFORMANCE_LEADERBOARD_ONLY__ = true;
     closeProfilePanel();
     showScreen("screenManagerBoard");
     applyManagerBoardVisibility();
@@ -17191,6 +17208,7 @@ async function routeProfilePerformanceLeaderboard(reason = "profile_leaderboard"
     return;
   }
 
+  window.__BC_WAITER_PERFORMANCE_LEADERBOARD_ONLY__ = false;
   await routeManagerBoard(reason);
 }
 
