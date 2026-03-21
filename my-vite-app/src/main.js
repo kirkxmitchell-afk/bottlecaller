@@ -13770,22 +13770,37 @@ function renderTimedChallengeTargetOptions() {
   });
 }
 
+const TIMED_CHALLENGE_COMPOSER_IDS = Object.freeze({
+  messenger: Object.freeze({
+    target: "mbTimedChallengeTarget",
+    type: "mbTimedChallengeType",
+    duration: "mbTimedChallengeDuration",
+    reward: "mbTimedChallengeReward",
+    placement: "mbTimedChallengePlacement",
+    status: "mbTimedChallengeStatus",
+    send: "btnSendTimedChallenge",
+    meta: null,
+    recent: "mbTimedChallengeRecentSummary",
+  }),
+  live_controls: Object.freeze({
+    target: "mbLcTimedChallengeTarget",
+    type: "mbLcTimedChallengeType",
+    duration: "mbLcTimedChallengeDuration",
+    reward: "mbLcTimedChallengeReward",
+    placement: "mbLcTimedChallengePlacement",
+    status: "mbLcTimedChallengeStatus",
+    send: "mbLcTimedChallengeSend",
+    meta: "mbLcTimedChallengeMeta",
+    recent: "mbLcTimedChallengeRecentSummary",
+  }),
+});
+
+function getTimedChallengeComposerIds(source = "messenger") {
+  return TIMED_CHALLENGE_COMPOSER_IDS[source] || TIMED_CHALLENGE_COMPOSER_IDS.messenger;
+}
+
 function getTimedChallengeComposerValues(source = "messenger") {
-  const ids = source === "live_controls"
-    ? {
-        target: "mbLcTimedChallengeTarget",
-        type: "mbLcTimedChallengeType",
-        duration: "mbLcTimedChallengeDuration",
-        reward: "mbLcTimedChallengeReward",
-        placement: "mbLcTimedChallengePlacement",
-      }
-    : {
-        target: "mbTimedChallengeTarget",
-        type: "mbTimedChallengeType",
-        duration: "mbTimedChallengeDuration",
-        reward: "mbTimedChallengeReward",
-        placement: "mbTimedChallengePlacement",
-      };
+  const ids = getTimedChallengeComposerIds(source);
 
   const targetEl = document.getElementById(ids.target);
   const typeEl = document.getElementById(ids.type);
@@ -13938,6 +13953,14 @@ function buildTimedChallengePayload() {
   return buildTimedChallengePayloadFromValues(getTimedChallengeComposerValues("messenger"));
 }
 
+function formatTimedChallengeSuccessText(values = {}) {
+  const placementLabel =
+    String(values.placement || "before_start") === "after_first_encounter"
+      ? "After encounter 1"
+      : "Before encounter 1";
+  return `Challenge Sent • ${values.challengeKey ? getTimedChallengeLabel(values.challengeKey) : "Timed Challenge"} • ${Math.round(Number(values.durationSec || 0) / 60)} min • ${placementLabel} • Reward ${Number(values.rewardPoints || 0)}`;
+}
+
 function setManagerStatus(elOrId, type = "idle", text = "") {
   const el = typeof elOrId === "string" ? document.getElementById(elOrId) : elOrId;
   if (!el) return;
@@ -14081,10 +14104,16 @@ async function sendTimedChallengeFromManager() {
 }
 
 function renderMessengerTimedChallengeMeta() {
-  const selectEl = document.getElementById("mbTimedChallengeType");
-  const statusEl = document.getElementById("mbTimedChallengeStatus");
-  const sendBtn = document.getElementById("btnSendTimedChallenge");
-  if (!selectEl || !sendBtn) return;
+  renderTimedChallengeComposerMeta("messenger");
+}
+
+function renderTimedChallengeComposerMeta(source = "messenger") {
+  const ids = getTimedChallengeComposerIds(source);
+  const selectEl = document.getElementById(ids.type);
+  const statusEl = document.getElementById(ids.status);
+  const sendBtn = document.getElementById(ids.send);
+  const metaEl = ids.meta ? document.getElementById(ids.meta) : null;
+  if (!selectEl) return;
 
   const key = String(selectEl.value || "");
   const cost = Number(MANAGER_CHALLENGE_COSTS?.[key] || 0);
@@ -14094,106 +14123,9 @@ function renderMessengerTimedChallengeMeta() {
     type: "challenge",
   });
 
-  sendBtn.disabled = !!blockReason;
-  sendBtn.style.opacity = blockReason ? ".6" : "1";
-  sendBtn.style.cursor = blockReason ? "not-allowed" : "";
-  sendBtn.title = blockReason || "Send challenge";
-
-  if (!statusEl) return;
-
-  if (blockReason) {
-    statusEl.textContent = `${formatManagerActionCost(cost)} • ${blockReason}`;
-  } else {
-    statusEl.textContent = `${formatManagerActionCost(cost)} • Ready`;
-  }
-}
-
-function wireTimedChallengeComposer() {
-  const btn = document.getElementById("btnSendTimedChallenge");
-  const typeEl = document.getElementById("mbTimedChallengeType");
-
-  if (typeEl && !typeEl.__bcMetaBound) {
-    typeEl.__bcMetaBound = true;
-    typeEl.addEventListener("change", () => {
-      renderMessengerTimedChallengeMeta?.();
-    });
-  }
-
-  if (!btn || btn.__bcBound) {
-    renderMessengerTimedChallengeMeta?.();
-    return;
-  }
-
-  btn.__bcBound = true;
-  btn.addEventListener("click", async () => {
-    await sendTimedChallengeFromManager();
-    renderMessengerTimedChallengeMeta?.();
-  });
-
-  renderMessengerTimedChallengeMeta?.();
-}
-
-function wireManagerTimedChallengeActionPanel() {
-  const btn = document.getElementById("mbLcTimedChallengeSend");
-  const typeEl = document.getElementById("mbLcTimedChallengeType");
-
-  if (typeEl && !typeEl.__bcBound) {
-    typeEl.__bcBound = true;
-    typeEl.addEventListener("change", () => {
-      renderManagerTimedChallengeActionMeta?.();
-    });
-  }
-
-  if (!btn || btn.__bcBound) return;
-
-  btn.__bcBound = true;
-  btn.addEventListener("click", async () => {
-    const statusEl = document.getElementById("mbLcTimedChallengeStatus");
-    setManagerStatus(statusEl, "working", "Sending challenge…");
-
-    try {
-      const values = getTimedChallengeComposerValues("live_controls");
-      const ok = await sendTimedChallengeFromManagerWithValues(values);
-
-      if (ok) {
-        setManagerStatus(statusEl, "success", "Challenge sent ✅");
-        renderManagerTimedChallengeActionMeta?.();
-
-        const src = document.getElementById("mbTimedChallengeRecentSummary");
-        const dst = document.getElementById("mbLcTimedChallengeRecentSummary");
-        if (src && dst) dst.textContent = src.textContent || "";
-      } else {
-        if (!statusEl.textContent) {
-          setManagerStatus(statusEl, "error", "Could not send challenge.");
-        }
-        renderManagerTimedChallengeActionMeta?.();
-      }
-    } catch (e) {
-      setManagerStatus(statusEl, "error", e?.message || String(e));
-      renderManagerTimedChallengeActionMeta?.();
-    }
-  });
-}
-
-function renderManagerTimedChallengeActionMeta() {
-  const selectEl = document.getElementById("mbLcTimedChallengeType");
-  const metaEl = document.getElementById("mbLcTimedChallengeMeta");
-  const sendBtn = document.getElementById("mbLcTimedChallengeSend");
-  if (!selectEl || !metaEl) return;
-
-  const key = String(selectEl.value || "");
-  const cost = Number(MANAGER_CHALLENGE_COSTS?.[key] || 0);
-  const blockReason = getManagerActionBlockReason({
-    key,
-    cost,
-    type: "challenge",
-  });
-
-  if (blockReason) {
-    metaEl.textContent = `Cost: ${formatManagerActionCost(cost)} • ${blockReason}`;
-  } else {
-    metaEl.textContent = `Cost: ${formatManagerActionCost(cost)} • Ready`;
-  }
+  const readyText = blockReason
+    ? `${formatManagerActionCost(cost)} • ${blockReason}`
+    : `${formatManagerActionCost(cost)} • Ready`;
 
   if (sendBtn) {
     sendBtn.disabled = !!blockReason;
@@ -14201,6 +14133,85 @@ function renderManagerTimedChallengeActionMeta() {
     sendBtn.style.cursor = blockReason ? "not-allowed" : "";
     sendBtn.title = blockReason || "Send challenge";
   }
+
+  if (statusEl && (!statusEl.dataset.state || statusEl.dataset.state === "idle")) {
+    statusEl.textContent = readyText;
+  }
+  if (metaEl) {
+    metaEl.textContent = readyText;
+  }
+}
+
+function wireTimedChallengeComposer() {
+  wireTimedChallengeComposerSource("messenger");
+}
+
+function wireManagerTimedChallengeActionPanel() {
+  wireTimedChallengeComposerSource("live_controls");
+}
+
+function renderManagerTimedChallengeActionMeta() {
+  renderTimedChallengeComposerMeta("live_controls");
+}
+
+function wireTimedChallengeComposerSource(source = "messenger") {
+  const ids = getTimedChallengeComposerIds(source);
+  const btn = document.getElementById(ids.send);
+  const watchIds = [ids.type, ids.target, ids.duration, ids.reward, ids.placement].filter(Boolean);
+
+  watchIds.forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el || el.__bcTimedChallengeMetaBound) return;
+    el.__bcTimedChallengeMetaBound = true;
+    el.addEventListener("change", () => {
+      renderTimedChallengeComposerMeta(source);
+    });
+  });
+
+  if (!btn || btn.__bcTimedChallengeBound) {
+    renderTimedChallengeComposerMeta(source);
+    return;
+  }
+
+  btn.__bcTimedChallengeBound = true;
+  btn.addEventListener("click", async () => {
+    const statusEl = document.getElementById(ids.status);
+    if (source === "live_controls") {
+      setManagerStatus(statusEl, "working", "Sending challenge…");
+    } else if (statusEl) {
+      statusEl.textContent = "Sending challenge…";
+    }
+
+    try {
+      const values = getTimedChallengeComposerValues(source);
+      const ok = await sendTimedChallengeFromManagerWithValues(values);
+      if (ok) {
+        if (source === "live_controls") {
+          setManagerStatus(statusEl, "success", formatTimedChallengeSuccessText(values));
+        } else if (statusEl) {
+          statusEl.textContent = formatTimedChallengeSuccessText(values);
+        }
+
+        const src = document.getElementById(TIMED_CHALLENGE_COMPOSER_IDS.messenger.recent);
+        const dst = document.getElementById(ids.recent);
+        if (src && dst && src !== dst) dst.textContent = src.textContent || "";
+      } else if (source === "live_controls" && statusEl && !statusEl.textContent) {
+        setManagerStatus(statusEl, "error", "Could not send challenge.");
+      } else if (statusEl && !statusEl.textContent) {
+        statusEl.textContent = "Could not send challenge.";
+      }
+    } catch (e) {
+      if (source === "live_controls") {
+        setManagerStatus(statusEl, "error", e?.message || String(e));
+      } else if (statusEl) {
+        statusEl.textContent = e?.message || String(e);
+      }
+    }
+
+    renderTimedChallengeComposerMeta(source);
+  });
+
+  renderTimedChallengeComposerMeta(source);
 }
 
 function canManageTimedChallenges() {

@@ -55,6 +55,37 @@
       return (s1ok ? 1 : 0) + (s2ok ? 1 : 0);
     }
 
+    function classifyDeliveryLine(line, kind = "emotional") {
+      const raw = String(line || "").trim().toLowerCase();
+      if (!raw) {
+        return {
+          tag: kind === "structural" ? "Structure" : "Fit",
+          note: kind === "structural" ? "Make the recommendation easy to say yes to." : "Set the guest's emotional lane first.",
+        };
+      }
+
+      if (kind === "structural") {
+        if (/\bi(?:'d| would)\b|\bi\b.*\bgo with\b|\bi\b.*\bput you on\b/.test(raw)) {
+          return { tag: "Recommend", note: "Direct close with confidence." };
+        }
+        if (/\bpairs?\b|\bworks?\b|\bgives?\b|\bbecause\b|\bmore\b|\bless\b/.test(raw)) {
+          return { tag: "Justify", note: "Explain the table logic behind the choice." };
+        }
+        return { tag: "Close", note: "Turn the bottle into an easy next step." };
+      }
+
+      if (/\byou want\b|\byou(?:'re| are)\b|\blooking for\b|\bfeel\b/.test(raw)) {
+        return { tag: "Affirm", note: "Match the guest's emotional intent." };
+      }
+      if (/\bif you want\b|\bi'd\b|\byou could\b|\bkeep it\b/.test(raw)) {
+        return { tag: "Guide", note: "Lead the guest toward a confident lane." };
+      }
+      if (/\bnot\b|\brather than\b|\binstead\b|\bmore\b|\bless\b/.test(raw)) {
+        return { tag: "Reframe", note: "Sharpen the choice by redirecting the frame." };
+      }
+      return { tag: "Frame", note: "Shape tone before naming the bottle." };
+    }
+
     const escapeHtml = window.escapeHtml;
 
     function railLine(text, classes = "small-text rail-copy") {
@@ -12832,12 +12863,10 @@ function ensureProgLoaded() {
         const noise = policy?.deliveryNoise ?? 0;
         const diff = d;
 
-        // Difficulty ramp:
-        // 1-2: AB / AB
-        // 3-4: ABC / AB
-        // 5:   ABC / ABC
-        const s1Count = diff >= 3 ? 3 : 2;
-        const s2Count = diff >= 5 ? 3 : 2;
+        // Keep the delivery step richer even at lower difficulty while still
+        // scaling the first sentence into a tougher emotional read at higher tiers.
+        const s1Count = diff >= 6 ? 4 : 3;
+        const s2Count = 3;
 
         const slots1 = getSlots(s1Count);
         const slots2 = getSlots(s2Count);
@@ -16802,9 +16831,14 @@ function ensureProgLoaded() {
           const btn = document.createElement("button");
           btn.type = "button";
           btn.className = "option-btn" + (String(currentEncounter.selectedS1) === String(slot) ? " selected" : "");
+          const descriptor = classifyDeliveryLine(currentEncounter.deliverOptionsS1[slot], "emotional");
           btn.innerHTML = `
-            <div class="option-title">Option ${escapeHtml(String(slot))}</div>
+            <div class="option-title" style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+              <span>Option ${escapeHtml(String(slot))}</span>
+              <span class="small-text" style="opacity:.74; text-transform:uppercase; letter-spacing:.04em;">${escapeHtml(descriptor.tag)}</span>
+            </div>
             <div class="option-preview">${escapeHtml(currentEncounter.deliverOptionsS1[slot])}</div>
+            <div class="small-text" style="margin-top:6px; opacity:.7;">${escapeHtml(descriptor.note)}</div>
           `;
           btn.dataset.bc = "deliver_s1";
           btn.dataset.slot = String(slot);
@@ -16838,9 +16872,14 @@ function ensureProgLoaded() {
           const btn = document.createElement("button");
           btn.type = "button";
           btn.className = "option-btn" + (String(currentEncounter.selectedS2) === String(slot) ? " selected" : "");
+          const descriptor = classifyDeliveryLine(currentEncounter.deliverOptionsS2[slot], "structural");
           btn.innerHTML = `
-            <div class="option-title">Option ${escapeHtml(String(slot))}</div>
+            <div class="option-title" style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+              <span>Option ${escapeHtml(String(slot))}</span>
+              <span class="small-text" style="opacity:.74; text-transform:uppercase; letter-spacing:.04em;">${escapeHtml(descriptor.tag)}</span>
+            </div>
             <div class="option-preview">${escapeHtml(currentEncounter.deliverOptionsS2[slot])}</div>
+            <div class="small-text" style="margin-top:6px; opacity:.7;">${escapeHtml(descriptor.note)}</div>
           `;
           btn.dataset.bc = "deliver_s2";
           btn.dataset.slot = String(slot);
