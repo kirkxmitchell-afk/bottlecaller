@@ -571,9 +571,9 @@ document.querySelector("#app").innerHTML = `
                 </select>
 
                 <select id="mbTimedChallengeDuration">
-                  <option value="60">1 min</option>
-                  <option value="180">3 min</option>
-                  <option value="300" selected>5 min</option>
+                  <option value="3600">1 hr</option>
+                  <option value="7200">2 hrs</option>
+                  <option value="10800" selected>3 hrs</option>
                 </select>
 
                 <select id="mbTimedChallengePlacement">
@@ -13810,7 +13810,7 @@ function getTimedChallengeComposerValues(source = "messenger") {
   return {
     targetUserId: String(targetEl?.value || "").trim() || null,
     challengeKey: String(typeEl?.value || "closing_push"),
-    durationSec: Math.max(60, Math.min(300, Number(durationEl?.value || 300))),
+    durationSec: Math.max(60, Math.min(10800, Number(durationEl?.value || 10800))),
     rewardPoints: Math.max(1, Math.min(5, Number(rewardEl?.value || 5))),
     placement: String(document.getElementById(ids.placement)?.value || "before_start"),
   };
@@ -13819,7 +13819,7 @@ function getTimedChallengeComposerValues(source = "messenger") {
 function buildTimedChallengePayloadFromValues(values = {}) {
   const targetUserId = values.targetUserId || null;
   const challengeKey = values.challengeKey || "closing_push";
-  const durationSec = Math.max(60, Math.min(300, Number(values.durationSec || 300)));
+  const durationSec = Math.max(60, Math.min(10800, Number(values.durationSec || 10800)));
   const rewardPoints = Number(values.rewardPoints || 50);
   const placement = String(values.placement || "before_start");
   const restaurantId = getManagerActiveRestaurantId();
@@ -13953,12 +13953,22 @@ function buildTimedChallengePayload() {
   return buildTimedChallengePayloadFromValues(getTimedChallengeComposerValues("messenger"));
 }
 
+function formatTimedChallengeDuration(durationSec = 0) {
+  const secs = Math.max(0, Number(durationSec || 0));
+  if (!secs) return "0 min";
+  const hours = Math.floor(secs / 3600);
+  const mins = Math.floor((secs % 3600) / 60);
+  if (hours && mins) return `${hours}h ${mins}m`;
+  if (hours) return `${hours}h`;
+  return `${Math.round(secs / 60)} min`;
+}
+
 function formatTimedChallengeSuccessText(values = {}) {
   const placementLabel =
     String(values.placement || "before_start") === "after_first_encounter"
       ? "After encounter 1"
       : "Before encounter 1";
-  return `Challenge Sent • ${values.challengeKey ? getTimedChallengeLabel(values.challengeKey) : "Timed Challenge"} • ${Math.round(Number(values.durationSec || 0) / 60)} min • ${placementLabel} • Reward ${Number(values.rewardPoints || 0)}`;
+  return `Challenge Sent • ${values.challengeKey ? getTimedChallengeLabel(values.challengeKey) : "Timed Challenge"} • ${formatTimedChallengeDuration(values.durationSec)} • ${placementLabel} • Reward ${Number(values.rewardPoints || 0)}`;
 }
 
 function setManagerStatus(elOrId, type = "idle", text = "") {
@@ -14040,7 +14050,7 @@ async function sendTimedChallengeFromManagerWithValues(values = {}) {
       receiver_user_id: payload.targetUserId,
       sender_role: senderRole,
       type: "timed_challenge",
-      body: `${payload.title} • ${Math.round(payload.durationSec / 60)} min`,
+      body: `${payload.title} • ${formatTimedChallengeDuration(payload.durationSec)}`,
       payload,
     };
 
@@ -14088,11 +14098,7 @@ async function sendTimedChallengeFromManager() {
 
   if (ok) {
     if (statusEl) {
-      const placementLabel =
-        String(values.placement || "before_start") === "after_first_encounter"
-          ? "After encounter 1"
-          : "Before encounter 1";
-      statusEl.textContent = `Challenge Sent • ${values.challengeKey ? getTimedChallengeLabel(values.challengeKey) : "Timed Challenge"} • ${Math.round(Number(values.durationSec || 0) / 60)} min • ${placementLabel} • Reward ${Number(values.rewardPoints || 0)}`;
+      statusEl.textContent = formatTimedChallengeSuccessText(values);
     }
     return true;
   }
@@ -14279,9 +14285,9 @@ function renderManagerTimedChallengeActionPanel() {
         </select>
 
         <select id="mbLcTimedChallengeDuration">
-          <option value="60">1 min</option>
-          <option value="180">3 min</option>
-          <option value="300" selected>5 min</option>
+          <option value="3600">1 hr</option>
+          <option value="7200">2 hrs</option>
+          <option value="10800" selected>3 hrs</option>
         </select>
         <select id="mbLcTimedChallengePlacement">
           <option value="before_start" selected>Before encounter 1</option>
