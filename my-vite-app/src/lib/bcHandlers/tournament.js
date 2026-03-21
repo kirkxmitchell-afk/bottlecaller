@@ -425,6 +425,51 @@ export function makeTournamentHandlers({
     };
   }
 
+  function handleTournamentCheckpoint(payload = {}) {
+    const tournamentId = String(payload?.tournamentId || "").trim();
+    const restore = clone(payload?.restore || null);
+
+    if (!tournamentId) {
+      throw new Error("Tournament id is required.");
+    }
+
+    const definition = getTournamentDefinition(tournamentId);
+    const runtime = getTournamentRuntime(tournamentId);
+
+    if (!definition) {
+      throw new Error(`Tournament definition not found for ${tournamentId}.`);
+    }
+
+    if (!runtime) {
+      throw new Error(`Tournament runtime not found for ${tournamentId}.`);
+    }
+
+    if (String(runtime.status || "") !== "active") {
+      throw new Error("Tournament is not active.");
+    }
+
+    if (!runtime.activeEntry) {
+      throw new Error("Tournament has no active entry.");
+    }
+
+    assertTournamentCheckpointAllowed(runtime, restore);
+
+    const nextRuntime = {
+      ...runtime,
+      restore: {
+        ...(restore && typeof restore === "object" ? restore : {}),
+        checkpointedAt: Date.now(),
+      },
+    };
+
+    setTournamentRuntime(tournamentId, nextRuntime);
+
+    return {
+      definition,
+      runtime: nextRuntime,
+    };
+  }
+
   return {
     [BC_TYPES.TOURNAMENT_CREATE]: async ({ msg, reply }) => {
       const requestId = msg?.requestId || null;
@@ -527,33 +572,12 @@ export function makeTournamentHandlers({
 
     [BC_TYPES.TOURNAMENT_CHECKPOINT]: async ({ msg, reply }) => {
       const requestId = msg?.requestId || null;
-      const tournamentId = msg?.payload?.tournamentId || null;
-      const restore = clone(msg?.payload?.restore || null);
-      const current = getDefinitionAndRuntime(tournamentId);
-      if (!current.definition || !current.runtime) {
-        replyErr(reply, BC_TYPES.TOURNAMENT_CHECKPOINT_RESULT, requestId, "tournament_not_found");
-        return;
-      }
-      if (current.runtime?.status !== "active" || !current.runtime?.activeEntry) {
-        replyErr(reply, BC_TYPES.TOURNAMENT_CHECKPOINT_RESULT, requestId, "tournament_not_active");
-        return;
-      }
       try {
-        assertTournamentCheckpointAllowed(current.runtime, restore);
+        const result = handleTournamentCheckpoint(msg?.payload || {});
+        replyOk(reply, BC_TYPES.TOURNAMENT_CHECKPOINT_RESULT, requestId, result);
       } catch (error) {
         replyErr(reply, BC_TYPES.TOURNAMENT_CHECKPOINT_RESULT, requestId, error?.message || String(error || "checkpoint_invalid"));
-        return;
       }
-
-      const runtime = store.updateRuntime(current.definition.tournamentId, (runtimeNow) => ({
-        ...clone(runtimeNow),
-        restore: restore && typeof restore === "object" ? restore : null,
-      }));
-
-      replyOk(reply, BC_TYPES.TOURNAMENT_CHECKPOINT_RESULT, requestId, {
-        ok: true,
-        runtime,
-      });
     },
   };
 }

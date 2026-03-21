@@ -5716,6 +5716,8 @@ function isDrillMode() {
       let bcStageResults = [];           // [{stage, skillFocus, correct}]
       let bcTournamentCheckpointTimer = null;
       let bcTournamentCheckpointAt = 0;
+      window.__BC_TOURNAMENT_CHECKPOINT_TIMER__ = window.__BC_TOURNAMENT_CHECKPOINT_TIMER__ || null;
+      window.__BC_TOURNAMENT_CHECKPOINT_IN_FLIGHT__ = window.__BC_TOURNAMENT_CHECKPOINT_IN_FLIGHT__ || false;
       window.__BC_RUNTIME_STATE__ = window.__BC_RUNTIME_STATE__ || {
         ctx: null,
         encounter: null,
@@ -5742,13 +5744,24 @@ function isDrillMode() {
       let isManager = false;
       let isWaiter = false;
       function buildTournamentRestorePayload(encounter = null) {
+        const activeEntry = getActiveTournamentEntry?.() || null;
+        const runtime = getActiveTournamentRuntime?.() || null;
         const enc = encounter || currentEncounter || null;
         if (!enc) return null;
         return {
-          runId: enc.runId || "",
-          encounterId: enc.encounterId || enc.id || "",
-          currentStep: Number(currentStep || 0),
-          stageResults: Array.isArray(bcStageResults) ? structuredClone(bcStageResults) : [],
+          tournamentId: String(runtime?.tournamentId || ""),
+          entryId: String(activeEntry?.entryId || enc?.tournamentEntryId || ""),
+          runId: String(activeEntry?.encounterRunId || enc?.runId || ""),
+          encounterId: String(
+            activeEntry?.encounterId ||
+            enc?.encounterId ||
+            enc?.id ||
+            ""
+          ),
+          currentStep: Number(currentStep || 0) || 0,
+          stageResults: Array.isArray(window.bcStageResults)
+            ? structuredClone(window.bcStageResults)
+            : (Array.isArray(bcStageResults) ? structuredClone(bcStageResults) : []),
           encounterState: {
             guestReadSelected: enc.guestReadSelected || "",
             modeSelected: enc.modeSelected || "",
@@ -5758,54 +5771,112 @@ function isDrillMode() {
             selectedS2: enc.selectedS2 ?? null,
             deliveryLine1: enc.deliveryLine1 || "",
             deliveryLine2: enc.deliveryLine2 || "",
+            deliveryLine1Key: enc.deliveryLine1Key || "",
+            deliveryLine2Key: enc.deliveryLine2Key || "",
             recoveryChoice: enc.recoveryChoice || "",
-            timedChallengeId: enc.timedChallengeId || null,
-            displayMethodChallengeId: enc.displayMethodChallengeId || null,
+            recoveryCorrect: !!enc.recoveryCorrect,
+            readCorrect: !!enc.readCorrect,
+            deliveryCorrect: !!enc.deliveryCorrect,
+            modeStatus: enc.modeStatus || "neutral",
+            chainScore: Number(enc.chainScore || 0) || 0,
+            tournamentResolvedOutcome: enc.tournamentResolvedOutcome || "",
+            challengeStartedAt: Number(enc.challengeStartedAt || 0) || 0,
+            challengeExpiresAt: Number(enc.challengeExpiresAt || 0) || 0,
+            timedChallengeResolved: !!enc.__timedChallengeResolved,
+            displayMethodChallengeResolved: !!enc.__displayMethodChallengeResolved,
           },
         };
       }
       function applyTournamentRestoreIfPresent(encounter = null, restore = null) {
-        const enc = encounter || currentEncounter || null;
-        if (!enc || !restore || typeof restore !== "object") return enc;
-        const state = restore.encounterState || {};
-        enc.guestReadSelected = state.guestReadSelected || enc.guestReadSelected || "";
-        enc.modeSelected = state.modeSelected || enc.modeSelected || "";
-        enc.hookSelected = state.hookSelected || enc.hookSelected || "";
-        enc.hookSelectedKey = state.hookSelectedKey || enc.hookSelectedKey || "";
-        enc.selectedS1 = state.selectedS1 ?? enc.selectedS1 ?? null;
-        enc.selectedS2 = state.selectedS2 ?? enc.selectedS2 ?? null;
-        enc.deliveryLine1 = state.deliveryLine1 || enc.deliveryLine1 || "";
-        enc.deliveryLine2 = state.deliveryLine2 || enc.deliveryLine2 || "";
-        enc.recoveryChoice = state.recoveryChoice || enc.recoveryChoice || "";
-        bcStageResults = Array.isArray(restore.stageResults) ? structuredClone(restore.stageResults) : [];
-        window.bcStageResults = bcStageResults;
-        return enc;
+        if (!encounter || !restore) return encounter;
+
+        const st = restore?.encounterState || {};
+
+        encounter.guestReadSelected = st.guestReadSelected || encounter.guestReadSelected || "";
+        encounter.modeSelected = st.modeSelected || encounter.modeSelected || "";
+        encounter.hookSelected = st.hookSelected || encounter.hookSelected || "";
+        encounter.hookSelectedKey = st.hookSelectedKey || encounter.hookSelectedKey || "";
+
+        encounter.selectedS1 = st.selectedS1 ?? encounter.selectedS1 ?? null;
+        encounter.selectedS2 = st.selectedS2 ?? encounter.selectedS2 ?? null;
+
+        encounter.deliveryLine1 = st.deliveryLine1 || encounter.deliveryLine1 || "";
+        encounter.deliveryLine2 = st.deliveryLine2 || encounter.deliveryLine2 || "";
+        encounter.deliveryLine1Key = st.deliveryLine1Key || encounter.deliveryLine1Key || "";
+        encounter.deliveryLine2Key = st.deliveryLine2Key || encounter.deliveryLine2Key || "";
+
+        encounter.recoveryChoice = st.recoveryChoice || encounter.recoveryChoice || "";
+        encounter.recoveryCorrect = !!st.recoveryCorrect || !!encounter.recoveryCorrect;
+        encounter.readCorrect = !!st.readCorrect || !!encounter.readCorrect;
+        encounter.deliveryCorrect = !!st.deliveryCorrect || !!encounter.deliveryCorrect;
+        encounter.modeStatus = st.modeStatus || encounter.modeStatus || "neutral";
+        encounter.chainScore = Number(st.chainScore || encounter.chainScore || 0) || 0;
+
+        encounter.tournamentResolvedOutcome =
+          st.tournamentResolvedOutcome || encounter.tournamentResolvedOutcome || "";
+
+        if (Number(st.challengeStartedAt || 0) > 0) {
+          encounter.challengeStartedAt = Number(st.challengeStartedAt || 0) || 0;
+        }
+
+        if (Number(st.challengeExpiresAt || 0) > 0) {
+          encounter.challengeExpiresAt = Number(st.challengeExpiresAt || 0) || 0;
+        }
+
+        encounter.__timedChallengeResolved =
+          !!st.timedChallengeResolved || !!encounter.__timedChallengeResolved;
+
+        encounter.__displayMethodChallengeResolved =
+          !!st.displayMethodChallengeResolved || !!encounter.__displayMethodChallengeResolved;
+
+        if (Array.isArray(restore?.stageResults)) {
+          bcStageResults = structuredClone(restore.stageResults);
+          window.bcStageResults = structuredClone(restore.stageResults);
+        }
+
+        return encounter;
       }
-      async function syncTournamentCheckpoint(reason = "runtime") {
-        if (!isTournamentSession()) return false;
+      async function sendTournamentCheckpointNow(reason = "checkpoint") {
         const runtime = getActiveTournamentRuntime?.() || null;
+        const activeEntry = getActiveTournamentEntry?.() || null;
         const encounter = currentEncounter || null;
-        if (!runtime?.tournamentId || !runtime?.activeEntry || !encounter?.runId) return false;
+
+        if (sessionType !== "tournament") return;
+        if (!runtime?.tournamentId || !activeEntry || !encounter) return;
+
         const restore = buildTournamentRestorePayload(encounter);
-        if (!restore) return false;
+        if (!restore?.runId) return;
+
         try {
           await window.TournamentBridge?.sendTournamentCheckpoint?.({
-            tournamentId: runtime.tournamentId,
-            restore,
+            tournamentId: String(runtime.tournamentId || ""),
+            restore: {
+              ...restore,
+              reason: String(reason || "checkpoint"),
+            }
           });
           bcTournamentCheckpointAt = Date.now();
-          return true;
-        } catch (e) {
-          console.warn("[TOURNAMENT] checkpoint failed", { reason, error: e?.message || e });
-          return false;
+        } catch (error) {
+          console.warn("[TOURNAMENT] checkpoint failed", error);
         }
       }
-      function scheduleTournamentCheckpoint(reason = "runtime", delayMs = 120) {
-        if (!isTournamentSession()) return;
-        try { clearTimeout(bcTournamentCheckpointTimer); } catch {}
-        bcTournamentCheckpointTimer = setTimeout(() => {
-          void syncTournamentCheckpoint(reason);
-        }, delayMs);
+      function scheduleTournamentCheckpoint(reason = "checkpoint", delayMs = 500) {
+        if (sessionType !== "tournament") return;
+
+        if (window.__BC_TOURNAMENT_CHECKPOINT_TIMER__) {
+          window.clearTimeout(window.__BC_TOURNAMENT_CHECKPOINT_TIMER__);
+        }
+
+        window.__BC_TOURNAMENT_CHECKPOINT_TIMER__ = window.setTimeout(async () => {
+          if (window.__BC_TOURNAMENT_CHECKPOINT_IN_FLIGHT__) return;
+
+          window.__BC_TOURNAMENT_CHECKPOINT_IN_FLIGHT__ = true;
+          try {
+            await sendTournamentCheckpointNow(reason);
+          } finally {
+            window.__BC_TOURNAMENT_CHECKPOINT_IN_FLIGHT__ = false;
+          }
+        }, Math.max(0, Number(delayMs || 0)));
       }
       async function requestTournamentAdvance(payload = {}) {
         return await window.TournamentBridge?.requestTournamentAdvance?.(payload);
@@ -6110,7 +6181,7 @@ function isDrillMode() {
         window.addEventListener("beforeunload", () => {
           if (!isTournamentSession()) return;
           try { navigator.sendBeacon?.("data:,"); } catch {}
-          void syncTournamentCheckpoint("beforeunload");
+          void sendTournamentCheckpointNow("beforeunload");
         });
       }
       window.__BC_TOURNAMENT_API__ = window.__BC_TOURNAMENT_API__ || {
@@ -15537,6 +15608,9 @@ function ensureProgLoaded() {
 
         const correct = !!choice.correct;
         bcStageResults.push({ stage: step.stage, skillFocus: step.skillFocus, correct });
+        if (sessionType === "tournament") {
+          scheduleTournamentCheckpoint("choice_update");
+        }
 
         const fb = document.getElementById("bcFeedbackLine");
         if (fb) {
@@ -18055,6 +18129,9 @@ function ensureProgLoaded() {
           btn.innerText = state;
           bindInput(btn, () => {
             currentEncounter.guestReadSelected = state;
+            if (sessionType === "tournament") {
+              scheduleTournamentCheckpoint("choice_update");
+            }
             renderEncounterStep();
           });
           options.appendChild(btn);
@@ -18123,6 +18200,9 @@ function ensureProgLoaded() {
 
           bindInput(btn, () => {
             currentEncounter.modeSelected = mode;
+            if (sessionType === "tournament") {
+              scheduleTournamentCheckpoint("choice_update");
+            }
             renderEncounterStep();
           });
           options.appendChild(btn);
@@ -18215,6 +18295,9 @@ function ensureProgLoaded() {
               ...opt,
               hookType
             };
+            if (sessionType === "tournament") {
+              scheduleTournamentCheckpoint("choice_update");
+            }
             renderEncounterStep();
           });
 
@@ -18327,6 +18410,9 @@ function ensureProgLoaded() {
               currentEncounter.deliveryLine1Key = canonicalDeliveryLine(currentEncounter.deliverOptionsS1[slot]);
             }
             console.log("[STEP4] S1 handler ran ✅", slot);
+            if (sessionType === "tournament") {
+              scheduleTournamentCheckpoint("choice_update");
+            }
             renderEncounterStep();
           });
           line1Options.appendChild(btn);
@@ -18368,6 +18454,9 @@ function ensureProgLoaded() {
               currentEncounter.deliveryLine2Key = canonicalDeliveryLine(currentEncounter.deliverOptionsS2[slot]);
             }
             console.log("[STEP4] S2 handler ran ✅", slot);
+            if (sessionType === "tournament") {
+              scheduleTournamentCheckpoint("choice_update");
+            }
             renderEncounterStep();
           });
           line2Options.appendChild(btn);
@@ -18612,6 +18701,9 @@ function ensureProgLoaded() {
               currentEncounter.recoveryCorrect =
                 !!currentEncounter.recoveryChoice &&
                 canonicalModeFromUi(currentEncounter.recoveryChoice) === canonicalModeFromUi(recoveryBest);
+              if (sessionType === "tournament") {
+                scheduleTournamentCheckpoint("choice_update");
+              }
               renderEncounterStep();
             });
             options.appendChild(btn);
@@ -18938,6 +19030,9 @@ function ensureProgLoaded() {
           currentEncounter.pivotType = currentEncounter.pivotType || "recovery";
           currentEncounter.__pendingRecovery = true;
           currentStep = 65;
+          if (sessionType === "tournament") {
+            scheduleTournamentCheckpoint("recovery_branch");
+          }
           renderEncounterStep();
           return true;
         }
@@ -19363,9 +19458,6 @@ function ensureProgLoaded() {
 
         stepContent.innerHTML = "";
         stepButtons.innerHTML = "";
-        if (isTournamentSession()) {
-          scheduleTournamentCheckpoint("render_step");
-        }
 
         renderDebugStateBox();
 
@@ -19461,6 +19553,9 @@ function ensureProgLoaded() {
               enc.recoveryChoice = c.id;
               enc.recoveryWhy = "";
               enc.recoveryCorrect = (c.id === best);
+              if (sessionType === "tournament") {
+                scheduleTournamentCheckpoint("choice_update");
+              }
 
               // Do not log here. Recovery feeds into reflection.
               // Reflection step performs the final encounter log.
