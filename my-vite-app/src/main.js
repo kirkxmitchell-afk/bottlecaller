@@ -7456,9 +7456,26 @@ async function renderWaiterPerformanceLeaderboardWindow() {
 
   try {
     const model = await getManagerPerformanceModel({ force: true });
-    const managerUsers = (model?.users || []).filter((user) =>
-      ["single_manager", "group_manager", "enterpriser"].includes(String(user?.role || "").toLowerCase())
+    const associatedManagers = await loadAssociatedManagersForRestaurant(
+      appState?.restaurant?.id ||
+      getManagerActiveRestaurantId?.() ||
+      appState?.activeRestaurantId ||
+      null
     );
+    const managerMap = new Map();
+    (model?.users || []).forEach((user) => {
+      if (!["single_manager", "group_manager", "enterpriser"].includes(String(user?.role || "").toLowerCase())) return;
+      managerMap.set(String(user.userId || ""), {
+        userId: user.userId,
+        displayName: user.displayName,
+        role: user.role || "waiter",
+      });
+    });
+    (associatedManagers || []).forEach((manager) => {
+      if (!manager?.userId) return;
+      managerMap.set(String(manager.userId), manager);
+    });
+    const managerUsers = Array.from(managerMap.values());
     managerContextEl.textContent = managerUsers.length
       ? `Managers linked here: ${managerUsers.map((user) => `${user.displayName} (${getDisplayRoleLabel(user.role || "waiter")})`).join(", ")}`
       : "Managers linked here are not currently ranked in this leaderboard view.";
@@ -7829,7 +7846,7 @@ async function loadProfile(userId) {
 
 async function loadRestaurant(restaurantId) {
   const res = await withTimeout(
-    supabase.from("restaurants").select("id,name,code,seat_limit,require_invite").eq("id", restaurantId).single(),
+    supabase.from("restaurants").select("id,name,code,seat_limit,require_invite,created_by").eq("id", restaurantId).single(),
     12000,
     "restaurants.select"
   );
@@ -9612,6 +9629,59 @@ async function getManagerPerformanceModel({ force = false } = {}) {
     users,
     notes: buildPerformanceCoachNotes(users),
   };
+}
+
+async function loadAssociatedManagersForRestaurant(restaurantId = null) {
+  const rid = String(restaurantId || "").trim();
+  if (!rid) return [];
+
+  const managers = new Map();
+  const addManager = (row) => {
+    const role = normalizeMembershipRole(row);
+    if (!["single_manager", "group_manager", "enterpriser"].includes(String(role || "").toLowerCase())) return;
+    const userId = String(row?.user_id || "");
+    if (!userId) return;
+    managers.set(userId, {
+      userId,
+      displayName: String(row?.display_name || "").trim() || userId.slice(0, 8),
+      role,
+    });
+  };
+
+  try {
+    const profileRes = await withTimeout(
+      supabase
+        .from("profiles")
+        .select("user_id, display_name, role")
+        .eq("restaurant_id", rid)
+        .order("display_name", { ascending: true }),
+      12000,
+      "profiles.associated_managers"
+    );
+    if (!profileRes?.error) {
+      (profileRes.data || []).forEach(addManager);
+    }
+  } catch (error) {
+    console.warn("[LEADERBOARD] associated manager profile query failed", error);
+  }
+
+  const creatorUserId =
+    String(appState?.restaurant?.id || "") === rid
+      ? String(appState?.restaurant?.created_by || "").trim()
+      : "";
+
+  if (creatorUserId) {
+    try {
+      const creatorProfile = await loadProfile(creatorUserId);
+      if (creatorProfile) addManager(creatorProfile);
+    } catch (error) {
+      console.warn("[LEADERBOARD] manager creator lookup failed", error);
+    }
+  }
+
+  return Array.from(managers.values()).sort((a, b) =>
+    String(a.displayName || "").localeCompare(String(b.displayName || ""))
+  );
 }
 
 function buildPerformanceSummary(users = []) {
