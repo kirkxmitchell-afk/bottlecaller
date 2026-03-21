@@ -406,13 +406,14 @@ document.querySelector("#app").innerHTML = `
           <strong>Performance Leaderboard</strong>
           <div class="small-text" id="waiterLeaderboardRestaurantLabel">Live performance snapshot for this restaurant.</div>
         </div>
+        <div id="waiterLeaderboardManagerContext" class="small-text" style="margin-top:8px;"></div>
         <div id="waiterLeaderboardMsg" class="small-text" style="margin-top:10px;"></div>
         <div class="mb-performance-table-wrap" style="margin-top:12px;">
           <table class="mb-performance-table">
             <thead>
               <tr>
                 <th>Rank</th>
-                <th>Waiter</th>
+                <th>Team Member</th>
                 <th>Total Points</th>
                 <th>Drill Pass %</th>
                 <th>Encounter Pass %</th>
@@ -7418,7 +7419,10 @@ function renderWaiterPerformanceLeaderboardTable(users = []) {
       <td>
         <div class="mb-user-name" style="display:flex; align-items:center; gap:10px;">
           <span class="mb-user-avatar">${escapeHtml((user.displayName || "?").slice(0, 2).toUpperCase())}</span>
-          <span>${escapeHtml(user.displayName || "Unknown")}</span>
+          <div style="display:flex; flex-direction:column; gap:4px;">
+            <span>${escapeHtml(user.displayName || "Unknown")}</span>
+            <span class="waiter-leaderboard-role-pill">${escapeHtml(getDisplayRoleLabel(user.role || "waiter"))}</span>
+          </div>
         </div>
       </td>
       <td>${formatMetricNumber(user.totalPoints, 1)}</td>
@@ -7434,9 +7438,10 @@ function renderWaiterPerformanceLeaderboardTable(users = []) {
 
 async function renderWaiterPerformanceLeaderboardWindow() {
   const labelEl = document.getElementById("waiterLeaderboardRestaurantLabel");
+  const managerContextEl = document.getElementById("waiterLeaderboardManagerContext");
   const msgEl = document.getElementById("waiterLeaderboardMsg");
   const tbody = document.getElementById("waiterLeaderboardRows");
-  if (!labelEl || !msgEl || !tbody) return;
+  if (!labelEl || !managerContextEl || !msgEl || !tbody) return;
 
   const restaurantName =
     appState?.restaurant?.name ||
@@ -7445,11 +7450,18 @@ async function renderWaiterPerformanceLeaderboardWindow() {
     "this restaurant";
 
   labelEl.textContent = `Live performance snapshot for ${restaurantName}.`;
+  managerContextEl.textContent = "";
   msgEl.textContent = "Loading leaderboard…";
   tbody.innerHTML = "";
 
   try {
     const model = await getManagerPerformanceModel({ force: true });
+    const managerUsers = (model?.users || []).filter((user) =>
+      ["single_manager", "group_manager", "enterpriser"].includes(String(user?.role || "").toLowerCase())
+    );
+    managerContextEl.textContent = managerUsers.length
+      ? `Managers linked here: ${managerUsers.map((user) => `${user.displayName} (${getDisplayRoleLabel(user.role || "waiter")})`).join(", ")}`
+      : "Managers linked here are not currently ranked in this leaderboard view.";
     renderWaiterPerformanceLeaderboardTable(model?.users || []);
     msgEl.textContent = model?.users?.length
       ? ""
@@ -9363,12 +9375,14 @@ async function getManagerPerformanceModel({ force = false } = {}) {
 
   const userIds = new Set();
   const profileNameMap = new Map();
+  const profileRoleMap = new Map();
 
   profileRows.forEach((row) => {
     const uid = String(row?.user_id || "");
     if (!uid || String(row?.role || "").toLowerCase() === "demo") return;
     userIds.add(uid);
     if (row?.display_name) profileNameMap.set(uid, row.display_name);
+    profileRoleMap.set(uid, normalizeMembershipRole(row) || String(row?.role || "").toLowerCase() || "waiter");
   });
 
   [progressionStateRows, leaderboardRows, readinessRows, totalsRows, latestRows, snapshotRows, encounterRows].forEach((rows) => {
@@ -9557,6 +9571,7 @@ async function getManagerPerformanceModel({ force = false } = {}) {
     return {
       userId: uid,
       displayName: nameMap.get(uid) || uid,
+      role: profileRoleMap.get(uid) || "waiter",
       totalPoints,
       drillPassRate,
       drillCompletedCount: drillRows.length,
