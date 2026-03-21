@@ -615,16 +615,34 @@
 
       if (!active) {
         if (pending) {
+          if (isTimedChallengeAssignmentExpired?.(pending)) {
+            expirePendingTimedChallengeAssignment?.("assignment_expired");
+            return {
+              state: "expired",
+              title: "Challenge Expired",
+              body: "The timed challenge window has ended before it was used.",
+              error: "",
+              timerText: "",
+              cueText: "",
+              nextText: "",
+              rewardText: "",
+            };
+          }
           const rewardPoints = Number(pending?.rewardPoints || pending?.reward_points || 0) || 0;
           const copy = getTimedChallengeCopy(pending);
+          const placement = String(pending?.placement || pending?.payload?.placement || "before_start");
           return {
             state: "pending",
             title: `${copy.label} (Queued)`,
-            body: "This timed challenge will begin after encounter 1.",
+            body: placement === "after_first_encounter"
+              ? "This timed challenge will begin after encounter 1."
+              : "This timed challenge will be your next extra encounter.",
             error: "",
             timerText: "",
             cueText: copy.cue,
-            nextText: "Complete encounter 1 to activate this challenge.",
+            nextText: placement === "after_first_encounter"
+              ? "Complete encounter 1 to activate this challenge."
+              : "Start the next encounter to launch this challenge.",
             rewardText: rewardPoints > 0 ? `Reward: ${rewardPoints} pts` : "",
           };
         }
@@ -869,6 +887,14 @@
         try {
           renderRailActiveChallenge?.();
           renderRailActiveDrill?.();
+          if (
+            currentEncounter?.isTimedChallengeEncounter &&
+            Number(currentEncounter?.challengeExpiresAt || 0) > 0 &&
+            Date.now() >= Number(currentEncounter.challengeExpiresAt) &&
+            !currentEncounter?.__timedChallengeResolved
+          ) {
+            failTimedChallengeEncounter("timeout");
+          }
         } catch {}
       }, 1000);
     }
@@ -1586,11 +1612,57 @@
       try { host.renderHudTimedChallenge?.(); } catch {}
       try { host.renderManagerBoardOverviewTimedChallenge?.(); } catch {}
     }
+    function isTimedChallengeAssignmentExpired(challenge = null) {
+      const assignmentExpiresAt = Number(
+        challenge?.assignmentExpiresAt ??
+        challenge?.payload?.assignmentExpiresAt ??
+        challenge?.payload?.assignment_expires_at ??
+        0
+      );
+      return !!assignmentExpiresAt && assignmentExpiresAt <= Date.now();
+    }
+    function expirePendingTimedChallengeAssignment(reason = "assignment_expired") {
+      const pending = getPendingTimedChallenge?.() || null;
+      if (!pending) return false;
+
+      setPendingTimedChallengeState(null);
+      window.__BC_LAST_TIMED_CHALLENGE_STATUS__ = {
+        ok: null,
+        error: null,
+        expired: true,
+        status: String(reason || "assignment_expired"),
+        at: Date.now(),
+      };
+      renderTimedChallengeSurfaces();
+      refreshWaiterRuntimeSurfaces?.({ rail: true, counts: false });
+      return true;
+    }
     function startTimedChallenge(challenge) {
       if (!challenge) return false;
 
+      const startedAt = Number(challenge.startedAt || challenge.started_at || Date.now());
+      const encounterTimerSec = Math.max(
+        60,
+        Number(
+          challenge.encounterTimerSec ??
+          challenge.payload?.encounterTimerSec ??
+          challenge.payload?.encounter_timer_sec ??
+          300
+        ) || 300
+      );
+      const nextChallenge = {
+        ...challenge,
+        startedAt,
+        expiresAt: Number(challenge.expiresAt || challenge.expires_at || 0) || (startedAt + encounterTimerSec * 1000),
+        durationSec: encounterTimerSec,
+        encounterTimerSec,
+        injected: true,
+        injectedAt: startedAt,
+        status: "active",
+      };
+
       setPendingTimedChallengeState(null);
-      setActiveTimedChallengeState(challenge);
+      setActiveTimedChallengeState(nextChallenge);
       window.__BC_LAST_TIMED_CHALLENGE_STATUS__ = {
         ok: null,
         error: null,
@@ -1599,32 +1671,76 @@
         at: Date.now(),
       };
 
-      console.log("[TIMED CHALLENGE] applied ✅", challenge);
+      console.log("[TIMED CHALLENGE] applied ✅", nextChallenge);
       renderTimedChallengeSurfaces();
       refreshWaiterRuntimeSurfaces?.();
       window.showToast?.("Timed manager challenge started ✅");
       return true;
     }
-    function maybeActivatePendingTimedChallenge(encounter = null) {
+    function shouldInjectTimedChallengeNow() {
       const pending = getPendingTimedChallenge?.() || null;
       if (!pending) return false;
       if (getActiveTimedChallenge?.()) return false;
-
-      const placement = String(pending?.placement || pending?.payload?.placement || "before_start");
-      if (placement !== "after_first_encounter") {
-        return startTimedChallenge(pending);
+      if (pending?.consumed || pending?.resolved) return false;
+      if (isTimedChallengeAssignmentExpired(pending)) {
+        expirePendingTimedChallengeAssignment("assignment_expired");
+        return false;
       }
 
-      const encounterNumber = Number(encounter?.encounterNumber ?? encounter?.encounter ?? 0);
-      if (encounterNumber !== 1) return false;
-
+      const placement = String(pending?.placement || pending?.payload?.placement || "before_start");
+      const currentIndex = Number(encounterIndex || 0);
+      if (placement === "after_first_encounter") return currentIndex === 1;
+      return currentIndex === 0;
+    }
+    function buildInjectedTimedChallengeEncounter(baseEncounter = null, challenge = null) {
+      const base = baseEncounter && typeof baseEncounter === "object"
+        ? structuredClone(baseEncounter)
+        : {};
+      const challengeId = String(challenge?.challengeId || challenge?.id || crypto.randomUUID());
+      const baseId = String(base?.id || base?.encounterId || base?.encounterNumber || "challenge");
       const startedAt = Date.now();
-      return startTimedChallenge({
-        ...pending,
-        startedAt,
-        expiresAt: startedAt + Number(pending.durationSec || 0) * 1000,
-        status: "active",
-      });
+      const encounterTimerSec = Math.max(
+        60,
+        Number(
+          challenge?.encounterTimerSec ??
+          challenge?.payload?.encounterTimerSec ??
+          challenge?.payload?.encounter_timer_sec ??
+          300
+        ) || 300
+      );
+      const title = String(challenge?.title || challenge?.payload?.title || "Timed Challenge");
+
+      return {
+        ...base,
+        id: `timed_challenge_${challengeId}_${baseId}`,
+        encounterId: `timed_challenge_${challengeId}_${baseId}`,
+        isTimedChallengeEncounter: true,
+        timedChallengeId: challengeId,
+        timedChallengeKey: challenge?.challengeKey || challenge?.payload?.challengeKey || null,
+        timedChallengeTitle: title,
+        timedChallengePlacement: challenge?.placement || challenge?.payload?.placement || "before_start",
+        timedChallengeTimerSec: encounterTimerSec,
+        challengeStartedAt: startedAt,
+        challengeExpiresAt: startedAt + encounterTimerSec * 1000,
+        contextLine: title
+          ? `[${title}] ${String(base?.contextLine || "").trim()}`.trim()
+          : String(base?.contextLine || ""),
+        meta: {
+          ...(base?.meta || {}),
+          timedChallenge: true,
+          timedChallengeId: challengeId,
+          timedChallengeKey: challenge?.challengeKey || challenge?.payload?.challengeKey || null,
+          timedChallengeTitle: title,
+        },
+      };
+    }
+    function maybeActivatePendingTimedChallenge(encounter = null) {
+      const pending = getPendingTimedChallenge?.() || null;
+      if (!pending) return false;
+      if (isTimedChallengeAssignmentExpired(pending)) {
+        return expirePendingTimedChallengeAssignment("assignment_expired");
+      }
+      return false;
     }
     function logTimedChallengeResult(result = {}) {
       try {
@@ -1690,9 +1806,14 @@
           strongPillars,
         };
 
-        const success = typeof evaluateTimedChallengeSuccess === "function"
-          ? evaluateTimedChallengeSuccess(challenge, encounter || {}, checks || {}, evaluationPayload)
-          : String(strongestSkill || "").toLowerCase() === String(challenge?.successRule?.value || "").toLowerCase();
+        const explicitSuccess = typeof result?.evaluatedSuccess === "boolean"
+          ? result.evaluatedSuccess
+          : null;
+        const success = explicitSuccess != null
+          ? explicitSuccess
+          : (typeof evaluateTimedChallengeSuccess === "function"
+            ? evaluateTimedChallengeSuccess(challenge, encounter || {}, checks || {}, evaluationPayload)
+            : String(strongestSkill || "").toLowerCase() === String(challenge?.successRule?.value || "").toLowerCase());
 
         const runtimeCtx = getRewardRuntimeContext();
         const performanceGrade = String(
@@ -1740,6 +1861,12 @@
             challenge?.rewardPoints ??
             challenge?.payload?.rewardPoints ??
             null,
+          challengeEncounter: !!(
+            result?.challengeEncounter ??
+            encounter?.isTimedChallengeEncounter ??
+            false
+          ),
+          challengeReason: result?.reason || null,
           targetUserId: challenge.targetUserId || null,
           restaurantId: challenge.restaurantId || null,
         };
@@ -1782,6 +1909,9 @@
         ackError: null,
         ackAt: null,
         challenge,
+        evaluatedSuccess: typeof extra?.evaluatedSuccess === "boolean"
+          ? extra.evaluatedSuccess
+          : String(status || "").toLowerCase() === "completed",
         ...extra,
       };
 
@@ -1806,11 +1936,41 @@
       logTimedChallengeResult(result);
       return true;
     }
+    function failTimedChallengeEncounter(reason = "timeout") {
+      const encounter = window.currentEncounter || currentEncounter || null;
+      if (!encounter?.isTimedChallengeEncounter) return false;
+      if (encounter.__timedChallengeResolved) return false;
+      encounter.__timedChallengeResolved = true;
+
+      completeTimedChallengeLocally("expired", {
+        reason,
+        encounter,
+        challengeEncounter: true,
+        evaluatedSuccess: false,
+        outcome: reason === "timeout" ? "timeout" : (encounter?.outcome || null),
+      });
+
+      setTimeout(() => {
+        try {
+          if (
+            (window.currentEncounter || currentEncounter)?.timedChallengeId === encounter.timedChallengeId &&
+            !(window.currentEncounter || currentEncounter)?.__finalized
+          ) {
+            startEncounter();
+          }
+        } catch (e) {
+          console.warn("[TIMED CHALLENGE] timeout restart failed", e);
+        }
+      }, 80);
+
+      return true;
+    }
     function evaluateTimedChallengeAgainstProgress(payload) {
       const challenge = getActiveTimedChallenge?.() || null;
       if (!challenge) return false;
 
       const encounter = window.currentEncounter || null;
+      if (!encounter?.isTimedChallengeEncounter) return false;
       const checks = encounter
         ? buildReactionChecksFromEncounter(encounter, PROG)
         : {};
@@ -1843,10 +2003,10 @@
         checks,
         reportPayload
       );
-      if (!success) return false;
-
       reportPayload.status = success ? "completed" : "expired";
       reportPayload.completedAt = Date.now();
+      reportPayload.challengeEncounter = true;
+      reportPayload.evaluatedSuccess = success;
 
       return completeTimedChallengeLocally(reportPayload.status, reportPayload);
     }
@@ -1884,7 +2044,19 @@
           return true;
         }
 
-        const startedAt = Date.now();
+        const assignedAt = Date.now();
+        const assignmentWindowSec = Math.max(
+          60,
+          Number(
+            payload?.assignmentWindowSec ??
+            payload?.durationSec ??
+            10800
+          ) || 10800
+        );
+        const encounterTimerSec = Math.max(
+          60,
+          Number(payload?.encounterTimerSec || 300) || 300
+        );
         const challenge = {
           id: message?.id || crypto.randomUUID(),
           challengeId: message?.id || null,
@@ -1892,39 +2064,40 @@
           challengeKey,
           targetUserId,
           restaurantId,
-          startedAt,
-          expiresAt: startedAt + durationSec * 1000,
-          durationSec,
+          assignmentStartedAt: assignedAt,
+          assignmentExpiresAt: assignedAt + assignmentWindowSec * 1000,
+          assignmentWindowSec,
+          encounterTimerSec,
+          durationSec: assignmentWindowSec,
           placement,
           focus: payload?.focus || null,
           rewardPoints: Number(payload?.rewardPoints || 0),
           successRule: payload?.successRule || {},
-          status: "active",
+          injectionMode: payload?.injectionMode || "extra_encounter",
+          consumed: false,
+          injected: false,
+          resolved: false,
+          status: "pending",
           payload,
         };
 
-        if (placement === "after_first_encounter" && Number(window.encounterIndex || 0) < 1) {
-          setPendingTimedChallengeState({
-            ...challenge,
-            status: "pending",
-          });
-          window.__BC_LAST_TIMED_CHALLENGE_STATUS__ = {
-            ok: null,
-            error: null,
-            expired: false,
-            status: "pending",
-            at: Date.now(),
-          };
+        setPendingTimedChallengeState(challenge);
+        window.__BC_LAST_TIMED_CHALLENGE_STATUS__ = {
+          ok: null,
+          error: null,
+          expired: false,
+          status: "pending",
+          at: Date.now(),
+        };
 
-          console.log("[TIMED CHALLENGE] queued for after encounter 1 ✅", challenge);
-          renderTimedChallengeSurfaces();
-          refreshWaiterRuntimeSurfaces?.();
-          window.showToast?.("Timed manager challenge queued for encounter 2 ✅");
-          return true;
-        }
-
-        startTimedChallenge(challenge);
-
+        console.log("[TIMED CHALLENGE] queued for encounter injection ✅", challenge);
+        renderTimedChallengeSurfaces();
+        refreshWaiterRuntimeSurfaces?.();
+        window.showToast?.(
+          placement === "after_first_encounter"
+            ? "Timed manager challenge queued for after encounter 1 ✅"
+            : "Timed manager challenge queued for next encounter ✅"
+        );
         return true;
       } catch (e) {
         console.warn("applyTimedChallengeFromMessage failed", e);
@@ -14186,7 +14359,10 @@ function ensureProgLoaded() {
           }
         }
 
-        encounterIndex = (encounterIndex ?? 0) + 1;
+        const consumesProgressionSlot = !currentEncounter?.isTimedChallengeEncounter;
+        if (consumesProgressionSlot) {
+          encounterIndex = (encounterIndex ?? 0) + 1;
+        }
 
         if (!isDemo) {
           const clamped = clampEncounterIndexToUnlockedTier(encounterIndex);
@@ -15399,7 +15575,10 @@ function ensureProgLoaded() {
             window.__NEXT_LOCK__ = true;
             setTimeout(() => { window.__NEXT_LOCK__ = false; }, 150);
 
-            encounterIndex = (encounterIndex ?? 0) + 1;
+            const consumesProgressionSlot = !currentEncounter?.isTimedChallengeEncounter;
+            if (consumesProgressionSlot) {
+              encounterIndex = (encounterIndex ?? 0) + 1;
+            }
 
             if (!isDemoNow) {
               const clamped = clampEncounterIndexToUnlockedTier(encounterIndex);
@@ -15610,6 +15789,10 @@ function ensureProgLoaded() {
           uxStrength: (currentEncounter.__uxSummary?.strengths || [])[0] || "",
           uxFix: (currentEncounter.__uxSummary?.fixes || [])[0] || "",
           uxNext: (currentEncounter.__uxSummary?.next || [])[0] || "",
+          timedChallengeId: currentEncounter?.timedChallengeId || null,
+          timedChallengeKey: currentEncounter?.timedChallengeKey || null,
+          timedChallengeTitle: currentEncounter?.timedChallengeTitle || null,
+          timedChallengePlacement: currentEncounter?.timedChallengePlacement || null,
         };
 
         if (!Array.isArray(runs)) runs = [];
@@ -15664,6 +15847,15 @@ function ensureProgLoaded() {
             chainSignal: currentEncounter?.chainSignal ?? "",
             performanceGrade: currentEncounter?.performanceGrade || "",
             wineSelected: currentEncounter?.wineSelected?.name || "",
+            timedChallenge: currentEncounter?.isTimedChallengeEncounter ? {
+              id: currentEncounter?.timedChallengeId || null,
+              key: currentEncounter?.timedChallengeKey || null,
+              title: currentEncounter?.timedChallengeTitle || null,
+              placement: currentEncounter?.timedChallengePlacement || null,
+              timerSec: currentEncounter?.timedChallengeTimerSec || null,
+              startedAt: currentEncounter?.challengeStartedAt || null,
+              expiresAt: currentEncounter?.challengeExpiresAt || null,
+            } : null,
             finalDifficulty:
               window.__BC_GUARD__?.finalDifficulty ??
               currentEncounter?.policy?.d ??
@@ -17271,6 +17463,10 @@ function ensureProgLoaded() {
       }
 
       function applyProgressionEncounterResult(didWin) {
+        if (currentEncounter?.isTimedChallengeEncounter) {
+          console.log("[PROG] skipping progression scoring for timed challenge encounter");
+          return;
+        }
         try {
           const encounterIdRaw =
             currentEncounter?.encounterId ??
@@ -17327,6 +17523,20 @@ function ensureProgLoaded() {
       }
 
       function computeAndStoreCompletionState(scored, streakInfo, unlock) {
+        if (currentEncounter?.isTimedChallengeEncounter) {
+          const guardState = loadGuardState();
+          const completionState = {
+            streakInfo,
+            unlock,
+            done: { done: false, reason: "timed_challenge_extra" },
+            tierNow: Number(guardState?.tier || 1) || 1,
+            guardState: { ...guardState },
+          };
+          currentEncounter.__completionState = completionState;
+          console.log("[SESSION] timed challenge encounter does not mutate progression guard");
+          return completionState;
+        }
+
         const guardState = loadGuardState();
         const rawTier = resolveTierForSession(sessionType, currentEncounter?.encounterNumber);
         const tierNow = Math.min(rawTier, getMaxUnlockedTier());
@@ -17845,6 +18055,15 @@ function ensureProgLoaded() {
 
       function renderEncounterStep() {
         if (window.__BC3__?.active) return;
+        if (
+          currentEncounter?.isTimedChallengeEncounter &&
+          Number(currentEncounter?.challengeExpiresAt || 0) > 0 &&
+          Date.now() >= Number(currentEncounter.challengeExpiresAt) &&
+          !currentEncounter?.__timedChallengeResolved
+        ) {
+          failTimedChallengeEncounter("timeout");
+          return;
+        }
         clearStepHighlights();
         console.log("[RENDER] currentStep =", currentStep, "enc#", currentEncounter?.encounterNumber);
         if (typeof syncProgressReportButtonVisibility === "function") {
@@ -18378,6 +18597,14 @@ function ensureProgLoaded() {
           chainSignal: "",
           resetUsed: false,
           guestPressure: initGuestPressureState(enc),
+          isTimedChallengeEncounter: !!enc?.isTimedChallengeEncounter,
+          timedChallengeId: enc?.timedChallengeId || null,
+          timedChallengeKey: enc?.timedChallengeKey || null,
+          timedChallengeTitle: enc?.timedChallengeTitle || null,
+          timedChallengePlacement: enc?.timedChallengePlacement || null,
+          timedChallengeTimerSec: Number(enc?.timedChallengeTimerSec || 0) || 0,
+          challengeStartedAt: Number(enc?.challengeStartedAt || 0) || 0,
+          challengeExpiresAt: Number(enc?.challengeExpiresAt || 0) || 0,
 
           __reactionComputed: false,
           __uxSummaryBuilt: false,
@@ -18385,7 +18612,8 @@ function ensureProgLoaded() {
           __resolvedLogged: false,
           __reaction: null,
           __uxSummary: null,
-          presentation: null
+          presentation: null,
+          __timedChallengeResolved: false,
         };
 
         if (!sameEncounter) {
@@ -18575,6 +18803,14 @@ function ensureProgLoaded() {
 
         const prevEncounterState = currentEncounter || null;
         let { enc } = selectEncounterCandidate(list, isDemoNow, progressionWindow);
+        const pendingTimedChallenge = getPendingTimedChallenge?.() || null;
+        if (pendingTimedChallenge && shouldInjectTimedChallengeNow()) {
+          const activated = startTimedChallenge(pendingTimedChallenge);
+          const activeTimedChallenge = activated
+            ? (getActiveTimedChallenge?.() || pendingTimedChallenge)
+            : pendingTimedChallenge;
+          enc = buildInjectedTimedChallengeEncounter(enc, activeTimedChallenge);
+        }
 
         // --- BC3 FORCE ROUTE (authoritative) ---
         setRuntimeEncounter(enc); // helps debugging consistency
