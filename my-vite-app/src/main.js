@@ -7539,7 +7539,19 @@ async function buildLeaderboardUserDetail(userId, restaurantId, fallbackUser = {
   const encounterRows = Array.isArray(encountersRes?.data) ? encountersRes.data : [];
   const messageRows = Array.isArray(messagesRes?.data) ? messagesRes.data : [];
   const profile = profileRes?.data || {};
-  const skillShape = averageSkillShape(snapshotRows);
+  const fetchedSkillShape = averageSkillShape(snapshotRows);
+  const fallbackSkillShape = (fallbackUser?.skillShape && typeof fallbackUser.skillShape === "object")
+    ? fallbackUser.skillShape
+    : {};
+  const fetchedSkillTotal = MANAGER_PERFORMANCE_SKILLS.reduce(
+    (sum, skill) => sum + Number(fetchedSkillShape?.[skill.key] || 0),
+    0
+  );
+  const fallbackSkillTotal = MANAGER_PERFORMANCE_SKILLS.reduce(
+    (sum, skill) => sum + Number(fallbackSkillShape?.[skill.key] || 0),
+    0
+  );
+  const skillShape = fetchedSkillTotal > 0 ? fetchedSkillShape : fallbackSkillShape;
   const canonicalState = progressionRow?.canonical_state && typeof progressionRow.canonical_state === "object"
     ? progressionRow.canonical_state
     : {};
@@ -7606,8 +7618,8 @@ async function buildLeaderboardUserDetail(userId, restaurantId, fallbackUser = {
     readinessLabel,
     servedTier,
     challengeReadiness,
-    strongestSkill: extremes.strongestSkill,
-    weakestSkill: extremes.weakestSkill,
+    strongestSkill: fallbackSkillTotal > fetchedSkillTotal ? (fallbackUser?.strongestSkill || extremes.strongestSkill) : extremes.strongestSkill,
+    weakestSkill: fallbackSkillTotal > fetchedSkillTotal ? (fallbackUser?.weakestSkill || extremes.weakestSkill) : extremes.weakestSkill,
     skillShape,
   };
 }
