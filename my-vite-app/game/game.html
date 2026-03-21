@@ -15497,7 +15497,9 @@ function ensureProgLoaded() {
           if (window.__BC_TOURNAMENT_ADVANCING__) return;
           window.__BC_TOURNAMENT_ADVANCING__ = true;
           try {
-            const outcome = resolveTournamentOutcome(currentEncounter);
+            const outcome =
+              String(currentEncounter?.tournamentResolvedOutcome || "") ||
+              resolveTournamentOutcome(currentEncounter);
             return await advanceTournamentAfterEncounter(outcome);
           } catch (e) {
             console.warn("[TOURNAMENT] advance failed", e);
@@ -18821,6 +18823,11 @@ function ensureProgLoaded() {
 
         try {
           currentEncounter.outcome = outcome?.outcome || null;
+          if (sessionType === "tournament") {
+            currentEncounter.tournamentResolvedOutcome =
+              currentEncounter.tournamentResolvedOutcome ||
+              resolveTournamentOutcome(currentEncounter);
+          }
           currentEncounter.chainSignal =
             currentEncounter.chainSignal ||
             currentEncounter?.__reaction?.chainSignal ||
@@ -19989,6 +19996,16 @@ function ensureProgLoaded() {
         resetLegacyBc3StageState(currentEncounter);
         currentStep = Number(runtime?.restore?.currentStep || 0) || 0;
         renderEncounterStep();
+        console.log("[TOURNAMENT][START_READY]", {
+          tournamentId: runtime?.tournamentId || null,
+          entryId: activeEntry?.entryId || null,
+          kind: activeEntry?.kind || null,
+          encounterIdStable: prepared?.encounterIdStable || null,
+          encounterRunId: prepared?.encounterRunId || null,
+          currentEncounterRunId: currentEncounter?.runId || null,
+          currentEncounterId: currentEncounter?.id || currentEncounter?.encounterId || null,
+          seed: activeEntry?.seed || null
+        });
         scheduleTournamentCheckpoint("tournament_start");
         return;
       }
@@ -20026,18 +20043,15 @@ function ensureProgLoaded() {
         const activeEntry = getActiveTournamentEntry?.() || null;
 
         return {
-          entryId: String(activeEntry?.entryId || encounter?.tournamentEntryId || encounter?.entryId || ""),
-          runId: String(
-            activeEntry?.encounterRunId ||
-            encounter?.runId ||
-            ""
-          ),
+          entryId: String(activeEntry?.entryId || ""),
+          runId: String(activeEntry?.encounterRunId || ""),
           outcome: String(outcome || "win"),
           score: Number(encounter?.chainScore || 0) || 0,
           completedAt: Date.now(),
           summary: {
             readCorrect: !!encounter?.readCorrect,
             correctMode: !!(
+              encounter?.modeStatus === "correct" ||
               encounter?.modeStatus === "optimal" ||
               encounter?.modeCorrect === true
             ),
@@ -20056,21 +20070,44 @@ function ensureProgLoaded() {
       async function advanceTournamentAfterEncounter(outcome = "win") {
         const runtime = getActiveTournamentRuntime?.() || null;
         const definition = getActiveTournamentDefinition?.() || null;
+        const activeEntry = getActiveTournamentEntry?.() || null;
 
         if (!runtime || !definition) {
           console.warn("[BC][Tournament] Missing runtime/definition during advance.");
           return;
         }
 
+        if (!activeEntry) {
+          console.warn("[BC][Tournament] Missing active entry during advance.");
+          return;
+        }
+
+        if (
+          String(activeEntry?.encounterRunId || "") &&
+          String(currentEncounter?.runId || "") &&
+          String(activeEntry.encounterRunId) !== String(currentEncounter.runId)
+        ) {
+          console.warn("[BC][Tournament] Runtime runId mismatch before advance.", {
+            activeRunId: activeEntry.encounterRunId,
+            encounterRunId: currentEncounter?.runId
+          });
+        }
+
         const completedEntry = buildTournamentCompletedEntry(currentEncounter, outcome);
-        const restore = null;
+
+        if (!completedEntry.entryId || !completedEntry.runId) {
+          console.warn("[BC][Tournament] Completed entry is missing required identity.", completedEntry);
+          window.showToast?.("Tournament entry identity is missing.");
+          return;
+        }
+
         let response = null;
 
         try {
           response = await requestTournamentAdvance({
             tournamentId: String(definition?.tournamentId || runtime?.tournamentId || ""),
             completedEntry,
-            restore
+            restore: null
           });
         } catch (error) {
           console.error("[BC][Tournament] advance failed", error);
