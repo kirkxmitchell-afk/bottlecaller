@@ -16,9 +16,11 @@ import { makeLeaderboardHandler } from "./lib/bcHandlers/leaderboard.js";
 import { makeProgressionSnapshotHandler } from "./lib/bcHandlers/progressionSnapshot.js";
 import { makeProgressReportSubmitHandler } from "./lib/bcHandlers/progressReportSubmit.js";
 import { makeHardResetProgressionHandler } from "./lib/bcHandlers/hardResetProgression.js";
+import { makeTournamentHandlers } from "./lib/bcHandlers/tournament.js";
 import { handleEventLog } from "./lib/handlers/handleEventLog.js";
 import { decideAllowedTier } from "./parent/progressionRouter";
 import { createProgressionStore } from "./progressionStore.js";
+import { getEncounterById as getAuthoredEncounterById } from "./game/encounter";
 
 const supabase = getSupabaseParent();
 
@@ -4703,6 +4705,10 @@ if (!window.__BC_PARENT_BRIDGE__) {
           getSenderCtxOrReject,
           getLiveAuthOrNull,
           hardResetProgressionStateOnly,
+        }),
+        ...makeTournamentHandlers({
+          resolveEncounterById: (encounterId) => getAuthoredEncounterById(String(encounterId || "")),
+          getIframeEpoch: () => window.__BC_IFRAME_EPOCH__,
         }),
         event_log: async ({ msg, event }) => {
           const replyType = "event_log_ack";

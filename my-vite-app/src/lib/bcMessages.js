@@ -24,6 +24,12 @@ export const BC_TYPES = Object.freeze({
   PROGRESSION_SNAPSHOT_REQUEST: "progression_snapshot_request",
   PROGRESS_REPORT_SUBMIT: "progress_report_submit",
   HARD_RESET_PROGRESSION: "hard_reset_progression",
+  TOURNAMENT_CREATE: "tournament_create",
+  TOURNAMENT_SNAPSHOT: "tournament_snapshot",
+  TOURNAMENT_START: "tournament_start",
+  TOURNAMENT_ADVANCE: "tournament_advance",
+  TOURNAMENT_RESTORE: "tournament_restore",
+  TOURNAMENT_CHECKPOINT: "tournament_checkpoint",
 
   // responses
   CTX: "bc_ctx",
@@ -40,6 +46,12 @@ export const BC_TYPES = Object.freeze({
   PROGRESSION_SNAPSHOT: "progression_snapshot",
   PROGRESS_REPORT_SUBMIT_RESULT: "progress_report_submit_result",
   HARD_RESET_PROGRESSION_RESULT: "hard_reset_progression_result",
+  TOURNAMENT_CREATED: "tournament_created",
+  TOURNAMENT_SNAPSHOT_RESULT: "tournament_snapshot_result",
+  TOURNAMENT_STARTED: "tournament_started",
+  TOURNAMENT_ADVANCED: "tournament_advanced",
+  TOURNAMENT_RESTORED: "tournament_restored",
+  TOURNAMENT_CHECKPOINT_RESULT: "tournament_checkpoint_result",
 
   ERROR: "bc_error",
 });

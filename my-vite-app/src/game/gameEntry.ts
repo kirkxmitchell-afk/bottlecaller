@@ -18,6 +18,7 @@ import { ENCOUNTERS, validateEncounters } from "./encounter";
 import * as WineBridge from "./wineBridge";
 import * as EventLogBridge from "./eventLogBridge";
 import * as ProgressionBridge from "./progressionBridge";
+import * as TournamentBridge from "./tournamentBridge";
 import { installProgressionGuards } from "./progressionGuards";
 
 
@@ -27,6 +28,7 @@ declare global {
     WineBridge?: any;
     EventLogBridge?: any;
     ProgressionBridge?: any;
+    TournamentBridge?: any;
     __BC_ENCOUNTERS__?: any;
     __BC_GAME_ENTRY_INSTALLED__?: boolean;
     __BC_CTX__?: any;
@@ -69,6 +71,7 @@ function getCtxFromWindow() {
   window.WineBridge = WineBridge;
   window.EventLogBridge = EventLogBridge;
   window.ProgressionBridge = ProgressionBridge;
+  window.TournamentBridge = TournamentBridge;
 
   ProgressionBridge.onProgressionSnapshot((payload: any) => {
     window.__BC_PROGRESSION__ = payload || null;
@@ -106,6 +109,7 @@ function getCtxFromWindow() {
   console.log("[BC] EngineBridge installed ✅", window.EngineBridge);
   console.log("[BC] WineBridge installed ✅", window.WineBridge);
   console.log("[BC] ProgressionBridge installed ✅", window.ProgressionBridge);
+  console.log("[BC] TournamentBridge installed ✅", window.TournamentBridge);
   console.log("[BC] Encounters loaded ✅", {
     demo: ENCOUNTERS.demo.length,
     premium: ENCOUNTERS.premium.length,

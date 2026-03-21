@@ -92,6 +92,7 @@ export type EncounterVariation = {
 };
 
 export type Encounter = {
+  id: string;
   encounterNumber: number; // 1..N
 
   guestStateActual: GuestState;
@@ -112,6 +113,8 @@ export type Encounter = {
   steps?: EncounterStep[];
   variations?: EncounterVariation[];
 };
+
+type RawEncounter = Omit<Encounter, "id"> & { id?: string };
 
 export type EncounterPack = {
   demo: Encounter[];
@@ -138,7 +141,7 @@ export function makeVariationEncounter({
   basePhysicalCues = [],
   baseVerbalCues = [],
   variations = []
-}: MakeVariationEncounterInput): Encounter {
+}: MakeVariationEncounterInput): RawEncounter {
   return {
     encounterNumber,
     guestStateActual,
@@ -199,7 +202,7 @@ Check before shipping:
 [ ] Reflection still reads cleanly
 */
 
-export const ENCOUNTERS: EncounterPack = {
+const RAW_ENCOUNTERS: { demo: RawEncounter[]; premium: RawEncounter[] } = {
   demo: [
     {
       encounterNumber: 1,
@@ -1820,6 +1823,28 @@ export const ENCOUNTERS: EncounterPack = {
   ],
 };
 
+function buildStableEncounterId(tier: "demo" | "premium", encounterNumber: number): string {
+  return `${tier}_${encounterNumber}`;
+}
+
+function withStableEncounterIds(
+  list: RawEncounter[],
+  tier: "demo" | "premium"
+): Encounter[] {
+  return list.map((encounter) => ({
+    ...encounter,
+    id:
+      typeof encounter?.id === "string" && encounter.id.trim()
+        ? encounter.id.trim()
+        : buildStableEncounterId(tier, encounter.encounterNumber),
+  }));
+}
+
+export const ENCOUNTERS: EncounterPack = {
+  demo: withStableEncounterIds(RAW_ENCOUNTERS.demo, "demo"),
+  premium: withStableEncounterIds(RAW_ENCOUNTERS.premium, "premium"),
+};
+
 // ------------------------------------------------------------
 // Helpers
 // ------------------------------------------------------------
@@ -1830,6 +1855,12 @@ export function getEncountersForTier(tier: "demo" | "premium"): Encounter[] {
 
 export function getEncounterByNumber(n: number): Encounter | undefined {
   return [...ENCOUNTERS.demo, ...ENCOUNTERS.premium].find((e) => e.encounterNumber === n);
+}
+
+export function getEncounterById(id: string): Encounter | undefined {
+  const target = String(id || "").trim();
+  if (!target) return undefined;
+  return [...ENCOUNTERS.demo, ...ENCOUNTERS.premium].find((e) => String(e?.id || "") === target);
 }
 
 export function getNextEncounterNumber(tier: "demo" | "premium", currentNumber: number): number | null {
@@ -1895,16 +1926,16 @@ export function validateEncounters(pack: EncounterPack): void {
     if (!cond) throw new Error(msg);
   }
 
-  function findDupes(list: any[], label: string) {
-    const seen = new Set<number>();
-    const dupes = new Set<number>();
+  function findDupes(list: any[], label: string, key: "encounterNumber" | "id") {
+    const seen = new Set<string | number>();
+    const dupes = new Set<string | number>();
     for (const e of list) {
-      const n = e?.encounterNumber;
-      if (seen.has(n)) dupes.add(n);
-      seen.add(n);
+      const value = e?.[key];
+      if (seen.has(value)) dupes.add(value);
+      seen.add(value);
     }
     if (dupes.size) {
-      throw new Error(`[encounters] Duplicate encounterNumber in ${label}: ${Array.from(dupes).join(", ")}`);
+      throw new Error(`[encounters] Duplicate ${key} in ${label}: ${Array.from(dupes).join(", ")}`);
     }
   }
 
@@ -1912,9 +1943,11 @@ export function validateEncounters(pack: EncounterPack): void {
     assert(Array.isArray(list), `[encounters] ${label} must be an array`);
     assert(list.length > 0, `[encounters] ${label} is empty`);
 
-    findDupes(list, label);
+    findDupes(list, label, "encounterNumber");
+    findDupes(list, label, "id");
 
     for (const e of list) {
+      assert(typeof e.id === "string" && e.id.length > 0, `[encounters] ${label} missing id`);
       assert(typeof e.encounterNumber === "number", `[encounters] ${label} missing encounterNumber`);
       assert(e.encounterNumber >= 1, `[encounters] ${label} encounterNumber must be >= 1`);
 
