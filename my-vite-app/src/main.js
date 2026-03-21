@@ -1199,6 +1199,60 @@ window.__BC_PARENT_STATE__ = {
   isCtxReady: isParentCtxReady,
   isPremiumIframeHealthy,
 };
+window.__BC_PARENT_SMOKE_TEST__ = function __BC_PARENT_SMOKE_TEST__() {
+  const snapshot = getParentCtxSnapshot("premium");
+  const iframe = document.getElementById("premiumRootFrame");
+  const frameWin = iframe?.contentWindow || null;
+  const iframeState = frameWin?.__BC_STATE__?.get?.() || null;
+  const iframeSmoke = frameWin?.__BC_IFRAME_SMOKE_TEST__?.() || null;
+  const frameCtx = frameWin?.__BC_CTX__ || null;
+  const frameEpoch = Number(frameWin?.__BC_EPOCH__ || 0);
+  const targetEpoch = Number(window.__BC_IFRAME_EPOCH__ || iframe?.dataset?.bcEpoch || 0);
+  const checks = [
+    { id: "parent_ctx_ready", ok: !!snapshot.ctxReady, value: snapshot.ctxReady },
+    { id: "iframe_mounted", ok: !!frameWin, value: !!frameWin },
+    { id: "iframe_healthy", ok: isPremiumIframeHealthy(), value: isPremiumIframeHealthy() },
+    { id: "epoch_match", ok: !!targetEpoch && frameEpoch === targetEpoch, value: { parentEpoch: targetEpoch, iframeEpoch: frameEpoch } },
+    {
+      id: "user_match",
+      ok: !!snapshot.userId && !!frameCtx?.userId && snapshot.userId === frameCtx.userId,
+      value: { parentUserId: snapshot.userId || null, iframeUserId: frameCtx?.userId || null }
+    },
+    {
+      id: "restaurant_match",
+      ok: !!snapshot.activeRestaurantId && !!frameCtx?.restaurantId && snapshot.activeRestaurantId === frameCtx.restaurantId,
+      value: { parentRestaurantId: snapshot.activeRestaurantId || null, iframeRestaurantId: frameCtx?.restaurantId || null }
+    },
+    {
+      id: "role_match",
+      ok: !!snapshot.membershipRole &&
+        !!(frameCtx?.membershipRole || frameCtx?.membership_role || frameCtx?.role) &&
+        snapshot.membershipRole === (frameCtx?.membershipRole || frameCtx?.membership_role || frameCtx?.role),
+      value: {
+        parentRole: snapshot.membershipRole || null,
+        iframeRole: frameCtx?.membershipRole || frameCtx?.membership_role || frameCtx?.role || null
+      }
+    },
+    {
+      id: "iframe_state_ready",
+      ok: iframeState?.stateHealth === "ready",
+      value: iframeState?.stateHealth || null
+    },
+  ];
+  const failed = checks.filter((check) => !check.ok).map((check) => check.id);
+  return {
+    ok: failed.length === 0,
+    summary: failed.length ? `failed:${failed.join(",")}` : "ok",
+    parent: snapshot,
+    iframe: {
+      epoch: frameEpoch,
+      ctx: frameCtx,
+      state: iframeState,
+      smoke: iframeSmoke,
+    },
+    checks,
+  };
+};
 
 (function bcAuthInvariantWatchdog() {
   if (window.__BC_AUTH_WATCHDOG__) return;

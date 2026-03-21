@@ -4965,6 +4965,55 @@ function isDrillMode() {
         get: getStateSnapshot,
         isReady: isRuntimeReady,
       };
+      window.__BC_IFRAME_SMOKE_TEST__ = function __BC_IFRAME_SMOKE_TEST__() {
+        const snapshot = getStateSnapshot();
+        const runtime = snapshot.runtime || {};
+        const ctx = snapshot.ctx || null;
+        const checks = [
+          { id: "ctx_ready", ok: !!snapshot.ctxReady, value: snapshot.ctxReady },
+          { id: "progression_ready", ok: !!snapshot.progressionReady, value: snapshot.progressionReady },
+          { id: "state_ready", ok: snapshot.stateHealth === "ready", value: snapshot.stateHealth },
+          { id: "user_bound", ok: !!ctx?.userId, value: ctx?.userId || null },
+          { id: "restaurant_bound", ok: !!ctx?.restaurantId, value: ctx?.restaurantId || null },
+          {
+            id: "role_bound",
+            ok: !!(ctx?.membershipRole || ctx?.membership_role || ctx?.role),
+            value: ctx?.membershipRole || ctx?.membership_role || ctx?.role || null
+          },
+          {
+            id: "epoch_bound",
+            ok: Number(window.__BC_EPOCH__ || 0) > 0,
+            value: Number(window.__BC_EPOCH__ || 0)
+          },
+          {
+            id: "runtime_ctx_match",
+            ok: !ctx || !runtime.ctx || (
+              ctx.userId === runtime.ctx.userId &&
+              ctx.restaurantId === runtime.ctx.restaurantId
+            ),
+            value: {
+              stateCtxUserId: ctx?.userId || null,
+              runtimeCtxUserId: runtime.ctx?.userId || null,
+              stateCtxRestaurantId: ctx?.restaurantId || null,
+              runtimeCtxRestaurantId: runtime.ctx?.restaurantId || null,
+            }
+          },
+          {
+            id: "progression_present",
+            ok: !!runtime.progression,
+            value: !!runtime.progression
+          },
+        ];
+        const failed = checks.filter((check) => !check.ok).map((check) => check.id);
+        return {
+          ok: failed.length === 0,
+          summary: failed.length ? `failed:${failed.join(",")}` : "ok",
+          mode: window.APP_MODE || window.bcMode || null,
+          epoch: Number(window.__BC_EPOCH__ || 0),
+          state: snapshot,
+          checks,
+        };
+      };
       window.isRuntimeReady = isRuntimeReady;
       syncRuntimeState({
         encounter: currentEncounter,
