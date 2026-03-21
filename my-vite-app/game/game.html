@@ -386,6 +386,30 @@
     function getLastTimedChallengeResult() {
       return window.__BC_LAST_TIMED_CHALLENGE_RESULT__ || getTimedChallengeHost().__BC_LAST_TIMED_CHALLENGE_RESULT__ || null;
     }
+    function setActiveDisplayMethodChallengeState(nextChallenge = null) {
+      const host = getTimedChallengeHost();
+      window.__BC_ACTIVE_DISPLAY_METHOD_CHALLENGE__ = nextChallenge || null;
+      try { host.__BC_ACTIVE_DISPLAY_METHOD_CHALLENGE__ = nextChallenge || null; } catch {}
+      return window.__BC_ACTIVE_DISPLAY_METHOD_CHALLENGE__;
+    }
+    function setPendingDisplayMethodChallengeState(nextChallenge = null) {
+      const host = getTimedChallengeHost();
+      window.__BC_PENDING_DISPLAY_METHOD_CHALLENGE__ = nextChallenge || null;
+      try { host.__BC_PENDING_DISPLAY_METHOD_CHALLENGE__ = nextChallenge || null; } catch {}
+      return window.__BC_PENDING_DISPLAY_METHOD_CHALLENGE__;
+    }
+    function getActiveDisplayMethodChallenge() {
+      return window.__BC_ACTIVE_DISPLAY_METHOD_CHALLENGE__ || getTimedChallengeHost().__BC_ACTIVE_DISPLAY_METHOD_CHALLENGE__ || null;
+    }
+    function getPendingDisplayMethodChallenge() {
+      return window.__BC_PENDING_DISPLAY_METHOD_CHALLENGE__ || getTimedChallengeHost().__BC_PENDING_DISPLAY_METHOD_CHALLENGE__ || null;
+    }
+    function getLastDisplayMethodChallengeStatus() {
+      return window.__BC_LAST_DISPLAY_METHOD_CHALLENGE_STATUS__ || null;
+    }
+    function getLastDisplayMethodChallengeResult() {
+      return window.__BC_LAST_DISPLAY_METHOD_CHALLENGE_RESULT__ || getTimedChallengeHost().__BC_LAST_DISPLAY_METHOD_CHALLENGE_RESULT__ || null;
+    }
     function setActiveAssignedDrill(nextDrill = null) {
       window.__BC_LAST_ASSIGNED_DRILL__ = nextDrill || null;
       return window.__BC_LAST_ASSIGNED_DRILL__;
@@ -595,6 +619,95 @@
           return strongestSkill === String(expected || "").toLowerCase();
       }
     }
+    function getDisplayMethodChallengeCopy(challenge = {}) {
+      const key = String(challenge?.methodKey || challenge?.challengeKey || "").toLowerCase();
+      const map = {
+        comparison: {
+          label: "Display Method: Comparison",
+          cue: "Frame the wine by comparing it clearly against another viable direction.",
+          next: "Guide the guest with a real contrast, not just a label drop.",
+        },
+        pairing: {
+          label: "Display Method: Pairing",
+          cue: "Tie the recommendation cleanly to what the table is eating or likely to enjoy.",
+          next: "Make the pairing logic obvious and relevant to the guest.",
+        },
+        value_justification: {
+          label: "Display Method: Value Justification",
+          cue: "Explain why this recommendation is worth it for this table.",
+          next: "Anchor the recommendation in value, not just enthusiasm.",
+        },
+      };
+
+      return map[key] || {
+        label: String(challenge?.title || "Display Method Challenge"),
+        cue: "Use the required display method before time runs out.",
+        next: "Make the recommendation structure easy for the guest to follow.",
+      };
+    }
+    function evaluateDisplayMethodChallengeSuccess(challenge = {}, encounter = {}, checks = {}, report = {}) {
+      const rule = challenge?.successRule || {};
+      const methodKey = String(
+        rule?.value ||
+        challenge?.methodKey ||
+        challenge?.challengeKey ||
+        report?.methodKey ||
+        ""
+      ).toLowerCase();
+      const strictness = String(
+        challenge?.strictness ||
+        report?.strictness ||
+        "normal"
+      ).toLowerCase();
+      const outcome = String(report?.outcome || encounter?.finalOutcome || encounter?.outcome || "").toLowerCase();
+      const chainScore = Number(report?.chainScore ?? encounter?.chainScore ?? 0);
+      const deliveryScore = Number(
+        report?.deliveryScore ??
+        encounter?.__tiers?.delivery ??
+        (typeof getDeliveryScore === "function" ? getDeliveryScore(encounter) : 0) ??
+        0
+      );
+      const guestReadCorrect = !!(
+        report?.guestReadCorrect ??
+        checks?.guestRead ??
+        encounter?.guestReadCorrect ??
+        false
+      );
+      const premiumSuccess = !!(
+        report?.premiumSuccess ??
+        encounter?.premiumOpportunityHit ??
+        encounter?.premiumRollSuccess ??
+        false
+      );
+      const modeStatus = String(report?.modeStatus || checks?.modeStatus || encounter?.modeStatus || "").toLowerCase();
+      const hookStatus = String(report?.hookStatus || checks?.hookStatus || encounter?.hookStatus || "").toLowerCase();
+      const modeSafe = modeStatus !== "damaging" && modeStatus !== "wrong";
+      const hookSafe = hookStatus !== "damaging" && hookStatus !== "wrong";
+      const outcomeSafe = outcome !== "recovery";
+      const outcomeClose = outcome === "soft_close" || outcome === "clean_close";
+      const strictPremium = strictness === "hard" || strictness === "strict";
+
+      switch (String(rule?.type || "").toLowerCase()) {
+        case "display_method_match":
+        default:
+          break;
+      }
+
+      switch (methodKey) {
+        case "pairing":
+          return guestReadCorrect && deliveryScore >= 1 && modeSafe && hookSafe && outcomeSafe;
+        case "value_justification":
+          return deliveryScore >= 1 && chainScore >= 5 && outcomeClose && (!strictPremium || premiumSuccess);
+        case "comparison":
+        default:
+          return (
+            deliveryScore >= 1 &&
+            chainScore >= 5 &&
+            outcomeSafe &&
+            (guestReadCorrect || (modeSafe && hookSafe))
+          );
+      }
+    }
     function getEncounterStrongPillars(enc = {}, checks = {}) {
       const readCorrect = !!checks?.guestRead;
       const modeTier = typeof getModeTier === "function" ? getModeTier(checks) : "wrong";
@@ -607,6 +720,118 @@
         (hookTier === "right" ? 1 : 0) +
         (deliveryStrong ? 1 : 0)
       );
+    }
+    function getDisplayMethodChallengeRailViewModel() {
+      const active = getActiveDisplayMethodChallenge?.() || null;
+      const pending = getPendingDisplayMethodChallenge?.() || null;
+      const status = getLastDisplayMethodChallengeStatus?.() || null;
+
+      if (!active) {
+        if (pending) {
+          if (isDisplayMethodChallengeAssignmentExpired?.(pending)) {
+            expirePendingDisplayMethodChallengeAssignment?.("assignment_expired");
+            return {
+              state: "expired",
+              title: "Display Method Challenge Expired",
+              body: "The display method assignment expired before it was used.",
+              error: "",
+              timerText: "",
+              cueText: "",
+              nextText: "",
+              rewardText: "",
+            };
+          }
+          const rewardPoints = Number(pending?.rewardPoints || pending?.reward_points || 0) || 0;
+          const copy = getDisplayMethodChallengeCopy(pending);
+          const placement = String(pending?.placement || pending?.payload?.placement || "before_start");
+          return {
+            state: "pending",
+            title: `${copy.label} (Queued)`,
+            body: placement === "after_first_encounter"
+              ? "This display method challenge will begin after encounter 1."
+              : "This display method challenge will be your next extra encounter.",
+            error: "",
+            timerText: "",
+            cueText: copy.cue,
+            nextText: placement === "after_first_encounter"
+              ? "Complete encounter 1 to activate this challenge."
+              : "Start the next encounter to launch this challenge.",
+            rewardText: rewardPoints > 0 ? `Reward: ${rewardPoints} pts` : "",
+          };
+        }
+
+        if (status?.ok === false) {
+          return {
+            state: "error",
+            title: "Display Method Update Failed",
+            body: "Last display method challenge result failed to send.",
+            error: String(status?.error || "unknown"),
+            timerText: "",
+            cueText: "",
+            nextText: "",
+            rewardText: "",
+          };
+        }
+
+        if (status?.expired) {
+          return {
+            state: "expired",
+            title: "Display Method Challenge Expired",
+            body: "The display method challenge window has ended.",
+            error: "",
+            timerText: "",
+            cueText: "",
+            nextText: "",
+            rewardText: "",
+          };
+        }
+
+        if (status?.ok) {
+          return {
+            state: "completed",
+            title: "Display Method Challenge Complete",
+            body: "Last display method challenge result sent ✅",
+            error: "",
+            timerText: "",
+            cueText: "",
+            nextText: "",
+            rewardText: "",
+          };
+        }
+
+        return {
+          state: "idle",
+          title: "No Display Method Objective",
+          body: "No display method objective right now.",
+          error: "",
+          timerText: "",
+          cueText: "",
+          nextText: "",
+          rewardText: "",
+        };
+      }
+
+      const durationSec = Number(active?.durationSec || active?.duration_sec || 0) || 0;
+      const startedAt = Number(active?.startedAt || active?.started_at || 0) || 0;
+      const elapsedSec = startedAt ? Math.max(0, Math.floor((Date.now() - startedAt) / 1000)) : 0;
+      const remainingSec = durationSec ? Math.max(0, durationSec - elapsedSec) : 0;
+      const mins = Math.floor(remainingSec / 60);
+      const secs = remainingSec % 60;
+      const copy = getDisplayMethodChallengeCopy(active);
+      const rewardPoints = Number(active?.rewardPoints || active?.reward_points || 0) || 0;
+
+      return {
+        state: "active",
+        title: copy.label,
+        body: "A display method challenge is active for this encounter window.",
+        error: "",
+        timerText: durationSec ? `${mins}m ${secs}s remaining` : "",
+        cueText: copy.cue,
+        nextText: copy.next,
+        rewardText: rewardPoints > 0 ? `Reward: ${rewardPoints} pts` : "",
+        focusLabel: String(active?.focus || "").replace(/_/g, " "),
+        remainingSec,
+      };
     }
     function getTimedChallengeRailViewModel() {
       const active = getActiveTimedChallenge?.() || null;
@@ -886,6 +1111,7 @@
       window.__BC_RAIL_OBJECTIVE_TICKER__ = setInterval(() => {
         try {
           renderRailActiveChallenge?.();
+          renderRailActiveDisplayMethodChallenge?.();
           renderRailActiveDrill?.();
           if (
             currentEncounter?.isTimedChallengeEncounter &&
@@ -894,6 +1120,14 @@
             !currentEncounter?.__timedChallengeResolved
           ) {
             failTimedChallengeEncounter("timeout");
+          }
+          if (
+            currentEncounter?.isDisplayMethodChallengeEncounter &&
+            Number(currentEncounter?.challengeExpiresAt || 0) > 0 &&
+            Date.now() >= Number(currentEncounter.challengeExpiresAt) &&
+            !currentEncounter?.__displayMethodChallengeResolved
+          ) {
+            failDisplayMethodChallengeEncounter("timeout");
           }
         } catch {}
       }, 1000);
@@ -1173,6 +1407,59 @@
 
         ${vm.focusLabel ? `
           ${railLine(`Focus: ${vm.focusLabel}`, "small-text rail-copy rail-copy-block")}
+        ` : ``}
+
+        ${vm.timerText ? `
+          ${railLine(vm.timerText)}
+        ` : ``}
+
+        ${vm.rewardText ? `
+          ${railLine(vm.rewardText)}
+        ` : ``}
+
+        ${vm.cueText ? `
+          ${railLine(vm.cueText, "small-text rail-copy rail-copy-block rail-copy-soft")}
+        ` : ``}
+
+        ${vm.nextText ? `
+          ${railLine(vm.nextText, "small-text rail-copy rail-copy-tight rail-copy-subtle")}
+        ` : ``}
+      `;
+    }
+    function renderRailActiveDisplayMethodChallenge() {
+      const root = getRailEl("railActiveDisplayMethodChallenge");
+      if (!root) return;
+
+      const vm = getDisplayMethodChallengeRailViewModel();
+
+      if (vm.state === "idle") {
+        root.innerHTML = railLine(vm.body, "small-text rail-copy rail-copy-muted");
+        return;
+      }
+
+      if (vm.state === "completed" || vm.state === "expired") {
+        root.innerHTML = `
+          ${railHeader(vm.title)}
+          ${railLine(vm.body, "small-text rail-copy rail-copy-spaced")}
+        `;
+        return;
+      }
+
+      if (vm.state === "error") {
+        root.innerHTML = `
+          ${railHeader(vm.title)}
+          ${railLine(vm.body, "small-text rail-copy rail-copy-spaced")}
+          ${railLine(`Error: ${vm.error}`, "small-text rail-copy rail-copy-subtle rail-copy-spaced")}
+        `;
+        return;
+      }
+
+      root.innerHTML = `
+        ${railHeader(vm.title, "Active")}
+        ${railLine(vm.body, "small-text rail-copy rail-copy-spaced")}
+
+        ${vm.focusLabel ? `
+          ${railLine(`Method: ${vm.focusLabel}`, "small-text rail-copy rail-copy-block")}
         ` : ``}
 
         ${vm.timerText ? `
@@ -1601,6 +1888,7 @@
     function renderGameplayRail() {
       ensureRailObjectiveTicker?.();
       safeCall("renderRailActiveChallenge", () => renderRailActiveChallenge?.());
+      safeCall("renderRailActiveDisplayMethodChallenge", () => renderRailActiveDisplayMethodChallenge?.());
       safeCall("renderRailActiveDrill", () => renderRailActiveDrill?.());
       safeCall("renderRailProgress", () => renderRailProgress?.());
       safeCall("renderRailLiveEffects", () => renderRailLiveEffects?.());
@@ -1611,6 +1899,69 @@
       const host = getTimedChallengeHost();
       try { host.renderHudTimedChallenge?.(); } catch {}
       try { host.renderManagerBoardOverviewTimedChallenge?.(); } catch {}
+    }
+    function renderDisplayMethodChallengeSurfaces() {
+      const host = getTimedChallengeHost();
+      try { host.renderHudDisplayMethodChallenge?.(); } catch {}
+      try { host.renderManagerBoardOverviewDisplayMethodChallenge?.(); } catch {}
+    }
+    function isInjectedChallengeEncounter(encounter = null) {
+      return !!(
+        encounter?.isTimedChallengeEncounter ||
+        encounter?.isDisplayMethodChallengeEncounter
+      );
+    }
+    function extractInjectedChallengeMeta(enc = {}) {
+      return {
+        isTimedChallengeEncounter: !!enc?.isTimedChallengeEncounter,
+        timedChallengeId: enc?.timedChallengeId || null,
+        timedChallengeKey: enc?.timedChallengeKey || null,
+        timedChallengeTitle: enc?.timedChallengeTitle || null,
+        timedChallengePlacement: enc?.timedChallengePlacement || null,
+        timedChallengeTimerSec: Number(enc?.timedChallengeTimerSec || 0) || 0,
+        isDisplayMethodChallengeEncounter: !!enc?.isDisplayMethodChallengeEncounter,
+        displayMethodChallengeId: enc?.displayMethodChallengeId || null,
+        displayMethodKey: enc?.displayMethodKey || null,
+        displayMethodTitle: enc?.displayMethodTitle || null,
+        displayMethodPlacement: enc?.displayMethodPlacement || null,
+        displayMethodTimerSec: Number(enc?.displayMethodTimerSec || 0) || 0,
+        displayMethodStrictness: enc?.displayMethodStrictness || null,
+        challengeStartedAt: Number(enc?.challengeStartedAt || 0) || 0,
+        challengeExpiresAt: Number(enc?.challengeExpiresAt || 0) || 0,
+        contextLine: enc?.contextLine || "",
+        meta: enc?.meta || null,
+      };
+    }
+    function reapplyInjectedChallengeMeta(enc = {}, meta = {}) {
+      if (!enc || !meta) return enc;
+      const next = { ...enc };
+      if (meta.isTimedChallengeEncounter) {
+        next.isTimedChallengeEncounter = true;
+        next.timedChallengeId = meta.timedChallengeId || null;
+        next.timedChallengeKey = meta.timedChallengeKey || null;
+        next.timedChallengeTitle = meta.timedChallengeTitle || null;
+        next.timedChallengePlacement = meta.timedChallengePlacement || null;
+        next.timedChallengeTimerSec = Number(meta.timedChallengeTimerSec || 0) || 0;
+      }
+      if (meta.isDisplayMethodChallengeEncounter) {
+        next.isDisplayMethodChallengeEncounter = true;
+        next.displayMethodChallengeId = meta.displayMethodChallengeId || null;
+        next.displayMethodKey = meta.displayMethodKey || null;
+        next.displayMethodTitle = meta.displayMethodTitle || null;
+        next.displayMethodPlacement = meta.displayMethodPlacement || null;
+        next.displayMethodTimerSec = Number(meta.displayMethodTimerSec || 0) || 0;
+        next.displayMethodStrictness = meta.displayMethodStrictness || null;
+      }
+      if (meta.challengeStartedAt) next.challengeStartedAt = Number(meta.challengeStartedAt || 0) || 0;
+      if (meta.challengeExpiresAt) next.challengeExpiresAt = Number(meta.challengeExpiresAt || 0) || 0;
+      if (meta.contextLine) next.contextLine = meta.contextLine;
+      if (meta.meta) {
+        next.meta = {
+          ...(next.meta || {}),
+          ...meta.meta,
+        };
+      }
+      return next;
     }
     function isTimedChallengeAssignmentExpired(challenge = null) {
       const assignmentExpiresAt = Number(
@@ -1692,6 +2043,46 @@
       if (placement === "after_first_encounter") return currentIndex === 1;
       return currentIndex === 0;
     }
+    function isDisplayMethodChallengeAssignmentExpired(challenge = null) {
+      const assignmentExpiresAt = Number(
+        challenge?.assignmentExpiresAt ??
+        challenge?.payload?.assignmentExpiresAt ??
+        challenge?.payload?.assignment_expires_at ??
+        0
+      );
+      return !!assignmentExpiresAt && assignmentExpiresAt <= Date.now();
+    }
+    function expirePendingDisplayMethodChallengeAssignment(reason = "assignment_expired") {
+      const pending = getPendingDisplayMethodChallenge?.() || null;
+      if (!pending) return false;
+
+      setPendingDisplayMethodChallengeState(null);
+      window.__BC_LAST_DISPLAY_METHOD_CHALLENGE_STATUS__ = {
+        ok: null,
+        error: null,
+        expired: true,
+        status: String(reason || "assignment_expired"),
+        at: Date.now(),
+      };
+      renderDisplayMethodChallengeSurfaces();
+      refreshWaiterRuntimeSurfaces?.({ rail: true, counts: false });
+      return true;
+    }
+    function shouldInjectDisplayMethodChallengeNow() {
+      const pending = getPendingDisplayMethodChallenge?.() || null;
+      if (!pending) return false;
+      if (getActiveDisplayMethodChallenge?.()) return false;
+      if (pending?.consumed || pending?.resolved) return false;
+      if (isDisplayMethodChallengeAssignmentExpired(pending)) {
+        expirePendingDisplayMethodChallengeAssignment("assignment_expired");
+        return false;
+      }
+
+      const placement = String(pending?.placement || pending?.payload?.placement || "before_start");
+      const currentIndex = Number(encounterIndex || 0);
+      if (placement === "after_first_encounter") return currentIndex === 1;
+      return currentIndex === 0;
+    }
     function buildInjectedTimedChallengeEncounter(baseEncounter = null, challenge = null) {
       const base = baseEncounter && typeof baseEncounter === "object"
         ? structuredClone(baseEncounter)
@@ -1731,6 +2122,89 @@
           timedChallengeId: challengeId,
           timedChallengeKey: challenge?.challengeKey || challenge?.payload?.challengeKey || null,
           timedChallengeTitle: title,
+        },
+      };
+    }
+    function startDisplayMethodChallenge(challenge) {
+      if (!challenge) return false;
+
+      const startedAt = Number(challenge.startedAt || challenge.started_at || Date.now());
+      const encounterTimerSec = Math.max(
+        60,
+        Number(
+          challenge.encounterTimerSec ??
+          challenge.payload?.encounterTimerSec ??
+          challenge.payload?.encounter_timer_sec ??
+          300
+        ) || 300
+      );
+      const nextChallenge = {
+        ...challenge,
+        startedAt,
+        expiresAt: Number(challenge.expiresAt || challenge.expires_at || 0) || (startedAt + encounterTimerSec * 1000),
+        durationSec: encounterTimerSec,
+        encounterTimerSec,
+        injected: true,
+        injectedAt: startedAt,
+        status: "active",
+      };
+
+      setPendingDisplayMethodChallengeState(null);
+      setActiveDisplayMethodChallengeState(nextChallenge);
+      window.__BC_LAST_DISPLAY_METHOD_CHALLENGE_STATUS__ = {
+        ok: null,
+        error: null,
+        expired: false,
+        status: "active",
+        at: Date.now(),
+      };
+
+      console.log("[DISPLAY METHOD CHALLENGE] applied ✅", nextChallenge);
+      renderDisplayMethodChallengeSurfaces();
+      refreshWaiterRuntimeSurfaces?.();
+      window.showToast?.("Display method challenge started ✅");
+      return true;
+    }
+    function buildInjectedDisplayMethodChallengeEncounter(baseEncounter = null, challenge = null) {
+      const base = baseEncounter && typeof baseEncounter === "object"
+        ? structuredClone(baseEncounter)
+        : {};
+      const challengeId = String(challenge?.challengeId || challenge?.id || crypto.randomUUID());
+      const baseId = String(base?.id || base?.encounterId || base?.encounterNumber || "challenge");
+      const startedAt = Date.now();
+      const encounterTimerSec = Math.max(
+        60,
+        Number(
+          challenge?.encounterTimerSec ??
+          challenge?.payload?.encounterTimerSec ??
+          challenge?.payload?.encounter_timer_sec ??
+          300
+        ) || 300
+      );
+      const title = String(challenge?.title || challenge?.payload?.title || "Display Method Challenge");
+
+      return {
+        ...base,
+        id: `display_method_challenge_${challengeId}_${baseId}`,
+        encounterId: `display_method_challenge_${challengeId}_${baseId}`,
+        isDisplayMethodChallengeEncounter: true,
+        displayMethodChallengeId: challengeId,
+        displayMethodKey: challenge?.methodKey || challenge?.payload?.methodKey || challenge?.challengeKey || null,
+        displayMethodTitle: title,
+        displayMethodPlacement: challenge?.placement || challenge?.payload?.placement || "before_start",
+        displayMethodTimerSec: encounterTimerSec,
+        displayMethodStrictness: challenge?.strictness || challenge?.payload?.strictness || "normal",
+        challengeStartedAt: startedAt,
+        challengeExpiresAt: startedAt + encounterTimerSec * 1000,
+        contextLine: title
+          ? `[${title}] ${String(base?.contextLine || "").trim()}`.trim()
+          : String(base?.contextLine || ""),
+        meta: {
+          ...(base?.meta || {}),
+          displayMethodChallenge: true,
+          displayMethodChallengeId: challengeId,
+          displayMethodKey: challenge?.methodKey || challenge?.payload?.methodKey || challenge?.challengeKey || null,
+          displayMethodTitle: title,
         },
       };
     }
@@ -2101,6 +2575,297 @@
         return true;
       } catch (e) {
         console.warn("applyTimedChallengeFromMessage failed", e);
+        return false;
+      }
+    }
+    function logDisplayMethodChallengeResult(result = {}) {
+      try {
+        const host = getTimedChallengeHost();
+        const challenge = result?.challenge || host.__BC_LAST_DISPLAY_METHOD_CHALLENGE_RESULT__ || null;
+        if (!challenge) return false;
+
+        const encounter = result?.encounter || window.currentEncounter || window.__BC_LAST_ENCOUNTER__ || null;
+        const checks = result?.checks || (
+          encounter && typeof buildReactionChecksFromEncounter === "function"
+            ? buildReactionChecksFromEncounter(encounter, window.PROG || window.__BC_PROG__ || null)
+            : {}
+        );
+        const runtimeCtx = getRewardRuntimeContext();
+        const performanceGrade = String(
+          result?.performanceGrade ||
+          encounter?.performanceGrade ||
+          ""
+        ).toUpperCase();
+        const qualityState =
+          performanceGrade === "A" ? "mastered" :
+          performanceGrade === "B" ? "passed" :
+          String(result?.status || "").toLowerCase() === "completed" ? "passed" :
+          "completed";
+
+        const payload = {
+          challengeKey: challenge.challengeKey || null,
+          methodKey: challenge.methodKey || challenge.challengeKey || null,
+          title: challenge.title || null,
+          status: result?.status || "expired",
+          completedAt: result?.completedAt || Date.now(),
+          strictness: result?.strictness || challenge?.strictness || null,
+          outcome: result?.outcome || encounter?.finalOutcome || encounter?.outcome || null,
+          chainSignal: result?.chainSignal || encounter?.chainSignal || encounter?.__reaction?.chainSignal || null,
+          chainScore: result?.chainScore ?? encounter?.chainScore ?? null,
+          guestReadCorrect: result?.guestReadCorrect ?? checks?.guestRead ?? null,
+          deliveryScore: result?.deliveryScore ?? (encounter && typeof getDeliveryScore === "function" ? getDeliveryScore(encounter) : null),
+          resetUsed: result?.resetUsed ?? checks?.resetUsed ?? encounter?.resetUsed ?? null,
+          premiumSuccess: result?.premiumSuccess ?? encounter?.premiumOpportunityHit ?? encounter?.premiumRollSuccess ?? false,
+          modeStatus: result?.modeStatus ?? checks?.modeStatus ?? encounter?.modeStatus ?? null,
+          hookStatus: result?.hookStatus ?? checks?.hookStatus ?? encounter?.hookStatus ?? null,
+          performanceGrade: performanceGrade || null,
+          strongPillars: result?.strongPillars ?? (encounter && typeof getEncounterStrongPillars === "function" ? getEncounterStrongPillars(encounter, checks) : null),
+          qualityState,
+          tier: Number(result?.tier ?? result?.servedTier ?? result?.tierToServe ?? runtimeCtx.tier ?? 1),
+          effectiveDifficulty: Number.isFinite(Number(result?.effectiveDifficulty))
+            ? Number(result.effectiveDifficulty)
+            : runtimeCtx.effectiveDifficulty,
+          pressureLevel: Number.isFinite(Number(result?.pressureLevel))
+            ? Number(result.pressureLevel)
+            : runtimeCtx.pressureLevel,
+          rewardPoints: result?.rewardPoints ?? challenge?.rewardPoints ?? challenge?.payload?.rewardPoints ?? null,
+          targetUserId: challenge.targetUserId || null,
+          restaurantId: challenge.restaurantId || null,
+        };
+
+        window.parent?.postMessage(
+          {
+            source: "BC_MSG",
+            v: 1,
+            type: "display_method_challenge_result",
+            challengeId: challenge.challengeId || challenge.id || null,
+            payload,
+            epoch: Number(window.__BC_IFRAME_EPOCH__ || window.__BC_EPOCH__ || 0),
+          },
+          window.location.origin
+        );
+
+        return true;
+      } catch (e) {
+        console.warn("[DISPLAY METHOD CHALLENGE] result post failed", e);
+        return false;
+      }
+    }
+    function completeDisplayMethodChallengeLocally(status, extra = {}) {
+      const host = getTimedChallengeHost();
+      const challenge = getActiveDisplayMethodChallenge?.() || host.__BC_ACTIVE_DISPLAY_METHOD_CHALLENGE__ || null;
+      if (!challenge) return false;
+
+      const result = {
+        id: challenge.id || challenge.challengeId || null,
+        challengeId: challenge.challengeId || challenge.id || null,
+        challengeKey: challenge.challengeKey,
+        methodKey: challenge.methodKey || challenge.challengeKey || null,
+        title: challenge.title,
+        status: String(status || "expired"),
+        completedAt: Date.now(),
+        targetUserId: challenge.targetUserId || null,
+        restaurantId: challenge.restaurantId || null,
+        rewardPoints: challenge?.rewardPoints ?? challenge?.payload?.rewardPoints ?? null,
+        ackPending: true,
+        ackOk: null,
+        ackError: null,
+        ackAt: null,
+        challenge,
+        evaluatedSuccess: typeof extra?.evaluatedSuccess === "boolean"
+          ? extra.evaluatedSuccess
+          : String(status || "").toLowerCase() === "completed",
+        ...extra,
+      };
+
+      window.__BC_LAST_DISPLAY_METHOD_CHALLENGE_RESULT__ = result;
+      host.__BC_LAST_DISPLAY_METHOD_CHALLENGE_RESULT__ = result;
+      window.__BC_LAST_DISPLAY_METHOD_CHALLENGE_STATUS__ = {
+        ok: null,
+        error: null,
+        expired: result.status === "expired",
+        status: result.status,
+        at: Date.now(),
+      };
+      setActiveDisplayMethodChallengeState(null);
+
+      renderDisplayMethodChallengeSurfaces();
+      refreshWaiterRuntimeSurfaces?.({ rail: true, counts: false });
+
+      if (result.status === "expired") {
+        window.showToast?.("This display method objective expired.");
+      }
+
+      logDisplayMethodChallengeResult(result);
+      return true;
+    }
+    function failDisplayMethodChallengeEncounter(reason = "timeout") {
+      const encounter = window.currentEncounter || currentEncounter || null;
+      if (!encounter?.isDisplayMethodChallengeEncounter) return false;
+      if (encounter.__displayMethodChallengeResolved) return false;
+      encounter.__displayMethodChallengeResolved = true;
+
+      completeDisplayMethodChallengeLocally("expired", {
+        reason,
+        encounter,
+        challengeEncounter: true,
+        evaluatedSuccess: false,
+        outcome: reason === "timeout" ? "timeout" : (encounter?.outcome || null),
+      });
+
+      setTimeout(() => {
+        try {
+          if (
+            (window.currentEncounter || currentEncounter)?.displayMethodChallengeId === encounter.displayMethodChallengeId &&
+            !(window.currentEncounter || currentEncounter)?.__finalized
+          ) {
+            startEncounter();
+          }
+        } catch (e) {
+          console.warn("[DISPLAY METHOD CHALLENGE] timeout restart failed", e);
+        }
+      }, 80);
+
+      return true;
+    }
+    function evaluateDisplayMethodChallengeAgainstProgress(payload) {
+      const challenge = getActiveDisplayMethodChallenge?.() || null;
+      if (!challenge) return false;
+
+      const encounter = window.currentEncounter || null;
+      if (!encounter?.isDisplayMethodChallengeEncounter) return false;
+      const checks = encounter ? buildReactionChecksFromEncounter(encounter, PROG) : {};
+      const outcomeResult = encounter && typeof resolveOutcome === "function"
+        ? resolveOutcome(encounter, checks)
+        : { outcome: encounter?.outcome || "" };
+      const reportPayload = {
+        challengeKey: challenge?.challengeKey || null,
+        methodKey: challenge?.methodKey || challenge?.challengeKey || null,
+        title: challenge?.title || "Display Method Challenge",
+        targetUserId: challenge?.targetUserId || null,
+        restaurantId: challenge?.restaurantId || null,
+        rewardPoints: Number(challenge?.rewardPoints || 0),
+        strictness: challenge?.strictness || null,
+        outcome: outcomeResult?.outcome || null,
+        chainSignal: encounter?.chainSignal || encounter?.__reaction?.chainSignal || null,
+        chainScore: Number(encounter?.chainScore || 0),
+        guestReadCorrect: !!checks?.guestRead,
+        deliveryScore: encounter && typeof getDeliveryScore === "function" ? getDeliveryScore(encounter) : 0,
+        resetUsed: !!checks?.resetUsed,
+        premiumSuccess: !!(encounter?.premiumOpportunityHit || encounter?.premiumRollSuccess || false),
+        modeStatus: checks?.modeStatus || encounter?.modeStatus || null,
+        hookStatus: checks?.hookStatus || encounter?.hookStatus || null,
+        performanceGrade: encounter?.performanceGrade || null,
+        strongPillars: getEncounterStrongPillars(encounter, checks),
+      };
+
+      const success = evaluateDisplayMethodChallengeSuccess(
+        challenge,
+        encounter,
+        checks,
+        reportPayload
+      );
+      reportPayload.status = success ? "completed" : "expired";
+      reportPayload.completedAt = Date.now();
+      reportPayload.challengeEncounter = true;
+      reportPayload.evaluatedSuccess = success;
+
+      return completeDisplayMethodChallengeLocally(reportPayload.status, reportPayload);
+    }
+    function applyDisplayMethodChallengeFromMessage(message) {
+      try {
+        const payload = message?.payload || {};
+        const challengeKey = payload?.challengeKey || null;
+        const methodKey = payload?.methodKey || challengeKey || null;
+        const targetUserId = payload?.targetUserId || null;
+        const restaurantId = payload?.restaurantId || null;
+        const durationSec = Number(payload?.durationSec || 0);
+        const placement = String(payload?.placement || "before_start");
+
+        const ctx = window.__BC_CTX__ || {};
+        const currentUserId = ctx.userId || null;
+        const currentRestaurantId = ctx.restaurantId || null;
+
+        if (!challengeKey || !methodKey || !targetUserId || !restaurantId || !durationSec) {
+          console.warn("[DISPLAY METHOD CHALLENGE] invalid payload", payload);
+          return false;
+        }
+
+        if (String(targetUserId) !== String(currentUserId || "")) return false;
+        if (String(restaurantId) !== String(currentRestaurantId || "")) return false;
+
+        const host = getTimedChallengeHost();
+        const current = getActiveDisplayMethodChallenge?.() || host.__BC_ACTIVE_DISPLAY_METHOD_CHALLENGE__ || null;
+        if (current?.id && message?.id && String(current.id) === String(message.id)) {
+          console.log("[DISPLAY METHOD CHALLENGE] skipped (already active)", { id: message.id });
+          return true;
+        }
+
+        const lastResult = window.__BC_LAST_DISPLAY_METHOD_CHALLENGE_RESULT__ || host.__BC_LAST_DISPLAY_METHOD_CHALLENGE_RESULT__ || null;
+        if (lastResult?.id && message?.id && String(lastResult.id) === String(message.id)) {
+          console.log("[DISPLAY METHOD CHALLENGE] skipped (already resolved)", { id: message.id });
+          return true;
+        }
+
+        const assignedAt = Date.now();
+        const assignmentWindowSec = Math.max(
+          60,
+          Number(
+            payload?.assignmentWindowSec ??
+            payload?.durationSec ??
+            10800
+          ) || 10800
+        );
+        const encounterTimerSec = Math.max(
+          60,
+          Number(payload?.encounterTimerSec || 300) || 300
+        );
+        const challenge = {
+          id: message?.id || crypto.randomUUID(),
+          challengeId: message?.id || null,
+          title: payload?.title || "Display Method Challenge",
+          challengeKey,
+          methodKey,
+          targetUserId,
+          restaurantId,
+          assignmentStartedAt: assignedAt,
+          assignmentExpiresAt: assignedAt + assignmentWindowSec * 1000,
+          assignmentWindowSec,
+          encounterTimerSec,
+          durationSec: assignmentWindowSec,
+          placement,
+          focus: payload?.focus || null,
+          rewardPoints: Number(payload?.rewardPoints || 0),
+          strictness: payload?.strictness || "normal",
+          successRule: payload?.successRule || {},
+          injectionMode: payload?.injectionMode || "extra_encounter",
+          consumed: false,
+          injected: false,
+          resolved: false,
+          status: "pending",
+          payload,
+        };
+
+        setPendingDisplayMethodChallengeState(challenge);
+        window.__BC_LAST_DISPLAY_METHOD_CHALLENGE_STATUS__ = {
+          ok: null,
+          error: null,
+          expired: false,
+          status: "pending",
+          at: Date.now(),
+        };
+
+        console.log("[DISPLAY METHOD CHALLENGE] queued for encounter injection ✅", challenge);
+        renderDisplayMethodChallengeSurfaces();
+        refreshWaiterRuntimeSurfaces?.();
+        window.showToast?.(
+          placement === "after_first_encounter"
+            ? "Display method challenge queued for after encounter 1 ✅"
+            : "Display method challenge queued for next encounter ✅"
+        );
+        return true;
+      } catch (e) {
+        console.warn("applyDisplayMethodChallengeFromMessage failed", e);
         return false;
       }
     }
@@ -3391,6 +4156,22 @@
             }
 
             shouldMarkRead = !!applied || !!duplicateActive || !!duplicateResolved;
+          } else if (rowType === "display_method_challenge") {
+            const alreadyActiveId = getActiveDisplayMethodChallenge()?.id || null;
+            const lastResultId = getLastDisplayMethodChallengeResult()?.id || null;
+
+            const duplicateActive =
+              row?.id && alreadyActiveId && String(row.id) === String(alreadyActiveId);
+
+            const duplicateResolved =
+              row?.id && lastResultId && String(row.id) === String(lastResultId);
+
+            let applied = false;
+            if (!duplicateActive && !duplicateResolved) {
+              applied = applyDisplayMethodChallengeFromMessage(row);
+            }
+
+            shouldMarkRead = !!applied || !!duplicateActive || !!duplicateResolved;
           } else if (rowType === "instruction") {
             window.showToast?.("New manager instruction ✅");
             shouldMarkRead = true;
@@ -3460,6 +4241,56 @@
         } else {
           console.warn("[TIMED CHALLENGE] result ack failed", msg?.error || "unknown");
           window.showToast?.("Could not send timed challenge result.");
+        }
+        return;
+      }
+      if (msg.type === "display_method_challenge_result_ack") {
+        const last = window.__BC_LAST_DISPLAY_METHOD_CHALLENGE_RESULT__ || null;
+        const ackMatchesLast =
+          last && msg?.challengeId && String(last.id || "") === String(msg.challengeId);
+
+        if (ackMatchesLast) {
+          const next = {
+            ...last,
+            ackPending: false,
+            ackOk: !!msg.ok,
+            ackError: msg.ok ? null : (msg?.error || "unknown"),
+            ackAt: Date.now(),
+          };
+          window.__BC_LAST_DISPLAY_METHOD_CHALLENGE_RESULT__ = next;
+          try { getTimedChallengeHost().__BC_LAST_DISPLAY_METHOD_CHALLENGE_RESULT__ = next; } catch {}
+          if (msg.ok && String(next?.status || "").toLowerCase() === "completed") {
+            try {
+              const spine = getProgressionSpine({ allowNull: true });
+              const rewardInput = buildDisplayMethodChallengeRewardInput({
+                ...next,
+                ...msg,
+                success: true,
+              });
+              spine?.actions?.applyDisplayMethodChallengeReward?.(rewardInput);
+            } catch (e) {
+              console.warn("[DISPLAY METHOD CHALLENGE] reward apply failed", e);
+            }
+          }
+          window.__BC_LAST_DISPLAY_METHOD_CHALLENGE_STATUS__ = {
+            ok: !!msg.ok,
+            error: msg.ok ? null : (msg?.error || "unknown"),
+            expired: String(next?.status || "").toLowerCase() === "expired",
+            status: next?.status || null,
+            at: Date.now(),
+          };
+          renderDisplayMethodChallengeSurfaces();
+          refreshWaiterRuntimeSurfaces?.({ rail: true, counts: false });
+        }
+
+        if (msg.ok) {
+          console.log("[DISPLAY METHOD CHALLENGE] result ack ✅", msg);
+          if ((last?.status || "").toLowerCase() === "completed") {
+            window.showToast?.("Display method challenge completed ✅");
+          }
+        } else {
+          console.warn("[DISPLAY METHOD CHALLENGE] result ack failed", msg?.error || "unknown");
+          window.showToast?.("Could not send display method challenge result.");
         }
         return;
       }
@@ -4052,6 +4883,13 @@
           <div class="bc-rail-title">Current Objective</div>
           <div class="bc-rail-body" id="railActiveChallenge">
             <div class="small-text rail-copy rail-copy-muted rail-empty-state">No current objective right now.</div>
+          </div>
+        </div>
+
+        <div class="bc-card bc-rail-card bc-rail-card-priority" data-rail-kind="display-method">
+          <div class="bc-rail-title">Display Method Challenge</div>
+          <div class="bc-rail-body" id="railActiveDisplayMethodChallenge">
+            <div class="small-text rail-copy rail-copy-muted rail-empty-state">No display method objective right now.</div>
           </div>
         </div>
 
@@ -5763,6 +6601,66 @@ function isDrillMode() {
         };
 
         console.log("[BC reward input][timed_challenge]", input);
+        return input;
+      }
+      function buildDisplayMethodChallengeRewardInput(result = {}) {
+        const ctx = getRewardRuntimeContext();
+        const performanceGrade = String(
+          result?.performanceGrade ||
+          result?.grade ||
+          ""
+        ).toUpperCase();
+
+        const explicitQuality = String(
+          result?.qualityState ||
+          result?.completionQuality ||
+          ""
+        ).toLowerCase();
+
+        const resolvedSuccess = Boolean(
+          result?.success ??
+          (String(result?.status || "").toLowerCase() === "completed")
+        );
+
+        const fallbackQuality =
+          performanceGrade === "A" ? "mastered" :
+          performanceGrade === "B" ? "passed" :
+          resolvedSuccess ? "passed" :
+          "completed";
+
+        const input = {
+          challengeId: String(
+            result?.challengeId ||
+            result?.id ||
+            ""
+          ),
+          qualityState: (explicitQuality || fallbackQuality).toLowerCase(),
+          tier: Number(
+            result?.tier ??
+            result?.servedTier ??
+            result?.tierToServe ??
+            ctx.tier ??
+            1
+          ),
+          effectiveDifficulty: Number.isFinite(Number(result?.effectiveDifficulty))
+            ? Number(result.effectiveDifficulty)
+            : Number.isFinite(Number(result?.eff))
+              ? Number(result.eff)
+              : ctx.effectiveDifficulty,
+          pressureLevel: Number.isFinite(Number(result?.pressureLevel))
+            ? Number(result.pressureLevel)
+            : Number.isFinite(Number(result?.pressure))
+              ? Number(result.pressure)
+              : ctx.pressureLevel,
+          premiumAchieved: Boolean(
+            result?.premiumAchieved ??
+            result?.premiumSuccess ??
+            result?.premiumConverted ??
+            false
+          ),
+        };
+
+        console.log("[BC reward input][display_method_challenge]", input);
         return input;
       }
 
@@ -14359,7 +15257,7 @@ function ensureProgLoaded() {
           }
         }
 
-        const consumesProgressionSlot = !currentEncounter?.isTimedChallengeEncounter;
+        const consumesProgressionSlot = !isInjectedChallengeEncounter(currentEncounter);
         if (consumesProgressionSlot) {
           encounterIndex = (encounterIndex ?? 0) + 1;
         }
@@ -15575,7 +16473,7 @@ function ensureProgLoaded() {
             window.__NEXT_LOCK__ = true;
             setTimeout(() => { window.__NEXT_LOCK__ = false; }, 150);
 
-            const consumesProgressionSlot = !currentEncounter?.isTimedChallengeEncounter;
+            const consumesProgressionSlot = !isInjectedChallengeEncounter(currentEncounter);
             if (consumesProgressionSlot) {
               encounterIndex = (encounterIndex ?? 0) + 1;
             }
@@ -15793,6 +16691,10 @@ function ensureProgLoaded() {
           timedChallengeKey: currentEncounter?.timedChallengeKey || null,
           timedChallengeTitle: currentEncounter?.timedChallengeTitle || null,
           timedChallengePlacement: currentEncounter?.timedChallengePlacement || null,
+          displayMethodChallengeId: currentEncounter?.displayMethodChallengeId || null,
+          displayMethodKey: currentEncounter?.displayMethodKey || null,
+          displayMethodTitle: currentEncounter?.displayMethodTitle || null,
+          displayMethodPlacement: currentEncounter?.displayMethodPlacement || null,
         };
 
         if (!Array.isArray(runs)) runs = [];
@@ -15853,6 +16755,16 @@ function ensureProgLoaded() {
               title: currentEncounter?.timedChallengeTitle || null,
               placement: currentEncounter?.timedChallengePlacement || null,
               timerSec: currentEncounter?.timedChallengeTimerSec || null,
+              startedAt: currentEncounter?.challengeStartedAt || null,
+              expiresAt: currentEncounter?.challengeExpiresAt || null,
+            } : null,
+            displayMethodChallenge: currentEncounter?.isDisplayMethodChallengeEncounter ? {
+              id: currentEncounter?.displayMethodChallengeId || null,
+              key: currentEncounter?.displayMethodKey || null,
+              title: currentEncounter?.displayMethodTitle || null,
+              placement: currentEncounter?.displayMethodPlacement || null,
+              timerSec: currentEncounter?.displayMethodTimerSec || null,
+              strictness: currentEncounter?.displayMethodStrictness || null,
               startedAt: currentEncounter?.challengeStartedAt || null,
               expiresAt: currentEncounter?.challengeExpiresAt || null,
             } : null,
@@ -17463,8 +18375,8 @@ function ensureProgLoaded() {
       }
 
       function applyProgressionEncounterResult(didWin) {
-        if (currentEncounter?.isTimedChallengeEncounter) {
-          console.log("[PROG] skipping progression scoring for timed challenge encounter");
+        if (isInjectedChallengeEncounter(currentEncounter)) {
+          console.log("[PROG] skipping progression scoring for injected challenge encounter");
           return;
         }
         try {
@@ -17523,17 +18435,17 @@ function ensureProgLoaded() {
       }
 
       function computeAndStoreCompletionState(scored, streakInfo, unlock) {
-        if (currentEncounter?.isTimedChallengeEncounter) {
+        if (isInjectedChallengeEncounter(currentEncounter)) {
           const guardState = loadGuardState();
           const completionState = {
             streakInfo,
             unlock,
-            done: { done: false, reason: "timed_challenge_extra" },
+            done: { done: false, reason: "injected_challenge_extra" },
             tierNow: Number(guardState?.tier || 1) || 1,
             guardState: { ...guardState },
           };
           currentEncounter.__completionState = completionState;
-          console.log("[SESSION] timed challenge encounter does not mutate progression guard");
+          console.log("[SESSION] injected challenge encounter does not mutate progression guard");
           return completionState;
         }
 
@@ -17766,6 +18678,16 @@ function ensureProgLoaded() {
             currentEncounter?.__reaction?.chainScore ??
             null,
         });
+        if (typeof evaluateTimedChallengeAgainstProgress === "function") {
+          try { evaluateTimedChallengeAgainstProgress({ strongestSkill: currentEncounter?.skillFocus || null }); } catch (e) {
+            console.warn("[TIMED CHALLENGE] evaluation failed", e);
+          }
+        }
+        if (typeof evaluateDisplayMethodChallengeAgainstProgress === "function") {
+          try { evaluateDisplayMethodChallengeAgainstProgress({ methodKey: currentEncounter?.displayMethodKey || null }); } catch (e) {
+            console.warn("[DISPLAY METHOD CHALLENGE] evaluation failed", e);
+          }
+        }
         applyProgressionEncounterResult(encounterCountsAsWin(outcome));
 
         const { streakInfo, unlock } = renderEncounterProgressSummary(stepContent, checks, scored);
@@ -18062,6 +18984,15 @@ function ensureProgLoaded() {
           !currentEncounter?.__timedChallengeResolved
         ) {
           failTimedChallengeEncounter("timeout");
+          return;
+        }
+        if (
+          currentEncounter?.isDisplayMethodChallengeEncounter &&
+          Number(currentEncounter?.challengeExpiresAt || 0) > 0 &&
+          Date.now() >= Number(currentEncounter.challengeExpiresAt) &&
+          !currentEncounter?.__displayMethodChallengeResolved
+        ) {
+          failDisplayMethodChallengeEncounter("timeout");
           return;
         }
         clearStepHighlights();
@@ -18603,6 +19534,13 @@ function ensureProgLoaded() {
           timedChallengeTitle: enc?.timedChallengeTitle || null,
           timedChallengePlacement: enc?.timedChallengePlacement || null,
           timedChallengeTimerSec: Number(enc?.timedChallengeTimerSec || 0) || 0,
+          isDisplayMethodChallengeEncounter: !!enc?.isDisplayMethodChallengeEncounter,
+          displayMethodChallengeId: enc?.displayMethodChallengeId || null,
+          displayMethodKey: enc?.displayMethodKey || null,
+          displayMethodTitle: enc?.displayMethodTitle || null,
+          displayMethodPlacement: enc?.displayMethodPlacement || null,
+          displayMethodTimerSec: Number(enc?.displayMethodTimerSec || 0) || 0,
+          displayMethodStrictness: enc?.displayMethodStrictness || null,
           challengeStartedAt: Number(enc?.challengeStartedAt || 0) || 0,
           challengeExpiresAt: Number(enc?.challengeExpiresAt || 0) || 0,
 
@@ -18614,6 +19552,7 @@ function ensureProgLoaded() {
           __uxSummary: null,
           presentation: null,
           __timedChallengeResolved: false,
+          __displayMethodChallengeResolved: false,
         };
 
         if (!sameEncounter) {
@@ -18804,12 +19743,19 @@ function ensureProgLoaded() {
         const prevEncounterState = currentEncounter || null;
         let { enc } = selectEncounterCandidate(list, isDemoNow, progressionWindow);
         const pendingTimedChallenge = getPendingTimedChallenge?.() || null;
+        const pendingDisplayMethodChallenge = getPendingDisplayMethodChallenge?.() || null;
         if (pendingTimedChallenge && shouldInjectTimedChallengeNow()) {
           const activated = startTimedChallenge(pendingTimedChallenge);
           const activeTimedChallenge = activated
             ? (getActiveTimedChallenge?.() || pendingTimedChallenge)
             : pendingTimedChallenge;
           enc = buildInjectedTimedChallengeEncounter(enc, activeTimedChallenge);
+        } else if (pendingDisplayMethodChallenge && shouldInjectDisplayMethodChallengeNow()) {
+          const activated = startDisplayMethodChallenge(pendingDisplayMethodChallenge);
+          const activeDisplayMethodChallenge = activated
+            ? (getActiveDisplayMethodChallenge?.() || pendingDisplayMethodChallenge)
+            : pendingDisplayMethodChallenge;
+          enc = buildInjectedDisplayMethodChallengeEncounter(enc, activeDisplayMethodChallenge);
         }
 
         // --- BC3 FORCE ROUTE (authoritative) ---
@@ -18839,8 +19785,9 @@ function ensureProgLoaded() {
         // ----------------------------
         // Normalize encounter -> UI state
         // ----------------------------
+        const injectedMeta = extractInjectedChallengeMeta(enc);
         const prepared = prepareEncounterForRun(enc, prevEncounterState);
-        enc = prepared.enc;
+        enc = reapplyInjectedChallengeMeta(prepared.enc, injectedMeta);
         const policy = resolveEncounterPolicy(enc, isDemoNow);
         currentEncounter = buildEncounterRuntimeState(
           enc,

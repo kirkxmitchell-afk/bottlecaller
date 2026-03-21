@@ -678,6 +678,65 @@ export function createProgressionStore(storage = window.localStorage) {
     return { ok: true, duplicate: false, points: Number(state.points || 0), reward };
   }
 
+  function applyDisplayMethodChallengeReward({
+    challengeId,
+    qualityState = "passed",
+    tier = null,
+    effectiveDifficulty = null,
+    pressureLevel = null,
+    premiumAchieved = false,
+  } = {}) {
+    const id = String(challengeId || "").trim();
+    if (!id) {
+      return { ok: false, reason: "missing_challenge_id", points: Number(state.points || 0) };
+    }
+
+    state.rewards = state.rewards || {};
+    state.rewards.displayMethodChallenges = state.rewards.displayMethodChallenges || {};
+
+    if (state.rewards.displayMethodChallenges[id]) {
+      return {
+        ok: true,
+        duplicate: true,
+        points: Number(state.points || 0),
+        reward: state.rewards.displayMethodChallenges[id]?.reward || null,
+      };
+    }
+
+    const resolvedTier = Number(
+      tier ||
+      deriveTier(Number(state.points || 0))
+    );
+
+    const reward = calculateRewardValue({
+      activityType: "display_method_challenge",
+      tier: resolvedTier,
+      effectiveDifficulty,
+      pressureLevel,
+      qualityState: qualityState || "passed",
+      competitionType: "display_method_challenge",
+      premiumBonus: premiumAchieved ? 1 : 0,
+    });
+    console.log("[BC reward output][display_method_challenge]", reward);
+
+    if (reward.totalPoints > 0) {
+      grantPoints(reward.totalPoints);
+    }
+
+    state.rewards.displayMethodChallenges[id] = {
+      challengeId: id,
+      qualityState: qualityState || "passed",
+      rewardedAt: Date.now(),
+      rewardPoints: reward.totalPoints,
+      reward,
+    };
+
+    logProgressionConsistency(state);
+    save();
+    emit();
+    return { ok: true, duplicate: false, points: Number(state.points || 0), reward };
+  }
+
   function applyDrillReward({
     assignedMessageId,
     repsDone,
@@ -810,6 +869,7 @@ export function createProgressionStore(storage = window.localStorage) {
         hydrateFromCanonicalState,
         applyEncounterResult,
         applyTimedChallengeReward,
+        applyDisplayMethodChallengeReward,
         applyDrillReward,
         applyPremiumBonus
       }

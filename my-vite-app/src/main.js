@@ -494,6 +494,7 @@ document.querySelector("#app").innerHTML = `
           <div id="mbGroupMetricsCard" style="margin-top:12px;"></div>
           <div id="mbGroupRestaurantComparisonCard" style="margin-top:12px;"></div>
           <div id="mbOverviewTimedChallenge" style="margin-top:12px;"></div>
+          <div id="mbOverviewDisplayMethodChallenge" style="margin-top:12px;"></div>
           <div id="mbOverviewRecentChallenges" style="margin-top:12px;"></div>
           <div id="mbInviteSummary" style="margin-top:12px;"></div>
           <div id="mbDrillSummary" style="margin-top:12px;"></div>
@@ -688,6 +689,7 @@ document.querySelector("#app").innerHTML = `
           <div id="mbAreaAbilitiesPanel" style="margin-top:12px;"></div>
           <div id="mbDrillQuickActionsPanel" style="margin-top:12px;"></div>
           <div id="mbTimedChallengeQuickActionsPanel" style="margin-top:12px;"></div>
+          <div id="mbDisplayMethodQuickActionsPanel" style="margin-top:12px;"></div>
         </div>
 
         <div id="mbTab_performance" class="mbTab hidden">
@@ -981,6 +983,15 @@ document.querySelector("#app").innerHTML = `
         <div id="hudTimedChallengeStatus" class="small-text" style="opacity:.8;">No active challenge</div>
       </div>
       <div id="hudTimedChallengeBody" class="small-text" style="display:flex; flex-direction:column; gap:6px;">
+        <div style="opacity:.7;">No challenge assigned.</div>
+      </div>
+    </div>
+    <div id="hudDisplayMethodChallengeCard" style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.10);">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px;">
+        <div style="font-weight:600;">Display Method Challenge</div>
+        <div id="hudDisplayMethodChallengeStatus" class="small-text" style="opacity:.8;">No active challenge</div>
+      </div>
+      <div id="hudDisplayMethodChallengeBody" class="small-text" style="display:flex; flex-direction:column; gap:6px;">
         <div style="opacity:.7;">No challenge assigned.</div>
       </div>
     </div>
@@ -2408,6 +2419,7 @@ function renderHudAbilities() {
   renderHudAbilityFamilyList("area", "hudAbilitiesAreaList");
   renderHudActiveEffects();
   renderHudTimedChallenge();
+  renderHudDisplayMethodChallenge();
   setHudAbilityFamily(window.__BC_ABILITY_UI__?.hudFamily || "attribute");
 }
 
@@ -2855,6 +2867,23 @@ function getActiveTimedChallenge() {
   return null;
 }
 
+function getDisplayMethodChallengeLabel(methodKey) {
+  const key = String(methodKey || "").toLowerCase();
+  const map = {
+    comparison: "Display Method: Comparison",
+    pairing: "Display Method: Pairing",
+    value_justification: "Display Method: Value Justification",
+  };
+  return map[key] || "Display Method Challenge";
+}
+
+function getActiveDisplayMethodChallenge() {
+  const challenge = window.__BC_ACTIVE_DISPLAY_METHOD_CHALLENGE__ || null;
+  if (!challenge) return null;
+  if (Number(challenge.expiresAt || 0) > Date.now()) return challenge;
+  return null;
+}
+
 function expireTimedChallenge(status = "expired") {
   const active = window.__BC_ACTIVE_TIMED_CHALLENGE__ || null;
   if (!active) return;
@@ -2899,6 +2928,41 @@ function renderHudTimedChallenge() {
     <div style="opacity:.85;">Focus: ${escapeHtml(challenge?.payload?.focus || "-")}</div>
     <div style="opacity:.85;">Reward: ${Number(challenge?.payload?.rewardPoints || 0)} pts</div>
   `;
+}
+
+function renderHudDisplayMethodChallenge() {
+  const statusEl = document.getElementById("hudDisplayMethodChallengeStatus");
+  const bodyEl = document.getElementById("hudDisplayMethodChallengeBody");
+  if (!statusEl || !bodyEl) return;
+
+  const challenge = getActiveDisplayMethodChallenge();
+  const pending = window.__BC_PENDING_DISPLAY_METHOD_CHALLENGE__ || null;
+  if (!challenge) {
+    if (pending) {
+      statusEl.textContent =
+        String(pending?.placement || "before_start") === "after_first_encounter"
+          ? "Queued • Starts after encounter 1"
+          : "Queued • Starts next encounter";
+      bodyEl.innerHTML = `
+        <div><b>${escapeHtml(pending.title || "Display Method Challenge")}</b></div>
+        <div style="opacity:.85;">Method: ${escapeHtml(getDisplayMethodChallengeLabel(pending?.methodKey || pending?.payload?.methodKey))}</div>
+        <div style="opacity:.85;">Reward: ${Number(pending?.payload?.rewardPoints || pending?.rewardPoints || 0)} pts</div>
+      `;
+      return;
+    }
+
+    statusEl.textContent = "No active challenge";
+    bodyEl.innerHTML = '<div style="opacity:.7;">No challenge assigned.</div>';
+    return;
+  }
+
+  const secsLeft = Math.max(0, Math.ceil(((challenge.expiresAt || 0) - Date.now()) / 1000));
+  bodyEl.innerHTML = `
+    <div><b>${escapeHtml(challenge.title || "Display Method Challenge")}</b></div>
+    <div style="opacity:.85;">Method: ${escapeHtml(getDisplayMethodChallengeLabel(challenge?.methodKey || challenge?.payload?.methodKey))}</div>
+    <div style="opacity:.85;">Reward: ${Number(challenge?.payload?.rewardPoints || challenge?.rewardPoints || 0)} pts</div>
+  `;
+  statusEl.textContent = `Active • ${secsLeft}s left`;
 }
 
 function getTimedChallengeLabel(challengeKey) {
@@ -2984,6 +3048,127 @@ function renderManagerBoardOverviewTimedChallenge() {
       ${lastResult ? `
         <div class="small" style="opacity:.75; margin-top:4px;">
           Last result: ${escapeHtml(getTimedChallengeMessageMeta(lastResult)?.label || "Result")} •
+          ${escapeHtml(formatRecentChallengeTime(lastResult?.created_at))}
+        </div>
+      ` : ""}
+    </div>
+  `;
+}
+
+function getRecentDisplayMethodChallengeRows() {
+  const rows = getManagerBoardMessageRows();
+  return [...rows]
+    .filter((row) => {
+      const type = String(row?.type || "");
+      return (
+        type === "display_method_challenge" ||
+        type === "display_method_challenge_completed" ||
+        type === "display_method_challenge_expired"
+      );
+    })
+    .sort((a, b) => new Date(b?.created_at || 0).getTime() - new Date(a?.created_at || 0).getTime())
+    .slice(0, 5);
+}
+
+function getRecentDisplayMethodChallengeSentRow() {
+  return getRecentDisplayMethodChallengeRows().find((row) => String(row?.type || "") === "display_method_challenge") || null;
+}
+
+function getRecentDisplayMethodChallengeResultRow() {
+  return getRecentDisplayMethodChallengeRows().find((row) => {
+    const type = String(row?.type || "");
+    return type === "display_method_challenge_completed" || type === "display_method_challenge_expired";
+  }) || null;
+}
+
+function getDisplayMethodChallengeActorLabel(row) {
+  const type = String(row?.type || "");
+  if (type === "display_method_challenge") {
+    return getTimedChallengeTargetLabel(row);
+  }
+  return resolveManagerBoardUserLabel(row?.sender_user_id || null);
+}
+
+function getDisplayMethodChallengeMessageMeta(row) {
+  const type = String(row?.type || "");
+  const payload = row?.payload || {};
+  const title = getDisplayMethodChallengeLabel(payload?.methodKey || payload?.challengeKey);
+  if (type === "display_method_challenge") {
+    return { label: "Challenge Sent", title };
+  }
+  if (type === "display_method_challenge_completed") {
+    return { label: "Completed", title };
+  }
+  if (type === "display_method_challenge_expired") {
+    return { label: "Expired", title };
+  }
+  return null;
+}
+
+function renderDisplayMethodChallengeRecentSummary() {
+  const lastSent = getRecentDisplayMethodChallengeSentRow();
+  const lastResult = getRecentDisplayMethodChallengeResultRow();
+  const latest = (() => {
+    if (!lastSent) return lastResult;
+    if (!lastResult) return lastSent;
+    return new Date(lastSent?.created_at || 0).getTime() >= new Date(lastResult?.created_at || 0).getTime()
+      ? lastSent
+      : lastResult;
+  })();
+  const root = document.getElementById("mbLcDisplayMethodRecentSummary");
+  if (!root) return;
+  if (!latest) {
+    root.innerHTML = `
+      <div style="font-weight:600;">Recent Display Method Activity</div>
+      <div class="small-text" style="margin-top:4px; opacity:.75;">No recent display method activity.</div>
+    `;
+    return;
+  }
+  const meta = getDisplayMethodChallengeMessageMeta(latest);
+  const actorText = getDisplayMethodChallengeActorLabel(latest);
+  const timeText = formatRecentChallengeTime(latest?.created_at);
+  root.innerHTML = `
+    <div style="font-weight:600;">Recent Display Method Activity</div>
+    <div class="small-text" style="margin-top:4px; opacity:.92;">${escapeHtml(meta?.label || "Result")} • ${escapeHtml(meta?.title || "Display Method Challenge")}</div>
+    <div class="small-text" style="margin-top:4px; opacity:.75;">${escapeHtml([actorText, timeText].filter(Boolean).join(" • "))}</div>
+  `;
+}
+
+function renderManagerBoardOverviewDisplayMethodChallenge() {
+  const root = document.getElementById("mbOverviewDisplayMethodChallenge");
+  if (!root) return;
+
+  const lastSent = getRecentDisplayMethodChallengeSentRow();
+  const lastResult = getRecentDisplayMethodChallengeResultRow();
+
+  if (!lastSent) {
+    root.innerHTML = `
+      <div class="card" style="display:flex; flex-direction:column; gap:8px; padding:12px;">
+        <div style="font-weight:600;">Display Method Challenge</div>
+        <div class="small" style="opacity:.75;">No active display method challenge.</div>
+        ${lastResult ? `
+          <div class="small" style="opacity:.85;">
+            Last result: <b>${escapeHtml(getDisplayMethodChallengeMessageMeta(lastResult)?.title || "Display Method Challenge")}</b> •
+            ${escapeHtml(getDisplayMethodChallengeMessageMeta(lastResult)?.label || "Result")}
+          </div>
+        ` : ""}
+      </div>
+    `;
+    return;
+  }
+
+  const sentPayload = lastSent?.payload || {};
+  root.innerHTML = `
+    <div class="card" style="display:flex; flex-direction:column; gap:8px; padding:12px;">
+      <div style="font-weight:600;">Display Method Challenge</div>
+      <div><b>${escapeHtml(getDisplayMethodChallengeLabel(sentPayload?.methodKey || sentPayload?.challengeKey))}</b></div>
+      <div class="small" style="opacity:.85;">Method: ${escapeHtml(getDisplayMethodChallengeLabel(sentPayload?.methodKey || sentPayload?.challengeKey))}</div>
+      <div class="small" style="opacity:.85;">Reward: ${Number(sentPayload?.rewardPoints || 0)} pts</div>
+      <div class="small" style="opacity:.85;">Target: ${escapeHtml(getDisplayMethodChallengeActorLabel(lastSent))}</div>
+      <div class="small" style="opacity:.85;">Sent: ${escapeHtml(formatRecentChallengeTime(lastSent?.created_at))}</div>
+      ${lastResult ? `
+        <div class="small" style="opacity:.75; margin-top:4px;">
+          Last result: ${escapeHtml(getDisplayMethodChallengeMessageMeta(lastResult)?.label || "Result")} •
           ${escapeHtml(formatRecentChallengeTime(lastResult?.created_at))}
         </div>
       ` : ""}
@@ -3512,16 +3697,19 @@ function tickManagerBoardAbilities() {
 
     if (overviewVisible) {
       renderManagerBoardOverviewTimedChallenge();
+      renderManagerBoardOverviewDisplayMethodChallenge();
       renderManagerBoardRecentChallenges();
       renderManagerBoardDrillSummary();
     }
     if (messengerVisible) {
       renderTimedChallengeRecentSummary();
+      renderDisplayMethodChallengeRecentSummary();
       renderManagerBoardDrillSummary();
       renderManagerThreadDrillSummary();
     }
     if (liveControlsVisible) {
       renderManagerBoardAbilityTabs();
+      renderManagerDisplayMethodActionPanel?.();
     }
   }, 1000);
 }
@@ -4765,6 +4953,124 @@ if (!window.__BC_PARENT_BRIDGE__) {
               deliveryScore: p?.deliveryScore ?? null,
               resetUsed: p?.resetUsed ?? null,
               premiumSuccess: p?.premiumSuccess ?? null,
+              strongPillars: p?.strongPillars ?? null,
+              completedAt: p?.completedAt || Date.now(),
+            },
+          };
+
+          const { error: insertErr } = await supabase
+            .from("bc_messages_v1")
+            .insert(resultRow);
+
+          if (insertErr) {
+            replyResult({ ok: false, error: "result_insert_failed" });
+            return;
+          }
+
+          replyResult({
+            ok: true,
+            managerUserId,
+            resultType,
+          });
+        },
+        display_method_challenge_result: async ({ msg, event }) => {
+          const replyType = "display_method_challenge_result_ack";
+          const challengeId = msg?.challengeId || null;
+          const replyResult = makeBridgeReply(event, replyType, { challengeId });
+
+          const gate = await getBridgeAuthedCtx({
+            msg,
+            event,
+            replyType,
+            extra: { challengeId },
+            demoPayload: { challengeId },
+          });
+          if (gate.demo) return;
+          if (!gate.ok) return;
+          const ctx = gate.ctx;
+
+          const p = msg?.payload || {};
+          const challengeKey = p?.challengeKey || null;
+          const methodKey = p?.methodKey || null;
+          const status = String(p?.status || "").toLowerCase();
+          const title = String(p?.title || getDisplayMethodChallengeLabel(methodKey || challengeKey) || "Display Method Challenge");
+          const targetUserId = p?.targetUserId || ctx.userId;
+          const restaurantId = p?.restaurantId || ctx.restaurantId;
+          const rewardPoints = Number(p?.rewardPoints || 0);
+          const outcome = p?.outcome || null;
+
+          if (!challengeId) {
+            replyResult({ ok: false, error: "missing_challenge_id" });
+            return;
+          }
+
+          const assignment = await loadAssignedMessage({
+            id: challengeId,
+            expectedType: "display_method_challenge",
+            lookupErrorCode: "challenge_lookup_failed",
+            notFoundErrorCode: "challenge_not_found",
+            missingSenderErrorCode: "challenge_missing_sender",
+            replyResult,
+            logLabel: "[DISPLAY METHOD CHALLENGE]",
+          });
+          if (!assignment) return;
+          const { managerUserId } = assignment;
+
+          const resultType =
+            status === "completed"
+              ? "display_method_challenge_completed"
+              : "display_method_challenge_expired";
+
+          const duplicateCheck = await hasDuplicateMessageResult({
+            type: resultType,
+            senderUserId: targetUserId,
+            receiverUserId: managerUserId,
+            restaurantId,
+            limit: 20,
+            keyName: "challengeId",
+            keyValue: challengeId,
+            lookupErrorCode: "existing_result_lookup_failed",
+            replyResult,
+          });
+          if (!duplicateCheck.ok) return;
+
+          if (duplicateCheck.duplicate) {
+            replyResult({ ok: true, managerUserId, resultType, duplicate: true });
+            return;
+          }
+
+          const body =
+            status === "completed"
+              ? `Completed ${title}`
+              : "Challenge Expired";
+
+          const resultRow = {
+            scope_type: "restaurant",
+            scope_id: restaurantId,
+            restaurant_id: restaurantId,
+            sender_user_id: targetUserId,
+            receiver_user_id: managerUserId,
+            sender_role: ctx.membershipRole || ctx.role || "waiter",
+            type: resultType,
+            body,
+            payload: {
+              challengeId,
+              challengeKey,
+              methodKey,
+              title,
+              status,
+              rewardPoints,
+              strictness: p?.strictness || null,
+              outcome,
+              chainSignal: p?.chainSignal || null,
+              chainScore: p?.chainScore ?? null,
+              guestReadCorrect: p?.guestReadCorrect ?? null,
+              deliveryScore: p?.deliveryScore ?? null,
+              resetUsed: p?.resetUsed ?? null,
+              premiumSuccess: p?.premiumSuccess ?? null,
+              modeStatus: p?.modeStatus ?? null,
+              hookStatus: p?.hookStatus ?? null,
+              performanceGrade: p?.performanceGrade ?? null,
               strongPillars: p?.strongPillars ?? null,
               completedAt: p?.completedAt || Date.now(),
             },
@@ -10745,11 +11051,13 @@ function refreshManagerRuntimeSurfaces(opts = {}) {
   if (thread) {
     safeCall?.("renderManagerThreadDrillSummary", () => renderManagerThreadDrillSummary?.());
     safeCall?.("renderTimedChallengeRecentSummary", () => renderTimedChallengeRecentSummary?.());
+    safeCall?.("renderDisplayMethodChallengeRecentSummary", () => renderDisplayMethodChallengeRecentSummary?.());
   }
 
   if (board) {
     safeCall?.("renderManagerBoardDrillSummary", () => renderManagerBoardDrillSummary?.());
     safeCall?.("renderManagerBoardOverviewLiveEffects", () => renderManagerBoardOverviewLiveEffects?.());
+    safeCall?.("renderManagerBoardOverviewDisplayMethodChallenge", () => renderManagerBoardOverviewDisplayMethodChallenge?.());
   }
 
   if (economy) {
@@ -10760,11 +11068,13 @@ function refreshManagerRuntimeSurfaces(opts = {}) {
     safeCall?.("renderManagerAttributeEffectsPanel", () => renderManagerAttributeEffectsPanel?.());
     safeCall?.("renderManagerAreaEffectsPanel", () => renderManagerAreaEffectsPanel?.());
     safeCall?.("renderManagerTimedChallengeActionPanel", () => renderManagerTimedChallengeActionPanel?.());
+    safeCall?.("renderManagerDisplayMethodActionPanel", () => renderManagerDisplayMethodActionPanel?.());
   }
 
   if (challengeMeta) {
     safeCall?.("renderManagerTimedChallengeActionMeta", () => renderManagerTimedChallengeActionMeta?.());
     safeCall?.("renderMessengerTimedChallengeMeta", () => renderMessengerTimedChallengeMeta?.());
+    safeCall?.("renderManagerDisplayMethodActionMeta", () => renderManagerDisplayMethodActionMeta?.());
   }
 
   validateManagerStateInvariants?.();
@@ -14764,6 +15074,298 @@ function renderManagerTimedChallengeActionPanel() {
   if (recent && liveRecent) {
     liveRecent.textContent = recent.textContent || "";
   }
+}
+
+function getManagerDisplayMethodActionValues() {
+  const targetEl = document.getElementById("mbLcDisplayMethodTarget");
+  const typeEl = document.getElementById("mbLcDisplayMethodType");
+  const durationEl = document.getElementById("mbLcDisplayMethodDuration");
+  const rewardEl = document.getElementById("mbLcDisplayMethodReward");
+  const strictnessEl = document.getElementById("mbLcDisplayMethodStrictness");
+  const placementEl = document.getElementById("mbLcDisplayMethodPlacement");
+
+  return {
+    targetUserId: String(targetEl?.value || "").trim() || null,
+    methodKey: String(typeEl?.value || "comparison"),
+    challengeKey: String(typeEl?.value || "comparison"),
+    durationSec: Math.max(60, Math.min(10800, Number(durationEl?.value || 10800))),
+    rewardPoints: Math.max(1, Math.min(5, Number(rewardEl?.value || 5))),
+    strictness: String(strictnessEl?.value || "normal"),
+    placement: String(placementEl?.value || "before_start"),
+  };
+}
+
+function buildDisplayMethodChallengePayloadFromValues(values = {}) {
+  const targetUserId = values.targetUserId || null;
+  const methodKey = values.methodKey || values.challengeKey || "comparison";
+  const challengeKey = methodKey;
+  const durationSec = Math.max(60, Math.min(10800, Number(values.durationSec || 10800)));
+  const rewardPoints = Number(values.rewardPoints || 5);
+  const strictness = String(values.strictness || "normal");
+  const placement = String(values.placement || "before_start");
+  const restaurantId = getManagerActiveRestaurantId();
+
+  if (!targetUserId || !restaurantId) return null;
+
+  const challengeDefs = {
+    comparison: {
+      title: "Display Method: Comparison",
+      focus: "comparison",
+      successRule: { type: "display_method_match", value: "comparison" },
+    },
+    pairing: {
+      title: "Display Method: Pairing",
+      focus: "pairing",
+      successRule: { type: "display_method_match", value: "pairing" },
+    },
+    value_justification: {
+      title: "Display Method: Value Justification",
+      focus: "value_justification",
+      successRule: { type: "display_method_match", value: "value_justification" },
+    },
+  };
+
+  const def = challengeDefs[methodKey] || challengeDefs.comparison;
+
+  return {
+    challengeKey,
+    methodKey,
+    title: def.title,
+    targetUserId,
+    restaurantId,
+    durationSec,
+    assignmentWindowSec: durationSec,
+    encounterTimerSec: 300,
+    injectionMode: "extra_encounter",
+    placement,
+    focus: def.focus,
+    rewardPoints,
+    strictness,
+    successRule: def.successRule,
+  };
+}
+
+function formatDisplayMethodChallengeSuccessText(values = {}) {
+  const placementLabel =
+    String(values.placement || "before_start") === "after_first_encounter"
+      ? "After encounter 1"
+      : "Before encounter 1";
+  return `Challenge Sent • ${getDisplayMethodChallengeLabel(values.methodKey || values.challengeKey)} • ${formatTimedChallengeDuration(values.durationSec)} • ${placementLabel} • Reward ${Number(values.rewardPoints || 0)}`;
+}
+
+async function sendDisplayMethodChallengeFromManagerWithValues(values = {}) {
+  const payload = buildDisplayMethodChallengePayloadFromValues(values);
+  const profile = appState?.profile || {};
+  const caps = getPremiumRoleCapabilities(profile);
+  const statusEl = document.getElementById("mbLcDisplayMethodStatus");
+
+  if (!caps.canAssignTimedChallenges) {
+    setManagerStatus(statusEl, "error", "Role cannot assign display method challenges.");
+    return false;
+  }
+
+  if (!payload) {
+    setManagerStatus(statusEl, "error", "Missing target or restaurant.");
+    return false;
+  }
+
+  if (!canActOnRestaurant(profile, profile, payload.restaurantId)) {
+    setManagerStatus(statusEl, "error", "Role cannot act on this restaurant.");
+    return false;
+  }
+
+  try {
+    const liveAuth = await getLiveAuthOrNull();
+    const userId = liveAuth?.userId || null;
+    if (!userId) {
+      setManagerStatus(statusEl, "error", "No active session.");
+      return false;
+    }
+
+    const senderRole = normalizeMembershipRole(profile) || "single_manager";
+    const activeScopeId =
+      profile?.scope_id ||
+      profile?.scopeId ||
+      payload.restaurantId;
+
+    const row = {
+      scope_type: "restaurant",
+      scope_id: activeScopeId,
+      restaurant_id: payload.restaurantId,
+      sender_user_id: userId,
+      receiver_user_id: payload.targetUserId,
+      sender_role: senderRole,
+      type: "display_method_challenge",
+      body: `${payload.title} • ${formatTimedChallengeDuration(payload.durationSec)}`,
+      payload,
+    };
+
+    const { error } = await supabase
+      .from("bc_messages_v1")
+      .insert(row);
+
+    if (error) throw error;
+
+    refreshManagerRuntimeSurfaces?.({
+      thread: true,
+      board: true,
+      economy: false,
+      liveControls: false,
+      challengeMeta: true,
+    });
+    setManagerStatus(statusEl, "success", `${payload.title} sent ✅`);
+    renderDisplayMethodChallengeRecentSummary?.();
+    await loadManagerMessenger(payload.restaurantId);
+    refreshManagerRuntimeSurfaces?.({
+      thread: true,
+      board: true,
+      economy: false,
+      liveControls: false,
+      challengeMeta: true,
+    });
+    return true;
+  } catch (e) {
+    console.warn("[DISPLAY METHOD CHALLENGE] send failed", e);
+    setManagerStatus(statusEl, "error", "Could not send challenge.");
+    return false;
+  }
+}
+
+function renderManagerDisplayMethodActionMeta() {
+  const selectEl = document.getElementById("mbLcDisplayMethodType");
+  const metaEl = document.getElementById("mbLcDisplayMethodMeta");
+  if (!selectEl || !metaEl) return;
+
+  const methodKey = String(selectEl.value || "comparison");
+  const strictness = String(document.getElementById("mbLcDisplayMethodStrictness")?.value || "normal");
+  const copy = {
+    comparison: "Require a clear compare-and-guide recommendation, not a flat product drop.",
+    pairing: "Reward food-context pairing logic and a recommendation that feels matched to the table.",
+    value_justification: "Reward a recommendation that explains why the choice is worth it for this guest.",
+  };
+  metaEl.textContent = `${copy[methodKey] || copy.comparison} Strictness: ${strictness}.`;
+}
+
+function wireManagerDisplayMethodActionPanel() {
+  const btn = document.getElementById("mbLcDisplayMethodSend");
+  const watchIds = [
+    "mbLcDisplayMethodTarget",
+    "mbLcDisplayMethodType",
+    "mbLcDisplayMethodDuration",
+    "mbLcDisplayMethodPlacement",
+    "mbLcDisplayMethodReward",
+    "mbLcDisplayMethodStrictness",
+  ];
+
+  watchIds.forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el || el.__bcDisplayMethodMetaBound) return;
+    el.__bcDisplayMethodMetaBound = true;
+    el.addEventListener("change", () => renderManagerDisplayMethodActionMeta());
+  });
+
+  if (!btn || btn.__bcDisplayMethodBound) {
+    renderManagerDisplayMethodActionMeta();
+    return;
+  }
+
+  btn.__bcDisplayMethodBound = true;
+  btn.addEventListener("click", async () => {
+    const statusEl = document.getElementById("mbLcDisplayMethodStatus");
+    setManagerStatus(statusEl, "working", "Sending challenge…");
+    try {
+      const values = getManagerDisplayMethodActionValues();
+      const ok = await sendDisplayMethodChallengeFromManagerWithValues(values);
+      if (ok) {
+        setManagerStatus(statusEl, "success", formatDisplayMethodChallengeSuccessText(values));
+      } else if (statusEl && !statusEl.textContent) {
+        setManagerStatus(statusEl, "error", "Could not send challenge.");
+      }
+    } catch (e) {
+      setManagerStatus(statusEl, "error", e?.message || String(e));
+    }
+    renderManagerDisplayMethodActionMeta();
+  });
+
+  renderManagerDisplayMethodActionMeta();
+}
+
+function renderManagerDisplayMethodActionPanel() {
+  const root = document.getElementById("mbDisplayMethodQuickActionsPanel");
+  if (!root) return;
+  if (!canManageTimedChallenges()) {
+    root.innerHTML = `
+      <div class="card" style="display:flex; flex-direction:column; gap:8px; padding:12px;">
+        <div style="font-weight:600;">Display Method Challenge</div>
+        <div class="small-text" style="opacity:.8;">
+          Your role cannot send display method challenges in this restaurant context.
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  const optionsHtml = [
+    ["comparison", "Comparison"],
+    ["pairing", "Pairing"],
+    ["value_justification", "Value Justification"],
+  ].map(([key, label]) => `<option value="${escapeHtml(key)}">${escapeHtml(label)}</option>`).join("");
+
+  root.innerHTML = `
+    <div class="card" style="display:flex; flex-direction:column; gap:10px; padding:12px;">
+      <div style="font-weight:600;">Display Method Challenge</div>
+      <div class="small-text" style="opacity:.8;">
+        Send a live display-method challenge to a staff member in the active restaurant.
+      </div>
+
+      <div class="row" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <select id="mbLcDisplayMethodTarget" style="min-width:180px;"></select>
+        <select id="mbLcDisplayMethodType">${optionsHtml}</select>
+        <select id="mbLcDisplayMethodDuration">
+          <option value="3600">1 hr</option>
+          <option value="7200">2 hrs</option>
+          <option value="10800" selected>3 hrs</option>
+        </select>
+        <select id="mbLcDisplayMethodPlacement">
+          <option value="before_start" selected>Before encounter 1</option>
+          <option value="after_first_encounter">After encounter 1</option>
+        </select>
+        <input
+          id="mbLcDisplayMethodReward"
+          type="number"
+          min="1"
+          max="5"
+          step="1"
+          value="5"
+          style="width:110px;"
+          placeholder="Points"
+        />
+        <select id="mbLcDisplayMethodStrictness">
+          <option value="normal" selected>Normal</option>
+          <option value="hard">Hard</option>
+          <option value="strict">Strict</option>
+        </select>
+      </div>
+
+      <div class="small-text" id="mbLcDisplayMethodMeta" style="opacity:.78;">
+        Select a method to view challenge guidance.
+      </div>
+
+      <div class="row" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <button id="mbLcDisplayMethodSend" class="btn" type="button">Send Challenge</button>
+        <div id="mbLcDisplayMethodStatus" class="small-text" style="opacity:.85;"></div>
+      </div>
+      <div id="mbLcDisplayMethodRecentSummary" class="small-text" style="opacity:.8;"></div>
+    </div>
+  `;
+
+  renderManagerWaiterSelectOptions(
+    document.getElementById("mbLcDisplayMethodTarget"),
+    { selectedUserId: window.__BC_MB_ACTIVE_THREAD_USER_ID__ || "" }
+  );
+  wireManagerDisplayMethodActionPanel?.();
+  renderManagerDisplayMethodActionMeta?.();
+  renderDisplayMethodChallengeRecentSummary?.();
 }
 
 async function mbSendInstruction() {
