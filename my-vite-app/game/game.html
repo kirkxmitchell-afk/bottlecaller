@@ -362,7 +362,7 @@
     function getTournamentHost() {
       return getTimedChallengeHost();
     }
-    function getEncounterByStableId(encounterId) {
+    function getEncounterById(encounterId) {
       const bundle = window.__BC_ENCOUNTERS__ || {};
       const all = [
         ...(Array.isArray(bundle.demo) ? bundle.demo : []),
@@ -2248,6 +2248,49 @@
           displayMethodTitle: title,
         },
       };
+    }
+    function resolveTournamentBaseEncounter(activeEntry = null) {
+      const encounterId = String(activeEntry?.encounterId || "");
+      if (!encounterId) return null;
+      const found = getEncounterById(encounterId);
+      return found ? structuredClone(found) : null;
+    }
+    function buildTournamentInjectedEncounter(baseEncounter = null, activeEntry = null) {
+      const kind = String(activeEntry?.kind || "encounter");
+
+      if (kind === "timed_challenge") {
+        const enc = buildInjectedTimedChallengeEncounter(baseEncounter, {
+          challengeId: activeEntry?.entryId,
+          challengeKey: activeEntry?.challengeMeta?.challengeKey,
+          placement: activeEntry?.challengeMeta?.placement,
+          encounterTimerSec: activeEntry?.timer?.durationSec,
+          title: activeEntry?.challengeMeta?.title || "Timed Challenge",
+        });
+        enc.challengeStartedAt = Number(activeEntry?.timer?.startedAt || 0) || 0;
+        enc.challengeExpiresAt = Number(activeEntry?.timer?.expiresAt || 0) || 0;
+        enc.timedChallengeTimerSec =
+          Number(activeEntry?.timer?.durationSec || enc.timedChallengeTimerSec || 0) || 0;
+        return enc;
+      }
+
+      if (kind === "display_method_challenge") {
+        const enc = buildInjectedDisplayMethodChallengeEncounter(baseEncounter, {
+          challengeId: activeEntry?.entryId,
+          challengeKey: activeEntry?.challengeMeta?.challengeKey,
+          methodKey: activeEntry?.challengeMeta?.methodKey,
+          placement: activeEntry?.challengeMeta?.placement,
+          strictness: activeEntry?.challengeMeta?.strictness,
+          encounterTimerSec: activeEntry?.timer?.durationSec,
+          title: activeEntry?.challengeMeta?.title || "Display Method Challenge",
+        });
+        enc.challengeStartedAt = Number(activeEntry?.timer?.startedAt || 0) || 0;
+        enc.challengeExpiresAt = Number(activeEntry?.timer?.expiresAt || 0) || 0;
+        enc.displayMethodTimerSec =
+          Number(activeEntry?.timer?.durationSec || enc.displayMethodTimerSec || 0) || 0;
+        return enc;
+      }
+
+      return structuredClone(baseEncounter || {});
     }
     function maybeActivatePendingTimedChallenge(encounter = null) {
       const pending = getPendingTimedChallenge?.() || null;
@@ -5731,7 +5774,6 @@ function isDrillMode() {
         enc.deliveryLine1 = state.deliveryLine1 || enc.deliveryLine1 || "";
         enc.deliveryLine2 = state.deliveryLine2 || enc.deliveryLine2 || "";
         enc.recoveryChoice = state.recoveryChoice || enc.recoveryChoice || "";
-        currentStep = Number(restore.currentStep || 0) || 0;
         bcStageResults = Array.isArray(restore.stageResults) ? structuredClone(restore.stageResults) : [];
         window.bcStageResults = bcStageResults;
         return enc;
@@ -19857,11 +19899,106 @@ function ensureProgLoaded() {
         }
       }
 
+      async function startTournamentEncounter() {
+        const isDemoNow = !!(window.isDemo || window.bcMode === "demo" || isDemo || bcMode === "demo");
+        const g = await waitForCtxAndWines(1500);
+        if (!g.ok) {
+          console.warn("[TOURNAMENT] blocked: ctx/wines not ready yet");
+          window.showToast?.(
+            g?.ctxReady === false
+              ? "BottleCaller is still attaching account context."
+              : "Wines are still loading for this restaurant."
+          );
+          if (!isDemoNow) return;
+        }
+
+        if (isDemoNow && (!Array.isArray(wines) || wines.length === 0)) {
+          wines = setWines(loadDemoWines().slice(0, 3));
+        }
+
+        const runtime = getActiveTournamentRuntime?.() || null;
+        const activeEntry = getActiveTournamentEntry?.() || null;
+        if (!runtime || !activeEntry) {
+          alert("No active tournament entry.");
+          return;
+        }
+
+        bcRenderHud("start");
+
+        const prevEncounterState = currentEncounter || null;
+        let enc = resolveTournamentBaseEncounter(activeEntry);
+        if (!enc) {
+          alert("Tournament encounter not found.");
+          return;
+        }
+
+        enc = buildTournamentInjectedEncounter(enc, activeEntry);
+
+        setRuntimeEncounter(enc);
+        currentEncounter = enc;
+        bcActiveEncounter = enc;
+        bcStepIndex = 0;
+        bcStageResults = [];
+        window.bcStageResults = [];
+        currentStep = 0;
+
+        const wine = selectEncounterWine(isDemoNow);
+        if (!wine) {
+          alert("No wine available. Please add wines first.");
+          return;
+        }
+
+        const injectedMeta = extractInjectedChallengeMeta(enc);
+        const prepared = prepareEncounterForRun(enc, prevEncounterState);
+        enc = reapplyInjectedChallengeMeta(prepared.enc, injectedMeta);
+
+        const policy = resolveEncounterPolicy(enc, isDemoNow);
+        currentEncounter = buildEncounterRuntimeState(
+          enc,
+          wine,
+          prepared.carry,
+          prepared.sameEncounter,
+          prepared.encounterIdStable,
+          prepared.encounterRunId,
+          policy,
+          prepared.preferNonEmpty
+        );
+        setRuntimeEncounter(currentEncounter);
+
+        currentEncounter = applyTournamentRestoreIfPresent(
+          currentEncounter,
+          runtime.restore || null
+        );
+        currentEncounter.tournamentId = runtime.tournamentId;
+        currentEncounter.tournamentEntryId = activeEntry.entryId;
+        currentEncounter.tournamentKind = activeEntry.kind;
+        currentEncounter.tournamentSeed = activeEntry.seed || null;
+        setRuntimeEncounter(currentEncounter);
+
+        currentEncounter = applyDifficultyToEncounter(currentEncounter, policy);
+        logEncounterStateAudit("built", currentEncounter);
+
+        setRuntimeSession({
+          ...(getRuntimeSession() || {}),
+          type: "tournament",
+          tournamentId: runtime.tournamentId,
+          currentEntryIndex: runtime.currentEntryIndex,
+        });
+        resetLegacyBc3StageState(currentEncounter);
+        currentStep = Number(runtime?.restore?.currentStep || 0) || 0;
+        renderEncounterStep();
+        scheduleTournamentCheckpoint("tournament_start");
+        return;
+      }
+
       async function startEncounter() {
         // DEMO FORCE
         if (window.isDemo || window.bcMode === "demo") forceDemoLocals();
         syncModeFromWindow();
         const isDemoNow = !!(window.isDemo || window.bcMode === "demo" || isDemo || bcMode === "demo");
+        if (sessionType === "tournament") {
+          return startTournamentEncounter();
+        }
         try {
           console.log("[DEMO][START] gate snapshot", {
             bcMode,
@@ -19962,113 +20099,6 @@ function ensureProgLoaded() {
           } catch (e) {
             console.warn("[BC] session_started failed", e);
           }
-        }
-
-        if (sessionType === "tournament") {
-          const tournamentRuntime = getActiveTournamentRuntime();
-          const activeEntry = getActiveTournamentEntry();
-          if (!tournamentRuntime || !activeEntry) {
-            window.showToast?.("No active tournament entry.");
-            return;
-          }
-
-          const baseEncounter = getEncounterByStableId(activeEntry.encounterId);
-          if (!baseEncounter) {
-            window.showToast?.("Tournament encounter not found.");
-            return;
-          }
-
-          const prevEncounterState = currentEncounter || null;
-          let enc = structuredClone(baseEncounter);
-
-          setActiveTimedChallengeState(null);
-          setActiveDisplayMethodChallengeState(null);
-          setPendingTimedChallengeState(null);
-          setPendingDisplayMethodChallengeState(null);
-
-          if (activeEntry.kind === "timed_challenge") {
-            const challengePayload = {
-              id: activeEntry.entryId,
-              challengeId: activeEntry.entryId,
-              challengeKey: activeEntry.challengeMeta?.challengeKey || null,
-              placement: activeEntry.challengeMeta?.placement || "before_start",
-              encounterTimerSec: Number(activeEntry.timer?.durationSec || 300) || 300,
-              startedAt: Number(activeEntry.timer?.startedAt || 0) || Date.now(),
-              expiresAt: Number(activeEntry.timer?.expiresAt || 0) || 0,
-              title: activeEntry.challengeMeta?.challengeKey || "Timed Challenge",
-            };
-            startTimedChallenge(challengePayload);
-            enc = buildInjectedTimedChallengeEncounter(enc, challengePayload);
-            enc.challengeStartedAt = Number(activeEntry.timer?.startedAt || 0) || 0;
-            enc.challengeExpiresAt = Number(activeEntry.timer?.expiresAt || 0) || 0;
-            enc.timedChallengeTimerSec = Number(activeEntry.timer?.durationSec || 300) || 300;
-          } else if (activeEntry.kind === "display_method_challenge") {
-            const challengePayload = {
-              id: activeEntry.entryId,
-              challengeId: activeEntry.entryId,
-              challengeKey: activeEntry.challengeMeta?.challengeKey || null,
-              methodKey: activeEntry.challengeMeta?.methodKey || null,
-              placement: activeEntry.challengeMeta?.placement || "before_start",
-              strictness: activeEntry.challengeMeta?.strictness || "normal",
-              encounterTimerSec: Number(activeEntry.timer?.durationSec || 300) || 300,
-              startedAt: Number(activeEntry.timer?.startedAt || 0) || Date.now(),
-              expiresAt: Number(activeEntry.timer?.expiresAt || 0) || 0,
-              title: activeEntry.challengeMeta?.challengeKey || "Display Method Challenge",
-            };
-            startDisplayMethodChallenge(challengePayload);
-            enc = buildInjectedDisplayMethodChallengeEncounter(enc, challengePayload);
-            enc.challengeStartedAt = Number(activeEntry.timer?.startedAt || 0) || 0;
-            enc.challengeExpiresAt = Number(activeEntry.timer?.expiresAt || 0) || 0;
-            enc.displayMethodTimerSec = Number(activeEntry.timer?.durationSec || 300) || 300;
-          }
-
-          setRuntimeEncounter(enc);
-          currentEncounter = enc;
-          bcActiveEncounter = enc;
-          bcStepIndex = 0;
-          bcStageResults = [];
-          window.bcStageResults = [];
-          currentStep = 0;
-
-          const wine = selectEncounterWine(isDemoNow);
-          if (!wine) {
-            alert("No wine available. Please add wines first.");
-            return;
-          }
-
-          const injectedMeta = extractInjectedChallengeMeta(enc);
-          const prepared = prepareEncounterForRun(enc, prevEncounterState);
-          enc = reapplyInjectedChallengeMeta(prepared.enc, injectedMeta);
-          const policy = resolveEncounterPolicy(enc, isDemoNow);
-          currentEncounter = buildEncounterRuntimeState(
-            enc,
-            wine,
-            prepared.carry,
-            prepared.sameEncounter,
-            activeEntry.encounterId,
-            activeEntry.encounterRunId,
-            policy,
-            prepared.preferNonEmpty
-          );
-          currentEncounter = applyDifficultyToEncounter(currentEncounter, policy);
-          currentEncounter.tournamentId = tournamentRuntime.tournamentId;
-          currentEncounter.tournamentEntryId = activeEntry.entryId;
-          currentEncounter.tournamentKind = activeEntry.kind;
-          currentEncounter.tournamentSeed = activeEntry.seed || null;
-          currentEncounter.challengeStartedAt = Number(activeEntry.timer?.startedAt || currentEncounter.challengeStartedAt || 0) || 0;
-          currentEncounter.challengeExpiresAt = Number(activeEntry.timer?.expiresAt || currentEncounter.challengeExpiresAt || 0) || 0;
-          applyTournamentRestoreIfPresent(currentEncounter, tournamentRuntime.restore || null);
-          setRuntimeEncounter(currentEncounter);
-          setRuntimeSession({
-            ...(getRuntimeSession() || {}),
-            type: "tournament",
-            tournamentId: tournamentRuntime.tournamentId,
-            currentEntryIndex: tournamentRuntime.currentEntryIndex,
-          });
-          resetLegacyBc3StageState(currentEncounter);
-          renderEncounterStep();
-          scheduleTournamentCheckpoint("tournament_start");
-          return;
         }
 
         const list = getEncounterListForMode(); // should return demo or premium list based on bcMode
