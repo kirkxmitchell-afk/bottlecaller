@@ -7436,6 +7436,45 @@ function renderWaiterPerformanceLeaderboardTable(users = []) {
   `).join("");
 }
 
+function mergeWaiterLeaderboardUsers(baseUsers = [], associatedManagers = []) {
+  const merged = new Map();
+
+  (baseUsers || []).forEach((user) => {
+    const userId = String(user?.userId || "");
+    if (!userId) return;
+    merged.set(userId, { ...user });
+  });
+
+  (associatedManagers || []).forEach((manager) => {
+    const userId = String(manager?.userId || "");
+    if (!userId || merged.has(userId)) return;
+    merged.set(userId, {
+      userId,
+      displayName: manager.displayName || userId.slice(0, 8),
+      role: manager.role || "group_manager",
+      totalPoints: 0,
+      drillPassRate: 0,
+      encounterPassRate: 0,
+      challengeSuccessRate: 0,
+      premiumSuccessRate: 0,
+      masteryRate: 0,
+      lastActiveAt: "",
+      rank: 0,
+    });
+  });
+
+  return Array.from(merged.values())
+    .sort((a, b) => {
+      const pointDiff = Number(b?.totalPoints || 0) - Number(a?.totalPoints || 0);
+      if (pointDiff) return pointDiff;
+      return String(a?.displayName || "").localeCompare(String(b?.displayName || ""));
+    })
+    .map((user, index) => ({
+      ...user,
+      rank: index + 1,
+    }));
+}
+
 async function renderWaiterPerformanceLeaderboardWindow() {
   const labelEl = document.getElementById("waiterLeaderboardRestaurantLabel");
   const managerContextEl = document.getElementById("waiterLeaderboardManagerContext");
@@ -7460,7 +7499,8 @@ async function renderWaiterPerformanceLeaderboardWindow() {
       appState?.restaurant?.id ||
       getManagerActiveRestaurantId?.() ||
       appState?.activeRestaurantId ||
-      null
+      null,
+      appState?.profile?.scope_id || null
     );
     const managerMap = new Map();
     (model?.users || []).forEach((user) => {
@@ -7476,11 +7516,12 @@ async function renderWaiterPerformanceLeaderboardWindow() {
       managerMap.set(String(manager.userId), manager);
     });
     const managerUsers = Array.from(managerMap.values());
+    const visibleUsers = mergeWaiterLeaderboardUsers(model?.users || [], associatedManagers || []);
     managerContextEl.textContent = managerUsers.length
       ? `Managers linked here: ${managerUsers.map((user) => `${user.displayName} (${getDisplayRoleLabel(user.role || "waiter")})`).join(", ")}`
       : "Managers linked here are not currently ranked in this leaderboard view.";
-    renderWaiterPerformanceLeaderboardTable(model?.users || []);
-    msgEl.textContent = model?.users?.length
+    renderWaiterPerformanceLeaderboardTable(visibleUsers);
+    msgEl.textContent = visibleUsers.length
       ? ""
       : "No leaderboard data yet for this restaurant.";
   } catch (error) {
@@ -9631,9 +9672,10 @@ async function getManagerPerformanceModel({ force = false } = {}) {
   };
 }
 
-async function loadAssociatedManagersForRestaurant(restaurantId = null) {
+async function loadAssociatedManagersForRestaurant(restaurantId = null, scopeId = null) {
   const rid = String(restaurantId || "").trim();
-  if (!rid) return [];
+  const sid = String(scopeId || "").trim();
+  if (!rid && !sid) return [];
 
   const managers = new Map();
   const addManager = (row) => {
@@ -9649,20 +9691,41 @@ async function loadAssociatedManagersForRestaurant(restaurantId = null) {
   };
 
   try {
-    const profileRes = await withTimeout(
-      supabase
-        .from("profiles")
-        .select("user_id, display_name, role")
-        .eq("restaurant_id", rid)
-        .order("display_name", { ascending: true }),
-      12000,
-      "profiles.associated_managers"
-    );
-    if (!profileRes?.error) {
-      (profileRes.data || []).forEach(addManager);
+    if (rid) {
+      const profileRes = await withTimeout(
+        supabase
+          .from("profiles")
+          .select("user_id, display_name, role")
+          .eq("restaurant_id", rid)
+          .order("display_name", { ascending: true }),
+        12000,
+        "profiles.associated_managers.restaurant"
+      );
+      if (!profileRes?.error) {
+        (profileRes.data || []).forEach(addManager);
+      }
     }
   } catch (error) {
-    console.warn("[LEADERBOARD] associated manager profile query failed", error);
+    console.warn("[LEADERBOARD] associated manager restaurant query failed", error);
+  }
+
+  try {
+    if (sid) {
+      const scopeRes = await withTimeout(
+        supabase
+          .from("profiles")
+          .select("user_id, display_name, role, scope_id")
+          .eq("scope_id", sid)
+          .order("display_name", { ascending: true }),
+        12000,
+        "profiles.associated_managers.scope"
+      );
+      if (!scopeRes?.error) {
+        (scopeRes.data || []).forEach(addManager);
+      }
+    }
+  } catch (error) {
+    console.warn("[LEADERBOARD] associated manager scope query failed", error);
   }
 
   const creatorUserId =
