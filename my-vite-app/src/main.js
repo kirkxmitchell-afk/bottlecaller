@@ -346,6 +346,7 @@ document.querySelector("#app").innerHTML = `
         <div class="row">
           <button id="btnOpenHud" class="btn-ghost" type="button">Menu</button>
           <button id="btnOpenMessages" class="btn-ghost" type="button">Messages</button>
+          <button id="btnWaiterPerformanceLeaderboard" class="btn-ghost hidden" type="button">Leaderboard</button>
           <button id="btnPremiumWineSetup" class="btn-ghost" type="button">Wine Setup</button>
           <button id="btnManagerBoard" class="btn-ghost" type="button">Manager Board</button>
           <button id="btnOpenProfile" class="btn-ghost" type="button">Profile</button>
@@ -381,7 +382,6 @@ document.querySelector("#app").innerHTML = `
         <div class="score-row">Access tier: <span id="profileAccessTier">-</span></div>
       </div>
 
-      <div id="profileNavigationCard" style="margin-top:12px;"></div>
       <div id="profileStandingCard" style="margin-top:12px;"></div>
       <div id="profileBadgeShelf" style="margin-top:12px;"></div>
       <div id="profileInsightCard" style="margin-top:12px;"></div>
@@ -13785,7 +13785,6 @@ function renderProfileScreen() {
   const profile = appState?.profile || {};
   const restaurant = appState?.restaurant || {};
   const roleLabel = getDisplayRoleLabel(profile);
-  const membershipRole = String(normalizeMembershipRole(profile) || "").toLowerCase();
 
   const displayNameEl = document.getElementById("profileDisplayName");
   const roleEl = document.getElementById("profileRole");
@@ -13793,26 +13792,9 @@ function renderProfileScreen() {
   const scopeTypeEl = document.getElementById("profileScopeType");
   const scopeIdEl = document.getElementById("profileScopeId");
   const accessTierEl = document.getElementById("profileAccessTier");
-  const navigationCard = document.getElementById("profileNavigationCard");
   const standingCard = document.getElementById("profileStandingCard");
   const badgeShelf = document.getElementById("profileBadgeShelf");
   const insightCard = document.getElementById("profileInsightCard");
-
-  if (navigationCard) {
-    if (membershipRole === "waiter") {
-      navigationCard.innerHTML = `
-        <div class="card">
-          <div style="font-weight:600; margin-bottom:10px;">Navigation</div>
-          <div class="small-text" style="opacity:.78; margin-bottom:12px;">Quick links for your restaurant view.</div>
-          <div style="display:flex; flex-wrap:wrap; gap:10px;">
-            <button id="btnProfileNavPerformanceLeaderboard" class="btn-ghost" type="button">Performance Leaderboard</button>
-          </div>
-        </div>
-      `;
-    } else {
-      navigationCard.innerHTML = "";
-    }
-  }
 
   if (displayNameEl) {
     displayNameEl.textContent =
@@ -17847,6 +17829,10 @@ function renderHud() {
   if (mgrBtn) mgrBtn.classList.toggle("hidden", !caps.canAccessManagerBoard);
   const msgBtn = document.getElementById("btnOpenMessages");
   if (msgBtn) msgBtn.classList.remove("hidden");
+  const leaderboardBtn = document.getElementById("btnWaiterPerformanceLeaderboard");
+  if (leaderboardBtn) {
+    leaderboardBtn.classList.toggle("hidden", String(normalizedRole).toLowerCase() !== "waiter");
+  }
 
   const badge = document.getElementById("premiumBadge");
   if (badge) badge.textContent = `PREMIUM • ${String(normalizedRole).toUpperCase()}`;
@@ -18503,6 +18489,9 @@ document.getElementById("btnOpenHud")?.addEventListener("click", () => {
   openHud();
   renderHud();
 });
+document.getElementById("btnWaiterPerformanceLeaderboard")?.addEventListener("click", async () => {
+  await routeProfilePerformanceLeaderboard("waiter_nav_button");
+});
 
 document.getElementById("btnCloseHud")?.addEventListener("click", () => {
   closeHud();
@@ -18514,10 +18503,6 @@ document.getElementById("btnBackToPremium")?.addEventListener("click", () => {
 });
 document.getElementById("btnBackFromProfile")?.addEventListener("click", closeProfilePanel);
 document.getElementById("screenProfile")?.addEventListener("click", (e) => {
-  if (e.target?.id === "btnProfileNavPerformanceLeaderboard") {
-    void routeProfilePerformanceLeaderboard("profile_button");
-    return;
-  }
   if (e.target?.id === "screenProfile") closeProfilePanel();
 });
 document.getElementById("btnLogoutProfile")?.addEventListener("click", async () => {
