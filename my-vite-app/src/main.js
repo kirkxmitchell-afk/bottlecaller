@@ -389,6 +389,46 @@ document.querySelector("#app").innerHTML = `
     </div>
   </section>
 
+  <section id="screenWaiterLeaderboard" class="screen hidden">
+    <div class="panel stack">
+      <div class="topbar">
+        <div class="brand">
+          <h2>Performance Leaderboard</h2>
+          <span class="badge">PREMIUM</span>
+        </div>
+        <div class="row">
+          <button id="btnCloseWaiterLeaderboard" class="btn-ghost" type="button">Close</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="mb-section-header">
+          <strong>Performance Leaderboard</strong>
+          <div class="small-text" id="waiterLeaderboardRestaurantLabel">Live performance snapshot for this restaurant.</div>
+        </div>
+        <div id="waiterLeaderboardMsg" class="small-text" style="margin-top:10px;"></div>
+        <div class="mb-performance-table-wrap" style="margin-top:12px;">
+          <table class="mb-performance-table">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Waiter</th>
+                <th>Total Points</th>
+                <th>Drill Pass %</th>
+                <th>Encounter Pass %</th>
+                <th>Challenge Success %</th>
+                <th>Premium Success %</th>
+                <th>Mastery %</th>
+                <th>Last Active</th>
+              </tr>
+            </thead>
+            <tbody id="waiterLeaderboardRows"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- PREMIUM SETUP (PARENT-OWNED) -->
   <section id="screenSetupPremium" class="screen hidden">
     <div class="panel">
@@ -5893,7 +5933,10 @@ function renderAppChrome() {
 
   const visibleScreens = Array.from(document.querySelectorAll(".screen:not(.hidden)"));
   const hasProfileOverlay = !document.getElementById("screenProfile")?.classList.contains("hidden");
-  const currentScreenId = hasProfileOverlay
+  const hasWaiterLeaderboardOverlay = !document.getElementById("screenWaiterLeaderboard")?.classList.contains("hidden");
+  const currentScreenId = hasWaiterLeaderboardOverlay
+    ? "screenWaiterLeaderboard"
+    : hasProfileOverlay
     ? "screenProfile"
     : (visibleScreens[0]?.id || "screenHome");
 
@@ -5902,6 +5945,7 @@ function renderAppChrome() {
     screenCreateRestaurant: "Restaurant Setup",
     screenPremiumApp: "Premium Floor",
     screenProfile: "Profile",
+    screenWaiterLeaderboard: "Leaderboard",
     screenSetupPremium: "Wine Setup",
     screenManagerBoard: "Manager Board",
     screenGameDemo: "Demo Floor",
@@ -7338,6 +7382,16 @@ function setProfileOpen(isOpen) {
   if (root) root.style.pointerEvents = isOpen ? "none" : "auto";
 }
 
+function setWaiterLeaderboardOpen(isOpen) {
+  const panel = document.getElementById("screenWaiterLeaderboard");
+  const frame = document.getElementById("premiumRootFrame");
+  const root = document.getElementById("premiumRoot");
+
+  if (panel) panel.classList.toggle("hidden", !isOpen);
+  if (frame) frame.style.pointerEvents = isOpen ? "none" : "auto";
+  if (root) root.style.pointerEvents = isOpen ? "none" : "auto";
+}
+
 function openProfilePanel() {
   closeHud?.();
   setProfileOpen(true);
@@ -7347,6 +7401,71 @@ function openProfilePanel() {
 function closeProfilePanel() {
   setProfileOpen(false);
   renderAppChrome?.();
+}
+
+function closeWaiterLeaderboardWindow() {
+  setWaiterLeaderboardOpen(false);
+  renderAppChrome?.();
+}
+
+function renderWaiterPerformanceLeaderboardTable(users = []) {
+  const tbody = document.getElementById("waiterLeaderboardRows");
+  if (!tbody) return;
+
+  tbody.innerHTML = users.map((user) => `
+    <tr>
+      <td>${user.rank}</td>
+      <td>
+        <div class="mb-user-name" style="display:flex; align-items:center; gap:10px;">
+          <span class="mb-user-avatar">${escapeHtml((user.displayName || "?").slice(0, 2).toUpperCase())}</span>
+          <span>${escapeHtml(user.displayName || "Unknown")}</span>
+        </div>
+      </td>
+      <td>${formatMetricNumber(user.totalPoints, 1)}</td>
+      <td>${formatPercent(user.drillPassRate)}</td>
+      <td>${formatPercent(user.encounterPassRate)}</td>
+      <td>${formatPercent(user.challengeSuccessRate)}</td>
+      <td>${formatPercent(user.premiumSuccessRate)}</td>
+      <td>${formatPercent(user.masteryRate)}</td>
+      <td>${formatRelativeTime(user.lastActiveAt)}</td>
+    </tr>
+  `).join("");
+}
+
+async function renderWaiterPerformanceLeaderboardWindow() {
+  const labelEl = document.getElementById("waiterLeaderboardRestaurantLabel");
+  const msgEl = document.getElementById("waiterLeaderboardMsg");
+  const tbody = document.getElementById("waiterLeaderboardRows");
+  if (!labelEl || !msgEl || !tbody) return;
+
+  const restaurantName =
+    appState?.restaurant?.name ||
+    getManagerActiveRestaurantId?.() ||
+    appState?.activeRestaurantId ||
+    "this restaurant";
+
+  labelEl.textContent = `Live performance snapshot for ${restaurantName}.`;
+  msgEl.textContent = "Loading leaderboard…";
+  tbody.innerHTML = "";
+
+  try {
+    const model = await getManagerPerformanceModel({ force: true });
+    renderWaiterPerformanceLeaderboardTable(model?.users || []);
+    msgEl.textContent = model?.users?.length
+      ? ""
+      : "No leaderboard data yet for this restaurant.";
+  } catch (error) {
+    console.error("[LEADERBOARD] load failed", error);
+    msgEl.textContent = error?.message || "Failed to load leaderboard.";
+  }
+}
+
+async function openWaiterLeaderboardWindow() {
+  closeHud?.();
+  closeProfilePanel?.();
+  setWaiterLeaderboardOpen(true);
+  renderAppChrome?.();
+  await renderWaiterPerformanceLeaderboardWindow();
 }
 
 window.__BC_HUD_TIMELINE_TARGET_USER_ID__ = window.__BC_HUD_TIMELINE_TARGET_USER_ID__ || null;
@@ -7925,9 +8044,7 @@ function wireManagerBoardMenu() {
     }
     if (normalized === "billing") return loadManagerBoardSeats?.();
     if (normalized === "performance") {
-      const leaderboardOnly = !!window.__BC_WAITER_PERFORMANCE_LEADERBOARD_ONLY__;
-      await loadManagerInsights({ leaderboardOnly });
-      if (leaderboardOnly) return;
+      await loadManagerInsights();
       await loadHistoryWaiters();
       const select = document.getElementById("mbHistoryUser");
       if (select && !select.__wired) {
@@ -7975,9 +8092,7 @@ function wireManagerBoardMenu() {
     }
     if (tab === "billing") await loadManagerBoardSeats?.();
     if (tab === "performance") {
-      const leaderboardOnly = !!window.__BC_WAITER_PERFORMANCE_LEADERBOARD_ONLY__;
-      await loadManagerInsights({ leaderboardOnly });
-      if (leaderboardOnly) return;
+      await loadManagerInsights();
       await loadHistoryWaiters();
 
       const select = document.getElementById("mbHistoryUser");
@@ -8488,31 +8603,29 @@ function wireManagerRestaurantPicker() {
 function applyManagerBoardVisibility() {
   const profile = appState.profile || {};
   const caps = getPremiumRoleCapabilities(profile);
-  const membershipRole = String(normalizeMembershipRole(profile) || "").toLowerCase();
-  const waiterPerformanceOnly = membershipRole === "waiter";
 
   const overviewBtn = document.querySelector('#mbMenu [data-mbtab="overview"]');
-  if (overviewBtn) overviewBtn.style.display = waiterPerformanceOnly ? "none" : "";
+  if (overviewBtn) overviewBtn.style.display = caps.canAccessManagerBoard ? "" : "none";
   const selectionBtn = document.querySelector('#mbMenu [data-mbtab="selection"]');
-  if (selectionBtn) selectionBtn.style.display = waiterPerformanceOnly ? "none" : "";
+  if (selectionBtn) selectionBtn.style.display = caps.canAccessManagerBoard ? "" : "none";
   const billingBtn = document.querySelector('#mbMenu [data-mbtab="billing"]');
-  if (billingBtn) billingBtn.style.display = waiterPerformanceOnly ? "none" : "";
+  if (billingBtn) billingBtn.style.display = caps.canAccessManagerBoard ? "" : "none";
   const peopleBtn = document.querySelector('#mbMenu [data-mbtab="people"]');
-  if (peopleBtn) peopleBtn.style.display = waiterPerformanceOnly ? "none" : "";
+  if (peopleBtn) peopleBtn.style.display = caps.canAccessManagerBoard ? "" : "none";
   const messengerBtn = document.querySelector('#mbMenu [data-mbtab="messenger"]');
-  if (messengerBtn) messengerBtn.style.display = waiterPerformanceOnly ? "none" : "";
+  if (messengerBtn) messengerBtn.style.display = caps.canAccessManagerBoard ? "" : "none";
   const liveControlsBtn = document.querySelector('#mbMenu [data-mbtab="live_controls"]');
-  if (liveControlsBtn) liveControlsBtn.style.display = waiterPerformanceOnly ? "none" : "";
+  if (liveControlsBtn) liveControlsBtn.style.display = caps.canAccessManagerBoard ? "" : "none";
   const performanceBtn = document.querySelector('#mbMenu [data-mbtab="performance"]');
-  if (performanceBtn) performanceBtn.style.display = "";
+  if (performanceBtn) performanceBtn.style.display = caps.canAccessManagerBoard ? "" : "none";
   const enterpriseBtn = document.querySelector('#mbMenu [data-mbtab="enterprise"]');
   if (enterpriseBtn) {
-    const showEnterprise = !waiterPerformanceOnly && caps.canUseEnterpriseControls;
+    const showEnterprise = caps.canUseEnterpriseControls;
     enterpriseBtn.style.display = showEnterprise ? "" : "none";
     enterpriseBtn.classList.toggle("hidden", !showEnterprise);
   }
   const picker = document.getElementById("mbRestaurantPicker");
-  if (picker) picker.classList.toggle("hidden", waiterPerformanceOnly);
+  if (picker) picker.classList.toggle("hidden", !caps.canAccessManagerBoard);
 }
 
 function wireActiveRestaurantPicker() {
@@ -9060,10 +9173,9 @@ function refreshInsightsExplorer() {
   }
 }
 
-async function loadManagerInsights(opts = {}) {
+async function loadManagerInsights() {
   const root = document.getElementById("mbInsightsPanel");
   if (!root) return;
-  const leaderboardOnly = !!opts?.leaderboardOnly;
 
   root.innerHTML = `<div class="card"><div class="small-text">Loading performance…</div></div>`;
 
@@ -9073,7 +9185,6 @@ async function loadManagerInsights(opts = {}) {
     window.__BC_MB_SELECTION_MODEL__ = normalizeSelectionData(model);
 
     root.innerHTML = `
-      ${leaderboardOnly ? "" : `
       <div class="mb-performance-overview card">
         <div class="mb-section-header">
           <strong>Team Performance</strong>
@@ -9081,9 +9192,8 @@ async function loadManagerInsights(opts = {}) {
         </div>
         <div id="mbPerformanceCards" class="mb-performance-card-grid" style="margin-top:12px;"></div>
       </div>
-      `}
 
-      <div class="mb-performance-leaderboard card" style="margin-top:${leaderboardOnly ? "0" : "12px"};">
+      <div class="mb-performance-leaderboard card" style="margin-top:12px;">
         <div class="mb-section-header">
           <strong>Performance Leaderboard</strong>
           <div class="small-text">Ranked by total points with quality and readiness context.</div>
@@ -9108,7 +9218,6 @@ async function loadManagerInsights(opts = {}) {
         </div>
       </div>
 
-      ${leaderboardOnly ? "" : `
       <div class="mb-performance-insights card" style="margin-top:12px;">
         <div class="mb-section-header">
           <strong>Coach Notes</strong>
@@ -9116,22 +9225,15 @@ async function loadManagerInsights(opts = {}) {
         </div>
         <div id="mbPerformanceCoachNotes" style="margin-top:12px;"></div>
       </div>
-      `}
     `;
 
-    if (!leaderboardOnly) {
-      renderManagerPerformanceOverview(model.summary);
-    }
+    renderManagerPerformanceOverview(model.summary);
     renderManagerPerformanceTable(model.users);
-    if (!leaderboardOnly) {
-      renderManagerCoachNotes(model.notes);
-    }
+    renderManagerCoachNotes(model.notes);
     wirePerformanceRowExpansion(
       Object.fromEntries(model.users.map((user) => [user.userId, user]))
     );
-    if (!leaderboardOnly) {
-      renderPerformanceHistorySummaryStrip(document.getElementById("mbHistoryUser")?.value || model.users[0]?.userId || "");
-    }
+    renderPerformanceHistorySummaryStrip(document.getElementById("mbHistoryUser")?.value || model.users[0]?.userId || "");
   } catch (error) {
     console.error("[MB] loadManagerInsights failed", error);
     root.innerHTML = `
@@ -17109,7 +17211,6 @@ async function routePremium(reason = "manual") {
 async function routeManagerBoard(reason = "manual") {
   clearMsgs();
   closeHud();
-  window.__BC_WAITER_PERFORMANCE_LEADERBOARD_ONLY__ = false;
 
   await loadAuthedState(`routeManagerBoard:${reason}`);
 
@@ -17198,17 +17299,10 @@ async function routeProfilePerformanceLeaderboard(reason = "profile_leaderboard"
   window.__BC_MB_DEFAULTTAB__ = "performance";
 
   if (membershipRole === "waiter") {
-    window.__BC_WAITER_PERFORMANCE_LEADERBOARD_ONLY__ = true;
-    closeProfilePanel();
-    showScreen("screenManagerBoard");
-    applyManagerBoardVisibility();
-    wireManagerBoardMenu();
-    window.__BC_MB_SHOWTAB__?.("performance");
-    await window.__BC_MB_LOADTAB__?.("performance");
+    await openWaiterLeaderboardWindow();
     return;
   }
 
-  window.__BC_WAITER_PERFORMANCE_LEADERBOARD_ONLY__ = false;
   await routeManagerBoard(reason);
 }
 
@@ -18510,6 +18604,7 @@ document.getElementById("btnOpenHud")?.addEventListener("click", () => {
 document.getElementById("btnWaiterPerformanceLeaderboard")?.addEventListener("click", async () => {
   await routeProfilePerformanceLeaderboard("waiter_nav_button");
 });
+document.getElementById("btnCloseWaiterLeaderboard")?.addEventListener("click", closeWaiterLeaderboardWindow);
 
 document.getElementById("btnCloseHud")?.addEventListener("click", () => {
   closeHud();
@@ -18522,6 +18617,9 @@ document.getElementById("btnBackToPremium")?.addEventListener("click", () => {
 document.getElementById("btnBackFromProfile")?.addEventListener("click", closeProfilePanel);
 document.getElementById("screenProfile")?.addEventListener("click", (e) => {
   if (e.target?.id === "screenProfile") closeProfilePanel();
+});
+document.getElementById("screenWaiterLeaderboard")?.addEventListener("click", (e) => {
+  if (e.target?.id === "screenWaiterLeaderboard") closeWaiterLeaderboardWindow();
 });
 document.getElementById("btnLogoutProfile")?.addEventListener("click", async () => {
   await doLogout("profile_logout");
