@@ -142,6 +142,33 @@ function assertTournamentAdvanceAllowed(runtime, completedEntry) {
   }
 }
 
+function assertTournamentCheckpointAllowed(runtime, restore) {
+  if (!runtime || String(runtime.status || "") !== "active") {
+    throw new Error("Tournament is not active.");
+  }
+
+  if (!runtime.activeEntry) {
+    throw new Error("Tournament has no active entry.");
+  }
+
+  const expectedRunId = String(runtime.activeEntry.encounterRunId || "");
+  const expectedEncounterId = String(runtime.activeEntry.encounterId || "");
+  const actualRunId = String(restore?.runId || "");
+  const actualEncounterId = String(restore?.encounterId || "");
+
+  if (!expectedRunId || !expectedEncounterId) {
+    throw new Error("Tournament active entry restore identity is incomplete.");
+  }
+
+  if (actualRunId !== expectedRunId) {
+    throw new Error(`Tournament checkpoint runId mismatch. Expected ${expectedRunId}, got ${actualRunId}.`);
+  }
+
+  if (actualEncounterId !== expectedEncounterId) {
+    throw new Error(`Tournament checkpoint encounterId mismatch. Expected ${expectedEncounterId}, got ${actualEncounterId}.`);
+  }
+}
+
 function buildTournamentRunId(tournamentId, entryIndex, ordinal = 1) {
   return `${String(tournamentId || "tournament")}::${Number(entryIndex || 0)}::run_${Number(ordinal || 1)}`;
 }
@@ -200,6 +227,34 @@ function buildActiveTournamentEntry(definition, runtime, entry) {
   }
 
   return active;
+}
+
+function sanitizeRuntimeRestore(runtime) {
+  if (!runtime || !runtime.activeEntry) return runtime;
+
+  const restore = runtime.restore;
+  if (!restore || typeof restore !== "object") return runtime;
+
+  const expectedRunId = String(runtime.activeEntry.encounterRunId || "");
+  const expectedEncounterId = String(runtime.activeEntry.encounterId || "");
+  const actualRunId = String(restore?.runId || "");
+  const actualEncounterId = String(restore?.encounterId || "");
+
+  if (expectedRunId && actualRunId && expectedRunId !== actualRunId) {
+    return {
+      ...runtime,
+      restore: null,
+    };
+  }
+
+  if (expectedEncounterId && actualEncounterId && expectedEncounterId !== actualEncounterId) {
+    return {
+      ...runtime,
+      restore: null,
+    };
+  }
+
+  return runtime;
 }
 
 function validateDefinition(definition, resolveEncounterById) {
@@ -459,9 +514,14 @@ export function makeTournamentHandlers({
         return;
       }
 
+      const sanitizedRuntime = sanitizeRuntimeRestore(current.runtime);
+      if (sanitizedRuntime !== current.runtime) {
+        setTournamentRuntime(current.definition.tournamentId, sanitizedRuntime);
+      }
+
       replyOk(reply, BC_TYPES.TOURNAMENT_RESTORED, requestId, {
         definition: current.definition,
-        runtime: current.runtime,
+        runtime: sanitizedRuntime,
       });
     },
 
@@ -478,8 +538,10 @@ export function makeTournamentHandlers({
         replyErr(reply, BC_TYPES.TOURNAMENT_CHECKPOINT_RESULT, requestId, "tournament_not_active");
         return;
       }
-      if (String(restore?.runId || "") !== String(current.runtime.activeEntry.encounterRunId || "")) {
-        replyErr(reply, BC_TYPES.TOURNAMENT_CHECKPOINT_RESULT, requestId, "run_mismatch");
+      try {
+        assertTournamentCheckpointAllowed(current.runtime, restore);
+      } catch (error) {
+        replyErr(reply, BC_TYPES.TOURNAMENT_CHECKPOINT_RESULT, requestId, error?.message || String(error || "checkpoint_invalid"));
         return;
       }
 

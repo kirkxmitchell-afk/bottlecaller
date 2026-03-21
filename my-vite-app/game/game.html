@@ -5855,8 +5855,64 @@ function isDrillMode() {
             payload.runtime,
             { autoStart: payload?.runtime?.status === "active" }
           );
-        } catch {
+        } catch (error) {
+          console.warn("[TOURNAMENT] restore failed", error);
           return null;
+        }
+      }
+      async function startTournamentSession(tournamentId) {
+        let response = null;
+
+        try {
+          response = await window.TournamentBridge?.requestTournamentStart?.(String(tournamentId || ""));
+        } catch (error) {
+          console.warn("[TOURNAMENT] start failed", error);
+          window.showToast?.(error?.message || "Could not start tournament.");
+          return;
+        }
+
+        const definition = response?.definition || getTournamentState().definition || null;
+        const runtime = response?.runtime || null;
+
+        if (!definition || !runtime) {
+          window.showToast?.("Tournament start did not return runtime.");
+          return;
+        }
+
+        setTournamentSnapshot?.(definition, runtime);
+
+        if (String(runtime.status || "") === "active" && runtime.activeEntry) {
+          return startTournamentEncounter();
+        }
+
+        if (String(runtime.status || "") === "complete") {
+          return renderTournamentCompleteState?.(definition, runtime);
+        }
+      }
+      async function restoreTournamentSession(tournamentId) {
+        let response = null;
+
+        try {
+          response = await window.TournamentBridge?.requestTournamentRestore?.(
+            tournamentId ? String(tournamentId) : null
+          );
+        } catch (error) {
+          console.warn("[TOURNAMENT] restore failed", error);
+          return;
+        }
+
+        const definition = response?.definition || null;
+        const runtime = response?.runtime || null;
+        if (!definition || !runtime) return;
+
+        setTournamentSnapshot?.(definition, runtime);
+
+        if (String(runtime.status || "") === "active" && runtime.activeEntry) {
+          return startTournamentEncounter();
+        }
+
+        if (String(runtime.status || "") === "complete") {
+          return renderTournamentCompleteState?.(definition, runtime);
         }
       }
       function renderStateHealthWarning() {
@@ -6059,28 +6115,45 @@ function isDrillMode() {
       }
       window.__BC_TOURNAMENT_API__ = window.__BC_TOURNAMENT_API__ || {
         get: getTournamentState,
-        restore: (tournamentId = null) => maybeRestoreTournamentSession(tournamentId),
+        restore: (tournamentId = null) => restoreTournamentSession(tournamentId),
         snapshot: async (tournamentId = null) => {
-          const payload = await window.TournamentBridge?.requestTournamentSnapshot?.(tournamentId);
+          let payload = null;
+          try {
+            payload = await window.TournamentBridge?.requestTournamentSnapshot?.(tournamentId);
+          } catch (error) {
+            console.warn("[TOURNAMENT] snapshot failed", error);
+            window.showToast?.(error?.message || "Could not load tournament snapshot.");
+            return null;
+          }
           if (payload?.definition || payload?.runtime) {
             setTournamentSnapshot(payload?.definition || null, payload?.runtime || null);
           }
           return payload;
         },
-        create: async (definition) => window.TournamentBridge?.requestTournamentCreate?.(definition),
+        create: async (definition) => {
+          try {
+            return await window.TournamentBridge?.requestTournamentCreate?.(definition);
+          } catch (error) {
+            console.warn("[TOURNAMENT] create failed", error);
+            window.showToast?.(error?.message || "Could not create tournament.");
+            return null;
+          }
+        },
         start: async (tournamentId) => {
           if (!getTournamentState().definition) {
-            const snap = await window.TournamentBridge?.requestTournamentSnapshot?.(tournamentId);
+            let snap = null;
+            try {
+              snap = await window.TournamentBridge?.requestTournamentSnapshot?.(tournamentId);
+            } catch (error) {
+              console.warn("[TOURNAMENT] snapshot failed", error);
+              window.showToast?.(error?.message || "Could not load tournament snapshot.");
+              return null;
+            }
             if (snap?.definition || snap?.runtime) {
               setTournamentSnapshot(snap?.definition || null, snap?.runtime || null);
             }
           }
-          const payload = await window.TournamentBridge?.requestTournamentStart?.(tournamentId);
-          if (payload?.runtime) {
-            const definition = getTournamentState().definition || null;
-            await applyTournamentSnapshotAndMaybeResume(definition, payload.runtime, { autoStart: true });
-          }
-          return payload;
+          return await startTournamentSession(tournamentId);
         },
       };
       function normalizeRole(rawRole, fallback = null) {
@@ -20111,7 +20184,7 @@ function ensureProgLoaded() {
           });
         } catch (error) {
           console.error("[BC][Tournament] advance failed", error);
-          window.showToast?.("Failed to advance tournament.");
+          window.showToast?.(error?.message || "Failed to advance tournament.");
           return;
         }
 

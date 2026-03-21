@@ -18,6 +18,10 @@ const pending = new Map<
 let installed = false;
 let requestSeq = 0;
 
+function isBridgeErrorPayload(payload: any): boolean {
+  return !!(payload && typeof payload === "object" && payload.ok === false);
+}
+
 function getEpoch(): number {
   try {
     return Number((window as any).__BC_EPOCH__ || 0);
@@ -52,7 +56,17 @@ function ensureListener() {
 
     pending.delete(requestId);
     window.clearTimeout(entry.timer);
-    entry.resolve(msg.payload ?? null);
+
+    const payload = msg.payload ?? null;
+    if (isBridgeErrorPayload(payload)) {
+      const errorMessage = String(payload.error || `${msg.type}:error`);
+      const err = new Error(errorMessage);
+      (err as any).payload = payload;
+      entry.reject(err);
+      return;
+    }
+
+    entry.resolve(payload);
   });
 }
 
