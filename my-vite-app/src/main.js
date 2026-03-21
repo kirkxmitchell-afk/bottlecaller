@@ -3714,13 +3714,15 @@ function normalizeWineRow(row) {
 
 function getWineDedupKey(row) {
   if (!row || typeof row !== "object") return "";
-  const id = String(row.id || "").trim();
-  if (id) return `id:${id}`;
   const name = String(row.name || "").trim().toLowerCase();
   const varietal = String(row.varietal || "").trim().toLowerCase();
   const region = String(row.region || "").trim().toLowerCase();
   const story = String(row.story || "").trim().toLowerCase();
-  return `shape:${name}::${varietal}::${region}::${story}`;
+  if (name || varietal || region || story) {
+    return `shape:${name}::${varietal}::${region}::${story}`;
+  }
+  const id = String(row.id || "").trim();
+  return id ? `id:${id}` : "";
 }
 
 function dedupeWineRows(rows = []) {

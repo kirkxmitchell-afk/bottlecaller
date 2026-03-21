@@ -4341,13 +4341,15 @@ console.log("BC3_MARKER_V1");
   window.wines = wines;
   function getWineDedupKey(wine) {
     if (!wine || typeof wine !== "object") return "";
-    const id = String(wine.id || "").trim();
-    if (id) return `id:${id}`;
     const name = String(wine.name || "").trim().toLowerCase();
     const varietal = String(wine.varietal || "").trim().toLowerCase();
     const region = String(wine.region || "").trim().toLowerCase();
     const story = String(wine.story || "").trim().toLowerCase();
-    return `shape:${name}::${varietal}::${region}::${story}`;
+    if (name || varietal || region || story) {
+      return `shape:${name}::${varietal}::${region}::${story}`;
+    }
+    const id = String(wine.id || "").trim();
+    return id ? `id:${id}` : "";
   }
   function dedupeWinesList(next) {
     const list = Array.isArray(next) ? next : [];
@@ -4682,6 +4684,12 @@ function isDrillMode() {
         `;
 
         if (!existing) document.body.appendChild(el);
+      }
+      window.renderStateHealthWarning = renderStateHealthWarning;
+      if (!window.__BC_STATE_HEALTH_WARNING_WATCHDOG__) {
+        window.__BC_STATE_HEALTH_WARNING_WATCHDOG__ = setInterval(() => {
+          try { renderStateHealthWarning(); } catch {}
+        }, 1500);
       }
       function syncRuntimeState(patch = {}) {
         const next = {
@@ -8765,6 +8773,7 @@ function ensureProgLoaded() {
           membership_role: membershipRole || "",
           role: membershipRole || role || ""
         });
+        try { renderStateHealthWarning(); } catch {}
         renderGameplayRail?.();
         exportRuntimeIdentity(window.__BC_CTX__);
         console.log("[BC][POST_EXPORT_DUMP]", window.__BC_RUNTIME_DUMP__?.());
