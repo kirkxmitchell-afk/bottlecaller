@@ -7417,8 +7417,8 @@ function renderWaiterPerformanceLeaderboardTable(users = []) {
     <tr>
       <td>${user.rank}</td>
       <td>
-        <div class="mb-user-name" style="display:flex; align-items:center; gap:10px;">
-          <span class="mb-user-avatar">${escapeHtml((user.displayName || "?").slice(0, 2).toUpperCase())}</span>
+        <div class="waiter-leaderboard-member">
+          <span class="waiter-leaderboard-avatar">${escapeHtml((user.displayName || "?").slice(0, 2).toUpperCase())}</span>
           <div style="display:flex; flex-direction:column; gap:4px;">
             <span>${escapeHtml(user.displayName || "Unknown")}</span>
             <span class="waiter-leaderboard-role-pill">${escapeHtml(getDisplayRoleLabel(user.role || "waiter"))}</span>

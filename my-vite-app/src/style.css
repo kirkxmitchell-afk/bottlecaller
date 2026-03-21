@@ -1926,6 +1926,25 @@ button:hover, .btn:hover, .btn-ghost:hover{
   text-transform:uppercase;
 }
 
+#screenWaiterLeaderboard .waiter-leaderboard-member{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  cursor:default;
+}
+
+#screenWaiterLeaderboard .waiter-leaderboard-avatar{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:26px;
+  height:26px;
+  border-radius:999px;
+  background:rgba(255,255,255,0.08);
+  font-size:11px;
+  letter-spacing:0.05em;
+}
+
 #profileMultiRestaurantCard{
   margin-top: 14px !important;
 }
