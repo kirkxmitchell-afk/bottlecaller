@@ -7551,7 +7551,18 @@ async function buildLeaderboardUserDetail(userId, restaurantId, fallbackUser = {
     (sum, skill) => sum + Number(fallbackSkillShape?.[skill.key] || 0),
     0
   );
-  const skillShape = fetchedSkillTotal > 0 ? fetchedSkillShape : fallbackSkillShape;
+  const derivedSkillShape = deriveLeaderboardSkillShape(fallbackUser);
+  const derivedSkillTotal = MANAGER_PERFORMANCE_SKILLS.reduce(
+    (sum, skill) => sum + Number(derivedSkillShape?.[skill.key] || 0),
+    0
+  );
+  const skillShape = fetchedSkillTotal > 0
+    ? fetchedSkillShape
+    : fallbackSkillTotal > 0
+      ? fallbackSkillShape
+      : derivedSkillTotal > 0
+        ? derivedSkillShape
+        : fallbackSkillShape;
   const canonicalState = progressionRow?.canonical_state && typeof progressionRow.canonical_state === "object"
     ? progressionRow.canonical_state
     : {};
@@ -7618,8 +7629,18 @@ async function buildLeaderboardUserDetail(userId, restaurantId, fallbackUser = {
     readinessLabel,
     servedTier,
     challengeReadiness,
-    strongestSkill: fallbackSkillTotal > fetchedSkillTotal ? (fallbackUser?.strongestSkill || extremes.strongestSkill) : extremes.strongestSkill,
-    weakestSkill: fallbackSkillTotal > fetchedSkillTotal ? (fallbackUser?.weakestSkill || extremes.weakestSkill) : extremes.weakestSkill,
+    strongestSkill:
+      fallbackSkillTotal > fetchedSkillTotal
+        ? (fallbackUser?.strongestSkill || extremes.strongestSkill)
+        : derivedSkillTotal > fetchedSkillTotal && fetchedSkillTotal === 0
+          ? extremes.strongestSkill
+          : extremes.strongestSkill,
+    weakestSkill:
+      fallbackSkillTotal > fetchedSkillTotal
+        ? (fallbackUser?.weakestSkill || extremes.weakestSkill)
+        : derivedSkillTotal > fetchedSkillTotal && fetchedSkillTotal === 0
+          ? extremes.weakestSkill
+          : extremes.weakestSkill,
     skillShape,
   };
 }
@@ -7689,6 +7710,23 @@ function closeAllWaiterPerformanceUserDetails(exceptUserId = null) {
     button.classList.remove("is-open");
     button.setAttribute("aria-expanded", "false");
   });
+}
+
+function deriveLeaderboardSkillShape(user = {}) {
+  const drill = Math.round(Math.max(0, Math.min(100, Number(user?.drillPassRate || 0) * 100)));
+  const encounter = Math.round(Math.max(0, Math.min(100, Number(user?.encounterPassRate || 0) * 100)));
+  const challenge = Math.round(Math.max(0, Math.min(100, Number(user?.challengeSuccessRate || 0) * 100)));
+  const premium = Math.round(Math.max(0, Math.min(100, Number(user?.premiumSuccessRate || 0) * 100)));
+  const mastery = Math.round(Math.max(0, Math.min(100, Number(user?.masteryRate || 0) * 100)));
+  const readiness = Math.round(Math.max(0, Math.min(100, Number(user?.readiness || 0) * 100)));
+
+  return {
+    read: Math.max(readiness, encounter),
+    framing: Math.max(drill, Math.round((drill + readiness) / 2)),
+    delivery: Math.max(encounter, mastery),
+    recovery: Math.max(challenge, Math.round((challenge + readiness) / 2)),
+    closing: Math.max(premium, mastery),
+  };
 }
 
 function mergeWaiterLeaderboardUsers(baseUsers = [], associatedManagers = []) {
