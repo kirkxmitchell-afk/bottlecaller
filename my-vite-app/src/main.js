@@ -479,6 +479,7 @@ document.querySelector("#app").innerHTML = `
 
       <div id="mbPanels">
         <div id="mbTab_overview" class="mbTab">
+          <div id="mbParentStateCard" style="margin-bottom:12px;"></div>
           <div class="card">
             <div class="score-row">Restaurant: <span id="mbRestName">-</span></div>
             <div class="score-row">Total runs: <span id="mbRunsTotal">-</span></div>
@@ -486,7 +487,6 @@ document.querySelector("#app").innerHTML = `
           </div>
 
           <div id="mbRestaurantContextCard" style="margin-top:12px;"></div>
-          <div id="mbParentStateCard" style="margin-top:12px;"></div>
           <div id="mbGroupOverviewCard" style="margin-top:12px;"></div>
           <div id="mbGroupMetricsCard" style="margin-top:12px;"></div>
           <div id="mbGroupRestaurantComparisonCard" style="margin-top:12px;"></div>
@@ -8886,6 +8886,7 @@ async function getManagerPerformanceModel({ force = false } = {}) {
   const encountersByUser = byUserFrom(encounterRows);
   const messagesByUser = byUserFrom(messageRows, "sender_user_id");
   const leaderboardByUser = byUserFrom(leaderboardRows);
+  const restaurantHasCanonicalProgression = progressionStateRows.length > 0;
 
   const users = Array.from(userIds).map((uid) => {
     const progressionStateRow = progressionStateByUser.get(uid)?.[0] || {};
@@ -8978,6 +8979,9 @@ async function getManagerPerformanceModel({ force = false } = {}) {
     const totalPoints = hasCanonicalProgression
       ? Math.max(0, canonicalPoints ?? 0)
       : (
+          restaurantHasCanonicalProgression
+            ? 0
+            :
           firstFinite(
             leaderboardRow?.total_points,
             totalsRow?.total_points,
@@ -9008,12 +9012,16 @@ async function getManagerPerformanceModel({ force = false } = {}) {
           1,
           Math.min(
             3,
-            Math.round(firstFinite(
-              latestRow?.latest_tier,
-              leaderboardRow?.tier_to_serve,
-              leaderboardRow?.served_tier,
-              eligibilityTier
-            ) || eligibilityTier)
+            Math.round(
+              restaurantHasCanonicalProgression
+                ? eligibilityTier
+                : (firstFinite(
+                    latestRow?.latest_tier,
+                    leaderboardRow?.tier_to_serve,
+                    leaderboardRow?.served_tier,
+                    eligibilityTier
+                  ) || eligibilityTier)
+            )
           )
         );
 
@@ -10065,20 +10073,48 @@ function getAllowedRestaurantName(restaurantId) {
 }
 
 function renderParentStateDebugCard() {
-  const root = document.getElementById("mbParentStateCard");
+  let root = document.getElementById("mbParentStateCard");
+  if (!root) {
+    const overview = document.getElementById("mbTab_overview");
+    if (!overview) return;
+    root = document.createElement("div");
+    root.id = "mbParentStateCard";
+    root.style.marginBottom = "12px";
+    overview.prepend(root);
+  }
   if (!root) return;
+
+  root.style.display = "block";
+  root.style.visibility = "visible";
+  root.style.opacity = "1";
+  root.style.position = "relative";
+  root.style.zIndex = "1";
 
   const snapshot = getParentCtxSnapshot("premium");
   const iframeHealthy = isPremiumIframeHealthy();
   const health = snapshot.ctxReady
     ? (iframeHealthy ? "ready" : "degraded_iframe")
     : "degraded_parent_ctx";
+  const healthTone =
+    health === "ready"
+      ? {
+          border: "rgba(62, 184, 122, 0.38)",
+          bg: "linear-gradient(180deg, rgba(18,52,35,0.96), rgba(14,30,24,0.96))",
+          badgeBg: "rgba(62, 184, 122, 0.18)",
+          badgeText: "#b8f1cf",
+        }
+      : {
+          border: "rgba(232, 170, 64, 0.42)",
+          bg: "linear-gradient(180deg, rgba(58,36,12,0.96), rgba(34,23,10,0.96))",
+          badgeBg: "rgba(232, 170, 64, 0.18)",
+          badgeText: "#ffe1a8",
+        };
 
   root.innerHTML = `
-    <div class="card" style="padding:12px; display:flex; flex-direction:column; gap:8px;">
+    <div class="card" style="padding:12px; display:flex; flex-direction:column; gap:8px; border:1px solid ${healthTone.border}; background:${healthTone.bg}; box-shadow:0 10px 28px rgba(0,0,0,0.18);">
       <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
         <strong>Parent State</strong>
-        <span class="small-text" style="opacity:.78;">${escapeHtml(health)}</span>
+        <span class="small-text" style="opacity:.95; padding:3px 8px; border-radius:999px; background:${healthTone.badgeBg}; color:${healthTone.badgeText}; text-transform:uppercase; letter-spacing:.04em;">${escapeHtml(health)}</span>
       </div>
       <div class="small-text" style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px 12px;">
         <div><b>Role:</b> ${escapeHtml(snapshot.membershipRole || "-")}</div>
@@ -10091,6 +10127,7 @@ function renderParentStateDebugCard() {
     </div>
   `;
 }
+window.renderParentStateDebugCard = renderParentStateDebugCard;
 
 function setGroupManagerMetrics(metrics) {
   window.__BC_GROUP_MANAGER_METRICS__ = metrics || {

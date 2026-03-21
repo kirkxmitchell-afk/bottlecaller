@@ -5067,6 +5067,7 @@ function isDrillMode() {
         const spine = bcGetSpineHost();
         const selectors = spine?.selectors || {};
         const state = spine?.getState?.() || null;
+        const stateSnapshot = getStateSnapshot();
         const runtime = getRuntimeState();
         const prog = runtime.progression || {};
         const meta = prog?.meta || {};
@@ -5078,16 +5079,20 @@ function isDrillMode() {
           !!state ||
           typeof selectors.points === "function" ||
           typeof selectors.tier === "function";
+        const canUseLocalProgressionFallback =
+          !!stateSnapshot?.ctxReady &&
+          !!stateSnapshot?.progressionReady &&
+          !hasCanonicalSpine;
 
-        const pointsFallback = hasCanonicalSpine
-          ? 0
-          : (meta.pointsTotal ?? prog?.points ?? 0);
-        const tierFallback = hasCanonicalSpine
-          ? 1
-          : (meta.tierUnlocked ?? prog?.tier ?? 1);
-        const difficultyFallback = hasCanonicalSpine
-          ? 1
-          : (meta.difficultySeed ?? 1);
+        const pointsFallback = canUseLocalProgressionFallback
+          ? (meta.pointsTotal ?? prog?.points ?? 0)
+          : 0;
+        const tierFallback = canUseLocalProgressionFallback
+          ? (meta.tierUnlocked ?? prog?.tier ?? 1)
+          : 1;
+        const difficultyFallback = canUseLocalProgressionFallback
+          ? (meta.difficultySeed ?? 1)
+          : 1;
 
         const points = Number(
           selectors.points?.() ??
@@ -11716,6 +11721,7 @@ function ensureProgLoaded() {
 
       function canPlay() {
         if (window.isDemo || window.bcMode === "demo" || isDemo || bcMode === "demo") return true;
+        if (!isRuntimeReady({ requireProgression: false })) return false;
         if (Array.isArray(wines) && wines.length > 0) return true;
         if (typeof getWineCount === "function") return (getWineCount() || 0) > 0;
         return false;
