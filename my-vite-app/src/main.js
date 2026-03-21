@@ -7475,6 +7475,71 @@ function mergeWaiterLeaderboardUsers(baseUsers = [], associatedManagers = []) {
     }));
 }
 
+async function loadRestaurantEnvironmentProfiles(restaurantId = null) {
+  const rid = String(restaurantId || "").trim();
+  if (!rid) return [];
+
+  const roster = new Map();
+  const addRow = (row) => {
+    const userId = String(row?.user_id || "").trim();
+    if (!userId) return;
+    roster.set(userId, {
+      userId,
+      displayName: String(row?.display_name || row?.full_name || row?.name || "").trim(),
+      role: normalizeMembershipRole(row) || String(row?.role || "").toLowerCase() || "waiter",
+    });
+  };
+
+  try {
+    const directProfilesRes = await withTimeout(
+      supabase
+        .from("profiles")
+        .select("user_id, display_name, role, scope_id")
+        .eq("restaurant_id", rid)
+        .order("display_name", { ascending: true }),
+      12000,
+      "profiles.restaurant_environment.direct"
+    );
+    if (!directProfilesRes?.error) {
+      (directProfilesRes.data || []).forEach(addRow);
+    }
+  } catch (error) {
+    console.warn("[LEADERBOARD] restaurant environment direct profiles failed", error);
+  }
+
+  try {
+    const scopeRowsRes = await withTimeout(
+      supabase
+        .from("bc_scope_restaurants")
+        .select("scope_id")
+        .eq("restaurant_id", rid)
+        .limit(20),
+      12000,
+      "scope_restaurants.restaurant_environment"
+    );
+
+    const scopeIds = Array.from(new Set((scopeRowsRes?.data || []).map((row) => String(row?.scope_id || "").trim()).filter(Boolean)));
+    if (scopeIds.length) {
+      const scopedProfilesRes = await withTimeout(
+        supabase
+          .from("profiles")
+          .select("user_id, display_name, role, scope_id")
+          .in("scope_id", scopeIds)
+          .order("display_name", { ascending: true }),
+        12000,
+        "profiles.restaurant_environment.scope"
+      );
+      if (!scopedProfilesRes?.error) {
+        (scopedProfilesRes.data || []).forEach(addRow);
+      }
+    }
+  } catch (error) {
+    console.warn("[LEADERBOARD] restaurant environment scope profiles failed", error);
+  }
+
+  return Array.from(roster.values());
+}
+
 async function hydrateLeaderboardDisplayNames(users = []) {
   const fallbackIds = Array.from(new Set(
     (users || [])
@@ -7482,6 +7547,7 @@ async function hydrateLeaderboardDisplayNames(users = []) {
       .filter(Boolean)
   ));
   const messageNameMap = new Map();
+  const rosterNameMap = new Map();
 
   try {
     const restaurantId =
@@ -7490,6 +7556,13 @@ async function hydrateLeaderboardDisplayNames(users = []) {
       appState?.activeRestaurantId ||
       appState?.profile?.restaurant_id ||
       null;
+
+    const rosterRows = await loadRestaurantEnvironmentProfiles(restaurantId);
+    (rosterRows || []).forEach((row) => {
+      const userId = String(row?.userId || "").trim();
+      const displayName = String(row?.displayName || "").trim();
+      if (userId && displayName) rosterNameMap.set(userId, displayName);
+    });
 
     if (restaurantId && fallbackIds.length) {
       const { data, error } = await supabase
@@ -7549,13 +7622,13 @@ async function hydrateLeaderboardDisplayNames(users = []) {
       const profileName = String(profile?.display_name || "").trim();
       out.push({
         ...user,
-        displayName: profileName || messageNameMap.get(userId) || user.displayName || "Unknown",
+        displayName: profileName || rosterNameMap.get(userId) || messageNameMap.get(userId) || user.displayName || "Unknown",
       });
     } catch (error) {
       console.warn("[LEADERBOARD] row display name hydrate failed", { userId, error });
       out.push({
         ...user,
-        displayName: messageNameMap.get(userId) || user.displayName || "Unknown",
+        displayName: rosterNameMap.get(userId) || messageNameMap.get(userId) || user.displayName || "Unknown",
       });
     }
   }
