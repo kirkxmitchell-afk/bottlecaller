@@ -9678,6 +9678,7 @@ async function loadAssociatedManagersForRestaurant(restaurantId = null, scopeId 
   if (!rid && !sid) return [];
 
   const managers = new Map();
+  const pendingManagerIds = new Set();
   const addManager = (row) => {
     const role = normalizeMembershipRole(row);
     if (!["single_manager", "group_manager", "enterpriser"].includes(String(role || "").toLowerCase())) return;
@@ -9688,6 +9689,11 @@ async function loadAssociatedManagersForRestaurant(restaurantId = null, scopeId 
       displayName: String(row?.display_name || "").trim() || userId.slice(0, 8),
       role,
     });
+  };
+  const addManagerId = (userId, role = "group_manager") => {
+    const normalizedId = String(userId || "").trim();
+    if (!normalizedId || managers.has(normalizedId)) return;
+    pendingManagerIds.add(`${normalizedId}::${role}`);
   };
 
   try {
@@ -9734,12 +9740,45 @@ async function loadAssociatedManagersForRestaurant(restaurantId = null, scopeId 
       : "";
 
   if (creatorUserId) {
+    addManagerId(creatorUserId, "group_manager");
+  }
+
+  if (rid) {
     try {
-      const creatorProfile = await loadProfile(creatorUserId);
-      if (creatorProfile) addManager(creatorProfile);
+      const messageRes = await withTimeout(
+        supabase
+          .from("bc_messages_v1")
+          .select("sender_user_id, sender_role")
+          .eq("restaurant_id", rid)
+          .in("sender_role", ["single_manager", "group_manager", "enterpriser", "manager", "enterprise_admin"])
+          .is("archived_at", null)
+          .order("created_at", { ascending: false })
+          .limit(200),
+        12000,
+        "messages.associated_managers"
+      );
+      if (!messageRes?.error) {
+        (messageRes.data || []).forEach((row) => {
+          addManagerId(row?.sender_user_id, normalizeMembershipRole(row?.sender_role || "group_manager"));
+        });
+      }
     } catch (error) {
-      console.warn("[LEADERBOARD] manager creator lookup failed", error);
+      console.warn("[LEADERBOARD] associated manager message query failed", error);
     }
+  }
+
+  if (pendingManagerIds.size) {
+    const ids = Array.from(pendingManagerIds).map((entry) => entry.split("::")[0]).filter(Boolean);
+    const resolvedNames = await mapUserIdsToNames(ids);
+    Array.from(pendingManagerIds).forEach((entry) => {
+      const [userId, role] = entry.split("::");
+      if (!userId || managers.has(userId)) return;
+      managers.set(userId, {
+        userId,
+        displayName: String(resolvedNames.get(userId) || "").trim() || userId.slice(0, 8),
+        role: normalizeMembershipRole(role || "group_manager"),
+      });
+    });
   }
 
   return Array.from(managers.values()).sort((a, b) =>
