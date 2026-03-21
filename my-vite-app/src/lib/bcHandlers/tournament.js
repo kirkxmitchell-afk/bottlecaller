@@ -78,24 +78,6 @@ function createStore(storage = globalThis?.window?.localStorage) {
   };
 }
 
-function sumTotals(results = []) {
-  const totals = {
-    entriesPlayed: 0,
-    wins: 0,
-    losses: 0,
-    totalScore: 0,
-  };
-  for (const result of results) {
-    totals.entriesPlayed += 1;
-    if (result?.outcome === "win") totals.wins += 1;
-    if (result?.outcome === "loss" || result?.outcome === "timeout" || result?.outcome === "abandoned") {
-      totals.losses += 1;
-    }
-    totals.totalScore += Number(result?.score || 0);
-  }
-  return totals;
-}
-
 function resolveTournamentId(state, requestedId = null) {
   const explicit = String(requestedId || "").trim();
   if (explicit) return explicit;
@@ -133,45 +115,91 @@ function isValidStrictness(value) {
   return value == null || ["easy", "normal", "hard"].includes(String(value));
 }
 
-function buildActiveEntry(definition, entry, index) {
-  const encounterId =
-    entry?.kind === "encounter"
-      ? entry.encounterId
-      : entry?.baseEncounterId;
-  const deterministic = !!definition?.rules?.deterministic;
-  const baseSeed =
-    definition?.rules?.sharedSeed ||
-    definition?.tournamentId ||
-    null;
-  const seed = deterministic && baseSeed ? `${baseSeed}::${index}` : null;
-  const encounterRunId = `${definition.tournamentId}::${index}::run_1`;
-  const durationSec = Math.max(60, Number(entry?.timerSec || 300) || 300);
-  const startedAt = Date.now();
+function assertTournamentAdvanceAllowed(runtime, completedEntry) {
+  if (!runtime || String(runtime.status || "") !== "active") {
+    throw new Error("Tournament is not active.");
+  }
 
+  if (!runtime.activeEntry) {
+    throw new Error("Tournament has no active entry.");
+  }
+
+  const expectedEntryId = String(runtime.activeEntry.entryId || "");
+  const expectedRunId = String(runtime.activeEntry.encounterRunId || "");
+  const actualEntryId = String(completedEntry?.entryId || "");
+  const actualRunId = String(completedEntry?.runId || "");
+
+  if (!expectedEntryId || !expectedRunId) {
+    throw new Error("Tournament active entry identity is incomplete.");
+  }
+
+  if (actualEntryId !== expectedEntryId) {
+    throw new Error(`Tournament entryId mismatch. Expected ${expectedEntryId}, got ${actualEntryId}.`);
+  }
+
+  if (actualRunId !== expectedRunId) {
+    throw new Error(`Tournament runId mismatch. Expected ${expectedRunId}, got ${actualRunId}.`);
+  }
+}
+
+function buildTournamentRunId(tournamentId, entryIndex, ordinal = 1) {
+  return `${String(tournamentId || "tournament")}::${Number(entryIndex || 0)}::run_${Number(ordinal || 1)}`;
+}
+
+function buildTournamentTimer(entry, now = Date.now()) {
+  const durationSec = Math.max(60, Number(entry?.timerSec || 300) || 300);
   return {
-    entryId: entry.entryId,
-    kind: entry.kind,
-    encounterRunId,
-    encounterId,
-    seed,
-    timer:
-      entry.kind === "timed_challenge" || entry.kind === "display_method_challenge"
-        ? {
-            startedAt,
-            expiresAt: startedAt + durationSec * 1000,
-            durationSec,
-          }
-        : null,
-    challengeMeta:
-      entry.kind === "encounter"
-        ? undefined
-        : {
-            challengeKey: entry?.challengeKey || null,
-            placement: entry?.placement || "before_start",
-            strictness: entry?.strictness || null,
-            methodKey: entry?.methodKey || null,
-          },
+    startedAt: now,
+    expiresAt: now + durationSec * 1000,
+    durationSec,
   };
+}
+
+function buildActiveTournamentEntry(definition, runtime, entry) {
+  const tournamentId = String(definition?.tournamentId || "");
+  const entryIndex = Number(runtime?.currentEntryIndex || 0) || 0;
+  const encounterRunId = buildTournamentRunId(tournamentId, entryIndex, 1);
+  const seedBase =
+    String(definition?.rules?.sharedSeed || "").trim() ||
+    tournamentId ||
+    "tournament_seed";
+
+  const kind = String(entry?.kind || "encounter");
+  const active = {
+    entryId: String(entry?.entryId || ""),
+    kind,
+    encounterId: String(
+      kind === "encounter"
+        ? (entry?.encounterId || "")
+        : (entry?.baseEncounterId || "")
+    ),
+    encounterRunId,
+    seed: `${seedBase}::${entryIndex}::${String(entry?.entryId || "")}`,
+    timer: null,
+    challengeMeta: null,
+  };
+
+  if (kind === "timed_challenge") {
+    active.timer = buildTournamentTimer(entry);
+    active.challengeMeta = {
+      challengeKey: entry?.challengeKey || null,
+      placement: entry?.placement || "before_start",
+      title: entry?.title || "Timed Challenge",
+    };
+  }
+
+  if (kind === "display_method_challenge") {
+    active.timer = buildTournamentTimer(entry);
+    active.challengeMeta = {
+      challengeKey: entry?.challengeKey || null,
+      placement: entry?.placement || "before_start",
+      strictness: entry?.strictness || "normal",
+      methodKey: entry?.methodKey || null,
+      title: entry?.title || "Display Method Challenge",
+    };
+  }
+
+  return active;
 }
 
 function validateDefinition(definition, resolveEncounterById) {
@@ -253,6 +281,95 @@ export function makeTournamentHandlers({
     };
   }
 
+  function setTournamentRuntime(tournamentId, nextRuntime) {
+    return store.updateRuntime(tournamentId, () => clone(nextRuntime));
+  }
+
+  function getTournamentDefinition(tournamentId) {
+    return store.getDefinition(tournamentId);
+  }
+
+  function getTournamentRuntime(tournamentId) {
+    return store.getRuntime(tournamentId);
+  }
+
+  function handleTournamentAdvance(payload = {}) {
+    const tournamentId = String(payload?.tournamentId || "").trim();
+    const completedEntry = clone(payload?.completedEntry || null);
+
+    if (!tournamentId) {
+      throw new Error("Tournament id is required.");
+    }
+
+    const definition = getTournamentDefinition(tournamentId);
+    const runtime = getTournamentRuntime(tournamentId);
+
+    if (!definition) {
+      throw new Error(`Tournament definition not found for ${tournamentId}.`);
+    }
+
+    if (!runtime) {
+      throw new Error(`Tournament runtime not found for ${tournamentId}.`);
+    }
+
+    assertTournamentAdvanceAllowed(runtime, completedEntry);
+
+    const entries = Array.isArray(definition?.entries) ? definition.entries : [];
+    const nextIndex = Number(runtime.currentEntryIndex || 0) + 1;
+    const results = [...(Array.isArray(runtime.results) ? runtime.results : []), completedEntry];
+    const prevTotals = runtime?.totals || {
+      entriesPlayed: 0,
+      wins: 0,
+      losses: 0,
+      totalScore: 0,
+    };
+
+    const nextRuntime = {
+      ...runtime,
+      restore: null,
+      lastCompletedEntry: {
+        ...completedEntry,
+      },
+      results,
+      totals: {
+        entriesPlayed: Number(prevTotals.entriesPlayed || 0) + 1,
+        wins: Number(prevTotals.wins || 0) + (completedEntry?.outcome === "win" ? 1 : 0),
+        losses: Number(prevTotals.losses || 0) + (completedEntry?.outcome === "win" ? 0 : 1),
+        totalScore: Number(prevTotals.totalScore || 0) + (Number(completedEntry?.score || 0) || 0),
+      },
+    };
+
+    if (nextIndex >= entries.length) {
+      nextRuntime.status = "complete";
+      nextRuntime.currentEntryIndex = nextIndex;
+      nextRuntime.activeEntry = null;
+      nextRuntime.completedAt = Date.now();
+
+      setTournamentRuntime(tournamentId, nextRuntime);
+
+      return {
+        definition,
+        runtime: nextRuntime,
+      };
+    }
+
+    const nextEntry = entries[nextIndex];
+    nextRuntime.status = "active";
+    nextRuntime.currentEntryIndex = nextIndex;
+    nextRuntime.activeEntry = buildActiveTournamentEntry(
+      definition,
+      { ...nextRuntime, currentEntryIndex: nextIndex },
+      nextEntry
+    );
+
+    setTournamentRuntime(tournamentId, nextRuntime);
+
+    return {
+      definition,
+      runtime: nextRuntime,
+    };
+  }
+
   return {
     [BC_TYPES.TOURNAMENT_CREATE]: async ({ msg, reply }) => {
       const requestId = msg?.requestId || null;
@@ -300,10 +417,13 @@ export function makeTournamentHandlers({
         return;
       }
 
-      const activeEntry = buildActiveEntry(
+      const activeEntry = buildActiveTournamentEntry(
         current.definition,
-        current.definition.entries[0],
-        0
+        {
+          ...clone(current.runtime),
+          currentEntryIndex: 0,
+        },
+        current.definition.entries[0]
       );
       const runtime = store.updateRuntime(current.definition.tournamentId, () => ({
         ...clone(current.runtime),
@@ -322,61 +442,12 @@ export function makeTournamentHandlers({
 
     [BC_TYPES.TOURNAMENT_ADVANCE]: async ({ msg, reply }) => {
       const requestId = msg?.requestId || null;
-      const tournamentId = msg?.payload?.tournamentId || null;
-      const completedEntry = clone(msg?.payload?.completedEntry || null);
-      const restore = clone(msg?.payload?.restore || null);
-      const current = getDefinitionAndRuntime(tournamentId);
-      if (!current.definition || !current.runtime) {
-        replyErr(reply, BC_TYPES.TOURNAMENT_ADVANCED, requestId, "tournament_not_found");
-        return;
+      try {
+        const result = handleTournamentAdvance(msg?.payload || {});
+        replyOk(reply, BC_TYPES.TOURNAMENT_ADVANCED, requestId, result);
+      } catch (error) {
+        replyErr(reply, BC_TYPES.TOURNAMENT_ADVANCED, requestId, error?.message || String(error || "Unknown error"));
       }
-      if (current.runtime?.status !== "active" || !current.runtime?.activeEntry) {
-        replyErr(reply, BC_TYPES.TOURNAMENT_ADVANCED, requestId, "tournament_not_active");
-        return;
-      }
-      if (String(completedEntry?.entryId || "") !== String(current.runtime.activeEntry.entryId || "")) {
-        replyErr(reply, BC_TYPES.TOURNAMENT_ADVANCED, requestId, "entry_mismatch");
-        return;
-      }
-      if (String(completedEntry?.runId || "") !== String(current.runtime.activeEntry.encounterRunId || "")) {
-        replyErr(reply, BC_TYPES.TOURNAMENT_ADVANCED, requestId, "run_mismatch");
-        return;
-      }
-
-      const nextIndex = Number(current.runtime.currentEntryIndex || 0) + 1;
-      const results = [...(Array.isArray(current.runtime.results) ? current.runtime.results : []), completedEntry];
-      const totals = sumTotals(results);
-
-      const nextRuntime =
-        nextIndex < current.definition.entries.length
-          ? {
-              ...clone(current.runtime),
-              status: "active",
-              currentEntryIndex: nextIndex,
-              activeEntry: buildActiveEntry(
-                current.definition,
-                current.definition.entries[nextIndex],
-                nextIndex
-              ),
-              restore: restore && typeof restore === "object" ? restore : null,
-              results,
-              totals,
-            }
-          : {
-              ...clone(current.runtime),
-              status: "complete",
-              currentEntryIndex: nextIndex,
-              activeEntry: null,
-              restore: null,
-              completedAt: Date.now(),
-              results,
-              totals,
-            };
-
-      const runtime = store.updateRuntime(current.definition.tournamentId, () => nextRuntime);
-      replyOk(reply, BC_TYPES.TOURNAMENT_ADVANCED, requestId, {
-        runtime,
-      });
     },
 
     [BC_TYPES.TOURNAMENT_RESTORE]: async ({ msg, reply }) => {
