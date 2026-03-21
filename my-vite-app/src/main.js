@@ -368,7 +368,6 @@ document.querySelector("#app").innerHTML = `
           <span class="badge">PREMIUM</span>
         </div>
         <div class="row">
-          <button id="btnProfilePerformanceLeaderboard" class="btn-ghost hidden" type="button">Performance Leaderboard</button>
           <button id="btnBackFromProfile" class="btn-ghost" type="button">Back</button>
         </div>
       </div>
@@ -382,6 +381,7 @@ document.querySelector("#app").innerHTML = `
         <div class="score-row">Access tier: <span id="profileAccessTier">-</span></div>
       </div>
 
+      <div id="profileNavigationCard" style="margin-top:12px;"></div>
       <div id="profileStandingCard" style="margin-top:12px;"></div>
       <div id="profileBadgeShelf" style="margin-top:12px;"></div>
       <div id="profileInsightCard" style="margin-top:12px;"></div>
@@ -13793,13 +13793,25 @@ function renderProfileScreen() {
   const scopeTypeEl = document.getElementById("profileScopeType");
   const scopeIdEl = document.getElementById("profileScopeId");
   const accessTierEl = document.getElementById("profileAccessTier");
-  const leaderboardBtn = document.getElementById("btnProfilePerformanceLeaderboard");
+  const navigationCard = document.getElementById("profileNavigationCard");
   const standingCard = document.getElementById("profileStandingCard");
   const badgeShelf = document.getElementById("profileBadgeShelf");
   const insightCard = document.getElementById("profileInsightCard");
 
-  if (leaderboardBtn) {
-    leaderboardBtn.classList.toggle("hidden", membershipRole !== "waiter");
+  if (navigationCard) {
+    if (membershipRole === "waiter") {
+      navigationCard.innerHTML = `
+        <div class="card">
+          <div style="font-weight:600; margin-bottom:10px;">Navigation</div>
+          <div class="small-text" style="opacity:.78; margin-bottom:12px;">Quick links for your restaurant view.</div>
+          <div style="display:flex; flex-wrap:wrap; gap:10px;">
+            <button id="btnProfileNavPerformanceLeaderboard" class="btn-ghost" type="button">Performance Leaderboard</button>
+          </div>
+        </div>
+      `;
+    } else {
+      navigationCard.innerHTML = "";
+    }
   }
 
   if (displayNameEl) {
@@ -18501,10 +18513,11 @@ document.getElementById("btnBackToPremium")?.addEventListener("click", () => {
   showScreen("screenPremiumApp");
 });
 document.getElementById("btnBackFromProfile")?.addEventListener("click", closeProfilePanel);
-document.getElementById("btnProfilePerformanceLeaderboard")?.addEventListener("click", async () => {
-  await routeProfilePerformanceLeaderboard("profile_button");
-});
 document.getElementById("screenProfile")?.addEventListener("click", (e) => {
+  if (e.target?.id === "btnProfileNavPerformanceLeaderboard") {
+    void routeProfilePerformanceLeaderboard("profile_button");
+    return;
+  }
   if (e.target?.id === "screenProfile") closeProfilePanel();
 });
 document.getElementById("btnLogoutProfile")?.addEventListener("click", async () => {
