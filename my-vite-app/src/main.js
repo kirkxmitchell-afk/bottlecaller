@@ -13732,7 +13732,7 @@ function getManagerWaiterOptions() {
         const displayName = String(row?.display_name || "").trim();
         return {
           userId,
-          label: displayName ? `${displayName} • ${userId}` : userId,
+          label: displayName || userId,
         };
       })
       .filter((x) => x?.userId);
@@ -13755,7 +13755,7 @@ function getManagerWaiterOptions() {
 
       return {
         userId,
-        label: name ? `${String(name).trim()} • ${userId}` : userId,
+        label: String(name).trim() || userId,
       };
     })
     .filter((x) => x?.userId);
