@@ -394,6 +394,9 @@
     function getActiveTournamentRuntime() {
       return getTournamentState().runtime || null;
     }
+    function getActiveTournamentDefinition() {
+      return getTournamentState().definition || null;
+    }
     function getActiveTournamentEntry() {
       return getActiveTournamentRuntime()?.activeEntry || null;
     }
@@ -5803,6 +5806,23 @@ function isDrillMode() {
         bcTournamentCheckpointTimer = setTimeout(() => {
           void syncTournamentCheckpoint(reason);
         }, delayMs);
+      }
+      async function requestTournamentAdvance(payload = {}) {
+        return await window.TournamentBridge?.requestTournamentAdvance?.(payload);
+      }
+      function renderTournamentCompleteState(definition = null, runtime = null) {
+        setRuntimeEncounter(null);
+        currentEncounter = null;
+        setRuntimeSession({
+          ...(getRuntimeSession() || {}),
+          type: "tournament_complete",
+          tournamentId:
+            runtime?.tournamentId ||
+            definition?.tournamentId ||
+            null,
+          currentEntryIndex: runtime?.currentEntryIndex ?? null,
+        });
+        window.showToast?.("Tournament complete.");
       }
       async function applyTournamentSnapshotAndMaybeResume(definition = null, runtime = null, opts = {}) {
         const next = setTournamentSnapshot(definition, runtime);
@@ -15470,60 +15490,15 @@ function ensureProgLoaded() {
 
       async function advanceToNextEncounter() {
         if (sessionType === "tournament") {
-          const runtime = getActiveTournamentRuntime();
-          const activeEntry = getActiveTournamentEntry();
-          if (!runtime?.tournamentId || !activeEntry) {
+          if (!getActiveTournamentRuntime()?.tournamentId || !getActiveTournamentEntry()) {
             window.showToast?.("Tournament state is missing.");
             return;
           }
           if (window.__BC_TOURNAMENT_ADVANCING__) return;
           window.__BC_TOURNAMENT_ADVANCING__ = true;
           try {
-            const checks = typeof buildReactionChecksFromEncounter === "function"
-              ? buildReactionChecksFromEncounter(currentEncounter, PROG)
-              : {};
-            const didWin = encounterCountsAsWin(currentEncounter?.outcome ? { outcome: currentEncounter.outcome } : null);
-            const completedEntry = {
-              entryId: activeEntry.entryId,
-              runId: activeEntry.encounterRunId,
-              outcome: didWin ? "win" : (
-                currentEncounter?.challengeExpiresAt &&
-                Date.now() >= Number(currentEncounter.challengeExpiresAt || 0)
-                  ? "timeout"
-                  : "loss"
-              ),
-              score: Number(currentEncounter?.chainScore || 0),
-              completedAt: Date.now(),
-              summary: {
-                correctMode: checks?.modeStatus === true || checks?.modeStatus === "right",
-                deliveryCorrect: !!checks?.deliveryCorrect,
-                recoveryUsed: !!checks?.resetUsed,
-                readCorrect: !!checks?.guestRead,
-              },
-            };
-            const payload = await window.TournamentBridge?.requestTournamentAdvance?.({
-              tournamentId: runtime.tournamentId,
-              completedEntry,
-              restore: null,
-            });
-            if (!payload?.runtime) {
-              window.showToast?.("Tournament advance failed.");
-              return;
-            }
-            setTournamentSnapshot(getTournamentState().definition, payload.runtime);
-            setRuntimeSession({
-              ...(getRuntimeSession() || {}),
-              type: payload.runtime.status === "complete" ? "tournament_complete" : "tournament",
-              tournamentId: payload.runtime.tournamentId,
-              currentEntryIndex: payload.runtime.currentEntryIndex,
-            });
-            if (payload.runtime.status === "complete" || !payload.runtime.activeEntry) {
-              setRuntimeEncounter(null);
-              currentEncounter = null;
-              window.showToast?.("Tournament complete.");
-              return;
-            }
-            await startEncounter();
+            const outcome = resolveTournamentOutcome(currentEncounter);
+            return await advanceTournamentAfterEncounter(outcome);
           } catch (e) {
             console.warn("[TOURNAMENT] advance failed", e);
             window.showToast?.("Could not advance tournament.");
@@ -19598,17 +19573,38 @@ function ensureProgLoaded() {
         return wine || null;
       }
 
-      function prepareEncounterForRun(enc, prevEncounterState) {
+      function prepareEncounterForRun(enc, prevEncounterState, forced = null) {
         enc = normalizeEncounterSchema(enc);
         enc.encounterNumber = enc.encounterNumber ?? (encounterIndex + 1);
 
+        const forcedEncounterIdStable =
+          forced && typeof forced === "object"
+            ? String(forced.encounterIdStable || "").trim()
+            : "";
+
+        const forcedEncounterRunId =
+          forced && typeof forced === "object"
+            ? String(forced.encounterRunId || "").trim()
+            : "";
+
+        const forcedVariationSeedBase =
+          forced && typeof forced === "object"
+            ? String(forced.variationSeedBase || "").trim()
+            : "";
+
         const encounterIdStable =
+          forcedEncounterIdStable ||
           enc.id ||
           enc.encounterId ||
           `${bcMode}_${String(enc.encounterNumber ?? (encounterIndex + 1))}`;
         const runIndex = Number.isFinite(encounterIndex) ? encounterIndex : 0;
-        const encounterRunId = `${encounterIdStable}::i_${runIndex}`;
-        const variationSeed = `${encounterRunId}::${enc.guestStateActual || ""}::${getEncounterSessionNonce()}`;
+        const encounterRunId =
+          forcedEncounterRunId ||
+          `${encounterIdStable}::i_${runIndex}`;
+        const variationSeedBase =
+          forcedVariationSeedBase ||
+          `${encounterRunId}::${enc.guestStateActual || ""}::${getEncounterSessionNonce()}`;
+        const variationSeed = variationSeedBase;
         const selectedVariation = pickEncounterVariation(enc, variationSeed);
         enc = applyEncounterVariation(enc, selectedVariation);
         enc.encounterNumber = enc.encounterNumber ?? (encounterIndex + 1);
@@ -19949,7 +19945,13 @@ function ensureProgLoaded() {
         }
 
         const injectedMeta = extractInjectedChallengeMeta(enc);
-        const prepared = prepareEncounterForRun(enc, prevEncounterState);
+        const prepared = prepareEncounterForRun(enc, prevEncounterState, {
+          encounterIdStable: String(activeEntry?.encounterId || ""),
+          encounterRunId: String(activeEntry?.encounterRunId || ""),
+          variationSeedBase:
+            String(activeEntry?.seed || "") ||
+            `${String(activeEntry?.encounterRunId || "")}::${String(activeEntry?.encounterId || "")}`
+        });
         enc = reapplyInjectedChallengeMeta(prepared.enc, injectedMeta);
 
         const policy = resolveEncounterPolicy(enc, isDemoNow);
@@ -19989,6 +19991,112 @@ function ensureProgLoaded() {
         renderEncounterStep();
         scheduleTournamentCheckpoint("tournament_start");
         return;
+      }
+
+      function resolveTournamentOutcome(encounter = null) {
+        if (
+          (
+            Number(encounter?.timedChallengeTimerSec || 0) > 0 ||
+            Number(encounter?.displayMethodTimerSec || 0) > 0
+          ) &&
+          Number(encounter?.challengeExpiresAt || 0) > 0 &&
+          Date.now() > Number(encounter.challengeExpiresAt || 0) &&
+          !encounter?.__timedChallengeResolved &&
+          !encounter?.__displayMethodChallengeResolved
+        ) {
+          return "timeout";
+        }
+
+        if (encounterCountsAsWin(encounter?.outcome ? { outcome: encounter.outcome } : null)) {
+          return "win";
+        }
+
+        if (
+          encounter?.deliveryCorrect ||
+          encounter?.readCorrect ||
+          encounter?.recoveryCorrect
+        ) {
+          return "win";
+        }
+
+        return "loss";
+      }
+
+      function buildTournamentCompletedEntry(encounter = null, outcome = "win") {
+        const activeEntry = getActiveTournamentEntry?.() || null;
+
+        return {
+          entryId: String(activeEntry?.entryId || encounter?.tournamentEntryId || encounter?.entryId || ""),
+          runId: String(
+            activeEntry?.encounterRunId ||
+            encounter?.runId ||
+            ""
+          ),
+          outcome: String(outcome || "win"),
+          score: Number(encounter?.chainScore || 0) || 0,
+          completedAt: Date.now(),
+          summary: {
+            readCorrect: !!encounter?.readCorrect,
+            correctMode: !!(
+              encounter?.modeStatus === "optimal" ||
+              encounter?.modeCorrect === true
+            ),
+            deliveryCorrect: !!encounter?.deliveryCorrect,
+            recoveryUsed: !!(
+              encounter?.recoveryChoice ||
+              encounter?.resetUsed
+            ),
+            recoveryCorrect: !!encounter?.recoveryCorrect,
+            timedChallengeResolved: !!encounter?.__timedChallengeResolved,
+            displayMethodChallengeResolved: !!encounter?.__displayMethodChallengeResolved,
+          }
+        };
+      }
+
+      async function advanceTournamentAfterEncounter(outcome = "win") {
+        const runtime = getActiveTournamentRuntime?.() || null;
+        const definition = getActiveTournamentDefinition?.() || null;
+
+        if (!runtime || !definition) {
+          console.warn("[BC][Tournament] Missing runtime/definition during advance.");
+          return;
+        }
+
+        const completedEntry = buildTournamentCompletedEntry(currentEncounter, outcome);
+        const restore = null;
+        let response = null;
+
+        try {
+          response = await requestTournamentAdvance({
+            tournamentId: String(definition?.tournamentId || runtime?.tournamentId || ""),
+            completedEntry,
+            restore
+          });
+        } catch (error) {
+          console.error("[BC][Tournament] advance failed", error);
+          window.showToast?.("Failed to advance tournament.");
+          return;
+        }
+
+        const nextDefinition = response?.definition || definition;
+        const nextRuntime = response?.runtime || null;
+
+        if (!nextRuntime) {
+          console.warn("[BC][Tournament] No runtime returned from advance.");
+          return;
+        }
+
+        setTournamentSnapshot?.(nextDefinition, nextRuntime);
+
+        if (String(nextRuntime.status || "") === "active" && nextRuntime.activeEntry) {
+          return startTournamentEncounter();
+        }
+
+        if (String(nextRuntime.status || "") === "complete") {
+          return renderTournamentCompleteState?.(nextDefinition, nextRuntime);
+        }
+
+        console.warn("[BC][Tournament] Unhandled runtime status after advance", nextRuntime.status);
       }
 
       async function startEncounter() {
