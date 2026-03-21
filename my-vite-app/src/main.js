@@ -368,6 +368,7 @@ document.querySelector("#app").innerHTML = `
           <span class="badge">PREMIUM</span>
         </div>
         <div class="row">
+          <button id="btnProfilePerformanceLeaderboard" class="btn-ghost hidden" type="button">Performance Leaderboard</button>
           <button id="btnBackFromProfile" class="btn-ghost" type="button">Back</button>
         </div>
       </div>
@@ -8483,22 +8484,31 @@ function wireManagerRestaurantPicker() {
 function applyManagerBoardVisibility() {
   const profile = appState.profile || {};
   const caps = getPremiumRoleCapabilities(profile);
+  const membershipRole = String(normalizeMembershipRole(profile) || "").toLowerCase();
+  const waiterPerformanceOnly = membershipRole === "waiter";
 
+  const overviewBtn = document.querySelector('#mbMenu [data-mbtab="overview"]');
+  if (overviewBtn) overviewBtn.style.display = waiterPerformanceOnly ? "none" : "";
+  const selectionBtn = document.querySelector('#mbMenu [data-mbtab="selection"]');
+  if (selectionBtn) selectionBtn.style.display = waiterPerformanceOnly ? "none" : "";
   const billingBtn = document.querySelector('#mbMenu [data-mbtab="billing"]');
-  if (billingBtn) billingBtn.style.display = "";
+  if (billingBtn) billingBtn.style.display = waiterPerformanceOnly ? "none" : "";
   const peopleBtn = document.querySelector('#mbMenu [data-mbtab="people"]');
-  if (peopleBtn) peopleBtn.style.display = "";
+  if (peopleBtn) peopleBtn.style.display = waiterPerformanceOnly ? "none" : "";
   const messengerBtn = document.querySelector('#mbMenu [data-mbtab="messenger"]');
-  if (messengerBtn) messengerBtn.style.display = "";
+  if (messengerBtn) messengerBtn.style.display = waiterPerformanceOnly ? "none" : "";
   const liveControlsBtn = document.querySelector('#mbMenu [data-mbtab="live_controls"]');
-  if (liveControlsBtn) liveControlsBtn.style.display = "";
+  if (liveControlsBtn) liveControlsBtn.style.display = waiterPerformanceOnly ? "none" : "";
   const performanceBtn = document.querySelector('#mbMenu [data-mbtab="performance"]');
   if (performanceBtn) performanceBtn.style.display = "";
   const enterpriseBtn = document.querySelector('#mbMenu [data-mbtab="enterprise"]');
   if (enterpriseBtn) {
-    enterpriseBtn.style.display = caps.canUseEnterpriseControls ? "" : "none";
-    enterpriseBtn.classList.toggle("hidden", !caps.canUseEnterpriseControls);
+    const showEnterprise = !waiterPerformanceOnly && caps.canUseEnterpriseControls;
+    enterpriseBtn.style.display = showEnterprise ? "" : "none";
+    enterpriseBtn.classList.toggle("hidden", !showEnterprise);
   }
+  const picker = document.getElementById("mbRestaurantPicker");
+  if (picker) picker.classList.toggle("hidden", waiterPerformanceOnly);
 }
 
 function wireActiveRestaurantPicker() {
@@ -13775,6 +13785,7 @@ function renderProfileScreen() {
   const profile = appState?.profile || {};
   const restaurant = appState?.restaurant || {};
   const roleLabel = getDisplayRoleLabel(profile);
+  const membershipRole = String(normalizeMembershipRole(profile) || "").toLowerCase();
 
   const displayNameEl = document.getElementById("profileDisplayName");
   const roleEl = document.getElementById("profileRole");
@@ -13782,9 +13793,14 @@ function renderProfileScreen() {
   const scopeTypeEl = document.getElementById("profileScopeType");
   const scopeIdEl = document.getElementById("profileScopeId");
   const accessTierEl = document.getElementById("profileAccessTier");
+  const leaderboardBtn = document.getElementById("btnProfilePerformanceLeaderboard");
   const standingCard = document.getElementById("profileStandingCard");
   const badgeShelf = document.getElementById("profileBadgeShelf");
   const insightCard = document.getElementById("profileInsightCard");
+
+  if (leaderboardBtn) {
+    leaderboardBtn.classList.toggle("hidden", membershipRole !== "waiter");
+  }
 
   if (displayNameEl) {
     displayNameEl.textContent =
@@ -17139,6 +17155,51 @@ async function routeManagerBoard(reason = "manual") {
   wireManagerBoardBillingAccess();
 }
 
+async function routeProfilePerformanceLeaderboard(reason = "profile_leaderboard") {
+  clearMsgs();
+  closeHud();
+
+  await loadAuthedState(`routeProfilePerformanceLeaderboard:${reason}`);
+
+  const profile = appState?.profile || {};
+  const membershipRole = String(normalizeMembershipRole(profile) || "").toLowerCase();
+  const restaurantId =
+    getManagerActiveRestaurantId() ||
+    appState?.activeRestaurantId ||
+    appState?.restaurant?.id ||
+    profile?.restaurant_id ||
+    profile?.restaurantId ||
+    null;
+
+  if (!restaurantId) {
+    setMsg("authMsg", "No restaurant is attached to this profile yet.", "error");
+    return;
+  }
+
+  setManagerActiveRestaurantId(restaurantId);
+
+  try {
+    const restaurant = await loadRestaurant(restaurantId);
+    if (restaurant) appState.restaurant = restaurant;
+  } catch (error) {
+    console.warn("[PROFILE] loadRestaurant for leaderboard failed", error);
+  }
+
+  window.__BC_MB_DEFAULTTAB__ = "performance";
+
+  if (membershipRole === "waiter") {
+    closeProfilePanel();
+    showScreen("screenManagerBoard");
+    applyManagerBoardVisibility();
+    wireManagerBoardMenu();
+    window.__BC_MB_SHOWTAB__?.("performance");
+    await window.__BC_MB_LOADTAB__?.("performance");
+    return;
+  }
+
+  await routeManagerBoard(reason);
+}
+
 function isAuthed() {
   return !!window.appState?.session;
 }
@@ -18440,6 +18501,9 @@ document.getElementById("btnBackToPremium")?.addEventListener("click", () => {
   showScreen("screenPremiumApp");
 });
 document.getElementById("btnBackFromProfile")?.addEventListener("click", closeProfilePanel);
+document.getElementById("btnProfilePerformanceLeaderboard")?.addEventListener("click", async () => {
+  await routeProfilePerformanceLeaderboard("profile_button");
+});
 document.getElementById("screenProfile")?.addEventListener("click", (e) => {
   if (e.target?.id === "screenProfile") closeProfilePanel();
 });
