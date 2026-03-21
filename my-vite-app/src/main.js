@@ -9770,12 +9770,25 @@ async function loadAssociatedManagersForRestaurant(restaurantId = null, scopeId 
   if (pendingManagerIds.size) {
     const ids = Array.from(pendingManagerIds).map((entry) => entry.split("::")[0]).filter(Boolean);
     const resolvedNames = await mapUserIdsToNames(ids);
+    for (const userId of ids) {
+      const currentName = String(resolvedNames.get(userId) || "").trim();
+      if (currentName && currentName !== String(userId).slice(0, 8)) continue;
+      try {
+        const profile = await loadProfile(userId);
+        const profileName = String(profile?.display_name || "").trim();
+        if (profileName) {
+          resolvedNames.set(userId, profileName);
+        }
+      } catch (error) {
+        console.warn("[LEADERBOARD] direct manager profile lookup failed", { userId, error });
+      }
+    }
     Array.from(pendingManagerIds).forEach((entry) => {
       const [userId, role] = entry.split("::");
       if (!userId || managers.has(userId)) return;
       managers.set(userId, {
         userId,
-        displayName: String(resolvedNames.get(userId) || "").trim() || userId.slice(0, 8),
+        displayName: String(resolvedNames.get(userId) || "").trim() || "Manager",
         role: normalizeMembershipRole(role || "group_manager"),
       });
     });
