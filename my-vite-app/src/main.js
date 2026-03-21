@@ -13738,6 +13738,123 @@ function renderProfileInsightCard(user = null) {
   `;
 }
 
+async function buildSelfProfilePerformanceUser() {
+  const profile = appState?.profile || {};
+  const userId = String(profile?.user_id || profile?.userId || appState?.session?.user?.id || "");
+  const restaurantId = String(profile?.restaurant_id || appState?.activeRestaurantId || appState?.restaurant?.id || "").trim();
+  if (!userId || !restaurantId) return null;
+
+  const sinceIso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const [progressionRow, skillShape, readinessRes, encountersRes, messagesRes] = await Promise.all([
+    window.__BC_GET_PROGRESSION_SNAPSHOT__?.({ targetUserId: userId, restaurantId }),
+    loadHudSkillSnapshot(),
+    supabase
+      .from("bc_readiness_v1")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("restaurant_id", restaurantId)
+      .maybeSingle(),
+    supabase
+      .from("bc_encounter_resolutions_v2")
+      .select("occurred_at, performance_grade, chain_signal, chain_score, is_green, is_red, tier")
+      .eq("user_id", userId)
+      .eq("restaurant_id", restaurantId)
+      .neq("mode", "demo")
+      .gte("occurred_at", sinceIso)
+      .order("occurred_at", { ascending: false })
+      .limit(200),
+    supabase
+      .from("bc_messages_v1")
+      .select("created_at, type, payload")
+      .eq("sender_user_id", userId)
+      .eq("restaurant_id", restaurantId)
+      .in("type", ["drill_completed", "timed_challenge_completed", "timed_challenge_expired"])
+      .is("archived_at", null)
+      .order("created_at", { ascending: false })
+      .limit(200),
+  ]);
+
+  const readinessRow = readinessRes?.data || {};
+  const encounterRows = Array.isArray(encountersRes?.data) ? encountersRes.data : [];
+  const messageRows = Array.isArray(messagesRes?.data) ? messagesRes.data : [];
+  const canonicalState = progressionRow?.canonical_state && typeof progressionRow.canonical_state === "object"
+    ? progressionRow.canonical_state
+    : {};
+  const canonicalEconomy = canonicalState?.economy && typeof canonicalState.economy === "object"
+    ? canonicalState.economy
+    : {};
+  const canonicalAuthority = canonicalState?.authority && typeof canonicalState.authority === "object"
+    ? canonicalState.authority
+    : {};
+  const totalPoints = Math.max(0, Number(canonicalEconomy?.points || 0));
+  const servedTier = Math.max(1, Math.min(3, Math.round(
+    firstFinite(canonicalAuthority?.tierToServe, canonicalEconomy?.tier, 1) || 1
+  )));
+
+  const drillRows = messageRows.filter((row) => String(row?.type || "") === "drill_completed");
+  const drillPasses = drillRows.filter((row) => {
+    const repsDone = Number(row?.payload?.repsDone || 0);
+    const repTarget = Number(row?.payload?.repTarget || 0);
+    return repTarget > 0 && repsDone >= repTarget;
+  }).length;
+  const challengeCompleted = messageRows.filter((row) => String(row?.type || "") === "timed_challenge_completed");
+  const challengeExpired = messageRows.filter((row) => String(row?.type || "") === "timed_challenge_expired");
+  const challengeRows = challengeCompleted.length + challengeExpired.length;
+  const encounterPasses = encounterRows.filter((row) => {
+    const grade = String(row?.performance_grade || "").toUpperCase();
+    return grade === "A" || grade === "B" || String(row?.chain_signal || "").toLowerCase() === "green" || !!row?.is_green;
+  }).length;
+  const encounterMastery = encounterRows.filter((row) => String(row?.performance_grade || "").toUpperCase() === "A").length;
+  const premiumSuccesses = challengeCompleted.filter((row) => !!row?.payload?.premiumSuccess).length;
+
+  const drillPassRate = drillRows.length ? drillPasses / drillRows.length : 0;
+  const encounterPassRate = encounterRows.length ? encounterPasses / encounterRows.length : 0;
+  const challengeSuccessRate = challengeRows ? challengeCompleted.length / challengeRows : 0;
+  const premiumSuccessRate = challengeCompleted.length ? premiumSuccesses / challengeCompleted.length : 0;
+  const masteryRate = encounterRows.length ? encounterMastery / encounterRows.length : 0;
+
+  const readinessBase = firstFinite(readinessRow?.readiness_score, readinessRow?.readiness_pct);
+  const readiness = Math.max(0, Math.min(1, firstFinite(
+    readinessBase != null ? (readinessBase > 1 ? readinessBase / 100 : readinessBase) : null,
+    masteryRate,
+    totalPoints >= 10 ? 0.8 : totalPoints >= 5 ? 0.62 : 0.4
+  ) || 0));
+  const readinessLabel = firstNonEmpty(readinessRow?.readiness, readiness >= 0.8 ? "STABLE" : readiness >= 0.62 ? "GROWING" : "FRAGILE");
+  const challengeReadiness = Math.max(
+    0,
+    Math.min(1, (readiness * 0.45) + (encounterPassRate * 0.35) + (challengeSuccessRate * 0.20))
+  );
+  const extremes = getSkillExtremes(skillShape);
+
+  return {
+    userId,
+    displayName: String(profile?.display_name || profile?.displayName || appState?.session?.user?.email || "You"),
+    totalPoints,
+    drillPassRate,
+    drillCompletedCount: drillRows.length,
+    drillPasses,
+    encounterPassRate,
+    encounterCount: encounterRows.length,
+    challengeSuccessRate,
+    challengeCompletedCount: challengeCompleted.length,
+    challengeExpiredCount: challengeExpired.length,
+    challengeCount: challengeRows,
+    premiumSuccessRate,
+    masteryRate,
+    lastActiveAt: firstNonEmpty(progressionRow?.updated_at, encounterRows[0]?.occurred_at, messageRows[0]?.created_at),
+    eligibilityTier: servedTier,
+    readiness,
+    readinessLabel,
+    servedTier,
+    challengeReadiness,
+    percentile: 0,
+    rank: null,
+    strongestSkill: extremes.strongestSkill,
+    weakestSkill: extremes.weakestSkill,
+    skillShape,
+  };
+}
+
 async function renderProfilePerformanceCards() {
   const rootStanding = document.getElementById("profileStandingCard");
   const rootBadges = document.getElementById("profileBadgeShelf");
@@ -13746,17 +13863,20 @@ async function renderProfilePerformanceCards() {
 
   try {
     const profile = appState?.profile || {};
-    const caps = getPremiumRoleCapabilities(profile);
-    if (!caps.canAccessManagerBoard) {
-      renderProfileStandingCard(null, null);
-      renderProfileBadgeShelf(null, null);
-      renderProfileInsightCard(null);
-      return;
+    const userId = String(profile?.user_id || profile?.userId || appState?.session?.user?.id || "");
+    let model = null;
+    let user = null;
+
+    try {
+      model = await getManagerPerformanceModel();
+      user = (model?.users || []).find((entry) => String(entry?.userId || "") === userId) || null;
+    } catch (modelError) {
+      console.warn("[PROFILE] manager performance model unavailable, using self fallback", modelError);
     }
 
-    const model = await getManagerPerformanceModel();
-    const userId = String(profile?.user_id || profile?.userId || appState?.session?.user?.id || "");
-    const user = (model?.users || []).find((entry) => String(entry?.userId || "") === userId) || null;
+    if (!user) {
+      user = await buildSelfProfilePerformanceUser();
+    }
 
     renderProfileStandingCard(user, model);
     renderProfileBadgeShelf(user, model);
