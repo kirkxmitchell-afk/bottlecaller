@@ -6616,8 +6616,9 @@ function ensureProgLoaded() {
       const coverKey = "bc_has_seen_cover";
 
       function runsKey(mode) {
-        const uid = window.__BC_CTX__?.userId || "anon";
-        const rid = window.__BC_CTX__?.restaurantId || "no_restaurant";
+        const ctx = getRuntimeCtx();
+        const uid = ctx?.userId || "anon";
+        const rid = ctx?.restaurantId || "no_restaurant";
         return `bc_runs_v1_${uid}_${rid}_${mode || "premium"}`;
       }
 
@@ -6845,8 +6846,9 @@ function ensureProgLoaded() {
       }
 
       function applyBlankProgressionResetLocally() {
-        const uid = window.__BC_CTX__?.userId || null;
-        const rid = window.__BC_CTX__?.restaurantId || null;
+        const ctx = getRuntimeCtx();
+        const uid = ctx?.userId || null;
+        const rid = ctx?.restaurantId || null;
         const realProgKey = (uid && rid) ? `bc_prog_v1_${uid}_${rid}` : null;
         const skillsKey = (uid && rid) ? `bc_skills_v2_${uid}_${rid}` : null;
         const resetMarkerKey = (uid && rid)
@@ -6916,6 +6918,7 @@ function ensureProgLoaded() {
           window.addEventListener("message", onMessage);
 
           try {
+            const ctx = getRuntimeCtx();
             window.parent.postMessage({
               source: "BC_MSG",
               v: 1,
@@ -6926,6 +6929,7 @@ function ensureProgLoaded() {
               restaurantId,
               epoch: Number(window.__BC_EPOCH__ || 0),
               mode: String(window.bcMode || "premium"),
+              role: ctx?.membershipRole || ctx?.role || null,
             }, window.location.origin);
           } catch (e) {
             window.removeEventListener("message", onMessage);
@@ -6943,7 +6947,7 @@ function ensureProgLoaded() {
       }
 
       async function hardResetProgressionOptionA() {
-        const ctx = window.__BC_CTX__ || null;
+        const ctx = getRuntimeCtx();
         const userId = ctx?.userId || ctx?.profileUserId || null;
         const restaurantId = ctx?.restaurantId || ctx?.scopeId || null;
 
@@ -7039,8 +7043,9 @@ function ensureProgLoaded() {
 
       function ensureProgKeyAfterCtx() {
         try {
-          const uid = window.__BC_CTX__?.userId;
-          const rid = window.__BC_CTX__?.restaurantId;
+          const ctx = getRuntimeCtx();
+          const uid = ctx?.userId;
+          const rid = ctx?.restaurantId;
 
           if (!uid || !rid) return { ok: true, migrated: false, reason: "no_ctx" };
 
@@ -7101,8 +7106,9 @@ function ensureProgLoaded() {
       }
 
       function guardKey() {
-        const uid = window.__BC_CTX__?.userId || userId || "anon";
-        const rid = window.__BC_CTX__?.restaurantId || restaurantId || "no_restaurant";
+        const ctx = getRuntimeCtx();
+        const uid = ctx?.userId || userId || "anon";
+        const rid = ctx?.restaurantId || restaurantId || "no_restaurant";
         return `bc_guard_v1_${uid}_${rid}`;
       }
 
@@ -7270,8 +7276,12 @@ function ensureProgLoaded() {
       }
 
       async function hydrateSetupFromDbIfPossible(mode) {
-        const rid = window.__BC_CTX__?.restaurantId;
-        const sid = window.__BC_CTX__?.scopeId || scopeId || null;
+        if (!isRuntimeReady({ requireProgression: false })) {
+          console.warn("[SETUP] skip hydrate: ctx not ready");
+          return;
+        }
+        const rid = getRuntimeCtx()?.restaurantId || null;
+        const sid = getRuntimeCtx()?.scopeId || scopeId || null;
         if (!rid || !sid) {
           console.warn("[SETUP] skip hydrate: no restaurantId yet");
           return;
@@ -7295,6 +7305,10 @@ function ensureProgLoaded() {
         if (identity.isWaiter) {
           console.warn("[NAV] setup blocked: waiter role");
           window.showToast?.("Only managers can edit the wine list.");
+          return;
+        }
+        if (!isRuntimeReady({ requireProgression: false })) {
+          window.showToast?.("BottleCaller is still attaching account context.");
           return;
         }
         initSetupTemplate(mode);
@@ -8267,7 +8281,7 @@ function ensureProgLoaded() {
       }
 
       function setActiveWineForPremium(wine) {
-        const rid = restaurantId || window.__BC_CTX__?.restaurantId || null;
+        const rid = restaurantId || getRuntimeCtx()?.restaurantId || null;
         window.__BC_ACTIVE_PREMIUM_WINE__ = wine || null;
         try {
           if (!rid) return;
@@ -8285,7 +8299,7 @@ function ensureProgLoaded() {
           if (foundLive) return foundLive;
         }
 
-        const rid = restaurantId || window.__BC_CTX__?.restaurantId || null;
+        const rid = restaurantId || getRuntimeCtx()?.restaurantId || null;
         let storedId = null;
         try {
           if (rid) storedId = localStorage.getItem(activePremiumWineKey(rid));
@@ -8527,14 +8541,15 @@ function ensureProgLoaded() {
 
           window.addEventListener("message", onMessage);
 
+          const ctx = getRuntimeCtx();
           window.parent.postMessage(
             {
               source: "BC_MSG",
               v: 1,
               type: "runs_count_request",
               reqId,
-              userId: window.__BC_CTX__?.userId || null,
-              restaurantId: window.__BC_CTX__?.restaurantId || null,
+              userId: ctx?.userId || null,
+              restaurantId: ctx?.restaurantId || null,
               epoch: window.__BC_EPOCH__ || null
             },
             "*"
@@ -8569,7 +8584,7 @@ function ensureProgLoaded() {
           return;
         }
 
-        if (window.__BC_CTX__?.userId && !msg.userId) {
+        if (getRuntimeCtx()?.userId && !msg.userId) {
           console.warn("[BC] ignoring bc_ctx overwrite without userId", msg);
           return;
         }
@@ -8753,7 +8768,8 @@ function ensureProgLoaded() {
         if (localStorage.getItem(flagKey) === "1") return false;
 
         const identity = getGameplayIdentity();
-        const sid = window.__BC_CTX__?.scopeId || scopeId || null;
+        if (!isRuntimeReady({ requireProgression: false })) return false;
+        const sid = getRuntimeCtx()?.scopeId || scopeId || null;
         const canWrite = !!(identity.isManager || identity.isEnterpriser);
         if (!canWrite || !sid) return false;
 
@@ -8810,8 +8826,13 @@ function ensureProgLoaded() {
         if (window.__BC_WINES_BOOTSTRAPPED__ || __BC_WINES_BOOTSTRAPPED__) return;
         window.__BC_WINES_BOOTSTRAPPED__ = true;
         __BC_WINES_BOOTSTRAPPED__ = true;
-        const rid = window.__BC_CTX__?.restaurantId;
-        const sid = window.__BC_CTX__?.scopeId || scopeId || null;
+        if (!isRuntimeReady({ requireProgression: false })) {
+          window.__BC_WINES_BOOTSTRAPPED__ = false;
+          __BC_WINES_BOOTSTRAPPED__ = false;
+          return;
+        }
+        const rid = getRuntimeCtx()?.restaurantId || null;
+        const sid = getRuntimeCtx()?.scopeId || scopeId || null;
         if (!rid || !sid) return;
 
         try {
@@ -9006,8 +9027,8 @@ function ensureProgLoaded() {
           updateCounts?.();
           console.log("[WINES RECEIVED]", {
             count: Array.isArray(msg.wines) ? msg.wines.length : null,
-            role: window.__BC_CTX__?.role,
-            restaurantId: window.__BC_CTX__?.restaurantId
+            role: getRuntimeCtx()?.role || getRuntimeCtx()?.membershipRole || null,
+            restaurantId: getRuntimeCtx()?.restaurantId || null
           });
           console.log("[BC] wines_report applied ✅", { count: wines.length });
           return;
@@ -9101,7 +9122,7 @@ function ensureProgLoaded() {
 
             // hydrate setup UI from local cache
             setTimeout(() => {
-              const rid = window.__BC_CTX__?.restaurantId || null;
+              const rid = getRuntimeCtx()?.restaurantId || null;
               const list = rid ? WineStore.read(rid) : [];
               wines = setWines(list);
 
@@ -9294,7 +9315,7 @@ function ensureProgLoaded() {
       window.__BC_DEBUG_WINES__ = function __BC_DEBUG_WINES__() {
         const rid =
           window.restaurantId ||
-          window.__BC_CTX__?.restaurantId ||
+          getRuntimeCtx()?.restaurantId ||
           window.restaurant_id ||
           null;
 
@@ -9353,7 +9374,10 @@ function ensureProgLoaded() {
 
         if (!isDemo && window.WineBridge?.fetchRestaurantWines) {
           try {
-            const sid = window.__BC_CTX__?.scopeId || scopeId || null;
+            if (!isRuntimeReady({ requireProgression: false })) {
+              throw new Error("ctx_not_ready");
+            }
+            const sid = getRuntimeCtx()?.scopeId || scopeId || null;
             if (!sid) throw new Error("missing_scope_id");
             const list = await window.WineBridge.fetchRestaurantWines(sid, restaurantId);
             wines = setWines(list);
@@ -10231,7 +10255,10 @@ function ensureProgLoaded() {
 
         // PREMIUM: DB source of truth
         try {
-          const sid = window.__BC_CTX__?.scopeId || scopeId || null;
+          if (!isRuntimeReady({ requireProgression: false })) {
+            throw new Error("ctx_not_ready");
+          }
+          const sid = getRuntimeCtx()?.scopeId || scopeId || null;
           if (!sid) throw new Error("missing_scope_id");
           const rows = await window.WineBridge.fetchRestaurantWines(sid, restaurantId);
           const out = (rows || [])
@@ -11241,8 +11268,9 @@ function ensureProgLoaded() {
       }
 
       function drillDoneKey() {
-        const uid = window.__BC_CTX__?.userId || "anon";
-        const rid = window.__BC_CTX__?.restaurantId || "no_restaurant";
+        const ctx = getRuntimeCtx();
+        const uid = ctx?.userId || "anon";
+        const rid = ctx?.restaurantId || "no_restaurant";
         return `bc_last_drill_day_${bcMode}_${rid}_${uid}`;
       }
 
@@ -11611,17 +11639,19 @@ function ensureProgLoaded() {
       }
 
       async function getCtxStrict(timeoutMs = 1500) {
-        if (window.__BC_CTX__?.userId && window.__BC_CTX__?.restaurantId) return window.__BC_CTX__;
+        const currentCtx = getRuntimeCtx();
+        if (currentCtx?.userId && currentCtx?.restaurantId) return currentCtx;
 
         await Promise.race([
           window.__BC_CTX_READY__ || Promise.resolve(),
           new Promise((_, rej) => setTimeout(() => rej(new Error("ctx_timeout")), timeoutMs)),
         ]);
 
-        if (!window.__BC_CTX__?.userId || !window.__BC_CTX__?.restaurantId) {
+        const resolvedCtx = getRuntimeCtx();
+        if (!resolvedCtx?.userId || !resolvedCtx?.restaurantId) {
           throw new Error("ctx_missing");
         }
-        return window.__BC_CTX__;
+        return resolvedCtx;
       }
 
       async function guardTier(desiredTier) {
@@ -11702,20 +11732,24 @@ function ensureProgLoaded() {
         }
         const t0 = Date.now();
         while (Date.now() - t0 < timeoutMs) {
-          const rid = restaurantId || window.__BC_CTX__?.restaurantId || null;
+          const snapshot = getStateSnapshot();
+          const rid = restaurantId || snapshot.ctx?.restaurantId || null;
           const wc = (typeof getWineCount === "function") ? getWineCount() : null;
           const lim = (typeof LIMIT !== "undefined") ? LIMIT : null;
 
-          if (rid && typeof wc === "number" && typeof lim === "number") {
-            return { ok: true, rid, wc, lim };
+          if (snapshot.ctxReady && rid && typeof wc === "number" && typeof lim === "number") {
+            return { ok: true, rid, wc, lim, stateHealth: snapshot.stateHealth };
           }
           await new Promise((r) => setTimeout(r, 50));
         }
+        const snapshot = getStateSnapshot();
         return {
           ok: false,
-          rid: restaurantId || window.__BC_CTX__?.restaurantId || null,
+          rid: restaurantId || snapshot.ctx?.restaurantId || null,
           wc: (typeof getWineCount === "function") ? getWineCount() : null,
           lim: (typeof LIMIT !== "undefined") ? LIMIT : null,
+          ctxReady: snapshot.ctxReady,
+          stateHealth: snapshot.stateHealth,
         };
       }
 
@@ -12099,7 +12133,7 @@ function ensureProgLoaded() {
           await window.WineBridge.deleteRestaurantWine(id);
           await hydrateSetupFromDbIfPossible(bcMode);
           try {
-            const rid = window.__BC_CTX__?.restaurantId;
+            const rid = getRuntimeCtx()?.restaurantId || null;
             if (rid) WineStore.write(rid, wines);
           } catch {}
         } catch (e) {
@@ -15402,10 +15436,11 @@ function ensureProgLoaded() {
       }
 
       function logEncounter() {
+        const ctx = getRuntimeCtx();
         console.log("[LOG] logEncounter() called", {
-          user: window.__BC_CTX__?.userId,
-          role: window.__BC_CTX__?.role,
-          rid: window.__BC_CTX__?.restaurantId,
+          user: ctx?.userId || null,
+          role: ctx?.membershipRole || ctx?.role || null,
+          rid: ctx?.restaurantId || null,
           step: window.currentStep,
           sessionId,
           encounterId: currentEncounter?.encounterId || currentEncounter?.id,
@@ -15578,15 +15613,15 @@ function ensureProgLoaded() {
           hasChecks
         ) {
           console.log("[WAITERCHECK] about to emit encounter_resolved", {
-            role: window.__BC_CTX__?.role,
-            rid: window.__BC_CTX__?.restaurantId,
+            role: ctx?.membershipRole || ctx?.role || null,
+            rid: ctx?.restaurantId || null,
             hasChecks,
             encounterId: payload?.encounterId,
             sessionId: payload?.sessionId
           });
           console.log("[EMIT] encounter_resolved ✅", {
-            user: window.__BC_CTX__?.userId,
-            rid: window.__BC_CTX__?.restaurantId,
+            user: ctx?.userId || null,
+            rid: ctx?.restaurantId || null,
             sessionId: payload?.sessionId,
             encounterId: payload?.encounterId,
             encounterNumber: payload?.encounterNumber,
@@ -18311,6 +18346,11 @@ function ensureProgLoaded() {
           console.log("[START][GATE]", g);
           if (!g.ok) {
             console.warn("[START] blocked: ctx/wines not ready yet");
+            window.showToast?.(
+              g?.ctxReady === false
+                ? "BottleCaller is still attaching account context."
+                : "Wines are still loading for this restaurant."
+            );
             if (!isDemoNow) return;
           }
 
@@ -18366,11 +18406,12 @@ function ensureProgLoaded() {
               });
               window.__BC_SESSIONS__ = window.__BC_SESSIONS__ || [];
               if (!window.__BC_SESSIONS__.find((x) => x && x.sessionId === sessionId)) {
+                const runtimeCtx = getRuntimeCtx();
                 window.__BC_SESSIONS__.push({
                   sessionId,
                   mode: window.bcMode,
                   startedAtMs: Date.now(),
-                  role: window.__BC_CTX__?.role || "demo",
+                  role: runtimeCtx?.membershipRole || runtimeCtx?.role || "demo",
                 });
               }
               localStorage.setItem(k, "1");
@@ -19050,8 +19091,9 @@ function ensureProgLoaded() {
           btnGoSetup.onclick = null;
           btnGoSetup.__bcBound = false;
           bindInput(btnGoSetup, async () => {
-            if (!window.__BC_CTX__ || !window.__BC_CTX__.restaurantId) {
+            if (!isRuntimeReady({ requireProgression: false })) {
               console.warn("[BOOT] ctx not ready — blocking play");
+              window.showToast?.("BottleCaller is still attaching account context.");
               return;
             }
             resetNavState();
