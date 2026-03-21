@@ -379,6 +379,9 @@ document.querySelector("#app").innerHTML = `
         <div class="score-row">Access tier: <span id="profileAccessTier">-</span></div>
       </div>
 
+      <div id="profileStandingCard" style="margin-top:12px;"></div>
+      <div id="profileBadgeShelf" style="margin-top:12px;"></div>
+      <div id="profileInsightCard" style="margin-top:12px;"></div>
       <div id="profileMultiRestaurantCard" style="margin-top:12px;"></div>
     </div>
   </section>
@@ -9117,8 +9120,14 @@ async function getManagerPerformanceModel({ force = false } = {}) {
       displayName: nameMap.get(uid) || uid,
       totalPoints,
       drillPassRate,
+      drillCompletedCount: drillRows.length,
+      drillPasses,
       encounterPassRate,
+      encounterCount: userEncounters.length,
       challengeSuccessRate,
+      challengeCompletedCount: challengeCompleted.length,
+      challengeExpiredCount: challengeExpired.length,
+      challengeCount: challengeRows,
       premiumSuccessRate,
       masteryRate,
       lastActiveAt,
@@ -9127,6 +9136,7 @@ async function getManagerPerformanceModel({ force = false } = {}) {
       readinessLabel,
       servedTier,
       challengeReadiness,
+      percentile: 0,
       strongestSkill: extremes.strongestSkill,
       weakestSkill: extremes.weakestSkill,
       skillShape,
@@ -9137,6 +9147,9 @@ async function getManagerPerformanceModel({ force = false } = {}) {
     .map((user, index) => ({
       ...user,
       rank: index + 1,
+      percentile: userIds.size
+        ? Math.max(0, Math.min(1, (userIds.size - index) / userIds.size))
+        : 0,
     }));
 
   return {
@@ -13453,6 +13466,9 @@ function renderProfileScreen() {
   const scopeTypeEl = document.getElementById("profileScopeType");
   const scopeIdEl = document.getElementById("profileScopeId");
   const accessTierEl = document.getElementById("profileAccessTier");
+  const standingCard = document.getElementById("profileStandingCard");
+  const badgeShelf = document.getElementById("profileBadgeShelf");
+  const insightCard = document.getElementById("profileInsightCard");
 
   if (displayNameEl) {
     displayNameEl.textContent =
@@ -13467,6 +13483,21 @@ function renderProfileScreen() {
   if (scopeTypeEl) scopeTypeEl.textContent = profile?.scope_type || profile?.scopeType || "-";
   if (scopeIdEl) scopeIdEl.textContent = profile?.scope_id || profile?.scopeId || "-";
   if (accessTierEl) accessTierEl.textContent = profile?.access_tier || profile?.accessTier || "-";
+
+  if (standingCard) {
+    standingCard.innerHTML = `
+      <div class="card">
+        <div style="font-weight:600; margin-bottom:8px;">My Standing</div>
+        <div class="small" style="opacity:.75;">Loading rank and badge status…</div>
+      </div>
+    `;
+  }
+  if (badgeShelf) {
+    badgeShelf.innerHTML = "";
+  }
+  if (insightCard) {
+    insightCard.innerHTML = "";
+  }
 
   const multiCard = document.getElementById("profileMultiRestaurantCard");
   if (multiCard) {
@@ -13487,6 +13518,261 @@ function renderProfileScreen() {
         </div>
       `;
     }
+  }
+
+  void renderProfilePerformanceCards();
+}
+
+function formatOrdinalRank(n) {
+  const num = Number(n || 0);
+  if (!Number.isFinite(num) || num <= 0) return "—";
+  const mod100 = num % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${num}th`;
+  const mod10 = num % 10;
+  if (mod10 === 1) return `${num}st`;
+  if (mod10 === 2) return `${num}nd`;
+  if (mod10 === 3) return `${num}rd`;
+  return `${num}th`;
+}
+
+function getProfileBadgeDefinitions(user = {}, totalUsers = 0) {
+  const rank = Number(user?.rank || 0);
+  const percentile = Number(user?.percentile || 0);
+  const readiness = Number(user?.readiness || 0);
+  const challengeReadiness = Number(user?.challengeReadiness || 0);
+  const totalPoints = Number(user?.totalPoints || 0);
+  const drillPassRate = Number(user?.drillPassRate || 0);
+  const challengeSuccessRate = Number(user?.challengeSuccessRate || 0);
+  const premiumSuccessRate = Number(user?.premiumSuccessRate || 0);
+  const encounterPassRate = Number(user?.encounterPassRate || 0);
+  const drillCompletedCount = Number(user?.drillCompletedCount || 0);
+  const challengeCompletedCount = Number(user?.challengeCompletedCount || 0);
+  const encounterCount = Number(user?.encounterCount || 0);
+  const badges = [
+    {
+      title: "Leaderboard Leader",
+      earned: !!rank && rank === 1 && totalUsers > 1,
+      tone: "gold",
+      detail: totalUsers > 1 ? `Currently #1 in this restaurant.` : "No cohort available yet.",
+    },
+    {
+      title: "Top Three",
+      earned: !!rank && rank <= 3 && totalUsers >= 3,
+      tone: "emerald",
+      detail: rank ? `Holding ${formatOrdinalRank(rank)} place.` : "No rank yet.",
+    },
+    {
+      title: "Hundred Point Club",
+      earned: totalPoints >= 100,
+      tone: "blue",
+      detail: `${formatMetricNumber(totalPoints, 1)} pts earned.`,
+    },
+    {
+      title: "Challenge Ready",
+      earned: challengeReadiness >= 0.7,
+      tone: "violet",
+      detail: `Challenge readiness ${formatPercent(challengeReadiness)}.`,
+    },
+    {
+      title: "Stable Window",
+      earned: readiness >= 0.8,
+      tone: "emerald",
+      detail: `Readiness ${formatPercent(readiness)} with a stable profile.`,
+    },
+    {
+      title: "Perfect Drill Day",
+      earned: drillCompletedCount > 0 && drillPassRate >= 1,
+      tone: "amber",
+      detail: `${drillCompletedCount} drill${drillCompletedCount === 1 ? "" : "s"} completed at ${formatPercent(drillPassRate)}.`,
+    },
+    {
+      title: "Challenge Closer",
+      earned: challengeCompletedCount >= 1 && challengeSuccessRate >= 0.5,
+      tone: "rose",
+      detail: `${challengeCompletedCount} completed challenge${challengeCompletedCount === 1 ? "" : "s"}.`,
+    },
+    {
+      title: "Premium Moment",
+      earned: premiumSuccessRate > 0,
+      tone: "gold",
+      detail: `Premium success rate ${formatPercent(premiumSuccessRate)}.`,
+    },
+    {
+      title: "Live Floor Builder",
+      earned: encounterCount >= 10 && encounterPassRate >= 0.5,
+      tone: "blue",
+      detail: `${encounterCount} encounters with ${formatPercent(encounterPassRate)} pass rate.`,
+    },
+    {
+      title: "Top Quartile",
+      earned: percentile >= 0.75 && totalUsers >= 4,
+      tone: "violet",
+      detail: `Top ${Math.max(1, Math.round((1 - percentile) * 100))}% of the restaurant cohort.`,
+    },
+  ];
+
+  return badges;
+}
+
+function renderProfileStandingCard(user = null, model = null) {
+  const root = document.getElementById("profileStandingCard");
+  if (!root) return;
+
+  if (!user) {
+    root.innerHTML = `
+      <div class="card">
+        <div style="font-weight:600; margin-bottom:8px;">My Standing</div>
+        <div class="small" style="opacity:.75;">Restaurant ranking is not available for this role yet.</div>
+      </div>
+    `;
+    return;
+  }
+
+  const totalUsers = Array.isArray(model?.users) ? model.users.length : 0;
+  const percentileLabel = totalUsers
+    ? `Top ${Math.max(1, Math.round((1 - Number(user.percentile || 0)) * 100))}%`
+    : "Solo profile";
+
+  root.innerHTML = `
+    <div class="card" style="display:flex; flex-direction:column; gap:10px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+        <div style="font-weight:600;">My Standing</div>
+        <span class="badge">Rank ${formatOrdinalRank(user.rank)}</span>
+      </div>
+      <div style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px;">
+        <div class="card" style="padding:10px;">
+          <div class="small-text">Restaurant Rank</div>
+          <strong>#${escapeHtml(String(user.rank || "—"))}</strong>
+          <div class="small-text" style="opacity:.72; margin-top:4px;">of ${escapeHtml(String(totalUsers || 1))}</div>
+        </div>
+        <div class="card" style="padding:10px;">
+          <div class="small-text">Percentile</div>
+          <strong>${escapeHtml(percentileLabel)}</strong>
+          <div class="small-text" style="opacity:.72; margin-top:4px;">based on current restaurant peers</div>
+        </div>
+        <div class="card" style="padding:10px;">
+          <div class="small-text">Points</div>
+          <strong>${escapeHtml(formatMetricNumber(user.totalPoints, 1))}</strong>
+          <div class="small-text" style="opacity:.72; margin-top:4px;">Tier ${escapeHtml(String(user.servedTier || user.eligibilityTier || 1))}</div>
+        </div>
+        <div class="card" style="padding:10px;">
+          <div class="small-text">Readiness</div>
+          <strong>${escapeHtml(formatPercent(user.readiness))}</strong>
+          <div class="small-text" style="opacity:.72; margin-top:4px;">${escapeHtml(describeReadiness(user.readiness, user.readinessLabel))}</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderProfileBadgeShelf(user = null, model = null) {
+  const root = document.getElementById("profileBadgeShelf");
+  if (!root) return;
+
+  if (!user) {
+    root.innerHTML = "";
+    return;
+  }
+
+  const totalUsers = Array.isArray(model?.users) ? model.users.length : 0;
+  const badges = getProfileBadgeDefinitions(user, totalUsers);
+  const earned = badges.filter((badge) => badge.earned);
+  const inProgress = badges.filter((badge) => !badge.earned).slice(0, 3);
+  const toneMap = {
+    gold: "rgba(214,166,56,0.16)",
+    emerald: "rgba(54,170,116,0.16)",
+    blue: "rgba(66,124,221,0.16)",
+    violet: "rgba(122,93,214,0.16)",
+    rose: "rgba(209,92,124,0.16)",
+    amber: "rgba(214,140,56,0.16)",
+  };
+
+  const renderBadge = (badge, locked = false) => `
+    <div class="card" style="padding:10px; border:1px solid rgba(255,255,255,0.08); background:${locked ? "rgba(255,255,255,0.03)" : (toneMap[badge.tone] || "rgba(255,255,255,0.05)")};">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+        <strong>${escapeHtml(badge.title)}</strong>
+        <span class="badge">${locked ? "In Progress" : "Earned"}</span>
+      </div>
+      <div class="small-text" style="margin-top:6px; opacity:.78;">${escapeHtml(badge.detail)}</div>
+    </div>
+  `;
+
+  root.innerHTML = `
+    <div class="card" style="display:flex; flex-direction:column; gap:10px;">
+      <div style="font-weight:600;">Badges & Milestones</div>
+      <div style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px;">
+        ${(earned.length ? earned : badges.slice(0, 2)).map((badge) => renderBadge(badge, !badge.earned)).join("")}
+      </div>
+      ${inProgress.length ? `
+        <div>
+          <div class="small-text" style="margin-bottom:8px; opacity:.78;">Next up</div>
+          <div style="display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px;">
+            ${inProgress.map((badge) => renderBadge(badge, true)).join("")}
+          </div>
+        </div>
+      ` : ``}
+    </div>
+  `;
+}
+
+function renderProfileInsightCard(user = null) {
+  const root = document.getElementById("profileInsightCard");
+  if (!root) return;
+
+  if (!user) {
+    root.innerHTML = "";
+    return;
+  }
+
+  root.innerHTML = `
+    <div class="card" style="display:flex; flex-direction:column; gap:10px;">
+      <div style="font-weight:600;">How You’re Known</div>
+      <div style="display:flex; flex-wrap:wrap; gap:8px;">
+        <span class="mb-badge">Strongest: ${escapeHtml(user.strongestSkill || "—")}</span>
+        <span class="mb-badge">Weakest: ${escapeHtml(user.weakestSkill || "—")}</span>
+        <span class="mb-badge">Challenge Readiness: ${escapeHtml(formatPercent(user.challengeReadiness))}</span>
+        <span class="mb-badge">Mastery: ${escapeHtml(formatPercent(user.masteryRate))}</span>
+        <span class="mb-badge">Last Active: ${escapeHtml(formatRelativeTime(user.lastActiveAt))}</span>
+      </div>
+    </div>
+  `;
+}
+
+async function renderProfilePerformanceCards() {
+  const rootStanding = document.getElementById("profileStandingCard");
+  const rootBadges = document.getElementById("profileBadgeShelf");
+  const rootInsight = document.getElementById("profileInsightCard");
+  if (!rootStanding && !rootBadges && !rootInsight) return;
+
+  try {
+    const profile = appState?.profile || {};
+    const caps = getPremiumRoleCapabilities(profile);
+    if (!caps.canAccessManagerBoard) {
+      renderProfileStandingCard(null, null);
+      renderProfileBadgeShelf(null, null);
+      renderProfileInsightCard(null);
+      return;
+    }
+
+    const model = await getManagerPerformanceModel();
+    const userId = String(profile?.user_id || profile?.userId || appState?.session?.user?.id || "");
+    const user = (model?.users || []).find((entry) => String(entry?.userId || "") === userId) || null;
+
+    renderProfileStandingCard(user, model);
+    renderProfileBadgeShelf(user, model);
+    renderProfileInsightCard(user);
+  } catch (error) {
+    console.warn("[PROFILE] performance card render failed", error);
+    if (rootStanding) {
+      rootStanding.innerHTML = `
+        <div class="card">
+          <div style="font-weight:600; margin-bottom:8px;">My Standing</div>
+          <div class="small" style="opacity:.75;">Could not load ranking right now.</div>
+        </div>
+      `;
+    }
+    if (rootBadges) rootBadges.innerHTML = "";
+    if (rootInsight) rootInsight.innerHTML = "";
   }
 }
 
