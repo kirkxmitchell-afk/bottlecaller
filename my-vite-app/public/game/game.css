@@ -80,7 +80,7 @@ h3 {
 p { margin: 0; color: var(--muted); line-height: 1.5; }
 
 .app-game-masthead{
-  width: min(980px, calc(100% - 32px));
+  width: min(1440px, calc(100% - 32px));
   margin: 18px auto 4px;
   padding: 16px 18px;
   display: flex;
@@ -126,7 +126,7 @@ p { margin: 0; color: var(--muted); line-height: 1.5; }
 /* ---------- Layout ---------- */
 .screen {
   display: none;
-  width: min(980px, 100%);
+  width: min(1440px, 100%);
   margin: 0 auto;
   padding: 18px 16px 24px;
 }
@@ -736,13 +736,13 @@ html, body{ height: 100%; }
 
 /* Shell layout */
 .bc-shell{
-  width:min(1320px, 100%);
+  width:min(1500px, 100%);
   margin:0 auto;
   padding:14px;
   display:grid;
   gap:12px;
 
-  grid-template-columns: 1.5fr .75fr;
+  grid-template-columns: minmax(0, 1.7fr) minmax(320px, 0.82fr);
   grid-template-rows: auto 1fr auto;
   grid-template-areas:
     "hud hud"
@@ -1321,13 +1321,13 @@ html, body{ height:100%; }
 
 /* Shell */
 #bcShell.bc-shell{
-  width:min(1320px, 100%);
+  width:min(1500px, 100%);
   margin:0 auto;
   padding:14px;
   display:grid !important;
   gap:12px;
 
-  grid-template-columns: 1.5fr .75fr;
+  grid-template-columns: minmax(0, 1.7fr) minmax(320px, 0.82fr);
   grid-template-rows: auto 1fr auto;
   grid-template-areas:
     "hud hud"
@@ -1949,7 +1949,7 @@ html, body{ height:100%; }
 #screenHome,
 #screenSetupDemo,
 #screenSetupPremium{
-  width: min(1320px, 100%);
+  width: min(1440px, 100%);
   margin: 0 auto;
   padding: 18px 14px 40px;
 }
@@ -2219,7 +2219,7 @@ html, body{ height:100%; }
 #screenWelcome,
 #screenHistory,
 #screenDrillSummary{
-  width: min(1320px, 100%);
+  width: min(1440px, 100%);
   margin: 0 auto;
   padding: 18px 14px 40px;
 }
@@ -2782,7 +2782,7 @@ html, body{ height:100%; }
 
 #screenHome .app-home-grid{
   display: grid !important;
-  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.9fr) !important;
   align-items: stretch;
   gap: 20px !important;
 }
@@ -2804,7 +2804,7 @@ html, body{ height:100%; }
 }
 
 #screenHome #cardPremium{
-  grid-column: 1 / -1;
+  grid-column: 1 / 2;
   padding: 30px !important;
   background:
     radial-gradient(920px 360px at 100% 100%, rgba(255,196,121,0.10), transparent 56%),
@@ -2815,7 +2815,7 @@ html, body{ height:100%; }
 }
 
 #screenHome #cardDemo{
-  align-self: start;
+  align-self: stretch;
   background:
     radial-gradient(700px 260px at 0% 0%, rgba(196,181,253,0.14), transparent 55%),
     linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02) 42%, rgba(255,255,255,0.015)),
@@ -2842,7 +2842,7 @@ html, body{ height:100%; }
 #screenHome .app-premium-hero{
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr);
+  grid-template-columns: minmax(0, 1.28fr) minmax(340px, 0.9fr);
   gap: 24px;
   align-items: stretch;
   margin-bottom: 10px;

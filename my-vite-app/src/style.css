@@ -53,11 +53,14 @@ button, input { font-family: inherit; }
   padding: 22px;
 }
 
-.screen { width: min(980px, 100%); }
+.screen {
+  width: min(1280px, 100%);
+  margin-inline: auto;
+}
 .hidden { display: none !important; }
 
 .app-chrome{
-  width: min(1480px, 100%);
+  width: min(1600px, 100%);
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) auto;
   gap: 18px;
@@ -1252,7 +1255,7 @@ button:hover, .btn:hover, .btn-ghost:hover{
 
 #screenPremiumApp,
 #screenManagerBoard{
-  width: min(1500px, 100%);
+  width: min(1600px, 100%);
   margin: 0 auto;
   padding: 16px 14px 28px;
 }
@@ -1772,7 +1775,7 @@ button:hover, .btn:hover, .btn-ghost:hover{
 }
 
 #screenProfile > .panel.stack{
-  width: min(680px, calc(100vw - 24px));
+  width: min(980px, calc(100vw - 24px));
   margin: 0 12px 0 auto;
   padding: 14px !important;
   border-radius: 28px !important;
@@ -1909,7 +1912,7 @@ button:hover, .btn:hover, .btn-ghost:hover{
   }
 
   #screenProfile > .panel.stack{
-    width: min(100vw - 16px, 680px);
+    width: min(100vw - 16px, 980px);
     margin: 0 auto;
   }
 
