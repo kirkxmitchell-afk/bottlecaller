@@ -3455,7 +3455,7 @@
         bindInput(btn, () => {
           btn.remove();
           if (window.__BC_STANDALONE_DEMO__) {
-            try { window.__BC_SESSION_TYPE__ = "play"; } catch {}
+            try { setRuntimeSessionType("play"); } catch {}
             try { resetNavState?.(); } catch {}
             try { showScreen?.("screenHome"); } catch {}
             return;
@@ -4562,6 +4562,7 @@ function isDrillMode() {
       let bcStepIndex = 0;               // 0..2
       let bcStageResults = [];           // [{stage, skillFocus, correct}]
       window.__BC_RUNTIME_STATE__ = window.__BC_RUNTIME_STATE__ || {
+        ctx: null,
         encounter: null,
         session: null,
         sessionType: null,
@@ -4585,6 +4586,50 @@ function isDrillMode() {
       let role = null;
       let isManager = false;
       let isWaiter = false;
+      function renderStateHealthWarning() {
+        const existing = document.getElementById("bcStateHealthWarning");
+        const state = window.__BC_STATE__?.get?.() || null;
+        const shouldShow =
+          !!state &&
+          !state.isDemo &&
+          String(state.mode || "").toLowerCase() === "premium" &&
+          state.stateHealth !== "ready";
+
+        if (!shouldShow) {
+          existing?.remove();
+          return;
+        }
+
+        const message =
+          state.stateHealth === "degraded_ctx"
+            ? "Premium context not fully attached. Some iframe features may be limited."
+            : state.stateHealth === "degraded_progression"
+              ? "Progression state is not fully attached yet."
+              : "BottleCaller is still booting.";
+
+        const el = existing || document.createElement("div");
+        el.id = "bcStateHealthWarning";
+        el.style.position = "fixed";
+        el.style.top = "14px";
+        el.style.right = "14px";
+        el.style.zIndex = "9999";
+        el.style.maxWidth = "320px";
+        el.style.padding = "10px 12px";
+        el.style.borderRadius = "12px";
+        el.style.background = "rgba(33, 16, 16, 0.94)";
+        el.style.border = "1px solid rgba(255, 120, 120, 0.45)";
+        el.style.boxShadow = "0 12px 30px rgba(0,0,0,0.28)";
+        el.style.color = "#fff4f4";
+        el.style.fontSize = "12px";
+        el.style.lineHeight = "1.4";
+        el.innerHTML = `
+          <div style="font-weight:700; letter-spacing:.02em; margin-bottom:4px;">State Warning</div>
+          <div>${escapeHtml(message)}</div>
+          <div style="margin-top:6px; opacity:.72;">stateHealth: ${escapeHtml(String(state.stateHealth || "unknown"))}</div>
+        `;
+
+        if (!existing) document.body.appendChild(el);
+      }
       function syncRuntimeState(patch = {}) {
         const next = {
           ...(window.__BC_RUNTIME_STATE__ || {}),
@@ -4613,6 +4658,11 @@ function isDrillMode() {
           window.PROG = PROG;
           window.__BC_PROG__ = PROG;
         }
+        if (Object.prototype.hasOwnProperty.call(patch || {}, "ctx")) {
+          window.__BC_CTX__ = next.ctx || null;
+        }
+
+        try { renderStateHealthWarning(); } catch {}
 
         return next;
       }
@@ -4620,6 +4670,7 @@ function isDrillMode() {
         const runtime = window.__BC_RUNTIME_STATE__ || {};
         return {
           ...runtime,
+          ctx: runtime.ctx || window.__BC_CTX__ || null,
           encounter: runtime.encounter || currentEncounter || null,
           session: runtime.session || window.__BC_SESSION__ || null,
           sessionType: runtime.sessionType || window.__BC_SESSION_TYPE__ || sessionType || null,
@@ -4628,6 +4679,97 @@ function isDrillMode() {
           progression: runtime.progression || window.__BC_PROG__ || window.PROG || null,
         };
       }
+      function getRuntimeCtx() {
+        return getRuntimeState().ctx || null;
+      }
+      function getRuntimeEncounter() {
+        return getRuntimeState().encounter || null;
+      }
+      function getRuntimeSession() {
+        return getRuntimeState().session || null;
+      }
+      function getRuntimeSessionType() {
+        return getRuntimeState().sessionType || null;
+      }
+      function getRuntimeDifficulty() {
+        return getRuntimeState().difficulty || null;
+      }
+      function getRuntimeGuard() {
+        return getRuntimeState().guard || null;
+      }
+      function getRuntimeProgression() {
+        return getRuntimeState().progression || null;
+      }
+      function getStateSnapshot() {
+        const ctx = getRuntimeCtx();
+        const runtime = getRuntimeState();
+        const identity = getGameplayIdentity();
+        const ctxReady = !!(ctx?.userId && ctx?.restaurantId && (ctx?.membershipRole || ctx?.role));
+        const progressionReady = !!runtime.progression;
+        const stateHealth =
+          ctxReady && progressionReady
+            ? "ready"
+            : (ctxReady ? "degraded_progression" : (progressionReady ? "degraded_ctx" : "booting"));
+
+        return {
+          ctx,
+          ctxReady,
+          progressionReady,
+          stateHealth,
+          runtime,
+          identity,
+          mode: window.bcMode || null,
+          isDemo: !!window.isDemo,
+        };
+      }
+      function isRuntimeReady({ requireProgression = true } = {}) {
+        const snapshot = getStateSnapshot();
+        if (!snapshot.ctxReady) return false;
+        if (requireProgression && !snapshot.progressionReady) return false;
+        return true;
+      }
+      function setRuntimeCtx(nextCtx = null) {
+        return syncRuntimeState({ ctx: nextCtx || null });
+      }
+      function setRuntimeEncounter(nextEncounter = null) {
+        return syncRuntimeState({ encounter: nextEncounter || null });
+      }
+      function setRuntimeSession(nextSession = null) {
+        return syncRuntimeState({ session: nextSession || null });
+      }
+      function setRuntimeSessionType(nextType = null) {
+        sessionType = nextType || null;
+        return syncRuntimeState({ sessionType });
+      }
+      function setRuntimeDifficulty(nextDifficulty = null) {
+        return syncRuntimeState({ difficulty: nextDifficulty || null });
+      }
+      function setRuntimeGuard(nextGuard = null) {
+        return syncRuntimeState({ guard: nextGuard || null });
+      }
+      function setRuntimeProgression(nextProg = null) {
+        if (nextProg) PROG = nextProg;
+        return syncRuntimeState({ progression: nextProg || PROG || null });
+      }
+      window.__BC_RUNTIME_STATE_API__ = {
+        get: getRuntimeState,
+        getCtx: getRuntimeCtx,
+        getEncounter: getRuntimeEncounter,
+        getSession: getRuntimeSession,
+        getSessionType: getRuntimeSessionType,
+        getDifficulty: getRuntimeDifficulty,
+        getGuard: getRuntimeGuard,
+        getProgression: getRuntimeProgression,
+        getSnapshot: getStateSnapshot,
+        isReady: isRuntimeReady,
+        setCtx: setRuntimeCtx,
+        setEncounter: setRuntimeEncounter,
+        setSession: setRuntimeSession,
+        setSessionType: setRuntimeSessionType,
+        setDifficulty: setRuntimeDifficulty,
+        setGuard: setRuntimeGuard,
+        setProgression: setRuntimeProgression,
+      };
       function normalizeRole(rawRole, fallback = null) {
         const role = String(rawRole || "").trim().toLowerCase();
         if (ROLE_CAPABILITIES[role]) return role;
@@ -4807,15 +4949,23 @@ function isDrillMode() {
         runtime: getRuntimeState(),
       });
       window.__BC_RUNTIME__ = () => ({
-        userId,
-        restaurantId,
-        scopeId,
-        role,
-        mode,
-        identity: getGameplayIdentity(),
-        gameplayRole: getGameplayIdentity().gameplayRole || null,
-        runtime: getRuntimeState(),
+        userId: getRuntimeCtx()?.userId || userId || null,
+        restaurantId: getRuntimeCtx()?.restaurantId || restaurantId || null,
+        scopeId: getRuntimeCtx()?.scopeId || scopeId || null,
+        role: getRuntimeCtx()?.membershipRole || getRuntimeCtx()?.role || role || null,
+        mode: window.bcMode || mode || null,
+        identity: getStateSnapshot().identity,
+        gameplayRole: getStateSnapshot().identity?.gameplayRole || null,
+        runtime: getStateSnapshot().runtime,
+        ctxReady: getStateSnapshot().ctxReady,
+        progressionReady: getStateSnapshot().progressionReady,
+        stateHealth: getStateSnapshot().stateHealth,
       });
+      window.__BC_STATE__ = {
+        get: getStateSnapshot,
+        isReady: isRuntimeReady,
+      };
+      window.isRuntimeReady = isRuntimeReady;
       syncRuntimeState({
         encounter: currentEncounter,
         session: window.__BC_SESSION__ || null,
@@ -6044,7 +6194,7 @@ function ensureProgLoaded() {
   console.log("[PROG] ensure key =", progKey());
   window.PROG = PROG;
   window.__BC_PROG__ = PROG;
-  syncRuntimeState({ progression: PROG });
+  setRuntimeProgression(PROG);
   window.progKey = progKey;
   window.defaultProg = defaultProg;
   window.loadProg = loadProg;
@@ -6672,7 +6822,7 @@ function ensureProgLoaded() {
         window.__NEXT_LOCK__ = false;
         window.__BC_DEMO_DONE__ = 0;
         currentStep = 0;
-        syncRuntimeState({ encounter: null });
+        setRuntimeEncounter(null);
         encounterIndex = 0;
         saveEncounterIndex(0);
 
@@ -6680,9 +6830,9 @@ function ensureProgLoaded() {
         PROG.__key = progKey();
         delete PROG.__canonicalMirrorStamp;
         ensureProgMeta();
-        syncRuntimeState({ progression: PROG });
+        setRuntimeProgression(PROG);
 
-        syncRuntimeState({ guard: { last3: [], pressureLevel: 0, finalDifficulty: 1, nextDifficulty: 1 } });
+        setRuntimeGuard({ last3: [], pressureLevel: 0, finalDifficulty: 1, nextDifficulty: 1 });
         try { saveGuardState(window.__BC_GUARD__); } catch {}
         try { setMaxUnlockedTier(1); } catch {}
         try { saveAccountDifficulty(1); } catch {}
@@ -6777,7 +6927,7 @@ function ensureProgLoaded() {
         applyBlankProgressionResetLocally();
 
         currentStep = 0;
-        currentEncounter = null;
+        setRuntimeEncounter(null);
         encounterIndex = 0;
 
         try { PROG = null; } catch {}
@@ -6800,7 +6950,7 @@ function ensureProgLoaded() {
         if (replayFromStage1()) {
           window.__NEXT_LOCK__ = false;
           currentStep = 0;
-          currentEncounter = null;
+          setRuntimeEncounter(null);
           encounterIndex = 0;
           saveEncounterIndex(encounterIndex);
           await startPlayWithReadyGate();
@@ -6810,7 +6960,7 @@ function ensureProgLoaded() {
         // Demo fallback: keep local restart behavior when no progression spine exists.
         window.__NEXT_LOCK__ = false;
         currentStep = 0;
-        currentEncounter = null;
+        setRuntimeEncounter(null);
         encounterIndex = 0;
         saveEncounterIndex(encounterIndex);
         window.__BC_DEMO_DONE__ = 0;
@@ -6939,7 +7089,7 @@ function ensureProgLoaded() {
         if (nextGuard && typeof nextGuard === "object") {
           if (!Array.isArray(nextGuard.last3)) nextGuard.last3 = [];
           if (!Number.isFinite(nextGuard.pressureLevel)) nextGuard.pressureLevel = 0;
-          window.__BC_GUARD__ = nextGuard;
+          setRuntimeGuard(nextGuard);
           if (persistGuard) saveGuardState(nextGuard);
           PROG.guard.pressureLevel = Number(nextGuard.pressureLevel ?? 0);
           PROG.guard.finalDifficulty = Number(
@@ -8445,6 +8595,7 @@ function ensureProgLoaded() {
           mode,
           identity
         };
+        setRuntimeCtx(window.__BC_CTX__);
         console.log("[BC][APPLY_CTX][AFTER_SET]", window.__BC_CTX__);
         applyGameplayIdentity({
           membership_role: membershipRole || "",
@@ -8828,7 +8979,7 @@ function ensureProgLoaded() {
             encounterIndex = 0;
             saveEncounterIndex?.(0);
             currentStep = 0;
-            currentEncounter = null;
+            setRuntimeEncounter(null);
             resetNavState?.();
             showScreen?.("screenPlay");
             window.startEncounter?.();
@@ -8856,11 +9007,12 @@ function ensureProgLoaded() {
               const seedByMode = { easy: 2, medium: 4, hard: 6 };
               const nextSeed = seedByMode[modeLabel] || 4;
               const nextPolicy = difficultyPolicy(nextSeed);
-              window.__BC_DIFFICULTY__ = {
+              const nextDifficultyState = {
                 ...nextPolicy,
                 mode: modeLabel,
                 pressure: Number(window.__BC_GUARD__?.pressureLevel || window.__BC_DIFFICULTY__?.pressure || 0),
               };
+              setRuntimeDifficulty(nextDifficultyState);
             }
           } catch (e) {
             console.warn("[BC] difficulty_set fallback failed", e);
@@ -8944,8 +9096,7 @@ function ensureProgLoaded() {
 
         if (msg.type === "start_drill") {
           // HARD DRILL MODE: set immediately so nothing touches progression
-          window.__BC_SESSION_TYPE__ = "drill";
-          syncRuntimeState({ sessionType: "drill" });
+          setRuntimeSessionType("drill");
           ensureDrillBackButton();
           console.log("[BC] session type set ->", window.__BC_SESSION_TYPE__);
           try { sessionType = "drill"; } catch {}
@@ -9077,14 +9228,20 @@ function ensureProgLoaded() {
 
       // Debug helpers (safe — reads from window.* to avoid TDZ)
       window.__BC_GAME_STATE__ = {
-        get: () => ({
-          restaurantId: window.__BC_CTX__?.restaurantId ?? restaurantId ?? null,
-          winesCount: Array.isArray(window.wines) ? window.wines.length : 0,
-          mode: window.APP_MODE || null,
-          limit: (typeof LIMIT !== "undefined" ? LIMIT : null),
-          sessionType: (typeof sessionType !== "undefined" ? sessionType : null),
-          runtime: getRuntimeState(),
-        })
+        get: () => {
+          const snapshot = getStateSnapshot();
+          return {
+            restaurantId: snapshot.ctx?.restaurantId ?? restaurantId ?? null,
+            winesCount: Array.isArray(window.wines) ? window.wines.length : 0,
+            mode: window.APP_MODE || null,
+            limit: (typeof LIMIT !== "undefined" ? LIMIT : null),
+            sessionType: snapshot.runtime?.sessionType ?? null,
+            ctxReady: snapshot.ctxReady,
+            progressionReady: snapshot.progressionReady,
+            stateHealth: snapshot.stateHealth,
+            runtime: snapshot.runtime,
+          };
+        }
       };
 
       window.__BC_DEBUG_WINES__ = function __BC_DEBUG_WINES__() {
@@ -9109,8 +9266,9 @@ function ensureProgLoaded() {
           getWineCount: typeof window.getWineCount === "function" ? window.getWineCount() : null,
           LIMIT: typeof window.LIMIT !== "undefined" ? window.LIMIT : null,
           unlocked: typeof window.isUnlocked === "function" ? window.isUnlocked() : null,
-          sessionType: window.__BC_SESSION_TYPE__ || null,
+          sessionType: getRuntimeSessionType(),
           bcMode: window.bcMode || null,
+          stateHealth: getStateSnapshot().stateHealth,
         };
 
         console.log("[BC][DEBUG_WINES]", out);
@@ -9179,9 +9337,7 @@ function ensureProgLoaded() {
         const resolvedStarter = starter || (identity.isWaiter ? "waiter" : (identity.membershipRole || "single_manager"));
         const pool = Array.isArray(cfg.pool) ? cfg.pool : null;
         // HARD DRILL MODE (safety)
-        window.__BC_SESSION_TYPE__ = "drill";
-        syncRuntimeState({ sessionType: "drill" });
-        try { sessionType = "drill"; } catch {}
+        setRuntimeSessionType("drill");
         DRILL = { repTarget, repDone: 0, startedAt: Date.now(), focus: drillFocus, starter: resolvedStarter, tier: (typeof tier === "number" ? tier : 0), pool };
         DRILL.activeWine = (Array.isArray(wines) && wines.length ? wines[0] : { name: "This bottle" });
         if (!DRILL.activeWine) {
@@ -9201,8 +9357,7 @@ function ensureProgLoaded() {
         window._bc_sessions[modeKey].repTarget = repTarget;
         window._bc_sessions[modeKey].demoDone = Number(window.__BC_DEMO_DONE__ || 0);
         window._bc_sessions[modeKey].demoTarget = Number(window.__BC_DEMO_TARGET__ || 3);
-        window.__BC_SESSION__ = window._bc_sessions[modeKey];
-        syncRuntimeState({ session: window.__BC_SESSION__ });
+        setRuntimeSession(window._bc_sessions[modeKey]);
 
         resetNavState();
         showScreen("screenDrill");
@@ -9394,8 +9549,7 @@ function ensureProgLoaded() {
         currentEncounter.__logged = false;
         currentEncounter.__resolvedLogged = false;
         currentEncounter.__reaction = null;
-        syncRuntimeState({ encounter: currentEncounter });
-        window.currentEncounter = currentEncounter;
+        setRuntimeEncounter(currentEncounter);
 
         window.__BC_PARENT_LAST_ENCOUNTER__ = currentEncounter;
         window.__BC_LAST_ENCOUNTER__ = currentEncounter;
@@ -9548,7 +9702,7 @@ function ensureProgLoaded() {
             resetUsed: currentEncounter?.resetUsed,
           });
           window.__BC_PROG__ = PROG;
-          syncRuntimeState({ progression: PROG });
+          setRuntimeProgression(PROG);
         } catch (e) {
           console.warn("[DRILL] progression update failed", e);
         }
@@ -9605,9 +9759,7 @@ function ensureProgLoaded() {
       }
 
       async function startProgressionSession() {
-        sessionType = "progression";
-        window.__BC_SESSION_TYPE__ = "progression";
-        syncRuntimeState({ sessionType: "progression" });
+        setRuntimeSessionType("progression");
         drillRepDone = 0;
         window._bc_sessions = window._bc_sessions || {};
         const modeKey = window.bcMode || "premium";
@@ -9620,8 +9772,7 @@ function ensureProgLoaded() {
           repDone: 0,
           startedAt: Date.now(),
         };
-        window.__BC_SESSION__ = window._bc_sessions[modeKey];
-        syncRuntimeState({ session: window.__BC_SESSION__ });
+        setRuntimeSession(window._bc_sessions[modeKey]);
         resetNavState();
         beginFreshProgressionRun();
         await startPlayWithReadyGate();
@@ -9929,7 +10080,7 @@ function ensureProgLoaded() {
       };
 
       function resetNavState() {
-        currentEncounter = null;
+        setRuntimeEncounter(null);
         currentStep = 0;
         bcActiveEncounter = null;
         bcStepIndex = 0;
@@ -10757,8 +10908,7 @@ function ensureProgLoaded() {
           spine.actions.resetEncounterFlow?.();
         }
         spine.actions.resetRunScoring();
-        sessionType = "progression";
-        window.__BC_SESSION_TYPE__ = "progression";
+        setRuntimeSessionType("progression");
         return true;
       }
 
@@ -10833,17 +10983,17 @@ function ensureProgLoaded() {
         const nextSeed = seedByMode[key] || 4;
         const priorPressure = Number(window.__BC_GUARD__?.pressureLevel || window.__BC_DIFFICULTY__?.pressure || 0);
         const nextPolicy = difficultyPolicy(nextSeed);
-        window.__BC_DIFFICULTY__ = {
+        const nextDifficultyState = {
           ...nextPolicy,
           mode: key,
           pressure: priorPressure
         };
-        syncRuntimeState({ difficulty: window.__BC_DIFFICULTY__ });
+        setRuntimeDifficulty(nextDifficultyState);
         window.__BC_SELECTED_DIFFICULTY__ = key;
         if (window.__BC_GUARD__) {
           window.__BC_GUARD__.finalDifficulty = nextSeed;
           window.__BC_GUARD__.nextDifficulty = nextSeed;
-          syncRuntimeState({ guard: window.__BC_GUARD__ });
+          setRuntimeGuard(window.__BC_GUARD__);
         }
         try { saveAccountDifficulty(nextSeed); } catch {}
         try { if (typeof saveGuardState === "function" && window.__BC_GUARD__) saveGuardState(window.__BC_GUARD__); } catch {}
@@ -11147,7 +11297,7 @@ function ensureProgLoaded() {
 
       function endDrillSession() {
         sessionType = null;
-        window.__BC_SESSION_TYPE__ = "play";
+        setRuntimeSessionType("play");
         if (isDemo || window.__BC_STANDALONE_DEMO__) {
           resetNavState();
           showScreen("screenHome");
@@ -17044,12 +17194,14 @@ function ensureProgLoaded() {
           hookStrict: policy.hookStrict,
           deliveryStrict: policy.deliveryStrict
         };
-        window.__BC_DIFFICULTY__ = {
+        const nextDifficultyState = {
           ...policy,
           tier: tierNow,
           pressure: guardState.pressureLevel,
           lastDecision: decision
         };
+        setRuntimeDifficulty(nextDifficultyState);
+        setRuntimeGuard(guardState);
         syncProgressionStateMirror({
           guardState: { ...guardState },
           difficultySeed: finalDifficulty,
@@ -17895,18 +18047,19 @@ function ensureProgLoaded() {
           enc.difficulty = enc.difficulty ?? policySeed ?? 1;
           policy = difficultyPolicy(enc.difficulty);
           const spineTier = Number(spine?.selectors?.tier?.() ?? 1);
-          window.__BC_DIFFICULTY__ = {
+          const nextDifficultyState = {
             ...policy,
             tierUnlocked: spineTier,
             pressure: getNormalizedProgressionState()?.session?.pressureLevel || 0
           };
+          setRuntimeDifficulty(nextDifficultyState);
           syncProgressionStateMirror({
             difficultySeed: policy.d,
             persistGuard: false
           });
         } else {
           enc.difficulty = enc.difficulty ?? 1;
-          window.__BC_DIFFICULTY__ = {
+          const nextDifficultyState = {
             d: 1,
             pivotChance: 0.2,
             hookStrictness: "lenient",
@@ -17919,6 +18072,7 @@ function ensureProgLoaded() {
             tierUnlocked: 1,
             pressure: 0
           };
+          setRuntimeDifficulty(nextDifficultyState);
         }
 
         return policy;
@@ -18210,8 +18364,8 @@ function ensureProgLoaded() {
         let { enc } = selectEncounterCandidate(list, isDemoNow, progressionWindow);
 
         // --- BC3 FORCE ROUTE (authoritative) ---
+        setRuntimeEncounter(enc); // helps debugging consistency
         currentEncounter = enc;
-        window.currentEncounter = enc; // helps debugging consistency
         bcActiveEncounter = enc;
         bcStepIndex = 0;
         bcStageResults = [];
@@ -18249,7 +18403,7 @@ function ensureProgLoaded() {
           policy,
           prepared.preferNonEmpty
         );
-        syncRuntimeState({ encounter: currentEncounter });
+        setRuntimeEncounter(currentEncounter);
         currentEncounter = applyDifficultyToEncounter(currentEncounter, policy);
         logEncounterStateAudit("built", currentEncounter);
         console.log("[ENCOUNTER] built", {
@@ -18365,7 +18519,7 @@ function ensureProgLoaded() {
         const idx = Math.max(1, Number(n || 1)) - 1;
         encounterIndex = idx;
         try { currentStep = 1; } catch {}
-        try { currentEncounter = null; } catch {}
+        try { setRuntimeEncounter(null); } catch {}
         return await startEncounter();
       }
 
@@ -18711,7 +18865,7 @@ function ensureProgLoaded() {
           const backTo = getBackToParam();
           exitDrillState();
           sessionType = null;
-          window.__BC_SESSION_TYPE__ = null;
+          setRuntimeSessionType(null);
           if (isDemo || standalone) {
             resetNavState();
             showScreen("screenHome");
