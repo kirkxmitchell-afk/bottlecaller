@@ -7496,13 +7496,13 @@ async function hydrateLeaderboardDisplayNames(users = []) {
       const profileName = String(profile?.display_name || "").trim();
       out.push({
         ...user,
-        displayName: profileName || (["single_manager", "group_manager", "enterpriser"].includes(String(user?.role || "").toLowerCase()) ? "Manager" : user.displayName),
+        displayName: profileName || user.displayName || "Unknown",
       });
     } catch (error) {
       console.warn("[LEADERBOARD] row display name hydrate failed", { userId, error });
       out.push({
         ...user,
-        displayName: ["single_manager", "group_manager", "enterpriser"].includes(String(user?.role || "").toLowerCase()) ? "Manager" : user.displayName,
+        displayName: user.displayName || "Unknown",
       });
     }
   }
