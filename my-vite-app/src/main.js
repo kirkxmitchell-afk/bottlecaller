@@ -3712,6 +3712,30 @@ function normalizeWineRow(row) {
   };
 }
 
+function getWineDedupKey(row) {
+  if (!row || typeof row !== "object") return "";
+  const id = String(row.id || "").trim();
+  if (id) return `id:${id}`;
+  const name = String(row.name || "").trim().toLowerCase();
+  const varietal = String(row.varietal || "").trim().toLowerCase();
+  const region = String(row.region || "").trim().toLowerCase();
+  const story = String(row.story || "").trim().toLowerCase();
+  return `shape:${name}::${varietal}::${region}::${story}`;
+}
+
+function dedupeWineRows(rows = []) {
+  const list = Array.isArray(rows) ? rows : [];
+  const seen = new Set();
+  const out = [];
+  for (const row of list) {
+    const key = getWineDedupKey(row);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(row);
+  }
+  return out;
+}
+
 function renderWineTable(wines) {
   const body = document.getElementById("premiumWineTableBody");
   const cards = document.getElementById("premiumWineCards");
@@ -6153,7 +6177,7 @@ async function fetchAndSendWines(targetWindow = null) {
       console.warn("[PARENT] bc_wines fetch failed", res.error);
     }
 
-    const wines = Array.isArray(res.data) ? res.data : [];
+    const wines = dedupeWineRows(res.data || []);
     const win = targetWindow || getPremiumFrame()?.contentWindow;
     win?.postMessage(
       { source: "BC_MSG", v: 1, type: "wines_report", mode: "premium", wines },
@@ -6173,7 +6197,7 @@ async function fetchParentRestaurantWines(restaurantId) {
     .order("created_at", { ascending: true });
 
   if (error) throw error;
-  return data || [];
+  return dedupeWineRows(data || []);
 }
 
 async function insertParentRestaurantWine(restaurantId, payload) {

@@ -4339,8 +4339,30 @@ console.log("BC3_MARKER_V1");
   // ===== RUNTIME STATE (MUST BE DECLARED EARLY) =====
   var wines = Array.isArray(window.wines) ? window.wines : [];
   window.wines = wines;
+  function getWineDedupKey(wine) {
+    if (!wine || typeof wine !== "object") return "";
+    const id = String(wine.id || "").trim();
+    if (id) return `id:${id}`;
+    const name = String(wine.name || "").trim().toLowerCase();
+    const varietal = String(wine.varietal || "").trim().toLowerCase();
+    const region = String(wine.region || "").trim().toLowerCase();
+    const story = String(wine.story || "").trim().toLowerCase();
+    return `shape:${name}::${varietal}::${region}::${story}`;
+  }
+  function dedupeWinesList(next) {
+    const list = Array.isArray(next) ? next : [];
+    const seen = new Set();
+    const out = [];
+    for (const wine of list) {
+      const key = getWineDedupKey(wine);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      out.push(wine);
+    }
+    return out;
+  }
   function setWines(next) {
-    const arr = Array.isArray(next) ? next : [];
+    const arr = dedupeWinesList(next);
     wines = arr;
     window.wines = arr;
     return arr;
