@@ -7438,6 +7438,11 @@ function renderWaiterPerformanceLeaderboardTable(users = []) {
 
 function mergeWaiterLeaderboardUsers(baseUsers = [], associatedManagers = []) {
   const merged = new Map();
+  const isFallbackName = (displayName, userId) => {
+    const name = String(displayName || "").trim();
+    const id = String(userId || "").trim();
+    return !name || name === id || (!!id && name === id.slice(0, 8));
+  };
 
   (baseUsers || []).forEach((user) => {
     const userId = String(user?.userId || "");
@@ -7447,7 +7452,21 @@ function mergeWaiterLeaderboardUsers(baseUsers = [], associatedManagers = []) {
 
   (associatedManagers || []).forEach((manager) => {
     const userId = String(manager?.userId || "");
-    if (!userId || merged.has(userId)) return;
+    if (!userId) return;
+
+    const existing = merged.get(userId) || null;
+    if (existing) {
+      merged.set(userId, {
+        ...existing,
+        displayName:
+          isFallbackName(existing.displayName, userId) && !isFallbackName(manager.displayName, userId)
+            ? manager.displayName
+            : existing.displayName,
+        role: manager.role || existing.role || "group_manager",
+      });
+      return;
+    }
+
     merged.set(userId, {
       userId,
       displayName: manager.displayName || userId.slice(0, 8),
