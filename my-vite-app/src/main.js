@@ -7414,16 +7414,22 @@ function renderWaiterPerformanceLeaderboardTable(users = []) {
   if (!tbody) return;
 
   tbody.innerHTML = users.map((user) => `
-    <tr>
+    <tr class="waiter-user-row" data-user-id="${escapeHtml(user.userId)}">
       <td>${user.rank}</td>
       <td>
-        <div class="waiter-leaderboard-member">
+        <button
+          type="button"
+          class="waiter-user-expand-btn"
+          data-user-id="${escapeHtml(user.userId)}"
+          aria-expanded="false"
+        >
+          <span class="waiter-chevron">▶</span>
           <span class="waiter-leaderboard-avatar">${escapeHtml((user.displayName || "?").slice(0, 2).toUpperCase())}</span>
-          <div style="display:flex; flex-direction:column; gap:4px;">
+          <span style="display:flex; flex-direction:column; gap:4px; align-items:flex-start;">
             <span>${escapeHtml(user.displayName || "Unknown")}</span>
             <span class="waiter-leaderboard-role-pill">${escapeHtml(getDisplayRoleLabel(user.role || "waiter"))}</span>
-          </div>
-        </div>
+          </span>
+        </button>
       </td>
       <td>${formatMetricNumber(user.totalPoints, 1)}</td>
       <td>${formatPercent(user.drillPassRate)}</td>
@@ -7433,7 +7439,97 @@ function renderWaiterPerformanceLeaderboardTable(users = []) {
       <td>${formatPercent(user.masteryRate)}</td>
       <td>${formatRelativeTime(user.lastActiveAt)}</td>
     </tr>
+    <tr class="waiter-user-detail-row hidden" data-user-detail-id="${escapeHtml(user.userId)}">
+      <td colspan="9">
+        <div class="waiter-user-detail-panel">
+          <div class="waiter-user-detail-left">
+            <div class="waiter-user-detail-chart-card">
+              <div class="small-text" style="margin-bottom:8px;">Current Skill Shape</div>
+              <canvas id="wlUserSkillPie_${escapeHtml(user.userId)}" class="mb-user-skill-pie" width="240" height="240"></canvas>
+              <div id="wlUserSkillLegend_${escapeHtml(user.userId)}" style="margin-top:12px;"></div>
+            </div>
+          </div>
+          <div class="waiter-user-detail-right">
+            <div class="waiter-user-metric-grid">
+              <div class="mb-user-metric-card"><div class="small-text">Total Points</div><strong>${formatMetricNumber(user.totalPoints, 1)}</strong></div>
+              <div class="mb-user-metric-card"><div class="small-text">Eligibility Tier</div><strong>T${user.eligibilityTier}</strong></div>
+              <div class="mb-user-metric-card"><div class="small-text">Readiness</div><strong>${formatPercent(user.readiness)}</strong></div>
+              <div class="mb-user-metric-card"><div class="small-text">Drill Pass</div><strong>${formatPercent(user.drillPassRate)}</strong></div>
+              <div class="mb-user-metric-card"><div class="small-text">Encounter Pass</div><strong>${formatPercent(user.encounterPassRate)}</strong></div>
+              <div class="mb-user-metric-card"><div class="small-text">Challenge Success</div><strong>${formatPercent(user.challengeSuccessRate)}</strong></div>
+              <div class="mb-user-metric-card"><div class="small-text">Premium Success</div><strong>${formatPercent(user.premiumSuccessRate)}</strong></div>
+              <div class="mb-user-metric-card"><div class="small-text">Mastery</div><strong>${formatPercent(user.masteryRate)}</strong></div>
+              <div class="mb-user-metric-card"><div class="small-text">Last Active</div><strong>${escapeHtml(formatRelativeTime(user.lastActiveAt))}</strong></div>
+            </div>
+            <div class="waiter-user-badge-row" style="margin-top:12px;">
+              <span class="mb-badge">Strongest: ${escapeHtml(user.strongestSkill || "—")}</span>
+              <span class="mb-badge">Weakest: ${escapeHtml(user.weakestSkill || "—")}</span>
+              <span class="mb-badge">${escapeHtml(user.challengeReadiness >= 0.7 ? "Challenge Ready" : "Needs Build-Up")}</span>
+              <span class="mb-badge">Readiness: ${escapeHtml(describeReadiness(user.readiness, user.readinessLabel))}</span>
+            </div>
+          </div>
+        </div>
+      </td>
+    </tr>
   `).join("");
+}
+
+function wireWaiterPerformanceRowExpansion(usersById = {}) {
+  document.querySelectorAll(".waiter-user-expand-btn").forEach((button) => {
+    if (button.__wired) return;
+    button.__wired = true;
+    button.addEventListener("click", async () => {
+      await toggleWaiterPerformanceUserDetail(button.dataset.userId, usersById);
+    });
+  });
+}
+
+async function toggleWaiterPerformanceUserDetail(userId, usersById = {}) {
+  const button = document.querySelector(`.waiter-user-expand-btn[data-user-id="${CSS.escape(String(userId || ""))}"]`);
+  const row = document.querySelector(`.waiter-user-detail-row[data-user-detail-id="${CSS.escape(String(userId || ""))}"]`);
+  if (!button || !row) return;
+
+  const isOpen = !row.classList.contains("hidden");
+  if (isOpen) {
+    row.classList.add("hidden");
+    button.classList.remove("is-open");
+    button.setAttribute("aria-expanded", "false");
+    return;
+  }
+
+  closeAllWaiterPerformanceUserDetails(userId);
+  row.classList.remove("hidden");
+  button.classList.add("is-open");
+  button.setAttribute("aria-expanded", "true");
+
+  const user = usersById?.[userId];
+  const canvas = document.getElementById(`wlUserSkillPie_${userId}`);
+  const legend = document.getElementById(`wlUserSkillLegend_${userId}`);
+  if (canvas && user && !canvas.__drawn) {
+    drawUserSkillPieChart(canvas, user.skillShape, {
+      centerTop: `T${user.eligibilityTier || 1}`,
+      centerBottom: `${Math.round(Number(user.readiness || 0) * 100)}%`,
+    });
+    canvas.__drawn = true;
+  }
+  if (legend && user) {
+    renderUserSkillShapeLegend(legend, user.skillShape, {
+      strongestSkill: user.strongestSkill,
+      weakestSkill: user.weakestSkill,
+    });
+  }
+}
+
+function closeAllWaiterPerformanceUserDetails(exceptUserId = null) {
+  document.querySelectorAll(".waiter-user-detail-row").forEach((row) => {
+    if (exceptUserId && row.dataset.userDetailId === exceptUserId) return;
+    row.classList.add("hidden");
+  });
+  document.querySelectorAll(".waiter-user-expand-btn").forEach((button) => {
+    if (exceptUserId && button.dataset.userId === exceptUserId) return;
+    button.classList.remove("is-open");
+    button.setAttribute("aria-expanded", "false");
+  });
 }
 
 function mergeWaiterLeaderboardUsers(baseUsers = [], associatedManagers = []) {
@@ -7715,10 +7811,12 @@ async function renderWaiterPerformanceLeaderboardWindow() {
     const visibleUsers = await hydrateLeaderboardDisplayNames(
       mergeWaiterLeaderboardUsers(model?.users || [], associatedManagers || [])
     );
+    const usersById = Object.fromEntries(visibleUsers.map((user) => [user.userId, user]));
     managerContextEl.textContent = managerUsers.length
       ? `Managers linked here: ${managerUsers.map((user) => `${user.displayName} (${getDisplayRoleLabel(user.role || "waiter")})`).join(", ")}`
       : "Managers linked here are not currently ranked in this leaderboard view.";
     renderWaiterPerformanceLeaderboardTable(visibleUsers);
+    wireWaiterPerformanceRowExpansion(usersById);
     msgEl.textContent = visibleUsers.length
       ? ""
       : "No leaderboard data yet for this restaurant.";
