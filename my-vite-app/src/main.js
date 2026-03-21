@@ -7476,6 +7476,59 @@ function mergeWaiterLeaderboardUsers(baseUsers = [], associatedManagers = []) {
 }
 
 async function hydrateLeaderboardDisplayNames(users = []) {
+  const fallbackIds = Array.from(new Set(
+    (users || [])
+      .map((user) => String(user?.userId || "").trim())
+      .filter(Boolean)
+  ));
+  const messageNameMap = new Map();
+
+  try {
+    const restaurantId =
+      appState?.restaurant?.id ||
+      getManagerActiveRestaurantId?.() ||
+      appState?.activeRestaurantId ||
+      appState?.profile?.restaurant_id ||
+      null;
+
+    if (restaurantId && fallbackIds.length) {
+      const { data, error } = await supabase
+        .from("bc_messages_v1")
+        .select("sender_user_id, receiver_user_id, payload")
+        .eq("restaurant_id", restaurantId)
+        .or(fallbackIds.map((id) => `sender_user_id.eq.${id},receiver_user_id.eq.${id}`).join(","))
+        .is("archived_at", null)
+        .order("created_at", { ascending: false })
+        .limit(200);
+
+      if (!error) {
+        (data || []).forEach((row) => {
+          const payload = row?.payload || {};
+          const senderId = String(row?.sender_user_id || "");
+          const receiverId = String(row?.receiver_user_id || "");
+          const senderName = String(
+            payload?.senderDisplayName ||
+            payload?.sender_display_name ||
+            payload?.managerDisplayName ||
+            payload?.manager_display_name ||
+            ""
+          ).trim();
+          const receiverName = String(
+            payload?.receiverDisplayName ||
+            payload?.receiver_display_name ||
+            payload?.targetDisplayName ||
+            payload?.target_display_name ||
+            ""
+          ).trim();
+          if (senderId && senderName && !messageNameMap.has(senderId)) messageNameMap.set(senderId, senderName);
+          if (receiverId && receiverName && !messageNameMap.has(receiverId)) messageNameMap.set(receiverId, receiverName);
+        });
+      }
+    }
+  } catch (error) {
+    console.warn("[LEADERBOARD] message display name hydrate failed", error);
+  }
+
   const out = [];
 
   for (const user of users || []) {
@@ -7496,13 +7549,13 @@ async function hydrateLeaderboardDisplayNames(users = []) {
       const profileName = String(profile?.display_name || "").trim();
       out.push({
         ...user,
-        displayName: profileName || user.displayName || "Unknown",
+        displayName: profileName || messageNameMap.get(userId) || user.displayName || "Unknown",
       });
     } catch (error) {
       console.warn("[LEADERBOARD] row display name hydrate failed", { userId, error });
       out.push({
         ...user,
-        displayName: user.displayName || "Unknown",
+        displayName: messageNameMap.get(userId) || user.displayName || "Unknown",
       });
     }
   }
