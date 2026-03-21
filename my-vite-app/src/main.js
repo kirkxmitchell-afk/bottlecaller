@@ -7440,38 +7440,176 @@ function renderWaiterPerformanceLeaderboardTable(users = []) {
       <td>${formatRelativeTime(user.lastActiveAt)}</td>
     </tr>
     <tr class="waiter-user-detail-row hidden" data-user-detail-id="${escapeHtml(user.userId)}">
-      <td colspan="9">
-        <div class="waiter-user-detail-panel">
-          <div class="waiter-user-detail-left">
-            <div class="waiter-user-detail-chart-card">
-              <div class="small-text" style="margin-bottom:8px;">Current Skill Shape</div>
-              <canvas id="wlUserSkillPie_${escapeHtml(user.userId)}" class="mb-user-skill-pie" width="240" height="240"></canvas>
-              <div id="wlUserSkillLegend_${escapeHtml(user.userId)}" style="margin-top:12px;"></div>
-            </div>
-          </div>
-          <div class="waiter-user-detail-right">
-            <div class="waiter-user-metric-grid">
-              <div class="mb-user-metric-card"><div class="small-text">Total Points</div><strong>${formatMetricNumber(user.totalPoints, 1)}</strong></div>
-              <div class="mb-user-metric-card"><div class="small-text">Eligibility Tier</div><strong>T${user.eligibilityTier}</strong></div>
-              <div class="mb-user-metric-card"><div class="small-text">Readiness</div><strong>${formatPercent(user.readiness)}</strong></div>
-              <div class="mb-user-metric-card"><div class="small-text">Drill Pass</div><strong>${formatPercent(user.drillPassRate)}</strong></div>
-              <div class="mb-user-metric-card"><div class="small-text">Encounter Pass</div><strong>${formatPercent(user.encounterPassRate)}</strong></div>
-              <div class="mb-user-metric-card"><div class="small-text">Challenge Success</div><strong>${formatPercent(user.challengeSuccessRate)}</strong></div>
-              <div class="mb-user-metric-card"><div class="small-text">Premium Success</div><strong>${formatPercent(user.premiumSuccessRate)}</strong></div>
-              <div class="mb-user-metric-card"><div class="small-text">Mastery</div><strong>${formatPercent(user.masteryRate)}</strong></div>
-              <div class="mb-user-metric-card"><div class="small-text">Last Active</div><strong>${escapeHtml(formatRelativeTime(user.lastActiveAt))}</strong></div>
-            </div>
-            <div class="waiter-user-badge-row" style="margin-top:12px;">
-              <span class="mb-badge">Strongest: ${escapeHtml(user.strongestSkill || "—")}</span>
-              <span class="mb-badge">Weakest: ${escapeHtml(user.weakestSkill || "—")}</span>
-              <span class="mb-badge">${escapeHtml(user.challengeReadiness >= 0.7 ? "Challenge Ready" : "Needs Build-Up")}</span>
-              <span class="mb-badge">Readiness: ${escapeHtml(describeReadiness(user.readiness, user.readinessLabel))}</span>
-            </div>
-          </div>
-        </div>
-      </td>
+      ${renderWaiterPerformanceUserDetailMarkup(user)}
     </tr>
   `).join("");
+}
+
+function renderWaiterPerformanceUserDetailMarkup(user = {}) {
+  return `
+    <td colspan="9">
+      <div class="waiter-user-detail-panel">
+        <div class="waiter-user-detail-left">
+          <div class="waiter-user-detail-chart-card">
+            <div class="small-text" style="margin-bottom:8px;">Current Skill Shape</div>
+            <canvas id="wlUserSkillPie_${escapeHtml(user.userId)}" class="mb-user-skill-pie" width="240" height="240"></canvas>
+            <div id="wlUserSkillLegend_${escapeHtml(user.userId)}" style="margin-top:12px;"></div>
+          </div>
+        </div>
+        <div class="waiter-user-detail-right">
+          <div class="waiter-user-metric-grid">
+            <div class="mb-user-metric-card"><div class="small-text">Total Points</div><strong>${formatMetricNumber(user.totalPoints, 1)}</strong></div>
+            <div class="mb-user-metric-card"><div class="small-text">Eligibility Tier</div><strong>T${user.eligibilityTier || 1}</strong></div>
+            <div class="mb-user-metric-card"><div class="small-text">Readiness</div><strong>${formatPercent(user.readiness)}</strong></div>
+            <div class="mb-user-metric-card"><div class="small-text">Drill Pass</div><strong>${formatPercent(user.drillPassRate)}</strong></div>
+            <div class="mb-user-metric-card"><div class="small-text">Encounter Pass</div><strong>${formatPercent(user.encounterPassRate)}</strong></div>
+            <div class="mb-user-metric-card"><div class="small-text">Challenge Success</div><strong>${formatPercent(user.challengeSuccessRate)}</strong></div>
+            <div class="mb-user-metric-card"><div class="small-text">Premium Success</div><strong>${formatPercent(user.premiumSuccessRate)}</strong></div>
+            <div class="mb-user-metric-card"><div class="small-text">Mastery</div><strong>${formatPercent(user.masteryRate)}</strong></div>
+            <div class="mb-user-metric-card"><div class="small-text">Last Active</div><strong>${escapeHtml(formatRelativeTime(user.lastActiveAt))}</strong></div>
+          </div>
+          <div class="waiter-user-badge-row" style="margin-top:12px;">
+            <span class="mb-badge">Strongest: ${escapeHtml(user.strongestSkill || "—")}</span>
+            <span class="mb-badge">Weakest: ${escapeHtml(user.weakestSkill || "—")}</span>
+            <span class="mb-badge">${escapeHtml(Number(user.challengeReadiness || 0) >= 0.7 ? "Challenge Ready" : "Needs Build-Up")}</span>
+            <span class="mb-badge">Readiness: ${escapeHtml(describeReadiness(user.readiness, user.readinessLabel))}</span>
+          </div>
+        </div>
+      </div>
+    </td>
+  `;
+}
+
+async function buildLeaderboardUserDetail(userId, restaurantId, fallbackUser = {}) {
+  const uid = String(userId || "").trim();
+  const rid = String(restaurantId || "").trim();
+  if (!uid || !rid) return { ...fallbackUser };
+
+  const sinceIso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const [progressionRes, snapshotsRes, readinessRes, encountersRes, messagesRes, profileRes] = await Promise.all([
+    supabase
+      .from("bc_progression_state_v1")
+      .select("canonical_state, updated_at")
+      .eq("user_id", uid)
+      .eq("restaurant_id", rid)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("bc_skill_snapshots_v1")
+      .select("created_at, read_pct, framing_pct, delivery_pct, recovery_pct, closing_pct")
+      .eq("user_id", uid)
+      .eq("restaurant_id", rid)
+      .order("created_at", { ascending: false })
+      .limit(20),
+    supabase
+      .from("bc_readiness_v1")
+      .select("*")
+      .eq("user_id", uid)
+      .eq("restaurant_id", rid)
+      .maybeSingle(),
+    supabase
+      .from("bc_encounter_resolutions_v2")
+      .select("occurred_at, performance_grade, chain_signal, is_green, tier")
+      .eq("user_id", uid)
+      .eq("restaurant_id", rid)
+      .neq("mode", "demo")
+      .gte("occurred_at", sinceIso)
+      .order("occurred_at", { ascending: false })
+      .limit(200),
+    supabase
+      .from("bc_messages_v1")
+      .select("created_at, type, payload")
+      .eq("sender_user_id", uid)
+      .eq("restaurant_id", rid)
+      .in("type", ["drill_completed", "timed_challenge_completed", "timed_challenge_expired"])
+      .is("archived_at", null)
+      .order("created_at", { ascending: false })
+      .limit(200),
+    supabase
+      .from("profiles")
+      .select("user_id, display_name, role")
+      .eq("user_id", uid)
+      .maybeSingle(),
+  ]);
+
+  const progressionRow = progressionRes?.data || {};
+  const snapshotRows = Array.isArray(snapshotsRes?.data) ? snapshotsRes.data : [];
+  const readinessRow = readinessRes?.data || {};
+  const encounterRows = Array.isArray(encountersRes?.data) ? encountersRes.data : [];
+  const messageRows = Array.isArray(messagesRes?.data) ? messagesRes.data : [];
+  const profile = profileRes?.data || {};
+  const skillShape = averageSkillShape(snapshotRows);
+  const canonicalState = progressionRow?.canonical_state && typeof progressionRow.canonical_state === "object"
+    ? progressionRow.canonical_state
+    : {};
+  const canonicalEconomy = canonicalState?.economy && typeof canonicalState.economy === "object"
+    ? canonicalState.economy
+    : {};
+  const canonicalAuthority = canonicalState?.authority && typeof canonicalState.authority === "object"
+    ? canonicalState.authority
+    : {};
+  const totalPoints = Math.max(0, Number(canonicalEconomy?.points || fallbackUser?.totalPoints || 0));
+  const servedTier = Math.max(1, Math.min(3, Math.round(
+    firstFinite(canonicalAuthority?.tierToServe, canonicalEconomy?.tier, fallbackUser?.servedTier, fallbackUser?.eligibilityTier, 1) || 1
+  )));
+
+  const drillRows = messageRows.filter((row) => String(row?.type || "") === "drill_completed");
+  const drillPasses = drillRows.filter((row) => {
+    const repsDone = Number(row?.payload?.repsDone || 0);
+    const repTarget = Number(row?.payload?.repTarget || 0);
+    return repTarget > 0 && repsDone >= repTarget;
+  }).length;
+  const challengeCompleted = messageRows.filter((row) => String(row?.type || "") === "timed_challenge_completed");
+  const challengeExpired = messageRows.filter((row) => String(row?.type || "") === "timed_challenge_expired");
+  const challengeRows = challengeCompleted.length + challengeExpired.length;
+  const encounterPasses = encounterRows.filter((row) => {
+    const grade = String(row?.performance_grade || "").toUpperCase();
+    return grade === "A" || grade === "B" || String(row?.chain_signal || "").toLowerCase() === "green" || !!row?.is_green;
+  }).length;
+  const encounterMastery = encounterRows.filter((row) => String(row?.performance_grade || "").toUpperCase() === "A").length;
+  const premiumSuccesses = challengeCompleted.filter((row) => !!row?.payload?.premiumSuccess).length;
+
+  const drillPassRate = drillRows.length ? drillPasses / drillRows.length : Number(fallbackUser?.drillPassRate || 0);
+  const encounterPassRate = encounterRows.length ? encounterPasses / encounterRows.length : Number(fallbackUser?.encounterPassRate || 0);
+  const challengeSuccessRate = challengeRows ? challengeCompleted.length / challengeRows : Number(fallbackUser?.challengeSuccessRate || 0);
+  const premiumSuccessRate = challengeCompleted.length ? premiumSuccesses / challengeCompleted.length : Number(fallbackUser?.premiumSuccessRate || 0);
+  const masteryRate = encounterRows.length ? encounterMastery / encounterRows.length : Number(fallbackUser?.masteryRate || 0);
+  const readinessBase = firstFinite(readinessRow?.readiness_score, readinessRow?.readiness_pct);
+  const readiness = Math.max(0, Math.min(1, firstFinite(
+    readinessBase != null ? (readinessBase > 1 ? readinessBase / 100 : readinessBase) : null,
+    fallbackUser?.readiness,
+    masteryRate,
+    totalPoints >= 10 ? 0.8 : totalPoints >= 5 ? 0.62 : 0.4
+  ) || 0));
+  const readinessLabel = firstNonEmpty(readinessRow?.readiness, fallbackUser?.readinessLabel, readiness >= 0.8 ? "STABLE" : readiness >= 0.62 ? "GROWING" : "FRAGILE");
+  const challengeReadiness = Math.max(
+    0,
+    Math.min(1, (readiness * 0.45) + (encounterPassRate * 0.35) + (challengeSuccessRate * 0.20))
+  );
+  const extremes = getSkillExtremes(skillShape);
+
+  return {
+    ...fallbackUser,
+    userId: uid,
+    displayName: String(profile?.display_name || fallbackUser?.displayName || uid).trim(),
+    role: normalizeMembershipRole(profile) || fallbackUser?.role || "waiter",
+    totalPoints,
+    drillPassRate,
+    encounterPassRate,
+    challengeSuccessRate,
+    premiumSuccessRate,
+    masteryRate,
+    lastActiveAt: firstNonEmpty(progressionRow?.updated_at, encounterRows[0]?.occurred_at, messageRows[0]?.created_at, fallbackUser?.lastActiveAt),
+    eligibilityTier: servedTier,
+    readiness,
+    readinessLabel,
+    servedTier,
+    challengeReadiness,
+    strongestSkill: extremes.strongestSkill,
+    weakestSkill: extremes.weakestSkill,
+    skillShape,
+  };
 }
 
 function wireWaiterPerformanceRowExpansion(usersById = {}) {
@@ -7502,20 +7640,29 @@ async function toggleWaiterPerformanceUserDetail(userId, usersById = {}) {
   button.classList.add("is-open");
   button.setAttribute("aria-expanded", "true");
 
-  const user = usersById?.[userId];
+  const restaurantId =
+    appState?.restaurant?.id ||
+    getManagerActiveRestaurantId?.() ||
+    appState?.activeRestaurantId ||
+    appState?.profile?.restaurant_id ||
+    null;
+  const detailUser = await buildLeaderboardUserDetail(userId, restaurantId, usersById?.[userId] || {});
+  usersById[userId] = detailUser;
+  row.innerHTML = renderWaiterPerformanceUserDetailMarkup(detailUser);
+
   const canvas = document.getElementById(`wlUserSkillPie_${userId}`);
   const legend = document.getElementById(`wlUserSkillLegend_${userId}`);
-  if (canvas && user && !canvas.__drawn) {
-    drawUserSkillPieChart(canvas, user.skillShape, {
-      centerTop: `T${user.eligibilityTier || 1}`,
-      centerBottom: `${Math.round(Number(user.readiness || 0) * 100)}%`,
+  if (canvas && detailUser && !canvas.__drawn) {
+    drawUserSkillPieChart(canvas, detailUser.skillShape, {
+      centerTop: `T${detailUser.eligibilityTier || 1}`,
+      centerBottom: `${Math.round(Number(detailUser.readiness || 0) * 100)}%`,
     });
     canvas.__drawn = true;
   }
-  if (legend && user) {
-    renderUserSkillShapeLegend(legend, user.skillShape, {
-      strongestSkill: user.strongestSkill,
-      weakestSkill: user.weakestSkill,
+  if (legend) {
+    renderUserSkillShapeLegend(legend, detailUser.skillShape, {
+      strongestSkill: detailUser.strongestSkill,
+      weakestSkill: detailUser.weakestSkill,
     });
   }
 }
