@@ -486,6 +486,7 @@ document.querySelector("#app").innerHTML = `
           </div>
 
           <div id="mbRestaurantContextCard" style="margin-top:12px;"></div>
+          <div id="mbParentStateCard" style="margin-top:12px;"></div>
           <div id="mbGroupOverviewCard" style="margin-top:12px;"></div>
           <div id="mbGroupMetricsCard" style="margin-top:12px;"></div>
           <div id="mbGroupRestaurantComparisonCard" style="margin-top:12px;"></div>
@@ -1130,6 +1131,73 @@ const appState = {
   profile: null,
   restaurant: null,
   invites: [],
+};
+
+function getParentCtxSnapshot(requestedMode = "premium") {
+  const session = appState?.session || null;
+  const profile = appState?.profile || null;
+  const progressionOwner = getActiveProgressionOwnerContext();
+  const membershipRole = normalizeMembershipRole(profile || null) || profile?.role || "waiter";
+  const activeRestaurantId =
+    window.getActiveRestaurantId?.() ||
+    appState?.activeRestaurantId ||
+    profile?.restaurant_id ||
+    appState?.restaurant?.id ||
+    null;
+  const epoch = Number(window.__BC_IFRAME_EPOCH__ || 0);
+  const mode = requestedMode ?? "premium";
+  const userId = session?.user?.id || null;
+  const profileUserId = profile?.user_id || userId || null;
+  const scopeId = profile?.scope_id || null;
+  const scopeType = profile?.scope_type || null;
+  const accessTier = profile?.access_tier || "demo";
+
+  return {
+    session,
+    profile,
+    requestedMode: mode,
+    mode,
+    epoch,
+    userId,
+    profileUserId,
+    membershipRole,
+    role: membershipRole,
+    membership_role: membershipRole,
+    gameplayRole: membershipRole,
+    gameplay_role: membershipRole,
+    scopeId,
+    scopeType,
+    accessTier,
+    restaurantId: activeRestaurantId,
+    activeRestaurantId,
+    progressionOwnerUserId: progressionOwner.userId || profileUserId,
+    progressionOwnerRestaurantId: progressionOwner.restaurantId || activeRestaurantId,
+    progressionOwner,
+    ctxReady: !!userId && !!membershipRole && (String(mode).toLowerCase() === "demo" || !!activeRestaurantId),
+    premiumIframeMounted: !!document.getElementById("premiumRootFrame")?.contentWindow,
+    lastSourceCtx: window.__BC_LAST_SOURCE_CTX__ || null,
+  };
+}
+
+function isParentCtxReady(requestedMode = "premium") {
+  return !!getParentCtxSnapshot(requestedMode).ctxReady;
+}
+
+function isPremiumIframeHealthy() {
+  const iframe = document.getElementById("premiumRootFrame");
+  const targetEpoch = Number(window.__BC_IFRAME_EPOCH__ || iframe?.dataset?.bcEpoch || 0);
+  const frameCtx = iframe?.contentWindow?.__BC_CTX__ || null;
+  const frameEpoch = Number(iframe?.contentWindow?.__BC_EPOCH__ || 0);
+  return !!frameCtx?.userId &&
+    !!frameCtx?.restaurantId &&
+    !!(frameCtx?.membershipRole || frameCtx?.role) &&
+    (!!targetEpoch ? frameEpoch === targetEpoch : true);
+}
+
+window.__BC_PARENT_STATE__ = {
+  get: getParentCtxSnapshot,
+  isCtxReady: isParentCtxReady,
+  isPremiumIframeHealthy,
 };
 
 (function bcAuthInvariantWatchdog() {
@@ -4001,7 +4069,8 @@ if (!window.__BC_PARENT_BRIDGE__) {
       const isFromPremiumFrame = !!(prem && event?.source === prem.contentWindow);
       if (!isFromPremiumFrame) return null;
 
-      const epoch = Number(window.__BC_IFRAME_EPOCH__ || 0);
+      const snapshot = getParentCtxSnapshot(requestedMode ?? "premium");
+      const epoch = Number(snapshot.epoch || 0);
       const msgEpoch = Number(msg?.epoch || 0);
       if (msgEpoch !== epoch) return null;
 
@@ -4021,12 +4090,12 @@ if (!window.__BC_PARENT_BRIDGE__) {
       } catch {}
 
       const needRestaurant = String(requestedMode || "").toLowerCase() !== "demo";
-      const rid = window.getActiveRestaurantId?.();
+      const rid = snapshot.activeRestaurantId;
       const live = await getLiveSessionOrNull();
       if (live) window.appState.session = live;
       const ready =
         !!live &&
-        !!window.appState?.profile?.role &&
+        isParentCtxReady(requestedMode ?? "premium") &&
         (needRestaurant ? !!rid : true);
       if (!ready) {
         try {
@@ -5222,7 +5291,8 @@ async function refreshManagerBoardAfterProgressionReset() {
 }
 
 async function hardResetWaiterProgressionAsManager({ userId, restaurantId = null } = {}) {
-  const profile = appState.profile || null;
+  const snapshot = getParentCtxSnapshot("premium");
+  const profile = snapshot.profile || null;
   const managerRole = normalizeMembershipRole(profile);
   if (!["single_manager", "group_manager", "enterpriser"].includes(managerRole)) {
     throw new Error("forbidden_role");
@@ -5230,7 +5300,7 @@ async function hardResetWaiterProgressionAsManager({ userId, restaurantId = null
 
   const activeRestaurantId =
     getManagerActiveRestaurantId?.() ||
-    window.getActiveRestaurantId?.() ||
+    snapshot.activeRestaurantId ||
     profile?.restaurant_id ||
     null;
   const targetRestaurantId = restaurantId || activeRestaurantId || null;
@@ -5271,7 +5341,7 @@ async function hardResetWaiterProgressionAsManager({ userId, restaurantId = null
   const ownerRestoreUserId =
     ownerCtx?.userId ||
     profile?.user_id ||
-    appState.session?.user?.id ||
+    snapshot.session?.user?.id ||
     null;
   const ownerRestoreRestaurantId =
     ownerCtx?.restaurantId ||
@@ -5849,21 +5919,24 @@ async function refreshParentProgressionFromDb() {
   if (_progInflight) return;
   _progInflight = true;
   try {
-    const session = appState.session || null;
-    const profile = appState.profile || null;
+    const snapshot = getParentCtxSnapshot("premium");
+    const session = snapshot.session || null;
+    const profile = snapshot.profile || null;
     const ownerCtx = getActiveProgressionOwnerContext();
     const userId = resolveProgressionOwnerUserId({
       targetUserId: ownerCtx.userId || null,
       restaurantId:
         ownerCtx.restaurantId ||
-        appState.profile?.restaurant_id ||
+        snapshot.activeRestaurantId ||
+        profile?.restaurant_id ||
         null,
       profile,
     }, session);
     const restaurantId = resolveProgressionOwnerRestaurantId({
       restaurantId:
         ownerCtx.restaurantId ||
-        appState.profile?.restaurant_id ||
+        snapshot.activeRestaurantId ||
+        profile?.restaurant_id ||
         null,
       profile,
     });
@@ -5888,7 +5961,7 @@ async function refreshParentProgressionFromDb() {
       userId,
       restaurantId,
       pointsTotal: Number.isFinite(currentPoints) ? currentPoints : null,
-      role: appState.profile?.role,
+      role: profile?.role,
       mode: "premium"
     });
 
@@ -7445,6 +7518,7 @@ function wireManagerBoardMenu() {
     if (!normalized) return;
     if (normalized === "overview") {
       await loadManagerBoardData();
+      renderParentStateDebugCard();
       await loadWeeklySummaryTop();
       return;
     }
@@ -7494,6 +7568,7 @@ function wireManagerBoardMenu() {
 
     if (tab === "overview") {
       await loadManagerBoardData();
+      renderParentStateDebugCard();
       await loadWeeklySummaryTop();
     }
     if (tab === "people") {
@@ -9570,60 +9645,41 @@ async function resolveInitialRestaurantForScope(profile) {
 function pushCtxToPremiumIframe(source = "manual") {
   const iframe = document.querySelector("#premiumRoot iframe") || document.getElementById("premiumRootFrame");
   if (!iframe || !iframe.contentWindow) return;
-  const epoch = Number(window.__BC_IFRAME_EPOCH__ || iframe.dataset?.bcEpoch || 0);
-
-  const uid = appState.session?.user?.id || null;
-  const profileUserId = appState.profile?.user_id || uid;
-  const progressionOwner = getActiveProgressionOwnerContext();
-  const membershipRole = normalizeMembershipRole(appState.profile || null) || appState.profile?.role || "waiter";
-  const activeRestaurantId = window.getActiveRestaurantId?.() || appState.profile?.restaurant_id || null;
-  const scopeId = appState.profile?.scope_id || null;
-  const scopeType = appState.profile?.scope_type || null;
-  const accessTier = appState.profile?.access_tier || "demo";
+  const snapshot = getParentCtxSnapshot("premium");
+  const epoch = Number(snapshot.epoch || iframe.dataset?.bcEpoch || 0);
+  const bcCtx = {
+    source: "BC_MSG",
+    v: 1,
+    type: "bc_ctx",
+    mode: "premium",
+    userId: snapshot.userId,
+    profileUserId: snapshot.profileUserId,
+    progressionOwnerUserId: snapshot.progressionOwnerUserId,
+    progressionOwnerRestaurantId: snapshot.progressionOwnerRestaurantId,
+    restaurantId: snapshot.restaurantId,
+    scopeId: snapshot.scopeId,
+    scopeType: snapshot.scopeType,
+    accessTier: snapshot.accessTier,
+    membershipRole: snapshot.membershipRole,
+    membership_role: snapshot.membership_role,
+    role: snapshot.role,
+    gameplayRole: snapshot.gameplayRole,
+    gameplay_role: snapshot.gameplay_role,
+    epoch,
+    _from: source,
+  };
 
   iframe.contentWindow.postMessage(
-    {
-      source: "BC_MSG",
-      v: 1,
-      type: "bc_ctx",
-      mode: "premium",
-      userId: uid,
-      profileUserId,
-      progressionOwnerUserId: progressionOwner.userId || profileUserId,
-      progressionOwnerRestaurantId: progressionOwner.restaurantId || activeRestaurantId,
-      restaurantId: activeRestaurantId,
-      scopeId,
-      scopeType,
-      accessTier,
-      membershipRole,
-      membership_role: membershipRole,
-      role: membershipRole,
-      gameplayRole: membershipRole,
-      gameplay_role: membershipRole,
-      epoch,
-      _from: source,
-    },
+    bcCtx,
     window.location.origin
   );
 
   try {
-    setSourceCtx(iframe.contentWindow, {
-      userId: uid,
-      profileUserId,
-      progressionOwnerUserId: progressionOwner.userId || profileUserId,
-      progressionOwnerRestaurantId: progressionOwner.restaurantId || activeRestaurantId,
-      restaurantId: activeRestaurantId,
-      scopeId,
-      scopeType,
-      accessTier,
-      membershipRole,
-      membership_role: membershipRole,
-      role: membershipRole,
-      gameplayRole: membershipRole,
-      gameplay_role: membershipRole,
-      mode: "premium",
-      epoch,
-    });
+    setSourceCtx(iframe.contentWindow, bcCtx);
+    window.__BC_LAST_SOURCE_CTX__ = {
+      ...bcCtx,
+      at: Date.now(),
+    };
   } catch {}
 }
 
@@ -9632,16 +9688,11 @@ function schedulePremiumCtxPush(source = "manual", attempt = 0) {
   if (!iframe?.contentWindow) return false;
   if (!appState?.session || isHardLoggedOut?.() || isLoggingOut?.()) return false;
 
-  const targetEpoch = Number(window.__BC_IFRAME_EPOCH__ || iframe.dataset?.bcEpoch || 0);
-  const frameCtx = iframe.contentWindow.__BC_CTX__ || null;
-  const frameEpoch = Number(iframe.contentWindow.__BC_EPOCH__ || 0);
-  const ready =
-    !!frameCtx?.userId &&
-    !!frameCtx?.restaurantId &&
-    !!frameCtx?.role &&
-    (!!targetEpoch ? frameEpoch === targetEpoch : true);
+  const ready = isPremiumIframeHealthy();
 
   if (ready) return true;
+
+  if (!isParentCtxReady("premium")) return false;
 
   pushCtxToPremiumIframe(`${source}#${attempt}`);
 
@@ -9658,7 +9709,7 @@ function postToPremiumIframeSafe(type, payload = {}) {
   try {
     if (isHardLoggedOut?.()) return false;
     if (isLoggingOut?.()) return false;
-    if (!window.appState?.session) return false;
+    if (!getParentCtxSnapshot("premium").session) return false;
 
     const frame =
       document.getElementById("premiumRootFrame") ||
@@ -9737,7 +9788,9 @@ function mountPremiumGameIframe({
   const hasLiveGameSrc = iframeSrcNow.includes("/game/game.html");
   if (iframe && !forceRemount && hasLiveGameSrc) {
     if (isHardLoggedOut()) return;
-    schedulePremiumCtxPush("mount.existing");
+    if (isParentCtxReady(mode || "premium")) {
+      schedulePremiumCtxPush("mount.existing");
+    }
     pushPremiumDrill();
     return;
   }
@@ -9808,7 +9861,9 @@ function mountPremiumGameIframe({
       if (modeFromSrc === "demo") return;
 
       try {
-        schedulePremiumCtxPush("iframe.load");
+        if (isParentCtxReady(modeFromSrc || "premium")) {
+          schedulePremiumCtxPush("iframe.load");
+        }
       } catch (e) {
         console.warn("[PARENT] bc_ctx push on iframe load failed", e);
       }
@@ -9940,9 +9995,10 @@ async function ensureActiveRestaurantReady() {
 }
 
 function getManagerBoardFilter() {
-  const profile = appState?.profile || {};
+  const snapshot = getParentCtxSnapshot("premium");
+  const profile = snapshot.profile || {};
   const caps = getPremiumRoleCapabilities(profile);
-  const restaurantId = getManagerActiveRestaurantId();
+  const restaurantId = getManagerActiveRestaurantId() || snapshot.activeRestaurantId || null;
 
   return {
     role: normalizeMembershipRole(profile),
@@ -9950,6 +10006,7 @@ function getManagerBoardFilter() {
     isManager: !!caps.canAccessManagerBoard,
     restaurantId,
     canAct: !!restaurantId && canActOnRestaurant(profile, profile, restaurantId),
+    parentSnapshot: snapshot,
   };
 }
 
@@ -10005,6 +10062,34 @@ function getAllowedRestaurantName(restaurantId) {
   });
 
   return row?.name || row?.restaurant_name || `Restaurant ${rid.slice(0, 8)}`;
+}
+
+function renderParentStateDebugCard() {
+  const root = document.getElementById("mbParentStateCard");
+  if (!root) return;
+
+  const snapshot = getParentCtxSnapshot("premium");
+  const iframeHealthy = isPremiumIframeHealthy();
+  const health = snapshot.ctxReady
+    ? (iframeHealthy ? "ready" : "degraded_iframe")
+    : "degraded_parent_ctx";
+
+  root.innerHTML = `
+    <div class="card" style="padding:12px; display:flex; flex-direction:column; gap:8px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+        <strong>Parent State</strong>
+        <span class="small-text" style="opacity:.78;">${escapeHtml(health)}</span>
+      </div>
+      <div class="small-text" style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px 12px;">
+        <div><b>Role:</b> ${escapeHtml(snapshot.membershipRole || "-")}</div>
+        <div><b>Restaurant:</b> ${escapeHtml(snapshot.activeRestaurantId || "-")}</div>
+        <div><b>Ctx Ready:</b> ${snapshot.ctxReady ? "Yes" : "No"}</div>
+        <div><b>Iframe Healthy:</b> ${iframeHealthy ? "Yes" : "No"}</div>
+        <div><b>Epoch:</b> ${escapeHtml(String(snapshot.epoch || 0))}</div>
+        <div><b>User:</b> ${escapeHtml(snapshot.userId || "-")}</div>
+      </div>
+    </div>
+  `;
 }
 
 function setGroupManagerMetrics(metrics) {
@@ -14557,7 +14642,8 @@ function wireManagerBoardMessenger() {
 }
 
 async function loadManagerBoardMembers() {
-  const rid = getManagerActiveRestaurantId() || window.appState?.profile?.restaurant_id || null;
+  const snapshot = getParentCtxSnapshot("premium");
+  const rid = getManagerActiveRestaurantId() || snapshot.activeRestaurantId || snapshot.profile?.restaurant_id || null;
   const box = document.getElementById("mbMembersList");
   const msg = document.getElementById("mbMembersMsg");
   const searchInput = document.getElementById("mbPeopleSearch");
@@ -14597,7 +14683,7 @@ async function loadManagerBoardMembers() {
     (p) => String(p?.role || "").toLowerCase() === "waiter"
   );
   const canResetWaiterProgression = ["single_manager", "group_manager", "enterpriser"].includes(
-    normalizeMembershipRole(appState?.profile || null)
+    normalizeMembershipRole(snapshot.profile || null)
   );
 
   const rows = filteredStaffRows.map((p) => {
@@ -15104,7 +15190,8 @@ async function loadWeeklySummaryTop() {
 async function loadManagerBoardData(restaurantId = null) {
   try {
     const rid = requireManagerRestaurantId(restaurantId);
-    const profile = appState?.profile || {};
+    const snapshot = getParentCtxSnapshot("premium");
+    const profile = snapshot.profile || {};
     const caps = getPremiumRoleCapabilities(profile);
     if (!caps.canAccessManagerBoard) throw new Error("Role cannot access manager board.");
     if (!canActOnRestaurant(profile, profile, rid)) throw new Error("Role cannot act on this restaurant.");
@@ -15118,6 +15205,7 @@ async function loadManagerBoardData(restaurantId = null) {
     document.getElementById("mbRestName").textContent =
       appState.restaurant?.name || (String(rid).slice(0, 8) + "…");
     document.getElementById("mbMsg").textContent = "";
+    renderParentStateDebugCard();
     wireManagerBoardMembers();
     await loadManagerBoardMembers();
     await loadLeaderboard();
