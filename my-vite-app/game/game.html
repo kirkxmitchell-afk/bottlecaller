@@ -6425,6 +6425,46 @@ function ensureProgLoaded() {
           }
         }
 
+        function stopCtxRecoveryLoop() {
+          try { clearTimeout(window.__BC_CTX_HEAL_T__); } catch {}
+          window.__BC_CTX_HEAL_T__ = null;
+          window.__BC_CTX_HEAL_ATTEMPTS__ = 0;
+        }
+
+        function scheduleCtxRecoveryLoop(reason = "manual") {
+          const IS_IFRAME = (window.parent !== window) && !!window.frameElement;
+          const modeNow = String(window.bcMode || getIframeMode() || "premium").toLowerCase();
+          if (!IS_IFRAME || modeNow === "demo") return;
+          if (window.__BC_CTX__?.userId && window.__BC_CTX__?.restaurantId) {
+            stopCtxRecoveryLoop();
+            return;
+          }
+
+          window.__BC_CTX_HEAL_ATTEMPTS__ = Number(window.__BC_CTX_HEAL_ATTEMPTS__ || 0) + 1;
+          const attempt = window.__BC_CTX_HEAL_ATTEMPTS__;
+          const maxAttempts = 10;
+
+          if (attempt > maxAttempts) {
+            console.warn("[BC] ctx self-heal exhausted", { reason, attempt, maxAttempts });
+            stopCtxRecoveryLoop();
+            return;
+          }
+
+          window.__BC_CTX_REQUESTED__ = false;
+          try { requestCtxOnce(); } catch {}
+
+          const delay = Math.min(1600, 180 + attempt * 140);
+          try { clearTimeout(window.__BC_CTX_HEAL_T__); } catch {}
+          window.__BC_CTX_HEAL_T__ = setTimeout(() => {
+            const snapshot = window.__BC_STATE__?.get?.() || null;
+            if (snapshot?.ctxReady) {
+              stopCtxRecoveryLoop();
+              return;
+            }
+            scheduleCtxRecoveryLoop("retry");
+          }, delay);
+        }
+
         if (!window.__BC_CTX_LISTENER_INSTALLED__) {
           window.__BC_CTX_LISTENER_INSTALLED__ = true;
           window.addEventListener("message", (event) => {
@@ -6494,6 +6534,7 @@ function ensureProgLoaded() {
 
           // ensure listener is installed before the first request
           requestCtxOnce();
+          scheduleCtxRecoveryLoop("listener_init");
         }
 
         const IS_IFRAME = (window.parent !== window) && !!window.frameElement;
@@ -6511,6 +6552,7 @@ function ensureProgLoaded() {
 
         // In iframe: request ctx from parent AFTER listener installation
         requestCtxOnce?.();
+        scheduleCtxRecoveryLoop("iframe_boot");
 
         (async () => {
           try {
@@ -8648,6 +8690,11 @@ function ensureProgLoaded() {
         if (window.__BC_CTX__) {
           try { hydrateRunCountFromServer?.(); } catch (e) { console.warn("[BC] hydrateRunCountFromServer failed", e); }
         }
+        try {
+          clearTimeout(window.__BC_CTX_HEAL_T__);
+          window.__BC_CTX_HEAL_T__ = null;
+          window.__BC_CTX_HEAL_ATTEMPTS__ = 0;
+        } catch {}
         try {
           runs = loadRuns();
           updateCounts?.();
