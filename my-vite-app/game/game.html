@@ -19754,6 +19754,15 @@ function ensureProgLoaded() {
         const bar = ensureStepButtonsContainer();
         bar.innerHTML = "";
 
+        if (!currentEncounter?.stepReactionByKey?.deliver) {
+          try {
+            window.evaluateChecks?.(currentEncounter);
+            commitEncounterStepReaction(currentEncounter, "deliver");
+          } catch (error) {
+            console.warn("[BC] deliver reaction commit on reaction screen failed", error);
+          }
+        }
+
         const reactionTitle = document.createElement("h3");
         reactionTitle.className = "encounter-stage-title";
         reactionTitle.innerText = "Guest Reaction";
@@ -19776,7 +19785,11 @@ function ensureProgLoaded() {
         const preview = currentEncounter?.__stepReactionPreview || null;
         const stepKey = String(preview?.stepKey || "");
         const reaction = stepKey
-          ? currentEncounter?.stepReactionByKey?.[stepKey] || null
+          ? (
+              currentEncounter?.stepReactionByKey?.[stepKey] ||
+              commitEncounterStepReaction(currentEncounter, stepKey) ||
+              null
+            )
           : null;
 
         const title = document.createElement("h3");
