@@ -5784,6 +5784,9 @@ function isDrillMode() {
             challengeExpiresAt: Number(enc.challengeExpiresAt || 0) || 0,
             timedChallengeResolved: !!enc.__timedChallengeResolved,
             displayMethodChallengeResolved: !!enc.__displayMethodChallengeResolved,
+            guestState: enc.guestState ? structuredClone(enc.guestState) : null,
+            reactionHistory: Array.isArray(enc.reactionHistory) ? structuredClone(enc.reactionHistory) : [],
+            stepSpine: Array.isArray(enc.stepSpine) ? structuredClone(enc.stepSpine) : [],
           },
         };
       }
@@ -5828,6 +5831,17 @@ function isDrillMode() {
 
         encounter.__displayMethodChallengeResolved =
           !!st.displayMethodChallengeResolved || !!encounter.__displayMethodChallengeResolved;
+
+        ensureEncounterReactionRuntime(encounter);
+        if (st.guestState && typeof st.guestState === "object") {
+          encounter.guestState = structuredClone(st.guestState);
+        }
+        if (Array.isArray(st.reactionHistory)) {
+          encounter.reactionHistory = structuredClone(st.reactionHistory);
+        }
+        if (Array.isArray(st.stepSpine)) {
+          encounter.stepSpine = structuredClone(st.stepSpine);
+        }
 
         if (Array.isArray(restore?.stageResults)) {
           bcStageResults = structuredClone(restore.stageResults);
@@ -11191,6 +11205,7 @@ function ensureProgLoaded() {
           resetUsed: false,
           __reactionComputed: false
         };
+        ensureEncounterReactionRuntime(currentEncounter);
         currentEncounter.__uxSummaryBuilt = false;
         currentEncounter.__recoveryLocked = false;
         currentEncounter.__logged = false;
@@ -15353,6 +15368,211 @@ function ensureProgLoaded() {
         return btn;
       }
 
+      function getReactionRuntimeApi() {
+        return window.ReactionRuntime || null;
+      }
+
+      function ensureEncounterReactionRuntime(encounter) {
+        if (!encounter || typeof encounter !== "object") return encounter;
+
+        const api = getReactionRuntimeApi();
+
+        if (
+          encounter.guestState &&
+          Array.isArray(encounter.reactionHistory) &&
+          Array.isArray(encounter.stepSpine)
+        ) {
+          return encounter;
+        }
+
+        if (api?.attachReactionRuntimeFields) {
+          try {
+            api.attachReactionRuntimeFields(encounter, encounter);
+            return encounter;
+          } catch (error) {
+            console.warn("[BC] attachReactionRuntimeFields failed", error);
+          }
+        }
+
+        encounter.guestState = encounter.guestState || {
+          trust: 0,
+          interest: 0,
+          resistance: 0,
+          emotion: "neutral",
+        };
+        encounter.reactionHistory = Array.isArray(encounter.reactionHistory) ? encounter.reactionHistory : [];
+        encounter.stepSpine = Array.isArray(encounter.stepSpine) ? encounter.stepSpine : [];
+        return encounter;
+      }
+
+      function evaluateEncounterReactionStep(stepKey, encounter) {
+        const checks = (typeof window.evaluateChecks === "function")
+          ? window.evaluateChecks(encounter)
+          : null;
+
+        if (stepKey === "observe") {
+          const correct = (typeof isCorrectGuestRead === "function")
+            ? !!isCorrectGuestRead(encounter)
+            : String(encounter?.guestReadSelected || "").toLowerCase() ===
+              String(encounter?.guestStateActual || "").toLowerCase();
+
+          return {
+            outcome: correct ? "correct" : "wrong",
+            score: correct ? 1 : -1,
+            reasoning: correct
+              ? "Guest read matched the authored guest type."
+              : "Guest read did not match the authored guest type.",
+          };
+        }
+
+        if (stepKey === "mode") {
+          const status = String(checks?.modeStatus || encounter?.modeStatus || "damaging").toLowerCase();
+          return {
+            outcome:
+              status === "optimal" ? "correct" :
+              status === "neutral" ? "partial" :
+              "wrong",
+            score:
+              status === "optimal" ? 1 :
+              status === "neutral" ? 0 :
+              -1,
+            reasoning: `Mode status resolved as ${status || "unknown"}.`,
+          };
+        }
+
+        if (stepKey === "hook") {
+          const status = String(checks?.hookStatus || encounter?.hookStatus || "damaging").toLowerCase();
+          return {
+            outcome:
+              status === "optimal" ? "correct" :
+              status === "neutral" ? "partial" :
+              "wrong",
+            score:
+              status === "optimal" ? 1 :
+              status === "neutral" ? 0 :
+              -1,
+            reasoning: `Hook status resolved as ${status || "unknown"}.`,
+          };
+        }
+
+        const deliveryScore = getDeliveryScore(encounter);
+        return {
+          outcome:
+            deliveryScore >= 2 ? "correct" :
+            deliveryScore === 1 ? "partial" :
+            "wrong",
+          score:
+            deliveryScore >= 2 ? 1 :
+            deliveryScore === 1 ? 0 :
+            -1,
+          reasoning: `Delivery matched ${deliveryScore}/2 authored slots.`,
+        };
+      }
+
+      function recordEncounterStepReaction(stepKey, encounter = currentEncounter) {
+        const api = getReactionRuntimeApi();
+        if (!encounter || !api?.buildStepReaction || !api?.applyStepReaction || !api?.storeStepReaction) {
+          return null;
+        }
+
+        ensureEncounterReactionRuntime(encounter);
+
+        const prior = Array.isArray(encounter.reactionHistory)
+          ? encounter.reactionHistory.find((node) => node?.step === stepKey)
+          : null;
+        if (prior) return prior;
+
+        const evalResult = evaluateEncounterReactionStep(stepKey, encounter);
+        const reaction = api.buildStepReaction({
+          stepKey,
+          evalResult,
+          runtime: encounter,
+          guestState: encounter.guestState,
+        });
+
+        api.applyStepReaction(encounter, reaction);
+        api.storeStepReaction(encounter, reaction);
+        encounter.__lastStepReaction = reaction;
+        return reaction;
+      }
+
+      function deriveEncounterReactionPayload(encounter = currentEncounter) {
+        const api = getReactionRuntimeApi();
+        if (!encounter) return null;
+
+        ensureEncounterReactionRuntime(encounter);
+
+        if (api?.deriveReflectionPayload) {
+          try {
+            return api.deriveReflectionPayload(encounter);
+          } catch (error) {
+            console.warn("[BC] deriveReflectionPayload failed", error);
+          }
+        }
+
+        return {
+          reactionHistory: encounter.reactionHistory || [],
+          stepSpine: encounter.stepSpine || [],
+          guestState: encounter.guestState || null,
+          aiPerception: "",
+          chosenPath: [],
+          bestPath: [],
+          bottleServed: false,
+        };
+      }
+
+      function buildEncounterReactionSummary(encounter = currentEncounter) {
+        const api = getReactionRuntimeApi();
+        if (!encounter) return null;
+
+        ensureEncounterReactionRuntime(encounter);
+
+        if (api?.buildEncounterSummaryRecord) {
+          try {
+            return api.buildEncounterSummaryRecord(
+              encounter,
+              String(encounter?.profileId || encounter?.guestStateActual || "unknown-profile"),
+              String(encounter?.encounterId || encounter?.id || "unknown-encounter")
+            );
+          } catch (error) {
+            console.warn("[BC] buildEncounterSummaryRecord failed", error);
+          }
+        }
+
+        return null;
+      }
+
+      function renderLatestReactionCueBlock(container, encounter = currentEncounter) {
+        const api = getReactionRuntimeApi();
+        if (!container || !encounter || !api?.getLatestReaction) return;
+
+        ensureEncounterReactionRuntime(encounter);
+        const latest = api.getLatestReaction(encounter);
+        if (!latest) return;
+
+        const block = document.createElement("div");
+        block.className = "notice notice-spaced encounter-quote-block";
+
+        const title = document.createElement("div");
+        title.className = "encounter-block-title";
+        title.innerHTML = "<strong>Live Table Cue</strong>";
+
+        const body = document.createElement("div");
+        body.className = "notice-body";
+        body.innerText = latest.tableCue;
+
+        const detail = document.createElement("div");
+        detail.className = "small-text";
+        detail.innerText = latest.microExpression
+          ? `${latest.physicalCue} (${latest.microExpression})`
+          : latest.physicalCue;
+
+        block.appendChild(title);
+        block.appendChild(body);
+        block.appendChild(detail);
+        container.appendChild(block);
+      }
+
       function resetEncounterVolatileState(encounter) {
         if (!encounter || typeof encounter !== "object") return encounter;
 
@@ -15404,9 +15624,20 @@ function ensureProgLoaded() {
         encounter.__reaction = null;
         encounter.__reactionComputed = false;
         encounter.__resolvedLogged = false;
+        encounter.__encounterReactionSummary = null;
+        encounter.__lastStepReaction = null;
         encounter.dynamicGuestReaction = null;
         encounter.dynamicGuestLine = null;
         encounter.guestPressure = initGuestPressureState(encounter);
+        ensureEncounterReactionRuntime(encounter);
+        encounter.guestState = encounter.guestState || {
+          trust: 0,
+          interest: 0,
+          resistance: 0,
+          emotion: "neutral",
+        };
+        encounter.reactionHistory = [];
+        encounter.stepSpine = [];
 
         return encounter;
       }
@@ -15430,6 +15661,9 @@ function ensureProgLoaded() {
           deliveryLine2Key: prev.deliveryLine2Key || "",
 
           recoveryChoice: prev.recoveryChoice || "",
+          guestState: prev.guestState ? structuredClone(prev.guestState) : null,
+          reactionHistory: Array.isArray(prev.reactionHistory) ? structuredClone(prev.reactionHistory) : [],
+          stepSpine: Array.isArray(prev.stepSpine) ? structuredClone(prev.stepSpine) : [],
 
           // Generated option sets are safe only for same run
           deliverOptionsS1: prev.deliverOptionsS1 || null,
@@ -16682,6 +16916,8 @@ function ensureProgLoaded() {
       }
 
       function renderReflectionOverview(container, encounter, checks, modeBestResolved) {
+        const reactionPayload = deriveEncounterReactionPayload(encounter);
+
         const reflectionTitle = document.createElement("h3");
         reflectionTitle.className = "encounter-stage-title";
         reflectionTitle.innerText = "What just happened";
@@ -16695,6 +16931,7 @@ function ensureProgLoaded() {
 
         renderDynamicGuestLineBlock(container, encounter, checks, { compact: false });
         renderDynamicGuestReactionBlock(container, encounter, checks, { compact: false });
+        renderLatestReactionCueBlock(container, encounter);
 
         if (window.__BC_DEBUG_PRESSURE__ === true) {
           renderGuestPressureDebug(container, encounter);
@@ -16780,6 +17017,24 @@ function ensureProgLoaded() {
           );
         }
 
+        if (reactionPayload?.reactionHistory?.length) {
+          const spineText = (reactionPayload.stepSpine || [])
+            .map((node) => `${node.step}:${node.score > 0 ? "+" : ""}${node.score}`)
+            .join("  ");
+          const guestState = reactionPayload.guestState || {};
+
+          addReflectionBlock(
+            container,
+            "Reaction Spine",
+            reactionPayload.aiPerception || "—",
+            `Path: ${(reactionPayload.chosenPath || []).join(" -> ") || "—"}. ` +
+            `Best path: ${(reactionPayload.bestPath || []).join(" -> ") || "—"}. ` +
+            `Bottle served: ${reactionPayload.bottleServed ? "yes" : "no"}. ` +
+            `Spine: ${spineText || "—"}. ` +
+            `Guest state: trust ${Number(guestState.trust || 0)}, interest ${Number(guestState.interest || 0)}, resistance ${Number(guestState.resistance || 0)}, emotion ${guestState.emotion || "neutral"}.`
+          );
+        }
+
         if (encounter.recoveryText) {
           const unlockedModes = getUnlockedModesForCurrentPlayer();
           const recoveryBest = resolveCorrectModeForPlayer(
@@ -16824,6 +17079,7 @@ function ensureProgLoaded() {
 
         const gradeObj = computePerformanceGrade(encounter, checks);
         encounter.performanceGrade = gradeObj.grade;
+        encounter.__encounterReactionSummary = buildEncounterReactionSummary(encounter);
         renderPerformanceGradeBlock(container, gradeObj);
         renderCoachLineBlock(container, encounter, checks);
 
@@ -17042,6 +17298,9 @@ function ensureProgLoaded() {
 
       function logEncounter() {
         const ctx = getRuntimeCtx();
+        const reactionPayload = deriveEncounterReactionPayload(currentEncounter);
+        currentEncounter.__encounterReactionSummary =
+          currentEncounter.__encounterReactionSummary || buildEncounterReactionSummary(currentEncounter);
         console.log("[LOG] logEncounter() called", {
           user: ctx?.userId || null,
           role: ctx?.membershipRole || ctx?.role || null,
@@ -17095,6 +17354,13 @@ function ensureProgLoaded() {
           pivotType: currentEncounter.pivotType || "",
           resetUsed: !!currentEncounter.resetUsed,
           performanceGrade: currentEncounter.performanceGrade || "",
+          aiPerception: reactionPayload?.aiPerception || "",
+          chosenPath: reactionPayload?.chosenPath || [],
+          bestPath: reactionPayload?.bestPath || [],
+          bottleServed: !!reactionPayload?.bottleServed,
+          reactionHistory: reactionPayload?.reactionHistory || [],
+          stepSpine: reactionPayload?.stepSpine || [],
+          guestState: reactionPayload?.guestState || null,
           // UX summary (for history)
           uxHeader: currentEncounter.__uxSummary?.header || "",
           uxStrength: (currentEncounter.__uxSummary?.strengths || [])[0] || "",
@@ -17186,6 +17452,8 @@ function ensureProgLoaded() {
               currentEncounter?.policy?.d ??
               currentEncounter?.difficulty ??
               1,
+            reactionSummary: currentEncounter.__encounterReactionSummary || null,
+            reflection: reactionPayload || null,
             progress: (() => {
               const spine = getProgressionSpine({ allowNull: true });
               const prog = loadProg();
@@ -18143,11 +18411,17 @@ function ensureProgLoaded() {
           currentEncounter.guestReadSelected = "";
         }
 
-        const lockInBtn = addStepButton("LOCK IN", () => { currentStep = 2; renderEncounterStep(); }, stepButtons);
+        const lockInBtn = addStepButton("LOCK IN", () => {
+          recordEncounterStepReaction("observe", currentEncounter);
+          currentStep = 2;
+          renderEncounterStep();
+        }, stepButtons);
         if (!currentEncounter.guestReadSelected) lockInBtn.disabled = true;
       }
 
       function renderStepMode(stepContent, stepButtons) {
+        renderLatestReactionCueBlock(stepContent, currentEncounter);
+
         const topRow = document.createElement("div");
         topRow.className = "history-row encounter-top-row";
 
@@ -18209,11 +18483,17 @@ function ensureProgLoaded() {
         });
         stepContent.appendChild(options);
 
-        const contBtn = addStepButton("CONTINUE", () => { currentStep = 3; renderEncounterStep(); }, stepButtons);
+        const contBtn = addStepButton("CONTINUE", () => {
+          recordEncounterStepReaction("mode", currentEncounter);
+          currentStep = 3;
+          renderEncounterStep();
+        }, stepButtons);
         if (!currentEncounter.modeSelected) contBtn.disabled = true;
       }
 
       function renderStepHook(stepContent, stepButtons) {
+        renderLatestReactionCueBlock(stepContent, currentEncounter);
+
         debugHookStrictness(currentEncounter);
 
         const topRow = document.createElement("div");
@@ -18309,6 +18589,7 @@ function ensureProgLoaded() {
         const contBtn = addStepButton(
           "CONTINUE",
           () => {
+            recordEncounterStepReaction("hook", currentEncounter);
             currentStep = 4;
             renderEncounterStep();
           },
@@ -18321,6 +18602,8 @@ function ensureProgLoaded() {
       }
 
       function renderStepDelivery(stepContent, stepButtons) {
+        renderLatestReactionCueBlock(stepContent, currentEncounter);
+
         function renderDeliverySelectionPreview() {
           const preview = document.createElement("div");
           preview.className = "card";
@@ -18465,7 +18748,11 @@ function ensureProgLoaded() {
 
         renderDeliverySelectionPreview();
 
-        const sayBtn = addStepButton("SAY IT", () => { currentStep = 5; renderEncounterStep(); }, stepButtons);
+        const sayBtn = addStepButton("SAY IT", () => {
+          recordEncounterStepReaction("deliver", currentEncounter);
+          currentStep = 5;
+          renderEncounterStep();
+        }, stepButtons);
         const ready =
           (currentEncounter.selectedS1 != null) &&
           (currentEncounter.selectedS2 != null);
@@ -18798,6 +19085,8 @@ function ensureProgLoaded() {
         reactionHint.className = "small-text encounter-hint";
         reactionHint.innerText = "Your choices shape how the guest responds.";
         stepContent.appendChild(reactionHint);
+
+        renderLatestReactionCueBlock(stepContent, currentEncounter);
 
         const { checksRaw, reactionChecks } = getReactionChecksForCurrentEncounter();
         const result = computeEncounterReaction(reactionChecks);
@@ -20018,6 +20307,17 @@ function ensureProgLoaded() {
           __displayMethodChallengeResolved: false,
         };
 
+        ensureEncounterReactionRuntime(encounter);
+        if (carry?.guestState && typeof carry.guestState === "object") {
+          encounter.guestState = structuredClone(carry.guestState);
+        }
+        if (Array.isArray(carry?.reactionHistory)) {
+          encounter.reactionHistory = structuredClone(carry.reactionHistory);
+        }
+        if (Array.isArray(carry?.stepSpine)) {
+          encounter.stepSpine = structuredClone(carry.stepSpine);
+        }
+
         if (!sameEncounter) {
           resetEncounterVolatileState(encounter);
         }
@@ -20689,6 +20989,15 @@ function ensureProgLoaded() {
                 "\nReset used: " + (entry.resetUsed ? "YES" : "NO")
               : "";
 
+          const reactionReflection =
+            Array.isArray(entry.stepSpine) && entry.stepSpine.length
+              ? "\nAI perception: " + (entry.aiPerception || "—") +
+                "\nChosen path: " + ((entry.chosenPath || []).join(" -> ") || "—") +
+                "\nBest path: " + ((entry.bestPath || []).join(" -> ") || "—") +
+                "\nBottle served: " + (entry.bottleServed ? "YES" : "NO") +
+                "\nReaction spine: " + entry.stepSpine.map((node) => `${node.step}:${node.score > 0 ? "+" : ""}${node.score}`).join("  ")
+              : "";
+
           details.innerText =
             "Guest Actual: " + entry.guestStateActual + "\n" +
             "Guest Chosen: " + entry.guestReadSelected + "\n" +
@@ -20696,6 +21005,7 @@ function ensureProgLoaded() {
             "Hook: " + entry.hookSelected + "\n" +
             "Line 1: " + entry.deliveryLine1 + "\n" +
             "Line 2: " + entry.deliveryLine2 +
+            reactionReflection +
             telemetry +
             recoveryLine;
 
