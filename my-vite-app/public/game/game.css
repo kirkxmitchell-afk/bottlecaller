@@ -904,6 +904,34 @@ button[disabled] { opacity: 0.5; cursor: not-allowed; transform: none; }
   line-height: 1.5;
 }
 
+.reflection-spine-svg {
+  display: block;
+  width: 100%;
+  max-width: 420px;
+  margin-top: 12px;
+  overflow: visible;
+}
+
+.reflection-spine-svg-step {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  fill: rgba(245,247,248,0.96);
+}
+
+.reflection-spine-svg-total {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  fill: rgba(220,252,231,0.82);
+}
+
+.reflection-spine-svg-score {
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+}
+
 .reaction-progress-card .reaction-spine-card,
 .reaction-progress-card .reaction-trail-card,
 .reaction-progress-card .reaction-journey-card,

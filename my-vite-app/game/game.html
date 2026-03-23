@@ -15839,50 +15839,90 @@ function ensureProgLoaded() {
         wrap.appendChild(totalHeader);
 
         if (opts.variant === "reflection") {
-          const stack = document.createElement("div");
-          stack.className = "reflection-spine-vertical-stack";
+          const svgNs = "http://www.w3.org/2000/svg";
+          const rowGap = 74;
+          const topPad = 30;
+          const width = 360;
+          const height = topPad * 2 + ((spine.length - 1) * rowGap);
+          const centerX = 180;
+
+          const svg = document.createElementNS(svgNs, "svg");
+          svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+          svg.setAttribute("class", "reflection-spine-svg");
+          svg.setAttribute("role", "img");
+          svg.setAttribute("aria-label", "Graphic score spine");
+
+          const core = document.createElementNS(svgNs, "line");
+          core.setAttribute("x1", String(centerX));
+          core.setAttribute("x2", String(centerX));
+          core.setAttribute("y1", String(topPad - 12));
+          core.setAttribute("y2", String(height - topPad + 12));
+          core.setAttribute("stroke", "rgba(52,211,153,0.95)");
+          core.setAttribute("stroke-width", "6");
+          core.setAttribute("stroke-linecap", "round");
+          svg.appendChild(core);
 
           let running = 0;
-          spine.forEach((node) => {
+          spine.forEach((node, index) => {
             const score = Number(node?.score || 0);
             running += score;
+            const y = topPad + (index * rowGap);
+            const protrusionLen = score > 0 ? 70 : score < 0 ? -70 : 0;
+            const endX = centerX + protrusionLen;
+            const strokeColor =
+              score > 0 ? "rgba(52,211,153,0.98)" :
+              score < 0 ? "rgba(251,113,133,0.98)" :
+              "rgba(245,194,107,0.98)";
 
-            const item = document.createElement("div");
-            item.className =
-              "reflection-spine-vertical-item " +
-              (score > 0 ? "is-positive" : score < 0 ? "is-negative" : "is-neutral");
+            const dot = document.createElementNS(svgNs, "circle");
+            dot.setAttribute("cx", String(centerX));
+            dot.setAttribute("cy", String(y));
+            dot.setAttribute("r", "7");
+            dot.setAttribute("fill", "rgba(52,211,153,0.98)");
+            svg.appendChild(dot);
 
-            const label = document.createElement("div");
-            label.className = "reflection-spine-vertical-label";
-            label.innerHTML =
-              `<strong>${escapeHtml(String(node?.step || "").toUpperCase())}</strong>` +
-              `<span>${score > 0 ? "+" : ""}${score}</span>`;
-            item.appendChild(label);
+            if (score !== 0) {
+              const branch = document.createElementNS(svgNs, "line");
+              branch.setAttribute("x1", String(centerX));
+              branch.setAttribute("x2", String(endX));
+              branch.setAttribute("y1", String(y));
+              branch.setAttribute("y2", String(y));
+              branch.setAttribute("stroke", strokeColor);
+              branch.setAttribute("stroke-width", "5");
+              branch.setAttribute("stroke-linecap", "round");
+              svg.appendChild(branch);
+            }
 
-            const axis = document.createElement("div");
-            axis.className = "reflection-spine-vertical-axis";
+            const stepLabel = document.createElementNS(svgNs, "text");
+            stepLabel.setAttribute("x", "18");
+            stepLabel.setAttribute("y", String(y - 6));
+            stepLabel.setAttribute("class", "reflection-spine-svg-step");
+            stepLabel.textContent = String(node?.step || "").toUpperCase();
+            svg.appendChild(stepLabel);
 
-            const core = document.createElement("div");
-            core.className = "reflection-spine-core";
-            axis.appendChild(core);
+            const totalLabel = document.createElementNS(svgNs, "text");
+            totalLabel.setAttribute("x", "18");
+            totalLabel.setAttribute("y", String(y + 16));
+            totalLabel.setAttribute("class", "reflection-spine-svg-total");
+            totalLabel.textContent = `TOTAL ${running > 0 ? "+" : ""}${running}`;
+            svg.appendChild(totalLabel);
 
-            const protrusion = document.createElement("div");
-            protrusion.className =
-              "reflection-spine-protrusion " +
-              (score > 0 ? "is-positive" : score < 0 ? "is-negative" : "is-neutral");
-            protrusion.innerText = score > 0 ? "+1" : score < 0 ? "-1" : "0";
-            axis.appendChild(protrusion);
-            item.appendChild(axis);
-
-            const total = document.createElement("div");
-            total.className = "reflection-spine-vertical-total";
-            total.innerText = `Total ${running > 0 ? "+" : ""}${running}`;
-            item.appendChild(total);
-
-            stack.appendChild(item);
+            const scoreBadge = document.createElementNS(svgNs, "text");
+            scoreBadge.setAttribute("x", String(score > 0 ? endX + 12 : score < 0 ? endX - 12 : centerX + 14));
+            scoreBadge.setAttribute("y", String(y + 5));
+            scoreBadge.setAttribute("text-anchor", score < 0 ? "end" : "start");
+            scoreBadge.setAttribute("class", "reflection-spine-svg-score");
+            scoreBadge.setAttribute(
+              "fill",
+              score > 0 ? "rgba(220,252,231,0.98)" :
+              score < 0 ? "rgba(255,228,232,0.98)" :
+              "rgba(255,247,232,0.98)"
+            );
+            scoreBadge.textContent = score > 0 ? "+1" : score < 0 ? "-1" : "0";
+            svg.appendChild(scoreBadge);
           });
 
-          wrap.appendChild(stack);
+          wrap.appendChild(svg);
           container.appendChild(wrap);
           return;
         }
