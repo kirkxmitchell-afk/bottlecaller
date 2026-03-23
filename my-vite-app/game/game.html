@@ -16348,17 +16348,24 @@ function ensureProgLoaded() {
       function resetEncounterViewport() {
         const panel = document.getElementById("encounterPanel");
         const content = document.getElementById("stepContent");
-        const target = content || panel;
-        if (!target) return;
+        const shell = document.getElementById("bcShell");
+        const stage = document.querySelector(".bc-stage");
 
-        try {
-          target.scrollIntoView({ block: "start", behavior: "auto" });
-        } catch {}
-
-        try {
-          if (panel) panel.scrollTop = 0;
-          if (content) content.scrollTop = 0;
-        } catch {}
+        requestAnimationFrame(() => {
+          const target = panel || content || stage || shell;
+          try { window.scrollTo(0, 0); } catch {}
+          try {
+            document.documentElement.scrollTop = 0;
+            document.body.scrollTop = 0;
+          } catch {}
+          try {
+            if (shell) shell.scrollTop = 0;
+            if (stage) stage.scrollTop = 0;
+            if (panel) panel.scrollTop = 0;
+            if (content) content.scrollTop = 0;
+          } catch {}
+          try { target?.scrollIntoView({ block: "start", behavior: "auto" }); } catch {}
+        });
       }
 
       function showStepReactionPreview(stepKey, nextStep) {
@@ -20450,7 +20457,6 @@ function ensureProgLoaded() {
 
         stepContent.innerHTML = "";
         stepButtons.innerHTML = "";
-        resetEncounterViewport();
 
         renderDebugStateBox();
 
@@ -20463,41 +20469,49 @@ function ensureProgLoaded() {
 
         if (currentStep === 0) {
           renderStepLoad(stepContent, stepButtons);
+          resetEncounterViewport();
           return;
         }
 
         if (currentStep === 1) {
           renderStepObserve(stepContent, stepButtons);
+          resetEncounterViewport();
           return;
         }
 
         if (currentStep === 2) {
           renderStepMode(stepContent, stepButtons);
+          resetEncounterViewport();
           return;
         }
 
         if (currentStep === 3) {
           renderStepHook(stepContent, stepButtons);
+          resetEncounterViewport();
           return;
         }
 
         if (currentStep === 4) {
           renderStepDelivery(stepContent, stepButtons);
+          resetEncounterViewport();
           return;
         }
 
         if (currentStep === 55) {
           renderStepReactionPreview(stepContent, stepButtons);
+          resetEncounterViewport();
           return;
         }
 
         if (currentStep === 5) {
           renderStepReaction(stepContent);
+          resetEncounterViewport();
           return;
         }
 
         if (currentStep === 6) {
           renderStepReflection(stepContent, stepButtons, inDrill);
+          resetEncounterViewport();
           return;
         }
 
@@ -20592,11 +20606,13 @@ function ensureProgLoaded() {
             };
             stepButtons.appendChild(btn);
           }
+          resetEncounterViewport();
           return;
         }
 
         if (currentStep === 7) {
           renderStepSessionSummary(stepContent, stepButtons, inDrill);
+          resetEncounterViewport();
           return;
         }
       }
