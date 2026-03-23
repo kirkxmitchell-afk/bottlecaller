@@ -16346,26 +16346,7 @@ function ensureProgLoaded() {
       }
 
       function resetEncounterViewport() {
-        const panel = document.getElementById("encounterPanel");
-        const content = document.getElementById("stepContent");
-        const shell = document.getElementById("bcShell");
-        const stage = document.querySelector(".bc-stage");
-
-        requestAnimationFrame(() => {
-          const target = panel || content || stage || shell;
-          try { window.scrollTo(0, 0); } catch {}
-          try {
-            document.documentElement.scrollTop = 0;
-            document.body.scrollTop = 0;
-          } catch {}
-          try {
-            if (shell) shell.scrollTop = 0;
-            if (stage) stage.scrollTop = 0;
-            if (panel) panel.scrollTop = 0;
-            if (content) content.scrollTop = 0;
-          } catch {}
-          try { target?.scrollIntoView({ block: "start", behavior: "auto" }); } catch {}
-        });
+        return;
       }
 
       function showStepReactionPreview(stepKey, nextStep) {
@@ -19054,9 +19035,6 @@ function ensureProgLoaded() {
 
       function renderStepMode(stepContent, stepButtons) {
         renderLatestReactionCueBlock(stepContent, currentEncounter);
-        renderReactionProgressPanel(stepContent, currentEncounter, {
-          title: "Guest reaction so far"
-        });
 
         const topRow = document.createElement("div");
         topRow.className = "history-row encounter-top-row";
@@ -19129,9 +19107,6 @@ function ensureProgLoaded() {
 
       function renderStepHook(stepContent, stepButtons) {
         renderLatestReactionCueBlock(stepContent, currentEncounter);
-        renderReactionProgressPanel(stepContent, currentEncounter, {
-          title: "Guest reaction so far"
-        });
 
         debugHookStrictness(currentEncounter);
 
@@ -19242,9 +19217,6 @@ function ensureProgLoaded() {
 
       function renderStepDelivery(stepContent, stepButtons) {
         renderLatestReactionCueBlock(stepContent, currentEncounter);
-        renderReactionProgressPanel(stepContent, currentEncounter, {
-          title: "Guest reaction so far"
-        });
 
         function renderDeliverySelectionPreview() {
           const preview = document.createElement("div");
@@ -19736,9 +19708,6 @@ function ensureProgLoaded() {
         reactionHint.innerText = "Your choices shape how the guest responds.";
         stepContent.appendChild(reactionHint);
 
-        renderReactionProgressPanel(stepContent, currentEncounter, {
-          title: "Reaction sequence"
-        });
         renderLatestReactionCueBlock(stepContent, currentEncounter);
 
         const { checksRaw, reactionChecks } = getReactionChecksForCurrentEncounter();
@@ -20469,49 +20438,41 @@ function ensureProgLoaded() {
 
         if (currentStep === 0) {
           renderStepLoad(stepContent, stepButtons);
-          resetEncounterViewport();
           return;
         }
 
         if (currentStep === 1) {
           renderStepObserve(stepContent, stepButtons);
-          resetEncounterViewport();
           return;
         }
 
         if (currentStep === 2) {
           renderStepMode(stepContent, stepButtons);
-          resetEncounterViewport();
           return;
         }
 
         if (currentStep === 3) {
           renderStepHook(stepContent, stepButtons);
-          resetEncounterViewport();
           return;
         }
 
         if (currentStep === 4) {
           renderStepDelivery(stepContent, stepButtons);
-          resetEncounterViewport();
           return;
         }
 
         if (currentStep === 55) {
           renderStepReactionPreview(stepContent, stepButtons);
-          resetEncounterViewport();
           return;
         }
 
         if (currentStep === 5) {
           renderStepReaction(stepContent);
-          resetEncounterViewport();
           return;
         }
 
         if (currentStep === 6) {
           renderStepReflection(stepContent, stepButtons, inDrill);
-          resetEncounterViewport();
           return;
         }
 
@@ -20606,13 +20567,11 @@ function ensureProgLoaded() {
             };
             stepButtons.appendChild(btn);
           }
-          resetEncounterViewport();
           return;
         }
 
         if (currentStep === 7) {
           renderStepSessionSummary(stepContent, stepButtons, inDrill);
-          resetEncounterViewport();
           return;
         }
       }
