@@ -3650,11 +3650,19 @@
       return role === "waiter";
     }
     function getDisplayStepNumber(step) {
+      if (step === 55) {
+        const key = String(currentEncounter?.__stepReactionPreview?.stepKey || "");
+        if (key === "observe") return 2;
+        if (key === "mode") return 3;
+        if (key === "hook") return 4;
+        if (key === "deliver") return 5;
+      }
       if (step === 65) return 7;
       if (step >= 7) return 7;
       return step + 1;
     }
     function getDisplayStepLabel(step) {
+      if (step === 55) return "Step Reaction";
       if (step === 65) return "Recovery";
       if (step === 7) return "Reflection";
       return "";
@@ -16332,7 +16340,18 @@ function ensureProgLoaded() {
 
       function goToStep(n) {
         if (n === 6) scrubEncounterDerivedState(currentEncounter);
+        if (currentEncounter) currentEncounter.__stepReactionPreview = null;
         currentStep = n;
+        renderEncounterStep();
+      }
+
+      function showStepReactionPreview(stepKey, nextStep) {
+        if (!currentEncounter || !stepKey) return;
+        currentEncounter.__stepReactionPreview = {
+          stepKey,
+          nextStep,
+        };
+        currentStep = 55;
         renderEncounterStep();
       }
 
@@ -19005,8 +19024,7 @@ function ensureProgLoaded() {
         const lockInBtn = addStepButton("LOCK IN", () => {
           window.evaluateChecks?.(currentEncounter);
           commitEncounterStepReaction(currentEncounter, "observe");
-          currentStep = 2;
-          renderEncounterStep();
+          showStepReactionPreview("observe", 2);
         }, stepButtons);
         if (!currentEncounter.guestReadSelected) lockInBtn.disabled = true;
       }
@@ -19081,8 +19099,7 @@ function ensureProgLoaded() {
         const contBtn = addStepButton("CONTINUE", () => {
           window.evaluateChecks?.(currentEncounter);
           commitEncounterStepReaction(currentEncounter, "mode");
-          currentStep = 3;
-          renderEncounterStep();
+          showStepReactionPreview("mode", 3);
         }, stepButtons);
         if (!currentEncounter.modeSelected) contBtn.disabled = true;
       }
@@ -19190,8 +19207,7 @@ function ensureProgLoaded() {
           () => {
             window.evaluateChecks?.(currentEncounter);
             commitEncounterStepReaction(currentEncounter, "hook");
-            currentStep = 4;
-            renderEncounterStep();
+            showStepReactionPreview("hook", 4);
           },
           stepButtons
         );
@@ -19354,8 +19370,7 @@ function ensureProgLoaded() {
         const sayBtn = addStepButton("SAY IT", () => {
           window.evaluateChecks?.(currentEncounter);
           commitEncounterStepReaction(currentEncounter, "deliver");
-          currentStep = 5;
-          renderEncounterStep();
+          showStepReactionPreview("deliver", 5);
         }, stepButtons);
         const ready =
           (currentEncounter.selectedS1 != null) &&
@@ -19707,6 +19722,63 @@ function ensureProgLoaded() {
         const result = computeEncounterReaction(reactionChecks);
         updateEncounterPresentationState(5);
         return renderReactionResolvedUI(stepContent, bar, checksRaw, reactionChecks, result);
+      }
+
+      function renderStepReactionPreview(stepContent, stepButtons) {
+        const preview = currentEncounter?.__stepReactionPreview || null;
+        const stepKey = String(preview?.stepKey || "");
+        const reaction = stepKey
+          ? currentEncounter?.stepReactionByKey?.[stepKey] || null
+          : null;
+
+        const title = document.createElement("h3");
+        title.className = "encounter-stage-title";
+        title.innerText = "Step Reaction";
+        stepContent.appendChild(title);
+
+        const hint = document.createElement("div");
+        hint.className = "small-text encounter-hint";
+        hint.innerText = "Your locked choice triggers an immediate table reaction before the next step.";
+        stepContent.appendChild(hint);
+
+        if (stepKey) {
+          renderSequentialEncounterFrame(stepContent, {
+            kicker: "LOCKED STEP",
+            title: stepKey.toUpperCase(),
+            meta: reaction?.accuracy || "resolved",
+            kind: "step",
+          });
+        }
+
+        renderSequentialEncounterFrame(stepContent, {
+          kicker: "TABLE REACTION",
+          title: reaction?.tableCue || "The guest reaction is still resolving.",
+          meta:
+            reaction
+              ? `${reaction.emotion || "neutral"} • ${reaction.stepScore > 0 ? "+1" : reaction.stepScore < 0 ? "-1" : "0"}`
+              : "pending",
+          score: Number(reaction?.stepScore || 0),
+          kind: "reaction",
+        });
+
+        if (reaction?.physicalCue) {
+          const detail = document.createElement("div");
+          detail.className = "notice";
+          detail.innerText = reaction.physicalCue;
+          stepContent.appendChild(detail);
+        }
+
+        const nextStep = Number(preview?.nextStep || 0);
+        const btn = addStepButton(
+          nextStep === 5 ? "GO TO REACTION" : "CONTINUE TO NEXT STEP",
+          () => {
+            if (currentEncounter) currentEncounter.__stepReactionPreview = null;
+            currentStep = nextStep;
+            renderEncounterStep();
+          },
+          stepButtons
+        );
+        if (!nextStep) btn.disabled = true;
       }
 
       function applyProgressionEncounterResult(didWin) {
@@ -20394,6 +20466,11 @@ function ensureProgLoaded() {
 
         if (currentStep === 4) {
           renderStepDelivery(stepContent, stepButtons);
+          return;
+        }
+
+        if (currentStep === 55) {
+          renderStepReactionPreview(stepContent, stepButtons);
           return;
         }
 
