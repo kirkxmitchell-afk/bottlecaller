@@ -17485,8 +17485,6 @@ function ensureProgLoaded() {
       }
 
       function renderReflectionOverview(container, encounter, checks, modeBestResolved) {
-        const reactionPayload = deriveEncounterReactionPayload(encounter);
-
         const reflectionTitle = document.createElement("h3");
         reflectionTitle.className = "encounter-stage-title";
         reflectionTitle.innerText = "What just happened";
@@ -17501,30 +17499,6 @@ function ensureProgLoaded() {
         renderDynamicGuestLineBlock(container, encounter, checks, { compact: false });
         renderDynamicGuestReactionBlock(container, encounter, checks, { compact: false });
         renderLatestReactionCueBlock(container, encounter);
-        if (reactionPayload) {
-          const snapshot = document.createElement("div");
-          snapshot.className = "card reaction-snapshot-card";
-
-          const snapshotTitle = document.createElement("h4");
-          snapshotTitle.innerText = "Reaction snapshot";
-          snapshot.appendChild(snapshotTitle);
-
-          const meta = document.createElement("div");
-          meta.className = "small-text reaction-block-subtitle";
-          meta.innerText =
-            "AI read: " + (reactionPayload.aiPerception || "—") +
-            " • Bottle served: " + (reactionPayload.bottleServed ? "YES" : "NO");
-          snapshot.appendChild(meta);
-
-          const path = document.createElement("div");
-          path.className = "reaction-snapshot-paths";
-          path.innerHTML =
-            "<strong>Chosen path:</strong> " + (((reactionPayload.chosenPath || []).join(" -> ")) || "—") +
-            "<br><strong>Best path:</strong> " + (((reactionPayload.bestPath || []).join(" -> ")) || "observe -> mode -> hook -> deliver");
-          snapshot.appendChild(path);
-
-          container.appendChild(snapshot);
-        }
         renderReflectionHorizontalSpineBlock(container, encounter);
 
         if (window.__BC_DEBUG_PRESSURE__ === true) {
@@ -17533,15 +17507,6 @@ function ensureProgLoaded() {
 
         logEncounterStateAudit("before_reflection_render", encounter);
         renderStrengthFixBlock(container, checks, encounter);
-
-        console.log("[BC] Step6 summary", encounter.__uxSummary);
-        const summaryForRender = encounter.__uxSummary || buildStrengthFixSummary(encounter, checks);
-        if (summaryForRender) {
-          renderUxSummary(container, summaryForRender, {
-            title: "Summary to lock it in",
-            compact: false
-          });
-        }
 
         addReflectionBlock(
           container,
