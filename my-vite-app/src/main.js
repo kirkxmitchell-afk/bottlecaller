@@ -1802,6 +1802,81 @@ function isMissingRelationError(error) {
   return code === "42P01" || /does not exist|undefined table|schema cache/i.test(message);
 }
 
+function isMissingColumnError(error) {
+  const code = String(error?.code || "").toUpperCase();
+  const message = String(error?.message || "");
+  return (
+    code === "42703" ||
+    /could not find the '[^']+' column|column "?[^"\s]+"? does not exist|schema cache/i.test(message)
+  );
+}
+
+function parseMissingColumnFromError(error) {
+  const message = String(error?.message || "");
+  const match =
+    message.match(/Could not find the '([^']+)' column/i) ||
+    message.match(/column "?([^"\s]+)"? does not exist/i);
+  return match?.[1] ? String(match[1]) : null;
+}
+
+const ENCOUNTER_RESOLUTION_SUMMARY_COLUMNS = [
+  "user_id",
+  "occurred_at",
+  "performance_grade",
+  "chain_signal",
+  "chain_score",
+  "is_green",
+  "is_red",
+  "tier",
+  "reflection",
+  "reaction_summary",
+  "step_reaction_trail",
+  "step_spine",
+  "ai_perception",
+  "bottle_served",
+  "chosen_path",
+  "best_path",
+];
+
+async function fetchEncounterResolutionSummaries({
+  restaurantId,
+  userId = null,
+  sinceIso = null,
+  limit = 20,
+} = {}) {
+  let columns = [...ENCOUNTER_RESOLUTION_SUMMARY_COLUMNS];
+
+  for (let attempt = 0; attempt < ENCOUNTER_RESOLUTION_SUMMARY_COLUMNS.length; attempt += 1) {
+    let query = supabase
+      .from("bc_encounter_resolutions_v2")
+      .select(columns.join(", "))
+      .eq("restaurant_id", restaurantId)
+      .neq("mode", "demo")
+      .order("occurred_at", { ascending: false })
+      .limit(limit);
+
+    if (userId) query = query.eq("user_id", userId);
+    if (sinceIso) query = query.gte("occurred_at", sinceIso);
+
+    const res = await query;
+    if (!res?.error) return res;
+    if (!isMissingColumnError(res.error)) return res;
+
+    const missingColumn = parseMissingColumnFromError(res.error);
+    if (!missingColumn || !columns.includes(missingColumn)) return res;
+
+    console.warn("[MB][PERFORMANCE] bc_encounter_resolutions_v2 missing column, retrying without it", {
+      missingColumn,
+    });
+    columns = columns.filter((column) => column !== missingColumn);
+  }
+
+  return {
+    data: [],
+    error: new Error("Unable to query bc_encounter_resolutions_v2 with any compatible column set."),
+  };
+}
+
 function setActiveProgressionOwner(profileLike = null) {
   const userId =
     profileLike?.user_id ||
@@ -9935,17 +10010,11 @@ async function getManagerPerformanceModel({ force = false } = {}) {
       .eq("restaurant_id", restaurantId)
       .order("created_at", { ascending: false })
       .limit(2000),
-    supabase
-      .from("bc_encounter_resolutions_v2")
-      .select(
-        "user_id, occurred_at, performance_grade, chain_signal, chain_score, is_green, is_red, tier, " +
-        "reflection, reaction_summary, step_reaction_trail, step_spine, ai_perception, bottle_served, chosen_path, best_path"
-      )
-      .eq("restaurant_id", restaurantId)
-      .neq("mode", "demo")
-      .gte("occurred_at", sinceIso)
-      .order("occurred_at", { ascending: false })
-      .limit(2000),
+    fetchEncounterResolutionSummaries({
+      restaurantId,
+      sinceIso,
+      limit: 2000,
+    }),
     supabase
       .from("bc_messages_v1")
       .select("sender_user_id, created_at, type, payload, body")
@@ -12975,17 +13044,11 @@ async function loadPerformanceHistory(userId) {
       .order("created_at", { ascending: true })
       .limit(50),
 
-    supabase
-      .from("bc_encounter_resolutions_v2")
-      .select(
-        "occurred_at, performance_grade, chain_signal, chain_score, tier, " +
-        "reflection, reaction_summary, step_reaction_trail, step_spine, ai_perception, bottle_served, chosen_path, best_path"
-      )
-      .eq("restaurant_id", restaurantId)
-      .eq("user_id", userId)
-      .neq("mode", "demo")
-      .order("occurred_at", { ascending: false })
-      .limit(20),
+    fetchEncounterResolutionSummaries({
+      restaurantId,
+      userId,
+      limit: 20,
+    }),
   ]);
 
   if (snapshotsRes?.error) {
