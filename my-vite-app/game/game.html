@@ -15380,7 +15380,10 @@ function ensureProgLoaded() {
         if (
           encounter.guestState &&
           Array.isArray(encounter.reactionHistory) &&
-          Array.isArray(encounter.stepSpine)
+          Array.isArray(encounter.stepSpine) &&
+          Array.isArray(encounter.stepReactionTrail) &&
+          encounter.stepReactionByKey &&
+          typeof encounter.stepReactionByKey === "object"
         ) {
           return encounter;
         }
@@ -15388,7 +15391,6 @@ function ensureProgLoaded() {
         if (api?.attachReactionRuntimeFields) {
           try {
             api.attachReactionRuntimeFields(encounter, encounter);
-            return encounter;
           } catch (error) {
             console.warn("[BC] attachReactionRuntimeFields failed", error);
           }
@@ -15402,31 +15404,34 @@ function ensureProgLoaded() {
         };
         encounter.reactionHistory = Array.isArray(encounter.reactionHistory) ? encounter.reactionHistory : [];
         encounter.stepSpine = Array.isArray(encounter.stepSpine) ? encounter.stepSpine : [];
+        encounter.stepReactionTrail = Array.isArray(encounter.stepReactionTrail) ? encounter.stepReactionTrail : [];
+        encounter.stepReactionByKey =
+          encounter.stepReactionByKey && typeof encounter.stepReactionByKey === "object"
+            ? encounter.stepReactionByKey
+            : {};
+        encounter.__lastStepReactionKey = String(encounter.__lastStepReactionKey || "");
         return encounter;
       }
 
-      function evaluateEncounterReactionStep(stepKey, encounter) {
-        const checks = (typeof window.evaluateChecks === "function")
-          ? window.evaluateChecks(encounter)
-          : null;
+      function getEncounterStepReactionKey(step) {
+        if (step === 1) return "observe";
+        if (step === 2) return "mode";
+        if (step === 3) return "hook";
+        if (step === 4) return "deliver";
+        return "";
+      }
 
+      function getStepEvalResultFromEncounter(encounter, stepKey) {
         if (stepKey === "observe") {
-          const correct = (typeof isCorrectGuestRead === "function")
-            ? !!isCorrectGuestRead(encounter)
-            : String(encounter?.guestReadSelected || "").toLowerCase() ===
-              String(encounter?.guestStateActual || "").toLowerCase();
-
           return {
-            outcome: correct ? "correct" : "wrong",
-            score: correct ? 1 : -1,
-            reasoning: correct
-              ? "Guest read matched the authored guest type."
-              : "Guest read did not match the authored guest type.",
+            outcome: encounter?.readCorrect ? "correct" : "wrong",
+            score: encounter?.readCorrect ? 1 : -1,
+            tags: ["guest_read"],
           };
         }
 
         if (stepKey === "mode") {
-          const status = String(checks?.modeStatus || encounter?.modeStatus || "damaging").toLowerCase();
+          const status = String(encounter?.modeStatus || "neutral").toLowerCase();
           return {
             outcome:
               status === "optimal" ? "correct" :
@@ -15436,12 +15441,12 @@ function ensureProgLoaded() {
               status === "optimal" ? 1 :
               status === "neutral" ? 0 :
               -1,
-            reasoning: `Mode status resolved as ${status || "unknown"}.`,
+            tags: ["mode"],
           };
         }
 
         if (stepKey === "hook") {
-          const status = String(checks?.hookStatus || encounter?.hookStatus || "damaging").toLowerCase();
+          const status = String(encounter?.hookStatus || "neutral").toLowerCase();
           return {
             outcome:
               status === "optimal" ? "correct" :
@@ -15451,49 +15456,184 @@ function ensureProgLoaded() {
               status === "optimal" ? 1 :
               status === "neutral" ? 0 :
               -1,
-            reasoning: `Hook status resolved as ${status || "unknown"}.`,
+            tags: ["hook"],
           };
         }
 
-        const deliveryScore = getDeliveryScore(encounter);
+        if (stepKey === "deliver") {
+          const deliveryScore =
+            (typeof getDeliveryScore === "function")
+              ? Number(getDeliveryScore(encounter) || 0)
+              : (
+                  (encounter?.selectedS1 != null &&
+                   String(encounter?.deliveryLine1Key || "") === String(encounter?.correctDeliveryLine1Key || "")) ? 1 : 0
+                ) + (
+                  (encounter?.selectedS2 != null &&
+                   String(encounter?.deliveryLine2Key || "") === String(encounter?.correctDeliveryLine2Key || "")) ? 1 : 0
+                );
+          return {
+            outcome:
+              deliveryScore >= 2 ? "correct" :
+              deliveryScore === 1 ? "partial" :
+              "wrong",
+            score:
+              deliveryScore >= 2 ? 1 :
+              deliveryScore === 1 ? 0 :
+              -1,
+            tags: ["delivery"],
+          };
+        }
+
         return {
-          outcome:
-            deliveryScore >= 2 ? "correct" :
-            deliveryScore === 1 ? "partial" :
-            "wrong",
-          score:
-            deliveryScore >= 2 ? 1 :
-            deliveryScore === 1 ? 0 :
-            -1,
-          reasoning: `Delivery matched ${deliveryScore}/2 authored slots.`,
+          outcome: "partial",
+          score: 0,
+          tags: [],
         };
       }
 
-      function recordEncounterStepReaction(stepKey, encounter = currentEncounter) {
-        const api = getReactionRuntimeApi();
-        if (!encounter || !api?.buildStepReaction || !api?.applyStepReaction || !api?.storeStepReaction) {
-          return null;
-        }
-
+      function buildEncounterStepReactionRecord(encounter, stepKey) {
         ensureEncounterReactionRuntime(encounter);
 
-        const prior = Array.isArray(encounter.reactionHistory)
-          ? encounter.reactionHistory.find((node) => node?.step === stepKey)
-          : null;
-        if (prior) return prior;
+        const evalResult = getStepEvalResultFromEncounter(encounter, stepKey);
+        const guestState = encounter.guestState || {
+          trust: 0,
+          interest: 0,
+          resistance: 0,
+          emotion: "neutral",
+        };
 
-        const evalResult = evaluateEncounterReactionStep(stepKey, encounter);
-        const reaction = api.buildStepReaction({
-          stepKey,
-          evalResult,
-          runtime: encounter,
-          guestState: encounter.guestState,
-        });
+        const api = getReactionRuntimeApi();
+        if (api?.buildStepReaction) {
+          try {
+            return api.buildStepReaction({
+              stepKey,
+              evalResult,
+              runtime: encounter,
+              guestState,
+            });
+          } catch (error) {
+            console.warn("[BC] buildStepReaction failed", error);
+          }
+        }
 
-        api.applyStepReaction(encounter, reaction);
-        api.storeStepReaction(encounter, reaction);
+        const accuracy =
+          evalResult.outcome === "correct" ? "correct" :
+          evalResult.outcome === "partial" ? "slight" :
+          "wrong";
+
+        const polarity =
+          accuracy === "correct" ? 1 :
+          accuracy === "slight" ? 0 :
+          -1;
+
+        const emotion =
+          stepKey === "observe"
+            ? (accuracy === "correct" ? "curious" : accuracy === "slight" ? "neutral" : "guarded")
+            : stepKey === "mode"
+              ? (accuracy === "correct" ? "interested" : accuracy === "slight" ? "uncertain" : "guarded")
+              : stepKey === "hook"
+                ? (accuracy === "correct" ? "engaged" : accuracy === "slight" ? "curious" : "resistant")
+                : (accuracy === "correct" ? "engaged" : "resistant");
+
+        const tableCue =
+          stepKey === "observe"
+            ? (accuracy === "correct" ? "Guest looks up, open to interaction."
+              : accuracy === "slight" ? "Guest glances up briefly."
+              : "Guest stays closed off.")
+            : stepKey === "mode"
+              ? (accuracy === "correct" ? "Guest relaxes into the tone."
+                : accuracy === "slight" ? "Guest listens, but seems unsure."
+                : "Guest stiffens slightly.")
+              : stepKey === "hook"
+                ? (accuracy === "correct" ? "Guest leans in, clearly interested."
+                  : accuracy === "slight" ? "Guest shows mild interest, but hesitates."
+                  : "Guest disengages from the pitch.")
+                : (accuracy === "correct" ? "Guest nods confidently, ready to decide."
+                  : "Guest declines and shuts down the offer.");
+
+        const physicalCue =
+          stepKey === "observe"
+            ? (accuracy === "correct" ? "Guest lifts eyes from the menu."
+              : accuracy === "slight" ? "Guest gives short eye contact."
+              : "Guest keeps focus on the menu.")
+            : stepKey === "mode"
+              ? (accuracy === "correct" ? "Guest maintains eye contact."
+                : accuracy === "slight" ? "Guest tilts head slightly."
+                : "Guest leans back and breaks eye contact.")
+              : stepKey === "hook"
+                ? (accuracy === "correct" ? "Guest lowers the menu and nods."
+                  : accuracy === "slight" ? "Guest glances at you, then back at the menu."
+                  : "Guest looks away and closes posture.")
+                : (accuracy === "correct" ? "Guest turns fully toward you and smiles."
+                  : "Guest shakes head and withdraws from the interaction.");
+
+        const trustDelta = stepKey === "deliver" && polarity > 0 ? 2 : polarity;
+        const interestDelta = stepKey === "hook" && polarity > 0 ? 3 : polarity;
+        const resistanceDelta = polarity > 0 ? -1 : polarity < 0 ? 1 : 0;
+
+        return {
+          step: stepKey,
+          accuracy,
+          emotion,
+          intensity: accuracy === "correct" ? 2 : accuracy === "slight" ? 1 : 2,
+          tableCue,
+          physicalCue,
+          microExpression: undefined,
+          trustDelta,
+          interestDelta,
+          resistanceDelta,
+          guestStateAfter: {
+            trust: clampNumber(Number(guestState.trust || 0) + trustDelta, -10, 10),
+            interest: clampNumber(Number(guestState.interest || 0) + interestDelta, -10, 10),
+            resistance: clampNumber(Number(guestState.resistance || 0) + resistanceDelta, -10, 10),
+            emotion,
+          },
+          stepScore: polarity,
+          successPolarity: polarity,
+        };
+      }
+
+      function commitEncounterStepReaction(encounter, stepKey) {
+        ensureEncounterReactionRuntime(encounter);
+        if (!stepKey) return null;
+
+        const dedupeKey =
+          stepKey + "::" +
+          String(encounter?.guestReadSelected || "") + "::" +
+          String(encounter?.modeSelected || "") + "::" +
+          String(encounter?.hookSelectedKey || encounter?.hookSelected || "") + "::" +
+          String(encounter?.deliveryLine1Key || encounter?.deliveryLine1 || "") + "::" +
+          String(encounter?.deliveryLine2Key || encounter?.deliveryLine2 || "");
+
+        if (encounter.stepReactionByKey?.[stepKey]?.__dedupeKey === dedupeKey) {
+          return encounter.stepReactionByKey[stepKey];
+        }
+
+        const reaction = buildEncounterStepReactionRecord(encounter, stepKey);
+        if (!reaction) return null;
+
+        reaction.__dedupeKey = dedupeKey;
+
+        encounter.guestState = structuredClone(reaction.guestStateAfter || encounter.guestState);
+        encounter.stepReactionByKey[stepKey] = reaction;
+
+        const idx = encounter.stepReactionTrail.findIndex((node) => node?.step === stepKey);
+        if (idx >= 0) encounter.stepReactionTrail[idx] = reaction;
+        else encounter.stepReactionTrail.push(reaction);
+
+        const spineNode = { step: stepKey, score: reaction.successPolarity };
+        const spineIdx = encounter.stepSpine.findIndex((node) => node?.step === stepKey);
+        if (spineIdx >= 0) encounter.stepSpine[spineIdx] = spineNode;
+        else encounter.stepSpine.push(spineNode);
+
         encounter.__lastStepReaction = reaction;
+        encounter.__lastStepReactionKey = stepKey;
         return reaction;
+      }
+
+      function recordEncounterStepReaction(stepKey, encounter = currentEncounter) {
+        if (!encounter) return null;
+        return commitEncounterStepReaction(encounter, stepKey);
       }
 
       function deriveEncounterReactionPayload(encounter = currentEncounter) {
@@ -15502,23 +15642,45 @@ function ensureProgLoaded() {
 
         ensureEncounterReactionRuntime(encounter);
 
+        let payload = null;
         if (api?.deriveReflectionPayload) {
           try {
-            return api.deriveReflectionPayload(encounter);
+            payload = api.deriveReflectionPayload(encounter);
           } catch (error) {
             console.warn("[BC] deriveReflectionPayload failed", error);
           }
         }
 
-        return {
-          reactionHistory: encounter.reactionHistory || [],
-          stepSpine: encounter.stepSpine || [],
-          guestState: encounter.guestState || null,
-          aiPerception: "",
-          chosenPath: [],
-          bestPath: [],
-          bottleServed: false,
-        };
+        const stepReactionTrail = Array.isArray(encounter.stepReactionTrail)
+          ? encounter.stepReactionTrail
+          : [];
+        const chosenPath = stepReactionTrail.length
+          ? stepReactionTrail.map((item) => item?.step).filter(Boolean)
+          : [];
+        const normalizedPayload = payload && typeof payload === "object" ? { ...payload } : {};
+
+        normalizedPayload.reactionHistory = Array.isArray(normalizedPayload.reactionHistory)
+          ? normalizedPayload.reactionHistory
+          : (encounter.reactionHistory || []);
+        normalizedPayload.stepReactionTrail = Array.isArray(normalizedPayload.stepReactionTrail)
+          ? normalizedPayload.stepReactionTrail
+          : stepReactionTrail;
+        normalizedPayload.stepSpine = Array.isArray(normalizedPayload.stepSpine)
+          ? normalizedPayload.stepSpine
+          : (encounter.stepSpine || []);
+        normalizedPayload.guestState = normalizedPayload.guestState || encounter.guestState || null;
+        normalizedPayload.aiPerception = normalizedPayload.aiPerception || "";
+        normalizedPayload.chosenPath =
+          Array.isArray(normalizedPayload.chosenPath) && normalizedPayload.chosenPath.length
+            ? normalizedPayload.chosenPath
+            : chosenPath;
+        normalizedPayload.bestPath =
+          Array.isArray(normalizedPayload.bestPath) && normalizedPayload.bestPath.length
+            ? normalizedPayload.bestPath
+            : ["observe", "mode", "hook", "deliver"];
+        normalizedPayload.bottleServed = !!normalizedPayload.bottleServed;
+
+        return normalizedPayload;
       }
 
       function buildEncounterReactionSummary(encounter = currentEncounter) {
@@ -15571,6 +15733,109 @@ function ensureProgLoaded() {
         block.appendChild(body);
         block.appendChild(detail);
         container.appendChild(block);
+      }
+
+      function renderStepReactionTrailBlock(container, encounter) {
+        const trail = Array.isArray(encounter?.stepReactionTrail)
+          ? encounter.stepReactionTrail
+          : [];
+
+        if (!trail.length) return;
+
+        const card = document.createElement("div");
+        card.className = "card reaction-trail-card";
+
+        const title = document.createElement("div");
+        title.className = "small-text";
+        title.innerText = "Table read across the encounter";
+        card.appendChild(title);
+
+        trail.forEach((item) => {
+          const row = document.createElement("div");
+          row.className = "reaction-trail-row";
+
+          const step = document.createElement("strong");
+          step.innerText = `${String(item.step || "").toUpperCase()}: `;
+          row.appendChild(step);
+
+          const text = document.createElement("span");
+          text.innerText =
+            `${item.tableCue || "—"} ` +
+            (item.physicalCue ? `(${item.physicalCue})` : "");
+          row.appendChild(text);
+
+          card.appendChild(row);
+        });
+
+        container.appendChild(card);
+      }
+
+      function renderCompactReactionSpineBlock(container, encounter) {
+        const spine = Array.isArray(encounter?.stepSpine) ? encounter.stepSpine : [];
+        if (!spine.length) return;
+
+        const box = document.createElement("div");
+        box.className = "notice";
+        box.innerText =
+          "Spine: " +
+          spine.map((node) => `${node.step}:${node.score > 0 ? "+" : ""}${node.score}`).join("  ");
+        container.appendChild(box);
+      }
+
+      function renderReflectionStepTrailBlock(container, encounter) {
+        const trail = Array.isArray(encounter?.stepReactionTrail)
+          ? encounter.stepReactionTrail
+          : [];
+
+        if (!trail.length) return;
+
+        const card = document.createElement("div");
+        card.className = "card reflection-step-trail-card";
+
+        const title = document.createElement("h4");
+        title.innerText = "How the table shifted";
+        card.appendChild(title);
+
+        trail.forEach((item) => {
+          const row = document.createElement("div");
+          row.className = "reflection-step-trail-row";
+          row.innerText =
+            `${String(item.step || "").toUpperCase()} • ` +
+            `${item.accuracy || "—"} • ` +
+            `${item.tableCue || "—"} ` +
+            (item.physicalCue ? `| ${item.physicalCue}` : "") +
+            (item.emotion ? ` | emotion: ${item.emotion}` : "");
+          card.appendChild(row);
+        });
+
+        container.appendChild(card);
+      }
+
+      function renderReflectionHorizontalSpineBlock(container, encounter) {
+        const spine = Array.isArray(encounter?.stepSpine) ? encounter.stepSpine : [];
+        if (!spine.length) return;
+
+        const wrap = document.createElement("div");
+        wrap.className = "card reflection-horizontal-spine";
+
+        const title = document.createElement("h4");
+        title.innerText = "Encounter spine";
+        wrap.appendChild(title);
+
+        const line = document.createElement("div");
+        line.className = "reflection-horizontal-spine-line";
+
+        spine.forEach((node) => {
+          const pill = document.createElement("div");
+          pill.className =
+            "reflection-spine-node " +
+            (node.score > 0 ? "is-positive" : node.score < 0 ? "is-negative" : "is-neutral");
+          pill.innerText = `${node.step} ${node.score > 0 ? "+1" : node.score < 0 ? "-1" : "0"}`;
+          line.appendChild(pill);
+        });
+
+        wrap.appendChild(line);
+        container.appendChild(wrap);
       }
 
       function resetEncounterVolatileState(encounter) {
@@ -15626,6 +15891,7 @@ function ensureProgLoaded() {
         encounter.__resolvedLogged = false;
         encounter.__encounterReactionSummary = null;
         encounter.__lastStepReaction = null;
+        encounter.__lastStepReactionKey = "";
         encounter.dynamicGuestReaction = null;
         encounter.dynamicGuestLine = null;
         encounter.guestPressure = initGuestPressureState(encounter);
@@ -15638,6 +15904,8 @@ function ensureProgLoaded() {
         };
         encounter.reactionHistory = [];
         encounter.stepSpine = [];
+        encounter.stepReactionTrail = [];
+        encounter.stepReactionByKey = {};
 
         return encounter;
       }
@@ -15664,6 +15932,10 @@ function ensureProgLoaded() {
           guestState: prev.guestState ? structuredClone(prev.guestState) : null,
           reactionHistory: Array.isArray(prev.reactionHistory) ? structuredClone(prev.reactionHistory) : [],
           stepSpine: Array.isArray(prev.stepSpine) ? structuredClone(prev.stepSpine) : [],
+          stepReactionTrail: Array.isArray(prev.stepReactionTrail) ? structuredClone(prev.stepReactionTrail) : [],
+          stepReactionByKey: prev.stepReactionByKey && typeof prev.stepReactionByKey === "object"
+            ? structuredClone(prev.stepReactionByKey)
+            : {},
 
           // Generated option sets are safe only for same run
           deliverOptionsS1: prev.deliverOptionsS1 || null,
@@ -16932,6 +17204,8 @@ function ensureProgLoaded() {
         renderDynamicGuestLineBlock(container, encounter, checks, { compact: false });
         renderDynamicGuestReactionBlock(container, encounter, checks, { compact: false });
         renderLatestReactionCueBlock(container, encounter);
+        renderReflectionStepTrailBlock(container, encounter);
+        renderReflectionHorizontalSpineBlock(container, encounter);
 
         if (window.__BC_DEBUG_PRESSURE__ === true) {
           renderGuestPressureDebug(container, encounter);
@@ -17359,6 +17633,9 @@ function ensureProgLoaded() {
           bestPath: reactionPayload?.bestPath || [],
           bottleServed: !!reactionPayload?.bottleServed,
           reactionHistory: reactionPayload?.reactionHistory || [],
+          stepReactionTrail: Array.isArray(currentEncounter.stepReactionTrail)
+            ? structuredClone(currentEncounter.stepReactionTrail)
+            : [],
           stepSpine: reactionPayload?.stepSpine || [],
           guestState: reactionPayload?.guestState || null,
           // UX summary (for history)
@@ -17453,6 +17730,9 @@ function ensureProgLoaded() {
               currentEncounter?.difficulty ??
               1,
             reactionSummary: currentEncounter.__encounterReactionSummary || null,
+            stepReactionTrail: Array.isArray(currentEncounter?.stepReactionTrail)
+              ? structuredClone(currentEncounter.stepReactionTrail)
+              : [],
             reflection: reactionPayload || null,
             progress: (() => {
               const spine = getProgressionSpine({ allowNull: true });
@@ -18412,7 +18692,8 @@ function ensureProgLoaded() {
         }
 
         const lockInBtn = addStepButton("LOCK IN", () => {
-          recordEncounterStepReaction("observe", currentEncounter);
+          window.evaluateChecks?.(currentEncounter);
+          commitEncounterStepReaction(currentEncounter, "observe");
           currentStep = 2;
           renderEncounterStep();
         }, stepButtons);
@@ -18484,7 +18765,8 @@ function ensureProgLoaded() {
         stepContent.appendChild(options);
 
         const contBtn = addStepButton("CONTINUE", () => {
-          recordEncounterStepReaction("mode", currentEncounter);
+          window.evaluateChecks?.(currentEncounter);
+          commitEncounterStepReaction(currentEncounter, "mode");
           currentStep = 3;
           renderEncounterStep();
         }, stepButtons);
@@ -18589,7 +18871,8 @@ function ensureProgLoaded() {
         const contBtn = addStepButton(
           "CONTINUE",
           () => {
-            recordEncounterStepReaction("hook", currentEncounter);
+            window.evaluateChecks?.(currentEncounter);
+            commitEncounterStepReaction(currentEncounter, "hook");
             currentStep = 4;
             renderEncounterStep();
           },
@@ -18749,7 +19032,8 @@ function ensureProgLoaded() {
         renderDeliverySelectionPreview();
 
         const sayBtn = addStepButton("SAY IT", () => {
-          recordEncounterStepReaction("deliver", currentEncounter);
+          window.evaluateChecks?.(currentEncounter);
+          commitEncounterStepReaction(currentEncounter, "deliver");
           currentStep = 5;
           renderEncounterStep();
         }, stepButtons);
@@ -18840,6 +19124,13 @@ function ensureProgLoaded() {
           result.pivotUnlocked = !!currentEncounter.pivotPlanned && result.pivotUnlocked;
           console.log("[BC] computeReaction result =", result);
           commitReaction(result, currentEncounter, reactionChecks);
+          currentEncounter.__reactionStepTrail =
+            Array.isArray(currentEncounter.stepReactionTrail)
+              ? structuredClone(currentEncounter.stepReactionTrail)
+              : [];
+          if (!Array.isArray(currentEncounter.reactionHistory) || !currentEncounter.reactionHistory.length) {
+            currentEncounter.reactionHistory = structuredClone(currentEncounter.__reactionStepTrail || []);
+          }
           try { logEncounter(); } catch (e) { console.warn("[BC] logEncounter failed", e); }
         } else {
           console.log("[BC] Reaction already computed for this step (skipping compute) ✅");
@@ -18906,6 +19197,7 @@ function ensureProgLoaded() {
         signalChip.innerText = "Signal: " + String(result.chainSignal || "").toUpperCase() +
           " (score " + Number(result.chainScore).toFixed(1) + " / 4.0)";
         stepContent.appendChild(signalChip);
+        renderCompactReactionSpineBlock(stepContent, currentEncounter);
 
         if (result.deliveryCorrect) {
           const upgraded = rollPremiumOpportunity(result, currentEncounter);
@@ -19087,6 +19379,7 @@ function ensureProgLoaded() {
         stepContent.appendChild(reactionHint);
 
         renderLatestReactionCueBlock(stepContent, currentEncounter);
+        renderStepReactionTrailBlock(stepContent, currentEncounter);
 
         const { checksRaw, reactionChecks } = getReactionChecksForCurrentEncounter();
         const result = computeEncounterReaction(reactionChecks);
@@ -20317,6 +20610,24 @@ function ensureProgLoaded() {
         if (Array.isArray(carry?.stepSpine)) {
           encounter.stepSpine = structuredClone(carry.stepSpine);
         }
+        if (Array.isArray(carry?.stepReactionTrail)) {
+          encounter.stepReactionTrail = structuredClone(carry.stepReactionTrail);
+        }
+        if (carry?.stepReactionByKey && typeof carry.stepReactionByKey === "object") {
+          encounter.stepReactionByKey = structuredClone(carry.stepReactionByKey);
+        }
+        if (carry?.__lastStepReactionKey) {
+          encounter.__lastStepReactionKey = String(carry.__lastStepReactionKey || "");
+        }
+        if (!Array.isArray(encounter.stepReactionTrail)) {
+          encounter.stepReactionTrail = [];
+        }
+        if (!encounter.stepReactionByKey || typeof encounter.stepReactionByKey !== "object") {
+          encounter.stepReactionByKey = {};
+        }
+        if (!encounter.__lastStepReactionKey) {
+          encounter.__lastStepReactionKey = "";
+        }
 
         if (!sameEncounter) {
           resetEncounterVolatileState(encounter);
@@ -20997,6 +21308,12 @@ function ensureProgLoaded() {
                 "\nBottle served: " + (entry.bottleServed ? "YES" : "NO") +
                 "\nReaction spine: " + entry.stepSpine.map((node) => `${node.step}:${node.score > 0 ? "+" : ""}${node.score}`).join("  ")
               : "";
+          const trailText =
+            Array.isArray(entry.stepReactionTrail) && entry.stepReactionTrail.length
+              ? "\nStep trail:\n" + entry.stepReactionTrail.map((item) =>
+                  `- ${String(item.step || "").toUpperCase()}: ${item.tableCue || "—"}`
+                ).join("\n")
+              : "";
 
           details.innerText =
             "Guest Actual: " + entry.guestStateActual + "\n" +
@@ -21006,6 +21323,7 @@ function ensureProgLoaded() {
             "Line 1: " + entry.deliveryLine1 + "\n" +
             "Line 2: " + entry.deliveryLine2 +
             reactionReflection +
+            trailText +
             telemetry +
             recoveryLine;
 
