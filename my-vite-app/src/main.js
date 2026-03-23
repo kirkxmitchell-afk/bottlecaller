@@ -9907,6 +9907,7 @@ function normalizeEncounterSummaryRow(row) {
     [];
 
   return {
+    userId: row?.user_id || "",
     occurredAt: row?.occurred_at || null,
     performanceGrade: row?.performance_grade || "",
     chainSignal: row?.chain_signal || "",
@@ -13039,8 +13040,7 @@ async function loadPerformanceHistory(userId) {
 
     fetchEncounterResolutionSummaries({
       restaurantId,
-      userId,
-      limit: 20,
+      limit: 120,
     }),
   ]);
 
@@ -13053,19 +13053,25 @@ async function loadPerformanceHistory(userId) {
 
   const snapshotData = Array.isArray(snapshotsRes?.data) ? snapshotsRes.data : [];
   const encounterData = Array.isArray(encountersRes?.data) ? encountersRes.data : [];
+  const encounterUserIds = Array.from(new Set(
+    encounterData
+      .map((row) => String(row?.user_id || "").trim())
+      .filter(Boolean)
+  ));
+  const encounterNameMap = await mapUserIdsToNames(encounterUserIds);
 
   drawPerformanceHistoryChart(snapshotData || []);
-  renderManagerEncounterSummaryList(userId, encounterData || []);
+  renderManagerEncounterSummaryList(userId, encounterData || [], encounterNameMap);
 }
 
-function renderManagerEncounterSummaryList(userId, rows) {
+function renderManagerEncounterSummaryList(userId, rows, nameMap = new Map()) {
   const host = document.getElementById("managerEncounterSummaryHost");
   if (!host) return;
 
   host.innerHTML = "";
 
   const title = document.createElement("h4");
-  title.innerText = "Encounter summaries";
+  title.innerText = "Encounter summaries by waiter";
   host.appendChild(title);
 
   if (!Array.isArray(rows) || !rows.length) {
@@ -13096,51 +13102,111 @@ function renderManagerEncounterSummaryList(userId, rows) {
     host.appendChild(note);
   }
 
-  normalizedRows.forEach((summary) => {
+  const groupedRows = normalizedRows.reduce((acc, summary) => {
+    const encounterUserId = String(summary.userId || "").trim() || "__unknown__";
+    if (!acc.has(encounterUserId)) acc.set(encounterUserId, []);
+    acc.get(encounterUserId).push(summary);
+    return acc;
+  }, new Map());
 
+  const panels = Array.from(groupedRows.entries())
+    .map(([encounterUserId, summaries]) => {
+      const latestOccurredAt = Math.max(
+        ...summaries.map((summary) => new Date(summary.occurredAt || 0).getTime() || 0),
+        0
+      );
+      const displayName =
+        nameMap.get(encounterUserId) ||
+        (encounterUserId === "__unknown__" ? "Unknown waiter" : encounterUserId);
+      return {
+        userId: encounterUserId,
+        displayName,
+        summaries: summaries.slice().sort((a, b) =>
+          new Date(b.occurredAt || 0).getTime() - new Date(a.occurredAt || 0).getTime()
+        ),
+        latestOccurredAt,
+      };
+    })
+    .sort((a, b) => {
+      if (String(a.userId) === String(userId || "")) return -1;
+      if (String(b.userId) === String(userId || "")) return 1;
+      if (b.latestOccurredAt !== a.latestOccurredAt) return b.latestOccurredAt - a.latestOccurredAt;
+      return String(a.displayName).localeCompare(String(b.displayName));
+    });
+
+  panels.forEach((panel) => {
     const card = document.createElement("div");
     card.className = "card manager-encounter-summary-card";
 
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "small-btn";
-    btn.innerText =
-      `${new Date(summary.occurredAt || Date.now()).toLocaleString()} • ` +
-      `Grade ${summary.performanceGrade || "—"}`;
+    btn.className = "manager-encounter-user-btn";
+    btn.innerHTML = `
+      <span class="manager-encounter-user-title">${escapeHtml(panel.displayName)}</span>
+      <span class="manager-encounter-user-meta">
+        ${panel.summaries.length} encounter${panel.summaries.length === 1 ? "" : "s"} •
+        Latest ${escapeHtml(new Date(panel.latestOccurredAt || Date.now()).toLocaleString())}
+      </span>
+    `;
 
-    const details = document.createElement("div");
-    details.className = "history-details is-collapsed";
+    const detailsWrap = document.createElement("div");
+    detailsWrap.className = "history-details is-collapsed manager-encounter-user-details";
 
-    const trailText = Array.isArray(summary.stepReactionTrail) && summary.stepReactionTrail.length
-      ? summary.stepReactionTrail
-          .map((item) => `- ${String(item.step || "").toUpperCase()}: ${item.tableCue || "—"}`)
-          .join("\n")
-      : "—";
+    panel.summaries.forEach((summary) => {
+      const summaryCard = document.createElement("div");
+      summaryCard.className = "manager-encounter-summary-item";
 
-    const spineText = Array.isArray(summary.stepSpine) && summary.stepSpine.length
-      ? summary.stepSpine
-          .map((node) => `${node.step}:${node.score > 0 ? "+" : ""}${node.score}`)
-          .join("  ")
-      : "—";
+      const summaryBtn = document.createElement("button");
+      summaryBtn.type = "button";
+      summaryBtn.className = "small-btn";
+      summaryBtn.innerText =
+        `${new Date(summary.occurredAt || Date.now()).toLocaleString()} • ` +
+        `Grade ${summary.performanceGrade || "—"}`;
 
-    details.innerText =
-      "AI perception: " + (summary.aiPerception || "—") + "\n" +
-      "Bottle served: " + (summary.bottleServed ? "YES" : "NO") + "\n" +
-      "Chosen path: " + ((summary.chosenPath || []).join(" -> ") || "—") + "\n" +
-      "Best path: " + ((summary.bestPath || []).join(" -> ") || "—") + "\n" +
-      "Spine: " + spineText + "\n" +
-      "Trail:\n" + trailText;
+      const details = document.createElement("div");
+      details.className = "history-details is-collapsed";
+
+      const trailText = Array.isArray(summary.stepReactionTrail) && summary.stepReactionTrail.length
+        ? summary.stepReactionTrail
+            .map((item) => `- ${String(item.step || "").toUpperCase()}: ${item.tableCue || "—"}`)
+            .join("\n")
+        : "—";
+
+      const spineText = Array.isArray(summary.stepSpine) && summary.stepSpine.length
+        ? summary.stepSpine
+            .map((node) => `${node.step}:${node.score > 0 ? "+" : ""}${node.score}`)
+            .join("  ")
+        : "—";
+
+      details.innerText =
+        "AI perception: " + (summary.aiPerception || "—") + "\n" +
+        "Bottle served: " + (summary.bottleServed ? "YES" : "NO") + "\n" +
+        "Chosen path: " + ((summary.chosenPath || []).join(" -> ") || "—") + "\n" +
+        "Best path: " + ((summary.bestPath || []).join(" -> ") || "—") + "\n" +
+        "Spine: " + spineText + "\n" +
+        "Trail:\n" + trailText;
+
+      summaryCard.appendChild(summaryBtn);
+      summaryCard.appendChild(details);
+      detailsWrap.appendChild(summaryCard);
+
+      summaryBtn.addEventListener("click", () => {
+        const isHidden = details.classList.contains("is-collapsed");
+        details.classList.toggle("is-collapsed", !isHidden);
+        summaryBtn.innerText = isHidden
+          ? `Hide • ${new Date(summary.occurredAt || Date.now()).toLocaleString()}`
+          : `${new Date(summary.occurredAt || Date.now()).toLocaleString()} • Grade ${summary.performanceGrade || "—"}`;
+      });
+    });
 
     card.appendChild(btn);
-    card.appendChild(details);
+    card.appendChild(detailsWrap);
     host.appendChild(card);
 
     btn.addEventListener("click", () => {
-      const isHidden = details.classList.contains("is-collapsed");
-      details.classList.toggle("is-collapsed", !isHidden);
-      btn.innerText = isHidden
-        ? `Hide • ${new Date(summary.occurredAt || Date.now()).toLocaleString()}`
-        : `${new Date(summary.occurredAt || Date.now()).toLocaleString()} • Grade ${summary.performanceGrade || "—"}`;
+      const isHidden = detailsWrap.classList.contains("is-collapsed");
+      detailsWrap.classList.toggle("is-collapsed", !isHidden);
+      btn.classList.toggle("is-open", isHidden);
     });
   });
 }
