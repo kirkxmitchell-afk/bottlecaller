@@ -5502,17 +5502,27 @@ console.log("BC3_MARKER_V1");
       window.__BC_INIT_DONE__ = true;
       applyRoleVisibility();
 
-      function bcEmitEvent(eventType, payload) {
-        try {
-          console.log("[BC][EMIT]", eventType, {
-            v: payload?.v,
-            encounterId: payload?.encounterId,
-            sessionId: payload?.sessionId,
-            hasChecks: payload ? Object.prototype.hasOwnProperty.call(payload, "checks") : false,
-            keys: payload ? Object.keys(payload) : [],
-          });
-          console.log("[BC][EMIT FULL]", eventType, payload);
-          console.trace("[BC][EMIT TRACE] " + eventType);
+	      function bcEmitEvent(eventType, payload) {
+	        try {
+	          console.log("[BC][EMIT]", eventType, {
+	            v: payload?.v,
+	            encounterId: payload?.encounterId,
+	            sessionId: payload?.sessionId,
+	            hasChecks: payload ? Object.prototype.hasOwnProperty.call(payload, "checks") : false,
+	            hasReflection: !!(payload?.reflection && typeof payload.reflection === "object"),
+	            hasReactionSummary: !!(payload?.reactionSummary && typeof payload.reactionSummary === "object"),
+	            hasStepReactionTrail: Array.isArray(payload?.stepReactionTrail),
+	            hasStepSpine: Array.isArray(payload?.reflection?.stepSpine) || Array.isArray(payload?.stepSpine),
+	            hasAiPerception: !!(payload?.reflection?.aiPerception || payload?.aiPerception),
+	            hasChosenPath: Array.isArray(payload?.reflection?.chosenPath) || Array.isArray(payload?.chosenPath),
+	            hasBestPath: Array.isArray(payload?.reflection?.bestPath) || Array.isArray(payload?.bestPath),
+	            hasBottleServed:
+	              typeof payload?.reflection?.bottleServed === "boolean" ||
+	              typeof payload?.bottleServed === "boolean",
+	            keys: payload ? Object.keys(payload) : [],
+	          });
+	          console.log("[BC][EMIT FULL]", eventType, payload);
+	          console.trace("[BC][EMIT TRACE] " + eventType);
 
           const ctx = window.__BC_CTX__ || null;
 
@@ -17777,12 +17787,19 @@ function ensureProgLoaded() {
             }
           } catch {}
 
-          console.log("[BC] encounter_resolved required fields", {
-            v: payload?.v,
-            encounterId: payload?.encounterId,
-          sessionId: payload?.sessionId,
-          hasChecks: Object.prototype.hasOwnProperty.call(payload || {}, "checks"),
-        });
+	          console.log("[BC] encounter_resolved required fields", {
+	            v: payload?.v,
+	            encounterId: payload?.encounterId,
+	          sessionId: payload?.sessionId,
+	          hasChecks: Object.prototype.hasOwnProperty.call(payload || {}, "checks"),
+	          hasReflection: !!(payload?.reflection && typeof payload.reflection === "object"),
+	          hasReactionSummary: !!(payload?.reactionSummary && typeof payload.reactionSummary === "object"),
+	          hasStepReactionTrail: Array.isArray(payload?.stepReactionTrail),
+	          reflectionKeys:
+	            payload?.reflection && typeof payload.reflection === "object"
+	              ? Object.keys(payload.reflection)
+	              : [],
+	        });
 
         const hasChecks = !!payload?.checks;
 
@@ -17799,15 +17816,21 @@ function ensureProgLoaded() {
             encounterId: payload?.encounterId,
             sessionId: payload?.sessionId
           });
-          console.log("[EMIT] encounter_resolved ✅", {
-            user: ctx?.userId || null,
-            rid: ctx?.restaurantId || null,
-            sessionId: payload?.sessionId,
-            encounterId: payload?.encounterId,
-            encounterNumber: payload?.encounterNumber,
-            chainScore: payload?.chainScore,
-            chainSignal: payload?.chainSignal
-          });
+	          console.log("[EMIT] encounter_resolved ✅", {
+	            user: ctx?.userId || null,
+	            rid: ctx?.restaurantId || null,
+	            sessionId: payload?.sessionId,
+	            encounterId: payload?.encounterId,
+	            encounterNumber: payload?.encounterNumber,
+	            chainScore: payload?.chainScore,
+	            chainSignal: payload?.chainSignal,
+	            hasReflection: !!(payload?.reflection && typeof payload.reflection === "object"),
+	            hasReactionSummary: !!(payload?.reactionSummary && typeof payload.reactionSummary === "object"),
+	            hasStepReactionTrail: Array.isArray(payload?.stepReactionTrail),
+	            hasChosenPath: Array.isArray(payload?.reflection?.chosenPath),
+	            hasBestPath: Array.isArray(payload?.reflection?.bestPath),
+	            hasBottleServed: typeof payload?.reflection?.bottleServed === "boolean",
+	          });
           bcEmitEvent("encounter_resolved", payload);
         } else {
           console.warn("[BC] blocked encounter_resolved (invalid payload)", payload);
