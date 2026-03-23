@@ -2771,6 +2771,12 @@ button:hover, .btn:hover, .btn-ghost:hover{
   gap:12px;
 }
 
+#screenManagerBoard .manager-encounter-summary-list{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+
 #screenManagerBoard .manager-encounter-summary-card{
   padding:12px;
   display:flex;
@@ -2802,7 +2808,33 @@ button:hover, .btn:hover, .btn-ghost:hover{
   opacity:.78;
 }
 
-#screenManagerBoard .manager-encounter-user-details{
+#screenManagerBoard .manager-encounter-detail-window{
+  padding:14px;
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+
+#screenManagerBoard .manager-encounter-detail-header{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  flex-wrap:wrap;
+}
+
+#screenManagerBoard .manager-encounter-detail-title{
+  font-weight:600;
+  font-size:16px;
+}
+
+#screenManagerBoard .manager-encounter-detail-meta{
+  margin-top:4px;
+  font-size:12px;
+  opacity:.78;
+}
+
+#screenManagerBoard .manager-encounter-detail-list{
   display:flex;
   flex-direction:column;
   gap:10px;

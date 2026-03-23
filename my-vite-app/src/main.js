@@ -13102,6 +13102,14 @@ function renderManagerEncounterSummaryList(userId, rows, nameMap = new Map()) {
     host.appendChild(note);
   }
 
+  const listView = document.createElement("div");
+  listView.className = "manager-encounter-summary-list";
+  host.appendChild(listView);
+
+  const detailWindow = document.createElement("div");
+  detailWindow.className = "card manager-encounter-detail-window hidden";
+  host.appendChild(detailWindow);
+
   const groupedRows = normalizedRows.reduce((acc, summary) => {
     const encounterUserId = String(summary.userId || "").trim() || "__unknown__";
     if (!acc.has(encounterUserId)) acc.set(encounterUserId, []);
@@ -13134,6 +13142,86 @@ function renderManagerEncounterSummaryList(userId, rows, nameMap = new Map()) {
       return String(a.displayName).localeCompare(String(b.displayName));
     });
 
+  function buildEncounterSummaryItem(summary) {
+    const summaryCard = document.createElement("div");
+    summaryCard.className = "manager-encounter-summary-item";
+
+    const summaryBtn = document.createElement("button");
+    summaryBtn.type = "button";
+    summaryBtn.className = "small-btn";
+    summaryBtn.innerText =
+      `${new Date(summary.occurredAt || Date.now()).toLocaleString()} • ` +
+      `Grade ${summary.performanceGrade || "—"}`;
+
+    const details = document.createElement("div");
+    details.className = "history-details is-collapsed";
+
+    const trailText = Array.isArray(summary.stepReactionTrail) && summary.stepReactionTrail.length
+      ? summary.stepReactionTrail
+          .map((item) => `- ${String(item.step || "").toUpperCase()}: ${item.tableCue || "—"}`)
+          .join("\n")
+      : "—";
+
+    const spineText = Array.isArray(summary.stepSpine) && summary.stepSpine.length
+      ? summary.stepSpine
+          .map((node) => `${node.step}:${node.score > 0 ? "+" : ""}${node.score}`)
+          .join("  ")
+      : "—";
+
+    details.innerText =
+      "AI perception: " + (summary.aiPerception || "—") + "\n" +
+      "Bottle served: " + (summary.bottleServed ? "YES" : "NO") + "\n" +
+      "Chosen path: " + ((summary.chosenPath || []).join(" -> ") || "—") + "\n" +
+      "Best path: " + ((summary.bestPath || []).join(" -> ") || "—") + "\n" +
+      "Spine: " + spineText + "\n" +
+      "Trail:\n" + trailText;
+
+    summaryCard.appendChild(summaryBtn);
+    summaryCard.appendChild(details);
+
+    summaryBtn.addEventListener("click", () => {
+      const isHidden = details.classList.contains("is-collapsed");
+      details.classList.toggle("is-collapsed", !isHidden);
+      summaryBtn.innerText = isHidden
+        ? `Hide • ${new Date(summary.occurredAt || Date.now()).toLocaleString()}`
+        : `${new Date(summary.occurredAt || Date.now()).toLocaleString()} • Grade ${summary.performanceGrade || "—"}`;
+    });
+
+    return summaryCard;
+  }
+
+  function openWaiterWindow(panel) {
+    listView.classList.add("hidden");
+    detailWindow.classList.remove("hidden");
+
+    detailWindow.innerHTML = `
+      <div class="manager-encounter-detail-header">
+        <div>
+          <div class="manager-encounter-detail-title">${escapeHtml(panel.displayName)}</div>
+          <div class="manager-encounter-detail-meta">
+            ${panel.summaries.length} encounter${panel.summaries.length === 1 ? "" : "s"} •
+            Latest ${escapeHtml(new Date(panel.latestOccurredAt || Date.now()).toLocaleString())}
+          </div>
+        </div>
+        <button type="button" class="small-btn manager-encounter-detail-close">Back</button>
+      </div>
+      <div class="manager-encounter-detail-list"></div>
+    `;
+
+    const closeBtn = detailWindow.querySelector(".manager-encounter-detail-close");
+    const detailList = detailWindow.querySelector(".manager-encounter-detail-list");
+
+    panel.summaries.forEach((summary) => {
+      detailList.appendChild(buildEncounterSummaryItem(summary));
+    });
+
+    closeBtn?.addEventListener("click", () => {
+      detailWindow.classList.add("hidden");
+      detailWindow.innerHTML = "";
+      listView.classList.remove("hidden");
+    });
+  }
+
   panels.forEach((panel) => {
     const card = document.createElement("div");
     card.className = "card manager-encounter-summary-card";
@@ -13148,65 +13236,11 @@ function renderManagerEncounterSummaryList(userId, rows, nameMap = new Map()) {
         Latest ${escapeHtml(new Date(panel.latestOccurredAt || Date.now()).toLocaleString())}
       </span>
     `;
-
-    const detailsWrap = document.createElement("div");
-    detailsWrap.className = "history-details is-collapsed manager-encounter-user-details";
-
-    panel.summaries.forEach((summary) => {
-      const summaryCard = document.createElement("div");
-      summaryCard.className = "manager-encounter-summary-item";
-
-      const summaryBtn = document.createElement("button");
-      summaryBtn.type = "button";
-      summaryBtn.className = "small-btn";
-      summaryBtn.innerText =
-        `${new Date(summary.occurredAt || Date.now()).toLocaleString()} • ` +
-        `Grade ${summary.performanceGrade || "—"}`;
-
-      const details = document.createElement("div");
-      details.className = "history-details is-collapsed";
-
-      const trailText = Array.isArray(summary.stepReactionTrail) && summary.stepReactionTrail.length
-        ? summary.stepReactionTrail
-            .map((item) => `- ${String(item.step || "").toUpperCase()}: ${item.tableCue || "—"}`)
-            .join("\n")
-        : "—";
-
-      const spineText = Array.isArray(summary.stepSpine) && summary.stepSpine.length
-        ? summary.stepSpine
-            .map((node) => `${node.step}:${node.score > 0 ? "+" : ""}${node.score}`)
-            .join("  ")
-        : "—";
-
-      details.innerText =
-        "AI perception: " + (summary.aiPerception || "—") + "\n" +
-        "Bottle served: " + (summary.bottleServed ? "YES" : "NO") + "\n" +
-        "Chosen path: " + ((summary.chosenPath || []).join(" -> ") || "—") + "\n" +
-        "Best path: " + ((summary.bestPath || []).join(" -> ") || "—") + "\n" +
-        "Spine: " + spineText + "\n" +
-        "Trail:\n" + trailText;
-
-      summaryCard.appendChild(summaryBtn);
-      summaryCard.appendChild(details);
-      detailsWrap.appendChild(summaryCard);
-
-      summaryBtn.addEventListener("click", () => {
-        const isHidden = details.classList.contains("is-collapsed");
-        details.classList.toggle("is-collapsed", !isHidden);
-        summaryBtn.innerText = isHidden
-          ? `Hide • ${new Date(summary.occurredAt || Date.now()).toLocaleString()}`
-          : `${new Date(summary.occurredAt || Date.now()).toLocaleString()} • Grade ${summary.performanceGrade || "—"}`;
-      });
-    });
-
     card.appendChild(btn);
-    card.appendChild(detailsWrap);
-    host.appendChild(card);
+    listView.appendChild(card);
 
     btn.addEventListener("click", () => {
-      const isHidden = detailsWrap.classList.contains("is-collapsed");
-      detailsWrap.classList.toggle("is-collapsed", !isHidden);
-      btn.classList.toggle("is-open", isHidden);
+      openWaiterWindow(panel);
     });
   });
 }
