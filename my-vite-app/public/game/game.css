@@ -907,27 +907,27 @@ button[disabled] { opacity: 0.5; cursor: not-allowed; transform: none; }
 .reflection-spine-svg {
   display: block;
   width: 100%;
-  max-width: 420px;
+  max-width: 760px;
   margin-top: 12px;
   overflow: visible;
 }
 
 .reflection-spine-svg-step {
-  font-size: 12px;
-  font-weight: 800;
+  font-size: 24px;
+  font-weight: 900;
   letter-spacing: 0.08em;
   fill: rgba(245,247,248,0.96);
 }
 
 .reflection-spine-svg-total {
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 800;
   letter-spacing: 0.05em;
   fill: rgba(220,252,231,0.82);
 }
 
 .reflection-spine-svg-score {
-  font-size: 12px;
+  font-size: 22px;
   font-weight: 900;
   letter-spacing: 0.05em;
 }
