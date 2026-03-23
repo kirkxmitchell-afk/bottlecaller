@@ -15816,11 +15816,19 @@ function ensureProgLoaded() {
         if (!spine.length) return;
 
         const wrap = document.createElement("div");
-        wrap.className = "card reaction-spine-graphic-card";
+        wrap.className =
+          "card reaction-spine-graphic-card" +
+          (opts.variant === "reflection" ? " is-reflection" : "");
 
         const title = document.createElement("h4");
         title.innerText = opts.title || "Score spine";
         wrap.appendChild(title);
+
+        const totalScore = spine.reduce((sum, node) => sum + Number(node?.score || 0), 0);
+        const totalHeader = document.createElement("div");
+        totalHeader.className = "small-text reaction-block-subtitle";
+        totalHeader.innerText = `Running score across the encounter: ${totalScore > 0 ? "+" : ""}${totalScore}`;
+        wrap.appendChild(totalHeader);
 
         let running = 0;
         spine.forEach((node) => {
@@ -15865,8 +15873,15 @@ function ensureProgLoaded() {
         const trail = Array.isArray(encounter.stepReactionTrail) ? encounter.stepReactionTrail : [];
         if (!trail.length) return;
 
+        if (opts.title) {
+          const title = document.createElement("div");
+          title.className = "small-text reaction-block-subtitle";
+          title.innerText = opts.title;
+          container.appendChild(title);
+        }
+
         const wrap = document.createElement("div");
-        wrap.className = "reaction-journey-strip";
+        wrap.className = "reaction-journey-rail";
 
         trail.forEach((item, index) => {
           const stepNode = document.createElement("div");
@@ -15875,6 +15890,11 @@ function ensureProgLoaded() {
             `<div class="reaction-journey-kicker">STEP ${index + 1}</div>` +
             `<div class="reaction-journey-main">${escapeHtml(String(item.step || "").toUpperCase() || "—")}</div>`;
           wrap.appendChild(stepNode);
+
+          const arrow = document.createElement("div");
+          arrow.className = "reaction-journey-arrow";
+          arrow.innerText = "→";
+          wrap.appendChild(arrow);
 
           const reactionNode = document.createElement("div");
           reactionNode.className =
@@ -15885,6 +15905,13 @@ function ensureProgLoaded() {
             `<div class="reaction-journey-main">${escapeHtml(item.tableCue || "—")}</div>` +
             `<div class="reaction-journey-meta">${escapeHtml(item.emotion || "neutral")} • ${item.stepScore > 0 ? "+1" : item.stepScore < 0 ? "-1" : "0"}</div>`;
           wrap.appendChild(reactionNode);
+
+          if (index < trail.length - 1) {
+            const nextArrow = document.createElement("div");
+            nextArrow.className = "reaction-journey-arrow";
+            nextArrow.innerText = "→";
+            wrap.appendChild(nextArrow);
+          }
         });
 
         container.appendChild(wrap);
@@ -15935,11 +15962,9 @@ function ensureProgLoaded() {
           "<strong>Chosen path:</strong> " + (trail.map((item) => item?.step).filter(Boolean).join(" -> ") || "—");
         card.appendChild(path);
 
-        const journeyTitle = document.createElement("div");
-        journeyTitle.className = "small-text reaction-block-subtitle";
-        journeyTitle.innerText = "Decision -> reaction sequence";
-        card.appendChild(journeyTitle);
-        renderReactionJourneyTimeline(card, encounter);
+        renderReactionJourneyTimeline(card, encounter, {
+          title: "Decision -> reaction -> next decision"
+        });
 
         container.appendChild(card);
       }
@@ -15978,7 +16003,10 @@ function ensureProgLoaded() {
         if (!spine.length) return;
 
         const graphicHost = document.createElement("div");
-        renderGraphicReactionSpineBlock(graphicHost, encounter, { title: "Encounter spine" });
+        renderGraphicReactionSpineBlock(graphicHost, encounter, {
+          title: "Graphic score spine",
+          variant: "reflection"
+        });
         if (graphicHost.firstChild) {
           container.appendChild(graphicHost.firstChild);
         }
