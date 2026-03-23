@@ -15960,36 +15960,24 @@ function ensureProgLoaded() {
         kicker.innerText = config.kicker || (config.pending ? "CURRENT STEP" : "LOCKED");
         frame.appendChild(kicker);
 
-        const stepNode = document.createElement("div");
-        stepNode.className = "reaction-journey-step";
-        stepNode.innerHTML =
-          `<div class="reaction-journey-main">${escapeHtml(config.stepTitle || "—")}</div>` +
-          (config.stepMeta
-            ? `<div class="reaction-journey-meta">${escapeHtml(config.stepMeta)}</div>`
+        const node = document.createElement("div");
+        node.className =
+          (config.kind === "reaction" ? "reaction-journey-reaction " : "reaction-journey-step ") +
+          (config.kind === "reaction"
+            ? (config.pending
+                ? "is-pending"
+                : config.score > 0
+                  ? "is-positive"
+                  : config.score < 0
+                    ? "is-negative"
+                    : "is-neutral")
             : "");
-        frame.appendChild(stepNode);
-
-        const connector = document.createElement("div");
-        connector.className = "reaction-journey-connector is-vertical";
-        connector.innerText = "↓";
-        frame.appendChild(connector);
-
-        const reactionNode = document.createElement("div");
-        reactionNode.className =
-          "reaction-journey-reaction " +
-          (config.pending
-            ? "is-pending"
-            : config.score > 0
-              ? "is-positive"
-              : config.score < 0
-                ? "is-negative"
-                : "is-neutral");
-        reactionNode.innerHTML =
-          `<div class="reaction-journey-main">${escapeHtml(config.reactionText || "—")}</div>` +
-          (config.reactionMeta
-            ? `<div class="reaction-journey-meta">${escapeHtml(config.reactionMeta)}</div>`
+        node.innerHTML =
+          `<div class="reaction-journey-main">${escapeHtml(config.title || "—")}</div>` +
+          (config.meta
+            ? `<div class="reaction-journey-meta">${escapeHtml(config.meta)}</div>`
             : "");
-        frame.appendChild(reactionNode);
+        frame.appendChild(node);
 
         container.appendChild(frame);
       }
@@ -16049,13 +16037,18 @@ function ensureProgLoaded() {
 
         if (latest) {
           renderSequentialEncounterFrame(sequence, {
-            kicker: "JUST LOCKED",
-            stepTitle: String(latest.step || "").toUpperCase(),
-            stepMeta: latest.accuracy || "resolved",
-            reactionText: latest.tableCue || "—",
-            reactionMeta:
+            kicker: "JUST LOCKED STEP",
+            title: String(latest.step || "").toUpperCase(),
+            meta: latest.accuracy || "resolved",
+            kind: "step",
+          });
+          renderSequentialEncounterFrame(sequence, {
+            kicker: "REACTION",
+            title: latest.tableCue || "—",
+            meta:
               `${latest.emotion || "neutral"} • ${latest.stepScore > 0 ? "+1" : latest.stepScore < 0 ? "-1" : "0"}`,
             score: Number(latest.stepScore || 0),
+            kind: "reaction",
           });
         }
 
@@ -16063,12 +16056,11 @@ function ensureProgLoaded() {
         if (activeStepKey && activeStepKey !== "reaction" && activeStepKey !== "reflection") {
           renderSequentialEncounterFrame(sequence, {
             kicker: "NEXT STEP",
-            stepTitle: String(activeStepKey).toUpperCase(),
-            stepMeta: "awaiting your choice",
-            reactionText: "The guest reaction for this step appears after you lock it in.",
-            reactionMeta: "pending",
+            title: String(activeStepKey).toUpperCase(),
+            meta: "awaiting your choice",
             pending: true,
             score: 0,
+            kind: "step",
           });
         }
 
