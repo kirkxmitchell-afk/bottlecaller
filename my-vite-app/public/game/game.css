@@ -566,6 +566,13 @@ button[disabled] { opacity: 0.5; cursor: not-allowed; transform: none; }
     rgba(255,255,255,0.02);
 }
 
+.reaction-journey-frame.is-pending {
+  border-color: rgba(255,255,255,0.10);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)),
+    rgba(255,255,255,0.02);
+}
+
 .reaction-journey-arrow {
   flex: 0 0 auto;
   align-self: center;
@@ -643,6 +650,13 @@ button[disabled] { opacity: 0.5; cursor: not-allowed; transform: none; }
   background:
     linear-gradient(180deg, rgba(245,194,107,0.14), rgba(255,255,255,0.03)),
     rgba(255,255,255,0.03);
+}
+
+.reaction-journey-reaction.is-pending {
+  border-color: rgba(255,255,255,0.08);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)),
+    rgba(255,255,255,0.02);
 }
 
 .reaction-journey-kicker {

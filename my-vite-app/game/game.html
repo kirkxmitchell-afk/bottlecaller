@@ -15937,6 +15937,63 @@ function ensureProgLoaded() {
         container.appendChild(wrap);
       }
 
+      function getActiveEncounterStepKey(step = currentStep) {
+        if (step === 1) return "observe";
+        if (step === 2) return "mode";
+        if (step === 3) return "hook";
+        if (step === 4) return "deliver";
+        if (step === 5) return "reaction";
+        if (step === 6) return "reflection";
+        return "";
+      }
+
+      function renderSequentialEncounterFrame(container, config = {}) {
+        if (!container) return;
+
+        const frame = document.createElement("div");
+        frame.className =
+          "card reaction-journey-frame" +
+          (config.pending ? " is-pending" : " is-complete");
+
+        const kicker = document.createElement("div");
+        kicker.className = "reaction-journey-kicker";
+        kicker.innerText = config.kicker || (config.pending ? "CURRENT STEP" : "LOCKED");
+        frame.appendChild(kicker);
+
+        const stepNode = document.createElement("div");
+        stepNode.className = "reaction-journey-step";
+        stepNode.innerHTML =
+          `<div class="reaction-journey-main">${escapeHtml(config.stepTitle || "—")}</div>` +
+          (config.stepMeta
+            ? `<div class="reaction-journey-meta">${escapeHtml(config.stepMeta)}</div>`
+            : "");
+        frame.appendChild(stepNode);
+
+        const connector = document.createElement("div");
+        connector.className = "reaction-journey-connector is-vertical";
+        connector.innerText = "↓";
+        frame.appendChild(connector);
+
+        const reactionNode = document.createElement("div");
+        reactionNode.className =
+          "reaction-journey-reaction " +
+          (config.pending
+            ? "is-pending"
+            : config.score > 0
+              ? "is-positive"
+              : config.score < 0
+                ? "is-negative"
+                : "is-neutral");
+        reactionNode.innerHTML =
+          `<div class="reaction-journey-main">${escapeHtml(config.reactionText || "—")}</div>` +
+          (config.reactionMeta
+            ? `<div class="reaction-journey-meta">${escapeHtml(config.reactionMeta)}</div>`
+            : "");
+        frame.appendChild(reactionNode);
+
+        container.appendChild(frame);
+      }
+
       function renderReactionProgressPanel(container, encounter, opts = {}) {
         if (!container || !encounter) return;
 
@@ -15982,10 +16039,40 @@ function ensureProgLoaded() {
           "<strong>Chosen path:</strong> " + (trail.map((item) => item?.step).filter(Boolean).join(" -> ") || "—");
         card.appendChild(path);
 
-        renderReactionJourneyTimeline(card, encounter, {
-          title: "Each step and its reaction",
-          layout: "vertical"
-        });
+        const sequenceTitle = document.createElement("div");
+        sequenceTitle.className = "small-text reaction-block-subtitle";
+        sequenceTitle.innerText = "Current sequence";
+        card.appendChild(sequenceTitle);
+
+        const sequence = document.createElement("div");
+        sequence.className = "reaction-journey-stack";
+
+        if (latest) {
+          renderSequentialEncounterFrame(sequence, {
+            kicker: "JUST LOCKED",
+            stepTitle: String(latest.step || "").toUpperCase(),
+            stepMeta: latest.accuracy || "resolved",
+            reactionText: latest.tableCue || "—",
+            reactionMeta:
+              `${latest.emotion || "neutral"} • ${latest.stepScore > 0 ? "+1" : latest.stepScore < 0 ? "-1" : "0"}`,
+            score: Number(latest.stepScore || 0),
+          });
+        }
+
+        const activeStepKey = getActiveEncounterStepKey(currentStep);
+        if (activeStepKey && activeStepKey !== "reaction" && activeStepKey !== "reflection") {
+          renderSequentialEncounterFrame(sequence, {
+            kicker: "NEXT STEP",
+            stepTitle: String(activeStepKey).toUpperCase(),
+            stepMeta: "awaiting your choice",
+            reactionText: "The guest reaction for this step appears after you lock it in.",
+            reactionMeta: "pending",
+            pending: true,
+            score: 0,
+          });
+        }
+
+        card.appendChild(sequence);
 
         container.appendChild(card);
       }
