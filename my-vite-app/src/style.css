@@ -431,6 +431,116 @@ button[disabled] { opacity: 0.5; cursor: not-allowed; transform: none; }
 .successText { color: var(--greenText); }
 .errorText { color: rgba(255, 140, 140, 0.92); }
 
+.reaction-trail-card,
+.reflection-step-trail-card,
+.reflection-horizontal-spine,
+.reaction-spine-card,
+.reaction-snapshot-card,
+.ux-summary-card,
+.reflection-detail-card{
+  margin-top: 14px;
+}
+
+.reaction-trail-card,
+.reaction-snapshot-card,
+.reaction-spine-card{
+  background:
+    radial-gradient(circle at top left, rgba(125,211,252,0.10), transparent 58%),
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+}
+
+.reflection-step-trail-card,
+.reflection-horizontal-spine,
+.reflection-detail-card,
+.ux-summary-card{
+  background:
+    radial-gradient(circle at top left, rgba(74,222,128,0.08), transparent 58%),
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+}
+
+.reaction-trail-card h4,
+.reflection-step-trail-card h4,
+.reflection-horizontal-spine h4,
+.reaction-spine-card h4,
+.reaction-snapshot-card h4{
+  margin: 0 0 8px;
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.reaction-block-subtitle{
+  margin-bottom: 10px;
+  color: rgba(245,246,247,0.72);
+}
+
+.reaction-trail-row,
+.reflection-step-trail-row{
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+}
+
+.reaction-trail-row + .reaction-trail-row,
+.reflection-step-trail-row + .reflection-step-trail-row{
+  margin-top: 8px;
+}
+
+.reaction-spine-line,
+.reflection-horizontal-spine-line{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.reaction-spine-node,
+.reflection-spine-node{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.04);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.reaction-spine-node.is-positive,
+.reflection-spine-node.is-positive{
+  border-color: rgba(74,222,128,0.28);
+  background: rgba(74,222,128,0.14);
+  color: rgba(220,252,231,0.98);
+}
+
+.reaction-spine-node.is-negative,
+.reflection-spine-node.is-negative{
+  border-color: rgba(248,113,113,0.28);
+  background: rgba(248,113,113,0.14);
+  color: rgba(254,226,226,0.98);
+}
+
+.reaction-spine-node.is-neutral,
+.reflection-spine-node.is-neutral{
+  border-color: rgba(250,204,21,0.24);
+  background: rgba(250,204,21,0.12);
+  color: rgba(254,249,195,0.98);
+}
+
+.reaction-snapshot-paths{
+  margin-top: 10px;
+  line-height: 1.55;
+}
+
+.reflection-detail-copy{
+  margin-top: 8px;
+  line-height: 1.5;
+}
+
 /* =========================================================
    PREMIUM APP: click-safe overlays + wide cockpit styling
    Applies to your exact DOM: #screenPremiumApp, #premiumRoot, #premiumRootFrame,

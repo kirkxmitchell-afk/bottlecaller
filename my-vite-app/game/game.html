@@ -15755,10 +15755,14 @@ function ensureProgLoaded() {
         const card = document.createElement("div");
         card.className = "card reaction-trail-card";
 
-        const title = document.createElement("div");
-        title.className = "small-text";
+        const title = document.createElement("h4");
         title.innerText = "Table read across the encounter";
         card.appendChild(title);
+
+        const subtitle = document.createElement("div");
+        subtitle.className = "small-text reaction-block-subtitle";
+        subtitle.innerText = "Each step shows how the guest reacted to the choice you locked in.";
+        card.appendChild(subtitle);
 
         trail.forEach((item) => {
           const row = document.createElement("div");
@@ -15785,10 +15789,25 @@ function ensureProgLoaded() {
         if (!spine.length) return;
 
         const box = document.createElement("div");
-        box.className = "notice";
-        box.innerText =
-          "Spine: " +
-          spine.map((node) => `${node.step}:${node.score > 0 ? "+" : ""}${node.score}`).join("  ");
+        box.className = "card reaction-spine-card";
+
+        const title = document.createElement("h4");
+        title.innerText = "Encounter spine";
+        box.appendChild(title);
+
+        const line = document.createElement("div");
+        line.className = "reaction-spine-line";
+
+        spine.forEach((node) => {
+          const pill = document.createElement("div");
+          pill.className =
+            "reaction-spine-node " +
+            (node.score > 0 ? "is-positive" : node.score < 0 ? "is-negative" : "is-neutral");
+          pill.innerText = `${node.step} ${node.score > 0 ? "+1" : node.score < 0 ? "-1" : "0"}`;
+          line.appendChild(pill);
+        });
+
+        box.appendChild(line);
         container.appendChild(box);
       }
 
@@ -17214,6 +17233,30 @@ function ensureProgLoaded() {
         renderDynamicGuestLineBlock(container, encounter, checks, { compact: false });
         renderDynamicGuestReactionBlock(container, encounter, checks, { compact: false });
         renderLatestReactionCueBlock(container, encounter);
+        if (reactionPayload) {
+          const snapshot = document.createElement("div");
+          snapshot.className = "card reaction-snapshot-card";
+
+          const snapshotTitle = document.createElement("h4");
+          snapshotTitle.innerText = "Reaction snapshot";
+          snapshot.appendChild(snapshotTitle);
+
+          const meta = document.createElement("div");
+          meta.className = "small-text reaction-block-subtitle";
+          meta.innerText =
+            "AI read: " + (reactionPayload.aiPerception || "—") +
+            " • Bottle served: " + (reactionPayload.bottleServed ? "YES" : "NO");
+          snapshot.appendChild(meta);
+
+          const path = document.createElement("div");
+          path.className = "reaction-snapshot-paths";
+          path.innerHTML =
+            "<strong>Chosen path:</strong> " + (((reactionPayload.chosenPath || []).join(" -> ")) || "—") +
+            "<br><strong>Best path:</strong> " + (((reactionPayload.bestPath || []).join(" -> ")) || "observe -> mode -> hook -> deliver");
+          snapshot.appendChild(path);
+
+          container.appendChild(snapshot);
+        }
         renderReflectionStepTrailBlock(container, encounter);
         renderReflectionHorizontalSpineBlock(container, encounter);
 
@@ -17225,8 +17268,9 @@ function ensureProgLoaded() {
         renderStrengthFixBlock(container, checks, encounter);
 
         console.log("[BC] Step6 summary", encounter.__uxSummary);
-        if (encounter.__uxSummary) {
-          renderUxSummary(container, encounter.__uxSummary, {
+        const summaryForRender = encounter.__uxSummary || buildStrengthFixSummary(encounter, checks);
+        if (summaryForRender) {
+          renderUxSummary(container, summaryForRender, {
             title: "Summary to lock it in",
             compact: false
           });

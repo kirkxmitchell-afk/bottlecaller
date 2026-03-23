@@ -13135,7 +13135,7 @@ function renderManagerEncounterSummaryList(userId, rows) {
     card.appendChild(details);
     host.appendChild(card);
 
-    bindInput(btn, () => {
+    btn.addEventListener("click", () => {
       const isHidden = details.classList.contains("is-collapsed");
       details.classList.toggle("is-collapsed", !isHidden);
       btn.innerText = isHidden
