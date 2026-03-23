@@ -15654,6 +15654,16 @@ function ensureProgLoaded() {
         return commitEncounterStepReaction(encounter, stepKey);
       }
 
+      function ensureDeliverReactionCommitted(encounter = currentEncounter) {
+        if (!encounter) return null;
+        try {
+          window.evaluateChecks?.(encounter);
+        } catch (error) {
+          console.warn("[BC] evaluateChecks failed before deliver commit", error);
+        }
+        return commitEncounterStepReaction(encounter, "deliver");
+      }
+
       function deriveEncounterReactionPayload(encounter = currentEncounter) {
         const api = getReactionRuntimeApi();
         if (!encounter) return null;
@@ -17574,6 +17584,9 @@ function ensureProgLoaded() {
       }
 
       function renderReflectionOverview(container, encounter, checks, modeBestResolved) {
+        if (!encounter?.stepReactionByKey?.deliver) {
+          ensureDeliverReactionCommitted(encounter);
+        }
         const reactionPayload = deriveEncounterReactionPayload(encounter);
 
         const reflectionTitle = document.createElement("h3");
@@ -19419,8 +19432,7 @@ function ensureProgLoaded() {
         renderDeliverySelectionPreview();
 
         const sayBtn = addStepButton("SAY IT", () => {
-          window.evaluateChecks?.(currentEncounter);
-          commitEncounterStepReaction(currentEncounter, "deliver");
+          ensureDeliverReactionCommitted(currentEncounter);
           showStepReactionPreview("deliver", 5);
         }, stepButtons);
         const ready =
@@ -19756,8 +19768,7 @@ function ensureProgLoaded() {
 
         if (!currentEncounter?.stepReactionByKey?.deliver) {
           try {
-            window.evaluateChecks?.(currentEncounter);
-            commitEncounterStepReaction(currentEncounter, "deliver");
+            ensureDeliverReactionCommitted(currentEncounter);
           } catch (error) {
             console.warn("[BC] deliver reaction commit on reaction screen failed", error);
           }
