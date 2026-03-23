@@ -17485,6 +17485,8 @@ function ensureProgLoaded() {
       }
 
       function renderReflectionOverview(container, encounter, checks, modeBestResolved) {
+        const reactionPayload = deriveEncounterReactionPayload(encounter);
+
         const reflectionTitle = document.createElement("h3");
         reflectionTitle.className = "encounter-stage-title";
         reflectionTitle.innerText = "What just happened";
