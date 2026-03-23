@@ -919,13 +919,6 @@ button[disabled] { opacity: 0.5; cursor: not-allowed; transform: none; }
   fill: rgba(245,247,248,0.96);
 }
 
-.reflection-spine-svg-total {
-  font-size: 24px;
-  font-weight: 800;
-  letter-spacing: 0.05em;
-  fill: rgba(220,252,231,0.82);
-}
-
 .reflection-spine-svg-score {
   font-size: 30px;
   font-weight: 900;

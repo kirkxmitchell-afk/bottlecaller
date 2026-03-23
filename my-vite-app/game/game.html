@@ -15661,7 +15661,25 @@ function ensureProgLoaded() {
         } catch (error) {
           console.warn("[BC] evaluateChecks failed before deliver commit", error);
         }
-        return commitEncounterStepReaction(encounter, "deliver");
+        const reaction = commitEncounterStepReaction(encounter, "deliver");
+        if (!encounter.stepReactionByKey?.deliver) {
+          encounter.stepReactionByKey = encounter.stepReactionByKey || {};
+          encounter.stepReactionByKey.deliver = reaction || buildEncounterStepReactionRecord(encounter, "deliver");
+        }
+        if (!Array.isArray(encounter.stepReactionTrail)) encounter.stepReactionTrail = [];
+        if (!encounter.stepReactionTrail.find((node) => node?.step === "deliver") && encounter.stepReactionByKey?.deliver) {
+          encounter.stepReactionTrail.push(encounter.stepReactionByKey.deliver);
+        }
+        if (!Array.isArray(encounter.stepSpine)) encounter.stepSpine = [];
+        if (!encounter.stepSpine.find((node) => node?.step === "deliver")) {
+          const deliverScore = Number(
+            encounter.stepReactionByKey?.deliver?.successPolarity ??
+            getStepEvalResultFromEncounter(encounter, "deliver")?.score ??
+            0
+          );
+          encounter.stepSpine.push({ step: "deliver", score: deliverScore });
+        }
+        return encounter.stepReactionByKey?.deliver || reaction;
       }
 
       function deriveEncounterReactionPayload(encounter = currentEncounter) {
@@ -15842,12 +15860,6 @@ function ensureProgLoaded() {
         title.innerText = opts.title || "Score spine";
         wrap.appendChild(title);
 
-        const totalScore = spine.reduce((sum, node) => sum + Number(node?.score || 0), 0);
-        const totalHeader = document.createElement("div");
-        totalHeader.className = "small-text reaction-block-subtitle";
-        totalHeader.innerText = `Running score across the encounter: ${totalScore > 0 ? "+" : ""}${totalScore}`;
-        wrap.appendChild(totalHeader);
-
         if (opts.variant === "reflection") {
           const svgNs = "http://www.w3.org/2000/svg";
           const rowGap = 142;
@@ -15872,10 +15884,8 @@ function ensureProgLoaded() {
           core.setAttribute("stroke-linecap", "round");
           svg.appendChild(core);
 
-          let running = 0;
           spine.forEach((node, index) => {
             const score = Number(node?.score || 0);
-            running += score;
             const y = topPad + (index * rowGap);
             const protrusionLen = score > 0 ? 175 : score < 0 ? -175 : 0;
             const endX = centerX + protrusionLen;
@@ -15910,13 +15920,6 @@ function ensureProgLoaded() {
             stepLabel.textContent = String(node?.step || "").toUpperCase();
             svg.appendChild(stepLabel);
 
-            const totalLabel = document.createElementNS(svgNs, "text");
-            totalLabel.setAttribute("x", "40");
-            totalLabel.setAttribute("y", String(y + 34));
-            totalLabel.setAttribute("class", "reflection-spine-svg-total");
-            totalLabel.textContent = `TOTAL ${running > 0 ? "+" : ""}${running}`;
-            svg.appendChild(totalLabel);
-
             const scoreBadge = document.createElementNS(svgNs, "text");
             scoreBadge.setAttribute("x", String(score > 0 ? endX + 34 : score < 0 ? endX - 34 : centerX + 38));
             scoreBadge.setAttribute("y", String(y + 12));
@@ -15937,10 +15940,7 @@ function ensureProgLoaded() {
           return;
         }
 
-        let running = 0;
         spine.forEach((node) => {
-          running += Number(node?.score || 0);
-
           const row = document.createElement("div");
           row.className =
             "reaction-spine-graphic-row" +
