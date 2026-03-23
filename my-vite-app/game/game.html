@@ -16345,6 +16345,22 @@ function ensureProgLoaded() {
         renderEncounterStep();
       }
 
+      function resetEncounterViewport() {
+        const panel = document.getElementById("encounterPanel");
+        const content = document.getElementById("stepContent");
+        const target = content || panel;
+        if (!target) return;
+
+        try {
+          target.scrollIntoView({ block: "start", behavior: "auto" });
+        } catch {}
+
+        try {
+          if (panel) panel.scrollTop = 0;
+          if (content) content.scrollTop = 0;
+        } catch {}
+      }
+
       function showStepReactionPreview(stepKey, nextStep) {
         if (!currentEncounter || !stepKey) return;
         currentEncounter.__stepReactionPreview = {
@@ -20434,6 +20450,7 @@ function ensureProgLoaded() {
 
         stepContent.innerHTML = "";
         stepButtons.innerHTML = "";
+        resetEncounterViewport();
 
         renderDebugStateBox();
 
