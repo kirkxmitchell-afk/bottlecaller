@@ -414,7 +414,8 @@ button[disabled] { opacity: 0.5; cursor: not-allowed; transform: none; }
 .reflection-horizontal-spine,
 .reaction-spine-card,
 .reaction-snapshot-card,
-.reaction-progress-card {
+.reaction-progress-card,
+.reaction-journey-card {
   position: relative;
   overflow: hidden;
   margin-top: 14px;
@@ -424,6 +425,7 @@ button[disabled] { opacity: 0.5; cursor: not-allowed; transform: none; }
 .reaction-spine-card::before,
 .reaction-snapshot-card::before,
 .reaction-progress-card::before,
+.reaction-journey-card::before,
 .reflection-step-trail-card::before,
 .reflection-horizontal-spine::before {
   content: "";
@@ -436,7 +438,8 @@ button[disabled] { opacity: 0.5; cursor: not-allowed; transform: none; }
 .reaction-trail-card,
 .reaction-spine-card,
 .reaction-snapshot-card,
-.reaction-progress-card {
+.reaction-progress-card,
+.reaction-journey-card {
   background:
     radial-gradient(640px 220px at 0% 0%, rgba(125,211,252,0.12), transparent 58%),
     linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
@@ -454,7 +457,8 @@ button[disabled] { opacity: 0.5; cursor: not-allowed; transform: none; }
 .reflection-horizontal-spine h4,
 .reaction-spine-card h4,
 .reaction-snapshot-card h4,
-.reaction-progress-card h4 {
+.reaction-progress-card h4,
+.reaction-journey-card h4 {
   margin: 0 0 8px;
   font-size: 15px;
   letter-spacing: 0.3px;
@@ -532,6 +536,75 @@ button[disabled] { opacity: 0.5; cursor: not-allowed; transform: none; }
   color: rgba(245,247,248,0.92);
 }
 
+.reaction-journey-line {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.reaction-journey-step,
+.reaction-journey-reaction {
+  position: relative;
+  min-height: 98px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reaction-journey-step {
+  background:
+    linear-gradient(180deg, rgba(125,211,252,0.16), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.03);
+}
+
+.reaction-journey-reaction.is-positive {
+  border-color: rgba(52,211,153,0.28);
+  background:
+    linear-gradient(180deg, rgba(52,211,153,0.16), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.03);
+}
+
+.reaction-journey-reaction.is-negative {
+  border-color: rgba(251,113,133,0.28);
+  background:
+    linear-gradient(180deg, rgba(251,113,133,0.16), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.03);
+}
+
+.reaction-journey-reaction.is-neutral {
+  border-color: rgba(245,194,107,0.24);
+  background:
+    linear-gradient(180deg, rgba(245,194,107,0.14), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.03);
+}
+
+.reaction-journey-kicker {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(244,246,247,0.68);
+}
+
+.reaction-journey-main {
+  font-size: 13px;
+  line-height: 1.45;
+  color: rgba(247,249,250,0.96);
+}
+
+.reaction-journey-meta {
+  margin-top: auto;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(244,246,247,0.70);
+}
+
 .reaction-progress-latest {
   margin-top: 8px;
   padding: 10px 12px;
@@ -543,7 +616,8 @@ button[disabled] { opacity: 0.5; cursor: not-allowed; transform: none; }
 }
 
 .reaction-progress-card .reaction-spine-card,
-.reaction-progress-card .reaction-trail-card {
+.reaction-progress-card .reaction-trail-card,
+.reaction-progress-card .reaction-journey-card {
   margin-top: 12px;
 }
 
