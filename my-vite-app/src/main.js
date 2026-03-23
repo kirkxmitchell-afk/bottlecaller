@@ -757,6 +757,7 @@ document.querySelector("#app").innerHTML = `
                 </canvas>
                 <div id="mbPerformanceLegend" style="margin-top:8px;"></div>
                 <div id="mbHistorySummaryStrip" style="margin-top:10px;"></div>
+                <div id="managerEncounterSummaryHost" class="manager-encounter-summary-host" style="margin-top:12px;"></div>
               </div>
             </details>
           </div>
@@ -9808,6 +9809,59 @@ async function loadManagerInsights() {
   }
 }
 
+function normalizeEncounterSummaryRow(row) {
+  const reflection =
+    row?.reflection && typeof row.reflection === "object"
+      ? row.reflection
+      : null;
+
+  const chosenPath =
+    Array.isArray(row?.chosen_path) ? row.chosen_path :
+    Array.isArray(reflection?.chosenPath) ? reflection.chosenPath :
+    [];
+
+  const bestPath =
+    Array.isArray(row?.best_path) ? row.best_path :
+    Array.isArray(reflection?.bestPath) ? reflection.bestPath :
+    ["observe", "mode", "hook", "deliver"];
+
+  const stepSpine =
+    Array.isArray(row?.step_spine) ? row.step_spine :
+    Array.isArray(reflection?.stepSpine) ? reflection.stepSpine :
+    [];
+
+  const stepReactionTrail =
+    Array.isArray(row?.step_reaction_trail) ? row.step_reaction_trail :
+    Array.isArray(reflection?.stepReactionTrail) ? reflection.stepReactionTrail :
+    Array.isArray(reflection?.reactionHistory) ? reflection.reactionHistory :
+    [];
+
+  return {
+    occurredAt: row?.occurred_at || null,
+    performanceGrade: row?.performance_grade || "",
+    chainSignal: row?.chain_signal || "",
+    chainScore: row?.chain_score ?? null,
+    tier: row?.tier ?? null,
+    aiPerception:
+      row?.ai_perception ||
+      reflection?.aiPerception ||
+      "",
+    bottleServed:
+      typeof row?.bottle_served === "boolean"
+        ? row.bottle_served
+        : !!reflection?.bottleServed,
+    chosenPath,
+    bestPath,
+    stepSpine,
+    stepReactionTrail,
+    reactionSummary:
+      row?.reaction_summary && typeof row.reaction_summary === "object"
+        ? row.reaction_summary
+        : null,
+    reflection,
+  };
+}
+
 async function getManagerPerformanceModel({ force = false } = {}) {
   const { restaurantId } = getManagerBoardFilter();
   if (!restaurantId) {
@@ -9883,7 +9937,10 @@ async function getManagerPerformanceModel({ force = false } = {}) {
       .limit(2000),
     supabase
       .from("bc_encounter_resolutions_v2")
-      .select("user_id, occurred_at, performance_grade, chain_signal, chain_score, is_green, is_red, tier")
+      .select(
+        "user_id, occurred_at, performance_grade, chain_signal, chain_score, is_green, is_red, tier, " +
+        "reflection, reaction_summary, step_reaction_trail, step_spine, ai_perception, bottle_served, chosen_path, best_path"
+      )
       .eq("restaurant_id", restaurantId)
       .neq("mode", "demo")
       .gte("occurred_at", sinceIso)
@@ -9983,6 +10040,9 @@ async function getManagerPerformanceModel({ force = false } = {}) {
     const latestRow = latestByUser.get(uid)?.[0] || {};
     const userSnapshots = snapshotsByUser.get(uid) || [];
     const userEncounters = encountersByUser.get(uid) || [];
+    const recentEncounterSummaries = userEncounters
+      .slice(0, 20)
+      .map((row) => normalizeEncounterSummaryRow(row));
     const userMessages = messagesByUser.get(uid) || [];
     const canonicalState =
       progressionStateRow?.canonical_state && typeof progressionStateRow.canonical_state === "object"
@@ -10145,6 +10205,7 @@ async function getManagerPerformanceModel({ force = false } = {}) {
       strongestSkill: extremes.strongestSkill,
       weakestSkill: extremes.weakestSkill,
       skillShape,
+      encounterSummaries: recentEncounterSummaries,
     };
   })
     .filter((user) => user.displayName)
@@ -12905,15 +12966,108 @@ async function loadPerformanceHistory(userId) {
   const { restaurantId } = getManagerBoardFilter();
   renderPerformanceHistorySummaryStrip(userId);
 
-  const { data } = await supabase
-    .from("bc_skill_snapshots_v1")
-    .select("*")
-    .eq("restaurant_id", restaurantId)
-    .eq("user_id", userId)
-    .order("created_at", { ascending: true })
-    .limit(50);
+  const [snapshotsRes, encountersRes] = await Promise.all([
+    supabase
+      .from("bc_skill_snapshots_v1")
+      .select("*")
+      .eq("restaurant_id", restaurantId)
+      .eq("user_id", userId)
+      .order("created_at", { ascending: true })
+      .limit(50),
 
-  drawPerformanceHistoryChart(data || []);
+    supabase
+      .from("bc_encounter_resolutions_v2")
+      .select(
+        "occurred_at, performance_grade, chain_signal, chain_score, tier, " +
+        "reflection, reaction_summary, step_reaction_trail, step_spine, ai_perception, bottle_served, chosen_path, best_path"
+      )
+      .eq("restaurant_id", restaurantId)
+      .eq("user_id", userId)
+      .neq("mode", "demo")
+      .order("occurred_at", { ascending: false })
+      .limit(20),
+  ]);
+
+  if (snapshotsRes?.error) {
+    console.warn("[MB][PERFORMANCE] bc_skill_snapshots_v1 query failed", snapshotsRes.error);
+  }
+  if (encountersRes?.error) {
+    console.warn("[MB][PERFORMANCE] bc_encounter_resolutions_v2 query failed", encountersRes.error);
+  }
+
+  const snapshotData = Array.isArray(snapshotsRes?.data) ? snapshotsRes.data : [];
+  const encounterData = Array.isArray(encountersRes?.data) ? encountersRes.data : [];
+
+  drawPerformanceHistoryChart(snapshotData || []);
+  renderManagerEncounterSummaryList(userId, encounterData || []);
+}
+
+function renderManagerEncounterSummaryList(userId, rows) {
+  const host = document.getElementById("managerEncounterSummaryHost");
+  if (!host) return;
+
+  host.innerHTML = "";
+
+  const title = document.createElement("h4");
+  title.innerText = "Encounter summaries";
+  host.appendChild(title);
+
+  if (!Array.isArray(rows) || !rows.length) {
+    const empty = document.createElement("div");
+    empty.className = "small-text";
+    empty.innerText = "No recent encounter summaries.";
+    host.appendChild(empty);
+    return;
+  }
+
+  rows.forEach((row) => {
+    const summary = normalizeEncounterSummaryRow(row);
+
+    const card = document.createElement("div");
+    card.className = "card manager-encounter-summary-card";
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "small-btn";
+    btn.innerText =
+      `${new Date(summary.occurredAt || Date.now()).toLocaleString()} • ` +
+      `Grade ${summary.performanceGrade || "—"}`;
+
+    const details = document.createElement("div");
+    details.className = "history-details is-collapsed";
+
+    const trailText = Array.isArray(summary.stepReactionTrail) && summary.stepReactionTrail.length
+      ? summary.stepReactionTrail
+          .map((item) => `- ${String(item.step || "").toUpperCase()}: ${item.tableCue || "—"}`)
+          .join("\n")
+      : "—";
+
+    const spineText = Array.isArray(summary.stepSpine) && summary.stepSpine.length
+      ? summary.stepSpine
+          .map((node) => `${node.step}:${node.score > 0 ? "+" : ""}${node.score}`)
+          .join("  ")
+      : "—";
+
+    details.innerText =
+      "AI perception: " + (summary.aiPerception || "—") + "\n" +
+      "Bottle served: " + (summary.bottleServed ? "YES" : "NO") + "\n" +
+      "Chosen path: " + ((summary.chosenPath || []).join(" -> ") || "—") + "\n" +
+      "Best path: " + ((summary.bestPath || []).join(" -> ") || "—") + "\n" +
+      "Spine: " + spineText + "\n" +
+      "Trail:\n" + trailText;
+
+    card.appendChild(btn);
+    card.appendChild(details);
+    host.appendChild(card);
+
+    bindInput(btn, () => {
+      const isHidden = details.classList.contains("is-collapsed");
+      details.classList.toggle("is-collapsed", !isHidden);
+      btn.innerText = isHidden
+        ? `Hide • ${new Date(summary.occurredAt || Date.now()).toLocaleString()}`
+        : `${new Date(summary.occurredAt || Date.now()).toLocaleString()} • Grade ${summary.performanceGrade || "—"}`;
+    });
+  });
 }
 
 function renderPerformanceLegend(items = []) {
