@@ -806,6 +806,7 @@ button[disabled] { opacity: 0.5; cursor: not-allowed; transform: none; }
   flex-direction: column;
   gap: 14px;
   margin-top: 12px;
+  padding: 8px 0;
 }
 
 .reflection-spine-vertical-item {
@@ -834,31 +835,34 @@ button[disabled] { opacity: 0.5; cursor: not-allowed; transform: none; }
 .reflection-spine-vertical-axis {
   position: relative;
   height: 46px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: block;
+  overflow: visible;
 }
 
 .reflection-spine-core {
   position: absolute;
-  top: -12px;
-  bottom: -12px;
+  top: -16px;
+  bottom: -16px;
   left: 50%;
-  width: 4px;
+  width: 6px;
   transform: translateX(-50%);
   border-radius: 999px;
-  background: linear-gradient(180deg, rgba(52,211,153,0.90), rgba(52,211,153,0.22));
-  box-shadow: 0 0 0 4px rgba(52,211,153,0.08);
+  background: linear-gradient(180deg, rgba(52,211,153,1), rgba(52,211,153,0.34));
+  box-shadow:
+    0 0 0 6px rgba(52,211,153,0.10),
+    0 0 18px rgba(52,211,153,0.22);
 }
 
 .reflection-spine-protrusion {
-  position: relative;
+  position: absolute;
+  top: 50%;
+  left: 50%;
   z-index: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 56px;
-  height: 30px;
+  min-width: 74px;
+  height: 34px;
   padding: 0 12px;
   border-radius: 999px;
   border: 1px solid rgba(255,255,255,0.10);
@@ -870,22 +874,21 @@ button[disabled] { opacity: 0.5; cursor: not-allowed; transform: none; }
 }
 
 .reflection-spine-protrusion.is-positive {
-  justify-self: end;
-  margin-left: 58px;
+  transform: translate(22px, -50%);
   border-color: rgba(52,211,153,0.28);
   background: rgba(52,211,153,0.18);
   color: rgba(220,252,231,0.98);
 }
 
 .reflection-spine-protrusion.is-negative {
-  justify-self: start;
-  margin-right: 58px;
+  transform: translate(calc(-100% - 22px), -50%);
   border-color: rgba(251,113,133,0.28);
   background: rgba(251,113,133,0.18);
   color: rgba(255,228,232,0.98);
 }
 
 .reflection-spine-protrusion.is-neutral {
+  transform: translate(-50%, -50%);
   border-color: rgba(245,194,107,0.24);
   background: rgba(245,194,107,0.14);
   color: rgba(255,247,232,0.98);
