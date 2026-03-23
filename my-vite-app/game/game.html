@@ -15874,7 +15874,7 @@ function ensureProgLoaded() {
           stepNode.innerHTML =
             `<div class="reaction-journey-kicker">STEP ${index + 1}</div>` +
             `<div class="reaction-journey-main">${escapeHtml(String(item.step || "").toUpperCase() || "—")}</div>`;
-          line.appendChild(stepNode);
+          wrap.appendChild(stepNode);
 
           const reactionNode = document.createElement("div");
           reactionNode.className =
