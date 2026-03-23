@@ -8683,18 +8683,7 @@ function wireManagerBoardMenu() {
     }
     if (normalized === "billing") return loadManagerBoardSeats?.();
     if (normalized === "performance") {
-      await loadManagerInsights();
-      await loadHistoryWaiters();
-      const select = document.getElementById("mbHistoryUser");
-      if (select && !select.__wired) {
-        select.__wired = true;
-        select.addEventListener("change", () => {
-          loadPerformanceHistory(select.value).catch(console.error);
-        });
-      }
-      if (select?.value) {
-        await loadPerformanceHistory(select.value);
-      }
+      await loadManagerPerformanceTab();
       return;
     }
     if (normalized === "selection") {
@@ -8731,21 +8720,7 @@ function wireManagerBoardMenu() {
     }
     if (tab === "billing") await loadManagerBoardSeats?.();
     if (tab === "performance") {
-      await loadManagerInsights();
-      await loadHistoryWaiters();
-
-      const select = document.getElementById("mbHistoryUser");
-
-      if (select && !select.__wired) {
-        select.__wired = true;
-        select.addEventListener("change", () => {
-          loadPerformanceHistory(select.value).catch(console.error);
-        });
-      }
-
-      if (select?.value) {
-        await loadPerformanceHistory(select.value);
-      }
+      await loadManagerPerformanceTab();
     }
     if (tab === "selection") {
       await loadSelectionTab();
@@ -9872,7 +9847,6 @@ async function loadManagerInsights() {
     wirePerformanceRowExpansion(
       Object.fromEntries(model.users.map((user) => [user.userId, user]))
     );
-    renderPerformanceHistorySummaryStrip(document.getElementById("mbHistoryUser")?.value || model.users[0]?.userId || "");
   } catch (error) {
     console.error("[MB] loadManagerInsights failed", error);
     root.innerHTML = `
@@ -9881,6 +9855,26 @@ async function loadManagerInsights() {
         <div class="small-text" style="margin-top:6px; opacity:.75;">${escapeHtml(error?.message || String(error || "Unknown error"))}</div>
       </div>
     `;
+  }
+}
+
+async function loadManagerPerformanceTab() {
+  await loadManagerInsights();
+  await loadHistoryWaiters();
+
+  const select = document.getElementById("mbHistoryUser");
+  if (select && !select.__wired) {
+    select.__wired = true;
+    select.addEventListener("change", () => {
+      loadPerformanceHistory(select.value).catch(console.error);
+    });
+  }
+
+  if (select?.value) {
+    await loadPerformanceHistory(select.value);
+  } else {
+    renderPerformanceHistorySummaryStrip("");
+    renderManagerEncounterSummaryList("", []);
   }
 }
 
@@ -13027,8 +13021,6 @@ async function loadHistoryWaiters() {
   if (selectedUserId) {
     select.value = selectedUserId;
   }
-
-  renderPerformanceHistorySummaryStrip(select.value);
 }
 
 async function loadPerformanceHistory(userId) {
