@@ -15838,6 +15838,55 @@ function ensureProgLoaded() {
         totalHeader.innerText = `Running score across the encounter: ${totalScore > 0 ? "+" : ""}${totalScore}`;
         wrap.appendChild(totalHeader);
 
+        if (opts.variant === "reflection") {
+          const stack = document.createElement("div");
+          stack.className = "reflection-spine-vertical-stack";
+
+          let running = 0;
+          spine.forEach((node) => {
+            const score = Number(node?.score || 0);
+            running += score;
+
+            const item = document.createElement("div");
+            item.className =
+              "reflection-spine-vertical-item " +
+              (score > 0 ? "is-positive" : score < 0 ? "is-negative" : "is-neutral");
+
+            const label = document.createElement("div");
+            label.className = "reflection-spine-vertical-label";
+            label.innerHTML =
+              `<strong>${escapeHtml(String(node?.step || "").toUpperCase())}</strong>` +
+              `<span>${score > 0 ? "+" : ""}${score}</span>`;
+            item.appendChild(label);
+
+            const axis = document.createElement("div");
+            axis.className = "reflection-spine-vertical-axis";
+
+            const core = document.createElement("div");
+            core.className = "reflection-spine-core";
+            axis.appendChild(core);
+
+            const protrusion = document.createElement("div");
+            protrusion.className =
+              "reflection-spine-protrusion " +
+              (score > 0 ? "is-positive" : score < 0 ? "is-negative" : "is-neutral");
+            protrusion.innerText = score > 0 ? "+1" : score < 0 ? "-1" : "0";
+            axis.appendChild(protrusion);
+            item.appendChild(axis);
+
+            const total = document.createElement("div");
+            total.className = "reflection-spine-vertical-total";
+            total.innerText = `Total ${running > 0 ? "+" : ""}${running}`;
+            item.appendChild(total);
+
+            stack.appendChild(item);
+          });
+
+          wrap.appendChild(stack);
+          container.appendChild(wrap);
+          return;
+        }
+
         let running = 0;
         spine.forEach((node) => {
           running += Number(node?.score || 0);
