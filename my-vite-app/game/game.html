@@ -15835,7 +15835,9 @@ function ensureProgLoaded() {
           running += Number(node?.score || 0);
 
           const row = document.createElement("div");
-          row.className = "reaction-spine-graphic-row";
+          row.className =
+            "reaction-spine-graphic-row" +
+            (opts.variant === "reflection" ? " is-vertical" : "");
 
           const label = document.createElement("div");
           label.className = "reaction-spine-graphic-label";
@@ -15881,20 +15883,29 @@ function ensureProgLoaded() {
         }
 
         const wrap = document.createElement("div");
-        wrap.className = "reaction-journey-rail";
+        wrap.className =
+          opts.layout === "vertical"
+            ? "reaction-journey-stack"
+            : "reaction-journey-rail";
 
         trail.forEach((item, index) => {
+          const frame = document.createElement("div");
+          frame.className = "card reaction-journey-frame";
+
           const stepNode = document.createElement("div");
           stepNode.className = "reaction-journey-step";
           stepNode.innerHTML =
             `<div class="reaction-journey-kicker">STEP ${index + 1}</div>` +
             `<div class="reaction-journey-main">${escapeHtml(String(item.step || "").toUpperCase() || "—")}</div>`;
-          wrap.appendChild(stepNode);
+          frame.appendChild(stepNode);
 
-          const arrow = document.createElement("div");
-          arrow.className = "reaction-journey-arrow";
-          arrow.innerText = "→";
-          wrap.appendChild(arrow);
+          const connector = document.createElement("div");
+          connector.className =
+            opts.layout === "vertical"
+              ? "reaction-journey-connector is-vertical"
+              : "reaction-journey-arrow";
+          connector.innerText = opts.layout === "vertical" ? "↓" : "→";
+          frame.appendChild(connector);
 
           const reactionNode = document.createElement("div");
           reactionNode.className =
@@ -15904,9 +15915,18 @@ function ensureProgLoaded() {
             `<div class="reaction-journey-kicker">REACTION</div>` +
             `<div class="reaction-journey-main">${escapeHtml(item.tableCue || "—")}</div>` +
             `<div class="reaction-journey-meta">${escapeHtml(item.emotion || "neutral")} • ${item.stepScore > 0 ? "+1" : item.stepScore < 0 ? "-1" : "0"}</div>`;
-          wrap.appendChild(reactionNode);
+          frame.appendChild(reactionNode);
 
-          if (index < trail.length - 1) {
+          if (index < trail.length - 1 && opts.layout === "vertical") {
+            const nextLabel = document.createElement("div");
+            nextLabel.className = "reaction-journey-next-step";
+            nextLabel.innerText = `Next: STEP ${index + 2}`;
+            frame.appendChild(nextLabel);
+          }
+
+          wrap.appendChild(frame);
+
+          if (index < trail.length - 1 && opts.layout !== "vertical") {
             const nextArrow = document.createElement("div");
             nextArrow.className = "reaction-journey-arrow";
             nextArrow.innerText = "→";
@@ -15963,7 +15983,8 @@ function ensureProgLoaded() {
         card.appendChild(path);
 
         renderReactionJourneyTimeline(card, encounter, {
-          title: "Decision -> reaction -> next decision"
+          title: "Each step and its reaction",
+          layout: "vertical"
         });
 
         container.appendChild(card);
@@ -17402,7 +17423,6 @@ function ensureProgLoaded() {
 
           container.appendChild(snapshot);
         }
-        renderReflectionStepTrailBlock(container, encounter);
         renderReflectionHorizontalSpineBlock(container, encounter);
 
         if (window.__BC_DEBUG_PRESSURE__ === true) {
