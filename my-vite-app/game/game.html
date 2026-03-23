@@ -15850,11 +15850,11 @@ function ensureProgLoaded() {
 
         if (opts.variant === "reflection") {
           const svgNs = "http://www.w3.org/2000/svg";
-          const rowGap = 118;
-          const topPad = 38;
-          const width = 760;
+          const rowGap = 142;
+          const topPad = 52;
+          const width = 920;
           const height = topPad * 2 + ((spine.length - 1) * rowGap);
-          const centerX = 470;
+          const centerX = 590;
 
           const svg = document.createElementNS(svgNs, "svg");
           svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
@@ -15865,10 +15865,10 @@ function ensureProgLoaded() {
           const core = document.createElementNS(svgNs, "line");
           core.setAttribute("x1", String(centerX));
           core.setAttribute("x2", String(centerX));
-          core.setAttribute("y1", String(topPad - 20));
-          core.setAttribute("y2", String(height - topPad + 20));
+          core.setAttribute("y1", String(topPad - 28));
+          core.setAttribute("y2", String(height - topPad + 28));
           core.setAttribute("stroke", "rgba(52,211,153,0.95)");
-          core.setAttribute("stroke-width", "10");
+          core.setAttribute("stroke-width", "12");
           core.setAttribute("stroke-linecap", "round");
           svg.appendChild(core);
 
@@ -15877,7 +15877,7 @@ function ensureProgLoaded() {
             const score = Number(node?.score || 0);
             running += score;
             const y = topPad + (index * rowGap);
-            const protrusionLen = score > 0 ? 145 : score < 0 ? -145 : 0;
+            const protrusionLen = score > 0 ? 175 : score < 0 ? -175 : 0;
             const endX = centerX + protrusionLen;
             const strokeColor =
               score > 0 ? "rgba(52,211,153,0.98)" :
@@ -15887,7 +15887,7 @@ function ensureProgLoaded() {
             const dot = document.createElementNS(svgNs, "circle");
             dot.setAttribute("cx", String(centerX));
             dot.setAttribute("cy", String(y));
-            dot.setAttribute("r", "15");
+            dot.setAttribute("r", "18");
             dot.setAttribute("fill", "rgba(52,211,153,0.98)");
             svg.appendChild(dot);
 
@@ -15898,28 +15898,28 @@ function ensureProgLoaded() {
               branch.setAttribute("y1", String(y));
               branch.setAttribute("y2", String(y));
               branch.setAttribute("stroke", strokeColor);
-              branch.setAttribute("stroke-width", "12");
+              branch.setAttribute("stroke-width", "14");
               branch.setAttribute("stroke-linecap", "round");
               svg.appendChild(branch);
             }
 
             const stepLabel = document.createElementNS(svgNs, "text");
-            stepLabel.setAttribute("x", "34");
-            stepLabel.setAttribute("y", String(y - 12));
+            stepLabel.setAttribute("x", "40");
+            stepLabel.setAttribute("y", String(y - 16));
             stepLabel.setAttribute("class", "reflection-spine-svg-step");
             stepLabel.textContent = String(node?.step || "").toUpperCase();
             svg.appendChild(stepLabel);
 
             const totalLabel = document.createElementNS(svgNs, "text");
-            totalLabel.setAttribute("x", "34");
-            totalLabel.setAttribute("y", String(y + 28));
+            totalLabel.setAttribute("x", "40");
+            totalLabel.setAttribute("y", String(y + 34));
             totalLabel.setAttribute("class", "reflection-spine-svg-total");
             totalLabel.textContent = `TOTAL ${running > 0 ? "+" : ""}${running}`;
             svg.appendChild(totalLabel);
 
             const scoreBadge = document.createElementNS(svgNs, "text");
-            scoreBadge.setAttribute("x", String(score > 0 ? endX + 28 : score < 0 ? endX - 28 : centerX + 32));
-            scoreBadge.setAttribute("y", String(y + 10));
+            scoreBadge.setAttribute("x", String(score > 0 ? endX + 34 : score < 0 ? endX - 34 : centerX + 38));
+            scoreBadge.setAttribute("y", String(y + 12));
             scoreBadge.setAttribute("text-anchor", score < 0 ? "end" : "start");
             scoreBadge.setAttribute("class", "reflection-spine-svg-score");
             scoreBadge.setAttribute(
