@@ -737,30 +737,31 @@ document.querySelector("#app").innerHTML = `
         </div>
 
         <div id="mbTab_performance" class="mbTab hidden">
-          <div id="mbInsightsPanel" style="margin-top:12px;"></div>
-          <div id="mbPerformanceHistoryPanel" style="margin-top:12px;">
-            <details class="card mb-disclosure">
-              <summary class="mb-disclosure-summary">
-                <div>
-                  <strong>Performance History</strong>
-                  <div class="small-text" style="margin-top:6px; opacity:.85;">
-                    Skill growth over time.
-                  </div>
+        <div id="mbInsightsPanel" style="margin-top:12px;"></div>
+        <div id="mbPerformanceHistoryPanel" style="margin-top:12px;">
+          <div class="card">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+              <div>
+                <strong>Performance History</strong>
+                <div class="small-text" style="margin-top:6px; opacity:.85;">
+                  Skill growth and encounter reactions for the selected waiter.
                 </div>
-              </summary>
-              <div class="mb-disclosure-body">
-                <select id="mbHistoryUser" class="input" style="margin-top:10px;"></select>
-                <canvas id="mbHistoryChart"
-                  width="600"
-                  height="280"
-                  style="margin-top:12px;">
-                </canvas>
-                <div id="mbPerformanceLegend" style="margin-top:8px;"></div>
-                <div id="mbHistorySummaryStrip" style="margin-top:10px;"></div>
-                <div id="managerEncounterSummaryHost" class="manager-encounter-summary-host" style="margin-top:12px;"></div>
               </div>
-            </details>
+              <label class="small-text" style="display:flex; align-items:center; gap:8px;">
+                Waiter
+                <select id="mbHistoryUser" class="input" style="min-width:220px;"></select>
+              </label>
+            </div>
+            <div id="mbHistorySummaryStrip" style="margin-top:10px;"></div>
+            <canvas id="mbHistoryChart"
+              width="600"
+              height="280"
+              style="margin-top:12px;">
+            </canvas>
+            <div id="mbPerformanceLegend" style="margin-top:8px;"></div>
+            <div id="managerEncounterSummaryHost" class="manager-encounter-summary-host" style="margin-top:12px;"></div>
           </div>
+        </div>
 
           <div class="card" style="margin-top:12px;">
             <strong>This Week (Auto Summary)</strong>
@@ -13075,8 +13076,27 @@ function renderManagerEncounterSummaryList(userId, rows) {
     return;
   }
 
-  rows.forEach((row) => {
-    const summary = normalizeEncounterSummaryRow(row);
+  const normalizedRows = rows.map((row) => normalizeEncounterSummaryRow(row));
+  const hasAnyReactionTelemetry = normalizedRows.some((summary) =>
+    !!summary.reflection ||
+    !!summary.reactionSummary ||
+    !!summary.aiPerception ||
+    Array.isArray(summary.stepReactionTrail) && summary.stepReactionTrail.length > 0 ||
+    Array.isArray(summary.stepSpine) && summary.stepSpine.length > 0 ||
+    Array.isArray(summary.chosenPath) && summary.chosenPath.length > 0 ||
+    Array.isArray(summary.bestPath) && summary.bestPath.length > 0
+  );
+
+  if (!hasAnyReactionTelemetry) {
+    const note = document.createElement("div");
+    note.className = "small-text";
+    note.style.marginTop = "6px";
+    note.style.opacity = ".82";
+    note.innerText = "Recent encounters exist, but they were logged before reaction telemetry was included in the payload.";
+    host.appendChild(note);
+  }
+
+  normalizedRows.forEach((summary) => {
 
     const card = document.createElement("div");
     card.className = "card manager-encounter-summary-card";
