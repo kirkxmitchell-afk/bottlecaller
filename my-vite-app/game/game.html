@@ -15811,6 +15811,62 @@ function ensureProgLoaded() {
         container.appendChild(box);
       }
 
+      function renderReactionProgressPanel(container, encounter, opts = {}) {
+        if (!container || !encounter) return;
+
+        ensureEncounterReactionRuntime(encounter);
+
+        const trail = Array.isArray(encounter.stepReactionTrail) ? encounter.stepReactionTrail : [];
+        const latest = trail.length ? trail[trail.length - 1] : null;
+        const card = document.createElement("div");
+        card.className = "card reaction-progress-card";
+
+        const title = document.createElement("h4");
+        title.innerText = opts.title || "Guest reaction so far";
+        card.appendChild(title);
+
+        const subtitle = document.createElement("div");
+        subtitle.className = "small-text reaction-block-subtitle";
+        subtitle.innerText = trail.length
+          ? `Locked reactions: ${trail.length} of 4`
+          : "Reaction tracking starts as soon as you lock in a decision.";
+        card.appendChild(subtitle);
+
+        if (!trail.length) {
+          const empty = document.createElement("div");
+          empty.className = "small-text";
+          empty.innerText = "No committed reactions yet.";
+          card.appendChild(empty);
+          container.appendChild(card);
+          return;
+        }
+
+        if (latest) {
+          const latestBox = document.createElement("div");
+          latestBox.className = "reaction-progress-latest";
+          latestBox.innerHTML =
+            "<strong>Latest cue:</strong> " + escapeHtml(latest.tableCue || "—") +
+            (latest.physicalCue ? `<div class="small-text" style="margin-top:6px;">${escapeHtml(latest.physicalCue)}</div>` : "");
+          card.appendChild(latestBox);
+        }
+
+        const path = document.createElement("div");
+        path.className = "reaction-snapshot-paths";
+        path.innerHTML =
+          "<strong>Chosen path:</strong> " + (trail.map((item) => item?.step).filter(Boolean).join(" -> ") || "—");
+        card.appendChild(path);
+
+        const spineHost = document.createElement("div");
+        renderCompactReactionSpineBlock(spineHost, encounter);
+        if (spineHost.firstChild) card.appendChild(spineHost.firstChild);
+
+        const trailHost = document.createElement("div");
+        renderStepReactionTrailBlock(trailHost, encounter);
+        if (trailHost.firstChild) card.appendChild(trailHost.firstChild);
+
+        container.appendChild(card);
+      }
+
       function renderReflectionStepTrailBlock(container, encounter) {
         const trail = Array.isArray(encounter?.stepReactionTrail)
           ? encounter.stepReactionTrail
@@ -18769,6 +18825,9 @@ function ensureProgLoaded() {
 
       function renderStepMode(stepContent, stepButtons) {
         renderLatestReactionCueBlock(stepContent, currentEncounter);
+        renderReactionProgressPanel(stepContent, currentEncounter, {
+          title: "Guest reaction so far"
+        });
 
         const topRow = document.createElement("div");
         topRow.className = "history-row encounter-top-row";
@@ -18842,6 +18901,9 @@ function ensureProgLoaded() {
 
       function renderStepHook(stepContent, stepButtons) {
         renderLatestReactionCueBlock(stepContent, currentEncounter);
+        renderReactionProgressPanel(stepContent, currentEncounter, {
+          title: "Guest reaction so far"
+        });
 
         debugHookStrictness(currentEncounter);
 
@@ -18953,6 +19015,9 @@ function ensureProgLoaded() {
 
       function renderStepDelivery(stepContent, stepButtons) {
         renderLatestReactionCueBlock(stepContent, currentEncounter);
+        renderReactionProgressPanel(stepContent, currentEncounter, {
+          title: "Guest reaction so far"
+        });
 
         function renderDeliverySelectionPreview() {
           const preview = document.createElement("div");
@@ -19445,8 +19510,10 @@ function ensureProgLoaded() {
         reactionHint.innerText = "Your choices shape how the guest responds.";
         stepContent.appendChild(reactionHint);
 
+        renderReactionProgressPanel(stepContent, currentEncounter, {
+          title: "Reaction sequence"
+        });
         renderLatestReactionCueBlock(stepContent, currentEncounter);
-        renderStepReactionTrailBlock(stepContent, currentEncounter);
 
         const { checksRaw, reactionChecks } = getReactionChecksForCurrentEncounter();
         const result = computeEncounterReaction(reactionChecks);
