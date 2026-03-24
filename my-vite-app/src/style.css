@@ -1877,6 +1877,14 @@ button:hover, .btn:hover, .btn-ghost:hover{
   z-index: 2147482998;
   padding: 18px;
   overflow-y: auto;
+}
+
+#screenProfile{
+  background: transparent;
+  backdrop-filter: none;
+}
+
+#screenWaiterLeaderboard{
   background: rgba(0,0,0,0.42);
   backdrop-filter: blur(4px);
 }
