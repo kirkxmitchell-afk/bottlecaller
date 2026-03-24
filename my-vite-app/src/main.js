@@ -9928,13 +9928,6 @@ function normalizeEncounterSummaryRow(row) {
     `Mode: chose ${chosenMode || "—"}${modeStatus ? ` (${modeStatus})` : ""}.`,
     `Hook: chose ${chosenHook || "—"}${hookStatus ? ` (${hookStatus})` : ""}.`,
     `Delivery: ${deliveryCorrect == null ? "—" : deliveryCorrect ? "delivery landed correctly" : "delivery was off"}.`,
-    stepReactionTrail.length
-      ? `Trail: ${stepReactionTrail.map((item) => {
-          const step = String(item?.step || "").toUpperCase() || "STEP";
-          const cue = item?.tableCue || "—";
-          return `${step}: ${cue}`;
-        }).join(" | ")}.`
-      : "",
   ].filter(Boolean).join(" ");
 
   const fallbackBestPathExposition = [
@@ -13210,12 +13203,6 @@ function renderManagerEncounterSummaryList(userId, rows, nameMap = new Map()) {
     const details = document.createElement("div");
     details.className = "history-details is-collapsed";
 
-    const trailText = Array.isArray(summary.stepReactionTrail) && summary.stepReactionTrail.length
-      ? summary.stepReactionTrail
-          .map((item) => `- ${String(item.step || "").toUpperCase()}: ${item.tableCue || "—"}`)
-          .join("\n")
-      : "—";
-
     const spineText = Array.isArray(summary.stepSpine) && summary.stepSpine.length
       ? summary.stepSpine
           .map((node) => `${node.step}:${node.score > 0 ? "+" : ""}${node.score}`)
@@ -13227,8 +13214,7 @@ function renderManagerEncounterSummaryList(userId, rows, nameMap = new Map()) {
       "Bottle served: " + (summary.bottleServed ? "YES" : "NO") + "\n" +
       "Chosen path: " + (summary.chosenPathExposition || ((summary.chosenPath || []).join(" -> ") || "—")) + "\n" +
       "Best path: " + (summary.bestPathExposition || ((summary.bestPath || []).join(" -> ") || "—")) + "\n" +
-      "Spine: " + spineText + "\n" +
-      "Trail:\n" + trailText;
+      "Spine: " + spineText;
 
     summaryCard.appendChild(summaryBtn);
     summaryCard.appendChild(details);

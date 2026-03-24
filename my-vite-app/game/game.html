@@ -15736,13 +15736,6 @@ function ensureProgLoaded() {
                 ? `${encounter?.selectedDeliveryLine1 || "—"} / ${encounter?.selectedDeliveryLine2 || "—"}`
                 : "—"
             }.`,
-            stepReactionTrail.length
-              ? `Trail: ${stepReactionTrail.map((item) => {
-                  const step = String(item?.step || "").toUpperCase() || "STEP";
-                  const cue = item?.tableCue || "—";
-                  return `${step}: ${cue}`;
-                }).join(" | ")}.`
-              : "Trail: —.",
           ].join(" ");
         normalizedPayload.bestPathExposition =
           normalizedPayload.bestPathExposition ||
