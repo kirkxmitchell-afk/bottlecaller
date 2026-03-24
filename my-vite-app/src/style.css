@@ -59,6 +59,13 @@ button, input { font-family: inherit; }
 }
 .hidden { display: none !important; }
 
+[data-tutorial-active="true"] {
+  position: relative;
+  z-index: 10000 !important;
+  box-shadow: 0 0 0 3px rgba(125,211,252,0.85);
+  border-radius: 12px;
+}
+
 .app-chrome{
   width: min(1600px, 100%);
   display: grid;

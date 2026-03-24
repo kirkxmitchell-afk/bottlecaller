@@ -1246,7 +1246,7 @@ function isParentCtxReady(requestedMode = "premium") {
 }
 
 function getWineSetupTutorialSteps(role) {
-  const steps = [
+  return [
     {
       id: "start",
       target: null,
@@ -1256,9 +1256,8 @@ function getWineSetupTutorialSteps(role) {
     {
       id: "open-setup",
       target: '[data-tutorial="nav-wine-setup"]',
-      title: "Open Wine Setup",
-      body: "Click here to open your wine configuration screen.",
-      action: "click",
+      title: "Wine Setup",
+      body: "This button opens the wine configuration screen.",
       before: () => showScreen("screenPremiumApp"),
     },
     {
@@ -1266,9 +1265,9 @@ function getWineSetupTutorialSteps(role) {
       target: '[data-tutorial="wine-panel"]',
       title: "Setup Panel",
       body: role === "group_manager"
-        ? "You are editing the currently selected restaurant's wines."
+        ? "You are editing the currently active restaurant's wines."
         : role === "enterpriser"
-        ? "This controls the wine environment across your system."
+        ? "You are configuring the currently active restaurant's wine environment from an enterprise-level role."
         : "These wines define your restaurant's selling environment.",
       before: () => openPremiumSetupScreen(),
     },
@@ -1305,21 +1304,6 @@ function getWineSetupTutorialSteps(role) {
       body: "You now understand how to configure wines.",
     },
   ];
-
-  if (role === "group_manager" || role === "enterpriser") {
-    steps.splice(2, 0, {
-      id: "restaurant",
-      target: '[data-tutorial="restaurant-picker"]',
-      title: "Active Restaurant",
-      body: "Select which restaurant you are configuring before editing wines.",
-      optional: true,
-      before: async () => {
-        await routeManagerBoard("tutorial_restaurant_picker");
-      },
-    });
-  }
-
-  return steps;
 }
 
 function startTutorial(id) {
@@ -1372,18 +1356,27 @@ async function runTutorialStep() {
     if (!tutorial.active || tutorial.runToken !== runToken) return;
   }
 
-  const el = step.target ? document.querySelector(step.target) : null;
+  let el = null;
+  if (step.target) {
+    for (let i = 0; i < 10; i += 1) {
+      el = document.querySelector(step.target);
+      if (el) break;
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      if (!tutorial.active || tutorial.runToken !== runToken) return;
+    }
+  }
+
   showTutorialOverlay({
     target: el,
     title: step.title,
     body: step.body,
-    action: step.action,
     optional: step.optional,
     onNext: nextTutorialStep,
   });
 
   if (step.action === "click" && el) {
     const handler = () => {
+      el.removeEventListener("click", handler);
       if (tutorial.active && tutorial.runToken === runToken) {
         nextTutorialStep();
       }
@@ -7204,7 +7197,7 @@ function showTutorialOverlay({ target, title, body, optional, onNext }) {
     <div style="margin-top:10px; display:flex; gap:6px;">
       <button id="tutorialNextBtn" type="button">Next</button>
       ${optional ? `<button id="tutorialSkipBtn" type="button">Skip</button>` : ""}
-      <button id="tutorialCloseBtn" type="button">Close</button>
+      <button id="tutorialExitBtn" type="button">Exit</button>
     </div>
   `;
 
@@ -7212,9 +7205,12 @@ function showTutorialOverlay({ target, title, body, optional, onNext }) {
   document.body.appendChild(overlay);
 
   if (target) {
+    target.dataset.tutorialActive = "true";
     const rect = target.getBoundingClientRect();
-    card.style.top = `${Math.min(rect.bottom + 10, Math.max(24, window.innerHeight - 160))}px`;
-    card.style.left = `${Math.min(rect.left, Math.max(24, window.innerWidth - 320))}px`;
+    const maxLeft = window.innerWidth - 320;
+    const maxTop = window.innerHeight - 180;
+    card.style.left = `${Math.max(12, Math.min(rect.left, maxLeft))}px`;
+    card.style.top = `${Math.max(12, Math.min(rect.bottom + 10, maxTop))}px`;
   } else {
     card.style.top = "50%";
     card.style.left = "50%";
@@ -7223,10 +7219,13 @@ function showTutorialOverlay({ target, title, body, optional, onNext }) {
 
   document.getElementById("tutorialNextBtn")?.addEventListener("click", onNext);
   document.getElementById("tutorialSkipBtn")?.addEventListener("click", onNext);
-  document.getElementById("tutorialCloseBtn")?.addEventListener("click", stopTutorial);
+  document.getElementById("tutorialExitBtn")?.addEventListener("click", stopTutorial);
 }
 
 function removeTutorialOverlay() {
+  document.querySelectorAll('[data-tutorial-active="true"]').forEach((el) => {
+    delete el.dataset.tutorialActive;
+  });
   document.getElementById("bcTutorialOverlay")?.remove();
 }
 
