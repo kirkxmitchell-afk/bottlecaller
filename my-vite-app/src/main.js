@@ -765,13 +765,6 @@ document.querySelector("#app").innerHTML = `
           </details>
         </div>
 
-          <div class="card" style="margin-top:12px;">
-            <strong>This Week (Auto Summary)</strong>
-            <div id="mbWeeklySummaryTop" class="small-text" style="margin-top:8px; opacity:.9;">
-              Loading…
-            </div>
-          </div>
-
           <div style="margin-top:12px;">
             <div style="font-weight:600; margin-bottom:6px;">Best streaks</div>
             <div id="mbBestStreaks" style="opacity:.9;">-</div>
@@ -8684,7 +8677,6 @@ function wireManagerBoardMenu() {
     if (normalized === "overview") {
       await loadManagerBoardData();
       renderParentStateDebugCard();
-      await loadWeeklySummaryTop();
       return;
     }
     if (normalized === "people") {
@@ -8723,7 +8715,6 @@ function wireManagerBoardMenu() {
     if (tab === "overview") {
       await loadManagerBoardData();
       renderParentStateDebugCard();
-      await loadWeeklySummaryTop();
     }
     if (tab === "people") {
       await loadManagerBoardData();
@@ -17473,62 +17464,6 @@ async function maybeSendWeeklyManagerSummary(rows) {
   }
 }
 
-async function loadWeeklySummaryTop() {
-  const { restaurantId, isManager } = getManagerBoardFilter();
-  if (!isManager) return;
-  if (!restaurantId) return;
-
-  const host = document.getElementById("mbWeeklySummaryTop");
-  if (host) host.textContent = "Loading…";
-
-  const managerId =
-    appState?.session?.user?.id ||
-    appState?.session?.userId ||
-    null;
-
-  if (!managerId) {
-    if (host) host.textContent = "No session.";
-    return;
-  }
-
-  const { data, error } = await supabase
-    .from("bc_messages_v1")
-    .select("id, created_at, body, payload")
-    .eq("restaurant_id", restaurantId)
-    .eq("receiver_user_id", managerId)
-    .eq("type", "weekly_summary")
-    .is("archived_at", null)
-    .order("created_at", { ascending: false })
-    .limit(1);
-
-  if (error) {
-    console.warn("[WEEKLY TOP] load failed", error);
-    if (host) host.textContent = "Could not load weekly summary.";
-    return;
-  }
-
-  const row = (data && data[0]) ? data[0] : null;
-  if (!row) {
-    if (host) host.textContent = "No weekly summary yet.";
-    return;
-  }
-
-  const p = row.payload || {};
-  const created = row.created_at ? new Date(row.created_at).toLocaleString() : "";
-
-  if (host) {
-    host.innerHTML = `
-      <div style="display:flex; flex-direction:column; gap:6px;">
-        <div style="opacity:.75;">Generated: ${escapeHtml(created)}</div>
-        <div>🏆 <b>Top performer:</b> ${escapeHtml(String(p.topPerformer || "—"))}</div>
-        <div>📈 <b>Most improved skill:</b> ${escapeHtml(String(p.mostImprovedSkill || "—"))}</div>
-        <div>🎯 <b>Recommended focus:</b> ${escapeHtml(String(p.recommendedFocus || "—"))}</div>
-        <div style="opacity:.75;"><b>Reports analyzed:</b> ${escapeHtml(String(p.reportsAnalyzed ?? 0))}</div>
-      </div>
-    `;
-  }
-}
-
 async function loadManagerBoardData(restaurantId = null) {
   try {
     const rid = requireManagerRestaurantId(restaurantId);
@@ -17553,7 +17488,6 @@ async function loadManagerBoardData(restaurantId = null) {
     await loadLeaderboard();
     const weeklyRows = await loadWeeklyTrainingReport();
     await maybeSendWeeklyManagerSummary(weeklyRows);
-    await loadWeeklySummaryTop();
     renderManagerBoardAbilityTabs();
 
     // Views you actually have
