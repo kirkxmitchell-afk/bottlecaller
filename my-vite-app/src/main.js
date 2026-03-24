@@ -354,7 +354,7 @@ document.querySelector("#app").innerHTML = `
           <button id="btnOpenMessages" class="btn-ghost" type="button">Messages</button>
           <button id="btnWaiterPerformanceLeaderboard" class="btn-ghost hidden" type="button">Leaderboard</button>
           <button id="btnPremiumWineSetup" class="btn-ghost" type="button" data-tutorial="nav-wine-setup">Wine Setup</button>
-          <button id="btnTutorial" class="btn-ghost" type="button">Tutorial</button>
+          <button id="btnTutorial" class="btn-ghost" type="button">Tutorials</button>
           <button id="btnManagerBoard" class="btn-ghost" type="button">Manager Board</button>
           <button id="btnOpenProfile" class="btn-ghost" type="button">Profile</button>
           <button id="btnLogoutPremium" class="btn-danger" type="button">Logout</button>
@@ -1384,6 +1384,7 @@ function getWineSetupTutorialSteps(role) {
 }
 
 function startTutorial(id) {
+  closeTutorialMenu();
   const ctx = getParentCtxSnapshot("premium");
   const role = String(ctx.role || "").toLowerCase();
   const tutorial = window.__BC_TUTORIAL__;
@@ -7085,7 +7086,7 @@ function wireParentButtons() {
   if (btnTutorial && !btnTutorial.__bcBound) {
     btnTutorial.__bcBound = true;
     btnTutorial.addEventListener("click", () => {
-      startTutorial("wine_setup_manager");
+      openTutorialMenu();
     });
   }
 
@@ -7258,6 +7259,62 @@ function clearTutorialHighlights() {
   });
 }
 
+function closeTutorialMenu() {
+  document.getElementById("bcTutorialMenu")?.remove();
+}
+
+function openTutorialMenu() {
+  closeTutorialMenu();
+
+  const overlay = document.createElement("div");
+  overlay.id = "bcTutorialMenu";
+  overlay.style.position = "fixed";
+  overlay.style.inset = "0";
+  overlay.style.background = "rgba(0,0,0,0.58)";
+  overlay.style.backdropFilter = "blur(6px)";
+  overlay.style.zIndex = "9998";
+  overlay.style.display = "grid";
+  overlay.style.placeItems = "center";
+
+  const panel = document.createElement("div");
+  panel.style.width = "min(420px, calc(100vw - 32px))";
+  panel.style.padding = "18px";
+  panel.style.borderRadius = "18px";
+  panel.style.border = "1px solid rgba(255,255,255,0.12)";
+  panel.style.background = "rgba(8,12,17,0.98)";
+  panel.style.boxShadow = "0 30px 80px rgba(0,0,0,0.48)";
+  panel.style.color = "rgba(244,246,247,0.96)";
+
+  panel.innerHTML = `
+    <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:14px;">
+      <div>
+        <div style="font-size:11px; letter-spacing:0.12em; text-transform:uppercase; opacity:0.7;">Tutorial Library</div>
+        <div style="font-size:20px; font-weight:800; margin-top:4px;">Choose a Tutorial</div>
+      </div>
+      <button id="bcTutorialMenuClose" type="button" style="min-height:36px; padding:8px 12px; border-radius:12px; border:1px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.06); color:inherit;">Close</button>
+    </div>
+    <button
+      id="bcTutorialWineSetup"
+      type="button"
+      style="width:100%; text-align:left; padding:14px; border-radius:14px; border:1px solid rgba(125,211,252,0.24); background:linear-gradient(180deg, rgba(125,211,252,0.14), rgba(255,255,255,0.03)), rgba(255,255,255,0.03); color:inherit;"
+    >
+      <div style="font-weight:800; font-size:15px;">Wine Setup Basics</div>
+      <div style="font-size:13px; opacity:0.82; margin-top:4px;">A guided tour of the manager wine setup screen, fields, and actions.</div>
+    </button>
+  `;
+
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) closeTutorialMenu();
+  });
+  document.getElementById("bcTutorialMenuClose")?.addEventListener("click", closeTutorialMenu);
+  document.getElementById("bcTutorialWineSetup")?.addEventListener("click", () => {
+    startTutorial("wine_setup_manager");
+  });
+}
+
 function placeTutorialCard(card, target, placement = "bottom") {
   if (!target) {
     card.style.top = "50%";
@@ -7311,12 +7368,15 @@ function showTutorialOverlay({ target, title, body, action, placement, optional,
 
   const card = document.createElement("div");
   card.style.position = "absolute";
-  card.style.maxWidth = "300px";
-  card.style.padding = "14px";
-  card.style.background = "#0f1720";
-  card.style.border = "1px solid rgba(255,255,255,0.1)";
-  card.style.borderRadius = "12px";
-  card.style.boxShadow = "0 24px 60px rgba(0,0,0,0.45)";
+  card.style.width = "320px";
+  card.style.maxWidth = "calc(100vw - 24px)";
+  card.style.padding = "16px";
+  card.style.background = "rgba(7, 11, 16, 0.98)";
+  card.style.color = "rgba(245,247,248,0.98)";
+  card.style.border = "1px solid rgba(255,255,255,0.14)";
+  card.style.borderRadius = "14px";
+  card.style.boxShadow = "0 28px 70px rgba(0,0,0,0.56)";
+  card.style.backdropFilter = "blur(10px)";
   card.style.pointerEvents = "auto";
 
   card.innerHTML = `
