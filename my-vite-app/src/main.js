@@ -1829,6 +1829,14 @@ const ENCOUNTER_RESOLUTION_SUMMARY_COLUMNS = [
   "is_green",
   "is_red",
   "tier",
+  "chosen_guest_type",
+  "chosen_mode",
+  "chosen_hook",
+  "actual_guest_type",
+  "read_correct",
+  "delivery_correct",
+  "mode_status",
+  "hook_status",
   "reflection",
   "reaction_summary",
   "step_reaction_trail",
@@ -9906,6 +9914,36 @@ function normalizeEncounterSummaryRow(row) {
     Array.isArray(reflection?.reactionHistory) ? reflection.reactionHistory :
     [];
 
+  const chosenGuestType = row?.chosen_guest_type || "";
+  const chosenMode = row?.chosen_mode || "";
+  const chosenHook = row?.chosen_hook || "";
+  const actualGuestType = row?.actual_guest_type || "";
+  const readCorrect = typeof row?.read_correct === "boolean" ? row.read_correct : null;
+  const deliveryCorrect = typeof row?.delivery_correct === "boolean" ? row.delivery_correct : null;
+  const modeStatus = row?.mode_status || "";
+  const hookStatus = row?.hook_status || "";
+
+  const fallbackChosenPathExposition = [
+    `Read: chose ${chosenGuestType || "—"}${readCorrect == null ? "" : readCorrect ? " and it was correct" : " and it was wrong"}.`,
+    `Mode: chose ${chosenMode || "—"}${modeStatus ? ` (${modeStatus})` : ""}.`,
+    `Hook: chose ${chosenHook || "—"}${hookStatus ? ` (${hookStatus})` : ""}.`,
+    `Delivery: ${deliveryCorrect == null ? "—" : deliveryCorrect ? "delivery landed correctly" : "delivery was off"}.`,
+    stepReactionTrail.length
+      ? `Trail: ${stepReactionTrail.map((item) => {
+          const step = String(item?.step || "").toUpperCase() || "STEP";
+          const cue = item?.tableCue || "—";
+          return `${step}: ${cue}`;
+        }).join(" | ")}.`
+      : "",
+  ].filter(Boolean).join(" ");
+
+  const fallbackBestPathExposition = [
+    `Read: correct guest was ${actualGuestType || "—"}.`,
+    modeStatus ? `Mode: target outcome was ${modeStatus === "optimal" ? "the optimal mode" : modeStatus}.` : "",
+    hookStatus ? `Hook: target outcome was ${hookStatus === "optimal" ? "the optimal hook" : hookStatus}.` : "",
+    deliveryCorrect == null ? "" : `Delivery: ${deliveryCorrect ? "the delivery choice was correct" : "the delivery needed different lines"}.`,
+  ].filter(Boolean).join(" ");
+
   return {
     userId: row?.user_id || "",
     occurredAt: row?.occurred_at || null,
@@ -9921,8 +9959,24 @@ function normalizeEncounterSummaryRow(row) {
       typeof row?.bottle_served === "boolean"
         ? row.bottle_served
         : !!reflection?.bottleServed,
+    chosenGuestType,
+    chosenMode,
+    chosenHook,
+    actualGuestType,
+    readCorrect,
+    deliveryCorrect,
+    modeStatus,
+    hookStatus,
     chosenPath,
     bestPath,
+    chosenPathExposition:
+      reflection?.chosenPathExposition ||
+      fallbackChosenPathExposition ||
+      "",
+    bestPathExposition:
+      reflection?.bestPathExposition ||
+      fallbackBestPathExposition ||
+      "",
     stepSpine,
     stepReactionTrail,
     reactionSummary:
@@ -13171,8 +13225,8 @@ function renderManagerEncounterSummaryList(userId, rows, nameMap = new Map()) {
     details.innerText =
       "AI perception: " + (summary.aiPerception || "—") + "\n" +
       "Bottle served: " + (summary.bottleServed ? "YES" : "NO") + "\n" +
-      "Chosen path: " + ((summary.chosenPath || []).join(" -> ") || "—") + "\n" +
-      "Best path: " + ((summary.bestPath || []).join(" -> ") || "—") + "\n" +
+      "Chosen path: " + (summary.chosenPathExposition || ((summary.chosenPath || []).join(" -> ") || "—")) + "\n" +
+      "Best path: " + (summary.bestPathExposition || ((summary.bestPath || []).join(" -> ") || "—")) + "\n" +
       "Spine: " + spineText + "\n" +
       "Trail:\n" + trailText;
 

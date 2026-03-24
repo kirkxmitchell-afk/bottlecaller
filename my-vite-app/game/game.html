@@ -15725,6 +15725,40 @@ function ensureProgLoaded() {
             ? normalizedPayload.bestPath
             : ["observe", "mode", "hook", "deliver"];
         normalizedPayload.bottleServed = !!normalizedPayload.bottleServed;
+        normalizedPayload.chosenPathExposition =
+          normalizedPayload.chosenPathExposition ||
+          [
+            `Read: chose ${encounter?.guestReadSelected || "—"}.`,
+            `Mode: chose ${encounter?.modeSelected ? uiModeLabel(encounter.modeSelected, "game") : "—"}.`,
+            `Hook: chose ${encounter?.hookSelected || "—"}.`,
+            `Delivery: ${
+              encounter?.selectedDeliveryLine1 || encounter?.selectedDeliveryLine2
+                ? `${encounter?.selectedDeliveryLine1 || "—"} / ${encounter?.selectedDeliveryLine2 || "—"}`
+                : "—"
+            }.`,
+            stepReactionTrail.length
+              ? `Trail: ${stepReactionTrail.map((item) => {
+                  const step = String(item?.step || "").toUpperCase() || "STEP";
+                  const cue = item?.tableCue || "—";
+                  return `${step}: ${cue}`;
+                }).join(" | ")}.`
+              : "Trail: —.",
+          ].join(" ");
+        normalizedPayload.bestPathExposition =
+          normalizedPayload.bestPathExposition ||
+          [
+            `Read: correct guest was ${encounter?.guestStateActual || "—"}.`,
+            `Mode: best answer was ${encounter?.correctModeResolved ? uiModeLabel(encounter.correctModeResolved, "game") : "—"}.`,
+            `Hook: best answer was ${encounter?.correctHookResolved || "—"}.`,
+            `Delivery: correct lines were ${
+              encounter?.correctDeliveryLine1 || encounter?.correctDeliveryLine2
+                ? `${encounter?.correctDeliveryLine1 || "—"} / ${encounter?.correctDeliveryLine2 || "—"}`
+                : "—"
+            }.`,
+            encounter?.recoveryText
+              ? `Pivot: best recovery was ${encounter?.recoveryCorrectModeResolved ? uiModeLabel(encounter.recoveryCorrectModeResolved, "game") : "—"}.`
+              : "",
+          ].filter(Boolean).join(" ");
 
         return normalizedPayload;
       }
