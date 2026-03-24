@@ -739,8 +739,8 @@ document.querySelector("#app").innerHTML = `
         <div id="mbTab_performance" class="mbTab hidden">
         <div id="mbInsightsPanel" style="margin-top:12px;"></div>
         <div id="mbPerformanceHistoryPanel" style="margin-top:12px;">
-          <div class="card">
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+          <details class="card mb-disclosure" open>
+            <summary class="mb-disclosure-summary">
               <div>
                 <strong>Performance History</strong>
                 <div class="small-text" style="margin-top:6px; opacity:.85;">
@@ -751,16 +751,18 @@ document.querySelector("#app").innerHTML = `
                 Waiter
                 <select id="mbHistoryUser" class="input" style="min-width:220px;"></select>
               </label>
+            </summary>
+            <div class="mb-disclosure-body">
+              <div id="mbHistorySummaryStrip" style="margin-top:10px;"></div>
+              <canvas id="mbHistoryChart"
+                width="600"
+                height="280"
+                style="margin-top:12px;">
+              </canvas>
+              <div id="mbPerformanceLegend" style="margin-top:8px;"></div>
+              <div id="managerEncounterSummaryHost" class="manager-encounter-summary-host" style="margin-top:12px;"></div>
             </div>
-            <div id="mbHistorySummaryStrip" style="margin-top:10px;"></div>
-            <canvas id="mbHistoryChart"
-              width="600"
-              height="280"
-              style="margin-top:12px;">
-            </canvas>
-            <div id="mbPerformanceLegend" style="margin-top:8px;"></div>
-            <div id="managerEncounterSummaryHost" class="manager-encounter-summary-host" style="margin-top:12px;"></div>
-          </div>
+          </details>
         </div>
 
           <div class="card" style="margin-top:12px;">
