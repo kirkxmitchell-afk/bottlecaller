@@ -401,7 +401,10 @@
       return getActiveTournamentRuntime()?.activeEntry || null;
     }
     function isTournamentSession() {
-      return String(window.__BC_SESSION_TYPE__ || "").toLowerCase() === "tournament" || sessionType === "tournament";
+      return (
+        String(window.__BC_SESSION_TYPE__ || "").toLowerCase() === "tournament" ||
+        (typeof sessionType !== "undefined" && sessionType === "tournament")
+      );
     }
     function getRailEl(id) {
       return document.getElementById(id);
