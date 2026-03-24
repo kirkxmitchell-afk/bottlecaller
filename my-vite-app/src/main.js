@@ -160,6 +160,12 @@ function setPendingStartDrill(payload) {
 
 window.__BC_ACTIVE_TIMED_CHALLENGE__ = window.__BC_ACTIVE_TIMED_CHALLENGE__ || null;
 window.__BC_LAST_TIMED_CHALLENGE_RESULT__ = window.__BC_LAST_TIMED_CHALLENGE_RESULT__ || null;
+window.__BC_TUTORIAL__ = window.__BC_TUTORIAL__ || {
+  active: false,
+  steps: [],
+  stepIndex: 0,
+  role: null,
+};
 
 window.setDefaultDrillConfig =
   window.setDefaultDrillConfig ||
@@ -347,7 +353,8 @@ document.querySelector("#app").innerHTML = `
           <button id="btnOpenHud" class="btn-ghost" type="button">Menu</button>
           <button id="btnOpenMessages" class="btn-ghost" type="button">Messages</button>
           <button id="btnWaiterPerformanceLeaderboard" class="btn-ghost hidden" type="button">Leaderboard</button>
-          <button id="btnPremiumWineSetup" class="btn-ghost" type="button">Wine Setup</button>
+          <button id="btnPremiumWineSetup" class="btn-ghost" type="button" data-tutorial="nav-wine-setup">Wine Setup</button>
+          <button id="btnTutorial" class="btn-ghost" type="button">Tutorial</button>
           <button id="btnManagerBoard" class="btn-ghost" type="button">Manager Board</button>
           <button id="btnOpenProfile" class="btn-ghost" type="button">Profile</button>
           <button id="btnLogoutPremium" class="btn-danger" type="button">Logout</button>
@@ -436,10 +443,10 @@ document.querySelector("#app").innerHTML = `
       <h2>Setup</h2>
       <div class="score-row">Wines added: <span id="wineCountPremium">0 / 10</span></div>
 
-      <div id="wineAdminPanel">
+      <div id="wineAdminPanel" data-tutorial="wine-panel">
       <div class="manager-row">
-        <input type="text" id="wineNameInputPremium" placeholder="Wine Name (required)" />
-        <input type="text" id="wineVarietalInputPremium" placeholder="Varietal (required)" />
+        <input type="text" id="wineNameInputPremium" data-tutorial="wine-name" placeholder="Wine Name (required)" />
+        <input type="text" id="wineVarietalInputPremium" data-tutorial="wine-varietal" placeholder="Varietal (required)" />
       </div>
 
       <div class="manager-row">
@@ -474,7 +481,7 @@ document.querySelector("#app").innerHTML = `
 
       <div class="manager-row">
         <textarea id="storyInputPremium" placeholder="Story (optional, 1 sentence)"></textarea>
-        <button id="addWineBtnPremium" type="button">Add Wine</button>
+        <button id="addWineBtnPremium" type="button" data-tutorial="wine-add">Add Wine</button>
       </div>
 
       <div class="manager-panel">
@@ -485,14 +492,14 @@ document.querySelector("#app").innerHTML = `
               <th>Name</th><th>Varietal</th><th>Fruit</th><th>Texture</th><th>Oak</th><th>Process</th><th>Region</th><th>Story</th><th>Action</th>
             </tr>
           </thead>
-          <tbody id="premiumWineTableBody"></tbody>
+          <tbody id="premiumWineTableBody" data-tutorial="wine-list"></tbody>
         </table>
         <div id="premiumWineCards" class="wine-cards"></div>
       </div>
       </div>
 
       <div class="button-row">
-        <button id="btnContinuePremium" type="button">Start</button>
+        <button id="btnContinuePremium" type="button" data-tutorial="wine-start">Start</button>
         <button id="btnBackHomeFromSetupPremium" type="button">Back</button>
       </div>
     </div>
@@ -521,7 +528,7 @@ document.querySelector("#app").innerHTML = `
         <button class="btn" type="button" data-mbtab="selection">Selection</button>
         <button class="btn" type="button" data-mbtab="billing">Listing</button>
         <button class="btn hidden" type="button" data-mbtab="enterprise" id="mbEnterpriseTabBtn">Enterprise</button>
-        <select id="mbRestaurantPicker" class="hidden input" style="margin-left:auto; min-width:220px;"></select>
+        <select id="mbRestaurantPicker" class="hidden input" data-tutorial="restaurant-picker" style="margin-left:auto; min-width:220px;"></select>
       </div>
 
       <div id="mbPanels">
@@ -1236,6 +1243,153 @@ function getParentCtxSnapshot(requestedMode = "premium") {
 
 function isParentCtxReady(requestedMode = "premium") {
   return !!getParentCtxSnapshot(requestedMode).ctxReady;
+}
+
+function getWineSetupTutorialSteps(role) {
+  const steps = [
+    {
+      id: "start",
+      target: null,
+      title: "Wine Setup",
+      body: "This is where you configure the wines used in your restaurant experience.",
+    },
+    {
+      id: "open-setup",
+      target: '[data-tutorial="nav-wine-setup"]',
+      title: "Open Wine Setup",
+      body: "Click here to open your wine configuration screen.",
+      action: "click",
+      before: () => showScreen("screenPremiumApp"),
+    },
+    {
+      id: "panel",
+      target: '[data-tutorial="wine-panel"]',
+      title: "Setup Panel",
+      body: role === "group_manager"
+        ? "You are editing the currently selected restaurant's wines."
+        : role === "enterpriser"
+        ? "This controls the wine environment across your system."
+        : "These wines define your restaurant's selling environment.",
+      before: () => openPremiumSetupScreen(),
+    },
+    {
+      id: "fields",
+      target: '[data-tutorial="wine-name"]',
+      title: "Wine Details",
+      body: "Start by entering the wine name and varietal.",
+    },
+    {
+      id: "add",
+      target: '[data-tutorial="wine-add"]',
+      title: "Add Wine",
+      body: "Click here to add a wine to your setup.",
+      action: "click",
+      optional: true,
+    },
+    {
+      id: "list",
+      target: '[data-tutorial="wine-list"]',
+      title: "Wine List",
+      body: "All configured wines appear here.",
+    },
+    {
+      id: "start-btn",
+      target: '[data-tutorial="wine-start"]',
+      title: "Start Experience",
+      body: "This will begin the experience using your configured wines.",
+    },
+    {
+      id: "end",
+      target: null,
+      title: "Done",
+      body: "You now understand how to configure wines.",
+    },
+  ];
+
+  if (role === "group_manager" || role === "enterpriser") {
+    steps.splice(2, 0, {
+      id: "restaurant",
+      target: '[data-tutorial="restaurant-picker"]',
+      title: "Active Restaurant",
+      body: "Select which restaurant you are configuring before editing wines.",
+      optional: true,
+      before: async () => {
+        await routeManagerBoard("tutorial_restaurant_picker");
+      },
+    });
+  }
+
+  return steps;
+}
+
+function startTutorial(id) {
+  const ctx = getParentCtxSnapshot("premium");
+  const role = String(ctx.role || "").toLowerCase();
+  const tutorial = window.__BC_TUTORIAL__;
+
+  tutorial.active = true;
+  tutorial.steps = [];
+  tutorial.stepIndex = 0;
+  tutorial.role = role;
+  tutorial.runToken = (tutorial.runToken || 0) + 1;
+
+  if (id === "wine_setup_manager") {
+    tutorial.steps = getWineSetupTutorialSteps(role);
+  }
+
+  runTutorialStep();
+}
+
+function stopTutorial() {
+  const tutorial = window.__BC_TUTORIAL__;
+  tutorial.active = false;
+  tutorial.steps = [];
+  tutorial.stepIndex = 0;
+  tutorial.runToken = (tutorial.runToken || 0) + 1;
+  removeTutorialOverlay();
+}
+
+function nextTutorialStep() {
+  const tutorial = window.__BC_TUTORIAL__;
+  tutorial.runToken = (tutorial.runToken || 0) + 1;
+  tutorial.stepIndex += 1;
+  runTutorialStep();
+}
+
+async function runTutorialStep() {
+  const tutorial = window.__BC_TUTORIAL__;
+  if (!tutorial?.active) return;
+
+  const step = tutorial.steps[tutorial.stepIndex];
+  if (!step) {
+    stopTutorial();
+    return;
+  }
+
+  const runToken = tutorial.runToken;
+  if (typeof step.before === "function") {
+    await step.before();
+    if (!tutorial.active || tutorial.runToken !== runToken) return;
+  }
+
+  const el = step.target ? document.querySelector(step.target) : null;
+  showTutorialOverlay({
+    target: el,
+    title: step.title,
+    body: step.body,
+    action: step.action,
+    optional: step.optional,
+    onNext: nextTutorialStep,
+  });
+
+  if (step.action === "click" && el) {
+    const handler = () => {
+      if (tutorial.active && tutorial.runToken === runToken) {
+        nextTutorialStep();
+      }
+    };
+    el.addEventListener("click", handler, { once: true });
+  }
 }
 
 function isPremiumIframeHealthy() {
@@ -3939,7 +4093,14 @@ const TEXTURE_OPTS = ["Silky","Chalky tannins","Firm tannins","Racy acidity","Cr
 const OAK_OPTS = ["None","Light","Subtle","Noticeable"];
 
 function getRestaurantIdOrNull() {
-  return appState?.profile?.restaurant_id || null;
+  return (
+    getManagerActiveRestaurantId?.() ||
+    window.__BC_ACTIVE_MANAGER_RESTAURANT_ID__ ||
+    appState?.activeRestaurantId ||
+    appState?.profile?.restaurant_id ||
+    appState?.restaurant?.id ||
+    null
+  );
 }
 
 function setupMultiSelectGrid(containerId, options, maxPick, getState, setState) {
@@ -6292,6 +6453,7 @@ function applyRoleTemplateGates() {
 
   const idsToHideForWaiter = [
     "btnPremiumWineSetup",
+    "btnTutorial",
     "btnWineSetup",
     "btnGoSetup",
     "btnSetupWines",
@@ -6803,6 +6965,7 @@ function wireParentButtons() {
   const btnOpenProfile = document.getElementById("btnOpenProfile");
   const btnOpenMessages = document.getElementById("btnOpenMessages");
   const btnPremiumWineSetup = document.getElementById("btnPremiumWineSetup");
+  const btnTutorial = document.getElementById("btnTutorial");
 
   if (btnManagerBoard && !btnManagerBoard.__bcBound) {
     btnManagerBoard.__bcBound = true;
@@ -6841,6 +7004,13 @@ function wireParentButtons() {
         return;
       }
       await openPremiumSetupScreen();
+    });
+  }
+
+  if (btnTutorial && !btnTutorial.__bcBound) {
+    btnTutorial.__bcBound = true;
+    btnTutorial.addEventListener("click", () => {
+      startTutorial("wine_setup_manager");
     });
   }
 
@@ -7005,6 +7175,59 @@ function openHud() {
 }
 function closeHud() {
   setHudOpen(false);
+}
+
+function showTutorialOverlay({ target, title, body, optional, onNext }) {
+  removeTutorialOverlay();
+
+  const overlay = document.createElement("div");
+  overlay.id = "bcTutorialOverlay";
+  overlay.style.position = "fixed";
+  overlay.style.inset = "0";
+  overlay.style.background = "rgba(0,0,0,0.6)";
+  overlay.style.zIndex = "9999";
+  overlay.style.pointerEvents = "none";
+
+  const card = document.createElement("div");
+  card.style.position = "absolute";
+  card.style.maxWidth = "300px";
+  card.style.padding = "14px";
+  card.style.background = "#0f1720";
+  card.style.border = "1px solid rgba(255,255,255,0.1)";
+  card.style.borderRadius = "12px";
+  card.style.boxShadow = "0 24px 60px rgba(0,0,0,0.45)";
+  card.style.pointerEvents = "auto";
+
+  card.innerHTML = `
+    <div style="font-weight:bold; margin-bottom:6px;">${escapeHtml(title || "")}</div>
+    <div style="font-size:13px; opacity:0.9;">${escapeHtml(body || "")}</div>
+    <div style="margin-top:10px; display:flex; gap:6px;">
+      <button id="tutorialNextBtn" type="button">Next</button>
+      ${optional ? `<button id="tutorialSkipBtn" type="button">Skip</button>` : ""}
+      <button id="tutorialCloseBtn" type="button">Close</button>
+    </div>
+  `;
+
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+
+  if (target) {
+    const rect = target.getBoundingClientRect();
+    card.style.top = `${Math.min(rect.bottom + 10, Math.max(24, window.innerHeight - 160))}px`;
+    card.style.left = `${Math.min(rect.left, Math.max(24, window.innerWidth - 320))}px`;
+  } else {
+    card.style.top = "50%";
+    card.style.left = "50%";
+    card.style.transform = "translate(-50%, -50%)";
+  }
+
+  document.getElementById("tutorialNextBtn")?.addEventListener("click", onNext);
+  document.getElementById("tutorialSkipBtn")?.addEventListener("click", onNext);
+  document.getElementById("tutorialCloseBtn")?.addEventListener("click", stopTutorial);
+}
+
+function removeTutorialOverlay() {
+  document.getElementById("bcTutorialOverlay")?.remove();
 }
 
 function renderWaiterThreadItem(row, selfUserId, nameMap) {
