@@ -61,8 +61,10 @@ button, input { font-family: inherit; }
 
 [data-tutorial-active="true"] {
   position: relative;
-  z-index: 10000 !important;
-  box-shadow: 0 0 0 3px rgba(125,211,252,0.85);
+  z-index: 10001 !important;
+  box-shadow:
+    0 0 0 3px rgba(125, 211, 252, 0.95),
+    0 0 0 8px rgba(125, 211, 252, 0.18);
   border-radius: 12px;
 }
 

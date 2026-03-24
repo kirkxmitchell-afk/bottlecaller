@@ -451,22 +451,22 @@ document.querySelector("#app").innerHTML = `
 
       <div class="manager-row">
         <strong>Fruit Profile (choose up to 2):</strong>
-        <div class="option-grid" id="fruitOptionsPremium"></div>
+        <div class="option-grid" id="fruitOptionsPremium" data-tutorial="fruit-options"></div>
       </div>
 
       <div class="manager-row">
         <strong>Structure/Texture (choose up to 2):</strong>
-        <div class="option-grid" id="textureOptionsPremium"></div>
+        <div class="option-grid" id="textureOptionsPremium" data-tutorial="texture-options"></div>
       </div>
 
       <div class="manager-row">
         <strong>Oak Level (choose 1):</strong>
-        <div class="option-grid" id="oakOptionsPremium"></div>
+        <div class="option-grid" id="oakOptionsPremium" data-tutorial="oak-options"></div>
       </div>
 
       <div class="manager-row">
         <strong>Process (optional):</strong>
-        <select id="processInputPremium">
+        <select id="processInputPremium" data-tutorial="wine-process">
           <option value="">Select process</option>
           <option value="Stainless steel">Stainless steel</option>
           <option value="Wild ferment">Wild ferment</option>
@@ -476,11 +476,11 @@ document.querySelector("#app").innerHTML = `
           <option value="Hand harvested">Hand harvested</option>
           <option value="Time on lees">Time on lees</option>
         </select>
-        <input type="text" id="regionInputPremium" placeholder="Region (optional)" />
+        <input type="text" id="regionInputPremium" data-tutorial="wine-region" placeholder="Region (optional)" />
       </div>
 
       <div class="manager-row">
-        <textarea id="storyInputPremium" placeholder="Story (optional, 1 sentence)"></textarea>
+        <textarea id="storyInputPremium" data-tutorial="wine-story" placeholder="Story (optional, 1 sentence)"></textarea>
         <button id="addWineBtnPremium" type="button" data-tutorial="wine-add">Add Wine</button>
       </div>
 
@@ -1246,62 +1246,139 @@ function isParentCtxReady(requestedMode = "premium") {
 }
 
 function getWineSetupTutorialSteps(role) {
+  const roleText =
+    role === "group_manager"
+      ? "You are editing the currently active restaurant's wines."
+      : role === "enterpriser"
+      ? "You are editing the currently active restaurant's wine environment from an enterprise-level role."
+      : "These wines define your restaurant's selling environment.";
+
   return [
     {
-      id: "start",
+      id: "intro",
       target: null,
+      title: "Wine Setup Tutorial",
+      body: "This walkthrough will show you where the wine setup tools are and what each field does.",
+      placement: "center",
+      action: "none",
+      before: async () => {
+        showScreen("screenPremiumApp");
+      },
+    },
+    {
+      id: "nav-wine-setup",
+      target: '[data-tutorial="nav-wine-setup"]',
       title: "Wine Setup",
-      body: "This is where you configure the wines used in your restaurant experience.",
+      body: "Use this button to open the wine configuration screen.",
+      placement: "bottom",
+      action: "none",
     },
     {
       id: "open-setup",
-      target: '[data-tutorial="nav-wine-setup"]',
-      title: "Wine Setup",
-      body: "This button opens the wine configuration screen.",
-      before: () => showScreen("screenPremiumApp"),
-    },
-    {
-      id: "panel",
       target: '[data-tutorial="wine-panel"]',
-      title: "Setup Panel",
-      body: role === "group_manager"
-        ? "You are editing the currently active restaurant's wines."
-        : role === "enterpriser"
-        ? "You are configuring the currently active restaurant's wine environment from an enterprise-level role."
-        : "These wines define your restaurant's selling environment.",
-      before: () => openPremiumSetupScreen(),
+      title: "Wine Setup Panel",
+      body: roleText,
+      placement: "top",
+      action: "none",
+      before: async () => {
+        await openPremiumSetupScreen();
+      },
     },
     {
-      id: "fields",
+      id: "wine-name",
       target: '[data-tutorial="wine-name"]',
-      title: "Wine Details",
-      body: "Start by entering the wine name and varietal.",
+      title: "Wine Name",
+      body: "Enter the name of the wine here.",
+      placement: "bottom",
+      action: "none",
     },
     {
-      id: "add",
+      id: "wine-varietal",
+      target: '[data-tutorial="wine-varietal"]',
+      title: "Varietal",
+      body: "This is where you enter the grape or varietal.",
+      placement: "bottom",
+      action: "none",
+    },
+    {
+      id: "fruit-options",
+      target: '[data-tutorial="fruit-options"]',
+      title: "Fruit Profile",
+      body: "This section defines the fruit character of the wine.",
+      placement: "right",
+      action: "none",
+    },
+    {
+      id: "texture-options",
+      target: '[data-tutorial="texture-options"]',
+      title: "Structure / Texture",
+      body: "This section defines the wine's body and texture profile.",
+      placement: "right",
+      action: "none",
+    },
+    {
+      id: "oak-options",
+      target: '[data-tutorial="oak-options"]',
+      title: "Oak Level",
+      body: "This is where you set the wine's oak influence.",
+      placement: "right",
+      action: "none",
+    },
+    {
+      id: "process",
+      target: '[data-tutorial="wine-process"]',
+      title: "Process",
+      body: "Use this field for optional production details.",
+      placement: "bottom",
+      action: "none",
+    },
+    {
+      id: "region",
+      target: '[data-tutorial="wine-region"]',
+      title: "Region",
+      body: "This field lets you add the wine's region.",
+      placement: "bottom",
+      action: "none",
+    },
+    {
+      id: "story",
+      target: '[data-tutorial="wine-story"]',
+      title: "Story",
+      body: "Add a short one-line story or memory hook here.",
+      placement: "top",
+      action: "none",
+    },
+    {
+      id: "add-button",
       target: '[data-tutorial="wine-add"]',
       title: "Add Wine",
-      body: "Click here to add a wine to your setup.",
-      action: "click",
-      optional: true,
+      body: "Once the fields are ready, this button adds the wine to the list.",
+      placement: "left",
+      action: "none",
     },
     {
-      id: "list",
+      id: "wine-list",
       target: '[data-tutorial="wine-list"]',
       title: "Wine List",
       body: "All configured wines appear here.",
+      placement: "top",
+      action: "none",
     },
     {
-      id: "start-btn",
+      id: "start-button",
       target: '[data-tutorial="wine-start"]',
-      title: "Start Experience",
-      body: "This will begin the experience using your configured wines.",
+      title: "Start",
+      body: "This returns you to the premium app after setup.",
+      placement: "top",
+      action: "none",
     },
     {
       id: "end",
       target: null,
       title: "Done",
-      body: "You now understand how to configure wines.",
+      body: "You've now seen the main wine setup fields and actions.",
+      placement: "center",
+      action: "none",
     },
   ];
 }
@@ -1350,15 +1427,18 @@ async function runTutorialStep() {
     return;
   }
 
+  removeTutorialOverlay();
+
   const runToken = tutorial.runToken;
   if (typeof step.before === "function") {
     await step.before();
+    await new Promise((resolve) => setTimeout(resolve, 120));
     if (!tutorial.active || tutorial.runToken !== runToken) return;
   }
 
   let el = null;
   if (step.target) {
-    for (let i = 0; i < 10; i += 1) {
+    for (let i = 0; i < 12; i += 1) {
       el = document.querySelector(step.target);
       if (el) break;
       await new Promise((resolve) => setTimeout(resolve, 80));
@@ -1370,6 +1450,8 @@ async function runTutorialStep() {
     target: el,
     title: step.title,
     body: step.body,
+    action: step.action,
+    placement: step.placement,
     optional: step.optional,
     onNext: nextTutorialStep,
   });
@@ -7170,8 +7252,54 @@ function closeHud() {
   setHudOpen(false);
 }
 
-function showTutorialOverlay({ target, title, body, optional, onNext }) {
-  removeTutorialOverlay();
+function clearTutorialHighlights() {
+  document.querySelectorAll("[data-tutorial-active='true']").forEach((el) => {
+    el.removeAttribute("data-tutorial-active");
+  });
+}
+
+function placeTutorialCard(card, target, placement = "bottom") {
+  if (!target) {
+    card.style.top = "50%";
+    card.style.left = "50%";
+    card.style.transform = "translate(-50%, -50%)";
+    return;
+  }
+
+  const rect = target.getBoundingClientRect();
+  const cardWidth = 320;
+  const cardHeight = 170;
+  const gap = 12;
+
+  let top = rect.bottom + gap;
+  let left = rect.left;
+
+  if (placement === "top") {
+    top = rect.top - cardHeight - gap;
+    left = rect.left;
+  } else if (placement === "right") {
+    top = rect.top;
+    left = rect.right + gap;
+  } else if (placement === "left") {
+    top = rect.top;
+    left = rect.left - cardWidth - gap;
+  } else if (placement === "bottom") {
+    top = rect.bottom + gap;
+    left = rect.left;
+  }
+
+  const maxLeft = window.innerWidth - cardWidth - 12;
+  const maxTop = window.innerHeight - cardHeight - 12;
+
+  left = Math.max(12, Math.min(left, maxLeft));
+  top = Math.max(12, Math.min(top, maxTop));
+
+  card.style.top = `${top}px`;
+  card.style.left = `${left}px`;
+}
+
+function showTutorialOverlay({ target, title, body, action, placement, optional, onNext }) {
+  clearTutorialHighlights();
 
   const overlay = document.createElement("div");
   overlay.id = "bcTutorialOverlay";
@@ -7205,17 +7333,11 @@ function showTutorialOverlay({ target, title, body, optional, onNext }) {
   document.body.appendChild(overlay);
 
   if (target) {
-    target.dataset.tutorialActive = "true";
-    const rect = target.getBoundingClientRect();
-    const maxLeft = window.innerWidth - 320;
-    const maxTop = window.innerHeight - 180;
-    card.style.left = `${Math.max(12, Math.min(rect.left, maxLeft))}px`;
-    card.style.top = `${Math.max(12, Math.min(rect.bottom + 10, maxTop))}px`;
-  } else {
-    card.style.top = "50%";
-    card.style.left = "50%";
-    card.style.transform = "translate(-50%, -50%)";
+    target.setAttribute("data-tutorial-active", "true");
+    target.scrollIntoView({ block: "center", behavior: "smooth" });
   }
+
+  placeTutorialCard(card, target, placement || "bottom");
 
   document.getElementById("tutorialNextBtn")?.addEventListener("click", onNext);
   document.getElementById("tutorialSkipBtn")?.addEventListener("click", onNext);
@@ -7223,10 +7345,8 @@ function showTutorialOverlay({ target, title, body, optional, onNext }) {
 }
 
 function removeTutorialOverlay() {
-  document.querySelectorAll('[data-tutorial-active="true"]').forEach((el) => {
-    delete el.dataset.tutorialActive;
-  });
   document.getElementById("bcTutorialOverlay")?.remove();
+  clearTutorialHighlights();
 }
 
 function renderWaiterThreadItem(row, selfUserId, nameMap) {
