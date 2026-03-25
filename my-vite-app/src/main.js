@@ -1384,72 +1384,114 @@ function getWineSetupTutorialSteps(role) {
 }
 
 function getEncounterTutorialSteps(role) {
-  const roleText =
-    role === "group_manager"
-      ? "You are viewing how the selected restaurant's gameplay works."
-      : role === "enterpriser"
-      ? "You are viewing gameplay from an enterprise-level role."
-      : "This shows how the gameplay flow works.";
-
   return [
     {
       id: "intro",
       target: null,
       title: "Encounter Flow",
-      body: "This tutorial takes you straight into the live encounter and explains the main gameplay areas.",
+      body: "This walkthrough shows how a real session works from start to finish.",
       placement: "center",
-      action: "none",
       before: async () => {
         showScreen("screenPremiumApp");
       },
     },
     {
-      id: "enter-game",
-      target: '[data-tutorial="guest-clue"]',
-      title: "Opening Encounter",
-      body: roleText,
+      id: "play-button",
+      target: '[data-tutorial="play-button"]',
+      title: "Start a Session",
+      body: "Click Play to begin a new encounter.",
       placement: "bottom",
-      action: "none",
-      before: async () => {
-        const frame = document.getElementById("premiumRootFrame");
-        const win = frame?.contentWindow;
-        await win?.startPlayWithReadyGate?.();
-        await new Promise((r) => setTimeout(r, 400));
-      },
+      action: "click",
     },
     {
       id: "guest",
       target: '[data-tutorial="guest-clue"]',
-      title: "Guest Prompt",
-      body: "This is where the waiter reads the guest and looks for clues.",
+      title: "Read the Guest",
+      body: "Start by reading the guest carefully. Their cues tell you everything.",
       placement: "bottom",
-      action: "none",
+      before: async () => {
+        await waitForStep(1);
+      },
     },
     {
-      id: "actions",
-      target: '[data-tutorial="action-area"]',
-      title: "Action Area",
-      body: "This is where the waiter makes decisions during the encounter.",
+      id: "choices",
+      target: '[data-tutorial="guest-clue"]',
+      title: "Choose a Read",
+      body: "Select the type of guest based on their behaviour.",
       placement: "top",
-      action: "none",
     },
     {
-      id: "result",
+      id: "lock-in",
+      target: '[data-tutorial="action-area"]',
+      title: "Lock It In",
+      body: "Confirm your read to move forward.",
+      placement: "top",
+      before: async () => {
+        await waitForButton("LOCK IN");
+      },
+    },
+    {
+      id: "mode",
+      target: '[data-tutorial="guest-clue"]',
+      title: "Choose Your Approach",
+      body: "Now decide how to handle the guest.",
+      placement: "bottom",
+      before: async () => {
+        await waitForStep(2);
+      },
+    },
+    {
+      id: "continue",
+      target: '[data-tutorial="action-area"]',
+      title: "Continue",
+      body: "Confirm your approach.",
+      placement: "top",
+      before: async () => {
+        await waitForButton("CONTINUE");
+      },
+    },
+    {
+      id: "feedback",
       target: '[data-tutorial="result-panel"]',
       title: "Feedback",
-      body: "This is where the system shows what worked, what missed, and why.",
+      body: "This shows what worked and what didn’t.",
       placement: "left",
-      action: "none",
     },
     {
       id: "end",
       target: null,
       title: "Complete",
-      body: "You've now seen the core encounter flow: read the guest, act, and review the feedback.",
+      body: "You’ve now seen a full encounter flow.",
       placement: "center",
-      action: "none",
     },
   ];
+}
+
+function getGameWindow() {
+  const frame = document.getElementById("premiumRootFrame");
+  return frame?.contentWindow || null;
+}
+
+async function waitForStep(stepIndex) {
+  for (let i = 0; i < 40; i++) {
+    const win = getGameWindow();
+    if (win && Number(win.currentStep) === Number(stepIndex)) return;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+}
+
+async function waitForButton(label) {
+  const wanted = String(label || "").trim().toLowerCase();
+  for (let i = 0; i < 40; i++) {
+    const localButtons = Array.from(document.querySelectorAll("button"));
+    const frameDoc = getGameWindow()?.document || null;
+    const frameButtons = frameDoc ? Array.from(frameDoc.querySelectorAll("button")) : [];
+    const match = [...localButtons, ...frameButtons].find((btn) =>
+      String(btn?.innerText || btn?.textContent || "").toLowerCase().includes(wanted)
+    );
+    if (match) return;
+    await new Promise((r) => setTimeout(r, 100));
+  }
 }
 
 function startTutorial(id) {
@@ -1548,6 +1590,12 @@ async function runTutorialStep() {
     }
 
     console.log("[TUTORIAL] target found", step.target, !!el);
+
+    if (step.action === "click" && el) {
+      el.click();
+      nextTutorialStep();
+      return;
+    }
 
     showTutorialOverlay({
       target: el,
