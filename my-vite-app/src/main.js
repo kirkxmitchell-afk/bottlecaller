@@ -1411,13 +1411,12 @@ function getEncounterTutorialSteps(role) {
           () => {
             const win = getGameWindow();
             const doc = win?.document || null;
+            const beginBtn = getTutorialButtonTarget(["BEGIN"]);
             const playScreen = doc?.getElementById?.("screenPlay") || null;
-            const playButton = doc?.querySelector?.('[data-tutorial="play-button"]') || null;
             const playVisible = !!playScreen && playScreen.classList.contains("active");
-            const buttonGone = !!playButton && !isVisibleTutorialTarget(playButton);
-            return playVisible || buttonGone;
+            return !!beginBtn || playVisible;
           },
-          "play clicked"
+          "begin available"
         );
       },
     },
