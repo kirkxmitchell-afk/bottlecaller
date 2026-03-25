@@ -22001,12 +22001,10 @@ function ensureProgLoaded() {
               bindInput(btnResetProgress, () => restartEncounterFlowOnly());
             }
             if (btnHardResetProgression) {
-              btnHardResetProgression.classList.remove("hidden");
-              btnHardResetProgression.disabled = false;
-              btnHardResetProgression.textContent = "Reset waiter progression";
+              btnHardResetProgression.classList.add("hidden");
+              btnHardResetProgression.disabled = true;
               btnHardResetProgression.onclick = null;
               btnHardResetProgression.__bcBound = false;
-              bindInput(btnHardResetProgression, () => hardResetProgressionOptionA());
             }
             if (btnResetRuns) {
               btnResetRuns.classList.remove("hidden");

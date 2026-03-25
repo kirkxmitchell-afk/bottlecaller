@@ -392,7 +392,15 @@ document.querySelector("#app").innerHTML = `
       <div id="profileStandingCard" style="margin-top:12px;"></div>
       <div id="profileBadgeShelf" style="margin-top:12px;"></div>
       <div id="profileInsightCard" style="margin-top:12px;"></div>
-      <div id="profileTutorialCard" style="margin-top:12px;"></div>
+      <div id="profileTutorialCard" class="hidden" style="margin-top:12px;">
+        <div class="card">
+          <div style="font-weight:600; margin-bottom:8px;">Tutorials</div>
+          <div id="profileTutorialCopy" class="small" style="opacity:.8; margin-bottom:10px;">
+            Launch the guided encounter walkthrough directly from your profile.
+          </div>
+          <button id="btnProfileEncounterTutorial" class="btn" type="button">Start Encounter Tutorial</button>
+        </div>
+      </div>
       <div id="profileMultiRestaurantCard" style="margin-top:12px;"></div>
     </div>
   </section>
@@ -16219,21 +16227,18 @@ function renderProfileScreen() {
   if (tutorialCard) {
     const normalizedRole = String(normalizeMembershipRole(profile) || "").toLowerCase();
     if (normalizedRole === "waiter") {
-      tutorialCard.innerHTML = `
-        <div class="card">
-          <div style="font-weight:600; margin-bottom:8px;">Tutorials</div>
-          <div class="small" style="opacity:.8; margin-bottom:10px;">
-            Launch the guided encounter walkthrough directly from your profile.
-          </div>
-          <button id="btnProfileEncounterTutorial" class="btn" type="button">Start Encounter Tutorial</button>
-        </div>
-      `;
-      document.getElementById("btnProfileEncounterTutorial")?.addEventListener("click", () => {
+      tutorialCard.classList.remove("hidden");
+      const copyEl = document.getElementById("profileTutorialCopy");
+      if (copyEl) {
+        copyEl.textContent = "Launch the guided encounter walkthrough directly from your profile.";
+      }
+      const tutorialBtn = document.getElementById("btnProfileEncounterTutorial");
+      if (tutorialBtn) tutorialBtn.onclick = () => {
         closeProfilePanel?.();
         startTutorial("encounter_setup_manager");
-      });
+      };
     } else {
-      tutorialCard.innerHTML = "";
+      tutorialCard.classList.add("hidden");
     }
   }
 
