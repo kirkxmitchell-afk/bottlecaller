@@ -1414,8 +1414,12 @@ function getEncounterTutorialSteps(role) {
       title: "Read the Guest",
       body: "Start by reading the guest carefully. Their cues tell you everything.",
       placement: "bottom",
+      disableNext: true,
       before: async () => {
         await waitForStep(1);
+      },
+      autoAdvance: async () => {
+        await waitMs(900);
       },
     },
     {
@@ -1455,8 +1459,12 @@ function getEncounterTutorialSteps(role) {
       title: "Choose Your Approach",
       body: "You are now in the mode step. Pick the approach you want to use with this guest.",
       placement: "bottom",
+      disableNext: true,
       before: async () => {
         await waitForStep(2);
+      },
+      autoAdvance: async () => {
+        await waitMs(900);
       },
     },
     {
@@ -1496,8 +1504,12 @@ function getEncounterTutorialSteps(role) {
       title: "Choose an Opening",
       body: "Now pick the opening angle for your recommendation.",
       placement: "bottom",
+      disableNext: true,
       before: async () => {
         await waitForStep(3);
+      },
+      autoAdvance: async () => {
+        await waitMs(900);
       },
     },
     {
@@ -1537,8 +1549,12 @@ function getEncounterTutorialSteps(role) {
       title: "Build the Delivery",
       body: "This step asks you to choose both delivery lines.",
       placement: "bottom",
+      disableNext: true,
       before: async () => {
         await waitForStep(4);
+      },
+      autoAdvance: async () => {
+        await waitMs(900);
       },
     },
     {
@@ -1584,6 +1600,7 @@ function getEncounterTutorialSteps(role) {
       title: "Reaction and Result",
       body: "This is the encounter outcome. Read the response, then continue into reflection.",
       placement: "left",
+      disableNext: true,
       before: async () => {
         await waitForTutorialCondition(
           () => {
@@ -1592,6 +1609,9 @@ function getEncounterTutorialSteps(role) {
           },
           "reaction or reflection visible"
         );
+      },
+      autoAdvance: async () => {
+        await waitMs(1200);
       },
     },
     {
@@ -1640,6 +1660,10 @@ async function waitForTutorialCondition(predicate, label = "condition") {
     await new Promise((r) => setTimeout(r, 100));
   }
   console.warn("[TUTORIAL] wait timed out", label);
+}
+
+async function waitMs(ms) {
+  await new Promise((r) => setTimeout(r, Number(ms) || 0));
 }
 
 async function waitForPremiumIframeReady() {
