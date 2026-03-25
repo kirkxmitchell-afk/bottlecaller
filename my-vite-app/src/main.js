@@ -28,15 +28,21 @@ if (!supabase.__BC_FINGERPRINT_PATCHED__) {
   const _getSession = supabase.auth.getSession.bind(supabase.auth);
   supabase.auth.getSession = async (...args) => {
     const r = await _getSession(...args);
-    console.log("[SB]", supabase.__BC_ID__, "getSession ->", !!r?.data?.session);
+    if (BC_VERBOSE_LOGS) {
+      console.log("[SB]", supabase.__BC_ID__, "getSession ->", !!r?.data?.session);
+    }
     return r;
   };
 
   const _signOut = supabase.auth.signOut.bind(supabase.auth);
   supabase.auth.signOut = async (...args) => {
-    console.log("[SB]", supabase.__BC_ID__, "signOut CALLED", args);
+    if (BC_VERBOSE_LOGS) {
+      console.log("[SB]", supabase.__BC_ID__, "signOut CALLED", args);
+    }
     const r = await _signOut(...args);
-    console.log("[SB]", supabase.__BC_ID__, "signOut DONE", r?.error || "ok");
+    if (BC_VERBOSE_LOGS) {
+      console.log("[SB]", supabase.__BC_ID__, "signOut DONE", r?.error || "ok");
+    }
     return r;
   };
   supabase.__BC_FINGERPRINT_PATCHED__ = true;
@@ -56,6 +62,9 @@ window.escapeHtml =
 
 // Keep existing calls working: escapeHtml("x")
 var escapeHtml = window.escapeHtml;
+const BC_VERBOSE_LOGS =
+  new URLSearchParams(window.location.search).get("bcDebug") === "1" ||
+  localStorage.getItem("BC_DEBUG_LOGS") === "1";
 
 let progressionRouterModulePromise = null;
 function loadProgressionRouterModule() {
@@ -134,9 +143,6 @@ if (window.__BOTTLECALLER_BOOTED__) {
   throw new Error("BottleCaller boot attempted twice.");
 }
 window.__BOTTLECALLER_BOOTED__ = true;
-setTimeout(() => {
-  void preloadEncounterCatalog();
-}, 0);
 
 window.addEventListener("storage", (e) => {
   if (e.key === "__BC_LOGOUT_LOCK__" && e.newValue) {
@@ -1290,6 +1296,33 @@ let managerRestaurantChoicesCache = {
 };
 let managerRestaurantChoicesInflight = null;
 const MANAGER_RESTAURANT_CHOICES_CACHE_MS = 120000;
+const MANAGER_BOARD_OVERVIEW_CACHE_MS = 15000;
+const MANAGER_BOARD_MEMBERS_CACHE_MS = 15000;
+const MANAGER_BOARD_MESSENGER_CACHE_MS = 10000;
+let managerBoardOverviewCache = { rid: "", loadedAt: 0 };
+let managerBoardMembersCache = { rid: "", loadedAt: 0, rows: null };
+let managerBoardMessengerCache = { rid: "", loadedAt: 0, rows: null };
+
+function isFreshCacheEntry(entry, ttlMs, rid) {
+  return (
+    entry &&
+    String(entry.rid || "") === String(rid || "") &&
+    Date.now() - Number(entry.loadedAt || 0) < Number(ttlMs || 0)
+  );
+}
+
+function invalidateManagerBoardCaches(rid = null) {
+  const key = String(rid || "");
+  if (!key || String(managerBoardOverviewCache.rid || "") === key) {
+    managerBoardOverviewCache = { rid: "", loadedAt: 0 };
+  }
+  if (!key || String(managerBoardMembersCache.rid || "") === key) {
+    managerBoardMembersCache = { rid: "", loadedAt: 0, rows: null };
+  }
+  if (!key || String(managerBoardMessengerCache.rid || "") === key) {
+    managerBoardMessengerCache = { rid: "", loadedAt: 0, rows: null };
+  }
+}
 
 function shouldBypassAuthedStateCache(reason = "") {
   const text = String(reason || "").toLowerCase();
@@ -1450,6 +1483,7 @@ window.__BC_PARENT_SMOKE_TEST__ = function __BC_PARENT_SMOKE_TEST__() {
   }
 
   setInterval(() => {
+    if (document.hidden) return;
     const hasSession = !!window.appState?.session;
     if (!hasSession) {
       const premRoot = document.getElementById("premiumRoot");
@@ -1459,7 +1493,7 @@ window.__BC_PARENT_SMOKE_TEST__ = function __BC_PARENT_SMOKE_TEST__() {
         killPremium("interval.detected_premium_without_session");
       }
     }
-  }, 200);
+  }, 1000);
 })();
 
 let __BC_ROLE_CAPABILITIES_TABLE__ = null;
@@ -2834,6 +2868,8 @@ function tickHudActiveAbilities() {
   window.__BC_HUD_ABILITIES_TICK_WIRED__ = true;
 
   setInterval(() => {
+    const hud = document.getElementById("hudPanel");
+    if (!hud || hud.classList.contains("hidden") || document.hidden) return;
     const active = getActiveAbilities();
     const challenge = getActiveTimedChallenge();
     if (!challenge && window.__BC_ACTIVE_TIMED_CHALLENGE__) {
@@ -3923,6 +3959,7 @@ function tickManagerBoardAbilities() {
   window.__BC_MB_ABILITIES_TICK_WIRED__ = true;
 
   setInterval(() => {
+    if (document.hidden) return;
     const screen = document.getElementById("screenManagerBoard");
     if (!screen || screen.classList.contains("hidden")) return;
 
@@ -6977,11 +7014,6 @@ function wireParentButtons() {
 }
 
 function setHomeAuthUI(isAuthed) {
-  console.log("[HOME_UI] setHomeAuthUI", {
-    isLoggedIn: isAuthed,
-    session: !!appState?.session,
-    stack: new Error().stack
-  });
   const badge = document.getElementById("homeAuthBadge");
   const logoutBtn = document.getElementById("btnHomeLogout");
   if (isAuthed) {
@@ -7129,7 +7161,11 @@ function openHud() {
   setHudOpen(true);
   wireGroupSetupRedeem?.();
   wireManagerBoardBillingAccess?.();
-  loadGroupRestaurantsForPicker?.();
+  const profile = appState?.profile || {};
+  const caps = getPremiumRoleCapabilities(profile);
+  if (caps.canManageMultipleRestaurants) {
+    loadGroupRestaurantsForPicker?.();
+  }
   wireActiveRestaurantPicker?.();
   renderHud();
 }
@@ -15651,49 +15687,13 @@ function renderManagerActiveThread(nameMap) {
   safeCall("renderManagerThreadRecommendationsPanel", () => renderManagerThreadRecommendationsPanel?.(thread));
 }
 
-async function loadManagerMessenger(restaurantId = null) {
-  const rid = String(restaurantId || getManagerActiveRestaurantId() || "");
-  const profile = appState?.profile || {};
-  const caps = getPremiumRoleCapabilities(profile);
-
-  if (!rid) {
-    resetManagerMessengerState({ keepStatus: true });
-    return [];
-  }
-
-  if (!caps.canAccessManagerBoard) {
-    resetManagerMessengerState({ keepStatus: true });
-    return [];
-  }
-
-  if (!canActOnRestaurant(profile, profile, rid)) {
-    resetManagerMessengerState({ keepStatus: true });
-    return [];
-  }
-
+function applyManagerMessengerRows(rid, rows) {
   const listEl = mbEl("mbThreadList");
   const emptyEl = mbEl("mbThreadEmpty");
   const msgEl = mbEl("mbThreadMessages");
   const titleEl = mbEl("mbThreadTitle");
   const metaEl = mbEl("mbThreadMeta");
 
-  if (listEl) listEl.innerHTML = `<div class="small-text" style="padding:10px; opacity:.85;">Loading…</div>`;
-  if (emptyEl) emptyEl.style.display = "none";
-  if (msgEl) msgEl.innerHTML = `<div class="small-text" style="opacity:.8;">Select a waiter thread in this restaurant to assign a timed challenge.</div>`;
-  if (titleEl) titleEl.textContent = "Select a waiter";
-  if (metaEl) metaEl.textContent = "";
-
-  const { data, error } = await supabase
-    .from("bc_messages_v1")
-    .select("id, created_at, scope_type, scope_id, restaurant_id, sender_user_id, receiver_user_id, sender_role, type, body, payload, read_at")
-    .eq("restaurant_id", rid)
-    .is("archived_at", null)
-    .order("created_at", { ascending: false })
-    .limit(200);
-
-  if (error) throw error;
-
-  const rows = data || [];
   window.__MB_LAST_MESSAGES__ = rows;
   window.__BC_MB_MESSAGES__ = rows;
   window.__BC_MESSENGER_ROWS__ = rows;
@@ -15704,6 +15704,7 @@ async function loadManagerMessenger(restaurantId = null) {
   renderTimedChallengeTargetOptions();
   wireTimedChallengeComposer();
   refreshManagerMessageQuotaUi?.();
+
   if (!rows.length) {
     resetManagerMessengerState({ keepStatus: true });
     if (emptyEl) emptyEl.style.display = "block";
@@ -15714,12 +15715,6 @@ async function loadManagerMessenger(restaurantId = null) {
     appState?.session?.user?.id ||
     appState?.session?.userId ||
     null;
-  console.log("[MANAGER MESSENGER][ROWS]", {
-    rid,
-    managerId,
-    count: rows.length,
-    rows
-  });
 
   const grouped = new Map();
 
@@ -15777,10 +15772,87 @@ async function loadManagerMessenger(restaurantId = null) {
     return window.__BC_MB_THREADS__;
   }
 
-  const userIds = window.__BC_MB_THREADS_ALL__.map((t) => t.userId);
+  return window.__BC_MB_THREADS__;
+}
+
+async function loadManagerMessenger(restaurantId = null, options = {}) {
+  const rid = String(restaurantId || getManagerActiveRestaurantId() || "");
+  const profile = appState?.profile || {};
+  const caps = getPremiumRoleCapabilities(profile);
+  const force = !!options?.force;
+
+  if (!rid) {
+    resetManagerMessengerState({ keepStatus: true });
+    return [];
+  }
+
+  if (!caps.canAccessManagerBoard) {
+    resetManagerMessengerState({ keepStatus: true });
+    return [];
+  }
+
+  if (isFreshCacheEntry(managerBoardMessengerCache, MANAGER_BOARD_MESSENGER_CACHE_MS, rid) && !force) {
+    const cachedRows = Array.isArray(managerBoardMessengerCache.rows) ? managerBoardMessengerCache.rows : [];
+    const cachedThreads = applyManagerMessengerRows(rid, cachedRows);
+    const userIds = (cachedThreads || []).map((t) => t.userId);
+    const nameMap = await mapUserIdsToNames(userIds);
+    renderManagerThreadList(window.__BC_MB_THREADS_ALL__ || cachedThreads, nameMap);
+    if (!window.__BC_MB_ACTIVE_THREAD_USER_ID__ && window.__BC_MB_THREADS?.[0]) {
+      setActiveManagerThreadState({
+        userId: window.__BC_MB_THREADS[0].userId,
+        rows: window.__BC_MB_THREADS[0].rows || [],
+      });
+    }
+    reconcileManagerMessengerSelection();
+    safeCall("renderManagerActiveThread", () => renderManagerActiveThread(nameMap));
+    renderTimedChallengeComposer();
+    wireMbCoachSuggestionButtons();
+    refreshManagerRuntimeSurfaces?.({
+      thread: true,
+      board: true,
+      economy: false,
+      liveControls: false,
+      challengeMeta: true,
+    });
+    return window.__BC_MB_THREADS__;
+  }
+
+  if (!canActOnRestaurant(profile, profile, rid)) {
+    resetManagerMessengerState({ keepStatus: true });
+    return [];
+  }
+
+  const listEl = mbEl("mbThreadList");
+  const emptyEl = mbEl("mbThreadEmpty");
+  const msgEl = mbEl("mbThreadMessages");
+  const titleEl = mbEl("mbThreadTitle");
+  const metaEl = mbEl("mbThreadMeta");
+
+  if (listEl) listEl.innerHTML = `<div class="small-text" style="padding:10px; opacity:.85;">Loading…</div>`;
+  if (emptyEl) emptyEl.style.display = "none";
+  if (msgEl) msgEl.innerHTML = `<div class="small-text" style="opacity:.8;">Select a waiter thread in this restaurant to assign a timed challenge.</div>`;
+  if (titleEl) titleEl.textContent = "Select a waiter";
+  if (metaEl) metaEl.textContent = "";
+
+  const { data, error } = await supabase
+    .from("bc_messages_v1")
+    .select("id, created_at, scope_type, scope_id, restaurant_id, sender_user_id, receiver_user_id, sender_role, type, body, payload, read_at")
+    .eq("restaurant_id", rid)
+    .is("archived_at", null)
+    .order("created_at", { ascending: false })
+    .limit(200);
+
+  if (error) throw error;
+
+  const rows = data || [];
+  managerBoardMessengerCache = { rid, loadedAt: Date.now(), rows };
+  const threads = applyManagerMessengerRows(rid, rows);
+  if (!threads.length) return threads;
+
+  const userIds = threads.map((t) => t.userId);
   const nameMap = await mapUserIdsToNames(userIds);
 
-  renderManagerThreadList(window.__BC_MB_THREADS_ALL__, nameMap);
+  renderManagerThreadList(window.__BC_MB_THREADS_ALL__ || threads, nameMap);
 
   if (!window.__BC_MB_ACTIVE_THREAD_USER_ID__ && window.__BC_MB_THREADS__[0]) {
     setActiveManagerThreadState({
@@ -16191,7 +16263,8 @@ async function sendTimedChallengeFromManagerWithValues(values = {}) {
     setStatus(`${payload.title} sent ✅`);
 
     renderTimedChallengeRecentSummary();
-    await loadManagerMessenger(payload.restaurantId);
+    invalidateManagerBoardCaches(payload.restaurantId);
+    await loadManagerMessenger(payload.restaurantId, { force: true });
     refreshManagerRuntimeSurfaces?.({
       thread: true,
       board: true,
@@ -16588,7 +16661,8 @@ async function sendDisplayMethodChallengeFromManagerWithValues(values = {}) {
     });
     setManagerStatus(statusEl, "success", `${payload.title} sent ✅`);
     renderDisplayMethodChallengeRecentSummary?.();
-    await loadManagerMessenger(payload.restaurantId);
+    invalidateManagerBoardCaches(payload.restaurantId);
+    await loadManagerMessenger(payload.restaurantId, { force: true });
     refreshManagerRuntimeSurfaces?.({
       thread: true,
       board: true,
@@ -16786,7 +16860,8 @@ async function mbSendInstruction() {
   if (status) status.textContent = "Sent ✅";
   try { mbEl("mbInstrBody").value = ""; } catch {}
   await refreshManagerMessageQuotaUi();
-  await loadManagerMessenger(restaurantId);
+  invalidateManagerBoardCaches(restaurantId);
+  await loadManagerMessenger(restaurantId, { force: true });
   refreshManagerRuntimeSurfaces?.({
     thread: true,
     board: true,
@@ -16952,7 +17027,8 @@ async function mbSendDrillOverride(opts = {}) {
   if (error) throw error;
 
   if (status && !opts.silentStatus) status.textContent = "Drill sent ✅";
-  await loadManagerMessenger(restaurantId);
+  invalidateManagerBoardCaches(restaurantId);
+  await loadManagerMessenger(restaurantId, { force: true });
   refreshManagerRuntimeSurfaces?.({
     thread: true,
     board: true,
@@ -17077,7 +17153,7 @@ function wireManagerBoardMessenger() {
   const btn = mbEl("mbMsgRefresh");
   if (btn && !btn.__wired) {
     btn.__wired = true;
-    btn.addEventListener("click", () => loadManagerMessenger().catch(console.error));
+    btn.addEventListener("click", () => loadManagerMessenger(null, { force: true }).catch(console.error));
   }
 
   const send = mbEl("mbInstrSend");
@@ -17159,9 +17235,7 @@ function wireManagerBoardMessenger() {
   }
 }
 
-async function loadManagerBoardMembers() {
-  const snapshot = getParentCtxSnapshot("premium");
-  const rid = getManagerActiveRestaurantId() || snapshot.activeRestaurantId || snapshot.profile?.restaurant_id || null;
+function renderManagerBoardMembersFromRows(rid, staffRows, snapshot) {
   const box = document.getElementById("mbMembersList");
   const msg = document.getElementById("mbMembersMsg");
   const searchInput = document.getElementById("mbPeopleSearch");
@@ -17172,30 +17246,7 @@ async function loadManagerBoardMembers() {
     searchInput.value = String(window.__BC_MB_PEOPLE_SEARCH__ || "");
   }
 
-  box.innerHTML = "";
-  msg.textContent = "";
-
-  if (!rid) {
-    msg.textContent = "No active restaurant selected.";
-    return;
-  }
-
-  msg.textContent = "Loading members…";
-
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("user_id, display_name, role, created_at")
-    .eq("restaurant_id", rid)
-    .order("created_at", { ascending: true });
-
-  if (error) {
-    msg.textContent = "Failed to load members: " + (error.message || "unknown");
-    return;
-  }
-
-  const staffRows = data || [];
   const filteredStaffRows = filterManagerStaffRows(staffRows, getManagerPeopleSearchTerm());
-
   window.__BC_MB_STAFF_ROWS__ = staffRows;
   window.__BC_MB_WAITERS__ = staffRows.filter(
     (p) => String(p?.role || "").toLowerCase() === "waiter"
@@ -17261,6 +17312,7 @@ async function loadManagerBoardMembers() {
           userId: targetUserId,
           restaurantId: targetRestaurantId,
         });
+        invalidateManagerBoardCaches(targetRestaurantId);
         msg.textContent = `Progression reset for ${targetName}.`;
       } catch (error) {
         msg.textContent = `Failed to reset ${targetName}: ${error?.message || String(error)}`;
@@ -17277,11 +17329,56 @@ async function loadManagerBoardMembers() {
   renderTimedChallengeTargetOptions();
 }
 
+async function loadManagerBoardMembers(options = {}) {
+  const snapshot = getParentCtxSnapshot("premium");
+  const rid = getManagerActiveRestaurantId() || snapshot.activeRestaurantId || snapshot.profile?.restaurant_id || null;
+  const box = document.getElementById("mbMembersList");
+  const msg = document.getElementById("mbMembersMsg");
+  const searchInput = document.getElementById("mbPeopleSearch");
+  const force = !!options?.force;
+  if (!box || !msg) return;
+
+  wireManagerBoardSearches();
+  if (searchInput && searchInput.value !== String(window.__BC_MB_PEOPLE_SEARCH__ || "")) {
+    searchInput.value = String(window.__BC_MB_PEOPLE_SEARCH__ || "");
+  }
+
+  box.innerHTML = "";
+  msg.textContent = "";
+
+  if (!rid) {
+    msg.textContent = "No active restaurant selected.";
+    return;
+  }
+
+  if (isFreshCacheEntry(managerBoardMembersCache, MANAGER_BOARD_MEMBERS_CACHE_MS, rid) && !force) {
+    renderManagerBoardMembersFromRows(rid, managerBoardMembersCache.rows || [], snapshot);
+    return;
+  }
+
+  msg.textContent = "Loading members…";
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("user_id, display_name, role, created_at")
+    .eq("restaurant_id", rid)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    msg.textContent = "Failed to load members: " + (error.message || "unknown");
+    return;
+  }
+
+  const staffRows = data || [];
+  managerBoardMembersCache = { rid: String(rid), loadedAt: Date.now(), rows: staffRows };
+  renderManagerBoardMembersFromRows(rid, staffRows, snapshot);
+}
+
 function wireManagerBoardMembers() {
   const btn = document.getElementById("mbRefreshMembers");
   if (!btn || btn.__wired) return;
   btn.__wired = true;
-  btn.addEventListener("click", () => loadManagerBoardMembers());
+  btn.addEventListener("click", () => loadManagerBoardMembers({ force: true }));
 }
 
 function renderLeaderboard(list) {
@@ -17649,9 +17746,10 @@ async function maybeSendWeeklyManagerSummary(rows) {
   }
 }
 
-async function loadManagerBoardData(restaurantId = null) {
+async function loadManagerBoardData(restaurantId = null, options = {}) {
   try {
     const rid = requireManagerRestaurantId(restaurantId);
+    const force = !!options?.force;
     const snapshot = getParentCtxSnapshot("premium");
     const profile = snapshot.profile || {};
     const caps = getPremiumRoleCapabilities(profile);
@@ -17669,6 +17767,10 @@ async function loadManagerBoardData(restaurantId = null) {
     document.getElementById("mbMsg").textContent = "";
     renderParentStateDebugCard();
     wireManagerBoardMembers();
+    if (isFreshCacheEntry(managerBoardOverviewCache, MANAGER_BOARD_OVERVIEW_CACHE_MS, rid) && !force) {
+      renderManagerBoardAbilityTabs();
+      return;
+    }
     const [weeklyRows] = await Promise.all([
       loadWeeklyTrainingReport(),
       loadManagerBoardMembers(),
@@ -17913,6 +18015,7 @@ async function loadManagerBoardData(restaurantId = null) {
       streakUsers: topStreaks.length,
       coachingUsers: coaching.length,
     });
+    managerBoardOverviewCache = { rid: String(rid), loadedAt: Date.now() };
   } catch (e) {
     console.error(e);
     document.getElementById("mbMsg").textContent = e?.message || "Failed to load manager board";
@@ -18321,6 +18424,7 @@ async function routePremium(reason = "manual") {
   try {
     if (isHardLoggedOut()) return;
     clearMsgs();
+    void preloadEncounterCatalog();
     await loadAuthedState(`routePremium:${reason}`);
     if (isHardLoggedOut()) return;
     await initRestaurantContextAfterAuth();

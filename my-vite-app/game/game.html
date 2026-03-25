@@ -26,6 +26,10 @@
   </script>
 
   <script>
+    const BC_VERBOSE_LOGS =
+      new URLSearchParams(window.location.search).get("bcDebug") === "1" ||
+      localStorage.getItem("BC_DEBUG_LOGS") === "1";
+
     function safeCall(label, fn) {
       try {
         return typeof fn === "function" ? fn() : undefined;
@@ -11658,7 +11662,9 @@ function ensureProgLoaded() {
           const last = el.__bcLastAt || 0;
           const minGap = isOption ? 0 : 250;
           if (now - last < minGap) {
-            console.log("[BIND] blocked by debounce ❌", { minGap, dt: now - last, cls: el.className });
+            if (BC_VERBOSE_LOGS) {
+              console.log("[BIND] blocked by debounce ❌", { minGap, dt: now - last, cls: el.className });
+            }
             return;
           }
           el.__bcLastAt = now;
@@ -11689,14 +11695,18 @@ function ensureProgLoaded() {
           }
 
           try {
-            console.log("[BIND] calling handler ✅", {
-              cls: el.className,
-              txt: (el.innerText || "").slice(0, 40),
-              bc: el.dataset?.bc,
-              slot: el.dataset?.slot
-            });
+            if (BC_VERBOSE_LOGS) {
+              console.log("[BIND] calling handler ✅", {
+                cls: el.className,
+                txt: (el.innerText || "").slice(0, 40),
+                bc: el.dataset?.bc,
+                slot: el.dataset?.slot
+              });
+            }
             await fn(e);
-            console.log("[BIND] handler returned ✅");
+            if (BC_VERBOSE_LOGS) {
+              console.log("[BIND] handler returned ✅");
+            }
           } catch (err) {
             console.error("[BC] handler error", err);
             throw err;
@@ -11712,8 +11722,10 @@ function ensureProgLoaded() {
 
       // ---------- Screens ----------
       function showScreen(screenId) {
-        console.log("[NAV] showScreen ->", screenId);
-        console.trace("[NAV] caller stack");
+        if (BC_VERBOSE_LOGS) {
+          console.log("[NAV] showScreen ->", screenId);
+          console.trace("[NAV] caller stack");
+        }
 
         // If drill is active, do not allow anything to kick us back to setup/home
         if (
@@ -11721,7 +11733,7 @@ function ensureProgLoaded() {
           (screenId === ids.setupScreen || screenId === "screenHome" || screenId === "screenWelcome")
         ) {
           console.warn("[NAV] blocked screen switch during drill:", screenId);
-          console.trace("[NAV] blocked caller stack");
+          if (BC_VERBOSE_LOGS) console.trace("[NAV] blocked caller stack");
           return;
         }
 
@@ -20523,15 +20535,9 @@ function ensureProgLoaded() {
           return;
         }
         clearStepHighlights();
-        console.log("[RENDER] currentStep =", currentStep, "enc#", currentEncounter?.encounterNumber);
         if (typeof syncProgressReportButtonVisibility === "function") {
           syncProgressReportButtonVisibility();
         }
-        console.log("[RENDER CHECK]", {
-          num: currentEncounter?.encounterNumber,
-          hasSteps: Array.isArray(currentEncounter?.steps),
-          stepsLen: currentEncounter?.steps?.length
-        });
         if (currentEncounter && Array.isArray(currentEncounter.steps) && currentEncounter.steps.length) {
           bcActiveEncounter = currentEncounter;
           renderBcStage();
