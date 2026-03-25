@@ -22013,12 +22013,10 @@ function ensureProgLoaded() {
             document.getElementById("btnResetWinesPremium")?.remove();
           } else {
             if (btnHardResetProgression) {
-              btnHardResetProgression.classList.remove("hidden");
-              btnHardResetProgression.disabled = false;
-              btnHardResetProgression.textContent = "Reset manager progression";
+              btnHardResetProgression.classList.add("hidden");
+              btnHardResetProgression.disabled = true;
               btnHardResetProgression.onclick = null;
               btnHardResetProgression.__bcBound = false;
-              bindInput(btnHardResetProgression, () => hardResetProgressionOptionA());
             }
             if (btnResetProgress) {
               btnResetProgress.classList.add("hidden");
