@@ -6859,15 +6859,23 @@ function isDrillMode() {
           false
         );
 
+        const runScopedEncounterKey = [
+          result?.sessionId ||
+          encounter?.sessionId ||
+          sessionId ||
+          "",
+          resolvedEncounterId || "",
+        ]
+          .filter(Boolean)
+          .join("::");
+
         const input = {
           encounterId: resolvedEncounterId,
           success: Boolean(result?.success),
           pointEligible: Boolean(result?.pointEligible ?? result?.success ?? true),
           encounterKey: String(
             result?.encounterKey ||
-            result?.sessionId ||
-            encounter?.sessionId ||
-            sessionId ||
+            runScopedEncounterKey ||
             resolvedEncounterId ||
             ""
           ),
@@ -18296,7 +18304,7 @@ function ensureProgLoaded() {
           encounterId,
           success: didWin,
           pointEligible: didWin,
-          encounterKey: String(sessionId || encounterId || ""),
+          encounterKey: [sessionId || "", encounterId || ""].filter(Boolean).join("::"),
           encounter: enc,
           sessionId,
         });
@@ -19928,7 +19936,7 @@ function ensureProgLoaded() {
             encounterId,
             success: didWin,
             pointEligible: didWin,
-            encounterKey: String(sessionId || encounterId || ""),
+            encounterKey: [sessionId || "", encounterId || ""].filter(Boolean).join("::"),
             encounter: currentEncounter,
             sessionId,
           });
