@@ -1399,13 +1399,21 @@ function getEncounterTutorialSteps(role) {
       id: "play-button",
       target: '[data-tutorial="play-button"]',
       title: "Start a Session",
-      body: "This is the real Start/Play button. Press Start in this tutorial card to enter the encounter.",
+      body: "Click the real Start/Play button to enter the encounter.",
       placement: "bottom",
-      action: "click",
-      nextLabel: "Start",
+      disableNext: true,
       before: async () => {
         await waitForPremiumIframeReady();
         await new Promise((r) => setTimeout(r, 250));
+      },
+      autoAdvance: async () => {
+        await waitForTutorialCondition(
+          () => {
+            const step = Number(getGameWindow()?.currentStep);
+            return step === 0 || step === 1 || step === 55;
+          },
+          "play clicked"
+        );
       },
     },
     {
@@ -1424,6 +1432,20 @@ function getEncounterTutorialSteps(role) {
           () => Number(getGameWindow()?.currentStep) === 1,
           "begin clicked"
         );
+      },
+    },
+    {
+      id: "observe",
+      target: '[data-tutorial="guest-clue"]',
+      title: "Observe the Guest",
+      body: "You are now in Observe. Read the guest prompt and cues before choosing a read.",
+      placement: "bottom",
+      disableNext: true,
+      before: async () => {
+        await waitForStep(1);
+      },
+      autoAdvance: async () => {
+        await waitMs(900);
       },
     },
     {
@@ -1696,8 +1718,12 @@ function getGameEncounter() {
   return win?.currentEncounter || win?.__BC_LAST_ENCOUNTER__ || null;
 }
 
+function isTutorialStillActive() {
+  return !!window.__BC_TUTORIAL__?.active;
+}
+
 async function waitForTutorialCondition(predicate, label = "condition") {
-  for (let i = 0; i < 120; i++) {
+  while (isTutorialStillActive()) {
     try {
       if (predicate()) return;
     } catch (error) {
@@ -1705,7 +1731,6 @@ async function waitForTutorialCondition(predicate, label = "condition") {
     }
     await new Promise((r) => setTimeout(r, 100));
   }
-  console.warn("[TUTORIAL] wait timed out", label);
 }
 
 async function waitMs(ms) {
@@ -1713,7 +1738,7 @@ async function waitMs(ms) {
 }
 
 async function waitForPremiumIframeReady() {
-  for (let i = 0; i < 40; i++) {
+  while (isTutorialStillActive()) {
     const frame = document.getElementById("premiumRootFrame");
     const doc = frame?.contentDocument || frame?.contentWindow?.document || null;
     const playBtn = doc?.querySelector?.('[data-tutorial="play-button"]') || null;
@@ -1723,7 +1748,7 @@ async function waitForPremiumIframeReady() {
 }
 
 async function waitForStep(stepIndex) {
-  for (let i = 0; i < 40; i++) {
+  while (isTutorialStillActive()) {
     const win = getGameWindow();
     if (win && Number(win.currentStep) === Number(stepIndex)) return;
     await new Promise((r) => setTimeout(r, 100));
@@ -1738,7 +1763,8 @@ async function waitForAnyButton(labels) {
   const wanted = (Array.isArray(labels) ? labels : [labels])
     .map((label) => String(label || "").trim().toLowerCase())
     .filter(Boolean);
-  for (let i = 0; i < 40; i++) {
+
+  while (isTutorialStillActive()) {
     const localButtons = Array.from(document.querySelectorAll("button"));
     const frameDoc = getGameWindow()?.document || null;
     const frameButtons = frameDoc ? Array.from(frameDoc.querySelectorAll("button")) : [];
