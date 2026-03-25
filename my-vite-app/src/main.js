@@ -1409,7 +1409,7 @@ function getEncounterTutorialSteps(role) {
       },
     },
     {
-      id: "guest",
+      id: "observe",
       target: '[data-tutorial="guest-clue"]',
       title: "Read the Guest",
       body: "Start by reading the guest carefully. Their cues tell you everything.",
@@ -1419,48 +1419,196 @@ function getEncounterTutorialSteps(role) {
       },
     },
     {
-      id: "choices",
+      id: "select-read",
       target: '[data-tutorial="guest-clue"]',
       title: "Choose a Read",
-      body: "Select the type of guest based on their behaviour.",
+      body: "Select the guest type from the buttons in this panel. The tutorial will continue as soon as you choose one.",
       placement: "top",
+      disableNext: true,
+      autoAdvance: async () => {
+        await waitForTutorialCondition(
+          () => Number(getGameWindow()?.currentStep) === 1 && !!getGameEncounter()?.guestReadSelected,
+          "guest read selected"
+        );
+      },
     },
     {
       id: "lock-in",
       target: '[data-tutorial="action-area"]',
       title: "Lock It In",
-      body: "Confirm your read to move forward.",
+      body: "Now click LOCK IN to confirm your read. The tutorial will move on after the game advances.",
       placement: "top",
       before: async () => {
         await waitForButton("LOCK IN");
+      },
+      disableNext: true,
+      autoAdvance: async () => {
+        await waitForTutorialCondition(
+          () => Number(getGameWindow()?.currentStep) !== 1,
+          "observe step complete"
+        );
       },
     },
     {
       id: "mode",
       target: '[data-tutorial="guest-clue"]',
       title: "Choose Your Approach",
-      body: "Now decide how to handle the guest.",
+      body: "You are now in the mode step. Pick the approach you want to use with this guest.",
       placement: "bottom",
       before: async () => {
         await waitForStep(2);
       },
     },
     {
-      id: "continue",
+      id: "select-mode",
+      target: '[data-tutorial="guest-clue"]',
+      title: "Select a Mode",
+      body: "Choose one of the mode options here. The tutorial will continue as soon as you select one.",
+      placement: "top",
+      disableNext: true,
+      autoAdvance: async () => {
+        await waitForTutorialCondition(
+          () => Number(getGameWindow()?.currentStep) === 2 && !!getGameEncounter()?.modeSelected,
+          "mode selected"
+        );
+      },
+    },
+    {
+      id: "continue-mode",
       target: '[data-tutorial="action-area"]',
       title: "Continue",
-      body: "Confirm your approach.",
+      body: "Click CONTINUE to lock in your approach and move to the next encounter step.",
       placement: "top",
       before: async () => {
         await waitForButton("CONTINUE");
       },
+      disableNext: true,
+      autoAdvance: async () => {
+        await waitForTutorialCondition(
+          () => Number(getGameWindow()?.currentStep) !== 2,
+          "mode step complete"
+        );
+      },
     },
     {
-      id: "feedback",
-      target: '[data-tutorial="result-panel"]',
-      title: "Feedback",
-      body: "This shows what worked and what didn’t.",
+      id: "hook",
+      target: '[data-tutorial="guest-clue"]',
+      title: "Choose an Opening",
+      body: "Now pick the opening angle for your recommendation.",
+      placement: "bottom",
+      before: async () => {
+        await waitForStep(3);
+      },
+    },
+    {
+      id: "select-hook",
+      target: '[data-tutorial="guest-clue"]',
+      title: "Select a Hook",
+      body: "Choose one opening option. The tutorial will continue when your hook is selected.",
+      placement: "top",
+      disableNext: true,
+      autoAdvance: async () => {
+        await waitForTutorialCondition(
+          () => Number(getGameWindow()?.currentStep) === 3 && !!getGameEncounter()?.hookSelected,
+          "hook selected"
+        );
+      },
+    },
+    {
+      id: "continue-hook",
+      target: '[data-tutorial="action-area"]',
+      title: "Continue",
+      body: "Click CONTINUE to move from the opening angle into delivery.",
+      placement: "top",
+      before: async () => {
+        await waitForButton("CONTINUE");
+      },
+      disableNext: true,
+      autoAdvance: async () => {
+        await waitForTutorialCondition(
+          () => Number(getGameWindow()?.currentStep) !== 3,
+          "hook step complete"
+        );
+      },
+    },
+    {
+      id: "delivery",
+      target: '[data-tutorial="guest-clue"]',
+      title: "Build the Delivery",
+      body: "This step asks you to choose both delivery lines.",
+      placement: "bottom",
+      before: async () => {
+        await waitForStep(4);
+      },
+    },
+    {
+      id: "select-delivery",
+      target: '[data-tutorial="guest-clue"]',
+      title: "Select Both Lines",
+      body: "Choose one option from each delivery group. The tutorial will continue once both lines are selected.",
+      placement: "top",
+      disableNext: true,
+      autoAdvance: async () => {
+        await waitForTutorialCondition(
+          () =>
+            Number(getGameWindow()?.currentStep) === 4 &&
+            getGameEncounter()?.selectedS1 != null &&
+            getGameEncounter()?.selectedS2 != null,
+          "delivery lines selected"
+        );
+      },
+    },
+    {
+      id: "continue-delivery",
+      target: '[data-tutorial="action-area"]',
+      title: "Continue",
+      body: "Click CONTINUE to resolve the encounter.",
+      placement: "top",
+      before: async () => {
+        await waitForButton("CONTINUE");
+      },
+      disableNext: true,
+      autoAdvance: async () => {
+        await waitForTutorialCondition(
+          () => {
+            const step = Number(getGameWindow()?.currentStep);
+            return step === 5 || step === 6 || step === 7 || step === 55;
+          },
+          "delivery step complete"
+        );
+      },
+    },
+    {
+      id: "reaction",
+      target: '[data-tutorial="guest-clue"]',
+      title: "Reaction and Result",
+      body: "This is the encounter outcome. Read the response, then continue into reflection.",
       placement: "left",
+      before: async () => {
+        await waitForTutorialCondition(
+          () => {
+            const step = Number(getGameWindow()?.currentStep);
+            return step === 5 || step === 6 || step === 7;
+          },
+          "reaction or reflection visible"
+        );
+      },
+    },
+    {
+      id: "reflection",
+      target: '[data-tutorial="guest-clue"]',
+      title: "Reflection",
+      body: "Reflection closes the encounter and shows what to improve next time.",
+      placement: "left",
+      before: async () => {
+        await waitForTutorialCondition(
+          () => {
+            const step = Number(getGameWindow()?.currentStep);
+            return step === 6 || step === 7;
+          },
+          "reflection visible"
+        );
+      },
     },
     {
       id: "end",
@@ -1475,6 +1623,23 @@ function getEncounterTutorialSteps(role) {
 function getGameWindow() {
   const frame = document.getElementById("premiumRootFrame");
   return frame?.contentWindow || null;
+}
+
+function getGameEncounter() {
+  const win = getGameWindow();
+  return win?.currentEncounter || win?.__BC_LAST_ENCOUNTER__ || null;
+}
+
+async function waitForTutorialCondition(predicate, label = "condition") {
+  for (let i = 0; i < 120; i++) {
+    try {
+      if (predicate()) return;
+    } catch (error) {
+      console.warn("[TUTORIAL] waitForTutorialCondition error", label, error);
+    }
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  console.warn("[TUTORIAL] wait timed out", label);
 }
 
 async function waitForPremiumIframeReady() {
@@ -1618,6 +1783,7 @@ async function runTutorialStep() {
       action: step.action || "none",
       placement: step.placement || "bottom",
       optional: !!step.optional,
+      disableNext: !!step.disableNext,
       nextLabel: step.nextLabel || "Next",
       onNext: () => {
         if (step.action === "click" && el) {
@@ -1627,6 +1793,16 @@ async function runTutorialStep() {
       },
       onExit: stopTutorial,
     });
+
+    if (typeof step.autoAdvance === "function") {
+      void (async () => {
+        await step.autoAdvance();
+        const liveTutorial = window.__BC_TUTORIAL__;
+        if (!liveTutorial?.active) return;
+        if (Number(liveTutorial.runToken || 0) !== token) return;
+        nextTutorialStep();
+      })();
+    }
   } catch (err) {
     console.error("[TUTORIAL] runTutorialStep failed", err);
   }
@@ -7622,6 +7798,7 @@ function showTutorialOverlay({
   body,
   placement = "bottom",
   optional = false,
+  disableNext = false,
   nextLabel = "Next",
   onNext,
   onExit,
@@ -7654,7 +7831,7 @@ function showTutorialOverlay({
     <div style="font-size:14px; line-height:1.45; opacity:0.92;">${escapeHtml(body || "")}</div>
     <div style="margin-top:12px; display:flex; gap:8px; justify-content:flex-end;">
       ${optional ? `<button id="tutorialSkipBtn" type="button">Skip</button>` : ""}
-      <button id="tutorialNextBtn" type="button">${escapeHtml(nextLabel || "Next")}</button>
+      <button id="tutorialNextBtn" type="button" ${disableNext ? "disabled" : ""}>${escapeHtml(nextLabel || "Next")}</button>
       <button id="tutorialExitBtn" type="button">Exit</button>
     </div>
   `;
