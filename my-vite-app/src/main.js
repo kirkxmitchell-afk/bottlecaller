@@ -499,8 +499,8 @@ document.querySelector("#app").innerHTML = `
       </div>
 
       <div class="button-row">
-        <button id="btnContinuePremium" type="button" data-tutorial="wine-start">Start</button>
-        <button id="btnBackHomeFromSetupPremium" type="button">Back</button>
+        <button id="btnContinuePremium" type="button" data-tutorial="encounter-start">Start</button>
+        <button id="btnBackHomeFromSetupPremium" type="button" data-tutorial="encounter-back">Back</button>
       </div>
     </div>
   </section>
@@ -1366,7 +1366,7 @@ function getWineSetupTutorialSteps(role) {
     },
     {
       id: "start-button",
-      target: '[data-tutorial="wine-start"]',
+      target: '[data-tutorial="encounter-start"]',
       title: "Start",
       body: "This returns you to the premium app after setup.",
       placement: "top",
@@ -1379,6 +1379,88 @@ function getWineSetupTutorialSteps(role) {
       body: "You've now seen the main wine setup fields and actions.",
       placement: "center",
       action: "none",
+    },
+  ];
+}
+
+function getEncounterTutorialSteps(role) {
+  const roleText =
+    role === "group_manager"
+      ? "You are viewing how the selected restaurant's setup becomes gameplay."
+      : role === "enterpriser"
+      ? "You are viewing how the selected restaurant's setup becomes gameplay from an enterprise role."
+      : "This shows how your setup becomes gameplay.";
+
+  return [
+    {
+      id: "intro",
+      target: null,
+      title: "Encounter Flow",
+      body: "This shows how your wine setup becomes a real interaction.",
+      placement: "center",
+      before: async () => {
+        showScreen("screenPremiumApp");
+      },
+    },
+    {
+      id: "open-setup",
+      target: '[data-tutorial="nav-wine-setup"]',
+      title: "Wine Setup",
+      body: "Configuration begins here.",
+    },
+    {
+      id: "setup",
+      target: '[data-tutorial="encounter-start"]',
+      title: "Setup Complete",
+      body: roleText,
+      before: async () => {
+        await openPremiumSetupScreen();
+      },
+    },
+    {
+      id: "start",
+      target: '[data-tutorial="encounter-start"]',
+      title: "Start",
+      body: "This begins the encounter using the current setup.",
+    },
+    {
+      id: "enter-game",
+      target: '[data-tutorial="guest-clue"]',
+      title: "Entering Gameplay",
+      body: "Now we move into the live encounter.",
+      placement: "bottom",
+      before: async () => {
+        const frame = document.getElementById("premiumRootFrame");
+        const win = frame?.contentWindow;
+        await win?.startPlayWithReadyGate?.();
+        await new Promise((r) => setTimeout(r, 300));
+      },
+    },
+    {
+      id: "guest",
+      target: '[data-tutorial="guest-clue"]',
+      title: "Guest Prompt",
+      body: "This is the guest. The waiter must read this correctly.",
+    },
+    {
+      id: "actions",
+      target: '[data-tutorial="action-area"]',
+      title: "Decision Area",
+      body: "This is where choices are made.",
+    },
+    {
+      id: "result",
+      target: '[data-tutorial="result-panel"]',
+      title: "Feedback",
+      body: "This shows what worked and why.",
+      placement: "left",
+    },
+    {
+      id: "end",
+      target: null,
+      title: "Complete",
+      body: "You now understand how setup becomes gameplay.",
+      placement: "center",
     },
   ];
 }
@@ -1400,6 +1482,8 @@ function startTutorial(id) {
 
   if (id === "wine_setup_manager") {
     tutorial.steps = getWineSetupTutorialSteps(role);
+  } else if (id === "encounter_setup_manager") {
+    tutorial.steps = getEncounterTutorialSteps(role);
   } else {
     tutorial.steps = [];
   }
@@ -1470,7 +1554,7 @@ async function runTutorialStep() {
 
     if (step.target) {
       for (let i = 0; i < 12; i++) {
-        el = document.querySelector(step.target);
+        el = getTutorialTarget(step.target);
         if (el) break;
         await new Promise((r) => setTimeout(r, 80));
       }
@@ -7279,9 +7363,63 @@ function closeHud() {
 }
 
 function clearTutorialHighlights() {
-  document.querySelectorAll("[data-tutorial-active='true']").forEach((el) => {
-    el.removeAttribute("data-tutorial-active");
+  getTutorialDocuments().forEach((doc) => {
+    doc.querySelectorAll("[data-tutorial-active='true']").forEach((el) => {
+      el.removeAttribute("data-tutorial-active");
+    });
   });
+}
+
+function getTutorialDocuments() {
+  const docs = [document];
+  try {
+    const frameDoc = document.getElementById("premiumRootFrame")?.contentWindow?.document || null;
+    if (frameDoc && frameDoc !== document) docs.push(frameDoc);
+  } catch {}
+  return docs;
+}
+
+function findTutorialTarget(selector) {
+  if (!selector) return null;
+  for (const doc of getTutorialDocuments()) {
+    const found = doc.querySelector(selector);
+    if (found) return found;
+  }
+  return null;
+}
+
+function getTutorialTarget(selector) {
+  let el = document.querySelector(selector);
+  if (el) return el;
+
+  const frame = document.getElementById("premiumRootFrame");
+  const doc = frame?.contentDocument || frame?.contentWindow?.document;
+  if (doc) {
+    el = doc.querySelector(selector);
+    if (el) return el;
+  }
+
+  return null;
+}
+
+function getTutorialTargetRect(target) {
+  if (!target) return null;
+  const rect = target.getBoundingClientRect();
+  const ownerDoc = target.ownerDocument || document;
+  if (ownerDoc === document) return rect;
+
+  const frameEl = document.getElementById("premiumRootFrame");
+  const frameRect = frameEl?.getBoundingClientRect?.();
+  if (!frameRect) return rect;
+
+  return {
+    top: frameRect.top + rect.top,
+    right: frameRect.left + rect.right,
+    bottom: frameRect.top + rect.bottom,
+    left: frameRect.left + rect.left,
+    width: rect.width,
+    height: rect.height,
+  };
 }
 
 function closeTutorialMenu() {
@@ -7326,6 +7464,14 @@ function openTutorialMenu() {
       <div style="font-weight:800; font-size:15px;">Wine Setup Basics</div>
       <div style="font-size:13px; opacity:0.82; margin-top:4px;">A guided tour of the manager wine setup screen, fields, and actions.</div>
     </button>
+    <button
+      id="bcTutorialEncounterFlow"
+      type="button"
+      style="width:100%; text-align:left; margin-top:10px; padding:14px; border-radius:14px; border:1px solid rgba(94,234,212,0.24); background:linear-gradient(180deg, rgba(94,234,212,0.14), rgba(255,255,255,0.03)), rgba(255,255,255,0.03); color:inherit;"
+    >
+      <div style="font-weight:800; font-size:15px;">Encounter Flow</div>
+      <div style="font-size:13px; opacity:0.82; margin-top:4px;">A guided walkthrough from setup into the live encounter screen.</div>
+    </button>
   `;
 
   overlay.appendChild(panel);
@@ -7339,6 +7485,10 @@ function openTutorialMenu() {
     closeTutorialMenu();
     startTutorial("wine_setup_manager");
   });
+  document.getElementById("bcTutorialEncounterFlow")?.addEventListener("click", () => {
+    closeTutorialMenu?.();
+    startTutorial("encounter_setup_manager");
+  });
 }
 
 function placeTutorialCard(card, target, placement = "bottom") {
@@ -7349,7 +7499,13 @@ function placeTutorialCard(card, target, placement = "bottom") {
     return;
   }
 
-  const rect = target.getBoundingClientRect();
+  const rect = getTutorialTargetRect(target);
+  if (!rect) {
+    card.style.top = "50%";
+    card.style.left = "50%";
+    card.style.transform = "translate(-50%, -50%)";
+    return;
+  }
   const gap = 12;
   const cardWidth = 320;
   const cardHeight = 180;
@@ -7424,7 +7580,13 @@ function showTutorialOverlay({
 
   if (target) {
     target.setAttribute("data-tutorial-active", "true");
+    const doc = target.ownerDocument;
+    doc.querySelectorAll('[data-tutorial-active="true"]').forEach((el) => {
+      if (el !== target) el.removeAttribute("data-tutorial-active");
+    });
     target.scrollIntoView({ block: "center", behavior: "smooth" });
+    const win = target.ownerDocument.defaultView;
+    win?.scrollBy?.(0, -40);
   }
 
   placeTutorialCard(card, target, placement);
