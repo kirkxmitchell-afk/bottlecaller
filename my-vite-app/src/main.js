@@ -1386,81 +1386,68 @@ function getWineSetupTutorialSteps(role) {
 function getEncounterTutorialSteps(role) {
   const roleText =
     role === "group_manager"
-      ? "You are viewing how the selected restaurant's setup becomes gameplay."
+      ? "You are viewing how the selected restaurant's gameplay works."
       : role === "enterpriser"
-      ? "You are viewing how the selected restaurant's setup becomes gameplay from an enterprise role."
-      : "This shows how your setup becomes gameplay.";
+      ? "You are viewing gameplay from an enterprise-level role."
+      : "This shows how the gameplay flow works.";
 
   return [
     {
       id: "intro",
       target: null,
       title: "Encounter Flow",
-      body: "This shows how your wine setup becomes a real interaction.",
+      body: "This tutorial takes you straight into the live encounter and explains the main gameplay areas.",
       placement: "center",
+      action: "none",
       before: async () => {
         showScreen("screenPremiumApp");
       },
     },
     {
-      id: "open-setup",
-      target: '[data-tutorial="nav-wine-setup"]',
-      title: "Wine Setup",
-      body: "Configuration begins here.",
-    },
-    {
-      id: "setup",
-      target: '[data-tutorial="encounter-start"]',
-      title: "Setup Complete",
-      body: roleText,
-      before: async () => {
-        await openPremiumSetupScreen();
-      },
-    },
-    {
-      id: "start",
-      target: '[data-tutorial="encounter-start"]',
-      title: "Start",
-      body: "This begins the encounter using the current setup.",
-    },
-    {
       id: "enter-game",
       target: '[data-tutorial="guest-clue"]',
-      title: "Entering Gameplay",
-      body: "Now we move into the live encounter.",
+      title: "Opening Encounter",
+      body: roleText,
       placement: "bottom",
+      action: "none",
       before: async () => {
         const frame = document.getElementById("premiumRootFrame");
         const win = frame?.contentWindow;
         await win?.startPlayWithReadyGate?.();
-        await new Promise((r) => setTimeout(r, 300));
+        await new Promise((r) => setTimeout(r, 400));
       },
     },
     {
       id: "guest",
       target: '[data-tutorial="guest-clue"]',
       title: "Guest Prompt",
-      body: "This is the guest. The waiter must read this correctly.",
+      body: "This is where the waiter reads the guest and looks for clues.",
+      placement: "bottom",
+      action: "none",
     },
     {
       id: "actions",
       target: '[data-tutorial="action-area"]',
-      title: "Decision Area",
-      body: "This is where choices are made.",
+      title: "Action Area",
+      body: "This is where the waiter makes decisions during the encounter.",
+      placement: "top",
+      action: "none",
     },
     {
       id: "result",
       target: '[data-tutorial="result-panel"]',
       title: "Feedback",
-      body: "This shows what worked and why.",
+      body: "This is where the system shows what worked, what missed, and why.",
       placement: "left",
+      action: "none",
     },
     {
       id: "end",
       target: null,
       title: "Complete",
-      body: "You now understand how setup becomes gameplay.",
+      body: "You've now seen the core encounter flow: read the guest, act, and review the feedback.",
       placement: "center",
+      action: "none",
     },
   ];
 }
