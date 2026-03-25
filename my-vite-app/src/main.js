@@ -1409,8 +1409,13 @@ function getEncounterTutorialSteps(role) {
       autoAdvance: async () => {
         await waitForTutorialCondition(
           () => {
-            const step = Number(getGameWindow()?.currentStep);
-            return step === 0 || step === 1 || step === 55;
+            const win = getGameWindow();
+            const doc = win?.document || null;
+            const playScreen = doc?.getElementById?.("screenPlay") || null;
+            const playButton = doc?.querySelector?.('[data-tutorial="play-button"]') || null;
+            const playVisible = !!playScreen && playScreen.classList.contains("active");
+            const buttonGone = !!playButton && !isVisibleTutorialTarget(playButton);
+            return playVisible || buttonGone;
           },
           "play clicked"
         );
@@ -1418,7 +1423,7 @@ function getEncounterTutorialSteps(role) {
     },
     {
       id: "load-begin",
-      target: '[data-tutorial="action-area"]',
+      buttonLabels: ["BEGIN"],
       title: "Begin the Encounter",
       body: "The encounter is loaded. Click BEGIN to move into Observe.",
       placement: "top",
@@ -1467,7 +1472,7 @@ function getEncounterTutorialSteps(role) {
     },
     {
       id: "lock-in",
-      target: '[data-tutorial="action-area"]',
+      buttonLabels: ["LOCK IN"],
       title: "Lock It In",
       body: "Now click LOCK IN to confirm your read.",
       placement: "top",
@@ -1485,7 +1490,7 @@ function getEncounterTutorialSteps(role) {
     },
     {
       id: "observe-preview",
-      target: '[data-tutorial="action-area"]',
+      buttonLabels: ["CONTINUE TO NEXT STEP"],
       title: "Continue to Mode",
       body: "The game shows a quick step reaction here. Click CONTINUE TO NEXT STEP to move into Mode.",
       placement: "top",
@@ -1520,7 +1525,7 @@ function getEncounterTutorialSteps(role) {
     },
     {
       id: "continue-mode",
-      target: '[data-tutorial="action-area"]',
+      buttonLabels: ["CONTINUE"],
       title: "Continue",
       body: "Click CONTINUE to lock in your approach.",
       placement: "top",
@@ -1538,7 +1543,7 @@ function getEncounterTutorialSteps(role) {
     },
     {
       id: "mode-preview",
-      target: '[data-tutorial="action-area"]',
+      buttonLabels: ["CONTINUE TO NEXT STEP"],
       title: "Continue to Hook",
       body: "The game shows another quick reaction here. Click CONTINUE TO NEXT STEP to move into Hook.",
       placement: "top",
@@ -1573,7 +1578,7 @@ function getEncounterTutorialSteps(role) {
     },
     {
       id: "continue-hook",
-      target: '[data-tutorial="action-area"]',
+      buttonLabels: ["CONTINUE"],
       title: "Continue",
       body: "Click CONTINUE to lock in the opening angle.",
       placement: "top",
@@ -1591,7 +1596,7 @@ function getEncounterTutorialSteps(role) {
     },
     {
       id: "hook-preview",
-      target: '[data-tutorial="action-area"]',
+      buttonLabels: ["CONTINUE TO NEXT STEP"],
       title: "Continue to Delivery",
       body: "Click CONTINUE TO NEXT STEP to move into Delivery.",
       placement: "top",
@@ -1629,7 +1634,7 @@ function getEncounterTutorialSteps(role) {
     },
     {
       id: "continue-delivery",
-      target: '[data-tutorial="action-area"]',
+      buttonLabels: ["SAY IT"],
       title: "Say It",
       body: "Click SAY IT to deliver the recommendation and resolve the encounter.",
       placement: "top",
@@ -1647,7 +1652,7 @@ function getEncounterTutorialSteps(role) {
     },
     {
       id: "delivery-preview",
-      target: '[data-tutorial="action-area"]',
+      buttonLabels: ["GO TO REACTION"],
       title: "Go to Reaction",
       body: "Click GO TO REACTION to see the encounter result.",
       placement: "top",
@@ -1665,7 +1670,7 @@ function getEncounterTutorialSteps(role) {
     },
     {
       id: "reaction-to-reflection",
-      target: '[data-tutorial="action-area"]',
+      buttonLabels: ["REFLECT", "CONTINUE TO REFLECTION"],
       title: "Move to Reflection",
       body: "Read the result, then click REFLECT or CONTINUE TO REFLECTION to close out the encounter.",
       placement: "top",
@@ -1686,7 +1691,7 @@ function getEncounterTutorialSteps(role) {
     },
     {
       id: "next-encounter",
-      target: '[data-tutorial="action-area"]',
+      buttonLabels: ["NEXT ENCOUNTER", "NEXT REP", "BACK HOME"],
       title: "Next Encounter",
       body: "The encounter is complete. The next prompt is ready. This ends the tutorial.",
       placement: "top",
@@ -1870,7 +1875,13 @@ async function runTutorialStep() {
 
     let el = null;
 
-    if (step.target) {
+    if (Array.isArray(step.buttonLabels) && step.buttonLabels.length) {
+      for (let i = 0; i < 12; i++) {
+        el = getTutorialButtonTarget(step.buttonLabels);
+        if (el) break;
+        await new Promise((r) => setTimeout(r, 80));
+      }
+    } else if (step.target) {
       for (let i = 0; i < 12; i++) {
         el = getTutorialTarget(step.target);
         if (el) break;
@@ -7783,6 +7794,25 @@ function getTutorialTargetRect(target) {
   };
 }
 
+function getTutorialButtonTarget(labels) {
+  const wanted = (Array.isArray(labels) ? labels : [labels])
+    .map((label) => String(label || "").trim().toLowerCase())
+    .filter(Boolean);
+  if (!wanted.length) return null;
+
+  for (const doc of getTutorialDocuments()) {
+    const buttons = Array.from(doc.querySelectorAll("button"));
+    const match = buttons.find((btn) => {
+      if (!isVisibleTutorialTarget(btn)) return false;
+      const text = String(btn.innerText || btn.textContent || "").trim().toLowerCase();
+      return wanted.some((label) => text.includes(label));
+    });
+    if (match) return match;
+  }
+
+  return null;
+}
+
 function closeTutorialMenu() {
   document.getElementById("bcTutorialMenu")?.remove();
 }
@@ -7914,7 +7944,7 @@ function showTutorialOverlay({
   overlay.id = "bcTutorialOverlay";
   overlay.style.position = "fixed";
   overlay.style.inset = "0";
-  overlay.style.background = "rgba(0,0,0,0.55)";
+  overlay.style.background = "transparent";
   overlay.style.zIndex = "2147483003";
   overlay.style.pointerEvents = "none";
 
