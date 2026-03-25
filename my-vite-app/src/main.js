@@ -1389,7 +1389,7 @@ function getEncounterTutorialSteps(role) {
       id: "intro",
       target: null,
       title: "Encounter Flow",
-      body: "This walkthrough shows how a real session works from start to finish.",
+      body: "This walkthrough will guide you from Start through one full encounter, ending when the next encounter prompt appears.",
       placement: "center",
       before: async () => {
         showScreen("screenPremiumApp");
@@ -1409,26 +1409,33 @@ function getEncounterTutorialSteps(role) {
       },
     },
     {
-      id: "observe",
-      target: '[data-tutorial="guest-clue"]',
-      title: "Read the Guest",
-      body: "Start by reading the guest carefully. Their cues tell you everything.",
-      placement: "bottom",
+      id: "load-begin",
+      target: '[data-tutorial="action-area"]',
+      title: "Begin the Encounter",
+      body: "The encounter is loaded. Click BEGIN to move into Observe.",
+      placement: "top",
       disableNext: true,
       before: async () => {
-        await waitForStep(1);
+        await waitForStep(0);
+        await waitForAnyButton(["BEGIN"]);
       },
       autoAdvance: async () => {
-        await waitMs(900);
+        await waitForTutorialCondition(
+          () => Number(getGameWindow()?.currentStep) === 1,
+          "begin clicked"
+        );
       },
     },
     {
       id: "select-read",
       target: '[data-tutorial="guest-clue"]',
       title: "Choose a Read",
-      body: "Select the guest type from the buttons in this panel. The tutorial will continue as soon as you choose one.",
+      body: "You are in Observe. Read the guest and select the guest type from the buttons in this panel.",
       placement: "top",
       disableNext: true,
+      before: async () => {
+        await waitForStep(1);
+      },
       autoAdvance: async () => {
         await waitForTutorialCondition(
           () => Number(getGameWindow()?.currentStep) === 1 && !!getGameEncounter()?.guestReadSelected,
@@ -1440,40 +1447,48 @@ function getEncounterTutorialSteps(role) {
       id: "lock-in",
       target: '[data-tutorial="action-area"]',
       title: "Lock It In",
-      body: "Now click LOCK IN to confirm your read. The tutorial will move on after the game advances.",
+      body: "Now click LOCK IN to confirm your read.",
       placement: "top",
       before: async () => {
+        await waitForStep(1);
         await waitForButton("LOCK IN");
       },
       disableNext: true,
       autoAdvance: async () => {
         await waitForTutorialCondition(
-          () => Number(getGameWindow()?.currentStep) !== 1,
-          "observe step complete"
+          () => Number(getGameWindow()?.currentStep) === 55,
+          "observe preview shown"
         );
       },
     },
     {
-      id: "mode",
-      target: '[data-tutorial="guest-clue"]',
-      title: "Choose Your Approach",
-      body: "You are now in the mode step. Pick the approach you want to use with this guest.",
-      placement: "bottom",
+      id: "observe-preview",
+      target: '[data-tutorial="action-area"]',
+      title: "Continue to Mode",
+      body: "The game shows a quick step reaction here. Click CONTINUE TO NEXT STEP to move into Mode.",
+      placement: "top",
       disableNext: true,
       before: async () => {
-        await waitForStep(2);
+        await waitForStep(55);
+        await waitForAnyButton(["CONTINUE TO NEXT STEP"]);
       },
       autoAdvance: async () => {
-        await waitMs(900);
+        await waitForTutorialCondition(
+          () => Number(getGameWindow()?.currentStep) === 2,
+          "mode step shown"
+        );
       },
     },
     {
       id: "select-mode",
       target: '[data-tutorial="guest-clue"]',
       title: "Select a Mode",
-      body: "Choose one of the mode options here. The tutorial will continue as soon as you select one.",
+      body: "You are in Mode. Choose how you want to handle the guest.",
       placement: "top",
       disableNext: true,
+      before: async () => {
+        await waitForStep(2);
+      },
       autoAdvance: async () => {
         await waitForTutorialCondition(
           () => Number(getGameWindow()?.currentStep) === 2 && !!getGameEncounter()?.modeSelected,
@@ -1485,40 +1500,48 @@ function getEncounterTutorialSteps(role) {
       id: "continue-mode",
       target: '[data-tutorial="action-area"]',
       title: "Continue",
-      body: "Click CONTINUE to lock in your approach and move to the next encounter step.",
+      body: "Click CONTINUE to lock in your approach.",
       placement: "top",
       before: async () => {
+        await waitForStep(2);
         await waitForButton("CONTINUE");
       },
       disableNext: true,
       autoAdvance: async () => {
         await waitForTutorialCondition(
-          () => Number(getGameWindow()?.currentStep) !== 2,
-          "mode step complete"
+          () => Number(getGameWindow()?.currentStep) === 55,
+          "mode preview shown"
         );
       },
     },
     {
-      id: "hook",
-      target: '[data-tutorial="guest-clue"]',
-      title: "Choose an Opening",
-      body: "Now pick the opening angle for your recommendation.",
-      placement: "bottom",
+      id: "mode-preview",
+      target: '[data-tutorial="action-area"]',
+      title: "Continue to Hook",
+      body: "The game shows another quick reaction here. Click CONTINUE TO NEXT STEP to move into Hook.",
+      placement: "top",
       disableNext: true,
       before: async () => {
-        await waitForStep(3);
+        await waitForStep(55);
+        await waitForAnyButton(["CONTINUE TO NEXT STEP"]);
       },
       autoAdvance: async () => {
-        await waitMs(900);
+        await waitForTutorialCondition(
+          () => Number(getGameWindow()?.currentStep) === 3,
+          "hook step shown"
+        );
       },
     },
     {
       id: "select-hook",
       target: '[data-tutorial="guest-clue"]',
       title: "Select a Hook",
-      body: "Choose one opening option. The tutorial will continue when your hook is selected.",
+      body: "You are in Hook. Choose the opening angle for your recommendation.",
       placement: "top",
       disableNext: true,
+      before: async () => {
+        await waitForStep(3);
+      },
       autoAdvance: async () => {
         await waitForTutorialCondition(
           () => Number(getGameWindow()?.currentStep) === 3 && !!getGameEncounter()?.hookSelected,
@@ -1530,40 +1553,48 @@ function getEncounterTutorialSteps(role) {
       id: "continue-hook",
       target: '[data-tutorial="action-area"]',
       title: "Continue",
-      body: "Click CONTINUE to move from the opening angle into delivery.",
+      body: "Click CONTINUE to lock in the opening angle.",
       placement: "top",
       before: async () => {
+        await waitForStep(3);
         await waitForButton("CONTINUE");
       },
       disableNext: true,
       autoAdvance: async () => {
         await waitForTutorialCondition(
-          () => Number(getGameWindow()?.currentStep) !== 3,
-          "hook step complete"
+          () => Number(getGameWindow()?.currentStep) === 55,
+          "hook preview shown"
         );
       },
     },
     {
-      id: "delivery",
-      target: '[data-tutorial="guest-clue"]',
-      title: "Build the Delivery",
-      body: "This step asks you to choose both delivery lines.",
-      placement: "bottom",
+      id: "hook-preview",
+      target: '[data-tutorial="action-area"]',
+      title: "Continue to Delivery",
+      body: "Click CONTINUE TO NEXT STEP to move into Delivery.",
+      placement: "top",
       disableNext: true,
       before: async () => {
-        await waitForStep(4);
+        await waitForStep(55);
+        await waitForAnyButton(["CONTINUE TO NEXT STEP"]);
       },
       autoAdvance: async () => {
-        await waitMs(900);
+        await waitForTutorialCondition(
+          () => Number(getGameWindow()?.currentStep) === 4,
+          "delivery step shown"
+        );
       },
     },
     {
       id: "select-delivery",
       target: '[data-tutorial="guest-clue"]',
       title: "Select Both Lines",
-      body: "Choose one option from each delivery group. The tutorial will continue once both lines are selected.",
+      body: "You are in Delivery. Choose one option from each delivery group to build the two-sentence pitch.",
       placement: "top",
       disableNext: true,
+      before: async () => {
+        await waitForStep(4);
+      },
       autoAdvance: async () => {
         await waitForTutorialCondition(
           () =>
@@ -1577,64 +1608,79 @@ function getEncounterTutorialSteps(role) {
     {
       id: "continue-delivery",
       target: '[data-tutorial="action-area"]',
-      title: "Continue",
-      body: "Click CONTINUE to resolve the encounter.",
+      title: "Say It",
+      body: "Click SAY IT to deliver the recommendation and resolve the encounter.",
       placement: "top",
       before: async () => {
-        await waitForButton("CONTINUE");
+        await waitForStep(4);
+        await waitForButton("SAY IT");
       },
       disableNext: true,
       autoAdvance: async () => {
         await waitForTutorialCondition(
-          () => {
-            const step = Number(getGameWindow()?.currentStep);
-            return step === 5 || step === 6 || step === 7 || step === 55;
-          },
-          "delivery step complete"
+          () => Number(getGameWindow()?.currentStep) === 55,
+          "delivery preview shown"
         );
       },
     },
     {
-      id: "reaction",
-      target: '[data-tutorial="guest-clue"]',
-      title: "Reaction and Result",
-      body: "This is the encounter outcome. Read the response, then continue into reflection.",
-      placement: "left",
+      id: "delivery-preview",
+      target: '[data-tutorial="action-area"]',
+      title: "Go to Reaction",
+      body: "Click GO TO REACTION to see the encounter result.",
+      placement: "top",
       disableNext: true,
       before: async () => {
-        await waitForTutorialCondition(
-          () => {
-            const step = Number(getGameWindow()?.currentStep);
-            return step === 5 || step === 6 || step === 7;
-          },
-          "reaction or reflection visible"
-        );
+        await waitForStep(55);
+        await waitForAnyButton(["GO TO REACTION"]);
       },
       autoAdvance: async () => {
-        await waitMs(1200);
+        await waitForTutorialCondition(
+          () => Number(getGameWindow()?.currentStep) === 5,
+          "reaction shown"
+        );
       },
     },
     {
-      id: "reflection",
-      target: '[data-tutorial="guest-clue"]',
-      title: "Reflection",
-      body: "Reflection closes the encounter and shows what to improve next time.",
-      placement: "left",
+      id: "reaction-to-reflection",
+      target: '[data-tutorial="action-area"]',
+      title: "Move to Reflection",
+      body: "Read the result, then click REFLECT or CONTINUE TO REFLECTION to close out the encounter.",
+      placement: "top",
+      disableNext: true,
       before: async () => {
+        await waitForStep(5);
+        await waitForAnyButton(["REFLECT", "CONTINUE TO REFLECTION"]);
+      },
+      autoAdvance: async () => {
         await waitForTutorialCondition(
           () => {
             const step = Number(getGameWindow()?.currentStep);
             return step === 6 || step === 7;
           },
-          "reflection visible"
+          "reflection shown"
         );
+      },
+    },
+    {
+      id: "next-encounter",
+      target: '[data-tutorial="action-area"]',
+      title: "Next Encounter",
+      body: "The encounter is complete. The next prompt is ready. This ends the tutorial.",
+      placement: "top",
+      disableNext: true,
+      before: async () => {
+        await waitForAnyButton(["NEXT ENCOUNTER", "NEXT REP", "BACK HOME"]);
+      },
+      autoAdvance: async () => {
+        await waitMs(1400);
       },
     },
     {
       id: "end",
       target: null,
       title: "Complete",
-      body: "You’ve now seen a full encounter flow.",
+      body: "You have been guided from Start through one full encounter to the next-encounter prompt.",
       placement: "center",
     },
   ];
@@ -1685,18 +1731,26 @@ async function waitForStep(stepIndex) {
 }
 
 async function waitForButton(label) {
-  const wanted = String(label || "").trim().toLowerCase();
+  return waitForAnyButton([label]);
+}
+
+async function waitForAnyButton(labels) {
+  const wanted = (Array.isArray(labels) ? labels : [labels])
+    .map((label) => String(label || "").trim().toLowerCase())
+    .filter(Boolean);
   for (let i = 0; i < 40; i++) {
     const localButtons = Array.from(document.querySelectorAll("button"));
     const frameDoc = getGameWindow()?.document || null;
     const frameButtons = frameDoc ? Array.from(frameDoc.querySelectorAll("button")) : [];
     console.log("[TUTORIAL] buttons", {
-      label,
+      labels: wanted,
       local: localButtons.map((b) => b.innerText || b.textContent || ""),
       frame: frameButtons.map((b) => b.innerText || b.textContent || ""),
     });
     const match = [...localButtons, ...frameButtons].find((btn) =>
-      String(btn?.innerText || btn?.textContent || "").toLowerCase().includes(wanted)
+      wanted.some((text) =>
+        String(btn?.innerText || btn?.textContent || "").toLowerCase().includes(text)
+      )
     );
     if (match) return;
     await new Promise((r) => setTimeout(r, 100));
