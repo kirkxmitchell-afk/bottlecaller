@@ -1384,41 +1384,63 @@ function getWineSetupTutorialSteps(role) {
 }
 
 function startTutorial(id) {
-  closeTutorialMenu();
-  const ctx = getParentCtxSnapshot("premium");
-  const role = String(ctx.role || "").toLowerCase();
-  const tutorial = window.__BC_TUTORIAL__;
+  console.log("[TUTORIAL] start", id);
+  closeTutorialMenu?.();
+  removeTutorialOverlay?.();
 
+  const ctx = getParentCtxSnapshot?.() || {};
+  const role = String(ctx.role || "").toLowerCase();
+
+  const tutorial = (window.__BC_TUTORIAL__ ||= {});
   tutorial.active = true;
-  tutorial.steps = [];
-  tutorial.stepIndex = 0;
+  tutorial.tutorialId = id;
   tutorial.role = role;
-  tutorial.runToken = (tutorial.runToken || 0) + 1;
+  tutorial.stepIndex = 0;
+  tutorial.runToken = Number(tutorial.runToken || 0) + 1;
 
   if (id === "wine_setup_manager") {
     tutorial.steps = getWineSetupTutorialSteps(role);
+  } else {
+    tutorial.steps = [];
   }
 
-  runTutorialStep();
+  void runTutorialStep();
 }
 
 function stopTutorial() {
-  const tutorial = window.__BC_TUTORIAL__;
+  const tutorial = (window.__BC_TUTORIAL__ ||= {});
   tutorial.active = false;
-  tutorial.steps = [];
   tutorial.stepIndex = 0;
-  tutorial.runToken = (tutorial.runToken || 0) + 1;
-  removeTutorialOverlay();
+  tutorial.steps = [];
+  tutorial.tutorialId = null;
+  tutorial.runToken = Number(tutorial.runToken || 0) + 1;
+
+  removeTutorialOverlay?.();
+  clearTutorialHighlights?.();
 }
 
 function nextTutorialStep() {
   const tutorial = window.__BC_TUTORIAL__;
-  tutorial.runToken = (tutorial.runToken || 0) + 1;
+  if (!tutorial?.active) return;
+
   tutorial.stepIndex += 1;
-  runTutorialStep();
+  tutorial.runToken = Number(tutorial.runToken || 0) + 1;
+
+  void runTutorialStep();
+}
+
+function prevTutorialStep() {
+  const tutorial = window.__BC_TUTORIAL__;
+  if (!tutorial?.active) return;
+
+  tutorial.stepIndex = Math.max(0, Number(tutorial.stepIndex || 0) - 1);
+  tutorial.runToken = Number(tutorial.runToken || 0) + 1;
+
+  void runTutorialStep();
 }
 
 async function runTutorialStep() {
+  console.log("[TUTORIAL] step", window.__BC_TUTORIAL__?.stepIndex, window.__BC_TUTORIAL__?.steps?.length);
   const tutorial = window.__BC_TUTORIAL__;
   if (!tutorial?.active) return;
 
@@ -7311,6 +7333,7 @@ function openTutorialMenu() {
   });
   document.getElementById("bcTutorialMenuClose")?.addEventListener("click", closeTutorialMenu);
   document.getElementById("bcTutorialWineSetup")?.addEventListener("click", () => {
+    closeTutorialMenu();
     startTutorial("wine_setup_manager");
   });
 }
@@ -7406,7 +7429,7 @@ function showTutorialOverlay({ target, title, body, action, placement, optional,
 
 function removeTutorialOverlay() {
   document.getElementById("bcTutorialOverlay")?.remove();
-  clearTutorialHighlights();
+  clearTutorialHighlights?.();
 }
 
 function renderWaiterThreadItem(row, selfUserId, nameMap) {
