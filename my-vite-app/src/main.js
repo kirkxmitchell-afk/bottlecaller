@@ -1712,11 +1712,28 @@ function getEncounterTutorialSteps(role) {
   ];
 }
 
+function isManagerBoardVisible() {
+  const screen = document.getElementById("screenManagerBoard");
+  return !!screen && !screen.classList.contains("hidden");
+}
+
+async function ensureManagerBoardTutorialReady() {
+  if (isManagerBoardVisible() && document.getElementById("mbMenu")) return;
+  await routeManagerBoard("tutorial_manager_board");
+}
+
 async function openManagerBoardTutorialTab(tab) {
   const normalized = normalizeManagerBoardTab(tab);
-  await routeManagerBoard("tutorial_manager_board");
+  await ensureManagerBoardTutorialReady();
   window.__BC_MB_SHOWTAB__?.(normalized);
-  await window.__BC_MB_LOADTAB__?.(normalized);
+  try {
+    await Promise.race([
+      Promise.resolve(window.__BC_MB_LOADTAB__?.(normalized)),
+      waitMs(1500),
+    ]);
+  } catch (error) {
+    console.warn("[TUTORIAL] manager board tab load failed", normalized, error);
+  }
   await waitMs(150);
 }
 
@@ -1729,7 +1746,7 @@ function getManagerBoardTutorialSteps(role) {
       body: "This walkthrough takes you through the Manager Board tabs and key sections. Press Continue in this prompt to move to the next tutorial screen.",
       placement: "center",
       before: async () => {
-        await routeManagerBoard("tutorial_manager_board");
+        await ensureManagerBoardTutorialReady();
       },
     },
     {
