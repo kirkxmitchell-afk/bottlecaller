@@ -1399,9 +1399,10 @@ function getEncounterTutorialSteps(role) {
       id: "play-button",
       target: '[data-tutorial="play-button"]',
       title: "Start a Session",
-      body: "Click Play to begin a new encounter.",
+      body: "This is the real Start/Play button. Press Start in this tutorial card to enter the encounter.",
       placement: "bottom",
       action: "click",
+      nextLabel: "Start",
       before: async () => {
         await waitForPremiumIframeReady();
         await new Promise((r) => setTimeout(r, 250));
@@ -1610,12 +1611,6 @@ async function runTutorialStep() {
 
     console.log("[TUTORIAL] target found", step.target, !!el);
 
-    if (step.action === "click" && el) {
-      el.click();
-      nextTutorialStep();
-      return;
-    }
-
     showTutorialOverlay({
       target: el,
       title: step.title || "",
@@ -1623,7 +1618,13 @@ async function runTutorialStep() {
       action: step.action || "none",
       placement: step.placement || "bottom",
       optional: !!step.optional,
-      onNext: nextTutorialStep,
+      nextLabel: step.nextLabel || "Next",
+      onNext: () => {
+        if (step.action === "click" && el) {
+          el.click();
+        }
+        nextTutorialStep();
+      },
       onExit: stopTutorial,
     });
   } catch (err) {
@@ -7436,20 +7437,46 @@ function getTutorialDocuments() {
 function findTutorialTarget(selector) {
   if (!selector) return null;
   for (const doc of getTutorialDocuments()) {
-    const found = doc.querySelector(selector);
+    const found = findVisibleTutorialTarget(doc, selector);
     if (found) return found;
   }
   return null;
 }
 
+function isVisibleTutorialTarget(el) {
+  if (!el) return false;
+  const rect = el.getBoundingClientRect?.();
+  if (!rect || rect.width <= 0 || rect.height <= 0) return false;
+
+  const win = el.ownerDocument?.defaultView || window;
+  const style = win.getComputedStyle?.(el);
+  if (style && (style.display === "none" || style.visibility === "hidden" || style.opacity === "0")) {
+    return false;
+  }
+
+  let node = el;
+  while (node && node !== el.ownerDocument?.body) {
+    if (node.classList?.contains("hidden")) return false;
+    node = node.parentElement;
+  }
+
+  return true;
+}
+
+function findVisibleTutorialTarget(doc, selector) {
+  if (!doc || !selector) return null;
+  const matches = Array.from(doc.querySelectorAll(selector));
+  return matches.find((el) => isVisibleTutorialTarget(el)) || matches[0] || null;
+}
+
 function getTutorialTarget(selector) {
-  let el = document.querySelector(selector);
+  let el = findVisibleTutorialTarget(document, selector);
   if (el) return el;
 
   const frame = document.getElementById("premiumRootFrame");
   const doc = frame?.contentDocument || frame?.contentWindow?.document;
   if (doc) {
-    el = doc.querySelector(selector);
+    el = findVisibleTutorialTarget(doc, selector);
     if (el) return el;
   }
 
@@ -7595,6 +7622,7 @@ function showTutorialOverlay({
   body,
   placement = "bottom",
   optional = false,
+  nextLabel = "Next",
   onNext,
   onExit,
 }) {
@@ -7625,7 +7653,7 @@ function showTutorialOverlay({
     <div style="font-size:14px; line-height:1.45; opacity:0.92;">${escapeHtml(body || "")}</div>
     <div style="margin-top:12px; display:flex; gap:8px; justify-content:flex-end;">
       ${optional ? `<button id="tutorialSkipBtn" type="button">Skip</button>` : ""}
-      <button id="tutorialNextBtn" type="button">Next</button>
+      <button id="tutorialNextBtn" type="button">${escapeHtml(nextLabel || "Next")}</button>
       <button id="tutorialExitBtn" type="button">Exit</button>
     </div>
   `;
