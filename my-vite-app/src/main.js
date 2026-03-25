@@ -7487,6 +7487,7 @@ function openTutorialMenu() {
   });
   document.getElementById("bcTutorialEncounterFlow")?.addEventListener("click", () => {
     closeTutorialMenu?.();
+    console.log("[TUTORIAL] launch encounter flow");
     startTutorial("encounter_setup_manager");
   });
 }
