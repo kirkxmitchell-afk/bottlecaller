@@ -1440,53 +1440,56 @@ function prevTutorialStep() {
 }
 
 async function runTutorialStep() {
-  console.log("[TUTORIAL] step", window.__BC_TUTORIAL__?.stepIndex, window.__BC_TUTORIAL__?.steps?.length);
-  const tutorial = window.__BC_TUTORIAL__;
-  if (!tutorial?.active) return;
+  try {
+    const tutorial = window.__BC_TUTORIAL__;
+    if (!tutorial?.active) return;
 
-  const step = tutorial.steps[tutorial.stepIndex];
-  if (!step) {
-    stopTutorial();
-    return;
-  }
+    const token = Number(tutorial.runToken || 0);
+    const step = tutorial.steps?.[tutorial.stepIndex];
 
-  removeTutorialOverlay();
+    console.log("[TUTORIAL] step index", tutorial.stepIndex);
+    console.log("[TUTORIAL] step", step);
 
-  const runToken = tutorial.runToken;
-  if (typeof step.before === "function") {
-    await step.before();
-    await new Promise((resolve) => setTimeout(resolve, 120));
-    if (!tutorial.active || tutorial.runToken !== runToken) return;
-  }
-
-  let el = null;
-  if (step.target) {
-    for (let i = 0; i < 12; i += 1) {
-      el = document.querySelector(step.target);
-      if (el) break;
-      await new Promise((resolve) => setTimeout(resolve, 80));
-      if (!tutorial.active || tutorial.runToken !== runToken) return;
+    if (!step) {
+      stopTutorial();
+      return;
     }
-  }
 
-  showTutorialOverlay({
-    target: el,
-    title: step.title,
-    body: step.body,
-    action: step.action,
-    placement: step.placement,
-    optional: step.optional,
-    onNext: nextTutorialStep,
-  });
+    removeTutorialOverlay?.();
+    clearTutorialHighlights?.();
 
-  if (step.action === "click" && el) {
-    const handler = () => {
-      el.removeEventListener("click", handler);
-      if (tutorial.active && tutorial.runToken === runToken) {
-        nextTutorialStep();
+    if (step.before) {
+      await step.before();
+      await new Promise((r) => setTimeout(r, 120));
+    }
+
+    if (!window.__BC_TUTORIAL__?.active) return;
+    if (Number(window.__BC_TUTORIAL__?.runToken || 0) !== token) return;
+
+    let el = null;
+
+    if (step.target) {
+      for (let i = 0; i < 12; i++) {
+        el = document.querySelector(step.target);
+        if (el) break;
+        await new Promise((r) => setTimeout(r, 80));
       }
-    };
-    el.addEventListener("click", handler, { once: true });
+    }
+
+    console.log("[TUTORIAL] target found", step.target, !!el);
+
+    showTutorialOverlay({
+      target: el,
+      title: step.title || "",
+      body: step.body || "",
+      action: step.action || "none",
+      placement: step.placement || "bottom",
+      optional: !!step.optional,
+      onNext: nextTutorialStep,
+      onExit: stopTutorial,
+    });
+  } catch (err) {
+    console.error("[TUTORIAL] runTutorialStep failed", err);
   }
 }
 
@@ -7347,9 +7350,9 @@ function placeTutorialCard(card, target, placement = "bottom") {
   }
 
   const rect = target.getBoundingClientRect();
-  const cardWidth = 320;
-  const cardHeight = 170;
   const gap = 12;
+  const cardWidth = 320;
+  const cardHeight = 180;
 
   let top = rect.bottom + gap;
   let left = rect.left;
@@ -7363,9 +7366,6 @@ function placeTutorialCard(card, target, placement = "bottom") {
   } else if (placement === "left") {
     top = rect.top;
     left = rect.left - cardWidth - gap;
-  } else if (placement === "bottom") {
-    top = rect.bottom + gap;
-    left = rect.left;
   }
 
   const maxLeft = window.innerWidth - cardWidth - 12;
@@ -7378,36 +7378,43 @@ function placeTutorialCard(card, target, placement = "bottom") {
   card.style.left = `${left}px`;
 }
 
-function showTutorialOverlay({ target, title, body, action, placement, optional, onNext }) {
-  clearTutorialHighlights();
+function showTutorialOverlay({
+  target,
+  title,
+  body,
+  placement = "bottom",
+  optional = false,
+  onNext,
+  onExit,
+}) {
+  removeTutorialOverlay?.();
+  clearTutorialHighlights?.();
 
   const overlay = document.createElement("div");
   overlay.id = "bcTutorialOverlay";
   overlay.style.position = "fixed";
   overlay.style.inset = "0";
-  overlay.style.background = "rgba(0,0,0,0.6)";
+  overlay.style.background = "rgba(0,0,0,0.55)";
   overlay.style.zIndex = "9999";
-  overlay.style.pointerEvents = "none";
+  overlay.style.pointerEvents = "auto";
 
   const card = document.createElement("div");
   card.style.position = "absolute";
   card.style.width = "320px";
   card.style.maxWidth = "calc(100vw - 24px)";
-  card.style.padding = "16px";
-  card.style.background = "rgba(7, 11, 16, 0.98)";
-  card.style.color = "rgba(245,247,248,0.98)";
-  card.style.border = "1px solid rgba(255,255,255,0.14)";
-  card.style.borderRadius = "14px";
-  card.style.boxShadow = "0 28px 70px rgba(0,0,0,0.56)";
-  card.style.backdropFilter = "blur(10px)";
-  card.style.pointerEvents = "auto";
+  card.style.padding = "14px";
+  card.style.background = "rgba(8,12,17,0.96)";
+  card.style.border = "1px solid rgba(255,255,255,0.12)";
+  card.style.borderRadius = "16px";
+  card.style.boxShadow = "0 20px 50px rgba(0,0,0,0.45)";
+  card.style.color = "#f4f6f7";
 
   card.innerHTML = `
-    <div style="font-weight:bold; margin-bottom:6px;">${escapeHtml(title || "")}</div>
-    <div style="font-size:13px; opacity:0.9;">${escapeHtml(body || "")}</div>
-    <div style="margin-top:10px; display:flex; gap:6px;">
-      <button id="tutorialNextBtn" type="button">Next</button>
+    <div style="font-weight:700; margin-bottom:8px;">${escapeHtml(title || "")}</div>
+    <div style="font-size:14px; line-height:1.45; opacity:0.92;">${escapeHtml(body || "")}</div>
+    <div style="margin-top:12px; display:flex; gap:8px; justify-content:flex-end;">
       ${optional ? `<button id="tutorialSkipBtn" type="button">Skip</button>` : ""}
+      <button id="tutorialNextBtn" type="button">Next</button>
       <button id="tutorialExitBtn" type="button">Exit</button>
     </div>
   `;
@@ -7420,11 +7427,11 @@ function showTutorialOverlay({ target, title, body, action, placement, optional,
     target.scrollIntoView({ block: "center", behavior: "smooth" });
   }
 
-  placeTutorialCard(card, target, placement || "bottom");
+  placeTutorialCard(card, target, placement);
 
   document.getElementById("tutorialNextBtn")?.addEventListener("click", onNext);
   document.getElementById("tutorialSkipBtn")?.addEventListener("click", onNext);
-  document.getElementById("tutorialExitBtn")?.addEventListener("click", stopTutorial);
+  document.getElementById("tutorialExitBtn")?.addEventListener("click", onExit);
 }
 
 function removeTutorialOverlay() {
