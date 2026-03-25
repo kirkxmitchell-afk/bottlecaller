@@ -520,19 +520,19 @@ document.querySelector("#app").innerHTML = `
       </div>
 
       <div id="mbMenu" class="card" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-        <button class="btn" type="button" data-mbtab="overview">Overview</button>
-        <button class="btn" type="button" data-mbtab="people">People</button>
-        <button class="btn" type="button" data-mbtab="messenger">Messenger</button>
-        <button class="btn" type="button" data-mbtab="live_controls">Live Controls</button>
-        <button class="btn" type="button" data-mbtab="performance">Performance</button>
-        <button class="btn" type="button" data-mbtab="selection">Selection</button>
-        <button class="btn" type="button" data-mbtab="billing">Listing</button>
-        <button class="btn hidden" type="button" data-mbtab="enterprise" id="mbEnterpriseTabBtn">Enterprise</button>
+        <button class="btn" type="button" data-mbtab="overview" data-tutorial="mb-tab-overview">Overview</button>
+        <button class="btn" type="button" data-mbtab="people" data-tutorial="mb-tab-people">People</button>
+        <button class="btn" type="button" data-mbtab="messenger" data-tutorial="mb-tab-messenger">Messenger</button>
+        <button class="btn" type="button" data-mbtab="live_controls" data-tutorial="mb-tab-live-controls">Live Controls</button>
+        <button class="btn" type="button" data-mbtab="performance" data-tutorial="mb-tab-performance">Performance</button>
+        <button class="btn" type="button" data-mbtab="selection" data-tutorial="mb-tab-selection">Selection</button>
+        <button class="btn" type="button" data-mbtab="billing" data-tutorial="mb-tab-billing">Listing</button>
+        <button class="btn hidden" type="button" data-mbtab="enterprise" id="mbEnterpriseTabBtn" data-tutorial="mb-tab-enterprise">Enterprise</button>
         <select id="mbRestaurantPicker" class="hidden input" data-tutorial="restaurant-picker" style="margin-left:auto; min-width:220px;"></select>
       </div>
 
       <div id="mbPanels">
-        <div id="mbTab_overview" class="mbTab">
+        <div id="mbTab_overview" class="mbTab" data-tutorial="mb-panel-overview">
           <div id="mbParentStateCard" style="margin-bottom:12px;"></div>
           <div class="card">
             <div class="score-row">Restaurant: <span id="mbRestName">-</span></div>
@@ -551,7 +551,7 @@ document.querySelector("#app").innerHTML = `
           <div id="mbDrillSummary" style="margin-top:12px;"></div>
         </div>
 
-        <div id="mbTab_people" class="mbTab hidden">
+        <div id="mbTab_people" class="mbTab hidden" data-tutorial="mb-panel-people">
           <div id="mbPeopleSummary" style="margin-top:12px;"></div>
           <div id="mbInvitesPanel" style="margin-top:12px;">
             <div class="card" style="padding:12px;">
@@ -582,7 +582,7 @@ document.querySelector("#app").innerHTML = `
             </div>
           </div>
         </div>
-        <div id="mbTab_messenger" class="mbTab hidden">
+        <div id="mbTab_messenger" class="mbTab hidden" data-tutorial="mb-panel-messenger">
           <div class="card" style="margin-top:12px;">
             <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
               <strong>Messenger</strong>
@@ -733,7 +733,7 @@ document.querySelector("#app").innerHTML = `
           </div>
         </div>
 
-        <div id="mbTab_live_controls" class="mbTab hidden">
+        <div id="mbTab_live_controls" class="mbTab hidden" data-tutorial="mb-panel-live-controls">
           <div id="mbOverviewLiveEffects" style="margin-top:12px;"></div>
           <div id="mbOverviewAbilityEconomy" style="margin-top:12px;"></div>
           <div id="mbAttributeAbilitiesPanel" style="margin-top:12px;"></div>
@@ -743,7 +743,7 @@ document.querySelector("#app").innerHTML = `
           <div id="mbDisplayMethodQuickActionsPanel" style="margin-top:12px;"></div>
         </div>
 
-        <div id="mbTab_performance" class="mbTab hidden">
+        <div id="mbTab_performance" class="mbTab hidden" data-tutorial="mb-panel-performance">
         <div id="mbInsightsPanel" style="margin-top:12px;"></div>
         <div id="mbPerformanceHistoryPanel" style="margin-top:12px;">
           <details class="card mb-disclosure">
@@ -809,11 +809,11 @@ document.querySelector("#app").innerHTML = `
           </div>
         </div>
 
-        <div id="mbTab_selection" class="mbTab hidden">
+        <div id="mbTab_selection" class="mbTab hidden" data-tutorial="mb-panel-selection">
           <div id="mbSelectionPanel" style="margin-top:12px;"></div>
         </div>
 
-        <div id="mbTab_billing" class="mbTab hidden">
+        <div id="mbTab_billing" class="mbTab hidden" data-tutorial="mb-panel-billing">
           <div id="mbBillingAccess" class="card" style="margin-top:12px;">
             <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
               <strong>Billing & Access</strong>
@@ -833,7 +833,7 @@ document.querySelector("#app").innerHTML = `
           </div>
         </div>
 
-        <div id="mbTab_enterprise" class="mbTab hidden">
+        <div id="mbTab_enterprise" class="mbTab hidden" data-tutorial="mb-panel-enterprise">
           <div id="mbEnterprisePanel" style="margin-top:12px;">
             <div class="card" style="padding:12px;">
               <div style="font-weight:600;">Enterprise</div>
@@ -1712,6 +1712,204 @@ function getEncounterTutorialSteps(role) {
   ];
 }
 
+async function openManagerBoardTutorialTab(tab) {
+  const normalized = normalizeManagerBoardTab(tab);
+  await routeManagerBoard("tutorial_manager_board");
+  window.__BC_MB_SHOWTAB__?.(normalized);
+  await window.__BC_MB_LOADTAB__?.(normalized);
+  await waitMs(150);
+}
+
+function getManagerBoardTutorialSteps(role) {
+  const steps = [
+    {
+      id: "intro",
+      target: null,
+      title: "Manager Board",
+      body: "This walkthrough takes you through the Manager Board tabs and key sections. Press Continue in this prompt to move to the next tutorial screen.",
+      placement: "center",
+      before: async () => {
+        await routeManagerBoard("tutorial_manager_board");
+      },
+    },
+    {
+      id: "tabs",
+      target: "#mbMenu",
+      title: "Board Navigation",
+      body: "This tab row is the main Manager Board navigation. The tutorial will take you through each area one by one.",
+      placement: "bottom",
+      before: async () => {
+        await openManagerBoardTutorialTab("overview");
+      },
+    },
+    {
+      id: "overview",
+      target: '[data-tutorial="mb-panel-overview"]',
+      title: "Overview",
+      body: "Overview gives you the top-level restaurant summary, current activity, challenge summaries, and quick operational context.",
+      placement: "top",
+      before: async () => {
+        await openManagerBoardTutorialTab("overview");
+      },
+    },
+    {
+      id: "people-tab",
+      target: '[data-tutorial="mb-tab-people"]',
+      title: "People Tab",
+      body: "Use People to manage invites, refresh members, and review the staff list for the active restaurant.",
+      placement: "bottom",
+      before: async () => {
+        await openManagerBoardTutorialTab("people");
+      },
+    },
+    {
+      id: "people-panel",
+      target: '[data-tutorial="mb-panel-people"]',
+      title: "People Section",
+      body: "This section contains invite management, member refresh, search, and the current member roster.",
+      placement: "top",
+      before: async () => {
+        await openManagerBoardTutorialTab("people");
+      },
+    },
+    {
+      id: "messenger-tab",
+      target: '[data-tutorial="mb-tab-messenger"]',
+      title: "Messenger Tab",
+      body: "Messenger is where you review waiter threads, assign challenges, and send direct coaching messages.",
+      placement: "bottom",
+      before: async () => {
+        await openManagerBoardTutorialTab("messenger");
+      },
+    },
+    {
+      id: "messenger-panel",
+      target: '[data-tutorial="mb-panel-messenger"]',
+      title: "Messenger Section",
+      body: "This area combines challenge assignment, thread review, suggested prompts, and outbound coaching actions.",
+      placement: "top",
+      before: async () => {
+        await openManagerBoardTutorialTab("messenger");
+      },
+    },
+    {
+      id: "live-controls-tab",
+      target: '[data-tutorial="mb-tab-live-controls"]',
+      title: "Live Controls Tab",
+      body: "Live Controls is where you manage active effects, quick actions, drills, and challenge controls.",
+      placement: "bottom",
+      before: async () => {
+        await openManagerBoardTutorialTab("live_controls");
+      },
+    },
+    {
+      id: "live-controls-panel",
+      target: '[data-tutorial="mb-panel-live-controls"]',
+      title: "Live Controls Section",
+      body: "These panels expose the operational controls that affect live training pressure, abilities, and quick manager actions.",
+      placement: "top",
+      before: async () => {
+        await openManagerBoardTutorialTab("live_controls");
+      },
+    },
+    {
+      id: "performance-tab",
+      target: '[data-tutorial="mb-tab-performance"]',
+      title: "Performance Tab",
+      body: "Performance shows history, coaching signals, recent activity, and weekly reporting.",
+      placement: "bottom",
+      before: async () => {
+        await openManagerBoardTutorialTab("performance");
+      },
+    },
+    {
+      id: "performance-panel",
+      target: '[data-tutorial="mb-panel-performance"]',
+      title: "Performance Section",
+      body: "Use this section to inspect training quality over time, identify coaching needs, and review recent performance summaries.",
+      placement: "top",
+      before: async () => {
+        await openManagerBoardTutorialTab("performance");
+      },
+    },
+    {
+      id: "selection-tab",
+      target: '[data-tutorial="mb-tab-selection"]',
+      title: "Selection Tab",
+      body: "Selection is the tournament and selection area for candidate evaluation and comparison.",
+      placement: "bottom",
+      before: async () => {
+        await openManagerBoardTutorialTab("selection");
+      },
+    },
+    {
+      id: "selection-panel",
+      target: '[data-tutorial="mb-panel-selection"]',
+      title: "Selection Section",
+      body: "This area is used for selection review, comparisons, and candidate-facing training decisions.",
+      placement: "top",
+      before: async () => {
+        await openManagerBoardTutorialTab("selection");
+      },
+    },
+    {
+      id: "billing-tab",
+      target: '[data-tutorial="mb-tab-billing"]',
+      title: "Listing Tab",
+      body: "Listing covers seat and access information for the restaurant.",
+      placement: "bottom",
+      before: async () => {
+        await openManagerBoardTutorialTab("billing");
+      },
+    },
+    {
+      id: "billing-panel",
+      target: '[data-tutorial="mb-panel-billing"]',
+      title: "Listing Section",
+      body: "Here you can review current seat usage, refresh access details, and see the current provisioning context.",
+      placement: "top",
+      before: async () => {
+        await openManagerBoardTutorialTab("billing");
+      },
+    },
+  ];
+
+  if (String(role || "").toLowerCase() === "enterpriser") {
+    steps.push(
+      {
+        id: "enterprise-tab",
+        target: '[data-tutorial="mb-tab-enterprise"]',
+        title: "Enterprise Tab",
+        body: "Enterprise opens the enterprise-only controls and rollup surfaces.",
+        placement: "bottom",
+        before: async () => {
+          await openManagerBoardTutorialTab("enterprise");
+        },
+      },
+      {
+        id: "enterprise-panel",
+        target: '[data-tutorial="mb-panel-enterprise"]',
+        title: "Enterprise Section",
+        body: "This section is reserved for enterprise-level controls and cross-restaurant management surfaces.",
+        placement: "top",
+        before: async () => {
+          await openManagerBoardTutorialTab("enterprise");
+        },
+      }
+    );
+  }
+
+  steps.push({
+    id: "end",
+    target: null,
+    title: "Complete",
+    body: "You have been guided through the main Manager Board tabs and sections.",
+    placement: "center",
+  });
+
+  return steps;
+}
+
 function getGameWindow() {
   const frame = document.getElementById("premiumRootFrame");
   return frame?.contentWindow || null;
@@ -1806,6 +2004,8 @@ function startTutorial(id) {
     tutorial.steps = getWineSetupTutorialSteps(role);
   } else if (id === "encounter_setup_manager") {
     tutorial.steps = getEncounterTutorialSteps(role);
+  } else if (id === "manager_board_manager") {
+    tutorial.steps = getManagerBoardTutorialSteps(role);
   } else {
     tutorial.steps = [];
   }
@@ -7862,6 +8062,14 @@ function openTutorialMenu() {
       <div style="font-weight:800; font-size:15px;">Encounter Flow</div>
       <div style="font-size:13px; opacity:0.82; margin-top:4px;">A guided walkthrough from setup into the live encounter screen.</div>
     </button>
+    <button
+      id="bcTutorialManagerBoard"
+      type="button"
+      style="width:100%; text-align:left; margin-top:10px; padding:14px; border-radius:14px; border:1px solid rgba(251,191,36,0.24); background:linear-gradient(180deg, rgba(251,191,36,0.14), rgba(255,255,255,0.03)), rgba(255,255,255,0.03); color:inherit;"
+    >
+      <div style="font-weight:800; font-size:15px;">Manager Board</div>
+      <div style="font-size:13px; opacity:0.82; margin-top:4px;">A guided walkthrough of the Manager Board tabs and main sections.</div>
+    </button>
   `;
 
   overlay.appendChild(panel);
@@ -7879,6 +8087,11 @@ function openTutorialMenu() {
     closeTutorialMenu?.();
     console.log("[TUTORIAL] launch encounter flow");
     startTutorial("encounter_setup_manager");
+  });
+  document.getElementById("bcTutorialManagerBoard")?.addEventListener("click", () => {
+    closeTutorialMenu?.();
+    console.log("[TUTORIAL] launch manager board");
+    startTutorial("manager_board_manager");
   });
 }
 
