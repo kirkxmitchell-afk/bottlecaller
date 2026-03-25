@@ -1299,6 +1299,8 @@ const MANAGER_RESTAURANT_CHOICES_CACHE_MS = 120000;
 const MANAGER_BOARD_OVERVIEW_CACHE_MS = 15000;
 const MANAGER_BOARD_MEMBERS_CACHE_MS = 15000;
 const MANAGER_BOARD_MESSENGER_CACHE_MS = 10000;
+const MANAGER_BOARD_PERFORMANCE_CACHE_MS = 20000;
+const MANAGER_BOARD_SELECTION_CACHE_MS = 20000;
 let managerBoardOverviewCache = { rid: "", loadedAt: 0 };
 let managerBoardMembersCache = { rid: "", loadedAt: 0, rows: null };
 let managerBoardMessengerCache = { rid: "", loadedAt: 0, rows: null };
@@ -5935,6 +5937,14 @@ function invalidateManagerBoardProgressionModels() {
   window.__BC_MB_SELECTION_MODEL__ = null;
 }
 
+function isFreshManagerBoardModel(model, ttlMs, restaurantId) {
+  return (
+    model &&
+    String(model.restaurantId || "") === String(restaurantId || "") &&
+    Date.now() - Number(model.loadedAt || 0) < Number(ttlMs || 0)
+  );
+}
+
 function getVisibleManagerBoardTab() {
   const visible = document.querySelector("#mbPanels .mbTab:not(.hidden)");
   const id = String(visible?.id || "");
@@ -9999,9 +10009,13 @@ async function loadManagerInsights() {
   root.innerHTML = `<div class="card"><div class="small-text">Loading performance…</div></div>`;
 
   try {
-    const model = await getManagerPerformanceModel({ force: true });
+    const model = await getManagerPerformanceModel({ force: false });
     window.__BC_MB_PERFORMANCE_MODEL__ = model;
-    window.__BC_MB_SELECTION_MODEL__ = normalizeSelectionData(model);
+    window.__BC_MB_SELECTION_MODEL__ = {
+      ...normalizeSelectionData(model),
+      restaurantId: model.restaurantId,
+      loadedAt: model.loadedAt || Date.now(),
+    };
 
     root.innerHTML = `
       <div class="mb-performance-overview card">
@@ -10195,7 +10209,9 @@ async function getManagerPerformanceModel({ force = false } = {}) {
   }
 
   const cached = window.__BC_MB_PERFORMANCE_MODEL__ || null;
-  if (!force && cached?.restaurantId === restaurantId) return cached;
+  if (!force && isFreshManagerBoardModel(cached, MANAGER_BOARD_PERFORMANCE_CACHE_MS, restaurantId)) {
+    return cached;
+  }
 
   const sinceIso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
   const [
@@ -10528,6 +10544,7 @@ async function getManagerPerformanceModel({ force = false } = {}) {
 
   return {
     restaurantId,
+    loadedAt: Date.now(),
     summary: buildPerformanceSummary(users),
     users,
     notes: buildPerformanceCoachNotes(users),
@@ -10993,57 +11010,23 @@ async function loadSelectionTab() {
   root.innerHTML = `<div class="card"><div class="small-text">Loading selection…</div></div>`;
 
   try {
+    const { restaurantId } = getManagerBoardFilter();
+    const cachedSelection = window.__BC_MB_SELECTION_MODEL__ || null;
+    if (isFreshManagerBoardModel(cachedSelection, MANAGER_BOARD_SELECTION_CACHE_MS, restaurantId)) {
+      const performanceModel = window.__BC_MB_PERFORMANCE_MODEL__ || await getManagerPerformanceModel({ force: false });
+      renderSelectionTabUi(root, cachedSelection, performanceModel.users);
+      return;
+    }
+
     const performanceModel = await getManagerPerformanceModel({ force: false });
     window.__BC_MB_PERFORMANCE_MODEL__ = performanceModel;
-    const model = normalizeSelectionData(performanceModel);
+    const model = {
+      ...normalizeSelectionData(performanceModel),
+      restaurantId: performanceModel.restaurantId,
+      loadedAt: Date.now(),
+    };
     window.__BC_MB_SELECTION_MODEL__ = model;
-
-    root.innerHTML = `
-      <div class="mb-selection-overview card">
-        <div class="mb-section-header">
-          <strong>Tournament Setup & Selection</strong>
-          <div class="small-text">Qualification, readiness, and selection guidance.</div>
-        </div>
-        <div id="mbSelectionCards" class="mb-performance-card-grid" style="margin-top:12px;"></div>
-      </div>
-
-      <div class="mb-selection-table-wrap card" style="margin-top:12px;">
-        <div class="mb-section-header">
-          <strong>Selection Table</strong>
-          <div class="small-text">Use readiness and eligibility to identify tournament candidates.</div>
-        </div>
-        <div style="margin-top:12px;">
-          <table class="mb-performance-table">
-            <thead>
-              <tr>
-                <th>Waiter</th>
-                <th>Eligibility Tier</th>
-                <th>Readiness</th>
-                <th>Served Tier</th>
-                <th>Challenge Readiness</th>
-                <th>Points Rank</th>
-                <th>Selection Status</th>
-                <th>Selection Reason</th>
-                <th>Last Active</th>
-              </tr>
-            </thead>
-            <tbody id="mbSelectionRows"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="mb-selection-preview card" style="margin-top:12px;">
-        <div class="mb-section-header">
-          <strong>Auto-Select Preview</strong>
-          <div class="small-text">Recommended cohort, reserves, and hold list.</div>
-        </div>
-        <div id="mbSelectionPreview" style="margin-top:12px;"></div>
-      </div>
-    `;
-
-    renderSelectionOverview(model.summary);
-    renderSelectionTable(model.rows);
-    renderSelectionPreview(model.preview, performanceModel.users);
+    renderSelectionTabUi(root, model, performanceModel.users);
   } catch (error) {
     console.error("[MB] loadSelectionTab failed", error);
     root.innerHTML = `
@@ -11071,6 +11054,56 @@ function renderSelectionOverview(summary = {}) {
       <strong>${escapeHtml(String(value))}</strong>
     </div>
   `).join("");
+}
+
+function renderSelectionTabUi(root, model, users) {
+  if (!root) return;
+  root.innerHTML = `
+    <div class="mb-selection-overview card">
+      <div class="mb-section-header">
+        <strong>Tournament Setup & Selection</strong>
+        <div class="small-text">Qualification, readiness, and selection guidance.</div>
+      </div>
+      <div id="mbSelectionCards" class="mb-performance-card-grid" style="margin-top:12px;"></div>
+    </div>
+
+    <div class="mb-selection-table-wrap card" style="margin-top:12px;">
+      <div class="mb-section-header">
+        <strong>Selection Table</strong>
+        <div class="small-text">Use readiness and eligibility to identify tournament candidates.</div>
+      </div>
+      <div style="margin-top:12px;">
+        <table class="mb-performance-table">
+          <thead>
+            <tr>
+              <th>Waiter</th>
+              <th>Eligibility Tier</th>
+              <th>Readiness</th>
+              <th>Served Tier</th>
+              <th>Challenge Readiness</th>
+              <th>Points Rank</th>
+              <th>Selection Status</th>
+              <th>Selection Reason</th>
+              <th>Last Active</th>
+            </tr>
+          </thead>
+          <tbody id="mbSelectionRows"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="mb-selection-preview card" style="margin-top:12px;">
+      <div class="mb-section-header">
+        <strong>Auto-Select Preview</strong>
+        <div class="small-text">Recommended cohort, reserves, and hold list.</div>
+      </div>
+      <div id="mbSelectionPreview" style="margin-top:12px;"></div>
+    </div>
+  `;
+
+  renderSelectionOverview(model.summary);
+  renderSelectionTable(model.rows);
+  renderSelectionPreview(model.preview, users);
 }
 
 function renderSelectionTable(rows = []) {
