@@ -1402,6 +1402,10 @@ function getEncounterTutorialSteps(role) {
       body: "Click Play to begin a new encounter.",
       placement: "bottom",
       action: "click",
+      before: async () => {
+        await waitForPremiumIframeReady();
+        await new Promise((r) => setTimeout(r, 250));
+      },
     },
     {
       id: "guest",
@@ -1472,6 +1476,16 @@ function getGameWindow() {
   return frame?.contentWindow || null;
 }
 
+async function waitForPremiumIframeReady() {
+  for (let i = 0; i < 40; i++) {
+    const frame = document.getElementById("premiumRootFrame");
+    const doc = frame?.contentDocument || frame?.contentWindow?.document || null;
+    const playBtn = doc?.querySelector?.('[data-tutorial="play-button"]') || null;
+    if (frame && doc && playBtn) return;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+}
+
 async function waitForStep(stepIndex) {
   for (let i = 0; i < 40; i++) {
     const win = getGameWindow();
@@ -1486,6 +1500,11 @@ async function waitForButton(label) {
     const localButtons = Array.from(document.querySelectorAll("button"));
     const frameDoc = getGameWindow()?.document || null;
     const frameButtons = frameDoc ? Array.from(frameDoc.querySelectorAll("button")) : [];
+    console.log("[TUTORIAL] buttons", {
+      label,
+      local: localButtons.map((b) => b.innerText || b.textContent || ""),
+      frame: frameButtons.map((b) => b.innerText || b.textContent || ""),
+    });
     const match = [...localButtons, ...frameButtons].find((btn) =>
       String(btn?.innerText || btn?.textContent || "").toLowerCase().includes(wanted)
     );

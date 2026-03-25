@@ -5732,6 +5732,16 @@ function isDrillMode() {
       // ---------- ENCOUNTER STATE (declare once, before any use) ----------
       let currentEncounter = null;
       let currentStep = 0;
+      Object.defineProperty(window, "currentStep", {
+        configurable: true,
+        get() {
+          return currentStep;
+        },
+        set(value) {
+          currentStep = value;
+          return currentStep;
+        },
+      });
       let bcActiveEncounter = null;      // current encounter object (steps mode)
       let bcStepIndex = 0;               // 0..2
       let bcStageResults = [];           // [{stage, skillFocus, correct}]
