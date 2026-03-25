@@ -7297,7 +7297,7 @@ function openTutorialMenu() {
   overlay.style.inset = "0";
   overlay.style.background = "rgba(0,0,0,0.58)";
   overlay.style.backdropFilter = "blur(6px)";
-  overlay.style.zIndex = "9998";
+  overlay.style.zIndex = "2147483002";
   overlay.style.display = "grid";
   overlay.style.placeItems = "center";
 
@@ -7395,7 +7395,7 @@ function showTutorialOverlay({
   overlay.style.position = "fixed";
   overlay.style.inset = "0";
   overlay.style.background = "rgba(0,0,0,0.55)";
-  overlay.style.zIndex = "9999";
+  overlay.style.zIndex = "2147483003";
   overlay.style.pointerEvents = "auto";
 
   const card = document.createElement("div");
