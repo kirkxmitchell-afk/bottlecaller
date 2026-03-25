@@ -7635,7 +7635,7 @@ function showTutorialOverlay({
   overlay.style.inset = "0";
   overlay.style.background = "rgba(0,0,0,0.55)";
   overlay.style.zIndex = "2147483003";
-  overlay.style.pointerEvents = "auto";
+  overlay.style.pointerEvents = "none";
 
   const card = document.createElement("div");
   card.style.position = "absolute";
@@ -7647,6 +7647,7 @@ function showTutorialOverlay({
   card.style.borderRadius = "16px";
   card.style.boxShadow = "0 20px 50px rgba(0,0,0,0.45)";
   card.style.color = "#f4f6f7";
+  card.style.pointerEvents = "auto";
 
   card.innerHTML = `
     <div style="font-weight:700; margin-bottom:8px;">${escapeHtml(title || "")}</div>
