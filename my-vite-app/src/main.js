@@ -494,33 +494,14 @@ document.querySelector("#app").innerHTML = `
 
     <div id="hudMsg" class="small" style="margin-top:10px;"></div>
   </div>
-
-  <!-- MANAGER BOARD MODAL -->
-  <!-- DEBUG PANEL -->
-  <pre id="debugPanel"
-    style="
-      position: fixed; right: 12px; bottom: 12px;
-      width: min(560px, 92vw);
-      max-height: 42vh;
-      overflow: auto;
-      z-index: 99997;
-      white-space: pre-wrap;
-      background: rgba(0,0,0,0.92);
-      color: #00ff66;
-      padding: 10px;
-      border-radius: 12px;
-      font-size: 12px;
-    "></pre>
 `;
 
 // ------------------------------------------------------------
 // Debug + global crash catcher
 // ------------------------------------------------------------
-const debugEl = document.getElementById("debugPanel");
 function setDebug(obj) {
-  debugEl.textContent = JSON.stringify(obj, null, 2);
+  console.debug("[BC_DEBUG]", obj);
 }
-debugEl.textContent = "Debug panel live ✅";
 
 window.addEventListener("error", (e) => {
   setDebug({
@@ -1770,6 +1751,12 @@ function forceRemountForModeSwitch(nextMode) {
   setDebug({ step: "game.iframe.forceRemount", nextMode, v: currentIframeVersion, time: new Date().toISOString() });
 }
 
+function getGameFrameHeight(mode) {
+  const isMobile = window.matchMedia("(max-width: 767px)").matches;
+  if (!isMobile) return mode === "premium" ? "720px" : "420px";
+  return mode === "premium" ? "calc(100dvh - 132px)" : "calc(100dvh - 124px)";
+}
+
 function mountGameIframe(targetId, mode /* "demo" | "premium" */) {
   const mount = document.getElementById(targetId);
   if (!mount) return;
@@ -1791,7 +1778,7 @@ function mountGameIframe(targetId, mode /* "demo" | "premium" */) {
       title="BottleCaller Game"
       style="
         width: 100%;
-        height: 420px;
+        height: ${getGameFrameHeight(mode)};
         border: 1px solid rgba(255,255,255,0.10);
         border-radius: 14px;
         background: rgba(0,0,0,0.35);
@@ -2111,7 +2098,7 @@ function mountPremiumGameIframe() {
   const iframe = document.createElement("iframe");
   iframe.src = `/game/game.html?mode=premium&v=${Date.now()}`;
   iframe.style.width = "100%";
-  iframe.style.height = "78vh";
+  iframe.style.height = getGameFrameHeight("premium");
   iframe.style.border = "0";
   root.appendChild(iframe);
 
