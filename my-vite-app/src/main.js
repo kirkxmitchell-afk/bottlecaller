@@ -2710,6 +2710,15 @@ async function routePremium(reason = "manual") {
       if (was !== "premium") forceRemountForModeSwitch("premium");
 
       unmountDemoGame();
+      if (isGroupManager) {
+        showScreen("screenManagerBoard");
+        applyManagerBoardVisibility();
+        await loadManagerBoardData();
+        wireManagerBoardBillingAccess();
+        await loadGroupRestaurantsForPicker();
+        return;
+      }
+
       showScreen("screenPremiumApp");
       const p = window.__BC_APP_STATE__?.profile;
       const isPremium = String(p?.access_tier || "").toLowerCase().startsWith("premium");
