@@ -1638,29 +1638,23 @@ function wireParentButtons() {
   if (btnSetup && !btnSetup.__bcBound) {
     btnSetup.__bcBound = true;
     btnSetup.addEventListener("click", () => {
-      openPremiumSetupScreen();
+      showScreen("screenPremiumApp");
+      postToGame("nav", { target: "setup_premium" });
     });
   }
 
   if (btnManagerBoard && !btnManagerBoard.__bcBound) {
     btnManagerBoard.__bcBound = true;
-    btnManagerBoard.addEventListener("click", async () => {
-      await routeManagerBoard("premium.toolbar");
+    btnManagerBoard.addEventListener("click", () => {
+      postToGame("nav", { target: "manager_board" });
     });
   }
 
   if (btnFiveMinRep && !btnFiveMinRep.__bcBound) {
     btnFiveMinRep.__bcBound = true;
     btnFiveMinRep.addEventListener("click", () => {
-      const stage = document.getElementById("premiumInlineStage");
-      if (!stage) return;
-      stage.innerHTML = `
-        <strong>5-Min Rep</strong>
-        <div class="small" style="margin-top:8px;">
-          This is now using the parent-owned premium workspace. The next step is to rebuild the interactive
-          rep flow directly in this app instead of depending on the missing game iframe.
-        </div>
-      `;
+      const tier = 0;
+      postToGame("start_drill", { repTarget: 3, focus: null, starter: "manager", tier });
     });
   }
 
@@ -1917,15 +1911,30 @@ function mountGameIframe(targetId, mode /* "demo" | "premium" */) {
   const mount = document.getElementById(targetId);
   if (!mount) return;
 
+  const existing = mount.querySelector("iframe");
+  if (existing && currentIframeMode === mode) return;
+
   currentIframeMode = mode;
+  const src = `/game/game.html?mode=${encodeURIComponent(mode)}&v=${currentIframeVersion}`;
 
-  if (mode === "premium") {
-    renderPremiumSurface(targetId);
-  } else {
-    renderDemoSurface(targetId);
-  }
+  mount.innerHTML = `
+    <iframe
+      id="${targetId}Frame"
+      src="${src}"
+      title="BottleCaller Game"
+      style="
+        width: 100%;
+        height: ${getGameFrameHeight(mode)};
+        border: 1px solid rgba(255,255,255,0.10);
+        border-radius: 14px;
+        background: rgba(0,0,0,0.35);
+        box-shadow: 0 10px 28px rgba(0,0,0,0.55);
+      "
+      loading="eager"
+    ></iframe>
+  `;
 
-  setDebug({ step: "game.parent_surface.mounted", targetId, mode, time: new Date().toISOString() });
+  setDebug({ step: "game.iframe.mounted", targetId, mode, src, time: new Date().toISOString() });
 }
 
 function callPremiumIframeNav(fnName) {
@@ -2757,25 +2766,7 @@ async function routePremium(reason = "manual") {
       if (was !== "premium") forceRemountForModeSwitch("premium");
 
       unmountDemoGame();
-      if (isGroupManager) {
-        showScreen("screenManagerBoard");
-        applyManagerBoardVisibility();
-        await loadManagerBoardData();
-        wireManagerBoardBillingAccess();
-        await loadGroupRestaurantsForPicker();
-        return;
-      }
-
       showScreen("screenPremiumApp");
-      const p = window.__BC_APP_STATE__?.profile;
-      const isPremium = String(p?.access_tier || "").toLowerCase().startsWith("premium");
-      const isGroup = ["group", "enterprise"].includes(String(p?.scope_type || "").toLowerCase());
-
-      if (isPremium && isGroup && !activeRestaurantId) {
-        console.log("[BC] group manager needs active restaurant -> Manager Board");
-        showScreen("screenManagerBoard");
-        return;
-      }
       mountGameIframe("premiumRoot", "premium");
       wireParentButtons();
       refreshParentProgressionUI();
@@ -2822,15 +2813,6 @@ async function routePremium(reason = "manual") {
     unmountDemoGame();
     showScreen("screenPremiumApp");
     wireParentButtons();
-    const p = window.__BC_APP_STATE__?.profile;
-    const isPremium = String(p?.access_tier || "").toLowerCase().startsWith("premium");
-    const isGroup = ["group", "enterprise"].includes(String(p?.scope_type || "").toLowerCase());
-
-    if (isPremium && isGroup && !activeRestaurantId) {
-      console.log("[BC] group manager needs active restaurant -> Manager Board");
-      showScreen("screenManagerBoard");
-      return;
-    }
     mountGameIframe("premiumRoot", "premium");
     refreshParentProgressionUI();
   } catch (e) {

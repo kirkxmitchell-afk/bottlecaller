@@ -1,0 +1,419 @@
+/* /public/game/game.css
+   BottleCaller Game UI (inside iframe)
+*/
+
+:root {
+  --bg: #070809;
+  --panel: #0e1113;
+  --text: #f4f6f7;
+  --muted: rgba(244, 246, 247, 0.72);
+  --faint: rgba(244, 246, 247, 0.5);
+
+  --border: rgba(255, 255, 255, 0.10);
+  --border2: rgba(255, 255, 255, 0.16);
+
+  --shadow: 0 18px 55px rgba(0, 0, 0, 0.72);
+  --shadow2: 0 10px 28px rgba(0, 0, 0, 0.55);
+
+  /* Accent (selection highlight) */
+  --greenBg: rgba(10, 70, 50, 0.55);
+  --greenBorder: rgba(35, 170, 125, 0.35);
+  --greenGlow: 0 0 0 3px rgba(35, 170, 125, 0.14), 0 16px 40px rgba(0, 0, 0, 0.55);
+  --greenText: rgba(235, 255, 248, 0.96);
+
+  --focus: rgba(244, 246, 247, 0.16);
+  --radius: 16px;
+
+  --red: #8b1a1a;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(1100px 600px at 18% 0%, rgba(255,255,255,0.06), transparent 55%),
+    radial-gradient(900px 550px at 92% 18%, rgba(255,255,255,0.04), transparent 60%),
+    radial-gradient(900px 550px at 72% 92%, rgba(255,255,255,0.03), transparent 60%),
+    var(--bg);
+  color: var(--text);
+  font-family: "Avenir Next", Avenir, "AvenirNextLTPro", "Nunito Sans",
+    system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  letter-spacing: 0.2px;
+}
+
+/* IMPORTANT: keep iframe interactions responsive */
+button, input, select, textarea { font-family: inherit; }
+button, .option-btn, .small-btn { touch-action: manipulation; }
+
+h1, h2, h3 { margin: 0; }
+h1 { font-size: 22px; letter-spacing: 0.6px; }
+h2 { font-size: 18px; letter-spacing: 0.4px; }
+h3 {
+  font-size: 14px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  opacity: 0.92;
+}
+
+p { margin: 0; color: var(--muted); line-height: 1.5; }
+
+.small-text,
+.small { font-size: 12px; color: var(--faint); line-height: 1.4; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+
+.hr {
+  height: 1px;
+  border: 0;
+  background: var(--border);
+  margin: 12px 0;
+}
+
+/* ---------- Layout ---------- */
+.screen {
+  display: none;
+  width: min(980px, 100%);
+  margin: 0 auto;
+  padding: 18px 16px 24px;
+}
+.screen.active { display: block; }
+
+.panel {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.05), transparent 140px),
+    var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px;
+}
+
+.cover-screen { text-align: left; }
+.cover-list { margin: 10px 0 0; padding-left: 18px; color: var(--muted); }
+.cover-list li { margin: 6px 0; }
+
+.row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.button-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.manager-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.manager-panel {
+  margin-top: 14px;
+}
+
+.score-row {
+  font-size: 13px;
+  color: rgba(244,246,247,0.82);
+}
+
+/* ---------- Form inputs ---------- */
+input[type="email"],
+input[type="password"],
+input[type="text"],
+input[type="number"],
+select,
+textarea {
+  width: 100%;
+  padding: 12px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.04);
+  color: var(--text);
+  outline: none;
+}
+
+select {
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, rgba(244,246,247,0.6) 50%),
+    linear-gradient(135deg, rgba(244,246,247,0.6) 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) calc(50% - 2px),
+    calc(100% - 12px) calc(50% - 2px);
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+}
+
+textarea { min-height: 44px; resize: vertical; }
+
+input::placeholder,
+textarea::placeholder { color: rgba(244,246,247,0.45); }
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: rgba(244,246,247,0.28);
+  box-shadow: 0 0 0 4px var(--focus);
+}
+
+/* ---------- Buttons ---------- */
+button {
+  border: 1px solid var(--border2);
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+  padding: 10px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition:
+    transform 120ms ease,
+    background 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    opacity 120ms ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+  background: rgba(255,255,255,0.09);
+}
+
+button:active { transform: translateY(0px); opacity: 0.92; }
+button[disabled] { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+.small-btn {
+  padding: 8px 10px;
+  font-size: 12px;
+  border-radius: 10px;
+}
+
+.notice {
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
+  border-radius: 14px;
+  padding: 12px;
+  color: rgba(244,246,247,0.84);
+  box-shadow: var(--shadow2);
+}
+
+/* ---------- Cards ---------- */
+.card {
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+  border-radius: var(--radius);
+  padding: 14px;
+  box-shadow: var(--shadow2);
+}
+
+/* ---------- Option grid + selection highlight ---------- */
+.option-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.option-btn {
+  flex: 0 1 auto;
+  min-width: 140px;
+  max-width: 100%;
+}
+
+.option-btn:hover {
+  border-color: rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.06);
+}
+
+.option-btn:active { opacity: 0.94; }
+
+/* ✅ This is the key: game.html toggles `.selected` on option buttons */
+.option-btn.selected {
+  border-color: rgba(35, 170, 125, 0.55) !important;
+  background: rgba(10, 70, 50, 0.55) !important;
+  box-shadow: var(--greenGlow) !important;
+  color: var(--greenText) !important;
+}
+
+/* Extra safety: if any other selection flags are used */
+button.active,
+button.selected,
+.option.active,
+.option.selected,
+.choice.active,
+.choice.selected,
+.card.active,
+.card.selected,
+[data-selected="true"] {
+  border-color: rgba(35, 170, 125, 0.55) !important;
+  background: rgba(10, 70, 50, 0.55) !important;
+  box-shadow: var(--greenGlow) !important;
+  color: var(--greenText) !important;
+}
+
+/* ---------- Wine badges ---------- */
+#wineBadges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  padding: 3px 8px;
+  border: 1px solid var(--border2);
+  border-radius: 999px;
+  opacity: 0.95;
+  background: rgba(255,255,255,0.03);
+}
+
+/* ---------- Encounter panel ---------- */
+.encounter-panel { margin-top: 8px; }
+.step-header {
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: rgba(244,246,247,0.75);
+  margin-bottom: 8px;
+}
+#stepHeader { white-space: pre-line; } /* lets \n render as a new line */
+
+/* ---------- History ---------- */
+.history-item {
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 14px;
+  padding: 12px;
+  background: rgba(255,255,255,0.03);
+  box-shadow: var(--shadow2);
+}
+
+.history-row {
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.history-details {
+  margin-top: 10px;
+  white-space: pre-wrap;
+  font-size: 12px;
+  color: rgba(244,246,247,0.75);
+  line-height: 1.4;
+}
+
+/* ---------- Wine tables/cards ---------- */
+.wine-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.10);
+}
+
+.wine-table th,
+.wine-table td {
+  padding: 10px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  font-size: 12px;
+  vertical-align: top;
+}
+
+.wine-table th {
+  text-align: left;
+  color: rgba(244,246,247,0.78);
+  background: rgba(255,255,255,0.03);
+  letter-spacing: 0.4px;
+}
+
+.wine-table td { color: rgba(244,246,247,0.82); }
+
+.wine-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.wine-card {
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.03);
+  border-radius: 16px;
+  padding: 12px;
+  box-shadow: var(--shadow2);
+}
+
+.wine-card-row {
+  font-size: 12px;
+  color: rgba(244,246,247,0.80);
+  margin-top: 6px;
+}
+
+.wine-card-label {
+  color: rgba(244,246,247,0.62);
+}
+
+.bc-details {
+  margin-top: 10px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  background: rgba(0,0,0,0.18);
+}
+
+.bc-summary {
+  cursor: pointer;
+  padding: 10px 12px;
+  font-weight: 600;
+  user-select: none;
+}
+
+.bc-details-body {
+  padding: 10px 12px 12px;
+  border-top: 1px solid rgba(255,255,255,0.10);
+}
+
+.bc-panel {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  background: rgba(0,0,0,0.25);
+  max-width: 520px;
+}
+
+.bc-row {
+  display: flex;
+  gap: 10px;
+  margin: 6px 0;
+}
+
+.bc-row strong {
+  width: 70px;
+  opacity: 0.9;
+}
+
+.bc-note {
+  margin-top: 8px;
+  opacity: 0.85;
+  font-size: 0.95em;
+}
+
+/* ---------- Minor utilities ---------- */
+.successText { color: var(--greenText); }
+.errorText { color: rgba(255, 140, 140, 0.92); }
+
+/* Reduce motion if user prefers */
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}
