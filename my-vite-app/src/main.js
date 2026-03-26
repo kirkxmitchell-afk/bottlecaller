@@ -604,7 +604,7 @@ function initProgressionSpineFromState() {
   const email = appState.session?.user?.email || null;
   const license =
     appState.restaurant?.code ||
-    appState.profile?.restaurant_id ||
+    window.getActiveRestaurantId?.() ||
     null;
   const groupId = appState.profile?.scope_id || null;
   if (!email || !license) return null;
@@ -680,7 +680,17 @@ async function initRestaurantContextAfterAuth() {
   console.log("[MB] active restaurant resolved", res);
 
   if (!res.ok) {
+    appState.restaurant = null;
     return;
+  }
+
+  if (!appState.restaurant || appState.restaurant.id !== res.activeRestaurantId) {
+    try {
+      appState.restaurant = await loadRestaurant(res.activeRestaurantId);
+    } catch (error) {
+      console.warn("[MB] loadRestaurant for active scope restaurant failed", error);
+      appState.restaurant = null;
+    }
   }
 
   if (document.getElementById("screenManagerBoard") &&
@@ -707,7 +717,7 @@ const TEXTURE_OPTS = ["Silky","Chalky tannins","Firm tannins","Racy acidity","Cr
 const OAK_OPTS = ["None","Light","Subtle","Noticeable"];
 
 function getRestaurantIdOrNull() {
-  return appState?.profile?.restaurant_id || null;
+  return window.getActiveRestaurantId?.() || null;
 }
 
 function setupMultiSelectGrid(containerId, options, maxPick, getState, setState) {
@@ -1023,7 +1033,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
       if (!eventType) return;
 
       const userId = appState.session?.user?.id || null;
-      const restaurantId = appState.profile?.restaurant_id || null;
+      const restaurantId = getRestaurantIdOrNull();
 
       // If not authed, ignore
       if (!userId) return;
@@ -1094,7 +1104,7 @@ window.__BC_GET_PROGRESSION_SNAPSHOT__ = async ({ userId, restaurantId }) => {
 
   // IMPORTANT: do NOT trust caller userId; force current authed user
   const authedUserId = appState.session?.user?.id || null;
-  const authedRestaurantId = appState.profile?.restaurant_id || null;
+  const authedRestaurantId = getRestaurantIdOrNull();
 
   if (!authedUserId) return null;
   if (authedUserId !== userId) return null;                 // prevent spoofing
@@ -1288,7 +1298,7 @@ async function refreshParentProgressionFromDb() {
   _progInflight = true;
   try {
     const userId = appState.session?.user?.id || null;
-    const restaurantId = appState.profile?.restaurant_id || null;
+    const restaurantId = getRestaurantIdOrNull();
 
     if (!userId || !restaurantId) {
       appState.progressionView = {
@@ -1892,7 +1902,7 @@ async function loadInvites(restaurantId) {
 }
 
 async function loadManagerBoardSeats() {
-  const rid = appState.profile?.restaurant_id || null;
+  const rid = getRestaurantIdOrNull();
   const elStatus = document.getElementById("mbSeatStatus");
   const elDetail = document.getElementById("mbSeatDetail");
 
@@ -1932,8 +1942,8 @@ async function adminSetSeats(newLimit) {
     alert("Managers only.");
     return;
   }
-  const rid = appState.profile?.restaurant_id || null;
-  if (!rid) return alert("Missing restaurant_id on profile.");
+  const rid = getRestaurantIdOrNull();
+  if (!rid) return alert("Missing active restaurant.");
 
   const { error } = await supabase.rpc("admin_set_seat_limit", {
     p_restaurant_id: rid,
@@ -2058,8 +2068,9 @@ async function loadGroupRestaurantsForPicker() {
   });
 
   // Optional: preselect active restaurant if already set
-  if (appState.profile?.restaurant_id) {
-    sel.value = appState.profile.restaurant_id;
+  const activeRestaurantId = getRestaurantIdOrNull();
+  if (activeRestaurantId) {
+    sel.value = activeRestaurantId;
   }
 
   console.log("[BC] group picker hydrated", { scopeId, count: rows.length, rows });
@@ -2081,7 +2092,7 @@ function pushCtxToPremiumIframe(source = "manual") {
       role: appState.profile?.role || null,
       scopeType: appState.profile?.scope_type || null,
       scopeId: appState.profile?.scope_id || null,
-      restaurantId: appState.profile?.restaurant_id || null,
+      restaurantId: getRestaurantIdOrNull(),
       accessTier: appState.profile?.access_tier || null,
       _from: source,
     },
@@ -2473,7 +2484,7 @@ function renderDemoJoinBlock() {
   if (badge) (isAuthed ? badge.classList.remove("hidden") : badge.classList.add("hidden"));
 
   const role = String(appState.profile?.role || "").toLowerCase();
-  const hasRestaurant = !!appState.profile?.restaurant_id;
+  const hasRestaurant = !!getRestaurantIdOrNull();
 
   const showJoin = isAuthed && role === "waiter" && !hasRestaurant;
   if (joinBlock) (showJoin ? joinBlock.classList.remove("hidden") : joinBlock.classList.add("hidden"));
@@ -2489,7 +2500,7 @@ async function demoJoinRestaurantByCode() {
     await loadAuthedState("demo.join.precheck");
     if (!appState.session?.user) throw new Error("Login as a waiter first.");
     if (String(appState.profile?.role || "").toLowerCase() !== "waiter") throw new Error("Join-by-code is for waiter accounts.");
-    if (appState.profile?.restaurant_id) throw new Error("You are already assigned to a restaurant.");
+    if (getRestaurantIdOrNull()) throw new Error("You are already assigned to a restaurant.");
 
     setMsg("demoJoinMsg", "Submitting...");
     setDebug({ step: "demo.join.start", time: new Date().toISOString(), code });
@@ -2517,7 +2528,7 @@ async function demoJoinRestaurantByCode() {
     await loadAuthedState("demo.join.refresh");
     renderDemoJoinBlock();
 
-    if (appState.profile?.restaurant_id) {
+    if (getRestaurantIdOrNull()) {
       await decideRoute("demo.join.auto");
     }
   } catch (e) {
@@ -2567,7 +2578,7 @@ async function routeDemo(reason = "manual") {
         v: 1,
         type: "bc_ctx",
         userId: appState.session?.user?.id || null,
-        restaurantId: appState.profile?.restaurant_id || null,
+        restaurantId: getRestaurantIdOrNull(),
         scopeId: appState.profile?.scope_id || null,
         role: appState.profile?.role || null,
         mode: "demo",
@@ -2599,9 +2610,12 @@ async function routePremium(reason = "manual") {
     }
 
     const profile = appState.profile;
+    const activeRestaurantId = getRestaurantIdOrNull();
+    const scopeType = String(profile?.scope_type || "").toLowerCase();
+    const isGroupManager = String(profile?.role || "").toLowerCase() === "manager" && (scopeType === "group" || scopeType === "enterprise");
 
     // ✅ HARD RULE: restaurant membership routes to premium always (do not block on access_tier)
-    if (profile?.restaurant_id) {
+    if (activeRestaurantId) {
       if (String(profile?.role).toLowerCase() === "manager" && appState.restaurant?.id) {
         try {
           appState.invites = await loadInvites(appState.restaurant.id);
@@ -2621,9 +2635,9 @@ async function routePremium(reason = "manual") {
       showScreen("screenPremiumApp");
       const p = window.__BC_APP_STATE__?.profile;
       const isPremium = String(p?.access_tier || "").toLowerCase().startsWith("premium");
-      const isGroup = String(p?.scope_type || "").toLowerCase() === "group";
+      const isGroup = ["group", "enterprise"].includes(String(p?.scope_type || "").toLowerCase());
 
-      if (isPremium && isGroup && !p?.restaurant_id) {
+      if (isPremium && isGroup && !activeRestaurantId) {
         console.log("[BC] group manager needs active restaurant -> Manager Board");
         showScreen("screenManagerBoard");
         return;
@@ -2631,6 +2645,17 @@ async function routePremium(reason = "manual") {
       mountGameIframe("premiumRoot", "premium");
       wireParentButtons();
       refreshParentProgressionUI();
+      return;
+    }
+
+    if (isGroupManager) {
+      appMode = "premium";
+      closeHud();
+      showScreen("screenManagerBoard");
+      applyManagerBoardVisibility();
+      await loadManagerBoardData();
+      wireManagerBoardBillingAccess();
+      await loadGroupRestaurantsForPicker();
       return;
     }
 
@@ -2665,9 +2690,9 @@ async function routePremium(reason = "manual") {
     wireParentButtons();
     const p = window.__BC_APP_STATE__?.profile;
     const isPremium = String(p?.access_tier || "").toLowerCase().startsWith("premium");
-    const isGroup = String(p?.scope_type || "").toLowerCase() === "group";
+    const isGroup = ["group", "enterprise"].includes(String(p?.scope_type || "").toLowerCase());
 
-    if (isPremium && isGroup && !p?.restaurant_id) {
+    if (isPremium && isGroup && !activeRestaurantId) {
       console.log("[BC] group manager needs active restaurant -> Manager Board");
       showScreen("screenManagerBoard");
       return;
@@ -2728,6 +2753,11 @@ async function decideRoute(reason = "decideRoute") {
   try {
     await loadAuthedState(reason);
     await initRestaurantContextAfterAuth();
+    const activeRestaurantId = getRestaurantIdOrNull();
+    const role = String(appState.profile?.role || "").toLowerCase();
+    const scopeType = String(appState.profile?.scope_type || "").toLowerCase();
+    const isScopedManager = role === "manager" && (scopeType === "group" || scopeType === "enterprise");
+    const hasPremiumEntitlement = canAccessPremium(appState.profile).ok;
 
     // 1) Logged out => Home
     if (!appState.session?.user) {
@@ -2740,9 +2770,21 @@ async function decideRoute(reason = "decideRoute") {
     }
 
     // 2) HARD RULE: restaurant membership => Premium always
-    if (appState.profile?.restaurant_id) {
+    if (activeRestaurantId) {
       setAuthIntent("premium");
       await routePremium(`decideRoute.restaurant:${reason}`);
+      return;
+    }
+
+    if (isScopedManager) {
+      setAuthIntent("premium");
+      await routePremium(`decideRoute.scoped_manager:${reason}`);
+      return;
+    }
+
+    if (hasPremiumEntitlement) {
+      setAuthIntent("premium");
+      await routePremium(`decideRoute.entitled:${reason}`);
       return;
     }
 
@@ -3092,7 +3134,12 @@ async function submitAuth() {
     // signup
     setMsg("authMsg", "Creating account...");
     const { error } = await withTimeout(
-      signUp(email, password, { role: roleForSignup, display_name: displayName || null }),
+      signUp(email, password, {
+        data: {
+          role: roleForSignup,
+          display_name: displayName || null,
+        },
+      }),
       15000,
       "auth.signUp"
     );
