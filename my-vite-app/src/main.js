@@ -56,7 +56,7 @@ window.__BC_SUPABASE__ = supabase;
 // ------------------------------------------------------------
 document.querySelector("#app").innerHTML = `
   <!-- FACE WINDOW -->
-  <section id="screenHome" class="screen">
+  <section id="screenHome" class="screen active">
     <div class="panel stack">
       <div class="topbar">
         <div class="brand">
@@ -1130,8 +1130,16 @@ window.__BC_GET_PROGRESSION_SNAPSHOT__ = async ({ userId, restaurantId }) => {
 // Helpers
 // ------------------------------------------------------------
 function showScreen(id) {
-  document.querySelectorAll(".screen").forEach((s) => s.classList.add("hidden"));
-  document.getElementById(id)?.classList.remove("hidden");
+  document.querySelectorAll(".screen").forEach((screen) => {
+    screen.classList.remove("active");
+    screen.classList.add("hidden");
+  });
+
+  const target = document.getElementById(id);
+  if (!target) return;
+
+  target.classList.remove("hidden");
+  target.classList.add("active");
 }
 
 // (removed duplicate getActiveRestaurantId; use window.getActiveRestaurantId)
