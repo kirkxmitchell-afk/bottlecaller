@@ -1,1 +1,3102 @@
-@import "../style.css";
+/* src/style.css */
+
+:root {
+  --bg: #070809;
+  --panel: #0e1113;
+  --text: #f4f6f7;
+  --muted: rgba(244, 246, 247, 0.72);
+  --faint: rgba(244, 246, 247, 0.5);
+
+  --border: rgba(255, 255, 255, 0.10);
+  --border2: rgba(255, 255, 255, 0.16);
+
+  --shadow: 0 18px 55px rgba(0, 0, 0, 0.72);
+  --shadow2: 0 10px 28px rgba(0, 0, 0, 0.55);
+
+  /* Dark green accent for selection + glow (NOT success messaging) */
+  --greenBg: rgba(10, 70, 50, 0.55);
+  --greenBorder: rgba(35, 170, 125, 0.35);
+  --greenGlow: 0 0 0 3px rgba(35, 170, 125, 0.14), 0 16px 40px rgba(0, 0, 0, 0.55);
+  --greenText: rgba(235, 255, 248, 0.96);
+
+  --focus: rgba(244, 246, 247, 0.16);
+  --radius: 16px;
+
+  --red: #8b1a1a;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(1100px 600px at 18% 0%, rgba(255,255,255,0.06), transparent 55%),
+    radial-gradient(900px 550px at 92% 18%, rgba(255,255,255,0.04), transparent 60%),
+    radial-gradient(900px 550px at 72% 92%, rgba(255,255,255,0.03), transparent 60%),
+    var(--bg);
+  color: var(--text);
+
+  font-family: "Avenir Next", Avenir, "AvenirNextLTPro", "Nunito Sans", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  letter-spacing: 0.2px;
+}
+
+button, input { font-family: inherit; }
+
+#app {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 22px;
+}
+
+.screen {
+  width: min(1280px, 100%);
+  margin-inline: auto;
+}
+.hidden { display: none !important; }
+
+[data-tutorial-active="true"] {
+  position: relative;
+  z-index: 10001 !important;
+  box-shadow:
+    0 0 0 3px rgba(125, 211, 252, 0.95),
+    0 0 0 8px rgba(125, 211, 252, 0.18);
+  border-radius: 12px;
+}
+
+.app-chrome{
+  width: min(1600px, 100%);
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) auto;
+  gap: 18px;
+  align-items: end;
+  padding: 18px 20px;
+  border-radius: 30px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background:
+    radial-gradient(1000px 280px at 0% 0%, rgba(125,211,252,0.14), transparent 56%),
+    radial-gradient(900px 260px at 100% 12%, rgba(94,234,212,0.10), transparent 58%),
+    linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.015)),
+    rgba(8,12,17,0.72);
+  box-shadow:
+    0 28px 70px rgba(0,0,0,0.34),
+    inset 0 1px 0 rgba(255,255,255,0.05);
+  backdrop-filter: blur(12px);
+  position: relative;
+  overflow: hidden;
+}
+
+.app-chrome::after{
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.07), transparent 34%),
+    radial-gradient(60% 100% at 100% 100%, rgba(255,196,121,0.06), transparent 65%);
+}
+
+.app-chrome-brand,
+.app-chrome-context{
+  position: relative;
+  z-index: 1;
+}
+
+.app-chrome-eyebrow{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(125,211,252,0.16);
+  background:
+    linear-gradient(180deg, rgba(125,211,252,0.14), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.03);
+  color: rgba(232,246,255,0.86);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.app-chrome-title-row{
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.app-chrome-title{
+  font-size: clamp(32px, 5vw, 52px);
+  line-height: 0.98;
+  letter-spacing: -0.03em;
+  font-weight: 800;
+  color: rgba(245,247,248,0.98);
+}
+
+.app-chrome-badge{
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02)),
+    rgba(255,255,255,0.03);
+  color: rgba(244,246,247,0.86);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.app-chrome-copy{
+  margin-top: 10px;
+  max-width: 62ch;
+  color: rgba(244,246,247,0.72);
+  line-height: 1.6;
+}
+
+.app-chrome-context{
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.app-chrome-chip{
+  min-width: 152px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02)),
+    rgba(255,255,255,0.02);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.04),
+    0 14px 30px rgba(0,0,0,0.16);
+}
+
+.app-chrome-chip-label{
+  display: block;
+  margin-bottom: 6px;
+  color: rgba(244,246,247,0.56);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.app-chrome-chip strong{
+  display: block;
+  color: rgba(244,246,247,0.94);
+  font-size: 14px;
+  line-height: 1.3;
+}
+
+.panel {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.05), transparent 140px),
+    var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px;
+}
+
+.stack > * + * { margin-top: 12px; }
+
+.hr {
+  height: 1px;
+  border: 0;
+  background: var(--border);
+  margin: 12px 0;
+}
+
+.row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.topbar {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  position: relative;
+  z-index: 50;
+}
+
+#topBar, #premiumHeader, .appHeader {
+  position: relative;
+  z-index: 9999;
+}
+
+#premiumRootFrame {
+  position: relative;
+  z-index: 1;
+}
+
+#screenPremiumApp {
+  position: relative;
+  z-index: 9999;
+}
+
+.brand {
+  display:flex;
+  gap:10px;
+  align-items:center;
+}
+.brand h2 { margin: 0; font-size: 20px; letter-spacing: 0.5px; }
+
+.badge {
+  font-size: 12px;
+  padding: 4px 10px;
+  border: 1px solid var(--border2);
+  border-radius: 999px;
+  opacity: 0.9;
+}
+
+.bc-prog-card{
+  margin: 14px 0 10px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 14px;
+  background: rgba(0,0,0,0.25);
+  max-width: 560px;
+}
+
+.bc-prog-title{
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.bc-prog-line{
+  display: flex;
+  gap: 12px;
+  margin: 6px 0;
+}
+
+.bc-prog-k{
+  width: 64px;
+  opacity: 0.85;
+}
+
+.bc-prog-v{
+  opacity: 0.95;
+}
+
+.bc-prog-note{
+  margin-top: 8px;
+  opacity: 0.8;
+  font-size: 0.95em;
+}
+
+.bc-unlock{
+  margin: 10px 0 10px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 14px;
+  background: rgba(0,0,0,0.18);
+  max-width: 560px;
+  opacity: 0.95;
+}
+
+h1,h2,h3 { margin: 0; }
+h3 { font-size: 14px; letter-spacing: 0.6px; text-transform: uppercase; opacity: 0.92; }
+p { margin: 0; color: var(--muted); line-height: 1.5; }
+
+.small { font-size: 12px; color: var(--faint); line-height: 1.4; }
+.kicker { font-size: 12px; color: var(--faint); letter-spacing: 1px; text-transform: uppercase; }
+
+.title {
+  font-size: 26px;
+  font-weight: 750;
+  letter-spacing: 0.3px;
+}
+
+.subtle { color: var(--muted); font-size: 13px; }
+
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+
+input[type="email"],
+input[type="password"],
+input[type="text"],
+input[type="number"] {
+  width: 100%;
+  padding: 12px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.04);
+  color: var(--text);
+  outline: none;
+}
+
+input::placeholder { color: rgba(244,246,247,0.45); }
+
+input:focus {
+  border-color: rgba(244,246,247,0.28);
+  box-shadow: 0 0 0 4px var(--focus);
+}
+
+/* ---------- Buttons ---------- */
+button {
+  border: 1px solid var(--border2);
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+  padding: 10px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: transform 120ms ease, background 120ms ease, border-color 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+  background: rgba(255,255,255,0.09);
+}
+
+button:active { transform: translateY(0px); opacity: 0.92; }
+button[disabled] { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+.btn-primary {
+  border-color: rgba(255,255,255,0.25);
+  background: #f4f6f7;
+  color: #0b0d0f;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.35);
+}
+.btn-primary:hover { background: #ffffff; }
+
+.btn-danger {
+  border-color: rgba(139,26,26,0.7);
+  background: linear-gradient(180deg, rgba(139,26,26,0.92), rgba(111,20,20,0.92));
+  color: #ffffff;
+  box-shadow: 0 12px 30px rgba(139,26,26,0.18);
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text);
+  opacity: 0.9;
+}
+
+/* Accent button used for “menu highlight/select” (dark green + glow) */
+.btn-accent {
+  border-color: var(--greenBorder);
+  background: var(--greenBg);
+  color: var(--greenText);
+  box-shadow: var(--greenGlow);
+}
+.btn-accent:hover {
+  background: rgba(10, 70, 50, 0.70);
+  box-shadow: 0 0 0 3px rgba(35, 170, 125, 0.20), 0 18px 50px rgba(0,0,0,0.60);
+}
+
+/* ---------- Tabs (no outer wrapper border) ---------- */
+.tabs {
+  display: flex;
+  gap: 10px;
+  padding: 0;            /* no wrapper padding */
+  border: 0;            /* remove wrapper border */
+  background: transparent;
+}
+
+.tab {
+  flex: 1;
+  text-align: center;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.03);
+  color: rgba(244,246,247,0.72);
+}
+
+.tab:hover {
+  border-color: rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.05);
+}
+
+.tab.active {
+  border-color: var(--greenBorder);
+  background: var(--greenBg);
+  color: var(--greenText);
+  box-shadow: var(--greenGlow);
+}
+
+/* ---------- Cards ---------- */
+.card {
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+  border-radius: var(--radius);
+  padding: 14px;
+  box-shadow: var(--shadow2);
+}
+
+.successText { color: var(--greenText); }
+.errorText { color: rgba(255, 140, 140, 0.92); }
+
+.reaction-trail-card,
+.reflection-step-trail-card,
+.reflection-horizontal-spine,
+.reaction-spine-card,
+.reaction-snapshot-card,
+.ux-summary-card,
+.reflection-detail-card{
+  margin-top: 14px;
+}
+
+.reaction-trail-card,
+.reaction-snapshot-card,
+.reaction-spine-card{
+  background:
+    radial-gradient(circle at top left, rgba(125,211,252,0.10), transparent 58%),
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+}
+
+.reflection-step-trail-card,
+.reflection-horizontal-spine,
+.reflection-detail-card,
+.ux-summary-card{
+  background:
+    radial-gradient(circle at top left, rgba(74,222,128,0.08), transparent 58%),
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+}
+
+.reaction-trail-card h4,
+.reflection-step-trail-card h4,
+.reflection-horizontal-spine h4,
+.reaction-spine-card h4,
+.reaction-snapshot-card h4{
+  margin: 0 0 8px;
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.reaction-block-subtitle{
+  margin-bottom: 10px;
+  color: rgba(245,246,247,0.72);
+}
+
+.reaction-trail-row,
+.reflection-step-trail-row{
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+}
+
+.reaction-trail-row + .reaction-trail-row,
+.reflection-step-trail-row + .reflection-step-trail-row{
+  margin-top: 8px;
+}
+
+.reaction-spine-line,
+.reflection-horizontal-spine-line{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.reaction-spine-node,
+.reflection-spine-node{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.04);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.reaction-spine-node.is-positive,
+.reflection-spine-node.is-positive{
+  border-color: rgba(74,222,128,0.28);
+  background: rgba(74,222,128,0.14);
+  color: rgba(220,252,231,0.98);
+}
+
+.reaction-spine-node.is-negative,
+.reflection-spine-node.is-negative{
+  border-color: rgba(248,113,113,0.28);
+  background: rgba(248,113,113,0.14);
+  color: rgba(254,226,226,0.98);
+}
+
+.reaction-spine-node.is-neutral,
+.reflection-spine-node.is-neutral{
+  border-color: rgba(250,204,21,0.24);
+  background: rgba(250,204,21,0.12);
+  color: rgba(254,249,195,0.98);
+}
+
+.reaction-snapshot-paths{
+  margin-top: 10px;
+  line-height: 1.55;
+}
+
+.reflection-detail-copy{
+  margin-top: 8px;
+  line-height: 1.5;
+}
+
+/* =========================================================
+   PREMIUM APP: click-safe overlays + wide cockpit styling
+   Applies to your exact DOM: #screenPremiumApp, #premiumRoot, #premiumRootFrame,
+   #hudBackdrop, #hudPanel, #debugPanel
+   ========================================================= */
+
+/* Root stability */
+#app{
+  min-height: 100vh;
+}
+
+/* IMPORTANT: if hidden overlays exist, they must not block clicks */
+#hudBackdrop.hidden,
+#hudPanel.hidden{
+  display: none !important; /* prevents invisible overlay click blockers */
+}
+
+/* HUD overlays when shown */
+#hudBackdrop{
+  pointer-events: auto;
+}
+#hudPanel{
+  pointer-events: auto;
+}
+
+/* PREMIUM SCREEN LAYOUT */
+#screenPremiumApp .panel.stack{
+  width: min(1400px, 100%);
+  margin: 0 auto;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+  grid-template-rows: auto auto auto 1fr;
+
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Topbar becomes HUD */
+#screenPremiumApp .topbar{
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(0,0,0,0.22);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.45);
+  padding: 12px 14px;
+}
+
+#screenPremiumApp .topbar .brand{
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+#premiumBadge.badge{
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.05);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+/* Progress card */
+#bcProgressionCard.bc-prog-card{
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(0,0,0,0.18);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.35);
+}
+
+/* Unlock notice */
+#bcUnlockNotice.bc-unlock{
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(0,0,0,0.16);
+}
+
+/* IFRAME SURFACE */
+#premiumRoot{
+  position: relative;
+  margin-top: 10px;
+}
+
+#premiumRootFrame,
+#premiumRoot iframe{
+  width: 100%;
+  height: 78vh;
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 22px;
+  background: rgba(0,0,0,0.18);
+  display: block;
+  pointer-events: auto;
+}
+
+#premiumRoot,
+#premiumRootFrame{
+  isolation: isolate;
+}
+
+@media (max-width: 860px){
+  #debugPanel{
+    max-height: 28vh !important;
+    opacity: 0.92;
+  }
+}
+
+html::before{
+  content:"STYLE-CHECK-123";
+  position:fixed;
+  left:10px; top:10px;
+  z-index:9999999;
+  background:#000; color:#0f0;
+  padding:6px 10px;
+  border:1px solid #0f0;
+  border-radius:10px;
+  font:12px/1.2 monospace;
+}
+
+/* =========================================================
+   BOTTLECALLER PREMIUM (PARENT) — paste at VERY BOTTOM
+   ========================================================= */
+
+:root{
+  --p-bg0:#060607;
+  --p-bg1:#0a0b0d;
+  --p-surface:#0f1114;
+
+  --p-text:#f5f6f7;
+  --p-muted:rgba(245,246,247,.72);
+
+  --p-stroke:rgba(255,255,255,.10);
+  --p-stroke2:rgba(255,255,255,.16);
+
+  --p-accent:#7dd3fc;
+
+  --p-r-xl:22px;
+  --p-shadow1:0 14px 40px rgba(0,0,0,.55);
+  --p-shadow2:0 8px 20px rgba(0,0,0,.45);
+  --p-ease:cubic-bezier(.2,.8,.2,1);
+}
+
+body{
+  background:
+    radial-gradient(1100px 650px at 18% 0%, rgba(125,211,252,.06), transparent 60%),
+    radial-gradient(900px 600px at 82% 22%, rgba(52,211,153,.04), transparent 60%),
+    linear-gradient(180deg, var(--p-bg1), var(--p-bg0)) !important;
+  color: var(--p-text) !important;
+}
+
+/* generic panels become premium */
+.panel, .card{
+  background: linear-gradient(180deg, rgba(255,255,255,.04), transparent 120px), var(--p-surface) !important;
+  border: 1px solid var(--p-stroke) !important;
+  border-radius: var(--p-r-xl) !important;
+  box-shadow: var(--p-shadow1) !important;
+}
+
+/* buttons */
+button, .btn, .btn-ghost, .btn-danger{
+  border-radius: 14px !important;
+  transition: transform 140ms var(--p-ease), background 140ms var(--p-ease), border-color 140ms var(--p-ease) !important;
+}
+
+button:hover, .btn:hover, .btn-ghost:hover{
+  transform: translateY(-1px);
+}
+
+/* premium iframe mount surface */
+#premiumRootFrame{
+  border: 1px solid rgba(255,255,255,0.10) !important;
+  border-radius: 22px !important;
+  background: rgba(0,0,0,0.18) !important;
+}
+
+/* =======================
+   PREMIUM APP (PARENT) HUD LAYOUT
+   ======================= */
+
+#screenPremiumApp .panel.stack{
+  width: min(1440px, 100%);
+  margin: 0 auto;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+
+  /* Topbar / Progress / Notices / Game Surface */
+  grid-template-rows: auto auto auto 1fr;
+
+  /* Remove wrapped in box feel */
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+#screenPremiumApp .topbar{
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(0,0,0,0.22);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 26px rgba(0,0,0,0.45);
+  padding: 12px 14px;
+}
+
+#screenPremiumApp .topbar h2{
+  margin: 0;
+  font-size: 16px;
+  letter-spacing: .2px;
+}
+
+#screenPremiumApp .topbar .row{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+#bcProgressionCard.bc-prog-card,
+#bcUnlockNotice.bc-unlock{
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(0,0,0,0.16);
+  box-shadow: 0 10px 26px rgba(0,0,0,0.35);
+}
+
+/* Frame the iframe like a game surface */
+#premiumRootFrame{
+  height: 78vh;
+  border-radius: 24px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(0,0,0,0.18);
+  box-shadow: 0 18px 50px rgba(0,0,0,0.55);
+}
+
+
+/* === PREMIUM v2: BIG VISIBLE SHIFT (PARENT) === */
+
+#screenPremiumApp .panel.stack{
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+
+  width: min(1480px, 100%);
+  margin: 0 auto;
+  padding: 16px !important;
+
+  display: grid !important;
+  gap: 14px !important;
+}
+
+#screenPremiumApp .topbar{
+  border-radius: 24px !important;
+  padding: 14px 16px !important;
+  background: rgba(0,0,0,0.24) !important;
+  border: 1px solid rgba(255,255,255,0.12) !important;
+  box-shadow: 0 18px 50px rgba(0,0,0,0.55) !important;
+}
+
+#bcProgressionCard.bc-prog-card{
+  border-radius: 24px !important;
+  background: rgba(0,0,0,0.18) !important;
+  border: 1px solid rgba(255,255,255,0.12) !important;
+}
+
+#premiumRootFrame{
+  border-radius: 28px !important;
+  box-shadow: 0 26px 80px rgba(0,0,0,0.70) !important;
+}
+
+/* =========================================================
+   PREMIUM WRAPPER (PARENT) — remove outer box + add HUD + stage
+   Target: #screenPremiumApp markup from src/main.js
+   ========================================================= */
+
+/* 1) Kill the big outer rounded panel */
+#screenPremiumApp > .panel.stack{
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+/* 2) Give the premium screen a wide, clean shell */
+#screenPremiumApp{
+  width: min(1480px, 100%);
+  margin: 0 auto;
+  padding: 18px 16px 40px;
+}
+
+/* 3) Topbar becomes a HUD strip (not a box) */
+#screenPremiumApp .topbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+
+  padding: 14px 16px;
+  border-radius: 26px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background:
+    radial-gradient(900px 260px at 20% 0%, rgba(125,211,252,0.10), rgba(0,0,0,0) 60%),
+    rgba(0,0,0,0.22);
+  box-shadow: 0 18px 55px rgba(0,0,0,0.62);
+  backdrop-filter: blur(10px);
+}
+
+/* Brand + badge */
+#screenPremiumApp .topbar .brand h2{
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+#screenPremiumApp #premiumBadge.badge{
+  border-radius: 999px;
+  padding: 6px 10px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.04);
+  color: rgba(245,246,247,.85);
+  font-size: 12px;
+}
+
+/* Right-side actions row */
+#screenPremiumApp .topbar .row{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  justify-content:flex-end;
+}
+
+/* Buttons */
+#screenPremiumApp button,
+#screenPremiumApp .btn-ghost,
+#screenPremiumApp .btn-danger{
+  border-radius: 18px !important;
+  padding: 12px 14px !important;
+  border: 1px solid rgba(255,255,255,0.14) !important;
+  background: rgba(255,255,255,0.04) !important;
+  color: rgba(245,246,247,0.92) !important;
+  transition: transform 140ms cubic-bezier(.2,.8,.2,1), background 140ms cubic-bezier(.2,.8,.2,1), border-color 140ms cubic-bezier(.2,.8,.2,1);
+}
+
+#screenPremiumApp .btn-danger{
+  background: rgba(251,113,133,0.14) !important;
+  border-color: rgba(251,113,133,0.35) !important;
+}
+
+#screenPremiumApp button:hover,
+#screenPremiumApp .btn-ghost:hover,
+#screenPremiumApp .btn-danger:hover{
+  transform: translateY(-1px);
+  background: rgba(255,255,255,0.07) !important;
+  border-color: rgba(125,211,252,0.30) !important;
+}
+
+#screenPremiumApp button:active,
+#screenPremiumApp .btn-ghost:active,
+#screenPremiumApp .btn-danger:active{
+  transform: translateY(0) scale(.99);
+}
+
+/* 4) Progression card: one clean surface, not nested boxes */
+#bcProgressionCard.bc-prog-card{
+  margin-top: 14px;
+  border-radius: 28px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0) 120px),
+    rgba(255,255,255,0.03);
+  box-shadow: 0 26px 90px rgba(0,0,0,0.70);
+  padding: 16px;
+}
+
+/* If bcProgressionCard contains nested cards/panels, flatten them */
+#bcProgressionCard .card,
+#bcProgressionCard .panel{
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+/* 5) Frame the iframe as the game stage */
+#premiumRoot{
+  margin-top: 14px !important;
+  border-radius: 30px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(0,0,0,0.14);
+  box-shadow: 0 30px 100px rgba(0,0,0,0.75);
+  padding: 12px;
+}
+
+/* the iframe itself */
+#premiumRootFrame{
+  width: 100% !important;
+  height: 78vh !important;
+  border: 0 !important;
+  display: block;
+  border-radius: 24px;
+  background: rgba(0,0,0,0.18);
+}
+
+/* Mobile: reduce padding */
+@media (max-width: 860px){
+  #screenPremiumApp{ padding: 14px 12px 28px; }
+  #premiumRoot{ padding: 10px; }
+}
+
+/* =========================================================
+   REMOVE "BottleCaller Prototype" WRAPPER
+   ========================================================= */
+
+/* Hide the heading */
+#screenPremiumApp h2:has(+ #premiumRoot),
+#screenPremiumApp h3:has(+ #premiumRoot){
+  display:none !important;
+}
+
+/* Remove the wrapper box completely */
+#premiumRoot{
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin-top: 14px;
+}
+
+/* Let the iframe become the real stage */
+#premiumRootFrame{
+  border-radius: 28px !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
+  background: rgba(0,0,0,0.20) !important;
+  box-shadow: 0 32px 110px rgba(0,0,0,0.80) !important;
+}
+
+/* ================================
+   PREMIUM PARENT: no prototype box, tight spacing, square corners
+   ================================ */
+
+/* Make the premium screen tighter */
+#screenPremiumApp{
+  width: min(1480px, 100%);
+  margin: 0 auto;
+  padding: 10px 12px 18px;
+}
+
+/* Reduce the stack spacing (your .stack class adds big gaps) */
+#screenPremiumApp .panel.stack{
+  gap: 8px !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Topbar: keep HUD feel but square corners and less padding */
+#screenPremiumApp .topbar{
+  padding: 10px 12px !important;
+  border-radius: 0 !important;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(0,0,0,0.22);
+  box-shadow: 0 14px 40px rgba(0,0,0,0.55);
+}
+
+/* Progression card: square corners, less space */
+#bcProgressionCard.bc-prog-card{
+  margin-top: 0 !important;
+  padding: 10px 12px !important;
+  border-radius: 0 !important;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.03);
+  box-shadow: 0 18px 55px rgba(0,0,0,0.55);
+}
+
+/* The mount div is NOT a wrapper card (no box) */
+#premiumRoot{
+  margin-top: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Iframe: square corners, no extra border-radius */
+#premiumRootFrame{
+  width: 100% !important;
+  height: 78vh !important;
+  border: 0 !important;
+  border-radius: 0 !important;  /* <-- square */
+  display: block !important;
+  box-shadow: 0 26px 80px rgba(0,0,0,0.70);
+  background: rgba(0,0,0,0.18);
+}
+
+/* =========================================================
+   LOGIN SCREEN
+   Keep this last so it beats the older generic home/auth rules.
+   ========================================================= */
+
+#screenHome{
+  width: min(1180px, 100%);
+}
+
+#screenHome > .panel.stack{
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 18px !important;
+  padding: 24px !important;
+  border-radius: 32px !important;
+  background:
+    radial-gradient(900px 320px at 0% 0%, rgba(125,211,252,0.12), transparent 58%),
+    radial-gradient(760px 280px at 100% 12%, rgba(94,234,212,0.10), transparent 60%),
+    linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.015)),
+    rgba(8,12,17,0.76) !important;
+  box-shadow:
+    0 32px 80px rgba(0,0,0,0.38),
+    inset 0 1px 0 rgba(255,255,255,0.05) !important;
+}
+
+#screenHome .topbar{
+  grid-column: 1 / -1;
+  padding: 0 0 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+#screenHome .title{
+  margin: 0;
+  font-size: clamp(34px, 5vw, 52px);
+  line-height: 0.96;
+  letter-spacing: -0.03em;
+  color: rgba(247,248,249,0.98);
+  max-width: 12ch;
+}
+
+#screenHome .subtle{
+  max-width: 72ch;
+  font-size: 15px;
+  line-height: 1.65;
+  color: rgba(244,246,247,0.74);
+}
+
+#screenHome #authFields{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 12px;
+  margin-top: 0 !important;
+  padding: 18px;
+  border-radius: 26px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015)),
+    rgba(255,255,255,0.02);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.04),
+    0 18px 38px rgba(0,0,0,0.16);
+}
+
+#screenHome #authFields > *{
+  margin-top: 0 !important;
+}
+
+#screenHome #authEmail,
+#screenHome #authPassword,
+#screenHome #authDisplayName,
+#screenHome #premiumLicenseCode,
+#screenHome #premiumRestaurantName{
+  min-height: 52px;
+  border-radius: 16px;
+  border-color: rgba(255,255,255,0.10);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015)),
+    rgba(7,12,16,0.70);
+}
+
+#screenHome #premiumIntentBlock{
+  grid-column: 1 / -1;
+  padding: 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(245,194,107,0.18);
+  background:
+    linear-gradient(180deg, rgba(245,194,107,0.12), rgba(255,255,255,0.02)),
+    rgba(255,255,255,0.02);
+}
+
+#screenHome #premiumIntentBlock .small{
+  color: rgba(255,246,231,0.76);
+}
+
+#screenHome #signupContactBlock,
+#screenHome #managerSignupConfig{
+  grid-column: 1 / -1;
+}
+
+#screenHome #signupContactBlock{
+  padding: 12px 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(125,211,252,0.16);
+  background:
+    linear-gradient(180deg, rgba(125,211,252,0.10), rgba(255,255,255,0.02)),
+    rgba(255,255,255,0.02);
+}
+
+#screenHome .premium-signup-card{
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(245,194,107,0.18);
+  background:
+    radial-gradient(780px 220px at 0% 0%, rgba(245,194,107,0.10), transparent 56%),
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)),
+    rgba(255,255,255,0.02);
+}
+
+#screenHome .premium-signup-copy,
+#screenHome .premium-contact-copy{
+  color: rgba(248,243,233,0.78);
+  line-height: 1.6;
+}
+
+#screenHome #premiumIntentBlock a{
+  color: rgba(255,248,236,0.92) !important;
+}
+
+#screenHome .premium-contact-copy a{
+  color: rgba(255,248,236,0.96) !important;
+}
+
+#screenHome .tabs{
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 6px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015)),
+    rgba(255,255,255,0.02);
+}
+
+#screenHome .tabs.tabs-3{
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+#screenHome #roleTabs::before,
+#screenHome #modeTabs::before{
+  content: "";
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  left: 6px;
+  width: calc(50% - 7px);
+  border-radius: 14px;
+  transform: translateX(var(--selector-x, 0px));
+  transition: transform 180ms ease, background 180ms ease, border-color 180ms ease;
+  z-index: 0;
+}
+
+#screenHome #managerPackageTabs::before,
+#screenHome #seatPlanTabs::before{
+  content: "";
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  left: 6px;
+  width: calc((100% - 28px) / 3);
+  border-radius: 14px;
+  z-index: 0;
+  transition: transform 180ms ease, background 180ms ease, border-color 180ms ease;
+}
+
+#screenHome #managerPackageTabs::before{
+  border: 1px solid rgba(245,194,107,0.22);
+  background:
+    linear-gradient(180deg, rgba(245,194,107,0.18), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.03);
+}
+
+#screenHome #seatPlanTabs::before{
+  border: 1px solid rgba(125,211,252,0.20);
+  background:
+    linear-gradient(180deg, rgba(125,211,252,0.18), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.03);
+}
+
+#screenHome #modeTabs[data-selected="login"]::before,
+#screenHome #roleTabs[data-selected="waiter"]::before{
+  transform: translateX(0);
+}
+
+#screenHome #modeTabs[data-selected="signup"]::before,
+#screenHome #roleTabs[data-selected="manager"]::before{
+  transform: translateX(calc(100% + 8px));
+}
+
+#screenHome #managerPackageTabs[data-selected="single_manager"]::before,
+#screenHome #seatPlanTabs[data-selected="15"]::before{
+  transform: translateX(0);
+}
+
+#screenHome #managerPackageTabs[data-selected="group_manager"]::before,
+#screenHome #seatPlanTabs[data-selected="30"]::before{
+  transform: translateX(calc(100% + 8px));
+}
+
+#screenHome #managerPackageTabs[data-selected="enterpriser"]::before,
+#screenHome #seatPlanTabs[data-selected="60"]::before{
+  transform: translateX(calc(200% + 16px));
+}
+
+#screenHome #modeTabs::before{
+  border: 1px solid rgba(125,211,252,0.20);
+  background:
+    linear-gradient(180deg, rgba(125,211,252,0.18), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.03);
+}
+
+#screenHome #roleTabs::before{
+  border: 1px solid rgba(94,234,212,0.22);
+  background:
+    linear-gradient(180deg, rgba(94,234,212,0.18), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.03);
+}
+
+#screenHome #roleTabs[data-selected="manager"]::before{
+  border-color: rgba(245,194,107,0.22);
+  background:
+    linear-gradient(180deg, rgba(245,194,107,0.20), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.03);
+}
+
+#screenHome #roleTabs,
+#screenHome .tabs,
+#screenHome #roleTabsWrap,
+#screenHome #signupContactBlock,
+#screenHome #managerSignupConfig,
+#screenHome #displayNameWrap,
+#screenHome #authFields .row,
+#screenHome #authMsg{
+  grid-column: 1 / -1;
+}
+
+#screenHome #roleTabsWrap{
+  margin-top: 4px;
+}
+
+#screenHome .auth-subselector-label{
+  margin: 0 0 8px;
+  color: rgba(244,246,247,0.68);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+#screenHome #authFields .row{
+  margin-top: 4px !important;
+}
+
+#screenHome .tab{
+  position: relative;
+  z-index: 1;
+  min-height: 44px;
+  border-radius: 14px !important;
+  border: 1px solid transparent !important;
+  background: transparent !important;
+  color: rgba(244,246,247,0.78) !important;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  box-shadow: none !important;
+}
+
+#screenHome .tab.active{
+  background: transparent !important;
+  color: rgba(248,249,250,0.96) !important;
+}
+
+#screenHome #tabRoleWaiter.active{
+  color: rgba(235,255,250,0.94) !important;
+}
+
+#screenHome #tabRoleManager.active{
+  color: rgba(255,247,232,0.94) !important;
+}
+
+#screenHome #btnAuthSubmit{
+  width: 100%;
+  min-height: 56px;
+  border-radius: 18px !important;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  background:
+    linear-gradient(180deg, rgba(244,246,247,0.96), rgba(224,231,235,0.92)) !important;
+  color: #0b0d0f !important;
+}
+
+#screenHome #authMsg{
+  min-height: 20px;
+  color: rgba(244,246,247,0.72);
+}
+
+@media (max-width: 980px){
+  #screenHome > .panel.stack{
+    padding: 18px !important;
+  }
+
+  #screenHome .title{
+    max-width: none;
+  }
+
+  #screenHome #authFields{
+    grid-template-columns: 1fr;
+  }
+}
+
+/* =========================================================
+   PARENT NAV REFINEMENT
+   Premium menu, manager board tabs, and messages surfaces.
+   Keep this last so it beats older premium-parent overrides.
+   ========================================================= */
+
+#screenPremiumApp,
+#screenManagerBoard{
+  width: min(1600px, 100%);
+  margin: 0 auto;
+  padding: 16px 14px 28px;
+}
+
+#screenPremiumApp > .panel.stack,
+#screenManagerBoard > .panel.stack{
+  gap: 12px !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+#screenPremiumApp .topbar,
+#screenManagerBoard .topbar{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px !important;
+  border-radius: 28px !important;
+  border: 1px solid rgba(255,255,255,0.12);
+  background:
+    radial-gradient(900px 280px at 12% 0%, rgba(125,211,252,0.12), transparent 58%),
+    radial-gradient(780px 240px at 100% 12%, rgba(94,234,212,0.10), transparent 60%),
+    linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.015)),
+    rgba(6,10,14,0.50);
+  box-shadow:
+    0 24px 60px rgba(0,0,0,0.44),
+    inset 0 1px 0 rgba(255,255,255,0.05);
+  backdrop-filter: blur(10px);
+}
+
+#screenPremiumApp .topbar .brand,
+#screenManagerBoard .topbar .brand{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#screenPremiumApp .topbar .brand h2,
+#screenManagerBoard .topbar .brand h2{
+  margin: 0;
+  font-size: 18px;
+  letter-spacing: 0.02em;
+}
+
+#screenPremiumApp .topbar .brand .badge,
+#screenManagerBoard .topbar .brand .badge,
+#screenPremiumApp #premiumBadge.badge{
+  padding: 6px 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(125,211,252,0.18);
+  background:
+    linear-gradient(180deg, rgba(125,211,252,0.18), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.03);
+  color: rgba(234,246,255,0.88);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+#screenPremiumApp .topbar .row,
+#screenManagerBoard .topbar .row{
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 6px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015)),
+    rgba(4,9,13,0.34);
+}
+
+#screenPremiumApp .topbar .row button,
+#screenPremiumApp .topbar .row .btn-ghost,
+#screenPremiumApp .topbar .row .btn-danger,
+#screenManagerBoard .topbar .row button,
+#screenManagerBoard .topbar .row .btn-ghost,
+#screenManagerBoard .topbar .row .btn-danger{
+  min-height: 44px;
+  padding: 11px 14px !important;
+  border-radius: 16px !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02)),
+    rgba(255,255,255,0.02) !important;
+  color: rgba(245,247,248,0.92) !important;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.04),
+    0 10px 22px rgba(0,0,0,0.16);
+}
+
+#screenPremiumApp .topbar .row .btn-danger,
+#screenManagerBoard .topbar .row .btn-danger{
+  background:
+    linear-gradient(180deg, rgba(251,113,133,0.22), rgba(255,255,255,0.03)),
+    rgba(251,113,133,0.10) !important;
+  border-color: rgba(251,113,133,0.34) !important;
+}
+
+#screenPremiumApp .topbar .row button:hover,
+#screenPremiumApp .topbar .row .btn-ghost:hover,
+#screenPremiumApp .topbar .row .btn-danger:hover,
+#screenManagerBoard .topbar .row button:hover,
+#screenManagerBoard .topbar .row .btn-ghost:hover,
+#screenManagerBoard .topbar .row .btn-danger:hover{
+  transform: translateY(-1px);
+  border-color: rgba(125,211,252,0.24) !important;
+  background:
+    linear-gradient(180deg, rgba(125,211,252,0.18), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.04) !important;
+}
+
+#screenPremiumApp #btnOpenHud,
+#screenPremiumApp #btnOpenMessages,
+#screenPremiumApp #btnPremiumWineSetup,
+#screenPremiumApp #btnManagerBoard{
+  border-color: rgba(125,211,252,0.18) !important;
+}
+
+#screenPremiumApp #btnOpenMessages{
+  background:
+    linear-gradient(180deg, rgba(94,234,212,0.18), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.03) !important;
+}
+
+#screenPremiumApp #btnManagerBoard{
+  background:
+    linear-gradient(180deg, rgba(245,194,107,0.18), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.03) !important;
+}
+
+#screenPremiumApp #btnPremiumWineSetup{
+  background:
+    linear-gradient(180deg, rgba(245,194,107,0.18), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.03) !important;
+}
+
+#screenManagerBoard #mbMenu{
+  display: flex !important;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px !important;
+  margin-top: 2px;
+  padding: 12px !important;
+  border-radius: 24px !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
+  background:
+    radial-gradient(900px 240px at 0% 0%, rgba(125,211,252,0.10), transparent 58%),
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015)),
+    rgba(7,11,15,0.44) !important;
+  box-shadow:
+    0 20px 44px rgba(0,0,0,0.28),
+    inset 0 1px 0 rgba(255,255,255,0.04) !important;
+}
+
+#screenManagerBoard #mbMenu [data-mbtab]{
+  min-height: 42px;
+  padding: 10px 14px !important;
+  border-radius: 16px !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02)),
+    rgba(255,255,255,0.02) !important;
+  color: rgba(244,246,247,0.90) !important;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+#screenManagerBoard #mbMenu [data-mbtab].is-active,
+#screenManagerBoard #mbMenu [data-mbtab][aria-selected="true"]{
+  border-color: rgba(125,211,252,0.28) !important;
+  background:
+    linear-gradient(180deg, rgba(125,211,252,0.20), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.04) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.06),
+    0 10px 20px rgba(0,0,0,0.18);
+}
+
+#screenManagerBoard #mbRestaurantPicker{
+  margin-left: auto !important;
+  min-width: 240px !important;
+  min-height: 42px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(10,16,22,0.78);
+  color: rgba(244,246,247,0.92);
+}
+
+#waiterMessagesPanel{
+  background:
+    radial-gradient(760px 220px at 0% 0%, rgba(94,234,212,0.10), transparent 60%),
+    linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.015)),
+    rgba(9,13,18,0.94) !important;
+  border-radius: 24px !important;
+  padding: 14px !important;
+  box-shadow:
+    0 28px 70px rgba(0,0,0,0.48),
+    inset 0 1px 0 rgba(255,255,255,0.05) !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
+}
+
+#waiterMessagesPanel #btnCloseMessages{
+  min-height: 36px;
+  padding: 8px 12px !important;
+  border-radius: 14px !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
+  background: rgba(255,255,255,0.04) !important;
+  color: rgba(244,246,247,0.92) !important;
+}
+
+#waiterMessagesThread{
+  margin-top: 14px !important;
+  gap: 10px !important;
+}
+
+@media (max-width: 980px){
+  #screenPremiumApp .topbar,
+  #screenManagerBoard .topbar{
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  #screenPremiumApp .topbar .row,
+  #screenManagerBoard .topbar .row{
+    justify-content: flex-start;
+  }
+
+  #screenManagerBoard #mbRestaurantPicker{
+    margin-left: 0 !important;
+    width: 100%;
+  }
+}
+
+/* =========================================================
+   PREMIUM MENU PANEL
+   Keep this last so it beats inline-leaning legacy styling.
+   ========================================================= */
+
+#hudBackdrop{
+  backdrop-filter: blur(4px);
+}
+
+#hudPanel{
+  background:
+    radial-gradient(820px 260px at 0% 0%, rgba(125,211,252,0.12), transparent 58%),
+    radial-gradient(720px 220px at 100% 12%, rgba(94,234,212,0.10), transparent 60%),
+    linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.015)),
+    rgba(8,12,17,0.95) !important;
+  border-radius: 28px !important;
+  padding: 14px !important;
+  box-shadow:
+    0 30px 80px rgba(0,0,0,0.52),
+    inset 0 1px 0 rgba(255,255,255,0.05) !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
+}
+
+#hudPanel > div:first-child{
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  gap: 12px !important;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+#hudPanel > div:first-child b{
+  font-size: 15px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(236,246,255,0.92);
+}
+
+#btnCloseHud{
+  min-height: 38px;
+  padding: 8px 12px !important;
+  border-radius: 14px !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
+  background: rgba(255,255,255,0.04) !important;
+  color: rgba(244,246,247,0.92) !important;
+}
+
+#hudPanel > div[style*="font-size:13px"]{
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+  margin-top: 12px !important;
+  padding: 12px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015)),
+    rgba(255,255,255,0.02);
+}
+
+#hudJoinRow{
+  grid-column: 1 / -1;
+}
+
+#hudSkillsCard,
+#hudAbilitiesCard,
+#hudTimedChallengeCard,
+#hudDifficultyCard,
+#managerOnlyBlock{
+  margin-top: 12px !important;
+  padding-top: 12px !important;
+  border-top: 1px solid rgba(255,255,255,0.08) !important;
+}
+
+#hudSkillsCard > div:first-child,
+#hudAbilitiesCard > div:first-child > div:first-child,
+#hudTimedChallengeCard > div:first-child > div:first-child,
+#hudDifficultyCard > div:first-child,
+#managerOnlyBlock h3{
+  color: rgba(240,248,255,0.94);
+}
+
+#hudPanel h3{
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(234,244,255,0.88);
+}
+
+#hudSkillSummary,
+#hudAbilitiesStatus,
+#hudTimedChallengeStatus,
+#hudDifficultyStatus,
+#hudSendProgressStatus,
+#hudRestaurantPickerMsg,
+#hudMsg{
+  color: rgba(244,246,247,0.76) !important;
+}
+
+#hudSkillsCard > div[style*="grid-template-columns: 1fr 1fr"]{
+  padding: 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background:
+    linear-gradient(180deg, rgba(125,211,252,0.10), rgba(255,255,255,0.02)),
+    rgba(255,255,255,0.02);
+}
+
+#hudSkillsCard .small-text,
+#hudAbilitiesCard .small-text,
+#hudTimedChallengeCard .small-text,
+#hudDifficultyCard .small-text,
+#managerOnlyBlock .small-text{
+  line-height: 1.5;
+}
+
+#hudSkillRadar{
+  margin: 6px auto 0 !important;
+  padding: 8px;
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015)),
+    rgba(3,8,12,0.34);
+}
+
+#hudTimelineList,
+#hudActiveEffectsList,
+#hudTimedChallengeBody{
+  padding: 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015)),
+    rgba(255,255,255,0.02);
+}
+
+#hudTimelineTitle{
+  letter-spacing: 0.02em;
+  color: rgba(239,247,255,0.94);
+}
+
+#hudAbilitySlots > div,
+#premiumActiveRestaurantCard,
+#managerOnlyBlock .card{
+  border-radius: 18px !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015)),
+    rgba(255,255,255,0.02) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.04),
+    0 14px 30px rgba(0,0,0,0.14);
+}
+
+#hudAbilitySlots > div{
+  padding: 12px !important;
+}
+
+#hudAbilitiesCard > div[style*="display:flex; gap:8px; margin-bottom:10px;"]{
+  padding: 6px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015)),
+    rgba(255,255,255,0.02);
+}
+
+#hudAbilitiesCard button,
+#hudDifficultyCard button,
+#btnHudSendProgress,
+#btnCopyHudCode,
+#managerOnlyBlock button{
+  min-height: 42px;
+  padding: 10px 13px !important;
+  border-radius: 15px !important;
+}
+
+#btnHudAbilitiesAttribute,
+#btnDifficultyMedium,
+#btnSaveRequireInvite,
+#btnAddInvite{
+  border-color: rgba(125,211,252,0.20) !important;
+  background:
+    linear-gradient(180deg, rgba(125,211,252,0.18), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.03) !important;
+}
+
+#btnHudAbilitiesArea,
+#btnDifficultyHard,
+#mbRedeemGroupSetup,
+#mbRedeemEnterprise{
+  border-color: rgba(94,234,212,0.20) !important;
+  background:
+    linear-gradient(180deg, rgba(94,234,212,0.18), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.03) !important;
+}
+
+#btnDifficultyEasy,
+#btnSetActiveRestaurant,
+#btnCopyHudCode{
+  border-color: rgba(245,194,107,0.20) !important;
+  background:
+    linear-gradient(180deg, rgba(245,194,107,0.18), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.03) !important;
+}
+
+#hudDifficultyCard > div[style*="display:flex; gap:8px; flex-wrap:wrap;"]{
+  padding: 6px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015)),
+    rgba(255,255,255,0.02);
+}
+
+#btnHudSendProgress,
+#btnSaveRequireInvite,
+#btnSaveSeatLimit,
+#btnAddInvite{
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+#hudPanel input,
+#hudPanel select,
+#hudPanel textarea{
+  border-radius: 14px !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
+  background: rgba(8,13,18,0.86) !important;
+  color: rgba(244,246,247,0.94) !important;
+}
+
+#managerOnlyBlock > div[style*="display:flex; gap:8px; align-items:center; flex-wrap:wrap;"],
+#managerOnlyBlock .card > div[style*="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;"],
+#premiumActiveRestaurantCard > div[style*="display:flex; gap:8px; margin-top:10px; align-items:center;"],
+#managerOnlyBlock > div[style*="display:flex; gap:8px; margin-top:10px; align-items:center; flex-wrap:wrap;"]{
+  padding: 10px 0;
+}
+
+#hudCopyRow{
+  padding-top: 10px;
+}
+
+#hudPanel hr{
+  border: 0;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.12), transparent);
+  opacity: 1 !important;
+}
+
+@media (max-width: 760px){
+  #hudPanel > div[style*="font-size:13px"]{
+    grid-template-columns: 1fr;
+  }
+}
+
+/* =========================================================
+   PROFILE WINDOW
+   Same overlay language as the premium menu.
+   ========================================================= */
+
+#screenProfile,
+#screenWaiterLeaderboard{
+  position: fixed;
+  inset: 0;
+  z-index: 2147482998;
+  padding: 18px;
+  overflow-y: auto;
+}
+
+#screenProfile{
+  background: transparent;
+  backdrop-filter: none;
+}
+
+#screenWaiterLeaderboard{
+  background: rgba(0,0,0,0.42);
+  backdrop-filter: blur(4px);
+}
+
+#screenProfile.hidden,
+#screenWaiterLeaderboard.hidden{
+  display: none !important;
+}
+
+#screenProfile > .panel.stack,
+#screenWaiterLeaderboard > .panel.stack{
+  width: min(980px, calc(100vw - 24px));
+  margin: 0 12px 0 auto;
+  padding: 14px !important;
+  border-radius: 28px !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
+  background:
+    radial-gradient(760px 240px at 0% 0%, rgba(125,211,252,0.12), transparent 58%),
+    radial-gradient(680px 220px at 100% 12%, rgba(94,234,212,0.10), transparent 60%),
+    linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.015)),
+    rgba(8,12,17,0.95) !important;
+  box-shadow:
+    0 30px 80px rgba(0,0,0,0.52),
+    inset 0 1px 0 rgba(255,255,255,0.05) !important;
+}
+
+#screenProfile .topbar,
+#screenWaiterLeaderboard .topbar{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 0 12px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border-bottom: 1px solid rgba(255,255,255,0.08) !important;
+}
+
+#screenProfile .topbar .brand,
+#screenWaiterLeaderboard .topbar .brand{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#screenProfile .topbar .brand h2,
+#screenWaiterLeaderboard .topbar .brand h2{
+  margin: 0;
+  font-size: 16px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(236,246,255,0.92);
+}
+
+#screenProfile .topbar .badge,
+#screenWaiterLeaderboard .topbar .badge{
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(125,211,252,0.18);
+  background:
+    linear-gradient(180deg, rgba(125,211,252,0.16), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.03);
+  color: rgba(234,246,255,0.86);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+#screenProfile .topbar .row,
+#screenWaiterLeaderboard .topbar .row{
+  display: flex;
+  gap: 10px;
+}
+
+#screenProfile .topbar .row button,
+#screenWaiterLeaderboard .topbar .row button{
+  min-height: 38px;
+  padding: 8px 12px !important;
+  border-radius: 14px !important;
+}
+
+#screenProfile .card,
+#screenWaiterLeaderboard .card{
+  margin-top: 14px;
+  padding: 14px !important;
+  border-radius: 22px !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015)),
+    rgba(255,255,255,0.02) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.04),
+    0 18px 36px rgba(0,0,0,0.18);
+}
+
+#screenProfile .card .score-row{
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 12px;
+  align-items: baseline;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+#screenProfile .card .score-row:last-child{
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+#screenProfile .card .score-row:first-child{
+  padding-top: 0;
+}
+
+#screenProfile .card .score-row span{
+  color: rgba(244,246,247,0.92);
+  word-break: break-word;
+}
+
+#screenWaiterLeaderboard .small-text,
+#screenWaiterLeaderboard .small{
+  color: rgba(244,246,247,0.74);
+  line-height: 1.5;
+}
+
+#screenWaiterLeaderboard .mb-section-header{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+
+#screenWaiterLeaderboard .mb-section-header strong{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  font-size:15px;
+  line-height:1.1;
+  color:rgba(248,244,255,0.96);
+}
+
+#screenWaiterLeaderboard .waiter-leaderboard-role-pill{
+  display:inline-flex;
+  align-items:center;
+  width:max-content;
+  padding:3px 8px;
+  border-radius:999px;
+  border:1px solid rgba(125,211,252,0.18);
+  background:
+    linear-gradient(180deg, rgba(125,211,252,0.14), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.03);
+  color:rgba(234,246,255,0.86);
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:0.08em;
+  text-transform:uppercase;
+}
+
+#screenWaiterLeaderboard .waiter-leaderboard-member{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  cursor:default;
+}
+
+#screenWaiterLeaderboard .waiter-user-expand-btn{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:0;
+  border:0;
+  background:transparent;
+  color:inherit;
+  font:inherit;
+  cursor:pointer;
+}
+
+#screenWaiterLeaderboard .waiter-leaderboard-avatar{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:26px;
+  height:26px;
+  border-radius:999px;
+  background:rgba(255,255,255,0.08);
+  font-size:11px;
+  letter-spacing:0.05em;
+}
+
+#screenWaiterLeaderboard .waiter-chevron{
+  display:inline-block;
+  transition:transform 220ms ease;
+}
+
+#screenWaiterLeaderboard .waiter-user-expand-btn.is-open .waiter-chevron{
+  transform:rotate(90deg);
+}
+
+#screenWaiterLeaderboard .waiter-user-detail-row.hidden{
+  display:none;
+}
+
+#screenWaiterLeaderboard .waiter-user-detail-panel{
+  display:grid;
+  grid-template-columns:240px 1fr;
+  gap:16px;
+  padding:14px 0 6px;
+  opacity:0;
+  transform:scale(0.96);
+  animation:mbDetailFadeIn 180ms ease forwards;
+}
+
+#screenWaiterLeaderboard .waiter-user-detail-chart-card{
+  padding:12px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:
+    radial-gradient(circle at top, rgba(96,165,250,0.10), transparent 60%),
+    rgba(255,255,255,0.03);
+}
+
+#screenWaiterLeaderboard .waiter-user-metric-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(120px, 1fr));
+  gap:10px;
+}
+
+#screenWaiterLeaderboard .waiter-user-badge-row{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+
+#screenWaiterLeaderboard .mb-badge,
+#screenWaiterLeaderboard .mb-user-metric-card{
+  padding:12px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:
+    linear-gradient(180deg, rgba(196,181,253,0.10), rgba(255,255,255,0.02)),
+    rgba(255,255,255,0.03);
+}
+
+#profileMultiRestaurantCard{
+  margin-top: 14px !important;
+}
+
+#profileMultiRestaurantCard .card{
+  margin-top: 0;
+}
+
+#profileMultiRestaurantCard .card > div:first-child{
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(236,246,255,0.88);
+  margin-bottom: 10px !important;
+}
+
+#profileMultiRestaurantCard .small{
+  padding: 9px 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.06);
+  background: rgba(255,255,255,0.02);
+  color: rgba(244,246,247,0.84);
+}
+
+#profileMultiRestaurantCard .small + .small{
+  margin-top: 8px;
+}
+
+@media (max-width: 760px){
+  #screenProfile,
+  #screenWaiterLeaderboard{
+    padding: 12px;
+  }
+
+  #screenProfile > .panel.stack,
+  #screenWaiterLeaderboard > .panel.stack{
+    width: min(100vw - 16px, 980px);
+    margin: 0 auto;
+  }
+
+  #screenProfile .card .score-row{
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}
+
+@media (max-width: 980px){
+  #app{
+    padding: 16px;
+    gap: 14px;
+  }
+
+  .app-chrome{
+    grid-template-columns: 1fr;
+    align-items: start;
+    padding: 16px;
+  }
+
+  .app-chrome-context{
+    justify-content: flex-start;
+  }
+}
+
+/* =========================================================
+   MANAGER BOARD CONTENTS
+   Content styling for overview, people, messenger, live controls,
+   performance, billing, and enterprise tabs.
+   ========================================================= */
+
+#screenManagerBoard #mbPanels{
+  display: grid;
+  gap: 14px;
+}
+
+#screenManagerBoard .mbTab{
+  display: grid;
+  gap: 14px;
+}
+
+#screenManagerBoard .mbTab.hidden{
+  display: none !important;
+}
+
+#screenManagerBoard .mbTab > .card,
+#screenManagerBoard [id^="mbTab_"] .card,
+#screenManagerBoard [id^="mbOverview"],
+#screenManagerBoard [id^="mbGroup"],
+#screenManagerBoard #mbPeopleSummary,
+#screenManagerBoard #mbRestaurantContextCard,
+#screenManagerBoard #mbInviteSummary,
+#screenManagerBoard #mbDrillSummary,
+#screenManagerBoard #mbOverviewLiveEffects,
+#screenManagerBoard #mbOverviewAbilityEconomy,
+#screenManagerBoard #mbAttributeAbilitiesPanel,
+#screenManagerBoard #mbAreaAbilitiesPanel,
+#screenManagerBoard #mbDrillQuickActionsPanel,
+#screenManagerBoard #mbTimedChallengeQuickActionsPanel,
+#screenManagerBoard #mbInsightsPanel,
+#screenManagerBoard #mbEnterprisePanel{
+  border-radius: 24px;
+}
+
+#screenManagerBoard .card,
+#screenManagerBoard [id^="mbOverview"],
+#screenManagerBoard [id^="mbGroup"],
+#screenManagerBoard #mbPeopleSummary,
+#screenManagerBoard #mbRestaurantContextCard,
+#screenManagerBoard #mbInviteSummary,
+#screenManagerBoard #mbDrillSummary,
+#screenManagerBoard #mbOverviewLiveEffects,
+#screenManagerBoard #mbOverviewAbilityEconomy,
+#screenManagerBoard #mbAttributeAbilitiesPanel,
+#screenManagerBoard #mbAreaAbilitiesPanel,
+#screenManagerBoard #mbDrillQuickActionsPanel,
+#screenManagerBoard #mbTimedChallengeQuickActionsPanel,
+#screenManagerBoard #mbInsightsPanel,
+#screenManagerBoard #mbEnterprisePanel{
+  border: 1px solid rgba(255,255,255,0.10) !important;
+  background:
+    radial-gradient(900px 240px at 0% 0%, rgba(125,211,252,0.08), transparent 58%),
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015)),
+    rgba(9,13,18,0.56) !important;
+  box-shadow:
+    0 20px 42px rgba(0,0,0,0.20),
+    inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+#screenManagerBoard .card strong,
+#screenManagerBoard .card h3,
+#screenManagerBoard [id^="mbTab_"] > div > div[style*="font-weight:600"],
+#screenManagerBoard [id^="mbTab_"] > div strong{
+  color: rgba(242,247,250,0.95);
+}
+
+#screenManagerBoard .score-row{
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 12px;
+  align-items: baseline;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+#screenManagerBoard .score-row:last-child{
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+#screenManagerBoard .score-row:first-child{
+  padding-top: 0;
+}
+
+#screenManagerBoard .score-row span{
+  color: rgba(244,246,247,0.92);
+}
+
+#screenManagerBoard #mbTab_people #mbInvitesPanel > .card,
+#screenManagerBoard #mbTab_people #mbMembersCard,
+#screenManagerBoard #mbBillingAccess,
+#screenManagerBoard #mbTab_enterprise .card{
+  padding: 14px !important;
+}
+
+#screenManagerBoard #mbTab_messenger > .card{
+  padding: 16px !important;
+}
+
+#screenManagerBoard #mbTimedChallengeComposer{
+  border-radius: 20px !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  background:
+    linear-gradient(180deg, rgba(94,234,212,0.08), rgba(255,255,255,0.02)),
+    rgba(255,255,255,0.02) !important;
+}
+
+#screenManagerBoard #mbThreadList,
+#screenManagerBoard #mbThreadMessages,
+#screenManagerBoard #mbSuggestedPrompts,
+#screenManagerBoard #mbMembersList,
+#screenManagerBoard #invitesList,
+#screenManagerBoard #mbLeaderboard,
+#screenManagerBoard #mbWeeklyReport,
+#screenManagerBoard #mbBestStreaks,
+#screenManagerBoard #mbNeedsCoaching,
+#screenManagerBoard #mbRecent,
+#screenManagerBoard #mbWeeklySummaryTop{
+  border-radius: 18px;
+}
+
+#screenManagerBoard #mbThreadList,
+#screenManagerBoard #mbThreadMessages,
+#screenManagerBoard #mbMembersList,
+#screenManagerBoard #invitesList,
+#screenManagerBoard #mbLeaderboard,
+#screenManagerBoard #mbWeeklyReport,
+#screenManagerBoard #mbBestStreaks,
+#screenManagerBoard #mbNeedsCoaching,
+#screenManagerBoard #mbRecent,
+#screenManagerBoard #mbWeeklySummaryTop{
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015)),
+    rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.08);
+  padding: 12px;
+}
+
+#screenManagerBoard #mbTab_messenger > .card > div[style*="grid-template-columns: 280px 1fr"]{
+  align-items: stretch;
+}
+
+#screenManagerBoard #mbTab_messenger > .card > div[style*="grid-template-columns: 280px 1fr"] > div{
+  border-radius: 22px !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015)),
+    rgba(255,255,255,0.02) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+#screenManagerBoard #mbThreadStatePanel,
+#screenManagerBoard #mbThreadRecommendationsPanel{
+  border-radius: 18px !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  background:
+    linear-gradient(180deg, rgba(125,211,252,0.08), rgba(255,255,255,0.02)),
+    rgba(255,255,255,0.02) !important;
+}
+
+#screenManagerBoard #mbHistoryChart{
+  width: 100%;
+  max-width: 100%;
+  padding: 10px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015)),
+    rgba(4,9,13,0.40);
+}
+
+#screenManagerBoard .small-text,
+#screenManagerBoard .small{
+  color: rgba(244,246,247,0.74);
+  line-height: 1.5;
+}
+
+#screenManagerBoard select,
+#screenManagerBoard input,
+#screenManagerBoard textarea{
+  border-radius: 14px !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
+  background: rgba(7,12,16,0.82) !important;
+  color: rgba(244,246,247,0.94) !important;
+}
+
+#screenManagerBoard textarea{
+  padding: 12px !important;
+}
+
+#screenManagerBoard button{
+  border-radius: 15px !important;
+}
+
+#screenManagerBoard #mbMsgRefresh,
+#screenManagerBoard #mbRefreshMembers,
+#screenManagerBoard #mbRefreshSeats{
+  border-color: rgba(125,211,252,0.18) !important;
+}
+
+#screenManagerBoard #btnSendTimedChallenge,
+#screenManagerBoard #mbInstrSend,
+#screenManagerBoard #mbRedeemEnterprise,
+#screenManagerBoard #mbRedeemGroupSetup{
+  border-color: rgba(94,234,212,0.18) !important;
+  background:
+    linear-gradient(180deg, rgba(94,234,212,0.18), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.03) !important;
+}
+
+#screenManagerBoard #mbSeat15,
+#screenManagerBoard #mbSeat30,
+#screenManagerBoard #mbSeat60{
+  border-color: rgba(245,194,107,0.18) !important;
+}
+
+#hudPanel .premium-contact-copy{
+  color: rgba(244,246,247,0.78);
+  line-height: 1.55;
+}
+
+#hudPanel .premium-contact-copy a,
+#screenManagerBoard .premium-contact-copy a{
+  color: rgba(248,243,233,0.96) !important;
+}
+
+#hudPanel #managerSetupSection.hidden{
+  display: none !important;
+}
+
+@media (max-width: 980px){
+  #screenManagerBoard .score-row{
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  #screenWaiterLeaderboard .waiter-user-detail-panel{
+    grid-template-columns: 1fr;
+  }
+
+  #screenManagerBoard #mbTab_messenger > .card > div[style*="grid-template-columns: 280px 1fr"]{
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Tab-specific identities */
+#screenManagerBoard #mbTab_overview > .card,
+#screenManagerBoard #mbTab_overview > div[id^="mb"]{
+  background:
+    radial-gradient(900px 260px at 0% 0%, rgba(125,211,252,0.12), transparent 58%),
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015)),
+    rgba(9,13,18,0.58) !important;
+}
+
+#screenManagerBoard #mbTab_people #mbPeopleSummary,
+#screenManagerBoard #mbTab_people #mbInvitesPanel > .card,
+#screenManagerBoard #mbTab_people #mbMembersCard{
+  background:
+    radial-gradient(900px 260px at 0% 0%, rgba(94,234,212,0.10), transparent 58%),
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015)),
+    rgba(9,13,18,0.58) !important;
+}
+
+#screenManagerBoard #mbTab_messenger > .card{
+  background:
+    radial-gradient(900px 280px at 0% 0%, rgba(245,194,107,0.10), transparent 58%),
+    radial-gradient(760px 240px at 100% 0%, rgba(125,211,252,0.08), transparent 62%),
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015)),
+    rgba(9,13,18,0.60) !important;
+}
+
+#screenManagerBoard #mbTab_live_controls > div{
+  background:
+    radial-gradient(920px 260px at 0% 0%, rgba(251,113,133,0.10), transparent 58%),
+    radial-gradient(780px 220px at 100% 8%, rgba(245,194,107,0.08), transparent 60%),
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015)),
+    rgba(9,13,18,0.60) !important;
+}
+
+#screenManagerBoard #mbTab_performance > .card,
+#screenManagerBoard #mbTab_performance > div{
+  background:
+    radial-gradient(920px 260px at 0% 0%, rgba(196,181,253,0.12), transparent 58%),
+    radial-gradient(780px 220px at 100% 10%, rgba(125,211,252,0.08), transparent 60%),
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015)),
+    rgba(9,13,18,0.60) !important;
+}
+
+#screenManagerBoard #mbTab_billing > .card,
+#screenManagerBoard #mbBillingAccess{
+  background:
+    radial-gradient(920px 260px at 0% 0%, rgba(245,194,107,0.12), transparent 58%),
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015)),
+    rgba(9,13,18,0.60) !important;
+}
+
+#screenManagerBoard #mbTab_enterprise .card,
+#screenManagerBoard #mbEnterprisePanel{
+  background:
+    radial-gradient(920px 260px at 0% 0%, rgba(244,114,182,0.10), transparent 58%),
+    radial-gradient(780px 220px at 100% 10%, rgba(94,234,212,0.08), transparent 60%),
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015)),
+    rgba(9,13,18,0.60) !important;
+}
+
+#screenManagerBoard #mbTab_overview{
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+#screenManagerBoard #mbTab_overview > .card:first-child,
+#screenManagerBoard #mbTab_overview > #mbRestaurantContextCard,
+#screenManagerBoard #mbTab_overview > #mbGroupRestaurantComparisonCard{
+  grid-column: 1 / -1;
+}
+
+#screenManagerBoard #mbTab_overview > div[id^="mb"]::before,
+#screenManagerBoard #mbTab_people > div[id^="mb"]::before,
+#screenManagerBoard #mbTab_live_controls > div[id^="mb"]::before,
+#screenManagerBoard #mbTab_performance > div[id^="mb"]::before,
+#screenManagerBoard #mbTab_enterprise > div[id^="mb"]::before{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  margin-bottom: 12px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02)),
+    rgba(255,255,255,0.02);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.04),
+    0 10px 22px rgba(0,0,0,0.12);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(244,246,247,0.72);
+}
+
+#screenManagerBoard #mbTab_overview > div[id^="mb"]::before{
+  border-color: rgba(125,211,252,0.18);
+  background:
+    linear-gradient(180deg, rgba(125,211,252,0.18), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.02);
+  color: rgba(232,245,255,0.84);
+}
+
+#screenManagerBoard #mbTab_people > div[id^="mb"]::before{
+  border-color: rgba(94,234,212,0.18);
+  background:
+    linear-gradient(180deg, rgba(94,234,212,0.18), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.02);
+  color: rgba(233,255,250,0.84);
+}
+
+#screenManagerBoard #mbTab_live_controls > div[id^="mb"]::before{
+  border-color: rgba(251,113,133,0.18);
+  background:
+    linear-gradient(180deg, rgba(251,113,133,0.18), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.02);
+  color: rgba(255,237,241,0.84);
+}
+
+#screenManagerBoard #mbTab_performance > div[id^="mb"]::before{
+  border-color: rgba(196,181,253,0.18);
+  background:
+    linear-gradient(180deg, rgba(196,181,253,0.18), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.02);
+  color: rgba(243,239,255,0.84);
+}
+
+#screenManagerBoard #mbTab_enterprise > div[id^="mb"]::before{
+  border-color: rgba(244,114,182,0.18);
+  background:
+    linear-gradient(180deg, rgba(244,114,182,0.18), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.02);
+  color: rgba(255,237,247,0.84);
+}
+
+#screenManagerBoard #mbRestaurantContextCard::before{ content: "Restaurant Context"; }
+#screenManagerBoard #mbGroupOverviewCard::before{ content: "Group Overview"; }
+#screenManagerBoard #mbGroupMetricsCard::before{ content: "Metrics"; }
+#screenManagerBoard #mbGroupRestaurantComparisonCard::before{ content: "Restaurant Comparison"; }
+#screenManagerBoard #mbOverviewTimedChallenge::before{ content: "Timed Challenge"; }
+#screenManagerBoard #mbOverviewRecentChallenges::before{ content: "Recent Challenges"; }
+#screenManagerBoard #mbInviteSummary::before{ content: "Invites"; }
+#screenManagerBoard #mbDrillSummary::before{ content: "Drill Summary"; }
+#screenManagerBoard #mbPeopleSummary::before{ content: "Roster Snapshot"; }
+#screenManagerBoard #mbOverviewLiveEffects::before{ content: "Live Effects"; }
+#screenManagerBoard #mbOverviewAbilityEconomy::before{ content: "Ability Economy"; }
+#screenManagerBoard #mbAttributeAbilitiesPanel::before{ content: "Attribute Controls"; }
+#screenManagerBoard #mbAreaAbilitiesPanel::before{ content: "Area Controls"; }
+#screenManagerBoard #mbDrillQuickActionsPanel::before{ content: "Drill Actions"; }
+#screenManagerBoard #mbTimedChallengeQuickActionsPanel::before{ content: "Challenge Actions"; }
+#screenManagerBoard #mbInsightsPanel::before{ content: "Insights"; }
+#screenManagerBoard #mbEnterprisePanel::before{ content: "Enterprise Control"; }
+
+#screenManagerBoard #mbRestaurantContextCard > .card > div:first-child[style*="font-weight:600"],
+#screenManagerBoard #mbGroupOverviewCard > .card > div:first-child[style*="font-weight:600"],
+#screenManagerBoard #mbGroupMetricsCard > .card > div:first-child[style*="font-weight:600"],
+#screenManagerBoard #mbGroupRestaurantComparisonCard > .card > div:first-child[style*="font-weight:600"],
+#screenManagerBoard #mbOverviewTimedChallenge > .card > div:first-child[style*="font-weight:600"],
+#screenManagerBoard #mbDrillSummary > .card > div:first-child[style*="font-weight:600"],
+#screenManagerBoard #mbAttributeAbilitiesPanel .card > div:first-child[style*="font-weight:600"],
+#screenManagerBoard #mbAreaAbilitiesPanel .card > div:first-child[style*="font-weight:600"],
+#screenManagerBoard #mbTimedChallengeQuickActionsPanel > .card > div:first-child[style*="font-weight:600"],
+#screenManagerBoard #mbInsightsPanel .card > div:first-child[style*="font-weight:700"],
+#screenManagerBoard #mbInsightsPanel > .card > div:first-child[style*="font-weight:700"],
+#screenManagerBoard #mbInsightsPanel > .card:first-child > div:first-child > div:first-child[style*="font-weight:700"],
+#screenManagerBoard #mbEnterprisePanel .card > div:first-child[style*="font-weight:600"]{
+  display: none !important;
+}
+
+#screenManagerBoard #mbTab_messenger #mbThreadList,
+#screenManagerBoard #mbTab_messenger #mbThreadMessages{
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015)),
+    rgba(10,14,19,0.62);
+}
+
+#screenManagerBoard #mbTab_messenger #mbThreadRecommendationsPanel{
+  background:
+    linear-gradient(180deg, rgba(245,194,107,0.10), rgba(255,255,255,0.02)),
+    rgba(255,255,255,0.02) !important;
+}
+
+#screenManagerBoard .mb-section-header{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+
+#screenManagerBoard .mb-section-header strong{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  font-size:15px;
+  line-height:1.1;
+  color:rgba(248,244,255,0.96);
+}
+
+#screenManagerBoard .mb-performance-card-grid,
+#screenManagerBoard .mb-selection-preview-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));
+  gap:12px;
+}
+
+#screenManagerBoard .mb-performance-card,
+#screenManagerBoard .mb-user-metric-card,
+#screenManagerBoard .mb-selection-preview-card,
+#screenManagerBoard .mb-coach-note{
+  padding:12px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:
+    linear-gradient(180deg, rgba(196,181,253,0.10), rgba(255,255,255,0.02)),
+    rgba(255,255,255,0.03);
+}
+
+#screenManagerBoard .mb-coach-note + .mb-coach-note{
+  margin-top:10px;
+}
+
+#screenManagerBoard .mb-performance-table-wrap,
+#screenWaiterLeaderboard .mb-performance-table-wrap{
+  overflow-x:auto;
+}
+
+#screenManagerBoard .mb-performance-table,
+#screenWaiterLeaderboard .mb-performance-table{
+  width:100%;
+  min-width:960px;
+  border-collapse:collapse;
+}
+
+#screenManagerBoard .mb-performance-table th,
+#screenManagerBoard .mb-performance-table td,
+#screenWaiterLeaderboard .mb-performance-table th,
+#screenWaiterLeaderboard .mb-performance-table td{
+  padding:10px 12px;
+  text-align:left;
+  border-bottom:1px solid rgba(255,255,255,0.08);
+  vertical-align:top;
+}
+
+#screenManagerBoard .mb-performance-table th,
+#screenWaiterLeaderboard .mb-performance-table th{
+  color:rgba(241,237,255,0.72);
+  font-size:12px;
+  text-transform:uppercase;
+  letter-spacing:0.04em;
+}
+
+#screenManagerBoard .mb-user-expand-btn{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:0;
+  border:0;
+  background:transparent;
+  color:inherit;
+  font:inherit;
+  cursor:pointer;
+}
+
+#screenManagerBoard .mb-user-avatar,
+#screenWaiterLeaderboard .mb-user-avatar{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:26px;
+  height:26px;
+  border-radius:999px;
+  background:rgba(255,255,255,0.08);
+  font-size:11px;
+  letter-spacing:0.05em;
+}
+
+#screenManagerBoard .mb-chevron{
+  display:inline-block;
+  transition:transform 220ms ease;
+}
+
+#screenManagerBoard .mb-user-expand-btn.is-open .mb-chevron{
+  transform:rotate(90deg);
+}
+
+#screenManagerBoard .mb-user-detail-row.hidden{
+  display:none;
+}
+
+#screenManagerBoard .mb-user-detail-panel{
+  display:grid;
+  grid-template-columns:240px 1fr;
+  gap:16px;
+  padding:14px 0 6px;
+  opacity:0;
+  transform:scale(0.96);
+  animation:mbDetailFadeIn 180ms ease forwards;
+}
+
+#screenManagerBoard .mb-user-detail-chart-card{
+  padding:12px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:
+    radial-gradient(circle at top, rgba(96,165,250,0.10), transparent 60%),
+    rgba(255,255,255,0.03);
+}
+
+#screenManagerBoard .mb-user-metric-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(120px, 1fr));
+  gap:10px;
+}
+
+#screenManagerBoard .mb-user-badge-row,
+#screenManagerBoard .mb-history-summary-strip{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+
+#screenManagerBoard .mb-badge{
+  display:inline-flex;
+  align-items:center;
+  padding:6px 10px;
+  border-radius:999px;
+  background:rgba(255,255,255,0.07);
+  border:1px solid rgba(255,255,255,0.08);
+  font-size:12px;
+}
+
+#screenManagerBoard .manager-encounter-summary-host{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+
+#screenManagerBoard .manager-encounter-summary-list{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+
+#screenManagerBoard .manager-encounter-summary-card{
+  padding:12px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+
+#screenManagerBoard .manager-encounter-user-btn{
+  width:100%;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:4px;
+  padding:0;
+  border:0;
+  background:transparent;
+  color:inherit;
+  font:inherit;
+  cursor:pointer;
+  text-align:left;
+}
+
+#screenManagerBoard .manager-encounter-user-title{
+  font-weight:600;
+}
+
+#screenManagerBoard .manager-encounter-user-meta{
+  font-size:12px;
+  opacity:.78;
+}
+
+#screenManagerBoard .manager-encounter-detail-window{
+  padding:14px;
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+
+#screenManagerBoard .manager-encounter-detail-header{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  flex-wrap:wrap;
+}
+
+#screenManagerBoard .manager-encounter-detail-title{
+  font-weight:600;
+  font-size:16px;
+}
+
+#screenManagerBoard .manager-encounter-detail-meta{
+  margin-top:4px;
+  font-size:12px;
+  opacity:.78;
+}
+
+#screenManagerBoard .manager-encounter-detail-list{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+
+#screenManagerBoard .manager-encounter-summary-item{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  padding:10px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,0.07);
+  background:rgba(255,255,255,0.03);
+}
+
+@keyframes mbDetailFadeIn{
+  from{
+    opacity:0;
+    transform:translateY(-4px) scale(0.96);
+  }
+  to{
+    opacity:1;
+    transform:translateY(0) scale(1);
+  }
+}
+
+#screenManagerBoard #mbTab_performance #mbPerformanceHistoryPanel > .card{
+  background:
+    linear-gradient(180deg, rgba(196,181,253,0.10), rgba(255,255,255,0.02)),
+    rgba(255,255,255,0.02) !important;
+}
+
+#screenManagerBoard #mbTab_performance > .card > strong,
+#screenManagerBoard #mbTab_performance .mb-disclosure-summary strong,
+#screenManagerBoard #mbTab_performance > div > div[style*="font-weight:600"]{
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  line-height: 1.1;
+  letter-spacing: 0.01em;
+  color: rgba(248,244,255,0.96);
+}
+
+#screenManagerBoard #mbTab_performance > .card > strong::before,
+#screenManagerBoard #mbTab_performance .mb-disclosure-summary strong::before,
+#screenManagerBoard #mbTab_performance > div > div[style*="font-weight:600"]::before{
+  content: "";
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 35% 35%, rgba(255,255,255,0.9), rgba(196,181,253,0.7) 28%, rgba(125,211,252,0.35) 58%, transparent 72%);
+  box-shadow:
+    0 0 0 5px rgba(196,181,253,0.08),
+    0 0 24px rgba(196,181,253,0.16);
+}
+
+#screenManagerBoard #mbTab_performance > .card > .small-text,
+#screenManagerBoard #mbTab_performance .mb-disclosure-summary .small-text{
+  margin-top: 8px !important;
+  color: rgba(241,237,255,0.72) !important;
+}
+
+#screenManagerBoard #mbTab_performance .mb-disclosure-summary{
+  align-items: flex-start;
+}
+
+#screenManagerBoard #mbPerformanceHistoryPanel .mb-disclosure{
+  overflow: hidden;
+}
+
+#screenManagerBoard #mbPerformanceHistoryPanel .mb-disclosure-summary{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  list-style: none;
+  cursor: pointer;
+}
+
+#screenManagerBoard #mbPerformanceHistoryPanel .mb-disclosure-summary::-webkit-details-marker{
+  display: none;
+}
+
+#screenManagerBoard #mbPerformanceHistoryPanel .mb-disclosure-summary::after{
+  content: "▾";
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid rgba(196,181,253,0.18);
+  background:
+    linear-gradient(180deg, rgba(196,181,253,0.16), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.02);
+  color: rgba(243,239,255,0.86);
+  font-size: 14px;
+  transition: transform 140ms ease;
+}
+
+#screenManagerBoard #mbPerformanceHistoryPanel .mb-disclosure:not([open]) .mb-disclosure-summary::after{
+  transform: rotate(-90deg);
+}
+
+#screenManagerBoard #mbPerformanceHistoryPanel .mb-disclosure-body{
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+#screenManagerBoard #mbTab_performance #mbWeeklySummaryTop,
+#screenManagerBoard #mbTab_performance #mbBestStreaks,
+#screenManagerBoard #mbTab_performance #mbNeedsCoaching,
+#screenManagerBoard #mbTab_performance #mbRecent,
+#screenManagerBoard #mbTab_performance #mbWeeklyReport{
+  background:
+    linear-gradient(180deg, rgba(196,181,253,0.08), rgba(255,255,255,0.02)),
+    rgba(255,255,255,0.02);
+}
+
+#screenManagerBoard #mbInsightsViewSelect,
+#screenManagerBoard #mbInsightsUserSelect{
+  border-color: rgba(196,181,253,0.18) !important;
+  background:
+    linear-gradient(180deg, rgba(196,181,253,0.14), rgba(255,255,255,0.03)),
+    rgba(8,12,17,0.82) !important;
+}
+
+#screenManagerBoard #mbInsightsGuestTable.hidden,
+#screenManagerBoard #mbInsightsTrendTable.hidden{
+  display: none !important;
+}
+
+@media (max-width: 880px){
+  #screenManagerBoard .mb-user-detail-panel{
+    grid-template-columns:1fr;
+  }
+}
+
+#screenManagerBoard #mbTab_billing #mbSeatStatus{
+  border-color: rgba(245,194,107,0.24);
+  background:
+    linear-gradient(180deg, rgba(245,194,107,0.18), rgba(255,255,255,0.03)),
+    rgba(255,255,255,0.03);
+  color: rgba(255,247,232,0.92);
+}
+
+#screenManagerBoard #mbTab_enterprise .card{
+  position: relative;
+  overflow: hidden;
+}
+
+#screenManagerBoard #mbTab_enterprise .card::after{
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.05), transparent 40%),
+    radial-gradient(55% 90% at 100% 100%, rgba(244,114,182,0.08), transparent 70%);
+}
+
+@media (max-width: 980px){
+  #screenManagerBoard #mbTab_overview{
+    grid-template-columns: 1fr;
+  }
+}
+
+/* premiumRoot should NOT look like a card/box */
+#premiumRoot{
+  margin-top: 14px;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+/* iframe itself is the framed stage */
+#premiumRootFrame{
+  width: 100%;
+  height: 78vh;
+  border: 0;
+  display: block;
+  border-radius: 28px;
+  box-shadow: 0 32px 110px rgba(0,0,0,0.80);
+  background: rgba(0,0,0,0.20);
+}
+
+/* ================================
+   PREMIUM PARENT: no prototype box, tight spacing, square corners
+   ================================ */
+
+/* Make the premium screen tighter */
+#screenPremiumApp{
+  width: min(1480px, 100%);
+  margin: 0 auto;
+  padding: 10px 12px 18px;
+}
+
+/* Reduce the stack spacing (your .stack class adds big gaps) */
+#screenPremiumApp .panel.stack{
+  gap: 8px !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Topbar: keep HUD feel but square corners and less padding */
+#screenPremiumApp .topbar{
+  padding: 10px 12px !important;
+  border-radius: 0 !important;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(0,0,0,0.22);
+  box-shadow: 0 14px 40px rgba(0,0,0,0.55);
+}
+
+/* Progression card: square corners, less space */
+#bcProgressionCard.bc-prog-card{
+  margin-top: 0 !important;
+  padding: 10px 12px !important;
+  border-radius: 0 !important;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.03);
+  box-shadow: 0 18px 55px rgba(0,0,0,0.55);
+}
+
+/* The mount div is NOT a wrapper card (no box) */
+#premiumRoot{
+  margin-top: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Iframe: square corners, no extra border-radius */
+#premiumRootFrame{
+  width: 100% !important;
+  height: 78vh !important;
+  border: 0 !important;
+  border-radius: 0 !important;  /* <-- square */
+  display: block !important;
+  box-shadow: 0 26px 80px rgba(0,0,0,0.70);
+  background: rgba(0,0,0,0.18);
+}
