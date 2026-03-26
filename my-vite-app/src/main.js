@@ -1591,23 +1591,29 @@ function wireParentButtons() {
   if (btnSetup && !btnSetup.__bcBound) {
     btnSetup.__bcBound = true;
     btnSetup.addEventListener("click", () => {
-      showScreen("screenPremiumApp");
-      postToGame("nav", { target: "setup_premium" });
+      openPremiumSetupScreen();
     });
   }
 
   if (btnManagerBoard && !btnManagerBoard.__bcBound) {
     btnManagerBoard.__bcBound = true;
-    btnManagerBoard.addEventListener("click", () => {
-      postToGame("nav", { target: "manager_board" });
+    btnManagerBoard.addEventListener("click", async () => {
+      await routeManagerBoard("premium.toolbar");
     });
   }
 
   if (btnFiveMinRep && !btnFiveMinRep.__bcBound) {
     btnFiveMinRep.__bcBound = true;
     btnFiveMinRep.addEventListener("click", () => {
-      const tier = 0;
-      postToGame("start_drill", { repTarget: 3, focus: null, starter: "manager", tier });
+      const stage = document.getElementById("premiumInlineStage");
+      if (!stage) return;
+      stage.innerHTML = `
+        <strong>5-Min Rep</strong>
+        <div class="small" style="margin-top:8px;">
+          This is now using the parent-owned premium workspace. The next step is to rebuild the interactive
+          rep flow directly in this app instead of depending on the missing game iframe.
+        </div>
+      `;
     });
   }
 
@@ -1767,40 +1773,112 @@ function getGameFrameHeight(mode) {
   return mode === "premium" ? "calc(100dvh - 132px)" : "calc(100dvh - 124px)";
 }
 
+function renderDemoSurface(targetId) {
+  const mount = document.getElementById(targetId);
+  if (!mount) return;
+
+  mount.innerHTML = `
+    <div class="card stack">
+      <div>
+        <div class="home-section-label">DEMO SURFACE</div>
+        <h3 style="margin:8px 0 0;">Service Rehearsal Lobby</h3>
+      </div>
+      <p class="small">
+        Demo mode is now parent-owned in this build. Use join-by-code below to attach a waiter profile to a restaurant,
+        or switch to Premium if you have manager or licensed access.
+      </p>
+      <div class="row">
+        <button id="btnDemoSurfacePremium" class="btn-primary" type="button">Go Premium</button>
+      </div>
+    </div>
+  `;
+
+  const premiumBtn = document.getElementById("btnDemoSurfacePremium");
+  if (premiumBtn && !premiumBtn.__bcBound) {
+    premiumBtn.__bcBound = true;
+    premiumBtn.addEventListener("click", async () => {
+      setAuthIntent("premium");
+      await routePremium("demo.surface.premium");
+    });
+  }
+}
+
+function renderPremiumSurface(targetId) {
+  const mount = document.getElementById(targetId);
+  if (!mount) return;
+
+  const role = String(appState.profile?.role || "-").toUpperCase();
+  const restName = appState.restaurant?.name || "No active restaurant";
+  const scopeType = String(appState.profile?.scope_type || "direct").toUpperCase();
+
+  mount.innerHTML = `
+    <div class="card stack">
+      <div class="row" style="justify-content:space-between; align-items:flex-start;">
+        <div>
+          <div class="home-section-label">PREMIUM SURFACE</div>
+          <h3 style="margin:8px 0 4px;">${restName}</h3>
+          <div class="small">Role: ${role} • Scope: ${scopeType}</div>
+        </div>
+        <span class="badge">LIVE PROFILE</span>
+      </div>
+
+      <p class="small">
+        The missing iframe game has been replaced with a parent-owned premium workspace so routing, profile UI,
+        setup, and manager tools stay inside the deployed app.
+      </p>
+
+      <div class="row">
+        <button id="btnPremiumSurfaceSetup" class="btn-ghost" type="button">Setup Workspace</button>
+        <button id="btnPremiumSurfaceDrill" class="btn-primary" type="button">Start 5-Min Rep</button>
+      </div>
+
+      <div id="premiumInlineStage" class="card">
+        <strong>Workspace ready</strong>
+        <div class="small" style="margin-top:8px;">
+          Use Setup for wine configuration, Manager Board for scope management, or start a guided rep from here.
+        </div>
+      </div>
+    </div>
+  `;
+
+  const setupBtn = document.getElementById("btnPremiumSurfaceSetup");
+  if (setupBtn && !setupBtn.__bcBound) {
+    setupBtn.__bcBound = true;
+    setupBtn.addEventListener("click", () => {
+      openPremiumSetupScreen();
+    });
+  }
+
+  const drillBtn = document.getElementById("btnPremiumSurfaceDrill");
+  if (drillBtn && !drillBtn.__bcBound) {
+    drillBtn.__bcBound = true;
+    drillBtn.addEventListener("click", () => {
+      const stage = document.getElementById("premiumInlineStage");
+      if (!stage) return;
+      stage.innerHTML = `
+        <strong>5-Min Rep</strong>
+        <div class="small" style="margin-top:8px;">
+          This profile path is now using the parent-owned premium shell. The next step is to rebuild the actual
+          rep/game interaction directly in the Vite app instead of the missing iframe surface.
+        </div>
+      `;
+    });
+  }
+}
+
 function mountGameIframe(targetId, mode /* "demo" | "premium" */) {
   const mount = document.getElementById(targetId);
   if (!mount) return;
 
-  // ✅ Prevent unwanted resets: if same mode already mounted in this target, do nothing
-  const existing = mount.querySelector("iframe");
-  if (existing && currentIframeMode === mode) return;
-
   currentIframeMode = mode;
 
-  // Cache-busting param required — but stable within this mode session
-  const src = `/game/game.html?mode=${encodeURIComponent(mode)}&v=${currentIframeVersion}`;
+  if (mode === "premium") {
+    renderPremiumSurface(targetId);
+  } else {
+    renderDemoSurface(targetId);
+  }
 
-  // ✅ Smaller default height to avoid giant empty space before setup
-  mount.innerHTML = `
-    <iframe
-      id="${targetId}Frame"
-      src="${src}"
-      title="BottleCaller Game"
-      style="
-        width: 100%;
-        height: ${getGameFrameHeight(mode)};
-        border: 1px solid rgba(255,255,255,0.10);
-        border-radius: 14px;
-        background: rgba(0,0,0,0.35);
-        box-shadow: 0 10px 28px rgba(0,0,0,0.55);
-      "
-      loading="eager"
-    ></iframe>
-  `;
-
-  // ctx is now delivered only via bc_ctx_request reply from the iframe
-
-  setDebug({ step: "game.iframe.mounted", targetId, mode, src, time: new Date().toISOString() });
+  setDebug({ step: "game.parent_surface.mounted", targetId, mode, time: new Date().toISOString() });
 }
 
 function callPremiumIframeNav(fnName) {
