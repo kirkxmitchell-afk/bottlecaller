@@ -316,9 +316,9 @@ document.querySelector("#app").innerHTML = `
         </div>
 
         <!-- Auth mode first; signup reveals the role selector underneath -->
-        <div class="tabs" id="modeTabs" data-selected="login" style="--selector-x: 0px;">
-          <button id="tabModeLogin" class="tab active" type="button">Login</button>
-          <button id="tabModeSignup" class="tab" type="button">Sign up</button>
+        <div class="tabs" id="modeTabs" data-selected="signup" style="--selector-x: 0px;">
+          <button id="tabModeLogin" class="tab" type="button">Login</button>
+          <button id="tabModeSignup" class="tab active" type="button">Sign up</button>
         </div>
 
         <div id="roleTabsWrap" class="hidden">
@@ -1273,7 +1273,7 @@ let authIntent = "login"; // login/public | premium
 
 const uiState = {
   role: "waiter", // waiter | manager (used only for signup UI)
-  mode: "login", // login | signup
+  mode: "signup", // login | signup
   managerPackage: "single_manager", // single_manager | group_manager | enterpriser
   seatPlan: "15", // provisioning preference only
   restaurantCount: "3", // group / enterpriser provisioning preference
@@ -18708,7 +18708,7 @@ function routeAuth() {
   closeHud();
   clearMsgs();
   setHomeAuthUI(false);
-  setMode("login");
+  setMode("signup");
   setAuthIntent("login");
   try {
     const url = new URL(window.location.href);
@@ -18732,7 +18732,7 @@ function routeHomeShell(reason = "home_shell", message = "") {
 
   closeHud();
   clearMsgs();
-  setMode("login");
+  setMode("signup");
   setAuthIntent("login");
   showScreen("screenHome");
   hardResetAuthUI();
@@ -20203,7 +20203,7 @@ showScreen("screenHome");
 setManagerPackage("single_manager");
 setSeatPlan("15");
 setRole("waiter");
-setMode("login");
+setMode("signup");
 setAuthIntent("login");
 wireLogout();
 wireGlobalDemoExit();
@@ -20229,7 +20229,7 @@ async function enforceAuthRoute() {
     appMode = "public";
     window.__BC_FORCE_AUTH__ = false;
 
-    try { setMode("login"); } catch {}
+    try { setMode("signup"); } catch {}
     try { setAuthIntent("login"); } catch {}
 
     showScreen("screenHome");
