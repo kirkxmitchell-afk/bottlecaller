@@ -95,8 +95,8 @@ document.querySelector("#app").innerHTML = `
         </div>
 
         <div class="tabs">
-          <button id="tabModeLogin" class="tab active" type="button">Login</button>
-          <button id="tabModeSignup" class="tab" type="button">Sign up</button>
+          <button id="tabModeLogin" class="tab" type="button">Login</button>
+          <button id="tabModeSignup" class="tab active" type="button">Sign up</button>
         </div>
 
         <div id="displayNameWrap" class="hidden">
@@ -3197,7 +3197,7 @@ document.getElementById("btnSaveSeatLimit").addEventListener("click", adminSaveS
 // ------------------------------------------------------------
 showScreen("screenHome");
 setRole("waiter");
-setMode("login");
+setMode("signup");
 setAuthIntent("demo");
 
 setDebug({ step: "boot.ready", time: new Date().toISOString(), supabaseUrl: import.meta.env.VITE_SUPABASE_URL });
