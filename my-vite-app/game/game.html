@@ -219,6 +219,20 @@
     }
 
     const ORIGIN = window.location.origin;
+    function redirectToParentLogin(reason = "standalone_premium") {
+      if (window.__BC_REDIRECTING_TO_PARENT_LOGIN__) return;
+      window.__BC_REDIRECTING_TO_PARENT_LOGIN__ = true;
+      console.warn("[BC] redirecting standalone premium game to parent login", {
+        reason,
+        path: window.location.pathname,
+      });
+      window.location.replace("/");
+    }
+
+    if (!DEMO && isStandalone()) {
+      redirectToParentLogin("initial_boot");
+    }
+
     // Canonical runtime identity defaults (single initialization point)
     window.__BC_CTX__ = window.__BC_CTX__ || null;
     window.__BC_ROLE__ = window.__BC_ROLE__ || null;
@@ -22268,6 +22282,10 @@ function ensureProgLoaded() {
 
           bindInput(btnWelcomeStart, async () => {
             console.log("[CLICK] welcome start", { mode: window.bcMode, isDemo: window.isDemo });
+            if (!window.isDemo && isStandalone()) {
+              redirectToParentLogin("welcome_start");
+              return;
+            }
             // Drill guard
             if (sessionType === "drill") {
               console.warn("[NAV] start blocked: drill active");
@@ -22299,6 +22317,10 @@ function ensureProgLoaded() {
           btnWelcomeHome.__bcBound = false;
 
           bindInput(btnWelcomeHome, () => {
+            if (!window.isDemo && isStandalone()) {
+              redirectToParentLogin("welcome_home");
+              return;
+            }
             try { localStorage.setItem(coverKey, "true"); } catch {}
             resetNavState();
             showScreen("screenHome");
