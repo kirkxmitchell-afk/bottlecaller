@@ -445,6 +445,110 @@ th {
   min-height: 20px;
 }
 
+.manager-shell {
+  width: min(1320px, 100%);
+}
+
+.manager-hero {
+  margin-top: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  background:
+    radial-gradient(circle at top right, rgba(94, 124, 117, 0.14), transparent 32%),
+    linear-gradient(180deg, rgba(31, 36, 41, 0.98) 0%, rgba(20, 22, 26, 0.98) 100%);
+}
+
+.manager-hero-title {
+  font-size: clamp(2.8rem, 5.4vw, 4rem);
+}
+
+.manager-status-grid,
+.manager-summary-grid,
+.manager-insight-grid,
+.manager-board-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.manager-status-grid,
+.manager-summary-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.manager-board-panel {
+  width: min(1180px, calc(100% - 120px));
+  margin: 14px auto 0;
+  background:
+    radial-gradient(circle at top right, rgba(95, 122, 118, 0.14), transparent 35%),
+    linear-gradient(180deg, rgba(29, 33, 37, 0.98) 0%, rgba(21, 24, 27, 0.98) 100%);
+}
+
+.manager-board-topbar {
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.manager-summary-card {
+  min-height: 118px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.manager-summary-value {
+  margin-top: 14px;
+  font-size: 1.95rem;
+  font-weight: 700;
+  line-height: 1.05;
+}
+
+.manager-board-grid {
+  grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.8fr);
+  align-items: start;
+}
+
+.manager-insight-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.manager-card {
+  background: linear-gradient(180deg, rgba(36, 29, 49, 0.76) 0%, rgba(31, 26, 43, 0.9) 100%);
+  border: 1px solid rgba(155, 116, 203, 0.14);
+}
+
+.manager-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.manager-action-row,
+.manager-inline-form {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.manager-inline-form input,
+.manager-inline-form select {
+  flex: 1;
+  min-width: 220px;
+}
+
+.manager-feed {
+  margin-top: 10px;
+  min-height: 72px;
+  color: rgba(231, 236, 241, 0.88);
+}
+
+.manager-msg {
+  min-height: 20px;
+}
+
 .encounter-panel {
   margin-top: 16px;
   padding: 14px;
@@ -573,7 +677,8 @@ button, .option-btn { touch-action: manipulation; }
   }
 
   .home-hero,
-  .home-auth-panel {
+  .home-auth-panel,
+  .manager-board-panel {
     width: 100%;
   }
 
@@ -589,8 +694,20 @@ button, .option-btn { touch-action: manipulation; }
   .home-status-grid,
   .home-auth-inputs,
   .auth-mode-tabs,
-  .auth-role-tabs {
+  .auth-role-tabs,
+  .manager-status-grid,
+  .manager-summary-grid,
+  .manager-insight-grid,
+  .manager-board-grid {
     grid-template-columns: 1fr;
+  }
+
+  .manager-hero {
+    flex-direction: column;
+  }
+
+  .manager-inline-form {
+    flex-direction: column;
   }
 
   .topbar {

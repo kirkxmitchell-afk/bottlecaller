@@ -301,86 +301,133 @@ document.querySelector("#app").innerHTML = `
 
   <!-- MANAGER BOARD -->
   <section id="screenManagerBoard" class="screen hidden">
-    <div class="panel stack">
-      <div class="topbar">
-        <div class="brand">
-          <h2>Manager Board</h2>
-          <span class="badge">PREMIUM</span>
+    <div class="home-shell manager-shell">
+      <div class="panel manager-hero">
+        <div class="manager-hero-copy">
+          <div class="home-kicker">MANAGER SURFACE</div>
+          <div class="home-hero-title-row">
+            <h1 class="home-hero-title manager-hero-title">BottleCaller</h1>
+            <span class="home-public-badge">GROUP MANAGER</span>
+          </div>
+          <p class="home-hero-subtle">
+            Scope management, billing controls, and activity coaching for the active restaurant.
+          </p>
         </div>
-        <div class="row">
-          <button id="btnBackToPremium" class="btn-ghost" type="button">Back</button>
-          <button id="btnLogoutManagerBoard" class="btn-danger" type="button">Logout</button>
+
+        <div class="manager-status-grid">
+          <div class="home-status-card">
+            <div class="home-status-label">RESTAURANT</div>
+            <div id="mbRestNameHero" class="home-status-value">-</div>
+          </div>
+          <div class="home-status-card">
+            <div class="home-status-label">RUNS</div>
+            <div id="mbRunsHero" class="home-status-value">-</div>
+          </div>
+          <div class="home-status-card">
+            <div class="home-status-label">DRILLS</div>
+            <div id="mbDrillsHero" class="home-status-value">-</div>
+          </div>
         </div>
       </div>
 
-      <div class="card">
-        <div class="score-row">Restaurant: <span id="mbRestName">-</span></div>
-        <div class="score-row">Total runs: <span id="mbRunsTotal">-</span></div>
-        <div class="score-row">Total drills: <span id="mbDrillsTotal">-</span></div>
+      <div class="panel stack manager-board-panel">
+        <div class="topbar manager-board-topbar">
+          <div class="brand">
+            <h2>Manager Board</h2>
+            <span class="badge">PREMIUM</span>
+          </div>
+          <div class="row">
+            <button id="btnBackToPremium" class="btn-ghost" type="button">Back</button>
+            <button id="btnLogoutManagerBoard" class="btn-danger" type="button">Logout</button>
+          </div>
+        </div>
+
+        <div class="manager-summary-grid">
+          <div class="card manager-summary-card">
+            <div class="home-section-label">ACTIVE RESTAURANT</div>
+            <div class="manager-summary-value" id="mbRestName">-</div>
+          </div>
+          <div class="card manager-summary-card">
+            <div class="home-section-label">TOTAL RUNS</div>
+            <div class="manager-summary-value" id="mbRunsTotal">-</div>
+          </div>
+          <div class="card manager-summary-card">
+            <div class="home-section-label">TOTAL DRILLS</div>
+            <div class="manager-summary-value" id="mbDrillsTotal">-</div>
+          </div>
+        </div>
+
+        <div class="manager-board-grid">
+          <div id="mbBillingAccess" class="card manager-card">
+            <div class="manager-card-head">
+              <div>
+                <div class="home-section-label">BILLING & ACCESS</div>
+                <strong>Seat controls</strong>
+              </div>
+              <span id="mbSeatStatus" class="badge">Seats: —</span>
+            </div>
+
+            <div class="small-text" id="mbSeatDetail" style="margin-top:6px;">
+              Loading seat usage…
+            </div>
+
+            <div class="manager-action-row">
+              <button id="mbSeat15" class="btn-ghost" type="button">Set seats: 15</button>
+              <button id="mbSeat30" class="btn-ghost" type="button">Set seats: 30</button>
+              <button id="mbSeat60" class="btn-ghost" type="button">Set seats: 60</button>
+              <button id="mbRefreshSeats" class="btn-ghost" type="button">Refresh</button>
+            </div>
+
+            <hr style="opacity:.2; margin:12px 0;" />
+
+            <div class="home-section-label">ENTERPRISE SIGNUP</div>
+            <div class="small-text" style="margin-top:6px;">
+              Paste an Enterprise manager_setup code to upgrade this manager scope.
+            </div>
+
+            <div class="manager-inline-form">
+              <input id="mbEnterpriseCode" type="text" placeholder="ENTERPRISE_XXXXX" />
+              <button id="mbRedeemEnterprise" class="btn-primary" type="button">Redeem</button>
+            </div>
+
+            <div id="mbEnterpriseMsg" class="small-text" style="margin-top:8px;"></div>
+          </div>
+
+          <div id="groupRestaurantPicker" class="card manager-card" style="display:none;">
+            <div class="home-section-label">ACTIVE RESTAURANT</div>
+            <strong>Switch scope focus</strong>
+            <div class="small-text" style="margin-top:6px;">
+              Group managers switch which restaurant they’re managing right now.
+            </div>
+
+            <div class="manager-inline-form">
+              <select id="selActiveRestaurant" class="input"></select>
+              <button id="btnSetActiveRestaurant" class="btn-primary" type="button">Set</button>
+            </div>
+
+            <div id="activeRestaurantHint" class="small-text" style="margin-top:8px;"></div>
+          </div>
+        </div>
+
+        <div class="manager-insight-grid">
+          <div class="card manager-card">
+            <div class="home-section-label">BEST STREAKS</div>
+            <div id="mbBestStreaks" class="manager-feed">-</div>
+          </div>
+
+          <div class="card manager-card">
+            <div class="home-section-label">NEEDS COACHING</div>
+            <div id="mbNeedsCoaching" class="manager-feed">-</div>
+          </div>
+        </div>
+
+        <div class="card manager-card">
+          <div class="home-section-label">RECENT ACTIVITY</div>
+          <div id="mbRecent" class="manager-feed">Loading…</div>
+        </div>
+
+        <div id="mbMsg" class="small manager-msg"></div>
       </div>
-
-      <div id="mbBillingAccess" class="card" style="margin-top:12px;">
-        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
-          <strong>Billing & Access</strong>
-          <span id="mbSeatStatus" class="badge">Seats: —</span>
-        </div>
-
-        <div class="small-text" id="mbSeatDetail" style="margin-top:6px;">
-          Loading seat usage…
-        </div>
-
-        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
-          <button id="mbSeat15" class="btn-ghost" type="button">Set seats: 15</button>
-          <button id="mbSeat30" class="btn-ghost" type="button">Set seats: 30</button>
-          <button id="mbSeat60" class="btn-ghost" type="button">Set seats: 60</button>
-          <button id="mbRefreshSeats" class="btn-ghost" type="button">Refresh</button>
-        </div>
-
-        <hr style="opacity:.2; margin:12px 0;" />
-
-        <strong>Enterprise Signup</strong>
-        <div class="small-text" style="margin-top:6px;">
-          Paste an Enterprise manager_setup code to upgrade this manager scope.
-        </div>
-
-        <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
-          <input id="mbEnterpriseCode" type="text" placeholder="ENTERPRISE_XXXXX" style="flex:1; min-width:220px;" />
-          <button id="mbRedeemEnterprise" class="btn-primary" type="button">Redeem</button>
-        </div>
-
-        <div id="mbEnterpriseMsg" class="small-text" style="margin-top:8px;"></div>
-      </div>
-
-      <div id="groupRestaurantPicker" class="card" style="display:none; margin-top:10px;">
-        <strong>Active Restaurant</strong>
-        <div class="small-text" style="margin-top:6px;">
-          Group managers switch which restaurant they’re managing right now.
-        </div>
-
-        <div style="display:flex; gap:8px; margin-top:10px; align-items:center;">
-          <select id="selActiveRestaurant" class="input" style="flex:1;"></select>
-          <button id="btnSetActiveRestaurant" class="btn" type="button">Set</button>
-        </div>
-
-        <div id="activeRestaurantHint" class="small-text" style="margin-top:8px;"></div>
-      </div>
-
-      <div style="margin-top:12px;">
-        <div style="font-weight:600; margin-bottom:6px;">Best streaks</div>
-        <div id="mbBestStreaks" style="opacity:.9;">-</div>
-      </div>
-
-      <div style="margin-top:12px;">
-        <div style="font-weight:600; margin-bottom:6px;">Needs coaching</div>
-        <div id="mbNeedsCoaching" style="opacity:.9;">-</div>
-      </div>
-
-      <div class="card">
-        <h3 style="margin:0 0 8px 0;">Recent activity</h3>
-        <div id="mbRecent" class="small" style="opacity:.9;">Loading…</div>
-      </div>
-
-      <div id="mbMsg" class="small"></div>
     </div>
   </section>
 
