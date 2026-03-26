@@ -7,21 +7,85 @@ import { createClient } from "@supabase/supabase-js";
  */
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const SUPABASE_CONFIG_ERROR = "Supabase configuration is missing. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.";
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  // Only warn (not throw) so dev server still starts; you'll see this in console.
-  console.warn("Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY in env.");
+  console.warn(SUPABASE_CONFIG_ERROR);
 }
 
-export const supabase = createClient(SUPABASE_URL ?? "", SUPABASE_ANON_KEY ?? "");
+function makeConfigError() {
+  return new Error(SUPABASE_CONFIG_ERROR);
+}
+
+function createFallbackSupabase() {
+  return {
+    auth: {
+      async signInWithPassword() {
+        return { data: { session: null, user: null }, error: makeConfigError() };
+      },
+      async signUp() {
+        return { data: { user: null, session: null }, error: makeConfigError() };
+      },
+      async signOut() {
+        return { error: null };
+      },
+      async getUser() {
+        return { data: { user: null }, error: null };
+      },
+      async getSession() {
+        return { data: { session: null }, error: null };
+      },
+      onAuthStateChange() {
+        return {
+          data: {
+            subscription: {
+              unsubscribe() {},
+            },
+          },
+        };
+      },
+    },
+  };
+}
+
+let client;
+
+try {
+  client = createClient(SUPABASE_URL ?? "", SUPABASE_ANON_KEY ?? "");
+} catch (error) {
+  console.error("Supabase client init failed:", error);
+  client = createFallbackSupabase();
+}
+
+export const supabase = client;
 
 /* Auth helpers used by the app — keep these small and predictable */
-export async function signIn({ email, password }) {
-  return supabase.auth.signInWithPassword({ email, password });
+function resolveCredentials(emailOrCredentials, password) {
+  if (typeof emailOrCredentials === "object" && emailOrCredentials !== null) {
+    return {
+      email: emailOrCredentials.email,
+      password: emailOrCredentials.password,
+    };
+  }
+
+  return {
+    email: emailOrCredentials,
+    password,
+  };
 }
 
-export async function signUp({ email, password }) {
-  return supabase.auth.signUp({ email, password });
+export async function signIn(emailOrCredentials, password) {
+  const { email, password: resolvedPassword } = resolveCredentials(emailOrCredentials, password);
+  return supabase.auth.signInWithPassword({ email, password: resolvedPassword });
+}
+
+export async function signUp(emailOrCredentials, password, options = {}) {
+  const { email, password: resolvedPassword } = resolveCredentials(emailOrCredentials, password);
+  return supabase.auth.signUp({
+    email,
+    password: resolvedPassword,
+    options,
+  });
 }
 
 export async function signOut() {
@@ -35,6 +99,5 @@ export async function getUser() {
 
 export async function getSession() {
   const { data, error } = await supabase.auth.getSession();
-  if (error) throw error;
-  return data.session;
+  return { session: data?.session ?? null, error };
 }
