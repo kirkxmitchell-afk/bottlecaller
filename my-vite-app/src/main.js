@@ -7156,7 +7156,7 @@ function setAuthIntent(next) {
     if (title) title.textContent = "Join Game";
     if (sub)
       sub.textContent =
-        "Waiters play Demo immediately and can join by code. Managers enter Premium to configure the restaurant.";
+        "Use the parent login first, then enter Premium to configure the restaurant or join with your issued access.";
     if (premiumBtn) premiumBtn.textContent = "Premium";
     if (exitBtn) exitBtn.classList.add("hidden");
   }
@@ -18720,6 +18720,26 @@ function routeAuth() {
   hardResetAuthUI();
 }
 
+function routeHomeShell(reason = "home_shell", message = "") {
+  console.log("[ROUTE] home shell", { reason, authed: !!appState?.session?.user });
+  destroyPremiumIframe(`routeHomeShell:${reason}`);
+  destroyDemoIframe(`routeHomeShell:${reason}`);
+  setPremiumOverlayActive(false);
+
+  window.__BC_DRILL_CONFIG__ = null;
+  window.BC_DRILL_CONFIG = null;
+  setPendingStartDrill(null);
+
+  closeHud();
+  clearMsgs();
+  setMode("login");
+  setAuthIntent("login");
+  showScreen("screenHome");
+  hardResetAuthUI();
+
+  if (message) setMsg("authMsg", message, "normal");
+}
+
 async function decideRoute(reason = "decideRoute") {
   if (isHardLoggedOut()) {
     console.warn("[BC] decideRoute blocked (hard logged out)", reason);
@@ -18755,9 +18775,11 @@ async function decideRoute(reason = "decideRoute") {
       return;
     }
 
-    // 3) No restaurant => Demo
-    setAuthIntent("demo");
-    await routeDemo(`decideRoute.no_restaurant:${reason}`);
+    // 3) No restaurant => stay on the parent shell until the user explicitly proceeds.
+    routeHomeShell(
+      `decideRoute.no_restaurant:${reason}`,
+      "Finish login or Premium setup on the parent screen before entering the game."
+    );
   } catch (e) {
     console.error(e);
     closeHud();
