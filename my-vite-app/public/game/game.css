@@ -3846,3 +3846,105 @@ html, body{ height:100%; }
     grid-template-columns: 1fr !important;
   }
 }
+
+@media (max-width: 860px){
+  body{
+    font-size: 14px;
+  }
+
+  .screen{
+    width: 100%;
+    padding: 12px 10px 18px;
+  }
+
+  .panel,
+  .card{
+    padding: 12px;
+    border-radius: 14px;
+  }
+
+  .button-row,
+  .manager-row,
+  .row{
+    gap: 8px;
+  }
+
+  button,
+  .option-btn,
+  .small-btn{
+    min-height: 40px;
+    padding: 9px 10px;
+    font-size: 12px;
+    border-radius: 11px;
+  }
+
+  input[type="email"],
+  input[type="password"],
+  input[type="text"],
+  input[type="number"],
+  select,
+  textarea{
+    padding: 10px 11px;
+    font-size: 13px;
+    border-radius: 11px;
+  }
+
+  .app-game-masthead{
+    width: min(100%, calc(100% - 20px));
+    margin: 10px auto 2px;
+    padding: 12px 14px;
+    border-radius: 16px;
+    font-size: clamp(18px, 6vw, 26px);
+  }
+
+  #bcShell{
+    gap: 10px;
+  }
+
+  #bcHudTop.bc-hud-top,
+  #bcHudBottom.bc-hud-bottom{
+    padding: 10px 12px;
+    border-radius: 14px;
+  }
+
+  #bcEncounterStage,
+  .bc-stage-card,
+  .app-home-shell,
+  .app-setup-shell{
+    border-radius: 16px;
+  }
+
+  #screenHome .app-home-header h2{
+    font-size: 24px !important;
+  }
+
+  #screenHome .app-home-subtitle,
+  #screenHome .app-mode-copy,
+  #screenHome .app-progress-card .small-text{
+    font-size: 12px !important;
+    line-height: 1.45;
+  }
+
+  #screenHome .app-mode-title{
+    font-size: 20px !important;
+  }
+
+  #screenPlay .bc-step-content,
+  #screenPlay .bc-feedback,
+  #screenPlay .encounter-lead,
+  #screenPlay .encounter-prompt{
+    font-size: 13px !important;
+    line-height: 1.45;
+  }
+
+  #screenPlay #stepHeader{
+    font-size: 11px;
+    letter-spacing: 0.12em;
+  }
+
+  .wine-table th,
+  .wine-table td{
+    padding: 8px 8px;
+    font-size: 11px;
+  }
+}

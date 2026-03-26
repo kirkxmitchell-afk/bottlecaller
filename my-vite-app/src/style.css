@@ -1042,6 +1042,134 @@ button:hover, .btn:hover, .btn-ghost:hover{
   background: rgba(0,0,0,0.18);
 }
 
+html[data-bc-mobile-env="true"] #app{
+  gap: 12px;
+  padding: 12px;
+}
+
+html[data-bc-mobile-env="true"] .screen{
+  width: 100%;
+}
+
+html[data-bc-mobile-env="true"] .app-chrome{
+  grid-template-columns: 1fr;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 20px;
+}
+
+html[data-bc-mobile-env="true"] .app-chrome-title{
+  font-size: clamp(26px, 9vw, 36px);
+}
+
+html[data-bc-mobile-env="true"] .app-chrome-copy{
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+html[data-bc-mobile-env="true"] .app-chrome-context{
+  justify-content: stretch;
+  gap: 8px;
+}
+
+html[data-bc-mobile-env="true"] .app-chrome-chip{
+  min-width: 0;
+  flex: 1 1 calc(33.333% - 8px);
+  padding: 10px 11px;
+  border-radius: 14px;
+}
+
+html[data-bc-mobile-env="true"] .panel,
+html[data-bc-mobile-env="true"] .card{
+  padding: 14px;
+  border-radius: 14px;
+}
+
+html[data-bc-mobile-env="true"] .topbar{
+  gap: 10px;
+}
+
+html[data-bc-mobile-env="true"] .topbar .brand h2{
+  font-size: 17px;
+}
+
+html[data-bc-mobile-env="true"] .topbar .row{
+  gap: 8px;
+}
+
+html[data-bc-mobile-env="true"] .topbar .row button,
+html[data-bc-mobile-env="true"] .topbar .row .btn-ghost,
+html[data-bc-mobile-env="true"] .topbar .row .btn-danger{
+  min-height: 40px;
+  padding: 9px 11px;
+  font-size: 12px;
+  border-radius: 11px;
+}
+
+html[data-bc-mobile-env="true"] #screenPremiumApp > .panel.stack,
+html[data-bc-mobile-env="true"] #screenManagerBoard > .panel.stack,
+html[data-bc-mobile-env="true"] #screenProfile > .panel.stack,
+html[data-bc-mobile-env="true"] #screenWaiterLeaderboard > .panel.stack{
+  padding: 12px;
+  border-radius: 16px;
+}
+
+html[data-bc-mobile-env="true"] #screenPremiumApp .topbar,
+html[data-bc-mobile-env="true"] #screenManagerBoard .topbar,
+html[data-bc-mobile-env="true"] #screenProfile .topbar{
+  align-items: flex-start;
+}
+
+html[data-bc-mobile-env="true"] #screenPremiumApp .topbar .row,
+html[data-bc-mobile-env="true"] #screenManagerBoard .topbar .row,
+html[data-bc-mobile-env="true"] #screenProfile .topbar .row{
+  width: 100%;
+}
+
+html[data-bc-mobile-env="true"] #screenPremiumApp .topbar .row button,
+html[data-bc-mobile-env="true"] #screenManagerBoard .topbar .row button,
+html[data-bc-mobile-env="true"] #screenProfile .topbar .row button{
+  flex: 1 1 calc(50% - 8px);
+}
+
+html[data-bc-mobile-env="true"] #premiumRootFrame,
+html[data-bc-mobile-env="true"] #gameRootDemoFrame{
+  height: calc(100dvh - 210px) !important;
+  min-height: 500px;
+  border-radius: 14px !important;
+}
+
+html[data-bc-mobile-env="true"] #hudPanel{
+  width: min(100vw - 16px, 520px) !important;
+  max-height: calc(100dvh - 16px) !important;
+  inset: auto 8px 8px 8px !important;
+  padding: 14px !important;
+  border-radius: 18px !important;
+}
+
+html[data-bc-mobile-env="true"] #hudPanel button,
+html[data-bc-mobile-env="true"] #hudPanel input,
+html[data-bc-mobile-env="true"] #hudPanel select,
+html[data-bc-mobile-env="true"] #hudPanel textarea{
+  font-size: 13px;
+}
+
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbMenu{
+  gap: 8px;
+}
+
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbMenu [data-mbtab]{
+  min-height: 40px;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+html[data-bc-mobile-env="true"] #screenProfile .card .score-row,
+html[data-bc-mobile-env="true"] #screenManagerBoard .score-row{
+  font-size: 12px;
+}
+
 /* =========================================================
    LOGIN SCREEN
    Keep this last so it beats the older generic home/auth rules.

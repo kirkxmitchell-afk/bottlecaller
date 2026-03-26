@@ -144,6 +144,23 @@ if (window.__BOTTLECALLER_BOOTED__) {
 }
 window.__BOTTLECALLER_BOOTED__ = true;
 
+function isBottleCallerMobileEnv() {
+  const narrow = window.matchMedia("(max-width: 860px)").matches;
+  const coarse = window.matchMedia("(pointer: coarse)").matches;
+  return narrow || coarse;
+}
+
+function syncBottleCallerViewportEnv() {
+  const isMobile = isBottleCallerMobileEnv();
+  document.documentElement.dataset.bcMobileEnv = isMobile ? "true" : "false";
+  document.documentElement.dataset.bcViewport = isMobile ? "mobile" : "desktop";
+  window.__BC_ENV__ = { ...(window.__BC_ENV__ || {}), mobile: isMobile };
+}
+
+syncBottleCallerViewportEnv();
+window.addEventListener("resize", syncBottleCallerViewportEnv, { passive: true });
+window.addEventListener("orientationchange", syncBottleCallerViewportEnv, { passive: true });
+
 window.addEventListener("storage", (e) => {
   if (e.key === "__BC_LOGOUT_LOCK__" && e.newValue) {
     console.warn("[CROSS-TAB] logout lock detected -> forcing logout UI");
