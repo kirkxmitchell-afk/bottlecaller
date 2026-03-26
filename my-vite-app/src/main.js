@@ -57,57 +57,97 @@ window.__BC_SUPABASE__ = supabase;
 document.querySelector("#app").innerHTML = `
   <!-- FACE WINDOW -->
   <section id="screenHome" class="screen active">
-    <div class="panel stack">
-      <div class="topbar">
-        <div class="brand">
-          <h2>BottleCaller</h2>
-          <span id="homeAuthBadge" class="badge hidden">LOGGED IN</span>
+    <div class="home-shell">
+      <div class="home-style-chip">STYLE-CHECK-123</div>
+
+      <div class="home-hero panel">
+        <div class="home-hero-copy">
+          <div class="home-kicker">SERVICE TRAINING COCKPIT</div>
+          <div class="home-hero-title-row">
+            <h1 class="home-hero-title">BottleCaller</h1>
+            <span class="home-public-badge">PUBLIC ACCESS</span>
+          </div>
+          <p class="home-hero-subtle">
+            A premium shell for live service training, guided reps, and manager-side coaching.
+          </p>
         </div>
-        <div class="row">
-          <button id="btnHomePremium" class="btn-ghost" type="button">Premium</button>
-          <button id="btnHomeExitPremium" class="btn-ghost hidden" type="button">Exit Premium</button>
-          <button id="btnHomeLogout" class="btn-danger hidden" type="button">Logout</button>
+
+        <div class="home-status-grid">
+          <div class="home-status-card">
+            <div class="home-status-label">SURFACE</div>
+            <div class="home-status-value">Lobby</div>
+          </div>
+          <div class="home-status-card">
+            <div class="home-status-label">ROLE</div>
+            <div class="home-status-value">Waiter</div>
+          </div>
+          <div class="home-status-card">
+            <div class="home-status-label">RESTAURANT</div>
+            <div class="home-status-value">Not bound</div>
+          </div>
         </div>
       </div>
 
-      <h1 class="title">Join Game</h1>
-      <p class="subtle">
-        Waiters play Demo immediately and can join by code. Managers enter Premium to configure the restaurant.
-      </p>
-
-      <div id="authFields" class="stack" style="margin-top:6px;">
-        <input id="authEmail" type="email" placeholder="Email" />
-        <input id="authPassword" type="password" placeholder="Password" />
-
-        <!-- ✅ Premium intent extras (only visible when Premium is selected) -->
-        <div id="premiumIntentBlock" class="hidden" style="margin-top:10px;">
-          <input id="premiumLicenseCode" type="text" placeholder="Enter Premium code" />
-          <div class="small" style="margin-top:8px;">
-            Contact us for purchase:
-            <a href="mailto:hello@bottlecaller.com">hello@bottlecaller.com</a>
+      <div class="panel stack home-auth-panel">
+        <div class="topbar home-auth-topbar">
+          <div class="brand">
+            <h2>BottleCaller</h2>
+            <span id="homeAuthBadge" class="badge hidden">LOGGED IN</span>
+          </div>
+          <div class="row">
+            <button id="btnHomePremium" class="btn-ghost" type="button">Premium</button>
+            <button id="btnHomeExitPremium" class="btn-ghost hidden" type="button">Exit Premium</button>
+            <button id="btnHomeLogout" class="btn-danger hidden" type="button">Logout</button>
           </div>
         </div>
 
-        <!-- Tabs UNDER fields -->
-        <div class="tabs" id="roleTabs" style="margin-top:10px;">
-          <button id="tabRoleWaiter" class="tab active" type="button">Waiter</button>
-          <button id="tabRoleManager" class="tab" type="button">Manager</button>
-        </div>
+        <h1 class="title">Join Game</h1>
+        <p class="subtle">
+          Use the parent login first, then enter Premium to configure the restaurant or join with your issued access.
+        </p>
 
-        <div class="tabs">
-          <button id="tabModeLogin" class="tab" type="button">Login</button>
-          <button id="tabModeSignup" class="tab active" type="button">Sign up</button>
-        </div>
+        <div id="authFields" class="stack home-auth-fields">
+          <div class="home-auth-inputs">
+            <input id="authEmail" type="email" placeholder="Email" />
+            <input id="authPassword" type="password" placeholder="Password" />
+          </div>
 
-        <div id="displayNameWrap" class="hidden">
-          <input id="authDisplayName" type="text" placeholder="Display name (optional)" />
-        </div>
+          <div class="tabs auth-mode-tabs">
+            <button id="tabModeLogin" class="tab" type="button">Login</button>
+            <button id="tabModeSignup" class="tab active" type="button">Sign up</button>
+          </div>
 
-        <div class="row">
-          <button id="btnAuthSubmit" class="btn-primary" type="button">Continue</button>
-        </div>
+          <div id="roleTabs" class="home-role-wrap">
+            <div class="home-section-label">CHOOSE ROLE</div>
+            <div class="tabs auth-role-tabs">
+              <button id="tabRoleWaiter" class="tab active" type="button">Waiter</button>
+              <button id="tabRoleManager" class="tab" type="button">Manager</button>
+            </div>
+          </div>
 
-        <div id="authMsg" class="small"></div>
+          <div id="displayNameWrap" class="hidden">
+            <input id="authDisplayName" type="text" placeholder="Display name (optional)" />
+          </div>
+
+          <div id="premiumIntentBlock" class="hidden home-premium-block">
+            <input id="premiumLicenseCode" type="text" placeholder="Enter Premium code" />
+          </div>
+
+          <div class="home-contact-card">
+            <div class="home-section-label">CONTACT US</div>
+            <div class="small">
+              Email
+              <a href="mailto:hello@bottlecaller.com">hello@bottlecaller.com</a>
+              with the setup you want and we will send the matching join or license code.
+            </div>
+          </div>
+
+          <div class="row home-submit-row">
+            <button id="btnAuthSubmit" class="btn-primary home-submit-btn" type="button">Continue</button>
+          </div>
+
+          <div id="authMsg" class="small home-auth-message"></div>
+        </div>
       </div>
     </div>
   </section>
