@@ -941,6 +941,10 @@ button[disabled] { opacity: 0.5; cursor: not-allowed; transform: none; }
   margin-top: 12px;
 }
 
+.reaction-progress-card .reaction-spine-card {
+  display: none;
+}
+
 @media (max-width: 760px) {
   .reaction-spine-graphic-row {
     grid-template-columns: 1fr;

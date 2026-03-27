@@ -2762,6 +2762,58 @@ html[data-bc-mobile-env="true"] #screenManagerBoard .score-row{
     rgba(255,255,255,0.02) !important;
 }
 
+#screenManagerBoard #mbTab_messenger > .card{
+  overflow:hidden;
+}
+
+#screenManagerBoard #mbTab_messenger > .card > div[style*="grid-template-columns: 260px minmax(0,1fr)"]{
+  grid-template-columns:minmax(220px, 280px) minmax(0, 1fr) !important;
+  align-items:start;
+}
+
+#screenManagerBoard #mbTab_messenger #mbThreadList,
+#screenManagerBoard #mbTab_messenger #mbThreadTimelinePanel,
+#screenManagerBoard #mbTab_messenger #mbThreadMessages,
+#screenManagerBoard #mbTab_messenger #mbThreadActions{
+  min-width:0;
+}
+
+#screenManagerBoard #mbTab_messenger #mbThreadTimelinePanel{
+  border:1px solid rgba(255,255,255,0.08);
+  background:
+    linear-gradient(180deg, rgba(245,194,107,0.08), rgba(255,255,255,0.02)),
+    rgba(10,14,19,0.58);
+}
+
+#screenManagerBoard #mbTab_messenger #mbThreadMessages{
+  min-height:260px;
+}
+
+#screenManagerBoard .mb-message-card{
+  overflow:hidden;
+}
+
+#screenManagerBoard .mb-message-head,
+#screenManagerBoard .mb-message-title-row{
+  min-width:0;
+  flex-wrap:wrap;
+}
+
+#screenManagerBoard .mb-message-title{
+  min-width:0;
+  flex:1 1 220px;
+  overflow-wrap:anywhere;
+}
+
+#screenManagerBoard .mb-message-date{
+  margin-left:auto;
+  flex:0 1 180px;
+  max-width:100%;
+  text-align:right;
+  white-space:normal;
+  overflow-wrap:anywhere;
+ }
+
 #screenManagerBoard .mb-section-header{
   display:flex;
   flex-direction:column;
@@ -3092,6 +3144,57 @@ html[data-bc-mobile-env="true"] #screenManagerBoard .score-row{
   border-top: 1px solid rgba(255,255,255,0.08);
 }
 
+#screenManagerBoard #mbTab_performance{
+  display:grid;
+  grid-template-columns:repeat(12, minmax(0, 1fr));
+  gap:12px;
+  align-items:start;
+}
+
+#screenManagerBoard #mbTab_performance > .card,
+#screenManagerBoard #mbTab_performance > div{
+  min-width:0;
+  height:100%;
+}
+
+#screenManagerBoard #mbInsightsPanel,
+#screenManagerBoard #mbPerformanceHistoryPanel{
+  grid-column:1 / -1;
+}
+
+#screenManagerBoard #mbTab_performance #mbWeeklySummaryTop,
+#screenManagerBoard #mbTab_performance #mbBestStreaks,
+#screenManagerBoard #mbTab_performance #mbNeedsCoaching,
+#screenManagerBoard #mbTab_performance #mbRecent,
+#screenManagerBoard #mbTab_performance #mbWeeklyReport{
+  grid-column:span 6;
+}
+
+#screenManagerBoard #mbSelectionPanel{
+  display:grid;
+  grid-template-columns:repeat(12, minmax(0, 1fr));
+  gap:12px;
+  align-items:start;
+}
+
+#screenManagerBoard #mbSelectionPanel > *{
+  min-width:0;
+  height:100%;
+  margin-top:0 !important;
+}
+
+#screenManagerBoard .mb-selection-overview{
+  grid-column:1 / -1;
+}
+
+#screenManagerBoard .mb-selection-table-wrap{
+  grid-column:span 8;
+}
+
+#screenManagerBoard .mb-selection-preview{
+  grid-column:span 4;
+}
+
 #screenManagerBoard #mbTab_performance #mbWeeklySummaryTop,
 #screenManagerBoard #mbTab_performance #mbBestStreaks,
 #screenManagerBoard #mbTab_performance #mbNeedsCoaching,
@@ -3118,6 +3221,26 @@ html[data-bc-mobile-env="true"] #screenManagerBoard .score-row{
 @media (max-width: 880px){
   #screenManagerBoard .mb-user-detail-panel{
     grid-template-columns:1fr;
+  }
+
+  #screenManagerBoard #mbTab_messenger > .card > div[style*="grid-template-columns: 260px minmax(0,1fr)"]{
+    grid-template-columns:1fr !important;
+  }
+
+  #screenManagerBoard .mb-message-date{
+    margin-left:0;
+    text-align:left;
+    flex:1 1 100%;
+  }
+
+  #screenManagerBoard #mbTab_performance #mbWeeklySummaryTop,
+  #screenManagerBoard #mbTab_performance #mbBestStreaks,
+  #screenManagerBoard #mbTab_performance #mbNeedsCoaching,
+  #screenManagerBoard #mbTab_performance #mbRecent,
+  #screenManagerBoard #mbTab_performance #mbWeeklyReport,
+  #screenManagerBoard .mb-selection-table-wrap,
+  #screenManagerBoard .mb-selection-preview{
+    grid-column:1 / -1;
   }
 }
 

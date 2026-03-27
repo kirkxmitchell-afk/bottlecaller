@@ -794,12 +794,14 @@ document.querySelector("#app").innerHTML = `
               </div>
 
               <div style="border:1px solid rgba(255,255,255,0.10); border-radius:12px; overflow:hidden; display:flex; flex-direction:column; min-height:520px;">
-                <div style="padding:10px; border-bottom:1px solid rgba(255,255,255,0.10);">
-                  <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
-                    <strong id="mbThreadTitle">Select a waiter</strong>
-                    <span id="mbThreadMeta" class="small-text" style="opacity:.75;"></span>
-                  </div>
+              <div style="padding:10px; border-bottom:1px solid rgba(255,255,255,0.10);">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+                  <strong id="mbThreadTitle">Select a waiter</strong>
+                  <span id="mbThreadMeta" class="small-text" style="opacity:.75;"></span>
                 </div>
+              </div>
+
+              <div id="mbThreadTimelinePanel" class="card" style="margin:10px 10px 0; padding:10px;"></div>
 
                 <div id="mbThreadMessages"
                   style="flex:1; padding:10px; display:flex; flex-direction:column; gap:8px; overflow-y:auto; min-height:280px;">
@@ -1164,7 +1166,6 @@ document.querySelector("#app").innerHTML = `
       </div>
     </div>
     <div style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.10);">
-      <div style="font-weight:600; margin-bottom:8px;">Coach</div>
       <button id="btnHudSendProgress" class="btn-ghost" type="button">Send progress to manager</button>
       <div id="hudSendProgressStatus" class="small-text" style="margin-top:6px; opacity:.85;"></div>
     </div>
@@ -11962,6 +11963,16 @@ function resetManagerMessengerState(opts = {}) {
     `;
   }
 
+  const timeline = document.getElementById("mbThreadTimelinePanel");
+  if (timeline) {
+    timeline.innerHTML = `
+      <div style="font-weight:600;">Objective Timeline</div>
+      <div class="small-text" style="margin-top:6px; opacity:.75;">
+        Select a waiter to view live objective activity.
+      </div>
+    `;
+  }
+
   const emptyEl = document.getElementById("mbThreadEmpty");
   if (emptyEl) emptyEl.style.display = "none";
 
@@ -13449,18 +13460,11 @@ function renderManagerEncounterSummaryList(userId, rows, nameMap = new Map()) {
     const details = document.createElement("div");
     details.className = "history-details is-collapsed";
 
-    const spineText = Array.isArray(summary.stepSpine) && summary.stepSpine.length
-      ? summary.stepSpine
-          .map((node) => `${node.step}:${node.score > 0 ? "+" : ""}${node.score}`)
-          .join("  ")
-      : "—";
-
     details.innerText =
       "AI perception: " + (summary.aiPerception || "—") + "\n" +
       "Bottle served: " + (summary.bottleServed ? "YES" : "NO") + "\n" +
       "Chosen path: " + (summary.chosenPathExposition || ((summary.chosenPath || []).join(" -> ") || "—")) + "\n" +
-      "Best path: " + (summary.bestPathExposition || ((summary.bestPath || []).join(" -> ") || "—")) + "\n" +
-      "Spine: " + spineText;
+      "Best path: " + (summary.bestPathExposition || ((summary.bestPath || []).join(" -> ") || "—"));
 
     summaryCard.appendChild(summaryBtn);
     summaryCard.appendChild(details);
@@ -13738,20 +13742,20 @@ ${escapeHtml(s.label)}
   }
 
   return `
-    <div data-msg-id="${escapeHtml(String(row?.id ?? ""))}" style="
+    <div class="mb-message-card" data-msg-id="${escapeHtml(String(row?.id ?? ""))}" style="
       ${toneStyle.border};
       border-radius:12px;
       padding:10px;
       background:${toneStyle.bg};
       margin-bottom:8px;
     ">
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+      <div class="mb-message-head" style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
         <div class="small-text" style="opacity:.75;">${escapeHtml(who)}</div>
         ${badgeHtml ? `<div>${badgeHtml}</div>` : ``}
       </div>
-      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-top:6px;">
-        <div style="font-weight:600;">${titleHtml}</div>
-        <div class="small-text" style="opacity:.6; white-space:nowrap;">${when}</div>
+      <div class="mb-message-title-row" style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-top:6px;">
+        <div class="mb-message-title" style="font-weight:600;">${titleHtml}</div>
+        <div class="mb-message-date small-text" style="opacity:.6;">${when}</div>
       </div>
       ${detailHtml ? `
         <div class="small-text" style="margin-top:4px; opacity:.82;">
@@ -13844,6 +13848,30 @@ function renderManagerThreadMessagesGrouped(rows = [], nameMap = {}) {
   }
 
   return html;
+}
+
+function renderManagerThreadTimeline(rows = [], nameMap = {}) {
+  const ordered = Array.isArray(rows)
+    ? rows.filter((row) => getManagerThreadRowGroup(row) === "objective_timeline")
+    : [];
+
+  if (!ordered.length) {
+    return `<div class="small-text" style="opacity:.75;">No objective timeline yet.</div>`;
+  }
+
+  return renderManagerThreadMessagesGrouped(ordered, nameMap);
+}
+
+function renderManagerThreadBody(rows = [], nameMap = {}) {
+  const ordered = Array.isArray(rows)
+    ? rows.filter((row) => getManagerThreadRowGroup(row) !== "objective_timeline")
+    : [];
+
+  if (!ordered.length) {
+    return `<div class="small-text" style="opacity:.75;">No coaching notes or performance messages yet.</div>`;
+  }
+
+  return renderManagerThreadMessagesGrouped(ordered, nameMap);
 }
 
 function renderManagerThreadListItem(thread, nameMap) {
@@ -15667,6 +15695,7 @@ async function renderProfilePerformanceCards() {
 
 function renderManagerActiveThread(nameMap) {
   const msgEl = mbEl("mbThreadMessages");
+  const timelineEl = mbEl("mbThreadTimelinePanel");
   const titleEl = mbEl("mbThreadTitle");
   const metaEl = mbEl("mbThreadMeta");
   const statePanelEl = mbEl("mbThreadStatePanel");
@@ -15679,6 +15708,14 @@ function renderManagerActiveThread(nameMap) {
   if (!thread) {
     if (titleEl) titleEl.textContent = "Select a waiter";
     if (metaEl) metaEl.textContent = "";
+    if (timelineEl) {
+      timelineEl.innerHTML = `
+        <div style="font-weight:600;">Objective Timeline</div>
+        <div class="small-text" style="margin-top:6px; opacity:.75;">
+          Select a waiter to view live objective activity.
+        </div>
+      `;
+    }
     if (msgEl) msgEl.innerHTML = `<div class="small-text" style="opacity:.8;">Select a waiter thread in this restaurant to assign a timed challenge.</div>`;
     if (statePanelEl) {
       statePanelEl.innerHTML = `
@@ -15709,10 +15746,25 @@ function renderManagerActiveThread(nameMap) {
     () => renderManagerThreadRecommendation(thread)
   ) || "";
 
+  if (timelineEl) {
+    const timelineHtml = safeCall(
+      "renderManagerThreadTimeline",
+      () => renderManagerThreadTimeline(ordered, nameMap)
+    ) || `<div class="small-text" style="opacity:.75;">No objective timeline yet.</div>`;
+
+    timelineEl.innerHTML = `
+      <div style="font-weight:600;">Objective Timeline</div>
+      <div class="small-text" style="margin-top:6px; opacity:.75;">
+        Timed challenges, drill launches, completions, and expiries for this waiter.
+      </div>
+      <div style="margin-top:10px;">${timelineHtml}</div>
+    `;
+  }
+
   if (msgEl) {
     const groupedHtml = safeCall(
-      "renderManagerThreadMessagesGrouped",
-      () => renderManagerThreadMessagesGrouped(ordered, nameMap)
+      "renderManagerThreadBody",
+      () => renderManagerThreadBody(ordered, nameMap)
     ) || "";
 
     msgEl.innerHTML = `${groupedHtml}${recommendationHtml}`;
