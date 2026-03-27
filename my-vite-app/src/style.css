@@ -1169,12 +1169,38 @@ html[data-bc-mobile-env="true"] #screenManagerBoard #mbRestaurantPicker{
 }
 
 html[data-bc-mobile-env="true"] #waiterMessagesPanel{
-  top: 70px !important;
+  top: 8px !important;
   right: 8px !important;
-  width: min(100vw - 16px, 460px) !important;
-  max-height: min(72dvh, 640px) !important;
+  left: 8px !important;
+  width: auto !important;
+  max-height: calc(100dvh - 16px) !important;
   padding: 12px !important;
   border-radius: 18px !important;
+}
+
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbToggleMessengerPanel{
+  display: none !important;
+}
+
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbMessengerDeck{
+  display: flex !important;
+}
+
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbTab_messenger > .card{
+  padding: 12px !important;
+}
+
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbTimedChallengeComposer{
+  margin-top: 8px !important;
+  margin-bottom: 8px !important;
+  padding: 10px !important;
+}
+
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbThreadList,
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbThreadMessages,
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbThreadTimelinePanel,
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbThreadActions{
+  max-height: none !important;
 }
 
 @media (max-width: 640px){

@@ -17307,12 +17307,20 @@ function wireManagerBoardMessenger() {
     if (toggle) toggle.textContent = isOpen ? "Close Inbox" : "Open Inbox";
   };
 
-  setMessengerOpen(window.__BC_MB_MESSENGER_OPEN__ !== false);
+  const isMobileEnv = document.documentElement.dataset.bcMobileEnv === "true";
+  if (isMobileEnv) {
+    window.__BC_MB_MESSENGER_OPEN__ = true;
+  }
+  setMessengerOpen(isMobileEnv ? true : window.__BC_MB_MESSENGER_OPEN__ !== false);
 
   const toggle = mbEl("mbToggleMessengerPanel");
   if (toggle && !toggle.__wired) {
     toggle.__wired = true;
     toggle.addEventListener("click", () => {
+      if (document.documentElement.dataset.bcMobileEnv === "true") {
+        setMessengerOpen(true);
+        return;
+      }
       setMessengerOpen(!(window.__BC_MB_MESSENGER_OPEN__ !== false));
     });
   }
