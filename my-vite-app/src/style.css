@@ -2782,6 +2782,11 @@ html[data-bc-mobile-env="true"] #screenManagerBoard .score-row{
   overflow:hidden;
 }
 
+#screenManagerBoard .mb-message-card .small-text,
+#screenManagerBoard .mb-message-card .small{
+  overflow-wrap:anywhere;
+}
+
 #screenManagerBoard .mb-message-head,
 #screenManagerBoard .mb-message-title-row{
   min-width:0;
@@ -3098,8 +3103,28 @@ html[data-bc-mobile-env="true"] #screenManagerBoard .score-row{
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
   list-style: none;
   cursor: pointer;
+}
+
+#screenManagerBoard #mbPerformanceHistoryPanel .mb-disclosure-summary > div,
+#screenManagerBoard #mbPerformanceHistoryPanel .mb-disclosure-summary > label{
+  min-width: 0;
+}
+
+#screenManagerBoard #mbPerformanceHistoryPanel .mb-disclosure-summary > div{
+  flex: 1 1 260px;
+}
+
+#screenManagerBoard #mbPerformanceHistoryPanel .mb-disclosure-summary > label{
+  flex: 0 1 100%;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+#screenManagerBoard #mbPerformanceHistoryPanel #mbHistoryUser{
+  max-width: 100%;
 }
 
 #screenManagerBoard #mbPerformanceHistoryPanel .mb-disclosure-summary::-webkit-details-marker{
@@ -3131,6 +3156,14 @@ html[data-bc-mobile-env="true"] #screenManagerBoard .score-row{
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid rgba(255,255,255,0.08);
+  min-width: 0;
+}
+
+#screenManagerBoard #mbPerformanceHistoryPanel #mbHistoryChart{
+  display:block;
+  width:100%;
+  max-width:100%;
+  height:auto;
 }
 
 #screenManagerBoard #mbTab_performance{
@@ -3221,6 +3254,10 @@ html[data-bc-mobile-env="true"] #screenManagerBoard .score-row{
     margin-left:0;
     text-align:left;
     flex:1 1 100%;
+  }
+
+  #screenManagerBoard #mbPerformanceHistoryPanel .mb-disclosure-summary > label{
+    flex: 1 1 100%;
   }
 
   #screenManagerBoard #mbTab_performance #mbWeeklySummaryTop,

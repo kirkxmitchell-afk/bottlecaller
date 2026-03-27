@@ -16519,16 +16519,19 @@ function ensureProgLoaded() {
       }
 
       function resetEncounterViewport() {
-        return;
+        const panel =
+          document.getElementById("encounterPanel") ||
+          document.getElementById("screenPlay") ||
+          document.getElementById("bcShell");
+        if (!panel?.scrollIntoView) return;
+        requestAnimationFrame(() => {
+          panel.scrollIntoView({ behavior: "smooth", block: "center" });
+        });
       }
 
       function showStepReactionPreview(stepKey, nextStep) {
-        if (!currentEncounter || !stepKey) return;
-        currentEncounter.__stepReactionPreview = {
-          stepKey,
-          nextStep,
-        };
-        currentStep = 55;
+        if (currentEncounter) currentEncounter.__stepReactionPreview = null;
+        currentStep = Number(nextStep || 0) || 0;
         renderEncounterStep();
       }
 
@@ -20537,6 +20540,9 @@ function ensureProgLoaded() {
       }
 
       function renderEncounterStep() {
+        const finishRender = () => {
+          resetEncounterViewport();
+        };
         if (window.__BC3__?.active) return;
         if (
           currentEncounter?.isTimedChallengeEncounter &&
@@ -20586,41 +20592,49 @@ function ensureProgLoaded() {
 
         if (currentStep === 0) {
           renderStepLoad(stepContent, stepButtons);
+          finishRender();
           return;
         }
 
         if (currentStep === 1) {
           renderStepObserve(stepContent, stepButtons);
+          finishRender();
           return;
         }
 
         if (currentStep === 2) {
           renderStepMode(stepContent, stepButtons);
+          finishRender();
           return;
         }
 
         if (currentStep === 3) {
           renderStepHook(stepContent, stepButtons);
+          finishRender();
           return;
         }
 
         if (currentStep === 4) {
           renderStepDelivery(stepContent, stepButtons);
+          finishRender();
           return;
         }
 
         if (currentStep === 55) {
           renderStepReactionPreview(stepContent, stepButtons);
+          finishRender();
           return;
         }
 
         if (currentStep === 5) {
           renderStepReaction(stepContent);
+          finishRender();
           return;
         }
 
         if (currentStep === 6) {
           renderStepReflection(stepContent, stepButtons, inDrill);
+          finishRender();
           return;
         }
 
@@ -20715,11 +20729,13 @@ function ensureProgLoaded() {
             };
             stepButtons.appendChild(btn);
           }
+          finishRender();
           return;
         }
 
         if (currentStep === 7) {
           renderStepSessionSummary(stepContent, stepButtons, inDrill);
+          finishRender();
           return;
         }
       }
@@ -21719,6 +21735,7 @@ function ensureProgLoaded() {
           buttons.appendChild(b);
         });
 
+        resetEncounterViewport();
         console.log("[BC3] render", { enc: S.enc.encounterNumber, step: S.step, stage: step.stage });
       }
 
@@ -21844,8 +21861,7 @@ function ensureProgLoaded() {
               ? "\nAI perception: " + (entry.aiPerception || "—") +
                 "\nChosen path: " + ((entry.chosenPath || []).join(" -> ") || "—") +
                 "\nBest path: " + ((entry.bestPath || []).join(" -> ") || "—") +
-                "\nBottle served: " + (entry.bottleServed ? "YES" : "NO") +
-                "\nReaction spine: " + entry.stepSpine.map((node) => `${node.step}:${node.score > 0 ? "+" : ""}${node.score}`).join("  ")
+                "\nBottle served: " + (entry.bottleServed ? "YES" : "NO")
               : "";
           const trailText =
             Array.isArray(entry.stepReactionTrail) && entry.stepReactionTrail.length

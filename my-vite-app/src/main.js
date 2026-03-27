@@ -11090,7 +11090,7 @@ function renderSelectionTabUi(root, model, users) {
         <strong>Selection Table</strong>
         <div class="small-text">Use readiness and eligibility to identify tournament candidates.</div>
       </div>
-      <div style="margin-top:12px;">
+      <div class="mb-performance-table-wrap" style="margin-top:12px;">
         <table class="mb-performance-table">
           <thead>
             <tr>
