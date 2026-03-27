@@ -156,6 +156,33 @@ function syncBottleCallerViewportEnv() {
   document.documentElement.dataset.bcMobileEnv = isMobile ? "true" : "false";
   document.documentElement.dataset.bcViewport = isMobile ? "mobile" : "desktop";
   window.__BC_ENV__ = { ...(window.__BC_ENV__ || {}), mobile: isMobile };
+  syncManagerMessengerViewportLayout();
+}
+
+function syncManagerMessengerViewportLayout() {
+  const isMobile = document.documentElement.dataset.bcMobileEnv === "true";
+  const columns = document.getElementById("mbMessengerColumns");
+  const threadsPane = document.getElementById("mbMessengerThreadsPane");
+  const detailPane = document.getElementById("mbMessengerDetailPane");
+  if (!columns || !threadsPane || !detailPane) return;
+
+  if (isMobile) {
+    columns.style.display = "flex";
+    columns.style.flexDirection = "column";
+    columns.style.gap = "8px";
+    threadsPane.style.width = "100%";
+    threadsPane.style.minWidth = "0";
+    detailPane.style.width = "100%";
+    detailPane.style.minWidth = "0";
+  } else {
+    columns.style.display = "grid";
+    columns.style.gridTemplateColumns = "280px 1fr";
+    columns.style.gap = "12px";
+    threadsPane.style.width = "";
+    threadsPane.style.minWidth = "";
+    detailPane.style.width = "";
+    detailPane.style.minWidth = "";
+  }
 }
 
 syncBottleCallerViewportEnv();
@@ -770,8 +797,8 @@ document.querySelector("#app").innerHTML = `
               <div id="mbTimedChallengeRecentSummary" class="small" style="opacity:.85; margin-top:4px;"></div>
             </div>
 
-            <div style="display:grid; grid-template-columns: 280px 1fr; gap:12px; margin-top:12px;">
-              <div style="border:1px solid rgba(255,255,255,0.10); border-radius:12px; overflow:hidden;">
+            <div id="mbMessengerColumns" style="display:grid; grid-template-columns: 280px 1fr; gap:12px; margin-top:12px;">
+              <div id="mbMessengerThreadsPane" style="border:1px solid rgba(255,255,255,0.10); border-radius:12px; overflow:hidden;">
               <div style="padding:10px; border-bottom:1px solid rgba(255,255,255,0.10); font-weight:600;">
                   Staff Threads
                 </div>
@@ -796,7 +823,7 @@ document.querySelector("#app").innerHTML = `
                 </div>
               </div>
 
-              <div style="border:1px solid rgba(255,255,255,0.10); border-radius:12px; overflow:hidden; display:flex; flex-direction:column; min-height:520px;">
+              <div id="mbMessengerDetailPane" style="border:1px solid rgba(255,255,255,0.10); border-radius:12px; overflow:hidden; display:flex; flex-direction:column; min-height:520px;">
               <div style="padding:10px; border-bottom:1px solid rgba(255,255,255,0.10);">
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
                   <strong id="mbThreadTitle">Select a waiter</strong>
@@ -17299,6 +17326,7 @@ function wireManagerDrillActionPanel() {
 }
 
 function wireManagerBoardMessenger() {
+  syncManagerMessengerViewportLayout();
   const setMessengerOpen = (isOpen) => {
     window.__BC_MB_MESSENGER_OPEN__ = !!isOpen;
     const deck = mbEl("mbMessengerDeck");
