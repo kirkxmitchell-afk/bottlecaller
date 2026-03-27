@@ -147,7 +147,8 @@ window.__BOTTLECALLER_BOOTED__ = true;
 function isBottleCallerMobileEnv() {
   const narrow = window.matchMedia("(max-width: 860px)").matches;
   const coarse = window.matchMedia("(pointer: coarse)").matches;
-  return narrow || coarse;
+  const coarseNarrow = coarse && window.matchMedia("(max-width: 1100px)").matches;
+  return narrow || coarseNarrow;
 }
 
 function syncBottleCallerViewportEnv() {

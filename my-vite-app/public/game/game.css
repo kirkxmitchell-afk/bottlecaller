@@ -3853,18 +3853,18 @@ html, body{ height:100%; }
 
 @media (max-width: 860px){
   body{
-    font-size: 14px;
+    font-size: 13px;
   }
 
   .screen{
     width: 100%;
-    padding: 12px 10px 18px;
+    padding: 8px 8px 14px;
   }
 
   .panel,
   .card{
-    padding: 12px;
-    border-radius: 14px;
+    padding: 10px;
+    border-radius: 12px;
   }
 
   .button-row,
@@ -3876,10 +3876,10 @@ html, body{ height:100%; }
   button,
   .option-btn,
   .small-btn{
-    min-height: 40px;
-    padding: 9px 10px;
-    font-size: 12px;
-    border-radius: 11px;
+    min-height: 36px;
+    padding: 8px 9px;
+    font-size: 11px;
+    border-radius: 10px;
   }
 
   input[type="email"],
@@ -3888,27 +3888,28 @@ html, body{ height:100%; }
   input[type="number"],
   select,
   textarea{
-    padding: 10px 11px;
-    font-size: 13px;
-    border-radius: 11px;
+    padding: 9px 10px;
+    font-size: 12px;
+    border-radius: 10px;
   }
 
   .app-game-masthead{
-    width: min(100%, calc(100% - 20px));
-    margin: 10px auto 2px;
-    padding: 12px 14px;
-    border-radius: 16px;
-    font-size: clamp(18px, 6vw, 26px);
+    width: min(100%, calc(100% - 12px));
+    margin: 8px auto 2px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    font-size: clamp(17px, 5.6vw, 22px);
   }
 
   #bcShell{
-    gap: 10px;
+    gap: 8px;
+    padding: 8px;
   }
 
   #bcHudTop.bc-hud-top,
   #bcHudBottom.bc-hud-bottom{
-    padding: 10px 12px;
-    border-radius: 14px;
+    padding: 9px 10px;
+    border-radius: 12px;
   }
 
   #bcEncounterStage,
@@ -3950,5 +3951,57 @@ html, body{ height:100%; }
   .wine-table td{
     padding: 8px 8px;
     font-size: 11px;
+  }
+}
+
+@media (max-width: 640px){
+  .screen{
+    padding: 6px 6px 12px;
+  }
+
+  .app-game-masthead{
+    width: min(100%, calc(100% - 8px));
+    padding: 8px 10px;
+    font-size: clamp(16px, 5.2vw, 19px);
+  }
+
+  #bcShell{
+    gap: 6px;
+    padding: 6px;
+  }
+
+  #bcHudTop.bc-hud-top,
+  #bcHudBottom.bc-hud-bottom{
+    padding: 8px 9px;
+    gap: 6px !important;
+  }
+
+  #bcHudTop .bc-title{
+    font-size: 12px;
+  }
+
+  #bcHudTop .bc-subtitle,
+  #bcHudTop .bc-chip{
+    font-size: 9px;
+    padding: 4px 7px;
+  }
+
+  #encounterPanel,
+  .bc-stage-card,
+  .bc-rail-card{
+    padding: 9px !important;
+    border-radius: 12px !important;
+  }
+
+  #encounterPanel .bc-score-row{
+    padding: 7px 8px !important;
+    border-radius: 10px !important;
+  }
+
+  #stepButtons > button,
+  #stepButtons .btn,
+  #stepButtons .option-btn{
+    padding: 9px !important;
+    border-radius: 10px !important;
   }
 }

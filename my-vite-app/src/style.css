@@ -1031,8 +1031,8 @@ button:hover, .btn:hover, .btn-ghost:hover{
 }
 
 html[data-bc-mobile-env="true"] #app{
-  gap: 12px;
-  padding: 12px;
+  gap: 8px;
+  padding: 8px;
 }
 
 html[data-bc-mobile-env="true"] .screen{
@@ -1041,13 +1041,13 @@ html[data-bc-mobile-env="true"] .screen{
 
 html[data-bc-mobile-env="true"] .app-chrome{
   grid-template-columns: 1fr;
-  gap: 12px;
-  padding: 14px;
-  border-radius: 20px;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 18px;
 }
 
 html[data-bc-mobile-env="true"] .app-chrome-title{
-  font-size: clamp(26px, 9vw, 36px);
+  font-size: clamp(22px, 8vw, 32px);
 }
 
 html[data-bc-mobile-env="true"] .app-chrome-copy{
@@ -1063,15 +1063,15 @@ html[data-bc-mobile-env="true"] .app-chrome-context{
 
 html[data-bc-mobile-env="true"] .app-chrome-chip{
   min-width: 0;
-  flex: 1 1 calc(33.333% - 8px);
-  padding: 10px 11px;
-  border-radius: 14px;
+  flex: 1 1 calc(50% - 8px);
+  padding: 8px 10px;
+  border-radius: 12px;
 }
 
 html[data-bc-mobile-env="true"] .panel,
 html[data-bc-mobile-env="true"] .card{
-  padding: 14px;
-  border-radius: 14px;
+  padding: 12px;
+  border-radius: 12px;
 }
 
 html[data-bc-mobile-env="true"] .topbar{
@@ -1089,18 +1089,18 @@ html[data-bc-mobile-env="true"] .topbar .row{
 html[data-bc-mobile-env="true"] .topbar .row button,
 html[data-bc-mobile-env="true"] .topbar .row .btn-ghost,
 html[data-bc-mobile-env="true"] .topbar .row .btn-danger{
-  min-height: 40px;
-  padding: 9px 11px;
-  font-size: 12px;
-  border-radius: 11px;
+  min-height: 36px;
+  padding: 8px 10px;
+  font-size: 11px;
+  border-radius: 10px;
 }
 
 html[data-bc-mobile-env="true"] #screenPremiumApp > .panel.stack,
 html[data-bc-mobile-env="true"] #screenManagerBoard > .panel.stack,
 html[data-bc-mobile-env="true"] #screenProfile > .panel.stack,
 html[data-bc-mobile-env="true"] #screenWaiterLeaderboard > .panel.stack{
-  padding: 12px;
-  border-radius: 16px;
+  padding: 10px;
+  border-radius: 14px;
 }
 
 html[data-bc-mobile-env="true"] #screenPremiumApp .topbar,
@@ -1123,9 +1123,9 @@ html[data-bc-mobile-env="true"] #screenProfile .topbar .row button{
 
 html[data-bc-mobile-env="true"] #premiumRootFrame,
 html[data-bc-mobile-env="true"] #gameRootDemoFrame{
-  height: calc(100dvh - 210px) !important;
-  min-height: 500px;
-  border-radius: 14px !important;
+  height: calc(100dvh - 148px) !important;
+  min-height: 420px;
+  border-radius: 12px !important;
 }
 
 html[data-bc-mobile-env="true"] #hudPanel{
@@ -1144,18 +1144,68 @@ html[data-bc-mobile-env="true"] #hudPanel textarea{
 }
 
 html[data-bc-mobile-env="true"] #screenManagerBoard #mbMenu{
-  gap: 8px;
+  gap: 6px;
+  padding: 10px !important;
+  border-radius: 16px !important;
 }
 
 html[data-bc-mobile-env="true"] #screenManagerBoard #mbMenu [data-mbtab]{
-  min-height: 40px;
-  padding: 8px 10px;
-  font-size: 12px;
+  min-height: 34px;
+  padding: 7px 9px;
+  font-size: 11px;
+  border-radius: 12px !important;
 }
 
 html[data-bc-mobile-env="true"] #screenProfile .card .score-row,
 html[data-bc-mobile-env="true"] #screenManagerBoard .score-row{
   font-size: 12px;
+}
+
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbRestaurantPicker{
+  min-width: 0 !important;
+  min-height: 36px;
+  padding: 8px 10px;
+  border-radius: 12px;
+}
+
+html[data-bc-mobile-env="true"] #waiterMessagesPanel{
+  top: 70px !important;
+  right: 8px !important;
+  width: min(100vw - 16px, 460px) !important;
+  max-height: min(72dvh, 640px) !important;
+  padding: 12px !important;
+  border-radius: 18px !important;
+}
+
+@media (max-width: 640px){
+  html[data-bc-mobile-env="true"] #app{
+    padding: 6px;
+  }
+
+  html[data-bc-mobile-env="true"] .app-chrome{
+    padding: 10px;
+    border-radius: 16px;
+  }
+
+  html[data-bc-mobile-env="true"] .app-chrome-chip{
+    flex: 1 1 100%;
+  }
+
+  html[data-bc-mobile-env="true"] .topbar .brand h2{
+    font-size: 15px;
+  }
+
+  html[data-bc-mobile-env="true"] #screenPremiumApp .topbar .row button,
+  html[data-bc-mobile-env="true"] #screenManagerBoard .topbar .row button,
+  html[data-bc-mobile-env="true"] #screenProfile .topbar .row button{
+    flex: 1 1 100%;
+  }
+
+  html[data-bc-mobile-env="true"] #premiumRootFrame,
+  html[data-bc-mobile-env="true"] #gameRootDemoFrame{
+    height: calc(100dvh - 132px) !important;
+    min-height: 380px;
+  }
 }
 
 /* =========================================================
