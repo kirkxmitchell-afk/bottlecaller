@@ -1197,6 +1197,19 @@ html[data-bc-mobile-env="true"] #screenManagerBoard #mbTimedChallengeComposer{
   padding: 10px !important;
 }
 
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbMessengerDeck > div[style*="grid-template-columns: 280px 1fr"],
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbMessengerDeck > div[style*="grid-template-columns: 260px minmax(0,1fr)"]{
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+}
+
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbMessengerDeck > div[style*="grid-template-columns: 280px 1fr"] > div,
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbMessengerDeck > div[style*="grid-template-columns: 260px minmax(0,1fr)"] > div{
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
 html[data-bc-mobile-env="true"] #screenManagerBoard #mbThreadTimelinePanel{
   margin: 8px 8px 0 !important;
   padding: 8px !important;
@@ -1224,6 +1237,21 @@ html[data-bc-mobile-env="true"] #screenManagerBoard #mbThreadActions,
 html[data-bc-mobile-env="true"] #screenManagerBoard #mbThreadRecommendationsPanel,
 html[data-bc-mobile-env="true"] #screenManagerBoard #mbThreadStatePanel{
   border-radius: 16px !important;
+}
+
+@media (max-width: 880px){
+  #screenManagerBoard #mbMessengerDeck > div[style*="grid-template-columns: 280px 1fr"],
+  #screenManagerBoard #mbMessengerDeck > div[style*="grid-template-columns: 260px minmax(0,1fr)"]{
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+
+  #screenManagerBoard #mbMessengerDeck > div[style*="grid-template-columns: 280px 1fr"] > div,
+  #screenManagerBoard #mbMessengerDeck > div[style*="grid-template-columns: 260px minmax(0,1fr)"] > div{
+    width: 100% !important;
+    min-width: 0 !important;
+  }
 }
 
 html[data-bc-mobile-env="true"] #screenManagerBoard #mbThreadRecommendationsPanel,
