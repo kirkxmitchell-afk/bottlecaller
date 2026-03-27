@@ -11363,6 +11363,28 @@ function pushCtxToPremiumIframe(source = "manual") {
   } catch {}
 }
 
+async function hydrateParentProgressionForPremiumIframe(source = "manual") {
+  const snapshot = getParentCtxSnapshot("premium");
+  const userId = snapshot.progressionOwnerUserId || snapshot.profileUserId || snapshot.userId || null;
+  const restaurantId = snapshot.progressionOwnerRestaurantId || snapshot.restaurantId || null;
+
+  if (!userId || !restaurantId) return false;
+
+  try {
+    await hydrateProgressionSpineFromLatestSnapshot({ userId, restaurantId });
+    console.log("[BC] premium iframe progression hydrated", { source, userId, restaurantId });
+    return true;
+  } catch (error) {
+    console.warn("[BC] premium iframe progression hydrate failed", {
+      source,
+      userId,
+      restaurantId,
+      error: error?.message || error,
+    });
+    return false;
+  }
+}
+
 function schedulePremiumCtxPush(source = "manual", attempt = 0) {
   const iframe = document.getElementById("premiumRootFrame");
   if (!iframe?.contentWindow) return false;
@@ -11469,7 +11491,9 @@ function mountPremiumGameIframe({
   if (iframe && !forceRemount && hasLiveGameSrc) {
     if (isHardLoggedOut()) return;
     if (isParentCtxReady(mode || "premium")) {
-      schedulePremiumCtxPush("mount.existing");
+      void hydrateParentProgressionForPremiumIframe("mount.existing").finally(() => {
+        schedulePremiumCtxPush("mount.existing");
+      });
     }
     pushPremiumDrill();
     return;
@@ -11542,6 +11566,7 @@ function mountPremiumGameIframe({
 
       try {
         if (isParentCtxReady(modeFromSrc || "premium")) {
+          await hydrateParentProgressionForPremiumIframe("iframe.load");
           schedulePremiumCtxPush("iframe.load");
         }
       } catch (e) {
@@ -17293,6 +17318,21 @@ function wireManagerBoardMessenger() {
     toggle.__wired = true;
     toggle.addEventListener("click", () => {
       setMessengerOpen(!(window.__BC_MB_MESSENGER_OPEN__ !== false));
+    });
+  }
+
+  if (document.body && !document.body.__bcManagerInboxBound) {
+    document.body.__bcManagerInboxBound = true;
+    document.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!target) return;
+      const messengerTab = mbEl("mbTab_messenger");
+      const toggleBtn = mbEl("mbToggleMessengerPanel");
+      const deck = mbEl("mbMessengerDeck");
+      if (!messengerTab || messengerTab.classList.contains("hidden")) return;
+      if (!deck || deck.classList.contains("hidden")) return;
+      if (deck.contains(target) || toggleBtn?.contains(target)) return;
+      setMessengerOpen(false);
     });
   }
 

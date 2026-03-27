@@ -1721,6 +1721,21 @@ html[data-bc-mobile-env="true"] #screenManagerBoard .score-row{
   gap: 10px !important;
 }
 
+#waiterMessagesThread > div{
+  min-width: 0;
+}
+
+#waiterMessagesThread > div > div:first-child{
+  flex-wrap: wrap;
+  align-items: flex-start !important;
+}
+
+#waiterMessagesThread > div .small-text{
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 #waiterMessagesBackdrop{
   display:none !important;
 }
@@ -2827,6 +2842,7 @@ html[data-bc-mobile-env="true"] #screenManagerBoard .score-row{
   text-align:right;
   white-space:normal;
   overflow-wrap:anywhere;
+  word-break:break-word;
 }
 
 #screenManagerBoard .mb-section-header{

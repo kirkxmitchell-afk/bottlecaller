@@ -10379,6 +10379,7 @@ function ensureProgLoaded() {
           // Premium/session progression path
           try {
             ensureProgLoaded();
+            applyCanonicalProgMirror({ force: true });
             evaluateUnlocks();
             window.__BC_ENSURE_PROG__?.();
             console.log(
