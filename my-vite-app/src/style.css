@@ -2780,11 +2780,22 @@ html[data-bc-mobile-env="true"] #screenManagerBoard .score-row{
 
 #screenManagerBoard .mb-message-card{
   overflow:hidden;
+  min-width:0;
 }
 
 #screenManagerBoard .mb-message-card .small-text,
 #screenManagerBoard .mb-message-card .small{
   overflow-wrap:anywhere;
+}
+
+#screenManagerBoard .mb-message-head > *,
+#screenManagerBoard .mb-message-title-row > *{
+  min-width:0;
+}
+
+#screenManagerBoard .mb-message-head > :last-child{
+  flex:0 1 auto;
+  max-width:100%;
 }
 
 #screenManagerBoard .mb-message-head,
@@ -2801,12 +2812,12 @@ html[data-bc-mobile-env="true"] #screenManagerBoard .score-row{
 
 #screenManagerBoard .mb-message-date{
   margin-left:auto;
-  flex:0 1 180px;
+  flex:1 1 140px;
   max-width:100%;
   text-align:right;
   white-space:normal;
   overflow-wrap:anywhere;
- }
+}
 
 #screenManagerBoard .mb-section-header{
   display:flex;
@@ -2856,6 +2867,33 @@ html[data-bc-mobile-env="true"] #screenManagerBoard .score-row{
   width:100%;
   min-width:960px;
   border-collapse:collapse;
+}
+
+#screenManagerBoard .mb-selection-table{
+  min-width:0;
+  table-layout:fixed;
+}
+
+#screenManagerBoard .mb-selection-table th,
+#screenManagerBoard .mb-selection-table td{
+  padding:9px 10px;
+  font-size:12px;
+  overflow-wrap:anywhere;
+}
+
+#screenManagerBoard .mb-selection-table th:nth-child(1),
+#screenManagerBoard .mb-selection-table td:nth-child(1){
+  width:12%;
+}
+
+#screenManagerBoard .mb-selection-table th:nth-child(7),
+#screenManagerBoard .mb-selection-table td:nth-child(7){
+  width:10%;
+}
+
+#screenManagerBoard .mb-selection-table th:nth-child(8),
+#screenManagerBoard .mb-selection-table td:nth-child(8){
+  width:20%;
 }
 
 #screenManagerBoard .mb-performance-table th,
@@ -3184,11 +3222,10 @@ html[data-bc-mobile-env="true"] #screenManagerBoard .score-row{
   grid-column:1 / -1;
 }
 
-#screenManagerBoard #mbTab_performance #mbWeeklySummaryTop,
-#screenManagerBoard #mbTab_performance #mbBestStreaks,
-#screenManagerBoard #mbTab_performance #mbNeedsCoaching,
-#screenManagerBoard #mbTab_performance #mbRecent,
-#screenManagerBoard #mbTab_performance #mbWeeklyReport{
+#screenManagerBoard #mbBestStreaksPanel,
+#screenManagerBoard #mbNeedsCoachingPanel,
+#screenManagerBoard #mbRecentPanel,
+#screenManagerBoard #mbWeeklyReportPanel{
   grid-column:span 6;
 }
 
@@ -3218,10 +3255,10 @@ html[data-bc-mobile-env="true"] #screenManagerBoard .score-row{
 }
 
 #screenManagerBoard #mbTab_performance #mbWeeklySummaryTop,
-#screenManagerBoard #mbTab_performance #mbBestStreaks,
-#screenManagerBoard #mbTab_performance #mbNeedsCoaching,
-#screenManagerBoard #mbTab_performance #mbRecent,
-#screenManagerBoard #mbTab_performance #mbWeeklyReport{
+#screenManagerBoard #mbBestStreaks,
+#screenManagerBoard #mbNeedsCoaching,
+#screenManagerBoard #mbRecent,
+#screenManagerBoard #mbWeeklyReport{
   background:
     linear-gradient(180deg, rgba(196,181,253,0.08), rgba(255,255,255,0.02)),
     rgba(255,255,255,0.02);
@@ -3260,11 +3297,10 @@ html[data-bc-mobile-env="true"] #screenManagerBoard .score-row{
     flex: 1 1 100%;
   }
 
-  #screenManagerBoard #mbTab_performance #mbWeeklySummaryTop,
-  #screenManagerBoard #mbTab_performance #mbBestStreaks,
-  #screenManagerBoard #mbTab_performance #mbNeedsCoaching,
-  #screenManagerBoard #mbTab_performance #mbRecent,
-  #screenManagerBoard #mbTab_performance #mbWeeklyReport,
+  #screenManagerBoard #mbBestStreaksPanel,
+  #screenManagerBoard #mbNeedsCoachingPanel,
+  #screenManagerBoard #mbRecentPanel,
+  #screenManagerBoard #mbWeeklyReportPanel,
   #screenManagerBoard .mb-selection-table-wrap,
   #screenManagerBoard .mb-selection-preview{
     grid-column:1 / -1;

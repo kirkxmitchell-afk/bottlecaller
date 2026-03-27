@@ -881,17 +881,17 @@ document.querySelector("#app").innerHTML = `
           </details>
         </div>
 
-          <div style="margin-top:12px;">
+          <div id="mbBestStreaksPanel" class="card" style="margin-top:12px;">
             <div style="font-weight:600; margin-bottom:6px;">Best streaks</div>
             <div id="mbBestStreaks" style="opacity:.9;">-</div>
           </div>
 
-          <div style="margin-top:12px;">
+          <div id="mbNeedsCoachingPanel" class="card" style="margin-top:12px;">
             <div style="font-weight:600; margin-bottom:6px;">Needs coaching</div>
             <div id="mbNeedsCoaching" style="opacity:.9;">-</div>
           </div>
 
-          <details class="card mb-disclosure">
+          <details id="mbRecentPanel" class="card mb-disclosure">
             <summary class="mb-disclosure-summary">
               <div>
                 <strong>Recent Activity</strong>
@@ -905,7 +905,7 @@ document.querySelector("#app").innerHTML = `
             </div>
           </details>
 
-          <div class="card" style="margin-top:12px;">
+          <div id="mbWeeklyReportPanel" class="card" style="margin-top:12px;">
             <strong>Weekly Training Report</strong>
 
             <div class="small-text" style="margin-top:6px; opacity:.85;">
@@ -11091,7 +11091,7 @@ function renderSelectionTabUi(root, model, users) {
         <div class="small-text">Use readiness and eligibility to identify tournament candidates.</div>
       </div>
       <div class="mb-performance-table-wrap" style="margin-top:12px;">
-        <table class="mb-performance-table">
+        <table class="mb-performance-table mb-selection-table">
           <thead>
             <tr>
               <th>Waiter</th>

@@ -941,7 +941,7 @@ button[disabled] { opacity: 0.5; cursor: not-allowed; transform: none; }
   margin-top: 12px;
 }
 
-.reaction-progress-card .reaction-spine-card {
+.reaction-spine-card {
   display: none;
 }
 

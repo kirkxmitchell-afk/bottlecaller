@@ -19672,7 +19672,6 @@ function ensureProgLoaded() {
         signalChip.innerText = "Signal: " + String(result.chainSignal || "").toUpperCase() +
           " (score " + Number(result.chainScore).toFixed(1) + " / 4.0)";
         stepContent.appendChild(signalChip);
-        renderCompactReactionSpineBlock(stepContent, currentEncounter);
 
         if (result.deliveryCorrect) {
           const upgraded = rollPremiumOpportunity(result, currentEncounter);
