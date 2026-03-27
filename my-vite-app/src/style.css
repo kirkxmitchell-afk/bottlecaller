@@ -656,18 +656,6 @@ button[disabled] { opacity: 0.5; cursor: not-allowed; transform: none; }
   }
 }
 
-html::before{
-  content:"STYLE-CHECK-123";
-  position:fixed;
-  left:10px; top:10px;
-  z-index:9999999;
-  background:#000; color:#0f0;
-  padding:6px 10px;
-  border:1px solid #0f0;
-  border-radius:10px;
-  font:12px/1.2 monospace;
-}
-
 /* =========================================================
    BOTTLECALLER PREMIUM (PARENT) — paste at VERY BOTTOM
    ========================================================= */
@@ -2766,7 +2754,8 @@ html[data-bc-mobile-env="true"] #screenManagerBoard .score-row{
   overflow:hidden;
 }
 
-#screenManagerBoard #mbTab_messenger > .card > div[style*="grid-template-columns: 260px minmax(0,1fr)"]{
+#screenManagerBoard #mbTab_messenger > .card > div[style*="grid-template-columns: 260px minmax(0,1fr)"],
+#screenManagerBoard #mbTab_messenger > .card > div[style*="grid-template-columns: 280px 1fr"]{
   grid-template-columns:minmax(220px, 280px) minmax(0, 1fr) !important;
   align-items:start;
 }
@@ -3223,7 +3212,8 @@ html[data-bc-mobile-env="true"] #screenManagerBoard .score-row{
     grid-template-columns:1fr;
   }
 
-  #screenManagerBoard #mbTab_messenger > .card > div[style*="grid-template-columns: 260px minmax(0,1fr)"]{
+  #screenManagerBoard #mbTab_messenger > .card > div[style*="grid-template-columns: 260px minmax(0,1fr)"],
+  #screenManagerBoard #mbTab_messenger > .card > div[style*="grid-template-columns: 280px 1fr"]{
     grid-template-columns:1fr !important;
   }
 
