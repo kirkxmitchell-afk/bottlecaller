@@ -1196,11 +1196,64 @@ html[data-bc-mobile-env="true"] #screenManagerBoard #mbTimedChallengeComposer{
   padding: 10px !important;
 }
 
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbTab_messenger > .card > div[style*="grid-template-columns: 260px minmax(0,1fr)"],
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbTab_messenger > .card > div[style*="grid-template-columns: 280px 1fr"]{
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 8px !important;
+}
+
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbTab_messenger > .card > div[style*="grid-template-columns: 260px minmax(0,1fr)"] > div,
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbTab_messenger > .card > div[style*="grid-template-columns: 280px 1fr"] > div{
+  min-width: 0 !important;
+  width: 100% !important;
+}
+
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbThreadList{
+  max-height: 220px !important;
+  overflow-y: auto !important;
+}
+
 html[data-bc-mobile-env="true"] #screenManagerBoard #mbThreadList,
 html[data-bc-mobile-env="true"] #screenManagerBoard #mbThreadMessages,
 html[data-bc-mobile-env="true"] #screenManagerBoard #mbThreadTimelinePanel,
 html[data-bc-mobile-env="true"] #screenManagerBoard #mbThreadActions{
   max-height: none !important;
+}
+
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbThreadTimelinePanel{
+  margin: 8px 8px 0 !important;
+}
+
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbThreadActions{
+  padding: 8px !important;
+  border-top: 0 !important;
+}
+
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbThreadMessages{
+  min-height: 180px !important;
+  padding: 8px !important;
+}
+
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbThreadRecommendationsPanel,
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbThreadStatePanel{
+  padding: 8px !important;
+}
+
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbInstrBody{
+  min-height: 88px !important;
+}
+
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbTimedChallengeComposer .row,
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbThreadActions > div[style*="display:flex; gap:8px"]{
+  gap: 6px !important;
+}
+
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbTimedChallengeComposer select,
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbTimedChallengeComposer input,
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbThreadActions button,
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbInstrSend{
+  min-height: 36px !important;
 }
 
 @media (max-width: 640px){
