@@ -1188,6 +1188,9 @@ html[data-bc-mobile-env="true"] #screenManagerBoard #mbMessengerDeck{
 
 html[data-bc-mobile-env="true"] #screenManagerBoard #mbTab_messenger > .card{
   padding: 12px !important;
+  max-height: calc(100dvh - 24px) !important;
+  overflow-y: auto !important;
+  border-radius: 18px !important;
 }
 
 html[data-bc-mobile-env="true"] #screenManagerBoard #mbTimedChallengeComposer{
@@ -1215,6 +1218,11 @@ html[data-bc-mobile-env="true"] #screenManagerBoard #mbThreadList{
 }
 
 html[data-bc-mobile-env="true"] #screenManagerBoard #mbThreadList,
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbThreadMessages{
+  border-radius: 16px !important;
+}
+
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbThreadList,
 html[data-bc-mobile-env="true"] #screenManagerBoard #mbThreadMessages,
 html[data-bc-mobile-env="true"] #screenManagerBoard #mbThreadTimelinePanel,
 html[data-bc-mobile-env="true"] #screenManagerBoard #mbThreadActions{
@@ -1233,6 +1241,8 @@ html[data-bc-mobile-env="true"] #screenManagerBoard #mbThreadActions{
 html[data-bc-mobile-env="true"] #screenManagerBoard #mbThreadMessages{
   min-height: 180px !important;
   padding: 8px !important;
+  max-height: 46dvh !important;
+  overflow-y: auto !important;
 }
 
 html[data-bc-mobile-env="true"] #screenManagerBoard #mbThreadRecommendationsPanel,
