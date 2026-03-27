@@ -2796,6 +2796,7 @@ html[data-bc-mobile-env="true"] #screenManagerBoard .score-row{
   display:flex;
   flex-direction:column;
   gap:10px;
+  flex:0 0 auto;
 }
 
 #screenManagerBoard #mbTab_messenger #mbThreadTimelinePanel{
@@ -2807,6 +2808,7 @@ html[data-bc-mobile-env="true"] #screenManagerBoard .score-row{
 
 #screenManagerBoard #mbTab_messenger #mbThreadMessages{
   min-height:260px;
+  flex:1 1 auto;
 }
 
 #screenManagerBoard .mb-message-card{

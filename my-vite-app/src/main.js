@@ -13916,12 +13916,14 @@ function renderManagerThreadTimeline(rows = [], nameMap = {}) {
 
 function renderManagerThreadBody(rows = [], nameMap = {}) {
   const ordered = Array.isArray(rows) ? rows : [];
+  const primaryRows = ordered.filter((row) => getManagerThreadRowGroup(row) !== "objective_timeline");
+  const rowsToRender = primaryRows.length ? primaryRows : ordered;
 
-  if (!ordered.length) {
+  if (!rowsToRender.length) {
     return `<div class="small-text" style="opacity:.75;">No thread messages yet.</div>`;
   }
 
-  return renderManagerThreadMessagesGrouped(ordered, nameMap);
+  return renderManagerThreadMessagesGrouped(rowsToRender, nameMap);
 }
 
 function renderManagerThreadListItem(thread, nameMap) {
