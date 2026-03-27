@@ -13915,12 +13915,10 @@ function renderManagerThreadTimeline(rows = [], nameMap = {}) {
 }
 
 function renderManagerThreadBody(rows = [], nameMap = {}) {
-  const ordered = Array.isArray(rows)
-    ? rows.filter((row) => getManagerThreadRowGroup(row) !== "objective_timeline")
-    : [];
+  const ordered = Array.isArray(rows) ? rows : [];
 
   if (!ordered.length) {
-    return `<div class="small-text" style="opacity:.75;">No coaching notes or performance messages yet.</div>`;
+    return `<div class="small-text" style="opacity:.75;">No thread messages yet.</div>`;
   }
 
   return renderManagerThreadMessagesGrouped(ordered, nameMap);
@@ -15793,11 +15791,6 @@ function renderManagerActiveThread(nameMap) {
   setActiveManagerThreadState({ userId: thread.userId, rows: ordered });
   if (titleEl) titleEl.textContent = String(thread?.title || userLabel(thread.userId, nameMap));
   if (metaEl) metaEl.textContent = getManagerThreadMetaSummary(ordered);
-  const recommendationHtml = safeCall(
-    "renderManagerThreadRecommendation",
-    () => renderManagerThreadRecommendation(thread)
-  ) || "";
-
   if (timelineEl) {
     const timelineHtml = safeCall(
       "renderManagerThreadTimeline",
@@ -15819,8 +15812,8 @@ function renderManagerActiveThread(nameMap) {
       () => renderManagerThreadBody(ordered, nameMap)
     ) || "";
 
-    msgEl.innerHTML = `${groupedHtml}${recommendationHtml}`;
-    msgEl.scrollTop = msgEl.scrollHeight;
+    msgEl.innerHTML = groupedHtml;
+    msgEl.scrollTop = 0;
     safeCall("wireMbCoachSuggestionButtons", () => wireMbCoachSuggestionButtons());
     safeCall("wireMbAutoDrillButtons", () => wireMbAutoDrillButtons());
     safeCall("wireManagerChallengeSuggestionButtons", () => wireManagerChallengeSuggestionButtons());
