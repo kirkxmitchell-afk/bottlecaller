@@ -10380,6 +10380,7 @@ function ensureProgLoaded() {
           try {
             ensureProgLoaded();
             applyCanonicalProgMirror({ force: true });
+            restoreEncounterIndexFromProgression();
             evaluateUnlocks();
             window.__BC_ENSURE_PROG__?.();
             console.log(
@@ -12659,6 +12660,35 @@ function ensureProgLoaded() {
           return false;
         }
         return beginFreshProgressionRun({ resetEncounterFlow });
+      }
+
+      function restoreEncounterIndexFromProgression() {
+        if (window.isDemo || window.bcMode === "demo") return false;
+
+        try {
+          const normalized = getNormalizedProgressionState?.() || null;
+          const restoredEncounterId = Number(
+            normalized?.session?.currentEncounterId ??
+            normalized?.state?.session?.currentEncounterId ??
+            0
+          );
+          const restoredIndex = Math.max(0, restoredEncounterId - 1);
+          const currentStoredIndex = Number(localStorage.getItem(encounterIndexKey) || encounterIndex || 0);
+
+          if (!Number.isFinite(restoredIndex) || restoredIndex <= currentStoredIndex) return false;
+
+          encounterIndex = restoredIndex;
+          saveEncounterIndex(encounterIndex);
+          console.log("[PROG] restored encounter index from canonical state", {
+            restoredEncounterId,
+            restoredIndex,
+            currentStoredIndex,
+          });
+          return true;
+        } catch (error) {
+          console.warn("[PROG] restoreEncounterIndexFromProgression failed", error);
+          return false;
+        }
       }
 
       function applyDifficultyToEncounter(enc, policy) {
