@@ -1184,12 +1184,17 @@ html[data-bc-mobile-env="true"] #screenManagerBoard #mbToggleMessengerPanel{
 
 html[data-bc-mobile-env="true"] #screenManagerBoard #mbMessengerDeck{
   display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  max-height: calc(100dvh - 96px) !important;
+  overflow-y: auto !important;
+  padding-right: 2px;
 }
 
 html[data-bc-mobile-env="true"] #screenManagerBoard #mbTab_messenger > .card{
   padding: 12px !important;
   max-height: calc(100dvh - 24px) !important;
-  overflow-y: auto !important;
+  overflow: hidden !important;
   border-radius: 18px !important;
 }
 
@@ -1213,7 +1218,7 @@ html[data-bc-mobile-env="true"] #screenManagerBoard #mbTab_messenger > .card > d
 }
 
 html[data-bc-mobile-env="true"] #screenManagerBoard #mbThreadList{
-  max-height: 220px !important;
+  max-height: 180px !important;
   overflow-y: auto !important;
 }
 
@@ -1233,16 +1238,30 @@ html[data-bc-mobile-env="true"] #screenManagerBoard #mbThreadTimelinePanel{
   margin: 8px 8px 0 !important;
 }
 
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbTab_messenger > .card > div[style*="grid-template-columns: 260px minmax(0,1fr)"] > div:last-child,
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbTab_messenger > .card > div[style*="grid-template-columns: 280px 1fr"] > div:last-child{
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
 html[data-bc-mobile-env="true"] #screenManagerBoard #mbThreadActions{
   padding: 8px !important;
   border-top: 0 !important;
+  order: 2;
 }
 
 html[data-bc-mobile-env="true"] #screenManagerBoard #mbThreadMessages{
-  min-height: 180px !important;
+  min-height: 0 !important;
   padding: 8px !important;
-  max-height: 46dvh !important;
-  overflow-y: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  order: 3;
+}
+
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbThreadTimelinePanel{
+  order: 1;
 }
 
 html[data-bc-mobile-env="true"] #screenManagerBoard #mbThreadRecommendationsPanel,
