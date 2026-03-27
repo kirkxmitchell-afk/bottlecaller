@@ -694,6 +694,7 @@ document.querySelector("#app").innerHTML = `
             <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
               <strong>Messenger</strong>
               <div style="display:flex; gap:8px; align-items:center;">
+                <button id="mbToggleMessengerPanel" class="btn-ghost" type="button">Close Inbox</button>
                 <button id="mbMsgRefresh" class="btn-ghost" type="button">Refresh</button>
               </div>
             </div>
@@ -702,6 +703,7 @@ document.querySelector("#app").innerHTML = `
               Progress reports from staff + coaching replies. (Per active restaurant.)
             </div>
 
+            <div id="mbMessengerDeck" style="display:flex; flex-direction:column; gap:0; margin-top:12px;">
             <div id="mbTimedChallengeComposer" class="card" style="display:flex; flex-direction:column; gap:10px; padding:12px; margin-top:12px; margin-bottom:12px;">
               <div style="font-weight:600;">Send Timed Challenge</div>
 
@@ -838,6 +840,7 @@ document.querySelector("#app").innerHTML = `
                   <div class="small-text" id="mbInstrStatus" style="opacity:.85;"></div>
                 </div>
               </div>
+            </div>
             </div>
           </div>
         </div>
@@ -7500,14 +7503,20 @@ function wireWaiterThreadButtons() {
 }
 
 async function openWaiterMessages() {
+  const panel = document.getElementById("waiterMessagesPanel");
+  if (panel && !panel.classList.contains("hidden")) {
+    closeWaiterMessages();
+    return;
+  }
   if (appState?.profile) {
     setActiveProgressionOwner({
       user_id: appState.profile.user_id || null,
       restaurant_id: appState.profile.restaurant_id || null,
     });
   }
-  document.getElementById("waiterMessagesBackdrop")?.classList.remove("hidden");
-  document.getElementById("waiterMessagesPanel")?.classList.remove("hidden");
+  document.getElementById("waiterMessagesBackdrop")?.classList.add("hidden");
+  panel?.classList.remove("hidden");
+  document.getElementById("btnOpenMessages")?.setAttribute("aria-expanded", "true");
   const status = document.getElementById("waiterSendProgressStatus");
   if (status) status.textContent = "";
   syncWaiterMessengerComposerVisibility();
@@ -7521,6 +7530,7 @@ async function openWaiterMessages() {
 function closeWaiterMessages() {
   document.getElementById("waiterMessagesBackdrop")?.classList.add("hidden");
   document.getElementById("waiterMessagesPanel")?.classList.add("hidden");
+  document.getElementById("btnOpenMessages")?.setAttribute("aria-expanded", "false");
   const status = document.getElementById("waiterSendProgressStatus");
   if (status) status.textContent = "";
 }
@@ -7549,6 +7559,8 @@ function wireWaiterMessagesPanel() {
   const closeBtn = document.getElementById("btnCloseMessages");
   const backdrop = document.getElementById("waiterMessagesBackdrop");
   const sendBtn = document.getElementById("btnWaiterSendProgress");
+  const openBtn = document.getElementById("btnOpenMessages");
+  const panel = document.getElementById("waiterMessagesPanel");
 
   if (closeBtn && !closeBtn.__bcBound) {
     closeBtn.__bcBound = true;
@@ -7559,6 +7571,21 @@ function wireWaiterMessagesPanel() {
     backdrop.__bcBound = true;
     backdrop.addEventListener("click", closeWaiterMessages);
   }
+
+  if (document.body && !document.body.__bcWaiterInboxBound) {
+    document.body.__bcWaiterInboxBound = true;
+    document.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!target) return;
+      const inbox = document.getElementById("waiterMessagesPanel");
+      if (!inbox || inbox.classList.contains("hidden")) return;
+      const trigger = document.getElementById("btnOpenMessages");
+      if (inbox.contains(target) || trigger?.contains(target)) return;
+      closeWaiterMessages();
+    });
+  }
+
+  if (openBtn) openBtn.setAttribute("aria-expanded", panel?.classList.contains("hidden") ? "false" : "true");
 
   if (sendBtn && !sendBtn.__bcBound) {
     sendBtn.__bcBound = true;
@@ -17251,6 +17278,24 @@ function wireManagerDrillActionPanel() {
 }
 
 function wireManagerBoardMessenger() {
+  const setMessengerOpen = (isOpen) => {
+    window.__BC_MB_MESSENGER_OPEN__ = !!isOpen;
+    const deck = mbEl("mbMessengerDeck");
+    const toggle = mbEl("mbToggleMessengerPanel");
+    if (deck) deck.classList.toggle("hidden", !isOpen);
+    if (toggle) toggle.textContent = isOpen ? "Close Inbox" : "Open Inbox";
+  };
+
+  setMessengerOpen(window.__BC_MB_MESSENGER_OPEN__ !== false);
+
+  const toggle = mbEl("mbToggleMessengerPanel");
+  if (toggle && !toggle.__wired) {
+    toggle.__wired = true;
+    toggle.addEventListener("click", () => {
+      setMessengerOpen(!(window.__BC_MB_MESSENGER_OPEN__ !== false));
+    });
+  }
+
   wireManagerBoardSearches();
   const btn = mbEl("mbMsgRefresh");
   if (btn && !btn.__wired) {

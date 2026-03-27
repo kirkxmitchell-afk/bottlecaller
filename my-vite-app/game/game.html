@@ -11493,7 +11493,7 @@ function ensureProgLoaded() {
         };
         setRuntimeSession(window._bc_sessions[modeKey]);
         resetNavState();
-        beginFreshProgressionRun();
+        beginOrResumeProgressionRun();
         await startPlayWithReadyGate();
       }
 
@@ -12640,6 +12640,24 @@ function ensureProgLoaded() {
         spine.actions.resetRunScoring();
         setRuntimeSessionType("progression");
         return true;
+      }
+
+      function hasRestorableProgressionRun() {
+        if (window.isDemo || window.bcMode === "demo") return false;
+        const normalized = getNormalizedProgressionState?.() || null;
+        const currentIndex = Number(localStorage.getItem(encounterIndexKey) || encounterIndex || 0);
+        const points = Number(normalized?.economy?.points || 0);
+        const runId = Number(normalized?.run?.runId || 0);
+        const scoredCount = Object.keys(normalized?.run?.scoredThisRun || {}).length;
+        return currentIndex > 0 || points > 0 || runId > 0 || scoredCount > 0;
+      }
+
+      function beginOrResumeProgressionRun({ resetEncounterFlow = false } = {}) {
+        if (hasRestorableProgressionRun()) {
+          setRuntimeSessionType("progression");
+          return false;
+        }
+        return beginFreshProgressionRun({ resetEncounterFlow });
       }
 
       function applyDifficultyToEncounter(enc, policy) {
@@ -21927,7 +21945,7 @@ function ensureProgLoaded() {
             showScreen("screenHome");
             return;
           }
-          beginFreshProgressionRun();
+          beginOrResumeProgressionRun();
           await startPlayWithReadyGate();
         });
         console.log("[WAITER] Play button wired ✅");
@@ -21961,7 +21979,7 @@ function ensureProgLoaded() {
         btn.__bcBound = false;
         bindInput(btn, async () => {
           resetNavState();
-          beginFreshProgressionRun();
+          beginOrResumeProgressionRun();
           await startPlayWithReadyGate();
         });
       }
@@ -22283,7 +22301,7 @@ function ensureProgLoaded() {
               return;
             }
             resetNavState();
-            beginFreshProgressionRun();
+            beginOrResumeProgressionRun();
             await startPlayWithReadyGate();
           });
         }
@@ -22320,7 +22338,7 @@ function ensureProgLoaded() {
             }
 
             // PREMIUM: ensure ctx/wines are ready then start
-            beginFreshProgressionRun();
+            beginOrResumeProgressionRun();
             await startPlayWithReadyGate();
           });
 
@@ -22396,11 +22414,12 @@ function ensureProgLoaded() {
           if (!(await assertWinesReadyOrExplain())) return;
           resetNavState();
 
-          // Start fresh runs at the first encounter
-          encounterIndex = 0;
-          saveEncounterIndex(encounterIndex);
+          if (!hasRestorableProgressionRun()) {
+            encounterIndex = 0;
+            saveEncounterIndex(encounterIndex);
+          }
 
-          beginFreshProgressionRun();
+          beginOrResumeProgressionRun();
           await startPlayWithReadyGate();
         });
 

@@ -1689,6 +1689,12 @@ html[data-bc-mobile-env="true"] #screenManagerBoard .score-row{
 }
 
 #waiterMessagesPanel{
+  position: fixed !important;
+  right: 18px !important;
+  top: 92px !important;
+  width: min(520px, calc(100vw - 24px)) !important;
+  max-height: min(70vh, 760px) !important;
+  overflow-y: auto;
   background:
     radial-gradient(760px 220px at 0% 0%, rgba(94,234,212,0.10), transparent 60%),
     linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.015)),
@@ -1713,6 +1719,10 @@ html[data-bc-mobile-env="true"] #screenManagerBoard .score-row{
 #waiterMessagesThread{
   margin-top: 14px !important;
   gap: 10px !important;
+}
+
+#waiterMessagesBackdrop{
+  display:none !important;
 }
 
 @media (max-width: 980px){
