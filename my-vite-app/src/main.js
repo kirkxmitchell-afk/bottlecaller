@@ -20,11 +20,43 @@ import { makeTournamentHandlers } from "./lib/bcHandlers/tournament.js";
 import { handleEventLog } from "./lib/handlers/handleEventLog.js";
 import { createProgressionStore } from "./progressionStore.js";
 
-const supabase = getSupabaseParent();
+let supabase = null;
+let bootError = null;
+
+function getBootErrorMessage(error) {
+  if (!error) return "Unknown startup error.";
+  if (typeof error === "string") return error;
+  if (typeof error?.message === "string" && error.message.trim()) return error.message;
+  return String(error);
+}
+
+function renderBootError(error) {
+  const root = document.querySelector("#app");
+  if (!root) return;
+  root.innerHTML = `
+    <section class="screen" style="width:min(880px, 100%);">
+      <div class="panel stack">
+        <div class="app-chrome-title">BottleCaller</div>
+        <div class="small-text" style="text-transform:uppercase; letter-spacing:0.14em; opacity:0.72;">Startup Error</div>
+        <p class="subtle" style="margin:0;">
+          The app failed during boot. Check the message below and browser console.
+        </p>
+        <pre style="margin:0; white-space:pre-wrap; overflow:auto; border:1px solid rgba(255,255,255,0.12); border-radius:12px; padding:14px; background:rgba(0,0,0,0.28); color:rgba(255,240,240,0.96);">${escapeHtml(getBootErrorMessage(error))}</pre>
+      </div>
+    </section>
+  `;
+}
+
+try {
+  supabase = getSupabaseParent();
+} catch (error) {
+  bootError = error;
+  console.error("[BC][BOOT] failed to initialize Supabase", error);
+}
 
 // ==== SUPABASE FINGERPRINT ====
-if (!supabase.__BC_ID__) supabase.__BC_ID__ = "sb_" + Math.random().toString(16).slice(2);
-if (!supabase.__BC_FINGERPRINT_PATCHED__) {
+if (supabase && !supabase.__BC_ID__) supabase.__BC_ID__ = "sb_" + Math.random().toString(16).slice(2);
+if (supabase && !supabase.__BC_FINGERPRINT_PATCHED__) {
   const _getSession = supabase.auth.getSession.bind(supabase.auth);
   supabase.auth.getSession = async (...args) => {
     const r = await _getSession(...args);
@@ -64,7 +96,13 @@ window.escapeHtml =
 var escapeHtml = window.escapeHtml;
 const BC_VERBOSE_LOGS =
   new URLSearchParams(window.location.search).get("bcDebug") === "1" ||
-  localStorage.getItem("BC_DEBUG_LOGS") === "1";
+  (() => {
+    try {
+      return localStorage.getItem("BC_DEBUG_LOGS") === "1";
+    } catch {
+      return false;
+    }
+  })();
 
 let progressionRouterModulePromise = null;
 function loadProgressionRouterModule() {
@@ -1326,6 +1364,11 @@ document.querySelector("#app").innerHTML = `
     <div id="hudMsg" class="small" style="margin-top:10px;"></div>
   </div>
 `;
+
+if (bootError) {
+  renderBootError(bootError);
+  throw bootError;
+}
 
 // ------------------------------------------------------------
 // Debug + global crash catcher
