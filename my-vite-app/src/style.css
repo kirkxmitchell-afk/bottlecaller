@@ -3032,6 +3032,34 @@ html[data-bc-mobile-env="true"] #screenManagerBoard #mbInstrSend{
   word-break:break-word;
 }
 
+html[data-bc-mobile-env="true"] #screenManagerBoard .mb-message-head,
+html[data-bc-mobile-env="true"] #screenManagerBoard .mb-message-title-row{
+  flex-direction: column;
+  align-items: flex-start !important;
+}
+
+html[data-bc-mobile-env="true"] #screenManagerBoard .mb-message-date{
+  margin-left: 0;
+  flex: 0 1 auto;
+  text-align: left;
+}
+
+html[data-bc-mobile-env="true"] #screenManagerBoard .mb-message-card{
+  padding: 10px 9px !important;
+}
+
+html[data-bc-mobile-env="true"] #screenManagerBoard .mb-message-card canvas{
+  display: block;
+  width: 100% !important;
+  max-width: 100%;
+  height: auto !important;
+}
+
+html[data-bc-mobile-env="true"] #screenManagerBoard .mb-message-card .mbCoachSuggestion{
+  width: 100%;
+  text-align: left;
+}
+
 #screenManagerBoard .mb-section-header{
   display:flex;
   flex-direction:column;

@@ -16579,7 +16579,12 @@ function ensureProgLoaded() {
       }
 
       function showStepReactionPreview(stepKey, nextStep) {
-        if (currentEncounter) currentEncounter.__stepReactionPreview = null;
+        if (currentEncounter) {
+          currentEncounter.__stepReactionPreview = {
+            stepKey: String(stepKey || ""),
+            nextStep: Number(nextStep || 0) || 0,
+          };
+        }
         currentStep = Number(nextStep || 0) || 0;
         renderEncounterStep();
       }

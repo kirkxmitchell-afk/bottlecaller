@@ -14329,6 +14329,21 @@ function getManagerMessageDisplayBody(row = {}) {
     };
   }
 
+  if (type === "progress_report") {
+    const encounterNo = payload?.encounterNumber ?? "—";
+    const guest = String(payload?.guestStateActual || "").trim();
+    const signal = String(payload?.chainSignal || "").trim();
+    const grade = String(payload?.performanceGrade || payload?.grade || "").trim();
+    return {
+      title: `Encounter ${encounterNo} report`,
+      detail: [
+        guest ? `Guest: ${guest}` : "",
+        signal ? `Signal: ${signal}` : "",
+        grade ? `Grade: ${grade}` : "",
+      ].filter(Boolean).join(" • "),
+    };
+  }
+
   return {
     title: String(row?.body || "Message"),
     detail: "",
