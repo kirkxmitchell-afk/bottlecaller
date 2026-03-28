@@ -164,24 +164,60 @@ function syncManagerMessengerViewportLayout() {
   const columns = document.getElementById("mbMessengerColumns");
   const threadsPane = document.getElementById("mbMessengerThreadsPane");
   const detailPane = document.getElementById("mbMessengerDetailPane");
+  const threadList = document.getElementById("mbThreadList");
+  const threadMessages = document.getElementById("mbThreadMessages");
   if (!columns || !threadsPane || !detailPane) return;
 
   if (isMobile) {
-    columns.style.display = "flex";
-    columns.style.flexDirection = "column";
+    columns.style.display = "grid";
+    columns.style.gridTemplateColumns = "minmax(0, 1fr)";
     columns.style.gap = "8px";
+    columns.style.width = "100%";
+    columns.style.alignItems = "stretch";
+    columns.style.overflow = "visible";
     threadsPane.style.width = "100%";
     threadsPane.style.minWidth = "0";
+    threadsPane.style.overflow = "hidden";
     detailPane.style.width = "100%";
     detailPane.style.minWidth = "0";
+    detailPane.style.display = "flex";
+    detailPane.style.flexDirection = "column";
+    detailPane.style.minHeight = "0";
+    detailPane.style.overflow = "visible";
+    if (threadList) {
+      threadList.style.maxHeight = "260px";
+      threadList.style.overflowY = "auto";
+    }
+    if (threadMessages) {
+      threadMessages.style.minHeight = "220px";
+      threadMessages.style.maxHeight = "42dvh";
+      threadMessages.style.overflowY = "auto";
+    }
   } else {
     columns.style.display = "grid";
     columns.style.gridTemplateColumns = "280px 1fr";
     columns.style.gap = "12px";
+    columns.style.width = "";
+    columns.style.alignItems = "";
+    columns.style.overflow = "";
     threadsPane.style.width = "";
     threadsPane.style.minWidth = "";
+    threadsPane.style.overflow = "";
     detailPane.style.width = "";
     detailPane.style.minWidth = "";
+    detailPane.style.display = "";
+    detailPane.style.flexDirection = "";
+    detailPane.style.minHeight = "";
+    detailPane.style.overflow = "";
+    if (threadList) {
+      threadList.style.maxHeight = "";
+      threadList.style.overflowY = "";
+    }
+    if (threadMessages) {
+      threadMessages.style.minHeight = "";
+      threadMessages.style.maxHeight = "";
+      threadMessages.style.overflowY = "";
+    }
   }
 }
 

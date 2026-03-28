@@ -1197,17 +1197,28 @@ html[data-bc-mobile-env="true"] #screenManagerBoard #mbTimedChallengeComposer{
   padding: 10px !important;
 }
 
-html[data-bc-mobile-env="true"] #screenManagerBoard #mbMessengerDeck > div[style*="grid-template-columns: 280px 1fr"],
-html[data-bc-mobile-env="true"] #screenManagerBoard #mbMessengerDeck > div[style*="grid-template-columns: 260px minmax(0,1fr)"]{
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 8px !important;
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbTab_messenger > .card{
+  overflow: visible !important;
 }
 
-html[data-bc-mobile-env="true"] #screenManagerBoard #mbMessengerDeck > div[style*="grid-template-columns: 280px 1fr"] > div,
-html[data-bc-mobile-env="true"] #screenManagerBoard #mbMessengerDeck > div[style*="grid-template-columns: 260px minmax(0,1fr)"] > div{
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbMessengerColumns{
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 8px !important;
+  width: 100% !important;
+  align-items: stretch !important;
+  overflow: visible !important;
+}
+
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbMessengerThreadsPane,
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbMessengerDetailPane{
   width: 100% !important;
   min-width: 0 !important;
+}
+
+html[data-bc-mobile-env="true"] #screenManagerBoard #mbMessengerDetailPane{
+  min-height: 0 !important;
+  overflow: visible !important;
 }
 
 html[data-bc-mobile-env="true"] #screenManagerBoard #mbThreadTimelinePanel{
@@ -1240,17 +1251,25 @@ html[data-bc-mobile-env="true"] #screenManagerBoard #mbThreadStatePanel{
 }
 
 @media (max-width: 880px){
-  #screenManagerBoard #mbMessengerDeck > div[style*="grid-template-columns: 280px 1fr"],
-  #screenManagerBoard #mbMessengerDeck > div[style*="grid-template-columns: 260px minmax(0,1fr)"]{
-    display: flex !important;
-    flex-direction: column !important;
+  #screenManagerBoard #mbTab_messenger > .card{
+    overflow: visible !important;
+  }
+
+  #screenManagerBoard #mbMessengerColumns{
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
     gap: 8px !important;
   }
 
-  #screenManagerBoard #mbMessengerDeck > div[style*="grid-template-columns: 280px 1fr"] > div,
-  #screenManagerBoard #mbMessengerDeck > div[style*="grid-template-columns: 260px minmax(0,1fr)"] > div{
+  #screenManagerBoard #mbMessengerThreadsPane,
+  #screenManagerBoard #mbMessengerDetailPane{
     width: 100% !important;
     min-width: 0 !important;
+  }
+
+  #screenManagerBoard #mbMessengerDetailPane{
+    min-height: 0 !important;
+    overflow: visible !important;
   }
 }
 
@@ -2738,6 +2757,14 @@ html[data-bc-mobile-env="true"] #screenManagerBoard #mbInstrSend{
   #screenManagerBoard #mbTab_messenger > .card > div[style*="grid-template-columns: 280px 1fr"]{
     grid-template-columns: 1fr !important;
   }
+
+  #screenManagerBoard #mbMessengerColumns{
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  #screenManagerBoard #mbMessengerDetailPane{
+    min-height: 0 !important;
+  }
 }
 
 /* Tab-specific identities */
@@ -2925,6 +2952,10 @@ html[data-bc-mobile-env="true"] #screenManagerBoard #mbInstrSend{
 
 #screenManagerBoard #mbTab_messenger > .card{
   overflow:hidden;
+}
+
+#screenManagerBoard #mbMessengerColumns{
+  align-items:start;
 }
 
 #screenManagerBoard #mbTab_messenger > .card > div[style*="grid-template-columns: 260px minmax(0,1fr)"],
