@@ -1,0 +1,17 @@
+import { BC_TYPES } from "../bcMessages";
+
+export function makeRunsCountHandler({ fetchRunsCount }) {
+  if (!fetchRunsCount) throw new Error("makeRunsCountHandler: fetchRunsCount required");
+
+  return async ({ msg, event, state, reply }) => {
+    const { userId, restaurantId, mode } = msg;
+    const result = await fetchRunsCount({ userId, restaurantId, mode, msg, event, state });
+    const reqId = msg?.reqId || null;
+    const count =
+      result && typeof result === "object"
+        ? Number(result.count || 0)
+        : Number(result || 0);
+
+    reply(BC_TYPES.RUNS_COUNT_RESPONSE, { reqId, ok: true, count });
+  };
+}
