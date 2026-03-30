@@ -7413,8 +7413,9 @@ function renderWaiterThreadItem(row, selfUserId, nameMap) {
         <div class="small-text" style="margin-top:8px; opacity:.75;">${escapeHtml(String(row.body || ""))}</div>
       </div>
     `;
-  } else if (kind === "progress_report" && row?.payload && typeof row.payload === "object" && Object.keys(row.payload).length) {
-    const p = row.payload || {};
+  } else if (kind === "progress_report") {
+    const p = getProgressReportPayload(row) || {};
+    if (Object.keys(p).length) {
     const skills = p.skills || {};
 
     payloadHtml = `
@@ -7468,6 +7469,7 @@ Needs Work: ${escapeHtml(String(p.weakestSkill ?? "-"))}
 
 </div>
 `;
+    }
   }
 
   return `
@@ -12554,6 +12556,44 @@ function getCoachingSuggestionsFromReport(payload) {
   return suggestions;
 }
 
+function getProgressReportPayload(rowOrPayload) {
+  const source =
+    rowOrPayload && typeof rowOrPayload === "object" && "payload" in rowOrPayload
+      ? rowOrPayload.payload
+      : rowOrPayload;
+
+  let payload = source;
+
+  if (typeof payload === "string") {
+    try {
+      payload = JSON.parse(payload);
+    } catch {
+      payload = null;
+    }
+  }
+
+  if (!payload || typeof payload !== "object") return null;
+
+  const nested =
+    payload.report ||
+    payload.progressReport ||
+    payload.progress_report ||
+    payload.summary ||
+    payload.payload ||
+    null;
+
+  if (nested && typeof nested === "object" && nested !== payload) {
+    const mergedSkills = payload.skills || nested.skills || null;
+    return {
+      ...payload,
+      ...nested,
+      skills: mergedSkills,
+    };
+  }
+
+  return payload;
+}
+
 function getLastAssignedDrill(threadRows) {
   const rows = Array.isArray(threadRows) ? threadRows : [];
   const last = rows
@@ -12580,7 +12620,7 @@ function getAutomaticDrillRecommendationForThread(thread) {
   const rows = Array.isArray(thread?.rows) ? thread.rows : [];
   const latest = [...rows].sort((a, b) => new Date(b?.created_at || 0) - new Date(a?.created_at || 0))[0];
 
-  const p = latest?.payload || {};
+  const p = getProgressReportPayload(latest) || {};
   const skills = p?.skills || null;
   if (!skills) return null;
 
@@ -12613,7 +12653,7 @@ function getManagerChallengeRecommendationCandidates(threadRows = []) {
   const rows = Array.isArray(threadRows) ? threadRows : [];
 
   const latestProgress = [...rows]
-    .filter((row) => String(row?.type || "") === "progress_report" && row?.payload)
+    .filter((row) => String(row?.type || "") === "progress_report" && getProgressReportPayload(row))
     .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
     .slice(-1)[0] || null;
 
@@ -12934,11 +12974,11 @@ function getManagerEffectRecommendationCandidates(threadRows = []) {
   const rows = Array.isArray(threadRows) ? threadRows : [];
 
   const latestProgress = [...rows]
-    .filter((row) => String(row?.type || "") === "progress_report" && row?.payload)
+    .filter((row) => String(row?.type || "") === "progress_report" && getProgressReportPayload(row))
     .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
     .slice(-1)[0] || null;
 
-  const p = latestProgress?.payload || {};
+  const p = getProgressReportPayload(latestProgress) || {};
 
   const weakestSkill = String(p?.weakestSkill || "").toLowerCase();
   const strongestSkill = String(p?.strongestSkill || "").toLowerCase();
@@ -13194,7 +13234,7 @@ function wireMbCoachSuggestionButtons() {
       const row = window.__MB_LAST_MESSAGES__?.find((r) => String(r.id) === String(rowId));
       if (!row) return;
 
-      const suggestions = getCoachingSuggestionsFromReport(row.payload || {});
+      const suggestions = getCoachingSuggestionsFromReport(getProgressReportPayload(row) || {});
       const s = suggestions[index];
       if (!s) return;
 
@@ -13837,8 +13877,9 @@ function renderMbMessageItem(row, nameMap) {
 
   let payloadHtml = "";
 
-  if (kind === "progress_report" && row?.payload && typeof row.payload === "object" && Object.keys(row.payload).length) {
-    const p = row.payload || {};
+  if (kind === "progress_report") {
+    const p = getProgressReportPayload(row) || {};
+    if (Object.keys(p).length) {
     const skills = p.skills || {};
     const suggestions = getCoachingSuggestionsFromReport(p);
 
@@ -13898,6 +13939,7 @@ ${escapeHtml(s.label)}
         </div>
       </div>
     `;
+    }
   }
 
   return `
@@ -14070,7 +14112,7 @@ function buildManagerSuggestedPrompts(thread) {
 
   const rows = [...(thread?.rows || [])].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
   const latest = rows[rows.length - 1];
-  const payload = latest?.payload || {};
+  const payload = getProgressReportPayload(latest) || {};
   const suggestions = [];
   const rec = getAutomaticDrillRecommendationForThread(thread);
 
@@ -15943,11 +15985,12 @@ function renderManagerActiveThread(nameMap) {
     safeCall("wireManagerChallengeSuggestionButtons", () => wireManagerChallengeSuggestionButtons());
     setTimeout(() => {
       const canvases = msgEl.querySelectorAll(".mbSkillRadar");
-      const skillRows = ordered.filter((row) => row?.payload?.skills);
+      const skillRows = ordered.filter((row) => !!getProgressReportPayload(row)?.skills);
       canvases.forEach((canvas, i) => {
         const row = skillRows[i];
-        if (!row?.payload?.skills) return;
-        drawSkillRadar(canvas, row.payload.skills);
+        const payload = getProgressReportPayload(row);
+        if (!payload?.skills) return;
+        drawSkillRadar(canvas, payload.skills);
       });
     }, 0);
   }
@@ -17175,7 +17218,7 @@ function getManagerThreadLatestSignal(targetUserId) {
     .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
     .slice(-1)[0] || null;
 
-  const payload = latest?.payload || {};
+  const payload = getProgressReportPayload(latest) || {};
   return {
     latest,
     payload,
@@ -17236,7 +17279,7 @@ async function mbSendDrillOverride(opts = {}) {
     .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
     .slice(-1)[0];
 
-  const latestPayload = latest?.payload || {};
+  const latestPayload = getProgressReportPayload(latest) || {};
   const guest = String(latestPayload?.guestStateActual || "").toLowerCase();
   const sig = String(latestPayload?.chainSignal || "").toLowerCase();
 
