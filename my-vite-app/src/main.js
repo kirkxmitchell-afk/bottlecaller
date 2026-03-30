@@ -13880,65 +13880,43 @@ function renderMbMessageItem(row, nameMap) {
   if (kind === "progress_report") {
     const p = getProgressReportPayload(row) || {};
     if (Object.keys(p).length) {
-    const skills = p.skills || {};
-    const suggestions = getCoachingSuggestionsFromReport(p);
+      const skills = p.skills || {};
+      const metricRows = [
+        ["Read", `${skills.read ?? 0}%`],
+        ["Frame", `${skills.framing ?? 0}%`],
+        ["Delivery", `${skills.delivery ?? 0}%`],
+        ["Recovery", `${skills.recovery ?? 0}%`],
+        ["Closing", `${skills.closing ?? 0}%`],
+      ];
 
-    const suggestionsHtml = suggestions.map((s, i) => `
-<button
-  class="btn-ghost mbCoachSuggestion"
-  data-index="${i}"
-  style="margin-top:6px;"
->
-${escapeHtml(s.label)}
-</button>
-`).join("");
+      payloadHtml = `
+        <div class="mb-progress-report-card">
+          <div class="mb-progress-report-topline">
+            <div class="mb-progress-report-pill">Encounter ${escapeHtml(String(p.encounterNumber ?? "-"))}</div>
+            <div class="mb-progress-report-pill">Signal ${escapeHtml(String(p.chainSignal || "-"))}</div>
+            <div class="mb-progress-report-pill">Score ${escapeHtml(String(p.chainScore ?? "-"))}</div>
+          </div>
 
-    payloadHtml = `
-      <div style="
-        margin-top:8px;
-        padding:10px;
-        border:1px solid rgba(255,255,255,0.10);
-        border-radius:10px;
-        background:rgba(255,255,255,0.04);
-      ">
-        <div><strong>Progress snapshot</strong></div>
-        <div class="small-text" style="margin-top:6px; opacity:.9;">Encounter: ${escapeHtml(String(p.encounterNumber ?? "-"))}</div>
-        <div class="small-text" style="opacity:.9;">Guest: ${escapeHtml(String(p.guestStateActual || "-"))}</div>
-        <div class="small-text" style="opacity:.9;">Difficulty: ${escapeHtml(String(p.difficulty ?? "-"))}</div>
-        <div class="small-text" style="opacity:.9;">Signal: ${escapeHtml(String(p.chainSignal || "-"))}</div>
-        <div class="small-text" style="opacity:.9;">Score: ${escapeHtml(String(p.chainScore ?? "-"))}</div>
+          <div class="mb-progress-report-meta">
+            Guest: <strong>${escapeHtml(String(p.guestStateActual || "-"))}</strong>
+            ${p.difficulty != null ? ` • Difficulty: <strong>${escapeHtml(String(p.difficulty))}</strong>` : ""}
+          </div>
 
-        <hr style="opacity:.2; margin:8px 0;">
+          <div class="mb-progress-report-grid">
+            ${metricRows.map(([label, value]) => `
+              <div class="mb-progress-report-metric">
+                <div class="mb-progress-report-label">${escapeHtml(label)}</div>
+                <div class="mb-progress-report-value">${escapeHtml(value)}</div>
+              </div>
+            `).join("")}
+          </div>
 
-        <div><strong>Skill Tree</strong></div>
-
-        <div class="small-text">Guest Reading: ${skills.read ?? 0}%</div>
-        <div class="small-text">Framing: ${skills.framing ?? 0}%</div>
-        <div class="small-text">Delivery: ${skills.delivery ?? 0}%</div>
-        <div class="small-text">Recovery: ${skills.recovery ?? 0}%</div>
-        <div class="small-text">Closing: ${skills.closing ?? 0}%</div>
-
-        <div class="small-text" style="margin-top:8px; opacity:.75;">
-          Strongest: ${escapeHtml(String(p.strongestSkill ?? "-"))}
-        </div>
-
-        <div class="small-text" style="opacity:.75;">
-          Needs Work: ${escapeHtml(String(p.weakestSkill ?? "-"))}
-        </div>
-
-        <div style="margin-top:12px;">
-          <strong>Performance Radar</strong>
-          <canvas class="mbSkillRadar" width="220" height="220" style="margin-top:8px;"></canvas>
-        </div>
-
-        <div style="margin-top:10px;">
-          <strong>Coach Suggestions</strong>
-          <div style="display:flex; flex-direction:column; gap:4px; margin-top:6px;">
-            ${suggestionsHtml}
+          <div class="mb-progress-report-summary">
+            <div><span class="mb-progress-report-key">Strongest</span> ${escapeHtml(String(p.strongestSkill ?? "-"))}</div>
+            <div><span class="mb-progress-report-key">Needs work</span> ${escapeHtml(String(p.weakestSkill ?? "-"))}</div>
           </div>
         </div>
-      </div>
-    `;
+      `;
     }
   }
 
