@@ -907,6 +907,11 @@ document.querySelector("#app").innerHTML = `
 
               <div id="mbThreadTimelinePanel" class="card" style="margin:10px 10px 0; padding:10px;"></div>
 
+                <div id="mbThreadMessages"
+                  style="flex:1; padding:10px; display:flex; flex-direction:column; gap:8px; overflow-y:auto; min-height:280px; border-top:1px solid rgba(255,255,255,0.10);">
+                  <div class="small-text" style="opacity:.8;">Select a waiter thread in this restaurant to assign a timed challenge.</div>
+                </div>
+
                 <div id="mbThreadActions" style="padding:10px; border-top:1px solid rgba(255,255,255,0.10); display:flex; flex-direction:column; gap:10px;">
                   <div id="mbThreadStatePanel" class="card" style="padding:10px;"></div>
 
@@ -935,11 +940,6 @@ document.querySelector("#app").innerHTML = `
 
                   <div class="small-text" id="mbInstrQuota" style="opacity:.78;"></div>
                   <div class="small-text" id="mbInstrStatus" style="opacity:.85;"></div>
-                </div>
-
-                <div id="mbThreadMessages"
-                  style="flex:1; padding:10px; display:flex; flex-direction:column; gap:8px; overflow-y:auto; min-height:280px; border-top:1px solid rgba(255,255,255,0.10);">
-                  <div class="small-text" style="opacity:.8;">Select a waiter thread in this restaurant to assign a timed challenge.</div>
                 </div>
               </div>
             </div>
