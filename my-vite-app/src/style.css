@@ -2993,6 +2993,8 @@ html[data-bc-mobile-env="true"] #screenManagerBoard #mbInstrSend{
 #screenManagerBoard .mb-message-card{
   overflow:hidden;
   min-width:0;
+  flex: 0 0 auto;
+  align-self: stretch;
 }
 
 #screenManagerBoard .mb-message-card .small-text,
@@ -3008,6 +3010,11 @@ html[data-bc-mobile-env="true"] #screenManagerBoard #mbInstrSend{
   background:
     linear-gradient(180deg, rgba(96,165,250,0.08), rgba(255,255,255,0.02)),
     rgba(255,255,255,0.03);
+  flex: 0 0 auto;
+}
+
+#screenManagerBoard #mbThreadMessages > *{
+  flex: 0 0 auto;
 }
 
 #screenManagerBoard .mb-progress-report-topline{
