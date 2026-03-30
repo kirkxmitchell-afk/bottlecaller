@@ -12127,9 +12127,9 @@ function resetManagerMessengerState(opts = {}) {
   const timeline = document.getElementById("mbThreadTimelinePanel");
   if (timeline) {
     timeline.innerHTML = `
-      <div style="font-weight:600;">Objective Timeline</div>
+      <div style="font-weight:600;">Thread Snapshot</div>
       <div class="small-text" style="margin-top:6px; opacity:.75;">
-        Select a waiter to view live objective activity.
+        Select a waiter to view the latest objective and performance reflection.
       </div>
     `;
   }
@@ -14041,16 +14041,65 @@ function renderManagerThreadTimeline(rows = [], nameMap = {}) {
   return renderManagerThreadMessagesGrouped(ordered, nameMap);
 }
 
+function renderManagerThreadSnapshot(rows = []) {
+  const ordered = Array.isArray(rows) ? rows : [];
+  const latestReport = [...ordered]
+    .filter((row) => String(row?.type || "") === "progress_report")
+    .sort((a, b) => new Date(b?.created_at || 0) - new Date(a?.created_at || 0))[0] || null;
+  const latestObjective = [...ordered]
+    .filter((row) => getManagerThreadRowGroup(row) === "objective_timeline")
+    .sort((a, b) => new Date(b?.created_at || 0) - new Date(a?.created_at || 0))[0] || null;
+
+  const report = getProgressReportPayload(latestReport) || null;
+  const objectiveDisplay = latestObjective ? getManagerMessageDisplayBody(latestObjective) : null;
+
+  return `
+    <div style="font-weight:600;">Thread Snapshot</div>
+    <div class="small-text" style="margin-top:6px; opacity:.75;">
+      Objectives and performance reports now appear together in the activity feed below.
+    </div>
+    <div style="margin-top:10px; display:grid; gap:8px;">
+      <div class="card" style="padding:10px;">
+        <div style="font-weight:600;">Latest Objective</div>
+        <div class="small-text" style="margin-top:6px; opacity:.82;">
+          ${escapeHtml(String(objectiveDisplay?.title || "No objective activity yet."))}
+        </div>
+        ${objectiveDisplay?.detail ? `
+          <div class="small-text" style="margin-top:4px; opacity:.7;">
+            ${escapeHtml(String(objectiveDisplay.detail))}
+          </div>
+        ` : ""}
+      </div>
+      <div class="card" style="padding:10px;">
+        <div style="font-weight:600;">Latest Performance Reflection</div>
+        ${report ? `
+          <div class="small-text" style="margin-top:6px; opacity:.82;">
+            Encounter ${escapeHtml(String(report.encounterNumber ?? "-"))} •
+            Guest ${escapeHtml(String(report.guestStateActual || "-"))} •
+            Signal ${escapeHtml(String(report.chainSignal || "-"))}
+          </div>
+          <div class="small-text" style="margin-top:6px; opacity:.9;">
+            Strongest: ${escapeHtml(String(report.strongestSkill ?? "-"))} •
+            Needs work: ${escapeHtml(String(report.weakestSkill ?? "-"))}
+          </div>
+        ` : `
+          <div class="small-text" style="margin-top:6px; opacity:.75;">
+            No performance report yet for this waiter.
+          </div>
+        `}
+      </div>
+    </div>
+  `;
+}
+
 function renderManagerThreadBody(rows = [], nameMap = {}) {
   const ordered = Array.isArray(rows) ? rows : [];
-  const primaryRows = ordered.filter((row) => getManagerThreadRowGroup(row) !== "objective_timeline");
-  const rowsToRender = primaryRows.length ? primaryRows : ordered;
 
-  if (!rowsToRender.length) {
+  if (!ordered.length) {
     return `<div class="small-text" style="opacity:.75;">No thread messages yet.</div>`;
   }
 
-  return renderManagerThreadMessagesGrouped(rowsToRender, nameMap);
+  return renderManagerThreadMessagesGrouped(ordered, nameMap);
 }
 
 function renderManagerThreadListItem(thread, nameMap) {
@@ -15904,9 +15953,9 @@ function renderManagerActiveThread(nameMap) {
     if (metaEl) metaEl.textContent = "";
     if (timelineEl) {
       timelineEl.innerHTML = `
-        <div style="font-weight:600;">Objective Timeline</div>
+        <div style="font-weight:600;">Thread Snapshot</div>
         <div class="small-text" style="margin-top:6px; opacity:.75;">
-          Select a waiter to view live objective activity.
+          Select a waiter to view the latest objective and performance reflection.
         </div>
       `;
     }
@@ -15936,17 +15985,14 @@ function renderManagerActiveThread(nameMap) {
   if (titleEl) titleEl.textContent = String(thread?.title || userLabel(thread.userId, nameMap));
   if (metaEl) metaEl.textContent = getManagerThreadMetaSummary(ordered);
   if (timelineEl) {
-    const timelineHtml = safeCall(
-      "renderManagerThreadTimeline",
-      () => renderManagerThreadTimeline(ordered, nameMap)
-    ) || `<div class="small-text" style="opacity:.75;">No objective timeline yet.</div>`;
-
-    timelineEl.innerHTML = `
-      <div style="font-weight:600;">Objective Timeline</div>
+    timelineEl.innerHTML = safeCall(
+      "renderManagerThreadSnapshot",
+      () => renderManagerThreadSnapshot(ordered)
+    ) || `
+      <div style="font-weight:600;">Thread Snapshot</div>
       <div class="small-text" style="margin-top:6px; opacity:.75;">
-        Timed challenges, drill launches, completions, and expiries for this waiter.
+        Unable to build thread snapshot.
       </div>
-      <div style="margin-top:10px;">${timelineHtml}</div>
     `;
   }
 
