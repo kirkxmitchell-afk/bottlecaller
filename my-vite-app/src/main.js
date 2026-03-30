@@ -348,6 +348,11 @@ function setPendingStartDrill(payload) {
   return next;
 }
 
+function clearQueuedDrillStart({ resetConfig = false } = {}) {
+  setPendingStartDrill(null);
+  if (resetConfig) setDrillConfig(null);
+}
+
 window.__BC_ACTIVE_TIMED_CHALLENGE__ = window.__BC_ACTIVE_TIMED_CHALLENGE__ || null;
 window.__BC_LAST_TIMED_CHALLENGE_RESULT__ = window.__BC_LAST_TIMED_CHALLENGE_RESULT__ || null;
 window.__BC_TUTORIAL__ = window.__BC_TUTORIAL__ || {
@@ -7805,6 +7810,7 @@ function setWaiterLeaderboardOpen(isOpen) {
 
 function openProfilePanel() {
   closeHud?.();
+  clearQueuedDrillStart();
   setProfileOpen(true);
   renderAppChrome?.();
 }
@@ -7825,8 +7831,8 @@ function renderWaiterPerformanceLeaderboardTable(users = []) {
 
   tbody.innerHTML = users.map((user) => `
     <tr class="waiter-user-row" data-user-id="${escapeHtml(user.userId)}">
-      <td>${user.rank}</td>
-      <td>
+      <td data-label="Rank">${user.rank}</td>
+      <td data-label="Team Member">
         <button
           type="button"
           class="waiter-user-expand-btn"
@@ -7841,13 +7847,13 @@ function renderWaiterPerformanceLeaderboardTable(users = []) {
           </span>
         </button>
       </td>
-      <td>${formatMetricNumber(user.totalPoints, 1)}</td>
-      <td>${formatPercent(user.drillPassRate)}</td>
-      <td>${formatPercent(user.encounterPassRate)}</td>
-      <td>${formatPercent(user.challengeSuccessRate)}</td>
-      <td>${formatPercent(user.premiumSuccessRate)}</td>
-      <td>${formatPercent(user.masteryRate)}</td>
-      <td>${formatRelativeTime(user.lastActiveAt)}</td>
+      <td data-label="Total Points">${formatMetricNumber(user.totalPoints, 1)}</td>
+      <td data-label="Drill Pass %">${formatPercent(user.drillPassRate)}</td>
+      <td data-label="Encounter Pass %">${formatPercent(user.encounterPassRate)}</td>
+      <td data-label="Challenge Success %">${formatPercent(user.challengeSuccessRate)}</td>
+      <td data-label="Premium Success %">${formatPercent(user.premiumSuccessRate)}</td>
+      <td data-label="Mastery %">${formatPercent(user.masteryRate)}</td>
+      <td data-label="Last Active">${formatRelativeTime(user.lastActiveAt)}</td>
     </tr>
     <tr class="waiter-user-detail-row hidden" data-user-detail-id="${escapeHtml(user.userId)}">
       ${renderWaiterPerformanceUserDetailMarkup(user)}
@@ -7893,49 +7899,56 @@ function renderWaiterPerformanceUserDetailMarkup(user = {}) {
 async function buildLeaderboardUserDetail(userId, restaurantId, fallbackUser = {}) {
   const uid = String(userId || "").trim();
   const rid = String(restaurantId || "").trim();
-  if (!uid || !rid) return { ...fallbackUser };
+  if (!uid) return { ...fallbackUser };
 
   const sinceIso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const progressionQuery = supabase
+    .from("bc_progression_state_v1")
+    .select("canonical_state, updated_at")
+    .eq("user_id", uid)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const snapshotsQuery = supabase
+    .from("bc_skill_snapshots_v1")
+    .select("created_at, read_pct, framing_pct, delivery_pct, recovery_pct, closing_pct")
+    .eq("user_id", uid)
+    .order("created_at", { ascending: false })
+    .limit(20);
+  const readinessQuery = supabase
+    .from("bc_readiness_v1")
+    .select("*")
+    .eq("user_id", uid)
+    .maybeSingle();
+  const encountersQuery = supabase
+    .from("bc_encounter_resolutions_v2")
+    .select("occurred_at, performance_grade, chain_signal, is_green, tier")
+    .eq("user_id", uid)
+    .neq("mode", "demo")
+    .gte("occurred_at", sinceIso)
+    .order("occurred_at", { ascending: false })
+    .limit(200);
+  const messagesQuery = supabase
+    .from("bc_messages_v1")
+    .select("created_at, type, payload")
+    .eq("sender_user_id", uid)
+    .in("type", ["drill_completed", "timed_challenge_completed", "timed_challenge_expired"])
+    .is("archived_at", null)
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (rid) {
+    progressionQuery.eq("restaurant_id", rid);
+    snapshotsQuery.eq("restaurant_id", rid);
+    readinessQuery.eq("restaurant_id", rid);
+    encountersQuery.eq("restaurant_id", rid);
+    messagesQuery.eq("restaurant_id", rid);
+  }
   const [progressionRes, snapshotsRes, readinessRes, encountersRes, messagesRes, profileRes] = await Promise.all([
-    supabase
-      .from("bc_progression_state_v1")
-      .select("canonical_state, updated_at")
-      .eq("user_id", uid)
-      .eq("restaurant_id", rid)
-      .order("updated_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    supabase
-      .from("bc_skill_snapshots_v1")
-      .select("created_at, read_pct, framing_pct, delivery_pct, recovery_pct, closing_pct")
-      .eq("user_id", uid)
-      .eq("restaurant_id", rid)
-      .order("created_at", { ascending: false })
-      .limit(20),
-    supabase
-      .from("bc_readiness_v1")
-      .select("*")
-      .eq("user_id", uid)
-      .eq("restaurant_id", rid)
-      .maybeSingle(),
-    supabase
-      .from("bc_encounter_resolutions_v2")
-      .select("occurred_at, performance_grade, chain_signal, is_green, tier")
-      .eq("user_id", uid)
-      .eq("restaurant_id", rid)
-      .neq("mode", "demo")
-      .gte("occurred_at", sinceIso)
-      .order("occurred_at", { ascending: false })
-      .limit(200),
-    supabase
-      .from("bc_messages_v1")
-      .select("created_at, type, payload")
-      .eq("sender_user_id", uid)
-      .eq("restaurant_id", rid)
-      .in("type", ["drill_completed", "timed_challenge_completed", "timed_challenge_expired"])
-      .is("archived_at", null)
-      .order("created_at", { ascending: false })
-      .limit(200),
+    progressionQuery,
+    snapshotsQuery,
+    readinessQuery,
+    encountersQuery,
+    messagesQuery,
     supabase
       .from("profiles")
       .select("user_id, display_name, role")
@@ -7949,6 +7962,11 @@ async function buildLeaderboardUserDetail(userId, restaurantId, fallbackUser = {
   const encounterRows = Array.isArray(encountersRes?.data) ? encountersRes.data : [];
   const messageRows = Array.isArray(messagesRes?.data) ? messagesRes.data : [];
   const profile = profileRes?.data || {};
+  const normalizedRole = String(normalizeMembershipRole(profile) || fallbackUser?.role || "").toLowerCase();
+  const isManagerLike =
+    normalizedRole === "single_manager" ||
+    normalizedRole === "group_manager" ||
+    normalizedRole === "enterpriser";
   const fetchedSkillShape = averageSkillShape(snapshotRows);
   const fallbackSkillShape = (fallbackUser?.skillShape && typeof fallbackUser.skillShape === "object")
     ? fallbackUser.skillShape
@@ -7966,10 +7984,34 @@ async function buildLeaderboardUserDetail(userId, restaurantId, fallbackUser = {
     (sum, skill) => sum + Number(derivedSkillShape?.[skill.key] || 0),
     0
   );
+  let crossRestaurantSkillShape = {};
+  let crossRestaurantSkillTotal = 0;
+
+  if (isManagerLike && fetchedSkillTotal <= 0 && fallbackSkillTotal <= 0 && derivedSkillTotal <= 0) {
+    try {
+      const crossSnapshotsRes = await supabase
+        .from("bc_skill_snapshots_v1")
+        .select("created_at, read_pct, framing_pct, delivery_pct, recovery_pct, closing_pct")
+        .eq("user_id", uid)
+        .order("created_at", { ascending: false })
+        .limit(20);
+      const crossSnapshotRows = Array.isArray(crossSnapshotsRes?.data) ? crossSnapshotsRes.data : [];
+      crossRestaurantSkillShape = averageSkillShape(crossSnapshotRows);
+      crossRestaurantSkillTotal = MANAGER_PERFORMANCE_SKILLS.reduce(
+        (sum, skill) => sum + Number(crossRestaurantSkillShape?.[skill.key] || 0),
+        0
+      );
+    } catch (error) {
+      console.warn("[LEADERBOARD] cross-restaurant skill fallback failed", { userId: uid, error });
+    }
+  }
+
   const skillShape = fetchedSkillTotal > 0
     ? fetchedSkillShape
     : fallbackSkillTotal > 0
       ? fallbackSkillShape
+      : crossRestaurantSkillTotal > 0
+        ? crossRestaurantSkillShape
       : derivedSkillTotal > 0
         ? derivedSkillShape
         : fallbackSkillShape;
@@ -8108,6 +8150,7 @@ async function toggleWaiterPerformanceUserDetail(userId, usersById = {}) {
       weakestSkill: detailUser.weakestSkill,
     });
   }
+  row.scrollIntoView({ block: "nearest", behavior: "smooth" });
 }
 
 function closeAllWaiterPerformanceUserDetails(exceptUserId = null) {
@@ -8129,6 +8172,31 @@ function deriveLeaderboardSkillShape(user = {}) {
   const premium = Math.round(Math.max(0, Math.min(100, Number(user?.premiumSuccessRate || 0) * 100)));
   const mastery = Math.round(Math.max(0, Math.min(100, Number(user?.masteryRate || 0) * 100)));
   const readiness = Math.round(Math.max(0, Math.min(100, Number(user?.readiness || 0) * 100)));
+  const totalPoints = Math.max(0, Number(user?.totalPoints || 0));
+  const metricsTotal = drill + encounter + challenge + premium + mastery + readiness;
+
+  if (metricsTotal <= 0) {
+    const baseline = Math.max(
+      28,
+      Math.min(
+        86,
+        Math.round(
+          readiness ||
+          (totalPoints >= 100 ? 82 :
+            totalPoints >= 50 ? 68 :
+            totalPoints >= 20 ? 56 :
+            totalPoints > 0 ? 44 : 34)
+        )
+      )
+    );
+    return {
+      read: baseline,
+      framing: Math.max(24, baseline - 4),
+      delivery: Math.min(92, baseline + 6),
+      recovery: Math.max(24, baseline - 2),
+      closing: Math.max(24, baseline - 1),
+    };
+  }
 
   return {
     read: Math.max(readiness, encounter),
@@ -8436,6 +8504,7 @@ async function renderWaiterPerformanceLeaderboardWindow() {
 async function openWaiterLeaderboardWindow() {
   closeHud?.();
   closeProfilePanel?.();
+  clearQueuedDrillStart();
   setWaiterLeaderboardOpen(true);
   renderAppChrome?.();
   await renderWaiterPerformanceLeaderboardWindow();
@@ -10458,12 +10527,27 @@ async function getManagerPerformanceModel({ force = false } = {}) {
   const snapshotRows = Array.isArray(snapshotsRes?.data) ? snapshotsRes.data : [];
   const encounterRows = Array.isArray(encountersRes?.data) ? encountersRes.data : [];
   const messageRows = Array.isArray(messagesRes?.data) ? messagesRes.data : [];
+  let environmentProfileRows = [];
+
+  try {
+    environmentProfileRows = await loadRestaurantEnvironmentProfiles(restaurantId);
+  } catch (error) {
+    console.warn("[MB][PERFORMANCE] restaurant environment roster unavailable", error);
+  }
 
   const userIds = new Set();
   const profileNameMap = new Map();
   const profileRoleMap = new Map();
+  const rosterRows = [
+    ...profileRows,
+    ...environmentProfileRows.map((row) => ({
+      user_id: row?.userId,
+      display_name: row?.displayName,
+      role: row?.role,
+    })),
+  ];
 
-  profileRows.forEach((row) => {
+  rosterRows.forEach((row) => {
     const uid = String(row?.user_id || "");
     if (!uid || String(row?.role || "").toLowerCase() === "demo") return;
     userIds.add(uid);
@@ -10547,9 +10631,9 @@ async function getManagerPerformanceModel({ force = false } = {}) {
       ? Math.max(1, Math.min(3, Math.round(canonicalTierRaw)))
       : null;
 
-    const skillShape = averageSkillShape(userSnapshots);
-    const skillAvg =
-      MANAGER_PERFORMANCE_SKILLS.reduce((sum, skill) => sum + Number(skillShape?.[skill.key] || 0), 0) /
+    const baseSkillShape = averageSkillShape(userSnapshots);
+    const baseSkillTotal = MANAGER_PERFORMANCE_SKILLS.reduce((sum, skill) => sum + Number(baseSkillShape?.[skill.key] || 0), 0);
+    const baseSkillAvg = baseSkillTotal /
       MANAGER_PERFORMANCE_SKILLS.length;
 
     const drillRows = userMessages.filter((row) => String(row?.type || "") === "drill_completed");
@@ -10575,7 +10659,7 @@ async function getManagerPerformanceModel({ force = false } = {}) {
     const encounterPassRate = userEncounters.length ? encounterPasses / userEncounters.length : 0;
     const challengeSuccessRate = challengeRows ? challengeCompleted.length / challengeRows : 0;
     const premiumSuccessRate = challengeCompleted.length ? premiumSuccesses / challengeCompleted.length : 0;
-    const masteryRate = userEncounters.length ? encounterMastery / userEncounters.length : skillAvg / 100;
+    const masteryRate = userEncounters.length ? encounterMastery / userEncounters.length : baseSkillAvg / 100;
 
     const readinessBase = firstFinite(
       readinessRow?.readiness_score,
@@ -10598,7 +10682,7 @@ async function getManagerPerformanceModel({ force = false } = {}) {
       readinessLabel === "STABLE" ? 0.84 : null,
       readinessLabel === "GROWING" ? 0.68 : null,
       readinessLabel === "FRAGILE" ? 0.42 : null,
-      skillAvg / 100
+      baseSkillAvg / 100
     ) || 0));
 
     const totalPoints = hasCanonicalProgression
@@ -10612,7 +10696,7 @@ async function getManagerPerformanceModel({ force = false } = {}) {
             totalsRow?.total_points,
             totalsRow?.points_total,
             latestRow?.total_points,
-            (skillAvg / 10) + (challengeCompleted.length * 0.9) + (drillPasses * 0.4)
+            (baseSkillAvg / 10) + (challengeCompleted.length * 0.9) + (drillPasses * 0.4)
           ) || 0
         );
 
@@ -10655,6 +10739,17 @@ async function getManagerPerformanceModel({ force = false } = {}) {
       Math.min(1, (readiness * 0.45) + (encounterPassRate * 0.35) + (challengeSuccessRate * 0.20))
     );
 
+    const skillShape = baseSkillTotal > 0
+      ? baseSkillShape
+      : deriveLeaderboardSkillShape({
+          totalPoints,
+          drillPassRate,
+          encounterPassRate,
+          challengeSuccessRate,
+          premiumSuccessRate,
+          masteryRate,
+          readiness,
+        });
     const extremes = getSkillExtremes(skillShape);
 
     return {
@@ -15522,20 +15617,31 @@ function renderProfileScreen() {
     insightCard.innerHTML = "";
   }
   if (tutorialCard) {
-    const normalizedRole = String(normalizeMembershipRole(profile) || "").toLowerCase();
-    if (normalizedRole === "waiter") {
+    const normalizedRole = String(normalizeMembershipRole(profile) || profile?.role || "waiter").toLowerCase();
+    const caps = getPremiumRoleCapabilities(profile);
+    const shouldShowTutorials =
+      normalizedRole === "waiter" ||
+      !caps.canAccessManagerBoard ||
+      (!profile?.role && !profile?.membership_role && !profile?.membershipRole);
+    if (shouldShowTutorials) {
       tutorialCard.classList.remove("hidden");
+      tutorialCard.style.display = "";
       const copyEl = document.getElementById("profileTutorialCopy");
       if (copyEl) {
-        copyEl.textContent = "Launch the guided encounter walkthrough directly from your profile.";
+        copyEl.textContent = "Launch guided tutorials directly from your profile.";
       }
       const tutorialBtn = document.getElementById("btnProfileEncounterTutorial");
-      if (tutorialBtn) tutorialBtn.onclick = () => {
+      if (tutorialBtn) {
+        tutorialBtn.textContent = "Start Encounter Tutorial";
+        tutorialBtn.onclick = () => {
+        clearQueuedDrillStart({ resetConfig: true });
         closeProfilePanel?.();
         startTutorial("encounter_setup_manager");
-      };
+        };
+      }
     } else {
       tutorialCard.classList.add("hidden");
+      tutorialCard.style.display = "none";
     }
   }
 
@@ -15740,13 +15846,13 @@ function renderProfileBadgeShelf(user = null, model = null) {
   root.innerHTML = `
     <div class="card" style="display:flex; flex-direction:column; gap:10px;">
       <div style="font-weight:600;">Badges & Milestones</div>
-      <div style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px;">
+      <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px;">
         ${(earned.length ? earned : badges.slice(0, 2)).map((badge) => renderBadge(badge, !badge.earned)).join("")}
       </div>
       ${inProgress.length ? `
         <div>
           <div class="small-text" style="margin-bottom:8px; opacity:.78;">Next up</div>
-          <div style="display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px;">
+          <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px;">
             ${inProgress.map((badge) => renderBadge(badge, true)).join("")}
           </div>
         </div>

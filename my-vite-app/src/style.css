@@ -1030,6 +1030,141 @@ button:hover, .btn:hover, .btn-ghost:hover{
   background: rgba(0,0,0,0.18);
 }
 
+/* Final waiter profile / leaderboard overrides */
+#screenProfile #profileTutorialCard.hidden{
+  display:none !important;
+}
+
+#screenProfile #profileTutorialCard:not(.hidden){
+  display:block !important;
+}
+
+#screenProfile #profileBadgeShelf .card > div[style*="grid-template-columns"],
+#screenProfile #profileStandingCard .card > div[style*="grid-template-columns"]{
+  grid-template-columns:repeat(auto-fit,minmax(220px,1fr)) !important;
+}
+
+#screenProfile #profileBadgeShelf .card strong,
+#screenProfile #profileStandingCard .card strong{
+  overflow-wrap:anywhere !important;
+}
+
+#screenWaiterLeaderboard > .panel.stack{
+  width:min(1180px,calc(100vw - 24px)) !important;
+}
+
+#screenWaiterLeaderboard .mb-performance-table-wrap{
+  max-width:100% !important;
+  overflow-x:auto !important;
+}
+
+#screenWaiterLeaderboard .mb-performance-table{
+  width:100% !important;
+  min-width:880px !important;
+}
+
+@media (max-width: 760px){
+  #screenWaiterLeaderboard{
+    padding:12px !important;
+  }
+
+  #screenWaiterLeaderboard > .panel.stack{
+    width:min(100vw - 16px, 980px) !important;
+    margin:0 auto !important;
+  }
+
+  #screenWaiterLeaderboard .topbar{
+    flex-direction:column !important;
+    align-items:flex-start !important;
+  }
+
+  #screenWaiterLeaderboard .topbar .row{
+    width:100% !important;
+  }
+
+  #screenWaiterLeaderboard .topbar .row button{
+    width:100% !important;
+  }
+
+  #screenWaiterLeaderboard .mb-performance-table-wrap{
+    overflow:visible !important;
+  }
+
+  #screenWaiterLeaderboard .mb-performance-table,
+  #screenWaiterLeaderboard .mb-performance-table tbody,
+  #screenWaiterLeaderboard .waiter-user-row,
+  #screenWaiterLeaderboard .waiter-user-detail-row{
+    display:block !important;
+    min-width:0 !important;
+  }
+
+  #screenWaiterLeaderboard .mb-performance-table thead{
+    display:none !important;
+  }
+
+  #screenWaiterLeaderboard .waiter-user-row{
+    margin-bottom:12px !important;
+    border:1px solid rgba(255,255,255,0.08) !important;
+    border-radius:16px !important;
+    background:rgba(255,255,255,0.03) !important;
+    overflow:hidden !important;
+  }
+
+  #screenWaiterLeaderboard .waiter-user-row > td{
+    display:flex !important;
+    justify-content:space-between !important;
+    align-items:flex-start !important;
+    gap:12px !important;
+    width:100% !important;
+    padding:10px 12px !important;
+    border-bottom:1px solid rgba(255,255,255,0.08) !important;
+  }
+
+  #screenWaiterLeaderboard .waiter-user-row > td:last-child{
+    border-bottom:0 !important;
+  }
+
+  #screenWaiterLeaderboard .waiter-user-row > td::before{
+    content:attr(data-label) !important;
+    flex:0 0 112px !important;
+    color:rgba(241,237,255,0.68) !important;
+    font-size:11px !important;
+    font-weight:800 !important;
+    letter-spacing:0.06em !important;
+    text-transform:uppercase !important;
+  }
+
+  #screenWaiterLeaderboard .waiter-user-row > td:nth-child(2){
+    display:block !important;
+  }
+
+  #screenWaiterLeaderboard .waiter-user-row > td:nth-child(2)::before{
+    display:block !important;
+    margin-bottom:8px !important;
+  }
+
+  #screenWaiterLeaderboard .waiter-user-expand-btn{
+    width:100% !important;
+    align-items:flex-start !important;
+  }
+
+  #screenWaiterLeaderboard .waiter-user-detail-row > td{
+    display:block !important;
+    padding:0 0 12px !important;
+    border:0 !important;
+  }
+
+  #screenWaiterLeaderboard .waiter-user-detail-panel{
+    grid-template-columns:1fr !important;
+    padding:12px !important;
+  }
+
+  #screenProfile #profileBadgeShelf .card > div[style*="grid-template-columns"],
+  #screenProfile #profileStandingCard .card > div[style*="grid-template-columns"]{
+    grid-template-columns:1fr !important;
+  }
+}
+
 html[data-bc-mobile-env="true"] #app{
   gap: 8px;
   padding: 8px;
@@ -2228,6 +2363,10 @@ html[data-bc-mobile-env="true"] #screenManagerBoard #mbInstrSend{
     inset 0 1px 0 rgba(255,255,255,0.05) !important;
 }
 
+#screenWaiterLeaderboard > .panel.stack{
+  width: min(1180px, calc(100vw - 24px));
+}
+
 #screenProfile .topbar,
 #screenWaiterLeaderboard .topbar{
   display: flex;
@@ -2372,12 +2511,24 @@ html[data-bc-mobile-env="true"] #screenManagerBoard #mbInstrSend{
   display:inline-flex;
   align-items:center;
   gap:8px;
+  width:100%;
+  min-width:0;
   padding:0;
   border:0;
   background:transparent;
   color:inherit;
   font:inherit;
   cursor:pointer;
+}
+
+#screenWaiterLeaderboard .waiter-user-expand-btn > span:last-child{
+  min-width:0;
+}
+
+#screenWaiterLeaderboard .waiter-user-expand-btn > span:last-child > span:first-child{
+  max-width:100%;
+  overflow-wrap:anywhere;
+  text-align:left;
 }
 
 #screenWaiterLeaderboard .waiter-leaderboard-avatar{
@@ -2410,6 +2561,7 @@ html[data-bc-mobile-env="true"] #screenManagerBoard #mbInstrSend{
   grid-template-columns:240px 1fr;
   gap:16px;
   padding:14px 0 6px;
+  min-width:0;
   opacity:0;
   transform:scale(0.96);
   animation:mbDetailFadeIn 180ms ease forwards;
@@ -2422,12 +2574,14 @@ html[data-bc-mobile-env="true"] #screenManagerBoard #mbInstrSend{
   background:
     radial-gradient(circle at top, rgba(96,165,250,0.10), transparent 60%),
     rgba(255,255,255,0.03);
+  min-width:0;
 }
 
 #screenWaiterLeaderboard .waiter-user-metric-grid{
   display:grid;
   grid-template-columns:repeat(auto-fit, minmax(120px, 1fr));
   gap:10px;
+  min-width:0;
 }
 
 #screenWaiterLeaderboard .waiter-user-badge-row{
@@ -2474,6 +2628,29 @@ html[data-bc-mobile-env="true"] #screenManagerBoard #mbInstrSend{
   margin-top: 8px;
 }
 
+#profileBadgeShelf strong,
+#profileStandingCard strong{
+  overflow-wrap:anywhere;
+}
+
+#profileBadgeShelf,
+#profileStandingCard{
+  min-width:0;
+}
+
+#profileBadgeShelf .card,
+#profileStandingCard .card{
+  min-width:0;
+}
+
+#profileBadgeShelf .badge,
+#profileStandingCard .badge{
+  white-space:normal;
+  text-align:center;
+  max-width:100%;
+  overflow-wrap:anywhere;
+}
+
 @media (max-width: 760px){
   #screenProfile,
   #screenWaiterLeaderboard{
@@ -2489,6 +2666,112 @@ html[data-bc-mobile-env="true"] #screenManagerBoard #mbInstrSend{
   #screenProfile .card .score-row{
     grid-template-columns: 1fr;
     gap: 4px;
+  }
+
+  #screenWaiterLeaderboard .topbar{
+    flex-direction:column;
+    align-items:flex-start;
+  }
+
+  #screenWaiterLeaderboard .topbar .row{
+    width:100%;
+  }
+
+  #screenWaiterLeaderboard .topbar .row button{
+    width:100%;
+  }
+
+  #screenWaiterLeaderboard .mb-performance-table-wrap{
+    overflow:visible;
+  }
+
+  #screenWaiterLeaderboard .mb-performance-table{
+    min-width:0;
+    border-collapse:separate;
+    border-spacing:0;
+  }
+
+  #screenWaiterLeaderboard .mb-performance-table thead{
+    display:none;
+  }
+
+  #screenWaiterLeaderboard .mb-performance-table tbody{
+    display:block;
+  }
+
+  #screenWaiterLeaderboard .waiter-user-row,
+  #screenWaiterLeaderboard .waiter-user-detail-row{
+    display:block;
+  }
+
+  #screenWaiterLeaderboard .waiter-user-row{
+    margin-bottom:12px;
+    border:1px solid rgba(255,255,255,0.08);
+    border-radius:16px;
+    background:rgba(255,255,255,0.03);
+    overflow:hidden;
+  }
+
+  #screenWaiterLeaderboard .waiter-user-row > td{
+    display:flex;
+    justify-content:space-between;
+    gap:12px;
+    width:100%;
+    padding:10px 12px;
+    border-bottom:1px solid rgba(255,255,255,0.08);
+  }
+
+  #screenWaiterLeaderboard .waiter-user-row > td:last-child{
+    border-bottom:0;
+  }
+
+  #screenWaiterLeaderboard .waiter-user-row > td::before{
+    content:attr(data-label);
+    flex:0 0 112px;
+    color:rgba(241,237,255,0.68);
+    font-size:11px;
+    font-weight:800;
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+  }
+
+  #screenWaiterLeaderboard .waiter-user-row > td:nth-child(2){
+    display:block;
+  }
+
+  #screenWaiterLeaderboard .waiter-user-row > td:nth-child(2)::before{
+    display:block;
+    margin-bottom:8px;
+  }
+
+  #screenWaiterLeaderboard .waiter-user-expand-btn{
+    align-items:flex-start;
+  }
+
+  #screenWaiterLeaderboard .waiter-user-detail-row > td{
+    display:block;
+    padding:0 0 12px;
+    border:0;
+  }
+
+  #screenWaiterLeaderboard .waiter-user-detail-panel{
+    padding:12px;
+  }
+
+  #profileStandingCard .card > div[style*="grid-template-columns"],
+  #profileBadgeShelf .card > div[style*="grid-template-columns"]{
+    grid-template-columns:1fr !important;
+  }
+
+  #profileStandingCard .card,
+  #profileBadgeShelf .card{
+    overflow:hidden;
+  }
+
+  #profileStandingCard .card > div[style*="justify-content:space-between"],
+  #profileBadgeShelf .card > div[style*="justify-content:space-between"]{
+    flex-wrap:wrap;
+    align-items:flex-start !important;
   }
 }
 
@@ -3194,12 +3477,13 @@ html[data-bc-mobile-env="true"] #screenManagerBoard .mb-message-card .mbCoachSug
 #screenManagerBoard .mb-performance-table-wrap,
 #screenWaiterLeaderboard .mb-performance-table-wrap{
   overflow-x:auto;
+  max-width:100%;
 }
 
 #screenManagerBoard .mb-performance-table,
 #screenWaiterLeaderboard .mb-performance-table{
   width:100%;
-  min-width:960px;
+  min-width:880px;
   border-collapse:collapse;
 }
 
@@ -3241,6 +3525,7 @@ html[data-bc-mobile-env="true"] #screenManagerBoard .mb-message-card .mbCoachSug
   text-align:left;
   border-bottom:1px solid rgba(255,255,255,0.08);
   vertical-align:top;
+  overflow-wrap:anywhere;
 }
 
 #screenManagerBoard .mb-performance-table th,
