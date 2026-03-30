@@ -1,6 +1,7 @@
 // src/parent/progressionState.ts
 import { getSupabaseParent } from "../lib/supabaseParent.js";
 import type { ProgressionState, RecentWindow, Tier, WeakestLink, Readiness } from "../game/progressionGuards";
+import { deriveTier } from "../progressionStore.js";
 
 export async function buildProgressionInputs(params: {
   userId: string;
@@ -40,15 +41,39 @@ export async function buildProgressionInputs(params: {
     .eq("restaurant_id", restaurantId)
     .maybeSingle();
 
+  // 5) Canonical progression state
+  const p1 = await supabase
+    .from("bc_progression_state_v1")
+    .select("canonical_state")
+    .eq("user_id", userId)
+    .eq("restaurant_id", restaurantId)
+    .maybeSingle();
+
   const readiness = (r1.data?.readiness || "UNKNOWN") as Readiness;
 
   const weakestLink = ((w1.data?.weakest_link || "NONE").toUpperCase()) as WeakestLink;
   const weakestRate = (w1.data?.weakest_rate ?? null) as number | null;
 
-  // Decide current tier:
-  // If you store tier in profiles/access_tier, fetch that instead.
-  // For now, clamp default to 1 until you wire tier persistence.
-  const tier: Tier = 1;
+  const canonicalState =
+    p1.data?.canonical_state && typeof p1.data.canonical_state === "object"
+      ? p1.data.canonical_state
+      : {};
+  const canonicalEconomy =
+    canonicalState?.economy && typeof canonicalState.economy === "object"
+      ? canonicalState.economy
+      : {};
+  const canonicalAuthority =
+    canonicalState?.authority && typeof canonicalState.authority === "object"
+      ? canonicalState.authority
+      : {};
+
+  const canonicalPoints = Number(canonicalEconomy?.points ?? canonicalState?.points ?? 0);
+  const tierFromPoints = deriveTier(canonicalPoints);
+  const servedTierRaw = Number(canonicalAuthority?.tierToServe ?? canonicalEconomy?.tier ?? tierFromPoints);
+  const tier: Tier =
+    servedTierRaw >= 3 ? 3 :
+    servedTierRaw === 2 ? 2 :
+    1;
 
   const last10Count = Number(r1.data?.last10_count ?? 0);
   const greens = Number(r1.data?.last10_greens ?? 0);
