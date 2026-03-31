@@ -3976,9 +3976,26 @@ html, body{ height:100%; }
     overflow: hidden;
   }
 
+  #screenSetupDemo .app-setup-list,
+  #screenSetupPremium .app-setup-list{
+    padding: 10px;
+  }
+
   #screenSetupDemo .manager-row,
   #screenSetupPremium .manager-row{
     align-items: stretch;
+  }
+
+  #screenSetupPremium .app-advanced-panel{
+    overflow: visible;
+  }
+
+  #screenSetupPremium .app-advanced-panel summary{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 44px;
   }
 
   #screenSetupDemo .wine-table,
@@ -3991,11 +4008,13 @@ html, body{ height:100%; }
     width: 100%;
     max-width: 100%;
     grid-template-columns: 1fr;
+    gap: 8px;
   }
 
   #screenSetupDemo .wine-card,
   #screenSetupPremium .wine-card{
     min-width: 0;
+    padding: 10px;
   }
 
   .app-game-masthead{

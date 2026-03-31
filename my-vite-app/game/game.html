@@ -13532,6 +13532,21 @@ function ensureProgLoaded() {
         document.getElementById("premiumWineAdvanced")?.classList.add("hidden");
       }
 
+      function wirePremiumWineAdvancedToggle() {
+        const details = document.getElementById("premiumWineAdvanced");
+        const summary = details?.querySelector?.("summary");
+        if (!details || !summary || summary.__bcAdvancedToggleBound) return;
+
+        summary.__bcAdvancedToggleBound = true;
+        summary.style.touchAction = "manipulation";
+
+        summary.addEventListener("touchend", (event) => {
+          if (event.defaultPrevented) return;
+          event.preventDefault();
+          details.open = !details.open;
+        }, { passive: false });
+      }
+
       // ---------- UI: counts ----------
       function renderHomeCounts() {
         const snapshot = getUnifiedProgressSnapshot();
@@ -22616,6 +22631,7 @@ function ensureProgLoaded() {
       buildOptionButtons(ids.fruitOptions, fruitOptions);
       buildOptionButtons(ids.textureOptions, textureOptions);
       buildOptionButtons(ids.oakOptions, oakOptions);
+      wirePremiumWineAdvancedToggle();
       applyRoleGatingToSetupUI();
 
       updateWineTagsSelections(ids.fruitOptions, 2);
