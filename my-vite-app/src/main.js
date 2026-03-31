@@ -653,66 +653,73 @@ document.querySelector("#app").innerHTML = `
 
   <!-- PREMIUM SETUP (PARENT-OWNED) -->
   <section id="screenSetupPremium" class="screen hidden">
-    <div class="panel">
-      <h2>Setup</h2>
-      <div class="score-row">Wines added: <span id="wineCountPremium">0 / 10</span></div>
-
-      <div id="wineAdminPanel" data-tutorial="wine-panel">
-      <div class="manager-row">
-        <input type="text" id="wineNameInputPremium" data-tutorial="wine-name" placeholder="Wine Name (required)" />
-        <input type="text" id="wineVarietalInputPremium" data-tutorial="wine-varietal" placeholder="Varietal (required)" />
+    <div class="panel app-setup-shell">
+      <div class="app-setup-header">
+        <h2>Setup</h2>
+        <div class="score-row app-score-row">Wines added: <span id="wineCountPremium">0 / 10</span></div>
       </div>
 
-      <div class="manager-row">
-        <strong>Fruit Profile (choose up to 2):</strong>
-        <div class="option-grid" id="fruitOptionsPremium" data-tutorial="fruit-options"></div>
-      </div>
-
-      <div class="manager-row">
-        <strong>Structure/Texture (choose up to 2):</strong>
-        <div class="option-grid" id="textureOptionsPremium" data-tutorial="texture-options"></div>
-      </div>
-
-      <div class="manager-row">
-        <strong>Oak Level (choose 1):</strong>
-        <div class="option-grid" id="oakOptionsPremium" data-tutorial="oak-options"></div>
-      </div>
-
-      <div class="manager-row">
-        <strong>Process (optional):</strong>
-        <select id="processInputPremium" data-tutorial="wine-process">
-          <option value="">Select process</option>
-          <option value="Stainless steel">Stainless steel</option>
-          <option value="Wild ferment">Wild ferment</option>
-          <option value="Maceration">Maceration</option>
-          <option value="Destemming">Destemming</option>
-          <option value="Whole bunch pressed">Whole bunch pressed</option>
-          <option value="Hand harvested">Hand harvested</option>
-          <option value="Time on lees">Time on lees</option>
-        </select>
-        <input type="text" id="regionInputPremium" data-tutorial="wine-region" placeholder="Region (optional)" />
-      </div>
-
-      <div class="manager-row">
-        <textarea id="storyInputPremium" data-tutorial="wine-story" placeholder="Story (optional, 1 sentence)"></textarea>
-        <button id="addWineBtnPremium" type="button" data-tutorial="wine-add">Add Wine</button>
-      </div>
-
-      <div class="manager-panel">
+      <div class="manager-panel app-setup-list">
         <h3>Wine List</h3>
-        <table class="wine-table">
-          <thead>
-            <tr>
-              <th>Name</th><th>Varietal</th><th>Fruit</th><th>Texture</th><th>Oak</th><th>Process</th><th>Region</th><th>Story</th><th>Action</th>
-            </tr>
-          </thead>
-          <tbody id="premiumWineTableBody" data-tutorial="wine-list"></tbody>
-        </table>
-        <div id="premiumWineCards" class="wine-cards"></div>
-      </div>
+        <div id="premiumWineCards" class="wine-cards" data-tutorial="wine-list"></div>
+
+        <details id="premiumWineAdvanced" class="wine-advanced panel-spaced app-advanced-panel">
+          <summary>Advanced (add wines + table)</summary>
+
+          <div id="wineAdminPanel" class="panel-spaced app-admin-panel" data-tutorial="wine-panel">
+            <div class="manager-row app-form-row">
+              <input type="text" id="wineNameInputPremium" data-tutorial="wine-name" placeholder="Wine Name (required)" />
+              <input type="text" id="wineVarietalInputPremium" data-tutorial="wine-varietal" placeholder="Varietal (required)" />
+            </div>
+
+            <div class="manager-row app-form-row app-form-section">
+              <strong>Fruit Profile (choose up to 2):</strong>
+              <div class="option-grid" id="fruitOptionsPremium" data-tutorial="fruit-options"></div>
+            </div>
+
+            <div class="manager-row app-form-row app-form-section">
+              <strong>Structure/Texture (choose up to 2):</strong>
+              <div class="option-grid" id="textureOptionsPremium" data-tutorial="texture-options"></div>
+            </div>
+
+            <div class="manager-row app-form-row app-form-section">
+              <strong>Oak Level (choose 1):</strong>
+              <div class="option-grid" id="oakOptionsPremium" data-tutorial="oak-options"></div>
+            </div>
+
+            <div class="manager-row app-form-row app-form-section">
+              <strong>Process (optional):</strong>
+              <select id="processInputPremium" data-tutorial="wine-process">
+                <option value="">Select process</option>
+                <option value="Stainless steel">Stainless steel</option>
+                <option value="Wild ferment">Wild ferment</option>
+                <option value="Maceration">Maceration</option>
+                <option value="Destemming">Destemming</option>
+                <option value="Whole bunch pressed">Whole bunch pressed</option>
+                <option value="Hand harvested">Hand harvested</option>
+                <option value="Time on lees">Time on lees</option>
+              </select>
+              <input type="text" id="regionInputPremium" data-tutorial="wine-region" placeholder="Region (optional)" />
+            </div>
+
+            <div class="manager-row app-form-row">
+              <textarea id="storyInputPremium" data-tutorial="wine-story" placeholder="Story (optional, 1 sentence)"></textarea>
+              <button id="addWineBtnPremium" type="button" data-tutorial="wine-add">Add Wine</button>
+            </div>
+
+            <table class="wine-table">
+              <thead>
+                <tr>
+                  <th>Name</th><th>Varietal</th><th>Fruit</th><th>Texture</th><th>Oak</th><th>Process</th><th>Region</th><th>Story</th><th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="premiumWineTableBody"></tbody>
+            </table>
+          </div>
+        </details>
       </div>
 
-      <div class="button-row">
+      <div class="button-row app-setup-actions">
         <button id="btnContinuePremium" type="button" data-tutorial="encounter-start">Start</button>
         <button id="btnBackHomeFromSetupPremium" type="button" data-tutorial="encounter-back">Back</button>
       </div>
@@ -6986,6 +6993,8 @@ async function openPremiumSetupScreen() {
   let fruitSel = [];
   let textureSel = [];
   let oakSel = "";
+  const advancedPanel = document.getElementById("premiumWineAdvanced");
+  if (advancedPanel) advancedPanel.open = window.innerWidth > 860;
 
   setupMultiSelectGrid("fruitOptionsPremium", FRUIT_OPTS, 2, () => fruitSel, (v) => (fruitSel = v));
   setupMultiSelectGrid("textureOptionsPremium", TEXTURE_OPTS, 2, () => textureSel, (v) => (textureSel = v));
@@ -7138,11 +7147,6 @@ function wireParentButtons() {
   if (btnPremiumWineSetup && !btnPremiumWineSetup.__bcBound) {
     btnPremiumWineSetup.__bcBound = true;
     btnPremiumWineSetup.addEventListener("click", async () => {
-      const frameWindow = getPremiumFrameWindow?.();
-      if (frameWindow) {
-        sendPremiumNav("setup_premium");
-        return;
-      }
       await openPremiumSetupScreen();
     });
   }
