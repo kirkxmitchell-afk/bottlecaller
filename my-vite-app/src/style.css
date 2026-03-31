@@ -1256,11 +1256,24 @@ html[data-bc-mobile-env="true"] #screenProfile .topbar .row button{
   flex: 1 1 calc(50% - 8px);
 }
 
+html[data-bc-mobile-env="true"] #screenPremiumApp{
+  width: min(100vw, 100%) !important;
+  padding: 8px 6px 14px !important;
+}
+
+html[data-bc-mobile-env="true"] #screenPremiumApp > .panel.stack{
+  gap: 6px !important;
+}
+
+html[data-bc-mobile-env="true"] #premiumRoot{
+  margin-top: 0 !important;
+}
+
 html[data-bc-mobile-env="true"] #premiumRootFrame,
 html[data-bc-mobile-env="true"] #gameRootDemoFrame{
-  height: calc(100dvh - 148px) !important;
+  height: calc(100dvh - 138px) !important;
   min-height: 420px;
-  border-radius: 12px !important;
+  border-radius: 10px !important;
 }
 
 html[data-bc-mobile-env="true"] #hudPanel{

@@ -3859,6 +3859,175 @@ html, body{ height:100%; }
   }
 }
 
+@media (max-width: 760px){
+  #screenHome{
+    padding: 8px 6px 18px !important;
+  }
+
+  #screenHome .app-home-shell{
+    padding: 16px 12px 14px !important;
+    border-radius: 18px !important;
+  }
+
+  #screenHome .app-home-header{
+    margin-bottom: 16px;
+  }
+
+  #screenHome .app-home-eyebrow{
+    margin-bottom: 10px;
+    padding: 6px 10px;
+    letter-spacing: 0.16em;
+    font-size: 10px;
+  }
+
+  #screenHome .app-home-header h2{
+    font-size: 28px !important;
+  }
+
+  #screenHome .app-home-subtitle{
+    max-width: none;
+    margin-top: 8px;
+    font-size: 12px;
+  }
+
+  #screenHome .app-home-grid{
+    gap: 12px !important;
+  }
+
+  #screenHome .app-mode-card{
+    padding: 16px 12px !important;
+    border-radius: 18px !important;
+  }
+
+  #screenHome #cardPremium{
+    padding: 18px 12px 14px !important;
+  }
+
+  #screenHome .app-premium-hero{
+    gap: 12px;
+    margin-bottom: 6px;
+  }
+
+  #screenHome .app-premium-lead{
+    padding: 0;
+  }
+
+  #screenHome #cardPremium .app-mode-header{
+    margin-bottom: 10px;
+  }
+
+  #screenHome #cardPremium .app-mode-title{
+    font-size: 24px !important;
+  }
+
+  #screenHome #cardPremium .app-mode-copy{
+    margin-bottom: 12px;
+    max-width: none;
+    font-size: 12px;
+  }
+
+  #screenHome .app-premium-status{
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    padding: 12px 10px;
+    border-radius: 18px;
+  }
+
+  #screenHome .app-score-row{
+    min-height: 38px;
+    padding: 8px 10px;
+    border-radius: 14px;
+    gap: 6px;
+    font-size: 11px;
+    line-height: 1.2;
+  }
+
+  #screenHome #cardPremium .app-progress-card{
+    grid-column: 1 / -1;
+    width: 100%;
+    padding: 14px 12px !important;
+    border-radius: 18px !important;
+  }
+
+  #screenHome .app-progress-title{
+    margin-bottom: 8px;
+    font-size: 13px;
+  }
+
+  #screenHome .app-progress-card .small-text{
+    font-size: 11px;
+  }
+
+  #screenHome .app-progress-meter-wrap{
+    margin: 2px 0 10px;
+    gap: 8px;
+  }
+
+  #screenHome .app-progress-percent{
+    font-size: 20px;
+  }
+
+  #screenHome .app-progress-notice,
+  #screenHome .app-progress-label{
+    font-size: 9px;
+    letter-spacing: 0.09em;
+  }
+
+  #screenHome .app-progress-chip-row{
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    margin: 0 0 10px;
+  }
+
+  #screenHome .app-progress-chip{
+    min-height: 28px;
+    padding: 6px 8px;
+    font-size: 9px;
+    letter-spacing: 0.03em;
+    text-align: center;
+  }
+
+  #screenHome .app-progress-meter-head,
+  #screenHome .app-progress-detail{
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    text-align: left;
+  }
+
+  #screenHome .app-home-actions{
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+    padding-top: 12px;
+  }
+
+  #screenHome #cardPremium .app-home-actions{
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    max-width: none;
+  }
+
+  #screenHome #cardPremium .app-home-actions button:first-child{
+    grid-column: auto !important;
+  }
+
+  #screenHome .app-home-actions button,
+  #screenHome .app-home-actions .btn,
+  #screenHome .app-home-actions .btn-ghost{
+    min-height: 42px;
+    padding: 9px 8px !important;
+    border-radius: 14px !important;
+    font-size: 11px;
+    line-height: 1.15;
+  }
+
+  #screenHome .app-home-actions button:first-child{
+    min-height: 42px;
+    font-size: 11px;
+  }
+}
+
 @media (max-width: 860px){
   body{
     font-size: 13px;
