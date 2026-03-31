@@ -19224,7 +19224,15 @@ async function decideRoute(reason = "decideRoute") {
       return;
     }
 
-    // 3) No restaurant => stay on the parent shell until the user explicitly proceeds.
+    // 3) No restaurant:
+    // - standard demo users should go straight into Demo
+    // - premium-capable users can stay on the parent shell for setup
+    const entitlement = canAccessPremium(appState.profile || {});
+    if (!entitlement.ok) {
+      await routeDemo(`decideRoute.no_restaurant.demo:${reason}`);
+      return;
+    }
+
     routeHomeShell(
       `decideRoute.no_restaurant:${reason}`,
       "Finish login or Premium setup on the parent screen before entering the game."
