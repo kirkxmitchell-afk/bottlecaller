@@ -27,7 +27,9 @@ async function minifyHtmlDocument(html) {
       const minified = await transform(content, {
         loader: "js",
         format: "esm",
-        minify: true,
+        minifySyntax: true,
+        minifyWhitespace: true,
+        minifyIdentifiers: false,
         drop: ["console", "debugger"],
         target: "es2020",
       });
