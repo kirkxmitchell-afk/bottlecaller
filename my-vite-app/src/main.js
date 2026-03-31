@@ -1624,7 +1624,7 @@ window.__BC_PARENT_SMOKE_TEST__ = function __BC_PARENT_SMOKE_TEST__() {
     console.warn("[AUTH_WATCHDOG] enforced logged-out UI:", reason);
   }
 
-  setInterval(() => {
+  const tick = () => {
     if (document.hidden) return;
     const hasSession = !!window.appState?.session;
     if (!hasSession) {
@@ -1635,7 +1635,10 @@ window.__BC_PARENT_SMOKE_TEST__ = function __BC_PARENT_SMOKE_TEST__() {
         killPremium("interval.detected_premium_without_session");
       }
     }
-  }, 1000);
+  };
+
+  tick();
+  window.__BC_AUTH_WATCHDOG_TICK__ = window.setInterval(tick, 2500);
 })();
 
 let __BC_ROLE_CAPABILITIES_TABLE__ = null;
@@ -3008,8 +3011,7 @@ function wireHudAbilities() {
 function tickHudActiveAbilities() {
   if (window.__BC_HUD_ABILITIES_TICK_WIRED__) return;
   window.__BC_HUD_ABILITIES_TICK_WIRED__ = true;
-
-  setInterval(() => {
+  const tick = () => {
     const hud = document.getElementById("hudPanel");
     if (!hud || hud.classList.contains("hidden") || document.hidden) return;
     const active = getActiveAbilities();
@@ -3033,7 +3035,10 @@ function tickHudActiveAbilities() {
       }
       renderHudTimedChallenge();
     }
-  }, 1000);
+  };
+
+  tick();
+  window.__BC_HUD_ABILITIES_TICK__ = window.setInterval(tick, 1500);
 }
 
 function getManagerBoardActiveAbilitySummary() {
@@ -4099,8 +4104,7 @@ function renderManagerBoardAbilityTabs() {
 function tickManagerBoardAbilities() {
   if (window.__BC_MB_ABILITIES_TICK_WIRED__) return;
   window.__BC_MB_ABILITIES_TICK_WIRED__ = true;
-
-  setInterval(() => {
+  const tick = () => {
     if (document.hidden) return;
     const screen = document.getElementById("screenManagerBoard");
     if (!screen || screen.classList.contains("hidden")) return;
@@ -4128,7 +4132,10 @@ function tickManagerBoardAbilities() {
       renderManagerBoardAbilityTabs();
       renderManagerDisplayMethodActionPanel?.();
     }
-  }, 1000);
+  };
+
+  tick();
+  window.__BC_MB_ABILITIES_TICK__ = window.setInterval(tick, 1500);
 }
 
 // --- Fetch allowed restaurants for current scope ---

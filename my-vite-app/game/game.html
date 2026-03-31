@@ -4022,6 +4022,7 @@
       window.__BC_UNREAD_POLL_WIRED__ = true;
 
       const kick = () => {
+        if (document.hidden) return;
         if (String(window.bcMode || "").toLowerCase() === "demo") return;
         requestUnreadMessages();
       };
@@ -4035,7 +4036,8 @@
       if (window.__BC_TIMED_CHALLENGE_TICK_WIRED__) return;
       window.__BC_TIMED_CHALLENGE_TICK_WIRED__ = true;
 
-      setInterval(() => {
+      window.__BC_TIMED_CHALLENGE_TICK__ = setInterval(() => {
+        if (document.hidden) return;
         const challenge = getActiveTimedChallenge();
         if (!challenge) return;
 
@@ -6096,8 +6098,9 @@ function isDrillMode() {
       window.renderStateHealthWarning = renderStateHealthWarning;
       if (!window.__BC_STATE_HEALTH_WARNING_WATCHDOG__) {
         window.__BC_STATE_HEALTH_WARNING_WATCHDOG__ = setInterval(() => {
+          if (document.hidden) return;
           try { renderStateHealthWarning(); } catch {}
-        }, 1500);
+        }, 4000);
       }
       function syncRuntimeState(patch = {}) {
         const next = {
