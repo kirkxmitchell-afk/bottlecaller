@@ -1174,12 +1174,15 @@ button.selected,
 
 /* ---------- Wine tables/cards ---------- */
 .wine-table {
+  display: block;
   width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
   border-collapse: collapse;
   margin-top: 10px;
-  overflow: hidden;
   border-radius: 14px;
   border: 1px solid rgba(255,255,255,0.10);
+  -webkit-overflow-scrolling: touch;
 }
 
 .wine-table th,
@@ -1188,6 +1191,8 @@ button.selected,
   border-bottom: 1px solid rgba(255,255,255,0.08);
   font-size: 12px;
   vertical-align: top;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .wine-table th {
@@ -2508,7 +2513,7 @@ html, body{ height:100%; }
 #screenSetupDemo .app-setup-shell,
 #screenSetupPremium .app-setup-shell{
   position: relative;
-  overflow: hidden;
+  overflow: clip;
   padding: 22px !important;
   border-radius: 28px !important;
   background:
@@ -2686,6 +2691,8 @@ html, body{ height:100%; }
 #screenSetupPremium .app-setup-list{
   margin-top: 18px;
   padding: 16px;
+  max-width: 100%;
+  overflow-x: auto;
   border-radius: 22px;
   border: 1px solid rgba(255,255,255,0.10);
   background:
@@ -2739,6 +2746,7 @@ html, body{ height:100%; }
   display:flex;
   gap: 10px;
   justify-content:flex-start;
+  flex-wrap: wrap;
 }
 
 @media (max-width: 860px){
@@ -3957,6 +3965,37 @@ html, body{ height:100%; }
 @media (max-width: 640px){
   .screen{
     padding: 6px 6px 12px;
+  }
+
+  #screenSetupDemo #wineAdminPanel,
+  #screenSetupPremium #wineAdminPanel,
+  #screenSetupDemo .manager-panel,
+  #screenSetupPremium .manager-panel{
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  #screenSetupDemo .manager-row,
+  #screenSetupPremium .manager-row{
+    align-items: stretch;
+  }
+
+  #screenSetupDemo .wine-table,
+  #screenSetupPremium .wine-table{
+    display: none;
+  }
+
+  #screenSetupDemo .wine-cards,
+  #screenSetupPremium .wine-cards{
+    width: 100%;
+    max-width: 100%;
+    grid-template-columns: 1fr;
+  }
+
+  #screenSetupDemo .wine-card,
+  #screenSetupPremium .wine-card{
+    min-width: 0;
   }
 
   .app-game-masthead{

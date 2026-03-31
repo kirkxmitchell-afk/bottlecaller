@@ -69,7 +69,7 @@ export function createTutorialRuntime({
         target: '[data-tutorial="fruit-options"]',
         title: "Fruit Profile",
         body: "This section defines the fruit character of the wine.",
-        placement: "right",
+        placement: "bottom",
         action: "none",
       },
       {
@@ -77,7 +77,7 @@ export function createTutorialRuntime({
         target: '[data-tutorial="texture-options"]',
         title: "Structure / Texture",
         body: "This section defines the wine's body and texture profile.",
-        placement: "right",
+        placement: "bottom",
         action: "none",
       },
       {
@@ -85,7 +85,7 @@ export function createTutorialRuntime({
         target: '[data-tutorial="oak-options"]',
         title: "Oak Level",
         body: "This is where you set the wine's oak influence.",
-        placement: "right",
+        placement: "bottom",
         action: "none",
       },
       {
@@ -421,11 +421,25 @@ export function createTutorialRuntime({
         },
       },
       {
+        id: "reflection-summary",
+        target: '[data-tutorial="reflection-summary"]',
+        title: "Reflection Summary",
+        body: "This summary highlights what worked, what to fix next, and the coaching focus to carry into the next encounter.",
+        placement: "top",
+        before: async () => {
+          await waitForTutorialCondition(() => {
+            const step = Number(getGameWindow()?.currentStep);
+            return (step === 6 || step === 7) && !!getTutorialTarget('[data-tutorial="reflection-summary"]');
+          }, "reflection summary ready");
+        },
+      },
+      {
         id: "next-encounter",
+        target: "#stepContent",
         buttonLabels: ["NEXT ENCOUNTER", "NEXT REP", "BACK HOME"],
         title: "Next Encounter",
         body: "The encounter is complete. The next prompt is ready. This ends the tutorial.",
-        placement: "top",
+        placement: "bottom",
         disableNext: true,
         before: async () => {
           await waitForAnyButton(["NEXT ENCOUNTER", "NEXT REP", "BACK HOME"]);
@@ -794,19 +808,22 @@ export function createTutorialRuntime({
       if (Number(window.__BC_TUTORIAL__?.runToken || 0) !== token) return;
 
       let el = null;
+      let buttonEl = null;
       if (Array.isArray(step.buttonLabels) && step.buttonLabels.length) {
         for (let i = 0; i < targetAttempts; i++) {
-          el = getTutorialButtonTarget(step.buttonLabels);
-          if (el) break;
+          buttonEl = getTutorialButtonTarget(step.buttonLabels);
+          if (buttonEl) break;
           await new Promise((r) => setTimeout(r, pollMs));
         }
-      } else if (step.target) {
+      }
+      if (step.target) {
         for (let i = 0; i < targetAttempts; i++) {
           el = getTutorialTarget(step.target);
           if (el) break;
           await new Promise((r) => setTimeout(r, pollMs));
         }
       }
+      if (!el) el = buttonEl;
 
       showTutorialOverlay({
         target: el,
@@ -817,7 +834,7 @@ export function createTutorialRuntime({
         disableNext: !!step.disableNext,
         nextLabel: step.nextLabel || "Next",
         onNext: () => {
-          if (step.action === "click" && el) el.click();
+          if (step.action === "click" && buttonEl) buttonEl.click();
           nextTutorialStep();
         },
         onExit: stopTutorial,
@@ -1002,6 +1019,10 @@ export function createTutorialRuntime({
   }
 
   function placeTutorialCard(card, target, placement = "bottom") {
+    const cardWidth = Math.min(card.offsetWidth || 320, window.innerWidth - 24);
+    const cardHeight = Math.min(card.offsetHeight || 180, window.innerHeight - 24);
+    const isMobileViewport = window.innerWidth <= 760;
+
     if (!target) {
       card.style.top = "50%";
       card.style.left = "50%";
@@ -1018,20 +1039,31 @@ export function createTutorialRuntime({
     }
 
     const gap = 12;
-    const cardWidth = 320;
-    const cardHeight = 180;
     let top = rect.bottom + gap;
-    let left = rect.left;
+    let left = rect.left + ((rect.width - cardWidth) / 2);
+    const centeredLeft = (window.innerWidth - cardWidth) / 2;
 
     if (placement === "top") {
       top = rect.top - cardHeight - gap;
-      left = rect.left;
+      left = rect.left + ((rect.width - cardWidth) / 2);
     } else if (placement === "right") {
-      top = rect.top;
+      top = rect.top + ((rect.height - cardHeight) / 2);
       left = rect.right + gap;
     } else if (placement === "left") {
-      top = rect.top;
+      top = rect.top + ((rect.height - cardHeight) / 2);
       left = rect.left - cardWidth - gap;
+    }
+
+    if (isMobileViewport) {
+      left = centeredLeft;
+      if (placement === "top") {
+        top = rect.top - cardHeight - gap;
+      } else {
+        top = rect.bottom + gap;
+      }
+      if (top > window.innerHeight - cardHeight - 12) {
+        top = rect.top - cardHeight - gap;
+      }
     }
 
     const maxLeft = window.innerWidth - cardWidth - 12;
@@ -1095,7 +1127,7 @@ export function createTutorialRuntime({
       doc.querySelectorAll('[data-tutorial-active="true"]').forEach((el) => {
         if (el !== target) el.removeAttribute("data-tutorial-active");
       });
-      target.scrollIntoView({ block: "center", behavior: "smooth" });
+      target.scrollIntoView({ block: "center", inline: "center", behavior: "smooth" });
       const win = target.ownerDocument.defaultView;
       win?.scrollBy?.(0, -40);
     }

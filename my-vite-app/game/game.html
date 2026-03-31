@@ -17701,6 +17701,7 @@ function ensureProgLoaded() {
 
         const block = document.createElement("div");
         block.className = "notice strength-fix-block";
+        block.setAttribute("data-tutorial", "reflection-summary");
 
         const strength = document.createElement("div");
         strength.innerHTML = `<strong>You did well:</strong> ${summary.strength}`;
