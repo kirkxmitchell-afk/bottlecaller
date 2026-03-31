@@ -13539,12 +13539,24 @@ function ensureProgLoaded() {
 
         summary.__bcAdvancedToggleBound = true;
         summary.style.touchAction = "manipulation";
+        summary.style.cursor = "pointer";
 
-        summary.addEventListener("touchend", (event) => {
-          if (event.defaultPrevented) return;
+        const shouldForceMobileToggle = () =>
+          !!window.matchMedia?.("(max-width: 860px)")?.matches;
+
+        const toggleDetails = (event) => {
+          if (!shouldForceMobileToggle()) return;
           event.preventDefault();
           details.open = !details.open;
-        }, { passive: false });
+        };
+
+        summary.addEventListener("click", toggleDetails);
+        summary.addEventListener("touchend", toggleDetails, { passive: false });
+        summary.addEventListener("keydown", (event) => {
+          if (!shouldForceMobileToggle()) return;
+          if (event.key !== "Enter" && event.key !== " ") return;
+          toggleDetails(event);
+        });
       }
 
       // ---------- UI: counts ----------

@@ -3996,6 +3996,19 @@ html, body{ height:100%; }
     justify-content: space-between;
     gap: 10px;
     min-height: 44px;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  #screenSetupPremium .app-advanced-panel summary::after{
+    content: "+";
+    flex: 0 0 auto;
+    font-size: 16px;
+    font-weight: 700;
+  }
+
+  #screenSetupPremium .app-advanced-panel[open] summary::after{
+    content: "−";
   }
 
   #screenSetupDemo .wine-table,
@@ -4015,6 +4028,33 @@ html, body{ height:100%; }
   #screenSetupPremium .wine-card{
     min-width: 0;
     padding: 10px;
+  }
+
+  #screenSetupDemo .wine-card,
+  #screenSetupPremium .wine-card,
+  #screenSetupDemo .wine-card div,
+  #screenSetupPremium .wine-card div{
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  #screenSetupDemo .wine-card div,
+  #screenSetupPremium .wine-card div{
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  #screenSetupDemo .wine-card strong,
+  #screenSetupPremium .wine-card strong{
+    font-size: 12px;
+  }
+
+  #screenSetupDemo .wine-card button,
+  #screenSetupPremium .wine-card button{
+    width: 100%;
+    margin-top: 8px;
+    font-size: 11px;
   }
 
   .app-game-masthead{
