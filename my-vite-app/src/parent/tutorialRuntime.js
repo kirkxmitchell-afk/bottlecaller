@@ -46,6 +46,7 @@ export function createTutorialRuntime({
         action: "none",
         before: async () => {
           await openPremiumSetupScreen();
+          await ensurePremiumWineAdvancedOpen();
         },
       },
       {
@@ -55,6 +56,7 @@ export function createTutorialRuntime({
         body: "Enter the name of the wine here.",
         placement: "bottom",
         action: "none",
+        before: ensurePremiumWineAdvancedOpen,
       },
       {
         id: "wine-varietal",
@@ -63,6 +65,7 @@ export function createTutorialRuntime({
         body: "This is where you enter the grape or varietal.",
         placement: "bottom",
         action: "none",
+        before: ensurePremiumWineAdvancedOpen,
       },
       {
         id: "fruit-options",
@@ -71,6 +74,7 @@ export function createTutorialRuntime({
         body: "This section defines the fruit character of the wine.",
         placement: "bottom",
         action: "none",
+        before: ensurePremiumWineAdvancedOpen,
       },
       {
         id: "texture-options",
@@ -79,6 +83,7 @@ export function createTutorialRuntime({
         body: "This section defines the wine's body and texture profile.",
         placement: "bottom",
         action: "none",
+        before: ensurePremiumWineAdvancedOpen,
       },
       {
         id: "oak-options",
@@ -87,6 +92,7 @@ export function createTutorialRuntime({
         body: "This is where you set the wine's oak influence.",
         placement: "bottom",
         action: "none",
+        before: ensurePremiumWineAdvancedOpen,
       },
       {
         id: "process",
@@ -95,6 +101,7 @@ export function createTutorialRuntime({
         body: "Use this field for optional production details.",
         placement: "bottom",
         action: "none",
+        before: ensurePremiumWineAdvancedOpen,
       },
       {
         id: "region",
@@ -103,6 +110,7 @@ export function createTutorialRuntime({
         body: "This field lets you add the wine's region.",
         placement: "bottom",
         action: "none",
+        before: ensurePremiumWineAdvancedOpen,
       },
       {
         id: "story",
@@ -111,6 +119,7 @@ export function createTutorialRuntime({
         body: "Add a short one-line story or memory hook here.",
         placement: "top",
         action: "none",
+        before: ensurePremiumWineAdvancedOpen,
       },
       {
         id: "add-button",
@@ -119,6 +128,7 @@ export function createTutorialRuntime({
         body: "Once the fields are ready, this button adds the wine to the list.",
         placement: "left",
         action: "none",
+        before: ensurePremiumWineAdvancedOpen,
       },
       {
         id: "wine-list",
@@ -127,6 +137,7 @@ export function createTutorialRuntime({
         body: "All configured wines appear here.",
         placement: "top",
         action: "none",
+        before: ensurePremiumWineAdvancedOpen,
       },
       {
         id: "start-button",
@@ -702,6 +713,42 @@ export function createTutorialRuntime({
     await new Promise((r) => setTimeout(r, Number(ms) || 0));
   }
 
+  async function ensurePremiumWineAdvancedOpen() {
+    const panel = document.getElementById("premiumWineAdvanced");
+    if (!panel) return;
+    if (!panel.open) panel.open = true;
+    panel.querySelector("summary")?.scrollIntoView({ block: "center", inline: "center", behavior: "auto" });
+    await waitMs(120);
+  }
+
+  async function alignTutorialTarget(target) {
+    if (!target) return;
+
+    const ownerWin = target.ownerDocument?.defaultView || window;
+    target.scrollIntoView({ block: "center", inline: "center", behavior: "auto" });
+    await waitMs(80);
+
+    const rect = target.getBoundingClientRect?.();
+    if (rect) {
+      const ownerDelta = (rect.top + (rect.height / 2)) - (ownerWin.innerHeight / 2);
+      if (Math.abs(ownerDelta) > 6) {
+        ownerWin.scrollBy?.({ top: ownerDelta, behavior: "auto" });
+        await waitMs(60);
+      }
+    }
+
+    if (target.ownerDocument !== document) {
+      const mergedRect = getTutorialTargetRect(target);
+      if (mergedRect) {
+        const parentDelta = (mergedRect.top + (mergedRect.height / 2)) - (window.innerHeight / 2);
+        if (Math.abs(parentDelta) > 6) {
+          window.scrollBy?.({ top: parentDelta, behavior: "auto" });
+          await waitMs(60);
+        }
+      }
+    }
+  }
+
   async function waitForPremiumIframeReady() {
     while (isTutorialStillActive()) {
       if (getTutorialTarget('[data-tutorial="play-button"]')) return;
@@ -824,6 +871,7 @@ export function createTutorialRuntime({
         }
       }
       if (!el) el = buttonEl;
+      await alignTutorialTarget(el);
 
       showTutorialOverlay({
         target: el,
@@ -1127,9 +1175,6 @@ export function createTutorialRuntime({
       doc.querySelectorAll('[data-tutorial-active="true"]').forEach((el) => {
         if (el !== target) el.removeAttribute("data-tutorial-active");
       });
-      target.scrollIntoView({ block: "center", inline: "center", behavior: "smooth" });
-      const win = target.ownerDocument.defaultView;
-      win?.scrollBy?.(0, -40);
     }
 
     placeTutorialCard(card, target, placement);
