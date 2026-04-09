@@ -3690,7 +3690,7 @@
     }
     function formatVisibleEncounterStep(stepKey) {
       const key = String(stepKey || "").toLowerCase();
-      if (key === "hook" || key === "flash_learn") return "Flash Learn of Wine";
+      if (key === "hook" || key === "flash_learn") return "Flash Wine Learn";
       if (key === "deliver" || key === "problem_solve") return "Deliver";
       if (key === "observe") return "Guest Read";
       if (key === "mode") return "Tone";
@@ -4716,7 +4716,7 @@
         </div>
         <ul class="cover-list" id="welcomeBulletList">
           <li>Diagnose the guest</li>
-          <li id="welcomeBulletModeHook">Flash Learn the Wine</li>
+          <li id="welcomeBulletModeHook">Flash Wine Learn the Wine</li>
           <li>Problem-solve with a 2-option prompt</li>
         </ul>
         <div class="button-row app-welcome-actions">
@@ -11452,7 +11452,7 @@ function ensureProgLoaded() {
         }
 
         if (currentStep === 3) {
-          stepHeader.textContent = "Step 4 — Flash Learn of Wine";
+          stepHeader.textContent = "Step 4 — Flash Wine Learn";
           stepContent.textContent = "Lock the bottle into your head before you solve the table.";
 
           const facts = getFlashLearnFacts(currentEncounter);
@@ -19334,7 +19334,7 @@ function ensureProgLoaded() {
           if (wine.process) addBadge(wineBadges, wine.process);
         }
 
-        const stepLabels = ["", "Table", "Guest Read", "Tone", "Flash Learn of Wine", "Deliver", "Reaction", "Reflect", "Summary"];
+        const stepLabels = ["", "Table", "Guest Read", "Tone", "Flash Wine Learn", "Deliver", "Reaction", "Reflect", "Summary"];
         const meta = (currentEncounter && currentEncounter.meta) ? currentEncounter.meta : null;
         const tier = meta && meta.tier ? meta.tier : "";
         const diff = meta && (meta.difficulty || meta.difficulty === 0) ? meta.difficulty : "";
@@ -20036,7 +20036,7 @@ function ensureProgLoaded() {
 
         const prompt = document.createElement("div");
         prompt.className = "encounter-prompt";
-        prompt.innerText = "Flash Learn of Wine";
+        prompt.innerText = "Flash Wine Learn";
         topRow.appendChild(prompt);
         stepContent.appendChild(topRow);
 

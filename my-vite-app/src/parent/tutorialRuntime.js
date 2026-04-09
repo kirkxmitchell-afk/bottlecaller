@@ -297,8 +297,8 @@ export function createTutorialRuntime({
       {
         id: "mode-preview",
         buttonLabels: ["CONTINUE TO NEXT STEP"],
-        title: "Continue to Flash Learn",
-        body: "The game shows another quick reaction here. Click CONTINUE TO NEXT STEP to move into Flash Learn of Wine.",
+        title: "Continue to Flash Wine Learn",
+        body: "The game shows another quick reaction here. Click CONTINUE TO NEXT STEP to move into Flash Wine Learn.",
         placement: "top",
         disableNext: true,
         before: async () => {
@@ -312,8 +312,8 @@ export function createTutorialRuntime({
       {
         id: "select-flash-learn",
         target: '[data-tutorial="guest-clue"]',
-        title: "Start Flash Learn",
-        body: "You are in Flash Learn of Wine. Start the 5 wine flashes and let the timed sequence finish.",
+        title: "Start Flash Wine Learn",
+        body: "You are in Flash Wine Learn. Start the 5 wine flashes and let the timed sequence finish.",
         placement: "top",
         disableNext: true,
         before: async () => {
@@ -330,7 +330,7 @@ export function createTutorialRuntime({
         id: "continue-flash-learn",
         buttonLabels: ["CONTINUE"],
         title: "Continue",
-        body: "Click CONTINUE to lock in Flash Learn and move to Deliver.",
+        body: "Click CONTINUE to lock in Flash Wine Learn and move to Deliver.",
         placement: "top",
         before: async () => {
           await waitForStep(4);
