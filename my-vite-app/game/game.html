@@ -42,6 +42,10 @@
     function getDeliveryScore(enc) {
       if (!enc || typeof enc !== "object") return 0;
 
+      if (enc?.problemSolveSelectedPrompt) {
+        return enc.problemSolveSelectedPrompt.tier === "right" ? 2 : 0;
+      }
+
       const s1ok =
         enc?.deliverOptionsS1 &&
         typeof enc.deliverOptionsS1 === "object" &&
@@ -573,8 +577,8 @@
         },
         full_delivery: {
           label: "Full Delivery",
-          cue: "This challenge rewards a complete delivery sequence.",
-          next: "Keep both delivery beats clean and accurate.",
+          cue: "This challenge rewards a clean problem-solve finish.",
+          next: "Keep the chosen prompt direct, clear, and accurate.",
         },
         no_reset_run: {
           label: "No Reset Run",
@@ -1028,7 +1032,7 @@
         },
         delivery: {
           label: "Delivery",
-          cue: "Focus on confident, clean delivery.",
+          cue: "Focus on a confident, clean problem-solve prompt.",
           next: "Keep the recommendation sharp and easy to follow.",
         },
         recovery: {
@@ -1358,7 +1362,7 @@
       const map = {
         closing_surge: {
           name: "Closing Surge",
-          body: "Strong delivery matters more right now.",
+          body: "Strong problem-solve choices matter more right now.",
           cue: "Keep your close clean and confident.",
         },
         recovery_focus: {
@@ -2176,6 +2180,15 @@
         timedChallengeTitle: title,
         timedChallengePlacement: challenge?.placement || challenge?.payload?.placement || "before_start",
         timedChallengeTimerSec: encounterTimerSec,
+        timedChallengeWineId:
+          challenge?.activeWineId ||
+          challenge?.payload?.activeWineId ||
+          challenge?.payload?.active_wine_id ||
+          null,
+        timedChallengeWine:
+          challenge?.activeWine ||
+          challenge?.payload?.activeWine ||
+          null,
         challengeStartedAt: startedAt,
         challengeExpiresAt: startedAt + encounterTimerSec * 1000,
         contextLine: title
@@ -2187,6 +2200,11 @@
           timedChallengeId: challengeId,
           timedChallengeKey: challenge?.challengeKey || challenge?.payload?.challengeKey || null,
           timedChallengeTitle: title,
+          timedChallengeWineId:
+            challenge?.activeWineId ||
+            challenge?.payload?.activeWineId ||
+            challenge?.payload?.active_wine_id ||
+            null,
         },
       };
     }
@@ -3670,6 +3688,16 @@
 
       return role === "waiter";
     }
+    function formatVisibleEncounterStep(stepKey) {
+      const key = String(stepKey || "").toLowerCase();
+      if (key === "hook" || key === "flash_learn") return "Flash Learn of Wine";
+      if (key === "deliver" || key === "problem_solve") return "Deliver";
+      if (key === "observe") return "Guest Read";
+      if (key === "mode") return "Tone";
+      if (key === "reaction") return "Reaction";
+      if (key === "reflection") return "Reflection";
+      return String(stepKey || "");
+    }
     function getDisplayStepNumber(step) {
       if (step === 55) {
         const key = String(currentEncounter?.__stepReactionPreview?.stepKey || "");
@@ -3678,14 +3706,14 @@
         if (key === "hook") return 4;
         if (key === "deliver") return 5;
       }
-      if (step === 65) return 7;
-      if (step >= 7) return 7;
-      return step + 1;
+      if (step === 65) return "7.5";
+      if (step >= 8) return 8;
+      return step;
     }
     function getDisplayStepLabel(step) {
       if (step === 55) return "Step Reaction";
-      if (step === 65) return "Recovery";
-      if (step === 7) return "Reflection";
+      if (step === 65) return "Recover the Table";
+      if (step === 8) return "Summary";
       return "";
     }
     function maybeAutoSendProgressReport(encounter) {
@@ -3947,7 +3975,7 @@
                 type: "start_drill",
                 repTarget: drill?.repTarget ?? 3,
                 focus: drill?.focus ?? "read",
-                pool: drill?.pool ?? ["decider", "bargain_smart", "griever"],
+                pool: drill?.pool ?? ["dictator", "bargain_smart", "griever"],
                 durationSec: drill?.durationSec ?? 300,
                 tier: drill?.tier ?? 1,
                 mode: "premium",
@@ -4080,6 +4108,13 @@
           } else {
             status.textContent = `Send failed: ${msg.error || "unknown error"}`;
           }
+        }
+        if (msg.ok) {
+          reconcileLocalProgressAfterSubmit({
+            syncedEncounterNumber: msg.syncedEncounterNumber,
+            syncedAt: msg.syncedAt,
+            serverSkillSnapshot: msg.serverSkillSnapshot || null,
+          });
         }
         if (msg.ok && typeof window.ProgressionBridge?.requestProgressionSnapshot === "function") {
           try {
@@ -4478,12 +4513,7 @@
       if (window.isDemo || window.bcMode === "demo") return 1;
 
       try {
-        const spine = (typeof getProgressionSpine === "function")
-          ? getProgressionSpine({ allowNull: true })
-          : null;
-
-        const t = spine?.selectors?.tier?.();
-        return (typeof t === "number" && Number.isFinite(t)) ? t : 1;
+        return getGameplayTier(getNormalizedProgressionState(), 1);
       } catch {
         return 1;
       }
@@ -4503,7 +4533,7 @@
     // DEMO FALLBACKS: no parent progression/tier unlocks
     if (window.isDemo || window.bcMode === "demo") {
       window.getTierUnlocked = () => 1;
-      window.allowedGuestTypes = () => ["decider", "bargain_smart", "griever"];
+      window.allowedGuestTypes = () => ["dictator", "bargain_smart", "griever"];
       window.getPointsTotal = () => 0;
     }
 
@@ -4577,7 +4607,7 @@
 
     window.__BC_DRILL_CONFIG__ = window.__BC_DRILL_CONFIG__ || {
       focus: "read",
-      pool: ["decider", "bargain_smart", "griever"],
+      pool: ["dictator", "bargain_smart", "griever"],
       durationSec: 300,
     };
 
@@ -4682,12 +4712,12 @@
       <div class="bc-card bc-stage-card panel cover-screen app-welcome-shell">
         <div class="app-welcome-header">
           <h2>Welcome to BottleCaller</h2>
-          <p class="app-welcome-subtitle">BottleCaller trains servers to sell the right wine by matching guest psychology with the right delivery style — in under 5 minutes.</p>
+          <p class="app-welcome-subtitle">BottleCaller trains servers to sell the right wine by matching guest psychology with the right tone and prompt style — in under 5 minutes.</p>
         </div>
         <ul class="cover-list" id="welcomeBulletList">
           <li>Diagnose the guest</li>
-          <li id="welcomeBulletModeHook">Choose Hook</li>
-          <li>Deliver in 2 sentences</li>
+          <li id="welcomeBulletModeHook">Flash Learn the Wine</li>
+          <li>Problem-solve with a 2-option prompt</li>
         </ul>
         <div class="button-row app-welcome-actions">
           <button id="btnWelcomeStart" data-tutorial="play-button" type="button">Start</button>
@@ -4746,7 +4776,7 @@
               <strong class="app-mode-title">Premium</strong>
               <div class="app-mode-kicker">Full service pressure</div>
             </div>
-            <p class="app-mode-copy">Run the full sequence with progression pressure, tighter reads, stronger delivery demands, and the real table-close loop.</p>
+            <p class="app-mode-copy">Run the full sequence with progression pressure, tighter reads, sharper prompt demands, and the real table-close loop.</p>
           </div>
           <div class="app-premium-status">
             <div class="score-row app-score-row">Wines saved: <span id="homePremiumCount">0 / 10</span></div>
@@ -4814,22 +4844,10 @@
       </div>
 
       <div class="manager-row app-form-row app-form-section">
-        <strong>Process (optional):</strong>
-        <select id="processInputDemo">
-          <option value="">Select process</option>
-          <option value="Stainless steel">Stainless steel</option>
-          <option value="Wild ferment">Wild ferment</option>
-          <option value="Maceration">Maceration</option>
-          <option value="Destemming">Destemming</option>
-          <option value="Whole bunch pressed">Whole bunch pressed</option>
-          <option value="Hand harvested">Hand harvested</option>
-          <option value="Time on lees">Time on lees</option>
-        </select>
         <input type="text" id="regionInputDemo" placeholder="Region (optional)" />
       </div>
 
       <div class="manager-row app-form-row">
-        <textarea id="storyInputDemo" placeholder="Story (optional, 1 sentence)"></textarea>
         <button id="addWineBtnDemo" type="button">Add Wine</button>
       </div>
 
@@ -4870,7 +4888,7 @@
         <div id="premiumWineCards" class="wine-cards"></div>
 
         <!-- 2) DROPDOWN UNDER CARDS -->
-        <details id="premiumWineAdvanced" class="wine-advanced panel-spaced app-advanced-panel">
+        <details id="premiumWineAdvanced" class="wine-advanced panel-spaced app-advanced-panel" open>
           <summary>Advanced (add wines + table)</summary>
 
           <!-- INPUT FORM INSIDE DROPDOWN -->
@@ -4896,22 +4914,10 @@
             </div>
 
             <div class="manager-row app-form-row app-form-section">
-              <strong>Process (optional):</strong>
-              <select id="processInputPremium">
-                <option value="">Select process</option>
-                <option value="Stainless steel">Stainless steel</option>
-                <option value="Wild ferment">Wild ferment</option>
-                <option value="Maceration">Maceration</option>
-                <option value="Destemming">Destemming</option>
-                <option value="Whole bunch pressed">Whole bunch pressed</option>
-                <option value="Hand harvested">Hand harvested</option>
-                <option value="Time on lees">Time on lees</option>
-              </select>
               <input type="text" id="regionInputPremium" placeholder="Region (optional)" />
             </div>
 
             <div class="manager-row app-form-row">
-              <textarea id="storyInputPremium" placeholder="Story (optional, 1 sentence)"></textarea>
               <button id="addWineBtnPremium" type="button">Add Wine</button>
             </div>
           </div>
@@ -5052,7 +5058,7 @@
 
       <footer id="bcHudBottom" class="bc-hud bc-hud-bottom">
         <div class="bc-hint-wrap">
-          <div class="bc-hint" id="bcHintLine">Read the guest. Choose the hook.</div>
+          <div class="bc-hint" id="bcHintLine">Read the guest. Learn the wine. Solve the table.</div>
         </div>
         <div class="bc-status-wrap">
           <div id="progressReportStatus" class="small-text progress-report-status"></div>
@@ -5099,7 +5105,8 @@ console.log("BC3_MARKER_V1");
 
   // ===== CANONICAL MODES (MUST BE AT TOP) =====
   window.MODES = window.MODES ?? {
-    SCOUT: "scout",
+    SCOUT: "hold",
+    HOLD: "hold",
     GUIDE: "guide",
     CHARM: "charm",
     AUTH: "authority",
@@ -5108,7 +5115,7 @@ console.log("BC3_MARKER_V1");
 
   // --- GUEST registry (must exist before any usage) ---
   window.GUEST = window.GUEST || {
-    DECIDER: "decider",
+    DECIDER: "dictator",
     FANCY: "fancy",
     GRIEVER: "griever",
     CELEBRATOR: "celebrator",
@@ -5117,7 +5124,8 @@ console.log("BC3_MARKER_V1");
 
   // --- Optional display labels ---
   window.GUEST_LABELS = window.GUEST_LABELS || {
-    decider: "Decider",
+    dictator: "Dictator",
+    decider: "Dictator",
     fancy: "Fancy",
     griever: "Griever",
     celebrator: "Celebrator",
@@ -5127,7 +5135,9 @@ console.log("BC3_MARKER_V1");
   // --- Normalizer ---
   window.normalizeGuestType = window.normalizeGuestType || function normalizeGuestType(raw) {
     if (!raw) return "";
-    return String(raw).trim().toLowerCase().replace(/[\s-]+/g, "_");
+    const normalized = String(raw).trim().toLowerCase().replace(/[\s-]+/g, "_");
+    if (normalized === "decider") return "dictator";
+    return normalized;
   };
 
   // --- Tier guest table + unlocks (must exist before any usage) ---
@@ -5151,9 +5161,9 @@ console.log("BC3_MARKER_V1");
 
   function getUnlockedModesForTier(tier) {
     const t = Number(tier || 1);
-    if (t <= 1) return [window.MODES.SCOUT, window.MODES.GUIDE, window.MODES.CHARM];
-    if (t === 2) return [window.MODES.SCOUT, window.MODES.GUIDE, window.MODES.CHARM, window.MODES.AUTH];
-    return [window.MODES.SCOUT, window.MODES.GUIDE, window.MODES.CHARM, window.MODES.AUTH];
+    const base = [window.MODES.GUIDE, window.MODES.CHARM, window.MODES.AUTH];
+    if (t >= 2) base.push(window.MODES.HOLD);
+    return base;
   }
 
   function getUnlockedModesForPoints(points) {
@@ -5167,14 +5177,14 @@ console.log("BC3_MARKER_V1");
 
     if (!raw) return "";
 
-    if (raw === "scout") return "scout";
+    if (raw === "scout") return "hold";
     if (raw === "guide") return "guide";
     if (raw === "charm") return "charm";
     if (raw === "authority" || raw === "auth") return "authority";
     if (raw === "closer" || raw === "close") return "closer";
 
     // Support old constants / labels / UI text
-    if (raw === "hold") return "scout";
+    if (raw === "hold") return "hold";
     if (raw === "direct") return "guide";
     if (raw === "push") return "guide";
     if (raw === "reflect") return "guide";
@@ -5193,19 +5203,23 @@ console.log("BC3_MARKER_V1");
     const modes =
       Array.isArray(spine?.selectors?.modes?.())
         ? spine.selectors.modes()
-        : ["scout", "guide", "charm"];
+        : ["guide", "charm", "authority"];
+
+    const normalized =
+      (typeof getNormalizedProgressionState === "function")
+        ? getNormalizedProgressionState()
+        : null;
 
     return modes
       .filter(Boolean)
       .map(canon)
-      .filter(Boolean);
+      .filter((mode) => mode === "guide" || mode === "charm" || mode === "authority" || mode === "hold")
+      .filter((mode) => mode !== "hold" || isHoldFeatureUnlocked(normalized));
   }
 
   function getCurrentTierSafe() {
     try {
-      const spine = getProgressionSpine({ allowNull: true });
-      const tier = Number(spine?.selectors?.tier?.() ?? 1);
-      return Number.isFinite(tier) ? tier : 1;
+      return getGameplayTier(getNormalizedProgressionState(), 1);
     } catch {
       return 1;
     }
@@ -5215,28 +5229,28 @@ console.log("BC3_MARKER_V1");
     1: {
       [window.GUEST.DECIDER]: {
         optimal: "guide",
-        neutral: "scout",
+        neutral: "hold",
         damaging: "charm"
       },
       [window.GUEST.BARGAIN_SMART]: {
-        optimal: "scout",
+        optimal: "hold",
         neutral: "guide",
         damaging: "charm"
       },
       [window.GUEST.FANCY]: {
         optimal: "charm",
         neutral: "guide",
-        damaging: "scout"
+        damaging: "hold"
       },
       [window.GUEST.GRIEVER]: {
-        optimal: "scout",
+        optimal: "hold",
         neutral: "guide",
         damaging: "charm"
       },
       [window.GUEST.CELEBRATOR]: {
         optimal: "charm",
         neutral: "guide",
-        damaging: "scout"
+        damaging: "hold"
       }
     },
 
@@ -5247,24 +5261,24 @@ console.log("BC3_MARKER_V1");
         damaging: "charm"
       },
       [window.GUEST.BARGAIN_SMART]: {
-        optimal: "scout",
+        optimal: "hold",
         neutral: "authority",
         damaging: "charm"
       },
       [window.GUEST.FANCY]: {
         optimal: "guide",
         neutral: "authority",
-        damaging: "scout"
+        damaging: "hold"
       },
       [window.GUEST.GRIEVER]: {
-        optimal: "scout",
+        optimal: "hold",
         neutral: "guide",
         damaging: "authority"
       },
       [window.GUEST.CELEBRATOR]: {
         optimal: "authority",
         neutral: "guide",
-        damaging: "scout"
+        damaging: "hold"
       }
     },
 
@@ -5275,24 +5289,24 @@ console.log("BC3_MARKER_V1");
         damaging: "charm"
       },
       [window.GUEST.BARGAIN_SMART]: {
-        optimal: "scout",
+        optimal: "hold",
         neutral: "authority",
         damaging: "charm"
       },
       [window.GUEST.FANCY]: {
         optimal: "guide",
         neutral: "authority",
-        damaging: "scout"
+        damaging: "hold"
       },
       [window.GUEST.GRIEVER]: {
-        optimal: "scout",
+        optimal: "hold",
         neutral: "guide",
         damaging: "authority"
       },
       [window.GUEST.CELEBRATOR]: {
         optimal: "authority",
         neutral: "guide",
-        damaging: "scout"
+        damaging: "hold"
       }
     }
   };
@@ -5312,7 +5326,7 @@ console.log("BC3_MARKER_V1");
 
     return {
       optimal: "guide",
-      neutral: "scout",
+      neutral: "hold",
       damaging: "charm"
     };
   }
@@ -5402,7 +5416,7 @@ console.log("BC3_MARKER_V1");
     const normalized = canonicalModeFromUi(rawMode);
 
     if (!allowed.length) {
-      return normalized || "scout";
+      return normalized || "hold";
     }
 
     if (normalized && allowed.includes(normalized)) {
@@ -5415,7 +5429,7 @@ console.log("BC3_MARKER_V1");
     const fallbackMap = {
       authority: "guide",
       direct: "guide",
-      hold: "scout",
+      hold: "hold",
       push: "guide",
       close: "charm"
     };
@@ -5425,10 +5439,10 @@ console.log("BC3_MARKER_V1");
       return fallback;
     }
 
-    // Prefer guide > charm > scout if available, else first allowed
+    // Prefer guide > charm > hold if available, else first allowed
     if (allowed.includes("guide")) return "guide";
     if (allowed.includes("charm")) return "charm";
-    if (allowed.includes("scout")) return "scout";
+    if (allowed.includes("hold")) return "hold";
 
     return allowed[0];
   }
@@ -5497,6 +5511,21 @@ console.log("BC3_MARKER_V1");
     wines = arr;
     window.wines = arr;
     return arr;
+  }
+  function syncWinesToParent(reason = "") {
+    try {
+      if (!isActuallyIframe()) return false;
+      postToParent({
+        type: "wines_sync",
+        restaurantId: getRuntimeCtx()?.restaurantId || restaurantId || null,
+        wines: Array.isArray(wines) ? wines : [],
+        reason: String(reason || ""),
+      });
+      return true;
+    } catch (e) {
+      console.warn("[BC] syncWinesToParent failed", e);
+      return false;
+    }
   }
 
   // ---- ctx gate (single source of truth) ----
@@ -5641,7 +5670,7 @@ function getDrillConfig() {
 
   const fallback = {
     focus: "mode",
-    pool: ["decider", "bargain_smart", "griever"],
+    pool: ["dictator", "bargain_smart", "griever"],
     durationSec: 300,
   };
 
@@ -5664,7 +5693,7 @@ function getDrillConfig() {
 }
 
 function getDrillGuestOptions() {
-  // Normalize everything to canonical form: "decider", "bargain_smart", etc.
+  // Normalize everything to canonical form: "dictator", "bargain_smart", etc.
   const norm = (x) => {
     if (!x) return "";
     try {
@@ -5825,6 +5854,8 @@ function isDrillMode() {
             deliveryLine1Key: enc.deliveryLine1Key || "",
             deliveryLine2Key: enc.deliveryLine2Key || "",
             recoveryChoice: enc.recoveryChoice || "",
+            recoveryChoiceCategory: enc.recoveryChoiceCategory || "",
+            recoveryChoiceTone: enc.recoveryChoiceTone || "",
             recoveryCorrect: !!enc.recoveryCorrect,
             readCorrect: !!enc.readCorrect,
             deliveryCorrect: !!enc.deliveryCorrect,
@@ -5860,6 +5891,8 @@ function isDrillMode() {
         encounter.deliveryLine2Key = st.deliveryLine2Key || encounter.deliveryLine2Key || "";
 
         encounter.recoveryChoice = st.recoveryChoice || encounter.recoveryChoice || "";
+        encounter.recoveryChoiceCategory = st.recoveryChoiceCategory || encounter.recoveryChoiceCategory || "";
+        encounter.recoveryChoiceTone = st.recoveryChoiceTone || encounter.recoveryChoiceTone || "";
         encounter.recoveryCorrect = !!st.recoveryCorrect || !!encounter.recoveryCorrect;
         encounter.readCorrect = !!st.readCorrect || !!encounter.readCorrect;
         encounter.deliveryCorrect = !!st.deliveryCorrect || !!encounter.deliveryCorrect;
@@ -6615,23 +6648,44 @@ function isDrillMode() {
         return 2;
       }
 
+      function getGameplayTier(normalized = null, fallbackTier = 1) {
+        const source = normalized || getNormalizedProgressionState();
+        const tierNum = Number(
+          source?.authority?.tierToServe ??
+          source?.economy?.tier ??
+          fallbackTier
+        );
+        if (!Number.isFinite(tierNum)) return 1;
+        if (tierNum <= 1) return 1;
+        if (tierNum >= 3) return 3;
+        return 2;
+      }
+
+      function isHoldFeatureUnlocked(normalized = null) {
+        return getGameplayTier(normalized, 1) >= 2;
+      }
+
+      function isPivotFeatureUnlocked(normalized = null) {
+        return getGameplayTier(normalized, 1) >= 3;
+      }
+
       function getTierRangeAndGuests(tier) {
         const t = Number(tier || 1);
         if (t >= 3) {
           return {
             encounterRange: [1, 20],
-            guestTypes: ["decider", "bargain_smart", "griever", "budget_guard", "make_it_easy"],
+            guestTypes: ["dictator", "bargain_smart", "griever", "fancy", "celebrator"],
           };
         }
         if (t >= 2) {
           return {
             encounterRange: [1, 12],
-            guestTypes: ["decider", "bargain_smart", "griever", "budget_guard"],
+            guestTypes: ["dictator", "bargain_smart", "griever", "fancy"],
           };
         }
         return {
           encounterRange: [1, 5],
-          guestTypes: ["decider", "bargain_smart", "griever"],
+          guestTypes: ["dictator", "bargain_smart", "griever"],
         };
       }
 
@@ -6685,7 +6739,8 @@ function isDrillMode() {
         );
         const spineRange = selectors.encounterRange?.();
         const spineGuests = selectors.guestTypes?.();
-        const modes = selectors.modes?.() || [];
+        const tones = selectors.tones?.() || selectors.modes?.() || ["guide", "charm", "authority"];
+        const modes = Array.isArray(tones) ? tones.slice() : ["guide", "charm", "authority"];
         const authoritativePayload = getAuthoritativeProgressionPayload();
         const authoritativeTier = getAuthoritativeTierToServe(tier);
         const authoritativeBounds = getTierRangeAndGuests(authoritativeTier ?? tier);
@@ -6724,6 +6779,7 @@ function isDrillMode() {
             tier,
             encounterRange,
             allowedGuestTypes,
+            tones,
             modes,
           },
           session: {
@@ -6769,11 +6825,13 @@ function isDrillMode() {
         return {
           state: normalized.state,
           points: normalized.economy.points,
-          tier: normalized.economy.tier,
+          tier: getGameplayTier(normalized, 1),
+          economyTier: normalized.economy.tier,
           difficultySeed: normalized.display.difficultySeed,
           effectiveDifficulty: normalized.display.effectiveDifficulty,
           encounterRange: normalized.economy.encounterRange,
           allowedGuestTypes: normalized.economy.allowedGuestTypes,
+          tones: normalized.economy.tones,
           modes: normalized.economy.modes,
           authoritativeTier: normalized.authority.tierToServe,
           pressureLevel: normalized.session.pressureLevel,
@@ -7154,7 +7212,7 @@ function isDrillMode() {
               : (typeof currentStep !== "undefined" ? currentStep : "-"),
 
           points: Number(prog?.points ?? spineProg?.points ?? 0),
-          tier: Number(prog?.tier ?? spineProg?.tier ?? normalized.economy.tier ?? 1),
+          tier: getGameplayTier(normalized, 1),
 
           encounterRange:
             prog?.encounterRange ||
@@ -7299,7 +7357,7 @@ function isDrillMode() {
             last3: [],
           },
           axes: { control: 0, selectivity: 0, compression: 0 },
-          counters: { deciderGood: 0, browserGood: 0, analystGood: 0 },
+          counters: { dictatorGood: 0, browserGood: 0, analystGood: 0 },
           flags: { resetDebt: 0 },
           unlocks: {
             authorityMode: false,
@@ -7333,6 +7391,7 @@ function isDrillMode() {
         if (!Number.isFinite(p.meta.lastUpdatedMs)) p.meta.lastUpdatedMs = 0;
         if (!Number.isFinite(p.meta.difficultySeed)) p.meta.difficultySeed = 1;
         if (!Number.isFinite(p.meta.tierUnlocked)) p.meta.tierUnlocked = 1;
+        if (!Number.isFinite(p.meta.servedTier)) p.meta.servedTier = p.meta.tierUnlocked;
 
         p.guard = p.guard || { pressureLevel: 0, finalDifficulty: 1, last3: [] };
         if (!Number.isFinite(p.guard.pressureLevel)) p.guard.pressureLevel = 0;
@@ -7344,6 +7403,9 @@ function isDrillMode() {
         if (typeof p.unlocks.guestCelebrator !== "boolean") p.unlocks.guestCelebrator = false;
 
         p.guestRanks = p.guestRanks || {};
+        if (!p.guestRanks[window.GUEST.DECIDER] && p.guestRanks.decider) {
+          p.guestRanks[window.GUEST.DECIDER] = p.guestRanks.decider;
+        }
         [window.GUEST.DECIDER, window.GUEST.BARGAIN_SMART, window.GUEST.GRIEVER, window.GUEST.FANCY, window.GUEST.CELEBRATOR].forEach((k) => {
           if (!p.guestRanks[k]) p.guestRanks[k] = makeGuestRank();
         });
@@ -7424,11 +7486,16 @@ function isDrillMode() {
         return 5;
       }
 
+      function baseDifficultyFromServedTier(servedTier) {
+        return baseDifficultyFromUnlockedTier(servedTier);
+      }
+
       function ensureProgMeta() {
         PROG = PROG || {};
         PROG.meta = PROG.meta || {};
         if (!Number.isFinite(PROG.meta.pointsTotal)) PROG.meta.pointsTotal = 0;
         if (!Number.isFinite(PROG.meta.tierUnlocked)) PROG.meta.tierUnlocked = 1;
+        if (!Number.isFinite(PROG.meta.servedTier)) PROG.meta.servedTier = PROG.meta.tierUnlocked;
         if (!Number.isFinite(PROG.meta.difficultySeed)) PROG.meta.difficultySeed = 1;
         PROG.guard = PROG.guard || { pressureLevel: 0, finalDifficulty: 1, last3: [] };
         PROG.unlocks = PROG.unlocks || {};
@@ -7478,7 +7545,7 @@ function isDrillMode() {
         PROG.flags = PROG.flags || {};
 
         if (!PROG.unlocks.authorityMode) {
-          const dec = PROG.counters.deciderGood || 0;
+          const dec = PROG.counters.dictatorGood || 0;
           const bro = PROG.counters.browserGood || 0;
           const ana = PROG.counters.analystGood || 0;
 
@@ -7503,7 +7570,7 @@ function isDrillMode() {
 
         const normalized = getNormalizedProgressionState();
         const pts = Number(normalized?.economy?.points ?? 0);
-        const tier = Number(normalized?.economy?.tier ?? 1);
+        const tier = getGameplayTier(normalized, 1);
         const fancyUnlocked = tier >= 2;
         const celebratorUnlocked = tier >= 3;
         PROG.unlocks.fancy = fancyUnlocked;
@@ -7511,6 +7578,7 @@ function isDrillMode() {
         PROG.unlocks.guestFancy = fancyUnlocked;
         PROG.unlocks.guestCelebrator = celebratorUnlocked;
         PROG.meta.pointsTotal = pts;
+        PROG.meta.servedTier = tier;
         PROG.meta.tierUnlocked = tier;
         PROG.meta.lastUpdatedMs = Date.now();
         return PROG.unlocks;
@@ -7524,15 +7592,15 @@ function isDrillMode() {
         const resetUsed = !!m?.resetUsed;
 
         PROG.counters = PROG.counters || {};
-        PROG.counters.deciderGood = PROG.counters.deciderGood || 0;
+        PROG.counters.dictatorGood = PROG.counters.dictatorGood || 0;
         PROG.counters.browserGood = PROG.counters.browserGood || 0;
         PROG.counters.analystGood = PROG.counters.analystGood || 0;
 
         const tierTag = String(m?.hookMeta?.tier || "").toLowerCase();
         const isGood = (tierTag === "right" || tierTag === "slightly");
 
-        if (g === "decider") {
-          PROG.counters.deciderGood += (isGood ? 1 : 0);
+        if (g === "dictator") {
+          PROG.counters.dictatorGood += (isGood ? 1 : 0);
         }
         if (g === "browser") {
           PROG.counters.browserGood += (isGood ? 1 : 0);
@@ -7541,7 +7609,7 @@ function isDrillMode() {
           PROG.counters.analystGood += (isGood ? 1 : 0);
         }
 
-        if (g === "decider") {
+        if (g === "dictator") {
           if (hookType.includes("guest_centered")) {
             PROG.axes.control += 1;
             PROG.axes.compression += 0.5;
@@ -7555,7 +7623,7 @@ function isDrillMode() {
 
           if (modePick === "authority") PROG.axes.control += 0.5;
           if (modePick === "guide") PROG.axes.compression += 0.25;
-          if (modePick === "scout") PROG.axes.selectivity += 0.25;
+          if (modePick === "guide") PROG.axes.selectivity += 0.25;
         }
 
         if (g === "browser") {
@@ -8352,7 +8420,7 @@ function ensureProgLoaded() {
           mode: "Fix: pick the Mode that matches the guest’s NEED (speed / safety / identity). Don’t pick your favorite mode.",
           hook: "Fix: match the hook to their motive: VALUE for proof, STORY for status/occasion, FLAVOUR for safety.",
           delivery: "Fix: sentence 1 = emotional framing, sentence 2 = structural clarity. No extra explanation.",
-          pivot: "Fix: when pushback hits, choose the Mode that removes friction (HOLD), commits (LEAD), or mirrors identity (REFLECT)."
+          pivot: "Fix: when pushback hits, choose the Mode that removes friction (GUIDE), commits (LEAD), or mirrors identity (REFLECT)."
         };
 
         return {
@@ -8372,8 +8440,8 @@ function ensureProgLoaded() {
 
         if (skillFocus === "read") passed = !!checks.guestRead;
         else if (skillFocus === "mode") passed = (checks.modeStatus === "optimal");
-        else if (skillFocus === "hook") passed = (checks.hookStatus === "optimal");
-        else if (skillFocus === "delivery") passed = !!checks.deliveryCorrect;
+        else if (skillFocus === "hook" || skillFocus === "flash_learn") passed = (checks.hookStatus === "optimal");
+        else if (skillFocus === "delivery" || skillFocus === "problem_solve") passed = !!checks.deliveryCorrect;
         else if (skillFocus === "pivot") {
           // Only count pivot if a pivot was actually presented/used
           const pivotAttempted = !!(encounter && encounter.recoveryText);
@@ -8673,14 +8741,7 @@ function ensureProgLoaded() {
       function getTierUnlocked() {
         // DEMO: always tier 1
         if (window.isDemo || window.bcMode === "demo") return 1;
-
-        // PREMIUM: derive from spine if available, otherwise safe fallback
-        const spine = (typeof getProgressionSpine === "function")
-          ? getProgressionSpine({ allowNull: true })
-          : null;
-
-        const tier = spine?.selectors?.tier?.();
-        return (typeof tier === "number" && Number.isFinite(tier)) ? tier : 1;
+        return getGameplayTier(getNormalizedProgressionState(), 1);
       }
 
       // make sure global uses this
@@ -9122,6 +9183,18 @@ function ensureProgLoaded() {
               }
             } catch {}
           }
+
+          try {
+            for (let i = 0; i < localStorage.length; i += 1) {
+              const key = String(localStorage.key(i) || "");
+              if (!key.startsWith("bc_wines_restaurant_")) continue;
+              const data = JSON.parse(localStorage.getItem(key) || "[]");
+              if (Array.isArray(data) && data.length) {
+                write(rid, data);
+                return data;
+              }
+            }
+          } catch {}
           return canonical;
         }
 
@@ -9263,7 +9336,7 @@ function ensureProgLoaded() {
 
       function uiModeLabel(mode, context = "game") {
         const m = canonicalModeFromUi(mode);
-        if (m === "scout") return "Scout";
+        if (m === "hold") return "Hold";
         if (m === "guide") return "Guide";
         if (m === "charm") return "Charm";
         if (m === "authority") return "Authority";
@@ -9286,7 +9359,7 @@ function ensureProgLoaded() {
           return uiModeLabel(mode, context);
         }
 
-        if (m === "scout") return "Ask one more question";
+        if (m === "hold") return "Slow the table down";
         if (m === "guide") return "Gently recommend a bottle";
         if (m === "charm") return "Make the moment fun";
         if (m === "authority") return "Speak with firm confidence";
@@ -9572,7 +9645,7 @@ function ensureProgLoaded() {
 
       function getEncounterPresentationContext() {
         const normalized = getNormalizedProgressionState();
-        const tier = Number(normalized?.economy?.tier ?? 1);
+        const tier = getGameplayTier(normalized, 1);
         const points = Number(normalized?.economy?.points ?? 0);
         const effectiveDifficulty = Number(normalized?.display?.effectiveDifficulty ?? 1);
         const difficultySeed = Number(normalized?.display?.difficultySeed ?? 1);
@@ -9875,9 +9948,9 @@ function ensureProgLoaded() {
 
       function getDrillModeOrderForGuest(guestStateActual, allowed) {
         const g = (guestStateActual || "").toLowerCase();
-        if (g === "decider") {
+        if (g === "dictator") {
           const MODES = window.MODES;
-          const rank = { [MODES.AUTH]: 0, [MODES.GUIDE]: 1, [MODES.SCOUT]: 2, [MODES.CHARM]: 3 };
+          const rank = { [MODES.AUTH]: 0, [MODES.GUIDE]: 1, [MODES.HOLD]: 2, [MODES.CHARM]: 3 };
           return allowed.slice().sort((a, b) => (rank[a] ?? 99) - (rank[b] ?? 99));
         }
         return allowed;
@@ -10084,6 +10157,9 @@ function ensureProgLoaded() {
             allowedGuestTypes: Array.isArray(normalized?.economy?.allowedGuestTypes)
               ? normalized.economy.allowedGuestTypes.slice()
               : [],
+            tones: Array.isArray(normalized?.economy?.tones)
+              ? normalized.economy.tones.slice()
+              : (Array.isArray(normalized?.economy?.modes) ? normalized.economy.modes.slice() : []),
             modes: Array.isArray(normalized?.economy?.modes)
               ? normalized.economy.modes.slice()
               : []
@@ -10509,6 +10585,7 @@ function ensureProgLoaded() {
 
           console.log("[BC] wines bootstrapped ✅", { rid, count: wines.length });
           renderWineTables?.();
+          syncWinesToParent("bootstrap");
         } catch (e) {
           console.warn("[BC] wines bootstrap failed — leaving cache as-is", e);
         }
@@ -10528,13 +10605,14 @@ function ensureProgLoaded() {
           const w = await loadWines();
           wines = setWines(w || []);
           console.log("[BC] wines loaded (read-only) ✅", { rid: restaurantId, count: wines.length });
+          syncWinesToParent("read_only_load");
           return wines.length > 0;
         } catch (e) {
           console.warn("[BC] loadWines failed (read-only)", e);
         }
 
         try {
-          postToParent({ type: "wines_request" });
+          postToParent({ type: "wines_request", restaurantId });
           await new Promise((r) => setTimeout(r, 350));
         } catch {}
 
@@ -10677,6 +10755,7 @@ function ensureProgLoaded() {
           wines = setWines(list);
           renderWineTables?.();
           updateCounts?.();
+          syncWinesToParent("wines_report");
           console.log("[WINES RECEIVED]", {
             count: Array.isArray(msg.wines) ? msg.wines.length : null,
             role: getRuntimeCtx()?.role || getRuntimeCtx()?.membershipRole || null,
@@ -10855,7 +10934,7 @@ function ensureProgLoaded() {
           }
 
           if (!Array.isArray(cfg.pool) || !cfg.pool.length) {
-            cfg.pool = ["decider", "bargain_smart", "griever"];
+            cfg.pool = ["dictator", "bargain_smart", "griever"];
           }
 
           console.log("[BC] drill_config (final) ✅", cfg);
@@ -10899,7 +10978,7 @@ function ensureProgLoaded() {
           console.log("[BC] start_drill RECEIVED ✅", msg);
           console.log("[BC] start_drill received, sessionType currently =", sessionType);
           if (!Array.isArray(window.__BC_DRILL_CONFIG__?.pool) || !window.__BC_DRILL_CONFIG__.pool.length) {
-            window.__BC_DRILL_CONFIG__.pool = ["decider", "bargain_smart", "griever"];
+            window.__BC_DRILL_CONFIG__.pool = ["dictator", "bargain_smart", "griever"];
           }
           startDrill(
             Number(msg.repTarget || 3),
@@ -11002,11 +11081,11 @@ function ensureProgLoaded() {
         window.wines = wines;
       }
 
-      if (isDemo) {
-        if (!restaurantId) restaurantId = "demo";
-        const existing = loadDemoWines();
-        if (existing.length > 0) {
-          wines = setWines(existing.slice(0, WINE_LIMIT));
+        if (isDemo) {
+          if (!restaurantId) restaurantId = "demo";
+          const existing = loadDemoWines();
+          if (existing.length > 0) {
+            wines = setWines(existing.slice(0, WINE_LIMIT));
         } else {
           wines = setWines(DEMO_WINES.slice(0, WINE_LIMIT));
           saveDemoWines(wines);
@@ -11014,10 +11093,11 @@ function ensureProgLoaded() {
       }
 
       console.log("[BC] wine schema sample", wines?.[0]);
+      syncWinesToParent("boot");
 
       function requestWinesFromParent() {
         try {
-          postToParent({ type: "wines_request" });
+          postToParent({ type: "wines_request", restaurantId });
         } catch {}
       }
 
@@ -11035,6 +11115,7 @@ function ensureProgLoaded() {
             wines = setWines(list);
             if (restaurantId) WineStore.write(restaurantId, wines);
             console.log("[BC] wines hydrated from DB ✅", { restaurantId, count: wines.length });
+            syncWinesToParent("hydrate_db");
             return wines;
           } catch (e) {
             console.warn("[BC] fetchRestaurantWines failed, fallback to cache", e);
@@ -11043,6 +11124,7 @@ function ensureProgLoaded() {
 
         const cached = restaurantId ? WineStore.read(restaurantId) : [];
         wines = setWines(cached);
+        syncWinesToParent("hydrate_cache");
         return wines;
       }
 
@@ -11097,7 +11179,13 @@ function ensureProgLoaded() {
 
       function buildReactionChecksFromEncounter(enc, progOverride) {
         const mode = (enc?.modeSelected || "").toLowerCase();
-        const hookMeta = enc?.hookMeta || null;
+        const selectedPrompt =
+          enc?.problemSolveSelectedPrompt ||
+          (Array.isArray(enc?.problemSolvePrompts)
+            ? enc.problemSolvePrompts.find((item) => item?.id === enc?.problemSolveSelectedId)
+            : null) ||
+          null;
+        const hookMeta = selectedPrompt || enc?.hookMeta || null;
         const prog = progOverride || ensureProgLoaded();
 
         const checks = {
@@ -11105,9 +11193,9 @@ function ensureProgLoaded() {
             ? isCorrectGuestRead(enc)
             : (String(enc?.guestReadSelected || "").toLowerCase() === String(enc?.guestStateActual || "").toLowerCase()),
           deliveryCorrect: getDeliveryScore(enc) >= 2,
-          deciderMode: mode,
-          deciderHookText: hookMeta?.text || "",
-          deciderHookType: hookMeta?.hookType || "",
+          dictatorMode: mode,
+          dictatorPromptText: hookMeta?.text || "",
+          dictatorPromptType: hookMeta?.hookType || "",
           tier: tierFromEncounter(enc),
           guestStateActual: enc?.guestStateActual || "",
           modeSelected: enc?.modeSelected || "",
@@ -11146,7 +11234,7 @@ function ensureProgLoaded() {
             hookMeta: currentEncounter?.hookMeta || null,
             chainScore: currentEncounter?.chainScore ?? null,
             chainSignal: currentEncounter?.chainSignal ?? "",
-            __decider: currentEncounter?.__decider ?? null,
+            __dictator: currentEncounter?.__dictator ?? null,
           };
 
           window.parent?.postMessage(payload, location.origin);
@@ -11170,23 +11258,27 @@ function ensureProgLoaded() {
         }
       };
 
-      window.__BC_FORCE_DECIDER__ = function () {
+      window.__BC_FORCE_DICTATOR__ = function () {
         const list = window.__BC_DEBUG_GET_ENCOUNTERS__();
-        console.log("[IFRAME FORCE_DECIDER] list len:", list.length);
+        console.log("[IFRAME FORCE_DICTATOR] list len:", list.length);
 
-        const i = list.findIndex(e => String(e?.guestStateActual || "").toLowerCase() === "decider");
-        console.log("[IFRAME FORCE_DECIDER] decider index:", i);
+        const i = list.findIndex(e => {
+          const guest = String(e?.guestStateActual || "").toLowerCase();
+          return guest === "dictator" || guest === "decider";
+        });
+        console.log("[IFRAME FORCE_DICTATOR] dictator index:", i);
 
-        if (i < 0) return "NO_DECIDER";
+        if (i < 0) return "NO_DICTATOR";
         if (typeof startEncounterForDrill !== "function") return "NO_startEncounterForDrill";
 
         encounterIndex = i;
         startEncounterForDrill();
         window.__BC_LAST_ENCOUNTER__ = currentEncounter;
 
-        console.log("[IFRAME FORCE_DECIDER] now at:", currentEncounter?.encounterNumber, currentEncounter?.guestStateActual);
+        console.log("[IFRAME FORCE_DICTATOR] now at:", currentEncounter?.encounterNumber, currentEncounter?.guestStateActual);
         return "OK";
       };
+      window.__BC_FORCE_DECIDER__ = window.__BC_FORCE_DICTATOR__;
 
       async function startEncounterForDrill() {
         let list = getEncounterListForMode();
@@ -11198,7 +11290,9 @@ function ensureProgLoaded() {
         const drillCfg = window.__BC_DRILL_CONFIG__ || null;
         if (drillCfg && (drillCfg.focus || Array.isArray(drillCfg.pool))) {
           const norm = window.normalizeGuestType || normalizeGuestType;
-          const pool = Array.isArray(drillCfg.pool) ? drillCfg.pool.map(x => String(x)) : null;
+          const pool = Array.isArray(drillCfg.pool)
+            ? drillCfg.pool.map((x) => (norm ? norm(x) : String(x)))
+            : null;
 
           const filtered = list.filter((e) => {
             let ok = true;
@@ -11290,10 +11384,28 @@ function ensureProgLoaded() {
         stepButtons.innerHTML = "";
 
         if (currentStep === 0) {
-          stepHeader.textContent = "Step 1 — Read the Room";
-          stepContent.textContent =
-            `${currentEncounter.contextLine}\n\n` +
-            `${currentEncounter.guestLine}`;
+          stepHeader.textContent = "Step 1 — Table";
+          appendEncounterTableScene(stepContent, currentEncounter);
+
+          const hint = document.createElement("div");
+          hint.className = "small-text encounter-hint";
+          hint.innerText = "Read the table first. Then make the guest call on the next step.";
+          stepContent.appendChild(hint);
+
+          const b = document.createElement("button");
+          b.type = "button";
+          b.textContent = "CONTINUE TO GUEST READ";
+          b.onclick = () => {
+            currentStep = 1;
+            renderDrillStep();
+          };
+          stepButtons.appendChild(b);
+          return;
+        }
+
+        if (currentStep === 1) {
+          stepHeader.textContent = "Step 2 — Guest Read";
+          stepContent.textContent = "What kind of guest are you dealing with?";
 
           const options = getDrillGuestOptions();
           options.forEach((opt) => {
@@ -11303,7 +11415,7 @@ function ensureProgLoaded() {
             b.textContent = label;
             b.onclick = () => {
               currentEncounter.guestReadSelected = opt;
-              currentStep = 1;
+              currentStep = 2;
               renderDrillStep();
             };
             stepButtons.appendChild(b);
@@ -11311,14 +11423,14 @@ function ensureProgLoaded() {
           return;
         }
 
-        if (currentStep === 1) {
-          stepHeader.textContent = "Step 2 — Choose Mode";
+        if (currentStep === 2) {
+          stepHeader.textContent = "Step 3 — Choose Tone";
           stepContent.textContent = "Pick your control strategy.";
 
           const unlockedModes = getUnlockedModesForCurrentPlayer();
           let allowed = unlockedModes.length
             ? unlockedModes
-            : [window.MODES.SCOUT, window.MODES.GUIDE, window.MODES.CHARM];
+            : [window.MODES.GUIDE, window.MODES.CHARM, window.MODES.AUTH];
           const ordered = getDrillModeOrderForGuest(currentEncounter.guestStateActual, allowed);
 
           ordered.forEach((modeKey) => {
@@ -11330,7 +11442,7 @@ function ensureProgLoaded() {
               if (!currentEncounter.firstMode) {
                 currentEncounter.firstMode = modeKey;
               }
-              currentStep = 2;
+              currentStep = 3;
               renderDrillStep();
             };
             stepButtons.appendChild(b);
@@ -11339,39 +11451,71 @@ function ensureProgLoaded() {
           return;
         }
 
-        if (currentStep === 2) {
-          stepHeader.textContent = "Step 3 — Hook";
-          stepContent.textContent = "Choose your opening line.";
+        if (currentStep === 3) {
+          stepHeader.textContent = "Step 4 — Flash Learn of Wine";
+          stepContent.textContent = "Lock the bottle into your head before you solve the table.";
 
-          const progState = null; // drill ignores progression
-          const tierNow = resolveTierForSession("drill");
-          const wine =
-            (DRILL && DRILL.activeWine) ? DRILL.activeWine :
-            (currentEncounter && currentEncounter.wineSelected) ? currentEncounter.wineSelected :
-            { name: "This bottle", varietal: "" };
-
-          const opts = hookPolicy(currentEncounter, wine, tierNow, progState);
-
-          const options = document.createElement("div");
-          options.className = "option-grid";
-
-          opts.forEach((opt) => {
-            const b = document.createElement("button");
-            b.type = "button";
-            b.className = "option-btn" + (currentEncounter.hookSelected === opt.id ? " selected" : "");
-            b.textContent = opt.text || "(missing hook text)";
-
-            b.onclick = () => {
-              currentEncounter.hookSelected = opt.id;
-              currentEncounter.hookMeta = opt;
-
-              drillCompleteRep();
-            };
-
-            options.appendChild(b);
+          const facts = getFlashLearnFacts(currentEncounter);
+          const list = document.createElement("div");
+          list.className = "option-grid";
+          facts.forEach((fact, index) => {
+            const card = document.createElement("div");
+            card.className = "option-btn";
+            card.style.pointerEvents = "none";
+            card.innerHTML = `
+              <div class="option-title">${escapeHtml(`Flash ${index + 1}`)}</div>
+              <div class="option-preview">${escapeHtml(fact.body)}</div>
+            `;
+            list.appendChild(card);
           });
+          stepContent.appendChild(list);
 
-          stepContent.appendChild(options);
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.textContent = "CONTINUE TO DELIVER";
+          btn.onclick = () => {
+            currentEncounter.flashLearnCompleted = true;
+            currentEncounter.hookSelected = "flash_learn";
+            currentEncounter.hookMeta = {
+              id: "flash_learn",
+              hookType: "guest_centered",
+              text: facts.map((fact) => fact.body).join(" "),
+              tier: "right",
+            };
+            currentStep = 4;
+            renderDrillStep();
+          };
+          stepButtons.appendChild(btn);
+          return;
+        }
+
+        if (currentStep === 4) {
+          stepHeader.textContent = "Step 5 — Deliver";
+          stepContent.textContent = "Build the delivery by answering each table prompt with 1 of 2 delivery lines.";
+
+          currentEncounter.problemSolvePrompts = buildProblemSolvePrompts(currentEncounter);
+          const progressCard = document.createElement("div");
+          progressCard.className = "card";
+          progressCard.style.padding = "12px";
+          progressCard.style.marginTop = "10px";
+          const promptTotal = currentEncounter.problemSolvePrompts.length;
+          const promptCursor = ensureProblemSolvePromptCursor(currentEncounter) + 1;
+          progressCard.innerHTML = `
+            <div class="small-text" style="opacity:.72; margin-bottom:8px;">Deliver sequence</div>
+            <div>${escapeHtml(`${promptCursor} of ${promptTotal} for ${normalizeGuestType(currentEncounter?.guestReadSelected || currentEncounter?.guestStateActual)}`)}</div>
+          `;
+          stepContent.appendChild(progressCard);
+          renderProblemSolvePromptSequence(stepContent, currentEncounter, {
+            tight: true,
+            onRender: () => renderDrillStep(),
+            onAnswer: (_prompt, _answerIndex) => {
+              if (areProblemSolvePromptsComplete(currentEncounter)) {
+                drillCompleteRep();
+                return;
+              }
+              renderDrillStep();
+            },
+          });
           return;
         }
       }
@@ -11399,7 +11543,7 @@ function ensureProgLoaded() {
             currentEncounter.chainScore = result.chainScore;
             currentEncounter.chainSignal = result.chainSignal;
             currentEncounter.pivotType = result.pivotType || "";
-            currentEncounter.__decider = result.__decider || null;
+            currentEncounter.__dictator = result.__dictator || null;
             currentEncounter.__reactionComputed = true;
             try {
               logEncounterEffectAudit("drill_reaction", currentEncounter, {
@@ -12108,6 +12252,64 @@ function ensureProgLoaded() {
         });
 
         return snapshot;
+      }
+
+      function buildSkillTreeFromSnapshot(snapshot = {}) {
+        const tree = cloneSkillTemplate();
+        ["read", "framing", "delivery", "recovery", "closing"].forEach((key) => {
+          const pct = Math.max(0, Math.min(100, Number(snapshot?.[key] || 0)));
+          tree[key].points = pct;
+          tree[key].attempts = 100;
+        });
+        return tree;
+      }
+
+      function reconcileLocalSkillTreeFromServer(snapshot = null) {
+        if (!snapshot || typeof snapshot !== "object") return null;
+        const nextTree = buildSkillTreeFromSnapshot(snapshot);
+        saveSkillTree(nextTree);
+        return nextTree;
+      }
+
+      function reconcileLocalRunsAfterServerSync(syncMeta = {}) {
+        if (!Array.isArray(runs) || !runs.length) return false;
+        const syncedEncounterNumber = Number(syncMeta?.syncedEncounterNumber);
+        const syncedAt = syncMeta?.syncedAt || Date.now();
+        const snapshot = syncMeta?.serverSkillSnapshot || null;
+        const matchIndex = [...runs]
+          .map((entry, index) => ({ entry, index }))
+          .reverse()
+          .find(({ entry }) =>
+            Number.isFinite(syncedEncounterNumber)
+              ? Number(entry?.encounterNumber) === syncedEncounterNumber
+              : !entry?.managerSyncAt
+          )?.index;
+
+        if (!Number.isInteger(matchIndex) || matchIndex < 0) return false;
+
+        runs[matchIndex] = {
+          ...runs[matchIndex],
+          managerSyncAt: syncedAt,
+          managerSyncOk: true,
+          serverSkillSnapshot: snapshot,
+        };
+        saveRuns();
+        return true;
+      }
+
+      function reconcileLocalProgressAfterSubmit(syncMeta = {}) {
+        try {
+          reconcileLocalSkillTreeFromServer(syncMeta?.serverSkillSnapshot || null);
+          reconcileLocalRunsAfterServerSync(syncMeta);
+          if (typeof renderHistory === "function") {
+            const historyList = document.getElementById("historyList");
+            if (historyList && !historyList.closest(".hidden")) {
+              renderHistory();
+            }
+          }
+        } catch (e) {
+          console.warn("[BC] local progress reconciliation failed", e);
+        }
       }
 
       // TEMP one-time reset/migration for broken local data. Remove after confirmation.
@@ -13236,31 +13438,31 @@ function ensureProgLoaded() {
 
         const pivotReasons = {
           objection: {
-            scout: "Scout helps when the guest is still holding back a hidden concern.",
+            hold: "Hold helps when the guest is still holding back a hidden concern.",
             guide: "Guide helps when the guest needs the choice simplified and made safer.",
             charm: "Charm helps when the pushback is emotional and the moment needs softening.",
             authority: "Authority helps when the guest wants someone decisive to settle the objection."
           },
           hesitation: {
-            scout: "Scout helps when hesitation is still hiding the real blocker.",
+            hold: "Hold helps when hesitation is still hiding the real blocker.",
             guide: "Guide helps when the guest needs a calmer path to yes.",
             charm: "Charm helps when lightness reduces the emotional drag of the moment.",
             authority: "Authority helps when the guest wants certainty more than exploration."
           },
           confusion: {
-            scout: "Scout helps when more signal is still needed.",
+            hold: "Hold helps when more signal is still needed.",
             guide: "Guide helps when the guest needs clean structure and clarity.",
             charm: "Charm helps when the conversation is stiff and needs warming.",
             authority: "Authority helps when direct clarity will settle the confusion."
           },
           resistance: {
-            scout: "Scout helps when the resistance may be hiding something more specific.",
+            hold: "Hold helps when the resistance may be hiding something more specific.",
             guide: "Guide helps when the guest needs direction without pressure.",
             charm: "Charm helps when the resistance softens through rapport and ease.",
             authority: "Authority helps when the guest actually wants a decisive lead."
           },
           impatience: {
-            scout: "Scout can slow things down too much for an impatient guest.",
+            hold: "Hold can slow things down too much for an impatient guest.",
             guide: "Guide helps when the guest needs a quick but calm narrowing of the field.",
             charm: "Charm can help if the pressure is emotional, but may not finish the choice fast enough.",
             authority: "Authority helps when the guest wants the decision made cleaner and faster."
@@ -13294,14 +13496,48 @@ function ensureProgLoaded() {
 
       function getResolvedPivotFeedback(encounter) {
         const e = encounter || {};
+        const chosenMode = canonicalModeFromUi(e.recoveryChoiceTone || e.recoveryChoice);
+        const chosenCategory = String(e.recoveryChoiceCategory || e.recoveryChoice || "").trim().toLowerCase();
+        const bestMode = canonicalModeFromUi(e.recoveryCorrectModeResolved || e.recoveryCorrectMode || "");
+        const bestCategory = String(e.recoveryCorrectCategory || "").trim().toLowerCase();
 
         return {
           pivotType: String(e.pivotType || "").trim().toLowerCase(),
           pivotScenario: String(e.recoveryText || "").trim(),
-          chosen: canonicalModeFromUi(e.recoveryChoice),
-          best: canonicalModeFromUi(e.recoveryCorrectModeResolved || e.recoveryCorrectMode || ""),
+          chosen: chosenMode,
+          chosenCategory,
+          best: bestMode,
+          bestCategory,
           correct: !!e.recoveryCorrect
         };
+      }
+
+      function recoveryCategoryLabel(category) {
+        const key = String(category || "").trim().toLowerCase();
+        if (key === "own_it") return "Own It";
+        if (key === "narrow") return "Narrow";
+        if (key === "anchor") return "Anchor";
+        return key ? key : "Recovery";
+      }
+
+      function getRecoveryChoiceDisplay(encounter) {
+        const e = encounter || {};
+        const category = String(e.recoveryChoiceCategory || e.recoveryChoice || "").trim().toLowerCase();
+        const tone = canonicalModeFromUi(e.recoveryChoiceTone || e.recoveryChoice);
+        if (category && tone) return `${recoveryCategoryLabel(category)} -> ${uiModeLabel(tone, "game")}`;
+        if (category) return recoveryCategoryLabel(category);
+        if (tone) return uiModeLabel(tone, "game");
+        return "—";
+      }
+
+      function getRecoveryBestDisplay(encounter) {
+        const e = encounter || {};
+        const category = String(e.recoveryCorrectCategory || "").trim().toLowerCase();
+        const tone = canonicalModeFromUi(e.recoveryCorrectModeResolved || e.recoveryCorrectMode || "");
+        if (category && tone) return `${recoveryCategoryLabel(category)} -> ${uiModeLabel(tone, "game")}`;
+        if (category) return recoveryCategoryLabel(category);
+        if (tone) return uiModeLabel(tone, "game");
+        return "—";
       }
 
       function statusWord(status) {
@@ -15318,13 +15554,13 @@ function ensureProgLoaded() {
           encounter?.guestStateActual ??
           encounter?.guestReadSelected ??
           encounter?.guestRead ??
-          "decider"
+          "dictator"
         ).trim().toLowerCase();
 
         const modeRule =
           typeof getModeRuleForCurrentPlayer === "function"
             ? getModeRuleForCurrentPlayer(encounter?.guestStateActual)
-            : { optimal: "guide", neutral: "scout", damaging: "charm" };
+            : { optimal: "guide", neutral: "guide", damaging: "charm" };
         const hookRule = getHookRuleForGuest(modeKey);
         if (!modeRule) console.warn("[BC] modeRule missing for key:", modeKey, { encounter: encounter?.encounterNumber });
         if (!hookRule) console.warn("[BC] hookRule missing for key:", modeKey, { encounter: encounter?.encounterNumber });
@@ -15350,92 +15586,33 @@ function ensureProgLoaded() {
           source: "evaluateChecks_legacy"
         });
 
-        // Hook status
-        let hookStatus = "neutral";
+        const selectedPrompt =
+          encounter.problemSolveSelectedPrompt ||
+          (Array.isArray(encounter.problemSolvePrompts)
+            ? encounter.problemSolvePrompts.find((item) => item?.id === encounter.problemSolveSelectedId)
+            : null) ||
+          null;
 
-        const selectedHookType = getSelectedHookType(encounter);
-        const chosenHookKey =
-          (typeof canonicalHook === "function")
-            ? canonicalHook(getSelectedHookType(encounter))
-            : String(getSelectedHookType(encounter) || "").trim().toUpperCase();
+        const correctPrompt =
+          Array.isArray(encounter.problemSolvePrompts)
+            ? encounter.problemSolvePrompts.find((item) => item?.tier === "right") || null
+            : null;
 
-        assertHookConsistency(hookRule, {
-          encounterNumber: encounter?.encounterNumber,
-          guest: encounter?.guestStateActual,
-          source: "evaluateChecks_hook"
-        });
-
-        let hookStatusEval = "neutral";
-
-        if (hookRule?.optimalKey && chosenHookKey && chosenHookKey === hookRule.optimalKey) {
-          hookStatusEval = "optimal";
-        } else if (hookRule?.neutralKey && chosenHookKey && chosenHookKey === hookRule.neutralKey) {
-          hookStatusEval = "neutral";
-        } else if (hookRule && chosenHookKey) {
-          hookStatusEval = "damaging";
-        }
-
-        if (encounter.hookMeta?.tier) {
-          const metaTierRaw = String(encounter.hookMeta.tier || "").toLowerCase();
-          const metaStatus =
-            metaTierRaw === "right" ? "optimal" :
-            metaTierRaw === "slightly" ? "neutral" :
-            metaTierRaw ? "damaging" :
-            null;
-
-          if (metaStatus && metaStatus !== hookStatusEval) {
-            console.warn("[HOOK CONSISTENCY] hookMeta tier disagrees with canonical rule", {
-              selectedHookType,
-              chosenHookKey,
-              hookMeta: encounter.hookMeta,
-              canonical: hookStatusEval,
-              metaStatus,
-              guest: encounter?.guestStateActual,
-              encounterNumber: encounter?.encounterNumber
-            });
-          }
-        }
-
-        // Strictness modifies interpretation of the canonical result.
-        // It should not replace the canonical result source.
-        if (strictness === "lenient") {
-          hookStatus =
-            hookStatusEval === "neutral" ? "optimal" : hookStatusEval;
-        } else if (strictness === "normal") {
-          hookStatus = hookStatusEval;
-        } else if (strictness === "strict") {
-          hookStatus =
-            hookStatusEval === "neutral" ? "damaging" : hookStatusEval;
-        } else if (strictness === "hard") {
-          hookStatus =
-            hookStatusEval === "optimal" ? "optimal" : "damaging";
-        } else {
-          hookStatus = hookStatusEval;
-        }
-
-        const selectedDeliveryLine1 =
-          encounter.deliveryLine1 || encounter.deliverOptionsS1?.[encounter.selectedS1] || "";
-
-        const selectedDeliveryLine2 =
-          encounter.deliveryLine2 || encounter.deliverOptionsS2?.[encounter.selectedS2] || "";
-
+        const hookStatus = encounter.flashLearnCompleted ? "optimal" : "damaging";
+        const selectedDeliveryLine1 = String(
+          selectedPrompt?.selectedAnswerText ||
+          selectedPrompt?.text ||
+          encounter.deliveryLine1 ||
+          ""
+        );
+        const selectedDeliveryLine2 = "";
         const selectedDeliveryLine1Key = canonicalDeliveryLine(selectedDeliveryLine1);
-        const selectedDeliveryLine2Key = canonicalDeliveryLine(selectedDeliveryLine2);
-
-        const correctDeliveryLine1 =
-          encounter.correctDeliveryLine1 || encounter.deliverOptionsS1?.[encounter.correctSlotS1] || "";
-
-        const correctDeliveryLine2 =
-          encounter.correctDeliveryLine2 || encounter.deliverOptionsS2?.[encounter.correctSlotS2] || "";
-
+        const selectedDeliveryLine2Key = "";
+        const correctDeliveryLine1 = String(correctPrompt?.text || "");
+        const correctDeliveryLine2 = "";
         const correctDeliveryLine1Key = canonicalDeliveryLine(correctDeliveryLine1);
-        const correctDeliveryLine2Key = canonicalDeliveryLine(correctDeliveryLine2);
-
-        const deliveryCorrect =
-          !!selectedDeliveryLine1Key &&
-          !!selectedDeliveryLine2Key &&
-          selectedDeliveryLine1Key === correctDeliveryLine1Key &&
-          selectedDeliveryLine2Key === correctDeliveryLine2Key;
+        const correctDeliveryLine2Key = "";
+        const deliveryCorrect = !!selectedPrompt && selectedPrompt.tier === "right";
 
         // Writeback
         encounter.readCorrect = !!guestRead;
@@ -15443,9 +15620,9 @@ function ensureProgLoaded() {
         encounter.hookStatus = hookStatus;
         encounter.deliveryCorrect = !!deliveryCorrect;
 
-        encounter.correctHookResolved = hookRule?.optimal || null;
-        encounter.correctHookNeutralResolved = hookRule?.neutral || null;
-        encounter.selectedHookResolved = selectedHookType || null;
+        encounter.correctHookResolved = "flash_learn";
+        encounter.correctHookNeutralResolved = "flash_learn";
+        encounter.selectedHookResolved = encounter.flashLearnCompleted ? "flash_learn" : null;
 
         encounter.correctDeliveryLine1 = correctDeliveryLine1;
         encounter.correctDeliveryLine2 = correctDeliveryLine2;
@@ -15558,10 +15735,10 @@ function ensureProgLoaded() {
       }
 
       function getEncounterStepReactionKey(step) {
-        if (step === 1) return "observe";
-        if (step === 2) return "mode";
-        if (step === 3) return "hook";
-        if (step === 4) return "deliver";
+        if (step === 2) return "observe";
+        if (step === 3) return "mode";
+        if (step === 4) return "flash_learn";
+        if (step === 5) return "problem_solve";
         return "";
       }
 
@@ -15589,7 +15766,7 @@ function ensureProgLoaded() {
           };
         }
 
-        if (stepKey === "hook") {
+        if (stepKey === "flash_learn") {
           const status = String(encounter?.hookStatus || "neutral").toLowerCase();
           return {
             outcome:
@@ -15600,11 +15777,11 @@ function ensureProgLoaded() {
               status === "optimal" ? 1 :
               status === "neutral" ? 0 :
               -1,
-            tags: ["hook"],
+            tags: ["flash_learn"],
           };
         }
 
-        if (stepKey === "deliver") {
+        if (stepKey === "problem_solve") {
           const deliveryScore =
             (typeof getDeliveryScore === "function")
               ? Number(getDeliveryScore(encounter) || 0)
@@ -15624,7 +15801,7 @@ function ensureProgLoaded() {
               deliveryScore >= 2 ? 1 :
               deliveryScore === 1 ? 0 :
               -1,
-            tags: ["delivery"],
+            tags: ["problem_solve"],
           };
         }
 
@@ -15675,7 +15852,7 @@ function ensureProgLoaded() {
             ? (accuracy === "correct" ? "curious" : accuracy === "slight" ? "neutral" : "guarded")
             : stepKey === "mode"
               ? (accuracy === "correct" ? "interested" : accuracy === "slight" ? "uncertain" : "guarded")
-              : stepKey === "hook"
+              : stepKey === "flash_learn"
                 ? (accuracy === "correct" ? "engaged" : accuracy === "slight" ? "curious" : "resistant")
                 : (accuracy === "correct" ? "engaged" : "resistant");
 
@@ -15688,11 +15865,11 @@ function ensureProgLoaded() {
               ? (accuracy === "correct" ? "Guest relaxes into the tone."
                 : accuracy === "slight" ? "Guest listens, but seems unsure."
                 : "Guest stiffens slightly.")
-              : stepKey === "hook"
+              : stepKey === "flash_learn"
                 ? (accuracy === "correct" ? "Guest leans in, clearly interested."
                   : accuracy === "slight" ? "Guest shows mild interest, but hesitates."
                   : "Guest disengages from the pitch.")
-                : (accuracy === "correct" ? "Guest nods confidently, ready to decide."
+                : (accuracy === "correct" ? "Guest nods confidently, ready to choose."
                   : "Guest declines and shuts down the offer.");
 
         const physicalCue =
@@ -15704,15 +15881,15 @@ function ensureProgLoaded() {
               ? (accuracy === "correct" ? "Guest maintains eye contact."
                 : accuracy === "slight" ? "Guest tilts head slightly."
                 : "Guest leans back and breaks eye contact.")
-              : stepKey === "hook"
+              : stepKey === "flash_learn"
                 ? (accuracy === "correct" ? "Guest lowers the menu and nods."
                   : accuracy === "slight" ? "Guest glances at you, then back at the menu."
                   : "Guest looks away and closes posture.")
                 : (accuracy === "correct" ? "Guest turns fully toward you and smiles."
                   : "Guest shakes head and withdraws from the interaction.");
 
-        const trustDelta = stepKey === "deliver" && polarity > 0 ? 2 : polarity;
-        const interestDelta = stepKey === "hook" && polarity > 0 ? 3 : polarity;
+        const trustDelta = stepKey === "problem_solve" && polarity > 0 ? 2 : polarity;
+        const interestDelta = stepKey === "flash_learn" && polarity > 0 ? 3 : polarity;
         const resistanceDelta = polarity > 0 ? -1 : polarity < 0 ? 1 : 0;
 
         return {
@@ -15780,32 +15957,32 @@ function ensureProgLoaded() {
         return commitEncounterStepReaction(encounter, stepKey);
       }
 
-      function ensureDeliverReactionCommitted(encounter = currentEncounter) {
+      function ensureProblemSolveReactionCommitted(encounter = currentEncounter) {
         if (!encounter) return null;
         try {
           window.evaluateChecks?.(encounter);
         } catch (error) {
-          console.warn("[BC] evaluateChecks failed before deliver commit", error);
+          console.warn("[BC] evaluateChecks failed before problem solve commit", error);
         }
-        const reaction = commitEncounterStepReaction(encounter, "deliver");
-        if (!encounter.stepReactionByKey?.deliver) {
+        const reaction = commitEncounterStepReaction(encounter, "problem_solve");
+        if (!encounter.stepReactionByKey?.problem_solve) {
           encounter.stepReactionByKey = encounter.stepReactionByKey || {};
-          encounter.stepReactionByKey.deliver = reaction || buildEncounterStepReactionRecord(encounter, "deliver");
+          encounter.stepReactionByKey.problem_solve = reaction || buildEncounterStepReactionRecord(encounter, "problem_solve");
         }
         if (!Array.isArray(encounter.stepReactionTrail)) encounter.stepReactionTrail = [];
-        if (!encounter.stepReactionTrail.find((node) => node?.step === "deliver") && encounter.stepReactionByKey?.deliver) {
-          encounter.stepReactionTrail.push(encounter.stepReactionByKey.deliver);
+        if (!encounter.stepReactionTrail.find((node) => node?.step === "problem_solve") && encounter.stepReactionByKey?.problem_solve) {
+          encounter.stepReactionTrail.push(encounter.stepReactionByKey.problem_solve);
         }
         if (!Array.isArray(encounter.stepSpine)) encounter.stepSpine = [];
-        if (!encounter.stepSpine.find((node) => node?.step === "deliver")) {
-          const deliverScore = Number(
-            encounter.stepReactionByKey?.deliver?.successPolarity ??
-            getStepEvalResultFromEncounter(encounter, "deliver")?.score ??
+        if (!encounter.stepSpine.find((node) => node?.step === "problem_solve")) {
+          const problemSolveScore = Number(
+            encounter.stepReactionByKey?.problem_solve?.successPolarity ??
+            getStepEvalResultFromEncounter(encounter, "problem_solve")?.score ??
             0
           );
-          encounter.stepSpine.push({ step: "deliver", score: deliverScore });
+          encounter.stepSpine.push({ step: "problem_solve", score: problemSolveScore });
         }
-        return encounter.stepReactionByKey?.deliver || reaction;
+        return encounter.stepReactionByKey?.problem_solve || reaction;
       }
 
       function deriveEncounterReactionPayload(encounter = currentEncounter) {
@@ -15849,17 +16026,17 @@ function ensureProgLoaded() {
         normalizedPayload.bestPath =
           Array.isArray(normalizedPayload.bestPath) && normalizedPayload.bestPath.length
             ? normalizedPayload.bestPath
-            : ["observe", "mode", "hook", "deliver"];
+            : ["observe", "mode", "problem_solve"];
         normalizedPayload.bottleServed = !!normalizedPayload.bottleServed;
         normalizedPayload.chosenPathExposition =
           normalizedPayload.chosenPathExposition ||
           [
             `Read: chose ${encounter?.guestReadSelected || "—"}.`,
             `Mode: chose ${encounter?.modeSelected ? uiModeLabel(encounter.modeSelected, "game") : "—"}.`,
-            `Hook: chose ${encounter?.hookSelected || "—"}.`,
-            `Delivery: ${
-              encounter?.selectedDeliveryLine1 || encounter?.selectedDeliveryLine2
-                ? `${encounter?.selectedDeliveryLine1 || "—"} / ${encounter?.selectedDeliveryLine2 || "—"}`
+            `Flash Learn: ${encounter?.flashLearnCompleted ? "completed" : "not completed"}.`,
+            `Deliver: ${
+              encounter?.selectedDeliveryLine1 || encounter?.problemSolveSelectedPrompt?.selectedAnswerText || encounter?.problemSolveSelectedPrompt?.text
+                ? `${encounter?.problemSolveSelectedPrompt?.selectedAnswerText || encounter?.problemSolveSelectedPrompt?.text || encounter?.selectedDeliveryLine1 || "—"}`
                 : "—"
             }.`,
           ].join(" ");
@@ -15868,10 +16045,10 @@ function ensureProgLoaded() {
           [
             `Read: correct guest was ${encounter?.guestStateActual || "—"}.`,
             `Mode: best answer was ${encounter?.correctModeResolved ? uiModeLabel(encounter.correctModeResolved, "game") : "—"}.`,
-            `Hook: best answer was ${encounter?.correctHookResolved || "—"}.`,
-            `Delivery: correct lines were ${
-              encounter?.correctDeliveryLine1 || encounter?.correctDeliveryLine2
-                ? `${encounter?.correctDeliveryLine1 || "—"} / ${encounter?.correctDeliveryLine2 || "—"}`
+            `Flash Learn: best answer was complete the wine flash.`,
+            `Deliver: correct prompt was ${
+              encounter?.correctDeliveryLine1 || encounter?.problemSolvePrompts?.find?.((item) => item?.tier === "right")?.text
+                ? `${encounter?.correctDeliveryLine1 || encounter?.problemSolvePrompts?.find?.((item) => item?.tier === "right")?.text || "—"}`
                 : "—"
             }.`,
             encounter?.recoveryText
@@ -16198,12 +16375,12 @@ function ensureProgLoaded() {
       }
 
       function getActiveEncounterStepKey(step = currentStep) {
-        if (step === 1) return "observe";
-        if (step === 2) return "mode";
-        if (step === 3) return "hook";
-        if (step === 4) return "deliver";
-        if (step === 5) return "reaction";
-        if (step === 6) return "reflection";
+        if (step === 2) return "observe";
+        if (step === 3) return "mode";
+        if (step === 4) return "flash_learn";
+        if (step === 5) return "problem_solve";
+        if (step === 6) return "reaction";
+        if (step === 7) return "reflection";
         return "";
       }
 
@@ -16259,7 +16436,7 @@ function ensureProgLoaded() {
         const subtitle = document.createElement("div");
         subtitle.className = "small-text reaction-block-subtitle";
         subtitle.innerText = trail.length
-          ? `Locked reactions: ${trail.length} of 4`
+          ? `Locked reactions: ${trail.length} of 3`
           : "Reaction tracking starts as soon as you lock in a decision.";
         card.appendChild(subtitle);
 
@@ -16298,7 +16475,7 @@ function ensureProgLoaded() {
         if (latest) {
           renderSequentialEncounterFrame(sequence, {
             kicker: "JUST LOCKED STEP",
-            title: String(latest.step || "").toUpperCase(),
+            title: formatVisibleEncounterStep(String(latest.step || "")).toUpperCase(),
             meta: latest.accuracy || "resolved",
             kind: "step",
           });
@@ -16316,7 +16493,7 @@ function ensureProgLoaded() {
         if (activeStepKey && activeStepKey !== "reaction" && activeStepKey !== "reflection") {
           renderSequentialEncounterFrame(sequence, {
             kicker: "NEXT STEP",
-            title: String(activeStepKey).toUpperCase(),
+            title: formatVisibleEncounterStep(String(activeStepKey || "")).toUpperCase(),
             meta: "awaiting your choice",
             pending: true,
             score: 0,
@@ -16347,7 +16524,7 @@ function ensureProgLoaded() {
           const row = document.createElement("div");
           row.className = "reflection-step-trail-row";
           row.innerText =
-            `${String(item.step || "").toUpperCase()} • ` +
+            `${formatVisibleEncounterStep(String(item.step || "")).toUpperCase()} • ` +
             `${item.accuracy || "—"} • ` +
             `${item.tableCue || "—"} ` +
             (item.physicalCue ? `| ${item.physicalCue}` : "") +
@@ -16381,6 +16558,12 @@ function ensureProgLoaded() {
         encounter.hookSelected = "";
         encounter.hookSelectedKey = "";
         encounter.hookMeta = null;
+        clearFlashLearnTimer(encounter);
+        encounter.flashLearnStartedAt = 0;
+        encounter.flashLearnCompleted = false;
+        encounter.problemSolvePrompts = null;
+        encounter.problemSolveSelectedId = "";
+        encounter.problemSolveSelectedPrompt = null;
 
         encounter.selectedS1 = null;
         encounter.selectedS2 = null;
@@ -16390,6 +16573,8 @@ function ensureProgLoaded() {
         encounter.deliveryLine2Key = "";
 
         encounter.recoveryChoice = "";
+        encounter.recoveryChoiceCategory = "";
+        encounter.recoveryChoiceTone = "";
         encounter.recoveryCorrect = false;
         encounter.showModeHelp = false;
         encounter.showHookHelp = false;
@@ -16454,6 +16639,11 @@ function ensureProgLoaded() {
           hookSelected: prev.hookSelected || "",
           hookSelectedKey: prev.hookSelectedKey || "",
           hookMeta: prev.hookMeta || null,
+          flashLearnStartedAt: Number(prev.flashLearnStartedAt || 0) || 0,
+          flashLearnCompleted: !!prev.flashLearnCompleted,
+          problemSolvePrompts: Array.isArray(prev.problemSolvePrompts) ? structuredClone(prev.problemSolvePrompts) : null,
+          problemSolveSelectedId: prev.problemSolveSelectedId || "",
+          problemSolveSelectedPrompt: prev.problemSolveSelectedPrompt ? structuredClone(prev.problemSolveSelectedPrompt) : null,
 
           selectedS1: prev.selectedS1 ?? null,
           selectedS2: prev.selectedS2 ?? null,
@@ -16463,6 +16653,10 @@ function ensureProgLoaded() {
           deliveryLine2Key: prev.deliveryLine2Key || "",
 
           recoveryChoice: prev.recoveryChoice || "",
+          recoveryChoiceCategory: prev.recoveryChoiceCategory || "",
+          recoveryChoiceTone: prev.recoveryChoiceTone || "",
+          recoveryChoiceCategory: prev.recoveryChoiceCategory || "",
+          recoveryChoiceTone: prev.recoveryChoiceTone || "",
           guestState: prev.guestState ? structuredClone(prev.guestState) : null,
           reactionHistory: Array.isArray(prev.reactionHistory) ? structuredClone(prev.reactionHistory) : [],
           stepSpine: Array.isArray(prev.stepSpine) ? structuredClone(prev.stepSpine) : [],
@@ -16591,7 +16785,7 @@ function ensureProgLoaded() {
       }
 
       function goToStep(n) {
-        if (n === 6) scrubEncounterDerivedState(currentEncounter);
+        if (n === 7) scrubEncounterDerivedState(currentEncounter);
         if (currentEncounter) currentEncounter.__stepReactionPreview = null;
         currentStep = n;
         renderEncounterStep();
@@ -16771,35 +16965,35 @@ function ensureProgLoaded() {
 
         const guestReasons = {
           [window.GUEST.DECIDER]: {
-            scout: "Scout works when you still need one more clue before steering them.",
+            hold: "Hold works when you still need one more clue before steering them.",
             guide: "Guide works best because this guest wants the choice narrowed down clearly.",
             charm: "Charm is weaker here because warmth alone does not solve their indecision.",
             authority: "Authority works when this guest is ready for strong certainty."
           },
 
           [window.GUEST.BARGAIN_SMART]: {
-            scout: "Scout works best because you need to learn what they value most first.",
+            hold: "Hold works best because you need to learn what they value most first.",
             guide: "Guide can work if you clearly frame the smart-value option.",
             charm: "Charm is weaker here because they care more about value than atmosphere.",
             authority: "Authority can work if you sound certain about the strongest-value choice."
           },
 
           [window.GUEST.FANCY]: {
-            scout: "Scout works when you need to read their taste before positioning the bottle.",
+            hold: "Hold works when you need to read their taste before positioning the bottle.",
             guide: "Guide works when they want refinement translated into a clear suggestion.",
             charm: "Charm works best when the moment should feel elevated, stylish, and personal.",
             authority: "Authority can work if they respect strong expertise and conviction."
           },
 
           [window.GUEST.GRIEVER]: {
-            scout: "Scout works best because you need to read the hesitation before pushing anything.",
+            hold: "Hold works best because you need to read the hesitation before pushing anything.",
             guide: "Guide can work when you calmly reduce their sense of risk.",
             charm: "Charm can help warm the moment, but too much can feel like avoidance.",
             authority: "Authority is often risky here if it adds pressure to an already hesitant guest."
           },
 
           [window.GUEST.CELEBRATOR]: {
-            scout: "Scout works when you still need to understand what kind of celebration this is.",
+            hold: "Hold works when you still need to understand what kind of celebration this is.",
             guide: "Guide works when the guest wants help turning the moment into a clear choice.",
             charm: "Charm works best because energy, warmth, and occasion matter most here.",
             authority: "Authority can work if the guest wants someone to lead confidently."
@@ -16887,8 +17081,8 @@ function ensureProgLoaded() {
       function modeWhyResolved(guestType, resolvedMode) {
         const mode = canonicalModeFromUi(resolvedMode);
 
-        if (mode === "scout") {
-          return "Scout fits when you need to read the guest carefully before trying to steer them.";
+        if (mode === "hold") {
+          return "Hold fits when you need to read the guest carefully before trying to steer them.";
         }
         if (mode === "guide") {
           return "Guide fits when the guest needs calm direction and confidence without pressure.";
@@ -17408,12 +17602,12 @@ function ensureProgLoaded() {
 
         if (modeStatus === "optimal" && chosenMode) {
           if (chosenMode === "guide") nuance = " The calm direction works for me.";
-          if (chosenMode === "scout") nuance = " That question helps.";
+          if (chosenMode === "hold") nuance = " That pause helps.";
           if (chosenMode === "charm") nuance = " I like the tone of that.";
           if (chosenMode === "authority") nuance = " I trust the certainty there.";
         } else if (modeStatus === "damaging" && chosenMode) {
           if (chosenMode === "guide") nuance = " That feels a bit too directed.";
-          if (chosenMode === "scout") nuance = " I don't want more questions right now.";
+          if (chosenMode === "hold") nuance = " I don't want to slow this down right now.";
           if (chosenMode === "charm") nuance = " That doesn't really answer what I need.";
           if (chosenMode === "authority") nuance = " That feels a bit too strong for me.";
         }
@@ -17693,22 +17887,22 @@ function ensureProgLoaded() {
         // Strength candidates
         if (checks.guestRead) strengths.push({ key: "read", text: "✅ Strength: You read the guest correctly." });
         if (checks.modeStatus === "optimal") strengths.push({ key: "mode", text: "✅ Strength: You matched the Mode perfectly." });
-        if (checks.hookStatus === "optimal") strengths.push({ key: "hook", text: "✅ Strength: You chose the right Hook for that guest." });
-        if (checks.deliveryCorrect) strengths.push({ key: "delivery", text: "✅ Strength: Your 2-sentence delivery landed clean." });
+        if (checks.hookStatus === "optimal") strengths.push({ key: "flash_learn", text: "✅ Strength: You completed Flash Learn cleanly." });
+        if (checks.deliveryCorrect) strengths.push({ key: "problem_solve", text: "✅ Strength: Your problem-solve prompt landed cleanly." });
 
         // Gap candidates (ordered by leverage)
         if (!checks.guestRead) gaps.push({ key: "read", text: "⚠️ Fix: Your first job is the read. Re-check cues before you pick a Mode." });
         if (checks.modeStatus === "damaging") gaps.push({ key: "mode", text: "⚠️ Fix: Your Mode fought the guest. Switch to the guest’s optimal Mode next time." });
-        if (checks.hookStatus === "damaging") gaps.push({ key: "hook", text: "⚠️ Fix: Your Hook didn’t match what they care about. Choose the guest’s optimal Hook." });
-        if (!checks.deliveryCorrect) gaps.push({ key: "delivery", text: "⚠️ Fix: Delivery missed. Sentence 1 = emotion/tone, Sentence 2 = structure/value." });
+        if (checks.hookStatus === "damaging") gaps.push({ key: "flash_learn", text: "⚠️ Fix: Complete the full Flash Learn before solving the table." });
+        if (!checks.deliveryCorrect) gaps.push({ key: "problem_solve", text: "⚠️ Fix: Pick the stronger guest-specific 2-option prompt." });
 
-        // Choose best strength: prioritize Read > Mode > Hook > Delivery
-        const strengthPriority = ["read", "mode", "hook", "delivery"];
+        // Choose best strength: prioritize Read > Mode > Flash Learn > Problem Solve
+        const strengthPriority = ["read", "mode", "flash_learn", "problem_solve"];
         let strength = strengths.sort((a,b) => strengthPriority.indexOf(a.key) - strengthPriority.indexOf(b.key))[0];
         if (!strength) strength = { key: "effort", text: "✅ Strength: You got through the sequence under pressure." };
 
-        // Choose biggest gap: prioritize Read > Mode > Hook > Delivery
-        const gapPriority = ["read", "mode", "hook", "delivery"];
+        // Choose biggest gap: prioritize Read > Mode > Flash Learn > Problem Solve
+        const gapPriority = ["read", "mode", "flash_learn", "problem_solve"];
         let fix = gaps.sort((a,b) => gapPriority.indexOf(a.key) - gapPriority.indexOf(b.key))[0];
         if (!fix) fix = { key: "tighten", text: "⚠️ Fix: Tighten speed. Fewer words, cleaner confidence." };
 
@@ -17716,8 +17910,8 @@ function ensureProgLoaded() {
         const rules = {
           read: "Next rule: Don’t choose a Mode until you can say: “They want speed / safety / status / proof / vibe.”",
           mode: "Next rule: If your Mode isn’t working, stop explaining — change Mode.",
-          hook: "Next rule: Hook must answer their real question: VALUE / STORY / FLAVOUR.",
-          delivery: "Next rule: Sentence 1 sets emotion. Sentence 2 gives the reason.",
+          flash_learn: "Next rule: Flash Learn gives you the bottle cues before you speak.",
+          problem_solve: "Next rule: Use one clean 2-option prompt built around what this guest values.",
           tighten: "Next rule: Cut your words in half and commit."
         };
 
@@ -17746,8 +17940,8 @@ function ensureProgLoaded() {
       }
 
       function renderReflectionOverview(container, encounter, checks, modeBestResolved) {
-        if (!encounter?.stepReactionByKey?.deliver) {
-          ensureDeliverReactionCommitted(encounter);
+        if (!encounter?.stepReactionByKey?.problem_solve) {
+          ensureProblemSolveReactionCommitted(encounter);
         }
         const reactionPayload = deriveEncounterReactionPayload(encounter);
 
@@ -17888,8 +18082,8 @@ function ensureProgLoaded() {
             "Pivot",
             encounter.recoveryCorrect ? "✅" : (encounter.recoveryChoice ? "❌" : "—"),
             `Scenario: ${encounter.recoveryText || "—"}. ` +
-            `Best recovery: ${recoveryBest ? uiModeLabel(recoveryBest, "game") : "—"}. ` +
-            `You chose: ${encounter.recoveryChoice ? uiModeLabel(encounter.recoveryChoice, "game") : "—"}. ` +
+            `Best recovery: ${getRecoveryBestDisplay(encounter)}. ` +
+            `You chose: ${getRecoveryChoiceDisplay(encounter)}. ` +
             `Why: ${pivotWhyWithChoice(encounter)}`
           );
         }
@@ -17899,7 +18093,7 @@ function ensureProgLoaded() {
             container,
             "Reset",
             "✅",
-            "You used reset (only allowed if first mode was HOLD)."
+            "You used reset (only allowed if first mode was GUIDE)."
           );
         }
 
@@ -18170,6 +18364,8 @@ function ensureProgLoaded() {
           // Pivot fields
           recoveryText: currentEncounter.recoveryText || "",
           recoveryChoice: currentEncounter.recoveryChoice || "",
+          recoveryChoiceCategory: currentEncounter.recoveryChoiceCategory || "",
+          recoveryChoiceTone: currentEncounter.recoveryChoiceTone || "",
           recoveryCorrect: !!currentEncounter.recoveryCorrect,
           recoveryCorrectMode: currentEncounter.recoveryCorrectModeResolved || currentEncounter.recoveryCorrectMode || "",
           recoveryWhy: currentEncounter.recoveryWhy || "",
@@ -18621,6 +18817,14 @@ function ensureProgLoaded() {
 
       function ensurePressureDrivenPivot(encounter) {
         if (!encounter) return encounter;
+        if (!isPivotFeatureUnlocked()) {
+          encounter.pivotPlanned = false;
+          encounter.recoveryText = "";
+          encounter.pivotType = "";
+          encounter.recoveryCorrectModeRaw = "";
+          encounter.recoveryCorrectModeResolved = "";
+          return encounter;
+        }
 
         const unlockedModes = getUnlockedModesForCurrentPlayer();
 
@@ -18640,10 +18844,10 @@ function ensureProgLoaded() {
         wrap.className = "notice notice-spaced";
 
         wrap.innerHTML = `
-          <div class="notice-copy-block"><strong>Scout</strong> — Ask one more question when you still need a better read on the guest.</div>
           <div class="notice-copy-block"><strong>Guide</strong> — Gently steer the guest when they need help getting to a clear choice.</div>
           <div class="notice-copy-block"><strong>Charm</strong> — Warm the moment up when connection and ease matter most.</div>
           <div class="notice-copy-block"><strong>Authority</strong> — Lead with certainty when the guest wants someone decisive.</div>
+          <div class="notice-copy-block"><strong>Hold</strong> — Slow the table down and reduce pressure before pushing the bottle.</div>
         `;
 
         stepContent.appendChild(wrap);
@@ -18930,16 +19134,17 @@ function ensureProgLoaded() {
 
       function getEncounterPresentationStage(step = currentStep) {
         if (step === 65) return "recovery";
-        if (step === 7) return "summary";
+        if (step === 8) return "summary";
 
         switch (step) {
           case 0: return "load";
           case 1: return "observe";
-          case 2: return "mode";
-          case 3: return "hook";
-          case 4: return "delivery";
-          case 5: return "reaction";
-          case 6: return "reflection";
+          case 2: return "observe";
+          case 3: return "mode";
+          case 4: return "flash_learn";
+          case 5: return "problem_solve";
+          case 6: return "reaction";
+          case 7: return "reflection";
           default: return "default";
         }
       }
@@ -18965,12 +19170,12 @@ function ensureProgLoaded() {
           accentRgb: "103, 232, 249",
           ink: "rgba(232, 253, 255, 0.97)",
         }),
-        hook: Object.freeze({
+        flash_learn: Object.freeze({
           tone: "framing",
           accentRgb: "251, 146, 60",
           ink: "rgba(255, 243, 232, 0.97)",
         }),
-        delivery: Object.freeze({
+        problem_solve: Object.freeze({
           tone: "close",
           accentRgb: "245, 194, 107",
           ink: "rgba(255, 248, 233, 0.97)",
@@ -19129,7 +19334,7 @@ function ensureProgLoaded() {
           if (wine.process) addBadge(wineBadges, wine.process);
         }
 
-        const stepLabels = ["Load", "Observe", "Mode", "Hook", "Deliver", "Reaction", "Reflect"];
+        const stepLabels = ["", "Table", "Guest Read", "Tone", "Flash Learn of Wine", "Deliver", "Reaction", "Reflect", "Summary"];
         const meta = (currentEncounter && currentEncounter.meta) ? currentEncounter.meta : null;
         const tier = meta && meta.tier ? meta.tier : "";
         const diff = meta && (meta.difficulty || meta.difficulty === 0) ? meta.difficulty : "";
@@ -19144,29 +19349,35 @@ function ensureProgLoaded() {
         if (trap && trap !== "none") chipParts.push(`Trap: ${trap}`);
         if (currentEncounter.__drillRep) chipParts.push(`Rep ${currentEncounter.__drillRep}/3`);
 
-        const displayStep = getDisplayStepNumber(currentStep);
-        const displayLabel = getDisplayStepLabel(currentStep) || stepLabels[currentStep] || "";
-        stepHeader.innerText =
-          "Step " + displayStep + " of 7" + (displayLabel ? ": " + displayLabel : "") +
-          (chipParts.length ? "\n" + chipParts.join(" • ") : "");
+        if (currentStep === 0) {
+          stepHeader.innerText =
+            "Encounter Ready" +
+            (chipParts.length ? "\n" + chipParts.join(" • ") : "");
+        } else {
+          const displayStep = getDisplayStepNumber(currentStep);
+          const displayLabel = getDisplayStepLabel(currentStep) || stepLabels[currentStep] || "";
+          stepHeader.innerText =
+            "Step " + displayStep + " of 8" + (displayLabel ? ": " + displayLabel : "") +
+            (chipParts.length ? "\n" + chipParts.join(" • ") : "");
+        }
         updateDifficultyBadge(currentEncounter?.difficulty ?? 1);
       }
 
       function renderStepLoad(stepContent, stepButtons) {
         const p = document.createElement("p");
         p.className = "encounter-lead";
-        p.innerText = "Encounter loaded. Press BEGIN to observe the guest.";
+        p.innerText = "Encounter loaded. Press BEGIN to go to the table.";
         stepContent.appendChild(p);
         addStepButton("BEGIN", () => { currentStep = 1; renderEncounterStep(); }, stepButtons);
       }
 
-      function renderStepObserve(stepContent, stepButtons) {
+      function appendEncounterTableScene(stepContent, encounter = currentEncounter) {
         const context = document.createElement("p");
         context.className = "encounter-lead";
-        context.innerText = currentEncounter.contextLine;
+        context.innerText = encounter?.contextLine || "";
         const guest = document.createElement("p");
         guest.className = "encounter-voice";
-        guest.innerText = "Guest: " + currentEncounter.guestLine;
+        guest.innerText = "Guest: " + (encounter?.guestLine || "");
         stepContent.appendChild(context);
         stepContent.appendChild(guest);
 
@@ -19177,9 +19388,9 @@ function ensureProgLoaded() {
         cueTitle.innerText = "Cues";
         cuePanel.appendChild(cueTitle);
 
-        const cuesNoise = currentEncounter.cueNoise ?? 0;
-        const physical = sliceCuesByNoise(currentEncounter.physicalCues, cuesNoise);
-        const verbal = sliceCuesByNoise(currentEncounter.verbalCues, cuesNoise);
+        const cuesNoise = encounter?.cueNoise ?? 0;
+        const physical = sliceCuesByNoise(encounter?.physicalCues, cuesNoise);
+        const verbal = sliceCuesByNoise(encounter?.verbalCues, cuesNoise);
 
         const phys = document.createElement("div");
         phys.className = "small-text cue-line";
@@ -19192,6 +19403,24 @@ function ensureProgLoaded() {
         cuePanel.appendChild(verb);
 
         stepContent.appendChild(cuePanel);
+      }
+
+      function renderStepTable(stepContent, stepButtons) {
+        appendEncounterTableScene(stepContent, currentEncounter);
+
+        const hint = document.createElement("div");
+        hint.className = "small-text encounter-hint";
+        hint.innerText = "Read the table first. The guest depiction and cues set up the next call.";
+        stepContent.appendChild(hint);
+
+        addStepButton("CONTINUE TO GUEST READ", () => {
+          currentStep = 2;
+          renderEncounterStep();
+        }, stepButtons);
+      }
+
+      function renderStepObserve(stepContent, stepButtons) {
+        renderLatestReactionCueBlock(stepContent, currentEncounter);
 
         const prompt = document.createElement("p");
         prompt.className = "encounter-prompt";
@@ -19218,7 +19447,7 @@ function ensureProgLoaded() {
           allowedReads = [window.GUEST.DECIDER, window.GUEST.BARGAIN_SMART, window.GUEST.GRIEVER];
         }
 
-        const tierUnlocked =
+        const servedTier =
           (window.isDemo || window.bcMode === "demo")
             ? 1
             : (typeof window.getTierUnlocked === "function" ? window.getTierUnlocked() : 1);
@@ -19226,7 +19455,7 @@ function ensureProgLoaded() {
         console.log("[BC][GUEST_UNLOCK]", {
           encounterIndex,
           encounterNumber: currentEncounter?.encounterNumber,
-          tierUnlocked,
+          servedTier,
           allowedReads,
           allowedCount: allowedReads?.length
         });
@@ -19259,7 +19488,7 @@ function ensureProgLoaded() {
         const lockInBtn = addStepButton("LOCK IN", () => {
           window.evaluateChecks?.(currentEncounter);
           commitEncounterStepReaction(currentEncounter, "observe");
-          showStepReactionPreview("observe", 2);
+          showStepReactionPreview("observe", 3);
         }, stepButtons);
         if (!currentEncounter.guestReadSelected) lockInBtn.disabled = true;
       }
@@ -19296,7 +19525,7 @@ function ensureProgLoaded() {
         const unlockedModes = getUnlockedModesForCurrentPlayer();
         const allowedModes = unlockedModes.length
           ? unlockedModes
-          : [window.MODES.SCOUT, window.MODES.GUIDE, window.MODES.CHARM]
+          : [window.MODES.GUIDE, window.MODES.CHARM, window.MODES.AUTH]
               .map(canonicalModeFromUi)
               .filter(Boolean);
 
@@ -19331,279 +19560,616 @@ function ensureProgLoaded() {
         const contBtn = addStepButton("CONTINUE", () => {
           window.evaluateChecks?.(currentEncounter);
           commitEncounterStepReaction(currentEncounter, "mode");
-          showStepReactionPreview("mode", 3);
+          showStepReactionPreview("mode", 4);
         }, stepButtons);
         if (!currentEncounter.modeSelected) contBtn.disabled = true;
+      }
+
+      function getFlashLearnFacts(encounter) {
+        const wine = encounter?.wineSelected || {};
+        const fruit = Array.isArray(wine.fruitTags) && wine.fruitTags.length
+          ? wine.fruitTags.join(", ")
+          : "clean fruit";
+        const texture = Array.isArray(wine.textureTags) && wine.textureTags.length
+          ? wine.textureTags.join(", ")
+          : "balanced texture";
+        const oak = String(wine.oakLevel || "unoaked").toLowerCase();
+        const process = String(wine.process || "classic cellar work");
+        const region = String(wine.region || "the list");
+        const story = String(wine.story || `${wine.varietal || "This wine"} stays clear and easy to place at the table.`);
+        return [
+          { title: "Flash 1", body: `${wine.name || "This bottle"} is a ${wine.varietal || "wine"} from ${region}.` },
+          { title: "Flash 2", body: `Fruit profile: ${fruit}.` },
+          { title: "Flash 3", body: `Texture cue: ${texture}.` },
+          { title: "Flash 4", body: `Oak and process: ${oak}, with ${process}.` },
+          { title: "Flash 5", body: `${story}` },
+        ];
+      }
+
+      function clearFlashLearnTimer(encounter) {
+        if (encounter?.__flashLearnTimer) {
+          clearTimeout(encounter.__flashLearnTimer);
+          encounter.__flashLearnTimer = null;
+        }
+      }
+
+      function deriveFlashLearnProgress(encounter) {
+        const facts = getFlashLearnFacts(encounter);
+        const startedAt = Number(encounter?.flashLearnStartedAt || 0);
+        if (!startedAt) {
+          return { facts, index: 0, completed: false, activeFact: facts[0] || null };
+        }
+        const elapsed = Math.max(0, Date.now() - startedAt);
+        const index = Math.min(facts.length - 1, Math.floor(elapsed / 3000));
+        const completed = elapsed >= facts.length * 3000;
+        return {
+          facts,
+          index,
+          completed,
+          activeFact: facts[index] || null,
+        };
+      }
+
+      function scheduleFlashLearnTick(encounter) {
+        clearFlashLearnTimer(encounter);
+        const progress = deriveFlashLearnProgress(encounter);
+        if (progress.completed || !encounter?.flashLearnStartedAt) return;
+        encounter.__flashLearnTimer = setTimeout(() => {
+          if (currentEncounter === encounter && currentStep === 4) {
+            renderEncounterStep();
+          }
+        }, 250);
+      }
+
+      function makeTwoOptionPrompt(left, right, intro = "") {
+        const prefix = intro ? `${intro} ` : "";
+        return `${prefix}Do you prefer ${left}, or ${right}?`;
+      }
+
+      function buildPromptIntro(label, promptKind) {
+        if (!label) return "";
+        return promptKind === "statement" ? `${label}:` : `${label}`;
+      }
+
+      function createDeliverPrompt({
+        id,
+        tier,
+        hookType,
+        family,
+        promptKind = "question",
+        intro = "",
+        question = "",
+        left,
+        right,
+        wordTheme = "",
+      }) {
+        const promptPrefix = buildPromptIntro(intro, promptKind);
+        const promptQuestion = String(question || "").trim() || `${promptPrefix ? `${promptPrefix} ` : ""}Do you prefer:`;
+        return {
+          id,
+          tier,
+          hookType,
+          family,
+          promptKind,
+          wordTheme,
+          left,
+          right,
+          question: promptQuestion,
+          answers: [left, right],
+          text: promptQuestion,
+        };
+      }
+
+      function ensureProblemSolvePromptCursor(encounter) {
+        const prompts = Array.isArray(encounter?.problemSolvePrompts) ? encounter.problemSolvePrompts : [];
+        const maxIndex = Math.max(0, prompts.length - 1);
+        const rawIndex = Number(encounter?.problemSolvePromptCursor || 0);
+        encounter.problemSolvePromptCursor = Math.max(0, Math.min(maxIndex, Number.isFinite(rawIndex) ? rawIndex : 0));
+        return encounter.problemSolvePromptCursor;
+      }
+
+      function setProblemSolvePromptSelection(encounter, item) {
+        if (!encounter || !item) return;
+        encounter.problemSolveSelectedId = item.id;
+        encounter.problemSolveSelectedPrompt = item;
+        encounter.deliveryLine1 = item.text;
+        encounter.deliveryLine1Key = canonicalDeliveryLine(item.text);
+        encounter.deliveryLine2 = "";
+        encounter.deliveryLine2Key = "";
+        encounter.hookMeta = item;
+      }
+
+      function ensureProblemSolveResponses(encounter) {
+        if (!encounter || typeof encounter !== "object") return {};
+        if (!encounter.problemSolveResponses || typeof encounter.problemSolveResponses !== "object") {
+          encounter.problemSolveResponses = {};
+        }
+        return encounter.problemSolveResponses;
+      }
+
+      function getProblemSolveAnswerIndex(encounter, promptId) {
+        const responses = ensureProblemSolveResponses(encounter);
+        const raw = responses[promptId];
+        const idx = Number(raw);
+        return Number.isInteger(idx) && idx >= 0 ? idx : null;
+      }
+
+      function setProblemSolveAnswer(encounter, prompt, answerIndex) {
+        const responses = ensureProblemSolveResponses(encounter);
+        responses[prompt.id] = Number(answerIndex);
+        const answers = Array.isArray(prompt?.answers) ? prompt.answers : [prompt?.left, prompt?.right];
+        const selectedAnswerText = String(answers?.[answerIndex] || "").trim();
+        const enrichedPrompt = {
+          ...prompt,
+          selectedAnswerIndex: Number(answerIndex),
+          selectedAnswerText,
+        };
+        encounter.problemSolveSelectedId = prompt.id;
+        encounter.problemSolveSelectedPrompt = enrichedPrompt;
+        encounter.deliveryLine1 = selectedAnswerText || prompt.text;
+        encounter.deliveryLine1Key = canonicalDeliveryLine(encounter.deliveryLine1);
+        encounter.deliveryLine2 = prompt.question || "";
+        encounter.deliveryLine2Key = canonicalDeliveryLine(encounter.deliveryLine2);
+        encounter.hookMeta = enrichedPrompt;
+      }
+
+      function areProblemSolvePromptsComplete(encounter) {
+        const prompts = Array.isArray(encounter?.problemSolvePrompts) ? encounter.problemSolvePrompts : [];
+        if (!prompts.length) return false;
+        return prompts.every((prompt) => getProblemSolveAnswerIndex(encounter, prompt.id) !== null);
+      }
+
+      function getDeliverySectionLabel(prompt, index, total) {
+        const kind = String(prompt?.promptKind || "question").toLowerCase();
+        const kindLabel = kind === "statement" ? "STATEMENT QUESTION" : "QUESTION";
+        return `INSTANCE ${index + 1} OF ${total} — ${kindLabel}`;
+      }
+
+      function getDeliveryAnswerRole(prompt, answerIndex) {
+        const family = String(prompt?.family || "").toLowerCase();
+        const theme = String(prompt?.wordTheme || "").toLowerCase();
+
+        if (family === "dictator" || theme === "fully_informative") {
+          return answerIndex === 0 ? "FRAME" : "REFRAME";
+        }
+        if (family === "bargain-smart" || theme === "value words") {
+          return answerIndex === 0 ? "JUSTIFY" : "CLOSE";
+        }
+        if (family === "griever" || theme === "emotional words") {
+          return answerIndex === 0 ? "SOFTEN" : "STEADY";
+        }
+        if (family === "fancy" || theme === "hype words") {
+          return answerIndex === 0 ? "ELEVATE" : "SHOWCASE";
+        }
+        if (family === "celebrator" || theme === "celebration words") {
+          return answerIndex === 0 ? "LIFT" : "TOAST";
+        }
+
+        return answerIndex === 0 ? "OPTION A" : "OPTION B";
+      }
+
+      function renderProblemSolvePromptSequence(container, encounter, options = {}) {
+        if (!container || !encounter) return null;
+        const prompts = Array.isArray(encounter.problemSolvePrompts) ? encounter.problemSolvePrompts : [];
+        if (!prompts.length) return null;
+        const chosenGuest = normalizeGuestType(encounter?.guestReadSelected || encounter?.guestStateActual);
+        const rerender = typeof options.onRender === "function"
+          ? options.onRender
+          : () => renderEncounterStep?.();
+        const cursor = ensureProblemSolvePromptCursor(encounter);
+        const current = prompts[cursor] || prompts[0];
+        const familyLabel = String(current?.family || chosenGuest || "guest");
+
+        const card = document.createElement("div");
+        card.className = "card";
+        card.style.marginTop = options.tight ? "10px" : "14px";
+        card.style.padding = "14px";
+        const chosenAnswerIndex = getProblemSolveAnswerIndex(encounter, current.id);
+        card.innerHTML = `
+          <div class="option-title" style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px;">
+            <span>${escapeHtml(`Table Prompt ${cursor + 1}`)}</span>
+            <span class="small-text" style="opacity:.74; text-transform:uppercase; letter-spacing:.04em;">${escapeHtml(familyLabel)}</span>
+          </div>
+          <div class="option-preview" style="margin-bottom:10px;">${escapeHtml(current?.question || "Do you prefer:")}</div>
+          ${current?.contextLine ? `<div class="small-text" style="opacity:.72;">${escapeHtml(current.contextLine)}</div>` : ``}
+        `;
+
+        const answers = document.createElement("div");
+        answers.className = "option-grid";
+        answers.style.marginTop = "12px";
+        (Array.isArray(current?.answers) ? current.answers : [current?.left, current?.right])
+          .filter(Boolean)
+          .forEach((answerText, answerIndex) => {
+            const answerBtn = document.createElement("button");
+            answerBtn.type = "button";
+            answerBtn.className = "option-btn" + (chosenAnswerIndex === answerIndex ? " selected" : "");
+            answerBtn.innerHTML = `
+              <div class="option-title" style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                <span>${escapeHtml(answerIndex === 0 ? "Option A" : "Option B")}</span>
+                <span class="small-text" style="opacity:.74; text-transform:uppercase; letter-spacing:.04em;">${escapeHtml(getDeliveryAnswerRole(current, answerIndex))}</span>
+              </div>
+              <div class="option-preview" style="margin-top:10px;">${escapeHtml(answerText)}</div>
+            `;
+            bindInput(answerBtn, () => {
+              setProblemSolveAnswer(encounter, current, answerIndex);
+              if (cursor < prompts.length - 1) {
+                encounter.problemSolvePromptCursor = cursor + 1;
+              }
+              if (typeof options.onAnswer === "function") {
+                options.onAnswer(current, answerIndex);
+                return;
+              }
+              rerender();
+            });
+            answers.appendChild(answerBtn);
+          });
+        card.appendChild(answers);
+
+        container.appendChild(card);
+        return current;
+      }
+
+      function buildProblemSolvePrompts(encounter) {
+        const wine = encounter?.wineSelected || {};
+        const guest = normalizeGuestType(encounter?.guestReadSelected || encounter?.guestStateActual);
+        const wineName = String(wine.name || "this bottle").trim();
+        const toneTag = String(encounter?.toneTag || "balanced").trim().toLowerCase();
+        const contextLine = String(encounter?.contextLine || encounter?.baseContextLine || "The table needs a bottle that fits the moment.").trim();
+        const guestLine = String(encounter?.guestLine || "").trim();
+        const fruit = Array.isArray(wine.fruitTags) && wine.fruitTags.length
+          ? wine.fruitTags[0].toLowerCase()
+          : "fresh fruit";
+        const texture = Array.isArray(wine.textureTags) && wine.textureTags.length
+          ? wine.textureTags[0].toLowerCase()
+          : "balanced texture";
+        const secondaryTexture = Array.isArray(wine.textureTags) && wine.textureTags.length > 1
+          ? wine.textureTags[1].toLowerCase()
+          : texture;
+        const oak = String(wine.oakLevel || "unoaked").toLowerCase();
+        const region = String(wine.region || "the list").trim();
+        const story = String(wine.story || `${wineName} gives the table a clear lane.`).trim();
+        const storyLead = tokenizeWords(story).slice(0, 2).join(" ") || "table energy";
+        const contextLead = contextLine.replace(/\.+$/, "");
+        const serviceLine = guestLine ? guestLine.replace(/^["']|["']$/g, "") : `For a table like this, ${wineName} needs to land quickly.`;
+
+        const byGuest = {
+          [window.GUEST.DECIDER]: [
+            createDeliverPrompt({
+              id: "dictator_1",
+              tier: "right",
+              hookType: "guest_centered",
+              family: "dictator",
+              promptKind: "question",
+              question: `${contextLead} Do you prefer leading with the direct ${fruit} call in ${wineName}, or the firmer ${texture} call in ${wineName}?`,
+              left: `${wineName} gives this table a direct ${fruit} answer and keeps the tone ${toneTag}.`,
+              right: `${wineName} gives this table a firmer ${texture} answer and closes the choice fast.`,
+              wordTheme: "fully_informative",
+              contextLine,
+            }),
+          ],
+          [window.GUEST.BARGAIN_SMART]: [
+            createDeliverPrompt({
+              id: "bargain_1",
+              tier: "right",
+              hookType: "guest_centered",
+              family: "bargain-smart",
+              promptKind: "question",
+              question: `${contextLead} Do you prefer the cleaner-value ${fruit} line for ${wineName}, or the fuller-value ${texture} line?`,
+              left: `${wineName} gives the table clean value through ${fruit} and an easy yes.`,
+              right: `${wineName} gives the table fuller value through ${texture} and more bottle presence.`,
+              wordTheme: "value words",
+              contextLine,
+            }),
+            createDeliverPrompt({
+              id: "bargain_2",
+              tier: "neutral",
+              hookType: "diagnostic",
+              family: "bargain-smart",
+              promptKind: "question",
+              question: `${serviceLine} Do you prefer the steady-value ${region} line, or the stronger-value ${secondaryTexture} line?`,
+              left: `${region} keeps the value read steady and makes ${wineName} easy to trust.`,
+              right: `${secondaryTexture} gives ${wineName} a stronger-value edge without pushing the spend.`,
+              wordTheme: "value words",
+              contextLine,
+            }),
+            createDeliverPrompt({
+              id: "bargain_3",
+              tier: "neutral",
+              hookType: "diagnostic",
+              family: "bargain-smart",
+              promptKind: "question",
+              question: `${contextLead} Do you prefer the smart-value line that lands clean, or the stretch-value line that adds more to the table?`,
+              left: `${wineName} is the smart-value pour: clear, useful, and right for this table.`,
+              right: `${wineName} is the stretch-value bottle: still smart, with more shape for the table.`,
+              wordTheme: "value words",
+              contextLine,
+            }),
+            createDeliverPrompt({
+              id: "bargain_4",
+              tier: "wrong",
+              hookType: "outcome_centered",
+              family: "bargain-smart",
+              promptKind: "statement",
+              question: `This table wants value that still feels considered. Do you prefer the premium-value line, or the status-value line for ${wineName}?`,
+              left: `${wineName} reads as premium value: worth it for what the table gets in the glass.`,
+              right: `${wineName} reads as status value: a more elevated feel without losing the smart buy.`,
+              wordTheme: "value words",
+              contextLine,
+            }),
+          ],
+          [window.GUEST.GRIEVER]: [
+            createDeliverPrompt({
+              id: "griever_1",
+              tier: "right",
+              hookType: "guest_centered",
+              family: "griever",
+              promptKind: "question",
+              question: `${contextLead} Do you prefer the softer ${fruit} line for ${wineName}, or the calmer ${texture} line?`,
+              left: `${wineName} feels soft and comforting, with ${fruit} that settles the table.`,
+              right: `${wineName} feels calm and reassuring, with ${texture} that keeps the table steady.`,
+              wordTheme: "emotional words",
+              contextLine,
+            }),
+            createDeliverPrompt({
+              id: "griever_2",
+              tier: "neutral",
+              hookType: "diagnostic",
+              family: "griever",
+              promptKind: "question",
+              question: `${serviceLine} Do you prefer the gentler ${region} line, or the steadier ${secondaryTexture} line?`,
+              left: `${wineName} from ${region} keeps the table in a gentler, easygoing place.`,
+              right: `${wineName} brings a steadier ${secondaryTexture} feel that supports the table softly.`,
+              wordTheme: "emotional words",
+              contextLine,
+            }),
+            createDeliverPrompt({
+              id: "griever_3",
+              tier: "wrong",
+              hookType: "outcome_centered",
+              family: "griever",
+              promptKind: "statement",
+              question: `The table needs care more than pressure. Do you prefer the gentle-comfort line, or the quiet-support line for ${wineName}?`,
+              left: `${wineName} keeps the table comfortable and never pushes harder than it should.`,
+              right: `${wineName} supports the table quietly and lets the decision feel safe.`,
+              wordTheme: "emotional words",
+              contextLine,
+            }),
+          ],
+          [window.GUEST.FANCY]: [
+            createDeliverPrompt({
+              id: "fancy_1",
+              tier: "right",
+              hookType: "guest_centered",
+              family: "fancy",
+              promptKind: "question",
+              question: `${contextLead} Do you prefer the polished ${fruit} line for ${wineName}, or the more luxe ${oak === "unoaked" ? texture : oak} line?`,
+              left: `${wineName} lands polished and elevated, with ${fruit} that keeps the table looking sharp.`,
+              right: `${wineName} lands luxe and high-style, with ${oak === "unoaked" ? texture : oak} giving the table more show.`,
+              wordTheme: "hype words",
+              contextLine,
+            }),
+            createDeliverPrompt({
+              id: "fancy_2",
+              tier: "neutral",
+              hookType: "diagnostic",
+              family: "fancy",
+              promptKind: "statement",
+              question: `This table responds to polish and finish. Do you prefer the sleek-standout line, or the dramatic-glossy line for ${wineName}?`,
+              left: `${wineName} feels sleek and standout, with ${secondaryTexture} that sharpens the whole table.`,
+              right: `${wineName} feels dramatic and glossy, with ${storyLead} turning the bottle into a moment.`,
+              wordTheme: "hype words",
+              contextLine,
+            }),
+            createDeliverPrompt({
+              id: "fancy_3",
+              tier: "wrong",
+              hookType: "outcome_centered",
+              family: "fancy",
+              promptKind: "statement",
+              question: `The table wants style in the line. Do you prefer the elevated-finish line, or the showcase-finish line for ${wineName}?`,
+              left: `${wineName} gives the table an elevated finish that feels considered from the first line.`,
+              right: `${wineName} gives the table a showcase finish that lifts the whole recommendation.`,
+              wordTheme: "hype words",
+              contextLine,
+            }),
+          ],
+          [window.GUEST.CELEBRATOR]: [
+            createDeliverPrompt({
+              id: "celebrator_1",
+              tier: "right",
+              hookType: "guest_centered",
+              family: "celebrator",
+              promptKind: "question",
+              question: `${contextLead} Do you prefer the lively ${fruit} line for ${wineName}, or the bigger ${texture} line for this table?`,
+              left: `${wineName} keeps the table lively with ${fruit} and a ready-to-share feel.`,
+              right: `${wineName} gives the table a bigger ${texture} moment and a stronger toast energy.`,
+              wordTheme: "celebration words",
+              contextLine,
+            }),
+            createDeliverPrompt({
+              id: "celebrator_2",
+              tier: "neutral",
+              hookType: "diagnostic",
+              family: "celebrator",
+              promptKind: "question",
+              question: `${serviceLine} Do you prefer the social-share line, or the festive-table line for ${wineName}?`,
+              left: `${wineName} is the social bottle everyone at the table can jump into fast.`,
+              right: `${wineName} is the festive bottle that gives the table more shape without losing the mood.`,
+              wordTheme: "celebration words",
+              contextLine,
+            }),
+            createDeliverPrompt({
+              id: "celebrator_3",
+              tier: "neutral",
+              hookType: "diagnostic",
+              family: "celebrator",
+              promptKind: "statement",
+              question: `The bottle should keep the moment moving. Do you prefer the upbeat-momentum line, or the bright-toast line for ${wineName}?`,
+              left: `${wineName} keeps the moment moving and lets the table stay upbeat.`,
+              right: `${wineName} keeps the toast feeling bright, easy, and shared.`,
+              wordTheme: "celebration words",
+              contextLine,
+            }),
+            createDeliverPrompt({
+              id: "celebrator_4",
+              tier: "wrong",
+              hookType: "outcome_centered",
+              family: "celebrator",
+              promptKind: "statement",
+              question: `The table still needs the bottle to feel like the moment. Do you prefer the lifted-celebration line, or the shared-toast line for ${wineName}?`,
+              left: `${wineName} lifts the celebration and keeps the table warm, open, and moving.`,
+              right: `${wineName} gives the table a shared-toast finish with enough shape to hold the moment.`,
+              wordTheme: "celebration words",
+              contextLine,
+            }),
+          ],
+        };
+
+        return byGuest[guest] || byGuest[window.GUEST.DECIDER] || [];
       }
 
       function renderStepHook(stepContent, stepButtons) {
         renderLatestReactionCueBlock(stepContent, currentEncounter);
 
-        debugHookStrictness(currentEncounter);
-
         const topRow = document.createElement("div");
         topRow.className = "history-row encounter-top-row";
 
         const prompt = document.createElement("div");
         prompt.className = "encounter-prompt";
-        prompt.innerText = "Choose your opening angle.";
+        prompt.innerText = "Flash Learn of Wine";
         topRow.appendChild(prompt);
-
-        const helpBtn = createHelpIconButton();
-        topRow.appendChild(helpBtn);
         stepContent.appendChild(topRow);
 
         const hint = document.createElement("div");
         hint.className = "small-text encounter-hint";
-        hint.innerText = "Your first sentence should make the guest lean in.";
+        hint.innerText = "Five wine flashes, three seconds each. Lock the bottle into your head before you solve the table.";
         stepContent.appendChild(hint);
 
-        bindInput(helpBtn, () => {
-          currentEncounter.showHookHelp = !currentEncounter.showHookHelp;
-          renderEncounterStep();
-        });
-
-        if (currentEncounter.showHookHelp) renderHookHelp(stepContent);
-
-        renderStrictRulesBadge(stepContent, currentEncounter);
-
-        const wine = currentEncounter?.wineSelected || {};
-        if (!Array.isArray(currentEncounter.hookOptions) || currentEncounter.hookOptions.length === 0) {
-          currentEncounter.hookOptions = hookPolicy(currentEncounter, wine);
+        const progress = deriveFlashLearnProgress(currentEncounter);
+        if (progress.completed && !currentEncounter.flashLearnCompleted) {
+          currentEncounter.flashLearnCompleted = true;
+          currentEncounter.hookSelected = "flash_learn";
+          currentEncounter.hookSelectedKey = "flash_learn";
+          currentEncounter.hookMeta = {
+            id: "flash_learn",
+            hookType: "guest_centered",
+            text: progress.facts.map((fact) => fact.body).join(" "),
+            tier: "right",
+          };
         }
-        const opts = currentEncounter.hookOptions;
 
-        const options = document.createElement("div");
-        options.className = "option-grid";
+        const card = document.createElement("div");
+        card.className = "card flash-learn-frame";
+        card.style.padding = "22px";
+        card.style.minHeight = "220px";
+        card.style.display = "flex";
+        card.style.flexDirection = "column";
+        card.style.justifyContent = "center";
+        card.innerHTML = `
+          <div class="small-text" style="opacity:.72; margin-bottom:8px;">
+            ${currentEncounter.flashLearnCompleted ? "Flash Learn complete" : currentEncounter.flashLearnStartedAt ? `Flash ${progress.index + 1} of ${progress.facts.length}` : "Ready to start"}
+          </div>
+          <div style="font-weight:700; margin-bottom:12px; font-size:1.05rem;">${escapeHtml(progress.activeFact?.title || "Flash Learn")}</div>
+          <div style="font-size:1.05rem; line-height:1.55;">${escapeHtml(progress.activeFact?.body || "Start the sequence to cycle through the wine information.")}</div>
+        `;
+        stepContent.appendChild(card);
 
-        console.log("[DRILL] hook opts", opts);
+        if (currentEncounter.flashLearnStartedAt && !currentEncounter.flashLearnCompleted) {
+          scheduleFlashLearnTick(currentEncounter);
+        }
 
-        opts.forEach((opt) => {
-          console.log("[HOOK_OPTION]", opt.id, opt.hookType, "tier:", opt.tier);
-
-          const hookType = String(opt.hookType || opt.id || opt.text || "").trim();
-          const key = String(opt.id || "") + "::" + hookType;
-          const btn = document.createElement("button");
-          btn.type = "button";
-
-          const selected = String(currentEncounter.hookSelectedKey || "") === key;
-          btn.className = "option-btn" + (selected ? " selected" : "");
-
-          const primary = document.createElement("div");
-          primary.className = "option-title";
-          primary.innerText = uiHookIntentLabelScaled(
-            hookType,
-            currentEncounter.guestStateActual,
-            currentEncounter,
-            "game"
-          );
-
-          const secondary = document.createElement("div");
-          secondary.className = "option-subtitle";
-          secondary.innerText = uiHookSubtitleLabel(hookType);
-
-          btn.innerHTML = "";
-          btn.appendChild(primary);
-          btn.appendChild(secondary);
-
-          if (opt.text) {
-            const preview = document.createElement("div");
-            preview.className = "option-preview";
-            preview.innerText = String(opt.text).trim();
-            btn.appendChild(preview);
-          }
-
-          bindInput(btn, () => {
-            currentEncounter.hookSelectedKey = key;
-            currentEncounter.hookSelected = hookType;
-            currentEncounter.hookMeta = {
-              ...opt,
-              hookType
-            };
-            if (sessionType === "tournament") {
-              scheduleTournamentCheckpoint("choice_update");
-            }
-            renderEncounterStep();
-          });
-
-          options.appendChild(btn);
-        });
-
-        stepContent.appendChild(options);
-
-        const contBtn = addStepButton(
-          "CONTINUE",
+        const actionBtn = addStepButton(
+          currentEncounter.flashLearnCompleted ? "CONTINUE" : currentEncounter.flashLearnStartedAt ? "PLAYING..." : "START FLASH LEARN",
           () => {
+            if (!currentEncounter.flashLearnStartedAt) {
+              currentEncounter.flashLearnStartedAt = Date.now();
+              currentEncounter.flashLearnCompleted = false;
+              scheduleFlashLearnTick(currentEncounter);
+              renderEncounterStep();
+              return;
+            }
+            if (!currentEncounter.flashLearnCompleted) return;
+            clearFlashLearnTimer(currentEncounter);
             window.evaluateChecks?.(currentEncounter);
-            commitEncounterStepReaction(currentEncounter, "hook");
-            showStepReactionPreview("hook", 4);
+            currentStep = 5;
+            renderEncounterStep();
           },
           stepButtons
         );
-
-        const ready = !!currentEncounter.hookSelected;
-        contBtn.disabled = !ready;
-        if (ready) contBtn.removeAttribute("disabled");
+        actionBtn.disabled = !!currentEncounter.flashLearnStartedAt && !currentEncounter.flashLearnCompleted;
       }
 
       function renderStepDelivery(stepContent, stepButtons) {
         renderLatestReactionCueBlock(stepContent, currentEncounter);
-
-        function renderDeliverySelectionPreview() {
-          const preview = document.createElement("div");
-          preview.className = "card";
-          preview.style.marginTop = "14px";
-          preview.style.padding = "12px";
-
-          const line1 = String(currentEncounter.deliveryLine1 || "").trim();
-          const line2 = String(currentEncounter.deliveryLine2 || "").trim();
-          const hasAny = !!line1 || !!line2;
-
-          preview.innerHTML = `
-            <div class="small-text" style="opacity:.72; margin-bottom:8px;">Current delivery</div>
-            <div style="display:flex; flex-direction:column; gap:8px;">
-              <div class="small-text" style="opacity:${line1 ? ".96" : ".58"};">
-                <strong>Line 1:</strong> ${escapeHtml(line1 || "Choose the emotional-fit sentence.")}
-              </div>
-              <div class="small-text" style="opacity:${line2 ? ".96" : ".58"};">
-                <strong>Line 2:</strong> ${escapeHtml(line2 || "Choose the recommendation sentence.")}
-              </div>
-            </div>
-            <div class="small-text" style="margin-top:10px; opacity:.7;">
-              ${hasAny ? "Tap a selected option again to change your phrasing." : "Build the full two-sentence recommendation before you say it."}
-            </div>
-          `;
-
-          stepContent.appendChild(preview);
-        }
-
         const topRow = document.createElement("div");
         topRow.className = "history-row encounter-top-row";
 
         const prompt = document.createElement("div");
         prompt.className = "encounter-prompt";
-        prompt.innerText = "Build the 2-sentence delivery.";
+        prompt.innerText = "Problem Solve";
         topRow.appendChild(prompt);
-
-        const helpBtn = createHelpIconButton();
-        topRow.appendChild(helpBtn);
         stepContent.appendChild(topRow);
 
-        bindInput(helpBtn, () => {
-          currentEncounter.showDeliveryHelp = !currentEncounter.showDeliveryHelp;
-          renderEncounterStep();
+        currentEncounter.problemSolvePrompts = buildProblemSolvePrompts(currentEncounter);
+        const wine = currentEncounter?.wineSelected || {};
+        const wineCard = document.createElement("div");
+        wineCard.className = "card";
+        wineCard.style.padding = "12px";
+        wineCard.style.marginTop = "14px";
+        const tags = [
+          ...(Array.isArray(wine.fruitTags) ? wine.fruitTags : []),
+          ...(Array.isArray(wine.textureTags) ? wine.textureTags : []),
+        ].filter(Boolean).slice(0, 3);
+        wineCard.innerHTML = `
+          <div class="small-text" style="opacity:.72; margin-bottom:8px;">Wine</div>
+          <div style="font-weight:700;">${escapeHtml(
+            `${wine.name || "Wine"}${wine.region ? ` — ${wine.region}` : ""}${wine.varietal ? ` (${wine.varietal})` : ""}`
+          )}</div>
+          ${tags.length ? `<div class="small-text" style="margin-top:8px; opacity:.78;">${escapeHtml(tags.join(" • "))}</div>` : ``}
+        `;
+        stepContent.appendChild(wineCard);
+
+        const sequenceHeader = document.createElement("div");
+        sequenceHeader.className = "card";
+        sequenceHeader.style.padding = "12px";
+        sequenceHeader.style.marginTop = "14px";
+        sequenceHeader.innerHTML = `
+          <div style="font-weight:700;">Build the prompt</div>
+        `;
+        stepContent.appendChild(sequenceHeader);
+
+        renderProblemSolvePromptSequence(stepContent, currentEncounter, {
+          onAnswer: (_item, _answerIndex) => {
+            if (sessionType === "tournament") {
+              scheduleTournamentCheckpoint("choice_update");
+            }
+            renderEncounterStep();
+          },
         });
 
-        if (currentEncounter.showDeliveryHelp) renderDeliveryHelp(stepContent);
+        const selectedPreview = document.createElement("div");
+        selectedPreview.className = "card";
+        selectedPreview.style.marginTop = "14px";
+        selectedPreview.style.padding = "12px";
+        const answeredCount = (currentEncounter.problemSolvePrompts || []).filter((prompt) =>
+          getProblemSolveAnswerIndex(currentEncounter, prompt.id) !== null
+        ).length;
+        const latestAnswer =
+          currentEncounter.problemSolveSelectedPrompt?.selectedAnswerText ||
+          currentEncounter.deliveryLine1 ||
+          "Choose 1 of the 2 answer options for each problem-solve prompt.";
+        selectedPreview.innerHTML = `
+          <div class="small-text" style="opacity:.72; margin-bottom:8px;">Problem Solve progress</div>
+          <div>${escapeHtml(`${answeredCount} of ${(currentEncounter.problemSolvePrompts || []).length || 0} prompts answered`)}</div>
+          <div class="small-text" style="margin-top:8px; opacity:.78;">${escapeHtml(latestAnswer)}</div>
+        `;
+        stepContent.appendChild(selectedPreview);
 
-        const reminder = document.createElement("div");
-        reminder.className = "notice encounter-reminder";
-        reminder.innerText = "First create emotional fit, then make the recommendation clear.";
-        stepContent.appendChild(reminder);
-
-        if (!currentEncounter.deliverOptionsS1 || !currentEncounter.deliverOptionsS2) initDeliverOptions(currentEncounter);
-
-        const line1Title = document.createElement("p");
-        line1Title.className = "encounter-section-title encounter-section-title-spaced";
-        line1Title.innerText = "Sentence 1 — Create emotional fit";
-        stepContent.appendChild(line1Title);
-
-        const line1Options = document.createElement("div");
-        line1Options.className = "option-grid";
-        Object.keys(currentEncounter.deliverOptionsS1 || {})
-          .sort((a, b) => String(a).localeCompare(String(b)))
-          .forEach(slot => {
-          const btn = document.createElement("button");
-          btn.type = "button";
-          btn.className = "option-btn" + (String(currentEncounter.selectedS1) === String(slot) ? " selected" : "");
-          const descriptor = classifyDeliveryLine(currentEncounter.deliverOptionsS1[slot], "emotional");
-          btn.innerHTML = `
-            <div class="option-title" style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
-              <span>Option ${escapeHtml(String(slot))}</span>
-              <span class="small-text" style="opacity:.74; text-transform:uppercase; letter-spacing:.04em;">${escapeHtml(descriptor.tag)}</span>
-            </div>
-            <div class="option-preview">${escapeHtml(currentEncounter.deliverOptionsS1[slot])}</div>
-            <div class="small-text" style="margin-top:6px; opacity:.7;">${escapeHtml(descriptor.note)}</div>
-          `;
-          btn.dataset.bc = "deliver_s1";
-          btn.dataset.slot = String(slot);
-          bindInput(btn, () => {
-            if (String(currentEncounter.selectedS1) === String(slot)) {
-              currentEncounter.selectedS1 = null;
-              currentEncounter.deliveryLine1 = "";
-              currentEncounter.deliveryLine1Key = "";
-            } else {
-              currentEncounter.selectedS1 = slot;
-              currentEncounter.deliveryLine1 = currentEncounter.deliverOptionsS1[slot];
-              currentEncounter.deliveryLine1Key = canonicalDeliveryLine(currentEncounter.deliverOptionsS1[slot]);
-            }
-            console.log("[STEP4] S1 handler ran ✅", slot);
-            if (sessionType === "tournament") {
-              scheduleTournamentCheckpoint("choice_update");
-            }
-            renderEncounterStep();
-          });
-          line1Options.appendChild(btn);
-          });
-        stepContent.appendChild(line1Options);
-
-        const line2Title = document.createElement("p");
-        line2Title.className = "encounter-section-title encounter-section-title-spaced";
-        line2Title.innerText = "Sentence 2 — Make the choice clear";
-        stepContent.appendChild(line2Title);
-
-        const line2Options = document.createElement("div");
-        line2Options.className = "option-grid";
-        Object.keys(currentEncounter.deliverOptionsS2 || {})
-          .sort((a, b) => String(a).localeCompare(String(b)))
-          .forEach(slot => {
-          const btn = document.createElement("button");
-          btn.type = "button";
-          btn.className = "option-btn" + (String(currentEncounter.selectedS2) === String(slot) ? " selected" : "");
-          const descriptor = classifyDeliveryLine(currentEncounter.deliverOptionsS2[slot], "structural");
-          btn.innerHTML = `
-            <div class="option-title" style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
-              <span>Option ${escapeHtml(String(slot))}</span>
-              <span class="small-text" style="opacity:.74; text-transform:uppercase; letter-spacing:.04em;">${escapeHtml(descriptor.tag)}</span>
-            </div>
-            <div class="option-preview">${escapeHtml(currentEncounter.deliverOptionsS2[slot])}</div>
-            <div class="small-text" style="margin-top:6px; opacity:.7;">${escapeHtml(descriptor.note)}</div>
-          `;
-          btn.dataset.bc = "deliver_s2";
-          btn.dataset.slot = String(slot);
-          bindInput(btn, () => {
-            if (String(currentEncounter.selectedS2) === String(slot)) {
-              currentEncounter.selectedS2 = null;
-              currentEncounter.deliveryLine2 = "";
-              currentEncounter.deliveryLine2Key = "";
-            } else {
-              currentEncounter.selectedS2 = slot;
-              currentEncounter.deliveryLine2 = currentEncounter.deliverOptionsS2[slot];
-              currentEncounter.deliveryLine2Key = canonicalDeliveryLine(currentEncounter.deliverOptionsS2[slot]);
-            }
-            console.log("[STEP4] S2 handler ran ✅", slot);
-            if (sessionType === "tournament") {
-              scheduleTournamentCheckpoint("choice_update");
-            }
-            renderEncounterStep();
-          });
-          line2Options.appendChild(btn);
-          });
-        stepContent.appendChild(line2Options);
-
-        renderDeliverySelectionPreview();
-
-        const sayBtn = addStepButton("SAY IT", () => {
-          ensureDeliverReactionCommitted(currentEncounter);
-          showStepReactionPreview("deliver", 5);
+        const sayBtn = addStepButton("LOCK PROMPT", () => {
+          ensureProblemSolveReactionCommitted(currentEncounter);
+          showStepReactionPreview("problem_solve", 6);
         }, stepButtons);
-        const ready =
-          (currentEncounter.selectedS1 != null) &&
-          (currentEncounter.selectedS2 != null);
-        console.log("[STEP4] READY?", ready, {
-          selectedS1: currentEncounter.selectedS1,
-          selectedS2: currentEncounter.selectedS2
-        });
+        const ready = areProblemSolvePromptsComplete(currentEncounter);
         sayBtn.disabled = !ready;
         if (ready) sayBtn.removeAttribute("disabled");
       }
@@ -19698,12 +20264,12 @@ function ensureProgLoaded() {
 
         currentEncounter.chainScore = result.chainScore;
         currentEncounter.chainSignal = result.chainSignal;
-        currentEncounter.__decider = result.__decider;
-        if (result.__decider?.signal === "DECIDER_FRICTION") {
+        currentEncounter.__dictator = result.__dictator;
+        if (result.__dictator?.signal === "DICTATOR_FRICTION") {
           currentEncounter.chainSignalDetail =
             "They’re not resisting the wine — they’re resisting time waste. Tighten the path.";
         }
-        if (result.__decider?.signal === "DECIDER_TRUST_GAINED") {
+        if (result.__dictator?.signal === "DICTATOR_TRUST_GAINED") {
           currentEncounter.chainSignalDetail =
             "They relax because you made it fast, safe, and inevitable.";
         }
@@ -19762,7 +20328,7 @@ function ensureProgLoaded() {
           const upgraded = rollPremiumOpportunity(result, currentEncounter);
           stepContent.appendChild(document.createTextNode(upgraded ? "✅ Upgrade. “Nice — that’s the move.”" : "✅ Nod. “Perfect.”"));
           appendFeedbackLine(stepContent, bcFeedbackFromOutcome(reactionChecks, result));
-          addStepButton("REFLECT", () => { goToStep(6); }, bar);
+          addStepButton("REFLECT", () => { goToStep(7); }, bar);
           return true;
         }
 
@@ -19780,6 +20346,8 @@ function ensureProgLoaded() {
             currentEncounter.recoveryCorrectMode = resolvedMode;
             currentEncounter.recoveryCorrectModeResolved = resolvedMode;
             currentEncounter.recoveryChoice = "";
+            currentEncounter.recoveryChoiceCategory = "";
+            currentEncounter.recoveryChoiceTone = "";
             currentEncounter.recoveryCorrect = false;
             currentEncounter.resetUsed = false;
             assertModeConsistency(unlockedModes, resolvedMode, {
@@ -19817,7 +20385,7 @@ function ensureProgLoaded() {
           options.className = "option-grid";
 
           const unlockedModes = getUnlockedModesForCurrentPlayer();
-          const recoveryModes = unlockedModes.length ? unlockedModes : [MODES.SCOUT, MODES.GUIDE, MODES.CHARM];
+          const recoveryModes = unlockedModes.length ? unlockedModes : [MODES.GUIDE, MODES.CHARM, MODES.AUTH];
           recoveryModes.forEach(mode => {
             const btn = document.createElement("button");
             btn.type = "button";
@@ -19853,11 +20421,11 @@ function ensureProgLoaded() {
           const resetRow = document.createElement("div");
           resetRow.className = "notice";
           resetRow.innerText = resetAllowed
-            ? "Reset available: because you started with HOLD (scout-mapped)."
-            : "Reset not available: only if you started with HOLD (scout-mapped).";
+            ? "Reset available: because you started with GUIDE."
+            : "Reset not available: only if you started with GUIDE.";
           stepContent.appendChild(resetRow);
 
-          const resetBtn = addStepButton("RESET (only if HOLD)", () => {
+          const resetBtn = addStepButton("RESET (only if GUIDE)", () => {
             if (!resetAllowed) return;
 
             currentEncounter.resetUsed = true;
@@ -19874,6 +20442,8 @@ function ensureProgLoaded() {
             currentEncounter.correctSlotS2 = null;
             currentEncounter.showModeHelp = false;
             currentEncounter.recoveryChoice = "";
+            currentEncounter.recoveryChoiceCategory = "";
+            currentEncounter.recoveryChoiceTone = "";
             currentEncounter.recoveryCorrect = false;
 
             scrubEncounterDerivedState(currentEncounter);
@@ -19912,14 +20482,14 @@ function ensureProgLoaded() {
 
           appendFeedbackLine(stepContent, bcFeedbackFromOutcome(reactionChecks, result));
 
-          const cont = addStepButton("CONTINUE TO REFLECTION", () => { goToStep(6); }, bar);
+          const cont = addStepButton("CONTINUE TO REFLECTION", () => { goToStep(7); }, bar);
           if (!currentEncounter.recoveryChoice && !currentEncounter.resetUsed) cont.disabled = true;
           return true;
         }
 
         stepContent.innerText = "❌ “We’ll choose, thanks.”";
         appendFeedbackLine(stepContent, bcFeedbackFromOutcome(reactionChecks, result));
-        addStepButton("REFLECT", () => { goToStep(6); }, bar);
+        addStepButton("REFLECT", () => { goToStep(7); }, bar);
         return true;
       }
 
@@ -19927,11 +20497,11 @@ function ensureProgLoaded() {
         const bar = ensureStepButtonsContainer();
         bar.innerHTML = "";
 
-        if (!currentEncounter?.stepReactionByKey?.deliver) {
+        if (!currentEncounter?.stepReactionByKey?.problem_solve) {
           try {
-            ensureDeliverReactionCommitted(currentEncounter);
+            ensureProblemSolveReactionCommitted(currentEncounter);
           } catch (error) {
-            console.warn("[BC] deliver reaction commit on reaction screen failed", error);
+            console.warn("[BC] problem solve reaction commit on reaction screen failed", error);
           }
         }
 
@@ -19949,7 +20519,7 @@ function ensureProgLoaded() {
 
         const { checksRaw, reactionChecks } = getReactionChecksForCurrentEncounter();
         const result = computeEncounterReaction(reactionChecks);
-        updateEncounterPresentationState(5);
+        updateEncounterPresentationState(6);
         return renderReactionResolvedUI(stepContent, bar, checksRaw, reactionChecks, result);
       }
 
@@ -19974,15 +20544,6 @@ function ensureProgLoaded() {
         hint.innerText = "Your locked choice triggers an immediate table reaction before the next step.";
         stepContent.appendChild(hint);
 
-        if (stepKey) {
-          renderSequentialEncounterFrame(stepContent, {
-            kicker: "LOCKED STEP",
-            title: stepKey.toUpperCase(),
-            meta: reaction?.accuracy || "resolved",
-            kind: "step",
-          });
-        }
-
         renderSequentialEncounterFrame(stepContent, {
           kicker: "TABLE REACTION",
           title: reaction?.tableCue || "The guest reaction is still resolving.",
@@ -20003,7 +20564,7 @@ function ensureProgLoaded() {
 
         const nextStep = Number(preview?.nextStep || 0);
         const btn = addStepButton(
-          nextStep === 5 ? "GO TO REACTION" : "CONTINUE TO NEXT STEP",
+          nextStep === 6 ? "GO TO REACTION" : "CONTINUE TO NEXT STEP",
           () => {
             if (currentEncounter) currentEncounter.__stepReactionPreview = null;
             currentStep = nextStep;
@@ -20235,7 +20796,13 @@ function ensureProgLoaded() {
             currentEncounter.nextGuestStateActual || p.next || currentEncounter.guestStateActual || "";
         }
 
-        if (outcome.outcome === "recovery") {
+        const shouldEnterRecovery =
+          outcome.outcome === "recovery" &&
+          currentEncounter.__pendingRecovery !== false &&
+          !currentEncounter.recoveryChoice &&
+          !currentEncounter.resetUsed;
+
+        if (shouldEnterRecovery) {
           currentEncounter.pivotType = currentEncounter.pivotType || "recovery";
           currentEncounter.__pendingRecovery = true;
           currentStep = 65;
@@ -20484,10 +21051,11 @@ function ensureProgLoaded() {
           ...getEncounterEffectDebugPayload(),
           runtime: abilityFx,
         });
+        const pivotFeatureUnlocked = isPivotFeatureUnlocked();
         const pivotPlanned =
           (enc?.pivotPlanned != null)
             ? enc.pivotPlanned
-            : (Math.random() < (policy?.pivotChance ?? 0));
+            : (pivotFeatureUnlocked && (Math.random() < (policy?.pivotChance ?? 0)));
         const readTier = getReadTier(enc, checks);
         const hookTier = getHookTier(checks);
         const modeTier = getModeTier(checks);
@@ -20574,7 +21142,7 @@ function ensureProgLoaded() {
           reactionSignal === "red" ||
           strongPillars <= 1 ||
           (!readCorrect && (modeDamaging || hookDamaging));
-        const pivotAllowed = pivotPlanned && recoverySelective && pivotViable;
+        const pivotAllowed = pivotFeatureUnlocked && pivotPlanned && recoverySelective && pivotViable;
 
         if (abilityFx.closingSurge) {
           recordAbilityImpact({
@@ -20627,129 +21195,204 @@ function ensureProgLoaded() {
         const finishRender = () => {
           resetEncounterViewport();
         };
-        if (window.__BC3__?.active) return;
-        if (
-          currentEncounter?.isTimedChallengeEncounter &&
-          Number(currentEncounter?.challengeExpiresAt || 0) > 0 &&
-          Date.now() >= Number(currentEncounter.challengeExpiresAt) &&
-          !currentEncounter?.__timedChallengeResolved
-        ) {
-          failTimedChallengeEncounter("timeout");
-          return;
-        }
-        if (
-          currentEncounter?.isDisplayMethodChallengeEncounter &&
-          Number(currentEncounter?.challengeExpiresAt || 0) > 0 &&
-          Date.now() >= Number(currentEncounter.challengeExpiresAt) &&
-          !currentEncounter?.__displayMethodChallengeResolved
-        ) {
-          failDisplayMethodChallengeEncounter("timeout");
-          return;
-        }
-        clearStepHighlights();
-        if (typeof syncProgressReportButtonVisibility === "function") {
-          syncProgressReportButtonVisibility();
-        }
-        if (currentEncounter && Array.isArray(currentEncounter.steps) && currentEncounter.steps.length) {
-          bcActiveEncounter = currentEncounter;
-          renderBcStage();
-          return;
-        }
-        const stepHeader = document.getElementById("stepHeader");
-        const stepContent = document.getElementById("stepContent");
-        const stepButtons = ensureStepButtonsContainer();
-        const wineDisplayName = document.getElementById("wineDisplayName");
-        const wineBadges = document.getElementById("wineBadges");
-        if (!stepHeader || !stepContent || !wineDisplayName || !wineBadges || !currentEncounter) return;
+        try {
+          if (window.__BC3__?.active) return;
+          if (
+            currentEncounter?.isTimedChallengeEncounter &&
+            Number(currentEncounter?.challengeExpiresAt || 0) > 0 &&
+            Date.now() >= Number(currentEncounter.challengeExpiresAt) &&
+            !currentEncounter?.__timedChallengeResolved
+          ) {
+            failTimedChallengeEncounter("timeout");
+            return;
+          }
+          if (
+            currentEncounter?.isDisplayMethodChallengeEncounter &&
+            Number(currentEncounter?.challengeExpiresAt || 0) > 0 &&
+            Date.now() >= Number(currentEncounter.challengeExpiresAt) &&
+            !currentEncounter?.__displayMethodChallengeResolved
+          ) {
+            failDisplayMethodChallengeEncounter("timeout");
+            return;
+          }
+          clearStepHighlights();
+          if (typeof syncProgressReportButtonVisibility === "function") {
+            syncProgressReportButtonVisibility();
+          }
+          if (currentEncounter && Array.isArray(currentEncounter.steps) && currentEncounter.steps.length) {
+            bcActiveEncounter = currentEncounter;
+            renderBcStage();
+            return;
+          }
+          const stepHeader = document.getElementById("stepHeader");
+          const stepContent = document.getElementById("stepContent");
+          const stepButtons = ensureStepButtonsContainer();
+          const wineDisplayName = document.getElementById("wineDisplayName");
+          const wineBadges = document.getElementById("wineBadges");
+          if (!stepHeader || !stepContent || !wineDisplayName || !wineBadges || !currentEncounter) return;
 
-        stepContent.innerHTML = "";
-        stepButtons.innerHTML = "";
+          stepContent.innerHTML = "";
+          stepButtons.innerHTML = "";
 
-        renderDebugStateBox();
+          renderDebugStateBox();
 
-        const inDrill = sessionType === "drill";
-        updateEncounterStageHeader(stepHeader, wineDisplayName, wineBadges);
-        updateEncounterPresentationState(currentStep);
+          const inDrill = sessionType === "drill";
+          updateEncounterStageHeader(stepHeader, wineDisplayName, wineBadges);
+          updateEncounterPresentationState(currentStep);
 
-        // ---- in-game Progression Status UI DISABLED (parent owns progression UX) ----
-        if (true) { /* intentionally disabled */ }
+          // ---- in-game Progression Status UI DISABLED (parent owns progression UX) ----
+          if (true) { /* intentionally disabled */ }
 
-        if (currentStep === 0) {
-          renderStepLoad(stepContent, stepButtons);
-          finishRender();
-          return;
-        }
+          if (currentStep === 0) {
+            renderStepLoad(stepContent, stepButtons);
+            finishRender();
+            return;
+          }
 
-        if (currentStep === 1) {
-          renderStepObserve(stepContent, stepButtons);
-          finishRender();
-          return;
-        }
+          if (currentStep === 1) {
+            renderStepTable(stepContent, stepButtons);
+            finishRender();
+            return;
+          }
 
-        if (currentStep === 2) {
-          renderStepMode(stepContent, stepButtons);
-          finishRender();
-          return;
-        }
+          if (currentStep === 2) {
+            renderStepObserve(stepContent, stepButtons);
+            finishRender();
+            return;
+          }
 
-        if (currentStep === 3) {
-          renderStepHook(stepContent, stepButtons);
-          finishRender();
-          return;
-        }
+          if (currentStep === 3) {
+            renderStepMode(stepContent, stepButtons);
+            finishRender();
+            return;
+          }
 
-        if (currentStep === 4) {
-          renderStepDelivery(stepContent, stepButtons);
-          finishRender();
-          return;
-        }
+          if (currentStep === 4) {
+            renderStepHook(stepContent, stepButtons);
+            finishRender();
+            return;
+          }
 
-        if (currentStep === 55) {
-          renderStepReactionPreview(stepContent, stepButtons);
-          finishRender();
-          return;
-        }
+          if (currentStep === 5) {
+            renderStepDelivery(stepContent, stepButtons);
+            finishRender();
+            return;
+          }
 
-        if (currentStep === 5) {
-          renderStepReaction(stepContent);
-          finishRender();
-          return;
-        }
+          if (currentStep === 55) {
+            renderStepReactionPreview(stepContent, stepButtons);
+            finishRender();
+            return;
+          }
 
-        if (currentStep === 6) {
-          renderStepReflection(stepContent, stepButtons, inDrill);
-          finishRender();
-          return;
-        }
+          if (currentStep === 6) {
+            renderStepReaction(stepContent);
+            finishRender();
+            return;
+          }
+
+          if (currentStep === 7) {
+            renderStepReflection(stepContent, stepButtons, inDrill);
+            finishRender();
+            return;
+          }
 
         function renderRecoveryStep(stepContent, stepButtons, enc, inDrill) {
+          const servedTier = getGameplayTier(getNormalizedProgressionState(), 1);
+          const tier3Pivot = servedTier >= 3;
+          const initialTone = canonicalModeFromUi(enc?.modeSelected || "");
+          const initialToneLabel = initialTone ? uiModeLabel(initialTone, "game") : "your first tone";
+          const guest = normalizeGuestType(enc?.guestStateActual);
+          const guestPivotToneMap = {
+            [window.GUEST.DECIDER]: {
+              own_it: "authority",
+              narrow: "guide",
+              anchor: "hold",
+            },
+            [window.GUEST.BARGAIN_SMART]: {
+              own_it: "guide",
+              narrow: "hold",
+              anchor: "authority",
+            },
+            [window.GUEST.FANCY]: {
+              own_it: "authority",
+              narrow: "guide",
+              anchor: "charm",
+            },
+            [window.GUEST.GRIEVER]: {
+              own_it: "hold",
+              narrow: "guide",
+              anchor: "charm",
+            },
+            [window.GUEST.CELEBRATOR]: {
+              own_it: "authority",
+              narrow: "guide",
+              anchor: "charm",
+            },
+          };
+          const categoryToTone = guestPivotToneMap[guest] || {
+            own_it: "authority",
+            narrow: "hold",
+            anchor: "guide",
+          };
+
           const title = document.createElement("h3");
-          title.innerText = "Recovery";
+          title.innerText = "Recover the Table";
           stepContent.appendChild(title);
 
           const desc = document.createElement("div");
           desc.className = "small-text recovery-desc";
           desc.innerText =
-            "You lost control of the table. Pick one line to regain it. One is correct.";
+            tier3Pivot
+              ? `You lost control of the table. Pick the right recovery category and pivot from ${initialToneLabel} into a better tone.`
+              : "You lost control of the table. Pick one line to regain it. One is correct.";
           stepContent.appendChild(desc);
 
+          if (tier3Pivot) {
+            const pivotExplain = document.createElement("div");
+            pivotExplain.className = "notice";
+            pivotExplain.innerHTML =
+              `<strong>Pivot the tone</strong><br>` +
+              `From: ${uiModeLabel(initialTone || "guide", "game")}<br>` +
+              `To: choose the best recovery tone for this guest.`;
+            stepContent.appendChild(pivotExplain);
+          }
+
           const choices = [
-            { id: "own_it", label: "Own it", line: "Fair — I overcomplicated it. Two quick options: fresher vs richer?" },
-            { id: "narrow", label: "Narrow", line: "If I give you two: crisp and bright vs smooth and rich — which direction?" },
-            { id: "anchor", label: "Anchor", line: `For your table, I’d go with ${enc?.wineSelected?.name || "this bottle"} because it hits comfort + balance.` },
+            {
+              id: "own_it",
+              label: "Own it",
+              tone: categoryToTone.own_it,
+              line: "Fair — I overcomplicated it. Two quick options: fresher vs richer?"
+            },
+            {
+              id: "narrow",
+              label: "Narrow",
+              tone: categoryToTone.narrow,
+              line: "If I give you two: crisp and bright vs smooth and rich — which direction?"
+            },
+            {
+              id: "anchor",
+              label: "Anchor",
+              tone: categoryToTone.anchor,
+              line: `For your table, I’d go with ${enc?.wineSelected?.name || "this bottle"} because it hits comfort + balance.`
+            },
           ];
 
           const g = resolveSafeGuestType(enc);
-          const bestRaw =
+          const bestCategory =
             (g === "alpha") ? "anchor" :
             (g === "analyst") ? "narrow" :
             (g === "budget_guard") ? "own_it" :
             "narrow";
-          const best = resolveCorrectModeForPlayer(bestRaw, getUnlockedModesForCurrentPlayer());
+          const bestTone = tier3Pivot
+            ? resolveCorrectModeForPlayer(categoryToTone[bestCategory] || "guide", getUnlockedModesForCurrentPlayer())
+            : "";
 
-          enc.recoveryCorrectMode = best;
-          enc.recoveryCorrectModeRaw = bestRaw;
-          enc.recoveryCorrectModeResolved = best;
+          enc.recoveryCorrectCategory = bestCategory;
+          enc.recoveryCorrectMode = bestTone;
+          enc.recoveryCorrectModeRaw = bestTone;
+          enc.recoveryCorrectModeResolved = bestTone;
           enc.recoveryText = enc.recoveryText || "Pressure spike — you must recover the frame.";
 
           const card = document.createElement("div");
@@ -20762,65 +21405,102 @@ function ensureProgLoaded() {
           choices.forEach((c) => {
             const btn = document.createElement("button");
             btn.type = "button";
-            btn.className = "btn btnChoice recovery-choice-btn";
-            btn.innerText = `${c.label}: ${c.line}`;
+            const isSelected = tier3Pivot
+              ? (
+                  String(enc.recoveryChoiceCategory || "") === c.id &&
+                  canonicalModeFromUi(enc.recoveryChoiceTone || enc.recoveryChoice) === canonicalModeFromUi(c.tone)
+                )
+              : String(enc.recoveryChoiceCategory || enc.recoveryChoice || "") === c.id;
+            btn.className = "btn btnChoice recovery-choice-btn" + (isSelected ? " selected" : "");
+            btn.innerText = tier3Pivot
+              ? `${c.label} -> ${uiModeLabel(c.tone, "game")}: ${c.line}`
+              : `${c.label}: ${c.line}`;
 
             btn.addEventListener("click", () => {
-              if (enc.__recoveryLocked) return;
-              enc.__recoveryLocked = true;
-
-              enc.recoveryChoice = c.id;
+              enc.recoveryChoiceCategory = c.id;
+              enc.recoveryChoiceTone = tier3Pivot ? c.tone : "";
+              enc.recoveryChoice = tier3Pivot ? c.tone : c.id;
               enc.recoveryWhy = "";
-              enc.recoveryCorrect = (c.id === best);
+              enc.recoveryCorrect = tier3Pivot
+                ? (c.id === bestCategory && canonicalModeFromUi(c.tone) === canonicalModeFromUi(bestTone))
+                : (c.id === bestCategory);
               if (sessionType === "tournament") {
                 scheduleTournamentCheckpoint("choice_update");
               }
-
-              // Do not log here. Recovery feeds into reflection.
-              // Reflection step performs the final encounter log.
-              addStepButton("CONTINUE TO REFLECTION", () => {
-                currentEncounter.__pendingRecovery = false;
-                currentStep = 7;
-                renderEncounterStep();
-              }, stepButtons);
+              renderEncounterStep();
             });
 
             card.appendChild(btn);
           });
 
           stepContent.appendChild(card);
-        }
 
-        if (currentStep === 65) {
-          try {
-            renderRecoveryStep(stepContent, stepButtons, currentEncounter, inDrill);
-          } catch (e) {
-            console.error("[BC] renderRecoveryStep crashed", e);
-
-            stepContent.innerHTML = "";
-            const p = document.createElement("p");
-            p.innerText = "Recovery step failed to render. You can still continue to reflection.";
-            stepContent.appendChild(p);
-
-            const btn = document.createElement("button");
-            btn.type = "button";
-            btn.className = "primary";
-            btn.innerText = "CONTINUE TO REFLECTION";
-            btn.onclick = () => {
+          if (enc.recoveryChoice || enc.resetUsed) {
+            addStepButton("CONTINUE TO REFLECTION", () => {
               currentEncounter.__pendingRecovery = false;
               currentStep = 7;
               renderEncounterStep();
-            };
-            stepButtons.appendChild(btn);
+            }, stepButtons);
           }
-          finishRender();
-          return;
         }
 
-        if (currentStep === 7) {
-          renderStepSessionSummary(stepContent, stepButtons, inDrill);
-          finishRender();
-          return;
+          if (currentStep === 65) {
+            try {
+              renderRecoveryStep(stepContent, stepButtons, currentEncounter, inDrill);
+            } catch (e) {
+              console.error("[BC] renderRecoveryStep crashed", e);
+
+              stepContent.innerHTML = "";
+              const p = document.createElement("p");
+              p.innerText = "Recovery step failed to render. You can still continue to reflection.";
+              stepContent.appendChild(p);
+
+              const btn = document.createElement("button");
+              btn.type = "button";
+              btn.className = "primary";
+              btn.innerText = "CONTINUE TO REFLECTION";
+              btn.onclick = () => {
+                currentEncounter.__pendingRecovery = false;
+                currentStep = 7;
+                renderEncounterStep();
+              };
+              stepButtons.appendChild(btn);
+            }
+            finishRender();
+            return;
+          }
+
+          if (currentStep === 8) {
+            renderStepSessionSummary(stepContent, stepButtons, inDrill);
+            finishRender();
+            return;
+          }
+        } catch (error) {
+          console.error("[BC] renderEncounterStep failed", {
+            step: currentStep,
+            encounterNumber: currentEncounter?.encounterNumber,
+            error,
+          });
+          const stepHeader = document.getElementById("stepHeader");
+          const stepContent = document.getElementById("stepContent");
+          const stepButtons = ensureStepButtonsContainer();
+          const wineDisplayName = document.getElementById("wineDisplayName");
+          if (stepHeader) stepHeader.innerText = "Encounter Ready";
+          if (wineDisplayName) wineDisplayName.textContent = "BottleCaller";
+          if (stepContent) {
+            stepContent.innerHTML = "";
+            const p = document.createElement("p");
+            p.className = "encounter-lead";
+            p.innerText = "This encounter step hit a render error. Continue from the table step.";
+            stepContent.appendChild(p);
+          }
+          if (stepButtons) {
+            stepButtons.innerHTML = "";
+            addStepButton("GO TO TABLE", () => {
+              currentStep = 1;
+              renderEncounterStep();
+            }, stepButtons);
+          }
         }
       }
 
@@ -20957,9 +21637,37 @@ function ensureProgLoaded() {
         return { idx, enc };
       }
 
-      function selectEncounterWine(isDemoNow) {
+      function selectEncounterWine(isDemoNow, encounterOverride = null) {
         if (sessionType === "drill") {
           return { name: "DRILL", varietal: "", region: "", story: "" };
+        }
+
+        const encounter = encounterOverride && typeof encounterOverride === "object"
+          ? encounterOverride
+          : currentEncounter;
+        const isTimedChallengeEncounter =
+          !!encounter?.isTimedChallengeEncounter ||
+          !!encounter?.timedChallengeId;
+
+        if (!isDemoNow && isTimedChallengeEncounter) {
+          const explicitChallengeWineId =
+            encounter?.timedChallengeWineId ||
+            encounter?.meta?.timedChallengeWineId ||
+            null;
+          const explicitChallengeWine =
+            (explicitChallengeWineId ? getWineById(explicitChallengeWineId) : null) ||
+            encounter?.timedChallengeWine ||
+            encounter?.meta?.timedChallengeWine ||
+            null;
+
+          if (explicitChallengeWine && explicitChallengeWine.name) {
+            return explicitChallengeWine;
+          }
+
+          const chosenPremiumWine = getActiveWineForPremium();
+          if (chosenPremiumWine && chosenPremiumWine.name) {
+            return chosenPremiumWine;
+          }
         }
 
         const wine = isDemoNow
@@ -21087,10 +21795,12 @@ function ensureProgLoaded() {
                   : (Number.isFinite(seedFromProg) ? seedFromProg : (enc.difficulty ?? 1)));
           enc.difficulty = enc.difficulty ?? policySeed ?? 1;
           policy = difficultyPolicy(enc.difficulty);
-          const spineTier = Number(spine?.selectors?.tier?.() ?? 1);
+          const servedTier = getGameplayTier(getNormalizedProgressionState(), 1);
           const nextDifficultyState = {
             ...policy,
-            tierUnlocked: spineTier,
+            pivotChance: servedTier >= 3 ? Number(policy.pivotChance || 0) : 0,
+            servedTier,
+            tierUnlocked: servedTier,
             pressure: getNormalizedProgressionState()?.session?.pressureLevel || 0
           };
           setRuntimeDifficulty(nextDifficultyState);
@@ -21110,6 +21820,7 @@ function ensureProgLoaded() {
             timeLimitSec: null,
             streakGate: "relaxed",
             streakPenaltyMultiplier: 1,
+            servedTier: 1,
             tierUnlocked: 1,
             pressure: 0
           };
@@ -21184,6 +21895,8 @@ function ensureProgLoaded() {
           deliveryLine1Key: carry?.deliveryLine1Key || "",
           deliveryLine2Key: carry?.deliveryLine2Key || "",
           recoveryChoice: carry?.recoveryChoice || "",
+          recoveryChoiceCategory: carry?.recoveryChoiceCategory || "",
+          recoveryChoiceTone: carry?.recoveryChoiceTone || "",
 
           hookOptions: carry?.hookOptions || null,
           deliverOptionsS1: carry?.deliverOptionsS1 || null,
@@ -21562,7 +22275,9 @@ function ensureProgLoaded() {
         if (sessionType === "tournament") {
           return startTournamentEncounter();
         }
+        let startStage = "boot";
         try {
+          startStage = "ensure_progression";
           console.log("[DEMO][START] gate snapshot", {
             bcMode,
             isDemo: window.isDemo,
@@ -21584,6 +22299,7 @@ function ensureProgLoaded() {
             PROG_meta: window.PROG?.meta || null
           });
 
+          startStage = "wait_ctx_wines";
           const g = await waitForCtxAndWines(1500);
           console.log("[START][GATE]", g);
           if (!g.ok) {
@@ -21664,6 +22380,7 @@ function ensureProgLoaded() {
           }
         }
 
+        startStage = "encounter_list";
         const list = getEncounterListForMode(); // should return demo or premium list based on bcMode
         if (!Array.isArray(list) || list.length === 0) {
           alert("Encounter list is empty. Drill cannot start.");
@@ -21687,10 +22404,12 @@ function ensureProgLoaded() {
         bcRenderHud("start");
 
         console.log("[DEMO_SPINE_GUARD]", { isDemo: window.isDemo, bcMode: window.bcMode });
+        startStage = "progression_window";
         const progressionWindow = getEncounterProgressionWindow(isDemoNow, list);
         if (!progressionWindow) return;
 
         const prevEncounterState = currentEncounter || null;
+        startStage = "select_encounter";
         let { enc } = selectEncounterCandidate(list, isDemoNow, progressionWindow);
         const pendingTimedChallenge = getPendingTimedChallenge?.() || null;
         const pendingDisplayMethodChallenge = getPendingDisplayMethodChallenge?.() || null;
@@ -21726,6 +22445,7 @@ function ensureProgLoaded() {
         // ----------------------------
         // Wine selection
         // ----------------------------
+        startStage = "select_wine";
         const wine = selectEncounterWine(isDemoNow);
         if (!wine) {
           alert("No wine available. Please add wines first.");
@@ -21735,10 +22455,13 @@ function ensureProgLoaded() {
         // ----------------------------
         // Normalize encounter -> UI state
         // ----------------------------
+        startStage = "prepare_encounter";
         const injectedMeta = extractInjectedChallengeMeta(enc);
         const prepared = prepareEncounterForRun(enc, prevEncounterState);
         enc = reapplyInjectedChallengeMeta(prepared.enc, injectedMeta);
+        startStage = "resolve_policy";
         const policy = resolveEncounterPolicy(enc, isDemoNow);
+        startStage = "build_runtime";
         currentEncounter = buildEncounterRuntimeState(
           enc,
           wine,
@@ -21750,6 +22473,7 @@ function ensureProgLoaded() {
           prepared.preferNonEmpty
         );
         setRuntimeEncounter(currentEncounter);
+        startStage = "apply_difficulty";
         currentEncounter = applyDifficultyToEncounter(currentEncounter, policy);
         logEncounterStateAudit("built", currentEncounter);
         console.log("[ENCOUNTER] built", {
@@ -21762,6 +22486,7 @@ function ensureProgLoaded() {
           s1: currentEncounter.selectedS1,
           s2: currentEncounter.selectedS2,
         });
+          startStage = "render";
           resetLegacyBc3StageState(currentEncounter);
 
           // FORCE legacy 7-step renderer only
@@ -21770,8 +22495,39 @@ function ensureProgLoaded() {
           renderEncounterStep();
           return;
         } catch (e) {
-          console.error("[BC][FATAL] startEncounter crashed", e);
-          alert("startEncounter crashed — check console [BC][FATAL].");
+          console.error("[BC][FATAL] startEncounter crashed", {
+            stage: startStage,
+            error: e,
+            encounterNumber: currentEncounter?.encounterNumber || null,
+            currentStep,
+          });
+          try {
+            showScreen("screenPlay");
+            const stepHeader = document.getElementById("stepHeader");
+            const stepContent = document.getElementById("stepContent");
+            const stepButtons = ensureStepButtonsContainer();
+            const wineDisplayName = document.getElementById("wineDisplayName");
+            const wineBadges = document.getElementById("wineBadges");
+            if (stepHeader) stepHeader.innerText = "Encounter Ready";
+            if (wineDisplayName) wineDisplayName.textContent = "BottleCaller";
+            if (wineBadges) wineBadges.textContent = "";
+            if (stepContent) {
+              stepContent.innerHTML = "";
+              const p = document.createElement("p");
+              p.className = "encounter-lead";
+              p.innerText = `Encounter startup failed during ${startStage}. Continue from the table step.`;
+              stepContent.appendChild(p);
+            }
+            if (stepButtons) {
+              stepButtons.innerHTML = "";
+              addStepButton("GO TO TABLE", () => {
+                currentStep = 1;
+                renderEncounterStep();
+              }, stepButtons);
+            }
+          } catch (fallbackError) {
+            console.error("[BC][FATAL] startEncounter fallback failed", fallbackError);
+          }
           return;
         }
       }
@@ -21909,9 +22665,10 @@ function ensureProgLoaded() {
           const summary = document.createElement("div");
           const inDrill = entry.sessionType === "drill";
           const modeLabel = uiModeLabel(entry.modeSelected, inDrill ? "drill" : "game");
+          const syncLabel = entry.managerSyncOk ? "Synced to manager" : "Local only";
           summary.innerText = inDrill
-            ? `${entry.timestamp} | Grade: ${entry.performanceGrade || "—"} | Drill | Mode: ${modeLabel} | Hook: ${entry.hookSelected}`
-            : `${entry.timestamp} | Grade: ${entry.performanceGrade || "—"} | Wine: ${entry.wineSelected} | Mode: ${modeLabel} | Hook: ${entry.hookSelected}`;
+            ? `${entry.timestamp} | ${syncLabel} | Grade: ${entry.performanceGrade || "—"} | Drill | Mode: ${modeLabel} | Hook: ${entry.hookSelected}`
+            : `${entry.timestamp} | ${syncLabel} | Grade: ${entry.performanceGrade || "—"} | Wine: ${entry.wineSelected} | Mode: ${modeLabel} | Hook: ${entry.hookSelected}`;
 
           const toggleBtn = document.createElement("button");
           toggleBtn.className = "small-btn";
@@ -21923,14 +22680,8 @@ function ensureProgLoaded() {
           const recoveryLine = entry.recoveryText
             ? "\nPivot: " + (entry.pivotType || "—") +
               "\nScenario: " + entry.recoveryText +
-              "\nBest: " + uiModeLabel(
-                resolveCorrectModeForPlayer(
-                  entry.recoveryCorrectModeResolved || entry.recoveryCorrectMode || null,
-                  getUnlockedModesForCurrentPlayer()
-                ),
-                "game"
-              ) +
-              "\nYou chose: " + entry.recoveryChoice + " (" + (entry.recoveryCorrect ? "✅" : "❌") + ")" +
+              "\nBest: " + getRecoveryBestDisplay(entry) +
+              "\nYou chose: " + getRecoveryChoiceDisplay(entry) + " (" + (entry.recoveryCorrect ? "✅" : "❌") + ")" +
               "\nWhy: " + entry.recoveryWhy
             : "";
 
@@ -21953,6 +22704,11 @@ function ensureProgLoaded() {
                   `- ${String(item.step || "").toUpperCase()}: ${item.tableCue || "—"}`
                 ).join("\n")
               : "";
+          const syncText =
+            entry.managerSyncOk
+              ? "\nSync: Synced to manager" +
+                (entry.managerSyncAt ? `\nSynced at: ${new Date(entry.managerSyncAt).toLocaleString()}` : "")
+              : "\nSync: Local only";
 
           details.innerText =
             "Guest Actual: " + entry.guestStateActual + "\n" +
@@ -21961,6 +22717,7 @@ function ensureProgLoaded() {
             "Hook: " + entry.hookSelected + "\n" +
             "Line 1: " + entry.deliveryLine1 + "\n" +
             "Line 2: " + entry.deliveryLine2 +
+            syncText +
             reactionReflection +
             trailText +
             telemetry +
@@ -22654,6 +23411,7 @@ function ensureProgLoaded() {
       updateRadioSelection(ids.oakOptions);
 
       renderWineTables();
+      syncWinesToParent("initial_render");
       initButtons();
       wireIframeLogout();
       applyDemoUIRestrictions();
@@ -22774,92 +23532,33 @@ function ensureProgLoaded() {
 
         encounter.modeStatus = modeStatus;
 
-        // Hook status
-        let hookStatus = "neutral";
+        const selectedPrompt =
+          encounter.problemSolveSelectedPrompt ||
+          (Array.isArray(encounter.problemSolvePrompts)
+            ? encounter.problemSolvePrompts.find((item) => item?.id === encounter.problemSolveSelectedId)
+            : null) ||
+          null;
 
-        const selectedHookType = getSelectedHookType(encounter);
-        const chosenHookKey =
-          (typeof canonicalHook === "function")
-            ? canonicalHook(getSelectedHookType(encounter))
-            : String(getSelectedHookType(encounter) || "").trim().toUpperCase();
+        const correctPrompt =
+          Array.isArray(encounter.problemSolvePrompts)
+            ? encounter.problemSolvePrompts.find((item) => item?.tier === "right") || null
+            : null;
 
-        assertHookConsistency(hookRule, {
-          encounterNumber: encounter?.encounterNumber,
-          guest: encounter?.guestStateActual,
-          source: "evaluateChecks_hook"
-        });
-
-        let hookStatusEval = "neutral";
-
-        if (hookRule?.optimalKey && chosenHookKey && chosenHookKey === hookRule.optimalKey) {
-          hookStatusEval = "optimal";
-        } else if (hookRule?.neutralKey && chosenHookKey && chosenHookKey === hookRule.neutralKey) {
-          hookStatusEval = "neutral";
-        } else if (hookRule && chosenHookKey) {
-          hookStatusEval = "damaging";
-        }
-
-        if (encounter.hookMeta?.tier) {
-          const metaTierRaw = String(encounter.hookMeta.tier || "").toLowerCase();
-          const metaStatus =
-            metaTierRaw === "right" ? "optimal" :
-            metaTierRaw === "slightly" ? "neutral" :
-            metaTierRaw ? "damaging" :
-            null;
-
-          if (metaStatus && metaStatus !== hookStatusEval) {
-            console.warn("[HOOK CONSISTENCY] hookMeta tier disagrees with canonical rule", {
-              selectedHookType,
-              chosenHookKey,
-              hookMeta: encounter.hookMeta,
-              canonical: hookStatusEval,
-              metaStatus,
-              guest: encounter?.guestStateActual,
-              encounterNumber: encounter?.encounterNumber
-            });
-          }
-        }
-
-        // Strictness modifies interpretation of the canonical result.
-        // It should not replace the canonical result source.
-        if (strictness === "lenient") {
-          hookStatus =
-            hookStatusEval === "neutral" ? "optimal" : hookStatusEval;
-        } else if (strictness === "normal") {
-          hookStatus = hookStatusEval;
-        } else if (strictness === "strict") {
-          hookStatus =
-            hookStatusEval === "neutral" ? "damaging" : hookStatusEval;
-        } else if (strictness === "hard") {
-          hookStatus =
-            hookStatusEval === "optimal" ? "optimal" : "damaging";
-        } else {
-          hookStatus = hookStatusEval;
-        }
-
-        const selectedDeliveryLine1 =
-          encounter.deliveryLine1 || encounter.deliverOptionsS1?.[encounter.selectedS1] || "";
-
-        const selectedDeliveryLine2 =
-          encounter.deliveryLine2 || encounter.deliverOptionsS2?.[encounter.selectedS2] || "";
-
+        const hookStatus = encounter.flashLearnCompleted ? "optimal" : "damaging";
+        const selectedDeliveryLine1 = String(
+          selectedPrompt?.selectedAnswerText ||
+          selectedPrompt?.text ||
+          encounter.deliveryLine1 ||
+          ""
+        );
+        const selectedDeliveryLine2 = "";
         const selectedDeliveryLine1Key = canonicalDeliveryLine(selectedDeliveryLine1);
-        const selectedDeliveryLine2Key = canonicalDeliveryLine(selectedDeliveryLine2);
-
-        const correctDeliveryLine1 =
-          encounter.correctDeliveryLine1 || encounter.deliverOptionsS1?.[encounter.correctSlotS1] || "";
-
-        const correctDeliveryLine2 =
-          encounter.correctDeliveryLine2 || encounter.deliverOptionsS2?.[encounter.correctSlotS2] || "";
-
+        const selectedDeliveryLine2Key = "";
+        const correctDeliveryLine1 = String(correctPrompt?.text || "");
+        const correctDeliveryLine2 = "";
         const correctDeliveryLine1Key = canonicalDeliveryLine(correctDeliveryLine1);
-        const correctDeliveryLine2Key = canonicalDeliveryLine(correctDeliveryLine2);
-
-        const deliveryCorrect =
-          !!selectedDeliveryLine1Key &&
-          !!selectedDeliveryLine2Key &&
-          selectedDeliveryLine1Key === correctDeliveryLine1Key &&
-          selectedDeliveryLine2Key === correctDeliveryLine2Key;
+        const correctDeliveryLine2Key = "";
+        const deliveryCorrect = !!selectedPrompt && selectedPrompt.tier === "right";
 
         // Writeback
         encounter.readCorrect = !!guestRead;
@@ -22867,9 +23566,9 @@ function ensureProgLoaded() {
         encounter.hookStatus = hookStatus;
         encounter.deliveryCorrect = !!deliveryCorrect;
 
-        encounter.correctHookResolved = hookRule?.optimal || null;
-        encounter.correctHookNeutralResolved = hookRule?.neutral || null;
-        encounter.selectedHookResolved = selectedHookType || null;
+        encounter.correctHookResolved = "flash_learn";
+        encounter.correctHookNeutralResolved = "flash_learn";
+        encounter.selectedHookResolved = encounter.flashLearnCompleted ? "flash_learn" : null;
 
         encounter.correctDeliveryLine1 = correctDeliveryLine1;
         encounter.correctDeliveryLine2 = correctDeliveryLine2;

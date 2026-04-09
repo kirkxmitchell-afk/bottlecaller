@@ -95,7 +95,7 @@ export interface PivotStep {
   enabled: boolean; // per encounter
   pivotType: PivotType; // recovery or opportunity
   triggerSignalsAllowed: Signal[]; // e.g. ["yellow","red"] or ["green"]
-  allowReset: boolean; // reset only if first mode was scout
+  allowReset: boolean; // reset only if first mode was reset-safe
 }
 
 export interface FinalHookStep {
@@ -323,7 +323,7 @@ export function canOfferPivot(enc: Encounter, state: AttemptState): boolean {
   return enc.pivotStep.triggerSignalsAllowed.includes(sig);
 }
 
-// ✅ UPDATED: Reset only allowed if first mode was scout AND allowReset is true
+// ✅ UPDATED: Reset only allowed if first mode was reset-safe AND allowReset is true
 export function choosePivot(
   enc: Encounter,
   state: AttemptState,
@@ -485,11 +485,11 @@ export type ReactionChecks = {
   guestRead: boolean;
   deliveryCorrect: boolean;
 
-  // v1 locked rule: reset only allowed if first mode was "scout".
+  // v1 locked rule: reset only allowed if first mode was reset-safe.
   firstMode?: string | null;
-  deciderMode?: string;
-  deciderHookText?: string;
-  deciderHookType?: string;
+  dictatorMode?: string;
+  dictatorPromptText?: string;
+  dictatorPromptType?: string;
   hookType?: string;
   hookText?: string;
   activeWine?: WineCue;
@@ -506,25 +506,25 @@ export type ReactionResult = {
   chainScore: number;       // 0..4
   chainSignal: Signal;      // uses your existing Signal type (green/yellow/red)
   pivotUnlocked: boolean;   // score band gate
-  resetAllowed: boolean;    // firstMode == HOLD (scout-mapped)
+  resetAllowed: boolean;    // firstMode == GUIDE (legacy HOLD/scout-mapped)
   deliveryCorrect: boolean; // passed through
   pivotType: "POWER_MOVE_PIVOT" | "RECOVERY_PIVOT" | "";
-  __decider: DeciderResult;
+  __dictator: DictatorResult;
   __resetPenalty?: number;
 };
 
-export type DeciderSignal = "DECIDER_NEUTRAL" | "DECIDER_TRUST_GAINED" | "DECIDER_FRICTION";
+export type DictatorSignal = "DICTATOR_NEUTRAL" | "DICTATOR_TRUST_GAINED" | "DICTATOR_FRICTION";
 
-export type DeciderResult = {
+export type DictatorResult = {
   total: number;
-  signal: DeciderSignal;
+  signal: DictatorSignal;
   modeScore: number;
   hookScore: number;
 };
 
-export const DECIDER_DEFAULT: DeciderResult = {
+export const DICTATOR_DEFAULT: DictatorResult = {
   total: 0,
-  signal: "DECIDER_NEUTRAL",
+  signal: "DICTATOR_NEUTRAL",
   modeScore: 0,
   hookScore: 0,
 };
@@ -537,14 +537,13 @@ function statusToPoints(s: ModeStatus | HookStatus): number {
 
 function scoreModeStatus(checks: ReactionChecks): ModeStatus {
   const g = (checks.guestStateActual || "").toLowerCase();
-  const m = (checks.deciderMode || checks.modeSelected || "").toLowerCase();
+  const m = (checks.dictatorMode || checks.modeSelected || "").toLowerCase();
   const tier = checks.tier ?? 0;
   const strict = tier >= 2;
 
-  if (g === "decider") {
+  if (g === "decider" || g === "dictator") {
     if (m === "authority") return "optimal";
     if (m === "guide") return "optimal";
-    if (m === "scout") return strict ? "damaging" : "neutral";
     if (m === "charm") return strict ? "damaging" : "neutral";
   }
 
@@ -552,8 +551,8 @@ function scoreModeStatus(checks: ReactionChecks): ModeStatus {
 }
 
 function scoreHookStatus(checks: ReactionChecks): HookStatus {
-  const hookType = (checks.deciderHookType || checks.hookType || "").toLowerCase();
-  const text = (checks.deciderHookText || checks.hookText || "").toLowerCase();
+  const hookType = (checks.dictatorPromptType || checks.hookType || "").toLowerCase();
+  const text = (checks.dictatorPromptText || checks.hookText || "").toLowerCase();
   const wine = checks.activeWine || {};
   const tier = checks.tier ?? 0;
   const strict = tier >= 2;
@@ -594,7 +593,8 @@ export function computeChainScore(checks: ReactionChecks): number {
 
   score += checks.guestRead ? 1 : -1;
 
-  const isDecider = (checks.guestStateActual || "").toLowerCase() === "decider";
+  const guest = (checks.guestStateActual || "").toLowerCase();
+  const isDecider = guest === "decider" || guest === "dictator";
   const mode = isDecider ? scoreModeStatus(checks) : (checks.modeStatus ?? "neutral");
   const hook = isDecider ? scoreHookStatus(checks) : (checks.hookStatus ?? "neutral");
 
@@ -623,7 +623,8 @@ export function pivotUnlockedFromScore(score: number, checks?: ReactionChecks): 
 }
 
 export function resetAllowedFromFirstMode(firstMode: ReactionChecks["firstMode"]): boolean {
-  return true;
+  const normalized = String(firstMode || "").toLowerCase();
+  return normalized === "guide" || normalized === "scout" || normalized === "hold";
 }
 
 function applyFalseSafetyResetPenalty(
@@ -633,7 +634,9 @@ function applyFalseSafetyResetPenalty(
   if (!checks.resetUsed) return { chainScore, penaltyApplied: false, penaltyPoints: 0 };
 
   const first = String(checks.firstMode || "").toLowerCase();
-  if (first === "scout") return { chainScore, penaltyApplied: false, penaltyPoints: 0 };
+  if (first === "guide" || first === "scout" || first === "hold") {
+    return { chainScore, penaltyApplied: false, penaltyPoints: 0 };
+  }
 
   const tier = checks.tier ?? 0;
   const penalty = tier >= 2 ? 2 : 1;
@@ -647,11 +650,11 @@ function applyFalseSafetyResetPenalty(
 
 export function computeReaction(checks: ReactionChecks): ReactionResult {
   let chainScore = computeChainScore(checks);
-  const deciderResult: DeciderResult =
-    (checks.deciderMode || checks.deciderHookText || checks.deciderHookType)
-      ? (scoreDecider(checks) ?? DECIDER_DEFAULT)
-      : DECIDER_DEFAULT;
-  chainScore = Math.max(0, Math.min(4, chainScore + deciderResult.total));
+  const dictatorResult: DictatorResult =
+    (checks.dictatorMode || checks.dictatorPromptText || checks.dictatorPromptType)
+      ? (scoreDictator(checks) ?? DICTATOR_DEFAULT)
+      : DICTATOR_DEFAULT;
+  chainScore = Math.max(0, Math.min(4, chainScore + dictatorResult.total));
   const pen = applyFalseSafetyResetPenalty(chainScore, checks);
   chainScore = pen.chainScore;
   if (checks.resetUsed) {
@@ -689,37 +692,36 @@ export function computeReaction(checks: ReactionChecks): ReactionResult {
     resetAllowed,
     deliveryCorrect: checks.deliveryCorrect,
     pivotType,
-    __decider: deciderResult,
+    __dictator: dictatorResult,
     __resetPenalty: pen.penaltyApplied ? pen.penaltyPoints : 0,
   };
 }
 
-function scoreDecider(checks: ReactionChecks): DeciderResult {
-  const mode = (checks.deciderMode || "").toLowerCase();
-  const text = (checks.deciderHookText || "").toLowerCase();
-  const hookType = (checks.deciderHookType || "").toLowerCase();
+function scoreDictator(checks: ReactionChecks): DictatorResult {
+  const mode = (checks.dictatorMode || "").toLowerCase();
+  const text = (checks.dictatorPromptText || "").toLowerCase();
+  const hookType = (checks.dictatorPromptType || "").toLowerCase();
 
   let modeScore = 0;
   if (mode === "authority") modeScore = 2;
   else if (mode === "guide") modeScore = 1;
-  else if (mode === "scout") modeScore = -1;
   else if (mode === "charm") modeScore = -2;
 
   let hookScore = 0;
   if (hookType.includes("guest_centered")) hookScore += 1;
   if (hookType.includes("outcome_centered")) hookScore -= 1;
 
-  const good = ["quick", "simple", "easy", "safe", "best", "i’d go", "i'd go", "can’t miss", "can't miss", "straightforward", "in a rush"];
-  const bad  = ["leaning", "maybe", "perhaps", "few options", "what do you feel", "do you prefer"];
+  const good = ["quick", "simple", "easy", "safe", "best", "i’d go", "i'd go", "can’t miss", "can't miss", "straightforward", "in a rush", "do you prefer"];
+  const bad  = ["leaning", "maybe", "perhaps", "few options", "what do you feel"];
 
   for (const k of good) if (text.includes(k)) hookScore += 1;
   for (const k of bad) if (text.includes(k)) hookScore -= 1;
 
   const total = modeScore + hookScore;
 
-  let signal: DeciderResult["signal"] = "DECIDER_NEUTRAL";
-  if (total >= 3) signal = "DECIDER_TRUST_GAINED";
-  else if (total <= -2) signal = "DECIDER_FRICTION";
+  let signal: DictatorResult["signal"] = "DICTATOR_NEUTRAL";
+  if (total >= 3) signal = "DICTATOR_TRUST_GAINED";
+  else if (total <= -2) signal = "DICTATOR_FRICTION";
 
   return { total, signal, modeScore, hookScore };
 }

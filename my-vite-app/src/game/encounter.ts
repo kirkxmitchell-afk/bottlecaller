@@ -5,7 +5,7 @@
 // - No DOM, no storage, no engine imports
 
 export type GuestState =
-  | "Decider"
+  | "Dictator"
   | "Fancy"
   | "Griever"
   | "Celebrator"
@@ -14,8 +14,8 @@ export type GuestState =
 export type SkillFocus =
   | "read"
   | "mode"
-  | "hook"
-  | "delivery"
+  | "flash_learn"
+  | "problem_solve"
   | "pivot"
   | "reset";
 export type TrapType =
@@ -181,8 +181,8 @@ Skill Focus:
 
 Core lesson:
 Best mode:
-Best hook:
-Best delivery tone:
+Best flash learn:
+Best problem solve tone:
 Most tempting wrong instinct:
 
 A = baseline readable
@@ -207,7 +207,7 @@ const RAW_ENCOUNTERS: { demo: RawEncounter[]; premium: RawEncounter[] } = {
     {
       encounterNumber: 1,
       difficulty: 1,
-      guestStateActual: guestConst("DECIDER", "Decider"),
+      guestStateActual: guestConst("DECIDER", "Dictator"),
       contextLine: "They scan the list fast, ready to choose.",
       guestLine: "“We’re in a bit of a rush.”",
       physicalCues: ["Phone on table, glancing at time", "Direct eye contact, waiting"],
@@ -234,13 +234,13 @@ const RAW_ENCOUNTERS: { demo: RawEncounter[]; premium: RawEncounter[] } = {
     // --- Stage 1 (1–7) learn the loop ---
     {
       encounterNumber: 1,
-      guestStateActual: "Decider",
+      guestStateActual: "Dictator",
       contextLine: "They want a clean decision with minimal talk.",
       guestLine: "“Just pick something good — we’ll trust you.”",
       physicalCues: ["Menu half-closed", "Looks up immediately"],
       verbalCues: ["“Just pick something good.”", "“What would you order?”"],
       toneTag: "Fast",
-      tags: ["decider", "lead", "fast"], // optional / non-validated
+      tags: ["dictator", "lead", "fast"], // optional / non-validated
       meta: {
         tier: tierFromEncounterNumber(1),
         difficulty: 1,
@@ -315,7 +315,7 @@ const RAW_ENCOUNTERS: { demo: RawEncounter[]; premium: RawEncounter[] } = {
     {
       encounterNumber: 6,
       difficulty: 2,
-      guestStateActual: guestConst("DECIDER", "Decider"),
+      guestStateActual: guestConst("DECIDER", "Dictator"),
       contextLine: "The guest wants help narrowing the choice.",
       guestLine: "I just need something good.",
       physicalCues: [
@@ -327,7 +327,7 @@ const RAW_ENCOUNTERS: { demo: RawEncounter[]; premium: RawEncounter[] } = {
         "They are ready to move if someone narrows the field confidently."
       ],
       toneTag: "Narrowing",
-      tags: ["decider", "guide", "narrowing"],
+      tags: ["dictator", "guide", "narrowing"],
       meta: { tier: tierFromEncounterNumber(6), difficulty: 2, skillFocus: "mode", trapType: "none" },
       variations: [
         {
@@ -359,7 +359,7 @@ const RAW_ENCOUNTERS: { demo: RawEncounter[]; premium: RawEncounter[] } = {
             pivot: "impatience"
           },
 
-          notes: "Core readable version. Good first decider."
+          notes: "Core readable version. Good first dictator."
         },
         {
           id: "B",
@@ -502,8 +502,8 @@ const RAW_ENCOUNTERS: { demo: RawEncounter[]; premium: RawEncounter[] } = {
         "They seem more worried about risk than excited about wine."
       ],
       toneTag: "Reassuring",
-      tags: ["griever", "hook", "risk-reduction"],
-      meta: { tier: tierFromEncounterNumber(7), difficulty: 3, skillFocus: "hook", trapType: "none" },
+      tags: ["griever", "flash_learn", "risk-reduction"],
+      meta: { tier: tierFromEncounterNumber(7), difficulty: 3, skillFocus: "flash_learn", trapType: "none" },
       variations: [
         {
           id: "A",
@@ -679,8 +679,8 @@ const RAW_ENCOUNTERS: { demo: RawEncounter[]; premium: RawEncounter[] } = {
         "They want the bottle to feel intentionally chosen."
       ],
       toneTag: "Polished",
-      tags: ["fancy", "hook", "elevate"],
-      meta: { tier: tierFromEncounterNumber(8), difficulty: 2, skillFocus: "hook", trapType: "none" },
+      tags: ["fancy", "flash_learn", "elevate"],
+      meta: { tier: tierFromEncounterNumber(8), difficulty: 2, skillFocus: "flash_learn", trapType: "none" },
       variations: [
         {
           id: "A",
@@ -854,8 +854,8 @@ const RAW_ENCOUNTERS: { demo: RawEncounter[]; premium: RawEncounter[] } = {
         "They want the spend to feel justified."
       ],
       toneTag: "Value",
-      tags: ["bargain-smart", "hook", "justify-spend"],
-      meta: { tier: tierFromEncounterNumber(9), difficulty: 3, skillFocus: "hook", trapType: "none" },
+      tags: ["bargain-smart", "flash_learn", "justify-spend"],
+      meta: { tier: tierFromEncounterNumber(9), difficulty: 3, skillFocus: "flash_learn", trapType: "none" },
       variations: [
         {
           id: "A",
@@ -1202,7 +1202,7 @@ const RAW_ENCOUNTERS: { demo: RawEncounter[]; premium: RawEncounter[] } = {
     },
     makeVariationEncounter({
       encounterNumber: 12,
-      guestStateActual: guestConst("DECIDER", "Decider"),
+      guestStateActual: guestConst("DECIDER", "Dictator"),
       skillFocus: "read",
 
       baseContextLine: "They want certainty; your hesitation loses the table.",
@@ -1246,7 +1246,7 @@ const RAW_ENCOUNTERS: { demo: RawEncounter[]; premium: RawEncounter[] } = {
             pivot: "impatience"
           },
 
-          notes: "Core urgent decider. Read must identify certainty-seeking fast."
+          notes: "Core urgent dictator. Read must identify certainty-seeking fast."
         },
         {
           id: "B",
@@ -1560,7 +1560,7 @@ const RAW_ENCOUNTERS: { demo: RawEncounter[]; premium: RawEncounter[] } = {
       meta: {
         tier: tierFromEncounterNumber(14),
         difficulty: 5,
-        skillFocus: "hook",
+        skillFocus: "flash_learn",
         trapType: "price-pushback",
       },
     },
@@ -1569,7 +1569,7 @@ const RAW_ENCOUNTERS: { demo: RawEncounter[]; premium: RawEncounter[] } = {
     makeVariationEncounter({
       encounterNumber: 15,
       guestStateActual: guestConst("CELEBRATOR", "Celebrator"),
-      skillFocus: "delivery",
+      skillFocus: "problem_solve",
 
       baseContextLine: "They want a win the whole table agrees on.",
       baseGuestLine: "Something everyone will like.",
@@ -1612,7 +1612,7 @@ const RAW_ENCOUNTERS: { demo: RawEncounter[]; premium: RawEncounter[] } = {
             pivot: "hesitation"
           },
 
-          notes: "Core group-friendly celebrator. Best delivery should feel socially safe and upbeat."
+          notes: "Core group-friendly celebrator. Best problem solve should feel socially safe and upbeat."
         },
         {
           id: "B",
@@ -1643,7 +1643,7 @@ const RAW_ENCOUNTERS: { demo: RawEncounter[]; premium: RawEncounter[] } = {
             pivot: "confusion"
           },
 
-          notes: "Alternate flavor. Tempts style-heavy but less clear delivery."
+          notes: "Alternate flavor. Tempts style-heavy but less clear problem solve."
         },
         {
           id: "C",
@@ -1674,7 +1674,7 @@ const RAW_ENCOUNTERS: { demo: RawEncounter[]; premium: RawEncounter[] } = {
             pivot: "hesitation"
           },
 
-          notes: "Medium pressure. Tempts safe-but-flat delivery."
+          notes: "Medium pressure. Tempts safe-but-flat problem solve."
         },
         {
           id: "D",
@@ -1736,7 +1736,7 @@ const RAW_ENCOUNTERS: { demo: RawEncounter[]; premium: RawEncounter[] } = {
             pivot: "impatience"
           },
 
-          notes: "Hard urgency variant. Tests quick but still socially intelligent delivery."
+          notes: "Hard urgency variant. Tests quick but still socially intelligent problem solve."
         }
       ]
     }),
@@ -1752,19 +1752,19 @@ const RAW_ENCOUNTERS: { demo: RawEncounter[]; premium: RawEncounter[] } = {
       meta: {
         tier: tierFromEncounterNumber(16),
         difficulty: 4,
-        skillFocus: "delivery",
+      skillFocus: "problem_solve",
         trapType: "status-test",
       },
     },
     {
       encounterNumber: 17,
-      guestStateActual: "Decider",
+      guestStateActual: "Dictator",
       contextLine: "They want a single decisive call but will punish fluff.",
       guestLine: "“One pick. No speech.”",
       physicalCues: ["Hand up (stop gesture)", "Quick eye contact"],
       verbalCues: ["“No speech.”", "“One pick.”"],
       toneTag: "NoFluff",
-      tags: ["decider", "lead", "no-fluff"],
+      tags: ["dictator", "lead", "no-fluff"],
       meta: {
         tier: tierFromEncounterNumber(17),
         difficulty: 4,
@@ -1784,7 +1784,7 @@ const RAW_ENCOUNTERS: { demo: RawEncounter[]; premium: RawEncounter[] } = {
       meta: {
         tier: tierFromEncounterNumber(18),
         difficulty: 5,
-        skillFocus: "hook",
+        skillFocus: "flash_learn",
         trapType: "proof-demand",
       },
     },
@@ -1816,7 +1816,7 @@ const RAW_ENCOUNTERS: { demo: RawEncounter[]; premium: RawEncounter[] } = {
       meta: {
         tier: tierFromEncounterNumber(20),
         difficulty: 5,
-        skillFocus: "delivery",
+        skillFocus: "problem_solve",
         trapType: "status-test",
       },
     },

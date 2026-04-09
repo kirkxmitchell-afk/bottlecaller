@@ -19,6 +19,11 @@ import { makeHardResetProgressionHandler } from "./lib/bcHandlers/hardResetProgr
 import { makeTournamentHandlers } from "./lib/bcHandlers/tournament.js";
 import { handleEventLog } from "./lib/handlers/handleEventLog.js";
 import { createProgressionStore } from "./progressionStore.js";
+import {
+  classifyEncounterResolutionForProgression,
+  normalizeProgressionSnapshot,
+  logLiveProgressionContractCheck,
+} from "./parent/progressionShared.js";
 
 let supabase = null;
 let bootError = null;
@@ -273,7 +278,7 @@ window.addEventListener("storage", (e) => {
 
 // ===== CANONICAL MODES =====
 const MODE = {
-  SCOUT: "scout",
+  SCOUT: "guide",
   GUIDE: "guide",
   CHARM: "charm",
   AUTH: "authority",
@@ -281,11 +286,11 @@ const MODE = {
 
 function canonicalModeFromUi(label) {
   const s = String(label || "").trim().toLowerCase();
-  if (s === "scout") return MODE.SCOUT;
+  if (s === "scout") return MODE.GUIDE;
   if (s === "guide") return MODE.GUIDE;
   if (s === "charm") return MODE.CHARM;
   if (s === "authority") return MODE.AUTH;
-  if (s === "hold") return MODE.SCOUT;
+  if (s === "hold") return MODE.GUIDE;
   if (s === "reflect") return MODE.GUIDE;
   if (s === "lead") return MODE.AUTH;
   if (s === MODE.SCOUT || s === MODE.GUIDE || s === MODE.CHARM || s === MODE.AUTH) return s;
@@ -300,7 +305,7 @@ function uiModeLabel(modeKey, uiStyle) {
     if (k === MODE.AUTH) return "LEAD";
     if (k === MODE.CHARM) return "CHARM";
   } else {
-    if (k === MODE.SCOUT) return "Scout";
+    if (k === MODE.SCOUT) return "Guide";
     if (k === MODE.GUIDE) return "Guide";
     if (k === MODE.CHARM) return "Charm";
     if (k === MODE.AUTH) return "Authority";
@@ -367,7 +372,7 @@ window.setDefaultDrillConfig =
   function setDefaultDrillConfig(overrides = {}) {
     const base = {
       focus: "read",
-      pool: ["decider", "bargain_smart", "griever"],
+      pool: ["dictator", "bargain_smart", "griever"],
       durationSec: 300,
     };
     const cfg = { ...base, ...overrides };
@@ -688,22 +693,10 @@ document.querySelector("#app").innerHTML = `
             </div>
 
             <div class="manager-row app-form-row app-form-section">
-              <strong>Process (optional):</strong>
-              <select id="processInputPremium" data-tutorial="wine-process">
-                <option value="">Select process</option>
-                <option value="Stainless steel">Stainless steel</option>
-                <option value="Wild ferment">Wild ferment</option>
-                <option value="Maceration">Maceration</option>
-                <option value="Destemming">Destemming</option>
-                <option value="Whole bunch pressed">Whole bunch pressed</option>
-                <option value="Hand harvested">Hand harvested</option>
-                <option value="Time on lees">Time on lees</option>
-              </select>
               <input type="text" id="regionInputPremium" data-tutorial="wine-region" placeholder="Region (optional)" />
             </div>
 
             <div class="manager-row app-form-row">
-              <textarea id="storyInputPremium" data-tutorial="wine-story" placeholder="Story (optional, 1 sentence)"></textarea>
               <button id="addWineBtnPremium" type="button" data-tutorial="wine-add">Add Wine</button>
             </div>
 
@@ -755,6 +748,7 @@ document.querySelector("#app").innerHTML = `
       <div id="mbPanels">
         <div id="mbTab_overview" class="mbTab" data-tutorial="mb-panel-overview">
           <div id="mbParentStateCard" style="margin-bottom:12px;"></div>
+          <div id="mbOverviewRitualStatus" style="margin-top:12px;"></div>
           <div class="card">
             <div class="score-row">Restaurant: <span id="mbRestName">-</span></div>
             <div class="score-row">Total runs: <span id="mbRunsTotal">-</span></div>
@@ -847,6 +841,8 @@ document.querySelector("#app").innerHTML = `
                     <option value="commanding_presence">Commanding Presence</option>
                   </optgroup>
                 </select>
+
+                <select id="mbTimedChallengeWine" style="min-width:220px;"></select>
 
                 <select id="mbTimedChallengeDuration">
                   <option value="3600">1 hr</option>
@@ -1871,9 +1867,11 @@ function getActorRestaurantSet(profileLike) {
 }
 
 function getManagerActiveRestaurantId() {
+  const scopeId = appState?.profile?.scope_id || null;
   const explicit =
     window.__BC_ACTIVE_MANAGER_RESTAURANT_ID__ ||
     window.__BC_ACTIVE_RESTAURANT_ID__ ||
+    getStoredActiveRestaurantId?.(scopeId) ||
     null;
 
   if (explicit) return String(explicit);
@@ -1901,6 +1899,10 @@ function setManagerActiveRestaurantId(nextRestaurantId) {
 
   window.__BC_ACTIVE_MANAGER_RESTAURANT_ID__ = rid;
   appState.activeRestaurantId = rid;
+  setStoredActiveRestaurantId(profile?.scope_id || null, rid);
+  setTimeout(() => {
+    try { hydrateStoredDifficultyForProfile(); } catch {}
+  }, 0);
 
   if (!appState.restaurant) appState.restaurant = {};
   appState.restaurant.id = rid;
@@ -1920,6 +1922,54 @@ function getStoredActiveRestaurantId(scopeId = window.appState?.profile?.scope_i
 function setStoredActiveRestaurantId(scopeId = window.appState?.profile?.scope_id || null, rid = null) {
   if (!rid) return;
   try { localStorage.setItem(activeRestaurantStorageKey(scopeId), rid); } catch {}
+}
+
+function difficultyStorageKey(userId = null, restaurantId = null) {
+  return `bc_selected_difficulty_v1::${userId || "nouser"}::${restaurantId || "norestaurant"}`;
+}
+
+function getStoredDifficultyValue(userId = null, restaurantId = null) {
+  try {
+    const raw = localStorage.getItem(difficultyStorageKey(userId, restaurantId));
+    if (raw == null) return null;
+    const n = Number(raw);
+    if (n <= 1) return 1;
+    if (n >= 3) return 3;
+    return 2;
+  } catch {
+    return null;
+  }
+}
+
+function setStoredDifficultyValue(userId = null, restaurantId = null, difficulty = null) {
+  const n = Number(difficulty);
+  const normalized = n <= 1 ? 1 : n >= 3 ? 3 : 2;
+  try {
+    localStorage.setItem(difficultyStorageKey(userId, restaurantId), String(normalized));
+  } catch {}
+}
+
+function hydrateStoredDifficultyForProfile() {
+  const userId =
+    appState?.profile?.user_id ||
+    appState?.session?.user?.id ||
+    null;
+  const restaurantId =
+    getManagerActiveRestaurantId?.() ||
+    appState?.activeRestaurantId ||
+    appState?.restaurant?.id ||
+    appState?.profile?.restaurant_id ||
+    null;
+  const stored = getStoredDifficultyValue(userId, restaurantId);
+  if (stored == null) return false;
+  appState.difficulty = stored;
+  try {
+    postToGame?.("difficulty_set", { difficulty: stored });
+  } catch (e) {
+    console.warn("[HUD] difficulty hydrate post failed", e);
+  }
+  renderHudDifficultyControls?.();
+  return true;
 }
 
 appState.activeRestaurantId = getStoredActiveRestaurantId();
@@ -2390,6 +2440,7 @@ window.getActiveRestaurantId =
   function getActiveRestaurantId() {
     const S = window.appState;
     return (
+      window.__BC_ACTIVE_MANAGER_RESTAURANT_ID__ ||
       S?.activeRestaurantId ||
       getStoredActiveRestaurantId?.() ||
       S?.profile?.restaurant_id ||
@@ -4098,7 +4149,11 @@ function renderManagerBoardAbilitiesTab(family, targetId) {
 
 function renderManagerBoardAbilityTabs() {
   renderManagerBoardOverviewLiveEffects();
-  safeCall("renderManagerLiveEffectsPanels", () => renderManagerLiveEffectsPanels?.());
+  safeCall("renderManagerLiveControlPanels", () => renderManagerLiveControlPanels?.());
+}
+
+function renderManagerLiveEffectsPanels() {
+  return renderManagerLiveControlPanels?.();
 }
 
 function tickManagerBoardAbilities() {
@@ -4361,26 +4416,40 @@ function dedupeWineRows(rows = []) {
 }
 
 function renderWineTable(wines) {
+  const safeWines = Array.isArray(wines) ? wines : [];
   const body = document.getElementById("premiumWineTableBody");
   const cards = document.getElementById("premiumWineCards");
   if (body) body.innerHTML = "";
   if (cards) cards.innerHTML = "";
 
-  renderWineCount(wines.length);
+  renderWineCount(safeWines.length);
+  const runtimeRestaurantId = String(
+    getRestaurantIdOrNull() ||
+    appState?.restaurant?.id ||
+    appState?.activeRestaurantId ||
+    appState?.profile?.restaurant_id ||
+    ""
+  ).trim();
+  const managerRestaurantId = String(getManagerActiveRestaurantId() || "").trim();
+  const cacheIds = Array.from(new Set([runtimeRestaurantId, managerRestaurantId].filter(Boolean)));
+  if (cacheIds.length) {
+    cacheIds.forEach((rid) => setManagerWineOptionsCache(rid, safeWines.slice()));
+  }
 
-  wines.forEach((w) => {
+  safeWines.forEach((w, idx) => {
+    const wine = w || {};
     if (body) {
       const tr = document.createElement("tr");
       tr.innerHTML = `
-        <td>${escapeHtml(w.name)}</td>
-        <td>${escapeHtml(w.varietal)}</td>
-        <td>${escapeHtml((w.fruitTags || []).join(", "))}</td>
-        <td>${escapeHtml((w.textureTags || []).join(", "))}</td>
-        <td>${escapeHtml(w.oakLevel || "")}</td>
-        <td>${escapeHtml(w.process || "")}</td>
-        <td>${escapeHtml(w.region || "")}</td>
-        <td>${escapeHtml(w.story || "")}</td>
-        <td><button type="button" class="btn-danger" data-wine-del="${w.id}">Delete</button></td>
+        <td>${escapeHtml(wine.name || `Wine ${idx + 1}`)}</td>
+        <td>${escapeHtml(wine.varietal || "")}</td>
+        <td>${escapeHtml(Array.isArray(wine.fruitTags) ? wine.fruitTags.join(", ") : Array.isArray(wine.fruit_tags) ? wine.fruit_tags.join(", ") : "")}</td>
+        <td>${escapeHtml(Array.isArray(wine.textureTags) ? wine.textureTags.join(", ") : Array.isArray(wine.texture_tags) ? wine.texture_tags.join(", ") : "")}</td>
+        <td>${escapeHtml(wine.oakLevel || wine.oak_level || "")}</td>
+        <td>${escapeHtml(wine.process || "")}</td>
+        <td>${escapeHtml(wine.region || "")}</td>
+        <td>${escapeHtml(wine.story || "")}</td>
+        <td><button type="button" class="btn-danger" data-wine-del="${escapeHtml(String(wine.id || wine.wine_id || wine.created_at || idx))}">Delete</button></td>
       `;
       body.appendChild(tr);
     }
@@ -4389,15 +4458,82 @@ function renderWineTable(wines) {
       const div = document.createElement("div");
       div.className = "wine-card";
       div.innerHTML = `
-        <div><strong>${escapeHtml(w.name)}</strong> — ${escapeHtml(w.varietal)}</div>
-        <div>${escapeHtml((w.fruitTags || []).join(", "))} · ${escapeHtml((w.textureTags || []).join(", "))} · ${escapeHtml(w.oakLevel || "")}</div>
-        <div>${escapeHtml(w.region || "")} ${w.process ? "· " + escapeHtml(w.process) : ""}</div>
-        <div>${escapeHtml(w.story || "")}</div>
-        <button type="button" class="btn-danger" data-wine-del="${w.id}">Delete</button>
+        <div><strong>${escapeHtml(wine.name || `Wine ${idx + 1}`)}</strong> — ${escapeHtml(wine.varietal || "")}</div>
+        <div>${escapeHtml((Array.isArray(wine.fruitTags) ? wine.fruitTags : wine.fruit_tags || []).join(", "))} · ${escapeHtml((Array.isArray(wine.textureTags) ? wine.textureTags : wine.texture_tags || []).join(", "))} · ${escapeHtml(wine.oakLevel || wine.oak_level || "")}</div>
+        <div>${escapeHtml(wine.region || "")} ${wine.process ? "· " + escapeHtml(wine.process) : ""}</div>
+        <div>${escapeHtml(wine.story || "")}</div>
+        <button type="button" class="btn-danger" data-wine-del="${escapeHtml(String(wine.id || wine.wine_id || wine.created_at || idx))}">Delete</button>
       `;
       cards.appendChild(div);
     }
   });
+
+}
+
+function getAnyManagerWineOptionsForDisplay(restaurantId = null) {
+  const rid = String(restaurantId || "").trim();
+  const scoped = rid ? getSharedManagerWineOptions(rid) : [];
+  if (scoped.length) return scoped;
+
+  const global = getSharedManagerWineOptions();
+  if (global.length) return global;
+
+  const frameWines = Array.isArray(getPremiumFrameWindow?.()?.wines)
+    ? getPremiumFrameWindow().wines
+    : [];
+  if (frameWines.length) return frameWines;
+
+  return [];
+}
+
+function buildWineTraceSnapshot(restaurantId = null) {
+  const rid = String(restaurantId || getManagerActiveRestaurantId() || getRestaurantIdOrNull() || "").trim();
+  const scopedCache = rid ? getSharedManagerWineOptions(rid) : [];
+  const globalCache = getSharedManagerWineOptions();
+  const frameWines = Array.isArray(getPremiumFrameWindow?.()?.wines)
+    ? getPremiumFrameWindow().wines
+    : [];
+
+  return {
+    restaurantId: rid || "-",
+    scopedCount: scopedCache.length,
+    globalCount: globalCache.length,
+    frameCount: frameWines.length,
+    activeMgrRestaurantId: String(window.__BC_ACTIVE_MANAGER_RESTAURANT_ID__ || "-"),
+    storedRestaurantId: String(getStoredActiveRestaurantId?.(appState?.profile?.scope_id || null) || "-"),
+  };
+}
+
+function renderWineTrace(elId = "wineSetupTrace", restaurantId = null) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+
+  const trace = buildWineTraceSnapshot(restaurantId);
+  el.textContent =
+    `Wine trace • rid ${trace.restaurantId} • scoped ${trace.scopedCount} • global ${trace.globalCount} • frame ${trace.frameCount} • active ${trace.activeMgrRestaurantId} • stored ${trace.storedRestaurantId}`;
+}
+
+function renderWinePreviewList(elId, restaurantId = null, limit = 10) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+
+  const wines = Array.isArray(getAnyManagerWineOptionsForDisplay(restaurantId))
+    ? getAnyManagerWineOptionsForDisplay(restaurantId).slice(0, limit)
+    : [];
+  if (!wines.length) {
+    el.innerHTML = `<div style="opacity:.75;">No wines available.</div>`;
+    return;
+  }
+
+  el.innerHTML = `
+    <div style="font-weight:600; margin-bottom:6px;">Wine preview</div>
+    ${wines.map((wine, idx) => {
+      const name = wine?.name || `Wine ${idx + 1}`;
+      const varietal = wine?.varietal ? ` (${wine.varietal})` : "";
+      const region = wine?.region ? ` • ${wine.region}` : "";
+      return `<div style="padding:5px 0; border-bottom:1px solid rgba(255,255,255,0.08);">${escapeHtml(`${name}${varietal}${region}`)}</div>`;
+    }).join("")}
+  `;
 }
 
 function buildReactionChecksFromDrillPick(msg) {
@@ -4421,11 +4557,11 @@ function buildReactionChecksFromDrillPick(msg) {
     hookStatus,
     deliveryCorrect,
     firstMode: mode,
-    ...(g === "decider"
+    ...((g === "decider" || g === "dictator")
       ? {
-          deciderMode: mode,
-          deciderHookType: hookType,
-          deciderHookText: hookText,
+          dictatorMode: mode,
+          dictatorPromptType: hookType,
+          dictatorPromptText: hookText,
         }
       : {})
   };
@@ -4438,6 +4574,36 @@ if (!window.__BC_PARENT_TRACE__) {
   window.addEventListener("message", (event) => {
     const msg = event?.data;
     if (msg?.source === "BC_MSG") {
+      if ((msg.type === "wines_report" || msg.type === "wines_sync") && Array.isArray(msg.wines)) {
+        const incomingRid = String(msg.restaurantId || "").trim();
+        const currentRid = String(
+          getManagerActiveRestaurantId() ||
+          appState?.restaurant?.id ||
+          appState?.activeRestaurantId ||
+          ""
+        ).trim();
+        const rid = incomingRid || currentRid;
+        const incomingWines = Array.isArray(msg.wines) ? msg.wines : [];
+        if (rid && incomingWines.length) {
+          if (incomingRid && !currentRid) {
+            try { setManagerActiveRestaurantId(incomingRid); } catch {}
+          }
+          setManagerWineOptionsCache(rid, incomingWines);
+          if (incomingRid && currentRid && incomingRid !== currentRid) {
+            setManagerWineOptionsCache(incomingRid, incomingWines);
+          }
+          if (document.getElementById("mbTimedChallengeWine") || document.getElementById("mbLcTimedChallengeWine")) {
+            loadTimedChallengeWineOptions().catch(console.warn);
+          }
+        } else if (rid && !incomingWines.length) {
+          const cachedWines = getSharedManagerWineOptions(rid);
+          if (!cachedWines.length) {
+            console.warn(`[PARENT] ignoring empty ${msg.type} with no cached wines`, { rid, req: msg.reqId || null });
+          } else {
+            console.warn(`[PARENT] ignoring empty ${msg.type} to preserve existing cache`, { rid, req: msg.reqId || null, cachedCount: cachedWines.length });
+          }
+        }
+      }
       console.log(
         "[PARENT] got",
         msg,
@@ -5872,7 +6038,113 @@ if (!window.__BC_PARENT_BRIDGE__) {
 // ------------------------------------------------------------
 // Progression Snapshot Provider (PARENT) -> used by progressionRouter
 // ------------------------------------------------------------
+async function buildProgressionSnapshotFromRecentEncounterLogs({ userId, restaurantId }) {
+  if (!userId || !restaurantId) return null;
+
+  const live = logLiveProgressionContractCheck(userId, restaurantId);
+
+  const [eventLogRes, readinessRes, totalsRes] = await Promise.all([
+    supabase
+      .from("bc_event_log")
+      .select("occurred_at,payload", { count: "exact" })
+      .eq("restaurant_id", restaurantId)
+      .eq("user_id", userId)
+      .eq("event_type", "encounter_resolved")
+      .order("occurred_at", { ascending: false })
+      .limit(500),
+    supabase
+      .from("bc_readiness_v1")
+      .select("last10_count,last10_greens,last10_reds,session_any_red_t2plus")
+      .eq("user_id", userId)
+      .eq("restaurant_id", restaurantId)
+      .maybeSingle(),
+    supabase
+      .from("bc_totals_v1")
+      .select("encounters_total,pivots_taken_total,pivots_success_total")
+      .eq("user_id", userId)
+      .eq("restaurant_id", restaurantId)
+      .maybeSingle(),
+  ]);
+
+  if (eventLogRes?.error) {
+    console.warn("[BC] progression event-log snapshot query failed", eventLogRes.error);
+  }
+  if (readinessRes?.error) {
+    console.warn("[BC] progression readiness snapshot query failed", readinessRes.error);
+  }
+  if (totalsRes?.error) {
+    console.warn("[BC] progression totals snapshot query failed", totalsRes.error);
+  }
+
+  const rows = Array.isArray(eventLogRes?.data) ? eventLogRes.data : [];
+  const recent = rows
+    .map((row) => classifyEncounterResolutionForProgression(row))
+    .filter(Boolean);
+
+  if (recent.length) {
+    const recent10 = recent.slice(0, 10);
+    const readinessRow = readinessRes?.data || {};
+    const totalsRow = totalsRes?.data || {};
+    const snapshot = normalizeProgressionSnapshot({
+      encountersTotal: Number(eventLogRes?.count ?? rows.length ?? 0) || Number(totalsRow?.encounters_total ?? 0) || 0,
+      last10Count: recent10.length,
+      last10Greens: recent10.filter((item) => item.isGreen).length,
+      last10Reds: recent10.filter((item) => item.isRed).length,
+      anyRedT2Plus:
+        typeof readinessRow?.session_any_red_t2plus === "boolean"
+          ? readinessRow.session_any_red_t2plus
+          : recent.some((item) => item.tier >= 2 && item.isRed),
+      pivotsTaken: recent.filter((item) => item.pivotTaken).length || Number(totalsRow?.pivots_taken_total ?? 0) || 0,
+      pivotsSuccess: recent.filter((item) => item.pivotSuccess).length || Number(totalsRow?.pivots_success_total ?? 0) || 0,
+    });
+
+    if (
+      snapshot &&
+      (snapshot.encountersTotal > 0 ||
+        snapshot.last10Count > 0 ||
+        snapshot.pivotsTaken > 0 ||
+        snapshot.pivotsSuccess > 0)
+    ) {
+      return snapshot;
+    }
+  }
+
+  const readinessRow = readinessRes?.data || {};
+  const totalsRow = totalsRes?.data || {};
+  const fallbackSnapshot = normalizeProgressionSnapshot({
+    encountersTotal: Number(totalsRow?.encounters_total ?? 0) || 0,
+    last10Count: Number(readinessRow?.last10_count ?? 0) || 0,
+    last10Greens: Number(readinessRow?.last10_greens ?? 0) || 0,
+    last10Reds: Number(readinessRow?.last10_reds ?? 0) || 0,
+    anyRedT2Plus: !!readinessRow?.session_any_red_t2plus,
+    pivotsTaken: Number(totalsRow?.pivots_taken_total ?? 0) || 0,
+    pivotsSuccess: Number(totalsRow?.pivots_success_total ?? 0) || 0,
+  });
+
+  if (
+    fallbackSnapshot &&
+    (fallbackSnapshot.encountersTotal > 0 ||
+      fallbackSnapshot.last10Count > 0 ||
+      fallbackSnapshot.pivotsTaken > 0 ||
+      fallbackSnapshot.pivotsSuccess > 0)
+  ) {
+    return fallbackSnapshot;
+  }
+
+  return null;
+}
+
 async function buildProgressionResult({ userId, restaurantId, desiredTier = 3 }) {
+  const snapshot = await buildProgressionSnapshotFromRecentEncounterLogs({ userId, restaurantId });
+  if (snapshot) {
+    return await decideAllowedTierLazy({
+      desiredTier: desiredTier === 1 ? 1 : desiredTier === 2 ? 2 : 3,
+      userId,
+      restaurantId,
+      snapshot,
+    });
+  }
+
   await hydrateProgressionSpineFromLatestSnapshot({ userId, restaurantId });
   const spine = initProgressionSpineFromState();
   const currentPoints = Number(spine?.selectors?.points?.() ?? NaN);
@@ -5912,8 +6184,9 @@ function buildBlankCanonicalProgressionState() {
       points: 0,
       tier: 1,
       encounterRange: [1, 5],
-      allowedGuestTypes: ["decider", "bargain_smart", "griever"],
-      modes: ["scout", "guide", "charm"],
+      allowedGuestTypes: ["dictator", "bargain_smart", "griever"],
+      tones: ["guide", "charm", "authority"],
+      modes: ["guide", "charm", "authority"],
     },
     session: {
       runId: 0,
@@ -5922,13 +6195,13 @@ function buildBlankCanonicalProgressionState() {
       pressureLevel: 0,
       finalDifficulty: 1,
       currentEncounterId: 1,
-      mode: "scout",
-      guestTypeSelected: "decider",
+      mode: "guide",
+      guestTypeSelected: "dictator",
     },
     authority: {
       tierToServe: 1,
       encounterRange: [1, 5],
-      guestTypes: ["decider", "bargain_smart", "griever"],
+      guestTypes: ["dictator", "bargain_smart", "griever"],
     },
     display: {
       difficultySeed: 1,
@@ -5963,7 +6236,7 @@ function buildBlankCanonicalProgressionState() {
         difficultySeed: 1,
       },
       axes: { control: 0, selectivity: 0, compression: 0 },
-      counters: { deciderGood: 0, browserGood: 0, analystGood: 0 },
+      counters: { dictatorGood: 0, browserGood: 0, analystGood: 0 },
       flags: { resetDebt: 0 },
       unlocks: {
         authorityMode: false,
@@ -5979,7 +6252,7 @@ function buildBlankCanonicalProgressionState() {
       drift: { vec: 0, ttl: 0 },
       recovery: { type: null, step: 0, ttl: 0 },
       guestRanks: {
-        decider: makeBlankGuestRank(),
+        dictator: makeBlankGuestRank(),
         bargain_smart: makeBlankGuestRank(),
         griever: makeBlankGuestRank(),
         fancy: makeBlankGuestRank(),
@@ -6120,6 +6393,7 @@ async function refreshManagerBoardAfterProgressionReset() {
 
   await loadManagerBoardMembers();
   renderManagerPeopleSummary?.();
+  safeCall("renderManagerBoardOverviewRitualStatusCard", () => renderManagerBoardOverviewRitualStatusCard?.());
 }
 
 async function hardResetWaiterProgressionAsManager({ userId, restaurantId = null } = {}) {
@@ -6988,12 +7262,45 @@ async function deleteParentRestaurantWine(wineId) {
 }
 
 async function openPremiumSetupScreen() {
+  try {
+    await ensureManagerRestaurantChoices?.();
+    await ensureActiveRestaurantValid?.();
+  } catch (error) {
+    console.warn("[BC] setup restaurant context resolve failed", error);
+  }
+
   showScreen("screenSetupPremium");
 
-  const restaurantId = getRestaurantIdOrNull();
+  const backBtn = document.getElementById("btnBackHomeFromSetupPremium");
+  if (backBtn && !backBtn.__bcBound) {
+    backBtn.__bcBound = true;
+    backBtn.addEventListener("click", () => {
+      showScreen("screenPremiumApp");
+    });
+  }
+
+  const startBtn = document.getElementById("btnContinuePremium");
+  if (startBtn && !startBtn.__bcBound) {
+    startBtn.__bcBound = true;
+    startBtn.addEventListener("click", () => {
+      showScreen("screenPremiumApp");
+    });
+  }
+
+  const restaurantId = getManagerActiveRestaurantId() || getRestaurantIdOrNull();
   if (!restaurantId) {
-    renderWineCount(0);
-    renderWineTable([]);
+    try {
+      const fallbackWines = await fetchAnyAccessibleParentWines();
+      const normalizedFallback = (fallbackWines || []).map(normalizeWineRow);
+      setManagerWineOptionsCache("", normalizedFallback);
+      renderWineCount(normalizedFallback.length);
+      renderWineTable(normalizedFallback.slice(0, WINE_LIMIT));
+    } catch (error) {
+      console.warn("[BC] fallback wine load failed", error);
+      const cachedFallback = getAnyManagerWineOptionsForDisplay();
+      renderWineCount(cachedFallback.length);
+      renderWineTable(cachedFallback.slice(0, WINE_LIMIT));
+    }
     return;
   }
 
@@ -7007,10 +7314,43 @@ async function openPremiumSetupScreen() {
   setupMultiSelectGrid("textureOptionsPremium", TEXTURE_OPTS, 2, () => textureSel, (v) => (textureSel = v));
   setupSingleSelectGrid("oakOptionsPremium", OAK_OPTS, () => oakSel, (v) => (oakSel = v));
 
-  const winesRaw = await fetchParentRestaurantWines(restaurantId);
-  const wines = (winesRaw || []).map(normalizeWineRow);
-  renderWineTable(wines.slice(0, WINE_LIMIT));
+  const cachedWines = getAnyManagerWineOptionsForDisplay(restaurantId).map(normalizeWineRow);
+  if (cachedWines.length) {
+    renderWineTable(cachedWines.slice(0, WINE_LIMIT));
+  }
 
+  let wines = cachedWines;
+  try {
+    const winesRaw = await fetchParentRestaurantWines(restaurantId);
+    const fetchedWines = (winesRaw || []).map(normalizeWineRow);
+    if (fetchedWines.length) {
+      wines = fetchedWines;
+    } else {
+      const accessibleWines = (await fetchAnyAccessibleParentWines()).map(normalizeWineRow);
+      if (accessibleWines.length) {
+        wines = accessibleWines;
+      }
+    }
+  } catch (error) {
+    console.warn("[BC] fetch wines for setup failed; falling back to cache", error);
+    try {
+      const accessibleWines = (await fetchAnyAccessibleParentWines()).map(normalizeWineRow);
+      if (accessibleWines.length) {
+        wines = accessibleWines;
+      }
+    } catch (fallbackError) {
+      console.warn("[BC] accessible wine fallback failed", fallbackError);
+    }
+  }
+
+  if (wines.length || !cachedWines.length) {
+    setManagerWineOptionsCache(restaurantId, wines);
+  }
+  renderWineTable(wines.slice(0, WINE_LIMIT));
+  const setupCount = document.getElementById("wineCountPremium");
+  if (setupCount) {
+    setupCount.textContent = `${Array.isArray(wines) ? wines.length : 0} / 10`;
+  }
   const addBtn = document.getElementById("addWineBtnPremium");
   if (addBtn && !addBtn.__bcBound) {
     addBtn.__bcBound = true;
@@ -7053,6 +7393,7 @@ async function openPremiumSetupScreen() {
 
         const refreshedRaw = await fetchParentRestaurantWines(restaurantId);
         const refreshed = (refreshedRaw || []).map(normalizeWineRow);
+        setManagerWineOptionsCache(restaurantId, refreshed);
         renderWineTable(refreshed.slice(0, WINE_LIMIT));
       } catch (e) {
         console.error("[BC] add wine failed", e);
@@ -7076,6 +7417,7 @@ async function openPremiumSetupScreen() {
         await deleteParentRestaurantWine(wineId);
         const refreshedRaw = await fetchParentRestaurantWines(restaurantId);
         const refreshed = (refreshedRaw || []).map(normalizeWineRow);
+        setManagerWineOptionsCache(restaurantId, refreshed);
         renderWineTable(refreshed.slice(0, WINE_LIMIT));
       } catch (e) {
         console.error("[BC] delete wine failed", e);
@@ -7086,21 +7428,6 @@ async function openPremiumSetupScreen() {
   bindDeleteDelegation(body);
   bindDeleteDelegation(cards);
 
-  const backBtn = document.getElementById("btnBackHomeFromSetupPremium");
-  if (backBtn && !backBtn.__bcBound) {
-    backBtn.__bcBound = true;
-    backBtn.addEventListener("click", () => {
-      showScreen("screenPremiumApp");
-    });
-  }
-
-  const startBtn = document.getElementById("btnContinuePremium");
-  if (startBtn && !startBtn.__bcBound) {
-    startBtn.__bcBound = true;
-    startBtn.addEventListener("click", () => {
-      showScreen("screenPremiumApp");
-    });
-  }
 }
 
 function sendPremiumNav(action) {
@@ -7510,6 +7837,44 @@ Needs Work: ${escapeHtml(String(p.weakestSkill ?? "-"))}
   `;
 }
 
+function getWaiterThreadTemplateKey(row = {}) {
+  const type = String(row?.type || "").toLowerCase();
+
+  if (!type) return `row:${String(row?.id || "")}`;
+
+  if (type === "progress_report") return "template:progress_report";
+  if (type === "instruction") return "template:instruction";
+  if (type === "drill_override") return "template:drill_override";
+  if (type === "drill_completed") return "template:drill_completed";
+  if (type === "drill_effectiveness") return "template:drill_effectiveness";
+
+  return `row:${String(row?.id || "")}`;
+}
+
+function buildWaiterThreadTemplateRows(rows = []) {
+  const ordered = Array.isArray(rows) ? rows : [];
+  const latestByTemplate = new Map();
+
+  for (const row of ordered) {
+    const key = getWaiterThreadTemplateKey(row);
+    const existing = latestByTemplate.get(key);
+    if (!existing) {
+      latestByTemplate.set(key, row);
+      continue;
+    }
+
+    const rowAt = new Date(row?.created_at || 0).getTime();
+    const existingAt = new Date(existing?.created_at || 0).getTime();
+    if (rowAt >= existingAt) {
+      latestByTemplate.set(key, row);
+    }
+  }
+
+  return Array.from(latestByTemplate.values()).sort(
+    (a, b) => new Date(a?.created_at || 0) - new Date(b?.created_at || 0)
+  );
+}
+
 async function loadWaiterMessagesThread() {
   const threadEl = document.getElementById("waiterMessagesThread");
   if (!threadEl) return;
@@ -7557,8 +7922,9 @@ async function loadWaiterMessagesThread() {
     new Set(rows.flatMap((r) => [r.sender_user_id, r.receiver_user_id]).filter(Boolean))
   );
   const nameMap = await mapUserIdsToNames(userIds);
+  const templateRows = buildWaiterThreadTemplateRows(rows);
 
-  threadEl.innerHTML = rows
+  threadEl.innerHTML = templateRows
     .map((row) => renderWaiterThreadItem(row, selfUserId, nameMap))
     .join("");
   threadEl.scrollTop = 0;
@@ -9111,8 +9477,10 @@ function wireManagerBoardMenu() {
       return loadManagerMessenger();
     }
     if (normalized === "live_controls") {
+      await loadManagerBoardData();
       safeCall("renderManagerBoardOverviewLiveEffects", () => renderManagerBoardOverviewLiveEffects?.());
-      safeCall("renderManagerLiveEffectsPanels", () => renderManagerLiveEffectsPanels?.());
+      safeCall("renderManagerLiveControlPanels", () => renderManagerLiveControlPanels?.());
+      await loadTimedChallengeWineOptions().catch(console.warn);
       return;
     }
   };
@@ -9139,7 +9507,7 @@ function wireManagerBoardMenu() {
     if (tab === "selection") {
       await loadSelectionTab();
     }
-  if (tab === "messenger") {
+    if (tab === "messenger") {
       renderTimedChallengeComposer();
       wireManagerBoardMessenger();
       await refreshManagerMessageQuotaUi();
@@ -9153,8 +9521,10 @@ function wireManagerBoardMenu() {
       });
     }
     if (tab === "live_controls") {
+      await loadManagerBoardData();
       safeCall("renderManagerBoardOverviewLiveEffects", () => renderManagerBoardOverviewLiveEffects?.());
-      safeCall("renderManagerLiveEffectsPanels", () => renderManagerLiveEffectsPanels?.());
+      safeCall("renderManagerLiveControlPanels", () => renderManagerLiveControlPanels?.());
+      await loadTimedChallengeWineOptions().catch(console.warn);
     }
   });
 
@@ -9283,21 +9653,26 @@ async function ensureManagerRestaurantChoices() {
     key: cacheKey,
     promise: (async () => {
       try {
-        if (typeof loadGroupRestaurantsForPicker === "function") {
-          const rowsRaw = await loadGroupRestaurantsForPicker();
-          const rows = Array.isArray(rowsRaw)
-            ? rowsRaw.map((x) => ({
-                id: String(x?.id || x?.restaurant_id || ""),
-                name: x?.name || x?.restaurant_name || null,
-              })).filter((x) => x.id)
-            : [];
+        const scopeId = profile?.scope_id || profile?.scopeId || null;
+        const rowsRaw = await fetchAllowedRestaurantsForScope(scopeId);
+        const rows = Array.isArray(rowsRaw)
+          ? rowsRaw.map((x) => ({
+              id: String(x?.id || x?.restaurant_id || ""),
+              name: x?.name || x?.restaurant_name || null,
+            })).filter((x) => x.id)
+          : [];
+        if (rows.length) {
           window.__BC_ALLOWED_RESTAURANT_ROWS__ = rows;
           window.__BC_ALLOWED_RESTAURANT_IDS__ = rows.map((x) => String(x.id));
+          const active = getManagerActiveRestaurantId();
+          if (!active || !rows.some((row) => row.id === active)) {
+            setManagerActiveRestaurantId(rows[0].id);
+          }
           managerRestaurantChoicesCache = { key: cacheKey, loadedAt: Date.now(), rows };
           return rows;
         }
       } catch (e) {
-        console.warn("[MB] loadGroupRestaurantsForPicker failed", e);
+        console.warn("[MB] scoped restaurant load failed", e);
       }
 
       const ownRestaurantId = String(
@@ -10042,7 +10417,7 @@ function renderGuestInsightsTable(rows, nameMap = new Map(), selectedUserId = "a
 
   if (!users.length) return `<div class="small-text" style="opacity:.8;">No encounter data yet.</div>`;
 
-  const guestOrder = ["decider", "bargain_smart", "griever"];
+  const guestOrder = ["dictator", "bargain_smart", "griever"];
 
   const header = `
     <div style="display:grid; grid-template-columns: 1.2fr .6fr .6fr .7fr .7fr .7fr .7fr; gap:8px; font-weight:700; opacity:.9;">
@@ -10157,7 +10532,7 @@ function renderTrendTable(rows, nameMap = new Map(), selectedUserId = "all") {
     .join("");
 }
 
-function startManagerDrill({ focus = "read", pool = ["decider", "bargain_smart", "griever"], repTarget = 3, durationSec = 300, tier = 1 } = {}) {
+function startManagerDrill({ focus = "read", pool = ["dictator", "bargain_smart", "griever"], repTarget = 3, durationSec = 300, tier = 1 } = {}) {
   // ensure parent config exists
   window.setDefaultDrillConfig?.({ focus, pool, durationSec });
 
@@ -10186,7 +10561,7 @@ function wireInsightsCTAs(plan) {
       const focus = plan?.weakest || "read";
       startManagerDrill({
         focus,
-        pool: ["decider", "bargain_smart", "griever"],
+        pool: ["dictator", "bargain_smart", "griever"],
         repTarget: 3,
         durationSec: 300,
         tier: 1,
@@ -10345,7 +10720,7 @@ function normalizeEncounterSummaryRow(row) {
   const bestPath =
     Array.isArray(row?.best_path) ? row.best_path :
     Array.isArray(reflection?.bestPath) ? reflection.bestPath :
-    ["observe", "mode", "hook", "deliver"];
+    ["observe", "mode", "problem_solve"];
 
   const stepSpine =
     Array.isArray(row?.step_spine) ? row.step_spine :
@@ -10370,15 +10745,15 @@ function normalizeEncounterSummaryRow(row) {
   const fallbackChosenPathExposition = [
     `Read: chose ${chosenGuestType || "—"}${readCorrect == null ? "" : readCorrect ? " and it was correct" : " and it was wrong"}.`,
     `Mode: chose ${chosenMode || "—"}${modeStatus ? ` (${modeStatus})` : ""}.`,
-    `Hook: chose ${chosenHook || "—"}${hookStatus ? ` (${hookStatus})` : ""}.`,
-    `Delivery: ${deliveryCorrect == null ? "—" : deliveryCorrect ? "delivery landed correctly" : "delivery was off"}.`,
+    `Flash Learn: ${hookStatus ? `completed (${hookStatus})` : "—"}.`,
+    `Deliver: ${deliveryCorrect == null ? "—" : deliveryCorrect ? "prompt landed correctly" : "prompt choice was off"}.`,
   ].filter(Boolean).join(" ");
 
   const fallbackBestPathExposition = [
     `Read: correct guest was ${actualGuestType || "—"}.`,
     modeStatus ? `Mode: target outcome was ${modeStatus === "optimal" ? "the optimal mode" : modeStatus}.` : "",
-    hookStatus ? `Hook: target outcome was ${hookStatus === "optimal" ? "the optimal hook" : hookStatus}.` : "",
-    deliveryCorrect == null ? "" : `Delivery: ${deliveryCorrect ? "the delivery choice was correct" : "the delivery needed different lines"}.`,
+    hookStatus ? `Flash Learn: target outcome was ${hookStatus === "optimal" ? "complete flash learn" : hookStatus}.` : "",
+    deliveryCorrect == null ? "" : `Deliver: ${deliveryCorrect ? "the prompt choice was correct" : "the prompt needed a stronger guest fit"}.`,
   ].filter(Boolean).join(" ");
 
   return {
@@ -11854,6 +12229,7 @@ async function setActiveRestaurantForGroup(restaurantId) {
     const restaurant = await loadRestaurant(restaurantId);
     appState.restaurant = restaurant;
     markActiveRestaurantReady();
+    hydrateStoredDifficultyForProfile();
 
     window.__BC_APP_STATE__ = window.__BC_APP_STATE__ || {};
     window.__BC_APP_STATE__.restaurant = restaurant;
@@ -12040,6 +12416,215 @@ function renderParentStateDebugCard() {
   `;
 }
 window.renderParentStateDebugCard = renderParentStateDebugCard;
+
+function getManagerRitualStatusStaffOptions() {
+  const staffRows = Array.isArray(window.__BC_MB_STAFF_ROWS__) ? window.__BC_MB_STAFF_ROWS__ : [];
+  const currentUserId = String(appState?.session?.user?.id || appState?.session?.userId || "");
+
+  if (staffRows.length) {
+    return staffRows
+      .map((row) => {
+        const role = String(row?.role || "").toLowerCase();
+        const userId = String(row?.user_id || "").trim();
+        if (!userId || role === "demo") return null;
+
+        const displayName = String(row?.display_name || "").trim();
+        const label = displayName || userId;
+        return {
+          userId,
+          label: currentUserId && userId === currentUserId ? `${label} (you)` : label,
+        };
+      })
+      .filter((x) => x?.userId)
+      .sort((a, b) => String(a.label || "").localeCompare(String(b.label || "")));
+  }
+
+  return getManagerWaiterOptions();
+}
+
+function renderManagerRitualStatusSelectOptions(selectEl, options = {}) {
+  if (!selectEl) return;
+
+  const waiterOptions = getManagerRitualStatusStaffOptions();
+  const placeholder = String(options.placeholder || "Select staff member");
+  const preferredUserId = String(
+    options.selectedUserId ||
+    window.__BC_MB_RITUAL_STATUS_USER_ID__ ||
+    window.__BC_MB_ACTIVE_THREAD_USER_ID__ ||
+    ""
+  );
+
+  const rows = [
+    `<option value="">${escapeHtml(placeholder)}</option>`,
+    ...waiterOptions.map((opt) => {
+      const selected = preferredUserId && String(opt.userId) === preferredUserId ? "selected" : "";
+      return `<option value="${escapeHtml(opt.userId)}" ${selected}>${escapeHtml(opt.label)}</option>`;
+    }),
+  ];
+
+  selectEl.innerHTML = rows.join("");
+}
+
+function getManagerRitualStatusWindowStartIso() {
+  const now = new Date();
+  const zaNow = new Date(now.toLocaleString("en-US", { timeZone: "Africa/Johannesburg" }));
+  const startZA = new Date(zaNow);
+  startZA.setHours(0, 0, 0, 0);
+  return startZA.toISOString();
+}
+
+async function fetchRitualStatusForStaffMember({ userId, restaurantId } = {}) {
+  const uid = String(userId || "").trim();
+  const rid = String(restaurantId || getManagerActiveRestaurantId() || "").trim();
+  if (!uid || !rid) {
+    return {
+      ok: false,
+      doneToday: false,
+      error: "missing_target",
+      latestOccurredAt: null,
+      windowStartIso: null,
+    };
+  }
+
+  const { data, error } = await supabase
+    .from("bc_event_log")
+    .select("occurred_at")
+    .eq("event_type", "ritual_completed")
+    .eq("user_id", uid)
+    .eq("restaurant_id", rid)
+    .gte("occurred_at", getManagerRitualStatusWindowStartIso())
+    .order("occurred_at", { ascending: false })
+    .limit(1);
+
+  if (error) {
+    return {
+      ok: false,
+      doneToday: false,
+      error: error.message || String(error),
+      latestOccurredAt: null,
+      windowStartIso: getManagerRitualStatusWindowStartIso(),
+    };
+  }
+
+  const latestOccurredAt = Array.isArray(data) && data.length ? data[0]?.occurred_at || null : null;
+  return {
+    ok: true,
+    doneToday: !!latestOccurredAt,
+    latestOccurredAt,
+    windowStartIso: getManagerRitualStatusWindowStartIso(),
+  };
+}
+
+async function renderManagerBoardOverviewRitualStatusCard(options = {}) {
+  const root = document.getElementById("mbOverviewRitualStatus");
+  if (!root) return;
+
+  const rid = String(getManagerActiveRestaurantId() || appState?.activeRestaurantId || appState?.profile?.restaurant_id || "");
+  const staffOptions = getManagerRitualStatusStaffOptions();
+  const fallbackSelected =
+    String(window.__BC_MB_RITUAL_STATUS_USER_ID__ || window.__BC_MB_ACTIVE_THREAD_USER_ID__ || staffOptions[0]?.userId || "");
+  const selectedUserId = String(options.selectedUserId || fallbackSelected || "");
+  window.__BC_MB_RITUAL_STATUS_USER_ID__ = selectedUserId;
+
+  if (!staffOptions.length) {
+    root.innerHTML = `
+      <div class="card" style="padding:12px; display:flex; flex-direction:column; gap:8px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+          <strong>Ritual Status</strong>
+          <span class="small-text" style="opacity:.8;">Overview</span>
+        </div>
+        <div class="small-text" style="opacity:.8;">No staff members available for ritual checks.</div>
+      </div>
+    `;
+    return;
+  }
+
+  const statusTone = {
+    border: "rgba(255,255,255,0.10)",
+    bg: "linear-gradient(180deg, rgba(16,18,24,0.96), rgba(13,15,20,0.96))",
+    badgeBg: "rgba(255,255,255,0.10)",
+    badgeText: "#e5e7eb",
+  };
+
+  root.innerHTML = `
+    <div class="card" style="padding:12px; display:flex; flex-direction:column; gap:10px; border:1px solid ${statusTone.border}; background:${statusTone.bg};">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+        <strong>Ritual Status</strong>
+        <span class="small-text" style="opacity:.9; padding:3px 8px; border-radius:999px; background:${statusTone.badgeBg}; color:${statusTone.badgeText}; text-transform:uppercase; letter-spacing:.04em;">Overview</span>
+      </div>
+      <div class="small-text" style="opacity:.82;">
+        Check whether a staff member has completed today’s ritual in the current restaurant.
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <select id="mbRitualStatusStaffSelect" class="input" style="min-width:240px;"></select>
+        <button id="mbRitualStatusRefresh" class="btn-ghost" type="button">Refresh</button>
+        <span id="mbRitualStatusBadge" class="small-text" style="padding:3px 8px; border-radius:999px; background:rgba(255,255,255,0.10);">Loading…</span>
+      </div>
+      <div id="mbRitualStatusDetails" class="small-text" style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px 12px;"></div>
+    </div>
+  `;
+
+  const select = document.getElementById("mbRitualStatusStaffSelect");
+  const refreshBtn = document.getElementById("mbRitualStatusRefresh");
+  const badgeEl = document.getElementById("mbRitualStatusBadge");
+  const detailsEl = document.getElementById("mbRitualStatusDetails");
+
+  renderManagerRitualStatusSelectOptions(select, { selectedUserId });
+
+  const paint = (result = {}) => {
+    const doneToday = !!result?.doneToday;
+    const latestOccurredAt = result?.latestOccurredAt || null;
+    const windowStartIso = result?.windowStartIso || null;
+    if (badgeEl) {
+      badgeEl.textContent = doneToday ? "Completed today" : "Not completed";
+      badgeEl.style.background = doneToday ? "rgba(62,184,122,0.18)" : "rgba(232,170,64,0.18)";
+      badgeEl.style.color = doneToday ? "#b8f1cf" : "#ffe1a8";
+    }
+    if (detailsEl) {
+      detailsEl.innerHTML = `
+        <div><b>Staff member:</b> ${escapeHtml(select?.selectedOptions?.[0]?.textContent || selectedUserId || "-")}</div>
+        <div><b>Restaurant:</b> ${escapeHtml(getAllowedRestaurantName(rid) || "-")}</div>
+        <div><b>Checked from:</b> ${escapeHtml(windowStartIso ? new Date(windowStartIso).toLocaleString() : "—")}</div>
+        <div><b>Last ritual:</b> ${escapeHtml(latestOccurredAt ? new Date(latestOccurredAt).toLocaleString() : "—")}</div>
+      `;
+    }
+  };
+
+  const load = async (userId = selectedUserId) => {
+    if (badgeEl) {
+      badgeEl.textContent = "Checking…";
+      badgeEl.style.background = "rgba(255,255,255,0.10)";
+      badgeEl.style.color = "#e5e7eb";
+    }
+    const result = await fetchRitualStatusForStaffMember({ userId, restaurantId: rid });
+    window.__BC_MB_RITUAL_STATUS_LAST_RESULT__ = {
+      userId,
+      restaurantId: rid,
+      ...result,
+      loadedAt: Date.now(),
+    };
+    paint(result);
+    return result;
+  };
+
+  if (select && !select.__bcRitualStatusBound) {
+    select.__bcRitualStatusBound = true;
+    select.addEventListener("change", async () => {
+      const nextUserId = String(select.value || "").trim();
+      window.__BC_MB_RITUAL_STATUS_USER_ID__ = nextUserId;
+      await load(nextUserId);
+    });
+  }
+
+  if (refreshBtn && !refreshBtn.__bcRitualStatusBound) {
+    refreshBtn.__bcRitualStatusBound = true;
+    refreshBtn.addEventListener("click", async () => {
+      await load(String(select?.value || selectedUserId || ""));
+    });
+  }
+
+  await load(selectedUserId);
+}
 
 function setGroupManagerMetrics(metrics) {
   window.__BC_GROUP_MANAGER_METRICS__ = metrics || {
@@ -12357,6 +12942,8 @@ function mbEl(id) {
 window.__BC_MB_THREADS__ = [];
 window.__BC_MB_THREADS_ALL__ = [];
 window.__BC_MB_ACTIVE_THREAD_USER_ID__ = null;
+window.__BC_MB_RITUAL_STATUS_USER_ID__ = "";
+window.__BC_MB_RITUAL_STATUS_LAST_RESULT__ = null;
 window.__BC_MB_ACTIVE_THREAD_ROWS__ = [];
 window.__MB_LAST_MESSAGES__ = [];
 window.__BC_MB_PEOPLE_SEARCH__ = "";
@@ -12592,6 +13179,7 @@ function refreshManagerRuntimeSurfaces(opts = {}) {
     safeCall?.("renderManagerAreaEffectsPanel", () => renderManagerAreaEffectsPanel?.());
     safeCall?.("renderManagerTimedChallengeActionPanel", () => renderManagerTimedChallengeActionPanel?.());
     safeCall?.("renderManagerDisplayMethodActionPanel", () => renderManagerDisplayMethodActionPanel?.());
+    safeCall?.("loadTimedChallengeWineOptions", () => loadTimedChallengeWineOptions?.().catch(console.warn));
   }
 
   if (challengeMeta) {
@@ -12951,9 +13539,9 @@ function getManagerChallengeRecommendations(threadRows = []) {
       reasons.push("Builds on the waiter's current strongest area.");
     }
 
-    if (item.key === "clean_close" && c.guest === "decider") {
+    if (item.key === "clean_close" && (c.guest === "decider" || c.guest === "dictator")) {
       score += 2;
-      reasons.push("Decider tables reward decisive finishes.");
+      reasons.push("Dictator tables reward decisive finishes.");
     }
 
     if (item.key === "read_first" && c.guest === "griever") {
@@ -13171,9 +13759,9 @@ function getManagerEffectRecommendations(threadRows = []) {
       reasons.push("The table likely needs stabilization.");
     }
 
-    if (item.key === "closing_surge" && c.guest === "decider") {
+    if (item.key === "closing_surge" && (c.guest === "decider" || c.guest === "dictator")) {
       score += 2;
-      reasons.push("Decider tables reward clear finishes.");
+      reasons.push("Dictator tables reward clear finishes.");
     }
 
     if (item.key === "recovery_focus" && c.guest === "griever") {
@@ -13649,6 +14237,7 @@ async function loadPerformanceHistory(userId) {
 
     fetchEncounterResolutionSummaries({
       restaurantId,
+      userId,
       limit: 120,
     }),
   ]);
@@ -13691,7 +14280,9 @@ function renderManagerEncounterSummaryList(userId, rows, nameMap = new Map()) {
     return;
   }
 
-  const normalizedRows = rows.map((row) => normalizeEncounterSummaryRow(row));
+  const normalizedRows = rows
+    .map((row) => normalizeEncounterSummaryRow(row))
+    .filter((summary) => !userId || String(summary.userId || "") === String(userId));
   const hasAnyReactionTelemetry = normalizedRows.some((summary) =>
     !!summary.reflection ||
     !!summary.reactionSummary ||
@@ -14082,6 +14673,75 @@ function getManagerThreadRowGroup(row = {}) {
   return "other";
 }
 
+function getManagerThreadTemplateKey(row = {}) {
+  const type = String(row?.type || "").toLowerCase();
+
+  if (!type) return `row:${String(row?.id || "")}`;
+
+  if (
+    type === "drill_override" ||
+    type === "drill_started" ||
+    type === "drill_completed"
+  ) {
+    return "template:drill";
+  }
+
+  if (
+    type === "timed_challenge" ||
+    type === "timed_challenge_completed" ||
+    type === "timed_challenge_expired"
+  ) {
+    return "template:timed_challenge";
+  }
+
+  if (
+    type === "display_method_challenge" ||
+    type === "display_method_challenge_completed" ||
+    type === "display_method_challenge_expired"
+  ) {
+    return "template:display_method_challenge";
+  }
+
+  if (type === "progress_report") {
+    return "template:progress_report";
+  }
+
+  if (type === "instruction") {
+    return "template:instruction";
+  }
+
+  return `row:${String(row?.id || "")}`;
+}
+
+function buildManagerThreadTemplateRows(rows = []) {
+  const ordered = Array.isArray(rows) ? rows : [];
+  const latestByTemplate = new Map();
+
+  for (const row of ordered) {
+    const key = getManagerThreadTemplateKey(row);
+    const existing = latestByTemplate.get(key);
+    if (!existing) {
+      latestByTemplate.set(key, row);
+      continue;
+    }
+
+    const rowAt = new Date(row?.created_at || 0).getTime();
+    const existingAt = new Date(existing?.created_at || 0).getTime();
+    if (rowAt >= existingAt) {
+      latestByTemplate.set(key, row);
+    }
+  }
+
+  return Array.from(latestByTemplate.values()).sort(
+    (a, b) => new Date(a?.created_at || 0) - new Date(b?.created_at || 0)
+  );
+}
+
+function getManagerLatestTemplateRow(rows = []) {
+  const templateRows = buildManagerThreadTemplateRows(rows);
+  return templateRows[templateRows.length - 1] || null;
+}
+
 function renderManagerThreadGroupDivider(group = "") {
   const labelMap = {
     objective_timeline: "Objective Timeline",
@@ -14117,7 +14777,7 @@ function renderManagerThreadGroupDivider(group = "") {
 }
 
 function renderManagerThreadMessagesGrouped(rows = [], nameMap = {}) {
-  const ordered = Array.isArray(rows) ? rows : [];
+  const ordered = buildManagerThreadTemplateRows(rows);
   let html = "";
   let lastGroup = "";
 
@@ -14199,7 +14859,7 @@ function renderManagerThreadSnapshot(rows = []) {
 }
 
 function renderManagerThreadBody(rows = [], nameMap = {}) {
-  const ordered = Array.isArray(rows) ? rows : [];
+  const ordered = buildManagerThreadTemplateRows(rows);
 
   if (!ordered.length) {
     return `<div class="small-text" style="opacity:.75;">No thread messages yet.</div>`;
@@ -14213,7 +14873,7 @@ function renderManagerThreadListItem(thread, nameMap) {
   const name = escapeHtml(String(thread?.title || userLabel(thread.userId, nameMap)));
   const preview = escapeHtml(String(thread.latestBody || "").slice(0, 80));
   const when = escapeHtml(String(thread.latestAt || ""));
-  const type = String(thread.latestType || "message").toUpperCase();
+  const type = escapeHtml(String(getManagerThreadListTypeLabel(thread?.latestType || "message")));
 
   return `
     <button
@@ -14259,6 +14919,10 @@ function buildManagerSuggestedPrompts(thread) {
 
   const sig = String(payload?.chainSignal || "").toLowerCase();
   const guest = String(payload?.guestStateActual || "").toLowerCase();
+  const promoSuggestions = [
+    "Promo: lead with the featured wine first, then close the table with one clear next step.",
+    "Promo: keep the pitch simple, name the bottle, and give the guest one strong reason to buy it now.",
+  ];
 
   if (sig === "red" || sig === "soft_close") {
     suggestions.push("Keep it shorter and confirm guest intent first.");
@@ -14269,13 +14933,15 @@ function buildManagerSuggestedPrompts(thread) {
     suggestions.push("Stay concise and guide the guest to a decision.");
   }
 
-  if (guest === "decider") {
-    suggestions.push("With Deciders: lead quickly with two strong options.");
+  if (guest === "decider" || guest === "dictator") {
+    suggestions.push("With Dictators: lead quickly with two strong options.");
   }
 
-  window.__BC_MB_SELECTED_SUGGESTION__ = suggestions[0] || "";
+  const allSuggestions = [...promoSuggestions, ...suggestions];
 
-  host.innerHTML = suggestions
+  window.__BC_MB_SELECTED_SUGGESTION__ = allSuggestions[0] || "";
+
+  host.innerHTML = allSuggestions
     .map((txt) => `<button type="button" class="btn-ghost" data-suggested-prompt="${escapeHtml(txt)}">${escapeHtml(txt)}</button>`)
     .join("");
 }
@@ -14380,6 +15046,25 @@ function getManagerMessageKindMeta(row = {}) {
     tone: "default",
     title: "",
   };
+}
+
+function getManagerThreadListTypeLabel(type = "") {
+  const key = String(type || "").toLowerCase();
+  const map = {
+    drill_override: "Drill Assigned",
+    drill_started: "Drill Started",
+    drill_completed: "Drill Done",
+    timed_challenge: "Challenge Sent",
+    timed_challenge_completed: "Challenge Won",
+    timed_challenge_expired: "Challenge Expired",
+    display_method_challenge: "Display Challenge",
+    display_method_challenge_completed: "Display Won",
+    display_method_challenge_expired: "Display Expired",
+    instruction: "Instruction",
+    progress_report: "Progress Update",
+  };
+
+  return map[key] || getManagerMessageKindMeta({ type: key })?.title || "Message";
 }
 
 function renderManagerMessageBadge(row = {}) {
@@ -15576,11 +16261,11 @@ function renderManagerAreaEffectsPanel() {
 }
 
 function renderManagerLiveControlPanels() {
-  renderManagerAbilityEconomyPanel?.();
-  renderManagerAttributeEffectsPanel?.();
-  renderManagerAreaEffectsPanel?.();
-  renderManagerTimedChallengeActionPanel?.();
-  renderManagerDrillActionPanel?.();
+  safeCall("renderManagerAbilityEconomyPanel", () => renderManagerAbilityEconomyPanel?.());
+  safeCall("renderManagerAttributeEffectsPanel", () => renderManagerAttributeEffectsPanel?.());
+  safeCall("renderManagerAreaEffectsPanel", () => renderManagerAreaEffectsPanel?.());
+  safeCall("renderManagerTimedChallengeActionPanel", () => renderManagerTimedChallengeActionPanel?.());
+  safeCall("renderManagerDrillActionPanel", () => renderManagerDrillActionPanel?.());
 }
 
 function renderProfileScreen() {
@@ -16195,7 +16880,7 @@ function applyManagerMessengerRows(rid, rows) {
       title: threadTitle,
       isSelfThread,
       latestAt: row.created_at,
-      latestBody: row.body || "",
+      latestBody: "",
       latestType: row.type || "message",
       rows: [],
     };
@@ -16204,16 +16889,20 @@ function applyManagerMessengerRows(rid, rows) {
     if (!entry.title && threadTitle) entry.title = threadTitle;
     if (isSelfThread) entry.isSelfThread = true;
 
-    if (new Date(row.created_at) > new Date(entry.latestAt)) {
-      entry.latestAt = row.created_at;
-      entry.latestBody = row.body || "";
-      entry.latestType = row.type || "message";
-    }
-
     grouped.set(threadUserId, entry);
   }
 
   const threads = Array.from(grouped.values())
+    .map((entry) => {
+      const latestTemplateRow = getManagerLatestTemplateRow(entry.rows);
+      const latestDisplay = latestTemplateRow ? getManagerMessageDisplayBody(latestTemplateRow) : null;
+      return {
+        ...entry,
+        latestAt: latestTemplateRow?.created_at || entry.latestAt,
+        latestType: latestTemplateRow?.type || entry.latestType || "message",
+        latestBody: String(latestDisplay?.title || latestTemplateRow?.body || entry.latestBody || ""),
+      };
+    })
     .sort((a, b) => new Date(b.latestAt) - new Date(a.latestAt));
 
   window.__BC_MB_THREADS_ALL__ = Array.isArray(threads) ? threads : [];
@@ -16404,12 +17093,451 @@ function renderManagerWaiterSelectOptions(selectEl, options = {}) {
 }
 
 function renderTimedChallengeTargetOptions() {
-  const select = document.getElementById("mbTimedChallengeTarget");
-  if (!select) return;
+  const selectIds = [
+    "mbTimedChallengeTarget",
+    "mbLcTimedChallengeTarget",
+    "mbLcDisplayMethodTarget",
+    "mbLcDrillTarget",
+  ];
 
-  renderManagerWaiterSelectOptions(select, {
-    selectedUserId: window.__BC_MB_ACTIVE_THREAD_USER_ID__ || "",
+  selectIds.forEach((id) => {
+    const select = document.getElementById(id);
+    if (!select) return;
+
+    renderManagerWaiterSelectOptions(select, {
+      selectedUserId: window.__BC_MB_ACTIVE_THREAD_USER_ID__ || "",
+    });
   });
+}
+
+function getTimedChallengeWineSelectIds() {
+  return ["mbTimedChallengeWine", "mbLcTimedChallengeWine"];
+}
+
+function getTimedChallengeWineLabel(wine = {}) {
+  const name = String(wine?.name || "Wine").trim();
+  const region = String(wine?.region || "").trim();
+  const varietal = String(wine?.varietal || "").trim();
+  const suffix = [region, varietal].filter(Boolean).join(" • ");
+  return suffix ? `${name} - ${suffix}` : name;
+}
+
+function getTimedChallengeWineOptionValue(wine = {}, index = 0) {
+  const candidates = [
+    wine?.id,
+    wine?.wine_id,
+    wine?.wineId,
+    wine?._id,
+    wine?.created_at,
+    wine?.updated_at,
+  ];
+
+  for (const candidate of candidates) {
+    const value = String(candidate || "").trim();
+    if (value) return value;
+  }
+
+  const label = getTimedChallengeWineLabel(wine);
+  if (label) {
+    return `${label}::${index}`;
+  }
+
+  return `wine::${index}`;
+}
+
+function setManagerWineOptionsCache(restaurantId, wines = []) {
+  const rid = String(restaurantId || "").trim();
+  const normalized = Array.isArray(wines) ? wines.slice() : [];
+  window.__BC_SHARED_MANAGER_WINES__ = normalized;
+  window.__BC_SHARED_MANAGER_WINES_RID__ = rid;
+  window.__BC_RESTAURANT_WINES__ = normalized;
+  window.__BC_RESTAURANT_WINES_RID__ = rid;
+  window.__BC_MANAGER_WINE_OPTIONS__ = normalized;
+  window.__BC_MANAGER_WINE_OPTIONS_RID__ = rid;
+  window.__BC_TIMED_CHALLENGE_WINE_OPTIONS__ = normalized;
+  window.__BC_TIMED_CHALLENGE_WINE_OPTIONS_RID__ = rid;
+  try {
+    renderTimedChallengeWineSelectOptionsFromCache?.(rid);
+  } catch (error) {
+    console.warn("[WINE] timed challenge cache render failed", error);
+  }
+  return normalized;
+}
+
+function readSharedWineRowsFromLocalStorage(restaurantId = null) {
+  const rid = String(restaurantId || "").trim();
+  const keys = [];
+  if (rid) keys.push(`bc_wines_restaurant_${rid}`);
+  keys.push("bc_wines", "BC_WINES", "bc_wines_premium");
+
+  for (const key of keys) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length) {
+        return parsed;
+      }
+    } catch {}
+  }
+
+  return [];
+}
+
+function readAnySharedWineRowsFromLocalStorage() {
+  const rows = [];
+  const seen = new Set();
+  const pushRows = (list = []) => {
+    for (const row of Array.isArray(list) ? list : []) {
+      const key = getWineDedupKey(row);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      rows.push(row);
+    }
+  };
+
+  try {
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = String(localStorage.key(i) || "");
+      if (!key) continue;
+      if (key !== "bc_wines" && key !== "BC_WINES" && key !== "bc_wines_premium" && !key.startsWith("bc_wines_restaurant_")) {
+        continue;
+      }
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      pushRows(parsed);
+    }
+  } catch {}
+
+  return rows;
+}
+
+function getSharedManagerWineOptions(restaurantId = null) {
+  const rid = String(restaurantId || "").trim();
+  const directStoreWines = readSharedWineRowsFromLocalStorage(rid);
+  if (directStoreWines.length) {
+    return directStoreWines;
+  }
+
+  const anyStoreWines = readAnySharedWineRowsFromLocalStorage();
+  if (anyStoreWines.length) {
+    return anyStoreWines;
+  }
+
+  const cacheSources = [
+    {
+      rid: String(window.__BC_SHARED_MANAGER_WINES_RID__ || ""),
+      rows: Array.isArray(window.__BC_SHARED_MANAGER_WINES__) ? window.__BC_SHARED_MANAGER_WINES__ : [],
+    },
+    {
+      rid: String(window.__BC_RESTAURANT_WINES_RID__ || ""),
+      rows: Array.isArray(window.__BC_RESTAURANT_WINES__) ? window.__BC_RESTAURANT_WINES__ : [],
+    },
+    {
+      rid: String(window.__BC_MANAGER_WINE_OPTIONS_RID__ || ""),
+      rows: Array.isArray(window.__BC_MANAGER_WINE_OPTIONS__) ? window.__BC_MANAGER_WINE_OPTIONS__ : [],
+    },
+    {
+      rid: String(window.__BC_TIMED_CHALLENGE_WINE_OPTIONS_RID__ || ""),
+      rows: Array.isArray(window.__BC_TIMED_CHALLENGE_WINE_OPTIONS__) ? window.__BC_TIMED_CHALLENGE_WINE_OPTIONS__ : [],
+    },
+  ];
+
+  for (const source of cacheSources) {
+    if (rid && source.rid && source.rid !== rid) continue;
+    if (Array.isArray(source.rows) && source.rows.length) {
+      return source.rows;
+    }
+  }
+
+  const frameWines = Array.isArray(getPremiumFrameWindow?.()?.wines)
+    ? getPremiumFrameWindow().wines
+    : [];
+  if (frameWines.length) {
+    return frameWines;
+  }
+  return [];
+}
+
+function getAllowedRestaurantIdsForWineFallback() {
+  const ids = Array.isArray(window.__BC_ALLOWED_RESTAURANT_IDS__)
+    ? window.__BC_ALLOWED_RESTAURANT_IDS__
+    : [];
+
+  const normalized = ids
+    .map((id) => String(id || "").trim())
+    .filter(Boolean);
+
+  return Array.from(new Set(normalized));
+}
+
+async function fetchParentWinesForRestaurantIds(restaurantIds = []) {
+  const ids = Array.isArray(restaurantIds)
+    ? restaurantIds.map((id) => String(id || "").trim()).filter(Boolean)
+    : [];
+  if (!ids.length) return [];
+
+  const { data, error } = await supabase
+    .from("bc_wines")
+    .select("*")
+    .in("restaurant_id", ids)
+    .order("created_at", { ascending: true });
+
+  if (error) throw error;
+  return dedupeWineRows(data || []);
+}
+
+async function fetchAnyAccessibleParentWines() {
+  const cached = readSharedWineRowsFromLocalStorage();
+  if (cached.length) return dedupeWineRows(cached);
+
+  const { data, error } = await supabase
+    .from("bc_wines")
+    .select("*")
+    .order("created_at", { ascending: true });
+
+  if (error) throw error;
+  return dedupeWineRows(data || []);
+}
+
+function applyTimedChallengeWineSelectOptions(selects = [], wines = [], activeWineId = "") {
+  const normalizedWines = Array.isArray(wines) ? wines : [];
+  const placeholderLabel = normalizedWines.length ? "Select wine" : "No wines available";
+  const options = [
+    { id: "", label: placeholderLabel },
+    ...normalizedWines
+      .map((wine, index) => ({
+        id: getTimedChallengeWineOptionValue(wine, index),
+        label: getTimedChallengeWineLabel(wine),
+      }))
+      .filter((opt) => opt.id),
+  ];
+
+  selects.forEach((select) => {
+    const currentValue = String(select.value || "").trim();
+    select.innerHTML = options
+      .map((opt) => {
+        const selected = currentValue
+          ? String(opt.id) === currentValue
+          : (activeWineId && String(opt.id) === activeWineId);
+        return `<option value="${escapeHtml(opt.id)}"${selected ? " selected" : ""}>${escapeHtml(opt.label)}</option>`;
+      })
+      .join("");
+
+    if (!select.value && activeWineId) {
+      select.value = activeWineId;
+    }
+  });
+
+  return normalizedWines;
+}
+
+function buildTimedChallengeWineOptionsHtml(wines = [], activeWineId = "") {
+  const normalizedWines = Array.isArray(wines) ? wines : [];
+  const placeholderLabel = normalizedWines.length ? "Select wine" : "No wines available";
+  const options = [
+    { id: "", label: placeholderLabel },
+    ...normalizedWines
+      .map((wine, index) => ({
+        id: getTimedChallengeWineOptionValue(wine, index),
+        label: getTimedChallengeWineLabel(wine),
+      }))
+      .filter((opt) => opt.id),
+  ];
+
+  return options
+    .map((opt) => {
+      const selected = activeWineId && String(opt.id) === String(activeWineId);
+      return `<option value="${escapeHtml(opt.id)}"${selected ? " selected" : ""}>${escapeHtml(opt.label)}</option>`;
+    })
+    .join("");
+}
+
+function renderTimedChallengeWineSelectOptionsFromCache(restaurantId = null) {
+  const selectIds = getTimedChallengeWineSelectIds();
+  const selects = selectIds
+    .map((id) => document.getElementById(id))
+    .filter(Boolean);
+  if (!selects.length) return [];
+
+  const rid = String(
+    restaurantId ||
+    getManagerActiveRestaurantId() ||
+    window.__BC_MB_ACTIVE_THREAD_RESTAURANT_ID__ ||
+    appState?.restaurant?.id ||
+    appState?.activeRestaurantId ||
+    appState?.profile?.restaurant_id ||
+    ""
+  ).trim();
+
+  const wines = getAnyManagerWineOptionsForDisplay(rid);
+  const fallbackWines = wines.length ? wines : getSharedManagerWineOptions();
+  const activeWine = window.getActiveWineForPremium?.() || null;
+  const activeWineId = String(activeWine?.id || "").trim();
+  return applyTimedChallengeWineSelectOptions(selects, fallbackWines, activeWineId);
+}
+
+async function refreshManagerWineOptions(restaurantId = null, { force = false } = {}) {
+  const rid = String(
+    restaurantId ||
+    getManagerActiveRestaurantId() ||
+    window.__BC_MB_ACTIVE_THREAD_RESTAURANT_ID__ ||
+    appState?.restaurant?.id ||
+    appState?.activeRestaurantId ||
+    appState?.profile?.restaurant_id ||
+    ""
+  ).trim();
+
+  if (!rid) {
+    try {
+      const anyWines = await fetchAnyAccessibleParentWines();
+      if (anyWines.length) {
+        return setManagerWineOptionsCache("", anyWines);
+      }
+    } catch (error) {
+      console.warn("[TIMED CHALLENGE] global wine fallback for missing restaurant failed", error);
+    }
+    setManagerWineOptionsCache("", []);
+    return [];
+  }
+
+  const sharedWines = getSharedManagerWineOptions(rid);
+  const cachedRid = String(window.__BC_MANAGER_WINE_OPTIONS_RID__ || window.__BC_TIMED_CHALLENGE_WINE_OPTIONS_RID__ || window.__BC_RESTAURANT_WINES_RID__ || "");
+  if (!force && cachedRid === rid && sharedWines.length) {
+    return setManagerWineOptionsCache(rid, sharedWines);
+  }
+
+  const premiumWin = getPremiumFrameWindow?.();
+  if (premiumWin) {
+    const frameWines = Array.isArray(premiumWin.wines) ? premiumWin.wines : [];
+    if (frameWines.length && (!cachedRid || cachedRid === rid)) {
+      return setManagerWineOptionsCache(rid, frameWines);
+    }
+
+    try {
+      if (premiumWin.WineBridge?.fetchRestaurantWines) {
+        const sid = getParentCtxSnapshot("premium")?.scopeId || appState?.profile?.scope_id || null;
+        const bridged = await premiumWin.WineBridge.fetchRestaurantWines(sid, rid);
+        const bridgedRows = Array.isArray(bridged) ? bridged : [];
+        if (bridgedRows.length) {
+          return setManagerWineOptionsCache(rid, bridgedRows);
+        }
+      }
+    } catch (error) {
+      console.warn("[TIMED CHALLENGE] premium-frame wine bridge failed", error);
+    }
+  }
+
+  try {
+    const wines = await fetchParentRestaurantWines(rid);
+    const dbWines = Array.isArray(wines) ? wines.slice() : [];
+    if (dbWines.length) {
+      return setManagerWineOptionsCache(rid, dbWines);
+    }
+    const fallbackRestaurantIds = getAllowedRestaurantIdsForWineFallback().filter((id) => id !== rid);
+    if (fallbackRestaurantIds.length) {
+      try {
+        const scopedFallbackWines = await fetchParentWinesForRestaurantIds(fallbackRestaurantIds);
+        if (scopedFallbackWines.length) {
+          return setManagerWineOptionsCache(rid || fallbackRestaurantIds[0] || "", scopedFallbackWines);
+        }
+      } catch (fallbackError) {
+        console.warn("[TIMED CHALLENGE] scope wine fallback failed", fallbackError);
+      }
+    }
+    if (sharedWines.length) {
+      return setManagerWineOptionsCache(rid, sharedWines);
+    }
+    try {
+      const anyWines = await fetchAnyAccessibleParentWines();
+      if (anyWines.length) {
+        return setManagerWineOptionsCache(rid, anyWines);
+      }
+    } catch (globalError) {
+      console.warn("[TIMED CHALLENGE] global wine fallback failed", globalError);
+    }
+    return setManagerWineOptionsCache(rid, []);
+  } catch (error) {
+    console.warn("[TIMED CHALLENGE] wine refresh failed", error);
+    const fallbackRestaurantIds = getAllowedRestaurantIdsForWineFallback().filter((id) => id !== rid);
+    if (fallbackRestaurantIds.length) {
+      try {
+        const scopedFallbackWines = await fetchParentWinesForRestaurantIds(fallbackRestaurantIds);
+        if (scopedFallbackWines.length) {
+          return setManagerWineOptionsCache(rid || fallbackRestaurantIds[0] || "", scopedFallbackWines);
+        }
+      } catch (fallbackError) {
+        console.warn("[TIMED CHALLENGE] scope wine fallback after error failed", fallbackError);
+      }
+    }
+    if (sharedWines.length) return setManagerWineOptionsCache(rid, sharedWines);
+    try {
+      const anyWines = await fetchAnyAccessibleParentWines();
+      if (anyWines.length) {
+        return setManagerWineOptionsCache(rid, anyWines);
+      }
+    } catch (globalError) {
+      console.warn("[TIMED CHALLENGE] global wine fallback after error failed", globalError);
+    }
+    return setManagerWineOptionsCache(rid, []);
+  }
+}
+
+async function loadManagerRestaurantWineOptions(restaurantId = null, { force = false } = {}) {
+  return refreshManagerWineOptions(restaurantId, { force });
+}
+
+async function loadTimedChallengeWineOptions() {
+  const restaurantId = String(
+    getManagerActiveRestaurantId() ||
+    window.__BC_MB_ACTIVE_THREAD_RESTAURANT_ID__ ||
+    appState?.restaurant?.id ||
+    appState?.activeRestaurantId ||
+    appState?.profile?.restaurant_id ||
+    ""
+  ).trim();
+  const selectIds = getTimedChallengeWineSelectIds();
+  const getCurrentSelects = () => selectIds
+    .map((id) => document.getElementById(id))
+    .filter(Boolean);
+  const initialSelects = getCurrentSelects();
+  if (!initialSelects.length) return [];
+
+  if (!restaurantId) {
+    const fallbackWines = getAnyManagerWineOptionsForDisplay();
+    if (fallbackWines.length) {
+      return applyTimedChallengeWineSelectOptions(initialSelects, fallbackWines, String(window.getActiveWineForPremium?.()?.id || "").trim());
+    }
+    initialSelects.forEach((select) => {
+      if (select.options.length <= 1) {
+        select.innerHTML = `<option value="">No wines available</option>`;
+      }
+      select.value = select.value || "";
+    });
+    return [];
+  }
+
+  const cachedWineRows = getAnyManagerWineOptionsForDisplay(restaurantId);
+  if (Array.isArray(cachedWineRows) && cachedWineRows.length) {
+    renderTimedChallengeWineSelectOptionsFromCache(restaurantId);
+  }
+
+  let wines = [];
+  try {
+    wines = await refreshManagerWineOptions(restaurantId, { force: false });
+  } catch (error) {
+    console.warn("[TIMED CHALLENGE] wine options load failed", error);
+    wines = [];
+  }
+
+  const fallbackWines = wines.length ? wines : getAnyManagerWineOptionsForDisplay(restaurantId);
+  const activeWine = window.getActiveWineForPremium?.() || null;
+  const activeWineId = String(activeWine?.id || "");
+
+  const selects = getCurrentSelects();
+  if (!selects.length) return wines;
+  return applyTimedChallengeWineSelectOptions(selects, fallbackWines, activeWineId);
 }
 
 const TIMED_CHALLENGE_COMPOSER_IDS = Object.freeze({
@@ -16446,12 +17574,14 @@ function getTimedChallengeComposerValues(source = "messenger") {
 
   const targetEl = document.getElementById(ids.target);
   const typeEl = document.getElementById(ids.type);
+  const wineEl = document.getElementById(source === "live_controls" ? "mbLcTimedChallengeWine" : "mbTimedChallengeWine");
   const durationEl = document.getElementById(ids.duration);
   const rewardEl = document.getElementById(ids.reward);
 
   return {
     targetUserId: String(targetEl?.value || "").trim() || null,
     challengeKey: String(typeEl?.value || "closing_push"),
+    activeWineId: String(wineEl?.value || "").trim() || null,
     durationSec: Math.max(60, Math.min(10800, Number(durationEl?.value || 10800))),
     rewardPoints: Math.max(1, Math.min(5, Number(rewardEl?.value || 5))),
     placement: String(document.getElementById(ids.placement)?.value || "before_start"),
@@ -16464,6 +17594,7 @@ function buildTimedChallengePayloadFromValues(values = {}) {
   const durationSec = Math.max(60, Math.min(10800, Number(values.durationSec || 10800)));
   const rewardPoints = Number(values.rewardPoints || 50);
   const placement = String(values.placement || "before_start");
+  const activeWineId = String(values.activeWineId || "").trim() || null;
   const restaurantId = getManagerActiveRestaurantId();
 
   if (!targetUserId) return null;
@@ -16591,6 +17722,8 @@ function buildTimedChallengePayloadFromValues(values = {}) {
     focus: def.focus,
     rewardPoints,
     successRule: def.successRule,
+    activeWineId,
+    activeWine: null,
   };
 }
 
@@ -16661,6 +17794,18 @@ async function sendTimedChallengeFromManagerWithValues(values = {}) {
   const challengeKey = String(payload?.challengeKey || "");
   const cost = Number(MANAGER_CHALLENGE_COSTS?.[challengeKey] || 0);
   const cooldownSec = Number(MANAGER_CHALLENGE_COOLDOWNS_SEC?.[challengeKey] || 0);
+  try {
+    await loadManagerRestaurantWineOptions(payload.restaurantId, { force: false });
+  } catch {}
+  const selectedWineId = String(payload?.activeWineId || "").trim();
+  const selectedWine = selectedWineId
+    ? (Array.isArray(window.__BC_TIMED_CHALLENGE_WINE_OPTIONS__)
+      ? window.__BC_TIMED_CHALLENGE_WINE_OPTIONS__.find((wine) => String(wine?.id || "") === selectedWineId) || null
+      : null)
+    : null;
+  if (selectedWine) {
+    payload.activeWine = selectedWine;
+  }
 
   if (isManagerActionOnCooldown(challengeKey)) {
     const remaining = getManagerCooldownRemaining(challengeKey);
@@ -16810,6 +17955,8 @@ function wireTimedChallengeComposerSource(source = "messenger") {
   const ids = getTimedChallengeComposerIds(source);
   const btn = document.getElementById(ids.send);
   const watchIds = [ids.type, ids.target, ids.duration, ids.reward, ids.placement].filter(Boolean);
+  const wineId = source === "live_controls" ? "mbLcTimedChallengeWine" : "mbTimedChallengeWine";
+  if (wineId) watchIds.push(wineId);
 
   watchIds.forEach((id) => {
     const el = document.getElementById(id);
@@ -16880,6 +18027,7 @@ function renderTimedChallengeComposer() {
   if (!canManageTimedChallenges()) return;
 
   renderTimedChallengeTargetOptions();
+  loadTimedChallengeWineOptions().catch(console.warn);
   wireTimedChallengeComposer();
   renderTimedChallengeRecentSummary();
 }
@@ -16887,17 +18035,7 @@ function renderTimedChallengeComposer() {
 function renderManagerTimedChallengeActionPanel() {
   const root = document.getElementById("mbTimedChallengeQuickActionsPanel");
   if (!root) return;
-  if (!canManageTimedChallenges()) {
-    root.innerHTML = `
-      <div class="card" style="display:flex; flex-direction:column; gap:8px; padding:12px;">
-        <div style="font-weight:600;">Timed Challenge</div>
-        <div class="small-text" style="opacity:.8;">
-          Your role cannot send timed challenges in this restaurant context.
-        </div>
-      </div>
-    `;
-    return;
-  }
+  const canSend = canManageTimedChallenges();
 
   const challengeOptions = [
     ["closing_push", "Closing Push"],
@@ -16916,6 +18054,18 @@ function renderManagerTimedChallengeActionPanel() {
     return `<option value="${escapeHtml(key)}">${escapeHtml(label)} (${escapeHtml(meta)})</option>`;
   }).join("");
 
+  const activeRestaurantId =
+    getManagerActiveRestaurantId() ||
+    appState?.restaurant?.id ||
+    appState?.activeRestaurantId ||
+    appState?.profile?.restaurant_id ||
+    "";
+  const activeWine = window.getActiveWineForPremium?.() || null;
+  const wineOptionsHtml = buildTimedChallengeWineOptionsHtml(
+    getAnyManagerWineOptionsForDisplay(activeRestaurantId),
+    activeWine?.id || ""
+  );
+
   root.innerHTML = `
     <div class="card" style="display:flex; flex-direction:column; gap:10px; padding:12px;">
       <div style="font-weight:600;">Timed Challenge</div>
@@ -16928,6 +18078,10 @@ function renderManagerTimedChallengeActionPanel() {
 
         <select id="mbLcTimedChallengeType">
           ${optionsHtml}
+        </select>
+
+        <select id="mbLcTimedChallengeWine" style="min-width:220px;">
+          ${wineOptionsHtml}
         </select>
 
         <select id="mbLcTimedChallengeDuration">
@@ -16954,19 +18108,80 @@ function renderManagerTimedChallengeActionPanel() {
       <div class="small-text" id="mbLcTimedChallengeMeta" style="opacity:.78;">
         Select a challenge to view cost and cooldown state.
       </div>
-
       <div class="row" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-        <button id="mbLcTimedChallengeSend" class="btn" type="button">Send Challenge</button>
+        <button id="mbLcTimedChallengeSend" class="btn" type="button" ${canSend ? "" : "disabled"}>Send Challenge</button>
         <div id="mbLcTimedChallengeStatus" class="small-text" style="opacity:.85;"></div>
       </div>
       <div id="mbLcTimedChallengeRecentSummary" class="small-text" style="opacity:.8;"></div>
     </div>
   `;
 
+  root.dataset.restaurantId = String(activeRestaurantId || "");
+  const wineStatusId = "mbLcTimedChallengeWineStatus";
+  const existingStatus = document.getElementById(wineStatusId);
+  if (!existingStatus) {
+    const status = document.createElement("div");
+    status.id = wineStatusId;
+    status.className = "small-text";
+    status.style.opacity = ".72";
+    status.style.marginTop = "4px";
+    status.textContent = "Wines loaded: 0";
+    root.appendChild(status);
+  }
+
+  const wineStatus = document.getElementById(wineStatusId);
+  const immediateWineCount = Array.isArray(window.__BC_TIMED_CHALLENGE_WINE_OPTIONS__)
+    ? window.__BC_TIMED_CHALLENGE_WINE_OPTIONS__.length
+    : 0;
+  if (wineStatus) {
+    wineStatus.textContent = `Wines loaded: ${immediateWineCount}`;
+  }
+  if (!canSend) {
+    const note = document.createElement("div");
+    note.className = "small-text";
+    note.style.opacity = ".8";
+    note.style.marginTop = "6px";
+    note.textContent = "Your role cannot send timed challenges in this restaurant context.";
+    root.appendChild(note);
+  }
+
   renderManagerWaiterSelectOptions(
     document.getElementById("mbLcTimedChallengeTarget"),
     { selectedUserId: window.__BC_MB_ACTIVE_THREAD_USER_ID__ || "" }
   );
+  renderTimedChallengeTargetOptions();
+  try {
+    const wineSelect = document.getElementById("mbLcTimedChallengeWine");
+    if (wineSelect) {
+      const activeWineId = String(activeWine?.id || "").trim();
+      const cacheWines = getAnyManagerWineOptionsForDisplay(activeRestaurantId);
+      const fallbackWines = cacheWines.length ? cacheWines : getAnyManagerWineOptionsForDisplay();
+      wineSelect.innerHTML = buildTimedChallengeWineOptionsHtml(fallbackWines, activeWineId);
+    }
+    renderTimedChallengeWineSelectOptionsFromCache?.(activeRestaurantId);
+  } catch (error) {
+    console.warn("[TIMED CHALLENGE] cache render failed", error);
+  }
+  void (async () => {
+    try {
+      await loadTimedChallengeWineOptions();
+    } catch (error) {
+      console.warn("[TIMED CHALLENGE] wine refresh failed in action panel", error);
+    }
+
+    const wineCount = Array.isArray(window.__BC_TIMED_CHALLENGE_WINE_OPTIONS__)
+      ? window.__BC_TIMED_CHALLENGE_WINE_OPTIONS__.length
+      : 0;
+    const wineSelect = document.getElementById("mbLcTimedChallengeWine");
+    const updatedStatus = document.getElementById(wineStatusId);
+    if (updatedStatus) {
+      updatedStatus.textContent = `Wines loaded: ${wineCount}` + (
+        wineSelect && wineSelect.options && wineSelect.options.length > 1
+          ? ""
+          : " (no selectable wines)"
+      );
+    }
+  })();
   wireManagerTimedChallengeActionPanel?.();
   renderManagerTimedChallengeActionMeta?.();
 
@@ -17265,6 +18480,7 @@ function renderManagerDisplayMethodActionPanel() {
     document.getElementById("mbLcDisplayMethodTarget"),
     { selectedUserId: window.__BC_MB_ACTIVE_THREAD_USER_ID__ || "" }
   );
+  renderTimedChallengeTargetOptions();
   wireManagerDisplayMethodActionPanel?.();
   renderManagerDisplayMethodActionMeta?.();
   renderDisplayMethodChallengeRecentSummary?.();
@@ -17383,7 +18599,7 @@ function renderManagerDrillHint(targetUserId) {
     text = "Suggested: Read drill based on the latest weak result.";
   } else if (guest === "griever") {
     text = "Suggested: Recovery drill due to softer, resistant guest energy.";
-  } else if (guest === "decider") {
+  } else if (guest === "decider" || guest === "dictator") {
     text = "Suggested: Closing or read drill for decisive-table handling.";
   } else if (guest === "fancy") {
     text = "Suggested: Frame or delivery drill for precision and confidence.";
@@ -17425,23 +18641,23 @@ async function mbSendDrillOverride(opts = {}) {
   const sig = String(latestPayload?.chainSignal || "").toLowerCase();
 
   let focus = String(opts.focus || "").toLowerCase() || "read";
-  let pool = ["decider", "bargain_smart", "griever"];
+  let pool = ["dictator", "bargain_smart", "griever"];
   let tier = 1;
   let durationSec = 300;
   let repTarget = 3;
 
   if (focus === "read") {
-    if (guest === "decider") pool = ["decider"];
-    else pool = ["decider", "bargain_smart", "griever"];
+    if (guest === "decider" || guest === "dictator") pool = ["dictator"];
+    else pool = ["dictator", "bargain_smart", "griever"];
   } else if (focus === "frame") {
-    pool = ["decider", "fancy"];
+    pool = ["dictator", "fancy"];
   } else if (focus === "delivery") {
-    pool = ["decider", "fancy", "griever"];
+    pool = ["dictator", "fancy", "griever"];
   } else if (focus === "recovery") {
-    pool = ["griever", "decider"];
+    pool = ["griever", "dictator"];
     repTarget = 4;
   } else if (focus === "closing") {
-    pool = ["decider", "fancy"];
+    pool = ["dictator", "fancy"];
   }
 
   if (!opts.focus && (sig === "soft_close" || sig === "red")) {
@@ -17498,17 +18714,7 @@ function renderManagerDrillActionPanel() {
   const root = document.getElementById("mbDrillQuickActionsPanel");
   if (!root) return;
   const caps = getPremiumRoleCapabilities(appState?.profile);
-  if (!caps.canAssignDrills) {
-    root.innerHTML = `
-      <div class="card" style="display:flex; flex-direction:column; gap:8px; padding:12px;">
-        <div style="font-weight:600;">Assign Drill</div>
-        <div class="small-text" style="opacity:.8;">
-          Your role cannot assign drills in this restaurant context.
-        </div>
-      </div>
-    `;
-    return;
-  }
+  const canSend = !!caps.canAssignDrills;
 
   root.innerHTML = `
     <div class="card" style="display:flex; flex-direction:column; gap:10px; padding:12px;">
@@ -17538,7 +18744,7 @@ function renderManagerDrillActionPanel() {
         </select>
       </div>
       <div class="row" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-        <button id="mbLcDrillSend" class="btn" type="button">Assign Drill</button>
+        <button id="mbLcDrillSend" class="btn" type="button" ${canSend ? "" : "disabled"}>Assign Drill</button>
         <div id="mbLcDrillStatus" class="small-text" style="opacity:.85;"></div>
       </div>
       <div id="mbLcDrillHint" class="small-text" style="opacity:.8;"></div>
@@ -17551,6 +18757,11 @@ function renderManagerDrillActionPanel() {
   );
 
   renderManagerDrillHint(window.__BC_MB_ACTIVE_THREAD_USER_ID__ || "");
+  if (!canSend) {
+    const hint = document.getElementById("mbLcDrillHint");
+    if (hint) hint.textContent = "Your role cannot assign drills in this restaurant context.";
+  }
+  renderTimedChallengeTargetOptions();
   wireManagerDrillActionPanel?.();
 }
 
@@ -17809,6 +19020,8 @@ function renderManagerBoardMembersFromRows(rid, staffRows, snapshot) {
     : `${staffRows.length} member(s) loaded.`;
   renderManagerPeopleSummary();
   renderTimedChallengeTargetOptions();
+  renderTimedChallengeWineSelectOptionsFromCache?.(rid);
+  safeCall("renderManagerBoardOverviewRitualStatusCard", () => renderManagerBoardOverviewRitualStatusCard?.());
 }
 
 async function loadManagerBoardMembers(options = {}) {
@@ -18244,12 +19457,26 @@ async function loadManagerBoardData(restaurantId = null, options = {}) {
       try { appState.restaurant = await loadRestaurant(rid); } catch {}
     }
 
+    try {
+      await refreshManagerWineOptions(rid, { force });
+    } catch (error) {
+      console.warn("[MB] wine cache refresh failed", error);
+    }
+    try {
+      await loadTimedChallengeWineOptions();
+    } catch (error) {
+      console.warn("[MB] timed challenge wine refresh failed", error);
+    }
+
     document.getElementById("mbRestName").textContent =
       appState.restaurant?.name || (String(rid).slice(0, 8) + "…");
     document.getElementById("mbMsg").textContent = "";
     renderParentStateDebugCard();
+    safeCall("renderManagerBoardOverviewRitualStatusCard", () => renderManagerBoardOverviewRitualStatusCard?.());
     wireManagerBoardMembers();
     if (isFreshCacheEntry(managerBoardOverviewCache, MANAGER_BOARD_OVERVIEW_CACHE_MS, rid) && !force) {
+      await loadManagerBoardMembers();
+      safeCall("renderManagerBoardOverviewRitualStatusCard", () => renderManagerBoardOverviewRitualStatusCard?.());
       renderManagerBoardAbilityTabs();
       return;
     }
@@ -18574,6 +19801,7 @@ async function loadAuthedState(reason = "manual") {
       appState.restaurant = null;
     }
     markActiveRestaurantReady();
+    hydrateStoredDifficultyForProfile();
   } catch (e) {
     console.warn("[BC] loadAuthedState: resolve/load restaurant failed", e);
     appState.restaurant = null;
@@ -19516,6 +20744,13 @@ function setCurrentDifficultyValue(nextValue) {
   const difficulty = n <= 1 ? 1 : n >= 3 ? 3 : 2;
 
   appState.difficulty = difficulty;
+  try {
+    setStoredDifficultyValue(
+      appState?.profile?.user_id || appState?.session?.user?.id || null,
+      getManagerActiveRestaurantId?.() || appState?.activeRestaurantId || appState?.restaurant?.id || appState?.profile?.restaurant_id || null,
+      difficulty
+    );
+  } catch {}
 
   try {
     postToGame?.("difficulty_set", { difficulty });

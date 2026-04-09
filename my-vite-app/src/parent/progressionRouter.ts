@@ -2,12 +2,14 @@
 import { getSupabaseParent } from "../lib/supabaseParent.js";
 import { decideAllowedTierFromSnapshot, describeLockReasons } from "../game/progressionEvaluator";
 import type { Tier, ProgressionSnapshot } from "../game/progressionRules";
+import { normalizeProgressionSnapshot } from "./progressionShared.js";
 
 export type DecideAllowedTierInput = {
   userId?: string | null;
   restaurantId?: string | null;
 
   desiredTier: Tier;
+  snapshot?: ProgressionSnapshot | null;
   pointsTotal?: number | null;
 
   encountersTotal?: number | null;
@@ -73,7 +75,7 @@ export async function decideAllowedTier(
   const desiredTier: Tier =
     input.desiredTier === 3 ? 3 : input.desiredTier === 2 ? 2 : 1;
 
-  let snap: ProgressionSnapshot = {
+  let snap: ProgressionSnapshot = normalizeProgressionSnapshot(input.snapshot) || {
     encountersTotal: 0,
     last10Count: 0,
     last10Greens: 0,
@@ -84,9 +86,9 @@ export async function decideAllowedTier(
   };
 
   const pointsTotal = Number(input.pointsTotal);
-  if (Number.isFinite(pointsTotal) && pointsTotal >= 0) {
+  if (!input.snapshot && Number.isFinite(pointsTotal) && pointsTotal >= 0) {
     snap = buildSnapshotFromPoints(pointsTotal);
-  } else if (input.userId && input.restaurantId) {
+  } else if (!input.snapshot && input.userId && input.restaurantId) {
     const supabase = getSupabaseParent();
 
     // Fallback legacy DB views if no points-backed spine is available.
@@ -117,7 +119,7 @@ export async function decideAllowedTier(
     snap.encountersTotal = Number(t?.encounters_total ?? 0) || 0;
     snap.pivotsTaken = Number(t?.pivots_taken_total ?? 0) || 0;
     snap.pivotsSuccess = Number(t?.pivots_success_total ?? 0) || 0;
-  } else {
+  } else if (!input.snapshot) {
     // optional extras if you later wire them
     snap.encountersTotal = input.encountersTotal ?? snap.last10Count;
     snap.pivotsTaken = input.pivotsTaken ?? 0;

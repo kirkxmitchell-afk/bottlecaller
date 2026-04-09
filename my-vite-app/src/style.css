@@ -161,40 +161,81 @@ button, input { font-family: inherit; }
 }
 
 .app-chrome-context{
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 10px;
+  position: relative;
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(150px, 1fr)) !important;
+  justify-content: end !important;
+  gap: 0 !important;
+  min-width: min(620px, 100%) !important;
+  padding: 6px !important;
+  border-radius: 4px !important;
+  border: 1px solid rgba(255,255,255,0.09) !important;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.006)),
+    rgba(5,9,13,0.44) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.03),
+    inset 0 -1px 0 rgba(0,0,0,0.32),
+    0 16px 34px rgba(0,0,0,0.16) !important;
+}
+
+.app-chrome-context::before{
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border-radius: 2px;
+  border: 1px solid rgba(255,255,255,0.04);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.018), transparent 58%),
+    linear-gradient(90deg, rgba(255,255,255,0.03), transparent 18%, transparent 82%, rgba(0,0,0,0.18));
+  pointer-events: none;
 }
 
 .app-chrome-chip{
-  min-width: 152px;
-  padding: 12px 14px;
-  border-radius: 18px;
-  border: 1px solid rgba(255,255,255,0.10);
+  position: relative;
+  min-width: 0 !important;
+  padding: 12px 16px 11px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
   background:
-    linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02)),
-    rgba(255,255,255,0.02);
+    linear-gradient(180deg, rgba(255,255,255,0.012), rgba(255,255,255,0.002)),
+    rgba(0,0,0,0.12) !important;
   box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.04),
-    0 14px 30px rgba(0,0,0,0.16);
+    inset 1px 1px 0 rgba(255,255,255,0.03),
+    inset -1px -1px 0 rgba(0,0,0,0.28) !important;
+  overflow: hidden !important;
+}
+
+.app-chrome-chip + .app-chrome-chip{
+  border-left: 1px solid rgba(255,255,255,0.10) !important;
+}
+
+.app-chrome-chip::before{
+  content: none !important;
 }
 
 .app-chrome-chip-label{
+  position: relative;
+  z-index: 1;
   display: block;
-  margin-bottom: 6px;
-  color: rgba(244,246,247,0.56);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  margin-bottom: 8px !important;
+  color: rgba(244,246,247,0.42) !important;
+  font-size: 9px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.22em !important;
+  text-transform: uppercase !important;
 }
 
 .app-chrome-chip strong{
+  position: relative;
+  z-index: 1;
   display: block;
-  color: rgba(244,246,247,0.94);
-  font-size: 14px;
-  line-height: 1.3;
+  color: rgba(244,246,247,0.98) !important;
+  font-size: 14px !important;
+  line-height: 1.25 !important;
+  letter-spacing: 0 !important;
+  text-transform: uppercase !important;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.28) !important;
 }
 
 .panel {
@@ -1193,14 +1234,19 @@ html[data-bc-mobile-env="true"] .app-chrome-copy{
 
 html[data-bc-mobile-env="true"] .app-chrome-context{
   justify-content: stretch;
-  gap: 8px;
+  grid-template-columns: 1fr;
+  gap: 0;
+  min-width: 0;
+  padding: 8px;
 }
 
 html[data-bc-mobile-env="true"] .app-chrome-chip{
-  min-width: 0;
-  flex: 1 1 calc(50% - 8px);
-  padding: 8px 10px;
-  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+html[data-bc-mobile-env="true"] .app-chrome-chip + .app-chrome-chip{
+  border-left: 0;
+  border-top: 1px solid rgba(255,255,255,0.08);
 }
 
 html[data-bc-mobile-env="true"] .panel,

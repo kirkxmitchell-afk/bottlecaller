@@ -67,6 +67,7 @@ export async function requestWines(rid: string) {
   postToParent({
     type: "wines_request",
     reqId,
+    restaurantId: rid,
   });
 
   const res = await waitFor("wines_report", (m) => m.reqId === reqId, 12000);

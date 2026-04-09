@@ -1,4 +1,4 @@
-export type EncounterStepKey = "observe" | "mode" | "hook" | "deliver";
+export type EncounterStepKey = "observe" | "mode" | "flash_learn" | "problem_solve";
 
 export type ReactionAccuracy = "correct" | "slight" | "wrong";
 

@@ -36,10 +36,10 @@ export function buildStepReaction(args: BuildReactionArgs): ReactionRecord {
       return buildObserveReaction(args);
     case "mode":
       return buildModeReaction(args);
-    case "hook":
-      return buildHookReaction(args);
-    case "deliver":
-      return buildDeliverReaction(args);
+    case "flash_learn":
+      return buildFlashLearnReaction(args);
+    case "problem_solve":
+      return buildProblemSolveReaction(args);
     default:
       return buildFallbackReaction(args);
   }
@@ -181,13 +181,13 @@ export function buildModeReaction(args: BuildReactionArgs): ReactionRecord {
   );
 }
 
-export function buildHookReaction(args: BuildReactionArgs): ReactionRecord {
+export function buildFlashLearnReaction(args: BuildReactionArgs): ReactionRecord {
   const accuracy = mapEvalToAccuracy(args.evalResult);
 
   if (accuracy === "correct") {
     return finalizeReactionRecord(
       {
-        stepKey: "hook",
+        stepKey: "flash_learn",
         guestState: args.guestState,
       },
       {
@@ -209,7 +209,7 @@ export function buildHookReaction(args: BuildReactionArgs): ReactionRecord {
   if (accuracy === "slight") {
     return finalizeReactionRecord(
       {
-        stepKey: "hook",
+        stepKey: "flash_learn",
         guestState: args.guestState,
       },
       {
@@ -230,7 +230,7 @@ export function buildHookReaction(args: BuildReactionArgs): ReactionRecord {
 
   return finalizeReactionRecord(
     {
-      stepKey: "hook",
+      stepKey: "flash_learn",
       guestState: args.guestState,
     },
     {
@@ -249,13 +249,13 @@ export function buildHookReaction(args: BuildReactionArgs): ReactionRecord {
   );
 }
 
-export function buildDeliverReaction(args: BuildReactionArgs): ReactionRecord {
+export function buildProblemSolveReaction(args: BuildReactionArgs): ReactionRecord {
   const accuracy = mapEvalToAccuracy(args.evalResult);
 
   if (accuracy === "correct") {
     return finalizeReactionRecord(
       {
-        stepKey: "deliver",
+        stepKey: "problem_solve",
         guestState: args.guestState,
       },
       {
@@ -277,7 +277,7 @@ export function buildDeliverReaction(args: BuildReactionArgs): ReactionRecord {
   if (accuracy === "slight") {
     return finalizeReactionRecord(
       {
-        stepKey: "deliver",
+        stepKey: "problem_solve",
         guestState: args.guestState,
       },
       {
@@ -298,7 +298,7 @@ export function buildDeliverReaction(args: BuildReactionArgs): ReactionRecord {
 
   return finalizeReactionRecord(
     {
-      stepKey: "deliver",
+      stepKey: "problem_solve",
       guestState: args.guestState,
     },
     {

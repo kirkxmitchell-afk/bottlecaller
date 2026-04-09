@@ -1,4 +1,6 @@
 // progressionStore.js
+export const AVAILABLE_TONES = ["guide", "charm", "authority"];
+
 export function deriveTier(points) {
   const pts = Number(points || 0);
   if (pts >= 10) return 3;
@@ -9,9 +11,9 @@ export function deriveTier(points) {
 export function unlockedGuestTypes(points) {
   const pts = Number(points || 0);
   const tier = deriveTier(pts);
-  const base = ["decider", "bargain_smart", "griever"];
-  if (tier >= 2) base.push("budget_guard");
-  if (tier >= 3) base.push("make_it_easy");
+  const base = ["dictator", "bargain_smart", "griever"];
+  if (tier >= 2) base.push("fancy");
+  if (tier >= 3) base.push("celebrator");
   return base;
 }
 
@@ -21,16 +23,18 @@ export function encounterRangeForPoints(points) {
 }
 
 export function getUnlockedModesForTier(tier) {
-  const t = Number(tier || 1);
-  if (t <= 1) return ["scout", "guide", "charm"];
-  if (t === 2) return ["scout", "guide", "charm", "authority"];
-  return ["scout", "guide", "charm", "authority"];
+  void tier;
+  return AVAILABLE_TONES.slice();
 }
 
 export function getUnlockedModesForPoints(points) {
   const pts = Number(points || 0);
   const tier = deriveTier(pts);
   return getUnlockedModesForTier(tier);
+}
+
+export function getAvailableTones() {
+  return AVAILABLE_TONES.slice();
 }
 
 export function getBaseReward(activityType) {
@@ -288,8 +292,8 @@ export function createProgressionStore(storage = window.localStorage) {
       history: { completedEncounterIds: [], successCount: 0, failCount: 0 },
       session: {
         currentEncounterId: 1,
-        mode: "scout",
-        guestTypeSelected: "decider",
+        mode: "guide",
+        guestTypeSelected: "dictator",
         runEase: 1.0,
         runEaseRemaining: 0
       },
@@ -325,8 +329,10 @@ export function createProgressionStore(storage = window.localStorage) {
 
     s.session = s.session || {};
     s.session.currentEncounterId = Number.isFinite(s.session.currentEncounterId) ? s.session.currentEncounterId : 1;
-    s.session.mode = typeof s.session.mode === "string" ? s.session.mode : "scout";
-    s.session.guestTypeSelected = typeof s.session.guestTypeSelected === "string" ? s.session.guestTypeSelected.toLowerCase() : "decider";
+    s.session.mode = typeof s.session.mode === "string" ? s.session.mode : "guide";
+    s.session.guestTypeSelected = typeof s.session.guestTypeSelected === "string"
+      ? s.session.guestTypeSelected.toLowerCase().replace("decider", "dictator")
+      : "dictator";
     if (!Number.isFinite(s.session.runEase)) s.session.runEase = 1.0;
     if (!Number.isFinite(s.session.runEaseRemaining)) s.session.runEaseRemaining = 0;
 
@@ -859,6 +865,7 @@ export function createProgressionStore(storage = window.localStorage) {
         runEase: () => state.session.runEase || 1.0,
         runEaseRemaining: () => state.session.runEaseRemaining || 0,
         guestTypes: () => unlockedGuestTypes(state.points),
+        tones: () => getAvailableTones(),
         modes: () => unlockedModes(state.points),
         encounterRange: () => encounterRangeForPoints(state.points)
       },

@@ -494,6 +494,22 @@ export function makeProgressReportSubmitHandler({
         ok: true,
         inserted,
         updated: !!writeResult?.updated,
+        serverSkillSnapshot:
+          nextPayload?.skills && typeof nextPayload.skills === "object"
+            ? {
+                read: Number(nextPayload.skills.read || 0),
+                framing: Number(nextPayload.skills.framing || 0),
+                delivery: Number(nextPayload.skills.delivery || 0),
+                recovery: Number(nextPayload.skills.recovery || 0),
+                closing: Number(nextPayload.skills.closing || 0),
+              }
+            : null,
+        serverProgressionState:
+          nextPayload?.progressionState && typeof nextPayload.progressionState === "object"
+            ? nextPayload.progressionState
+            : null,
+        syncedEncounterNumber: nextPayload?.encounterNumber ?? null,
+        syncedAt: nextPayload?.updatedAt ?? Date.now(),
         progressionStateOk: !!progressionStateResult?.ok,
         progressionStateSkipped: !!progressionStateResult?.skipped,
         progressionStateError:

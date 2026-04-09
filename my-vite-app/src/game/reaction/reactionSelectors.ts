@@ -120,7 +120,7 @@ export function deriveBestPath(runtime: EncounterRuntimeState): string[] {
     return runtime.bestPath;
   }
 
-  return ["observe", "mode", "hook", "deliver"];
+  return ["observe", "mode", "problem_solve"];
 }
 
 export function deriveBottleServed(runtime: EncounterRuntimeState): boolean {
@@ -128,11 +128,11 @@ export function deriveBottleServed(runtime: EncounterRuntimeState): boolean {
     return runtime.bottleServed;
   }
 
-  const deliverReaction = (runtime.reactionHistory ?? []).find(
-    (reaction) => reaction.step === "deliver"
+  const problemSolveReaction = (runtime.reactionHistory ?? []).find(
+    (reaction) => reaction.step === "problem_solve"
   );
 
-  if (deliverReaction?.accuracy === "correct") return true;
+  if (problemSolveReaction?.accuracy === "correct") return true;
 
   const total = (runtime.reactionHistory ?? []).reduce(
     (sum, reaction) => sum + reaction.successPolarity,

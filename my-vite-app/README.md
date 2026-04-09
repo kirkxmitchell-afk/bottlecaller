@@ -10,6 +10,8 @@ Use these settings in the Cloudflare Pages project:
 - Build output directory: `dist`
 - Root directory: `my-vite-app` if deploying from the repo root, otherwise leave blank if this folder is the repo root in Pages
 
+If Cloudflare runs `wrangler versions upload` from the repository root, keep the repo-root `wrangler.toml` checked in. It points Wrangler at `my-vite-app/dist` so static asset uploads still succeed even when the app itself lives in a subdirectory.
+
 Set these environment variables in the Pages project before deploying:
 
 - `VITE_SUPABASE_URL`

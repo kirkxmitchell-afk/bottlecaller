@@ -22,7 +22,7 @@ export function createTutorialRuntime({
         id: "intro",
         target: null,
         title: "Wine Setup Tutorial",
-        body: "This walkthrough will show you where the wine setup tools are and what each field does.",
+        body: "This walkthrough will show you where the wine setup tools are and what each field in the current add-wine form does.",
         placement: "center",
         action: "none",
         before: async () => {
@@ -41,7 +41,7 @@ export function createTutorialRuntime({
         id: "open-setup",
         target: '[data-tutorial="wine-panel"]',
         title: "Wine Setup Panel",
-        body: roleText,
+        body: `${roleText} Use this area to build the active wine list and table-ready bottle details.`,
         placement: "top",
         action: "none",
         before: async () => {
@@ -95,15 +95,6 @@ export function createTutorialRuntime({
         before: ensurePremiumWineAdvancedOpen,
       },
       {
-        id: "process",
-        target: '[data-tutorial="wine-process"]',
-        title: "Process",
-        body: "Use this field for optional production details.",
-        placement: "bottom",
-        action: "none",
-        before: ensurePremiumWineAdvancedOpen,
-      },
-      {
         id: "region",
         target: '[data-tutorial="wine-region"]',
         title: "Region",
@@ -113,19 +104,10 @@ export function createTutorialRuntime({
         before: ensurePremiumWineAdvancedOpen,
       },
       {
-        id: "story",
-        target: '[data-tutorial="wine-story"]',
-        title: "Story",
-        body: "Add a short one-line story or memory hook here.",
-        placement: "top",
-        action: "none",
-        before: ensurePremiumWineAdvancedOpen,
-      },
-      {
         id: "add-button",
         target: '[data-tutorial="wine-add"]',
         title: "Add Wine",
-        body: "Once the fields are ready, this button adds the wine to the list.",
+        body: "Once the required fields and tags are ready, this button adds the wine to the list.",
         placement: "left",
         action: "none",
         before: ensurePremiumWineAdvancedOpen,
@@ -134,7 +116,7 @@ export function createTutorialRuntime({
         id: "wine-list",
         target: '[data-tutorial="wine-list"]',
         title: "Wine List",
-        body: "All configured wines appear here.",
+        body: "Your configured wine cards and the wine table appear here. This is the list the encounter flow uses.",
         placement: "top",
         action: "none",
         before: ensurePremiumWineAdvancedOpen,
@@ -143,7 +125,7 @@ export function createTutorialRuntime({
         id: "start-button",
         target: '[data-tutorial="encounter-start"]',
         title: "Start",
-        body: "This returns you to the premium app after setup.",
+        body: "This starts the encounter flow using the current wine setup.",
         placement: "top",
         action: "none",
       },
@@ -151,7 +133,7 @@ export function createTutorialRuntime({
         id: "end",
         target: null,
         title: "Done",
-        body: "You've now seen the main wine setup fields and actions.",
+        body: "You've now seen the current wine setup fields and actions.",
         placement: "center",
         action: "none",
       },
@@ -197,7 +179,7 @@ export function createTutorialRuntime({
         id: "load-begin",
         buttonLabels: ["BEGIN"],
         title: "Begin the Encounter",
-        body: "The encounter is loaded. Click BEGIN to move into Observe.",
+        body: "The encounter is loaded. Click BEGIN to move into Table.",
         placement: "top",
         disableNext: true,
         before: async () => {
@@ -209,32 +191,43 @@ export function createTutorialRuntime({
         },
       },
       {
-        id: "observe",
+        id: "table",
         target: '[data-tutorial="guest-clue"]',
-        title: "Observe the Guest",
-        body: "You are now in Observe. Read the guest prompt and cues before choosing a read.",
+        title: "Table",
+        body: "You are now in Table. Read the table illustration area, guest depiction, and cues before moving on.",
         placement: "bottom",
-        disableNext: true,
         before: async () => {
           await waitForStep(1);
         },
+      },
+      {
+        id: "table-continue",
+        buttonLabels: ["CONTINUE TO GUEST READ"],
+        title: "Continue to Guest Read",
+        body: "Click CONTINUE TO GUEST READ to move from the table scene into the guest read step.",
+        placement: "top",
+        disableNext: true,
+        before: async () => {
+          await waitForStep(1);
+          await waitForButton("CONTINUE TO GUEST READ");
+        },
         autoAdvance: async () => {
-          await waitMs(900);
+          await waitForTutorialCondition(() => Number(getGameWindow()?.currentStep) === 2, "guest read step shown");
         },
       },
       {
         id: "select-read",
         target: '[data-tutorial="guest-clue"]',
-        title: "Choose a Read",
-        body: "You are in Observe. Read the guest and select the guest type from the buttons in this panel.",
+        title: "Guest Read",
+        body: "You are now in Guest Read. Select the guest type from the buttons in this panel.",
         placement: "top",
         disableNext: true,
         before: async () => {
-          await waitForStep(1);
+          await waitForStep(2);
         },
         autoAdvance: async () => {
           await waitForTutorialCondition(
-            () => Number(getGameWindow()?.currentStep) === 1 && !!getGameEncounter()?.guestReadSelected,
+            () => Number(getGameWindow()?.currentStep) === 2 && !!getGameEncounter()?.guestReadSelected,
             "guest read selected"
           );
         },
@@ -246,7 +239,7 @@ export function createTutorialRuntime({
         body: "Now click LOCK IN to confirm your read.",
         placement: "top",
         before: async () => {
-          await waitForStep(1);
+          await waitForStep(2);
           await waitForButton("LOCK IN");
         },
         disableNext: true,
@@ -257,8 +250,8 @@ export function createTutorialRuntime({
       {
         id: "observe-preview",
         buttonLabels: ["CONTINUE TO NEXT STEP"],
-        title: "Continue to Mode",
-        body: "The game shows a quick step reaction here. Click CONTINUE TO NEXT STEP to move into Mode.",
+        title: "Continue to Tone",
+        body: "The game shows a quick table reaction here. Click CONTINUE TO NEXT STEP to move into Tone.",
         placement: "top",
         disableNext: true,
         before: async () => {
@@ -266,22 +259,22 @@ export function createTutorialRuntime({
           await waitForAnyButton(["CONTINUE TO NEXT STEP"]);
         },
         autoAdvance: async () => {
-          await waitForTutorialCondition(() => Number(getGameWindow()?.currentStep) === 2, "mode step shown");
+          await waitForTutorialCondition(() => Number(getGameWindow()?.currentStep) === 3, "tone step shown");
         },
       },
       {
         id: "select-mode",
         target: '[data-tutorial="guest-clue"]',
-        title: "Select a Mode",
-        body: "You are in Mode. Choose how you want to handle the guest.",
+        title: "Select a Tone",
+        body: "You are in Tone. Choose the tone you want to use with the guest.",
         placement: "top",
         disableNext: true,
         before: async () => {
-          await waitForStep(2);
+          await waitForStep(3);
         },
         autoAdvance: async () => {
           await waitForTutorialCondition(
-            () => Number(getGameWindow()?.currentStep) === 2 && !!getGameEncounter()?.modeSelected,
+            () => Number(getGameWindow()?.currentStep) === 3 && !!getGameEncounter()?.modeSelected,
             "mode selected"
           );
         },
@@ -290,10 +283,10 @@ export function createTutorialRuntime({
         id: "continue-mode",
         buttonLabels: ["CONTINUE"],
         title: "Continue",
-        body: "Click CONTINUE to lock in your approach.",
+        body: "Click CONTINUE to lock in your chosen tone.",
         placement: "top",
         before: async () => {
-          await waitForStep(2);
+          await waitForStep(3);
           await waitForButton("CONTINUE");
         },
         disableNext: true,
@@ -304,8 +297,8 @@ export function createTutorialRuntime({
       {
         id: "mode-preview",
         buttonLabels: ["CONTINUE TO NEXT STEP"],
-        title: "Continue to Hook",
-        body: "The game shows another quick reaction here. Click CONTINUE TO NEXT STEP to move into Hook.",
+        title: "Continue to Flash Learn",
+        body: "The game shows another quick reaction here. Click CONTINUE TO NEXT STEP to move into Flash Learn of Wine.",
         placement: "top",
         disableNext: true,
         before: async () => {
@@ -313,93 +306,77 @@ export function createTutorialRuntime({
           await waitForAnyButton(["CONTINUE TO NEXT STEP"]);
         },
         autoAdvance: async () => {
-          await waitForTutorialCondition(() => Number(getGameWindow()?.currentStep) === 3, "hook step shown");
+          await waitForTutorialCondition(() => Number(getGameWindow()?.currentStep) === 4, "flash learn step shown");
         },
       },
       {
-        id: "select-hook",
+        id: "select-flash-learn",
         target: '[data-tutorial="guest-clue"]',
-        title: "Select a Hook",
-        body: "You are in Hook. Choose the opening angle for your recommendation.",
+        title: "Start Flash Learn",
+        body: "You are in Flash Learn of Wine. Start the 5 wine flashes and let the timed sequence finish.",
         placement: "top",
         disableNext: true,
         before: async () => {
-          await waitForStep(3);
+          await waitForStep(4);
         },
         autoAdvance: async () => {
           await waitForTutorialCondition(
-            () => Number(getGameWindow()?.currentStep) === 3 && !!getGameEncounter()?.hookSelected,
-            "hook selected"
+            () => Number(getGameWindow()?.currentStep) === 4 && !!getGameEncounter()?.flashLearnCompleted,
+            "flash learn complete"
           );
         },
       },
       {
-        id: "continue-hook",
+        id: "continue-flash-learn",
         buttonLabels: ["CONTINUE"],
         title: "Continue",
-        body: "Click CONTINUE to lock in the opening angle.",
+        body: "Click CONTINUE to lock in Flash Learn and move to Deliver.",
         placement: "top",
         before: async () => {
-          await waitForStep(3);
+          await waitForStep(4);
           await waitForButton("CONTINUE");
         },
         disableNext: true,
         autoAdvance: async () => {
-          await waitForTutorialCondition(() => Number(getGameWindow()?.currentStep) === 55, "hook preview shown");
+          await waitForTutorialCondition(() => Number(getGameWindow()?.currentStep) === 5, "deliver step shown");
         },
       },
       {
-        id: "hook-preview",
-        buttonLabels: ["CONTINUE TO NEXT STEP"],
-        title: "Continue to Delivery",
-        body: "Click CONTINUE TO NEXT STEP to move into Delivery.",
-        placement: "top",
-        disableNext: true,
-        before: async () => {
-          await waitForStep(55);
-          await waitForAnyButton(["CONTINUE TO NEXT STEP"]);
-        },
-        autoAdvance: async () => {
-          await waitForTutorialCondition(() => Number(getGameWindow()?.currentStep) === 4, "delivery step shown");
-        },
-      },
-      {
-        id: "select-delivery",
+        id: "select-problem-solve",
         target: '[data-tutorial="guest-clue"]',
-        title: "Select Both Lines",
-        body: "You are in Delivery. Choose one option from each delivery group to build the two-sentence pitch.",
+        title: "Deliver",
+        body: "You are in Deliver. Choose the best 2-option prompt for the guest and table.",
         placement: "top",
         disableNext: true,
         before: async () => {
-          await waitForStep(4);
+          await waitForStep(5);
         },
         autoAdvance: async () => {
           await waitForTutorialCondition(
             () =>
-              Number(getGameWindow()?.currentStep) === 4 &&
-              getGameEncounter()?.selectedS1 != null &&
-              getGameEncounter()?.selectedS2 != null,
-            "delivery lines selected"
+              Number(getGameWindow()?.currentStep) === 5 &&
+              !!getGameEncounter()?.problemSolveSelectedPrompt,
+            "problem solve prompt selected"
           );
         },
       },
       {
-        id: "continue-delivery",
-        buttonLabels: ["SAY IT"],
-        title: "Say It",
-        body: "Click SAY IT to deliver the recommendation and resolve the encounter.",
+        id: "continue-problem-solve",
+        buttonLabels: ["LOCK PROMPT"],
+        title: "Lock Prompt",
+        body: "Click LOCK PROMPT to lock in the delivery choice and resolve the encounter.",
         placement: "top",
         before: async () => {
-          await waitForStep(4);
-          await waitForButton("SAY IT");
+          await waitForStep(5);
+          await waitForButton("LOCK PROMPT");
         },
         disableNext: true,
         autoAdvance: async () => {
-          await waitForTutorialCondition(() => Number(getGameWindow()?.currentStep) === 55, "delivery preview shown");
+          await waitForTutorialCondition(() => Number(getGameWindow()?.currentStep) === 55, "problem solve preview shown");
         },
       },
       {
-        id: "delivery-preview",
+        id: "problem-solve-preview",
         buttonLabels: ["GO TO REACTION"],
         title: "Go to Reaction",
         body: "Click GO TO REACTION to see the encounter result.",
@@ -410,7 +387,7 @@ export function createTutorialRuntime({
           await waitForAnyButton(["GO TO REACTION"]);
         },
         autoAdvance: async () => {
-          await waitForTutorialCondition(() => Number(getGameWindow()?.currentStep) === 5, "reaction shown");
+          await waitForTutorialCondition(() => Number(getGameWindow()?.currentStep) === 6, "reaction shown");
         },
       },
       {
@@ -421,14 +398,36 @@ export function createTutorialRuntime({
         placement: "top",
         disableNext: true,
         before: async () => {
-          await waitForStep(5);
+          await waitForStep(6);
           await waitForAnyButton(["REFLECT", "CONTINUE TO REFLECTION"]);
         },
         autoAdvance: async () => {
           await waitForTutorialCondition(() => {
             const step = Number(getGameWindow()?.currentStep);
-            return step === 6 || step === 7;
+            return step === 7 || step === 8 || step === 65;
           }, "reflection shown");
+        },
+      },
+      {
+        id: "recover-the-table",
+        target: "#stepContent",
+        title: "Recover the Table",
+        body: "Recovery is active. Choose the best recovery option, then continue to reflection.",
+        placement: "top",
+        disableNext: true,
+        skipIf: async () => {
+          const step = Number(getGameWindow()?.currentStep);
+          return step !== 65;
+        },
+        before: async () => {
+          await waitForStep(65);
+          await waitForAnyButton(["CONTINUE TO REFLECTION"]);
+        },
+        autoAdvance: async () => {
+          await waitForTutorialCondition(() => {
+            const step = Number(getGameWindow()?.currentStep);
+            return step === 7 || step === 8;
+          }, "recovery completed");
         },
       },
       {
@@ -440,7 +439,7 @@ export function createTutorialRuntime({
         before: async () => {
           await waitForTutorialCondition(() => {
             const step = Number(getGameWindow()?.currentStep);
-            return (step === 6 || step === 7) && !!getTutorialTarget('[data-tutorial="reflection-summary"]');
+            return (step === 7 || step === 8) && !!getTutorialTarget('[data-tutorial="reflection-summary"]');
           }, "reflection summary ready");
         },
       },
@@ -500,7 +499,7 @@ export function createTutorialRuntime({
         id: "intro",
         target: null,
         title: "Manager Board",
-        body: "This walkthrough takes you through the Manager Board tabs and key sections. Press Continue in this prompt to move to the next tutorial screen.",
+        body: "This walkthrough covers the current Manager Board sections: Overview, People, Messenger, Live Controls, Performance, Selection, and Billing.",
         placement: "center",
         before: async () => {
           await ensureManagerBoardTutorialReady();
@@ -510,7 +509,7 @@ export function createTutorialRuntime({
         id: "tabs",
         target: "#mbMenu",
         title: "Board Navigation",
-        body: "This tab row is the main Manager Board navigation. The tutorial will take you through each area one by one.",
+        body: "Use this tab row to move between the board sections.",
         placement: "bottom",
         before: async () => {
           await openManagerBoardTutorialTab("overview");
@@ -520,7 +519,17 @@ export function createTutorialRuntime({
         id: "overview",
         target: '[data-tutorial="mb-panel-overview"]',
         title: "Overview",
-        body: "Overview gives you the top-level restaurant summary, current activity, challenge summaries, and quick operational context.",
+        body: "Top-level restaurant picture: ritual status, challenge state, recent activity, and operating context.",
+        placement: "top",
+        before: async () => {
+          await openManagerBoardTutorialTab("overview");
+        },
+      },
+      {
+        id: "overview-ritual-status",
+        target: "#mbOverviewRitualStatus",
+        title: "Ritual Status",
+        body: "Check whether a staff member has completed today’s ritual.",
         placement: "top",
         before: async () => {
           await openManagerBoardTutorialTab("overview");
@@ -530,7 +539,7 @@ export function createTutorialRuntime({
         id: "people-tab",
         target: '[data-tutorial="mb-tab-people"]',
         title: "People Tab",
-        body: "Use People to manage invites, refresh members, and review the staff list for the active restaurant.",
+        body: "Manage invites, refresh members, and review staff.",
         placement: "bottom",
         before: async () => {
           await openManagerBoardTutorialTab("people");
@@ -540,7 +549,17 @@ export function createTutorialRuntime({
         id: "people-panel",
         target: '[data-tutorial="mb-panel-people"]',
         title: "People Section",
-        body: "This section contains invite management, member refresh, search, and the current member roster.",
+        body: "Invite management, member refresh, search, and the current roster.",
+        placement: "top",
+        before: async () => {
+          await openManagerBoardTutorialTab("people");
+        },
+      },
+      {
+        id: "people-summary",
+        target: "#mbPeopleSummary",
+        title: "People Summary",
+        body: "Quick read on the current staff set.",
         placement: "top",
         before: async () => {
           await openManagerBoardTutorialTab("people");
@@ -550,7 +569,7 @@ export function createTutorialRuntime({
         id: "messenger-tab",
         target: '[data-tutorial="mb-tab-messenger"]',
         title: "Messenger Tab",
-        body: "Messenger is where you review waiter threads, assign challenges, and send direct coaching messages.",
+        body: "Review staff threads, assign timed challenges, and send coaching messages.",
         placement: "bottom",
         before: async () => {
           await openManagerBoardTutorialTab("messenger");
@@ -560,7 +579,17 @@ export function createTutorialRuntime({
         id: "messenger-panel",
         target: '[data-tutorial="mb-panel-messenger"]',
         title: "Messenger Section",
-        body: "This area combines challenge assignment, thread review, suggested prompts, and outbound coaching actions.",
+        body: "Timed challenge composer, thread review, suggested prompts, and coaching actions.",
+        placement: "top",
+        before: async () => {
+          await openManagerBoardTutorialTab("messenger");
+        },
+      },
+      {
+        id: "messenger-challenge-composer",
+        target: "#mbTimedChallengeComposer",
+        title: "Timed Challenge Composer",
+        body: "Choose the staff member, challenge type, wine, duration, placement, and reward.",
         placement: "top",
         before: async () => {
           await openManagerBoardTutorialTab("messenger");
@@ -570,7 +599,7 @@ export function createTutorialRuntime({
         id: "live-controls-tab",
         target: '[data-tutorial="mb-tab-live-controls"]',
         title: "Live Controls Tab",
-        body: "Live Controls is where you manage active effects, quick actions, drills, and challenge controls.",
+        body: "Manage active effects, ability economy, drill actions, and challenge controls.",
         placement: "bottom",
         before: async () => {
           await openManagerBoardTutorialTab("live_controls");
@@ -580,7 +609,27 @@ export function createTutorialRuntime({
         id: "live-controls-panel",
         target: '[data-tutorial="mb-panel-live-controls"]',
         title: "Live Controls Section",
-        body: "These panels expose the operational controls that affect live training pressure, abilities, and quick manager actions.",
+        body: "Operational controls for pressure, attributes, area effects, drills, and challenges.",
+        placement: "top",
+        before: async () => {
+          await openManagerBoardTutorialTab("live_controls");
+        },
+      },
+      {
+        id: "live-controls-drill-actions",
+        target: "#mbDrillQuickActionsPanel",
+        title: "Drill Actions",
+        body: "Assign focused training work.",
+        placement: "top",
+        before: async () => {
+          await openManagerBoardTutorialTab("live_controls");
+        },
+      },
+      {
+        id: "live-controls-challenge-actions",
+        target: "#mbTimedChallengeQuickActionsPanel",
+        title: "Challenge Actions",
+        body: "Send a timed challenge from the current restaurant context.",
         placement: "top",
         before: async () => {
           await openManagerBoardTutorialTab("live_controls");
@@ -590,7 +639,7 @@ export function createTutorialRuntime({
         id: "performance-tab",
         target: '[data-tutorial="mb-tab-performance"]',
         title: "Performance Tab",
-        body: "Performance shows history, coaching signals, recent activity, and weekly reporting.",
+        body: "Coaching signals, performance history, recent activity, and weekly reporting.",
         placement: "bottom",
         before: async () => {
           await openManagerBoardTutorialTab("performance");
@@ -600,7 +649,17 @@ export function createTutorialRuntime({
         id: "performance-panel",
         target: '[data-tutorial="mb-panel-performance"]',
         title: "Performance Section",
-        body: "Use this section to inspect training quality over time, identify coaching needs, and review recent performance summaries.",
+        body: "Inspect training quality, coaching needs, and performance summaries.",
+        placement: "top",
+        before: async () => {
+          await openManagerBoardTutorialTab("performance");
+        },
+      },
+      {
+        id: "performance-insights",
+        target: "#mbInsightsPanel",
+        title: "Coaching Insights",
+        body: "Strengths, weak spots, and attention signals.",
         placement: "top",
         before: async () => {
           await openManagerBoardTutorialTab("performance");
@@ -610,7 +669,7 @@ export function createTutorialRuntime({
         id: "selection-tab",
         target: '[data-tutorial="mb-tab-selection"]',
         title: "Selection Tab",
-        body: "Selection is the tournament and selection area for candidate evaluation and comparison.",
+        body: "Candidate comparison, screening, and selection decisions.",
         placement: "bottom",
         before: async () => {
           await openManagerBoardTutorialTab("selection");
@@ -620,7 +679,7 @@ export function createTutorialRuntime({
         id: "selection-panel",
         target: '[data-tutorial="mb-panel-selection"]',
         title: "Selection Section",
-        body: "This area is used for selection review, comparisons, and candidate-facing training decisions.",
+        body: "Selection review, comparisons, and training decisions.",
         placement: "top",
         before: async () => {
           await openManagerBoardTutorialTab("selection");
@@ -630,7 +689,7 @@ export function createTutorialRuntime({
         id: "billing-tab",
         target: '[data-tutorial="mb-tab-billing"]',
         title: "Listing Tab",
-        body: "Listing covers seat and access information for the restaurant.",
+        body: "Seat and access information.",
         placement: "bottom",
         before: async () => {
           await openManagerBoardTutorialTab("billing");
@@ -640,7 +699,7 @@ export function createTutorialRuntime({
         id: "billing-panel",
         target: '[data-tutorial="mb-panel-billing"]',
         title: "Listing Section",
-        body: "Here you can review current seat usage, refresh access details, and see the current provisioning context.",
+        body: "Review seat usage, access details, and provisioning context.",
         placement: "top",
         before: async () => {
           await openManagerBoardTutorialTab("billing");
@@ -656,6 +715,10 @@ export function createTutorialRuntime({
           title: "Enterprise Tab",
           body: "Enterprise opens the enterprise-only controls and rollup surfaces.",
           placement: "bottom",
+          skipIf: async () => {
+            const btn = getTutorialTarget('[data-tutorial="mb-tab-enterprise"]');
+            return !btn || btn.classList.contains("hidden");
+          },
           before: async () => {
             await openManagerBoardTutorialTab("enterprise");
           },
@@ -666,6 +729,10 @@ export function createTutorialRuntime({
           title: "Enterprise Section",
           body: "This section is reserved for enterprise-level controls and cross-restaurant management surfaces.",
           placement: "top",
+          skipIf: async () => {
+            const panel = getTutorialTarget('[data-tutorial="mb-panel-enterprise"]');
+            return !panel || panel.classList.contains("hidden");
+          },
           before: async () => {
             await openManagerBoardTutorialTab("enterprise");
           },
@@ -841,6 +908,14 @@ export function createTutorialRuntime({
       if (!step) {
         stopTutorial();
         return;
+      }
+
+      if (typeof step.skipIf === "function") {
+        const shouldSkip = await step.skipIf();
+        if (shouldSkip) {
+          nextTutorialStep();
+          return;
+        }
       }
 
       removeTutorialOverlay();

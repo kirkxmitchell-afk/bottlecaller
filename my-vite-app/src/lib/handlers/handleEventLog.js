@@ -38,6 +38,7 @@ export async function handleEventLog({
   } = {}) {
     const p = payload || {};
     const checks = p.checks || {};
+    const pivot = p.pivot || {};
     const chosen = p.chosen || {};
     const actual = p.actual || {};
 
@@ -110,6 +111,11 @@ export async function handleEventLog({
           hook_status: hookStatus,
           chain_signal: chainSignal,
           performance_grade: performanceGrade,
+          pivot_type: pivot.type ?? null,
+          pivot_taken: !!pivot.taken,
+          pivot_success: !!pivot.success,
+          recovery_choice: chosen.mode ?? null,
+          recovery_correct: !!pivot.success,
           tier: p.tier ?? null,
           encounter_number: p.encounterNumber ?? p.encounter_number ?? null,
           session_id: p.sessionId ?? p.session_id ?? null,
@@ -135,6 +141,11 @@ export async function handleEventLog({
           chain_signal: chainSignal,
           outcome: p.outcome ?? chainSignal ?? null,
           score: p.score ?? chainScore ?? null,
+          pivot_type: pivot.type ?? null,
+          pivot_taken: !!pivot.taken,
+          pivot_success: !!pivot.success,
+          recovery_choice: chosen.mode ?? null,
+          recovery_correct: !!pivot.success,
         },
       },
       {
@@ -157,6 +168,11 @@ export async function handleEventLog({
           chain_signal: chainSignal,
           outcome: p.outcome ?? chainSignal ?? null,
           score: p.score ?? chainScore ?? null,
+          pivot_type: pivot.type ?? null,
+          pivot_taken: !!pivot.taken,
+          pivot_success: !!pivot.success,
+          recovery_choice: chosen.mode ?? null,
+          recovery_correct: !!pivot.success,
         },
       },
     ];
