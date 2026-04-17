@@ -4852,7 +4852,7 @@
       </div>
 
       <div class="manager-panel app-setup-list">
-        <h3>Wine List</h3>
+        <h3>Wine Cards</h3>
         <table class="wine-table">
           <thead>
             <tr>
@@ -4922,6 +4922,8 @@
             </div>
           </div>
 
+          <h3 style="margin-top:16px;">Wine List</h3>
+
           <!-- TABLE VIEW INSIDE DROPDOWN -->
           <table class="wine-table table-spaced">
             <thead>
@@ -4931,9 +4933,7 @@
                 <th>Fruit</th>
                 <th>Texture</th>
                 <th>Oak</th>
-                <th>Process</th>
                 <th>Region</th>
-                <th>Story</th>
                 <th>Action</th>
               </tr>
             </thead>
@@ -14015,9 +14015,7 @@ function ensureProgLoaded() {
             (wine.fruitTags || []).join(", "),
             (wine.textureTags || []).join(", "),
             wine.oakLevel || "",
-            wine.process || "",
-            wine.region || "",
-            wine.story || ""
+            wine.region || ""
           ];
 
           cols.forEach(text => {
@@ -14063,10 +14061,13 @@ function ensureProgLoaded() {
             { label: "Fruit", value: (wine.fruitTags || []).join(", ") || "—" },
             { label: "Texture", value: (wine.textureTags || []).join(", ") || "—" },
             { label: "Oak", value: wine.oakLevel || "—" },
-            { label: "Process", value: wine.process || "—" },
-            { label: "Region", value: wine.region || "—" },
-            { label: "Story", value: wine.story || "—" }
+            { label: "Region", value: wine.region || "—" }
           ];
+
+          const title = document.createElement("div");
+          title.className = "wine-card-type";
+          title.innerText = "Wine Card";
+          card.appendChild(title);
 
           rows.forEach(row => {
             const line = document.createElement("div");

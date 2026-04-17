@@ -499,7 +499,7 @@ export function createTutorialRuntime({
         id: "intro",
         target: null,
         title: "Manager Board",
-        body: "This walkthrough covers the current Manager Board sections: Overview, People, Messenger, Live Controls, Performance, Selection, and Billing.",
+        body: "This walkthrough covers the current Manager Board sections: Overview, Gameplay Adjustments, Team Performance, and Billing. Messages opens the standalone messenger panel.",
         placement: "center",
         before: async () => {
           await ensureManagerBoardTutorialReady();
@@ -519,7 +519,7 @@ export function createTutorialRuntime({
         id: "overview",
         target: '[data-tutorial="mb-panel-overview"]',
         title: "Overview",
-        body: "Top-level restaurant picture: ritual status, challenge state, recent activity, and operating context.",
+        body: "Top-level restaurant picture: waiter progress, challenge state, recent activity, and operating context.",
         placement: "top",
         before: async () => {
           await openManagerBoardTutorialTab("overview");
@@ -528,61 +528,21 @@ export function createTutorialRuntime({
       {
         id: "overview-ritual-status",
         target: "#mbOverviewRitualStatus",
-        title: "Ritual Status",
-        body: "Check whether a staff member has completed today’s ritual.",
+        title: "Waiter Progress",
+        body: "Check whether a waiter has completed today’s ritual.",
         placement: "top",
         before: async () => {
           await openManagerBoardTutorialTab("overview");
         },
       },
       {
-        id: "people-tab",
-        target: '[data-tutorial="mb-tab-people"]',
-        title: "People Tab",
-        body: "Manage invites, refresh members, and review staff.",
-        placement: "bottom",
-        before: async () => {
-          await openManagerBoardTutorialTab("people");
-        },
-      },
-      {
-        id: "people-panel",
-        target: '[data-tutorial="mb-panel-people"]',
-        title: "People Section",
-        body: "Invite management, member refresh, search, and the current roster.",
-        placement: "top",
-        before: async () => {
-          await openManagerBoardTutorialTab("people");
-        },
-      },
-      {
-        id: "people-summary",
-        target: "#mbPeopleSummary",
-        title: "People Summary",
-        body: "Quick read on the current staff set.",
-        placement: "top",
-        before: async () => {
-          await openManagerBoardTutorialTab("people");
-        },
-      },
-      {
-        id: "messenger-tab",
-        target: '[data-tutorial="mb-tab-messenger"]',
-        title: "Messenger Tab",
-        body: "Review staff threads, assign timed challenges, and send coaching messages.",
-        placement: "bottom",
-        before: async () => {
-          await openManagerBoardTutorialTab("messenger");
-        },
-      },
-      {
         id: "messenger-panel",
-        target: '[data-tutorial="mb-panel-messenger"]',
-        title: "Messenger Section",
-        body: "Timed challenge composer, thread review, suggested prompts, and coaching actions.",
+        target: '#screenManagerMessenger [data-tutorial="mb-panel-messenger"]',
+        title: "Messenger",
+        body: "Thread review, suggested prompts, coaching actions, and timed challenge setup.",
         placement: "top",
         before: async () => {
-          await openManagerBoardTutorialTab("messenger");
+          await window.openManagerMessengerWindow?.();
         },
       },
       {
@@ -592,53 +552,53 @@ export function createTutorialRuntime({
         body: "Choose the staff member, challenge type, wine, duration, placement, and reward.",
         placement: "top",
         before: async () => {
-          await openManagerBoardTutorialTab("messenger");
+          await openManagerBoardTutorialTab("gameplay_adjustments");
         },
       },
       {
-        id: "live-controls-tab",
-        target: '[data-tutorial="mb-tab-live-controls"]',
-        title: "Live Controls Tab",
+        id: "gameplay-adjustments-tab",
+        target: '[data-tutorial="mb-tab-gameplay-adjustments"]',
+        title: "Gameplay Adjustments Tab",
         body: "Manage active effects, ability economy, drill actions, and challenge controls.",
         placement: "bottom",
         before: async () => {
-          await openManagerBoardTutorialTab("live_controls");
+          await openManagerBoardTutorialTab("gameplay_adjustments");
         },
       },
       {
-        id: "live-controls-panel",
-        target: '[data-tutorial="mb-panel-live-controls"]',
-        title: "Live Controls Section",
+        id: "gameplay-adjustments-panel",
+        target: '[data-tutorial="mb-panel-gameplay-adjustments"]',
+        title: "Gameplay Adjustments Section",
         body: "Operational controls for pressure, attributes, area effects, drills, and challenges.",
         placement: "top",
         before: async () => {
-          await openManagerBoardTutorialTab("live_controls");
+          await openManagerBoardTutorialTab("gameplay_adjustments");
         },
       },
       {
-        id: "live-controls-drill-actions",
+        id: "gameplay-adjustments-drill-actions",
         target: "#mbDrillQuickActionsPanel",
         title: "Drill Actions",
         body: "Assign focused training work.",
         placement: "top",
         before: async () => {
-          await openManagerBoardTutorialTab("live_controls");
+          await openManagerBoardTutorialTab("gameplay_adjustments");
         },
       },
       {
-        id: "live-controls-challenge-actions",
+        id: "gameplay-adjustments-challenge-actions",
         target: "#mbTimedChallengeQuickActionsPanel",
         title: "Challenge Actions",
         body: "Send a timed challenge from the current restaurant context.",
         placement: "top",
         before: async () => {
-          await openManagerBoardTutorialTab("live_controls");
+          await openManagerBoardTutorialTab("gameplay_adjustments");
         },
       },
       {
         id: "performance-tab",
         target: '[data-tutorial="mb-tab-performance"]',
-        title: "Performance Tab",
+        title: "Team Performance Tab",
         body: "Coaching signals, performance history, recent activity, and weekly reporting.",
         placement: "bottom",
         before: async () => {
@@ -648,7 +608,7 @@ export function createTutorialRuntime({
       {
         id: "performance-panel",
         target: '[data-tutorial="mb-panel-performance"]',
-        title: "Performance Section",
+        title: "Team Performance Section",
         body: "Inspect training quality, coaching needs, and performance summaries.",
         placement: "top",
         before: async () => {
@@ -663,26 +623,6 @@ export function createTutorialRuntime({
         placement: "top",
         before: async () => {
           await openManagerBoardTutorialTab("performance");
-        },
-      },
-      {
-        id: "selection-tab",
-        target: '[data-tutorial="mb-tab-selection"]',
-        title: "Selection Tab",
-        body: "Candidate comparison, screening, and selection decisions.",
-        placement: "bottom",
-        before: async () => {
-          await openManagerBoardTutorialTab("selection");
-        },
-      },
-      {
-        id: "selection-panel",
-        target: '[data-tutorial="mb-panel-selection"]',
-        title: "Selection Section",
-        body: "Selection review, comparisons, and training decisions.",
-        placement: "top",
-        before: async () => {
-          await openManagerBoardTutorialTab("selection");
         },
       },
       {
