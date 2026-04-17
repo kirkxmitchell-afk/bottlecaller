@@ -559,15 +559,28 @@ document.querySelector("#app").innerHTML = `
           <h2>BottleCaller</h2>
           <span id="premiumBadge" class="badge">PREMIUM</span>
         </div>
-        <div class="row">
-          <button id="btnOpenHud" class="btn-ghost" type="button">Menu</button>
-          <button id="btnOpenMessages" class="btn-ghost" type="button">Messages</button>
-          <button id="btnWaiterPerformanceLeaderboard" class="btn-ghost hidden" type="button">Leaderboard</button>
-          <button id="btnPremiumWineSetup" class="btn-ghost" type="button" data-tutorial="nav-wine-setup">Wine Setup</button>
-          <button id="btnTutorial" class="btn-ghost" type="button">Tutorials</button>
-          <button id="btnManagerBoard" class="btn-ghost" type="button">Manager Board</button>
-          <button id="btnOpenProfile" class="btn-ghost" type="button">Profile</button>
-          <button id="btnLogoutPremium" class="btn-danger" type="button">Logout</button>
+        <div id="premiumTopbarMenuWrap" class="premium-topbar-menu-wrap">
+          <button
+            id="btnPremiumTopbarMenu"
+            class="premium-topbar-menu-button"
+            type="button"
+            aria-label="Open premium menu"
+            aria-expanded="false"
+            aria-controls="premiumTopbarMenuPanel"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M19.14 12.94c.04-.31.06-.62.06-.94s-.02-.63-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.2 7.2 0 0 0-1.63-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.58.22-1.12.53-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.7 8.84a.5.5 0 0 0 .12.64l2.03 1.58c-.04.31-.06.62-.06.94s.02.63.06.94L2.82 14.52a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .6.22l2.39-.96c.5.4 1.05.72 1.63.94l.36 2.54a.5.5 0 0 0 .5.42h3.84a.5.5 0 0 0 .5-.42l.36-2.54c.58-.22 1.13-.54 1.63-.94l2.39.96a.5.5 0 0 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58ZM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7Z" />
+            </svg>
+          </button>
+          <div id="premiumTopbarMenuPanel" class="premium-topbar-menu-panel hidden">
+            <button id="btnOpenMessages" class="btn-ghost" type="button">Messages</button>
+            <button id="btnWaiterPerformanceLeaderboard" class="btn-ghost" type="button">Leaderboard</button>
+            <button id="btnPremiumWineSetup" class="btn-ghost" type="button" data-tutorial="nav-wine-setup">Wine Setup</button>
+            <button id="btnTutorial" class="btn-ghost" type="button">Tutorials</button>
+            <button id="btnManagerBoard" class="btn-ghost" type="button">Manager Board</button>
+            <button id="btnOpenProfile" class="btn-ghost" type="button">Profile</button>
+            <button id="btnLogoutPremium" class="btn-danger" type="button">Logout</button>
+          </div>
         </div>
       </div>
 
@@ -601,7 +614,35 @@ document.querySelector("#app").innerHTML = `
 
       <div id="profileStandingCard" style="margin-top:12px;"></div>
       <div id="profileBadgeShelf" style="margin-top:12px;"></div>
-      <div id="profileInsightCard" style="margin-top:12px;"></div>
+      <div id="profileSkillsCard" style="margin-top:12px;"></div>
+      <div id="profilePerformanceHistoryCard" style="margin-top:12px;">
+        <div id="mbPerformanceHistoryPanel" style="margin-top:12px;">
+          <details class="card mb-disclosure">
+            <summary class="mb-disclosure-summary">
+              <div>
+                <strong>Performance History</strong>
+                <div class="small-text" style="margin-top:6px; opacity:.85;">
+                  Skill growth and encounter reactions for your profile.
+                </div>
+              </div>
+              <label class="small-text" style="display:flex; align-items:center; gap:8px;">
+                Waiter
+                <select id="mbHistoryUser" class="input" style="min-width:220px;"></select>
+              </label>
+            </summary>
+            <div class="mb-disclosure-body">
+              <div id="mbHistorySummaryStrip" style="margin-top:10px;"></div>
+              <canvas id="mbHistoryChart"
+                width="600"
+                height="280"
+                style="margin-top:12px;">
+              </canvas>
+              <div id="mbPerformanceLegend" style="margin-top:8px;"></div>
+              <div id="managerEncounterSummaryHost" class="manager-encounter-summary-host" style="margin-top:12px;"></div>
+            </div>
+          </details>
+        </div>
+      </div>
       <div id="profileTutorialCard" class="hidden" style="margin-top:12px;">
         <div class="card">
           <div style="font-weight:600; margin-bottom:8px;">Tutorials</div>
@@ -656,6 +697,109 @@ document.querySelector("#app").innerHTML = `
     </div>
   </section>
 
+  <section id="screenManagerMessenger" class="screen hidden">
+    <div class="panel stack">
+      <div class="topbar">
+        <div class="brand">
+          <h2>Messenger</h2>
+          <span class="badge">PREMIUM</span>
+        </div>
+        <div class="row">
+          <button id="btnCloseManagerMessenger" class="btn-ghost" type="button">Close</button>
+        </div>
+      </div>
+
+      <div class="card" data-tutorial="mb-panel-messenger">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+          <strong>Messenger</strong>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <button id="mbToggleMessengerPanel" class="btn-ghost" type="button">Close Inbox</button>
+            <button id="mbMsgRefresh" class="btn-ghost" type="button">Refresh</button>
+          </div>
+        </div>
+
+        <div class="small-text" style="margin-top:6px; opacity:.85;">
+          Progress reports from staff + coaching replies. (Per active restaurant.)
+        </div>
+
+        <div id="mbMessengerDeck" style="display:flex; flex-direction:column; gap:0; margin-top:12px;">
+        <div id="mbMessengerColumns" style="display:grid; grid-template-columns: 280px 1fr; gap:12px; margin-top:12px;">
+          <div id="mbMessengerThreadsPane" style="border:1px solid rgba(255,255,255,0.10); border-radius:12px; overflow:hidden;">
+          <div style="padding:10px; border-bottom:1px solid rgba(255,255,255,0.10); font-weight:600;">
+              Staff Threads
+            </div>
+
+            <div style="padding:10px; border-bottom:1px solid rgba(255,255,255,0.10);">
+              <div style="display:flex; gap:8px; align-items:center;">
+                <input
+                  id="mbMessengerSearch"
+                  class="input"
+                  type="search"
+                  placeholder="Search threads by person, message, or type"
+                  style="width:100%;"
+                />
+                <button id="mbMessengerSearchClear" class="btn-ghost" type="button" title="Clear thread search">Clear</button>
+              </div>
+            </div>
+
+            <div id="mbThreadList" style="display:flex; flex-direction:column; gap:0;"></div>
+
+            <div id="mbThreadEmpty" class="small-text" style="padding:10px; display:none; opacity:.8;">
+              No waiter threads yet.
+            </div>
+          </div>
+
+          <div id="mbMessengerDetailPane" style="border:1px solid rgba(255,255,255,0.10); border-radius:12px; overflow:hidden; display:flex; flex-direction:column; min-height:520px;">
+          <div style="padding:10px; border-bottom:1px solid rgba(255,255,255,0.10);">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+              <strong id="mbThreadTitle">Select a waiter</strong>
+              <span id="mbThreadMeta" class="small-text" style="opacity:.75;"></span>
+            </div>
+          </div>
+
+          <div id="mbThreadTimelinePanel" class="card" style="margin:10px 10px 0; padding:10px;"></div>
+
+            <div id="mbThreadMessages"
+              style="flex:1; padding:10px; display:flex; flex-direction:column; gap:8px; overflow-y:auto; min-height:280px; border-top:1px solid rgba(255,255,255,0.10);">
+              <div class="small-text" style="opacity:.8;">Select a waiter thread in this restaurant to assign a timed challenge.</div>
+            </div>
+
+            <div id="mbThreadActions" style="padding:10px; border-top:1px solid rgba(255,255,255,0.10); display:flex; flex-direction:column; gap:10px;">
+              <div id="mbThreadStatePanel" class="card" style="padding:10px;"></div>
+
+              <div id="mbThreadRecommendationsPanel" class="card" style="padding:10px;">
+                <div>
+                  <strong>Suggested prompts</strong>
+                  <div id="mbSuggestedPrompts" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;"></div>
+                </div>
+
+                <div id="mbThreadChallengeRecommendations" style="margin-top:12px;"></div>
+              </div>
+
+              <div class="small-text" style="opacity:.75;">Actions</div>
+              <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                <button id="mbInstrRunDrill" class="btn-ghost" type="button">Run Drill</button>
+                <button id="mbInstrUseSuggestion" class="btn-ghost" type="button">Use Suggestion</button>
+              </div>
+
+              <textarea id="mbInstrBody" class="input"
+                style="width:100%; min-height:110px;"
+                placeholder="Example: Tonight: keep it short + confirm intent first. Run 5-min Guest Reading before shift."></textarea>
+
+              <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                <button id="mbInstrSend" class="btn" type="button">Send Message</button>
+              </div>
+
+              <div class="small-text" id="mbInstrQuota" style="opacity:.78;"></div>
+              <div class="small-text" id="mbInstrStatus" style="opacity:.85;"></div>
+            </div>
+          </div>
+        </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- PREMIUM SETUP (PARENT-OWNED) -->
   <section id="screenSetupPremium" class="screen hidden">
     <div class="panel app-setup-shell">
@@ -665,7 +809,7 @@ document.querySelector("#app").innerHTML = `
       </div>
 
       <div class="manager-panel app-setup-list">
-        <h3>Wine List</h3>
+        <h3>Wine Cards</h3>
         <div id="premiumWineCards" class="wine-cards" data-tutorial="wine-list"></div>
 
         <details id="premiumWineAdvanced" class="wine-advanced panel-spaced app-advanced-panel">
@@ -700,10 +844,11 @@ document.querySelector("#app").innerHTML = `
               <button id="addWineBtnPremium" type="button" data-tutorial="wine-add">Add Wine</button>
             </div>
 
+            <h3 style="margin-top:16px;">Wine List</h3>
             <table class="wine-table">
               <thead>
                 <tr>
-                  <th>Name</th><th>Varietal</th><th>Fruit</th><th>Texture</th><th>Oak</th><th>Process</th><th>Region</th><th>Story</th><th>Action</th>
+                  <th>Name</th><th>Varietal</th><th>Fruit</th><th>Texture</th><th>Oak</th><th>Region</th><th>Action</th>
                 </tr>
               </thead>
               <tbody id="premiumWineTableBody"></tbody>
@@ -729,17 +874,13 @@ document.querySelector("#app").innerHTML = `
         </div>
         <div class="row">
           <button id="btnBackToPremium" class="btn-ghost" type="button">Back</button>
-          <button id="btnLogoutManagerBoard" class="btn-danger" type="button">Logout</button>
         </div>
       </div>
 
       <div id="mbMenu" class="card" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
         <button class="btn" type="button" data-mbtab="overview" data-tutorial="mb-tab-overview">Overview</button>
-        <button class="btn" type="button" data-mbtab="people" data-tutorial="mb-tab-people">People</button>
-        <button class="btn" type="button" data-mbtab="messenger" data-tutorial="mb-tab-messenger">Messenger</button>
-        <button class="btn" type="button" data-mbtab="live_controls" data-tutorial="mb-tab-live-controls">Live Controls</button>
-        <button class="btn" type="button" data-mbtab="performance" data-tutorial="mb-tab-performance">Performance</button>
-        <button class="btn" type="button" data-mbtab="selection" data-tutorial="mb-tab-selection">Selection</button>
+        <button class="btn" type="button" data-mbtab="gameplay_adjustments" data-tutorial="mb-tab-gameplay-adjustments">Gameplay Adjustments</button>
+        <button class="btn" type="button" data-mbtab="performance" data-tutorial="mb-tab-performance">Team Performance</button>
         <button class="btn" type="button" data-mbtab="billing" data-tutorial="mb-tab-billing">Listing</button>
         <button class="btn hidden" type="button" data-mbtab="enterprise" id="mbEnterpriseTabBtn" data-tutorial="mb-tab-enterprise">Enterprise</button>
         <select id="mbRestaurantPicker" class="hidden input" data-tutorial="restaurant-picker" style="margin-left:auto; min-width:220px;"></select>
@@ -747,277 +888,93 @@ document.querySelector("#app").innerHTML = `
 
       <div id="mbPanels">
         <div id="mbTab_overview" class="mbTab" data-tutorial="mb-panel-overview">
-          <div id="mbParentStateCard" style="margin-bottom:12px;"></div>
           <div id="mbOverviewRitualStatus" style="margin-top:12px;"></div>
-          <div class="card">
-            <div class="score-row">Restaurant: <span id="mbRestName">-</span></div>
-            <div class="score-row">Total runs: <span id="mbRunsTotal">-</span></div>
-            <div class="score-row">Total drills: <span id="mbDrillsTotal">-</span></div>
-          </div>
 
           <div id="mbRestaurantContextCard" style="margin-top:12px;"></div>
           <div id="mbGroupOverviewCard" style="margin-top:12px;"></div>
-          <div id="mbGroupMetricsCard" style="margin-top:12px;"></div>
           <div id="mbGroupRestaurantComparisonCard" style="margin-top:12px;"></div>
-          <div id="mbOverviewTimedChallenge" style="margin-top:12px;"></div>
-          <div id="mbOverviewDisplayMethodChallenge" style="margin-top:12px;"></div>
-          <div id="mbOverviewRecentChallenges" style="margin-top:12px;"></div>
           <div id="mbInviteSummary" style="margin-top:12px;"></div>
-          <div id="mbDrillSummary" style="margin-top:12px;"></div>
         </div>
 
-        <div id="mbTab_people" class="mbTab hidden" data-tutorial="mb-panel-people">
-          <div id="mbPeopleSummary" style="margin-top:12px;"></div>
-          <div id="mbInvitesPanel" style="margin-top:12px;">
-            <div class="card" style="padding:12px;">
-              <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-                <strong>Invites</strong>
-              </div>
-              <div id="invitesList" style="margin-top:10px;"></div>
-            </div>
-          </div>
-          <div id="mbStaffPanel" style="margin-top:12px;">
-            <div class="card" id="mbMembersCard" style="margin-top:12px;">
-              <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-                <strong>Members</strong>
-                <button id="mbRefreshMembers" class="btn" type="button">Refresh</button>
-              </div>
-              <div style="display:flex; gap:8px; margin-top:10px; align-items:center;">
-                <input
-                  id="mbPeopleSearch"
-                  class="input"
-                  type="search"
-                  placeholder="Search people by name, role, or user id"
-                  style="width:100%;"
-                />
-                <button id="mbPeopleSearchClear" class="btn-ghost" type="button" title="Clear people search">Clear</button>
-              </div>
-              <div id="mbMembersMsg" class="small-text" style="margin-top:6px;"></div>
-              <div id="mbMembersList" style="margin-top:10px; display:flex; flex-direction:column; gap:8px;"></div>
-            </div>
-          </div>
-        </div>
-        <div id="mbTab_messenger" class="mbTab hidden" data-tutorial="mb-panel-messenger">
-          <div class="card" style="margin-top:12px;">
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-              <strong>Messenger</strong>
-              <div style="display:flex; gap:8px; align-items:center;">
-                <button id="mbToggleMessengerPanel" class="btn-ghost" type="button">Close Inbox</button>
-                <button id="mbMsgRefresh" class="btn-ghost" type="button">Refresh</button>
-              </div>
-            </div>
-
-            <div class="small-text" style="margin-top:6px; opacity:.85;">
-              Progress reports from staff + coaching replies. (Per active restaurant.)
-            </div>
-
-            <div id="mbMessengerDeck" style="display:flex; flex-direction:column; gap:0; margin-top:12px;">
-            <div id="mbTimedChallengeComposer" class="card" style="display:flex; flex-direction:column; gap:10px; padding:12px; margin-top:12px; margin-bottom:12px;">
-              <div style="font-weight:600;">Send Timed Challenge</div>
-
-              <div class="row" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-                <select id="mbTimedChallengeTarget" style="min-width:180px;"></select>
-
-                <select id="mbTimedChallengeType">
-                  <optgroup label="Skill Focus">
-                    <option value="closing_push">Closing Push</option>
-                    <option value="recovery_window">Recovery Window</option>
-                    <option value="read_first">Read First</option>
-                    <option value="full_delivery">Full Delivery</option>
-                  </optgroup>
-                  <optgroup label="Outcome">
-                    <option value="clean_close">Clean Close</option>
-                    <option value="soft_close">Soft Close</option>
-                    <option value="successful_pivot">Successful Pivot</option>
-                  </optgroup>
-                  <optgroup label="Discipline">
-                    <option value="no_reset_run">No Reset Run</option>
-                    <option value="stable_signal">Stable Signal</option>
-                    <option value="controlled_table">Controlled Table</option>
-                  </optgroup>
-                  <optgroup label="Momentum">
-                    <option value="solid_interaction">Solid Interaction</option>
-                    <option value="premium_moment">Premium Moment</option>
-                    <option value="commanding_presence">Commanding Presence</option>
-                  </optgroup>
-                </select>
-
-                <select id="mbTimedChallengeWine" style="min-width:220px;"></select>
-
-                <select id="mbTimedChallengeDuration">
-                  <option value="3600">1 hr</option>
-                  <option value="7200">2 hrs</option>
-                  <option value="10800" selected>3 hrs</option>
-                </select>
-
-                <select id="mbTimedChallengePlacement">
-                  <option value="before_start" selected>Before encounter 1</option>
-                  <option value="after_first_encounter">After encounter 1</option>
-                </select>
-
-                <input
-                  id="mbTimedChallengeReward"
-                  type="number"
-                  min="1"
-                  max="5"
-                  step="1"
-                  value="5"
-                  style="width:110px;"
-                  placeholder="Points"
-                />
-              </div>
-
-              <div class="small" style="opacity:.8;">
-                Assign a live objective by skill focus, outcome, discipline, or momentum.
-              </div>
-
-              <div class="row" style="display:flex; gap:8px; align-items:center;">
-                <button id="btnSendTimedChallenge" class="btn" type="button">Send Challenge</button>
-                <div id="mbTimedChallengeStatus" class="small" style="opacity:.85;"></div>
-              </div>
-
-              <div id="mbTimedChallengeRecentSummary" class="small" style="opacity:.85; margin-top:4px;"></div>
-            </div>
-
-            <div id="mbMessengerColumns" style="display:grid; grid-template-columns: 280px 1fr; gap:12px; margin-top:12px;">
-              <div id="mbMessengerThreadsPane" style="border:1px solid rgba(255,255,255,0.10); border-radius:12px; overflow:hidden;">
-              <div style="padding:10px; border-bottom:1px solid rgba(255,255,255,0.10); font-weight:600;">
-                  Staff Threads
-                </div>
-
-                <div style="padding:10px; border-bottom:1px solid rgba(255,255,255,0.10);">
-                  <div style="display:flex; gap:8px; align-items:center;">
-                    <input
-                      id="mbMessengerSearch"
-                      class="input"
-                      type="search"
-                      placeholder="Search threads by person, message, or type"
-                      style="width:100%;"
-                    />
-                    <button id="mbMessengerSearchClear" class="btn-ghost" type="button" title="Clear thread search">Clear</button>
-                  </div>
-                </div>
-
-                <div id="mbThreadList" style="display:flex; flex-direction:column; gap:0;"></div>
-
-                <div id="mbThreadEmpty" class="small-text" style="padding:10px; display:none; opacity:.8;">
-                  No waiter threads yet.
-                </div>
-              </div>
-
-              <div id="mbMessengerDetailPane" style="border:1px solid rgba(255,255,255,0.10); border-radius:12px; overflow:hidden; display:flex; flex-direction:column; min-height:520px;">
-              <div style="padding:10px; border-bottom:1px solid rgba(255,255,255,0.10);">
-                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
-                  <strong id="mbThreadTitle">Select a waiter</strong>
-                  <span id="mbThreadMeta" class="small-text" style="opacity:.75;"></span>
-                </div>
-              </div>
-
-              <div id="mbThreadTimelinePanel" class="card" style="margin:10px 10px 0; padding:10px;"></div>
-
-                <div id="mbThreadMessages"
-                  style="flex:1; padding:10px; display:flex; flex-direction:column; gap:8px; overflow-y:auto; min-height:280px; border-top:1px solid rgba(255,255,255,0.10);">
-                  <div class="small-text" style="opacity:.8;">Select a waiter thread in this restaurant to assign a timed challenge.</div>
-                </div>
-
-                <div id="mbThreadActions" style="padding:10px; border-top:1px solid rgba(255,255,255,0.10); display:flex; flex-direction:column; gap:10px;">
-                  <div id="mbThreadStatePanel" class="card" style="padding:10px;"></div>
-
-                  <div id="mbThreadRecommendationsPanel" class="card" style="padding:10px;">
-                    <div>
-                      <strong>Suggested prompts</strong>
-                      <div id="mbSuggestedPrompts" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;"></div>
-                    </div>
-
-                    <div id="mbThreadChallengeRecommendations" style="margin-top:12px;"></div>
-                  </div>
-
-                  <div class="small-text" style="opacity:.75;">Actions</div>
-                  <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-                    <button id="mbInstrRunDrill" class="btn-ghost" type="button">Run Drill</button>
-                    <button id="mbInstrUseSuggestion" class="btn-ghost" type="button">Use Suggestion</button>
-                  </div>
-
-                  <textarea id="mbInstrBody" class="input"
-                    style="width:100%; min-height:110px;"
-                    placeholder="Example: Tonight: keep it short + confirm intent first. Run 5-min Guest Reading before shift."></textarea>
-
-                  <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-                    <button id="mbInstrSend" class="btn" type="button">Send Message</button>
-                  </div>
-
-                  <div class="small-text" id="mbInstrQuota" style="opacity:.78;"></div>
-                  <div class="small-text" id="mbInstrStatus" style="opacity:.85;"></div>
-                </div>
-              </div>
-            </div>
-            </div>
-          </div>
-        </div>
-
-        <div id="mbTab_live_controls" class="mbTab hidden" data-tutorial="mb-panel-live-controls">
-          <div id="mbOverviewLiveEffects" style="margin-top:12px;"></div>
-          <div id="mbOverviewAbilityEconomy" style="margin-top:12px;"></div>
+        <div id="mbTab_gameplay_adjustments" class="mbTab hidden" data-tutorial="mb-panel-gameplay-adjustments">
+          <div id="mbOverviewLiveEffects" class="hidden" style="display:none; margin-top:12px;"></div>
+          <div id="mbGameplayAdjustmentsPanel" style="margin-top:12px;"></div>
           <div id="mbAttributeAbilitiesPanel" style="margin-top:12px;"></div>
           <div id="mbAreaAbilitiesPanel" style="margin-top:12px;"></div>
           <div id="mbDrillQuickActionsPanel" style="margin-top:12px;"></div>
           <div id="mbTimedChallengeQuickActionsPanel" style="margin-top:12px;"></div>
-          <div id="mbDisplayMethodQuickActionsPanel" style="margin-top:12px;"></div>
+          <div id="mbDisplayMethodQuickActionsPanel" class="hidden" style="display:none; margin-top:12px;"></div>
+          <div id="mbTimedChallengeComposer" class="card" style="display:flex; flex-direction:column; gap:10px; padding:12px; margin-top:12px; margin-bottom:12px;">
+            <div style="font-weight:600;">Send Timed Challenge</div>
+
+            <div class="row" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+              <select id="mbTimedChallengeTarget" style="min-width:180px;"></select>
+
+              <select id="mbTimedChallengeType">
+                <optgroup label="Skill Focus">
+                  <option value="closing_push">Closing Push</option>
+                  <option value="recovery_window">Recovery Window</option>
+                  <option value="read_first">Read First</option>
+                  <option value="full_delivery">Full Delivery</option>
+                </optgroup>
+                <optgroup label="Outcome">
+                  <option value="clean_close">Clean Close</option>
+                  <option value="soft_close">Soft Close</option>
+                  <option value="successful_pivot">Successful Pivot</option>
+                </optgroup>
+                <optgroup label="Discipline">
+                  <option value="no_reset_run">No Reset Run</option>
+                  <option value="stable_signal">Stable Signal</option>
+                  <option value="controlled_table">Controlled Table</option>
+                </optgroup>
+                <optgroup label="Momentum">
+                  <option value="solid_interaction">Solid Interaction</option>
+                  <option value="premium_moment">Premium Moment</option>
+                  <option value="commanding_presence">Commanding Presence</option>
+                </optgroup>
+              </select>
+
+              <select id="mbTimedChallengeWine" style="min-width:220px;"></select>
+
+              <select id="mbTimedChallengeDuration">
+                <option value="3600">1 hr</option>
+                <option value="7200">2 hrs</option>
+                <option value="10800" selected>3 hrs</option>
+              </select>
+
+              <select id="mbTimedChallengePlacement">
+                <option value="before_start" selected>Before encounter 1</option>
+                <option value="after_first_encounter">After encounter 1</option>
+              </select>
+
+              <input
+                id="mbTimedChallengeReward"
+                type="number"
+                min="1"
+                max="5"
+                step="1"
+                value="5"
+                style="width:110px;"
+                placeholder="Points"
+              />
+            </div>
+
+            <div class="small" style="opacity:.8;">
+              Assign a live objective by skill focus, outcome, discipline, or momentum.
+            </div>
+
+            <div class="row" style="display:flex; gap:8px; align-items:center;">
+              <button id="btnSendTimedChallenge" class="btn" type="button">Send Challenge</button>
+              <div id="mbTimedChallengeStatus" class="small" style="opacity:.85;"></div>
+            </div>
+
+            <div id="mbTimedChallengeRecentSummary" class="small" style="opacity:.85; margin-top:4px;"></div>
+          </div>
+          <div id="mbOverviewAbilityEconomy" style="margin-top:12px;"></div>
         </div>
 
         <div id="mbTab_performance" class="mbTab hidden" data-tutorial="mb-panel-performance">
         <div id="mbInsightsPanel" style="margin-top:12px;"></div>
-        <div id="mbPerformanceHistoryPanel" style="margin-top:12px;">
-          <details class="card mb-disclosure">
-            <summary class="mb-disclosure-summary">
-              <div>
-                <strong>Performance History</strong>
-                <div class="small-text" style="margin-top:6px; opacity:.85;">
-                  Skill growth and encounter reactions for the selected waiter.
-                </div>
-              </div>
-              <label class="small-text" style="display:flex; align-items:center; gap:8px;">
-                Waiter
-                <select id="mbHistoryUser" class="input" style="min-width:220px;"></select>
-              </label>
-            </summary>
-            <div class="mb-disclosure-body">
-              <div id="mbHistorySummaryStrip" style="margin-top:10px;"></div>
-              <canvas id="mbHistoryChart"
-                width="600"
-                height="280"
-                style="margin-top:12px;">
-              </canvas>
-              <div id="mbPerformanceLegend" style="margin-top:8px;"></div>
-              <div id="managerEncounterSummaryHost" class="manager-encounter-summary-host" style="margin-top:12px;"></div>
-            </div>
-          </details>
-        </div>
-
-          <div id="mbBestStreaksPanel" class="card" style="margin-top:12px;">
-            <div style="font-weight:600; margin-bottom:6px;">Best streaks</div>
-            <div id="mbBestStreaks" style="opacity:.9;">-</div>
-          </div>
-
-          <div id="mbNeedsCoachingPanel" class="card" style="margin-top:12px;">
-            <div style="font-weight:600; margin-bottom:6px;">Needs coaching</div>
-            <div id="mbNeedsCoaching" style="opacity:.9;">-</div>
-          </div>
-
-          <details id="mbRecentPanel" class="card mb-disclosure">
-            <summary class="mb-disclosure-summary">
-              <div>
-                <strong>Recent Activity</strong>
-                <div class="small-text" style="margin-top:6px; opacity:.85;">
-                  Latest reporting and training events.
-                </div>
-              </div>
-            </summary>
-            <div class="mb-disclosure-body">
-              <div id="mbRecent" class="small" style="opacity:.9;">Loading…</div>
-            </div>
-          </details>
-
           <div id="mbWeeklyReportPanel" class="card" style="margin-top:12px;">
             <strong>Weekly Training Report</strong>
 
@@ -1029,10 +986,6 @@ document.querySelector("#app").innerHTML = `
               <div class="small-text" style="opacity:.7;">Loading report…</div>
             </div>
           </div>
-        </div>
-
-        <div id="mbTab_selection" class="mbTab hidden" data-tutorial="mb-panel-selection">
-          <div id="mbSelectionPanel" style="margin-top:12px;"></div>
         </div>
 
         <div id="mbTab_billing" class="mbTab hidden" data-tutorial="mb-panel-billing">
@@ -1053,6 +1006,87 @@ document.querySelector("#app").innerHTML = `
               Seat plans are now provisioned through Premium signup and licensing. Contact <a href="mailto:hello@bottlecaller.com">hello@bottlecaller.com</a> if you need a different seat package issued.
             </div>
           </div>
+
+          <div id="mbListingMenuPanel" class="card" style="margin-top:12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+              <strong>Premium Menu</strong>
+            </div>
+
+            <div style="margin-top:10px; font-size:13px; opacity:.95;">
+              <div><b>Role:</b> <span id="mbListingRole">-</span></div>
+              <div><b>Restaurant:</b> <span id="mbListingRestName">-</span></div>
+              <div id="mbListingJoinRow" class="row" style="margin-top:10px; align-items:center; gap:10px; flex-wrap:wrap;">
+                <div><b>Join code:</b> <span id="mbListingJoinCode">-</span></div>
+                <button id="btnMbListingCopyCode" type="button">Copy join code</button>
+              </div>
+              <div><b>Seat limit:</b> <span id="mbListingSeatLimit">-</span></div>
+              <div><b>Invite required:</b> <span id="mbListingRequireInvite">-</span></div>
+            </div>
+          </div>
+
+          <div id="mbListingManagerOnlyBlock" style="margin-top:12px;">
+            <div id="mbListingManagerSetupSection">
+              <div id="mbListingGroupSetupCard" class="card" style="margin-top:12px;">
+                <strong>Group Manager Signup</strong>
+                <div class="small-text" style="margin-top:6px;">
+                  Paste a GROUP manager_setup code to create or upgrade a manager scope for multi-restaurant control.
+                </div>
+
+                <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+                  <input id="mbListingGroupSetupCode" type="text" placeholder="GROUP_XXXXX" style="flex:1; min-width:220px;" />
+                  <button id="mbListingRedeemGroupSetup" class="btn-primary" type="button">Redeem</button>
+                </div>
+
+                <div id="mbListingGroupSetupMsg" class="small-text" style="margin-top:8px;"></div>
+                <div class="small-text premium-contact-copy" style="margin-top:10px;">
+                  Contact us at <a href="mailto:hello@bottlecaller.com">hello@bottlecaller.com</a> with the upgrade and seat plan you want. We will issue the matching code for this profile.
+                </div>
+              </div>
+
+              <div id="mbListingProvisionAccess" class="card" style="margin-top:12px;">
+                <strong>Enterprise Signup</strong>
+                <div class="small-text" style="margin-top:6px;">
+                  Paste an Enterprise manager_setup code to upgrade this manager scope.
+                </div>
+
+                <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+                  <input id="mbListingEnterpriseCode" type="text" placeholder="ENTERPRISE_XXXXX" style="flex:1; min-width:220px;" />
+                  <button id="mbListingRedeemEnterprise" class="btn-primary" type="button">Redeem</button>
+                </div>
+
+                <div id="mbListingEnterpriseMsg" class="small-text" style="margin-top:8px;"></div>
+                <div class="small-text premium-contact-copy" style="margin-top:10px;">
+                  Contact us at <a href="mailto:hello@bottlecaller.com">hello@bottlecaller.com</a> for enterprise provisioning. We will send the correct enterprise code for this account.
+                </div>
+              </div>
+            </div>
+
+            <div id="mbListingActiveRestaurantCard" class="card" style="margin-top:12px;">
+              <strong>Active Restaurant</strong>
+              <div class="small-text" style="margin-top:6px;">
+                Switch which restaurant you’re managing right now.
+              </div>
+
+              <div style="display:flex; gap:8px; margin-top:10px; align-items:center;">
+                <select id="mbListingActiveRestaurant" class="input" style="flex:1;"></select>
+                <button id="mbListingSetActiveRestaurant" class="btn" type="button">Set</button>
+              </div>
+
+              <div id="mbListingActiveRestaurantHint" class="small-text" style="margin-top:8px;"></div>
+            </div>
+
+            <div class="card" style="margin-top:12px;">
+              <strong>Invite emails</strong>
+              <div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <input id="mbListingInviteEmailInput" type="email" placeholder="waiter@email.com" style="flex:1; min-width:220px;" />
+                <button id="mbListingAddInvite" class="btn-primary" type="button">Add waiter</button>
+              </div>
+
+              <div id="mbInvitesList" style="margin-top:10px; font-size:12px; opacity:.95;"></div>
+            </div>
+          </div>
+
+          <div id="mbListingMsg" class="small-text" style="margin-top:10px;"></div>
         </div>
 
         <div id="mbTab_enterprise" class="mbTab hidden" data-tutorial="mb-panel-enterprise">
@@ -1179,127 +1213,23 @@ document.querySelector("#app").innerHTML = `
       <div><b>Restaurant:</b> <span id="hudRestName">-</span></div>
 
       <!-- Join code MANAGER ONLY -->
-      <div id="hudJoinRow" class="hidden"><b>Join code:</b> <span id="hudJoinCode">-</span></div>
+      <div id="hudJoinRow" class="row hidden" style="margin-top:10px; align-items:center; gap:10px; flex-wrap:wrap;">
+        <div><b>Join code:</b> <span id="hudJoinCode">-</span></div>
+        <button id="btnCopyHudCode" type="button">Copy join code</button>
+      </div>
 
       <div><b>Seat limit:</b> <span id="hudSeatLimit">-</span></div>
       <div><b>Invite required:</b> <span id="hudRequireInvite">-</span></div>
-    </div>
-    <div id="hudSkillsCard" style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.10);">
-      <div style="font-weight:600; margin-bottom:8px;">Your Skills</div>
-
-      <div class="small-text" id="hudSkillSummary" style="margin-bottom:8px; opacity:.85;">
-        Loading skill summary…
-      </div>
-
-      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px 12px; margin-bottom:10px;">
-        <div class="small-text">Reading: <span id="hudSkillRead">0%</span></div>
-        <div class="small-text">Framing: <span id="hudSkillFraming">0%</span></div>
-        <div class="small-text">Delivery: <span id="hudSkillDelivery">0%</span></div>
-        <div class="small-text">Recovery: <span id="hudSkillRecovery">0%</span></div>
-        <div class="small-text">Closing: <span id="hudSkillClosing">0%</span></div>
-      </div>
-
-      <canvas id="hudSkillRadar" width="240" height="240" style="display:block; margin:0 auto;"></canvas>
-
-      <div id="hudSkillTimeline" style="margin-top:12px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:6px;">
-          <div id="hudTimelineTitle" style="font-weight:600;">Recent Progress</div>
-          <select id="hudTimelineUserSelect" class="hidden" style="max-width:180px;"></select>
-        </div>
-
-        <div id="hudTimelineList" class="small-text" style="display:flex; flex-direction:column; gap:6px;">
-          <div style="opacity:.7;">No history yet.</div>
-        </div>
-
-      </div>
-    </div>
-    <div id="hudAbilitiesCard" style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.10);">
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px;">
-        <div style="font-weight:600;">Abilities</div>
-        <div class="small-text" id="hudAbilitiesStatus" style="opacity:.8;">No active effects</div>
-      </div>
-
-      <div id="hudAbilitySlots" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;">
-        <div id="hudAttributeSlotCard" style="padding:10px; border:1px solid rgba(255,255,255,0.08); border-radius:10px;">
-          <div class="small-text" style="opacity:.7;">Attribute Slot</div>
-          <div id="hudAttributeSlotStatus" style="font-weight:600; margin-top:4px;">-</div>
-          <div id="hudAttributeSlotMeta" class="small-text" style="opacity:.8; margin-top:4px;">-</div>
-        </div>
-        <div id="hudAreaSlotCard" style="padding:10px; border:1px solid rgba(255,255,255,0.08); border-radius:10px;">
-          <div class="small-text" style="opacity:.7;">Area Slot</div>
-          <div id="hudAreaSlotStatus" style="font-weight:600; margin-top:4px;">-</div>
-          <div id="hudAreaSlotMeta" class="small-text" style="opacity:.8; margin-top:4px;">-</div>
-        </div>
-      </div>
-
-      <div style="display:flex; gap:8px; margin-bottom:10px;">
-        <button id="btnHudAbilitiesAttribute" type="button" class="btn-ghost">Attribute</button>
-        <button id="btnHudAbilitiesArea" type="button" class="btn-ghost">Area</button>
-      </div>
-
-      <div id="hudAbilitiesAttributeList" style="display:flex; flex-direction:column; gap:8px;"></div>
-      <div id="hudAbilitiesAreaList" class="hidden" style="display:none; flex-direction:column; gap:8px;"></div>
-
-      <div id="hudActiveEffects" style="margin-top:12px;">
-        <div style="font-weight:600; margin-bottom:6px;">Active Effects</div>
-        <div id="hudActiveEffectsList" class="small-text" style="display:flex; flex-direction:column; gap:6px;">
-          <div style="opacity:.7;">No active abilities.</div>
-        </div>
-      </div>
-    </div>
-    <div id="hudTimedChallengeCard" style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.10);">
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px;">
-        <div style="font-weight:600;">Timed Challenge</div>
-        <div id="hudTimedChallengeStatus" class="small-text" style="opacity:.8;">No active challenge</div>
-      </div>
-      <div id="hudTimedChallengeBody" class="small-text" style="display:flex; flex-direction:column; gap:6px;">
-        <div style="opacity:.7;">No challenge assigned.</div>
-      </div>
-    </div>
-    <div id="hudDisplayMethodChallengeCard" style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.10);">
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px;">
-        <div style="font-weight:600;">Display Method Challenge</div>
-        <div id="hudDisplayMethodChallengeStatus" class="small-text" style="opacity:.8;">No active challenge</div>
-      </div>
-      <div id="hudDisplayMethodChallengeBody" class="small-text" style="display:flex; flex-direction:column; gap:6px;">
-        <div style="opacity:.7;">No challenge assigned.</div>
-      </div>
-    </div>
-    <div id="hudDifficultyCard" style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.10);">
-      <div style="font-weight:600; margin-bottom:8px;">Difficulty</div>
-
-      <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <button id="btnDifficultyEasy" class="btn-ghost" type="button">Easy</button>
-        <button id="btnDifficultyMedium" class="btn-ghost" type="button">Medium</button>
-        <button id="btnDifficultyHard" class="btn-ghost" type="button">Hard</button>
-      </div>
-
-      <div id="hudDifficultyStatus" class="small-text" style="margin-top:6px; opacity:.85;">
-        Current: -
-      </div>
     </div>
     <div style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.10);">
       <button id="btnHudSendProgress" class="btn-ghost" type="button">Send progress to manager</button>
       <div id="hudSendProgressStatus" class="small-text" style="margin-top:6px; opacity:.85;"></div>
     </div>
 
-    <!-- Copy join code MANAGER ONLY -->
-    <div id="hudCopyRow" class="row hidden" style="margin-top:10px;">
-      <button id="btnCopyHudCode" type="button">Copy join code</button>
-    </div>
-
     <div id="managerOnlyBlock" class="hidden">
       <hr style="opacity:.25; margin:12px 0;" />
 
       <h3 style="margin:0;">Manager controls</h3>
-
-      <div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-        <label style="font-size:12px; opacity:.9;">
-          <input id="toggleRequireInvite" type="checkbox" />
-          Require invite to join
-        </label>
-        <button id="btnSaveRequireInvite" class="btn-primary" type="button">Save</button>
-      </div>
 
       <hr style="opacity:.25; margin:12px 0;" />
       <div id="managerSetupSection">
@@ -3195,7 +3125,7 @@ function renderManagerBoardOverviewLiveEffects() {
       </div>
 
       <div class="small-text" style="opacity:.82;">
-        Live Controls effects sent to the waiter experience, compared with the current game runtime.
+        Gameplay Adjustments effects sent to the waiter experience, compared with the current game runtime.
       </div>
 
       <div style="display:flex; gap:8px; flex-wrap:wrap;">
@@ -4165,26 +4095,23 @@ function tickManagerBoardAbilities() {
     if (!screen || screen.classList.contains("hidden")) return;
 
     const overview = document.getElementById("mbTab_overview");
-    const messenger = document.getElementById("mbTab_messenger");
-    const liveControls = document.getElementById("mbTab_live_controls");
+    const messenger = document.getElementById("screenManagerMessenger");
+    const gameplayAdjustments = document.getElementById("mbTab_gameplay_adjustments");
     const overviewVisible = overview && !overview.classList.contains("hidden");
     const messengerVisible = messenger && !messenger.classList.contains("hidden");
-    const liveControlsVisible = liveControls && !liveControls.classList.contains("hidden");
+    const gameplayAdjustmentsVisible = gameplayAdjustments && !gameplayAdjustments.classList.contains("hidden");
 
-    if (overviewVisible) {
-      renderManagerBoardOverviewTimedChallenge();
-      renderManagerBoardOverviewDisplayMethodChallenge();
-      renderManagerBoardRecentChallenges();
-      renderManagerBoardDrillSummary();
-    }
     if (messengerVisible) {
       renderTimedChallengeRecentSummary();
       renderDisplayMethodChallengeRecentSummary();
       renderManagerBoardDrillSummary();
       renderManagerThreadDrillSummary();
     }
-    if (liveControlsVisible) {
+    if (gameplayAdjustmentsVisible) {
       renderManagerBoardAbilityTabs();
+      renderManagerDrillActionPanel?.();
+      renderManagerGameplayAdjustmentsPanel?.();
+      renderTimedChallengeComposer?.();
       renderManagerDisplayMethodActionPanel?.();
     }
   };
@@ -4443,13 +4370,11 @@ function renderWineTable(wines) {
       tr.innerHTML = `
         <td>${escapeHtml(wine.name || `Wine ${idx + 1}`)}</td>
         <td>${escapeHtml(wine.varietal || "")}</td>
-        <td>${escapeHtml(Array.isArray(wine.fruitTags) ? wine.fruitTags.join(", ") : Array.isArray(wine.fruit_tags) ? wine.fruit_tags.join(", ") : "")}</td>
-        <td>${escapeHtml(Array.isArray(wine.textureTags) ? wine.textureTags.join(", ") : Array.isArray(wine.texture_tags) ? wine.texture_tags.join(", ") : "")}</td>
-        <td>${escapeHtml(wine.oakLevel || wine.oak_level || "")}</td>
-        <td>${escapeHtml(wine.process || "")}</td>
-        <td>${escapeHtml(wine.region || "")}</td>
-        <td>${escapeHtml(wine.story || "")}</td>
-        <td><button type="button" class="btn-danger" data-wine-del="${escapeHtml(String(wine.id || wine.wine_id || wine.created_at || idx))}">Delete</button></td>
+      <td>${escapeHtml(Array.isArray(wine.fruitTags) ? wine.fruitTags.join(", ") : Array.isArray(wine.fruit_tags) ? wine.fruit_tags.join(", ") : "")}</td>
+      <td>${escapeHtml(Array.isArray(wine.textureTags) ? wine.textureTags.join(", ") : Array.isArray(wine.texture_tags) ? wine.texture_tags.join(", ") : "")}</td>
+      <td>${escapeHtml(wine.oakLevel || wine.oak_level || "")}</td>
+      <td>${escapeHtml(wine.region || "")}</td>
+      <td><button type="button" class="btn-danger" data-wine-del="${escapeHtml(String(wine.id || wine.wine_id || wine.created_at || idx))}">Delete</button></td>
       `;
       body.appendChild(tr);
     }
@@ -4458,10 +4383,10 @@ function renderWineTable(wines) {
       const div = document.createElement("div");
       div.className = "wine-card";
       div.innerHTML = `
+        <div class="wine-card-type">Wine Card</div>
         <div><strong>${escapeHtml(wine.name || `Wine ${idx + 1}`)}</strong> — ${escapeHtml(wine.varietal || "")}</div>
         <div>${escapeHtml((Array.isArray(wine.fruitTags) ? wine.fruitTags : wine.fruit_tags || []).join(", "))} · ${escapeHtml((Array.isArray(wine.textureTags) ? wine.textureTags : wine.texture_tags || []).join(", "))} · ${escapeHtml(wine.oakLevel || wine.oak_level || "")}</div>
-        <div>${escapeHtml(wine.region || "")} ${wine.process ? "· " + escapeHtml(wine.process) : ""}</div>
-        <div>${escapeHtml(wine.story || "")}</div>
+        <div>${escapeHtml(wine.region || "")}</div>
         <button type="button" class="btn-danger" data-wine-del="${escapeHtml(String(wine.id || wine.wine_id || wine.created_at || idx))}">Delete</button>
       `;
       cards.appendChild(div);
@@ -6387,7 +6312,7 @@ async function refreshManagerBoardAfterProgressionReset() {
   }
 
   if (activeTab === "selection") {
-    await loadSelectionTab();
+    await loadManagerBoardData();
     return;
   }
 
@@ -6933,6 +6858,7 @@ function clearMsgs() {
   setMsg("createRestMsg", "");
   setMsg("inviteMsg", "");
   setMsg("hudMsg", "");
+  setMsg("mbListingMsg", "");
   setMsg("demoJoinMsg", "");
 }
 
@@ -7472,9 +7398,8 @@ function wireParentButtons() {
   // Waiter / premium messages panel
   if (btnOpenMessages && !btnOpenMessages.__bcBound) {
     btnOpenMessages.__bcBound = true;
-    btnOpenMessages.addEventListener("click", () => {
-      closeHud?.();
-      openWaiterMessages();
+    btnOpenMessages.addEventListener("click", async () => {
+      await openManagerMessengerWindow("messages_button");
     });
   }
 
@@ -7652,6 +7577,68 @@ function openHud() {
 }
 function closeHud() {
   setHudOpen(false);
+}
+
+function closePremiumTopbarMenu() {
+  const trigger = document.getElementById("btnPremiumTopbarMenu");
+  const panel = document.getElementById("premiumTopbarMenuPanel");
+  if (trigger) trigger.setAttribute("aria-expanded", "false");
+  panel?.classList.add("hidden");
+}
+
+function openPremiumTopbarMenu() {
+  const trigger = document.getElementById("btnPremiumTopbarMenu");
+  const panel = document.getElementById("premiumTopbarMenuPanel");
+  if (trigger) trigger.setAttribute("aria-expanded", "true");
+  panel?.classList.remove("hidden");
+}
+
+function togglePremiumTopbarMenu() {
+  const panel = document.getElementById("premiumTopbarMenuPanel");
+  if (!panel) return;
+  if (panel.classList.contains("hidden")) {
+    openPremiumTopbarMenu();
+  } else {
+    closePremiumTopbarMenu();
+  }
+}
+
+function wirePremiumTopbarMenu() {
+  const trigger = document.getElementById("btnPremiumTopbarMenu");
+  const panel = document.getElementById("premiumTopbarMenuPanel");
+  const wrap = document.getElementById("premiumTopbarMenuWrap");
+  if (!trigger || !panel || !wrap) return;
+
+  if (!trigger.__bcBound) {
+    trigger.__bcBound = true;
+    trigger.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      togglePremiumTopbarMenu();
+    });
+  }
+
+  if (!panel.__bcBound) {
+    panel.__bcBound = true;
+    panel.addEventListener("click", (event) => {
+      const actionBtn = event.target?.closest?.("button");
+      if (!actionBtn || actionBtn.id === "btnPremiumTopbarMenu") return;
+      closePremiumTopbarMenu();
+    });
+  }
+
+  if (!document.body.__bcPremiumTopbarMenuBound) {
+    document.body.__bcPremiumTopbarMenuBound = true;
+    document.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!target) return;
+      if (wrap.contains(target)) return;
+      closePremiumTopbarMenu();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closePremiumTopbarMenu();
+    });
+  }
 }
 
 function renderWaiterThreadItem(row, selfUserId, nameMap) {
@@ -8134,9 +8121,9 @@ window.addEventListener("message", (event) => {
           : `Progress updated${msg.inserted ? ` (${msg.inserted})` : ""} ✅`)
       : describeProgressSendError(msg.error || "unknown_error");
 
-    if (status) status.textContent = text;
-    if (hudStatus) hudStatus.textContent = text;
-    renderHudSkillDashboard();
+  if (status) status.textContent = text;
+  if (hudStatus) hudStatus.textContent = text;
+    renderProfileSkillDashboard();
 
     if (msg.ok) {
       loadHudSkillTimeline().catch(console.error);
@@ -8887,6 +8874,52 @@ async function openWaiterLeaderboardWindow() {
   await renderWaiterPerformanceLeaderboardWindow();
 }
 
+async function openManagerMessengerWindow(reason = "messages_button") {
+  clearMsgs();
+  closeHud?.();
+  closeProfilePanel?.();
+
+  await loadAuthedState(`openManagerMessengerWindow:${reason}`);
+
+  const caps = getPremiumRoleCapabilities(appState.profile);
+  if (!caps.canAccessManagerBoard) {
+    setMsg("authMsg", "Manager Board is manager-only.", "error");
+    showScreen("screenPremiumApp");
+    return;
+  }
+
+  const fallbackRestaurantId =
+    window.__BC_ACTIVE_MANAGER_RESTAURANT_ID__ ||
+    appState?.restaurant?.id ||
+    appState?.profile?.restaurant_id ||
+    appState?.profile?.restaurantId ||
+    null;
+
+  if (fallbackRestaurantId) {
+    setManagerActiveRestaurantId(fallbackRestaurantId);
+  }
+
+  try {
+    if (fallbackRestaurantId) {
+      const restaurant = await loadRestaurant(fallbackRestaurantId);
+      if (restaurant) appState.restaurant = restaurant;
+    }
+  } catch (error) {
+    console.warn("[MESSAGES] loadRestaurant failed", error);
+  }
+
+  showScreen("screenManagerMessenger");
+  wireManagerBoardMessenger?.();
+
+  const rid = getManagerActiveRestaurantId() || fallbackRestaurantId || "";
+  await loadManagerMessenger(rid, { force: true });
+}
+
+function closeManagerMessengerWindow() {
+  showScreen("screenPremiumApp");
+  renderHud?.();
+}
+
 window.__BC_HUD_TIMELINE_TARGET_USER_ID__ = window.__BC_HUD_TIMELINE_TARGET_USER_ID__ || null;
 
 function getHudActorContext() {
@@ -9264,7 +9297,7 @@ async function loadInvites(restaurantId = null) {
 }
 
 async function loadManagerBoardSeats() {
-  const rid = appState.profile?.restaurant_id || null;
+  const rid = getManagerActiveRestaurantId() || appState.restaurant?.id || appState.profile?.restaurant_id || null;
   const elStatus = document.getElementById("mbSeatStatus");
   const elDetail = document.getElementById("mbSeatDetail");
 
@@ -9304,7 +9337,7 @@ async function adminSetSeats(newLimit) {
     alert("Managers only.");
     return;
   }
-  const rid = appState.profile?.restaurant_id || null;
+  const rid = getManagerActiveRestaurantId() || appState.restaurant?.id || appState.profile?.restaurant_id || null;
   if (!rid) return alert("Missing restaurant_id on profile.");
 
   const { error } = await supabase.rpc("admin_set_seat_limit", {
@@ -9320,13 +9353,13 @@ async function adminSetSeats(newLimit) {
   await loadManagerBoardSeats();
 }
 
-async function redeemEnterpriseManagerSetupCode() {
+async function redeemEnterpriseManagerSetupCode(inputId = "mbEnterpriseCode", msgId = "mbEnterpriseMsg") {
   if (!isManagerRole(appState.profile?.role)) {
     alert("Managers only.");
     return;
   }
-  const input = document.getElementById("mbEnterpriseCode");
-  const msg = document.getElementById("mbEnterpriseMsg");
+  const input = document.getElementById(inputId);
+  const msg = document.getElementById(msgId);
   const code = (input?.value || "").trim().toUpperCase();
 
   if (!code) return;
@@ -9357,9 +9390,9 @@ async function redeemEnterpriseManagerSetupCode() {
   if (msg) msg.textContent = "✅ Enterprise upgrade applied (if code was enterprise).";
 }
 
-async function redeemGroupSetupCode() {
-  const input = document.getElementById("mbGroupSetupCode");
-  const msg = document.getElementById("mbGroupSetupMsg");
+async function redeemGroupSetupCode(inputId = "mbGroupSetupCode", msgId = "mbGroupSetupMsg") {
+  const input = document.getElementById(inputId);
+  const msg = document.getElementById(msgId);
   const code = (input?.value || "").trim().toUpperCase();
 
   if (!code) return;
@@ -9386,10 +9419,15 @@ async function redeemGroupSetupCode() {
 }
 
 function wireGroupSetupRedeem() {
-  const btn = document.getElementById("mbRedeemGroupSetup");
-  if (!btn || btn.__wired) return;
-  btn.__wired = true;
-  btn.addEventListener("click", redeemGroupSetupCode);
+  [
+    { buttonId: "mbRedeemGroupSetup", inputId: "mbGroupSetupCode", msgId: "mbGroupSetupMsg" },
+    { buttonId: "mbListingRedeemGroupSetup", inputId: "mbListingGroupSetupCode", msgId: "mbListingGroupSetupMsg" },
+  ].forEach(({ buttonId, inputId, msgId }) => {
+    const btn = document.getElementById(buttonId);
+    if (!btn || btn.__wired) return;
+    btn.__wired = true;
+    btn.addEventListener("click", () => redeemGroupSetupCode(inputId, msgId));
+  });
 }
 
 function wireManagerBoardBillingAccess() {
@@ -9398,22 +9436,37 @@ function wireManagerBoardBillingAccess() {
   const b30 = document.getElementById("mbSeat30");
   const b60 = document.getElementById("mbSeat60");
   const bRef = document.getElementById("mbRefreshSeats");
-  const bRedeem = document.getElementById("mbRedeemEnterprise");
-  const codeInput = document.getElementById("mbEnterpriseCode");
-  const msg = document.getElementById("mbEnterpriseMsg");
+  const redeemControls = [
+    {
+      button: document.getElementById("mbRedeemEnterprise"),
+      input: document.getElementById("mbEnterpriseCode"),
+      msg: document.getElementById("mbEnterpriseMsg"),
+      inputId: "mbEnterpriseCode",
+      msgId: "mbEnterpriseMsg",
+    },
+    {
+      button: document.getElementById("mbListingRedeemEnterprise"),
+      input: document.getElementById("mbListingEnterpriseCode"),
+      msg: document.getElementById("mbListingEnterpriseMsg"),
+      inputId: "mbListingEnterpriseCode",
+      msgId: "mbListingEnterpriseMsg",
+    },
+  ];
 
   [b15, b30, b60].forEach((el) => {
     if (el) el.style.display = isMgr ? "" : "none";
   });
-  if (bRedeem) bRedeem.style.display = isMgr ? "" : "none";
-  if (codeInput) codeInput.style.display = isMgr ? "" : "none";
-  if (msg && !isMgr) msg.textContent = "";
+  redeemControls.forEach(({ button, input, msg, inputId, msgId }) => {
+    if (button) button.style.display = isMgr ? "" : "none";
+    if (input) input.style.display = isMgr ? "" : "none";
+    if (msg && !isMgr) msg.textContent = "";
+    if (button) button.onclick = () => redeemEnterpriseManagerSetupCode(inputId, msgId);
+  });
 
   if (b15) b15.onclick = () => adminSetSeats(15);
   if (b30) b30.onclick = () => adminSetSeats(30);
   if (b60) b60.onclick = () => adminSetSeats(60);
   if (bRef) bRef.onclick = () => loadManagerBoardSeats();
-  if (bRedeem) bRedeem.onclick = () => redeemEnterpriseManagerSetupCode();
 
   loadManagerBoardSeats();
 }
@@ -9421,13 +9474,19 @@ function wireManagerBoardBillingAccess() {
 function normalizeManagerBoardTab(tabLike) {
   const raw = String(tabLike || "overview").toLowerCase();
   const aliases = {
-    staff: "people",
+    staff: "overview",
+    people: "overview",
     history: "performance",
     insights: "performance",
-    tournament: "selection",
-    tournament_setup: "selection",
-    attribute_abilities: "live_controls",
-    area_abilities: "live_controls",
+    gameplay: "gameplay_adjustments",
+    adjustments: "gameplay_adjustments",
+    gameplay_adjustments: "gameplay_adjustments",
+    tournament: "overview",
+    tournament_setup: "overview",
+    selection: "overview",
+    attribute_abilities: "gameplay_adjustments",
+    area_abilities: "gameplay_adjustments",
+    live_controls: "gameplay_adjustments",
   };
   return aliases[raw] || raw;
 }
@@ -9454,12 +9513,6 @@ function wireManagerBoardMenu() {
     if (!normalized) return;
     if (normalized === "overview") {
       await loadManagerBoardData();
-      renderParentStateDebugCard();
-      return;
-    }
-    if (normalized === "people") {
-      await loadManagerBoardData();
-      renderManagerPeopleSummary();
       return;
     }
     if (normalized === "billing") return loadManagerBoardSeats?.();
@@ -9467,19 +9520,17 @@ function wireManagerBoardMenu() {
       await loadManagerPerformanceTab();
       return;
     }
-    if (normalized === "selection") {
-      await loadSelectionTab();
+    if (normalized === "messenger") {
+      await openManagerMessengerWindow("board_tab");
       return;
     }
-    if (normalized === "messenger") {
-      renderTimedChallengeComposer();
-      wireManagerBoardMessenger();
-      return loadManagerMessenger();
-    }
-    if (normalized === "live_controls") {
-      await loadManagerBoardData();
+    if (normalized === "gameplay_adjustments") {
       safeCall("renderManagerBoardOverviewLiveEffects", () => renderManagerBoardOverviewLiveEffects?.());
+      safeCall("renderManagerAbilityEconomyPanel", () => renderManagerAbilityEconomyPanel?.());
       safeCall("renderManagerLiveControlPanels", () => renderManagerLiveControlPanels?.());
+      safeCall("renderManagerDrillActionPanel", () => renderManagerDrillActionPanel?.());
+      renderManagerGameplayAdjustmentsPanel();
+      renderTimedChallengeComposer();
       await loadTimedChallengeWineOptions().catch(console.warn);
       return;
     }
@@ -9494,36 +9545,18 @@ function wireManagerBoardMenu() {
 
     if (tab === "overview") {
       await loadManagerBoardData();
-      renderParentStateDebugCard();
-    }
-    if (tab === "people") {
-      await loadManagerBoardData();
-      renderManagerPeopleSummary();
     }
     if (tab === "billing") await loadManagerBoardSeats?.();
     if (tab === "performance") {
       await loadManagerPerformanceTab();
     }
-    if (tab === "selection") {
-      await loadSelectionTab();
-    }
-    if (tab === "messenger") {
-      renderTimedChallengeComposer();
-      wireManagerBoardMessenger();
-      await refreshManagerMessageQuotaUi();
-      await loadManagerMessenger();
-      refreshManagerRuntimeSurfaces?.({
-        thread: true,
-        board: true,
-        economy: false,
-        liveControls: false,
-        challengeMeta: true,
-      });
-    }
-    if (tab === "live_controls") {
-      await loadManagerBoardData();
+    if (tab === "gameplay_adjustments") {
       safeCall("renderManagerBoardOverviewLiveEffects", () => renderManagerBoardOverviewLiveEffects?.());
+      safeCall("renderManagerAbilityEconomyPanel", () => renderManagerAbilityEconomyPanel?.());
       safeCall("renderManagerLiveControlPanels", () => renderManagerLiveControlPanels?.());
+      safeCall("renderManagerDrillActionPanel", () => renderManagerDrillActionPanel?.());
+      renderManagerGameplayAdjustmentsPanel();
+      renderTimedChallengeComposer();
       await loadTimedChallengeWineOptions().catch(console.warn);
     }
   });
@@ -9935,9 +9968,9 @@ async function openManagerRestaurantChallengeContext(restaurantId) {
   await loadManagerBoardData?.(rid);
   await refreshManagerBoardScopedViews?.(rid);
 
-  window.__BC_MB_DEFAULTTAB__ = "messenger";
-  window.__BC_MB_SHOWTAB__?.("messenger");
-  await window.__BC_MB_LOADTAB__?.("messenger");
+  window.__BC_MB_DEFAULTTAB__ = "gameplay_adjustments";
+  window.__BC_MB_SHOWTAB__?.("gameplay_adjustments");
+  await window.__BC_MB_LOADTAB__?.("gameplay_adjustments");
 
   const status = document.getElementById("mbTimedChallengeStatus");
   if (status) {
@@ -10044,16 +10077,12 @@ function applyManagerBoardVisibility() {
 
   const overviewBtn = document.querySelector('#mbMenu [data-mbtab="overview"]');
   if (overviewBtn) overviewBtn.style.display = caps.canAccessManagerBoard ? "" : "none";
-  const selectionBtn = document.querySelector('#mbMenu [data-mbtab="selection"]');
-  if (selectionBtn) selectionBtn.style.display = caps.canAccessManagerBoard ? "" : "none";
   const billingBtn = document.querySelector('#mbMenu [data-mbtab="billing"]');
   if (billingBtn) billingBtn.style.display = caps.canAccessManagerBoard ? "" : "none";
-  const peopleBtn = document.querySelector('#mbMenu [data-mbtab="people"]');
-  if (peopleBtn) peopleBtn.style.display = caps.canAccessManagerBoard ? "" : "none";
   const messengerBtn = document.querySelector('#mbMenu [data-mbtab="messenger"]');
   if (messengerBtn) messengerBtn.style.display = caps.canAccessManagerBoard ? "" : "none";
-  const liveControlsBtn = document.querySelector('#mbMenu [data-mbtab="live_controls"]');
-  if (liveControlsBtn) liveControlsBtn.style.display = caps.canAccessManagerBoard ? "" : "none";
+  const gameplayAdjustmentsBtn = document.querySelector('#mbMenu [data-mbtab="gameplay_adjustments"]');
+  if (gameplayAdjustmentsBtn) gameplayAdjustmentsBtn.style.display = caps.canAccessManagerBoard ? "" : "none";
   const performanceBtn = document.querySelector('#mbMenu [data-mbtab="performance"]');
   if (performanceBtn) performanceBtn.style.display = caps.canAccessManagerBoard ? "" : "none";
   const enterpriseBtn = document.querySelector('#mbMenu [data-mbtab="enterprise"]');
@@ -10067,15 +10096,20 @@ function applyManagerBoardVisibility() {
 }
 
 function wireActiveRestaurantPicker() {
-  const btn = document.getElementById("btnSetActiveRestaurant");
-  if (!btn || btn.__wired) return;
-  btn.__wired = true;
+  [
+    { buttonId: "btnSetActiveRestaurant", selectId: "selActiveRestaurant" },
+    { buttonId: "mbListingSetActiveRestaurant", selectId: "mbListingActiveRestaurant" },
+  ].forEach(({ buttonId, selectId }) => {
+    const btn = document.getElementById(buttonId);
+    if (!btn || btn.__wired) return;
+    btn.__wired = true;
 
-  btn.addEventListener("click", async () => {
-    const sel = document.getElementById("selActiveRestaurant");
-    const rid = sel?.value || null;
-    if (!rid) return;
-    await setActiveRestaurantForGroup(rid);
+    btn.addEventListener("click", async () => {
+      const sel = document.getElementById(selectId);
+      const rid = sel?.value || null;
+      if (!rid) return;
+      await setActiveRestaurantForGroup(rid);
+    });
   });
 }
 
@@ -10634,47 +10668,9 @@ async function loadManagerInsights() {
         </div>
         <div id="mbPerformanceCards" class="mb-performance-card-grid" style="margin-top:12px;"></div>
       </div>
-
-      <div class="mb-performance-leaderboard card" style="margin-top:12px;">
-        <div class="mb-section-header">
-          <strong>Performance Leaderboard</strong>
-          <div class="small-text">Ranked by total points with quality and readiness context.</div>
-        </div>
-        <div class="mb-performance-table-wrap" style="margin-top:12px;">
-          <table class="mb-performance-table">
-            <thead>
-              <tr>
-                <th>Rank</th>
-                <th>Waiter</th>
-                <th>Total Points</th>
-                <th>Drill Pass %</th>
-                <th>Encounter Pass %</th>
-                <th>Challenge Success %</th>
-                <th>Premium Success %</th>
-                <th>Mastery %</th>
-                <th>Last Active</th>
-              </tr>
-            </thead>
-            <tbody id="mbPerformanceRows"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="mb-performance-insights card" style="margin-top:12px;">
-        <div class="mb-section-header">
-          <strong>Coach Notes</strong>
-          <div class="small-text">Quick patterns worth manager attention.</div>
-        </div>
-        <div id="mbPerformanceCoachNotes" style="margin-top:12px;"></div>
-      </div>
     `;
 
     renderManagerPerformanceOverview(model.summary);
-    renderManagerPerformanceTable(model.users);
-    renderManagerCoachNotes(model.notes);
-    wirePerformanceRowExpansion(
-      Object.fromEntries(model.users.map((user) => [user.userId, user]))
-    );
   } catch (error) {
     console.error("[MB] loadManagerInsights failed", error);
     root.innerHTML = `
@@ -10704,6 +10700,41 @@ async function loadManagerPerformanceTab() {
     renderPerformanceHistorySummaryStrip("");
     renderManagerEncounterSummaryList("", []);
   }
+}
+
+async function loadProfilePerformanceHistory() {
+  const select = document.getElementById("mbHistoryUser");
+  if (!select) return;
+
+  await loadHistoryWaiters();
+
+  if (select && !select.__wired) {
+    select.__wired = true;
+    select.addEventListener("change", () => {
+      loadPerformanceHistory(select.value).catch(console.error);
+    });
+  }
+
+  const profile = appState?.profile || {};
+  const currentUserId = String(
+    profile?.user_id ||
+    profile?.userId ||
+    appState?.session?.user?.id ||
+    ""
+  ).trim();
+
+  if (select?.value) {
+    await loadPerformanceHistory(select.value);
+    return;
+  }
+
+  if (currentUserId) {
+    await loadPerformanceHistory(currentUserId);
+    return;
+  }
+
+  renderPerformanceHistorySummaryStrip("");
+  renderManagerEncounterSummaryList("", []);
 }
 
 function normalizeEncounterSummaryRow(row) {
@@ -11182,7 +11213,7 @@ async function getManagerPerformanceModel({ force = false } = {}) {
     loadedAt: Date.now(),
     summary: buildPerformanceSummary(users),
     users,
-    notes: buildPerformanceCoachNotes(users),
+    notes: [],
   };
 }
 
@@ -11328,23 +11359,6 @@ function buildPerformanceSummary(users = []) {
   };
 }
 
-function buildPerformanceCoachNotes(users = []) {
-  if (!users.length) return ["No performance data yet."];
-
-  const notes = [];
-  const drillStrongEncounterWeak = users.filter((user) => user.drillPassRate >= 0.75 && user.encounterPassRate < 0.6);
-  const highPointsLowChallenge = users.filter((user) => user.totalPoints >= 8 && user.challengeSuccessRate < 0.5);
-  const premiumReady = users.filter((user) => user.premiumSuccessRate >= 0.4);
-  const coachingFocus = users.slice().sort((a, b) => a.challengeReadiness - b.challengeReadiness).slice(0, 2);
-
-  if (drillStrongEncounterWeak.length) notes.push(`${drillStrongEncounterWeak.length} waiter(s) convert drills better than live encounters.`);
-  if (highPointsLowChallenge.length) notes.push(`${highPointsLowChallenge.length} high-point waiter(s) still need cleaner challenge execution.`);
-  if (premiumReady.length) notes.push(`${premiumReady.length} waiter(s) are consistently converting premium moments.`);
-  if (coachingFocus.length) notes.push(`Focus next coaching on ${coachingFocus.map((user) => user.displayName).join(" and ")}.`);
-
-  return notes.slice(0, 4);
-}
-
 function renderManagerPerformanceOverview(summary = {}) {
   const el = document.getElementById("mbPerformanceCards");
   if (!el) return;
@@ -11426,14 +11440,6 @@ function renderManagerPerformanceTable(users = []) {
       </td>
     </tr>
   `).join("");
-}
-
-function renderManagerCoachNotes(notes = []) {
-  const root = document.getElementById("mbPerformanceCoachNotes");
-  if (!root) return;
-  root.innerHTML = notes.length
-    ? notes.map((note) => `<div class="mb-coach-note">${escapeHtml(String(note || ""))}</div>`).join("")
-    : `<div class="small-text">No coach notes yet.</div>`;
 }
 
 function wirePerformanceRowExpansion(usersById = {}) {
@@ -11787,12 +11793,21 @@ function renderSelectionPreview(preview = {}, users = []) {
 }
 
 async function loadGroupRestaurantsForPicker() {
-  const sel = document.getElementById("selActiveRestaurant");
-  const hint = document.getElementById("activeRestaurantHint");
-  if (!sel) return;
+  const pickers = [
+    { selectId: "selActiveRestaurant", hintId: "activeRestaurantHint" },
+    { selectId: "mbListingActiveRestaurant", hintId: "mbListingActiveRestaurantHint" },
+  ]
+    .map(({ selectId, hintId }) => ({
+      sel: document.getElementById(selectId),
+      hint: document.getElementById(hintId),
+    }))
+    .filter(({ sel }) => !!sel);
+  if (!pickers.length) return;
 
-  sel.innerHTML = "";
-  if (hint) hint.textContent = "Loading restaurants…";
+  pickers.forEach(({ sel, hint }) => {
+    sel.innerHTML = "";
+    if (hint) hint.textContent = "Loading restaurants…";
+  });
 
   const r = await supabase
     .from("restaurants")
@@ -11801,22 +11816,28 @@ async function loadGroupRestaurantsForPicker() {
 
   if (r.error) {
     console.error("[BC] restaurants fetch failed", r.error);
-    if (hint) hint.textContent = `⚠️ Failed to load restaurants: ${r.error.message}`;
+    pickers.forEach(({ hint }) => {
+      if (hint) hint.textContent = `⚠️ Failed to load restaurants: ${r.error.message}`;
+    });
     return;
   }
 
   const rows = r.data || [];
   if (!rows.length) {
-    if (hint) hint.textContent = "⚠️ No restaurants found.";
+    pickers.forEach(({ hint }) => {
+      if (hint) hint.textContent = "⚠️ No restaurants found.";
+    });
     return;
   }
 
-  for (const row of rows) {
-    const opt = document.createElement("option");
-    opt.value = row.id;
-    opt.textContent = row.name || row.id.slice(0, 8) + "…";
-    sel.appendChild(opt);
-  }
+  pickers.forEach(({ sel }) => {
+    for (const row of rows) {
+      const opt = document.createElement("option");
+      opt.value = row.id;
+      opt.textContent = row.name || row.id.slice(0, 8) + "…";
+      sel.appendChild(opt);
+    }
+  });
 
   // restore active
   const stored =
@@ -11827,7 +11848,9 @@ async function loadGroupRestaurantsForPicker() {
     null;
 
   const active = appState.activeRestaurantId || stored || rows[0].id;
-  sel.value = active;
+  pickers.forEach(({ sel }) => {
+    sel.value = active;
+  });
   appState.activeRestaurantId = active;
   window.__BC_ALLOWED_RESTAURANT_IDS__ = rows.map((x) => String(x.id || "")).filter(Boolean);
   setStoredActiveRestaurantId(appState?.profile?.scope_id || null, active);
@@ -11837,7 +11860,9 @@ async function loadGroupRestaurantsForPicker() {
   const activeRow = rows.find((x) => x.id === active) || null;
   if (activeRow && !appState.restaurant) appState.restaurant = activeRow;
   markActiveRestaurantReady();
-  if (hint) hint.textContent = `✅ Active: ${activeRow?.name || String(active).slice(0, 8) + "…"}`;
+  pickers.forEach(({ hint }) => {
+    if (hint) hint.textContent = `✅ Active: ${activeRow?.name || String(active).slice(0, 8) + "…"}`;
+  });
 
   console.log("[BC] picker hydrated (no scope)", { active });
   return rows;
@@ -12362,60 +12387,92 @@ function getAllowedRestaurantName(restaurantId) {
 
 function renderParentStateDebugCard() {
   let root = document.getElementById("mbParentStateCard");
-  if (!root) {
-    const overview = document.getElementById("mbTab_overview");
-    if (!overview) return;
-    root = document.createElement("div");
-    root.id = "mbParentStateCard";
-    root.style.marginBottom = "12px";
-    overview.prepend(root);
-  }
+  if (root) root.remove();
+}
+window.renderParentStateDebugCard = renderParentStateDebugCard;
+
+function renderManagerGameplayAdjustmentsPanel() {
+  const root = document.getElementById("mbGameplayAdjustmentsPanel");
   if (!root) return;
 
-  root.style.display = "block";
-  root.style.visibility = "visible";
-  root.style.opacity = "1";
-  root.style.position = "relative";
-  root.style.zIndex = "1";
-
-  const snapshot = getParentCtxSnapshot("premium");
-  const iframeHealthy = isPremiumIframeHealthy();
-  const health = snapshot.ctxReady
-    ? (iframeHealthy ? "ready" : "degraded_iframe")
-    : "degraded_parent_ctx";
-  const healthTone =
-    health === "ready"
-      ? {
-          border: "rgba(62, 184, 122, 0.38)",
-          bg: "linear-gradient(180deg, rgba(18,52,35,0.96), rgba(14,30,24,0.96))",
-          badgeBg: "rgba(62, 184, 122, 0.18)",
-          badgeText: "#b8f1cf",
-        }
-      : {
-          border: "rgba(232, 170, 64, 0.42)",
-          bg: "linear-gradient(180deg, rgba(58,36,12,0.96), rgba(34,23,10,0.96))",
-          badgeBg: "rgba(232, 170, 64, 0.18)",
-          badgeText: "#ffe1a8",
-        };
+  const currentDifficulty = getCurrentDifficultyValue();
+  const currentLabel = getCurrentDifficultyLabel();
+  const restaurantName = appState?.restaurant?.name || appState?.restaurant?.id || "Current restaurant";
+  const currentTier =
+    Number(appState?.difficulty) || currentDifficulty;
 
   root.innerHTML = `
-    <div class="card" style="padding:12px; display:flex; flex-direction:column; gap:8px; border:1px solid ${healthTone.border}; background:${healthTone.bg}; box-shadow:0 10px 28px rgba(0,0,0,0.18);">
+    <div class="card" style="padding:12px; display:flex; flex-direction:column; gap:12px;">
       <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-        <strong>Parent State</strong>
-        <span class="small-text" style="opacity:.95; padding:3px 8px; border-radius:999px; background:${healthTone.badgeBg}; color:${healthTone.badgeText}; text-transform:uppercase; letter-spacing:.04em;">${escapeHtml(health)}</span>
+        <strong>Gameplay Adjustments</strong>
+        <span class="small-text" style="opacity:.8;">Manager board</span>
       </div>
-      <div class="small-text" style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px 12px;">
-        <div><b>Role:</b> ${escapeHtml(snapshot.membershipRole || "-")}</div>
-        <div><b>Restaurant:</b> ${escapeHtml(snapshot.activeRestaurantId || "-")}</div>
-        <div><b>Ctx Ready:</b> ${snapshot.ctxReady ? "Yes" : "No"}</div>
-        <div><b>Iframe Healthy:</b> ${iframeHealthy ? "Yes" : "No"}</div>
-        <div><b>Epoch:</b> ${escapeHtml(String(snapshot.epoch || 0))}</div>
-        <div><b>User:</b> ${escapeHtml(snapshot.userId || "-")}</div>
+
+      <div class="small-text" style="opacity:.82;">
+        Adjust the current restaurant’s live encounter difficulty. This saves for the selected user and restaurant.
+      </div>
+
+      <div class="card" style="padding:12px; display:flex; flex-direction:column; gap:10px;">
+        <div style="font-weight:600;">Difficulty</div>
+        <div class="row" style="gap:8px; flex-wrap:wrap;">
+          <button id="mbGameplayDifficultyEasy" class="btn-ghost" type="button">Easy</button>
+          <button id="mbGameplayDifficultyMedium" class="btn-ghost" type="button">Medium</button>
+          <button id="mbGameplayDifficultyHard" class="btn-ghost" type="button">Hard</button>
+        </div>
+        <div id="mbGameplayDifficultyStatus" class="small-text" style="opacity:.85;"></div>
+      </div>
+
+      <div class="card" style="padding:12px; display:flex; flex-direction:column; gap:8px;">
+        <div style="font-weight:600;">Current gameplay rules</div>
+        <div id="mbGameplayStateSummary" class="small-text" style="opacity:.86; display:grid; gap:6px;"></div>
       </div>
     </div>
   `;
+
+  const stateSummary = document.getElementById("mbGameplayStateSummary");
+  if (stateSummary) {
+    stateSummary.innerHTML = [
+      `<div><b>Restaurant:</b> ${escapeHtml(restaurantName)}</div>`,
+      `<div><b>Current difficulty:</b> ${escapeHtml(currentLabel)}</div>`,
+      `<div><b>Live tier authority:</b> T${escapeHtml(String(currentTier || 1))}</div>`,
+      `<div><b>Tones:</b> guide, charm, authority</div>`,
+      `<div><b>Hold:</b> unlocks at Tier 2</div>`,
+      `<div><b>Pivot:</b> unlocks at Tier 3</div>`,
+    ].join("");
+  }
+
+  const statusEl = document.getElementById("mbGameplayDifficultyStatus");
+  if (statusEl) {
+    statusEl.textContent = `Current selection: ${currentLabel}`;
+  }
+
+  const setActive = () => {
+    const current = getCurrentDifficultyValue();
+    document.getElementById("mbGameplayDifficultyEasy")?.classList.toggle("active", current === 1);
+    document.getElementById("mbGameplayDifficultyMedium")?.classList.toggle("active", current === 2);
+    document.getElementById("mbGameplayDifficultyHard")?.classList.toggle("active", current === 3);
+    const status = document.getElementById("mbGameplayDifficultyStatus");
+    if (status) status.textContent = `Current selection: ${getCurrentDifficultyLabel()}`;
+  };
+
+  setActive();
+  wireManagerGameplayAdjustmentsPanel();
 }
-window.renderParentStateDebugCard = renderParentStateDebugCard;
+window.renderManagerGameplayAdjustmentsPanel = renderManagerGameplayAdjustmentsPanel;
+
+function wireManagerGameplayAdjustmentsPanel() {
+  const bind = (id, value) => {
+    const btn = document.getElementById(id);
+    if (!btn || btn.__bcBound) return;
+    btn.__bcBound = true;
+    bindInput(btn, () => setCurrentDifficultyValue(value));
+  };
+
+  bind("mbGameplayDifficultyEasy", 1);
+  bind("mbGameplayDifficultyMedium", 2);
+  bind("mbGameplayDifficultyHard", 3);
+}
+window.wireManagerGameplayAdjustmentsPanel = wireManagerGameplayAdjustmentsPanel;
 
 function getManagerRitualStatusStaffOptions() {
   const staffRows = Array.isArray(window.__BC_MB_STAFF_ROWS__) ? window.__BC_MB_STAFF_ROWS__ : [];
@@ -12440,6 +12497,24 @@ function getManagerRitualStatusStaffOptions() {
   }
 
   return getManagerWaiterOptions();
+}
+
+async function loadManagerRitualStatusStaffOptionsFromDb(restaurantId) {
+  const rid = String(restaurantId || "").trim();
+  if (!rid) return [];
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("user_id, display_name, role, created_at")
+    .eq("restaurant_id", rid)
+    .order("created_at", { ascending: true });
+
+  if (error || !Array.isArray(data) || !data.length) {
+    return [];
+  }
+
+  window.__BC_MB_STAFF_ROWS__ = data;
+  return getManagerRitualStatusStaffOptions();
 }
 
 function renderManagerRitualStatusSelectOptions(selectEl, options = {}) {
@@ -12520,7 +12595,10 @@ async function renderManagerBoardOverviewRitualStatusCard(options = {}) {
   if (!root) return;
 
   const rid = String(getManagerActiveRestaurantId() || appState?.activeRestaurantId || appState?.profile?.restaurant_id || "");
-  const staffOptions = getManagerRitualStatusStaffOptions();
+  let staffOptions = getManagerRitualStatusStaffOptions();
+  if (!staffOptions.length && rid) {
+    staffOptions = await loadManagerRitualStatusStaffOptionsFromDb(rid);
+  }
   const fallbackSelected =
     String(window.__BC_MB_RITUAL_STATUS_USER_ID__ || window.__BC_MB_ACTIVE_THREAD_USER_ID__ || staffOptions[0]?.userId || "");
   const selectedUserId = String(options.selectedUserId || fallbackSelected || "");
@@ -12530,10 +12608,10 @@ async function renderManagerBoardOverviewRitualStatusCard(options = {}) {
     root.innerHTML = `
       <div class="card" style="padding:12px; display:flex; flex-direction:column; gap:8px;">
         <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-          <strong>Ritual Status</strong>
+          <strong>Waiter Progress</strong>
           <span class="small-text" style="opacity:.8;">Overview</span>
         </div>
-        <div class="small-text" style="opacity:.8;">No staff members available for ritual checks.</div>
+        <div class="small-text" style="opacity:.8;">No staff members available for progress checks.</div>
       </div>
     `;
     return;
@@ -12549,11 +12627,11 @@ async function renderManagerBoardOverviewRitualStatusCard(options = {}) {
   root.innerHTML = `
     <div class="card" style="padding:12px; display:flex; flex-direction:column; gap:10px; border:1px solid ${statusTone.border}; background:${statusTone.bg};">
       <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-        <strong>Ritual Status</strong>
+        <strong>Waiter Progress</strong>
         <span class="small-text" style="opacity:.9; padding:3px 8px; border-radius:999px; background:${statusTone.badgeBg}; color:${statusTone.badgeText}; text-transform:uppercase; letter-spacing:.04em;">Overview</span>
       </div>
       <div class="small-text" style="opacity:.82;">
-        Check whether a staff member has completed today’s ritual in the current restaurant.
+        Check whether a waiter has completed today’s ritual in the current restaurant.
       </div>
       <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
         <select id="mbRitualStatusStaffSelect" class="input" style="min-width:240px;"></select>
@@ -13165,16 +13243,17 @@ function refreshManagerRuntimeSurfaces(opts = {}) {
   }
 
   if (board) {
-    safeCall?.("renderManagerBoardDrillSummary", () => renderManagerBoardDrillSummary?.());
-    safeCall?.("renderManagerBoardOverviewLiveEffects", () => renderManagerBoardOverviewLiveEffects?.());
-    safeCall?.("renderManagerBoardOverviewDisplayMethodChallenge", () => renderManagerBoardOverviewDisplayMethodChallenge?.());
-  }
+  safeCall?.("renderManagerBoardDrillSummary", () => renderManagerBoardDrillSummary?.());
+  safeCall?.("renderManagerBoardOverviewLiveEffects", () => renderManagerBoardOverviewLiveEffects?.());
+}
 
   if (economy) {
     safeCall?.("renderManagerAbilityEconomyPanel", () => renderManagerAbilityEconomyPanel?.());
   }
 
   if (liveControls) {
+    safeCall?.("renderManagerBoardOverviewLiveEffects", () => renderManagerBoardOverviewLiveEffects?.());
+    safeCall?.("renderManagerAbilityEconomyPanel", () => renderManagerAbilityEconomyPanel?.());
     safeCall?.("renderManagerAttributeEffectsPanel", () => renderManagerAttributeEffectsPanel?.());
     safeCall?.("renderManagerAreaEffectsPanel", () => renderManagerAreaEffectsPanel?.());
     safeCall?.("renderManagerTimedChallengeActionPanel", () => renderManagerTimedChallengeActionPanel?.());
@@ -16261,11 +16340,12 @@ function renderManagerAreaEffectsPanel() {
 }
 
 function renderManagerLiveControlPanels() {
+  safeCall("renderManagerBoardOverviewLiveEffects", () => renderManagerBoardOverviewLiveEffects?.());
   safeCall("renderManagerAbilityEconomyPanel", () => renderManagerAbilityEconomyPanel?.());
   safeCall("renderManagerAttributeEffectsPanel", () => renderManagerAttributeEffectsPanel?.());
   safeCall("renderManagerAreaEffectsPanel", () => renderManagerAreaEffectsPanel?.());
   safeCall("renderManagerTimedChallengeActionPanel", () => renderManagerTimedChallengeActionPanel?.());
-  safeCall("renderManagerDrillActionPanel", () => renderManagerDrillActionPanel?.());
+  safeCall("renderManagerDisplayMethodActionPanel", () => renderManagerDisplayMethodActionPanel?.());
 }
 
 function renderProfileScreen() {
@@ -16341,6 +16421,7 @@ function renderProfileScreen() {
     }
   }
 
+  void renderProfileSkillDashboard();
   const multiCard = document.getElementById("profileMultiRestaurantCard");
   if (multiCard) {
     const caps = getPremiumRoleCapabilities(profile);
@@ -16505,6 +16586,94 @@ function renderProfileStandingCard(user = null, model = null) {
       </div>
     </div>
   `;
+}
+
+async function renderProfileSkillDashboard() {
+  const root = document.getElementById("profileSkillsCard");
+  if (!root) return;
+
+  root.innerHTML = `
+    <div class="card" style="display:flex; flex-direction:column; gap:10px;">
+      <div style="font-weight:600;">Your Personal Skills</div>
+
+      <div class="small-text" id="profileSkillSummary" style="margin-bottom:8px; opacity:.85;">
+        Loading skill summary…
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px 12px; margin-bottom:10px;">
+        <div class="small-text">Reading: <span id="profileSkillRead">0%</span></div>
+        <div class="small-text">Framing: <span id="profileSkillFraming">0%</span></div>
+        <div class="small-text">Delivery: <span id="profileSkillDelivery">0%</span></div>
+        <div class="small-text">Recovery: <span id="profileSkillRecovery">0%</span></div>
+        <div class="small-text">Closing: <span id="profileSkillClosing">0%</span></div>
+      </div>
+
+      <canvas id="profileSkillRadar" width="240" height="240" style="display:block; margin:0 auto;"></canvas>
+
+      <div id="profileSkillTimeline" style="margin-top:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:6px;">
+          <div id="profileTimelineTitle" style="font-weight:600;">Recent Progress</div>
+          <select id="profileTimelineUserSelect" class="hidden" style="max-width:180px;"></select>
+        </div>
+
+        <div id="profileTimelineList" class="small-text" style="display:flex; flex-direction:column; gap:6px;">
+          <div style="opacity:.7;">No history yet.</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  try {
+    const snap = await loadHudSkillSnapshot();
+
+    const setText = (id, value) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = `${value}%`;
+    };
+
+    setText("profileSkillRead", snap.read ?? 0);
+    setText("profileSkillFraming", snap.framing ?? 0);
+    setText("profileSkillDelivery", snap.delivery ?? 0);
+    setText("profileSkillRecovery", snap.recovery ?? 0);
+    setText("profileSkillClosing", snap.closing ?? 0);
+
+    const entries = [
+      { key: "read", label: "Reading", val: snap.read ?? 0 },
+      { key: "framing", label: "Framing", val: snap.framing ?? 0 },
+      { key: "delivery", label: "Delivery", val: snap.delivery ?? 0 },
+      { key: "recovery", label: "Recovery", val: snap.recovery ?? 0 },
+      { key: "closing", label: "Closing", val: snap.closing ?? 0 },
+    ].sort((a, b) => b.val - a.val);
+
+    const strongest = entries[0];
+    const weakest = entries[entries.length - 1];
+
+    const summary = document.getElementById("profileSkillSummary");
+    if (summary) {
+      summary.textContent = `Strongest: ${strongest.label} (${strongest.val}%) • Needs work: ${weakest.label} (${weakest.val}%)`;
+    }
+
+    const canvas = document.getElementById("profileSkillRadar");
+    if (canvas && typeof drawSkillRadar === "function") {
+      drawSkillRadar(canvas, snap);
+    }
+
+    const titleEl = document.getElementById("profileTimelineTitle");
+    if (titleEl) titleEl.textContent = "Recent Progress";
+
+    const timelineList = document.getElementById("profileTimelineList");
+    if (timelineList) {
+      timelineList.innerHTML = `<div class="small-text" style="opacity:.75;">Open Profile to review recent skill history.</div>`;
+    }
+  } catch (error) {
+    console.warn("[PROFILE] skill dashboard render failed", error);
+    root.innerHTML = `
+      <div class="card">
+        <div style="font-weight:600; margin-bottom:8px;">Your Personal Skills</div>
+        <div class="small" style="opacity:.75;">Could not load skill summary right now.</div>
+      </div>
+    `;
+  }
 }
 
 function renderProfileBadgeShelf(user = null, model = null) {
@@ -16700,8 +16869,7 @@ async function buildSelfProfilePerformanceUser() {
 async function renderProfilePerformanceCards() {
   const rootStanding = document.getElementById("profileStandingCard");
   const rootBadges = document.getElementById("profileBadgeShelf");
-  const rootInsight = document.getElementById("profileInsightCard");
-  if (!rootStanding && !rootBadges && !rootInsight) return;
+  if (!rootStanding && !rootBadges) return;
 
   try {
     const profile = appState?.profile || {};
@@ -16722,7 +16890,6 @@ async function renderProfilePerformanceCards() {
 
     renderProfileStandingCard(user, model);
     renderProfileBadgeShelf(user, model);
-    renderProfileInsightCard(user);
   } catch (error) {
     console.warn("[PROFILE] performance card render failed", error);
     if (rootStanding) {
@@ -16734,7 +16901,6 @@ async function renderProfilePerformanceCards() {
       `;
     }
     if (rootBadges) rootBadges.innerHTML = "";
-    if (rootInsight) rootInsight.innerHTML = "";
   }
 }
 
@@ -19468,10 +19634,7 @@ async function loadManagerBoardData(restaurantId = null, options = {}) {
       console.warn("[MB] timed challenge wine refresh failed", error);
     }
 
-    document.getElementById("mbRestName").textContent =
-      appState.restaurant?.name || (String(rid).slice(0, 8) + "…");
     document.getElementById("mbMsg").textContent = "";
-    renderParentStateDebugCard();
     safeCall("renderManagerBoardOverviewRitualStatusCard", () => renderManagerBoardOverviewRitualStatusCard?.());
     wireManagerBoardMembers();
     if (isFreshCacheEntry(managerBoardOverviewCache, MANAGER_BOARD_OVERVIEW_CACHE_MS, rid) && !force) {
@@ -19511,9 +19674,6 @@ async function loadManagerBoardData(restaurantId = null, options = {}) {
 
     if (runsRes.error) throw runsRes.error;
     if (drillsRes.error) throw drillsRes.error;
-
-    document.getElementById("mbRunsTotal").textContent = String(runsRes.count ?? 0);
-    document.getElementById("mbDrillsTotal").textContent = String(drillsRes.count ?? 0);
 
     // -----------------------------
     // Recent activity feed
@@ -19558,19 +19718,6 @@ async function loadManagerBoardData(restaurantId = null, options = {}) {
       .filter((i) => i.t)
       .sort((a, b) => new Date(b.t) - new Date(a.t))
       .slice(0, 8);
-
-    document.getElementById("mbRecent").innerHTML =
-      items.length
-        ? items
-            .map(
-              (i) =>
-                `<div style="padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.08);">
-                  ${i.line}
-                  <div style="opacity:.6; font-size:12px;">${i.t}</div>
-                </div>`
-            )
-            .join("")
-        : `<div style="opacity:.8;">No activity yet.</div>`;
 
     // -----------------------------
     // Best streaks (computed from encounter resolutions)
@@ -19648,81 +19795,12 @@ async function loadManagerBoardData(restaurantId = null, options = {}) {
         : `<div style="opacity:.8;">No streak data yet.</div>`;
     }
 
-    // -----------------------------
-    // Needs coaching (ranked, not binary)
-    // Uses bc_user_latest_v1 so it works even when sessions are sparse
-    // -----------------------------
-    let latestQ = supabase
-      .from("bc_user_latest_v1")
-      .select("user_id, last10_count, last10_greens, last10_yellows, last10_reds, last10_avg_chain_score, latest_chain_signal, latest_tier, latest_grade, latest_occurred_at")
-      .eq("restaurant_id", rid)
-      .order("latest_occurred_at", { ascending: false })
-      .limit(200);
-
-    const latestRes = await latestQ;
-
-    if (latestRes.error) throw latestRes.error;
-
-    const coaching = (latestRes.data || [])
-      .map((u) => {
-        const n = Number(u.last10_count ?? 0);
-        const reds = Number(u.last10_reds ?? 0);
-        const avg = Number(u.last10_avg_chain_score ?? 0);
-
-        // score higher = more attention needed
-        // (reds are heavy, low avg also heavy, low sample dampened)
-        const attention =
-          (reds * 3) +
-          (avg < 2.2 ? 2 : 0) +
-          (avg < 1.8 ? 2 : 0) +
-          (n >= 8 ? 1 : 0);
-
-        return {
-          user_id: u.user_id,
-          attention,
-          n,
-          reds,
-          avg,
-          latest_signal: u.latest_chain_signal,
-          latest_tier: u.latest_tier,
-          latest_grade: u.latest_grade,
-          latest_occurred_at: u.latest_occurred_at,
-        };
-      })
-      .sort((a, b) => (b.attention - a.attention) || (b.reds - a.reds) || (a.avg - b.avg))
-      .slice(0, 5);
-
-    const coachingNameMap = await mapUserIdsToNames(coaching.map(x => x.user_id));
-
-    const coachEl = document.getElementById("mbNeedsCoaching");
-    if (coachEl) {
-      coachEl.innerHTML = coaching.length
-        ? coaching
-            .map((x) => {
-              const u = userLabel(x.user_id, coachingNameMap);
-              const reasons = [
-                x.reds > 0 ? `${x.reds} red(s) in last10` : null,
-                Number.isFinite(x.avg) ? `avg ${x.avg.toFixed(2)}` : null,
-                x.latest_signal ? `latest ${x.latest_signal}` : null,
-                x.latest_tier ? `tier ${x.latest_tier}` : null,
-              ].filter(Boolean);
-
-              return `<div style="padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.08);">
-                        <div><b>${u}</b> • ${reasons.join(" • ")}</div>
-                        <div style="opacity:.6; font-size:12px;">${x.latest_occurred_at || ""}</div>
-                      </div>`;
-            })
-            .join("")
-        : `<div style="opacity:.8;">No coaching signals yet.</div>`;
-    }
-
     setDebug({
       step: "managerBoard.loaded",
       restaurant_id: rid,
       runs: runsRes.count,
       drills: drillsRes.count,
       streakUsers: topStreaks.length,
-      coachingUsers: coaching.length,
     });
     managerBoardOverviewCache = { rid: String(rid), loadedAt: Date.now() };
   } catch (e) {
@@ -20505,47 +20583,49 @@ async function decideRouteGuarded(reason = "") {
 // HUD
 // ------------------------------------------------------------
 function renderInvitesList() {
-  const el = document.getElementById("invitesList");
-  if (!el) return;
-
   const invites = getManagerBoardInvites();
-  if (!invites.length) {
-    el.innerHTML = `<div style="opacity:.8;">No waiters added yet.</div>`;
-    return;
-  }
+  ["invitesList", "mbInvitesList"].forEach((targetId) => {
+    const el = document.getElementById(targetId);
+    if (!el) return;
 
-  el.innerHTML = invites
-    .map((i) => {
-      const status = i.status;
-      const email = i.email;
-      const meta = status === "accepted" ? "accepted" : status === "revoked" ? "revoked" : "pending";
+    if (!invites.length) {
+      el.innerHTML = `<div style="opacity:.8;">No waiters added yet.</div>`;
+      return;
+    }
 
-      const btn =
-        status === "revoked"
-          ? `<button data-action="reinvite" data-email="${email}" style="font-size:12px;">Re-add</button>`
-          : `<button data-action="revoke" data-email="${email}" style="font-size:12px;">Remove</button>`;
+    el.innerHTML = invites
+      .map((i) => {
+        const status = i.status;
+        const email = i.email;
+        const meta = status === "accepted" ? "accepted" : status === "revoked" ? "revoked" : "pending";
 
-      return `
-        <div style="display:flex; justify-content:space-between; gap:10px; padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.08);">
-          <div style="min-width:0;">
-            <div style="font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${email}</div>
-            <div style="font-size:12px; opacity:.75;">${meta}</div>
+        const btn =
+          status === "revoked"
+            ? `<button data-action="reinvite" data-email="${email}" style="font-size:12px;">Re-add</button>`
+            : `<button data-action="revoke" data-email="${email}" style="font-size:12px;">Remove</button>`;
+
+        return `
+          <div style="display:flex; justify-content:space-between; gap:10px; padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.08);">
+            <div style="min-width:0;">
+              <div style="font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${email}</div>
+              <div style="font-size:12px; opacity:.75;">${meta}</div>
+            </div>
+            <div style="display:flex; gap:8px; align-items:center;">
+              ${btn}
+            </div>
           </div>
-          <div style="display:flex; gap:8px; align-items:center;">
-            ${btn}
-          </div>
-        </div>
-      `;
-    })
-    .join("");
+        `;
+      })
+      .join("");
 
-  el.querySelectorAll("button[data-action]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const action = btn.getAttribute("data-action");
-      const email = btn.getAttribute("data-email");
-      if (!email) return;
-      if (action === "revoke") await adminRevokeInvite(email);
-      if (action === "reinvite") await adminAddInvite(email);
+    el.querySelectorAll("button[data-action]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const action = btn.getAttribute("data-action");
+        const email = btn.getAttribute("data-email");
+        if (!email) return;
+        if (action === "revoke") await adminRevokeInvite(email);
+        if (action === "reinvite") await adminAddInvite(email);
+      });
     });
   });
 }
@@ -20610,7 +20690,6 @@ async function refreshManagerBoardScopedViews(restaurantId = null) {
   renderManagerRestaurantPicker?.();
   renderManagerRestaurantContextCard?.();
   safeCall("renderGroupOverviewCard", () => renderGroupOverviewCard?.());
-  safeCall("renderGroupMetricsCard", () => renderGroupMetricsCard?.());
   safeCall("renderGroupRestaurantComparisonCard", () => renderGroupRestaurantComparisonCard?.());
   safeCall("wireGroupRestaurantComparisonCard", () => wireGroupRestaurantComparisonCard?.());
   safeCall("renderManagerPeopleSummary", () => renderManagerPeopleSummary?.());
@@ -20619,10 +20698,7 @@ async function refreshManagerBoardScopedViews(restaurantId = null) {
   safeCall("renderManagerBoardOverviewLiveEffects", () => renderManagerBoardOverviewLiveEffects?.());
   safeCall("renderManagerLiveEffectsPanels", () => renderManagerLiveEffectsPanels?.());
   safeCall("pushLiveEffectsToGame", () => pushLiveEffectsToGame?.());
-  safeCall("renderManagerBoardOverviewTimedChallenge", () => renderManagerBoardOverviewTimedChallenge?.());
-  safeCall("renderManagerBoardRecentChallenges", () => renderManagerBoardRecentChallenges?.());
   safeCall("renderTimedChallengeRecentSummary", () => renderTimedChallengeRecentSummary?.());
-  renderManagerDrillSummary?.();
   renderManagerLiveControlPanels?.();
   renderProfileScreen?.();
   renderHud?.();
@@ -21013,16 +21089,31 @@ function renderHud() {
   const caps = getPremiumRoleCapabilities(profile);
   const activeRestaurantId = getManagerActiveRestaurantId();
   const r = appState.restaurant;
+  const displayRole = getDisplayRoleLabel(profile);
+  const restaurantLabel = r?.name || activeRestaurantId || "-";
+  const joinCode = r?.code || "-";
+  const seatLimit = r?.seat_limit ?? "-";
+  const requireInviteLabel = r ? (r.require_invite ? "Yes" : "No") : "-";
 
   if (activeRestaurantId && appState?.restaurant?.id && String(appState.restaurant.id) !== String(activeRestaurantId)) {
     appState.restaurant.id = activeRestaurantId;
   }
 
-  document.getElementById("hudRole").textContent = getDisplayRoleLabel(profile);
-  document.getElementById("hudRestName").textContent = r?.name || activeRestaurantId || "-";
-  document.getElementById("hudJoinCode").textContent = r?.code || "-";
-  document.getElementById("hudSeatLimit").textContent = r?.seat_limit ?? "-";
-  document.getElementById("hudRequireInvite").textContent = r ? (r.require_invite ? "Yes" : "No") : "-";
+  document.getElementById("hudRole").textContent = displayRole;
+  document.getElementById("hudRestName").textContent = restaurantLabel;
+  document.getElementById("hudJoinCode").textContent = joinCode;
+  document.getElementById("hudSeatLimit").textContent = seatLimit;
+  document.getElementById("hudRequireInvite").textContent = requireInviteLabel;
+  const mbListingRole = document.getElementById("mbListingRole");
+  if (mbListingRole) mbListingRole.textContent = displayRole;
+  const mbListingRestName = document.getElementById("mbListingRestName");
+  if (mbListingRestName) mbListingRestName.textContent = restaurantLabel;
+  const mbListingJoinCode = document.getElementById("mbListingJoinCode");
+  if (mbListingJoinCode) mbListingJoinCode.textContent = joinCode;
+  const mbListingSeatLimit = document.getElementById("mbListingSeatLimit");
+  if (mbListingSeatLimit) mbListingSeatLimit.textContent = seatLimit;
+  const mbListingRequireInvite = document.getElementById("mbListingRequireInvite");
+  if (mbListingRequireInvite) mbListingRequireInvite.textContent = requireInviteLabel;
 
   const mgrBtn = document.getElementById("btnManagerBoard");
   if (mgrBtn) mgrBtn.classList.toggle("hidden", !caps.canAccessManagerBoard);
@@ -21030,7 +21121,10 @@ function renderHud() {
   if (msgBtn) msgBtn.classList.remove("hidden");
   const leaderboardBtn = document.getElementById("btnWaiterPerformanceLeaderboard");
   if (leaderboardBtn) {
-    leaderboardBtn.classList.toggle("hidden", String(normalizedRole).toLowerCase() !== "waiter");
+    leaderboardBtn.classList.toggle(
+      "hidden",
+      !(caps.canAccessManagerBoard || String(normalizedRole).toLowerCase() === "waiter")
+    );
   }
 
   const badge = document.getElementById("premiumBadge");
@@ -21054,12 +21148,14 @@ function renderHud() {
 
   const managerBlock = document.getElementById("managerOnlyBlock");
   const joinRow = document.getElementById("hudJoinRow");
-  const copyRow = document.getElementById("hudCopyRow");
+  const listingManagerBlock = document.getElementById("mbListingManagerOnlyBlock");
+  const listingJoinRow = document.getElementById("mbListingJoinRow");
   const showManagerRestaurantControls =
     caps.canInviteWaiters || caps.canReadInvites || caps.canAccessManagerBoard;
   managerBlock?.classList.toggle("hidden", !showManagerRestaurantControls);
   joinRow?.classList.toggle("hidden", !caps.canReadInvites);
-  copyRow?.classList.toggle("hidden", !caps.canReadInvites);
+  listingManagerBlock?.classList.toggle("hidden", !showManagerRestaurantControls);
+  listingJoinRow?.classList.toggle("hidden", !caps.canReadInvites);
 
   const toggle = document.getElementById("toggleRequireInvite");
   if (toggle && r) toggle.checked = !!r.require_invite;
@@ -21070,7 +21166,8 @@ function renderHud() {
   renderManagerUpgradeAccess();
   renderInvitesList();
   renderHudTimelineUserSelect?.();
-  renderHudSkillDashboard();
+  renderProfileSkillDashboard();
+  void loadProfilePerformanceHistory();
   renderHudAbilities();
   renderHudDifficultyControls?.();
   wireHudDifficultyControls?.();
@@ -21078,17 +21175,26 @@ function renderHud() {
 
 function renderManagerUpgradeAccess() {
   const normalizedRole = normalizeMembershipRole(appState?.profile || null) || "waiter";
-  const section = document.getElementById("managerSetupSection");
-  const groupCard = document.getElementById("mbGroupSetupCard");
-  const enterpriseCard = document.getElementById("mbProvisionAccess");
-
   const showGroup = normalizedRole === "single_manager";
   const showEnterprise = normalizedRole === "single_manager" || normalizedRole === "group_manager";
   const showSection = showGroup || showEnterprise;
 
-  section?.classList.toggle("hidden", !showSection);
-  groupCard?.classList.toggle("hidden", !showGroup);
-  enterpriseCard?.classList.toggle("hidden", !showEnterprise);
+  [
+    {
+      section: document.getElementById("managerSetupSection"),
+      groupCard: document.getElementById("mbGroupSetupCard"),
+      enterpriseCard: document.getElementById("mbProvisionAccess"),
+    },
+    {
+      section: document.getElementById("mbListingManagerSetupSection"),
+      groupCard: document.getElementById("mbListingGroupSetupCard"),
+      enterpriseCard: document.getElementById("mbListingProvisionAccess"),
+    },
+  ].forEach(({ section, groupCard, enterpriseCard }) => {
+    section?.classList.toggle("hidden", !showSection);
+    groupCard?.classList.toggle("hidden", !showGroup);
+    enterpriseCard?.classList.toggle("hidden", !showEnterprise);
+  });
 }
 
 // ------------------------------------------------------------
@@ -21097,6 +21203,7 @@ function renderManagerUpgradeAccess() {
 async function adminAddInvite(emailRaw) {
   try {
     setMsg("hudMsg", "");
+    setMsg("mbListingMsg", "");
     const email = normEmail(emailRaw);
     if (!email) throw new Error("Enter a valid email.");
 
@@ -21133,15 +21240,18 @@ async function adminAddInvite(emailRaw) {
     renderInvitesList();
     renderManagerBoardInviteSummary();
     setMsg("hudMsg", `Added: ${email}`, "success");
+    setMsg("mbListingMsg", `Added: ${email}`, "success");
   } catch (e) {
     console.error(e);
     setMsg("hudMsg", e?.message || "Add failed", "error");
+    setMsg("mbListingMsg", e?.message || "Add failed", "error");
   }
 }
 
 async function adminRevokeInvite(emailRaw) {
   try {
     setMsg("hudMsg", "");
+    setMsg("mbListingMsg", "");
     const email = normEmail(emailRaw);
     if (!email) throw new Error("Invalid email.");
 
@@ -21175,9 +21285,11 @@ async function adminRevokeInvite(emailRaw) {
     renderInvitesList();
     renderManagerBoardInviteSummary();
     setMsg("hudMsg", `Removed: ${email}`, "success");
+    setMsg("mbListingMsg", `Removed: ${email}`, "success");
   } catch (e) {
     console.error(e);
     setMsg("hudMsg", e?.message || "Remove failed", "error");
+    setMsg("mbListingMsg", e?.message || "Remove failed", "error");
   }
 }
 
@@ -21685,6 +21797,7 @@ document.getElementById("btnCopyCode").addEventListener("click", async () => {
 document.getElementById("btnEnterPremium").addEventListener("click", () => decideRoute("enterPremium"));
 
 wireParentButtons();
+wirePremiumTopbarMenu();
 wireManagerBoardButton();
 wireHudSendProgressButton();
 wireWaiterMessagesPanel();
@@ -21698,7 +21811,10 @@ document.getElementById("btnOpenHud")?.addEventListener("click", () => {
   renderHud();
 });
 document.getElementById("btnWaiterPerformanceLeaderboard")?.addEventListener("click", async () => {
-  await routeProfilePerformanceLeaderboard("waiter_nav_button");
+  await openWaiterLeaderboardWindow();
+});
+document.getElementById("btnCloseManagerMessenger")?.addEventListener("click", () => {
+  closeManagerMessengerWindow();
 });
 document.getElementById("btnCloseWaiterLeaderboard")?.addEventListener("click", closeWaiterLeaderboardWindow);
 
@@ -21717,6 +21833,9 @@ document.getElementById("screenProfile")?.addEventListener("click", (e) => {
 document.getElementById("screenWaiterLeaderboard")?.addEventListener("click", (e) => {
   if (e.target?.id === "screenWaiterLeaderboard") closeWaiterLeaderboardWindow();
 });
+document.getElementById("screenManagerMessenger")?.addEventListener("click", (e) => {
+  if (e.target?.id === "screenManagerMessenger") closeManagerMessengerWindow();
+});
 document.getElementById("btnLogoutProfile")?.addEventListener("click", async () => {
   await doLogout("profile_logout");
 });
@@ -21727,8 +21846,23 @@ document.getElementById("btnCopyHudCode").addEventListener("click", async () => 
     if (!code) throw new Error("No code loaded.");
     await navigator.clipboard.writeText(code);
     setMsg("hudMsg", "Copied ✅", "success");
+    setMsg("mbListingMsg", "Copied ✅", "success");
   } catch (e) {
     setMsg("hudMsg", e?.message || "Copy failed", "error");
+    setMsg("mbListingMsg", e?.message || "Copy failed", "error");
+  }
+});
+
+document.getElementById("btnMbListingCopyCode")?.addEventListener("click", async () => {
+  try {
+    const code = appState.restaurant?.code;
+    if (!code) throw new Error("No code loaded.");
+    await navigator.clipboard.writeText(code);
+    setMsg("hudMsg", "Copied ✅", "success");
+    setMsg("mbListingMsg", "Copied ✅", "success");
+  } catch (e) {
+    setMsg("hudMsg", e?.message || "Copy failed", "error");
+    setMsg("mbListingMsg", e?.message || "Copy failed", "error");
   }
 });
 
@@ -21736,6 +21870,12 @@ document.getElementById("btnAddInvite").addEventListener("click", async () => {
   const v = document.getElementById("inviteEmailInput").value;
   await adminAddInvite(v);
   document.getElementById("inviteEmailInput").value = "";
+});
+document.getElementById("mbListingAddInvite")?.addEventListener("click", async () => {
+  const input = document.getElementById("mbListingInviteEmailInput");
+  const v = input?.value || "";
+  await adminAddInvite(v);
+  if (input) input.value = "";
 });
 document.getElementById("btnSaveRequireInvite").addEventListener("click", adminSaveRequireInvite);
 document.getElementById("btnSaveSeatLimit")?.addEventListener("click", adminSaveSeatLimit);
@@ -21748,6 +21888,7 @@ window.__BC_MB__.loadManagerInsights = loadManagerInsights;
 window.__BC_MB__.loadManagerBoardData = loadManagerBoardData;
 window.__BC_MB__.loadManagerMessenger = loadManagerMessenger;
 window.__BC_MB__.wireManagerBoardMessenger = wireManagerBoardMessenger;
+window.__BC_MB__.openManagerMessengerWindow = openManagerMessengerWindow;
 
 // Optional convenience aliases (only if you want old calls to work)
 window.wireManagerBoardMenu = wireManagerBoardMenu;
@@ -21755,6 +21896,8 @@ window.applyManagerBoardVisibility = applyManagerBoardVisibility;
 window.loadManagerInsights = loadManagerInsights;
 window.loadManagerBoardData = loadManagerBoardData;
 window.loadManagerMessenger = loadManagerMessenger;
+window.openManagerMessengerWindow = openManagerMessengerWindow;
+window.closeManagerMessengerWindow = closeManagerMessengerWindow;
 
 // ------------------------------------------------------------
 // Boot + auth change

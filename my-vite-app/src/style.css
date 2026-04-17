@@ -1296,6 +1296,14 @@ html[data-bc-mobile-env="true"] #screenProfile .topbar .row{
   width: 100%;
 }
 
+html[data-bc-mobile-env="true"] #screenPremiumApp .premium-topbar-menu-wrap{
+  width: auto;
+}
+
+html[data-bc-mobile-env="true"] #screenPremiumApp .premium-topbar-menu-panel{
+  width: min(280px, calc(100vw - 32px));
+}
+
 html[data-bc-mobile-env="true"] #screenPremiumApp .topbar .row button,
 html[data-bc-mobile-env="true"] #screenManagerBoard .topbar .row button,
 html[data-bc-mobile-env="true"] #screenProfile .topbar .row button{
@@ -1960,6 +1968,25 @@ html[data-bc-mobile-env="true"] #screenManagerBoard #mbInstrSend{
     rgba(255,255,255,0.02);
 }
 
+#screenSetupPremium .wine-card-type{
+  display:inline-flex;
+  align-items:center;
+  margin-bottom:10px;
+  padding:5px 10px;
+  border-radius:999px;
+  border:1px solid rgba(122,184,255,0.28);
+  background:rgba(122,184,255,0.10);
+  color:rgba(244,246,247,0.96);
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:0.8px;
+  text-transform:uppercase;
+}
+
+#screenSetupPremium .wine-card-type + div{
+  font-weight:600;
+}
+
 #screenSetupPremium .app-setup-actions{
   margin-top:18px;
   display:flex;
@@ -2131,9 +2158,88 @@ html[data-bc-mobile-env="true"] #screenManagerBoard #mbInstrSend{
     rgba(4,9,13,0.34);
 }
 
+#screenPremiumApp .premium-topbar-menu-wrap{
+  position: relative;
+  display: flex;
+  justify-content: flex-end;
+  margin-left: auto;
+}
+
+#screenPremiumApp .premium-topbar-menu-button{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 54px;
+  height: 54px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(125,211,252,0.20);
+  background:
+    radial-gradient(circle at 30% 30%, rgba(125,211,252,0.30), transparent 55%),
+    linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02)),
+    rgba(4,9,13,0.48);
+  color: rgba(245,247,248,0.95);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.08),
+    0 14px 32px rgba(0,0,0,0.22);
+}
+
+#screenPremiumApp .premium-topbar-menu-button svg{
+  width: 24px;
+  height: 24px;
+  fill: currentColor;
+}
+
+#screenPremiumApp .premium-topbar-menu-button:hover,
+#screenPremiumApp .premium-topbar-menu-button[aria-expanded="true"]{
+  transform: translateY(-1px) rotate(10deg);
+  border-color: rgba(94,234,212,0.34);
+  background:
+    radial-gradient(circle at 30% 30%, rgba(94,234,212,0.34), transparent 58%),
+    linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.03)),
+    rgba(4,9,13,0.56);
+}
+
+#screenPremiumApp .premium-topbar-menu-panel{
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 22px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background:
+    radial-gradient(280px 160px at 0% 0%, rgba(125,211,252,0.12), transparent 60%),
+    linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02)),
+    rgba(5,10,14,0.94);
+  box-shadow:
+    0 26px 60px rgba(0,0,0,0.36),
+    inset 0 1px 0 rgba(255,255,255,0.05);
+  backdrop-filter: blur(12px);
+  z-index: 40;
+}
+
+#screenPremiumApp .premium-topbar-menu-panel.hidden{
+  display: none;
+}
+
+#screenPremiumApp .premium-topbar-menu-panel button,
+#screenPremiumApp .premium-topbar-menu-panel .btn-ghost,
+#screenPremiumApp .premium-topbar-menu-panel .btn-danger{
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+}
+
 #screenPremiumApp .topbar .row button,
 #screenPremiumApp .topbar .row .btn-ghost,
 #screenPremiumApp .topbar .row .btn-danger,
+#screenPremiumApp .premium-topbar-menu-panel button,
+#screenPremiumApp .premium-topbar-menu-panel .btn-ghost,
+#screenPremiumApp .premium-topbar-menu-panel .btn-danger,
 #screenManagerBoard .topbar .row button,
 #screenManagerBoard .topbar .row .btn-ghost,
 #screenManagerBoard .topbar .row .btn-danger{
@@ -2153,6 +2259,7 @@ html[data-bc-mobile-env="true"] #screenManagerBoard #mbInstrSend{
 }
 
 #screenPremiumApp .topbar .row .btn-danger,
+#screenPremiumApp .premium-topbar-menu-panel .btn-danger,
 #screenManagerBoard .topbar .row .btn-danger{
   background:
     linear-gradient(180deg, rgba(251,113,133,0.22), rgba(255,255,255,0.03)),
@@ -2163,6 +2270,9 @@ html[data-bc-mobile-env="true"] #screenManagerBoard #mbInstrSend{
 #screenPremiumApp .topbar .row button:hover,
 #screenPremiumApp .topbar .row .btn-ghost:hover,
 #screenPremiumApp .topbar .row .btn-danger:hover,
+#screenPremiumApp .premium-topbar-menu-panel button:hover,
+#screenPremiumApp .premium-topbar-menu-panel .btn-ghost:hover,
+#screenPremiumApp .premium-topbar-menu-panel .btn-danger:hover,
 #screenManagerBoard .topbar .row button:hover,
 #screenManagerBoard .topbar .row .btn-ghost:hover,
 #screenManagerBoard .topbar .row .btn-danger:hover{
@@ -2313,6 +2423,16 @@ html[data-bc-mobile-env="true"] #screenManagerBoard #mbInstrSend{
   #screenPremiumApp .topbar .row,
   #screenManagerBoard .topbar .row{
     justify-content: flex-start;
+  }
+
+  #screenPremiumApp .premium-topbar-menu-wrap{
+    justify-content: flex-end;
+  }
+
+  #screenPremiumApp .premium-topbar-menu-panel{
+    right: 0;
+    left: auto;
+    width: min(280px, calc(100vw - 32px));
   }
 
   #screenManagerBoard #mbRestaurantPicker{
@@ -3375,9 +3495,14 @@ html[data-bc-mobile-env="true"] #screenManagerBoard #mbInstrSend{
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-#screenManagerBoard #mbTab_overview > .card:first-child,
+#screenManagerBoard #mbTab_overview > #mbOverviewRitualStatus,
 #screenManagerBoard #mbTab_overview > #mbRestaurantContextCard,
+#screenManagerBoard #mbTab_overview > #mbGroupOverviewCard,
 #screenManagerBoard #mbTab_overview > #mbGroupRestaurantComparisonCard{
+  grid-column: span 1;
+}
+
+#screenManagerBoard #mbTab_overview > #mbInviteSummary{
   grid-column: 1 / -1;
 }
 
