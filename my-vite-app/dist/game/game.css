@@ -4294,3 +4294,181 @@ html, body{ height:100%; }
     border-radius: 10px !important;
   }
 }
+
+@media (max-width: 860px){
+  #screenWelcome,
+  #screenHistory,
+  #screenDrillSummary,
+  #screenHome,
+  #screenPlay{
+    padding: 8px 6px 18px !important;
+  }
+
+  .app-welcome-shell,
+  .app-history-shell,
+  .app-summary-shell,
+  #screenHome .app-home-shell{
+    padding: 16px 12px !important;
+    border-radius: 20px !important;
+  }
+
+  .app-welcome-actions,
+  .app-history-actions,
+  .app-summary-actions{
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .app-welcome-actions button,
+  .app-history-actions button,
+  .app-summary-actions button{
+    width: 100%;
+  }
+
+  #screenHome .app-home-grid{
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  #screenHome .app-home-actions,
+  #screenHome #cardPremium .app-home-actions{
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+
+  #bcShell.bc-shell{
+    padding: 8px !important;
+    gap: 8px !important;
+    grid-template-columns: 1fr !important;
+    grid-template-areas:
+      "hud"
+      "stage"
+      "rail"
+      "bottom" !important;
+  }
+
+  #bcStage,
+  #bcRail{
+    min-width: 0;
+  }
+
+  #bcHudTop.bc-hud-top{
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  #bcHudTop .bc-brand,
+  #bcHudTop .bc-stats,
+  #bcHudTop .bc-actions{
+    width: 100%;
+  }
+
+  #bcHudTop .bc-stats{
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  #bcHudTop .bc-chip{
+    width: 100%;
+    min-width: 0;
+    justify-content: center;
+    text-align: center;
+  }
+
+  #bcHudTop .bc-actions{
+    display: flex;
+    justify-content: stretch;
+  }
+
+  #bcHudTop .bc-actions button{
+    width: 100%;
+  }
+
+  #encounterPanel .bc-score-row{
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  #stepButtons{
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  #stepButtons > *{
+    width: 100%;
+  }
+
+  #bcRail{
+    display: grid;
+    gap: 8px;
+  }
+
+  #bcRail .bc-rail-card{
+    min-width: 0;
+  }
+
+  #railQuickActions .rail-action-stack,
+  #railQuickActions .button-row{
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  #railQuickActions button{
+    width: 100%;
+  }
+
+  #bcHudBottom.bc-hud-bottom{
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px !important;
+  }
+
+  #bcHudBottom .bc-hint-wrap,
+  #bcHudBottom .bc-status-wrap{
+    width: 100%;
+  }
+}
+
+@media (max-width: 640px){
+  .app-welcome-header h2,
+  #screenHome .app-home-header h2{
+    font-size: 24px !important;
+  }
+
+  .app-welcome-subtitle,
+  #screenHome .app-home-subtitle{
+    max-width: none;
+    font-size: 12px !important;
+  }
+
+  .app-welcome-shell .cover-list li{
+    padding: 10px 12px 10px 30px;
+  }
+
+  #bcHudTop .bc-stats{
+    grid-template-columns: 1fr;
+  }
+
+  #bcHudTop .bc-brand{
+    align-items: center;
+  }
+
+  #encounterPanel .bc-score-row strong,
+  #encounterPanel .difficulty-badge{
+    width: 100%;
+  }
+
+  #bcRail .bc-rail-title{
+    font-size: 11px;
+    letter-spacing: 0.12em;
+  }
+
+  #bcRail .bc-rail-body{
+    font-size: 12px;
+  }
+}

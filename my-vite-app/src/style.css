@@ -3271,8 +3271,138 @@ html[data-bc-mobile-env="true"] #screenManagerBoard #mbInstrSend{
     padding: 16px;
   }
 
+  .app-chrome-brand,
+  .app-chrome-play-cta,
+  .app-chrome-context,
+  .app-chrome-premium-bar{
+    grid-column: 1 / -1 !important;
+    width: 100%;
+  }
+
+  .app-chrome-play-cta{
+    justify-content: stretch;
+  }
+
+  .app-chrome-enter-button{
+    width: 100%;
+    min-width: 0;
+  }
+
   .app-chrome-context{
-    justify-content: flex-start;
+    justify-content: stretch !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    min-width: 0 !important;
+    width: 100%;
+  }
+
+  .app-chrome-premium-bar{
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 760px){
+  #app{
+    padding: 10px;
+    gap: 10px;
+  }
+
+  .app-chrome{
+    gap: 12px;
+    padding: 14px 12px;
+    border-radius: 20px;
+  }
+
+  .app-chrome-title{
+    font-size: clamp(26px, 10vw, 36px);
+  }
+
+  .app-chrome-copy{
+    max-width: none;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  .app-chrome-context{
+    padding: 5px !important;
+    border-radius: 16px !important;
+    grid-template-columns: 1fr !important;
+  }
+
+  .app-chrome-context::before{
+    inset: 4px;
+    border-radius: 12px;
+  }
+
+  .app-chrome-chip{
+    padding: 10px 12px !important;
+  }
+
+  .app-chrome-chip + .app-chrome-chip{
+    border-left: 0 !important;
+    border-top: 1px solid rgba(255,255,255,0.08);
+  }
+
+  .app-chrome-premium-bar{
+    min-height: 44px;
+  }
+
+  .app-chrome-premium-bar .premium-topbar-menu-wrap{
+    width: 100%;
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .app-chrome-premium-bar .premium-topbar-menu-panel{
+    width: min(280px, calc(100vw - 28px));
+    right: 0;
+    left: auto;
+  }
+
+  #screenPremiumApp{
+    padding-inline: 0 !important;
+  }
+
+  #screenPremiumApp .panel.stack{
+    padding: 8px;
+    gap: 8px;
+  }
+
+  #premiumRootFrame,
+  #premiumRoot iframe{
+    height: min(78dvh, 900px);
+    border-radius: 16px;
+  }
+}
+
+@media (max-width: 640px){
+  #app{
+    padding: 8px;
+  }
+
+  .app-chrome-eyebrow{
+    margin-bottom: 10px;
+  }
+
+  .app-chrome-title-row{
+    gap: 10px;
+  }
+
+  .app-chrome-badge{
+    font-size: 10px;
+  }
+
+  .app-chrome-context{
+    border-radius: 14px !important;
+  }
+
+  .app-chrome-chip strong{
+    font-size: 18px;
+  }
+
+  #premiumRootFrame,
+  #premiumRoot iframe{
+    height: min(76dvh, 820px);
+    min-height: 520px;
   }
 }
 
