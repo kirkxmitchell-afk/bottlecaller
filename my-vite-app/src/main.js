@@ -394,6 +394,9 @@ document.querySelector("#app").innerHTML = `
       </div>
       <div class="app-chrome-copy">A premium shell for live service training, guided reps, and manager-side coaching.</div>
     </div>
+    <div id="appChromePlayCta" class="app-chrome-play-cta hidden">
+      <button id="btnAppChromeEnter" class="app-chrome-enter-button" type="button">Play / Enter</button>
+    </div>
     <div class="app-chrome-context">
       <div class="app-chrome-chip">
         <span class="app-chrome-chip-label">Surface</span>
@@ -406,6 +409,31 @@ document.querySelector("#app").innerHTML = `
       <div class="app-chrome-chip">
         <span class="app-chrome-chip-label">Restaurant</span>
         <strong id="appChromeRestaurant">Not bound</strong>
+      </div>
+    </div>
+    <div id="appChromePremiumBar" class="app-chrome-premium-bar hidden">
+      <div id="premiumTopbarMenuWrap" class="premium-topbar-menu-wrap">
+        <button
+          id="btnPremiumTopbarMenu"
+          class="premium-topbar-menu-button"
+          type="button"
+          aria-label="Open premium menu"
+          aria-expanded="false"
+          aria-controls="premiumTopbarMenuPanel"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M19.14 12.94c.04-.31.06-.62.06-.94s-.02-.63-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.2 7.2 0 0 0-1.63-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.58.22-1.12.53-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.7 8.84a.5.5 0 0 0 .12.64l2.03 1.58c-.04.31-.06.62-.06.94s.02.63.06.94L2.82 14.52a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .6.22l2.39-.96c.5.4 1.05.72 1.63.94l.36 2.54a.5.5 0 0 0 .5.42h3.84a.5.5 0 0 0 .5-.42l.36-2.54c.58-.22 1.13-.54 1.63-.94l2.39.96a.5.5 0 0 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58ZM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7Z" />
+          </svg>
+        </button>
+        <div id="premiumTopbarMenuPanel" class="premium-topbar-menu-panel hidden">
+          <button id="btnOpenMessages" class="btn-ghost" type="button">Messages</button>
+          <button id="btnWaiterPerformanceLeaderboard" class="btn-ghost" type="button">Leaderboard</button>
+          <button id="btnPremiumWineSetup" class="btn-ghost" type="button" data-tutorial="nav-wine-setup">Wine Setup</button>
+          <button id="btnTutorial" class="btn-ghost" type="button">Tutorials</button>
+          <button id="btnManagerBoard" class="btn-ghost" type="button">Manager Board</button>
+          <button id="btnOpenProfile" class="btn-ghost" type="button">Profile</button>
+          <button id="btnLogoutPremium" class="btn-danger" type="button">Logout</button>
+        </div>
       </div>
     </div>
   </div>
@@ -554,36 +582,6 @@ document.querySelector("#app").innerHTML = `
   <!-- PREMIUM APP -->
   <section id="screenPremiumApp" class="screen hidden">
     <div class="panel stack">
-      <div class="topbar">
-        <div class="brand">
-          <h2>BottleCaller</h2>
-          <span id="premiumBadge" class="badge">PREMIUM</span>
-        </div>
-        <div id="premiumTopbarMenuWrap" class="premium-topbar-menu-wrap">
-          <button
-            id="btnPremiumTopbarMenu"
-            class="premium-topbar-menu-button"
-            type="button"
-            aria-label="Open premium menu"
-            aria-expanded="false"
-            aria-controls="premiumTopbarMenuPanel"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              <path d="M19.14 12.94c.04-.31.06-.62.06-.94s-.02-.63-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.2 7.2 0 0 0-1.63-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.58.22-1.12.53-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.7 8.84a.5.5 0 0 0 .12.64l2.03 1.58c-.04.31-.06.62-.06.94s.02.63.06.94L2.82 14.52a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .6.22l2.39-.96c.5.4 1.05.72 1.63.94l.36 2.54a.5.5 0 0 0 .5.42h3.84a.5.5 0 0 0 .5-.42l.36-2.54c.58-.22 1.13-.54 1.63-.94l2.39.96a.5.5 0 0 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58ZM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7Z" />
-            </svg>
-          </button>
-          <div id="premiumTopbarMenuPanel" class="premium-topbar-menu-panel hidden">
-            <button id="btnOpenMessages" class="btn-ghost" type="button">Messages</button>
-            <button id="btnWaiterPerformanceLeaderboard" class="btn-ghost" type="button">Leaderboard</button>
-            <button id="btnPremiumWineSetup" class="btn-ghost" type="button" data-tutorial="nav-wine-setup">Wine Setup</button>
-            <button id="btnTutorial" class="btn-ghost" type="button">Tutorials</button>
-            <button id="btnManagerBoard" class="btn-ghost" type="button">Manager Board</button>
-            <button id="btnOpenProfile" class="btn-ghost" type="button">Profile</button>
-            <button id="btnLogoutPremium" class="btn-danger" type="button">Logout</button>
-          </div>
-        </div>
-      </div>
-
       <div id="bcUnlockNotice" class="bc-unlock" style="display:none;"></div>
 
       <!-- Game lives here (isolated) -->
@@ -641,6 +639,17 @@ document.querySelector("#app").innerHTML = `
               <div id="managerEncounterSummaryHost" class="manager-encounter-summary-host" style="margin-top:12px;"></div>
             </div>
           </details>
+        </div>
+      </div>
+      <div id="profileWeeklyReportPanel" class="card" style="margin-top:12px;">
+        <strong>Weekly Training Report</strong>
+
+        <div class="small-text" style="margin-top:6px; opacity:.85;">
+          Summary of team progress over the last 7 days.
+        </div>
+
+        <div id="mbWeeklyReport" style="margin-top:10px;">
+          <div class="small-text" style="opacity:.7;">Loading report…</div>
         </div>
       </div>
       <div id="profileTutorialCard" class="hidden" style="margin-top:12px;">
@@ -975,17 +984,6 @@ document.querySelector("#app").innerHTML = `
 
         <div id="mbTab_performance" class="mbTab hidden" data-tutorial="mb-panel-performance">
         <div id="mbInsightsPanel" style="margin-top:12px;"></div>
-          <div id="mbWeeklyReportPanel" class="card" style="margin-top:12px;">
-            <strong>Weekly Training Report</strong>
-
-            <div class="small-text" style="margin-top:6px; opacity:.85;">
-              Summary of team progress over the last 7 days.
-            </div>
-
-            <div id="mbWeeklyReport" style="margin-top:10px;">
-              <div class="small-text" style="opacity:.7;">Loading report…</div>
-            </div>
-          </div>
         </div>
 
         <div id="mbTab_billing" class="mbTab hidden" data-tutorial="mb-panel-billing">
@@ -6524,7 +6522,9 @@ function renderAppChrome() {
   const roleEl = document.getElementById("appChromeRole");
   const restaurantEl = document.getElementById("appChromeRestaurant");
   const statusEl = document.getElementById("appChromeStatus");
-  if (!surfaceEl && !roleEl && !restaurantEl && !statusEl) return;
+  const premiumBarEl = document.getElementById("appChromePremiumBar");
+  const playCtaEl = document.getElementById("appChromePlayCta");
+  if (!surfaceEl && !roleEl && !restaurantEl && !statusEl && !premiumBarEl && !playCtaEl) return;
 
   const visibleScreens = Array.from(document.querySelectorAll(".screen:not(.hidden)"));
   const hasProfileOverlay = !document.getElementById("screenProfile")?.classList.contains("hidden");
@@ -6554,11 +6554,15 @@ function renderAppChrome() {
   const statusLabel = hasSession
     ? ((profile?.access_tier || profile?.accessTier || "premium").toString().toUpperCase())
     : "Public Access";
+  const showPremiumBar = currentScreenId === "screenPremiumApp" && hasSession;
+  const showPlayCta = currentScreenId === "screenPremiumApp" && hasSession;
 
   if (surfaceEl) surfaceEl.textContent = surfaceMap[currentScreenId] || "Workspace";
   if (roleEl) roleEl.textContent = roleLabel;
   if (restaurantEl) restaurantEl.textContent = restaurantLabel;
   if (statusEl) statusEl.textContent = statusLabel;
+  premiumBarEl?.classList.toggle("hidden", !showPremiumBar);
+  playCtaEl?.classList.toggle("hidden", !showPlayCta);
 }
 
 function removeGlobalResetButtons() {
@@ -6585,8 +6589,6 @@ function removeGlobalResetButtons() {
 
 function onScreenChanged(id) {
   console.log("[NAV] parent onScreenChanged ->", id);
-  const role = String(appState?.profile?.role || "").toLowerCase();
-  const isWaiter = role === "waiter";
 
   const isPremium = id === "screenPremiumApp" || id === "screenPlay";
   if (isPremium && !appState?.session) {
@@ -6595,15 +6597,6 @@ function onScreenChanged(id) {
     return;
   }
   setPremiumOverlayActive(isPremium);
-
-  if (isPremium) {
-    if (!document.getElementById("premiumRootFrame")) {
-      mountPremiumGameIframe({
-        showBack: true,
-        backTo: isWaiter ? "screenPremiumApp" : "screenManagerBoard"
-      });
-    }
-  }
 
   if (!isPremium) {
     document.getElementById("hudPanel")?.classList.add("hidden");
@@ -7583,14 +7576,50 @@ function closePremiumTopbarMenu() {
   const trigger = document.getElementById("btnPremiumTopbarMenu");
   const panel = document.getElementById("premiumTopbarMenuPanel");
   if (trigger) trigger.setAttribute("aria-expanded", "false");
-  panel?.classList.add("hidden");
+  if (panel) {
+    panel.classList.add("hidden");
+    panel.style.top = "";
+    panel.style.right = "";
+    panel.style.left = "";
+    panel.style.bottom = "";
+  }
+}
+
+function positionPremiumTopbarMenu(trigger, panel) {
+  if (!trigger || !panel) return;
+
+  const isCockpitMenu = !!trigger.closest(".app-chrome-premium-bar");
+  if (isCockpitMenu) {
+    panel.style.position = "absolute";
+    panel.style.top = "calc(100% + 12px)";
+    panel.style.right = "0";
+    panel.style.left = "auto";
+    panel.style.bottom = "auto";
+    return;
+  }
+
+  panel.style.position = "fixed";
+
+  const rect = trigger.getBoundingClientRect();
+  const gutter = 16;
+  const panelWidth = Math.min(280, Math.max(220, panel.offsetWidth || 220));
+  const left = Math.max(gutter, Math.min(rect.right - panelWidth, window.innerWidth - panelWidth - gutter));
+  const top = Math.min(rect.bottom + 12, window.innerHeight - gutter);
+
+  panel.style.left = `${left}px`;
+  panel.style.top = `${top}px`;
+  panel.style.right = "auto";
+  panel.style.bottom = "auto";
 }
 
 function openPremiumTopbarMenu() {
   const trigger = document.getElementById("btnPremiumTopbarMenu");
   const panel = document.getElementById("premiumTopbarMenuPanel");
   if (trigger) trigger.setAttribute("aria-expanded", "true");
-  panel?.classList.remove("hidden");
+  if (panel) {
+    panel.classList.remove("hidden");
+    positionPremiumTopbarMenu(trigger, panel);
+  }
 }
 
 function togglePremiumTopbarMenu() {
@@ -7638,6 +7667,18 @@ function wirePremiumTopbarMenu() {
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") closePremiumTopbarMenu();
     });
+    window.addEventListener("resize", () => {
+      const trigger = document.getElementById("btnPremiumTopbarMenu");
+      const panel = document.getElementById("premiumTopbarMenuPanel");
+      if (!panel || panel.classList.contains("hidden")) return;
+      positionPremiumTopbarMenu(trigger, panel);
+    }, { passive: true });
+    window.addEventListener("scroll", () => {
+      const trigger = document.getElementById("btnPremiumTopbarMenu");
+      const panel = document.getElementById("premiumTopbarMenuPanel");
+      if (!panel || panel.classList.contains("hidden")) return;
+      positionPremiumTopbarMenu(trigger, panel);
+    }, { passive: true });
   }
 }
 
@@ -9233,6 +9274,42 @@ function postNavToPremiumIframe(screen) {
   setDebug({ step: "nav.post.sent", screen, time: new Date().toISOString() });
 }
 
+function openPremiumBeginScreen() {
+  const tryOpenBegin = () => {
+    const frame = document.getElementById("premiumRootFrame");
+    const nav = frame?.contentWindow?.__BC_NAV__;
+    if (nav && typeof nav.openPlay === "function") {
+      nav.openPlay();
+      return true;
+    }
+    return false;
+  };
+
+  closeHud?.();
+  showScreen("screenPremiumApp");
+
+  if (!document.getElementById("premiumRootFrame")) {
+    const role = String(appState?.profile?.role || "").toLowerCase();
+    const isWaiter = role === "waiter";
+    mountPremiumGameIframe({
+      mode: "premium",
+      showBack: true,
+      backTo: isWaiter ? "screenPremiumApp" : "screenManagerBoard"
+    });
+  }
+
+  let attempts = 0;
+  const maxAttempts = 12;
+  const retryOpenBegin = () => {
+    if (tryOpenBegin()) return;
+    attempts += 1;
+    if (attempts >= maxAttempts) return;
+    window.setTimeout(retryOpenBegin, 180);
+  };
+
+  retryOpenBegin();
+}
+
 // ✅ Optional auto-resize (requires matching postMessage in game.html)
 window.addEventListener("message", (event) => {
   const data = event?.data;
@@ -10250,7 +10327,8 @@ function formatDateTime(isoString) {
 }
 
 function averageSkillShape(rows = []) {
-  const source = Array.isArray(rows) ? rows.slice(0, 5) : [];
+  const source = Array.isArray(rows) ? rows.slice(0, 3) : [];
+  const weights = [0.5, 0.3, 0.2];
   const totals = {
     read: 0,
     framing: 0,
@@ -10261,17 +10339,19 @@ function averageSkillShape(rows = []) {
 
   if (!source.length) return totals;
 
-  source.forEach((row) => {
-    totals.read += Number(row?.read_pct || row?.read || 0);
-    totals.framing += Number(row?.framing_pct || row?.framing || 0);
-    totals.delivery += Number(row?.delivery_pct || row?.delivery || 0);
-    totals.recovery += Number(row?.recovery_pct || row?.recovery || 0);
-    totals.closing += Number(row?.closing_pct || row?.closing || 0);
+  let appliedWeight = 0;
+  source.forEach((row, index) => {
+    const weight = weights[index] || 0;
+    appliedWeight += weight;
+    totals.read += Number(row?.read_pct || row?.read || 0) * weight;
+    totals.framing += Number(row?.framing_pct || row?.framing || 0) * weight;
+    totals.delivery += Number(row?.delivery_pct || row?.delivery || 0) * weight;
+    totals.recovery += Number(row?.recovery_pct || row?.recovery || 0) * weight;
+    totals.closing += Number(row?.closing_pct || row?.closing || 0) * weight;
   });
 
-  const count = source.length;
   Object.keys(totals).forEach((key) => {
-    totals[key] = Math.round(totals[key] / count);
+    totals[key] = Math.round(totals[key] / Math.max(appliedWeight, 1));
   });
 
   return totals;
@@ -10706,6 +10786,7 @@ async function loadProfilePerformanceHistory() {
   const select = document.getElementById("mbHistoryUser");
   if (!select) return;
 
+  await loadWeeklyTrainingReport();
   await loadHistoryWaiters();
 
   if (select && !select.__wired) {
@@ -19421,7 +19502,10 @@ function renderWeeklyTrainingReport(rows) {
 
 async function loadWeeklyTrainingReport() {
   const { restaurantId } = getManagerBoardFilter();
-  if (!restaurantId) return [];
+  if (!restaurantId) {
+    renderWeeklyTrainingReport([]);
+    return [];
+  }
 
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -20259,16 +20343,6 @@ async function routePremium(reason = "manual") {
         showScreen("screenManagerBoard");
         return;
       }
-      mountPremiumGameIframe({ mode: "premium" });
-      try {
-        postToGame("bc_ctx", {
-          userId: appState.session?.user?.id || null,
-          restaurantId: appState.activeRestaurantId || appState.profile?.restaurant_id || null,
-          scopeId: appState.profile?.scope_id || null,
-          role: appState.profile?.role || null,
-          mode: "premium"
-        });
-      } catch {}
       wireParentButtons();
       refreshParentProgressionUI();
       return;
@@ -20314,16 +20388,6 @@ async function routePremium(reason = "manual") {
       showScreen("screenManagerBoard");
       return;
     }
-    mountPremiumGameIframe({ mode: "premium" });
-    try {
-      postToGame("bc_ctx", {
-        userId: appState.session?.user?.id || null,
-        restaurantId: appState.activeRestaurantId || appState.profile?.restaurant_id || null,
-        scopeId: appState.profile?.scope_id || null,
-        role: appState.profile?.role || null,
-        mode: "premium"
-      });
-    } catch {}
     refreshParentProgressionUI();
   } catch (e) {
     console.error(e);
@@ -21795,6 +21859,7 @@ document.getElementById("btnCopyCode").addEventListener("click", async () => {
   }
 });
 document.getElementById("btnEnterPremium").addEventListener("click", () => decideRoute("enterPremium"));
+document.getElementById("btnAppChromeEnter")?.addEventListener("click", () => openPremiumBeginScreen());
 
 wireParentButtons();
 wirePremiumTopbarMenu();

@@ -4705,8 +4705,6 @@
 </head>
 
 <body>
-  <h1 class="app-game-masthead">BottleCaller Prototype</h1>
-
   <section id="screenWelcome" class="screen">
     <div class="bc-shell bc-shell-center">
       <div class="bc-card bc-stage-card panel cover-screen app-welcome-shell">
@@ -4721,13 +4719,14 @@
         </ul>
         <div class="button-row app-welcome-actions">
           <button id="btnWelcomeStart" data-tutorial="play-button" type="button">Start</button>
-          <button id="btnWelcomeHome" type="button" class="btn-ghost">Home</button>
+          <button id="btnWelcomeHome" type="button" class="btn-ghost">Status menu</button>
+          <button id="btnWelcomeClose" type="button" class="btn-ghost">Close</button>
           <button
             id="btnWelcomeBackToSetup"
             type="button"
             class="btn-ghost"
         >
-            Back to Setup
+            Back to Wine Setup
           </button>
         </div>
         <div class="small-text app-welcome-note" id="welcomeFooterNote"></div>
@@ -4741,6 +4740,9 @@
         <div class="app-home-eyebrow">Service Training Cockpit</div>
         <h2>BottleCaller</h2>
         <p class="app-home-subtitle">Train the floor. Build cleaner reads. Sharpen the close.</p>
+        <div class="button-row app-home-header-actions">
+          <button id="btnStatusBackToWelcome" type="button" class="btn-ghost">Back to Welcome</button>
+        </div>
       </div>
 
       <div class="app-home-grid">
@@ -10829,6 +10831,23 @@ function ensureProgLoaded() {
         if (msg.type === "nav") {
           const identity = getGameplayIdentity();
           const isWaiterNow = !!identity.isWaiter;
+          if (msg.target === "play_begin" || msg.action === "play_begin") {
+            if (sessionType === "drill") return;
+            await window.__BC_NAV__?.openPlay?.();
+            return;
+          }
+          if (msg.target === "status_menu" || msg.action === "status_menu") {
+            if (sessionType === "drill") return;
+            resetNavState?.();
+            showScreen("screenHome");
+            return;
+          }
+          if (msg.target === "welcome" || msg.action === "welcome") {
+            if (sessionType === "drill") return;
+            resetNavState?.();
+            showScreen("screenWelcome");
+            return;
+          }
           if (msg.target === "setup_premium" || msg.action === "setup_premium") {
             if (isDemo) {
               window.showToast?.("Setup is Premium only.");
@@ -11952,6 +11971,56 @@ function ensureProgLoaded() {
           openManagerBoard();
         } catch (e) {
           console.warn("[BC] NAV managerBoard failed", e);
+        }
+      };
+
+      window.__BC_NAV__.openWelcome = () => {
+        if (sessionType === "drill") return;
+        try {
+          resetNavState();
+          showScreen("screenWelcome");
+        } catch (e) {
+          console.warn("[BC] NAV openWelcome failed", e);
+        }
+      };
+
+      window.__BC_NAV__.openStatus = () => {
+        if (sessionType === "drill") return;
+        try {
+          resetNavState();
+          showScreen("screenHome");
+        } catch (e) {
+          console.warn("[BC] NAV openStatus failed", e);
+        }
+      };
+
+      window.__BC_NAV__.openPlay = async () => {
+        if (sessionType === "drill") return;
+        try {
+          if (!window.isDemo && isStandalone()) {
+            redirectToParentLogin("nav_open_play");
+            return;
+          }
+
+          if (!isRuntimeReady({ requireProgression: false })) {
+            console.warn("[BC] NAV openPlay blocked: ctx not ready");
+            window.showToast?.("BottleCaller is still attaching account context.");
+            return;
+          }
+
+          try { localStorage.setItem(coverKey, "true"); } catch {}
+          resetNavState();
+          showScreen("screenPlay");
+
+          if (window.isDemo || window.bcMode === "demo") {
+            window.startEncounter?.();
+            return;
+          }
+
+          beginOrResumeProgressionRun();
+          await startPlayWithReadyGate();
+        } catch (e) {
+          console.warn("[BC] NAV openPlay failed", e);
         }
       };
 
@@ -23040,6 +23109,8 @@ function ensureProgLoaded() {
       function initButtons() {
         const btnWelcomeStart = document.getElementById("btnWelcomeStart");
         const btnWelcomeHome = document.getElementById("btnWelcomeHome");
+        const btnWelcomeClose = document.getElementById("btnWelcomeClose");
+        const btnStatusBackToWelcome = document.getElementById("btnStatusBackToWelcome");
         const btnResetApp = document.getElementById("btnResetApp");
         const btnBackToSetup = document.getElementById("btnWelcomeBackToSetup");
 
@@ -23065,6 +23136,13 @@ function ensureProgLoaded() {
         const btnGoPremium = document.getElementById("btnGoPremium");
         const identity = getGameplayIdentity();
         const isWaiter = !!identity.isWaiter;
+
+        if (btnWelcomeHome && (window.isDemo || window.bcMode === "demo")) {
+          btnWelcomeHome.textContent = "Home";
+        }
+        if (btnStatusBackToWelcome && (window.isDemo || window.bcMode === "demo")) {
+          btnStatusBackToWelcome.classList.add("hidden");
+        }
 
         if (btnFiveMinDrill) {
           btnFiveMinDrill.classList.add("hidden");
@@ -23182,6 +23260,39 @@ function ensureProgLoaded() {
             try { localStorage.setItem(coverKey, "true"); } catch {}
             resetNavState();
             showScreen("screenHome");
+          });
+        }
+
+        if (btnWelcomeClose) {
+          btnWelcomeClose.onclick = null;
+          btnWelcomeClose.__bcBound = false;
+
+          bindInput(btnWelcomeClose, () => {
+            if (window.isDemo || window.bcMode === "demo") {
+              showScreen("screenHome");
+              return;
+            }
+            const msg = { source: "BC_MSG", v: 1, type: "nav_back", backTo: "screenPremiumApp" };
+            try {
+              window.parent?.postMessage(msg, window.location.origin);
+              setTimeout(() => {
+                try { window.parent?.postMessage(msg, window.location.origin); } catch {}
+              }, 60);
+            } catch {}
+          });
+        }
+
+        if (btnStatusBackToWelcome) {
+          btnStatusBackToWelcome.onclick = null;
+          btnStatusBackToWelcome.__bcBound = false;
+
+          bindInput(btnStatusBackToWelcome, () => {
+            if (window.isDemo || window.bcMode === "demo") {
+              showScreen("screenHome");
+              return;
+            }
+            resetNavState();
+            showScreen("screenWelcome");
           });
         }
 

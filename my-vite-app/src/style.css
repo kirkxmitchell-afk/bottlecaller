@@ -71,7 +71,7 @@ button, input { font-family: inherit; }
 .app-chrome{
   width: min(1600px, 100%);
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) auto;
+  grid-template-columns: minmax(0, 1.1fr) auto auto auto;
   gap: 18px;
   align-items: end;
   padding: 18px 20px;
@@ -87,7 +87,9 @@ button, input { font-family: inherit; }
     inset 0 1px 0 rgba(255,255,255,0.05);
   backdrop-filter: blur(12px);
   position: relative;
-  overflow: hidden;
+  z-index: 10050;
+  isolation: isolate;
+  overflow: visible;
 }
 
 .app-chrome::after{
@@ -101,9 +103,60 @@ button, input { font-family: inherit; }
 }
 
 .app-chrome-brand,
-.app-chrome-context{
+.app-chrome-play-cta,
+.app-chrome-context,
+.app-chrome-premium-bar{
   position: relative;
   z-index: 1;
+}
+
+.app-chrome-premium-bar{
+  grid-column: 4 / 5;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  z-index: 10060;
+}
+
+.app-chrome-play-cta{
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.app-chrome-enter-button{
+  min-width: 190px;
+  min-height: 56px;
+  padding: 14px 22px;
+  border-radius: 999px;
+  border: 1px solid rgba(125,211,252,0.24);
+  background:
+    radial-gradient(circle at 30% 30%, rgba(94,234,212,0.32), transparent 56%),
+    linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.03)),
+    rgba(4,9,13,0.56);
+  color: rgba(245,247,248,0.96);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.08),
+    0 18px 42px rgba(0,0,0,0.24);
+}
+
+.app-chrome-enter-button:hover,
+.app-chrome-enter-button:focus-visible{
+  transform: translateY(-1px);
+  border-color: rgba(94,234,212,0.38);
+  background:
+    radial-gradient(circle at 30% 30%, rgba(94,234,212,0.40), transparent 58%),
+    linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.04)),
+    rgba(4,9,13,0.62);
 }
 
 .app-chrome-eyebrow{
@@ -161,6 +214,7 @@ button, input { font-family: inherit; }
 }
 
 .app-chrome-context{
+  grid-column: 3 / 4;
   position: relative;
   display: grid !important;
   grid-template-columns: repeat(3, minmax(150px, 1fr)) !important;
@@ -1249,6 +1303,20 @@ html[data-bc-mobile-env="true"] .app-chrome-chip + .app-chrome-chip{
   border-top: 1px solid rgba(255,255,255,0.08);
 }
 
+html[data-bc-mobile-env="true"] .app-chrome-premium-bar{
+  flex-direction: column;
+  align-items: stretch;
+}
+
+html[data-bc-mobile-env="true"] .app-chrome-play-cta{
+  order: 3;
+}
+
+html[data-bc-mobile-env="true"] .app-chrome-enter-button{
+  width: 100%;
+  min-width: 0;
+}
+
 html[data-bc-mobile-env="true"] .panel,
 html[data-bc-mobile-env="true"] .card{
   padding: 12px;
@@ -2158,13 +2226,16 @@ html[data-bc-mobile-env="true"] #screenManagerBoard #mbInstrSend{
     rgba(4,9,13,0.34);
 }
 
+.app-chrome-premium-bar .premium-topbar-menu-wrap,
 #screenPremiumApp .premium-topbar-menu-wrap{
   position: relative;
   display: flex;
   justify-content: flex-end;
   margin-left: auto;
+  z-index: 10070;
 }
 
+.app-chrome-premium-bar .premium-topbar-menu-button,
 #screenPremiumApp .premium-topbar-menu-button{
   display: inline-flex;
   align-items: center;
@@ -2184,12 +2255,15 @@ html[data-bc-mobile-env="true"] #screenManagerBoard #mbInstrSend{
     0 14px 32px rgba(0,0,0,0.22);
 }
 
+.app-chrome-premium-bar .premium-topbar-menu-button svg,
 #screenPremiumApp .premium-topbar-menu-button svg{
   width: 24px;
   height: 24px;
   fill: currentColor;
 }
 
+.app-chrome-premium-bar .premium-topbar-menu-button:hover,
+.app-chrome-premium-bar .premium-topbar-menu-button[aria-expanded="true"],
 #screenPremiumApp .premium-topbar-menu-button:hover,
 #screenPremiumApp .premium-topbar-menu-button[aria-expanded="true"]{
   transform: translateY(-1px) rotate(10deg);
@@ -2200,11 +2274,13 @@ html[data-bc-mobile-env="true"] #screenManagerBoard #mbInstrSend{
     rgba(4,9,13,0.56);
 }
 
-#screenPremiumApp .premium-topbar-menu-panel{
+.app-chrome-premium-bar .premium-topbar-menu-panel{
   position: absolute;
   top: calc(100% + 12px);
   right: 0;
+  left: auto;
   min-width: 220px;
+  max-width: min(280px, calc(100vw - 32px));
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -2219,13 +2295,40 @@ html[data-bc-mobile-env="true"] #screenManagerBoard #mbInstrSend{
     0 26px 60px rgba(0,0,0,0.36),
     inset 0 1px 0 rgba(255,255,255,0.05);
   backdrop-filter: blur(12px);
-  z-index: 40;
+  z-index: 10080;
 }
 
+#screenPremiumApp .premium-topbar-menu-panel{
+  position: fixed;
+  top: 0;
+  right: auto;
+  min-width: 220px;
+  max-width: min(280px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 22px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background:
+    radial-gradient(280px 160px at 0% 0%, rgba(125,211,252,0.12), transparent 60%),
+    linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02)),
+    rgba(5,10,14,0.94);
+  box-shadow:
+    0 26px 60px rgba(0,0,0,0.36),
+    inset 0 1px 0 rgba(255,255,255,0.05);
+  backdrop-filter: blur(12px);
+  z-index: 10080;
+}
+
+.app-chrome-premium-bar .premium-topbar-menu-panel.hidden,
 #screenPremiumApp .premium-topbar-menu-panel.hidden{
   display: none;
 }
 
+.app-chrome-premium-bar .premium-topbar-menu-panel button,
+.app-chrome-premium-bar .premium-topbar-menu-panel .btn-ghost,
+.app-chrome-premium-bar .premium-topbar-menu-panel .btn-danger,
 #screenPremiumApp .premium-topbar-menu-panel button,
 #screenPremiumApp .premium-topbar-menu-panel .btn-ghost,
 #screenPremiumApp .premium-topbar-menu-panel .btn-danger{
