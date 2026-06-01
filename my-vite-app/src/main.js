@@ -7323,6 +7323,16 @@ async function openPremiumSetupScreen() {
 
   const body = document.getElementById("premiumWineTableBody");
   const cards = document.getElementById("premiumWineCards");
+  const getWineDeleteLabel = (wineId) => {
+    const wine = getAnyManagerWineOptionsForDisplay(restaurantId).find((row) => {
+      const rowId = String(row?.id || row?.wine_id || row?.created_at || "");
+      return rowId && rowId === String(wineId);
+    });
+    const name = String(wine?.name || "").trim();
+    const varietal = String(wine?.varietal || "").trim();
+    if (name && varietal) return `${name} (${varietal})`;
+    return name || varietal || "this wine";
+  };
   const bindDeleteDelegation = (root) => {
     if (!root || root.__bcBound) return;
     root.__bcBound = true;
@@ -7330,7 +7340,8 @@ async function openPremiumSetupScreen() {
       const btn = ev.target?.closest?.("[data-wine-del]");
       const wineId = btn?.getAttribute?.("data-wine-del");
       if (!wineId) return;
-      if (!confirm("Delete this wine?")) return;
+      const wineLabel = getWineDeleteLabel(wineId);
+      if (!confirm(`Delete ${wineLabel}?\n\nThis will remove the wine card from setup.`)) return;
 
       try {
         await deleteParentRestaurantWine(wineId);
@@ -10748,9 +10759,17 @@ async function loadManagerInsights() {
         </div>
         <div id="mbPerformanceCards" class="mb-performance-card-grid" style="margin-top:12px;"></div>
       </div>
+      <div id="mbPerformanceResultsPanel" class="card">
+        <div class="mb-section-header">
+          <strong>Results Graph</strong>
+          <div class="small-text">Team average drill, encounter, challenge, and premium rates shown as donut graphics.</div>
+        </div>
+        <div id="mbPerformanceResultsChart" class="mb-team-results-grid" style="margin-top:14px;"></div>
+      </div>
     `;
 
     renderManagerPerformanceOverview(model.summary);
+    drawTeamPerformanceResultsChart(model.summary || {});
   } catch (error) {
     console.error("[MB] loadManagerInsights failed", error);
     root.innerHTML = `
@@ -11459,6 +11478,88 @@ function renderManagerPerformanceOverview(summary = {}) {
       <strong>${escapeHtml(String(value))}</strong>
     </div>
   `).join("");
+}
+
+const TEAM_RESULTS_METRICS = [
+  { key: "drillPassRate", label: "Drill", color: "#22c55e" },
+  { key: "encounterPassRate", label: "Encounter", color: "#60a5fa" },
+  { key: "challengeSuccessRate", label: "Challenge", color: "#34d399" },
+  { key: "premiumSuccessRate", label: "Premium", color: "#f59e0b" },
+];
+
+function drawSingleMetricDonut(canvas, value = 0, color = "#60a5fa", options = {}) {
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const width = canvas.width;
+  const height = canvas.height;
+  const cx = width / 2;
+  const cy = height / 2;
+  const radius = Math.min(width, height) * 0.32;
+  const pct = Math.max(0, Math.min(1, Number(value || 0)));
+
+  ctx.clearRect(0, 0, width, height);
+  ctx.lineWidth = 22;
+  ctx.lineCap = "round";
+
+  ctx.beginPath();
+  ctx.strokeStyle = "rgba(255,255,255,0.10)";
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.strokeStyle = color;
+  ctx.arc(cx, cy, radius, -Math.PI / 2, (-Math.PI / 2) + (pct * Math.PI * 2));
+  ctx.stroke();
+
+  ctx.fillStyle = "rgba(4,7,12,0.9)";
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius - 18, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#fff";
+  ctx.textAlign = "center";
+  ctx.font = "bold 22px sans-serif";
+  ctx.fillText(String(options.centerTop || `${Math.round(pct * 100)}%`), cx, cy - 2);
+  ctx.font = "12px sans-serif";
+  ctx.fillStyle = "rgba(255,255,255,0.74)";
+  ctx.fillText(String(options.centerBottom || ""), cx, cy + 18);
+}
+
+function drawTeamPerformanceResultsChart(summary = {}) {
+  const root = document.getElementById("mbPerformanceResultsChart");
+  if (!root) return;
+
+  const donutMetrics = [
+    { ...TEAM_RESULTS_METRICS[0], value: Number(summary.avgDrillPassRate || 0), note: "Team average" },
+    { ...TEAM_RESULTS_METRICS[1], value: Number(summary.avgEncounterPassRate || 0), note: "Team average" },
+    { ...TEAM_RESULTS_METRICS[2], value: Number(summary.avgChallengeSuccessRate || 0), note: "Team average" },
+    { ...TEAM_RESULTS_METRICS[3], value: Number(summary.avgPremiumSuccessRate || 0), note: "Team average" },
+  ];
+
+  if (!donutMetrics.some((metric) => metric.value > 0)) {
+    root.innerHTML = `<div class="small-text">No team performance data yet.</div>`;
+    return;
+  }
+
+  root.innerHTML = donutMetrics.map((metric, index) => `
+    <div class="mb-team-results-donut-card">
+      <canvas id="mbTeamResultsDonut_${index}" width="180" height="180" class="mb-team-results-donut"></canvas>
+      <div class="mb-team-results-copy">
+        <strong>${escapeHtml(metric.label)}</strong>
+        <div class="small-text">${escapeHtml(metric.note)}</div>
+      </div>
+    </div>
+  `).join("");
+
+  donutMetrics.forEach((metric, index) => {
+    const canvas = document.getElementById(`mbTeamResultsDonut_${index}`);
+    if (!canvas) return;
+    const pct = Math.max(0, Math.min(1, Number(metric.value || 0)));
+    drawSingleMetricDonut(canvas, pct, metric.color, {
+      centerTop: `${Math.round(pct * 100)}%`,
+      centerBottom: metric.label,
+    });
+  });
 }
 
 function renderManagerPerformanceTable(users = []) {

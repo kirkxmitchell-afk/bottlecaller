@@ -4514,6 +4514,10 @@ html[data-bc-mobile-env="true"] #screenManagerBoard .mb-message-card .mbCoachSug
   grid-column:1 / -1;
 }
 
+#screenManagerBoard #mbPerformanceResultsPanel{
+  grid-column:1 / -1;
+}
+
 #screenManagerBoard #mbBestStreaksPanel,
 #screenManagerBoard #mbNeedsCoachingPanel,
 #screenManagerBoard #mbRecentPanel,
@@ -4564,12 +4568,50 @@ html[data-bc-mobile-env="true"] #screenManagerBoard .mb-message-card .mbCoachSug
     rgba(8,12,17,0.82) !important;
 }
 
+#screenManagerBoard .mb-team-results-grid{
+  display:grid;
+  grid-template-columns:repeat(4, minmax(0, 1fr));
+  gap:12px;
+}
+
+#screenManagerBoard .mb-team-results-donut-card{
+  display:grid;
+  gap:10px;
+  justify-items:center;
+  padding:14px 12px;
+  border-radius:18px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015)),
+    rgba(255,255,255,0.02);
+}
+
+#screenManagerBoard .mb-team-results-donut{
+  display:block;
+  width:140px;
+  height:140px;
+  max-width:100%;
+}
+
+#screenManagerBoard .mb-team-results-copy{
+  text-align:center;
+}
+
+#screenManagerBoard .mb-team-results-copy strong{
+  display:block;
+  margin-bottom:4px;
+}
+
 #screenManagerBoard #mbInsightsGuestTable.hidden,
 #screenManagerBoard #mbInsightsTrendTable.hidden{
   display: none !important;
 }
 
 @media (max-width: 880px){
+  #screenManagerBoard .mb-team-results-grid{
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+  }
+
   #screenManagerBoard .mb-user-detail-panel{
     grid-template-columns:1fr;
   }
@@ -4596,6 +4638,12 @@ html[data-bc-mobile-env="true"] #screenManagerBoard .mb-message-card .mbCoachSug
   #screenManagerBoard .mb-selection-table-wrap,
   #screenManagerBoard .mb-selection-preview{
     grid-column:1 / -1;
+  }
+}
+
+@media (max-width: 640px){
+  #screenManagerBoard .mb-team-results-grid{
+    grid-template-columns:1fr;
   }
 }
 

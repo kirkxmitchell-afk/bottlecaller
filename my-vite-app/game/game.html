@@ -4720,7 +4720,6 @@
         <div class="button-row app-welcome-actions">
           <button id="btnWelcomeStart" data-tutorial="play-button" type="button">Start</button>
           <button id="btnWelcomeHome" type="button" class="btn-ghost">Status menu</button>
-          <button id="btnWelcomeClose" type="button" class="btn-ghost">Close</button>
           <button
             id="btnWelcomeBackToSetup"
             type="button"
@@ -4728,6 +4727,7 @@
         >
             Back to Wine Setup
           </button>
+          <button id="btnWelcomeClose" type="button" class="btn-ghost">Close</button>
         </div>
         <div class="small-text app-welcome-note" id="welcomeFooterNote"></div>
       </div>
@@ -5488,10 +5488,13 @@ console.log("BC3_MARKER_V1");
     if (!wine || typeof wine !== "object") return "";
     const name = String(wine.name || "").trim().toLowerCase();
     const varietal = String(wine.varietal || "").trim().toLowerCase();
+    if (name || varietal) {
+      return `label:${name}::${varietal}`;
+    }
     const region = String(wine.region || "").trim().toLowerCase();
     const story = String(wine.story || "").trim().toLowerCase();
-    if (name || varietal || region || story) {
-      return `shape:${name}::${varietal}::${region}::${story}`;
+    if (region || story) {
+      return `shape:${region}::${story}`;
     }
     const id = String(wine.id || "").trim();
     return id ? `id:${id}` : "";
@@ -14171,6 +14174,13 @@ function ensureProgLoaded() {
 
       async function deleteWineById(id) {
         if (!id) return;
+        const wine = (wines || []).find((row) => String(row?.id || "") === String(id)) || null;
+        const wineName = String(wine?.name || "").trim();
+        const wineVarietal = String(wine?.varietal || "").trim();
+        const wineLabel = wineName && wineVarietal
+          ? `${wineName} (${wineVarietal})`
+          : (wineName || wineVarietal || "this wine");
+        if (!confirm(`Delete ${wineLabel}?\n\nThis will remove the wine card from setup.`)) return;
         try {
           await window.WineBridge.deleteRestaurantWine(id);
           await hydrateSetupFromDbIfPossible(bcMode);
