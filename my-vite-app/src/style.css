@@ -71,7 +71,7 @@ button, input { font-family: inherit; }
 .app-chrome{
   width: min(1600px, 100%);
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) auto auto auto;
+  grid-template-columns: minmax(0, 1.1fr) auto auto;
   gap: 18px;
   align-items: end;
   padding: 18px 20px;
@@ -104,14 +104,13 @@ button, input { font-family: inherit; }
 
 .app-chrome-brand,
 .app-chrome-play-cta,
-.app-chrome-context,
 .app-chrome-premium-bar{
   position: relative;
   z-index: 1;
 }
 
 .app-chrome-premium-bar{
-  grid-column: 4 / 5;
+  grid-column: 3 / 4;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -1393,8 +1392,8 @@ html[data-bc-mobile-env="true"] #premiumRoot{
 
 html[data-bc-mobile-env="true"] #premiumRootFrame,
 html[data-bc-mobile-env="true"] #gameRootDemoFrame{
-  height: calc(100dvh - 138px) !important;
-  min-height: 420px;
+  height: auto !important;
+  min-height: 320px;
   border-radius: 10px !important;
 }
 
@@ -1590,8 +1589,8 @@ html[data-bc-mobile-env="true"] #screenManagerBoard #mbInstrSend{
 
   html[data-bc-mobile-env="true"] #premiumRootFrame,
   html[data-bc-mobile-env="true"] #gameRootDemoFrame{
-    height: calc(100dvh - 132px) !important;
-    min-height: 380px;
+    height: auto !important;
+    min-height: 300px;
   }
 }
 

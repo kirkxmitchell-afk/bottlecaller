@@ -2,6 +2,7 @@ import { getSupabaseParent, SUPABASE_ANON_KEY, SUPABASE_URL } from "./supabasePa
 
 const SDK_SIGN_IN_TIMEOUT_MS = 5000;
 const DIRECT_AUTH_TIMEOUT_MS = 8000;
+const SIGN_OUT_TIMEOUT_MS = 3000;
 
 function isNetworkFetchError(error) {
   const message = String(error?.message || error || "").toLowerCase();
@@ -142,7 +143,25 @@ export async function parentSignUp(email, password, metadata = {}) {
 
 export async function parentSignOutGlobal() {
   const sb = getSupabaseParent();
-  return sb.auth.signOut({ scope: "global" });
+  try {
+    return await withDeadline(
+      sb.auth.signOut({ scope: "global" }),
+      SIGN_OUT_TIMEOUT_MS,
+      "Supabase SDK sign-out"
+    );
+  } catch (error) {
+    console.warn("[AUTH] global signOut stalled, retrying local signOut", error);
+    try {
+      return await withDeadline(
+        sb.auth.signOut(),
+        SIGN_OUT_TIMEOUT_MS,
+        "Supabase local sign-out"
+      );
+    } catch (fallbackError) {
+      console.warn("[AUTH] local signOut failed after global signOut stall", fallbackError);
+      return { error: fallbackError };
+    }
+  }
 }
 
 export async function signOutLocal() {

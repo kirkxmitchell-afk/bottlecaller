@@ -397,20 +397,6 @@ document.querySelector("#app").innerHTML = `
     <div id="appChromePlayCta" class="app-chrome-play-cta hidden">
       <button id="btnAppChromeEnter" class="app-chrome-enter-button" type="button">Play / Enter</button>
     </div>
-    <div class="app-chrome-context">
-      <div class="app-chrome-chip">
-        <span class="app-chrome-chip-label">Surface</span>
-        <strong id="appChromeSurface">Lobby</strong>
-      </div>
-      <div class="app-chrome-chip">
-        <span class="app-chrome-chip-label">Role</span>
-        <strong id="appChromeRole">Guest</strong>
-      </div>
-      <div class="app-chrome-chip">
-        <span class="app-chrome-chip-label">Restaurant</span>
-        <strong id="appChromeRestaurant">Not bound</strong>
-      </div>
-    </div>
     <div id="appChromePremiumBar" class="app-chrome-premium-bar hidden">
       <div id="premiumTopbarMenuWrap" class="premium-topbar-menu-wrap">
         <button
@@ -6518,13 +6504,10 @@ function showScreen(id) {
 }
 
 function renderAppChrome() {
-  const surfaceEl = document.getElementById("appChromeSurface");
-  const roleEl = document.getElementById("appChromeRole");
-  const restaurantEl = document.getElementById("appChromeRestaurant");
   const statusEl = document.getElementById("appChromeStatus");
   const premiumBarEl = document.getElementById("appChromePremiumBar");
   const playCtaEl = document.getElementById("appChromePlayCta");
-  if (!surfaceEl && !roleEl && !restaurantEl && !statusEl && !premiumBarEl && !playCtaEl) return;
+  if (!statusEl && !premiumBarEl && !playCtaEl) return;
 
   const visibleScreens = Array.from(document.querySelectorAll(".screen:not(.hidden)"));
   const hasProfileOverlay = !document.getElementById("screenProfile")?.classList.contains("hidden");
@@ -6548,8 +6531,6 @@ function renderAppChrome() {
 
   const profile = appState?.profile || {};
   const restaurant = appState?.restaurant || {};
-  const roleLabel = getDisplayRoleLabel?.(profile) || "Guest";
-  const restaurantLabel = restaurant?.name || restaurant?.id || "Not bound";
   const hasSession = !!appState?.session?.user;
   const statusLabel = hasSession
     ? ((profile?.access_tier || profile?.accessTier || "premium").toString().toUpperCase())
@@ -6557,9 +6538,6 @@ function renderAppChrome() {
   const showPremiumBar = currentScreenId === "screenPremiumApp" && hasSession;
   const showPlayCta = currentScreenId === "screenPremiumApp" && hasSession;
 
-  if (surfaceEl) surfaceEl.textContent = surfaceMap[currentScreenId] || "Workspace";
-  if (roleEl) roleEl.textContent = roleLabel;
-  if (restaurantEl) restaurantEl.textContent = restaurantLabel;
   if (statusEl) statusEl.textContent = statusLabel;
   premiumBarEl?.classList.toggle("hidden", !showPremiumBar);
   playCtaEl?.classList.toggle("hidden", !showPlayCta);
@@ -7663,6 +7641,15 @@ function wirePremiumTopbarMenu() {
     panel.addEventListener("click", (event) => {
       const actionBtn = event.target?.closest?.("button");
       if (!actionBtn || actionBtn.id === "btnPremiumTopbarMenu") return;
+      if (actionBtn.id === "btnLogoutPremium") {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation?.();
+        closePremiumTopbarMenu();
+        console.log("[LOGOUT] premium menu action");
+        triggerLogoutIntent(actionBtn, "ui:btnLogoutPremium.panel");
+        return;
+      }
       closePremiumTopbarMenu();
     });
   }
@@ -9139,6 +9126,7 @@ function buildGameIframeUrl({
   mode = "premium",
   showBack = false,
   backTo = "screenPremiumApp",
+  initialScreen = null,
   urlOverride = null,
   epoch = Date.now(),
   bustCache = false,
@@ -9158,6 +9146,8 @@ function buildGameIframeUrl({
   base.searchParams.set("mode", String(mode || "premium").toLowerCase());
   base.searchParams.set("showBack", showBack ? "1" : "0");
   base.searchParams.set("backTo", String(backTo || "screenPremiumApp"));
+  if (initialScreen) base.searchParams.set("initialScreen", String(initialScreen));
+  else base.searchParams.delete("initialScreen");
 
   // Keep epoch off the URL so iframe assets can stay browser-cacheable.
   // The runtime already gets the active epoch from frameElement.dataset.bcEpoch,
@@ -9289,8 +9279,8 @@ function openPremiumBeginScreen() {
   const tryOpenBegin = () => {
     const frame = document.getElementById("premiumRootFrame");
     const nav = frame?.contentWindow?.__BC_NAV__;
-    if (nav && typeof nav.openPlay === "function") {
-      nav.openPlay();
+    if (nav && typeof nav.openWelcome === "function") {
+      nav.openWelcome();
       return true;
     }
     return false;
@@ -9305,7 +9295,8 @@ function openPremiumBeginScreen() {
     mountPremiumGameIframe({
       mode: "premium",
       showBack: true,
-      backTo: isWaiter ? "screenPremiumApp" : "screenManagerBoard"
+      backTo: isWaiter ? "screenPremiumApp" : "screenManagerBoard",
+      initialScreen: "screenWelcome",
     });
   }
 
@@ -9334,8 +9325,11 @@ window.addEventListener("message", (event) => {
   const h = Number(data.height);
   if (!Number.isFinite(h)) return;
 
-  const clamped = Math.max(360, Math.min(860, h + 24));
-  frame.style.height = clamped + "px";
+  const isMobile = document.documentElement?.dataset?.bcMobileEnv === "true";
+  const maxHeight = isMobile ? 6000 : 860;
+  const minHeight = isMobile ? 320 : 360;
+  const clamped = Math.max(minHeight, Math.min(maxHeight, h + (isMobile ? 12 : 24)));
+  frame.style.setProperty("height", clamped + "px", "important");
 });
 
 // ------------------------------------------------------------
@@ -12270,6 +12264,7 @@ function mountPremiumGameIframe({
   showBack = false,
   backTo = "screenManagerBoard",
   mode = "premium",
+  initialScreen = null,
   url = null,
   forceRemount = false,
 } = {}) {
@@ -12332,6 +12327,7 @@ function mountPremiumGameIframe({
     mode: mode || "premium",
     showBack: !!showBack,
     backTo: resolvedBackTo || "screenPremiumApp",
+    initialScreen: initialScreen || null,
     urlOverride: url || null,
     epoch,
     bustCache: true,
@@ -12342,36 +12338,43 @@ function mountPremiumGameIframe({
   iframe.style.position = "relative";
   iframe.style.zIndex = "1";
   iframe.style.pointerEvents = "auto";
+  iframe.style.opacity = "0";
+  iframe.style.transition = "opacity 140ms ease";
 
   iframe.addEventListener("load", () => {
     (async () => {
-      // 🔒 ignore stale load events (hot reload / rapid remount)
-      if (Number(window.__BC_IFRAME_EPOCH__ || 0) !== myEpoch) {
-        console.warn("[PARENT] ignored iframe load (stale epoch)", { myEpoch, current: window.__BC_IFRAME_EPOCH__ });
-        return;
-      }
-
-      if (isLoggingOut()) return;
-
-      const live = await getLiveSessionOrNull();
-      if (!live) return;
-      appState.session = live;
-
-      // demo never gets ctx
-      const modeFromSrc = String(new URL(iframe.src, window.location.href).searchParams.get("mode") || "").toLowerCase();
-      if (modeFromSrc === "demo") return;
-
       try {
-        if (isParentCtxReady(modeFromSrc || "premium")) {
-          await hydrateParentProgressionForPremiumIframe("iframe.load");
-          schedulePremiumCtxPush("iframe.load");
+        // 🔒 ignore stale load events (hot reload / rapid remount)
+        if (Number(window.__BC_IFRAME_EPOCH__ || 0) !== myEpoch) {
+          console.warn("[PARENT] ignored iframe load (stale epoch)", { myEpoch, current: window.__BC_IFRAME_EPOCH__ });
+          return;
         }
-      } catch (e) {
-        console.warn("[PARENT] bc_ctx push on iframe load failed", e);
-      }
 
-      pushPremiumDrill();
-      console.log("[PARENT] premium iframe loaded ✅ (ctx/drill pushed)", { epoch: myEpoch });
+        if (isLoggingOut()) return;
+
+        const live = await getLiveSessionOrNull();
+        if (!live) return;
+        appState.session = live;
+
+        // demo never gets ctx
+        const modeFromSrc = String(new URL(iframe.src, window.location.href).searchParams.get("mode") || "").toLowerCase();
+        if (modeFromSrc === "demo") return;
+
+        try {
+          if (isParentCtxReady(modeFromSrc || "premium")) {
+            await hydrateParentProgressionForPremiumIframe("iframe.load");
+            schedulePremiumCtxPush("iframe.load");
+          }
+        } catch (e) {
+          console.warn("[PARENT] bc_ctx push on iframe load failed", e);
+        }
+
+        pushPremiumDrill();
+        console.log("[PARENT] premium iframe loaded ✅ (ctx/drill pushed)", { epoch: myEpoch });
+      } finally {
+        iframe.style.opacity = "1";
+        iframe.style.pointerEvents = "auto";
+      }
     })();
   });
 
@@ -21709,55 +21712,87 @@ async function signOutHard() {
 async function doLogout(reason = "user") {
   if (window.__BC_LOGGING_OUT__) return;
   window.__BC_LOGGING_OUT__ = true;
+  let logoutRedirectIssued = false;
 
   console.warn("[LOGOUT] start", reason);
 
-  try { localStorage.setItem("__BC_LOGOUT_LOCK__", String(Date.now())); } catch {}
-  window.__BC_LOGOUT_LOCK__ = Date.now();
-
-  // Notify active iframe(s) before teardown so UI can collapse immediately.
   try {
-    const origin = window.location.origin;
-    const notify = (frameId) => {
-      const win = document.getElementById(frameId)?.contentWindow;
-      if (!win) return;
-      win.postMessage({ source: "BC_MSG", v: 1, type: "auth_state", authed: false }, origin);
-      win.postMessage({ source: "BC_MSG", v: 1, type: "parent_logged_out" }, origin);
-    };
-    notify("premiumRootFrame");
-    notify("gameRootDemoFrame");
-  } catch {}
+    try { localStorage.setItem("__BC_LOGOUT_LOCK__", String(Date.now())); } catch {}
+    window.__BC_LOGOUT_LOCK__ = Date.now();
 
-  // 1) detach UI immediately
-  try { destroyPremiumIframe("logout"); } catch (e) { console.warn("destroyPremiumIframe failed", e); }
-  try { routeAuth(); } catch (e) { console.warn("routeAuth failed", e); }
+    // Clear local auth/profile state first so the UI cannot stay in Premium
+    // even if network sign-out stalls or fails.
+    try {
+      appState.session = null;
+      appState.profile = null;
+      appState.restaurant = null;
+      appState.activeRestaurantId = null;
+      appMode = "public";
+    } catch {}
 
-  // 2) sign out (best effort)
-  try {
-    await parentSignOutGlobal();
-    console.warn("[LOGOUT] supabase signOut ok");
-  } catch (e) {
-    console.warn("[LOGOUT] supabase signOut failed (continuing anyway)", e);
+    // Notify active iframe(s) before teardown so UI can collapse immediately.
+    try {
+      const origin = window.location.origin;
+      const notify = (frameId) => {
+        const win = document.getElementById(frameId)?.contentWindow;
+        if (!win) return;
+        win.postMessage({ source: "BC_MSG", v: 1, type: "auth_state", authed: false }, origin);
+        win.postMessage({ source: "BC_MSG", v: 1, type: "parent_logged_out" }, origin);
+      };
+      notify("premiumRootFrame");
+      notify("gameRootDemoFrame");
+    } catch {}
+
+    // 1) detach UI immediately
+    try { hardResetUI("logout.start"); } catch (e) { console.warn("hardResetUI failed", e); }
+    try { destroyPremiumIframe("logout"); } catch (e) { console.warn("destroyPremiumIframe failed", e); }
+    try { routeAuth(); } catch (e) { console.warn("routeAuth failed", e); }
+    try { applyAuthUi(); } catch {}
+
+    // 2) sign out (best effort)
+    try {
+      await parentSignOutGlobal();
+      console.warn("[LOGOUT] supabase signOut ok");
+    } catch (e) {
+      console.warn("[LOGOUT] supabase signOut failed (continuing anyway)", e);
+    }
+
+    // 3) purge ALL known keys (yours + supabase default/legacy)
+    try { purgeAuthStorage(); } catch {}
+    try {
+      localStorage.removeItem("bc_supabase_auth_v1");
+      sessionStorage.removeItem("bc_supabase_auth_v1");
+
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith("sb-") && k.includes("auth-token")) localStorage.removeItem(k);
+      }
+      for (let i = sessionStorage.length - 1; i >= 0; i--) {
+        const k = sessionStorage.key(i);
+        if (k && k.startsWith("sb-") && k.includes("auth-token")) sessionStorage.removeItem(k);
+      }
+    } catch {}
+
+    try {
+      try { localStorage.setItem("__BC_LOGOUT_LATCH__", String(Date.now())); } catch {}
+      window.location.replace("/?loggedOut=1&ts=" + Date.now());
+      logoutRedirectIssued = true;
+      return;
+    } catch (e) {
+      console.warn("[LOGOUT] redirect failed, falling back to auth route", e);
+    }
+  } finally {
+    try {
+      appState.session = null;
+      appState.profile = null;
+    } catch {}
+    if (!logoutRedirectIssued) {
+      try { localStorage.removeItem("__BC_LOGOUT_LOCK__"); } catch {}
+      window.__BC_LOGOUT_LOCK__ = null;
+      window.__BC_LOGGING_OUT__ = false;
+      try { routeAuth(); } catch {}
+    }
   }
-
-  // 3) purge ALL known keys (yours + supabase default/legacy)
-  try { purgeAuthStorage(); } catch {}
-  try {
-    localStorage.removeItem("bc_supabase_auth_v1");
-    sessionStorage.removeItem("bc_supabase_auth_v1");
-
-    for (let i = localStorage.length - 1; i >= 0; i--) {
-      const k = localStorage.key(i);
-      if (k && k.startsWith("sb-") && k.includes("auth-token")) localStorage.removeItem(k);
-    }
-    for (let i = sessionStorage.length - 1; i >= 0; i--) {
-      const k = sessionStorage.key(i);
-      if (k && k.startsWith("sb-") && k.includes("auth-token")) sessionStorage.removeItem(k);
-    }
-  } catch {}
-
-  // 4) hard redirect with latch
-  window.location.replace("/?loggedOut=1&ts=" + Date.now());
 }
 window.doLogout = doLogout;
 console.log("doLogout is", window.doLogout);
@@ -21767,8 +21802,15 @@ async function logoutAll(reason = "logout") {
   return doLogout(reason);
 }
 
+function triggerLogoutIntent(btn, reason = "ui") {
+  if (window.__BC_LOGGING_OUT__) return;
+  try { btn.disabled = true; } catch {}
+  void (window.doLogout || doLogout)(reason);
+}
+
 function wireLogoutButtons() {
   const ids = [
+    "btnHomeLogout",
     "btnLogoutCreate",
     "btnLogoutPremium",
     "btnLogoutManagerBoard",
@@ -21777,10 +21819,14 @@ function wireLogoutButtons() {
   ids.forEach((id) => {
     const btn = document.getElementById(id);
     if (!btn) return;
-    btn.onclick = null;
-    btn.__bcBound = false;
-    bindInput(btn, async () => {
-      await doLogout(id);
+    if (btn.__bcLogoutBound) return;
+    btn.__bcLogoutBound = true;
+    btn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation?.();
+      console.log("[LOGOUT] direct", id);
+      triggerLogoutIntent(btn, "ui:" + id);
     });
   });
 }
@@ -21806,14 +21852,9 @@ function wireLogout() {
       console.log("[LOGOUT] captured", btn.id);
 
       e.preventDefault();
-      // Don’t block other UI generally — but for logout, we want control.
       e.stopPropagation();
       e.stopImmediatePropagation?.();
-
-      // Optional UX: disable button immediately to prevent double taps.
-      try { btn.disabled = true; } catch {}
-
-      (window.doLogout || doLogout)("ui:" + btn.id);
+      triggerLogoutIntent(btn, "ui:" + btn.id);
     },
     true
   );
@@ -22207,6 +22248,7 @@ setRole("waiter");
 setMode("login");
 setAuthIntent("login");
 wireLogout();
+wireLogoutButtons();
 wireGlobalDemoExit();
 wireDemoButtons();
 applyAuthUi();

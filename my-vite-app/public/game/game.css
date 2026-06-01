@@ -2225,6 +2225,57 @@ html, body{ height:100%; }
     rgba(255,255,255,0.03);
 }
 
+#bcShell.is-encounter-only{
+  grid-template-columns:minmax(0, 1fr) !important;
+  grid-template-areas:"stage" !important;
+  padding-top:0 !important;
+  position:relative;
+}
+
+#bcShell.is-encounter-only #bcHudTop,
+#bcShell.is-encounter-only #bcRail,
+#bcShell.is-encounter-only #bcHudBottom{
+  display:none !important;
+}
+
+#bcShell.is-encounter-only #bcHudTop{
+  display:flex !important;
+  justify-content:flex-end !important;
+  background:transparent !important;
+  border:0 !important;
+  box-shadow:none !important;
+  backdrop-filter:none !important;
+  padding:0 !important;
+  position:absolute !important;
+  top:16px;
+  right:16px;
+  z-index:3;
+}
+
+#bcShell.is-encounter-only #bcHudTop::before,
+#bcShell.is-encounter-only #bcHudTop::after,
+#bcShell.is-encounter-only #bcHudTop .bc-brand,
+#bcShell.is-encounter-only #bcHudTop .bc-stats{
+  display:none !important;
+}
+
+#bcShell.is-encounter-only #bcHudTop .bc-actions{
+  width:auto;
+}
+
+#bcShell.is-encounter-only #bcStage{
+  grid-area:stage;
+  position:relative;
+  align-self:start;
+}
+
+#bcShell.is-encounter-only #encounterPanel{
+  min-height:0 !important;
+  height:auto !important;
+  align-self:start;
+  padding-top:64px !important;
+}
+
 #bcHudBottom .bc-hint-wrap,
 #bcHudBottom .bc-status-wrap{
   position: relative;

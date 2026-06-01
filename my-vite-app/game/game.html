@@ -347,6 +347,69 @@
       window.parent?.postMessage(msg, ORIGIN);
       return true;
     }
+    function measureIframeContentHeight() {
+      const activeScreen = document.querySelector(".screen.active");
+      return Math.max(
+        document.documentElement?.scrollHeight || 0,
+        document.body?.scrollHeight || 0,
+        document.documentElement?.offsetHeight || 0,
+        document.body?.offsetHeight || 0,
+        activeScreen?.scrollHeight || 0,
+        activeScreen?.offsetHeight || 0
+      );
+    }
+    function reportIframeHeight(reason = "layout") {
+      if (!isActuallyIframe()) return false;
+      const height = measureIframeContentHeight();
+      if (!Number.isFinite(height) || height <= 0) return false;
+      return postToParent({ type: "BC_IFRAME_HEIGHT", height, reason });
+    }
+    function scheduleIframeHeightReport(reason = "layout") {
+      try { clearTimeout(window.__BC_HEIGHT_REPORT_T__); } catch {}
+      window.__BC_HEIGHT_REPORT_T__ = setTimeout(() => {
+        try {
+          reportIframeHeight(reason);
+          requestAnimationFrame(() => {
+            try { reportIframeHeight(reason + ":raf"); } catch {}
+          });
+        } catch {}
+      }, 24);
+    }
+    function installIframeHeightSync() {
+      if (window.__BC_HEIGHT_SYNC_INSTALLED__) return;
+      window.__BC_HEIGHT_SYNC_INSTALLED__ = true;
+
+      window.addEventListener("load", () => scheduleIframeHeightReport("window_load"));
+      window.addEventListener("resize", () => scheduleIframeHeightReport("window_resize"));
+      window.addEventListener("orientationchange", () => scheduleIframeHeightReport("orientationchange"));
+
+      if (typeof ResizeObserver === "function") {
+        try {
+          const ro = new ResizeObserver(() => scheduleIframeHeightReport("resize_observer"));
+          if (document.body) ro.observe(document.body);
+          if (document.documentElement) ro.observe(document.documentElement);
+          window.__BC_HEIGHT_RESIZE_OBSERVER__ = ro;
+        } catch {}
+      }
+
+      if (typeof MutationObserver === "function") {
+        try {
+          const mo = new MutationObserver(() => scheduleIframeHeightReport("mutation"));
+          if (document.body) {
+            mo.observe(document.body, {
+              childList: true,
+              subtree: true,
+              attributes: true,
+              characterData: true,
+            });
+          }
+          window.__BC_HEIGHT_MUTATION_OBSERVER__ = mo;
+        } catch {}
+      }
+
+      scheduleIframeHeightReport("install");
+    }
+    installIframeHeightSync();
     function submitProgressReport({ body, payload, reqId } = {}) {
       try {
         const id = reqId || ("pr_" + Math.random().toString(16).slice(2));
@@ -3179,7 +3242,7 @@
       };
     };
 
-    function applyAbilityRuntimeToReaction(result, encounter, checks) {
+      function applyAbilityRuntimeToReaction(result, encounter, checks) {
       if (!result || typeof result !== "object") return result;
 
       const runtime = getActiveAbilityRuntime();
@@ -3219,6 +3282,11 @@
         runtime.recoveryFocus &&
         !next.pivotUnlocked &&
         !checks?.deliveryCorrect &&
+        (
+          !checks?.guestRead ||
+          checks?.modeStatus === "damaging" ||
+          checks?.hookStatus === "damaging"
+        ) &&
         Number(next.chainScore || 0) >= clampNumber(2 + (0.5 * runtime.recoveryThresholdDelta), 1.5, 4)
       ) {
         next.pivotUnlocked = true;
@@ -11938,6 +12006,7 @@ function ensureProgLoaded() {
         applyDifficultyTheme(mode);
         const hudStats = document.querySelector("#bcHudTop .bc-stats");
         if (hudStats) renderDifficultyBadge(hudStats);
+        scheduleIframeHeightReport("showScreen:" + screenId);
       }
 
       window.__BC_UI__ = {
@@ -11990,6 +12059,7 @@ function ensureProgLoaded() {
       window.__BC_NAV__.openStatus = () => {
         if (sessionType === "drill") return;
         try {
+          applyPlaySurfaceMode("full");
           resetNavState();
           showScreen("screenHome");
         } catch (e) {
@@ -12012,6 +12082,7 @@ function ensureProgLoaded() {
           }
 
           try { localStorage.setItem(coverKey, "true"); } catch {}
+          applyPlaySurfaceMode("full");
           resetNavState();
           showScreen("screenPlay");
 
@@ -12039,6 +12110,12 @@ function ensureProgLoaded() {
           window.__BC3__.step = 0;
           window.__BC3__.results = [];
         }
+      }
+
+      function applyPlaySurfaceMode(mode = "full") {
+        const shell = document.getElementById("bcShell");
+        if (!shell) return;
+        shell.classList.toggle("is-encounter-only", mode === "encounter_only");
       }
 
       // ---------- Storage ----------
@@ -18398,6 +18475,7 @@ function ensureProgLoaded() {
 
       function logEncounter() {
         const ctx = getRuntimeCtx();
+        const progressionResolution = resolveEncounterProgressionResolution(currentEncounter);
         const reactionPayload = deriveEncounterReactionPayload(currentEncounter);
         currentEncounter.__encounterReactionSummary =
           currentEncounter.__encounterReactionSummary || buildEncounterReactionSummary(currentEncounter);
@@ -18451,9 +18529,13 @@ function ensureProgLoaded() {
           recoveryWhy: currentEncounter.recoveryWhy || "",
 
           // Telemetry
+          outcome: currentEncounter.outcome || "",
+          finalOutcome: progressionResolution.finalOutcome || currentEncounter.finalOutcome || "",
           chainScore: currentEncounter.chainScore ?? null,
           chainSignal: currentEncounter.chainSignal ?? "",
           pivotType: currentEncounter.pivotType || "",
+          pivotTaken: !!currentEncounter.pivotTaken,
+          pivotSuccess: !!currentEncounter.pivotSuccess,
           resetUsed: !!currentEncounter.resetUsed,
           performanceGrade: currentEncounter.performanceGrade || "",
           aiPerception: reactionPayload?.aiPerception || "",
@@ -18529,6 +18611,8 @@ function ensureProgLoaded() {
               success: !!currentEncounter?.pivotSuccess,
             },
 
+            outcome: currentEncounter?.outcome || "",
+            finalOutcome: progressionResolution.finalOutcome || currentEncounter?.finalOutcome || "",
             chainScore: currentEncounter?.chainScore ?? null,
             chainSignal: currentEncounter?.chainSignal ?? "",
             performanceGrade: currentEncounter?.performanceGrade || "",
@@ -18709,14 +18793,71 @@ function ensureProgLoaded() {
         });
       }
 
-      function encounterCountsAsWin(outcome) {
-        const winOutcomes = [
+      function resolveEncounterProgressionResolution(encounter = null) {
+        const enc = encounter || currentEncounter || null;
+        const rawOutcome = String(enc?.outcome || "").trim().toLowerCase();
+        const hasRecoveryBranch = !!(
+          enc?.recoveryText ||
+          enc?.pivotType ||
+          rawOutcome === "pivot" ||
+          rawOutcome === "recovery"
+        );
+        const recoveryAttempted = !!(
+          enc?.recoveryChoice ||
+          enc?.recoveryChoiceCategory ||
+          enc?.resetUsed
+        );
+        const recoveryCorrect = !!enc?.recoveryCorrect;
+
+        let finalOutcome = rawOutcome || "";
+        if (hasRecoveryBranch) {
+          if (recoveryAttempted) {
+            finalOutcome = recoveryCorrect ? "recovered_close" : "failed_recovery";
+          } else if (rawOutcome === "pivot" || rawOutcome === "recovery") {
+            finalOutcome = "recovery_pending";
+          }
+        }
+
+        const didWin = [
           "clean_close",
           "soft_close",
-          "pivot"
-        ];
+          "recovered_close",
+        ].includes(finalOutcome);
 
-        return winOutcomes.includes(outcome?.outcome);
+        if (enc) {
+          enc.finalOutcome = finalOutcome || null;
+          enc.pivotTaken = hasRecoveryBranch && (recoveryAttempted || rawOutcome === "pivot" || rawOutcome === "recovery");
+          enc.pivotSuccess = recoveryCorrect;
+        }
+
+        return {
+          rawOutcome,
+          finalOutcome,
+          hasRecoveryBranch,
+          recoveryAttempted,
+          recoveryCorrect,
+          didWin,
+        };
+      }
+
+      function encounterCountsAsWin(outcome, encounter = null) {
+        const explicitOutcome = String(
+          encounter?.finalOutcome ||
+          encounter?.outcome ||
+          outcome?.finalOutcome ||
+          outcome?.outcome ||
+          ""
+        ).trim().toLowerCase();
+
+        if (explicitOutcome) {
+          return [
+            "clean_close",
+            "soft_close",
+            "recovered_close",
+          ].includes(explicitOutcome);
+        }
+
+        return false;
       }
 
       function maybeEndDemoRunAndReturnHome() {
@@ -20404,6 +20545,8 @@ function ensureProgLoaded() {
           " (score " + Number(result.chainScore).toFixed(1) + " / 4.0)";
         stepContent.appendChild(signalChip);
 
+        const outcomePreview = resolveOutcome(currentEncounter, reactionChecks);
+
         if (result.deliveryCorrect) {
           const upgraded = rollPremiumOpportunity(result, currentEncounter);
           stepContent.appendChild(document.createTextNode(upgraded ? "✅ Upgrade. “Nice — that’s the move.”" : "✅ Nod. “Perfect.”"));
@@ -20412,7 +20555,7 @@ function ensureProgLoaded() {
           return true;
         }
 
-        if (result.pivotUnlocked) {
+        if (result.pivotUnlocked && ["pivot", "recovery"].includes(String(outcomePreview?.outcome || "").toLowerCase())) {
           if (!currentEncounter.recoveryText) {
             ensurePressureDrivenPivot(currentEncounter);
             const unlockedModes = getUnlockedModesForCurrentPlayer();
@@ -20564,6 +20707,13 @@ function ensureProgLoaded() {
 
           const cont = addStepButton("CONTINUE TO REFLECTION", () => { goToStep(7); }, bar);
           if (!currentEncounter.recoveryChoice && !currentEncounter.resetUsed) cont.disabled = true;
+          return true;
+        }
+
+        if (String(outcomePreview?.outcome || "").toLowerCase() === "soft_close") {
+          stepContent.appendChild(document.createTextNode("🟡 The table is still serviceable. No recovery branch needed — tighten the close in reflection."));
+          appendFeedbackLine(stepContent, bcFeedbackFromOutcome(reactionChecks, result));
+          addStepButton("REFLECT", () => { goToStep(7); }, bar);
           return true;
         }
 
@@ -20838,6 +20988,7 @@ function ensureProgLoaded() {
 
         try {
           currentEncounter.outcome = outcome?.outcome || null;
+          resolveEncounterProgressionResolution(currentEncounter);
           if (sessionType === "tournament") {
             currentEncounter.tournamentResolvedOutcome =
               currentEncounter.tournamentResolvedOutcome ||
@@ -20961,9 +21112,11 @@ function ensureProgLoaded() {
         ensureProgLoaded();
         const scored = scoreEncounterForGuard(currentEncounter, checks);
         const outcome = resolveOutcome(currentEncounter, checks);
+        const progressionResolution = resolveEncounterProgressionResolution(currentEncounter);
         cacheSendableProgressDraft(currentEncounter, {
           checks,
           outcome: outcome?.outcome || null,
+          finalOutcome: progressionResolution.finalOutcome || null,
           chainSignal:
             currentEncounter?.chainSignal ||
             currentEncounter?.__reaction?.chainSignal ||
@@ -20983,7 +21136,6 @@ function ensureProgLoaded() {
             console.warn("[DISPLAY METHOD CHALLENGE] evaluation failed", e);
           }
         }
-        applyProgressionEncounterResult(encounterCountsAsWin(outcome));
 
         const { streakInfo, unlock } = renderEncounterProgressSummary(stepContent, checks, scored);
         const completionState = computeAndStoreCompletionState(scored, streakInfo, unlock);
@@ -21024,6 +21176,7 @@ function ensureProgLoaded() {
         maybeAutoSendProgressReport(currentEncounter);
         maybeActivatePendingTimedChallenge(currentEncounter);
         renderReflectionOverview(stepContent, currentEncounter, checks, modeBestResolved);
+        const progressionResolution = resolveEncounterProgressionResolution(currentEncounter);
 
         const scored = scoreEncounterForGuard(currentEncounter, checks);
         const completionState = currentEncounter.__completionState || null;
@@ -21050,12 +21203,7 @@ function ensureProgLoaded() {
 
         if (!currentEncounter.__progressionApplied) {
           currentEncounter.__progressionApplied = true;
-          const didWin =
-            !!checks.guestRead &&
-            checks.modeStatus !== "damaging" &&
-            checks.hookStatus !== "damaging" &&
-            !!checks.deliveryCorrect;
-          applyProgressionEncounterResult(didWin);
+          applyProgressionEncounterResult(progressionResolution.didWin);
         }
 
         const { streakInfo, unlock } = renderEncounterProgressSummary(stepContent, checks, scored);
@@ -21218,11 +21366,12 @@ function ensureProgLoaded() {
           modeTier === "right" ||
           hookTier === "right" ||
           (!modeDamaging && !hookDamaging);
-        const recoverySelective =
+        const recoveryRequired =
           reactionSignal === "red" ||
           strongPillars <= 1 ||
-          (!readCorrect && (modeDamaging || hookDamaging));
-        const pivotAllowed = pivotFeatureUnlocked && pivotPlanned && recoverySelective && pivotViable;
+          (!readCorrect && (modeDamaging || hookDamaging)) ||
+          (!deliveryStrong && (modeDamaging || hookDamaging) && !readCorrect);
+        const pivotAllowed = pivotFeatureUnlocked && pivotPlanned && recoveryRequired && pivotViable;
 
         if (abilityFx.closingSurge) {
           recordAbilityImpact({
@@ -21256,17 +21405,20 @@ function ensureProgLoaded() {
           return { outcome: "soft_close", score: total };
         }
         if (total >= recoveryPivotThreshold) {
+          if (!redSignalDowngrade && softEligible && strongPillars >= 2) {
+            return { outcome: "soft_close", score: total };
+          }
           if (pivotAllowed) {
             return { outcome: "pivot", score: total };
           }
           if (softEligible && strongPillars >= 2) {
             return { outcome: "soft_close", score: total };
           }
-          return recoverySelective
+          return recoveryRequired
             ? { outcome: "recovery", score: total }
             : { outcome: "soft_close", score: total };
         }
-        return recoverySelective
+        return recoveryRequired
           ? { outcome: "recovery", score: total }
           : { outcome: "soft_close", score: total };
       }
@@ -23241,6 +23393,7 @@ function ensureProgLoaded() {
             // Mark cover as dismissed
             try { localStorage.setItem(coverKey, "true"); } catch {}
 
+            applyPlaySurfaceMode("encounter_only");
             resetNavState();
             showScreen("screenPlay");
 
@@ -23268,6 +23421,7 @@ function ensureProgLoaded() {
               return;
             }
             try { localStorage.setItem(coverKey, "true"); } catch {}
+            applyPlaySurfaceMode("full");
             resetNavState();
             showScreen("screenHome");
           });
@@ -23301,6 +23455,7 @@ function ensureProgLoaded() {
               showScreen("screenHome");
               return;
             }
+            applyPlaySurfaceMode("full");
             resetNavState();
             showScreen("screenWelcome");
           });
@@ -23358,6 +23513,7 @@ function ensureProgLoaded() {
 
         bindInput(btnContinue, async () => {
           if (!(await assertWinesReadyOrExplain())) return;
+          applyPlaySurfaceMode("full");
           resetNavState();
 
           if (!hasRestorableProgressionRun()) {
@@ -23557,12 +23713,20 @@ function ensureProgLoaded() {
 
       // Decide initial screen (premium should land on Home)
       const hasSeenCover = localStorage.getItem(coverKey) === "true";
+      const initialScreenParam = (() => {
+        try {
+          const value = new URLSearchParams(window.location.search).get("initialScreen") || "";
+          return value && document.getElementById(value) ? value : "";
+        } catch {
+          return "";
+        }
+      })();
 
       if (sessionType !== "drill") {
         if (isDemo) {
-          showScreen(hasSeenCover ? "screenHome" : "screenWelcome");
+          showScreen(initialScreenParam || (hasSeenCover ? "screenHome" : "screenWelcome"));
         } else {
-          showScreen("screenHome");
+          showScreen(initialScreenParam || "screenHome");
         }
       }
       updateCounts();
