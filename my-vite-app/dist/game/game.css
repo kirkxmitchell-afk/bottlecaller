@@ -1329,7 +1329,11 @@ html, body{ height: 100%; }
 
 .bc-shell-center{
   grid-template-columns: 1fr;
+  grid-template-rows: auto;
   grid-template-areas: "stage";
+  align-content: start;
+  justify-items: stretch;
+  padding-bottom: 0;
 }
 
 .bc-hud-top{ grid-area:hud; }
@@ -2852,7 +2856,7 @@ html, body{ height:100%; }
 #screenDrillSummary{
   width: min(1440px, 100%);
   margin: 0 auto;
-  padding: 18px 14px 40px;
+  padding: 18px 14px 20px;
 }
 
 .app-welcome-shell,
@@ -2860,6 +2864,8 @@ html, body{ height:100%; }
 .app-summary-shell{
   position: relative;
   overflow: hidden;
+  height: auto;
+  min-height: 0;
   padding: 22px !important;
   border-radius: 28px !important;
   background:
