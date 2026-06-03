@@ -3759,9 +3759,9 @@
     function formatVisibleEncounterStep(stepKey) {
       const key = String(stepKey || "").toLowerCase();
       if (key === "hook" || key === "flash_learn") return "Flash Wine Learn";
-      if (key === "deliver" || key === "problem_solve") return "Deliver";
+      if (key === "deliver" || key === "problem_solve") return "Delivery";
       if (key === "observe") return "Guest Read";
-      if (key === "mode") return "Tone";
+      if (key === "mode") return "Mode";
       if (key === "reaction") return "Reaction";
       if (key === "reflection") return "Reflection";
       return String(stepKey || "");
@@ -16326,7 +16326,7 @@ function ensureProgLoaded() {
           pill.className =
             "reaction-spine-node " +
             (node.score > 0 ? "is-positive" : node.score < 0 ? "is-negative" : "is-neutral");
-          pill.innerText = `${node.step} ${node.score > 0 ? "+1" : node.score < 0 ? "-1" : "0"}`;
+          pill.innerText = `${formatVisibleEncounterStep(node.step)} ${node.score > 0 ? "+1" : node.score < 0 ? "-1" : "0"}`;
           line.appendChild(pill);
         });
 
@@ -16404,7 +16404,7 @@ function ensureProgLoaded() {
             stepLabel.setAttribute("x", "40");
             stepLabel.setAttribute("y", String(y - 16));
             stepLabel.setAttribute("class", "reflection-spine-svg-step");
-            stepLabel.textContent = String(node?.step || "").toUpperCase();
+            stepLabel.textContent = String(formatVisibleEncounterStep(node?.step || "") || "").toUpperCase();
             svg.appendChild(stepLabel);
 
             const scoreBadge = document.createElementNS(svgNs, "text");
@@ -16436,7 +16436,7 @@ function ensureProgLoaded() {
           const label = document.createElement("div");
           label.className = "reaction-spine-graphic-label";
           label.innerHTML =
-            `<strong>${escapeHtml(String(node?.step || "").toUpperCase())}</strong>` +
+            `<strong>${escapeHtml(String(formatVisibleEncounterStep(node?.step || "") || "").toUpperCase())}</strong>` +
             `<span>${Number(node?.score || 0) > 0 ? "+" : ""}${Number(node?.score || 0)}</span>`;
           row.appendChild(label);
 
@@ -16490,7 +16490,7 @@ function ensureProgLoaded() {
           stepNode.className = "reaction-journey-step";
           stepNode.innerHTML =
             `<div class="reaction-journey-kicker">STEP ${index + 1}</div>` +
-            `<div class="reaction-journey-main">${escapeHtml(String(item.step || "").toUpperCase() || "—")}</div>`;
+            `<div class="reaction-journey-main">${escapeHtml(String(formatVisibleEncounterStep(item.step || "") || "").toUpperCase() || "—")}</div>`;
           frame.appendChild(stepNode);
 
           const connector = document.createElement("div");
@@ -18045,13 +18045,13 @@ function ensureProgLoaded() {
         if (checks.guestRead) strengths.push({ key: "read", text: "✅ Strength: You read the guest correctly." });
         if (checks.modeStatus === "optimal") strengths.push({ key: "mode", text: "✅ Strength: You matched the Mode perfectly." });
         if (checks.hookStatus === "optimal") strengths.push({ key: "flash_learn", text: "✅ Strength: You completed Flash Learn cleanly." });
-        if (checks.deliveryCorrect) strengths.push({ key: "problem_solve", text: "✅ Strength: Your problem-solve prompt landed cleanly." });
+        if (checks.deliveryCorrect) strengths.push({ key: "problem_solve", text: "✅ Strength: Your delivery landed cleanly." });
 
         // Gap candidates (ordered by leverage)
         if (!checks.guestRead) gaps.push({ key: "read", text: "⚠️ Fix: Your first job is the read. Re-check cues before you pick a Mode." });
         if (checks.modeStatus === "damaging") gaps.push({ key: "mode", text: "⚠️ Fix: Your Mode fought the guest. Switch to the guest’s optimal Mode next time." });
         if (checks.hookStatus === "damaging") gaps.push({ key: "flash_learn", text: "⚠️ Fix: Complete the full Flash Learn before solving the table." });
-        if (!checks.deliveryCorrect) gaps.push({ key: "problem_solve", text: "⚠️ Fix: Pick the stronger guest-specific 2-option prompt." });
+        if (!checks.deliveryCorrect) gaps.push({ key: "problem_solve", text: "⚠️ Fix: Pick the stronger guest-specific delivery." });
 
         // Choose best strength: prioritize Read > Mode > Flash Learn > Problem Solve
         const strengthPriority = ["read", "mode", "flash_learn", "problem_solve"];
@@ -18068,7 +18068,7 @@ function ensureProgLoaded() {
           read: "Next rule: Don’t choose a Mode until you can say: “They want speed / safety / status / proof / vibe.”",
           mode: "Next rule: If your Mode isn’t working, stop explaining — change Mode.",
           flash_learn: "Next rule: Flash Learn gives you the bottle cues before you speak.",
-          problem_solve: "Next rule: Use one clean 2-option prompt built around what this guest values.",
+          problem_solve: "Next rule: Use one clean delivery built around what this guest values.",
           tighten: "Next rule: Cut your words in half and commit."
         };
 
@@ -20327,7 +20327,7 @@ function ensureProgLoaded() {
 
         const prompt = document.createElement("div");
         prompt.className = "encounter-prompt";
-        prompt.innerText = "Problem Solve";
+        prompt.innerText = "Delivery";
         topRow.appendChild(prompt);
         stepContent.appendChild(topRow);
 
@@ -20380,7 +20380,7 @@ function ensureProgLoaded() {
           currentEncounter.deliveryLine1 ||
           "Choose 1 of the 2 answer options for each problem-solve prompt.";
         selectedPreview.innerHTML = `
-          <div class="small-text" style="opacity:.72; margin-bottom:8px;">Problem Solve progress</div>
+          <div class="small-text" style="opacity:.72; margin-bottom:8px;">Delivery progress</div>
           <div>${escapeHtml(`${answeredCount} of ${(currentEncounter.problemSolvePrompts || []).length || 0} prompts answered`)}</div>
           <div class="small-text" style="margin-top:8px; opacity:.78;">${escapeHtml(latestAnswer)}</div>
         `;
@@ -23274,7 +23274,7 @@ function ensureProgLoaded() {
         const btnWelcomeClose = document.getElementById("btnWelcomeClose");
         const btnStatusBackToWelcome = document.getElementById("btnStatusBackToWelcome");
         const btnResetApp = document.getElementById("btnResetApp");
-        const btnBackToSetup = document.getElementById("btnWelcomeBackToSetup");
+        const btnWelcomeBackToSetup = document.getElementById("btnWelcomeBackToSetup");
 
         const btnGoSetup = document.getElementById(ids.btnGoSetup);
         const btnContinue = document.getElementById(ids.btnContinue);
@@ -23300,7 +23300,10 @@ function ensureProgLoaded() {
         const isWaiter = !!identity.isWaiter;
 
         if (btnWelcomeHome && (window.isDemo || window.bcMode === "demo")) {
-          btnWelcomeHome.textContent = "Home";
+          btnWelcomeHome.remove();
+        }
+        if (btnWelcomeBackToSetup && (window.isDemo || window.bcMode === "demo")) {
+          btnWelcomeBackToSetup.remove();
         }
         if (btnStatusBackToWelcome && (window.isDemo || window.bcMode === "demo")) {
           btnStatusBackToWelcome.classList.add("hidden");
@@ -23312,6 +23315,8 @@ function ensureProgLoaded() {
         }
 
         if (isWaiter) {
+          btnWelcomeHome?.remove();
+          btnWelcomeBackToSetup?.remove();
           ["btnWelcomeBackToSetup", "btnGoSetup", "btnSetupWines"].forEach((id) => {
             document.getElementById(id)?.classList.add("hidden");
           });
@@ -23433,7 +23438,10 @@ function ensureProgLoaded() {
 
           bindInput(btnWelcomeClose, () => {
             if (window.isDemo || window.bcMode === "demo") {
-              showScreen("screenHome");
+              try {
+                const msg = { source: "BC_MSG", v: 1, type: "nav_back", backTo: "screenGameDemo" };
+                window.parent?.postMessage?.(msg, "*");
+              } catch {}
               return;
             }
             const msg = { source: "BC_MSG", v: 1, type: "nav_back", backTo: "screenPremiumApp" };
@@ -23452,7 +23460,7 @@ function ensureProgLoaded() {
 
           bindInput(btnStatusBackToWelcome, () => {
             if (window.isDemo || window.bcMode === "demo") {
-              showScreen("screenHome");
+              showScreen("screenWelcome");
               return;
             }
             applyPlaySurfaceMode("full");
@@ -23461,8 +23469,8 @@ function ensureProgLoaded() {
           });
         }
 
-        if (!isWaiter) {
-          bindInput(btnBackToSetup, () => {
+        if (!isWaiter && btnWelcomeBackToSetup) {
+          bindInput(btnWelcomeBackToSetup, () => {
             if (sessionType === "drill") return;
             resetNavState();
             showScreen(ids.setupScreen);
@@ -23560,12 +23568,12 @@ function ensureProgLoaded() {
             console.warn("[BC] session_ended failed", e);
           }
           resetNavState();
-          showScreen(isDemo ? "screenHome" : "screenWelcome");
+          showScreen("screenWelcome");
         });
 
         bindInput(btnBackHomeFromHistory, () => {
           resetNavState();
-          showScreen(isDemo ? "screenHome" : "screenWelcome");
+          showScreen("screenWelcome");
         });
 
         bindInput(btnViewHistory, () => {

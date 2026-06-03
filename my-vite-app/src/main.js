@@ -412,6 +412,7 @@ document.querySelector("#app").innerHTML = `
           </svg>
         </button>
         <div id="premiumTopbarMenuPanel" class="premium-topbar-menu-panel hidden">
+          <button id="btnPremiumSignupMenu" class="btn-ghost hidden" type="button">Premium Sign Up</button>
           <button id="btnOpenMessages" class="btn-ghost" type="button">Messages</button>
           <button id="btnWaiterPerformanceLeaderboard" class="btn-ghost" type="button">Leaderboard</button>
           <button id="btnPremiumWineSetup" class="btn-ghost" type="button" data-tutorial="nav-wine-setup">Wine Setup</button>
@@ -1160,13 +1161,13 @@ document.querySelector("#app").innerHTML = `
       <button id="btnCloseMessages" type="button" style="font-size:12px;">Close</button>
     </div>
 
-    <div id="waiterMessagesThread" style="margin-top:12px; display:flex; flex-direction:column; gap:8px;">
-      <div class="small-text" style="opacity:.8;">No messages yet.</div>
-    </div>
-
     <div style="margin-top:14px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.10);">
       <button id="btnWaiterSendProgress" class="btn-ghost" type="button">Send Progress</button>
       <div id="waiterSendProgressStatus" class="small-text" style="margin-top:6px; opacity:.85;"></div>
+    </div>
+
+    <div id="waiterMessagesThread" style="margin-top:12px; display:flex; flex-direction:column; gap:8px;">
+      <div class="small-text" style="opacity:.8;">No messages yet.</div>
     </div>
   </div>
 
@@ -5738,11 +5739,14 @@ if (!window.__BC_PARENT_BRIDGE__) {
         return;
       }
 
-      // Source gate: only accept messages from mounted premium iframe window.
-      const frame =
-        document.getElementById("bcPremiumFrame") ||
-        document.getElementById("premiumRootFrame");
-      if (!frame || event.source !== frame.contentWindow) return;
+      // Source gate: accept messages from whichever mounted game iframe is active.
+      const candidateFrames = [
+        document.getElementById("bcPremiumFrame"),
+        document.getElementById("premiumRootFrame"),
+        document.getElementById("gameRootDemoFrame"),
+      ].filter(Boolean);
+      const matchedFrame = candidateFrames.find((frame) => event.source === frame.contentWindow);
+      if (!matchedFrame) return;
 
       if (msg.type === "debug_progress_payload") {
         console.log("[PARENT][DEBUG_PROGRESS_PAYLOAD]", msg.payload);
@@ -5832,6 +5836,9 @@ if (!window.__BC_PARENT_BRIDGE__) {
           console.log("[PARENT] NAV_BACK ->", backTo, msg);
 
           destroyPremiumIframe("nav_back");
+          if (backTo === "screenGameDemo") {
+            destroyDemoIframe("nav_back_demo_shell");
+          }
           setPremiumOverlayActive(false);
           showScreen(backTo);
           return;
@@ -6530,17 +6537,41 @@ function renderAppChrome() {
   };
 
   const profile = appState?.profile || {};
-  const restaurant = appState?.restaurant || {};
   const hasSession = !!appState?.session?.user;
-  const statusLabel = hasSession
+  const isDemoCockpit = currentScreenId === "screenGameDemo" && appMode === "demo";
+  const statusLabel = isDemoCockpit
+    ? "DEMO"
+    : hasSession
     ? ((profile?.access_tier || profile?.accessTier || "premium").toString().toUpperCase())
     : "Public Access";
-  const showPremiumBar = currentScreenId === "screenPremiumApp" && hasSession;
-  const showPlayCta = currentScreenId === "screenPremiumApp" && hasSession;
+  const showPremiumBar = (currentScreenId === "screenPremiumApp" && hasSession) || isDemoCockpit;
+  const showPlayCta = (currentScreenId === "screenPremiumApp" && hasSession) || isDemoCockpit;
 
   if (statusEl) statusEl.textContent = statusLabel;
   premiumBarEl?.classList.toggle("hidden", !showPremiumBar);
   playCtaEl?.classList.toggle("hidden", !showPlayCta);
+
+  const premiumSignupBtn = document.getElementById("btnPremiumSignupMenu");
+  const messagesBtn = document.getElementById("btnOpenMessages");
+  const leaderboardBtn = document.getElementById("btnWaiterPerformanceLeaderboard");
+  const wineSetupBtn = document.getElementById("btnPremiumWineSetup");
+  const tutorialBtn = document.getElementById("btnTutorial");
+  const managerBoardBtn = document.getElementById("btnManagerBoard");
+  const profileBtn = document.getElementById("btnOpenProfile");
+  const logoutBtn = document.getElementById("btnLogoutPremium");
+
+  if (isDemoCockpit) {
+    premiumSignupBtn?.classList.remove("hidden");
+    messagesBtn?.classList.add("hidden");
+    leaderboardBtn?.classList.add("hidden");
+    wineSetupBtn?.classList.add("hidden");
+    tutorialBtn?.classList.add("hidden");
+    managerBoardBtn?.classList.add("hidden");
+    profileBtn?.classList.add("hidden");
+    logoutBtn?.classList.toggle("hidden", !hasSession);
+  } else {
+    premiumSignupBtn?.classList.add("hidden");
+  }
 }
 
 function removeGlobalResetButtons() {
@@ -7357,6 +7388,7 @@ function wireParentButtons() {
   const btnOpenMessages = document.getElementById("btnOpenMessages");
   const btnPremiumWineSetup = document.getElementById("btnPremiumWineSetup");
   const btnTutorial = document.getElementById("btnTutorial");
+  const btnPremiumSignupMenu = document.getElementById("btnPremiumSignupMenu");
 
   if (btnManagerBoard && !btnManagerBoard.__bcBound) {
     btnManagerBoard.__bcBound = true;
@@ -7381,6 +7413,11 @@ function wireParentButtons() {
   if (btnOpenMessages && !btnOpenMessages.__bcBound) {
     btnOpenMessages.__bcBound = true;
     btnOpenMessages.addEventListener("click", async () => {
+      const membershipRole = String(normalizeMembershipRole(appState?.profile) || "").toLowerCase();
+      if (membershipRole === "waiter") {
+        await openWaiterMessages();
+        return;
+      }
       await openManagerMessengerWindow("messages_button");
     });
   }
@@ -7396,6 +7433,18 @@ function wireParentButtons() {
     btnTutorial.__bcBound = true;
     btnTutorial.addEventListener("click", () => {
       openTutorialMenu();
+    });
+  }
+
+  if (btnPremiumSignupMenu && !btnPremiumSignupMenu.__bcBound) {
+    btnPremiumSignupMenu.__bcBound = true;
+    btnPremiumSignupMenu.addEventListener("click", () => {
+      closePremiumTopbarMenu();
+      window.__BC_RETURN_TO_DEMO_ON_EXIT_PREMIUM__ = appMode === "demo";
+      routeAuth();
+      setMode("signup");
+      setAuthIntent("premium");
+      setMsg("authMsg", "Premium selected. Sign up or log in below.", "success");
     });
   }
 
@@ -9160,7 +9209,7 @@ function buildGameIframeUrl({
   return base.toString();
 }
 
-function mountGameIframe(targetId, mode /* "demo" | "premium" */) {
+function mountGameIframe(targetId, mode /* "demo" | "premium" */, options = {}) {
   if (isLoggingOut()) {
     console.warn("[BC] mountGameIframe blocked (logging out)", { targetId, mode });
     return;
@@ -9184,10 +9233,14 @@ function mountGameIframe(targetId, mode /* "demo" | "premium" */) {
     window.__BC_IFRAME_EPOCH__ = Date.now();
   }
 
-  // Cache-busting param required — but stable within this mode session
-  const demoFlag = mode === "demo" ? "&demo=1" : "";
-  const epochFlag = mode === "premium" ? `&epoch=${window.__BC_IFRAME_EPOCH__}` : "";
-  const src = `/game/game.html?mode=${encodeURIComponent(mode)}${demoFlag}${epochFlag}&v=${currentIframeVersion}`;
+  const src = buildGameIframeUrl({
+    mode,
+    initialScreen: options?.initialScreen || "",
+    showBack: options?.showBack ?? false,
+    backTo: options?.backTo || "screenPremiumApp",
+    epoch: mode === "premium" ? window.__BC_IFRAME_EPOCH__ : 0,
+    bustCache: true,
+  });
 
   // ✅ Smaller default height to avoid giant empty space before setup
   mount.innerHTML = `
@@ -9276,6 +9329,38 @@ function postNavToPremiumIframe(screen) {
 }
 
 function openPremiumBeginScreen() {
+  if (appMode === "demo") {
+    const tryOpenDemoWelcome = () => {
+      const frame = document.getElementById("gameRootDemoFrame");
+      const nav = frame?.contentWindow?.__BC_NAV__;
+      if (nav && typeof nav.openWelcome === "function") {
+        nav.openWelcome();
+        return true;
+      }
+      return false;
+    };
+
+    closeHud?.();
+    showScreen("screenGameDemo");
+    setPremiumOverlayActive(false);
+
+    if (!document.getElementById("gameRootDemoFrame")) {
+      mountGameIframe("gameRootDemo", "demo", { initialScreen: "screenWelcome" });
+    }
+
+    let attempts = 0;
+    const maxAttempts = 12;
+    const retryOpenDemoWelcome = () => {
+      if (tryOpenDemoWelcome()) return;
+      attempts += 1;
+      if (attempts >= maxAttempts) return;
+      window.setTimeout(retryOpenDemoWelcome, 180);
+    };
+
+    retryOpenDemoWelcome();
+    return;
+  }
+
   const tryOpenBegin = () => {
     const frame = document.getElementById("premiumRootFrame");
     const nav = frame?.contentWindow?.__BC_NAV__;
@@ -12650,7 +12735,11 @@ function wireManagerGameplayAdjustmentsPanel() {
     const btn = document.getElementById(id);
     if (!btn || btn.__bcBound) return;
     btn.__bcBound = true;
-    bindInput(btn, () => setCurrentDifficultyValue(value));
+    btn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setCurrentDifficultyValue(value);
+    });
   };
 
   bind("mbGameplayDifficultyEasy", 1);
@@ -20381,7 +20470,9 @@ async function routeDemo(reason = "manual") {
   setDebug({ step: "route.demo", time: new Date().toISOString(), reason, authed: !!appState.session?.user });
   showScreen("screenGameDemo");
   renderDemoJoinBlock();
-  mountGameIframe("gameRootDemo", "demo");
+  document.getElementById("btnDemoPremium")?.classList.add("hidden");
+  document.getElementById("btnDemoExit")?.classList.add("hidden");
+  destroyDemoIframe("routeDemo:shell_only");
 }
 
 async function routePremium(reason = "manual") {
@@ -20608,6 +20699,7 @@ function isAuthed() {
 
 function routeDemoShellNoAuth() {
   console.log("[ROUTE] demo (no auth)");
+  appMode = "demo";
   showScreen("screenGameDemo");
   setPremiumOverlayActive(false);
   destroyPremiumIframe("routeDemoShellNoAuth");
@@ -20615,7 +20707,9 @@ function routeDemoShellNoAuth() {
   window.BC_DRILL_CONFIG = null;
   setPendingStartDrill(null);
   destroyDemoIframe("routeDemoShellNoAuth:pre");
-  mountGameIframe("gameRootDemo", "demo");
+  document.getElementById("btnDemoPremium")?.classList.add("hidden");
+  document.getElementById("btnDemoExit")?.classList.add("hidden");
+  mountGameIframe("gameRootDemo", "demo", { initialScreen: "screenWelcome" });
 }
 
 function routeAuth() {
@@ -20677,17 +20771,17 @@ async function decideRoute(reason = "decideRoute") {
     await initRestaurantContextAfterAuth();
     if (isHardLoggedOut()) return;
 
-    // 1) Logged out => Auth by default (Demo only if explicitly requested)
+    // 1) Logged out => Demo shell by default
     if (!isAuthed()) {
-      appMode = "public";
+      appMode = "demo";
       if (window.__BC_FORCE_AUTH__) {
         window.__BC_FORCE_AUTH__ = false;
         routeAuth();
         setDebug({ step: "decideRoute.logged_out.force_auth", time: new Date().toISOString(), reason });
         return;
       }
-      routeAuth();
-      setDebug({ step: "decideRoute.logged_out.auth", time: new Date().toISOString(), reason });
+      routeDemoShellNoAuth();
+      setDebug({ step: "decideRoute.logged_out.demo_shell", time: new Date().toISOString(), reason });
       return;
     }
 
@@ -21003,6 +21097,7 @@ function setCurrentDifficultyValue(nextValue) {
   }
 
   renderHudDifficultyControls?.();
+  renderManagerGameplayAdjustmentsPanel?.();
 }
 
 function renderHudDifficultyControls() {
@@ -21967,6 +22062,14 @@ document.getElementById("btnHomePremium").addEventListener("click", async () => 
 document.getElementById("btnHomeExitPremium").addEventListener("click", () => {
   setAuthIntent("login");
   setMsg("authMsg", "", "normal");
+  if (window.__BC_RETURN_TO_DEMO_ON_EXIT_PREMIUM__) {
+    window.__BC_RETURN_TO_DEMO_ON_EXIT_PREMIUM__ = false;
+    if (appState.session?.user) {
+      void routeDemo("exit_premium");
+    } else {
+      routeDemoShellNoAuth();
+    }
+  }
 });
 
 document.getElementById("btnAuthSubmit").addEventListener("click", submitAuth);
@@ -22267,15 +22370,11 @@ async function enforceAuthRoute() {
   const session = data?.session || null;
 
   if (!session) {
-    console.log("[ROUTE] no session -> forcing public mode");
+    console.log("[ROUTE] no session -> forcing demo shell");
 
-    appMode = "public";
+    appMode = "demo";
     window.__BC_FORCE_AUTH__ = false;
-
-    try { setMode("login"); } catch {}
-    try { setAuthIntent("login"); } catch {}
-
-    showScreen("screenHome");
+    routeDemoShellNoAuth();
     return;
   }
 
@@ -22304,16 +22403,16 @@ supabase.auth.onAuthStateChange((event, session) => {
       appState.session = session || null;
 
       if (!session) {
-        console.log("[AUTH] session gone -> forcing login screen");
+        console.log("[AUTH] session gone -> forcing demo shell");
         appState.profile = null;
         appState.restaurant = null;
         appState.activeRestaurantId = null;
-        appMode = "public";
+        appMode = "demo";
 
         // Destroy all premium/demo shells
         try { document.querySelectorAll("iframe").forEach((f) => f.remove()); } catch {}
 
-        showScreen("screenHome");
+        routeDemoShellNoAuth();
         hideAllLogoutButtons();
         hideDemoButtonsOnLogin();
         document
@@ -22330,7 +22429,7 @@ supabase.auth.onAuthStateChange((event, session) => {
       await syncAuthUi();
     } catch {
       closeHud();
-      showScreen("screenHome");
+      routeDemoShellNoAuth();
     }
   }, 150);
 });

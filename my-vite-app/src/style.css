@@ -2820,8 +2820,8 @@ html[data-bc-mobile-env="true"] #screenManagerBoard #mbInstrSend{
 }
 
 #screenWaiterLeaderboard{
-  background: rgba(0,0,0,0.42);
-  backdrop-filter: blur(4px);
+  background: transparent;
+  backdrop-filter: none;
 }
 
 #screenProfile.hidden,
