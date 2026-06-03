@@ -349,6 +349,19 @@
     }
     function measureIframeContentHeight() {
       const activeScreen = document.querySelector(".screen.active");
+      const compactShell = activeScreen?.querySelector?.(".bc-shell-center");
+      const compactCard = activeScreen?.querySelector?.(".app-welcome-shell, .app-history-shell, .app-summary-shell");
+      if (compactShell || compactCard) {
+        const shellHeight = Math.max(
+          compactShell?.scrollHeight || 0,
+          compactShell?.offsetHeight || 0,
+          compactCard?.scrollHeight || 0,
+          compactCard?.offsetHeight || 0
+        );
+        if (shellHeight > 0) {
+          return shellHeight + 24;
+        }
+      }
       return Math.max(
         document.documentElement?.scrollHeight || 0,
         document.body?.scrollHeight || 0,
@@ -360,9 +373,15 @@
     }
     function reportIframeHeight(reason = "layout") {
       if (!isActuallyIframe()) return false;
+      const activeScreen = document.querySelector(".screen.active");
       const height = measureIframeContentHeight();
       if (!Number.isFinite(height) || height <= 0) return false;
-      return postToParent({ type: "BC_IFRAME_HEIGHT", height, reason });
+      return postToParent({
+        type: "BC_IFRAME_HEIGHT",
+        height,
+        reason,
+        screenId: activeScreen?.id || null,
+      });
     }
     function scheduleIframeHeightReport(reason = "layout") {
       try { clearTimeout(window.__BC_HEIGHT_REPORT_T__); } catch {}
@@ -23001,6 +23020,9 @@ function ensureProgLoaded() {
             showScreen("screenHome");
             return;
           }
+          try { localStorage.setItem(coverKey, "true"); } catch {}
+          applyPlaySurfaceMode("encounter_only");
+          showScreen("screenPlay");
           beginOrResumeProgressionRun();
           await startPlayWithReadyGate();
         });

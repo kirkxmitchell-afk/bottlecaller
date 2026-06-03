@@ -1128,8 +1128,8 @@ document.querySelector("#app").innerHTML = `
       </div>
 
       <!-- Game lives here (isolated) -->
-      <div id="gameRootDemo" style="margin-top:10px;"></div>
-      <div class="small" style="margin-top:8px;">
+      <div id="gameRootDemo"></div>
+      <div id="demoContactFooter" class="small hidden" style="margin-top:8px;">
         Contact us for purchase:
         <a href="mailto:hello@bottlecaller.com" style="color:#fff;">hello@bottlecaller.com</a>
       </div>
@@ -8458,10 +8458,10 @@ async function buildLeaderboardUserDetail(userId, restaurantId, fallbackUser = {
     }
   }
 
-  const skillShape = fetchedSkillTotal > 0
-    ? fetchedSkillShape
-    : fallbackSkillTotal > 0
-      ? fallbackSkillShape
+  const skillShape = fallbackSkillTotal > 0
+    ? fallbackSkillShape
+    : fetchedSkillTotal > 0
+      ? fetchedSkillShape
       : crossRestaurantSkillTotal > 0
         ? crossRestaurantSkillShape
       : derivedSkillTotal > 0
@@ -8527,7 +8527,7 @@ async function buildLeaderboardUserDetail(userId, restaurantId, fallbackUser = {
     challengeSuccessRate,
     premiumSuccessRate,
     masteryRate,
-    lastActiveAt: firstNonEmpty(progressionRow?.updated_at, encounterRows[0]?.occurred_at, messageRows[0]?.created_at, fallbackUser?.lastActiveAt),
+    lastActiveAt: latestTimestamp(progressionRow?.updated_at, encounterRows[0]?.occurred_at, messageRows[0]?.created_at, fallbackUser?.lastActiveAt),
     eligibilityTier: servedTier,
     readiness,
     readinessLabel,
@@ -9241,6 +9241,10 @@ function mountGameIframe(targetId, mode /* "demo" | "premium" */, options = {}) 
     epoch: mode === "premium" ? window.__BC_IFRAME_EPOCH__ : 0,
     bustCache: true,
   });
+  const initialHeight =
+    mode === "demo" && options?.initialScreen === "screenWelcome"
+      ? 300
+      : 420;
 
   // ✅ Smaller default height to avoid giant empty space before setup
   mount.innerHTML = `
@@ -9250,7 +9254,7 @@ function mountGameIframe(targetId, mode /* "demo" | "premium" */, options = {}) 
       title="BottleCaller Game"
       style="
         width: 100%;
-        height: 420px;
+        height: ${initialHeight}px;
         border: 1px solid rgba(255,255,255,0.10);
         border-radius: 14px;
         background: rgba(0,0,0,0.35);
@@ -9411,8 +9415,13 @@ window.addEventListener("message", (event) => {
   if (!Number.isFinite(h)) return;
 
   const isMobile = document.documentElement?.dataset?.bcMobileEnv === "true";
+  const isDemoWelcome =
+    String(data.mode || "").toLowerCase() === "demo" &&
+    String(data.screenId || "") === "screenWelcome";
   const maxHeight = isMobile ? 6000 : 860;
-  const minHeight = isMobile ? 320 : 360;
+  const minHeight = isDemoWelcome
+    ? (isMobile ? 220 : 200)
+    : (isMobile ? 320 : 360);
   const clamped = Math.max(minHeight, Math.min(maxHeight, h + (isMobile ? 12 : 24)));
   frame.style.setProperty("height", clamped + "px", "important");
 });
@@ -10373,6 +10382,23 @@ function firstNonEmpty(...values) {
   return "";
 }
 
+function latestTimestamp(...values) {
+  let bestValue = "";
+  let bestTs = -Infinity;
+  for (const value of values) {
+    if (value == null) continue;
+    const str = String(value).trim();
+    if (!str) continue;
+    const ts = new Date(str).getTime();
+    if (!Number.isFinite(ts)) continue;
+    if (ts > bestTs) {
+      bestTs = ts;
+      bestValue = str;
+    }
+  }
+  return bestValue;
+}
+
 function formatPercent(value, digits = 0) {
   const num = Number(value);
   if (!Number.isFinite(num)) return "—";
@@ -10822,7 +10848,7 @@ async function loadManagerInsights() {
   root.innerHTML = `<div class="card"><div class="small-text">Loading performance…</div></div>`;
 
   try {
-    const model = await getManagerPerformanceModel({ force: false });
+    const model = await getManagerPerformanceModel({ force: true });
     window.__BC_MB_PERFORMANCE_MODEL__ = model;
     window.__BC_MB_SELECTION_MODEL__ = {
       ...normalizeSelectionData(model),
@@ -11296,7 +11322,7 @@ async function getManagerPerformanceModel({ force = false } = {}) {
           ) || 0
         );
 
-    const lastActiveAt = firstNonEmpty(
+    const lastActiveAt = latestTimestamp(
       progressionStateRow?.updated_at,
       leaderboardRow?.last_activity_at,
       latestRow?.latest_occurred_at,
@@ -17126,7 +17152,7 @@ async function buildSelfProfilePerformanceUser() {
     challengeCount: challengeRows,
     premiumSuccessRate,
     masteryRate,
-    lastActiveAt: firstNonEmpty(progressionRow?.updated_at, encounterRows[0]?.occurred_at, messageRows[0]?.created_at),
+    lastActiveAt: latestTimestamp(progressionRow?.updated_at, encounterRows[0]?.occurred_at, messageRows[0]?.created_at),
     eligibilityTier: servedTier,
     readiness,
     readinessLabel,
@@ -21013,8 +21039,48 @@ async function loadHudSkillSnapshot() {
   };
 }
 
+async function loadProfileSkillShape() {
+  const ctx = getHudActorContext();
+  if (!ctx.userId || !ctx.restaurantId) {
+    return {
+      read: 0,
+      framing: 0,
+      delivery: 0,
+      recovery: 0,
+      closing: 0,
+    };
+  }
+
+  const { data, error } = await supabase
+    .from("bc_skill_snapshots_v1")
+    .select(`
+      read_pct,
+      framing_pct,
+      delivery_pct,
+      recovery_pct,
+      closing_pct,
+      created_at
+    `)
+    .eq("user_id", ctx.userId)
+    .eq("restaurant_id", ctx.restaurantId)
+    .order("created_at", { ascending: false })
+    .limit(3);
+
+  if (error || !Array.isArray(data) || !data.length) {
+    return {
+      read: 0,
+      framing: 0,
+      delivery: 0,
+      recovery: 0,
+      closing: 0,
+    };
+  }
+
+  return averageSkillShape(data);
+}
+
 async function renderHudSkillDashboard() {
-  const snap = await loadHudSkillSnapshot();
+    const snap = await loadProfileSkillShape();
 
   const setText = (id, value) => {
     const el = document.getElementById(id);
