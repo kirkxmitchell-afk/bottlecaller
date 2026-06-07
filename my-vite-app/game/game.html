@@ -4797,13 +4797,16 @@
       <div class="bc-card bc-stage-card panel cover-screen app-welcome-shell">
         <div class="app-welcome-header">
           <h2>Welcome to BottleCaller</h2>
-          <p class="app-welcome-subtitle">BottleCaller trains servers to sell the right wine by matching guest psychology with the right tone and prompt style — in under 5 minutes.</p>
+          <p class="app-welcome-subtitle" id="welcomeSubtitle">BottleCaller trains servers to sell the right wine by matching guest psychology with the right tone and prompt style — in under 5 minutes.</p>
         </div>
         <ul class="cover-list" id="welcomeBulletList">
           <li>Diagnose the guest</li>
           <li id="welcomeBulletModeHook">Flash Wine Learn the Wine</li>
           <li>Problem-solve with a 2-option prompt</li>
         </ul>
+        <div class="app-welcome-explainer" id="welcomeExplainer">
+          <strong>How to play:</strong> Press <strong>Start</strong>, read the table scene, then choose one response card at a time to move the guest toward the right bottle.
+        </div>
         <div class="button-row app-welcome-actions">
           <button id="btnWelcomeStart" data-tutorial="play-button" type="button">Start</button>
           <button id="btnWelcomeHome" type="button" class="btn-ghost">Status menu</button>
@@ -8409,8 +8412,31 @@ function ensureProgLoaded() {
 
       // ---------- Welcome copy ----------
       const welcomeFooterNote = document.getElementById("welcomeFooterNote");
+      const welcomeSubtitle = document.getElementById("welcomeSubtitle");
+      const welcomeBulletList = document.getElementById("welcomeBulletList");
+      const welcomeExplainer = document.getElementById("welcomeExplainer");
+      if (isDemo) {
+        if (welcomeSubtitle) {
+          welcomeSubtitle.textContent =
+            "Read the table, choose one response card at a time, and guide the guest toward the bottle without forcing the close.";
+        }
+        if (welcomeBulletList) {
+          welcomeBulletList.innerHTML = `
+            <li>Press <strong>Start</strong> to enter the guest scene and read the clues.</li>
+            <li>Choose your next response from <strong>Ask</strong>, <strong>Recommend</strong>, or <strong>Commit</strong>.</li>
+            <li>After every guest reply, follow the instruction prompt to decide whether to keep reading, recommend, commit, or walk away.</li>
+          `;
+        }
+        if (welcomeExplainer) {
+          welcomeExplainer.innerHTML = `
+            <strong>How the demo works:</strong> Each encounter gives you a table scene, guest dialogue, and response cards. Start with the card that best fits the table, then keep choosing the next card the prompt asks for until you either land the bottle, preserve the experience, or lose the table.
+          `;
+        }
+      }
       if (welcomeFooterNote) {
-        welcomeFooterNote.textContent = isDemo ? "Demo mode" : "";
+        welcomeFooterNote.textContent = isDemo
+          ? "Demo tip: the encounter ends when you secure the bottle, walk away cleanly, or the guest shuts down. Walk Away only appears once friction reaches critical resistance."
+          : "";
       }
 
       // ---------- Keys / limits ----------
@@ -23122,6 +23148,38 @@ function ensureProgLoaded() {
         return "Read the table, choose the right interaction, and move the guest without creating friction.";
       }
 
+      function getV2NextStepInstruction(snapshot) {
+        const outcome = String(snapshot?.outcome || "");
+        if (outcome === "premium_success" || outcome === "standard_success" || outcome === "weak_success") {
+          return "The encounter is complete. Continue to the next Tier 1 table or replay this one to try a cleaner path.";
+        }
+        if (outcome === "neutral_exit") {
+          return "You preserved the guest experience. Continue to the next table when you're ready.";
+        }
+        if (outcome === "failure") {
+          return "The table shut down. Replay to try a different read, or continue to the next Tier 1 encounter.";
+        }
+        if (snapshot?.walkAwayUnlocked) {
+          return "Critical resistance reached. You can keep trying to recover with a better line, or choose Walk Away to preserve the guest experience.";
+        }
+        if ((snapshot?.turnCount || 0) <= 0) {
+          return "Start by choosing one card. Ask is the safest opening move if you still need to read the table.";
+        }
+        if ((snapshot?.turnCount || 0) === 1 && snapshot?.progressMood === "guarded") {
+          return "The guest is still guarded. Ask again or make a more fitting recommendation before you commit.";
+        }
+        if (snapshot?.progressMood === "warming_up") {
+          return "The table is opening up. Choose the next card that moves them forward without adding pressure.";
+        }
+        if (snapshot?.progressMood === "engaged") {
+          return "Momentum is building. A strong recommendation can set up your close, but do not commit too early.";
+        }
+        if (snapshot?.progressMood === "ready") {
+          return "The guest looks ready. Choose Commit if you think you have enough trust, or ask/recommend once more if the fit still feels loose.";
+        }
+        return "Choose the next response card to continue the encounter.";
+      }
+
       function isV2TerminalOutcome(outcome) {
         const value = String(outcome || "");
         return (
@@ -23231,6 +23289,20 @@ function ensureProgLoaded() {
         const moodDescriptor = getV2MoodDescriptor(snapshot);
         const isTerminal = isV2TerminalOutcome(snapshot.outcome);
         const lesson = String(encounter?.lesson || "");
+        const nextStepInstruction = getV2NextStepInstruction(snapshot);
+        const progressNodes = Array.from({ length: Math.max(1, snapshot.encounterCount || 1) }, (_, index) => {
+          const encounterNumber = index + 1;
+          const nodeClass =
+            encounterNumber < snapshot.encounterOrdinal
+              ? "v2-progress-node is-complete"
+              : encounterNumber === snapshot.encounterOrdinal
+                ? "v2-progress-node is-active"
+                : "v2-progress-node";
+          return `<span class="${nodeClass}"></span>`;
+        }).join("");
+        const walkAwayHint = snapshot.walkAwayUnlocked
+          ? "Walk Away is now available because the table has reached critical resistance."
+          : "Walk Away unlocks only when friction reaches critical resistance.";
 
         stepContent.dataset.stage = "observe";
         stepContent.dataset.signal =
@@ -23249,13 +23321,7 @@ function ensureProgLoaded() {
                   <span>Encounter ${String(snapshot.encounterOrdinal).padStart(3, "0")} of ${snapshot.encounterCount}</span>
                 </div>
                 <h2 class="v2-encounter-title">${escapeHtml(snapshot.encounterTitle)}</h2>
-                <div class="v2-progress-rail" aria-hidden="true">
-                  <span class="v2-progress-node is-active"></span>
-                  <span class="v2-progress-node"></span>
-                  <span class="v2-progress-node"></span>
-                  <span class="v2-progress-node"></span>
-                  <span class="v2-progress-node"></span>
-                </div>
+                <div class="v2-progress-rail" style="--v2-progress-count:${Math.max(1, snapshot.encounterCount || 1)}" aria-hidden="true">${progressNodes}</div>
               </div>
               <div class="v2-region-mark">SA</div>
             </div>
@@ -23304,6 +23370,11 @@ function ensureProgLoaded() {
                 <div class="v2-state-meta">${escapeHtml(outcome)}</div>
               </div>
             </div>
+            <div class="v2-guidance-card">
+              <div class="v2-guidance-label">What To Do Next</div>
+              <p class="v2-guidance-copy">${escapeHtml(nextStepInstruction)}</p>
+              <div class="v2-guidance-meta">${escapeHtml(walkAwayHint)}</div>
+            </div>
             ${isTerminal ? `
               <div class="v2-status-card" style="margin-top:12px;">
                 <div><strong>Lesson:</strong> ${escapeHtml(lesson)}</div>
@@ -23343,7 +23414,9 @@ function ensureProgLoaded() {
               .join("")
           : "";
 
-        const actionLabel = selectedGroup ? v2HarnessLabel(selectedGroup) : "No Actions";
+        const actionLabel = selectedGroup
+          ? `Choose one ${v2HarnessLabel(selectedGroup)} response card to continue the encounter.`
+          : "The encounter is complete. Continue, replay, or go back to welcome.";
         stepButtons.innerHTML = `
           <div class="v2-action-shell">
             <div class="v2-action-header">${groupButtons}</div>
