@@ -4848,6 +4848,89 @@ html, body{ height:100%; }
   #bcHudBottom .bc-status-wrap{
     width: 100%;
   }
+
+  .v2-play-shell{
+    gap: 10px;
+  }
+
+  .v2-play-header{
+    grid-template-columns: 56px minmax(0,1fr) 48px;
+    gap: 10px;
+    padding: 12px;
+    border-radius: 18px;
+  }
+
+  .v2-crest,
+  .v2-region-mark{
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    font-size: 24px;
+  }
+
+  .v2-header-topline{
+    gap: 8px;
+    font-size: 10px;
+    letter-spacing: .12em;
+  }
+
+  .v2-encounter-title{
+    font-size: clamp(24px, 7vw, 34px);
+    line-height: 1.06;
+  }
+
+  .v2-progress-rail{
+    gap: 6px;
+  }
+
+  .v2-scene-card,
+  .v2-quote-row{
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .v2-scene-text,
+  .v2-status-card,
+  .v2-state-card,
+  .v2-quote-card,
+  .v2-action-shell,
+  .v2-guidance-card{
+    border-radius: 18px;
+  }
+
+  .v2-state-grid{
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .v2-action-header{
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0,1fr));
+    gap: 8px;
+  }
+
+  .v2-group-button{
+    min-width: 0;
+    width: 100%;
+  }
+
+  .v2-action-grid{
+    grid-template-columns: repeat(2, minmax(0,1fr));
+    gap: 10px;
+  }
+
+  .v2-action-card{
+    min-height: 96px;
+    padding: 12px 10px;
+  }
+
+  .v2-action-title{
+    font-size: 18px;
+  }
+
+  .v2-action-copy{
+    font-size: 11px;
+  }
 }
 
 @media (max-width: 640px){
@@ -4886,5 +4969,82 @@ html, body{ height:100%; }
 
   #bcRail .bc-rail-body{
     font-size: 12px;
+  }
+
+  .v2-play-header{
+    grid-template-columns: 1fr;
+    justify-items: start;
+  }
+
+  .v2-crest{
+    order: 1;
+  }
+
+  .v2-header-copy{
+    order: 2;
+    width: 100%;
+  }
+
+  .v2-region-mark{
+    order: 3;
+    justify-self: end;
+  }
+
+  .v2-header-topline{
+    flex-direction: column;
+    align-items: flex-start;
+    margin-bottom: 6px;
+  }
+
+  .v2-encounter-title{
+    font-size: 24px;
+  }
+
+  .v2-scene-copy,
+  .v2-guidance-copy{
+    font-size: 14px;
+  }
+
+  .v2-quote-card{
+    padding: 16px 16px 16px 60px;
+  }
+
+  .v2-quote-card p{
+    font-size: 20px;
+    line-height: 1.3;
+  }
+
+  .v2-quote-mark{
+    left: 16px;
+    top: 14px;
+    width: 30px;
+    height: 30px;
+    font-size: 22px;
+  }
+
+  .v2-mood-value,
+  .v2-state-value{
+    font-size: 28px;
+  }
+
+  .v2-action-header,
+  .v2-action-grid{
+    grid-template-columns: 1fr;
+  }
+
+  .v2-action-caption{
+    margin-top: 12px;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .v2-action-shell .button-row{
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .v2-action-shell .button-row .btn{
+    width: 100%;
   }
 }
