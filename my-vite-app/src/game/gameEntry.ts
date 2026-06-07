@@ -15,6 +15,7 @@ if (window.self !== window.top) {
 
 import { installEngineBridge } from "./engineBridge";
 import { ENCOUNTERS, validateEncounters } from "./encounter";
+import { createDemoRuntimeV2Api } from "./runtimeV2";
 import * as WineBridge from "./wineBridge";
 import * as EventLogBridge from "./eventLogBridge";
 import * as ProgressionBridge from "./progressionBridge.ts";
@@ -35,6 +36,7 @@ declare global {
     __BC_GAME_ENTRY_INSTALLED__?: boolean;
     __BC_CTX__?: any;
     __BC_PROGRESSION__?: any;
+    __BC_V2_HARNESS__?: any;
   }
 }
 
@@ -108,12 +110,19 @@ function getCtxFromWindow() {
 
   // Expose encounters -> game.html can read this without importing TS
   window.__BC_ENCOUNTERS__ = ENCOUNTERS;
+  const v2HarnessEnabled =
+    new URLSearchParams(window.location.search).get("bcV2") === "1";
+  window.__BC_V2_HARNESS__ = {
+    enabled: v2HarnessEnabled,
+    api: createDemoRuntimeV2Api(),
+  };
 
   console.log("[BC] EngineBridge installed ✅", window.EngineBridge);
   console.log("[BC] WineBridge installed ✅", window.WineBridge);
   console.log("[BC] ProgressionBridge installed ✅", window.ProgressionBridge);
   console.log("[BC] TournamentBridge installed ✅", window.TournamentBridge);
   console.log("[BC] ReactionRuntime installed ✅", window.ReactionRuntime);
+  console.log("[BC] V2 harness installed ✅", { enabled: v2HarnessEnabled });
   console.log("[BC] Encounters loaded ✅", {
     demo: ENCOUNTERS.demo.length,
     premium: ENCOUNTERS.premium.length,

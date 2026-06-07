@@ -23048,6 +23048,364 @@ function ensureProgLoaded() {
         );
       }
 
+      function isV2DemoHarnessEnabled() {
+        return !!(window.__BC_V2_HARNESS__?.enabled && (window.isDemo || window.bcMode === "demo"));
+      }
+
+      function getV2HarnessApi() {
+        return window.__BC_V2_HARNESS__?.api || null;
+      }
+
+      function v2HarnessLabel(value) {
+        return String(value || "")
+          .replaceAll("_", " ")
+          .replace(/\b\w/g, (m) => m.toUpperCase());
+      }
+
+      function getV2EncounterChoiceLine(encounter, group, type) {
+        if (!encounter?.choiceLines) return "";
+        if (group === "ask") return String(encounter.choiceLines.ask?.[type] || "");
+        if (group === "recommend") return String(encounter.choiceLines.recommend?.[type] || "");
+        if (group === "commit") return String(encounter.choiceLines.commit?.[type] || "");
+        if (group === "walk_away") return "Step away cleanly and preserve the guest experience.";
+        return "";
+      }
+
+      function getV2MoodDescriptor(snapshot) {
+        const progressMood = String(snapshot?.progressMood || "");
+        const frustrationMood = String(snapshot?.frustrationMood || "");
+        if (snapshot?.outcome === "premium_success") return "Table fully aligned";
+        if (snapshot?.outcome === "standard_success") return "Table ready to commit";
+        if (snapshot?.outcome === "weak_success") return "Close secured with friction";
+        if (snapshot?.outcome === "neutral_exit") return "Experience preserved";
+        if (snapshot?.outcome === "failure") return "Table lost";
+        if (frustrationMood === "critical_resistance") return "Critical resistance";
+        if (progressMood === "ready") return "Ready to commit";
+        if (progressMood === "engaged") return "Strong momentum";
+        if (progressMood === "warming_up") return "Warming up";
+        return "Guarded";
+      }
+
+      function getV2ReactiveQuote(snapshot, encounter, reaction = "") {
+        if (reaction) return reaction;
+        if (snapshot?.outcome === "premium_success") return "Perfect. That's exactly the bottle we were hoping you'd land on.";
+        if (snapshot?.outcome === "standard_success") return "Great, that sounds like the right call for us.";
+        if (snapshot?.outcome === "weak_success") return "Alright, let's do it.";
+        if (snapshot?.outcome === "neutral_exit") return "No problem. Thanks for reading the table and leaving it there.";
+        if (snapshot?.outcome === "failure") return "We'll leave it, thanks.";
+        if (snapshot?.frustrationMood === "critical_resistance") return "You're losing the table. One more bad push and the guest will shut down.";
+        if (snapshot?.progressMood === "ready") return "They're close. A clean commit should land this.";
+        if (snapshot?.progressMood === "engaged") return "The guest is leaning in. Keep the rhythm clean.";
+        if (snapshot?.progressMood === "warming_up") return encounter?.verbalClue || "The guest is starting to open up.";
+        return encounter?.verbalClue || "";
+      }
+
+      function getV2FeedbackLine(snapshot, reaction = "") {
+        if (snapshot?.outcome === "premium_success") {
+          return "You read the pressure cleanly and committed at the right moment.";
+        }
+        if (snapshot?.outcome === "standard_success") {
+          return "The guest moved with you. The table was ready enough to close.";
+        }
+        if (snapshot?.outcome === "weak_success") {
+          return "You still got the bottle over the line, but with more friction than ideal.";
+        }
+        if (snapshot?.outcome === "neutral_exit") {
+          return "Good restraint. You preserved the guest experience instead of forcing the sale.";
+        }
+        if (snapshot?.outcome === "failure") {
+          return "The table shut down. You created too much pressure before the guest was ready.";
+        }
+        if (reaction) {
+          return "The guest is reacting to your line. Watch the mood before you commit.";
+        }
+        return "Read the table, choose the right interaction, and move the guest without creating friction.";
+      }
+
+      function isV2TerminalOutcome(outcome) {
+        const value = String(outcome || "");
+        return (
+          value === "premium_success" ||
+          value === "standard_success" ||
+          value === "weak_success" ||
+          value === "neutral_exit" ||
+          value === "failure"
+        );
+      }
+
+      function emitV2HarnessOutcome(snapshot, session, lastReaction = "") {
+        if (!snapshot || !session || !isV2TerminalOutcome(snapshot.outcome)) return;
+        if (session.outcomeEmitted) return;
+        session.outcomeEmitted = true;
+
+        try {
+          const payload = {
+            v: 1,
+            engineVersion: "v2_preview",
+            temporary: true,
+            encounterId: snapshot.encounterId,
+            encounterTitle: snapshot.encounterTitle,
+            encounterTier: snapshot.tier,
+            serviceStage: snapshot.serviceStage,
+            targetRecommendAngle: snapshot.targetRecommendAngle || null,
+            outcome: snapshot.outcome,
+            authorityDelta: Number(snapshot.authorityDelta || 0),
+            progress: Number(snapshot.progress || 0),
+            frustration: Number(snapshot.frustration || 0),
+            progressMood: snapshot.progressMood,
+            frustrationMood: snapshot.frustrationMood,
+            walkAwayUnlocked: !!snapshot.walkAwayUnlocked,
+            turnCount: Number(snapshot.turnCount || 0),
+            bestPath: Array.isArray(snapshot.bestPath) ? snapshot.bestPath : [],
+            product: session.product
+              ? {
+                  id: session.product.id || null,
+                  name: session.product.name || null,
+                  category: session.product.category || null,
+                  style: session.product.style || null,
+                  region: session.product.region || null,
+                }
+              : null,
+            history: Array.isArray(session.gameState?.history)
+              ? session.gameState.history.map((item) => ({
+                  turn: item.turn,
+                  choice: item.choice,
+                  quality: item.quality,
+                  progressDelta: item.progressDelta,
+                  frustrationDelta: item.frustrationDelta,
+                  resultingProgress: item.resultingProgress,
+                  resultingFrustration: item.resultingFrustration,
+                  reaction: item.reaction,
+                }))
+              : [],
+            scene: {
+              family: session.encounter?.family || null,
+              hiddenPressure: session.encounter?.hiddenPressure || null,
+              masterProfile: session.encounter?.masterProfile || null,
+              variant: session.encounter?.variant || null,
+            },
+            latestReaction: lastReaction || "",
+          };
+          bcEmitEvent("encounter_resolved_v2_preview", payload);
+        } catch (e) {
+          console.warn("[BC][V2] emitV2HarnessOutcome failed", e);
+        }
+      }
+
+      function renderV2HarnessPlay(snapshot, reaction = "") {
+        const stepHeader = document.getElementById("stepHeader");
+        const wineDisplayName = document.getElementById("wineDisplayName");
+        const stepContent = document.getElementById("stepContent");
+        const feedbackLine = document.getElementById("bcFeedbackLine");
+        const stepButtons = document.getElementById("stepButtons");
+        const api = getV2HarnessApi();
+        if (!stepHeader || !wineDisplayName || !stepContent || !feedbackLine || !stepButtons || !snapshot || !api) {
+          return;
+        }
+
+        const session = api.getSession?.() || null;
+        const encounter = session?.encounter || null;
+
+        const selectedGroup =
+          window.__BC_V2_HARNESS_STATE__?.selectedGroup &&
+          snapshot.availableGroups.includes(window.__BC_V2_HARNESS_STATE__.selectedGroup)
+            ? window.__BC_V2_HARNESS_STATE__.selectedGroup
+            : (snapshot.availableGroups[0] || null);
+        window.__BC_V2_HARNESS_STATE__ = {
+          ...(window.__BC_V2_HARNESS_STATE__ || {}),
+          selectedGroup,
+        };
+
+        stepHeader.textContent = `Tier ${snapshot.tier} • Encounter ${String(snapshot.encounterOrdinal).padStart(3, "0")} • ${snapshot.encounterTitle}`;
+        wineDisplayName.textContent = snapshot.productName
+          ? `Product: ${snapshot.productName}`
+          : `Encounter: ${snapshot.encounterTitle}`;
+        feedbackLine.textContent = getV2FeedbackLine(snapshot, reaction);
+
+        const bestPath = Array.isArray(snapshot.bestPath) ? snapshot.bestPath.join(" → ") : "";
+        const outcome = snapshot.outcome ? v2HarnessLabel(snapshot.outcome) : "In Progress";
+        const angle = snapshot.targetRecommendAngle ? v2HarnessLabel(snapshot.targetRecommendAngle) : "Flexible";
+        const quote = getV2ReactiveQuote(snapshot, encounter, reaction);
+        const scene = encounter?.scene || "";
+        const visualClues = Array.isArray(encounter?.visualClues) ? encounter.visualClues : [];
+        const moodDescriptor = getV2MoodDescriptor(snapshot);
+        const isTerminal = isV2TerminalOutcome(snapshot.outcome);
+        const lesson = String(encounter?.lesson || "");
+
+        stepContent.dataset.stage = "observe";
+        stepContent.dataset.signal =
+          snapshot.frustrationMood === "critical_resistance"
+            ? "red"
+            : snapshot.progressMood === "ready"
+              ? "green"
+              : "yellow";
+        stepContent.innerHTML = `
+          <section class="v2-play-shell">
+            <div class="v2-play-header">
+              <div class="v2-crest">B</div>
+              <div class="v2-header-copy">
+                <div class="v2-header-topline">
+                  <span>Tier ${snapshot.tier}</span>
+                  <span>Encounter ${String(snapshot.encounterOrdinal).padStart(3, "0")} of ${snapshot.encounterCount}</span>
+                </div>
+                <h2 class="v2-encounter-title">${escapeHtml(snapshot.encounterTitle)}</h2>
+                <div class="v2-progress-rail" aria-hidden="true">
+                  <span class="v2-progress-node is-active"></span>
+                  <span class="v2-progress-node"></span>
+                  <span class="v2-progress-node"></span>
+                  <span class="v2-progress-node"></span>
+                  <span class="v2-progress-node"></span>
+                </div>
+              </div>
+              <div class="v2-region-mark">SA</div>
+            </div>
+
+            <div class="v2-scene-card">
+              <div class="v2-scene-text">
+                <div class="v2-scene-label">Table Scene</div>
+                <p class="v2-scene-copy">${escapeHtml(scene)}</p>
+                <ul class="v2-clue-list">
+                  ${visualClues.map((clue) => `<li>${escapeHtml(clue)}</li>`).join("")}
+                </ul>
+              </div>
+              <div class="v2-mood-pill">
+                <div class="v2-mood-label">Table Mood</div>
+                <div class="v2-mood-value">${escapeHtml(v2HarnessLabel(snapshot.progressMood))}</div>
+                <div class="v2-mood-detail">${escapeHtml(moodDescriptor)}</div>
+              </div>
+            </div>
+
+            <div class="v2-quote-row">
+              <blockquote class="v2-quote-card">
+                <span class="v2-quote-mark">“</span>
+                <p>${escapeHtml(quote)}</p>
+              </blockquote>
+              <div class="v2-status-card">
+                <div><strong>Service Stage:</strong> ${escapeHtml(v2HarnessLabel(snapshot.serviceStage))}</div>
+                <div><strong>Target Angle:</strong> ${escapeHtml(angle)}</div>
+                <div><strong>Best Path:</strong> ${escapeHtml(bestPath)}</div>
+              </div>
+            </div>
+
+            <div class="v2-state-grid">
+              <div class="v2-state-card">
+                <div class="v2-state-label">Progress</div>
+                <div class="v2-state-value">${snapshot.progress}</div>
+                <div class="v2-state-meta">${escapeHtml(v2HarnessLabel(snapshot.progressMood))}</div>
+              </div>
+              <div class="v2-state-card">
+                <div class="v2-state-label">Friction</div>
+                <div class="v2-state-value">${snapshot.frustration}</div>
+                <div class="v2-state-meta">${escapeHtml(v2HarnessLabel(snapshot.frustrationMood))}</div>
+              </div>
+              <div class="v2-state-card">
+                <div class="v2-state-label">Authority</div>
+                <div class="v2-state-value">${snapshot.authorityDelta}</div>
+                <div class="v2-state-meta">${escapeHtml(outcome)}</div>
+              </div>
+            </div>
+            ${isTerminal ? `
+              <div class="v2-status-card" style="margin-top:12px;">
+                <div><strong>Lesson:</strong> ${escapeHtml(lesson)}</div>
+              </div>
+            ` : ""}
+          </section>
+        `;
+
+        const groupButtons = snapshot.availableGroups
+          .map((group) => {
+            const active = group === selectedGroup;
+            return `
+              <button
+                type="button"
+                class="btn btnChoice v2-group-button${active ? " is-active" : ""}"
+                data-v2-group="${escapeHtml(group)}"
+              >${escapeHtml(v2HarnessLabel(group))}</button>
+            `;
+          })
+          .join("");
+
+        const actionButtons = selectedGroup
+          ? api.availableActionTypes(selectedGroup)
+              .map((type) => `
+                <button
+                  type="button"
+                  class="btn btnChoice v2-action-card"
+                  data-v2-action="${escapeHtml(String(type))}"
+                >
+                  <span class="v2-action-title">${escapeHtml(v2HarnessLabel(type))}</span>
+                  <span class="v2-action-subtitle">${escapeHtml(v2HarnessLabel(selectedGroup))}</span>
+                  <span class="v2-action-copy">${escapeHtml(
+                    getV2EncounterChoiceLine(encounter, selectedGroup, type)
+                  )}</span>
+                </button>
+              `)
+              .join("")
+          : "";
+
+        const actionLabel = selectedGroup ? v2HarnessLabel(selectedGroup) : "No Actions";
+        stepButtons.innerHTML = `
+          <div class="v2-action-shell">
+            <div class="v2-action-header">${groupButtons}</div>
+            <div class="small-text v2-action-caption">${escapeHtml(actionLabel)}</div>
+            <div class="v2-action-grid">${actionButtons}</div>
+            <div class="button-row" style="width:100%; margin-top:10px;">
+              ${isTerminal ? `<button type="button" class="btn" id="btnV2HarnessContinue">Continue Tier 1</button>` : ""}
+              ${isTerminal ? `<button type="button" class="btn btn-ghost" id="btnV2HarnessReplay">Replay Encounter</button>` : ""}
+              <button type="button" class="btn btn-ghost" id="btnV2HarnessBack">Back</button>
+            </div>
+          </div>
+        `;
+
+        stepButtons.querySelectorAll("[data-v2-group]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const nextGroup = String(btn.getAttribute("data-v2-group") || "");
+            window.__BC_V2_HARNESS_STATE__ = {
+              ...(window.__BC_V2_HARNESS_STATE__ || {}),
+              selectedGroup: nextGroup,
+            };
+            renderV2HarnessPlay(snapshot, reaction);
+          });
+        });
+
+        stepButtons.querySelectorAll("[data-v2-action]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            if (!selectedGroup) return;
+            const type = String(btn.getAttribute("data-v2-action") || "");
+            const result = api.choose(selectedGroup, type);
+            if (!result?.snapshot) return;
+            const liveSession = api.getSession?.() || null;
+            emitV2HarnessOutcome(result.snapshot, liveSession, result.reaction || "");
+            renderV2HarnessPlay(result.snapshot, result.reaction || "");
+          });
+        });
+
+        document.getElementById("btnV2HarnessContinue")?.addEventListener("click", () => {
+          startV2HarnessEncounter();
+        });
+
+        document.getElementById("btnV2HarnessReplay")?.addEventListener("click", () => {
+          if (!snapshot?.encounterId) return;
+          const replaySnapshot = api.start({ tier: snapshot.tier, encounterId: snapshot.encounterId });
+          renderV2HarnessPlay(replaySnapshot, "");
+        });
+
+        document.getElementById("btnV2HarnessBack")?.addEventListener("click", () => {
+          showScreen("screenWelcome");
+        });
+      }
+
+      function startV2HarnessEncounter() {
+        const api = getV2HarnessApi();
+        if (!api) return false;
+        applyPlaySurfaceMode("encounter_only");
+        resetNavState();
+        showScreen("screenPlay");
+        const snapshot = api.start({ tier: 1 });
+        renderV2HarnessPlay(snapshot, "");
+        return true;
+      }
+
       function bindPremiumEntryButton(btn) {
         if (!btn) return;
         btn.textContent = "Play";
@@ -23080,6 +23438,10 @@ function ensureProgLoaded() {
             btnGoPremium.__bcBound = false;
             bindInput(btnGoPremium, () => {
               resetNavState();
+              if (isV2DemoHarnessEnabled()) {
+                startV2HarnessEncounter();
+                return;
+              }
               showScreen("screenPlay");
               window.startEncounter?.();
             });
@@ -23358,6 +23720,10 @@ function ensureProgLoaded() {
 
           bindInput(btnGoDemo, () => {
             resetNavState();
+            if (isV2DemoHarnessEnabled()) {
+              startV2HarnessEncounter();
+              return;
+            }
             showScreen("screenPlay");
             window.startEncounter?.();
           });
@@ -23375,6 +23741,10 @@ function ensureProgLoaded() {
 
             bindInput(btnGoPremium, () => {
               resetNavState();
+              if (isV2DemoHarnessEnabled()) {
+                startV2HarnessEncounter();
+                return;
+              }
               showScreen("screenPlay");
               window.startEncounter?.();
             });
@@ -23426,6 +23796,10 @@ function ensureProgLoaded() {
 
             // DEMO: start immediately
             if (window.isDemo || window.bcMode === "demo") {
+              if (isV2DemoHarnessEnabled()) {
+                startV2HarnessEncounter();
+                return;
+              }
               window.startEncounter?.();
               return;
             }

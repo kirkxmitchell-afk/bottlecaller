@@ -9179,6 +9179,7 @@ function buildGameIframeUrl({
   urlOverride = null,
   epoch = Date.now(),
   bustCache = false,
+  v2Harness = false,
 } = {}) {
   // If you pass a full override URL, use it as the base.
   // Otherwise build from same-origin /game/game.html
@@ -9197,6 +9198,8 @@ function buildGameIframeUrl({
   base.searchParams.set("backTo", String(backTo || "screenPremiumApp"));
   if (initialScreen) base.searchParams.set("initialScreen", String(initialScreen));
   else base.searchParams.delete("initialScreen");
+  if (v2Harness) base.searchParams.set("bcV2", "1");
+  else base.searchParams.delete("bcV2");
 
   // Keep epoch off the URL so iframe assets can stay browser-cacheable.
   // The runtime already gets the active epoch from frameElement.dataset.bcEpoch,
@@ -9240,6 +9243,7 @@ function mountGameIframe(targetId, mode /* "demo" | "premium" */, options = {}) 
     backTo: options?.backTo || "screenPremiumApp",
     epoch: mode === "premium" ? window.__BC_IFRAME_EPOCH__ : 0,
     bustCache: true,
+    v2Harness: !!options?.v2Harness,
   });
   const initialHeight =
     mode === "demo" && options?.initialScreen === "screenWelcome"
@@ -9334,6 +9338,15 @@ function postNavToPremiumIframe(screen) {
 
 function openPremiumBeginScreen() {
   if (appMode === "demo") {
+    const useV2Harness =
+      new URLSearchParams(window.location.search).get("bcV2Demo") === "1" ||
+      (() => {
+        try {
+          return localStorage.getItem("BC_V2_DEMO") === "1";
+        } catch {
+          return false;
+        }
+      })();
     const tryOpenDemoWelcome = () => {
       const frame = document.getElementById("gameRootDemoFrame");
       const nav = frame?.contentWindow?.__BC_NAV__;
@@ -9348,8 +9361,15 @@ function openPremiumBeginScreen() {
     showScreen("screenGameDemo");
     setPremiumOverlayActive(false);
 
+    if (useV2Harness) {
+      destroyDemoIframe("openPremiumBeginScreen:force_v2_remount");
+    }
+
     if (!document.getElementById("gameRootDemoFrame")) {
-      mountGameIframe("gameRootDemo", "demo", { initialScreen: "screenWelcome" });
+      mountGameIframe("gameRootDemo", "demo", {
+        initialScreen: "screenWelcome",
+        v2Harness: useV2Harness,
+      });
     }
 
     let attempts = 0;
@@ -20726,6 +20746,15 @@ function isAuthed() {
 function routeDemoShellNoAuth() {
   console.log("[ROUTE] demo (no auth)");
   appMode = "demo";
+  const useV2Harness =
+    new URLSearchParams(window.location.search).get("bcV2Demo") === "1" ||
+    (() => {
+      try {
+        return localStorage.getItem("BC_V2_DEMO") === "1";
+      } catch {
+        return false;
+      }
+    })();
   showScreen("screenGameDemo");
   setPremiumOverlayActive(false);
   destroyPremiumIframe("routeDemoShellNoAuth");
@@ -20735,7 +20764,10 @@ function routeDemoShellNoAuth() {
   destroyDemoIframe("routeDemoShellNoAuth:pre");
   document.getElementById("btnDemoPremium")?.classList.add("hidden");
   document.getElementById("btnDemoExit")?.classList.add("hidden");
-  mountGameIframe("gameRootDemo", "demo", { initialScreen: "screenWelcome" });
+  mountGameIframe("gameRootDemo", "demo", {
+    initialScreen: "screenWelcome",
+    v2Harness: useV2Harness,
+  });
 }
 
 function routeAuth() {
