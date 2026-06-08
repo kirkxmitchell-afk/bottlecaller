@@ -5198,7 +5198,7 @@ html, body{ height:100%; }
     margin-top: 0 !important;
     padding: 6px 8px max(10px, env(safe-area-inset-bottom, 0px)) !important;
     background:
-      linear-gradient(180deg, rgba(6, 7, 10, 0), rgba(6, 7, 10, 0.52) 12%, rgba(6, 7, 10, 0.9) 32%, rgba(6, 7, 10, 0.98)),
+      linear-gradient(180deg, rgba(6, 7, 10, 0) 0%, rgba(6, 7, 10, 0.16) 20%, rgba(6, 7, 10, 0.46) 54%, rgba(6, 7, 10, 0.72) 100%),
       transparent;
   }
 
@@ -5215,7 +5215,7 @@ html, body{ height:100%; }
     border-radius: 0;
     background:
       linear-gradient(180deg, rgba(7, 8, 12, 0.84) 0%, rgba(7, 8, 12, 0.16) 12%, rgba(7, 8, 12, 0.02) 34%, rgba(7, 8, 12, 0.14) 74%, rgba(7, 8, 12, 0.76) 100%),
-      url("/game/tier1-encounter-scene.png") center 58% / contain no-repeat,
+      url("/game/tier1-encounter-scene.png") center top / contain no-repeat,
       #090a0e;
   }
 
