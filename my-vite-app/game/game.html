@@ -23444,70 +23444,73 @@ function ensureProgLoaded() {
               : "yellow";
         stepContent.innerHTML = `
           <section class="v2-play-shell">
-            <div class="v2-play-header">
-              <div class="v2-crest">B</div>
-              <div class="v2-header-copy">
-                <div class="v2-header-topline">
-                  <span>Tier ${snapshot.tier}</span>
-                  <span>Encounter ${String(snapshot.encounterOrdinal).padStart(3, "0")} of ${snapshot.encounterCount}</span>
+            <div class="v2-hero-frame">
+              <div class="v2-hero-top">
+                <div class="v2-play-header">
+                  <div class="v2-crest">B</div>
+                  <div class="v2-header-copy">
+                    <div class="v2-header-topline">
+                      <span>Tier ${snapshot.tier}</span>
+                      <span>Encounter ${String(snapshot.encounterOrdinal).padStart(3, "0")} of ${snapshot.encounterCount}</span>
+                    </div>
+                    <h2 class="v2-encounter-title">${escapeHtml(snapshot.encounterTitle)}</h2>
+                    <div class="v2-progress-rail" style="--v2-progress-count:${Math.max(1, snapshot.encounterCount || 1)}" aria-hidden="true">${progressNodes}</div>
+                  </div>
+                  <div class="v2-region-mark">SA</div>
                 </div>
-                <h2 class="v2-encounter-title">${escapeHtml(snapshot.encounterTitle)}</h2>
-                <div class="v2-progress-rail" style="--v2-progress-count:${Math.max(1, snapshot.encounterCount || 1)}" aria-hidden="true">${progressNodes}</div>
+                <div class="v2-mood-pill">
+                  <div class="v2-mood-label">Table Mood</div>
+                  <div class="v2-mood-value">${escapeHtml(v2HarnessLabel(snapshot.progressMood))}</div>
+                  <div class="v2-mood-detail">${escapeHtml(moodDescriptor)}</div>
+                </div>
               </div>
-              <div class="v2-region-mark">SA</div>
-            </div>
+              <div class="v2-hero-bottom">
+                <div class="v2-scene-text">
+                  <div class="v2-scene-label">Table Scene</div>
+                  <p class="v2-scene-copy">${escapeHtml(scene)}</p>
+                  <ul class="v2-clue-list">
+                    ${visualClues.map((clue) => `<li>${escapeHtml(clue)}</li>`).join("")}
+                  </ul>
+                </div>
 
-            <div class="v2-scene-card">
-              <div class="v2-scene-text">
-                <div class="v2-scene-label">Table Scene</div>
-                <p class="v2-scene-copy">${escapeHtml(scene)}</p>
-                <ul class="v2-clue-list">
-                  ${visualClues.map((clue) => `<li>${escapeHtml(clue)}</li>`).join("")}
-                </ul>
-              </div>
-              <div class="v2-mood-pill">
-                <div class="v2-mood-label">Table Mood</div>
-                <div class="v2-mood-value">${escapeHtml(v2HarnessLabel(snapshot.progressMood))}</div>
-                <div class="v2-mood-detail">${escapeHtml(moodDescriptor)}</div>
-              </div>
-            </div>
+                <div class="v2-quote-row">
+                  <blockquote class="v2-quote-card">
+                    <span class="v2-quote-mark">“</span>
+                    <p>${escapeHtml(quote)}</p>
+                  </blockquote>
+                </div>
 
-            <div class="v2-quote-row">
-              <blockquote class="v2-quote-card">
-                <span class="v2-quote-mark">“</span>
-                <p>${escapeHtml(quote)}</p>
-              </blockquote>
+                <div class="v2-state-grid">
+                  <div class="v2-state-card">
+                    <div class="v2-state-label">Progress</div>
+                    <div class="v2-state-value">${snapshot.progress}</div>
+                    <div class="v2-state-meta">${escapeHtml(v2HarnessLabel(snapshot.progressMood))}</div>
+                  </div>
+                  <div class="v2-state-card">
+                    <div class="v2-state-label">Friction</div>
+                    <div class="v2-state-value">${snapshot.frustration}</div>
+                    <div class="v2-state-meta">${escapeHtml(v2HarnessLabel(snapshot.frustrationMood))}</div>
+                  </div>
+                  <div class="v2-state-card">
+                    <div class="v2-state-label">Authority</div>
+                    <div class="v2-state-value">${snapshot.authorityDelta}</div>
+                    <div class="v2-state-meta">${escapeHtml(outcome)}</div>
+                  </div>
+                </div>
+                ${showIntroGuidance ? `
+                  <div class="v2-guidance-card">
+                    <div class="v2-guidance-label">What To Do Next</div>
+                    <p class="v2-guidance-copy">${escapeHtml(nextStepInstruction)}</p>
+                    <div class="v2-guidance-meta">${escapeHtml(walkAwayHint)}</div>
+                  </div>
+                ` : ""}
+                ${isTerminal ? `
+                  <div class="v2-status-card">
+                    <div><strong>Lesson:</strong> ${escapeHtml(lesson)}</div>
+                  </div>
+                ` : ""}
+              </div>
             </div>
-
-            <div class="v2-state-grid">
-              <div class="v2-state-card">
-                <div class="v2-state-label">Progress</div>
-                <div class="v2-state-value">${snapshot.progress}</div>
-                <div class="v2-state-meta">${escapeHtml(v2HarnessLabel(snapshot.progressMood))}</div>
-              </div>
-              <div class="v2-state-card">
-                <div class="v2-state-label">Friction</div>
-                <div class="v2-state-value">${snapshot.frustration}</div>
-                <div class="v2-state-meta">${escapeHtml(v2HarnessLabel(snapshot.frustrationMood))}</div>
-              </div>
-              <div class="v2-state-card">
-                <div class="v2-state-label">Authority</div>
-                <div class="v2-state-value">${snapshot.authorityDelta}</div>
-                <div class="v2-state-meta">${escapeHtml(outcome)}</div>
-              </div>
-            </div>
-            ${showIntroGuidance ? `
-              <div class="v2-guidance-card">
-                <div class="v2-guidance-label">What To Do Next</div>
-                <p class="v2-guidance-copy">${escapeHtml(nextStepInstruction)}</p>
-                <div class="v2-guidance-meta">${escapeHtml(walkAwayHint)}</div>
-              </div>
-            ` : ""}
-            ${isTerminal ? `
-              <div class="v2-status-card" style="margin-top:12px;">
-                <div><strong>Lesson:</strong> ${escapeHtml(lesson)}</div>
-              </div>
-            ` : ""}
           </section>
         `;
 
