@@ -5195,7 +5195,7 @@ html, body{ height:100%; }
     bottom: 0;
     z-index: 3;
     margin-top: 0 !important;
-    padding: 6px 10px 10px !important;
+    padding: 6px 10px max(10px, env(safe-area-inset-bottom, 0px)) !important;
     background:
       linear-gradient(180deg, rgba(6, 7, 10, 0), rgba(6, 7, 10, 0.58) 14%, rgba(6, 7, 10, 0.92) 38%, rgba(6, 7, 10, 0.98)),
       transparent;
@@ -5214,15 +5214,15 @@ html, body{ height:100%; }
     border-radius: 0;
     background:
       linear-gradient(180deg, rgba(7, 8, 12, 0.86) 0%, rgba(7, 8, 12, 0.2) 14%, rgba(7, 8, 12, 0) 28%, rgba(7, 8, 12, 0.08) 72%, rgba(7, 8, 12, 0.78) 100%),
-      url("/game/tier1-encounter-scene.png") center center / contain no-repeat,
+      url("/game/tier1-encounter-scene.png") center 58% / contain no-repeat,
       #090a0e;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-hero-top{
-    top: max(8px, env(safe-area-inset-top, 0px));
-    left: 8px;
-    right: 8px;
-    gap: 8px;
+    top: max(2px, env(safe-area-inset-top, 0px));
+    left: 6px;
+    right: 6px;
+    gap: 6px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-play-header{
@@ -5293,10 +5293,10 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-hero-bottom{
-    left: 8px;
-    right: 8px;
-    bottom: clamp(138px, 24dvh, 190px);
-    gap: 8px;
+    left: 6px;
+    right: 6px;
+    bottom: calc(92px + env(safe-area-inset-bottom, 0px));
+    gap: 6px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-scene-text{
