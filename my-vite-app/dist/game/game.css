@@ -5158,16 +5158,15 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"]{
-    position: relative;
-    display: block;
-    height: 100dvh !important;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    height: auto !important;
     min-height: 100dvh !important;
     padding: 0 !important;
     border: 0 !important;
     border-radius: 0 !important;
     background: #0b0b10 !important;
     box-shadow: none !important;
-    overflow: hidden;
   }
 
   #encounterPanel[data-v2-layout="tier1"]::before,
@@ -5184,45 +5183,44 @@ html, body{ height:100%; }
 
   #encounterPanel[data-v2-layout="tier1"] #stepContent{
     min-height: 0;
-    height: 100%;
+    padding: 0 !important;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] #stepContent{
+    position: relative;
     padding: 0 !important;
   }
 
   #encounterPanel[data-v2-layout="tier1"] #stepButtons{
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 3;
     margin-top: 0 !important;
-    padding: 6px 10px max(10px, env(safe-area-inset-bottom, 0px)) !important;
+    padding: 10px 10px max(12px, env(safe-area-inset-bottom, 0px)) !important;
     background:
-      linear-gradient(180deg, rgba(6, 7, 10, 0), rgba(6, 7, 10, 0.58) 14%, rgba(6, 7, 10, 0.92) 38%, rgba(6, 7, 10, 0.98)),
-      transparent;
+      linear-gradient(180deg, rgba(6, 7, 10, 0), rgba(6, 7, 10, 0.72) 18%, rgba(6, 7, 10, 0.96)),
+      #0b0b10;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-play-shell{
-    height: 100%;
-    padding: 0;
+    min-height: 0;
+    padding: 8px 8px 0;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-hero-frame{
     width: 100%;
-    min-height: 0;
-    height: 100%;
+    min-height: clamp(620px, 74dvh, 880px);
+    height: auto;
     padding: 0;
     border-radius: 0;
     background:
-      linear-gradient(180deg, rgba(7, 8, 12, 0.86) 0%, rgba(7, 8, 12, 0.2) 14%, rgba(7, 8, 12, 0) 28%, rgba(7, 8, 12, 0.08) 72%, rgba(7, 8, 12, 0.78) 100%),
-      url("/game/tier1-encounter-scene.png") center 58% / contain no-repeat,
+      linear-gradient(180deg, rgba(7, 8, 12, 0.88) 0%, rgba(7, 8, 12, 0.22) 14%, rgba(7, 8, 12, 0.04) 52%, rgba(7, 8, 12, 0.8) 100%),
+      url("/game/tier1-encounter-scene.png") center top / contain no-repeat,
       #090a0e;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-hero-top{
-    top: max(2px, env(safe-area-inset-top, 0px));
-    left: 6px;
-    right: 6px;
-    gap: 6px;
+    top: max(8px, env(safe-area-inset-top, 0px));
+    left: 8px;
+    right: 8px;
+    gap: 8px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-play-header{
@@ -5293,19 +5291,20 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-hero-bottom{
-    left: 6px;
-    right: 6px;
-    bottom: calc(92px + env(safe-area-inset-bottom, 0px));
-    gap: 6px;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    gap: 8px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-scene-text{
-    display: none;
+    display: grid;
+    max-width: 74%;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-quote-row{
-    display: block;
-    max-width: min(72vw, 320px);
+    display: grid;
+    max-width: 70%;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-quote-card{
@@ -5339,7 +5338,7 @@ html, body{ height:100%; }
   #encounterPanel[data-v2-layout="tier1"] .v2-state-grid,
   #encounterPanel[data-v2-layout="tier1"] .v2-guidance-card,
   #encounterPanel[data-v2-layout="tier1"] .v2-status-card{
-    display: none !important;
+    max-width: 88%;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-shell{
@@ -5350,7 +5349,9 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-caption{
-    display: none;
+    margin-top: 10px;
+    font-size: 12px;
+    line-height: 1.4;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-header{
@@ -5372,7 +5373,7 @@ html, body{ height:100%; }
   #encounterPanel[data-v2-layout="tier1"] .v2-action-grid{
     order: 1;
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 6px;
   }
 
@@ -5400,12 +5401,14 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-copy{
-    font-size: 0;
-    line-height: 0;
+    font-size: 10px;
+    line-height: 1.25;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-shell .button-row{
-    display: none;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] #v2DemoCompletionCard{
