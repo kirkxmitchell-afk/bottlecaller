@@ -347,6 +347,88 @@
       window.parent?.postMessage(msg, ORIGIN);
       return true;
     }
+    function measureIframeContentHeight() {
+      const activeScreen = document.querySelector(".screen.active");
+      const compactShell = activeScreen?.querySelector?.(".bc-shell-center");
+      const compactCard = activeScreen?.querySelector?.(".app-welcome-shell, .app-history-shell, .app-summary-shell");
+      if (compactShell || compactCard) {
+        const shellHeight = Math.max(
+          compactShell?.scrollHeight || 0,
+          compactShell?.offsetHeight || 0,
+          compactCard?.scrollHeight || 0,
+          compactCard?.offsetHeight || 0
+        );
+        if (shellHeight > 0) {
+          return shellHeight + 24;
+        }
+      }
+      return Math.max(
+        document.documentElement?.scrollHeight || 0,
+        document.body?.scrollHeight || 0,
+        document.documentElement?.offsetHeight || 0,
+        document.body?.offsetHeight || 0,
+        activeScreen?.scrollHeight || 0,
+        activeScreen?.offsetHeight || 0
+      );
+    }
+    function reportIframeHeight(reason = "layout") {
+      if (!isActuallyIframe()) return false;
+      const activeScreen = document.querySelector(".screen.active");
+      const height = measureIframeContentHeight();
+      if (!Number.isFinite(height) || height <= 0) return false;
+      return postToParent({
+        type: "BC_IFRAME_HEIGHT",
+        height,
+        reason,
+        screenId: activeScreen?.id || null,
+      });
+    }
+    function scheduleIframeHeightReport(reason = "layout") {
+      try { clearTimeout(window.__BC_HEIGHT_REPORT_T__); } catch {}
+      window.__BC_HEIGHT_REPORT_T__ = setTimeout(() => {
+        try {
+          reportIframeHeight(reason);
+          requestAnimationFrame(() => {
+            try { reportIframeHeight(reason + ":raf"); } catch {}
+          });
+        } catch {}
+      }, 24);
+    }
+    function installIframeHeightSync() {
+      if (window.__BC_HEIGHT_SYNC_INSTALLED__) return;
+      window.__BC_HEIGHT_SYNC_INSTALLED__ = true;
+
+      window.addEventListener("load", () => scheduleIframeHeightReport("window_load"));
+      window.addEventListener("resize", () => scheduleIframeHeightReport("window_resize"));
+      window.addEventListener("orientationchange", () => scheduleIframeHeightReport("orientationchange"));
+
+      if (typeof ResizeObserver === "function") {
+        try {
+          const ro = new ResizeObserver(() => scheduleIframeHeightReport("resize_observer"));
+          if (document.body) ro.observe(document.body);
+          if (document.documentElement) ro.observe(document.documentElement);
+          window.__BC_HEIGHT_RESIZE_OBSERVER__ = ro;
+        } catch {}
+      }
+
+      if (typeof MutationObserver === "function") {
+        try {
+          const mo = new MutationObserver(() => scheduleIframeHeightReport("mutation"));
+          if (document.body) {
+            mo.observe(document.body, {
+              childList: true,
+              subtree: true,
+              attributes: true,
+              characterData: true,
+            });
+          }
+          window.__BC_HEIGHT_MUTATION_OBSERVER__ = mo;
+        } catch {}
+      }
+
+      scheduleIframeHeightReport("install");
+    }
+    installIframeHeightSync();
     function submitProgressReport({ body, payload, reqId } = {}) {
       try {
         const id = reqId || ("pr_" + Math.random().toString(16).slice(2));
@@ -3179,7 +3261,7 @@
       };
     };
 
-    function applyAbilityRuntimeToReaction(result, encounter, checks) {
+      function applyAbilityRuntimeToReaction(result, encounter, checks) {
       if (!result || typeof result !== "object") return result;
 
       const runtime = getActiveAbilityRuntime();
@@ -3219,6 +3301,11 @@
         runtime.recoveryFocus &&
         !next.pivotUnlocked &&
         !checks?.deliveryCorrect &&
+        (
+          !checks?.guestRead ||
+          checks?.modeStatus === "damaging" ||
+          checks?.hookStatus === "damaging"
+        ) &&
         Number(next.chainScore || 0) >= clampNumber(2 + (0.5 * runtime.recoveryThresholdDelta), 1.5, 4)
       ) {
         next.pivotUnlocked = true;
@@ -3691,9 +3778,9 @@
     function formatVisibleEncounterStep(stepKey) {
       const key = String(stepKey || "").toLowerCase();
       if (key === "hook" || key === "flash_learn") return "Flash Wine Learn";
-      if (key === "deliver" || key === "problem_solve") return "Deliver";
+      if (key === "deliver" || key === "problem_solve") return "Delivery";
       if (key === "observe") return "Guest Read";
-      if (key === "mode") return "Tone";
+      if (key === "mode") return "Mode";
       if (key === "reaction") return "Reaction";
       if (key === "reflection") return "Reflection";
       return String(stepKey || "");
@@ -4705,30 +4792,32 @@
 </head>
 
 <body>
-  <h1 class="app-game-masthead">BottleCaller Prototype</h1>
-
   <section id="screenWelcome" class="screen">
     <div class="bc-shell bc-shell-center">
       <div class="bc-card bc-stage-card panel cover-screen app-welcome-shell">
         <div class="app-welcome-header">
           <h2>Welcome to BottleCaller</h2>
-          <p class="app-welcome-subtitle">BottleCaller trains servers to sell the right wine by matching guest psychology with the right tone and prompt style — in under 5 minutes.</p>
+          <p class="app-welcome-subtitle" id="welcomeSubtitle">BottleCaller trains servers to sell the right wine by matching guest psychology with the right tone and prompt style — in under 5 minutes.</p>
         </div>
         <ul class="cover-list" id="welcomeBulletList">
           <li>Diagnose the guest</li>
           <li id="welcomeBulletModeHook">Flash Wine Learn the Wine</li>
           <li>Problem-solve with a 2-option prompt</li>
         </ul>
+        <div class="app-welcome-explainer" id="welcomeExplainer">
+          <strong>How to play:</strong> Press <strong>Start</strong>, read the table scene, then choose one response card at a time to move the guest toward the right bottle.
+        </div>
         <div class="button-row app-welcome-actions">
           <button id="btnWelcomeStart" data-tutorial="play-button" type="button">Start</button>
-          <button id="btnWelcomeHome" type="button" class="btn-ghost">Home</button>
+          <button id="btnWelcomeHome" type="button" class="btn-ghost">Status menu</button>
           <button
             id="btnWelcomeBackToSetup"
             type="button"
             class="btn-ghost"
         >
-            Back to Setup
+            Back to Wine Setup
           </button>
+          <button id="btnWelcomeClose" type="button" class="btn-ghost">Close</button>
         </div>
         <div class="small-text app-welcome-note" id="welcomeFooterNote"></div>
       </div>
@@ -4741,6 +4830,9 @@
         <div class="app-home-eyebrow">Service Training Cockpit</div>
         <h2>BottleCaller</h2>
         <p class="app-home-subtitle">Train the floor. Build cleaner reads. Sharpen the close.</p>
+        <div class="button-row app-home-header-actions">
+          <button id="btnStatusBackToWelcome" type="button" class="btn-ghost">Back to Welcome</button>
+        </div>
       </div>
 
       <div class="app-home-grid">
@@ -4852,7 +4944,7 @@
       </div>
 
       <div class="manager-panel app-setup-list">
-        <h3>Wine List</h3>
+        <h3>Wine Cards</h3>
         <table class="wine-table">
           <thead>
             <tr>
@@ -4922,6 +5014,8 @@
             </div>
           </div>
 
+          <h3 style="margin-top:16px;">Wine List</h3>
+
           <!-- TABLE VIEW INSIDE DROPDOWN -->
           <table class="wine-table table-spaced">
             <thead>
@@ -4931,9 +5025,7 @@
                 <th>Fruit</th>
                 <th>Texture</th>
                 <th>Oak</th>
-                <th>Process</th>
                 <th>Region</th>
-                <th>Story</th>
                 <th>Action</th>
               </tr>
             </thead>
@@ -5486,10 +5578,13 @@ console.log("BC3_MARKER_V1");
     if (!wine || typeof wine !== "object") return "";
     const name = String(wine.name || "").trim().toLowerCase();
     const varietal = String(wine.varietal || "").trim().toLowerCase();
+    if (name || varietal) {
+      return `label:${name}::${varietal}`;
+    }
     const region = String(wine.region || "").trim().toLowerCase();
     const story = String(wine.story || "").trim().toLowerCase();
-    if (name || varietal || region || story) {
-      return `shape:${name}::${varietal}::${region}::${story}`;
+    if (region || story) {
+      return `shape:${region}::${story}`;
     }
     const id = String(wine.id || "").trim();
     return id ? `id:${id}` : "";
@@ -8317,8 +8412,31 @@ function ensureProgLoaded() {
 
       // ---------- Welcome copy ----------
       const welcomeFooterNote = document.getElementById("welcomeFooterNote");
+      const welcomeSubtitle = document.getElementById("welcomeSubtitle");
+      const welcomeBulletList = document.getElementById("welcomeBulletList");
+      const welcomeExplainer = document.getElementById("welcomeExplainer");
+      if (isDemo) {
+        if (welcomeSubtitle) {
+          welcomeSubtitle.textContent =
+            "Read the table, choose one response card at a time, and guide the guest toward the bottle without forcing the close.";
+        }
+        if (welcomeBulletList) {
+          welcomeBulletList.innerHTML = `
+            <li>Press <strong>Start</strong> to enter the guest scene and read the clues.</li>
+            <li>Choose your next response from <strong>Ask</strong>, <strong>Recommend</strong>, or <strong>Commit</strong>.</li>
+            <li>After every guest reply, follow the instruction prompt to decide whether to keep reading, recommend, commit, or walk away.</li>
+          `;
+        }
+        if (welcomeExplainer) {
+          welcomeExplainer.innerHTML = `
+            <strong>How the demo works:</strong> Each encounter gives you a table scene, guest dialogue, and response cards. Start with the card that best fits the table, then keep choosing the next card the prompt asks for until you either land the bottle, preserve the experience, or lose the table.
+          `;
+        }
+      }
       if (welcomeFooterNote) {
-        welcomeFooterNote.textContent = isDemo ? "Demo mode" : "";
+        welcomeFooterNote.textContent = isDemo
+          ? "Demo tip: the encounter ends when you secure the bottle, walk away cleanly, or the guest shuts down. Walk Away only appears once friction reaches critical resistance."
+          : "";
       }
 
       // ---------- Keys / limits ----------
@@ -10829,6 +10947,23 @@ function ensureProgLoaded() {
         if (msg.type === "nav") {
           const identity = getGameplayIdentity();
           const isWaiterNow = !!identity.isWaiter;
+          if (msg.target === "play_begin" || msg.action === "play_begin") {
+            if (sessionType === "drill") return;
+            await window.__BC_NAV__?.openPlay?.();
+            return;
+          }
+          if (msg.target === "status_menu" || msg.action === "status_menu") {
+            if (sessionType === "drill") return;
+            resetNavState?.();
+            showScreen("screenHome");
+            return;
+          }
+          if (msg.target === "welcome" || msg.action === "welcome") {
+            if (sessionType === "drill") return;
+            resetNavState?.();
+            showScreen("screenWelcome");
+            return;
+          }
           if (msg.target === "setup_premium" || msg.action === "setup_premium") {
             if (isDemo) {
               window.showToast?.("Setup is Premium only.");
@@ -11916,6 +12051,7 @@ function ensureProgLoaded() {
         applyDifficultyTheme(mode);
         const hudStats = document.querySelector("#bcHudTop .bc-stats");
         if (hudStats) renderDifficultyBadge(hudStats);
+        scheduleIframeHeightReport("showScreen:" + screenId);
       }
 
       window.__BC_UI__ = {
@@ -11955,6 +12091,58 @@ function ensureProgLoaded() {
         }
       };
 
+      window.__BC_NAV__.openWelcome = () => {
+        if (sessionType === "drill") return;
+        try {
+          resetNavState();
+          showScreen("screenWelcome");
+        } catch (e) {
+          console.warn("[BC] NAV openWelcome failed", e);
+        }
+      };
+
+      window.__BC_NAV__.openStatus = () => {
+        if (sessionType === "drill") return;
+        try {
+          applyPlaySurfaceMode("full");
+          resetNavState();
+          showScreen("screenHome");
+        } catch (e) {
+          console.warn("[BC] NAV openStatus failed", e);
+        }
+      };
+
+      window.__BC_NAV__.openPlay = async () => {
+        if (sessionType === "drill") return;
+        try {
+          if (!window.isDemo && isStandalone()) {
+            redirectToParentLogin("nav_open_play");
+            return;
+          }
+
+          if (!isRuntimeReady({ requireProgression: false })) {
+            console.warn("[BC] NAV openPlay blocked: ctx not ready");
+            window.showToast?.("BottleCaller is still attaching account context.");
+            return;
+          }
+
+          try { localStorage.setItem(coverKey, "true"); } catch {}
+          applyPlaySurfaceMode("full");
+          resetNavState();
+          showScreen("screenPlay");
+
+          if (window.isDemo || window.bcMode === "demo") {
+            window.startEncounter?.();
+            return;
+          }
+
+          beginOrResumeProgressionRun();
+          await startPlayWithReadyGate();
+        } catch (e) {
+          console.warn("[BC] NAV openPlay failed", e);
+        }
+      };
+
       function resetNavState() {
         setRuntimeEncounter(null);
         currentStep = 0;
@@ -11967,6 +12155,12 @@ function ensureProgLoaded() {
           window.__BC3__.step = 0;
           window.__BC3__.results = [];
         }
+      }
+
+      function applyPlaySurfaceMode(mode = "full") {
+        const shell = document.getElementById("bcShell");
+        if (!shell) return;
+        shell.classList.toggle("is-encounter-only", mode === "encounter_only");
       }
 
       // ---------- Storage ----------
@@ -14015,9 +14209,7 @@ function ensureProgLoaded() {
             (wine.fruitTags || []).join(", "),
             (wine.textureTags || []).join(", "),
             wine.oakLevel || "",
-            wine.process || "",
-            wine.region || "",
-            wine.story || ""
+            wine.region || ""
           ];
 
           cols.forEach(text => {
@@ -14063,10 +14255,13 @@ function ensureProgLoaded() {
             { label: "Fruit", value: (wine.fruitTags || []).join(", ") || "—" },
             { label: "Texture", value: (wine.textureTags || []).join(", ") || "—" },
             { label: "Oak", value: wine.oakLevel || "—" },
-            { label: "Process", value: wine.process || "—" },
-            { label: "Region", value: wine.region || "—" },
-            { label: "Story", value: wine.story || "—" }
+            { label: "Region", value: wine.region || "—" }
           ];
+
+          const title = document.createElement("div");
+          title.className = "wine-card-type";
+          title.innerText = "Wine Card";
+          card.appendChild(title);
 
           rows.forEach(row => {
             const line = document.createElement("div");
@@ -14101,6 +14296,13 @@ function ensureProgLoaded() {
 
       async function deleteWineById(id) {
         if (!id) return;
+        const wine = (wines || []).find((row) => String(row?.id || "") === String(id)) || null;
+        const wineName = String(wine?.name || "").trim();
+        const wineVarietal = String(wine?.varietal || "").trim();
+        const wineLabel = wineName && wineVarietal
+          ? `${wineName} (${wineVarietal})`
+          : (wineName || wineVarietal || "this wine");
+        if (!confirm(`Delete ${wineLabel}?\n\nThis will remove the wine card from setup.`)) return;
         try {
           await window.WineBridge.deleteRestaurantWine(id);
           await hydrateSetupFromDbIfPossible(bcMode);
@@ -16169,7 +16371,7 @@ function ensureProgLoaded() {
           pill.className =
             "reaction-spine-node " +
             (node.score > 0 ? "is-positive" : node.score < 0 ? "is-negative" : "is-neutral");
-          pill.innerText = `${node.step} ${node.score > 0 ? "+1" : node.score < 0 ? "-1" : "0"}`;
+          pill.innerText = `${formatVisibleEncounterStep(node.step)} ${node.score > 0 ? "+1" : node.score < 0 ? "-1" : "0"}`;
           line.appendChild(pill);
         });
 
@@ -16247,7 +16449,7 @@ function ensureProgLoaded() {
             stepLabel.setAttribute("x", "40");
             stepLabel.setAttribute("y", String(y - 16));
             stepLabel.setAttribute("class", "reflection-spine-svg-step");
-            stepLabel.textContent = String(node?.step || "").toUpperCase();
+            stepLabel.textContent = String(formatVisibleEncounterStep(node?.step || "") || "").toUpperCase();
             svg.appendChild(stepLabel);
 
             const scoreBadge = document.createElementNS(svgNs, "text");
@@ -16279,7 +16481,7 @@ function ensureProgLoaded() {
           const label = document.createElement("div");
           label.className = "reaction-spine-graphic-label";
           label.innerHTML =
-            `<strong>${escapeHtml(String(node?.step || "").toUpperCase())}</strong>` +
+            `<strong>${escapeHtml(String(formatVisibleEncounterStep(node?.step || "") || "").toUpperCase())}</strong>` +
             `<span>${Number(node?.score || 0) > 0 ? "+" : ""}${Number(node?.score || 0)}</span>`;
           row.appendChild(label);
 
@@ -16333,7 +16535,7 @@ function ensureProgLoaded() {
           stepNode.className = "reaction-journey-step";
           stepNode.innerHTML =
             `<div class="reaction-journey-kicker">STEP ${index + 1}</div>` +
-            `<div class="reaction-journey-main">${escapeHtml(String(item.step || "").toUpperCase() || "—")}</div>`;
+            `<div class="reaction-journey-main">${escapeHtml(String(formatVisibleEncounterStep(item.step || "") || "").toUpperCase() || "—")}</div>`;
           frame.appendChild(stepNode);
 
           const connector = document.createElement("div");
@@ -17888,13 +18090,13 @@ function ensureProgLoaded() {
         if (checks.guestRead) strengths.push({ key: "read", text: "✅ Strength: You read the guest correctly." });
         if (checks.modeStatus === "optimal") strengths.push({ key: "mode", text: "✅ Strength: You matched the Mode perfectly." });
         if (checks.hookStatus === "optimal") strengths.push({ key: "flash_learn", text: "✅ Strength: You completed Flash Learn cleanly." });
-        if (checks.deliveryCorrect) strengths.push({ key: "problem_solve", text: "✅ Strength: Your problem-solve prompt landed cleanly." });
+        if (checks.deliveryCorrect) strengths.push({ key: "problem_solve", text: "✅ Strength: Your delivery landed cleanly." });
 
         // Gap candidates (ordered by leverage)
         if (!checks.guestRead) gaps.push({ key: "read", text: "⚠️ Fix: Your first job is the read. Re-check cues before you pick a Mode." });
         if (checks.modeStatus === "damaging") gaps.push({ key: "mode", text: "⚠️ Fix: Your Mode fought the guest. Switch to the guest’s optimal Mode next time." });
         if (checks.hookStatus === "damaging") gaps.push({ key: "flash_learn", text: "⚠️ Fix: Complete the full Flash Learn before solving the table." });
-        if (!checks.deliveryCorrect) gaps.push({ key: "problem_solve", text: "⚠️ Fix: Pick the stronger guest-specific 2-option prompt." });
+        if (!checks.deliveryCorrect) gaps.push({ key: "problem_solve", text: "⚠️ Fix: Pick the stronger guest-specific delivery." });
 
         // Choose best strength: prioritize Read > Mode > Flash Learn > Problem Solve
         const strengthPriority = ["read", "mode", "flash_learn", "problem_solve"];
@@ -17911,7 +18113,7 @@ function ensureProgLoaded() {
           read: "Next rule: Don’t choose a Mode until you can say: “They want speed / safety / status / proof / vibe.”",
           mode: "Next rule: If your Mode isn’t working, stop explaining — change Mode.",
           flash_learn: "Next rule: Flash Learn gives you the bottle cues before you speak.",
-          problem_solve: "Next rule: Use one clean 2-option prompt built around what this guest values.",
+          problem_solve: "Next rule: Use one clean delivery built around what this guest values.",
           tighten: "Next rule: Cut your words in half and commit."
         };
 
@@ -18318,6 +18520,7 @@ function ensureProgLoaded() {
 
       function logEncounter() {
         const ctx = getRuntimeCtx();
+        const progressionResolution = resolveEncounterProgressionResolution(currentEncounter);
         const reactionPayload = deriveEncounterReactionPayload(currentEncounter);
         currentEncounter.__encounterReactionSummary =
           currentEncounter.__encounterReactionSummary || buildEncounterReactionSummary(currentEncounter);
@@ -18371,9 +18574,13 @@ function ensureProgLoaded() {
           recoveryWhy: currentEncounter.recoveryWhy || "",
 
           // Telemetry
+          outcome: currentEncounter.outcome || "",
+          finalOutcome: progressionResolution.finalOutcome || currentEncounter.finalOutcome || "",
           chainScore: currentEncounter.chainScore ?? null,
           chainSignal: currentEncounter.chainSignal ?? "",
           pivotType: currentEncounter.pivotType || "",
+          pivotTaken: !!currentEncounter.pivotTaken,
+          pivotSuccess: !!currentEncounter.pivotSuccess,
           resetUsed: !!currentEncounter.resetUsed,
           performanceGrade: currentEncounter.performanceGrade || "",
           aiPerception: reactionPayload?.aiPerception || "",
@@ -18449,6 +18656,8 @@ function ensureProgLoaded() {
               success: !!currentEncounter?.pivotSuccess,
             },
 
+            outcome: currentEncounter?.outcome || "",
+            finalOutcome: progressionResolution.finalOutcome || currentEncounter?.finalOutcome || "",
             chainScore: currentEncounter?.chainScore ?? null,
             chainSignal: currentEncounter?.chainSignal ?? "",
             performanceGrade: currentEncounter?.performanceGrade || "",
@@ -18629,14 +18838,71 @@ function ensureProgLoaded() {
         });
       }
 
-      function encounterCountsAsWin(outcome) {
-        const winOutcomes = [
+      function resolveEncounterProgressionResolution(encounter = null) {
+        const enc = encounter || currentEncounter || null;
+        const rawOutcome = String(enc?.outcome || "").trim().toLowerCase();
+        const hasRecoveryBranch = !!(
+          enc?.recoveryText ||
+          enc?.pivotType ||
+          rawOutcome === "pivot" ||
+          rawOutcome === "recovery"
+        );
+        const recoveryAttempted = !!(
+          enc?.recoveryChoice ||
+          enc?.recoveryChoiceCategory ||
+          enc?.resetUsed
+        );
+        const recoveryCorrect = !!enc?.recoveryCorrect;
+
+        let finalOutcome = rawOutcome || "";
+        if (hasRecoveryBranch) {
+          if (recoveryAttempted) {
+            finalOutcome = recoveryCorrect ? "recovered_close" : "failed_recovery";
+          } else if (rawOutcome === "pivot" || rawOutcome === "recovery") {
+            finalOutcome = "recovery_pending";
+          }
+        }
+
+        const didWin = [
           "clean_close",
           "soft_close",
-          "pivot"
-        ];
+          "recovered_close",
+        ].includes(finalOutcome);
 
-        return winOutcomes.includes(outcome?.outcome);
+        if (enc) {
+          enc.finalOutcome = finalOutcome || null;
+          enc.pivotTaken = hasRecoveryBranch && (recoveryAttempted || rawOutcome === "pivot" || rawOutcome === "recovery");
+          enc.pivotSuccess = recoveryCorrect;
+        }
+
+        return {
+          rawOutcome,
+          finalOutcome,
+          hasRecoveryBranch,
+          recoveryAttempted,
+          recoveryCorrect,
+          didWin,
+        };
+      }
+
+      function encounterCountsAsWin(outcome, encounter = null) {
+        const explicitOutcome = String(
+          encounter?.finalOutcome ||
+          encounter?.outcome ||
+          outcome?.finalOutcome ||
+          outcome?.outcome ||
+          ""
+        ).trim().toLowerCase();
+
+        if (explicitOutcome) {
+          return [
+            "clean_close",
+            "soft_close",
+            "recovered_close",
+          ].includes(explicitOutcome);
+        }
+
+        return false;
       }
 
       function maybeEndDemoRunAndReturnHome() {
@@ -20106,7 +20372,7 @@ function ensureProgLoaded() {
 
         const prompt = document.createElement("div");
         prompt.className = "encounter-prompt";
-        prompt.innerText = "Problem Solve";
+        prompt.innerText = "Delivery";
         topRow.appendChild(prompt);
         stepContent.appendChild(topRow);
 
@@ -20159,7 +20425,7 @@ function ensureProgLoaded() {
           currentEncounter.deliveryLine1 ||
           "Choose 1 of the 2 answer options for each problem-solve prompt.";
         selectedPreview.innerHTML = `
-          <div class="small-text" style="opacity:.72; margin-bottom:8px;">Problem Solve progress</div>
+          <div class="small-text" style="opacity:.72; margin-bottom:8px;">Delivery progress</div>
           <div>${escapeHtml(`${answeredCount} of ${(currentEncounter.problemSolvePrompts || []).length || 0} prompts answered`)}</div>
           <div class="small-text" style="margin-top:8px; opacity:.78;">${escapeHtml(latestAnswer)}</div>
         `;
@@ -20324,6 +20590,8 @@ function ensureProgLoaded() {
           " (score " + Number(result.chainScore).toFixed(1) + " / 4.0)";
         stepContent.appendChild(signalChip);
 
+        const outcomePreview = resolveOutcome(currentEncounter, reactionChecks);
+
         if (result.deliveryCorrect) {
           const upgraded = rollPremiumOpportunity(result, currentEncounter);
           stepContent.appendChild(document.createTextNode(upgraded ? "✅ Upgrade. “Nice — that’s the move.”" : "✅ Nod. “Perfect.”"));
@@ -20332,7 +20600,7 @@ function ensureProgLoaded() {
           return true;
         }
 
-        if (result.pivotUnlocked) {
+        if (result.pivotUnlocked && ["pivot", "recovery"].includes(String(outcomePreview?.outcome || "").toLowerCase())) {
           if (!currentEncounter.recoveryText) {
             ensurePressureDrivenPivot(currentEncounter);
             const unlockedModes = getUnlockedModesForCurrentPlayer();
@@ -20484,6 +20752,13 @@ function ensureProgLoaded() {
 
           const cont = addStepButton("CONTINUE TO REFLECTION", () => { goToStep(7); }, bar);
           if (!currentEncounter.recoveryChoice && !currentEncounter.resetUsed) cont.disabled = true;
+          return true;
+        }
+
+        if (String(outcomePreview?.outcome || "").toLowerCase() === "soft_close") {
+          stepContent.appendChild(document.createTextNode("🟡 The table is still serviceable. No recovery branch needed — tighten the close in reflection."));
+          appendFeedbackLine(stepContent, bcFeedbackFromOutcome(reactionChecks, result));
+          addStepButton("REFLECT", () => { goToStep(7); }, bar);
           return true;
         }
 
@@ -20758,6 +21033,7 @@ function ensureProgLoaded() {
 
         try {
           currentEncounter.outcome = outcome?.outcome || null;
+          resolveEncounterProgressionResolution(currentEncounter);
           if (sessionType === "tournament") {
             currentEncounter.tournamentResolvedOutcome =
               currentEncounter.tournamentResolvedOutcome ||
@@ -20881,9 +21157,11 @@ function ensureProgLoaded() {
         ensureProgLoaded();
         const scored = scoreEncounterForGuard(currentEncounter, checks);
         const outcome = resolveOutcome(currentEncounter, checks);
+        const progressionResolution = resolveEncounterProgressionResolution(currentEncounter);
         cacheSendableProgressDraft(currentEncounter, {
           checks,
           outcome: outcome?.outcome || null,
+          finalOutcome: progressionResolution.finalOutcome || null,
           chainSignal:
             currentEncounter?.chainSignal ||
             currentEncounter?.__reaction?.chainSignal ||
@@ -20903,7 +21181,6 @@ function ensureProgLoaded() {
             console.warn("[DISPLAY METHOD CHALLENGE] evaluation failed", e);
           }
         }
-        applyProgressionEncounterResult(encounterCountsAsWin(outcome));
 
         const { streakInfo, unlock } = renderEncounterProgressSummary(stepContent, checks, scored);
         const completionState = computeAndStoreCompletionState(scored, streakInfo, unlock);
@@ -20944,6 +21221,7 @@ function ensureProgLoaded() {
         maybeAutoSendProgressReport(currentEncounter);
         maybeActivatePendingTimedChallenge(currentEncounter);
         renderReflectionOverview(stepContent, currentEncounter, checks, modeBestResolved);
+        const progressionResolution = resolveEncounterProgressionResolution(currentEncounter);
 
         const scored = scoreEncounterForGuard(currentEncounter, checks);
         const completionState = currentEncounter.__completionState || null;
@@ -20970,12 +21248,7 @@ function ensureProgLoaded() {
 
         if (!currentEncounter.__progressionApplied) {
           currentEncounter.__progressionApplied = true;
-          const didWin =
-            !!checks.guestRead &&
-            checks.modeStatus !== "damaging" &&
-            checks.hookStatus !== "damaging" &&
-            !!checks.deliveryCorrect;
-          applyProgressionEncounterResult(didWin);
+          applyProgressionEncounterResult(progressionResolution.didWin);
         }
 
         const { streakInfo, unlock } = renderEncounterProgressSummary(stepContent, checks, scored);
@@ -21138,11 +21411,12 @@ function ensureProgLoaded() {
           modeTier === "right" ||
           hookTier === "right" ||
           (!modeDamaging && !hookDamaging);
-        const recoverySelective =
+        const recoveryRequired =
           reactionSignal === "red" ||
           strongPillars <= 1 ||
-          (!readCorrect && (modeDamaging || hookDamaging));
-        const pivotAllowed = pivotFeatureUnlocked && pivotPlanned && recoverySelective && pivotViable;
+          (!readCorrect && (modeDamaging || hookDamaging)) ||
+          (!deliveryStrong && (modeDamaging || hookDamaging) && !readCorrect);
+        const pivotAllowed = pivotFeatureUnlocked && pivotPlanned && recoveryRequired && pivotViable;
 
         if (abilityFx.closingSurge) {
           recordAbilityImpact({
@@ -21176,17 +21450,20 @@ function ensureProgLoaded() {
           return { outcome: "soft_close", score: total };
         }
         if (total >= recoveryPivotThreshold) {
+          if (!redSignalDowngrade && softEligible && strongPillars >= 2) {
+            return { outcome: "soft_close", score: total };
+          }
           if (pivotAllowed) {
             return { outcome: "pivot", score: total };
           }
           if (softEligible && strongPillars >= 2) {
             return { outcome: "soft_close", score: total };
           }
-          return recoverySelective
+          return recoveryRequired
             ? { outcome: "recovery", score: total }
             : { outcome: "soft_close", score: total };
         }
-        return recoverySelective
+        return recoveryRequired
           ? { outcome: "recovery", score: total }
           : { outcome: "soft_close", score: total };
       }
@@ -22769,6 +23046,9 @@ function ensureProgLoaded() {
             showScreen("screenHome");
             return;
           }
+          try { localStorage.setItem(coverKey, "true"); } catch {}
+          applyPlaySurfaceMode("encounter_only");
+          showScreen("screenPlay");
           beginOrResumeProgressionRun();
           await startPlayWithReadyGate();
         });
@@ -22792,6 +23072,559 @@ function ensureProgLoaded() {
           role === "group_manager" ||
           role === "enterpriser"
         );
+      }
+
+      function isV2DemoHarnessEnabled() {
+        return !!(window.__BC_V2_HARNESS__?.enabled && (window.isDemo || window.bcMode === "demo"));
+      }
+
+      function getV2HarnessApi() {
+        return window.__BC_V2_HARNESS__?.api || null;
+      }
+
+      function v2HarnessLabel(value) {
+        return String(value || "")
+          .replaceAll("_", " ")
+          .replace(/\b\w/g, (m) => m.toUpperCase());
+      }
+
+      function getV2EncounterChoiceLine(encounter, group, type) {
+        if (!encounter?.choiceLines) return "";
+        if (group === "ask") return String(encounter.choiceLines.ask?.[type] || "");
+        if (group === "recommend") return String(encounter.choiceLines.recommend?.[type] || "");
+        if (group === "commit") return String(encounter.choiceLines.commit?.[type] || "");
+        if (group === "walk_away") return "Step away cleanly and preserve the guest experience.";
+        return "";
+      }
+
+      function getV2MoodDescriptor(snapshot) {
+        const progressMood = String(snapshot?.progressMood || "");
+        const frustrationMood = String(snapshot?.frustrationMood || "");
+        if (snapshot?.outcome === "premium_success") return "Table fully aligned";
+        if (snapshot?.outcome === "standard_success") return "Table ready to commit";
+        if (snapshot?.outcome === "weak_success") return "Close secured with friction";
+        if (snapshot?.outcome === "neutral_exit") return "Experience preserved";
+        if (snapshot?.outcome === "failure") return "Table lost";
+        if (frustrationMood === "critical_resistance") return "Critical resistance";
+        if (progressMood === "ready") return "Ready to commit";
+        if (progressMood === "engaged") return "Strong momentum";
+        if (progressMood === "warming_up") return "Warming up";
+        return "Guarded";
+      }
+
+      function getV2ReactiveQuote(snapshot, encounter, reaction = "") {
+        if (reaction) return reaction;
+        if (snapshot?.outcome === "premium_success") return "Perfect. That's exactly the bottle we were hoping you'd land on.";
+        if (snapshot?.outcome === "standard_success") return "Great, that sounds like the right call for us.";
+        if (snapshot?.outcome === "weak_success") return "Alright, let's do it.";
+        if (snapshot?.outcome === "neutral_exit") return "No problem. Thanks for reading the table and leaving it there.";
+        if (snapshot?.outcome === "failure") return "We'll leave it, thanks.";
+        if (snapshot?.frustrationMood === "critical_resistance") return "You're losing the table. One more bad push and the guest will shut down.";
+        if (snapshot?.progressMood === "ready") return "They're close. A clean commit should land this.";
+        if (snapshot?.progressMood === "engaged") return "The guest is leaning in. Keep the rhythm clean.";
+        if (snapshot?.progressMood === "warming_up") return encounter?.verbalClue || "The guest is starting to open up.";
+        return encounter?.verbalClue || "";
+      }
+
+      function getV2FeedbackLine(snapshot, reaction = "") {
+        if (snapshot?.outcome === "premium_success") {
+          return "You read the pressure cleanly and committed at the right moment.";
+        }
+        if (snapshot?.outcome === "standard_success") {
+          return "The guest moved with you. The table was ready enough to close.";
+        }
+        if (snapshot?.outcome === "weak_success") {
+          return "You still got the bottle over the line, but with more friction than ideal.";
+        }
+        if (snapshot?.outcome === "neutral_exit") {
+          return "Good restraint. You preserved the guest experience instead of forcing the sale.";
+        }
+        if (snapshot?.outcome === "failure") {
+          return "The table shut down. You created too much pressure before the guest was ready.";
+        }
+        if (reaction) {
+          return "The guest is reacting to your line. Watch the mood before you commit.";
+        }
+        return "Read the table, choose the right interaction, and move the guest without creating friction.";
+      }
+
+      function getV2NextStepInstruction(snapshot) {
+        const outcome = String(snapshot?.outcome || "");
+        if (outcome === "premium_success" || outcome === "standard_success" || outcome === "weak_success") {
+          return "The encounter is complete. Continue to the next Tier 1 table or replay this one to try a cleaner path.";
+        }
+        if (outcome === "neutral_exit") {
+          return "You preserved the guest experience. Continue to the next table when you're ready.";
+        }
+        if (outcome === "failure") {
+          return "The table shut down. Replay to try a different read, or continue to the next Tier 1 encounter.";
+        }
+        if (snapshot?.walkAwayUnlocked) {
+          return "Critical resistance reached. You can keep trying to recover with a better line, or choose Walk Away to preserve the guest experience.";
+        }
+        if ((snapshot?.turnCount || 0) <= 0) {
+          return "Start by choosing one card. Ask is the safest opening move if you still need to read the table.";
+        }
+        if ((snapshot?.turnCount || 0) === 1 && snapshot?.progressMood === "guarded") {
+          return "The guest is still guarded. Ask again or make a more fitting recommendation before you commit.";
+        }
+        if (snapshot?.progressMood === "warming_up") {
+          return "The table is opening up. Choose the next card that moves them forward without adding pressure.";
+        }
+        if (snapshot?.progressMood === "engaged") {
+          return "Momentum is building. A strong recommendation can set up your close, but do not commit too early.";
+        }
+        if (snapshot?.progressMood === "ready") {
+          return "The guest looks ready. Choose Commit if you think you have enough trust, or ask/recommend once more if the fit still feels loose.";
+        }
+        return "Choose the next response card to continue the encounter.";
+      }
+
+      function isV2TerminalOutcome(outcome) {
+        const value = String(outcome || "");
+        return (
+          value === "premium_success" ||
+          value === "standard_success" ||
+          value === "weak_success" ||
+          value === "neutral_exit" ||
+          value === "failure"
+        );
+      }
+
+      function emitV2HarnessOutcome(snapshot, session, lastReaction = "") {
+        if (!snapshot || !session || !isV2TerminalOutcome(snapshot.outcome)) return;
+        if (session.outcomeEmitted) return;
+        session.outcomeEmitted = true;
+
+        try {
+          const payload = {
+            v: 1,
+            engineVersion: "v2_preview",
+            temporary: true,
+            encounterId: snapshot.encounterId,
+            encounterTitle: snapshot.encounterTitle,
+            encounterTier: snapshot.tier,
+            serviceStage: snapshot.serviceStage,
+            targetRecommendAngle: snapshot.targetRecommendAngle || null,
+            outcome: snapshot.outcome,
+            authorityDelta: Number(snapshot.authorityDelta || 0),
+            progress: Number(snapshot.progress || 0),
+            frustration: Number(snapshot.frustration || 0),
+            progressMood: snapshot.progressMood,
+            frustrationMood: snapshot.frustrationMood,
+            walkAwayUnlocked: !!snapshot.walkAwayUnlocked,
+            turnCount: Number(snapshot.turnCount || 0),
+            bestPath: Array.isArray(snapshot.bestPath) ? snapshot.bestPath : [],
+            product: session.product
+              ? {
+                  id: session.product.id || null,
+                  name: session.product.name || null,
+                  category: session.product.category || null,
+                  style: session.product.style || null,
+                  region: session.product.region || null,
+                }
+              : null,
+            history: Array.isArray(session.gameState?.history)
+              ? session.gameState.history.map((item) => ({
+                  turn: item.turn,
+                  choice: item.choice,
+                  quality: item.quality,
+                  progressDelta: item.progressDelta,
+                  frustrationDelta: item.frustrationDelta,
+                  resultingProgress: item.resultingProgress,
+                  resultingFrustration: item.resultingFrustration,
+                  reaction: item.reaction,
+                }))
+              : [],
+            scene: {
+              family: session.encounter?.family || null,
+              hiddenPressure: session.encounter?.hiddenPressure || null,
+              masterProfile: session.encounter?.masterProfile || null,
+              variant: session.encounter?.variant || null,
+            },
+            latestReaction: lastReaction || "",
+          };
+          bcEmitEvent("encounter_resolved_v2_preview", payload);
+        } catch (e) {
+          console.warn("[BC][V2] emitV2HarnessOutcome failed", e);
+        }
+      }
+
+      function isV2FinalDemoEncounter(snapshot) {
+        return !!(
+          snapshot &&
+          isV2TerminalOutcome(snapshot.outcome) &&
+          Number(snapshot.encounterOrdinal || 0) >= Number(snapshot.encounterCount || 0)
+        );
+      }
+
+      function getParentDemoJoinApi() {
+        try {
+          if (!window.parent || window.parent === window) return null;
+          return window.parent.__BC_DEMO_JOIN_API__ || null;
+        } catch {
+          return null;
+        }
+      }
+
+      function getV2DemoJoinState() {
+        try {
+          const api = getParentDemoJoinApi();
+          if (!api || typeof api.getState !== "function") return null;
+          return api.getState();
+        } catch {
+          return null;
+        }
+      }
+
+      function getV2DemoSessionState() {
+        if (!window.__BC_V2_DEMO_SESSION__) {
+          window.__BC_V2_DEMO_SESSION__ = {
+            active: false,
+            introEncounterId: null,
+          };
+        }
+        return window.__BC_V2_DEMO_SESSION__;
+      }
+
+      function resetV2DemoSession() {
+        window.__BC_V2_DEMO_SESSION__ = {
+          active: false,
+          introEncounterId: null,
+        };
+      }
+
+      function shouldShowV2DemoIntro(snapshot) {
+        const state = getV2DemoSessionState();
+        return !!(
+          state.active &&
+          state.introEncounterId &&
+          snapshot &&
+          snapshot.encounterId === state.introEncounterId
+        );
+      }
+
+      function resetV2DemoProgressToStart() {
+        try { window.localStorage.setItem("BC_V2_TIER1_ROTATION_INDEX", "0"); } catch {}
+        try { window.__BC_V2_HARNESS_STATE__ = {}; } catch {}
+        startV2HarnessEncounter();
+      }
+
+      function renderV2DemoCompletionCard(stepButtons, snapshot) {
+        const shell = stepButtons?.querySelector?.(".v2-action-shell");
+        if (!shell) return;
+
+        shell.querySelector("#v2DemoCompletionCard")?.remove();
+        if (!isV2FinalDemoEncounter(snapshot)) return;
+
+        const joinState = getV2DemoJoinState();
+        const canJoin = !!joinState?.canJoin;
+        const card = document.createElement("div");
+        card.id = "v2DemoCompletionCard";
+        card.className = "card";
+        card.style.marginTop = "14px";
+        card.innerHTML = `
+          <div style="display:grid; gap:10px;">
+            <div>
+              <strong>Tier 1 complete</strong>
+              <div class="small-text" style="margin-top:6px;">
+                You've finished the 3-encounter demo run.
+              </div>
+            </div>
+            ${
+              canJoin
+                ? `
+                  <div>
+                    <div class="small-text" style="margin-bottom:8px;">Join a restaurant to unlock Premium with your waiter account.</div>
+                    <input id="v2DemoJoinCode" type="text" placeholder="Join code" />
+                    <div class="button-row" style="margin-top:10px;">
+                      <button id="btnV2DemoJoin" type="button">Join Restaurant</button>
+                      <button id="btnV2RestartEncounterFlow" type="button" class="btn-ghost">Return to Encounter 1</button>
+                    </div>
+                    <div id="v2DemoJoinMsg" class="small-text" style="margin-top:8px;"></div>
+                  </div>
+                `
+                : `
+                  <div class="button-row">
+                    <button id="btnV2RestartEncounterFlow" type="button" class="btn-ghost">Return to Encounter 1</button>
+                  </div>
+                `
+            }
+          </div>
+        `;
+        shell.insertBefore(card, shell.querySelector(".button-row"));
+
+        document.getElementById("btnV2RestartEncounterFlow")?.addEventListener("click", () => {
+          resetV2DemoProgressToStart();
+        });
+
+        document.getElementById("btnV2DemoJoin")?.addEventListener("click", async () => {
+          const msg = document.getElementById("v2DemoJoinMsg");
+          const input = document.getElementById("v2DemoJoinCode");
+          const code = String(input?.value || "");
+          const api = getParentDemoJoinApi();
+          if (!api || typeof api.submit !== "function") {
+            if (msg) msg.textContent = "Join is unavailable in this view.";
+            return;
+          }
+          if (msg) msg.textContent = "Submitting...";
+          try {
+            const result = await api.submit(code);
+            if (msg) msg.textContent = result?.message || "Success ✅ Premium unlocked.";
+          } catch (error) {
+            if (msg) msg.textContent = String(error?.message || error || "Join failed.");
+          }
+        });
+      }
+
+      function renderV2HarnessPlay(snapshot, reaction = "") {
+        const encounterPanel = document.getElementById("encounterPanel");
+        const stepHeader = document.getElementById("stepHeader");
+        const wineDisplayName = document.getElementById("wineDisplayName");
+        const stepContent = document.getElementById("stepContent");
+        const feedbackLine = document.getElementById("bcFeedbackLine");
+        const stepButtons = document.getElementById("stepButtons");
+        const api = getV2HarnessApi();
+        if (!encounterPanel || !stepHeader || !wineDisplayName || !stepContent || !feedbackLine || !stepButtons || !snapshot || !api) {
+          return;
+        }
+        encounterPanel.dataset.v2Layout = "tier1";
+
+        const session = api.getSession?.() || null;
+        const encounter = session?.encounter || null;
+
+        const selectedGroup =
+          window.__BC_V2_HARNESS_STATE__?.selectedGroup &&
+          snapshot.availableGroups.includes(window.__BC_V2_HARNESS_STATE__.selectedGroup)
+            ? window.__BC_V2_HARNESS_STATE__.selectedGroup
+            : (snapshot.availableGroups[0] || null);
+        window.__BC_V2_HARNESS_STATE__ = {
+          ...(window.__BC_V2_HARNESS_STATE__ || {}),
+          selectedGroup,
+        };
+
+        const showIntroGuidance = shouldShowV2DemoIntro(snapshot);
+        stepHeader.textContent = `Tier ${snapshot.tier} • Encounter ${String(snapshot.encounterOrdinal).padStart(3, "0")} • ${snapshot.encounterTitle}`;
+        wineDisplayName.textContent = snapshot.productName
+          ? `Product: ${snapshot.productName}`
+          : `Encounter: ${snapshot.encounterTitle}`;
+        feedbackLine.textContent = showIntroGuidance ? getV2FeedbackLine(snapshot, reaction) : "";
+
+        const bestPath = Array.isArray(snapshot.bestPath) ? snapshot.bestPath.join(" → ") : "";
+        const outcome = snapshot.outcome ? v2HarnessLabel(snapshot.outcome) : "In Progress";
+        const angle = snapshot.targetRecommendAngle ? v2HarnessLabel(snapshot.targetRecommendAngle) : "Flexible";
+        const quote = getV2ReactiveQuote(snapshot, encounter, reaction);
+        const scene = encounter?.scene || "";
+        const visualClues = Array.isArray(encounter?.visualClues) ? encounter.visualClues : [];
+        const moodDescriptor = getV2MoodDescriptor(snapshot);
+        const isTerminal = isV2TerminalOutcome(snapshot.outcome);
+        const isFinalEncounter = isV2FinalDemoEncounter(snapshot);
+        const lesson = String(encounter?.lesson || "");
+        const nextStepInstruction = getV2NextStepInstruction(snapshot);
+        const progressNodes = Array.from({ length: Math.max(1, snapshot.encounterCount || 1) }, (_, index) => {
+          const encounterNumber = index + 1;
+          const nodeClass =
+            encounterNumber < snapshot.encounterOrdinal
+              ? "v2-progress-node is-complete"
+              : encounterNumber === snapshot.encounterOrdinal
+                ? "v2-progress-node is-active"
+                : "v2-progress-node";
+          return `<span class="${nodeClass}"></span>`;
+        }).join("");
+        const walkAwayHint = snapshot.walkAwayUnlocked
+          ? "Walk Away is now available because the table has reached critical resistance."
+          : "Walk Away unlocks only when friction reaches critical resistance.";
+
+        stepContent.dataset.stage = "observe";
+        stepContent.dataset.signal =
+          snapshot.frustrationMood === "critical_resistance"
+            ? "red"
+            : snapshot.progressMood === "ready"
+              ? "green"
+              : "yellow";
+        stepContent.innerHTML = `
+          <section class="v2-play-shell">
+            <div class="v2-hero-frame">
+              <div class="v2-hero-top">
+                <div class="v2-play-header">
+                  <div class="v2-crest">B</div>
+                  <div class="v2-header-copy">
+                    <div class="v2-header-topline">
+                      <span>Tier ${snapshot.tier}</span>
+                      <span>Encounter ${String(snapshot.encounterOrdinal).padStart(3, "0")} of ${snapshot.encounterCount}</span>
+                    </div>
+                    <h2 class="v2-encounter-title">${escapeHtml(snapshot.encounterTitle)}</h2>
+                    <div class="v2-progress-rail" style="--v2-progress-count:${Math.max(1, snapshot.encounterCount || 1)}" aria-hidden="true">${progressNodes}</div>
+                  </div>
+                  <div class="v2-region-mark">SA</div>
+                </div>
+                <div class="v2-mood-pill">
+                  <div class="v2-mood-label">Table Mood</div>
+                  <div class="v2-mood-value">${escapeHtml(v2HarnessLabel(snapshot.progressMood))}</div>
+                  <div class="v2-mood-detail">${escapeHtml(moodDescriptor)}</div>
+                </div>
+              </div>
+              <div class="v2-hero-bottom">
+                <div class="v2-scene-text">
+                  <div class="v2-scene-label">Table Scene</div>
+                  <p class="v2-scene-copy">${escapeHtml(scene)}</p>
+                  <ul class="v2-clue-list">
+                    ${visualClues.map((clue) => `<li>${escapeHtml(clue)}</li>`).join("")}
+                  </ul>
+                </div>
+
+                <div class="v2-quote-row">
+                  <blockquote class="v2-quote-card">
+                    <span class="v2-quote-mark">“</span>
+                    <p>${escapeHtml(quote)}</p>
+                  </blockquote>
+                </div>
+
+                <div class="v2-state-grid">
+                  <div class="v2-state-card">
+                    <div class="v2-state-label">Progress</div>
+                    <div class="v2-state-value">${snapshot.progress}</div>
+                    <div class="v2-state-meta">${escapeHtml(v2HarnessLabel(snapshot.progressMood))}</div>
+                  </div>
+                  <div class="v2-state-card">
+                    <div class="v2-state-label">Friction</div>
+                    <div class="v2-state-value">${snapshot.frustration}</div>
+                    <div class="v2-state-meta">${escapeHtml(v2HarnessLabel(snapshot.frustrationMood))}</div>
+                  </div>
+                  <div class="v2-state-card">
+                    <div class="v2-state-label">Authority</div>
+                    <div class="v2-state-value">${snapshot.authorityDelta}</div>
+                    <div class="v2-state-meta">${escapeHtml(outcome)}</div>
+                  </div>
+                </div>
+                ${showIntroGuidance ? `
+                  <div class="v2-guidance-card">
+                    <div class="v2-guidance-label">What To Do Next</div>
+                    <p class="v2-guidance-copy">${escapeHtml(nextStepInstruction)}</p>
+                    <div class="v2-guidance-meta">${escapeHtml(walkAwayHint)}</div>
+                  </div>
+                ` : ""}
+                ${isTerminal ? `
+                  <div class="v2-status-card">
+                    <div><strong>Lesson:</strong> ${escapeHtml(lesson)}</div>
+                  </div>
+                ` : ""}
+              </div>
+            </div>
+          </section>
+        `;
+
+        const groupButtons = snapshot.availableGroups
+          .map((group) => {
+            const active = group === selectedGroup;
+            return `
+              <button
+                type="button"
+                class="btn btnChoice v2-group-button${active ? " is-active" : ""}"
+                data-v2-group="${escapeHtml(group)}"
+              >${escapeHtml(v2HarnessLabel(group))}</button>
+            `;
+          })
+          .join("");
+
+        const actionButtons = selectedGroup
+          ? api.availableActionTypes(selectedGroup)
+              .map((type) => `
+                <button
+                  type="button"
+                  class="btn btnChoice v2-action-card"
+                  data-v2-action="${escapeHtml(String(type))}"
+                >
+                  <span class="v2-action-title">${escapeHtml(v2HarnessLabel(type))}</span>
+                  <span class="v2-action-subtitle">${escapeHtml(v2HarnessLabel(selectedGroup))}</span>
+                  <span class="v2-action-copy">${escapeHtml(
+                    getV2EncounterChoiceLine(encounter, selectedGroup, type)
+                  )}</span>
+                </button>
+              `)
+              .join("")
+          : "";
+
+        const actionLabel = selectedGroup
+          ? `Choose one ${v2HarnessLabel(selectedGroup)} response card to continue the encounter.`
+          : "The encounter is complete. Continue, replay, or go back to welcome.";
+        stepButtons.innerHTML = `
+          <div class="v2-action-shell">
+            <div class="v2-action-header">${groupButtons}</div>
+            ${showIntroGuidance ? `<div class="small-text v2-action-caption">${escapeHtml(actionLabel)}</div>` : ""}
+            <div class="v2-action-grid">${actionButtons}</div>
+            <div class="button-row" style="width:100%; margin-top:10px;">
+              ${isTerminal ? `<button type="button" class="btn" id="btnV2HarnessContinue">${isFinalEncounter ? "Return to Encounter 1" : "Continue Tier 1"}</button>` : ""}
+              ${isTerminal ? `<button type="button" class="btn btn-ghost" id="btnV2HarnessReplay">Replay Encounter</button>` : ""}
+              <button type="button" class="btn btn-ghost" id="btnV2HarnessBack">Back</button>
+            </div>
+          </div>
+        `;
+        renderV2DemoCompletionCard(stepButtons, snapshot);
+
+        stepButtons.querySelectorAll("[data-v2-group]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const nextGroup = String(btn.getAttribute("data-v2-group") || "");
+            window.__BC_V2_HARNESS_STATE__ = {
+              ...(window.__BC_V2_HARNESS_STATE__ || {}),
+              selectedGroup: nextGroup,
+            };
+            renderV2HarnessPlay(snapshot, reaction);
+          });
+        });
+
+        stepButtons.querySelectorAll("[data-v2-action]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            if (!selectedGroup) return;
+            const type = String(btn.getAttribute("data-v2-action") || "");
+            const result = api.choose(selectedGroup, type);
+            if (!result?.snapshot) return;
+            const liveSession = api.getSession?.() || null;
+            emitV2HarnessOutcome(result.snapshot, liveSession, result.reaction || "");
+            renderV2HarnessPlay(result.snapshot, result.reaction || "");
+          });
+        });
+
+        document.getElementById("btnV2HarnessContinue")?.addEventListener("click", () => {
+          if (isFinalEncounter) {
+            resetV2DemoProgressToStart();
+            return;
+          }
+          startV2HarnessEncounter();
+        });
+
+        document.getElementById("btnV2HarnessReplay")?.addEventListener("click", () => {
+          if (!snapshot?.encounterId) return;
+          const replaySnapshot = api.start({ tier: snapshot.tier, encounterId: snapshot.encounterId });
+          renderV2HarnessPlay(replaySnapshot, "");
+        });
+
+        document.getElementById("btnV2HarnessBack")?.addEventListener("click", () => {
+          resetV2DemoSession();
+          showScreen("screenWelcome");
+        });
+      }
+
+      function startV2HarnessEncounter(options = {}) {
+        const api = getV2HarnessApi();
+        if (!api) return false;
+        const state = getV2DemoSessionState();
+        const startingFresh = !!(options.resetSession || !state.active);
+        if (startingFresh) {
+          state.active = true;
+          state.introEncounterId = null;
+        } else {
+          state.introEncounterId = null;
+        }
+        applyPlaySurfaceMode("encounter_only");
+        resetNavState();
+        showScreen("screenPlay");
+        const snapshot = api.start({ tier: 1 });
+        if (startingFresh) {
+          state.introEncounterId = snapshot?.encounterId || null;
+        }
+        renderV2HarnessPlay(snapshot, "");
+        return true;
       }
 
       function bindPremiumEntryButton(btn) {
@@ -22826,6 +23659,10 @@ function ensureProgLoaded() {
             btnGoPremium.__bcBound = false;
             bindInput(btnGoPremium, () => {
               resetNavState();
+              if (isV2DemoHarnessEnabled()) {
+                startV2HarnessEncounter({ resetSession: true });
+                return;
+              }
               showScreen("screenPlay");
               window.startEncounter?.();
             });
@@ -23039,8 +23876,10 @@ function ensureProgLoaded() {
       function initButtons() {
         const btnWelcomeStart = document.getElementById("btnWelcomeStart");
         const btnWelcomeHome = document.getElementById("btnWelcomeHome");
+        const btnWelcomeClose = document.getElementById("btnWelcomeClose");
+        const btnStatusBackToWelcome = document.getElementById("btnStatusBackToWelcome");
         const btnResetApp = document.getElementById("btnResetApp");
-        const btnBackToSetup = document.getElementById("btnWelcomeBackToSetup");
+        const btnWelcomeBackToSetup = document.getElementById("btnWelcomeBackToSetup");
 
         const btnGoSetup = document.getElementById(ids.btnGoSetup);
         const btnContinue = document.getElementById(ids.btnContinue);
@@ -23065,12 +23904,24 @@ function ensureProgLoaded() {
         const identity = getGameplayIdentity();
         const isWaiter = !!identity.isWaiter;
 
+        if (btnWelcomeHome && (window.isDemo || window.bcMode === "demo")) {
+          btnWelcomeHome.remove();
+        }
+        if (btnWelcomeBackToSetup && (window.isDemo || window.bcMode === "demo")) {
+          btnWelcomeBackToSetup.remove();
+        }
+        if (btnStatusBackToWelcome && (window.isDemo || window.bcMode === "demo")) {
+          btnStatusBackToWelcome.classList.add("hidden");
+        }
+
         if (btnFiveMinDrill) {
           btnFiveMinDrill.classList.add("hidden");
           btnFiveMinDrill.setAttribute("aria-hidden", "true");
         }
 
         if (isWaiter) {
+          btnWelcomeHome?.remove();
+          btnWelcomeBackToSetup?.remove();
           ["btnWelcomeBackToSetup", "btnGoSetup", "btnSetupWines"].forEach((id) => {
             document.getElementById(id)?.classList.add("hidden");
           });
@@ -23090,6 +23941,10 @@ function ensureProgLoaded() {
 
           bindInput(btnGoDemo, () => {
             resetNavState();
+            if (isV2DemoHarnessEnabled()) {
+              startV2HarnessEncounter({ resetSession: true });
+              return;
+            }
             showScreen("screenPlay");
             window.startEncounter?.();
           });
@@ -23107,6 +23962,10 @@ function ensureProgLoaded() {
 
             bindInput(btnGoPremium, () => {
               resetNavState();
+              if (isV2DemoHarnessEnabled()) {
+                startV2HarnessEncounter({ resetSession: true });
+                return;
+              }
               showScreen("screenPlay");
               window.startEncounter?.();
             });
@@ -23152,11 +24011,16 @@ function ensureProgLoaded() {
             // Mark cover as dismissed
             try { localStorage.setItem(coverKey, "true"); } catch {}
 
+            applyPlaySurfaceMode("encounter_only");
             resetNavState();
             showScreen("screenPlay");
 
             // DEMO: start immediately
             if (window.isDemo || window.bcMode === "demo") {
+              if (isV2DemoHarnessEnabled()) {
+                startV2HarnessEncounter({ resetSession: true });
+                return;
+              }
               window.startEncounter?.();
               return;
             }
@@ -23179,13 +24043,51 @@ function ensureProgLoaded() {
               return;
             }
             try { localStorage.setItem(coverKey, "true"); } catch {}
+            applyPlaySurfaceMode("full");
             resetNavState();
             showScreen("screenHome");
           });
         }
 
-        if (!isWaiter) {
-          bindInput(btnBackToSetup, () => {
+        if (btnWelcomeClose) {
+          btnWelcomeClose.onclick = null;
+          btnWelcomeClose.__bcBound = false;
+
+          bindInput(btnWelcomeClose, () => {
+            if (window.isDemo || window.bcMode === "demo") {
+              try {
+                const msg = { source: "BC_MSG", v: 1, type: "nav_back", backTo: "screenGameDemo" };
+                window.parent?.postMessage?.(msg, "*");
+              } catch {}
+              return;
+            }
+            const msg = { source: "BC_MSG", v: 1, type: "nav_back", backTo: "screenPremiumApp" };
+            try {
+              window.parent?.postMessage(msg, window.location.origin);
+              setTimeout(() => {
+                try { window.parent?.postMessage(msg, window.location.origin); } catch {}
+              }, 60);
+            } catch {}
+          });
+        }
+
+        if (btnStatusBackToWelcome) {
+          btnStatusBackToWelcome.onclick = null;
+          btnStatusBackToWelcome.__bcBound = false;
+
+          bindInput(btnStatusBackToWelcome, () => {
+            if (window.isDemo || window.bcMode === "demo") {
+              showScreen("screenWelcome");
+              return;
+            }
+            applyPlaySurfaceMode("full");
+            resetNavState();
+            showScreen("screenWelcome");
+          });
+        }
+
+        if (!isWaiter && btnWelcomeBackToSetup) {
+          bindInput(btnWelcomeBackToSetup, () => {
             if (sessionType === "drill") return;
             resetNavState();
             showScreen(ids.setupScreen);
@@ -23236,6 +24138,7 @@ function ensureProgLoaded() {
 
         bindInput(btnContinue, async () => {
           if (!(await assertWinesReadyOrExplain())) return;
+          applyPlaySurfaceMode("full");
           resetNavState();
 
           if (!hasRestorableProgressionRun()) {
@@ -23282,12 +24185,12 @@ function ensureProgLoaded() {
             console.warn("[BC] session_ended failed", e);
           }
           resetNavState();
-          showScreen(isDemo ? "screenHome" : "screenWelcome");
+          showScreen("screenWelcome");
         });
 
         bindInput(btnBackHomeFromHistory, () => {
           resetNavState();
-          showScreen(isDemo ? "screenHome" : "screenWelcome");
+          showScreen("screenWelcome");
         });
 
         bindInput(btnViewHistory, () => {
@@ -23435,12 +24338,20 @@ function ensureProgLoaded() {
 
       // Decide initial screen (premium should land on Home)
       const hasSeenCover = localStorage.getItem(coverKey) === "true";
+      const initialScreenParam = (() => {
+        try {
+          const value = new URLSearchParams(window.location.search).get("initialScreen") || "";
+          return value && document.getElementById(value) ? value : "";
+        } catch {
+          return "";
+        }
+      })();
 
       if (sessionType !== "drill") {
         if (isDemo) {
-          showScreen(hasSeenCover ? "screenHome" : "screenWelcome");
+          showScreen(initialScreenParam || (hasSeenCover ? "screenHome" : "screenWelcome"));
         } else {
-          showScreen("screenHome");
+          showScreen(initialScreenParam || "screenHome");
         }
       }
       updateCounts();

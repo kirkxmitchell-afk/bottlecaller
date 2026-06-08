@@ -198,6 +198,16 @@ function syncBottleCallerViewportEnv() {
   const isMobile = isBottleCallerMobileEnv();
   document.documentElement.dataset.bcMobileEnv = isMobile ? "true" : "false";
   document.documentElement.dataset.bcViewport = isMobile ? "mobile" : "desktop";
+  const isV2Demo =
+    new URLSearchParams(window.location.search).get("bcV2Demo") === "1" ||
+    (() => {
+      try {
+        return localStorage.getItem("BC_V2_DEMO") === "1";
+      } catch {
+        return false;
+      }
+    })();
+  document.documentElement.dataset.bcV2Demo = isV2Demo ? "true" : "false";
   window.__BC_ENV__ = { ...(window.__BC_ENV__ || {}), mobile: isMobile };
   syncManagerMessengerViewportLayout();
 }
@@ -394,18 +404,33 @@ document.querySelector("#app").innerHTML = `
       </div>
       <div class="app-chrome-copy">A premium shell for live service training, guided reps, and manager-side coaching.</div>
     </div>
-    <div class="app-chrome-context">
-      <div class="app-chrome-chip">
-        <span class="app-chrome-chip-label">Surface</span>
-        <strong id="appChromeSurface">Lobby</strong>
-      </div>
-      <div class="app-chrome-chip">
-        <span class="app-chrome-chip-label">Role</span>
-        <strong id="appChromeRole">Guest</strong>
-      </div>
-      <div class="app-chrome-chip">
-        <span class="app-chrome-chip-label">Restaurant</span>
-        <strong id="appChromeRestaurant">Not bound</strong>
+    <div id="appChromePlayCta" class="app-chrome-play-cta hidden">
+      <button id="btnAppChromeEnter" class="app-chrome-enter-button" type="button">Play / Enter</button>
+    </div>
+    <div id="appChromePremiumBar" class="app-chrome-premium-bar hidden">
+      <div id="premiumTopbarMenuWrap" class="premium-topbar-menu-wrap">
+        <button
+          id="btnPremiumTopbarMenu"
+          class="premium-topbar-menu-button"
+          type="button"
+          aria-label="Open premium menu"
+          aria-expanded="false"
+          aria-controls="premiumTopbarMenuPanel"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M19.14 12.94c.04-.31.06-.62.06-.94s-.02-.63-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.2 7.2 0 0 0-1.63-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.58.22-1.12.53-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.7 8.84a.5.5 0 0 0 .12.64l2.03 1.58c-.04.31-.06.62-.06.94s.02.63.06.94L2.82 14.52a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .6.22l2.39-.96c.5.4 1.05.72 1.63.94l.36 2.54a.5.5 0 0 0 .5.42h3.84a.5.5 0 0 0 .5-.42l.36-2.54c.58-.22 1.13-.54 1.63-.94l2.39.96a.5.5 0 0 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58ZM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7Z" />
+          </svg>
+        </button>
+        <div id="premiumTopbarMenuPanel" class="premium-topbar-menu-panel hidden">
+          <button id="btnPremiumSignupMenu" class="btn-ghost hidden" type="button">Premium Sign Up</button>
+          <button id="btnOpenMessages" class="btn-ghost" type="button">Messages</button>
+          <button id="btnWaiterPerformanceLeaderboard" class="btn-ghost" type="button">Leaderboard</button>
+          <button id="btnPremiumWineSetup" class="btn-ghost" type="button" data-tutorial="nav-wine-setup">Wine Setup</button>
+          <button id="btnTutorial" class="btn-ghost" type="button">Tutorials</button>
+          <button id="btnManagerBoard" class="btn-ghost" type="button">Manager Board</button>
+          <button id="btnOpenProfile" class="btn-ghost" type="button">Profile</button>
+          <button id="btnLogoutPremium" class="btn-danger" type="button">Logout</button>
+        </div>
       </div>
     </div>
   </div>
@@ -554,23 +579,6 @@ document.querySelector("#app").innerHTML = `
   <!-- PREMIUM APP -->
   <section id="screenPremiumApp" class="screen hidden">
     <div class="panel stack">
-      <div class="topbar">
-        <div class="brand">
-          <h2>BottleCaller</h2>
-          <span id="premiumBadge" class="badge">PREMIUM</span>
-        </div>
-        <div class="row">
-          <button id="btnOpenHud" class="btn-ghost" type="button">Menu</button>
-          <button id="btnOpenMessages" class="btn-ghost" type="button">Messages</button>
-          <button id="btnWaiterPerformanceLeaderboard" class="btn-ghost hidden" type="button">Leaderboard</button>
-          <button id="btnPremiumWineSetup" class="btn-ghost" type="button" data-tutorial="nav-wine-setup">Wine Setup</button>
-          <button id="btnTutorial" class="btn-ghost" type="button">Tutorials</button>
-          <button id="btnManagerBoard" class="btn-ghost" type="button">Manager Board</button>
-          <button id="btnOpenProfile" class="btn-ghost" type="button">Profile</button>
-          <button id="btnLogoutPremium" class="btn-danger" type="button">Logout</button>
-        </div>
-      </div>
-
       <div id="bcUnlockNotice" class="bc-unlock" style="display:none;"></div>
 
       <!-- Game lives here (isolated) -->
@@ -601,7 +609,46 @@ document.querySelector("#app").innerHTML = `
 
       <div id="profileStandingCard" style="margin-top:12px;"></div>
       <div id="profileBadgeShelf" style="margin-top:12px;"></div>
-      <div id="profileInsightCard" style="margin-top:12px;"></div>
+      <div id="profileSkillsCard" style="margin-top:12px;"></div>
+      <div id="profilePerformanceHistoryCard" style="margin-top:12px;">
+        <div id="mbPerformanceHistoryPanel" style="margin-top:12px;">
+          <details class="card mb-disclosure">
+            <summary class="mb-disclosure-summary">
+              <div>
+                <strong>Performance History</strong>
+                <div class="small-text" style="margin-top:6px; opacity:.85;">
+                  Skill growth and encounter reactions for your profile.
+                </div>
+              </div>
+              <label class="small-text" style="display:flex; align-items:center; gap:8px;">
+                Waiter
+                <select id="mbHistoryUser" class="input" style="min-width:220px;"></select>
+              </label>
+            </summary>
+            <div class="mb-disclosure-body">
+              <div id="mbHistorySummaryStrip" style="margin-top:10px;"></div>
+              <canvas id="mbHistoryChart"
+                width="600"
+                height="280"
+                style="margin-top:12px;">
+              </canvas>
+              <div id="mbPerformanceLegend" style="margin-top:8px;"></div>
+              <div id="managerEncounterSummaryHost" class="manager-encounter-summary-host" style="margin-top:12px;"></div>
+            </div>
+          </details>
+        </div>
+      </div>
+      <div id="profileWeeklyReportPanel" class="card" style="margin-top:12px;">
+        <strong>Weekly Training Report</strong>
+
+        <div class="small-text" style="margin-top:6px; opacity:.85;">
+          Summary of team progress over the last 7 days.
+        </div>
+
+        <div id="mbWeeklyReport" style="margin-top:10px;">
+          <div class="small-text" style="opacity:.7;">Loading report…</div>
+        </div>
+      </div>
       <div id="profileTutorialCard" class="hidden" style="margin-top:12px;">
         <div class="card">
           <div style="font-weight:600; margin-bottom:8px;">Tutorials</div>
@@ -656,6 +703,109 @@ document.querySelector("#app").innerHTML = `
     </div>
   </section>
 
+  <section id="screenManagerMessenger" class="screen hidden">
+    <div class="panel stack">
+      <div class="topbar">
+        <div class="brand">
+          <h2>Messenger</h2>
+          <span class="badge">PREMIUM</span>
+        </div>
+        <div class="row">
+          <button id="btnCloseManagerMessenger" class="btn-ghost" type="button">Close</button>
+        </div>
+      </div>
+
+      <div class="card" data-tutorial="mb-panel-messenger">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+          <strong>Messenger</strong>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <button id="mbToggleMessengerPanel" class="btn-ghost" type="button">Close Inbox</button>
+            <button id="mbMsgRefresh" class="btn-ghost" type="button">Refresh</button>
+          </div>
+        </div>
+
+        <div class="small-text" style="margin-top:6px; opacity:.85;">
+          Progress reports from staff + coaching replies. (Per active restaurant.)
+        </div>
+
+        <div id="mbMessengerDeck" style="display:flex; flex-direction:column; gap:0; margin-top:12px;">
+        <div id="mbMessengerColumns" style="display:grid; grid-template-columns: 280px 1fr; gap:12px; margin-top:12px;">
+          <div id="mbMessengerThreadsPane" style="border:1px solid rgba(255,255,255,0.10); border-radius:12px; overflow:hidden;">
+          <div style="padding:10px; border-bottom:1px solid rgba(255,255,255,0.10); font-weight:600;">
+              Staff Threads
+            </div>
+
+            <div style="padding:10px; border-bottom:1px solid rgba(255,255,255,0.10);">
+              <div style="display:flex; gap:8px; align-items:center;">
+                <input
+                  id="mbMessengerSearch"
+                  class="input"
+                  type="search"
+                  placeholder="Search threads by person, message, or type"
+                  style="width:100%;"
+                />
+                <button id="mbMessengerSearchClear" class="btn-ghost" type="button" title="Clear thread search">Clear</button>
+              </div>
+            </div>
+
+            <div id="mbThreadList" style="display:flex; flex-direction:column; gap:0;"></div>
+
+            <div id="mbThreadEmpty" class="small-text" style="padding:10px; display:none; opacity:.8;">
+              No waiter threads yet.
+            </div>
+          </div>
+
+          <div id="mbMessengerDetailPane" style="border:1px solid rgba(255,255,255,0.10); border-radius:12px; overflow:hidden; display:flex; flex-direction:column; min-height:520px;">
+          <div style="padding:10px; border-bottom:1px solid rgba(255,255,255,0.10);">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+              <strong id="mbThreadTitle">Select a waiter</strong>
+              <span id="mbThreadMeta" class="small-text" style="opacity:.75;"></span>
+            </div>
+          </div>
+
+          <div id="mbThreadTimelinePanel" class="card" style="margin:10px 10px 0; padding:10px;"></div>
+
+            <div id="mbThreadMessages"
+              style="flex:1; padding:10px; display:flex; flex-direction:column; gap:8px; overflow-y:auto; min-height:280px; border-top:1px solid rgba(255,255,255,0.10);">
+              <div class="small-text" style="opacity:.8;">Select a waiter thread in this restaurant to assign a timed challenge.</div>
+            </div>
+
+            <div id="mbThreadActions" style="padding:10px; border-top:1px solid rgba(255,255,255,0.10); display:flex; flex-direction:column; gap:10px;">
+              <div id="mbThreadStatePanel" class="card" style="padding:10px;"></div>
+
+              <div id="mbThreadRecommendationsPanel" class="card" style="padding:10px;">
+                <div>
+                  <strong>Suggested prompts</strong>
+                  <div id="mbSuggestedPrompts" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;"></div>
+                </div>
+
+                <div id="mbThreadChallengeRecommendations" style="margin-top:12px;"></div>
+              </div>
+
+              <div class="small-text" style="opacity:.75;">Actions</div>
+              <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                <button id="mbInstrRunDrill" class="btn-ghost" type="button">Run Drill</button>
+                <button id="mbInstrUseSuggestion" class="btn-ghost" type="button">Use Suggestion</button>
+              </div>
+
+              <textarea id="mbInstrBody" class="input"
+                style="width:100%; min-height:110px;"
+                placeholder="Example: Tonight: keep it short + confirm intent first. Run 5-min Guest Reading before shift."></textarea>
+
+              <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                <button id="mbInstrSend" class="btn" type="button">Send Message</button>
+              </div>
+
+              <div class="small-text" id="mbInstrQuota" style="opacity:.78;"></div>
+              <div class="small-text" id="mbInstrStatus" style="opacity:.85;"></div>
+            </div>
+          </div>
+        </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- PREMIUM SETUP (PARENT-OWNED) -->
   <section id="screenSetupPremium" class="screen hidden">
     <div class="panel app-setup-shell">
@@ -665,7 +815,7 @@ document.querySelector("#app").innerHTML = `
       </div>
 
       <div class="manager-panel app-setup-list">
-        <h3>Wine List</h3>
+        <h3>Wine Cards</h3>
         <div id="premiumWineCards" class="wine-cards" data-tutorial="wine-list"></div>
 
         <details id="premiumWineAdvanced" class="wine-advanced panel-spaced app-advanced-panel">
@@ -700,10 +850,11 @@ document.querySelector("#app").innerHTML = `
               <button id="addWineBtnPremium" type="button" data-tutorial="wine-add">Add Wine</button>
             </div>
 
+            <h3 style="margin-top:16px;">Wine List</h3>
             <table class="wine-table">
               <thead>
                 <tr>
-                  <th>Name</th><th>Varietal</th><th>Fruit</th><th>Texture</th><th>Oak</th><th>Process</th><th>Region</th><th>Story</th><th>Action</th>
+                  <th>Name</th><th>Varietal</th><th>Fruit</th><th>Texture</th><th>Oak</th><th>Region</th><th>Action</th>
                 </tr>
               </thead>
               <tbody id="premiumWineTableBody"></tbody>
@@ -729,17 +880,13 @@ document.querySelector("#app").innerHTML = `
         </div>
         <div class="row">
           <button id="btnBackToPremium" class="btn-ghost" type="button">Back</button>
-          <button id="btnLogoutManagerBoard" class="btn-danger" type="button">Logout</button>
         </div>
       </div>
 
       <div id="mbMenu" class="card" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
         <button class="btn" type="button" data-mbtab="overview" data-tutorial="mb-tab-overview">Overview</button>
-        <button class="btn" type="button" data-mbtab="people" data-tutorial="mb-tab-people">People</button>
-        <button class="btn" type="button" data-mbtab="messenger" data-tutorial="mb-tab-messenger">Messenger</button>
-        <button class="btn" type="button" data-mbtab="live_controls" data-tutorial="mb-tab-live-controls">Live Controls</button>
-        <button class="btn" type="button" data-mbtab="performance" data-tutorial="mb-tab-performance">Performance</button>
-        <button class="btn" type="button" data-mbtab="selection" data-tutorial="mb-tab-selection">Selection</button>
+        <button class="btn" type="button" data-mbtab="gameplay_adjustments" data-tutorial="mb-tab-gameplay-adjustments">Gameplay Adjustments</button>
+        <button class="btn" type="button" data-mbtab="performance" data-tutorial="mb-tab-performance">Team Performance</button>
         <button class="btn" type="button" data-mbtab="billing" data-tutorial="mb-tab-billing">Listing</button>
         <button class="btn hidden" type="button" data-mbtab="enterprise" id="mbEnterpriseTabBtn" data-tutorial="mb-tab-enterprise">Enterprise</button>
         <select id="mbRestaurantPicker" class="hidden input" data-tutorial="restaurant-picker" style="margin-left:auto; min-width:220px;"></select>
@@ -747,292 +894,93 @@ document.querySelector("#app").innerHTML = `
 
       <div id="mbPanels">
         <div id="mbTab_overview" class="mbTab" data-tutorial="mb-panel-overview">
-          <div id="mbParentStateCard" style="margin-bottom:12px;"></div>
           <div id="mbOverviewRitualStatus" style="margin-top:12px;"></div>
-          <div class="card">
-            <div class="score-row">Restaurant: <span id="mbRestName">-</span></div>
-            <div class="score-row">Total runs: <span id="mbRunsTotal">-</span></div>
-            <div class="score-row">Total drills: <span id="mbDrillsTotal">-</span></div>
-          </div>
 
           <div id="mbRestaurantContextCard" style="margin-top:12px;"></div>
           <div id="mbGroupOverviewCard" style="margin-top:12px;"></div>
-          <div id="mbGroupMetricsCard" style="margin-top:12px;"></div>
           <div id="mbGroupRestaurantComparisonCard" style="margin-top:12px;"></div>
-          <div id="mbOverviewTimedChallenge" style="margin-top:12px;"></div>
-          <div id="mbOverviewDisplayMethodChallenge" style="margin-top:12px;"></div>
-          <div id="mbOverviewRecentChallenges" style="margin-top:12px;"></div>
           <div id="mbInviteSummary" style="margin-top:12px;"></div>
-          <div id="mbDrillSummary" style="margin-top:12px;"></div>
         </div>
 
-        <div id="mbTab_people" class="mbTab hidden" data-tutorial="mb-panel-people">
-          <div id="mbPeopleSummary" style="margin-top:12px;"></div>
-          <div id="mbInvitesPanel" style="margin-top:12px;">
-            <div class="card" style="padding:12px;">
-              <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-                <strong>Invites</strong>
-              </div>
-              <div id="invitesList" style="margin-top:10px;"></div>
-            </div>
-          </div>
-          <div id="mbStaffPanel" style="margin-top:12px;">
-            <div class="card" id="mbMembersCard" style="margin-top:12px;">
-              <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-                <strong>Members</strong>
-                <button id="mbRefreshMembers" class="btn" type="button">Refresh</button>
-              </div>
-              <div style="display:flex; gap:8px; margin-top:10px; align-items:center;">
-                <input
-                  id="mbPeopleSearch"
-                  class="input"
-                  type="search"
-                  placeholder="Search people by name, role, or user id"
-                  style="width:100%;"
-                />
-                <button id="mbPeopleSearchClear" class="btn-ghost" type="button" title="Clear people search">Clear</button>
-              </div>
-              <div id="mbMembersMsg" class="small-text" style="margin-top:6px;"></div>
-              <div id="mbMembersList" style="margin-top:10px; display:flex; flex-direction:column; gap:8px;"></div>
-            </div>
-          </div>
-        </div>
-        <div id="mbTab_messenger" class="mbTab hidden" data-tutorial="mb-panel-messenger">
-          <div class="card" style="margin-top:12px;">
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-              <strong>Messenger</strong>
-              <div style="display:flex; gap:8px; align-items:center;">
-                <button id="mbToggleMessengerPanel" class="btn-ghost" type="button">Close Inbox</button>
-                <button id="mbMsgRefresh" class="btn-ghost" type="button">Refresh</button>
-              </div>
-            </div>
-
-            <div class="small-text" style="margin-top:6px; opacity:.85;">
-              Progress reports from staff + coaching replies. (Per active restaurant.)
-            </div>
-
-            <div id="mbMessengerDeck" style="display:flex; flex-direction:column; gap:0; margin-top:12px;">
-            <div id="mbTimedChallengeComposer" class="card" style="display:flex; flex-direction:column; gap:10px; padding:12px; margin-top:12px; margin-bottom:12px;">
-              <div style="font-weight:600;">Send Timed Challenge</div>
-
-              <div class="row" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-                <select id="mbTimedChallengeTarget" style="min-width:180px;"></select>
-
-                <select id="mbTimedChallengeType">
-                  <optgroup label="Skill Focus">
-                    <option value="closing_push">Closing Push</option>
-                    <option value="recovery_window">Recovery Window</option>
-                    <option value="read_first">Read First</option>
-                    <option value="full_delivery">Full Delivery</option>
-                  </optgroup>
-                  <optgroup label="Outcome">
-                    <option value="clean_close">Clean Close</option>
-                    <option value="soft_close">Soft Close</option>
-                    <option value="successful_pivot">Successful Pivot</option>
-                  </optgroup>
-                  <optgroup label="Discipline">
-                    <option value="no_reset_run">No Reset Run</option>
-                    <option value="stable_signal">Stable Signal</option>
-                    <option value="controlled_table">Controlled Table</option>
-                  </optgroup>
-                  <optgroup label="Momentum">
-                    <option value="solid_interaction">Solid Interaction</option>
-                    <option value="premium_moment">Premium Moment</option>
-                    <option value="commanding_presence">Commanding Presence</option>
-                  </optgroup>
-                </select>
-
-                <select id="mbTimedChallengeWine" style="min-width:220px;"></select>
-
-                <select id="mbTimedChallengeDuration">
-                  <option value="3600">1 hr</option>
-                  <option value="7200">2 hrs</option>
-                  <option value="10800" selected>3 hrs</option>
-                </select>
-
-                <select id="mbTimedChallengePlacement">
-                  <option value="before_start" selected>Before encounter 1</option>
-                  <option value="after_first_encounter">After encounter 1</option>
-                </select>
-
-                <input
-                  id="mbTimedChallengeReward"
-                  type="number"
-                  min="1"
-                  max="5"
-                  step="1"
-                  value="5"
-                  style="width:110px;"
-                  placeholder="Points"
-                />
-              </div>
-
-              <div class="small" style="opacity:.8;">
-                Assign a live objective by skill focus, outcome, discipline, or momentum.
-              </div>
-
-              <div class="row" style="display:flex; gap:8px; align-items:center;">
-                <button id="btnSendTimedChallenge" class="btn" type="button">Send Challenge</button>
-                <div id="mbTimedChallengeStatus" class="small" style="opacity:.85;"></div>
-              </div>
-
-              <div id="mbTimedChallengeRecentSummary" class="small" style="opacity:.85; margin-top:4px;"></div>
-            </div>
-
-            <div id="mbMessengerColumns" style="display:grid; grid-template-columns: 280px 1fr; gap:12px; margin-top:12px;">
-              <div id="mbMessengerThreadsPane" style="border:1px solid rgba(255,255,255,0.10); border-radius:12px; overflow:hidden;">
-              <div style="padding:10px; border-bottom:1px solid rgba(255,255,255,0.10); font-weight:600;">
-                  Staff Threads
-                </div>
-
-                <div style="padding:10px; border-bottom:1px solid rgba(255,255,255,0.10);">
-                  <div style="display:flex; gap:8px; align-items:center;">
-                    <input
-                      id="mbMessengerSearch"
-                      class="input"
-                      type="search"
-                      placeholder="Search threads by person, message, or type"
-                      style="width:100%;"
-                    />
-                    <button id="mbMessengerSearchClear" class="btn-ghost" type="button" title="Clear thread search">Clear</button>
-                  </div>
-                </div>
-
-                <div id="mbThreadList" style="display:flex; flex-direction:column; gap:0;"></div>
-
-                <div id="mbThreadEmpty" class="small-text" style="padding:10px; display:none; opacity:.8;">
-                  No waiter threads yet.
-                </div>
-              </div>
-
-              <div id="mbMessengerDetailPane" style="border:1px solid rgba(255,255,255,0.10); border-radius:12px; overflow:hidden; display:flex; flex-direction:column; min-height:520px;">
-              <div style="padding:10px; border-bottom:1px solid rgba(255,255,255,0.10);">
-                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
-                  <strong id="mbThreadTitle">Select a waiter</strong>
-                  <span id="mbThreadMeta" class="small-text" style="opacity:.75;"></span>
-                </div>
-              </div>
-
-              <div id="mbThreadTimelinePanel" class="card" style="margin:10px 10px 0; padding:10px;"></div>
-
-                <div id="mbThreadMessages"
-                  style="flex:1; padding:10px; display:flex; flex-direction:column; gap:8px; overflow-y:auto; min-height:280px; border-top:1px solid rgba(255,255,255,0.10);">
-                  <div class="small-text" style="opacity:.8;">Select a waiter thread in this restaurant to assign a timed challenge.</div>
-                </div>
-
-                <div id="mbThreadActions" style="padding:10px; border-top:1px solid rgba(255,255,255,0.10); display:flex; flex-direction:column; gap:10px;">
-                  <div id="mbThreadStatePanel" class="card" style="padding:10px;"></div>
-
-                  <div id="mbThreadRecommendationsPanel" class="card" style="padding:10px;">
-                    <div>
-                      <strong>Suggested prompts</strong>
-                      <div id="mbSuggestedPrompts" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;"></div>
-                    </div>
-
-                    <div id="mbThreadChallengeRecommendations" style="margin-top:12px;"></div>
-                  </div>
-
-                  <div class="small-text" style="opacity:.75;">Actions</div>
-                  <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-                    <button id="mbInstrRunDrill" class="btn-ghost" type="button">Run Drill</button>
-                    <button id="mbInstrUseSuggestion" class="btn-ghost" type="button">Use Suggestion</button>
-                  </div>
-
-                  <textarea id="mbInstrBody" class="input"
-                    style="width:100%; min-height:110px;"
-                    placeholder="Example: Tonight: keep it short + confirm intent first. Run 5-min Guest Reading before shift."></textarea>
-
-                  <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-                    <button id="mbInstrSend" class="btn" type="button">Send Message</button>
-                  </div>
-
-                  <div class="small-text" id="mbInstrQuota" style="opacity:.78;"></div>
-                  <div class="small-text" id="mbInstrStatus" style="opacity:.85;"></div>
-                </div>
-              </div>
-            </div>
-            </div>
-          </div>
-        </div>
-
-        <div id="mbTab_live_controls" class="mbTab hidden" data-tutorial="mb-panel-live-controls">
-          <div id="mbOverviewLiveEffects" style="margin-top:12px;"></div>
-          <div id="mbOverviewAbilityEconomy" style="margin-top:12px;"></div>
+        <div id="mbTab_gameplay_adjustments" class="mbTab hidden" data-tutorial="mb-panel-gameplay-adjustments">
+          <div id="mbOverviewLiveEffects" class="hidden" style="display:none; margin-top:12px;"></div>
+          <div id="mbGameplayAdjustmentsPanel" style="margin-top:12px;"></div>
           <div id="mbAttributeAbilitiesPanel" style="margin-top:12px;"></div>
           <div id="mbAreaAbilitiesPanel" style="margin-top:12px;"></div>
           <div id="mbDrillQuickActionsPanel" style="margin-top:12px;"></div>
           <div id="mbTimedChallengeQuickActionsPanel" style="margin-top:12px;"></div>
-          <div id="mbDisplayMethodQuickActionsPanel" style="margin-top:12px;"></div>
+          <div id="mbDisplayMethodQuickActionsPanel" class="hidden" style="display:none; margin-top:12px;"></div>
+          <div id="mbTimedChallengeComposer" class="card" style="display:flex; flex-direction:column; gap:10px; padding:12px; margin-top:12px; margin-bottom:12px;">
+            <div style="font-weight:600;">Send Timed Challenge</div>
+
+            <div class="row" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+              <select id="mbTimedChallengeTarget" style="min-width:180px;"></select>
+
+              <select id="mbTimedChallengeType">
+                <optgroup label="Skill Focus">
+                  <option value="closing_push">Closing Push</option>
+                  <option value="recovery_window">Recovery Window</option>
+                  <option value="read_first">Read First</option>
+                  <option value="full_delivery">Full Delivery</option>
+                </optgroup>
+                <optgroup label="Outcome">
+                  <option value="clean_close">Clean Close</option>
+                  <option value="soft_close">Soft Close</option>
+                  <option value="successful_pivot">Successful Pivot</option>
+                </optgroup>
+                <optgroup label="Discipline">
+                  <option value="no_reset_run">No Reset Run</option>
+                  <option value="stable_signal">Stable Signal</option>
+                  <option value="controlled_table">Controlled Table</option>
+                </optgroup>
+                <optgroup label="Momentum">
+                  <option value="solid_interaction">Solid Interaction</option>
+                  <option value="premium_moment">Premium Moment</option>
+                  <option value="commanding_presence">Commanding Presence</option>
+                </optgroup>
+              </select>
+
+              <select id="mbTimedChallengeWine" style="min-width:220px;"></select>
+
+              <select id="mbTimedChallengeDuration">
+                <option value="3600">1 hr</option>
+                <option value="7200">2 hrs</option>
+                <option value="10800" selected>3 hrs</option>
+              </select>
+
+              <select id="mbTimedChallengePlacement">
+                <option value="before_start" selected>Before encounter 1</option>
+                <option value="after_first_encounter">After encounter 1</option>
+              </select>
+
+              <input
+                id="mbTimedChallengeReward"
+                type="number"
+                min="1"
+                max="5"
+                step="1"
+                value="5"
+                style="width:110px;"
+                placeholder="Points"
+              />
+            </div>
+
+            <div class="small" style="opacity:.8;">
+              Assign a live objective by skill focus, outcome, discipline, or momentum.
+            </div>
+
+            <div class="row" style="display:flex; gap:8px; align-items:center;">
+              <button id="btnSendTimedChallenge" class="btn" type="button">Send Challenge</button>
+              <div id="mbTimedChallengeStatus" class="small" style="opacity:.85;"></div>
+            </div>
+
+            <div id="mbTimedChallengeRecentSummary" class="small" style="opacity:.85; margin-top:4px;"></div>
+          </div>
+          <div id="mbOverviewAbilityEconomy" style="margin-top:12px;"></div>
         </div>
 
         <div id="mbTab_performance" class="mbTab hidden" data-tutorial="mb-panel-performance">
         <div id="mbInsightsPanel" style="margin-top:12px;"></div>
-        <div id="mbPerformanceHistoryPanel" style="margin-top:12px;">
-          <details class="card mb-disclosure">
-            <summary class="mb-disclosure-summary">
-              <div>
-                <strong>Performance History</strong>
-                <div class="small-text" style="margin-top:6px; opacity:.85;">
-                  Skill growth and encounter reactions for the selected waiter.
-                </div>
-              </div>
-              <label class="small-text" style="display:flex; align-items:center; gap:8px;">
-                Waiter
-                <select id="mbHistoryUser" class="input" style="min-width:220px;"></select>
-              </label>
-            </summary>
-            <div class="mb-disclosure-body">
-              <div id="mbHistorySummaryStrip" style="margin-top:10px;"></div>
-              <canvas id="mbHistoryChart"
-                width="600"
-                height="280"
-                style="margin-top:12px;">
-              </canvas>
-              <div id="mbPerformanceLegend" style="margin-top:8px;"></div>
-              <div id="managerEncounterSummaryHost" class="manager-encounter-summary-host" style="margin-top:12px;"></div>
-            </div>
-          </details>
-        </div>
-
-          <div id="mbBestStreaksPanel" class="card" style="margin-top:12px;">
-            <div style="font-weight:600; margin-bottom:6px;">Best streaks</div>
-            <div id="mbBestStreaks" style="opacity:.9;">-</div>
-          </div>
-
-          <div id="mbNeedsCoachingPanel" class="card" style="margin-top:12px;">
-            <div style="font-weight:600; margin-bottom:6px;">Needs coaching</div>
-            <div id="mbNeedsCoaching" style="opacity:.9;">-</div>
-          </div>
-
-          <details id="mbRecentPanel" class="card mb-disclosure">
-            <summary class="mb-disclosure-summary">
-              <div>
-                <strong>Recent Activity</strong>
-                <div class="small-text" style="margin-top:6px; opacity:.85;">
-                  Latest reporting and training events.
-                </div>
-              </div>
-            </summary>
-            <div class="mb-disclosure-body">
-              <div id="mbRecent" class="small" style="opacity:.9;">Loading…</div>
-            </div>
-          </details>
-
-          <div id="mbWeeklyReportPanel" class="card" style="margin-top:12px;">
-            <strong>Weekly Training Report</strong>
-
-            <div class="small-text" style="margin-top:6px; opacity:.85;">
-              Summary of team progress over the last 7 days.
-            </div>
-
-            <div id="mbWeeklyReport" style="margin-top:10px;">
-              <div class="small-text" style="opacity:.7;">Loading report…</div>
-            </div>
-          </div>
-        </div>
-
-        <div id="mbTab_selection" class="mbTab hidden" data-tutorial="mb-panel-selection">
-          <div id="mbSelectionPanel" style="margin-top:12px;"></div>
         </div>
 
         <div id="mbTab_billing" class="mbTab hidden" data-tutorial="mb-panel-billing">
@@ -1053,6 +1001,87 @@ document.querySelector("#app").innerHTML = `
               Seat plans are now provisioned through Premium signup and licensing. Contact <a href="mailto:hello@bottlecaller.com">hello@bottlecaller.com</a> if you need a different seat package issued.
             </div>
           </div>
+
+          <div id="mbListingMenuPanel" class="card" style="margin-top:12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+              <strong>Premium Menu</strong>
+            </div>
+
+            <div style="margin-top:10px; font-size:13px; opacity:.95;">
+              <div><b>Role:</b> <span id="mbListingRole">-</span></div>
+              <div><b>Restaurant:</b> <span id="mbListingRestName">-</span></div>
+              <div id="mbListingJoinRow" class="row" style="margin-top:10px; align-items:center; gap:10px; flex-wrap:wrap;">
+                <div><b>Join code:</b> <span id="mbListingJoinCode">-</span></div>
+                <button id="btnMbListingCopyCode" type="button">Copy join code</button>
+              </div>
+              <div><b>Seat limit:</b> <span id="mbListingSeatLimit">-</span></div>
+              <div><b>Invite required:</b> <span id="mbListingRequireInvite">-</span></div>
+            </div>
+          </div>
+
+          <div id="mbListingManagerOnlyBlock" style="margin-top:12px;">
+            <div id="mbListingManagerSetupSection">
+              <div id="mbListingGroupSetupCard" class="card" style="margin-top:12px;">
+                <strong>Group Manager Signup</strong>
+                <div class="small-text" style="margin-top:6px;">
+                  Paste a GROUP manager_setup code to create or upgrade a manager scope for multi-restaurant control.
+                </div>
+
+                <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+                  <input id="mbListingGroupSetupCode" type="text" placeholder="GROUP_XXXXX" style="flex:1; min-width:220px;" />
+                  <button id="mbListingRedeemGroupSetup" class="btn-primary" type="button">Redeem</button>
+                </div>
+
+                <div id="mbListingGroupSetupMsg" class="small-text" style="margin-top:8px;"></div>
+                <div class="small-text premium-contact-copy" style="margin-top:10px;">
+                  Contact us at <a href="mailto:hello@bottlecaller.com">hello@bottlecaller.com</a> with the upgrade and seat plan you want. We will issue the matching code for this profile.
+                </div>
+              </div>
+
+              <div id="mbListingProvisionAccess" class="card" style="margin-top:12px;">
+                <strong>Enterprise Signup</strong>
+                <div class="small-text" style="margin-top:6px;">
+                  Paste an Enterprise manager_setup code to upgrade this manager scope.
+                </div>
+
+                <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+                  <input id="mbListingEnterpriseCode" type="text" placeholder="ENTERPRISE_XXXXX" style="flex:1; min-width:220px;" />
+                  <button id="mbListingRedeemEnterprise" class="btn-primary" type="button">Redeem</button>
+                </div>
+
+                <div id="mbListingEnterpriseMsg" class="small-text" style="margin-top:8px;"></div>
+                <div class="small-text premium-contact-copy" style="margin-top:10px;">
+                  Contact us at <a href="mailto:hello@bottlecaller.com">hello@bottlecaller.com</a> for enterprise provisioning. We will send the correct enterprise code for this account.
+                </div>
+              </div>
+            </div>
+
+            <div id="mbListingActiveRestaurantCard" class="card" style="margin-top:12px;">
+              <strong>Active Restaurant</strong>
+              <div class="small-text" style="margin-top:6px;">
+                Switch which restaurant you’re managing right now.
+              </div>
+
+              <div style="display:flex; gap:8px; margin-top:10px; align-items:center;">
+                <select id="mbListingActiveRestaurant" class="input" style="flex:1;"></select>
+                <button id="mbListingSetActiveRestaurant" class="btn" type="button">Set</button>
+              </div>
+
+              <div id="mbListingActiveRestaurantHint" class="small-text" style="margin-top:8px;"></div>
+            </div>
+
+            <div class="card" style="margin-top:12px;">
+              <strong>Invite emails</strong>
+              <div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <input id="mbListingInviteEmailInput" type="email" placeholder="waiter@email.com" style="flex:1; min-width:220px;" />
+                <button id="mbListingAddInvite" class="btn-primary" type="button">Add waiter</button>
+              </div>
+
+              <div id="mbInvitesList" style="margin-top:10px; font-size:12px; opacity:.95;"></div>
+            </div>
+          </div>
+
+          <div id="mbListingMsg" class="small-text" style="margin-top:10px;"></div>
         </div>
 
         <div id="mbTab_enterprise" class="mbTab hidden" data-tutorial="mb-panel-enterprise">
@@ -1109,8 +1138,8 @@ document.querySelector("#app").innerHTML = `
       </div>
 
       <!-- Game lives here (isolated) -->
-      <div id="gameRootDemo" style="margin-top:10px;"></div>
-      <div class="small" style="margin-top:8px;">
+      <div id="gameRootDemo"></div>
+      <div id="demoContactFooter" class="small hidden" style="margin-top:8px;">
         Contact us for purchase:
         <a href="mailto:hello@bottlecaller.com" style="color:#fff;">hello@bottlecaller.com</a>
       </div>
@@ -1142,13 +1171,13 @@ document.querySelector("#app").innerHTML = `
       <button id="btnCloseMessages" type="button" style="font-size:12px;">Close</button>
     </div>
 
-    <div id="waiterMessagesThread" style="margin-top:12px; display:flex; flex-direction:column; gap:8px;">
-      <div class="small-text" style="opacity:.8;">No messages yet.</div>
-    </div>
-
     <div style="margin-top:14px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.10);">
       <button id="btnWaiterSendProgress" class="btn-ghost" type="button">Send Progress</button>
       <div id="waiterSendProgressStatus" class="small-text" style="margin-top:6px; opacity:.85;"></div>
+    </div>
+
+    <div id="waiterMessagesThread" style="margin-top:12px; display:flex; flex-direction:column; gap:8px;">
+      <div class="small-text" style="opacity:.8;">No messages yet.</div>
     </div>
   </div>
 
@@ -1179,127 +1208,23 @@ document.querySelector("#app").innerHTML = `
       <div><b>Restaurant:</b> <span id="hudRestName">-</span></div>
 
       <!-- Join code MANAGER ONLY -->
-      <div id="hudJoinRow" class="hidden"><b>Join code:</b> <span id="hudJoinCode">-</span></div>
+      <div id="hudJoinRow" class="row hidden" style="margin-top:10px; align-items:center; gap:10px; flex-wrap:wrap;">
+        <div><b>Join code:</b> <span id="hudJoinCode">-</span></div>
+        <button id="btnCopyHudCode" type="button">Copy join code</button>
+      </div>
 
       <div><b>Seat limit:</b> <span id="hudSeatLimit">-</span></div>
       <div><b>Invite required:</b> <span id="hudRequireInvite">-</span></div>
-    </div>
-    <div id="hudSkillsCard" style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.10);">
-      <div style="font-weight:600; margin-bottom:8px;">Your Skills</div>
-
-      <div class="small-text" id="hudSkillSummary" style="margin-bottom:8px; opacity:.85;">
-        Loading skill summary…
-      </div>
-
-      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px 12px; margin-bottom:10px;">
-        <div class="small-text">Reading: <span id="hudSkillRead">0%</span></div>
-        <div class="small-text">Framing: <span id="hudSkillFraming">0%</span></div>
-        <div class="small-text">Delivery: <span id="hudSkillDelivery">0%</span></div>
-        <div class="small-text">Recovery: <span id="hudSkillRecovery">0%</span></div>
-        <div class="small-text">Closing: <span id="hudSkillClosing">0%</span></div>
-      </div>
-
-      <canvas id="hudSkillRadar" width="240" height="240" style="display:block; margin:0 auto;"></canvas>
-
-      <div id="hudSkillTimeline" style="margin-top:12px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:6px;">
-          <div id="hudTimelineTitle" style="font-weight:600;">Recent Progress</div>
-          <select id="hudTimelineUserSelect" class="hidden" style="max-width:180px;"></select>
-        </div>
-
-        <div id="hudTimelineList" class="small-text" style="display:flex; flex-direction:column; gap:6px;">
-          <div style="opacity:.7;">No history yet.</div>
-        </div>
-
-      </div>
-    </div>
-    <div id="hudAbilitiesCard" style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.10);">
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px;">
-        <div style="font-weight:600;">Abilities</div>
-        <div class="small-text" id="hudAbilitiesStatus" style="opacity:.8;">No active effects</div>
-      </div>
-
-      <div id="hudAbilitySlots" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;">
-        <div id="hudAttributeSlotCard" style="padding:10px; border:1px solid rgba(255,255,255,0.08); border-radius:10px;">
-          <div class="small-text" style="opacity:.7;">Attribute Slot</div>
-          <div id="hudAttributeSlotStatus" style="font-weight:600; margin-top:4px;">-</div>
-          <div id="hudAttributeSlotMeta" class="small-text" style="opacity:.8; margin-top:4px;">-</div>
-        </div>
-        <div id="hudAreaSlotCard" style="padding:10px; border:1px solid rgba(255,255,255,0.08); border-radius:10px;">
-          <div class="small-text" style="opacity:.7;">Area Slot</div>
-          <div id="hudAreaSlotStatus" style="font-weight:600; margin-top:4px;">-</div>
-          <div id="hudAreaSlotMeta" class="small-text" style="opacity:.8; margin-top:4px;">-</div>
-        </div>
-      </div>
-
-      <div style="display:flex; gap:8px; margin-bottom:10px;">
-        <button id="btnHudAbilitiesAttribute" type="button" class="btn-ghost">Attribute</button>
-        <button id="btnHudAbilitiesArea" type="button" class="btn-ghost">Area</button>
-      </div>
-
-      <div id="hudAbilitiesAttributeList" style="display:flex; flex-direction:column; gap:8px;"></div>
-      <div id="hudAbilitiesAreaList" class="hidden" style="display:none; flex-direction:column; gap:8px;"></div>
-
-      <div id="hudActiveEffects" style="margin-top:12px;">
-        <div style="font-weight:600; margin-bottom:6px;">Active Effects</div>
-        <div id="hudActiveEffectsList" class="small-text" style="display:flex; flex-direction:column; gap:6px;">
-          <div style="opacity:.7;">No active abilities.</div>
-        </div>
-      </div>
-    </div>
-    <div id="hudTimedChallengeCard" style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.10);">
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px;">
-        <div style="font-weight:600;">Timed Challenge</div>
-        <div id="hudTimedChallengeStatus" class="small-text" style="opacity:.8;">No active challenge</div>
-      </div>
-      <div id="hudTimedChallengeBody" class="small-text" style="display:flex; flex-direction:column; gap:6px;">
-        <div style="opacity:.7;">No challenge assigned.</div>
-      </div>
-    </div>
-    <div id="hudDisplayMethodChallengeCard" style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.10);">
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px;">
-        <div style="font-weight:600;">Display Method Challenge</div>
-        <div id="hudDisplayMethodChallengeStatus" class="small-text" style="opacity:.8;">No active challenge</div>
-      </div>
-      <div id="hudDisplayMethodChallengeBody" class="small-text" style="display:flex; flex-direction:column; gap:6px;">
-        <div style="opacity:.7;">No challenge assigned.</div>
-      </div>
-    </div>
-    <div id="hudDifficultyCard" style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.10);">
-      <div style="font-weight:600; margin-bottom:8px;">Difficulty</div>
-
-      <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <button id="btnDifficultyEasy" class="btn-ghost" type="button">Easy</button>
-        <button id="btnDifficultyMedium" class="btn-ghost" type="button">Medium</button>
-        <button id="btnDifficultyHard" class="btn-ghost" type="button">Hard</button>
-      </div>
-
-      <div id="hudDifficultyStatus" class="small-text" style="margin-top:6px; opacity:.85;">
-        Current: -
-      </div>
     </div>
     <div style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.10);">
       <button id="btnHudSendProgress" class="btn-ghost" type="button">Send progress to manager</button>
       <div id="hudSendProgressStatus" class="small-text" style="margin-top:6px; opacity:.85;"></div>
     </div>
 
-    <!-- Copy join code MANAGER ONLY -->
-    <div id="hudCopyRow" class="row hidden" style="margin-top:10px;">
-      <button id="btnCopyHudCode" type="button">Copy join code</button>
-    </div>
-
     <div id="managerOnlyBlock" class="hidden">
       <hr style="opacity:.25; margin:12px 0;" />
 
       <h3 style="margin:0;">Manager controls</h3>
-
-      <div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-        <label style="font-size:12px; opacity:.9;">
-          <input id="toggleRequireInvite" type="checkbox" />
-          Require invite to join
-        </label>
-        <button id="btnSaveRequireInvite" class="btn-primary" type="button">Save</button>
-      </div>
 
       <hr style="opacity:.25; margin:12px 0;" />
       <div id="managerSetupSection">
@@ -3195,7 +3120,7 @@ function renderManagerBoardOverviewLiveEffects() {
       </div>
 
       <div class="small-text" style="opacity:.82;">
-        Live Controls effects sent to the waiter experience, compared with the current game runtime.
+        Gameplay Adjustments effects sent to the waiter experience, compared with the current game runtime.
       </div>
 
       <div style="display:flex; gap:8px; flex-wrap:wrap;">
@@ -4165,26 +4090,23 @@ function tickManagerBoardAbilities() {
     if (!screen || screen.classList.contains("hidden")) return;
 
     const overview = document.getElementById("mbTab_overview");
-    const messenger = document.getElementById("mbTab_messenger");
-    const liveControls = document.getElementById("mbTab_live_controls");
+    const messenger = document.getElementById("screenManagerMessenger");
+    const gameplayAdjustments = document.getElementById("mbTab_gameplay_adjustments");
     const overviewVisible = overview && !overview.classList.contains("hidden");
     const messengerVisible = messenger && !messenger.classList.contains("hidden");
-    const liveControlsVisible = liveControls && !liveControls.classList.contains("hidden");
+    const gameplayAdjustmentsVisible = gameplayAdjustments && !gameplayAdjustments.classList.contains("hidden");
 
-    if (overviewVisible) {
-      renderManagerBoardOverviewTimedChallenge();
-      renderManagerBoardOverviewDisplayMethodChallenge();
-      renderManagerBoardRecentChallenges();
-      renderManagerBoardDrillSummary();
-    }
     if (messengerVisible) {
       renderTimedChallengeRecentSummary();
       renderDisplayMethodChallengeRecentSummary();
       renderManagerBoardDrillSummary();
       renderManagerThreadDrillSummary();
     }
-    if (liveControlsVisible) {
+    if (gameplayAdjustmentsVisible) {
       renderManagerBoardAbilityTabs();
+      renderManagerDrillActionPanel?.();
+      renderManagerGameplayAdjustmentsPanel?.();
+      renderTimedChallengeComposer?.();
       renderManagerDisplayMethodActionPanel?.();
     }
   };
@@ -4443,13 +4365,11 @@ function renderWineTable(wines) {
       tr.innerHTML = `
         <td>${escapeHtml(wine.name || `Wine ${idx + 1}`)}</td>
         <td>${escapeHtml(wine.varietal || "")}</td>
-        <td>${escapeHtml(Array.isArray(wine.fruitTags) ? wine.fruitTags.join(", ") : Array.isArray(wine.fruit_tags) ? wine.fruit_tags.join(", ") : "")}</td>
-        <td>${escapeHtml(Array.isArray(wine.textureTags) ? wine.textureTags.join(", ") : Array.isArray(wine.texture_tags) ? wine.texture_tags.join(", ") : "")}</td>
-        <td>${escapeHtml(wine.oakLevel || wine.oak_level || "")}</td>
-        <td>${escapeHtml(wine.process || "")}</td>
-        <td>${escapeHtml(wine.region || "")}</td>
-        <td>${escapeHtml(wine.story || "")}</td>
-        <td><button type="button" class="btn-danger" data-wine-del="${escapeHtml(String(wine.id || wine.wine_id || wine.created_at || idx))}">Delete</button></td>
+      <td>${escapeHtml(Array.isArray(wine.fruitTags) ? wine.fruitTags.join(", ") : Array.isArray(wine.fruit_tags) ? wine.fruit_tags.join(", ") : "")}</td>
+      <td>${escapeHtml(Array.isArray(wine.textureTags) ? wine.textureTags.join(", ") : Array.isArray(wine.texture_tags) ? wine.texture_tags.join(", ") : "")}</td>
+      <td>${escapeHtml(wine.oakLevel || wine.oak_level || "")}</td>
+      <td>${escapeHtml(wine.region || "")}</td>
+      <td><button type="button" class="btn-danger" data-wine-del="${escapeHtml(String(wine.id || wine.wine_id || wine.created_at || idx))}">Delete</button></td>
       `;
       body.appendChild(tr);
     }
@@ -4458,10 +4378,10 @@ function renderWineTable(wines) {
       const div = document.createElement("div");
       div.className = "wine-card";
       div.innerHTML = `
+        <div class="wine-card-type">Wine Card</div>
         <div><strong>${escapeHtml(wine.name || `Wine ${idx + 1}`)}</strong> — ${escapeHtml(wine.varietal || "")}</div>
         <div>${escapeHtml((Array.isArray(wine.fruitTags) ? wine.fruitTags : wine.fruit_tags || []).join(", "))} · ${escapeHtml((Array.isArray(wine.textureTags) ? wine.textureTags : wine.texture_tags || []).join(", "))} · ${escapeHtml(wine.oakLevel || wine.oak_level || "")}</div>
-        <div>${escapeHtml(wine.region || "")} ${wine.process ? "· " + escapeHtml(wine.process) : ""}</div>
-        <div>${escapeHtml(wine.story || "")}</div>
+        <div>${escapeHtml(wine.region || "")}</div>
         <button type="button" class="btn-danger" data-wine-del="${escapeHtml(String(wine.id || wine.wine_id || wine.created_at || idx))}">Delete</button>
       `;
       cards.appendChild(div);
@@ -5829,11 +5749,14 @@ if (!window.__BC_PARENT_BRIDGE__) {
         return;
       }
 
-      // Source gate: only accept messages from mounted premium iframe window.
-      const frame =
-        document.getElementById("bcPremiumFrame") ||
-        document.getElementById("premiumRootFrame");
-      if (!frame || event.source !== frame.contentWindow) return;
+      // Source gate: accept messages from whichever mounted game iframe is active.
+      const candidateFrames = [
+        document.getElementById("bcPremiumFrame"),
+        document.getElementById("premiumRootFrame"),
+        document.getElementById("gameRootDemoFrame"),
+      ].filter(Boolean);
+      const matchedFrame = candidateFrames.find((frame) => event.source === frame.contentWindow);
+      if (!matchedFrame) return;
 
       if (msg.type === "debug_progress_payload") {
         console.log("[PARENT][DEBUG_PROGRESS_PAYLOAD]", msg.payload);
@@ -5923,6 +5846,9 @@ if (!window.__BC_PARENT_BRIDGE__) {
           console.log("[PARENT] NAV_BACK ->", backTo, msg);
 
           destroyPremiumIframe("nav_back");
+          if (backTo === "screenGameDemo") {
+            destroyDemoIframe("nav_back_demo_shell");
+          }
           setPremiumOverlayActive(false);
           showScreen(backTo);
           return;
@@ -6387,7 +6313,7 @@ async function refreshManagerBoardAfterProgressionReset() {
   }
 
   if (activeTab === "selection") {
-    await loadSelectionTab();
+    await loadManagerBoardData();
     return;
   }
 
@@ -6595,11 +6521,10 @@ function showScreen(id) {
 }
 
 function renderAppChrome() {
-  const surfaceEl = document.getElementById("appChromeSurface");
-  const roleEl = document.getElementById("appChromeRole");
-  const restaurantEl = document.getElementById("appChromeRestaurant");
   const statusEl = document.getElementById("appChromeStatus");
-  if (!surfaceEl && !roleEl && !restaurantEl && !statusEl) return;
+  const premiumBarEl = document.getElementById("appChromePremiumBar");
+  const playCtaEl = document.getElementById("appChromePlayCta");
+  if (!statusEl && !premiumBarEl && !playCtaEl) return;
 
   const visibleScreens = Array.from(document.querySelectorAll(".screen:not(.hidden)"));
   const hasProfileOverlay = !document.getElementById("screenProfile")?.classList.contains("hidden");
@@ -6622,18 +6547,46 @@ function renderAppChrome() {
   };
 
   const profile = appState?.profile || {};
-  const restaurant = appState?.restaurant || {};
-  const roleLabel = getDisplayRoleLabel?.(profile) || "Guest";
-  const restaurantLabel = restaurant?.name || restaurant?.id || "Not bound";
   const hasSession = !!appState?.session?.user;
-  const statusLabel = hasSession
+  const isDemoCockpit = currentScreenId === "screenGameDemo" && appMode === "demo";
+  const isDemoWelcomeOpen =
+    isDemoCockpit &&
+    window.__BC_DEMO_IFRAME_LAST_SCREEN__ === "screenWelcome";
+  const statusLabel = isDemoCockpit
+    ? "DEMO"
+    : hasSession
     ? ((profile?.access_tier || profile?.accessTier || "premium").toString().toUpperCase())
     : "Public Access";
+  const showPremiumBar = (currentScreenId === "screenPremiumApp" && hasSession) || isDemoCockpit;
+  const showPlayCta =
+    ((currentScreenId === "screenPremiumApp" && hasSession) || isDemoCockpit) &&
+    !isDemoWelcomeOpen;
 
-  if (surfaceEl) surfaceEl.textContent = surfaceMap[currentScreenId] || "Workspace";
-  if (roleEl) roleEl.textContent = roleLabel;
-  if (restaurantEl) restaurantEl.textContent = restaurantLabel;
   if (statusEl) statusEl.textContent = statusLabel;
+  premiumBarEl?.classList.toggle("hidden", !showPremiumBar);
+  playCtaEl?.classList.toggle("hidden", !showPlayCta);
+
+  const premiumSignupBtn = document.getElementById("btnPremiumSignupMenu");
+  const messagesBtn = document.getElementById("btnOpenMessages");
+  const leaderboardBtn = document.getElementById("btnWaiterPerformanceLeaderboard");
+  const wineSetupBtn = document.getElementById("btnPremiumWineSetup");
+  const tutorialBtn = document.getElementById("btnTutorial");
+  const managerBoardBtn = document.getElementById("btnManagerBoard");
+  const profileBtn = document.getElementById("btnOpenProfile");
+  const logoutBtn = document.getElementById("btnLogoutPremium");
+
+  if (isDemoCockpit) {
+    premiumSignupBtn?.classList.remove("hidden");
+    messagesBtn?.classList.add("hidden");
+    leaderboardBtn?.classList.add("hidden");
+    wineSetupBtn?.classList.add("hidden");
+    tutorialBtn?.classList.add("hidden");
+    managerBoardBtn?.classList.add("hidden");
+    profileBtn?.classList.add("hidden");
+    logoutBtn?.classList.toggle("hidden", !hasSession);
+  } else {
+    premiumSignupBtn?.classList.add("hidden");
+  }
 }
 
 function removeGlobalResetButtons() {
@@ -6660,8 +6613,6 @@ function removeGlobalResetButtons() {
 
 function onScreenChanged(id) {
   console.log("[NAV] parent onScreenChanged ->", id);
-  const role = String(appState?.profile?.role || "").toLowerCase();
-  const isWaiter = role === "waiter";
 
   const isPremium = id === "screenPremiumApp" || id === "screenPlay";
   if (isPremium && !appState?.session) {
@@ -6670,15 +6621,6 @@ function onScreenChanged(id) {
     return;
   }
   setPremiumOverlayActive(isPremium);
-
-  if (isPremium) {
-    if (!document.getElementById("premiumRootFrame")) {
-      mountPremiumGameIframe({
-        showBack: true,
-        backTo: isWaiter ? "screenPremiumApp" : "screenManagerBoard"
-      });
-    }
-  }
 
   if (!isPremium) {
     document.getElementById("hudPanel")?.classList.add("hidden");
@@ -6933,6 +6875,7 @@ function clearMsgs() {
   setMsg("createRestMsg", "");
   setMsg("inviteMsg", "");
   setMsg("hudMsg", "");
+  setMsg("mbListingMsg", "");
   setMsg("demoJoinMsg", "");
 }
 
@@ -7404,6 +7347,16 @@ async function openPremiumSetupScreen() {
 
   const body = document.getElementById("premiumWineTableBody");
   const cards = document.getElementById("premiumWineCards");
+  const getWineDeleteLabel = (wineId) => {
+    const wine = getAnyManagerWineOptionsForDisplay(restaurantId).find((row) => {
+      const rowId = String(row?.id || row?.wine_id || row?.created_at || "");
+      return rowId && rowId === String(wineId);
+    });
+    const name = String(wine?.name || "").trim();
+    const varietal = String(wine?.varietal || "").trim();
+    if (name && varietal) return `${name} (${varietal})`;
+    return name || varietal || "this wine";
+  };
   const bindDeleteDelegation = (root) => {
     if (!root || root.__bcBound) return;
     root.__bcBound = true;
@@ -7411,7 +7364,8 @@ async function openPremiumSetupScreen() {
       const btn = ev.target?.closest?.("[data-wine-del]");
       const wineId = btn?.getAttribute?.("data-wine-del");
       if (!wineId) return;
-      if (!confirm("Delete this wine?")) return;
+      const wineLabel = getWineDeleteLabel(wineId);
+      if (!confirm(`Delete ${wineLabel}?\n\nThis will remove the wine card from setup.`)) return;
 
       try {
         await deleteParentRestaurantWine(wineId);
@@ -7449,6 +7403,7 @@ function wireParentButtons() {
   const btnOpenMessages = document.getElementById("btnOpenMessages");
   const btnPremiumWineSetup = document.getElementById("btnPremiumWineSetup");
   const btnTutorial = document.getElementById("btnTutorial");
+  const btnPremiumSignupMenu = document.getElementById("btnPremiumSignupMenu");
 
   if (btnManagerBoard && !btnManagerBoard.__bcBound) {
     btnManagerBoard.__bcBound = true;
@@ -7472,9 +7427,13 @@ function wireParentButtons() {
   // Waiter / premium messages panel
   if (btnOpenMessages && !btnOpenMessages.__bcBound) {
     btnOpenMessages.__bcBound = true;
-    btnOpenMessages.addEventListener("click", () => {
-      closeHud?.();
-      openWaiterMessages();
+    btnOpenMessages.addEventListener("click", async () => {
+      const membershipRole = String(normalizeMembershipRole(appState?.profile) || "").toLowerCase();
+      if (membershipRole === "waiter") {
+        await openWaiterMessages();
+        return;
+      }
+      await openManagerMessengerWindow("messages_button");
     });
   }
 
@@ -7489,6 +7448,18 @@ function wireParentButtons() {
     btnTutorial.__bcBound = true;
     btnTutorial.addEventListener("click", () => {
       openTutorialMenu();
+    });
+  }
+
+  if (btnPremiumSignupMenu && !btnPremiumSignupMenu.__bcBound) {
+    btnPremiumSignupMenu.__bcBound = true;
+    btnPremiumSignupMenu.addEventListener("click", () => {
+      closePremiumTopbarMenu();
+      window.__BC_RETURN_TO_DEMO_ON_EXIT_PREMIUM__ = appMode === "demo";
+      routeAuth();
+      setMode("signup");
+      setAuthIntent("premium");
+      setMsg("authMsg", "Premium selected. Sign up or log in below.", "success");
     });
   }
 
@@ -7652,6 +7623,125 @@ function openHud() {
 }
 function closeHud() {
   setHudOpen(false);
+}
+
+function closePremiumTopbarMenu() {
+  const trigger = document.getElementById("btnPremiumTopbarMenu");
+  const panel = document.getElementById("premiumTopbarMenuPanel");
+  if (trigger) trigger.setAttribute("aria-expanded", "false");
+  if (panel) {
+    panel.classList.add("hidden");
+    panel.style.top = "";
+    panel.style.right = "";
+    panel.style.left = "";
+    panel.style.bottom = "";
+  }
+}
+
+function positionPremiumTopbarMenu(trigger, panel) {
+  if (!trigger || !panel) return;
+
+  const isCockpitMenu = !!trigger.closest(".app-chrome-premium-bar");
+  if (isCockpitMenu) {
+    panel.style.position = "absolute";
+    panel.style.top = "calc(100% + 12px)";
+    panel.style.right = "0";
+    panel.style.left = "auto";
+    panel.style.bottom = "auto";
+    return;
+  }
+
+  panel.style.position = "fixed";
+
+  const rect = trigger.getBoundingClientRect();
+  const gutter = 16;
+  const panelWidth = Math.min(280, Math.max(220, panel.offsetWidth || 220));
+  const left = Math.max(gutter, Math.min(rect.right - panelWidth, window.innerWidth - panelWidth - gutter));
+  const top = Math.min(rect.bottom + 12, window.innerHeight - gutter);
+
+  panel.style.left = `${left}px`;
+  panel.style.top = `${top}px`;
+  panel.style.right = "auto";
+  panel.style.bottom = "auto";
+}
+
+function openPremiumTopbarMenu() {
+  const trigger = document.getElementById("btnPremiumTopbarMenu");
+  const panel = document.getElementById("premiumTopbarMenuPanel");
+  if (trigger) trigger.setAttribute("aria-expanded", "true");
+  if (panel) {
+    panel.classList.remove("hidden");
+    positionPremiumTopbarMenu(trigger, panel);
+  }
+}
+
+function togglePremiumTopbarMenu() {
+  const panel = document.getElementById("premiumTopbarMenuPanel");
+  if (!panel) return;
+  if (panel.classList.contains("hidden")) {
+    openPremiumTopbarMenu();
+  } else {
+    closePremiumTopbarMenu();
+  }
+}
+
+function wirePremiumTopbarMenu() {
+  const trigger = document.getElementById("btnPremiumTopbarMenu");
+  const panel = document.getElementById("premiumTopbarMenuPanel");
+  const wrap = document.getElementById("premiumTopbarMenuWrap");
+  if (!trigger || !panel || !wrap) return;
+
+  if (!trigger.__bcBound) {
+    trigger.__bcBound = true;
+    trigger.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      togglePremiumTopbarMenu();
+    });
+  }
+
+  if (!panel.__bcBound) {
+    panel.__bcBound = true;
+    panel.addEventListener("click", (event) => {
+      const actionBtn = event.target?.closest?.("button");
+      if (!actionBtn || actionBtn.id === "btnPremiumTopbarMenu") return;
+      if (actionBtn.id === "btnLogoutPremium") {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation?.();
+        closePremiumTopbarMenu();
+        console.log("[LOGOUT] premium menu action");
+        triggerLogoutIntent(actionBtn, "ui:btnLogoutPremium.panel");
+        return;
+      }
+      closePremiumTopbarMenu();
+    });
+  }
+
+  if (!document.body.__bcPremiumTopbarMenuBound) {
+    document.body.__bcPremiumTopbarMenuBound = true;
+    document.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!target) return;
+      if (wrap.contains(target)) return;
+      closePremiumTopbarMenu();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closePremiumTopbarMenu();
+    });
+    window.addEventListener("resize", () => {
+      const trigger = document.getElementById("btnPremiumTopbarMenu");
+      const panel = document.getElementById("premiumTopbarMenuPanel");
+      if (!panel || panel.classList.contains("hidden")) return;
+      positionPremiumTopbarMenu(trigger, panel);
+    }, { passive: true });
+    window.addEventListener("scroll", () => {
+      const trigger = document.getElementById("btnPremiumTopbarMenu");
+      const panel = document.getElementById("premiumTopbarMenuPanel");
+      if (!panel || panel.classList.contains("hidden")) return;
+      positionPremiumTopbarMenu(trigger, panel);
+    }, { passive: true });
+  }
 }
 
 function renderWaiterThreadItem(row, selfUserId, nameMap) {
@@ -8134,9 +8224,9 @@ window.addEventListener("message", (event) => {
           : `Progress updated${msg.inserted ? ` (${msg.inserted})` : ""} ✅`)
       : describeProgressSendError(msg.error || "unknown_error");
 
-    if (status) status.textContent = text;
-    if (hudStatus) hudStatus.textContent = text;
-    renderHudSkillDashboard();
+  if (status) status.textContent = text;
+  if (hudStatus) hudStatus.textContent = text;
+    renderProfileSkillDashboard();
 
     if (msg.ok) {
       loadHudSkillTimeline().catch(console.error);
@@ -8383,10 +8473,10 @@ async function buildLeaderboardUserDetail(userId, restaurantId, fallbackUser = {
     }
   }
 
-  const skillShape = fetchedSkillTotal > 0
-    ? fetchedSkillShape
-    : fallbackSkillTotal > 0
-      ? fallbackSkillShape
+  const skillShape = fallbackSkillTotal > 0
+    ? fallbackSkillShape
+    : fetchedSkillTotal > 0
+      ? fetchedSkillShape
       : crossRestaurantSkillTotal > 0
         ? crossRestaurantSkillShape
       : derivedSkillTotal > 0
@@ -8452,7 +8542,7 @@ async function buildLeaderboardUserDetail(userId, restaurantId, fallbackUser = {
     challengeSuccessRate,
     premiumSuccessRate,
     masteryRate,
-    lastActiveAt: firstNonEmpty(progressionRow?.updated_at, encounterRows[0]?.occurred_at, messageRows[0]?.created_at, fallbackUser?.lastActiveAt),
+    lastActiveAt: latestTimestamp(progressionRow?.updated_at, encounterRows[0]?.occurred_at, messageRows[0]?.created_at, fallbackUser?.lastActiveAt),
     eligibilityTier: servedTier,
     readiness,
     readinessLabel,
@@ -8887,6 +8977,52 @@ async function openWaiterLeaderboardWindow() {
   await renderWaiterPerformanceLeaderboardWindow();
 }
 
+async function openManagerMessengerWindow(reason = "messages_button") {
+  clearMsgs();
+  closeHud?.();
+  closeProfilePanel?.();
+
+  await loadAuthedState(`openManagerMessengerWindow:${reason}`);
+
+  const caps = getPremiumRoleCapabilities(appState.profile);
+  if (!caps.canAccessManagerBoard) {
+    setMsg("authMsg", "Manager Board is manager-only.", "error");
+    showScreen("screenPremiumApp");
+    return;
+  }
+
+  const fallbackRestaurantId =
+    window.__BC_ACTIVE_MANAGER_RESTAURANT_ID__ ||
+    appState?.restaurant?.id ||
+    appState?.profile?.restaurant_id ||
+    appState?.profile?.restaurantId ||
+    null;
+
+  if (fallbackRestaurantId) {
+    setManagerActiveRestaurantId(fallbackRestaurantId);
+  }
+
+  try {
+    if (fallbackRestaurantId) {
+      const restaurant = await loadRestaurant(fallbackRestaurantId);
+      if (restaurant) appState.restaurant = restaurant;
+    }
+  } catch (error) {
+    console.warn("[MESSAGES] loadRestaurant failed", error);
+  }
+
+  showScreen("screenManagerMessenger");
+  wireManagerBoardMessenger?.();
+
+  const rid = getManagerActiveRestaurantId() || fallbackRestaurantId || "";
+  await loadManagerMessenger(rid, { force: true });
+}
+
+function closeManagerMessengerWindow() {
+  showScreen("screenPremiumApp");
+  renderHud?.();
+}
+
 window.__BC_HUD_TIMELINE_TARGET_USER_ID__ = window.__BC_HUD_TIMELINE_TARGET_USER_ID__ || null;
 
 function getHudActorContext() {
@@ -8939,6 +9075,7 @@ function destroyDemoIframe(reason = "") {
   try { document.getElementById("gameRootDemoFrame")?.remove(); } catch {}
   const root = document.getElementById("gameRootDemo");
   if (root) root.innerHTML = "";
+  window.__BC_DEMO_IFRAME_LAST_SCREEN__ = null;
   try { currentIframeMode = null; } catch {}
 }
 
@@ -9054,9 +9191,11 @@ function buildGameIframeUrl({
   mode = "premium",
   showBack = false,
   backTo = "screenPremiumApp",
+  initialScreen = null,
   urlOverride = null,
   epoch = Date.now(),
   bustCache = false,
+  v2Harness = false,
 } = {}) {
   // If you pass a full override URL, use it as the base.
   // Otherwise build from same-origin /game/game.html
@@ -9073,6 +9212,10 @@ function buildGameIframeUrl({
   base.searchParams.set("mode", String(mode || "premium").toLowerCase());
   base.searchParams.set("showBack", showBack ? "1" : "0");
   base.searchParams.set("backTo", String(backTo || "screenPremiumApp"));
+  if (initialScreen) base.searchParams.set("initialScreen", String(initialScreen));
+  else base.searchParams.delete("initialScreen");
+  if (v2Harness) base.searchParams.set("bcV2", "1");
+  else base.searchParams.delete("bcV2");
 
   // Keep epoch off the URL so iframe assets can stay browser-cacheable.
   // The runtime already gets the active epoch from frameElement.dataset.bcEpoch,
@@ -9085,7 +9228,7 @@ function buildGameIframeUrl({
   return base.toString();
 }
 
-function mountGameIframe(targetId, mode /* "demo" | "premium" */) {
+function mountGameIframe(targetId, mode /* "demo" | "premium" */, options = {}) {
   if (isLoggingOut()) {
     console.warn("[BC] mountGameIframe blocked (logging out)", { targetId, mode });
     return;
@@ -9109,10 +9252,22 @@ function mountGameIframe(targetId, mode /* "demo" | "premium" */) {
     window.__BC_IFRAME_EPOCH__ = Date.now();
   }
 
-  // Cache-busting param required — but stable within this mode session
-  const demoFlag = mode === "demo" ? "&demo=1" : "";
-  const epochFlag = mode === "premium" ? `&epoch=${window.__BC_IFRAME_EPOCH__}` : "";
-  const src = `/game/game.html?mode=${encodeURIComponent(mode)}${demoFlag}${epochFlag}&v=${currentIframeVersion}`;
+  const src = buildGameIframeUrl({
+    mode,
+    initialScreen: options?.initialScreen || "",
+    showBack: options?.showBack ?? false,
+    backTo: options?.backTo || "screenPremiumApp",
+    epoch: mode === "premium" ? window.__BC_IFRAME_EPOCH__ : 0,
+    bustCache: true,
+    v2Harness: !!options?.v2Harness,
+  });
+  const isMobile = document.documentElement?.dataset?.bcMobileEnv === "true";
+  const initialHeight =
+    mode === "demo" && options?.v2Harness && isMobile
+      ? Math.max(window.innerHeight || 0, 680)
+      : mode === "demo" && options?.initialScreen === "screenWelcome"
+        ? 300
+        : 420;
 
   // ✅ Smaller default height to avoid giant empty space before setup
   mount.innerHTML = `
@@ -9122,7 +9277,7 @@ function mountGameIframe(targetId, mode /* "demo" | "premium" */) {
       title="BottleCaller Game"
       style="
         width: 100%;
-        height: 420px;
+        height: ${initialHeight}px;
         border: 1px solid rgba(255,255,255,0.10);
         border-radius: 14px;
         background: rgba(0,0,0,0.35);
@@ -9200,6 +9355,91 @@ function postNavToPremiumIframe(screen) {
   setDebug({ step: "nav.post.sent", screen, time: new Date().toISOString() });
 }
 
+function openPremiumBeginScreen() {
+  if (appMode === "demo") {
+    const useV2Harness =
+      new URLSearchParams(window.location.search).get("bcV2Demo") === "1" ||
+      (() => {
+        try {
+          return localStorage.getItem("BC_V2_DEMO") === "1";
+        } catch {
+          return false;
+        }
+      })();
+    const tryOpenDemoWelcome = () => {
+      const frame = document.getElementById("gameRootDemoFrame");
+      const nav = frame?.contentWindow?.__BC_NAV__;
+      if (nav && typeof nav.openWelcome === "function") {
+        nav.openWelcome();
+        return true;
+      }
+      return false;
+    };
+
+    closeHud?.();
+    showScreen("screenGameDemo");
+    setPremiumOverlayActive(false);
+
+    if (useV2Harness) {
+      destroyDemoIframe("openPremiumBeginScreen:force_v2_remount");
+    }
+
+    if (!document.getElementById("gameRootDemoFrame")) {
+      mountGameIframe("gameRootDemo", "demo", {
+        initialScreen: "screenWelcome",
+        v2Harness: useV2Harness,
+      });
+    }
+
+    let attempts = 0;
+    const maxAttempts = 12;
+    const retryOpenDemoWelcome = () => {
+      if (tryOpenDemoWelcome()) return;
+      attempts += 1;
+      if (attempts >= maxAttempts) return;
+      window.setTimeout(retryOpenDemoWelcome, 180);
+    };
+
+    retryOpenDemoWelcome();
+    return;
+  }
+
+  const tryOpenBegin = () => {
+    const frame = document.getElementById("premiumRootFrame");
+    const nav = frame?.contentWindow?.__BC_NAV__;
+    if (nav && typeof nav.openWelcome === "function") {
+      nav.openWelcome();
+      return true;
+    }
+    return false;
+  };
+
+  closeHud?.();
+  showScreen("screenPremiumApp");
+
+  if (!document.getElementById("premiumRootFrame")) {
+    const role = String(appState?.profile?.role || "").toLowerCase();
+    const isWaiter = role === "waiter";
+    mountPremiumGameIframe({
+      mode: "premium",
+      showBack: true,
+      backTo: isWaiter ? "screenPremiumApp" : "screenManagerBoard",
+      initialScreen: "screenWelcome",
+    });
+  }
+
+  let attempts = 0;
+  const maxAttempts = 12;
+  const retryOpenBegin = () => {
+    if (tryOpenBegin()) return;
+    attempts += 1;
+    if (attempts >= maxAttempts) return;
+    window.setTimeout(retryOpenBegin, 180);
+  };
+
+  retryOpenBegin();
+}
+
 // ✅ Optional auto-resize (requires matching postMessage in game.html)
 window.addEventListener("message", (event) => {
   const data = event?.data;
@@ -9213,8 +9453,27 @@ window.addEventListener("message", (event) => {
   const h = Number(data.height);
   if (!Number.isFinite(h)) return;
 
-  const clamped = Math.max(360, Math.min(860, h + 24));
-  frame.style.height = clamped + "px";
+  const isMobile = document.documentElement?.dataset?.bcMobileEnv === "true";
+  const isV2Demo =
+    String(data.mode || "").toLowerCase() === "demo" &&
+    document.documentElement?.dataset?.bcV2Demo === "true";
+  const isDemoWelcome =
+    String(data.mode || "").toLowerCase() === "demo" &&
+    String(data.screenId || "") === "screenWelcome";
+  if (String(data.mode || "").toLowerCase() === "demo") {
+    window.__BC_DEMO_IFRAME_LAST_SCREEN__ = String(data.screenId || "") || null;
+    try { renderAppChrome?.(); } catch {}
+  }
+  const maxHeight = isMobile ? 6000 : 860;
+  const minHeight = isDemoWelcome
+    ? (isMobile ? 220 : 200)
+    : (isMobile ? 320 : 360);
+  const measuredHeight = Math.max(minHeight, Math.min(maxHeight, h + (isMobile ? 12 : 24)));
+  const viewportHeight = Math.ceil(window.visualViewport?.height || window.innerHeight || 0);
+  const clamped = isMobile && isV2Demo
+    ? Math.max(viewportHeight, measuredHeight)
+    : measuredHeight;
+  frame.style.setProperty("height", clamped + "px", "important");
 });
 
 // ------------------------------------------------------------
@@ -9264,7 +9523,7 @@ async function loadInvites(restaurantId = null) {
 }
 
 async function loadManagerBoardSeats() {
-  const rid = appState.profile?.restaurant_id || null;
+  const rid = getManagerActiveRestaurantId() || appState.restaurant?.id || appState.profile?.restaurant_id || null;
   const elStatus = document.getElementById("mbSeatStatus");
   const elDetail = document.getElementById("mbSeatDetail");
 
@@ -9304,7 +9563,7 @@ async function adminSetSeats(newLimit) {
     alert("Managers only.");
     return;
   }
-  const rid = appState.profile?.restaurant_id || null;
+  const rid = getManagerActiveRestaurantId() || appState.restaurant?.id || appState.profile?.restaurant_id || null;
   if (!rid) return alert("Missing restaurant_id on profile.");
 
   const { error } = await supabase.rpc("admin_set_seat_limit", {
@@ -9320,13 +9579,13 @@ async function adminSetSeats(newLimit) {
   await loadManagerBoardSeats();
 }
 
-async function redeemEnterpriseManagerSetupCode() {
+async function redeemEnterpriseManagerSetupCode(inputId = "mbEnterpriseCode", msgId = "mbEnterpriseMsg") {
   if (!isManagerRole(appState.profile?.role)) {
     alert("Managers only.");
     return;
   }
-  const input = document.getElementById("mbEnterpriseCode");
-  const msg = document.getElementById("mbEnterpriseMsg");
+  const input = document.getElementById(inputId);
+  const msg = document.getElementById(msgId);
   const code = (input?.value || "").trim().toUpperCase();
 
   if (!code) return;
@@ -9357,9 +9616,9 @@ async function redeemEnterpriseManagerSetupCode() {
   if (msg) msg.textContent = "✅ Enterprise upgrade applied (if code was enterprise).";
 }
 
-async function redeemGroupSetupCode() {
-  const input = document.getElementById("mbGroupSetupCode");
-  const msg = document.getElementById("mbGroupSetupMsg");
+async function redeemGroupSetupCode(inputId = "mbGroupSetupCode", msgId = "mbGroupSetupMsg") {
+  const input = document.getElementById(inputId);
+  const msg = document.getElementById(msgId);
   const code = (input?.value || "").trim().toUpperCase();
 
   if (!code) return;
@@ -9386,10 +9645,15 @@ async function redeemGroupSetupCode() {
 }
 
 function wireGroupSetupRedeem() {
-  const btn = document.getElementById("mbRedeemGroupSetup");
-  if (!btn || btn.__wired) return;
-  btn.__wired = true;
-  btn.addEventListener("click", redeemGroupSetupCode);
+  [
+    { buttonId: "mbRedeemGroupSetup", inputId: "mbGroupSetupCode", msgId: "mbGroupSetupMsg" },
+    { buttonId: "mbListingRedeemGroupSetup", inputId: "mbListingGroupSetupCode", msgId: "mbListingGroupSetupMsg" },
+  ].forEach(({ buttonId, inputId, msgId }) => {
+    const btn = document.getElementById(buttonId);
+    if (!btn || btn.__wired) return;
+    btn.__wired = true;
+    btn.addEventListener("click", () => redeemGroupSetupCode(inputId, msgId));
+  });
 }
 
 function wireManagerBoardBillingAccess() {
@@ -9398,22 +9662,37 @@ function wireManagerBoardBillingAccess() {
   const b30 = document.getElementById("mbSeat30");
   const b60 = document.getElementById("mbSeat60");
   const bRef = document.getElementById("mbRefreshSeats");
-  const bRedeem = document.getElementById("mbRedeemEnterprise");
-  const codeInput = document.getElementById("mbEnterpriseCode");
-  const msg = document.getElementById("mbEnterpriseMsg");
+  const redeemControls = [
+    {
+      button: document.getElementById("mbRedeemEnterprise"),
+      input: document.getElementById("mbEnterpriseCode"),
+      msg: document.getElementById("mbEnterpriseMsg"),
+      inputId: "mbEnterpriseCode",
+      msgId: "mbEnterpriseMsg",
+    },
+    {
+      button: document.getElementById("mbListingRedeemEnterprise"),
+      input: document.getElementById("mbListingEnterpriseCode"),
+      msg: document.getElementById("mbListingEnterpriseMsg"),
+      inputId: "mbListingEnterpriseCode",
+      msgId: "mbListingEnterpriseMsg",
+    },
+  ];
 
   [b15, b30, b60].forEach((el) => {
     if (el) el.style.display = isMgr ? "" : "none";
   });
-  if (bRedeem) bRedeem.style.display = isMgr ? "" : "none";
-  if (codeInput) codeInput.style.display = isMgr ? "" : "none";
-  if (msg && !isMgr) msg.textContent = "";
+  redeemControls.forEach(({ button, input, msg, inputId, msgId }) => {
+    if (button) button.style.display = isMgr ? "" : "none";
+    if (input) input.style.display = isMgr ? "" : "none";
+    if (msg && !isMgr) msg.textContent = "";
+    if (button) button.onclick = () => redeemEnterpriseManagerSetupCode(inputId, msgId);
+  });
 
   if (b15) b15.onclick = () => adminSetSeats(15);
   if (b30) b30.onclick = () => adminSetSeats(30);
   if (b60) b60.onclick = () => adminSetSeats(60);
   if (bRef) bRef.onclick = () => loadManagerBoardSeats();
-  if (bRedeem) bRedeem.onclick = () => redeemEnterpriseManagerSetupCode();
 
   loadManagerBoardSeats();
 }
@@ -9421,13 +9700,19 @@ function wireManagerBoardBillingAccess() {
 function normalizeManagerBoardTab(tabLike) {
   const raw = String(tabLike || "overview").toLowerCase();
   const aliases = {
-    staff: "people",
+    staff: "overview",
+    people: "overview",
     history: "performance",
     insights: "performance",
-    tournament: "selection",
-    tournament_setup: "selection",
-    attribute_abilities: "live_controls",
-    area_abilities: "live_controls",
+    gameplay: "gameplay_adjustments",
+    adjustments: "gameplay_adjustments",
+    gameplay_adjustments: "gameplay_adjustments",
+    tournament: "overview",
+    tournament_setup: "overview",
+    selection: "overview",
+    attribute_abilities: "gameplay_adjustments",
+    area_abilities: "gameplay_adjustments",
+    live_controls: "gameplay_adjustments",
   };
   return aliases[raw] || raw;
 }
@@ -9454,12 +9739,6 @@ function wireManagerBoardMenu() {
     if (!normalized) return;
     if (normalized === "overview") {
       await loadManagerBoardData();
-      renderParentStateDebugCard();
-      return;
-    }
-    if (normalized === "people") {
-      await loadManagerBoardData();
-      renderManagerPeopleSummary();
       return;
     }
     if (normalized === "billing") return loadManagerBoardSeats?.();
@@ -9467,19 +9746,17 @@ function wireManagerBoardMenu() {
       await loadManagerPerformanceTab();
       return;
     }
-    if (normalized === "selection") {
-      await loadSelectionTab();
+    if (normalized === "messenger") {
+      await openManagerMessengerWindow("board_tab");
       return;
     }
-    if (normalized === "messenger") {
-      renderTimedChallengeComposer();
-      wireManagerBoardMessenger();
-      return loadManagerMessenger();
-    }
-    if (normalized === "live_controls") {
-      await loadManagerBoardData();
+    if (normalized === "gameplay_adjustments") {
       safeCall("renderManagerBoardOverviewLiveEffects", () => renderManagerBoardOverviewLiveEffects?.());
+      safeCall("renderManagerAbilityEconomyPanel", () => renderManagerAbilityEconomyPanel?.());
       safeCall("renderManagerLiveControlPanels", () => renderManagerLiveControlPanels?.());
+      safeCall("renderManagerDrillActionPanel", () => renderManagerDrillActionPanel?.());
+      renderManagerGameplayAdjustmentsPanel();
+      renderTimedChallengeComposer();
       await loadTimedChallengeWineOptions().catch(console.warn);
       return;
     }
@@ -9494,36 +9771,18 @@ function wireManagerBoardMenu() {
 
     if (tab === "overview") {
       await loadManagerBoardData();
-      renderParentStateDebugCard();
-    }
-    if (tab === "people") {
-      await loadManagerBoardData();
-      renderManagerPeopleSummary();
     }
     if (tab === "billing") await loadManagerBoardSeats?.();
     if (tab === "performance") {
       await loadManagerPerformanceTab();
     }
-    if (tab === "selection") {
-      await loadSelectionTab();
-    }
-    if (tab === "messenger") {
-      renderTimedChallengeComposer();
-      wireManagerBoardMessenger();
-      await refreshManagerMessageQuotaUi();
-      await loadManagerMessenger();
-      refreshManagerRuntimeSurfaces?.({
-        thread: true,
-        board: true,
-        economy: false,
-        liveControls: false,
-        challengeMeta: true,
-      });
-    }
-    if (tab === "live_controls") {
-      await loadManagerBoardData();
+    if (tab === "gameplay_adjustments") {
       safeCall("renderManagerBoardOverviewLiveEffects", () => renderManagerBoardOverviewLiveEffects?.());
+      safeCall("renderManagerAbilityEconomyPanel", () => renderManagerAbilityEconomyPanel?.());
       safeCall("renderManagerLiveControlPanels", () => renderManagerLiveControlPanels?.());
+      safeCall("renderManagerDrillActionPanel", () => renderManagerDrillActionPanel?.());
+      renderManagerGameplayAdjustmentsPanel();
+      renderTimedChallengeComposer();
       await loadTimedChallengeWineOptions().catch(console.warn);
     }
   });
@@ -9935,9 +10194,9 @@ async function openManagerRestaurantChallengeContext(restaurantId) {
   await loadManagerBoardData?.(rid);
   await refreshManagerBoardScopedViews?.(rid);
 
-  window.__BC_MB_DEFAULTTAB__ = "messenger";
-  window.__BC_MB_SHOWTAB__?.("messenger");
-  await window.__BC_MB_LOADTAB__?.("messenger");
+  window.__BC_MB_DEFAULTTAB__ = "gameplay_adjustments";
+  window.__BC_MB_SHOWTAB__?.("gameplay_adjustments");
+  await window.__BC_MB_LOADTAB__?.("gameplay_adjustments");
 
   const status = document.getElementById("mbTimedChallengeStatus");
   if (status) {
@@ -10044,16 +10303,12 @@ function applyManagerBoardVisibility() {
 
   const overviewBtn = document.querySelector('#mbMenu [data-mbtab="overview"]');
   if (overviewBtn) overviewBtn.style.display = caps.canAccessManagerBoard ? "" : "none";
-  const selectionBtn = document.querySelector('#mbMenu [data-mbtab="selection"]');
-  if (selectionBtn) selectionBtn.style.display = caps.canAccessManagerBoard ? "" : "none";
   const billingBtn = document.querySelector('#mbMenu [data-mbtab="billing"]');
   if (billingBtn) billingBtn.style.display = caps.canAccessManagerBoard ? "" : "none";
-  const peopleBtn = document.querySelector('#mbMenu [data-mbtab="people"]');
-  if (peopleBtn) peopleBtn.style.display = caps.canAccessManagerBoard ? "" : "none";
   const messengerBtn = document.querySelector('#mbMenu [data-mbtab="messenger"]');
   if (messengerBtn) messengerBtn.style.display = caps.canAccessManagerBoard ? "" : "none";
-  const liveControlsBtn = document.querySelector('#mbMenu [data-mbtab="live_controls"]');
-  if (liveControlsBtn) liveControlsBtn.style.display = caps.canAccessManagerBoard ? "" : "none";
+  const gameplayAdjustmentsBtn = document.querySelector('#mbMenu [data-mbtab="gameplay_adjustments"]');
+  if (gameplayAdjustmentsBtn) gameplayAdjustmentsBtn.style.display = caps.canAccessManagerBoard ? "" : "none";
   const performanceBtn = document.querySelector('#mbMenu [data-mbtab="performance"]');
   if (performanceBtn) performanceBtn.style.display = caps.canAccessManagerBoard ? "" : "none";
   const enterpriseBtn = document.querySelector('#mbMenu [data-mbtab="enterprise"]');
@@ -10067,15 +10322,20 @@ function applyManagerBoardVisibility() {
 }
 
 function wireActiveRestaurantPicker() {
-  const btn = document.getElementById("btnSetActiveRestaurant");
-  if (!btn || btn.__wired) return;
-  btn.__wired = true;
+  [
+    { buttonId: "btnSetActiveRestaurant", selectId: "selActiveRestaurant" },
+    { buttonId: "mbListingSetActiveRestaurant", selectId: "mbListingActiveRestaurant" },
+  ].forEach(({ buttonId, selectId }) => {
+    const btn = document.getElementById(buttonId);
+    if (!btn || btn.__wired) return;
+    btn.__wired = true;
 
-  btn.addEventListener("click", async () => {
-    const sel = document.getElementById("selActiveRestaurant");
-    const rid = sel?.value || null;
-    if (!rid) return;
-    await setActiveRestaurantForGroup(rid);
+    btn.addEventListener("click", async () => {
+      const sel = document.getElementById(selectId);
+      const rid = sel?.value || null;
+      if (!rid) return;
+      await setActiveRestaurantForGroup(rid);
+    });
   });
 }
 
@@ -10172,6 +10432,23 @@ function firstNonEmpty(...values) {
   return "";
 }
 
+function latestTimestamp(...values) {
+  let bestValue = "";
+  let bestTs = -Infinity;
+  for (const value of values) {
+    if (value == null) continue;
+    const str = String(value).trim();
+    if (!str) continue;
+    const ts = new Date(str).getTime();
+    if (!Number.isFinite(ts)) continue;
+    if (ts > bestTs) {
+      bestTs = ts;
+      bestValue = str;
+    }
+  }
+  return bestValue;
+}
+
 function formatPercent(value, digits = 0) {
   const num = Number(value);
   if (!Number.isFinite(num)) return "—";
@@ -10216,7 +10493,8 @@ function formatDateTime(isoString) {
 }
 
 function averageSkillShape(rows = []) {
-  const source = Array.isArray(rows) ? rows.slice(0, 5) : [];
+  const source = Array.isArray(rows) ? rows.slice(0, 3) : [];
+  const weights = [0.5, 0.3, 0.2];
   const totals = {
     read: 0,
     framing: 0,
@@ -10227,17 +10505,19 @@ function averageSkillShape(rows = []) {
 
   if (!source.length) return totals;
 
-  source.forEach((row) => {
-    totals.read += Number(row?.read_pct || row?.read || 0);
-    totals.framing += Number(row?.framing_pct || row?.framing || 0);
-    totals.delivery += Number(row?.delivery_pct || row?.delivery || 0);
-    totals.recovery += Number(row?.recovery_pct || row?.recovery || 0);
-    totals.closing += Number(row?.closing_pct || row?.closing || 0);
+  let appliedWeight = 0;
+  source.forEach((row, index) => {
+    const weight = weights[index] || 0;
+    appliedWeight += weight;
+    totals.read += Number(row?.read_pct || row?.read || 0) * weight;
+    totals.framing += Number(row?.framing_pct || row?.framing || 0) * weight;
+    totals.delivery += Number(row?.delivery_pct || row?.delivery || 0) * weight;
+    totals.recovery += Number(row?.recovery_pct || row?.recovery || 0) * weight;
+    totals.closing += Number(row?.closing_pct || row?.closing || 0) * weight;
   });
 
-  const count = source.length;
   Object.keys(totals).forEach((key) => {
-    totals[key] = Math.round(totals[key] / count);
+    totals[key] = Math.round(totals[key] / Math.max(appliedWeight, 1));
   });
 
   return totals;
@@ -10618,7 +10898,7 @@ async function loadManagerInsights() {
   root.innerHTML = `<div class="card"><div class="small-text">Loading performance…</div></div>`;
 
   try {
-    const model = await getManagerPerformanceModel({ force: false });
+    const model = await getManagerPerformanceModel({ force: true });
     window.__BC_MB_PERFORMANCE_MODEL__ = model;
     window.__BC_MB_SELECTION_MODEL__ = {
       ...normalizeSelectionData(model),
@@ -10634,47 +10914,17 @@ async function loadManagerInsights() {
         </div>
         <div id="mbPerformanceCards" class="mb-performance-card-grid" style="margin-top:12px;"></div>
       </div>
-
-      <div class="mb-performance-leaderboard card" style="margin-top:12px;">
+      <div id="mbPerformanceResultsPanel" class="card">
         <div class="mb-section-header">
-          <strong>Performance Leaderboard</strong>
-          <div class="small-text">Ranked by total points with quality and readiness context.</div>
+          <strong>Results Graph</strong>
+          <div class="small-text">Team average drill, encounter, challenge, and premium rates shown as donut graphics.</div>
         </div>
-        <div class="mb-performance-table-wrap" style="margin-top:12px;">
-          <table class="mb-performance-table">
-            <thead>
-              <tr>
-                <th>Rank</th>
-                <th>Waiter</th>
-                <th>Total Points</th>
-                <th>Drill Pass %</th>
-                <th>Encounter Pass %</th>
-                <th>Challenge Success %</th>
-                <th>Premium Success %</th>
-                <th>Mastery %</th>
-                <th>Last Active</th>
-              </tr>
-            </thead>
-            <tbody id="mbPerformanceRows"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="mb-performance-insights card" style="margin-top:12px;">
-        <div class="mb-section-header">
-          <strong>Coach Notes</strong>
-          <div class="small-text">Quick patterns worth manager attention.</div>
-        </div>
-        <div id="mbPerformanceCoachNotes" style="margin-top:12px;"></div>
+        <div id="mbPerformanceResultsChart" class="mb-team-results-grid" style="margin-top:14px;"></div>
       </div>
     `;
 
     renderManagerPerformanceOverview(model.summary);
-    renderManagerPerformanceTable(model.users);
-    renderManagerCoachNotes(model.notes);
-    wirePerformanceRowExpansion(
-      Object.fromEntries(model.users.map((user) => [user.userId, user]))
-    );
+    drawTeamPerformanceResultsChart(model.summary || {});
   } catch (error) {
     console.error("[MB] loadManagerInsights failed", error);
     root.innerHTML = `
@@ -10704,6 +10954,42 @@ async function loadManagerPerformanceTab() {
     renderPerformanceHistorySummaryStrip("");
     renderManagerEncounterSummaryList("", []);
   }
+}
+
+async function loadProfilePerformanceHistory() {
+  const select = document.getElementById("mbHistoryUser");
+  if (!select) return;
+
+  await loadWeeklyTrainingReport();
+  await loadHistoryWaiters();
+
+  if (select && !select.__wired) {
+    select.__wired = true;
+    select.addEventListener("change", () => {
+      loadPerformanceHistory(select.value).catch(console.error);
+    });
+  }
+
+  const profile = appState?.profile || {};
+  const currentUserId = String(
+    profile?.user_id ||
+    profile?.userId ||
+    appState?.session?.user?.id ||
+    ""
+  ).trim();
+
+  if (select?.value) {
+    await loadPerformanceHistory(select.value);
+    return;
+  }
+
+  if (currentUserId) {
+    await loadPerformanceHistory(currentUserId);
+    return;
+  }
+
+  renderPerformanceHistorySummaryStrip("");
+  renderManagerEncounterSummaryList("", []);
 }
 
 function normalizeEncounterSummaryRow(row) {
@@ -11086,7 +11372,7 @@ async function getManagerPerformanceModel({ force = false } = {}) {
           ) || 0
         );
 
-    const lastActiveAt = firstNonEmpty(
+    const lastActiveAt = latestTimestamp(
       progressionStateRow?.updated_at,
       leaderboardRow?.last_activity_at,
       latestRow?.latest_occurred_at,
@@ -11182,7 +11468,7 @@ async function getManagerPerformanceModel({ force = false } = {}) {
     loadedAt: Date.now(),
     summary: buildPerformanceSummary(users),
     users,
-    notes: buildPerformanceCoachNotes(users),
+    notes: [],
   };
 }
 
@@ -11328,23 +11614,6 @@ function buildPerformanceSummary(users = []) {
   };
 }
 
-function buildPerformanceCoachNotes(users = []) {
-  if (!users.length) return ["No performance data yet."];
-
-  const notes = [];
-  const drillStrongEncounterWeak = users.filter((user) => user.drillPassRate >= 0.75 && user.encounterPassRate < 0.6);
-  const highPointsLowChallenge = users.filter((user) => user.totalPoints >= 8 && user.challengeSuccessRate < 0.5);
-  const premiumReady = users.filter((user) => user.premiumSuccessRate >= 0.4);
-  const coachingFocus = users.slice().sort((a, b) => a.challengeReadiness - b.challengeReadiness).slice(0, 2);
-
-  if (drillStrongEncounterWeak.length) notes.push(`${drillStrongEncounterWeak.length} waiter(s) convert drills better than live encounters.`);
-  if (highPointsLowChallenge.length) notes.push(`${highPointsLowChallenge.length} high-point waiter(s) still need cleaner challenge execution.`);
-  if (premiumReady.length) notes.push(`${premiumReady.length} waiter(s) are consistently converting premium moments.`);
-  if (coachingFocus.length) notes.push(`Focus next coaching on ${coachingFocus.map((user) => user.displayName).join(" and ")}.`);
-
-  return notes.slice(0, 4);
-}
-
 function renderManagerPerformanceOverview(summary = {}) {
   const el = document.getElementById("mbPerformanceCards");
   if (!el) return;
@@ -11364,6 +11633,88 @@ function renderManagerPerformanceOverview(summary = {}) {
       <strong>${escapeHtml(String(value))}</strong>
     </div>
   `).join("");
+}
+
+const TEAM_RESULTS_METRICS = [
+  { key: "drillPassRate", label: "Drill", color: "#22c55e" },
+  { key: "encounterPassRate", label: "Encounter", color: "#60a5fa" },
+  { key: "challengeSuccessRate", label: "Challenge", color: "#34d399" },
+  { key: "premiumSuccessRate", label: "Premium", color: "#f59e0b" },
+];
+
+function drawSingleMetricDonut(canvas, value = 0, color = "#60a5fa", options = {}) {
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const width = canvas.width;
+  const height = canvas.height;
+  const cx = width / 2;
+  const cy = height / 2;
+  const radius = Math.min(width, height) * 0.32;
+  const pct = Math.max(0, Math.min(1, Number(value || 0)));
+
+  ctx.clearRect(0, 0, width, height);
+  ctx.lineWidth = 22;
+  ctx.lineCap = "round";
+
+  ctx.beginPath();
+  ctx.strokeStyle = "rgba(255,255,255,0.10)";
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.strokeStyle = color;
+  ctx.arc(cx, cy, radius, -Math.PI / 2, (-Math.PI / 2) + (pct * Math.PI * 2));
+  ctx.stroke();
+
+  ctx.fillStyle = "rgba(4,7,12,0.9)";
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius - 18, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#fff";
+  ctx.textAlign = "center";
+  ctx.font = "bold 22px sans-serif";
+  ctx.fillText(String(options.centerTop || `${Math.round(pct * 100)}%`), cx, cy - 2);
+  ctx.font = "12px sans-serif";
+  ctx.fillStyle = "rgba(255,255,255,0.74)";
+  ctx.fillText(String(options.centerBottom || ""), cx, cy + 18);
+}
+
+function drawTeamPerformanceResultsChart(summary = {}) {
+  const root = document.getElementById("mbPerformanceResultsChart");
+  if (!root) return;
+
+  const donutMetrics = [
+    { ...TEAM_RESULTS_METRICS[0], value: Number(summary.avgDrillPassRate || 0), note: "Team average" },
+    { ...TEAM_RESULTS_METRICS[1], value: Number(summary.avgEncounterPassRate || 0), note: "Team average" },
+    { ...TEAM_RESULTS_METRICS[2], value: Number(summary.avgChallengeSuccessRate || 0), note: "Team average" },
+    { ...TEAM_RESULTS_METRICS[3], value: Number(summary.avgPremiumSuccessRate || 0), note: "Team average" },
+  ];
+
+  if (!donutMetrics.some((metric) => metric.value > 0)) {
+    root.innerHTML = `<div class="small-text">No team performance data yet.</div>`;
+    return;
+  }
+
+  root.innerHTML = donutMetrics.map((metric, index) => `
+    <div class="mb-team-results-donut-card">
+      <canvas id="mbTeamResultsDonut_${index}" width="180" height="180" class="mb-team-results-donut"></canvas>
+      <div class="mb-team-results-copy">
+        <strong>${escapeHtml(metric.label)}</strong>
+        <div class="small-text">${escapeHtml(metric.note)}</div>
+      </div>
+    </div>
+  `).join("");
+
+  donutMetrics.forEach((metric, index) => {
+    const canvas = document.getElementById(`mbTeamResultsDonut_${index}`);
+    if (!canvas) return;
+    const pct = Math.max(0, Math.min(1, Number(metric.value || 0)));
+    drawSingleMetricDonut(canvas, pct, metric.color, {
+      centerTop: `${Math.round(pct * 100)}%`,
+      centerBottom: metric.label,
+    });
+  });
 }
 
 function renderManagerPerformanceTable(users = []) {
@@ -11426,14 +11777,6 @@ function renderManagerPerformanceTable(users = []) {
       </td>
     </tr>
   `).join("");
-}
-
-function renderManagerCoachNotes(notes = []) {
-  const root = document.getElementById("mbPerformanceCoachNotes");
-  if (!root) return;
-  root.innerHTML = notes.length
-    ? notes.map((note) => `<div class="mb-coach-note">${escapeHtml(String(note || ""))}</div>`).join("")
-    : `<div class="small-text">No coach notes yet.</div>`;
 }
 
 function wirePerformanceRowExpansion(usersById = {}) {
@@ -11787,12 +12130,21 @@ function renderSelectionPreview(preview = {}, users = []) {
 }
 
 async function loadGroupRestaurantsForPicker() {
-  const sel = document.getElementById("selActiveRestaurant");
-  const hint = document.getElementById("activeRestaurantHint");
-  if (!sel) return;
+  const pickers = [
+    { selectId: "selActiveRestaurant", hintId: "activeRestaurantHint" },
+    { selectId: "mbListingActiveRestaurant", hintId: "mbListingActiveRestaurantHint" },
+  ]
+    .map(({ selectId, hintId }) => ({
+      sel: document.getElementById(selectId),
+      hint: document.getElementById(hintId),
+    }))
+    .filter(({ sel }) => !!sel);
+  if (!pickers.length) return;
 
-  sel.innerHTML = "";
-  if (hint) hint.textContent = "Loading restaurants…";
+  pickers.forEach(({ sel, hint }) => {
+    sel.innerHTML = "";
+    if (hint) hint.textContent = "Loading restaurants…";
+  });
 
   const r = await supabase
     .from("restaurants")
@@ -11801,22 +12153,28 @@ async function loadGroupRestaurantsForPicker() {
 
   if (r.error) {
     console.error("[BC] restaurants fetch failed", r.error);
-    if (hint) hint.textContent = `⚠️ Failed to load restaurants: ${r.error.message}`;
+    pickers.forEach(({ hint }) => {
+      if (hint) hint.textContent = `⚠️ Failed to load restaurants: ${r.error.message}`;
+    });
     return;
   }
 
   const rows = r.data || [];
   if (!rows.length) {
-    if (hint) hint.textContent = "⚠️ No restaurants found.";
+    pickers.forEach(({ hint }) => {
+      if (hint) hint.textContent = "⚠️ No restaurants found.";
+    });
     return;
   }
 
-  for (const row of rows) {
-    const opt = document.createElement("option");
-    opt.value = row.id;
-    opt.textContent = row.name || row.id.slice(0, 8) + "…";
-    sel.appendChild(opt);
-  }
+  pickers.forEach(({ sel }) => {
+    for (const row of rows) {
+      const opt = document.createElement("option");
+      opt.value = row.id;
+      opt.textContent = row.name || row.id.slice(0, 8) + "…";
+      sel.appendChild(opt);
+    }
+  });
 
   // restore active
   const stored =
@@ -11827,7 +12185,9 @@ async function loadGroupRestaurantsForPicker() {
     null;
 
   const active = appState.activeRestaurantId || stored || rows[0].id;
-  sel.value = active;
+  pickers.forEach(({ sel }) => {
+    sel.value = active;
+  });
   appState.activeRestaurantId = active;
   window.__BC_ALLOWED_RESTAURANT_IDS__ = rows.map((x) => String(x.id || "")).filter(Boolean);
   setStoredActiveRestaurantId(appState?.profile?.scope_id || null, active);
@@ -11837,7 +12197,9 @@ async function loadGroupRestaurantsForPicker() {
   const activeRow = rows.find((x) => x.id === active) || null;
   if (activeRow && !appState.restaurant) appState.restaurant = activeRow;
   markActiveRestaurantReady();
-  if (hint) hint.textContent = `✅ Active: ${activeRow?.name || String(active).slice(0, 8) + "…"}`;
+  pickers.forEach(({ hint }) => {
+    if (hint) hint.textContent = `✅ Active: ${activeRow?.name || String(active).slice(0, 8) + "…"}`;
+  });
 
   console.log("[BC] picker hydrated (no scope)", { active });
   return rows;
@@ -12063,6 +12425,7 @@ function mountPremiumGameIframe({
   showBack = false,
   backTo = "screenManagerBoard",
   mode = "premium",
+  initialScreen = null,
   url = null,
   forceRemount = false,
 } = {}) {
@@ -12125,6 +12488,7 @@ function mountPremiumGameIframe({
     mode: mode || "premium",
     showBack: !!showBack,
     backTo: resolvedBackTo || "screenPremiumApp",
+    initialScreen: initialScreen || null,
     urlOverride: url || null,
     epoch,
     bustCache: true,
@@ -12135,36 +12499,43 @@ function mountPremiumGameIframe({
   iframe.style.position = "relative";
   iframe.style.zIndex = "1";
   iframe.style.pointerEvents = "auto";
+  iframe.style.opacity = "0";
+  iframe.style.transition = "opacity 140ms ease";
 
   iframe.addEventListener("load", () => {
     (async () => {
-      // 🔒 ignore stale load events (hot reload / rapid remount)
-      if (Number(window.__BC_IFRAME_EPOCH__ || 0) !== myEpoch) {
-        console.warn("[PARENT] ignored iframe load (stale epoch)", { myEpoch, current: window.__BC_IFRAME_EPOCH__ });
-        return;
-      }
-
-      if (isLoggingOut()) return;
-
-      const live = await getLiveSessionOrNull();
-      if (!live) return;
-      appState.session = live;
-
-      // demo never gets ctx
-      const modeFromSrc = String(new URL(iframe.src, window.location.href).searchParams.get("mode") || "").toLowerCase();
-      if (modeFromSrc === "demo") return;
-
       try {
-        if (isParentCtxReady(modeFromSrc || "premium")) {
-          await hydrateParentProgressionForPremiumIframe("iframe.load");
-          schedulePremiumCtxPush("iframe.load");
+        // 🔒 ignore stale load events (hot reload / rapid remount)
+        if (Number(window.__BC_IFRAME_EPOCH__ || 0) !== myEpoch) {
+          console.warn("[PARENT] ignored iframe load (stale epoch)", { myEpoch, current: window.__BC_IFRAME_EPOCH__ });
+          return;
         }
-      } catch (e) {
-        console.warn("[PARENT] bc_ctx push on iframe load failed", e);
-      }
 
-      pushPremiumDrill();
-      console.log("[PARENT] premium iframe loaded ✅ (ctx/drill pushed)", { epoch: myEpoch });
+        if (isLoggingOut()) return;
+
+        const live = await getLiveSessionOrNull();
+        if (!live) return;
+        appState.session = live;
+
+        // demo never gets ctx
+        const modeFromSrc = String(new URL(iframe.src, window.location.href).searchParams.get("mode") || "").toLowerCase();
+        if (modeFromSrc === "demo") return;
+
+        try {
+          if (isParentCtxReady(modeFromSrc || "premium")) {
+            await hydrateParentProgressionForPremiumIframe("iframe.load");
+            schedulePremiumCtxPush("iframe.load");
+          }
+        } catch (e) {
+          console.warn("[PARENT] bc_ctx push on iframe load failed", e);
+        }
+
+        pushPremiumDrill();
+        console.log("[PARENT] premium iframe loaded ✅ (ctx/drill pushed)", { epoch: myEpoch });
+      } finally {
+        iframe.style.opacity = "1";
+        iframe.style.pointerEvents = "auto";
+      }
     })();
   });
 
@@ -12362,60 +12733,96 @@ function getAllowedRestaurantName(restaurantId) {
 
 function renderParentStateDebugCard() {
   let root = document.getElementById("mbParentStateCard");
-  if (!root) {
-    const overview = document.getElementById("mbTab_overview");
-    if (!overview) return;
-    root = document.createElement("div");
-    root.id = "mbParentStateCard";
-    root.style.marginBottom = "12px";
-    overview.prepend(root);
-  }
+  if (root) root.remove();
+}
+window.renderParentStateDebugCard = renderParentStateDebugCard;
+
+function renderManagerGameplayAdjustmentsPanel() {
+  const root = document.getElementById("mbGameplayAdjustmentsPanel");
   if (!root) return;
 
-  root.style.display = "block";
-  root.style.visibility = "visible";
-  root.style.opacity = "1";
-  root.style.position = "relative";
-  root.style.zIndex = "1";
-
-  const snapshot = getParentCtxSnapshot("premium");
-  const iframeHealthy = isPremiumIframeHealthy();
-  const health = snapshot.ctxReady
-    ? (iframeHealthy ? "ready" : "degraded_iframe")
-    : "degraded_parent_ctx";
-  const healthTone =
-    health === "ready"
-      ? {
-          border: "rgba(62, 184, 122, 0.38)",
-          bg: "linear-gradient(180deg, rgba(18,52,35,0.96), rgba(14,30,24,0.96))",
-          badgeBg: "rgba(62, 184, 122, 0.18)",
-          badgeText: "#b8f1cf",
-        }
-      : {
-          border: "rgba(232, 170, 64, 0.42)",
-          bg: "linear-gradient(180deg, rgba(58,36,12,0.96), rgba(34,23,10,0.96))",
-          badgeBg: "rgba(232, 170, 64, 0.18)",
-          badgeText: "#ffe1a8",
-        };
+  const currentDifficulty = getCurrentDifficultyValue();
+  const currentLabel = getCurrentDifficultyLabel();
+  const restaurantName = appState?.restaurant?.name || appState?.restaurant?.id || "Current restaurant";
+  const currentTier =
+    Number(appState?.difficulty) || currentDifficulty;
 
   root.innerHTML = `
-    <div class="card" style="padding:12px; display:flex; flex-direction:column; gap:8px; border:1px solid ${healthTone.border}; background:${healthTone.bg}; box-shadow:0 10px 28px rgba(0,0,0,0.18);">
+    <div class="card" style="padding:12px; display:flex; flex-direction:column; gap:12px;">
       <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-        <strong>Parent State</strong>
-        <span class="small-text" style="opacity:.95; padding:3px 8px; border-radius:999px; background:${healthTone.badgeBg}; color:${healthTone.badgeText}; text-transform:uppercase; letter-spacing:.04em;">${escapeHtml(health)}</span>
+        <strong>Gameplay Adjustments</strong>
+        <span class="small-text" style="opacity:.8;">Manager board</span>
       </div>
-      <div class="small-text" style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px 12px;">
-        <div><b>Role:</b> ${escapeHtml(snapshot.membershipRole || "-")}</div>
-        <div><b>Restaurant:</b> ${escapeHtml(snapshot.activeRestaurantId || "-")}</div>
-        <div><b>Ctx Ready:</b> ${snapshot.ctxReady ? "Yes" : "No"}</div>
-        <div><b>Iframe Healthy:</b> ${iframeHealthy ? "Yes" : "No"}</div>
-        <div><b>Epoch:</b> ${escapeHtml(String(snapshot.epoch || 0))}</div>
-        <div><b>User:</b> ${escapeHtml(snapshot.userId || "-")}</div>
+
+      <div class="small-text" style="opacity:.82;">
+        Adjust the current restaurant’s live encounter difficulty. This saves for the selected user and restaurant.
+      </div>
+
+      <div class="card" style="padding:12px; display:flex; flex-direction:column; gap:10px;">
+        <div style="font-weight:600;">Difficulty</div>
+        <div class="row" style="gap:8px; flex-wrap:wrap;">
+          <button id="mbGameplayDifficultyEasy" class="btn-ghost" type="button">Easy</button>
+          <button id="mbGameplayDifficultyMedium" class="btn-ghost" type="button">Medium</button>
+          <button id="mbGameplayDifficultyHard" class="btn-ghost" type="button">Hard</button>
+        </div>
+        <div id="mbGameplayDifficultyStatus" class="small-text" style="opacity:.85;"></div>
+      </div>
+
+      <div class="card" style="padding:12px; display:flex; flex-direction:column; gap:8px;">
+        <div style="font-weight:600;">Current gameplay rules</div>
+        <div id="mbGameplayStateSummary" class="small-text" style="opacity:.86; display:grid; gap:6px;"></div>
       </div>
     </div>
   `;
+
+  const stateSummary = document.getElementById("mbGameplayStateSummary");
+  if (stateSummary) {
+    stateSummary.innerHTML = [
+      `<div><b>Restaurant:</b> ${escapeHtml(restaurantName)}</div>`,
+      `<div><b>Current difficulty:</b> ${escapeHtml(currentLabel)}</div>`,
+      `<div><b>Live tier authority:</b> T${escapeHtml(String(currentTier || 1))}</div>`,
+      `<div><b>Tones:</b> guide, charm, authority</div>`,
+      `<div><b>Hold:</b> unlocks at Tier 2</div>`,
+      `<div><b>Pivot:</b> unlocks at Tier 3</div>`,
+    ].join("");
+  }
+
+  const statusEl = document.getElementById("mbGameplayDifficultyStatus");
+  if (statusEl) {
+    statusEl.textContent = `Current selection: ${currentLabel}`;
+  }
+
+  const setActive = () => {
+    const current = getCurrentDifficultyValue();
+    document.getElementById("mbGameplayDifficultyEasy")?.classList.toggle("active", current === 1);
+    document.getElementById("mbGameplayDifficultyMedium")?.classList.toggle("active", current === 2);
+    document.getElementById("mbGameplayDifficultyHard")?.classList.toggle("active", current === 3);
+    const status = document.getElementById("mbGameplayDifficultyStatus");
+    if (status) status.textContent = `Current selection: ${getCurrentDifficultyLabel()}`;
+  };
+
+  setActive();
+  wireManagerGameplayAdjustmentsPanel();
 }
-window.renderParentStateDebugCard = renderParentStateDebugCard;
+window.renderManagerGameplayAdjustmentsPanel = renderManagerGameplayAdjustmentsPanel;
+
+function wireManagerGameplayAdjustmentsPanel() {
+  const bind = (id, value) => {
+    const btn = document.getElementById(id);
+    if (!btn || btn.__bcBound) return;
+    btn.__bcBound = true;
+    btn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setCurrentDifficultyValue(value);
+    });
+  };
+
+  bind("mbGameplayDifficultyEasy", 1);
+  bind("mbGameplayDifficultyMedium", 2);
+  bind("mbGameplayDifficultyHard", 3);
+}
+window.wireManagerGameplayAdjustmentsPanel = wireManagerGameplayAdjustmentsPanel;
 
 function getManagerRitualStatusStaffOptions() {
   const staffRows = Array.isArray(window.__BC_MB_STAFF_ROWS__) ? window.__BC_MB_STAFF_ROWS__ : [];
@@ -12440,6 +12847,24 @@ function getManagerRitualStatusStaffOptions() {
   }
 
   return getManagerWaiterOptions();
+}
+
+async function loadManagerRitualStatusStaffOptionsFromDb(restaurantId) {
+  const rid = String(restaurantId || "").trim();
+  if (!rid) return [];
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("user_id, display_name, role, created_at")
+    .eq("restaurant_id", rid)
+    .order("created_at", { ascending: true });
+
+  if (error || !Array.isArray(data) || !data.length) {
+    return [];
+  }
+
+  window.__BC_MB_STAFF_ROWS__ = data;
+  return getManagerRitualStatusStaffOptions();
 }
 
 function renderManagerRitualStatusSelectOptions(selectEl, options = {}) {
@@ -12520,7 +12945,10 @@ async function renderManagerBoardOverviewRitualStatusCard(options = {}) {
   if (!root) return;
 
   const rid = String(getManagerActiveRestaurantId() || appState?.activeRestaurantId || appState?.profile?.restaurant_id || "");
-  const staffOptions = getManagerRitualStatusStaffOptions();
+  let staffOptions = getManagerRitualStatusStaffOptions();
+  if (!staffOptions.length && rid) {
+    staffOptions = await loadManagerRitualStatusStaffOptionsFromDb(rid);
+  }
   const fallbackSelected =
     String(window.__BC_MB_RITUAL_STATUS_USER_ID__ || window.__BC_MB_ACTIVE_THREAD_USER_ID__ || staffOptions[0]?.userId || "");
   const selectedUserId = String(options.selectedUserId || fallbackSelected || "");
@@ -12530,10 +12958,10 @@ async function renderManagerBoardOverviewRitualStatusCard(options = {}) {
     root.innerHTML = `
       <div class="card" style="padding:12px; display:flex; flex-direction:column; gap:8px;">
         <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-          <strong>Ritual Status</strong>
+          <strong>Waiter Progress</strong>
           <span class="small-text" style="opacity:.8;">Overview</span>
         </div>
-        <div class="small-text" style="opacity:.8;">No staff members available for ritual checks.</div>
+        <div class="small-text" style="opacity:.8;">No staff members available for progress checks.</div>
       </div>
     `;
     return;
@@ -12549,11 +12977,11 @@ async function renderManagerBoardOverviewRitualStatusCard(options = {}) {
   root.innerHTML = `
     <div class="card" style="padding:12px; display:flex; flex-direction:column; gap:10px; border:1px solid ${statusTone.border}; background:${statusTone.bg};">
       <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-        <strong>Ritual Status</strong>
+        <strong>Waiter Progress</strong>
         <span class="small-text" style="opacity:.9; padding:3px 8px; border-radius:999px; background:${statusTone.badgeBg}; color:${statusTone.badgeText}; text-transform:uppercase; letter-spacing:.04em;">Overview</span>
       </div>
       <div class="small-text" style="opacity:.82;">
-        Check whether a staff member has completed today’s ritual in the current restaurant.
+        Check whether a waiter has completed today’s ritual in the current restaurant.
       </div>
       <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
         <select id="mbRitualStatusStaffSelect" class="input" style="min-width:240px;"></select>
@@ -13165,16 +13593,17 @@ function refreshManagerRuntimeSurfaces(opts = {}) {
   }
 
   if (board) {
-    safeCall?.("renderManagerBoardDrillSummary", () => renderManagerBoardDrillSummary?.());
-    safeCall?.("renderManagerBoardOverviewLiveEffects", () => renderManagerBoardOverviewLiveEffects?.());
-    safeCall?.("renderManagerBoardOverviewDisplayMethodChallenge", () => renderManagerBoardOverviewDisplayMethodChallenge?.());
-  }
+  safeCall?.("renderManagerBoardDrillSummary", () => renderManagerBoardDrillSummary?.());
+  safeCall?.("renderManagerBoardOverviewLiveEffects", () => renderManagerBoardOverviewLiveEffects?.());
+}
 
   if (economy) {
     safeCall?.("renderManagerAbilityEconomyPanel", () => renderManagerAbilityEconomyPanel?.());
   }
 
   if (liveControls) {
+    safeCall?.("renderManagerBoardOverviewLiveEffects", () => renderManagerBoardOverviewLiveEffects?.());
+    safeCall?.("renderManagerAbilityEconomyPanel", () => renderManagerAbilityEconomyPanel?.());
     safeCall?.("renderManagerAttributeEffectsPanel", () => renderManagerAttributeEffectsPanel?.());
     safeCall?.("renderManagerAreaEffectsPanel", () => renderManagerAreaEffectsPanel?.());
     safeCall?.("renderManagerTimedChallengeActionPanel", () => renderManagerTimedChallengeActionPanel?.());
@@ -16261,11 +16690,12 @@ function renderManagerAreaEffectsPanel() {
 }
 
 function renderManagerLiveControlPanels() {
+  safeCall("renderManagerBoardOverviewLiveEffects", () => renderManagerBoardOverviewLiveEffects?.());
   safeCall("renderManagerAbilityEconomyPanel", () => renderManagerAbilityEconomyPanel?.());
   safeCall("renderManagerAttributeEffectsPanel", () => renderManagerAttributeEffectsPanel?.());
   safeCall("renderManagerAreaEffectsPanel", () => renderManagerAreaEffectsPanel?.());
   safeCall("renderManagerTimedChallengeActionPanel", () => renderManagerTimedChallengeActionPanel?.());
-  safeCall("renderManagerDrillActionPanel", () => renderManagerDrillActionPanel?.());
+  safeCall("renderManagerDisplayMethodActionPanel", () => renderManagerDisplayMethodActionPanel?.());
 }
 
 function renderProfileScreen() {
@@ -16341,6 +16771,7 @@ function renderProfileScreen() {
     }
   }
 
+  void renderProfileSkillDashboard();
   const multiCard = document.getElementById("profileMultiRestaurantCard");
   if (multiCard) {
     const caps = getPremiumRoleCapabilities(profile);
@@ -16505,6 +16936,94 @@ function renderProfileStandingCard(user = null, model = null) {
       </div>
     </div>
   `;
+}
+
+async function renderProfileSkillDashboard() {
+  const root = document.getElementById("profileSkillsCard");
+  if (!root) return;
+
+  root.innerHTML = `
+    <div class="card" style="display:flex; flex-direction:column; gap:10px;">
+      <div style="font-weight:600;">Your Personal Skills</div>
+
+      <div class="small-text" id="profileSkillSummary" style="margin-bottom:8px; opacity:.85;">
+        Loading skill summary…
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px 12px; margin-bottom:10px;">
+        <div class="small-text">Reading: <span id="profileSkillRead">0%</span></div>
+        <div class="small-text">Framing: <span id="profileSkillFraming">0%</span></div>
+        <div class="small-text">Delivery: <span id="profileSkillDelivery">0%</span></div>
+        <div class="small-text">Recovery: <span id="profileSkillRecovery">0%</span></div>
+        <div class="small-text">Closing: <span id="profileSkillClosing">0%</span></div>
+      </div>
+
+      <canvas id="profileSkillRadar" width="240" height="240" style="display:block; margin:0 auto;"></canvas>
+
+      <div id="profileSkillTimeline" style="margin-top:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:6px;">
+          <div id="profileTimelineTitle" style="font-weight:600;">Recent Progress</div>
+          <select id="profileTimelineUserSelect" class="hidden" style="max-width:180px;"></select>
+        </div>
+
+        <div id="profileTimelineList" class="small-text" style="display:flex; flex-direction:column; gap:6px;">
+          <div style="opacity:.7;">No history yet.</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  try {
+    const snap = await loadHudSkillSnapshot();
+
+    const setText = (id, value) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = `${value}%`;
+    };
+
+    setText("profileSkillRead", snap.read ?? 0);
+    setText("profileSkillFraming", snap.framing ?? 0);
+    setText("profileSkillDelivery", snap.delivery ?? 0);
+    setText("profileSkillRecovery", snap.recovery ?? 0);
+    setText("profileSkillClosing", snap.closing ?? 0);
+
+    const entries = [
+      { key: "read", label: "Reading", val: snap.read ?? 0 },
+      { key: "framing", label: "Framing", val: snap.framing ?? 0 },
+      { key: "delivery", label: "Delivery", val: snap.delivery ?? 0 },
+      { key: "recovery", label: "Recovery", val: snap.recovery ?? 0 },
+      { key: "closing", label: "Closing", val: snap.closing ?? 0 },
+    ].sort((a, b) => b.val - a.val);
+
+    const strongest = entries[0];
+    const weakest = entries[entries.length - 1];
+
+    const summary = document.getElementById("profileSkillSummary");
+    if (summary) {
+      summary.textContent = `Strongest: ${strongest.label} (${strongest.val}%) • Needs work: ${weakest.label} (${weakest.val}%)`;
+    }
+
+    const canvas = document.getElementById("profileSkillRadar");
+    if (canvas && typeof drawSkillRadar === "function") {
+      drawSkillRadar(canvas, snap);
+    }
+
+    const titleEl = document.getElementById("profileTimelineTitle");
+    if (titleEl) titleEl.textContent = "Recent Progress";
+
+    const timelineList = document.getElementById("profileTimelineList");
+    if (timelineList) {
+      timelineList.innerHTML = `<div class="small-text" style="opacity:.75;">Open Profile to review recent skill history.</div>`;
+    }
+  } catch (error) {
+    console.warn("[PROFILE] skill dashboard render failed", error);
+    root.innerHTML = `
+      <div class="card">
+        <div style="font-weight:600; margin-bottom:8px;">Your Personal Skills</div>
+        <div class="small" style="opacity:.75;">Could not load skill summary right now.</div>
+      </div>
+    `;
+  }
 }
 
 function renderProfileBadgeShelf(user = null, model = null) {
@@ -16683,7 +17202,7 @@ async function buildSelfProfilePerformanceUser() {
     challengeCount: challengeRows,
     premiumSuccessRate,
     masteryRate,
-    lastActiveAt: firstNonEmpty(progressionRow?.updated_at, encounterRows[0]?.occurred_at, messageRows[0]?.created_at),
+    lastActiveAt: latestTimestamp(progressionRow?.updated_at, encounterRows[0]?.occurred_at, messageRows[0]?.created_at),
     eligibilityTier: servedTier,
     readiness,
     readinessLabel,
@@ -16700,8 +17219,7 @@ async function buildSelfProfilePerformanceUser() {
 async function renderProfilePerformanceCards() {
   const rootStanding = document.getElementById("profileStandingCard");
   const rootBadges = document.getElementById("profileBadgeShelf");
-  const rootInsight = document.getElementById("profileInsightCard");
-  if (!rootStanding && !rootBadges && !rootInsight) return;
+  if (!rootStanding && !rootBadges) return;
 
   try {
     const profile = appState?.profile || {};
@@ -16722,7 +17240,6 @@ async function renderProfilePerformanceCards() {
 
     renderProfileStandingCard(user, model);
     renderProfileBadgeShelf(user, model);
-    renderProfileInsightCard(user);
   } catch (error) {
     console.warn("[PROFILE] performance card render failed", error);
     if (rootStanding) {
@@ -16734,7 +17251,6 @@ async function renderProfilePerformanceCards() {
       `;
     }
     if (rootBadges) rootBadges.innerHTML = "";
-    if (rootInsight) rootInsight.innerHTML = "";
   }
 }
 
@@ -19255,7 +19771,10 @@ function renderWeeklyTrainingReport(rows) {
 
 async function loadWeeklyTrainingReport() {
   const { restaurantId } = getManagerBoardFilter();
-  if (!restaurantId) return [];
+  if (!restaurantId) {
+    renderWeeklyTrainingReport([]);
+    return [];
+  }
 
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -19468,10 +19987,7 @@ async function loadManagerBoardData(restaurantId = null, options = {}) {
       console.warn("[MB] timed challenge wine refresh failed", error);
     }
 
-    document.getElementById("mbRestName").textContent =
-      appState.restaurant?.name || (String(rid).slice(0, 8) + "…");
     document.getElementById("mbMsg").textContent = "";
-    renderParentStateDebugCard();
     safeCall("renderManagerBoardOverviewRitualStatusCard", () => renderManagerBoardOverviewRitualStatusCard?.());
     wireManagerBoardMembers();
     if (isFreshCacheEntry(managerBoardOverviewCache, MANAGER_BOARD_OVERVIEW_CACHE_MS, rid) && !force) {
@@ -19511,9 +20027,6 @@ async function loadManagerBoardData(restaurantId = null, options = {}) {
 
     if (runsRes.error) throw runsRes.error;
     if (drillsRes.error) throw drillsRes.error;
-
-    document.getElementById("mbRunsTotal").textContent = String(runsRes.count ?? 0);
-    document.getElementById("mbDrillsTotal").textContent = String(drillsRes.count ?? 0);
 
     // -----------------------------
     // Recent activity feed
@@ -19558,19 +20071,6 @@ async function loadManagerBoardData(restaurantId = null, options = {}) {
       .filter((i) => i.t)
       .sort((a, b) => new Date(b.t) - new Date(a.t))
       .slice(0, 8);
-
-    document.getElementById("mbRecent").innerHTML =
-      items.length
-        ? items
-            .map(
-              (i) =>
-                `<div style="padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.08);">
-                  ${i.line}
-                  <div style="opacity:.6; font-size:12px;">${i.t}</div>
-                </div>`
-            )
-            .join("")
-        : `<div style="opacity:.8;">No activity yet.</div>`;
 
     // -----------------------------
     // Best streaks (computed from encounter resolutions)
@@ -19648,81 +20148,12 @@ async function loadManagerBoardData(restaurantId = null, options = {}) {
         : `<div style="opacity:.8;">No streak data yet.</div>`;
     }
 
-    // -----------------------------
-    // Needs coaching (ranked, not binary)
-    // Uses bc_user_latest_v1 so it works even when sessions are sparse
-    // -----------------------------
-    let latestQ = supabase
-      .from("bc_user_latest_v1")
-      .select("user_id, last10_count, last10_greens, last10_yellows, last10_reds, last10_avg_chain_score, latest_chain_signal, latest_tier, latest_grade, latest_occurred_at")
-      .eq("restaurant_id", rid)
-      .order("latest_occurred_at", { ascending: false })
-      .limit(200);
-
-    const latestRes = await latestQ;
-
-    if (latestRes.error) throw latestRes.error;
-
-    const coaching = (latestRes.data || [])
-      .map((u) => {
-        const n = Number(u.last10_count ?? 0);
-        const reds = Number(u.last10_reds ?? 0);
-        const avg = Number(u.last10_avg_chain_score ?? 0);
-
-        // score higher = more attention needed
-        // (reds are heavy, low avg also heavy, low sample dampened)
-        const attention =
-          (reds * 3) +
-          (avg < 2.2 ? 2 : 0) +
-          (avg < 1.8 ? 2 : 0) +
-          (n >= 8 ? 1 : 0);
-
-        return {
-          user_id: u.user_id,
-          attention,
-          n,
-          reds,
-          avg,
-          latest_signal: u.latest_chain_signal,
-          latest_tier: u.latest_tier,
-          latest_grade: u.latest_grade,
-          latest_occurred_at: u.latest_occurred_at,
-        };
-      })
-      .sort((a, b) => (b.attention - a.attention) || (b.reds - a.reds) || (a.avg - b.avg))
-      .slice(0, 5);
-
-    const coachingNameMap = await mapUserIdsToNames(coaching.map(x => x.user_id));
-
-    const coachEl = document.getElementById("mbNeedsCoaching");
-    if (coachEl) {
-      coachEl.innerHTML = coaching.length
-        ? coaching
-            .map((x) => {
-              const u = userLabel(x.user_id, coachingNameMap);
-              const reasons = [
-                x.reds > 0 ? `${x.reds} red(s) in last10` : null,
-                Number.isFinite(x.avg) ? `avg ${x.avg.toFixed(2)}` : null,
-                x.latest_signal ? `latest ${x.latest_signal}` : null,
-                x.latest_tier ? `tier ${x.latest_tier}` : null,
-              ].filter(Boolean);
-
-              return `<div style="padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.08);">
-                        <div><b>${u}</b> • ${reasons.join(" • ")}</div>
-                        <div style="opacity:.6; font-size:12px;">${x.latest_occurred_at || ""}</div>
-                      </div>`;
-            })
-            .join("")
-        : `<div style="opacity:.8;">No coaching signals yet.</div>`;
-    }
-
     setDebug({
       step: "managerBoard.loaded",
       restaurant_id: rid,
       runs: runsRes.count,
       drills: drillsRes.count,
       streakUsers: topStreaks.length,
-      coachingUsers: coaching.length,
     });
     managerBoardOverviewCache = { rid: String(rid), loadedAt: Date.now() };
   } catch (e) {
@@ -19978,63 +20409,87 @@ function renderDemoJoinBlock() {
 
   const isAuthed = !!appState.session?.user;
   if (badge) (isAuthed ? badge.classList.remove("hidden") : badge.classList.add("hidden"));
-
-  const role = String(appState.profile?.role || "").toLowerCase();
-  const hasRestaurant = !!appState.profile?.restaurant_id;
-
-  const showJoin = isAuthed && role === "waiter" && !hasRestaurant;
-  if (joinBlock) (showJoin ? joinBlock.classList.remove("hidden") : joinBlock.classList.add("hidden"));
+  if (joinBlock) joinBlock.classList.add("hidden");
 }
 
-async function demoJoinRestaurantByCode() {
+function getDemoJoinState() {
+  const isAuthed = !!appState.session?.user;
+  const role = String(appState.profile?.role || "").toLowerCase();
+  const hasRestaurant = !!appState.profile?.restaurant_id;
+  return {
+    isAuthed,
+    role,
+    hasRestaurant,
+    canJoin: isAuthed && role === "waiter" && !hasRestaurant,
+  };
+}
+
+async function submitDemoJoinRestaurantCode(rawCode) {
+  const code = normCode(rawCode);
+  if (!code) throw new Error("Enter a join code.");
+
+  await loadAuthedState("demo.join.precheck");
+  if (!appState.session?.user) throw new Error("Login as a waiter first.");
+  if (String(appState.profile?.role || "").toLowerCase() !== "waiter") {
+    throw new Error("Join-by-code is for waiter accounts.");
+  }
+  if (appState.profile?.restaurant_id) throw new Error("You are already assigned to a restaurant.");
+
+  setDebug({ step: "demo.join.start", time: new Date().toISOString(), code });
+
+  const sb = window.supabase || supabase;
+  const rpc = await withTimeout(
+    sb.rpc("join_restaurant_by_code", { p_code: code }),
+    15000,
+    "rpc.join_restaurant_by_code"
+  );
+
+  if (rpc.error) throw rpc.error;
+
+  if (!rpc.data?.ok) {
+    const err = rpc.data?.error || "unknown";
+    if (err === "invalid_code") throw new Error("Invalid join code.");
+    if (err === "seat_limit_reached") throw new Error("Seat limit reached for this restaurant.");
+    if (err === "invite_required") throw new Error("Invite required. Ask your manager to add your email.");
+    if (err === "already_in_restaurant") throw new Error("You are already assigned to a restaurant.");
+    throw new Error("Join failed.");
+  }
+
+  setDebug({ step: "demo.join.ok", time: new Date().toISOString(), restaurant_id: rpc.data.restaurant_id });
+
+  await loadAuthedState("demo.join.refresh");
+  await ensureProfileDisplayName();
+  renderDemoJoinBlock();
+
+  if (appState.profile?.restaurant_id) {
+    await decideRoute("demo.join.auto");
+  }
+
+  return {
+    ok: true,
+    restaurantId: rpc.data.restaurant_id || null,
+    message: "Success ✅ Premium unlocked.",
+  };
+}
+
+async function demoJoinRestaurantByCode(rawCode) {
   try {
     clearMsgs();
-
-    const code = normCode(document.getElementById("demoJoinCode")?.value);
-    if (!code) throw new Error("Enter a join code.");
-
-    await loadAuthedState("demo.join.precheck");
-    if (!appState.session?.user) throw new Error("Login as a waiter first.");
-    if (String(appState.profile?.role || "").toLowerCase() !== "waiter") throw new Error("Join-by-code is for waiter accounts.");
-    if (appState.profile?.restaurant_id) throw new Error("You are already assigned to a restaurant.");
-
     setMsg("demoJoinMsg", "Submitting...");
-    setDebug({ step: "demo.join.start", time: new Date().toISOString(), code });
-
-    const sb = window.supabase || supabase;
-    const rpc = await withTimeout(
-      sb.rpc("join_restaurant_by_code", { p_code: code }),
-      15000,
-      "rpc.join_restaurant_by_code"
-    );
-
-    if (rpc.error) throw rpc.error;
-
-    if (!rpc.data?.ok) {
-      const err = rpc.data?.error || "unknown";
-      if (err === "invalid_code") throw new Error("Invalid join code.");
-      if (err === "seat_limit_reached") throw new Error("Seat limit reached for this restaurant.");
-      if (err === "invite_required") throw new Error("Invite required. Ask your manager to add your email.");
-      if (err === "already_in_restaurant") throw new Error("You are already assigned to a restaurant.");
-      throw new Error("Join failed.");
-    }
-
-    setMsg("demoJoinMsg", "Success ✅ Premium unlocked.", "success");
-    setDebug({ step: "demo.join.ok", time: new Date().toISOString(), restaurant_id: rpc.data.restaurant_id });
-
-    await loadAuthedState("demo.join.refresh");
-    await ensureProfileDisplayName();
-    renderDemoJoinBlock();
-
-    if (appState.profile?.restaurant_id) {
-      await decideRoute("demo.join.auto");
-    }
+    const inputCode = typeof rawCode === "string" ? rawCode : document.getElementById("demoJoinCode")?.value;
+    const result = await submitDemoJoinRestaurantCode(inputCode);
+    setMsg("demoJoinMsg", result.message || "Success ✅ Premium unlocked.", "success");
   } catch (e) {
     console.error(e);
     setMsg("demoJoinMsg", e?.message || "Join failed", "error");
     setDebug({ step: "demo.join.failed", time: new Date().toISOString(), error: e?.message || String(e) });
   }
 }
+
+window.__BC_DEMO_JOIN_API__ = {
+  getState: getDemoJoinState,
+  submit: submitDemoJoinRestaurantCode,
+};
 
 // ------------------------------------------------------------
 // Routing rules (restaurant-first)
@@ -20115,7 +20570,9 @@ async function routeDemo(reason = "manual") {
   setDebug({ step: "route.demo", time: new Date().toISOString(), reason, authed: !!appState.session?.user });
   showScreen("screenGameDemo");
   renderDemoJoinBlock();
-  mountGameIframe("gameRootDemo", "demo");
+  document.getElementById("btnDemoPremium")?.classList.add("hidden");
+  document.getElementById("btnDemoExit")?.classList.add("hidden");
+  destroyDemoIframe("routeDemo:shell_only");
 }
 
 async function routePremium(reason = "manual") {
@@ -20181,16 +20638,6 @@ async function routePremium(reason = "manual") {
         showScreen("screenManagerBoard");
         return;
       }
-      mountPremiumGameIframe({ mode: "premium" });
-      try {
-        postToGame("bc_ctx", {
-          userId: appState.session?.user?.id || null,
-          restaurantId: appState.activeRestaurantId || appState.profile?.restaurant_id || null,
-          scopeId: appState.profile?.scope_id || null,
-          role: appState.profile?.role || null,
-          mode: "premium"
-        });
-      } catch {}
       wireParentButtons();
       refreshParentProgressionUI();
       return;
@@ -20236,16 +20683,6 @@ async function routePremium(reason = "manual") {
       showScreen("screenManagerBoard");
       return;
     }
-    mountPremiumGameIframe({ mode: "premium" });
-    try {
-      postToGame("bc_ctx", {
-        userId: appState.session?.user?.id || null,
-        restaurantId: appState.activeRestaurantId || appState.profile?.restaurant_id || null,
-        scopeId: appState.profile?.scope_id || null,
-        role: appState.profile?.role || null,
-        mode: "premium"
-      });
-    } catch {}
     refreshParentProgressionUI();
   } catch (e) {
     console.error(e);
@@ -20362,6 +20799,16 @@ function isAuthed() {
 
 function routeDemoShellNoAuth() {
   console.log("[ROUTE] demo (no auth)");
+  appMode = "demo";
+  const useV2Harness =
+    new URLSearchParams(window.location.search).get("bcV2Demo") === "1" ||
+    (() => {
+      try {
+        return localStorage.getItem("BC_V2_DEMO") === "1";
+      } catch {
+        return false;
+      }
+    })();
   showScreen("screenGameDemo");
   setPremiumOverlayActive(false);
   destroyPremiumIframe("routeDemoShellNoAuth");
@@ -20369,7 +20816,12 @@ function routeDemoShellNoAuth() {
   window.BC_DRILL_CONFIG = null;
   setPendingStartDrill(null);
   destroyDemoIframe("routeDemoShellNoAuth:pre");
-  mountGameIframe("gameRootDemo", "demo");
+  document.getElementById("btnDemoPremium")?.classList.add("hidden");
+  document.getElementById("btnDemoExit")?.classList.add("hidden");
+  mountGameIframe("gameRootDemo", "demo", {
+    initialScreen: "screenWelcome",
+    v2Harness: useV2Harness,
+  });
 }
 
 function routeAuth() {
@@ -20431,17 +20883,17 @@ async function decideRoute(reason = "decideRoute") {
     await initRestaurantContextAfterAuth();
     if (isHardLoggedOut()) return;
 
-    // 1) Logged out => Auth by default (Demo only if explicitly requested)
+    // 1) Logged out => Demo shell by default
     if (!isAuthed()) {
-      appMode = "public";
+      appMode = "demo";
       if (window.__BC_FORCE_AUTH__) {
         window.__BC_FORCE_AUTH__ = false;
         routeAuth();
         setDebug({ step: "decideRoute.logged_out.force_auth", time: new Date().toISOString(), reason });
         return;
       }
-      routeAuth();
-      setDebug({ step: "decideRoute.logged_out.auth", time: new Date().toISOString(), reason });
+      routeDemoShellNoAuth();
+      setDebug({ step: "decideRoute.logged_out.demo_shell", time: new Date().toISOString(), reason });
       return;
     }
 
@@ -20505,47 +20957,49 @@ async function decideRouteGuarded(reason = "") {
 // HUD
 // ------------------------------------------------------------
 function renderInvitesList() {
-  const el = document.getElementById("invitesList");
-  if (!el) return;
-
   const invites = getManagerBoardInvites();
-  if (!invites.length) {
-    el.innerHTML = `<div style="opacity:.8;">No waiters added yet.</div>`;
-    return;
-  }
+  ["invitesList", "mbInvitesList"].forEach((targetId) => {
+    const el = document.getElementById(targetId);
+    if (!el) return;
 
-  el.innerHTML = invites
-    .map((i) => {
-      const status = i.status;
-      const email = i.email;
-      const meta = status === "accepted" ? "accepted" : status === "revoked" ? "revoked" : "pending";
+    if (!invites.length) {
+      el.innerHTML = `<div style="opacity:.8;">No waiters added yet.</div>`;
+      return;
+    }
 
-      const btn =
-        status === "revoked"
-          ? `<button data-action="reinvite" data-email="${email}" style="font-size:12px;">Re-add</button>`
-          : `<button data-action="revoke" data-email="${email}" style="font-size:12px;">Remove</button>`;
+    el.innerHTML = invites
+      .map((i) => {
+        const status = i.status;
+        const email = i.email;
+        const meta = status === "accepted" ? "accepted" : status === "revoked" ? "revoked" : "pending";
 
-      return `
-        <div style="display:flex; justify-content:space-between; gap:10px; padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.08);">
-          <div style="min-width:0;">
-            <div style="font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${email}</div>
-            <div style="font-size:12px; opacity:.75;">${meta}</div>
+        const btn =
+          status === "revoked"
+            ? `<button data-action="reinvite" data-email="${email}" style="font-size:12px;">Re-add</button>`
+            : `<button data-action="revoke" data-email="${email}" style="font-size:12px;">Remove</button>`;
+
+        return `
+          <div style="display:flex; justify-content:space-between; gap:10px; padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.08);">
+            <div style="min-width:0;">
+              <div style="font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${email}</div>
+              <div style="font-size:12px; opacity:.75;">${meta}</div>
+            </div>
+            <div style="display:flex; gap:8px; align-items:center;">
+              ${btn}
+            </div>
           </div>
-          <div style="display:flex; gap:8px; align-items:center;">
-            ${btn}
-          </div>
-        </div>
-      `;
-    })
-    .join("");
+        `;
+      })
+      .join("");
 
-  el.querySelectorAll("button[data-action]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const action = btn.getAttribute("data-action");
-      const email = btn.getAttribute("data-email");
-      if (!email) return;
-      if (action === "revoke") await adminRevokeInvite(email);
-      if (action === "reinvite") await adminAddInvite(email);
+    el.querySelectorAll("button[data-action]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const action = btn.getAttribute("data-action");
+        const email = btn.getAttribute("data-email");
+        if (!email) return;
+        if (action === "revoke") await adminRevokeInvite(email);
+        if (action === "reinvite") await adminAddInvite(email);
+      });
     });
   });
 }
@@ -20610,7 +21064,6 @@ async function refreshManagerBoardScopedViews(restaurantId = null) {
   renderManagerRestaurantPicker?.();
   renderManagerRestaurantContextCard?.();
   safeCall("renderGroupOverviewCard", () => renderGroupOverviewCard?.());
-  safeCall("renderGroupMetricsCard", () => renderGroupMetricsCard?.());
   safeCall("renderGroupRestaurantComparisonCard", () => renderGroupRestaurantComparisonCard?.());
   safeCall("wireGroupRestaurantComparisonCard", () => wireGroupRestaurantComparisonCard?.());
   safeCall("renderManagerPeopleSummary", () => renderManagerPeopleSummary?.());
@@ -20619,10 +21072,7 @@ async function refreshManagerBoardScopedViews(restaurantId = null) {
   safeCall("renderManagerBoardOverviewLiveEffects", () => renderManagerBoardOverviewLiveEffects?.());
   safeCall("renderManagerLiveEffectsPanels", () => renderManagerLiveEffectsPanels?.());
   safeCall("pushLiveEffectsToGame", () => pushLiveEffectsToGame?.());
-  safeCall("renderManagerBoardOverviewTimedChallenge", () => renderManagerBoardOverviewTimedChallenge?.());
-  safeCall("renderManagerBoardRecentChallenges", () => renderManagerBoardRecentChallenges?.());
   safeCall("renderTimedChallengeRecentSummary", () => renderTimedChallengeRecentSummary?.());
-  renderManagerDrillSummary?.();
   renderManagerLiveControlPanels?.();
   renderProfileScreen?.();
   renderHud?.();
@@ -20675,8 +21125,48 @@ async function loadHudSkillSnapshot() {
   };
 }
 
+async function loadProfileSkillShape() {
+  const ctx = getHudActorContext();
+  if (!ctx.userId || !ctx.restaurantId) {
+    return {
+      read: 0,
+      framing: 0,
+      delivery: 0,
+      recovery: 0,
+      closing: 0,
+    };
+  }
+
+  const { data, error } = await supabase
+    .from("bc_skill_snapshots_v1")
+    .select(`
+      read_pct,
+      framing_pct,
+      delivery_pct,
+      recovery_pct,
+      closing_pct,
+      created_at
+    `)
+    .eq("user_id", ctx.userId)
+    .eq("restaurant_id", ctx.restaurantId)
+    .order("created_at", { ascending: false })
+    .limit(3);
+
+  if (error || !Array.isArray(data) || !data.length) {
+    return {
+      read: 0,
+      framing: 0,
+      delivery: 0,
+      recovery: 0,
+      closing: 0,
+    };
+  }
+
+  return averageSkillShape(data);
+}
+
 async function renderHudSkillDashboard() {
-  const snap = await loadHudSkillSnapshot();
+    const snap = await loadProfileSkillShape();
 
   const setText = (id, value) => {
     const el = document.getElementById(id);
@@ -20759,6 +21249,7 @@ function setCurrentDifficultyValue(nextValue) {
   }
 
   renderHudDifficultyControls?.();
+  renderManagerGameplayAdjustmentsPanel?.();
 }
 
 function renderHudDifficultyControls() {
@@ -21013,16 +21504,31 @@ function renderHud() {
   const caps = getPremiumRoleCapabilities(profile);
   const activeRestaurantId = getManagerActiveRestaurantId();
   const r = appState.restaurant;
+  const displayRole = getDisplayRoleLabel(profile);
+  const restaurantLabel = r?.name || activeRestaurantId || "-";
+  const joinCode = r?.code || "-";
+  const seatLimit = r?.seat_limit ?? "-";
+  const requireInviteLabel = r ? (r.require_invite ? "Yes" : "No") : "-";
 
   if (activeRestaurantId && appState?.restaurant?.id && String(appState.restaurant.id) !== String(activeRestaurantId)) {
     appState.restaurant.id = activeRestaurantId;
   }
 
-  document.getElementById("hudRole").textContent = getDisplayRoleLabel(profile);
-  document.getElementById("hudRestName").textContent = r?.name || activeRestaurantId || "-";
-  document.getElementById("hudJoinCode").textContent = r?.code || "-";
-  document.getElementById("hudSeatLimit").textContent = r?.seat_limit ?? "-";
-  document.getElementById("hudRequireInvite").textContent = r ? (r.require_invite ? "Yes" : "No") : "-";
+  document.getElementById("hudRole").textContent = displayRole;
+  document.getElementById("hudRestName").textContent = restaurantLabel;
+  document.getElementById("hudJoinCode").textContent = joinCode;
+  document.getElementById("hudSeatLimit").textContent = seatLimit;
+  document.getElementById("hudRequireInvite").textContent = requireInviteLabel;
+  const mbListingRole = document.getElementById("mbListingRole");
+  if (mbListingRole) mbListingRole.textContent = displayRole;
+  const mbListingRestName = document.getElementById("mbListingRestName");
+  if (mbListingRestName) mbListingRestName.textContent = restaurantLabel;
+  const mbListingJoinCode = document.getElementById("mbListingJoinCode");
+  if (mbListingJoinCode) mbListingJoinCode.textContent = joinCode;
+  const mbListingSeatLimit = document.getElementById("mbListingSeatLimit");
+  if (mbListingSeatLimit) mbListingSeatLimit.textContent = seatLimit;
+  const mbListingRequireInvite = document.getElementById("mbListingRequireInvite");
+  if (mbListingRequireInvite) mbListingRequireInvite.textContent = requireInviteLabel;
 
   const mgrBtn = document.getElementById("btnManagerBoard");
   if (mgrBtn) mgrBtn.classList.toggle("hidden", !caps.canAccessManagerBoard);
@@ -21030,7 +21536,10 @@ function renderHud() {
   if (msgBtn) msgBtn.classList.remove("hidden");
   const leaderboardBtn = document.getElementById("btnWaiterPerformanceLeaderboard");
   if (leaderboardBtn) {
-    leaderboardBtn.classList.toggle("hidden", String(normalizedRole).toLowerCase() !== "waiter");
+    leaderboardBtn.classList.toggle(
+      "hidden",
+      !(caps.canAccessManagerBoard || String(normalizedRole).toLowerCase() === "waiter")
+    );
   }
 
   const badge = document.getElementById("premiumBadge");
@@ -21054,12 +21563,14 @@ function renderHud() {
 
   const managerBlock = document.getElementById("managerOnlyBlock");
   const joinRow = document.getElementById("hudJoinRow");
-  const copyRow = document.getElementById("hudCopyRow");
+  const listingManagerBlock = document.getElementById("mbListingManagerOnlyBlock");
+  const listingJoinRow = document.getElementById("mbListingJoinRow");
   const showManagerRestaurantControls =
     caps.canInviteWaiters || caps.canReadInvites || caps.canAccessManagerBoard;
   managerBlock?.classList.toggle("hidden", !showManagerRestaurantControls);
   joinRow?.classList.toggle("hidden", !caps.canReadInvites);
-  copyRow?.classList.toggle("hidden", !caps.canReadInvites);
+  listingManagerBlock?.classList.toggle("hidden", !showManagerRestaurantControls);
+  listingJoinRow?.classList.toggle("hidden", !caps.canReadInvites);
 
   const toggle = document.getElementById("toggleRequireInvite");
   if (toggle && r) toggle.checked = !!r.require_invite;
@@ -21070,7 +21581,8 @@ function renderHud() {
   renderManagerUpgradeAccess();
   renderInvitesList();
   renderHudTimelineUserSelect?.();
-  renderHudSkillDashboard();
+  renderProfileSkillDashboard();
+  void loadProfilePerformanceHistory();
   renderHudAbilities();
   renderHudDifficultyControls?.();
   wireHudDifficultyControls?.();
@@ -21078,17 +21590,26 @@ function renderHud() {
 
 function renderManagerUpgradeAccess() {
   const normalizedRole = normalizeMembershipRole(appState?.profile || null) || "waiter";
-  const section = document.getElementById("managerSetupSection");
-  const groupCard = document.getElementById("mbGroupSetupCard");
-  const enterpriseCard = document.getElementById("mbProvisionAccess");
-
   const showGroup = normalizedRole === "single_manager";
   const showEnterprise = normalizedRole === "single_manager" || normalizedRole === "group_manager";
   const showSection = showGroup || showEnterprise;
 
-  section?.classList.toggle("hidden", !showSection);
-  groupCard?.classList.toggle("hidden", !showGroup);
-  enterpriseCard?.classList.toggle("hidden", !showEnterprise);
+  [
+    {
+      section: document.getElementById("managerSetupSection"),
+      groupCard: document.getElementById("mbGroupSetupCard"),
+      enterpriseCard: document.getElementById("mbProvisionAccess"),
+    },
+    {
+      section: document.getElementById("mbListingManagerSetupSection"),
+      groupCard: document.getElementById("mbListingGroupSetupCard"),
+      enterpriseCard: document.getElementById("mbListingProvisionAccess"),
+    },
+  ].forEach(({ section, groupCard, enterpriseCard }) => {
+    section?.classList.toggle("hidden", !showSection);
+    groupCard?.classList.toggle("hidden", !showGroup);
+    enterpriseCard?.classList.toggle("hidden", !showEnterprise);
+  });
 }
 
 // ------------------------------------------------------------
@@ -21097,6 +21618,7 @@ function renderManagerUpgradeAccess() {
 async function adminAddInvite(emailRaw) {
   try {
     setMsg("hudMsg", "");
+    setMsg("mbListingMsg", "");
     const email = normEmail(emailRaw);
     if (!email) throw new Error("Enter a valid email.");
 
@@ -21133,15 +21655,18 @@ async function adminAddInvite(emailRaw) {
     renderInvitesList();
     renderManagerBoardInviteSummary();
     setMsg("hudMsg", `Added: ${email}`, "success");
+    setMsg("mbListingMsg", `Added: ${email}`, "success");
   } catch (e) {
     console.error(e);
     setMsg("hudMsg", e?.message || "Add failed", "error");
+    setMsg("mbListingMsg", e?.message || "Add failed", "error");
   }
 }
 
 async function adminRevokeInvite(emailRaw) {
   try {
     setMsg("hudMsg", "");
+    setMsg("mbListingMsg", "");
     const email = normEmail(emailRaw);
     if (!email) throw new Error("Invalid email.");
 
@@ -21175,9 +21700,11 @@ async function adminRevokeInvite(emailRaw) {
     renderInvitesList();
     renderManagerBoardInviteSummary();
     setMsg("hudMsg", `Removed: ${email}`, "success");
+    setMsg("mbListingMsg", `Removed: ${email}`, "success");
   } catch (e) {
     console.error(e);
     setMsg("hudMsg", e?.message || "Remove failed", "error");
+    setMsg("mbListingMsg", e?.message || "Remove failed", "error");
   }
 }
 
@@ -21432,55 +21959,87 @@ async function signOutHard() {
 async function doLogout(reason = "user") {
   if (window.__BC_LOGGING_OUT__) return;
   window.__BC_LOGGING_OUT__ = true;
+  let logoutRedirectIssued = false;
 
   console.warn("[LOGOUT] start", reason);
 
-  try { localStorage.setItem("__BC_LOGOUT_LOCK__", String(Date.now())); } catch {}
-  window.__BC_LOGOUT_LOCK__ = Date.now();
-
-  // Notify active iframe(s) before teardown so UI can collapse immediately.
   try {
-    const origin = window.location.origin;
-    const notify = (frameId) => {
-      const win = document.getElementById(frameId)?.contentWindow;
-      if (!win) return;
-      win.postMessage({ source: "BC_MSG", v: 1, type: "auth_state", authed: false }, origin);
-      win.postMessage({ source: "BC_MSG", v: 1, type: "parent_logged_out" }, origin);
-    };
-    notify("premiumRootFrame");
-    notify("gameRootDemoFrame");
-  } catch {}
+    try { localStorage.setItem("__BC_LOGOUT_LOCK__", String(Date.now())); } catch {}
+    window.__BC_LOGOUT_LOCK__ = Date.now();
 
-  // 1) detach UI immediately
-  try { destroyPremiumIframe("logout"); } catch (e) { console.warn("destroyPremiumIframe failed", e); }
-  try { routeAuth(); } catch (e) { console.warn("routeAuth failed", e); }
+    // Clear local auth/profile state first so the UI cannot stay in Premium
+    // even if network sign-out stalls or fails.
+    try {
+      appState.session = null;
+      appState.profile = null;
+      appState.restaurant = null;
+      appState.activeRestaurantId = null;
+      appMode = "public";
+    } catch {}
 
-  // 2) sign out (best effort)
-  try {
-    await parentSignOutGlobal();
-    console.warn("[LOGOUT] supabase signOut ok");
-  } catch (e) {
-    console.warn("[LOGOUT] supabase signOut failed (continuing anyway)", e);
+    // Notify active iframe(s) before teardown so UI can collapse immediately.
+    try {
+      const origin = window.location.origin;
+      const notify = (frameId) => {
+        const win = document.getElementById(frameId)?.contentWindow;
+        if (!win) return;
+        win.postMessage({ source: "BC_MSG", v: 1, type: "auth_state", authed: false }, origin);
+        win.postMessage({ source: "BC_MSG", v: 1, type: "parent_logged_out" }, origin);
+      };
+      notify("premiumRootFrame");
+      notify("gameRootDemoFrame");
+    } catch {}
+
+    // 1) detach UI immediately
+    try { hardResetUI("logout.start"); } catch (e) { console.warn("hardResetUI failed", e); }
+    try { destroyPremiumIframe("logout"); } catch (e) { console.warn("destroyPremiumIframe failed", e); }
+    try { routeAuth(); } catch (e) { console.warn("routeAuth failed", e); }
+    try { applyAuthUi(); } catch {}
+
+    // 2) sign out (best effort)
+    try {
+      await parentSignOutGlobal();
+      console.warn("[LOGOUT] supabase signOut ok");
+    } catch (e) {
+      console.warn("[LOGOUT] supabase signOut failed (continuing anyway)", e);
+    }
+
+    // 3) purge ALL known keys (yours + supabase default/legacy)
+    try { purgeAuthStorage(); } catch {}
+    try {
+      localStorage.removeItem("bc_supabase_auth_v1");
+      sessionStorage.removeItem("bc_supabase_auth_v1");
+
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith("sb-") && k.includes("auth-token")) localStorage.removeItem(k);
+      }
+      for (let i = sessionStorage.length - 1; i >= 0; i--) {
+        const k = sessionStorage.key(i);
+        if (k && k.startsWith("sb-") && k.includes("auth-token")) sessionStorage.removeItem(k);
+      }
+    } catch {}
+
+    try {
+      try { localStorage.setItem("__BC_LOGOUT_LATCH__", String(Date.now())); } catch {}
+      window.location.replace("/?loggedOut=1&ts=" + Date.now());
+      logoutRedirectIssued = true;
+      return;
+    } catch (e) {
+      console.warn("[LOGOUT] redirect failed, falling back to auth route", e);
+    }
+  } finally {
+    try {
+      appState.session = null;
+      appState.profile = null;
+    } catch {}
+    if (!logoutRedirectIssued) {
+      try { localStorage.removeItem("__BC_LOGOUT_LOCK__"); } catch {}
+      window.__BC_LOGOUT_LOCK__ = null;
+      window.__BC_LOGGING_OUT__ = false;
+      try { routeAuth(); } catch {}
+    }
   }
-
-  // 3) purge ALL known keys (yours + supabase default/legacy)
-  try { purgeAuthStorage(); } catch {}
-  try {
-    localStorage.removeItem("bc_supabase_auth_v1");
-    sessionStorage.removeItem("bc_supabase_auth_v1");
-
-    for (let i = localStorage.length - 1; i >= 0; i--) {
-      const k = localStorage.key(i);
-      if (k && k.startsWith("sb-") && k.includes("auth-token")) localStorage.removeItem(k);
-    }
-    for (let i = sessionStorage.length - 1; i >= 0; i--) {
-      const k = sessionStorage.key(i);
-      if (k && k.startsWith("sb-") && k.includes("auth-token")) sessionStorage.removeItem(k);
-    }
-  } catch {}
-
-  // 4) hard redirect with latch
-  window.location.replace("/?loggedOut=1&ts=" + Date.now());
 }
 window.doLogout = doLogout;
 console.log("doLogout is", window.doLogout);
@@ -21490,8 +22049,15 @@ async function logoutAll(reason = "logout") {
   return doLogout(reason);
 }
 
+function triggerLogoutIntent(btn, reason = "ui") {
+  if (window.__BC_LOGGING_OUT__) return;
+  try { btn.disabled = true; } catch {}
+  void (window.doLogout || doLogout)(reason);
+}
+
 function wireLogoutButtons() {
   const ids = [
+    "btnHomeLogout",
     "btnLogoutCreate",
     "btnLogoutPremium",
     "btnLogoutManagerBoard",
@@ -21500,10 +22066,14 @@ function wireLogoutButtons() {
   ids.forEach((id) => {
     const btn = document.getElementById(id);
     if (!btn) return;
-    btn.onclick = null;
-    btn.__bcBound = false;
-    bindInput(btn, async () => {
-      await doLogout(id);
+    if (btn.__bcLogoutBound) return;
+    btn.__bcLogoutBound = true;
+    btn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation?.();
+      console.log("[LOGOUT] direct", id);
+      triggerLogoutIntent(btn, "ui:" + id);
     });
   });
 }
@@ -21529,14 +22099,9 @@ function wireLogout() {
       console.log("[LOGOUT] captured", btn.id);
 
       e.preventDefault();
-      // Don’t block other UI generally — but for logout, we want control.
       e.stopPropagation();
       e.stopImmediatePropagation?.();
-
-      // Optional UX: disable button immediately to prevent double taps.
-      try { btn.disabled = true; } catch {}
-
-      (window.doLogout || doLogout)("ui:" + btn.id);
+      triggerLogoutIntent(btn, "ui:" + btn.id);
     },
     true
   );
@@ -21649,6 +22214,14 @@ document.getElementById("btnHomePremium").addEventListener("click", async () => 
 document.getElementById("btnHomeExitPremium").addEventListener("click", () => {
   setAuthIntent("login");
   setMsg("authMsg", "", "normal");
+  if (window.__BC_RETURN_TO_DEMO_ON_EXIT_PREMIUM__) {
+    window.__BC_RETURN_TO_DEMO_ON_EXIT_PREMIUM__ = false;
+    if (appState.session?.user) {
+      void routeDemo("exit_premium");
+    } else {
+      routeDemoShellNoAuth();
+    }
+  }
 });
 
 document.getElementById("btnAuthSubmit").addEventListener("click", submitAuth);
@@ -21668,7 +22241,7 @@ document.getElementById("tabRestaurant5")?.addEventListener("click", () => setRe
 document.getElementById("tabRestaurant7")?.addEventListener("click", () => setRestaurantCount("7"));
 document.getElementById("tabRestaurant10")?.addEventListener("click", () => setRestaurantCount("10"));
 
-document.getElementById("btnDemoJoin").addEventListener("click", demoJoinRestaurantByCode);
+document.getElementById("btnDemoJoin").addEventListener("click", () => demoJoinRestaurantByCode());
 
 document.getElementById("btnCreateRestaurant").addEventListener("click", createPremiumRestaurant);
 
@@ -21683,8 +22256,10 @@ document.getElementById("btnCopyCode").addEventListener("click", async () => {
   }
 });
 document.getElementById("btnEnterPremium").addEventListener("click", () => decideRoute("enterPremium"));
+document.getElementById("btnAppChromeEnter")?.addEventListener("click", () => openPremiumBeginScreen());
 
 wireParentButtons();
+wirePremiumTopbarMenu();
 wireManagerBoardButton();
 wireHudSendProgressButton();
 wireWaiterMessagesPanel();
@@ -21698,7 +22273,10 @@ document.getElementById("btnOpenHud")?.addEventListener("click", () => {
   renderHud();
 });
 document.getElementById("btnWaiterPerformanceLeaderboard")?.addEventListener("click", async () => {
-  await routeProfilePerformanceLeaderboard("waiter_nav_button");
+  await openWaiterLeaderboardWindow();
+});
+document.getElementById("btnCloseManagerMessenger")?.addEventListener("click", () => {
+  closeManagerMessengerWindow();
 });
 document.getElementById("btnCloseWaiterLeaderboard")?.addEventListener("click", closeWaiterLeaderboardWindow);
 
@@ -21717,6 +22295,9 @@ document.getElementById("screenProfile")?.addEventListener("click", (e) => {
 document.getElementById("screenWaiterLeaderboard")?.addEventListener("click", (e) => {
   if (e.target?.id === "screenWaiterLeaderboard") closeWaiterLeaderboardWindow();
 });
+document.getElementById("screenManagerMessenger")?.addEventListener("click", (e) => {
+  if (e.target?.id === "screenManagerMessenger") closeManagerMessengerWindow();
+});
 document.getElementById("btnLogoutProfile")?.addEventListener("click", async () => {
   await doLogout("profile_logout");
 });
@@ -21727,8 +22308,23 @@ document.getElementById("btnCopyHudCode").addEventListener("click", async () => 
     if (!code) throw new Error("No code loaded.");
     await navigator.clipboard.writeText(code);
     setMsg("hudMsg", "Copied ✅", "success");
+    setMsg("mbListingMsg", "Copied ✅", "success");
   } catch (e) {
     setMsg("hudMsg", e?.message || "Copy failed", "error");
+    setMsg("mbListingMsg", e?.message || "Copy failed", "error");
+  }
+});
+
+document.getElementById("btnMbListingCopyCode")?.addEventListener("click", async () => {
+  try {
+    const code = appState.restaurant?.code;
+    if (!code) throw new Error("No code loaded.");
+    await navigator.clipboard.writeText(code);
+    setMsg("hudMsg", "Copied ✅", "success");
+    setMsg("mbListingMsg", "Copied ✅", "success");
+  } catch (e) {
+    setMsg("hudMsg", e?.message || "Copy failed", "error");
+    setMsg("mbListingMsg", e?.message || "Copy failed", "error");
   }
 });
 
@@ -21736,6 +22332,12 @@ document.getElementById("btnAddInvite").addEventListener("click", async () => {
   const v = document.getElementById("inviteEmailInput").value;
   await adminAddInvite(v);
   document.getElementById("inviteEmailInput").value = "";
+});
+document.getElementById("mbListingAddInvite")?.addEventListener("click", async () => {
+  const input = document.getElementById("mbListingInviteEmailInput");
+  const v = input?.value || "";
+  await adminAddInvite(v);
+  if (input) input.value = "";
 });
 document.getElementById("btnSaveRequireInvite").addEventListener("click", adminSaveRequireInvite);
 document.getElementById("btnSaveSeatLimit")?.addEventListener("click", adminSaveSeatLimit);
@@ -21748,6 +22350,7 @@ window.__BC_MB__.loadManagerInsights = loadManagerInsights;
 window.__BC_MB__.loadManagerBoardData = loadManagerBoardData;
 window.__BC_MB__.loadManagerMessenger = loadManagerMessenger;
 window.__BC_MB__.wireManagerBoardMessenger = wireManagerBoardMessenger;
+window.__BC_MB__.openManagerMessengerWindow = openManagerMessengerWindow;
 
 // Optional convenience aliases (only if you want old calls to work)
 window.wireManagerBoardMenu = wireManagerBoardMenu;
@@ -21755,6 +22358,8 @@ window.applyManagerBoardVisibility = applyManagerBoardVisibility;
 window.loadManagerInsights = loadManagerInsights;
 window.loadManagerBoardData = loadManagerBoardData;
 window.loadManagerMessenger = loadManagerMessenger;
+window.openManagerMessengerWindow = openManagerMessengerWindow;
+window.closeManagerMessengerWindow = closeManagerMessengerWindow;
 
 // ------------------------------------------------------------
 // Boot + auth change
@@ -21898,6 +22503,7 @@ setRole("waiter");
 setMode("login");
 setAuthIntent("login");
 wireLogout();
+wireLogoutButtons();
 wireGlobalDemoExit();
 wireDemoButtons();
 applyAuthUi();
@@ -21916,15 +22522,11 @@ async function enforceAuthRoute() {
   const session = data?.session || null;
 
   if (!session) {
-    console.log("[ROUTE] no session -> forcing public mode");
+    console.log("[ROUTE] no session -> forcing demo shell");
 
-    appMode = "public";
+    appMode = "demo";
     window.__BC_FORCE_AUTH__ = false;
-
-    try { setMode("login"); } catch {}
-    try { setAuthIntent("login"); } catch {}
-
-    showScreen("screenHome");
+    routeDemoShellNoAuth();
     return;
   }
 
@@ -21953,16 +22555,16 @@ supabase.auth.onAuthStateChange((event, session) => {
       appState.session = session || null;
 
       if (!session) {
-        console.log("[AUTH] session gone -> forcing login screen");
+        console.log("[AUTH] session gone -> forcing demo shell");
         appState.profile = null;
         appState.restaurant = null;
         appState.activeRestaurantId = null;
-        appMode = "public";
+        appMode = "demo";
 
         // Destroy all premium/demo shells
         try { document.querySelectorAll("iframe").forEach((f) => f.remove()); } catch {}
 
-        showScreen("screenHome");
+        routeDemoShellNoAuth();
         hideAllLogoutButtons();
         hideDemoButtonsOnLogin();
         document
@@ -21979,7 +22581,7 @@ supabase.auth.onAuthStateChange((event, session) => {
       await syncAuthUi();
     } catch {
       closeHud();
-      showScreen("screenHome");
+      routeDemoShellNoAuth();
     }
   }, 150);
 });
