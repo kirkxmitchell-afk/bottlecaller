@@ -5197,9 +5197,7 @@ html, body{ height:100%; }
     z-index: 3;
     margin-top: 0 !important;
     padding: 6px 8px max(10px, env(safe-area-inset-bottom, 0px)) !important;
-    background:
-      linear-gradient(180deg, rgba(6, 7, 10, 0) 0%, rgba(6, 7, 10, 0.16) 20%, rgba(6, 7, 10, 0.46) 54%, rgba(6, 7, 10, 0.72) 100%),
-      transparent;
+    background: transparent;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-play-shell{
