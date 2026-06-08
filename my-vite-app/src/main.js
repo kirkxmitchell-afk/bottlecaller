@@ -198,6 +198,16 @@ function syncBottleCallerViewportEnv() {
   const isMobile = isBottleCallerMobileEnv();
   document.documentElement.dataset.bcMobileEnv = isMobile ? "true" : "false";
   document.documentElement.dataset.bcViewport = isMobile ? "mobile" : "desktop";
+  const isV2Demo =
+    new URLSearchParams(window.location.search).get("bcV2Demo") === "1" ||
+    (() => {
+      try {
+        return localStorage.getItem("BC_V2_DEMO") === "1";
+      } catch {
+        return false;
+      }
+    })();
+  document.documentElement.dataset.bcV2Demo = isV2Demo ? "true" : "false";
   window.__BC_ENV__ = { ...(window.__BC_ENV__ || {}), mobile: isMobile };
   syncManagerMessengerViewportLayout();
 }
@@ -9251,10 +9261,13 @@ function mountGameIframe(targetId, mode /* "demo" | "premium" */, options = {}) 
     bustCache: true,
     v2Harness: !!options?.v2Harness,
   });
+  const isMobile = document.documentElement?.dataset?.bcMobileEnv === "true";
   const initialHeight =
-    mode === "demo" && options?.initialScreen === "screenWelcome"
-      ? 300
-      : 420;
+    mode === "demo" && options?.v2Harness && isMobile
+      ? Math.max(window.innerHeight || 0, 680)
+      : mode === "demo" && options?.initialScreen === "screenWelcome"
+        ? 300
+        : 420;
 
   // ✅ Smaller default height to avoid giant empty space before setup
   mount.innerHTML = `
@@ -9441,6 +9454,9 @@ window.addEventListener("message", (event) => {
   if (!Number.isFinite(h)) return;
 
   const isMobile = document.documentElement?.dataset?.bcMobileEnv === "true";
+  const isV2Demo =
+    String(data.mode || "").toLowerCase() === "demo" &&
+    document.documentElement?.dataset?.bcV2Demo === "true";
   const isDemoWelcome =
     String(data.mode || "").toLowerCase() === "demo" &&
     String(data.screenId || "") === "screenWelcome";
@@ -9452,7 +9468,11 @@ window.addEventListener("message", (event) => {
   const minHeight = isDemoWelcome
     ? (isMobile ? 220 : 200)
     : (isMobile ? 320 : 360);
-  const clamped = Math.max(minHeight, Math.min(maxHeight, h + (isMobile ? 12 : 24)));
+  const measuredHeight = Math.max(minHeight, Math.min(maxHeight, h + (isMobile ? 12 : 24)));
+  const viewportHeight = Math.ceil(window.visualViewport?.height || window.innerHeight || 0);
+  const clamped = isMobile && isV2Demo
+    ? Math.max(viewportHeight, measuredHeight)
+    : measuredHeight;
   frame.style.setProperty("height", clamped + "px", "important");
 });
 
