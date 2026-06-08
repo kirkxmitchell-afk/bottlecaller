@@ -121,7 +121,7 @@ function makeTier1Encounter(args: {
     hiddenPressure: args.hiddenPressure,
     masterProfile: args.masterProfile,
     variant: args.variant,
-    startingProgress: 2,
+    startingProgress: 0,
     startingFrustration: 0,
     idealRhythm: ["ask", "recommend", "commit"],
     scene: args.scene,

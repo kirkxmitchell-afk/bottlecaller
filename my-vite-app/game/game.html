@@ -23250,16 +23250,145 @@ function ensureProgLoaded() {
         }
       }
 
+      function isV2FinalDemoEncounter(snapshot) {
+        return !!(
+          snapshot &&
+          isV2TerminalOutcome(snapshot.outcome) &&
+          Number(snapshot.encounterOrdinal || 0) >= Number(snapshot.encounterCount || 0)
+        );
+      }
+
+      function getParentDemoJoinApi() {
+        try {
+          if (!window.parent || window.parent === window) return null;
+          return window.parent.__BC_DEMO_JOIN_API__ || null;
+        } catch {
+          return null;
+        }
+      }
+
+      function getV2DemoJoinState() {
+        try {
+          const api = getParentDemoJoinApi();
+          if (!api || typeof api.getState !== "function") return null;
+          return api.getState();
+        } catch {
+          return null;
+        }
+      }
+
+      function getV2DemoSessionState() {
+        if (!window.__BC_V2_DEMO_SESSION__) {
+          window.__BC_V2_DEMO_SESSION__ = {
+            active: false,
+            introEncounterId: null,
+          };
+        }
+        return window.__BC_V2_DEMO_SESSION__;
+      }
+
+      function resetV2DemoSession() {
+        window.__BC_V2_DEMO_SESSION__ = {
+          active: false,
+          introEncounterId: null,
+        };
+      }
+
+      function shouldShowV2DemoIntro(snapshot) {
+        const state = getV2DemoSessionState();
+        return !!(
+          state.active &&
+          state.introEncounterId &&
+          snapshot &&
+          snapshot.encounterId === state.introEncounterId
+        );
+      }
+
+      function resetV2DemoProgressToStart() {
+        try { window.localStorage.setItem("BC_V2_TIER1_ROTATION_INDEX", "0"); } catch {}
+        try { window.__BC_V2_HARNESS_STATE__ = {}; } catch {}
+        startV2HarnessEncounter();
+      }
+
+      function renderV2DemoCompletionCard(stepButtons, snapshot) {
+        const shell = stepButtons?.querySelector?.(".v2-action-shell");
+        if (!shell) return;
+
+        shell.querySelector("#v2DemoCompletionCard")?.remove();
+        if (!isV2FinalDemoEncounter(snapshot)) return;
+
+        const joinState = getV2DemoJoinState();
+        const canJoin = !!joinState?.canJoin;
+        const card = document.createElement("div");
+        card.id = "v2DemoCompletionCard";
+        card.className = "card";
+        card.style.marginTop = "14px";
+        card.innerHTML = `
+          <div style="display:grid; gap:10px;">
+            <div>
+              <strong>Tier 1 complete</strong>
+              <div class="small-text" style="margin-top:6px;">
+                You've finished the 3-encounter demo run.
+              </div>
+            </div>
+            ${
+              canJoin
+                ? `
+                  <div>
+                    <div class="small-text" style="margin-bottom:8px;">Join a restaurant to unlock Premium with your waiter account.</div>
+                    <input id="v2DemoJoinCode" type="text" placeholder="Join code" />
+                    <div class="button-row" style="margin-top:10px;">
+                      <button id="btnV2DemoJoin" type="button">Join Restaurant</button>
+                      <button id="btnV2RestartEncounterFlow" type="button" class="btn-ghost">Return to Encounter 1</button>
+                    </div>
+                    <div id="v2DemoJoinMsg" class="small-text" style="margin-top:8px;"></div>
+                  </div>
+                `
+                : `
+                  <div class="button-row">
+                    <button id="btnV2RestartEncounterFlow" type="button" class="btn-ghost">Return to Encounter 1</button>
+                  </div>
+                `
+            }
+          </div>
+        `;
+        shell.insertBefore(card, shell.querySelector(".button-row"));
+
+        document.getElementById("btnV2RestartEncounterFlow")?.addEventListener("click", () => {
+          resetV2DemoProgressToStart();
+        });
+
+        document.getElementById("btnV2DemoJoin")?.addEventListener("click", async () => {
+          const msg = document.getElementById("v2DemoJoinMsg");
+          const input = document.getElementById("v2DemoJoinCode");
+          const code = String(input?.value || "");
+          const api = getParentDemoJoinApi();
+          if (!api || typeof api.submit !== "function") {
+            if (msg) msg.textContent = "Join is unavailable in this view.";
+            return;
+          }
+          if (msg) msg.textContent = "Submitting...";
+          try {
+            const result = await api.submit(code);
+            if (msg) msg.textContent = result?.message || "Success ✅ Premium unlocked.";
+          } catch (error) {
+            if (msg) msg.textContent = String(error?.message || error || "Join failed.");
+          }
+        });
+      }
+
       function renderV2HarnessPlay(snapshot, reaction = "") {
+        const encounterPanel = document.getElementById("encounterPanel");
         const stepHeader = document.getElementById("stepHeader");
         const wineDisplayName = document.getElementById("wineDisplayName");
         const stepContent = document.getElementById("stepContent");
         const feedbackLine = document.getElementById("bcFeedbackLine");
         const stepButtons = document.getElementById("stepButtons");
         const api = getV2HarnessApi();
-        if (!stepHeader || !wineDisplayName || !stepContent || !feedbackLine || !stepButtons || !snapshot || !api) {
+        if (!encounterPanel || !stepHeader || !wineDisplayName || !stepContent || !feedbackLine || !stepButtons || !snapshot || !api) {
           return;
         }
+        encounterPanel.dataset.v2Layout = "tier1";
 
         const session = api.getSession?.() || null;
         const encounter = session?.encounter || null;
@@ -23274,11 +23403,12 @@ function ensureProgLoaded() {
           selectedGroup,
         };
 
+        const showIntroGuidance = shouldShowV2DemoIntro(snapshot);
         stepHeader.textContent = `Tier ${snapshot.tier} • Encounter ${String(snapshot.encounterOrdinal).padStart(3, "0")} • ${snapshot.encounterTitle}`;
         wineDisplayName.textContent = snapshot.productName
           ? `Product: ${snapshot.productName}`
           : `Encounter: ${snapshot.encounterTitle}`;
-        feedbackLine.textContent = getV2FeedbackLine(snapshot, reaction);
+        feedbackLine.textContent = showIntroGuidance ? getV2FeedbackLine(snapshot, reaction) : "";
 
         const bestPath = Array.isArray(snapshot.bestPath) ? snapshot.bestPath.join(" → ") : "";
         const outcome = snapshot.outcome ? v2HarnessLabel(snapshot.outcome) : "In Progress";
@@ -23288,6 +23418,7 @@ function ensureProgLoaded() {
         const visualClues = Array.isArray(encounter?.visualClues) ? encounter.visualClues : [];
         const moodDescriptor = getV2MoodDescriptor(snapshot);
         const isTerminal = isV2TerminalOutcome(snapshot.outcome);
+        const isFinalEncounter = isV2FinalDemoEncounter(snapshot);
         const lesson = String(encounter?.lesson || "");
         const nextStepInstruction = getV2NextStepInstruction(snapshot);
         const progressNodes = Array.from({ length: Math.max(1, snapshot.encounterCount || 1) }, (_, index) => {
@@ -23365,11 +23496,13 @@ function ensureProgLoaded() {
                 <div class="v2-state-meta">${escapeHtml(outcome)}</div>
               </div>
             </div>
-            <div class="v2-guidance-card">
-              <div class="v2-guidance-label">What To Do Next</div>
-              <p class="v2-guidance-copy">${escapeHtml(nextStepInstruction)}</p>
-              <div class="v2-guidance-meta">${escapeHtml(walkAwayHint)}</div>
-            </div>
+            ${showIntroGuidance ? `
+              <div class="v2-guidance-card">
+                <div class="v2-guidance-label">What To Do Next</div>
+                <p class="v2-guidance-copy">${escapeHtml(nextStepInstruction)}</p>
+                <div class="v2-guidance-meta">${escapeHtml(walkAwayHint)}</div>
+              </div>
+            ` : ""}
             ${isTerminal ? `
               <div class="v2-status-card" style="margin-top:12px;">
                 <div><strong>Lesson:</strong> ${escapeHtml(lesson)}</div>
@@ -23415,15 +23548,16 @@ function ensureProgLoaded() {
         stepButtons.innerHTML = `
           <div class="v2-action-shell">
             <div class="v2-action-header">${groupButtons}</div>
-            <div class="small-text v2-action-caption">${escapeHtml(actionLabel)}</div>
+            ${showIntroGuidance ? `<div class="small-text v2-action-caption">${escapeHtml(actionLabel)}</div>` : ""}
             <div class="v2-action-grid">${actionButtons}</div>
             <div class="button-row" style="width:100%; margin-top:10px;">
-              ${isTerminal ? `<button type="button" class="btn" id="btnV2HarnessContinue">Continue Tier 1</button>` : ""}
+              ${isTerminal ? `<button type="button" class="btn" id="btnV2HarnessContinue">${isFinalEncounter ? "Return to Encounter 1" : "Continue Tier 1"}</button>` : ""}
               ${isTerminal ? `<button type="button" class="btn btn-ghost" id="btnV2HarnessReplay">Replay Encounter</button>` : ""}
               <button type="button" class="btn btn-ghost" id="btnV2HarnessBack">Back</button>
             </div>
           </div>
         `;
+        renderV2DemoCompletionCard(stepButtons, snapshot);
 
         stepButtons.querySelectorAll("[data-v2-group]").forEach((btn) => {
           btn.addEventListener("click", () => {
@@ -23449,6 +23583,10 @@ function ensureProgLoaded() {
         });
 
         document.getElementById("btnV2HarnessContinue")?.addEventListener("click", () => {
+          if (isFinalEncounter) {
+            resetV2DemoProgressToStart();
+            return;
+          }
           startV2HarnessEncounter();
         });
 
@@ -23459,17 +23597,29 @@ function ensureProgLoaded() {
         });
 
         document.getElementById("btnV2HarnessBack")?.addEventListener("click", () => {
+          resetV2DemoSession();
           showScreen("screenWelcome");
         });
       }
 
-      function startV2HarnessEncounter() {
+      function startV2HarnessEncounter(options = {}) {
         const api = getV2HarnessApi();
         if (!api) return false;
+        const state = getV2DemoSessionState();
+        const startingFresh = !!(options.resetSession || !state.active);
+        if (startingFresh) {
+          state.active = true;
+          state.introEncounterId = null;
+        } else {
+          state.introEncounterId = null;
+        }
         applyPlaySurfaceMode("encounter_only");
         resetNavState();
         showScreen("screenPlay");
         const snapshot = api.start({ tier: 1 });
+        if (startingFresh) {
+          state.introEncounterId = snapshot?.encounterId || null;
+        }
         renderV2HarnessPlay(snapshot, "");
         return true;
       }
@@ -23507,7 +23657,7 @@ function ensureProgLoaded() {
             bindInput(btnGoPremium, () => {
               resetNavState();
               if (isV2DemoHarnessEnabled()) {
-                startV2HarnessEncounter();
+                startV2HarnessEncounter({ resetSession: true });
                 return;
               }
               showScreen("screenPlay");
@@ -23789,7 +23939,7 @@ function ensureProgLoaded() {
           bindInput(btnGoDemo, () => {
             resetNavState();
             if (isV2DemoHarnessEnabled()) {
-              startV2HarnessEncounter();
+              startV2HarnessEncounter({ resetSession: true });
               return;
             }
             showScreen("screenPlay");
@@ -23810,7 +23960,7 @@ function ensureProgLoaded() {
             bindInput(btnGoPremium, () => {
               resetNavState();
               if (isV2DemoHarnessEnabled()) {
-                startV2HarnessEncounter();
+                startV2HarnessEncounter({ resetSession: true });
                 return;
               }
               showScreen("screenPlay");
@@ -23865,7 +24015,7 @@ function ensureProgLoaded() {
             // DEMO: start immediately
             if (window.isDemo || window.bcMode === "demo") {
               if (isV2DemoHarnessEnabled()) {
-                startV2HarnessEncounter();
+                startV2HarnessEncounter({ resetSession: true });
                 return;
               }
               window.startEncounter?.();

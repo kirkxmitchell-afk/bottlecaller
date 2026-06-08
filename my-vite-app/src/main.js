@@ -6539,13 +6539,18 @@ function renderAppChrome() {
   const profile = appState?.profile || {};
   const hasSession = !!appState?.session?.user;
   const isDemoCockpit = currentScreenId === "screenGameDemo" && appMode === "demo";
+  const isDemoWelcomeOpen =
+    isDemoCockpit &&
+    window.__BC_DEMO_IFRAME_LAST_SCREEN__ === "screenWelcome";
   const statusLabel = isDemoCockpit
     ? "DEMO"
     : hasSession
     ? ((profile?.access_tier || profile?.accessTier || "premium").toString().toUpperCase())
     : "Public Access";
   const showPremiumBar = (currentScreenId === "screenPremiumApp" && hasSession) || isDemoCockpit;
-  const showPlayCta = (currentScreenId === "screenPremiumApp" && hasSession) || isDemoCockpit;
+  const showPlayCta =
+    ((currentScreenId === "screenPremiumApp" && hasSession) || isDemoCockpit) &&
+    !isDemoWelcomeOpen;
 
   if (statusEl) statusEl.textContent = statusLabel;
   premiumBarEl?.classList.toggle("hidden", !showPremiumBar);
@@ -9060,6 +9065,7 @@ function destroyDemoIframe(reason = "") {
   try { document.getElementById("gameRootDemoFrame")?.remove(); } catch {}
   const root = document.getElementById("gameRootDemo");
   if (root) root.innerHTML = "";
+  window.__BC_DEMO_IFRAME_LAST_SCREEN__ = null;
   try { currentIframeMode = null; } catch {}
 }
 
@@ -9438,6 +9444,10 @@ window.addEventListener("message", (event) => {
   const isDemoWelcome =
     String(data.mode || "").toLowerCase() === "demo" &&
     String(data.screenId || "") === "screenWelcome";
+  if (String(data.mode || "").toLowerCase() === "demo") {
+    window.__BC_DEMO_IFRAME_LAST_SCREEN__ = String(data.screenId || "") || null;
+    try { renderAppChrome?.(); } catch {}
+  }
   const maxHeight = isMobile ? 6000 : 860;
   const minHeight = isDemoWelcome
     ? (isMobile ? 220 : 200)
@@ -20379,63 +20389,87 @@ function renderDemoJoinBlock() {
 
   const isAuthed = !!appState.session?.user;
   if (badge) (isAuthed ? badge.classList.remove("hidden") : badge.classList.add("hidden"));
-
-  const role = String(appState.profile?.role || "").toLowerCase();
-  const hasRestaurant = !!appState.profile?.restaurant_id;
-
-  const showJoin = isAuthed && role === "waiter" && !hasRestaurant;
-  if (joinBlock) (showJoin ? joinBlock.classList.remove("hidden") : joinBlock.classList.add("hidden"));
+  if (joinBlock) joinBlock.classList.add("hidden");
 }
 
-async function demoJoinRestaurantByCode() {
+function getDemoJoinState() {
+  const isAuthed = !!appState.session?.user;
+  const role = String(appState.profile?.role || "").toLowerCase();
+  const hasRestaurant = !!appState.profile?.restaurant_id;
+  return {
+    isAuthed,
+    role,
+    hasRestaurant,
+    canJoin: isAuthed && role === "waiter" && !hasRestaurant,
+  };
+}
+
+async function submitDemoJoinRestaurantCode(rawCode) {
+  const code = normCode(rawCode);
+  if (!code) throw new Error("Enter a join code.");
+
+  await loadAuthedState("demo.join.precheck");
+  if (!appState.session?.user) throw new Error("Login as a waiter first.");
+  if (String(appState.profile?.role || "").toLowerCase() !== "waiter") {
+    throw new Error("Join-by-code is for waiter accounts.");
+  }
+  if (appState.profile?.restaurant_id) throw new Error("You are already assigned to a restaurant.");
+
+  setDebug({ step: "demo.join.start", time: new Date().toISOString(), code });
+
+  const sb = window.supabase || supabase;
+  const rpc = await withTimeout(
+    sb.rpc("join_restaurant_by_code", { p_code: code }),
+    15000,
+    "rpc.join_restaurant_by_code"
+  );
+
+  if (rpc.error) throw rpc.error;
+
+  if (!rpc.data?.ok) {
+    const err = rpc.data?.error || "unknown";
+    if (err === "invalid_code") throw new Error("Invalid join code.");
+    if (err === "seat_limit_reached") throw new Error("Seat limit reached for this restaurant.");
+    if (err === "invite_required") throw new Error("Invite required. Ask your manager to add your email.");
+    if (err === "already_in_restaurant") throw new Error("You are already assigned to a restaurant.");
+    throw new Error("Join failed.");
+  }
+
+  setDebug({ step: "demo.join.ok", time: new Date().toISOString(), restaurant_id: rpc.data.restaurant_id });
+
+  await loadAuthedState("demo.join.refresh");
+  await ensureProfileDisplayName();
+  renderDemoJoinBlock();
+
+  if (appState.profile?.restaurant_id) {
+    await decideRoute("demo.join.auto");
+  }
+
+  return {
+    ok: true,
+    restaurantId: rpc.data.restaurant_id || null,
+    message: "Success ✅ Premium unlocked.",
+  };
+}
+
+async function demoJoinRestaurantByCode(rawCode) {
   try {
     clearMsgs();
-
-    const code = normCode(document.getElementById("demoJoinCode")?.value);
-    if (!code) throw new Error("Enter a join code.");
-
-    await loadAuthedState("demo.join.precheck");
-    if (!appState.session?.user) throw new Error("Login as a waiter first.");
-    if (String(appState.profile?.role || "").toLowerCase() !== "waiter") throw new Error("Join-by-code is for waiter accounts.");
-    if (appState.profile?.restaurant_id) throw new Error("You are already assigned to a restaurant.");
-
     setMsg("demoJoinMsg", "Submitting...");
-    setDebug({ step: "demo.join.start", time: new Date().toISOString(), code });
-
-    const sb = window.supabase || supabase;
-    const rpc = await withTimeout(
-      sb.rpc("join_restaurant_by_code", { p_code: code }),
-      15000,
-      "rpc.join_restaurant_by_code"
-    );
-
-    if (rpc.error) throw rpc.error;
-
-    if (!rpc.data?.ok) {
-      const err = rpc.data?.error || "unknown";
-      if (err === "invalid_code") throw new Error("Invalid join code.");
-      if (err === "seat_limit_reached") throw new Error("Seat limit reached for this restaurant.");
-      if (err === "invite_required") throw new Error("Invite required. Ask your manager to add your email.");
-      if (err === "already_in_restaurant") throw new Error("You are already assigned to a restaurant.");
-      throw new Error("Join failed.");
-    }
-
-    setMsg("demoJoinMsg", "Success ✅ Premium unlocked.", "success");
-    setDebug({ step: "demo.join.ok", time: new Date().toISOString(), restaurant_id: rpc.data.restaurant_id });
-
-    await loadAuthedState("demo.join.refresh");
-    await ensureProfileDisplayName();
-    renderDemoJoinBlock();
-
-    if (appState.profile?.restaurant_id) {
-      await decideRoute("demo.join.auto");
-    }
+    const inputCode = typeof rawCode === "string" ? rawCode : document.getElementById("demoJoinCode")?.value;
+    const result = await submitDemoJoinRestaurantCode(inputCode);
+    setMsg("demoJoinMsg", result.message || "Success ✅ Premium unlocked.", "success");
   } catch (e) {
     console.error(e);
     setMsg("demoJoinMsg", e?.message || "Join failed", "error");
     setDebug({ step: "demo.join.failed", time: new Date().toISOString(), error: e?.message || String(e) });
   }
 }
+
+window.__BC_DEMO_JOIN_API__ = {
+  getState: getDemoJoinState,
+  submit: submitDemoJoinRestaurantCode,
+};
 
 // ------------------------------------------------------------
 // Routing rules (restaurant-first)
@@ -22187,7 +22221,7 @@ document.getElementById("tabRestaurant5")?.addEventListener("click", () => setRe
 document.getElementById("tabRestaurant7")?.addEventListener("click", () => setRestaurantCount("7"));
 document.getElementById("tabRestaurant10")?.addEventListener("click", () => setRestaurantCount("10"));
 
-document.getElementById("btnDemoJoin").addEventListener("click", demoJoinRestaurantByCode);
+document.getElementById("btnDemoJoin").addEventListener("click", () => demoJoinRestaurantByCode());
 
 document.getElementById("btnCreateRestaurant").addEventListener("click", createPremiumRestaurant);
 
