@@ -5148,26 +5148,26 @@ html, body{ height:100%; }
 
   #bcShell.is-encounter-only{
     min-height: 100dvh;
-    height: 100dvh;
+    height: auto;
     padding: 0 !important;
     gap: 0 !important;
   }
 
   #bcShell.is-encounter-only #bcStage{
-    height: 100dvh;
+    height: auto;
   }
 
   #encounterPanel[data-v2-layout="tier1"]{
     position: relative;
     display: block;
-    height: 100dvh !important;
-    min-height: 100dvh !important;
+    height: auto !important;
+    min-height: 0 !important;
     padding: 0 !important;
     border: 0 !important;
     border-radius: 0 !important;
     background: #0b0b10 !important;
     box-shadow: none !important;
-    overflow: hidden;
+    overflow: visible;
   }
 
   #encounterPanel[data-v2-layout="tier1"]::before,
@@ -5184,50 +5184,52 @@ html, body{ height:100%; }
 
   #encounterPanel[data-v2-layout="tier1"] #stepContent{
     min-height: 0;
-    height: 100%;
+    height: auto;
     padding: 0 !important;
     position: relative;
+    overflow: visible;
   }
 
   #encounterPanel[data-v2-layout="tier1"] #stepButtons{
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 3;
-    margin-top: 0 !important;
-    padding: 6px 8px max(10px, env(safe-area-inset-bottom, 0px)) !important;
+    position: relative;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    z-index: 1;
+    margin-top: 10px !important;
+    padding: 0 8px max(12px, env(safe-area-inset-bottom, 0px)) !important;
     background: transparent;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-play-shell{
-    height: 100%;
+    min-height: 0;
     padding: 0;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-hero-frame{
     width: 100%;
-    min-height: 100%;
-    height: 100%;
+    min-height: 0;
+    height: auto;
+    aspect-ratio: 941 / 1672;
     padding: 0;
     border-radius: 0;
     background:
       linear-gradient(180deg, rgba(7, 8, 12, 0.84) 0%, rgba(7, 8, 12, 0.16) 12%, rgba(7, 8, 12, 0.02) 34%, rgba(7, 8, 12, 0.14) 74%, rgba(7, 8, 12, 0.76) 100%),
-      url("/game/tier1-encounter-scene.png") center center / cover no-repeat,
+      url("/game/tier1-encounter-scene.png") center top / cover no-repeat,
       #090a0e;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-hero-top{
-    top: max(2px, env(safe-area-inset-top, 0px));
-    left: 6px;
-    right: 6px;
-    gap: 4px;
+    top: max(6px, env(safe-area-inset-top, 0px));
+    left: 8px;
+    right: 8px;
+    gap: 6px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-play-header{
-    grid-template-columns: 36px minmax(0, 1fr) 36px;
+    grid-template-columns: 40px minmax(0, 1fr) 40px;
     gap: 6px;
-    padding: 6px 8px;
+    padding: 7px 9px;
     border-radius: 14px;
     background:
       linear-gradient(180deg, rgba(18, 18, 24, 0.96), rgba(10, 11, 16, 0.92)),
@@ -5238,10 +5240,10 @@ html, body{ height:100%; }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-crest,
   #encounterPanel[data-v2-layout="tier1"] .v2-region-mark{
-    width: 36px;
-    height: 36px;
+    width: 40px;
+    height: 40px;
     border-radius: 10px;
-    font-size: 18px;
+    font-size: 20px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-header-topline{
@@ -5255,8 +5257,8 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-encounter-title{
-    font-size: clamp(15px, 4.1vw, 20px);
-    line-height: 1.02;
+    font-size: clamp(16px, 4.5vw, 22px);
+    line-height: 1.04;
     text-align: center;
   }
 
@@ -5266,7 +5268,7 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-mood-pill{
-    width: 104px;
+    width: 112px;
     margin-left: auto;
     min-height: 0;
     padding: 8px 10px;
@@ -5283,7 +5285,7 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-mood-value{
-    font-size: 12px;
+    font-size: 13px;
     line-height: 1.05;
   }
 
@@ -5292,15 +5294,15 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-hero-bottom{
-    left: 6px;
-    right: 6px;
-    bottom: calc(108px + env(safe-area-inset-bottom, 0px));
-    gap: 4px;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    gap: 6px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-scene-text{
     display: grid;
-    max-width: min(72vw, 286px);
+    max-width: min(76vw, 320px);
     padding: 8px 10px;
     border-radius: 14px;
     gap: 6px;
@@ -5325,7 +5327,7 @@ html, body{ height:100%; }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-quote-row{
     display: block;
-    max-width: min(66vw, 270px);
+    max-width: min(72vw, 320px);
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-quote-card{
@@ -5360,7 +5362,7 @@ html, body{ height:100%; }
   #encounterPanel[data-v2-layout="tier1"] .v2-guidance-card,
   #encounterPanel[data-v2-layout="tier1"] .v2-status-card{
     display: grid !important;
-    max-width: min(84vw, 320px);
+    max-width: min(88vw, 360px);
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-state-grid{
@@ -5410,7 +5412,7 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-shell{
-    padding: 0;
+    padding: 10px 0 0;
     border: 0;
     background: transparent;
     box-shadow: none;
@@ -5419,8 +5421,8 @@ html, body{ height:100%; }
   #encounterPanel[data-v2-layout="tier1"] .v2-action-caption{
     display: block;
     margin-top: 6px;
-    font-size: 9px;
-    line-height: 1.2;
+    font-size: 11px;
+    line-height: 1.35;
     color: rgba(247, 239, 223, 0.92);
   }
 
@@ -5428,15 +5430,15 @@ html, body{ height:100%; }
     order: 2;
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 4px;
-    margin-top: 6px;
+    gap: 6px;
+    margin-top: 8px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-group-button{
-    min-height: 40px;
-    padding: 6px 4px !important;
+    min-height: 44px;
+    padding: 8px 6px !important;
     border-radius: 12px !important;
-    font-size: 10px !important;
+    font-size: 11px !important;
     letter-spacing: 0.04em;
   }
 
@@ -5444,12 +5446,12 @@ html, body{ height:100%; }
     order: 1;
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 4px;
+    gap: 6px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-card{
-    min-height: 68px;
-    padding: 6px 4px !important;
+    min-height: 86px;
+    padding: 8px 6px !important;
     border-radius: 12px !important;
     background:
       linear-gradient(180deg, rgba(255, 252, 243, 0.98), rgba(245, 236, 218, 0.96)),
@@ -5460,20 +5462,20 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-title{
-    font-size: 8px;
+    font-size: 11px;
     line-height: 1.1;
     color: #4f3421;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-subtitle{
-    font-size: 7px;
+    font-size: 8px;
     color: rgba(79, 52, 33, 0.72);
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-copy{
     display: block;
-    font-size: 7px;
-    line-height: 1.1;
+    font-size: 9px;
+    line-height: 1.2;
     color: #8a5a1f !important;
   }
 
