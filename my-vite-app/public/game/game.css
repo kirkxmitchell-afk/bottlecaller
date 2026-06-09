@@ -5213,7 +5213,7 @@ html, body{ height:100%; }
   #encounterPanel[data-v2-layout="tier1"] .v2-hero-frame{
     position: relative;
     width: 100%;
-    min-height: max(880px, calc((100vw - 20px) * 1.7778958555));
+    min-height: max(1040px, calc((100vw - 20px) * 1.7778958555)) !important;
     height: auto;
     aspect-ratio: auto;
     margin: 0;
@@ -5307,7 +5307,7 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-scene-text{
-    display: grid;
+    display: grid !important;
     max-width: 78%;
     padding: 12px 14px;
     border-radius: 18px;
@@ -5332,7 +5332,7 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-quote-row{
-    display: grid;
+    display: grid !important;
     grid-template-columns: minmax(0, 1fr);
     max-width: 74%;
   }
@@ -5417,7 +5417,7 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-caption{
-    display: block;
+    display: block !important;
     margin-top: 10px;
     font-size: 12px;
     line-height: 1.45;
@@ -5426,7 +5426,7 @@ html, body{ height:100%; }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-header{
     order: 1;
-    display: grid;
+    display: grid !important;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
     margin-top: 0;
@@ -5442,7 +5442,7 @@ html, body{ height:100%; }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-grid{
     order: 3;
-    display: grid;
+    display: grid !important;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
   }
@@ -5469,7 +5469,7 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-shell .button-row{
-    display: grid;
+    display: grid !important;
     grid-template-columns: 1fr;
     gap: 10px;
   }
@@ -5477,5 +5477,52 @@ html, body{ height:100%; }
   #encounterPanel[data-v2-layout="tier1"] #v2DemoCompletionCard{
     margin-top: 8px !important;
     pointer-events: auto;
+  }
+}
+
+@media (max-width: 640px){
+  #encounterPanel[data-v2-layout="tier1"] .v2-play-header{
+    grid-template-columns: 50px minmax(0,1fr) 46px !important;
+    justify-items: stretch !important;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-crest{
+    order: initial !important;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-header-copy{
+    order: initial !important;
+    width: auto !important;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-region-mark{
+    order: initial !important;
+    justify-self: stretch !important;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-header-topline{
+    flex-direction: row !important;
+    align-items: center !important;
+    margin-bottom: 6px !important;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-encounter-title{
+    font-size: clamp(20px, 6vw, 28px) !important;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-state-grid{
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-action-header{
+    grid-template-columns: repeat(3, minmax(0,1fr)) !important;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-action-grid{
+    grid-template-columns: repeat(2, minmax(0,1fr)) !important;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-action-shell .button-row{
+    grid-template-columns: 1fr !important;
   }
 }
