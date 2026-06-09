@@ -1392,8 +1392,10 @@ html[data-bc-mobile-env="true"] #premiumRoot{
 
 html[data-bc-mobile-env="true"] #premiumRootFrame,
 html[data-bc-mobile-env="true"] #gameRootDemoFrame{
-  height: auto !important;
-  min-height: 320px;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: calc(100dvh - 92px) !important;
+  min-height: 420px;
   border-radius: 10px !important;
 }
 
@@ -1629,8 +1631,8 @@ html[data-bc-mobile-env="true"] #screenManagerBoard #mbInstrSend{
 
   html[data-bc-mobile-env="true"] #premiumRootFrame,
   html[data-bc-mobile-env="true"] #gameRootDemoFrame{
-    height: auto !important;
-    min-height: 300px;
+    height: calc(100dvh - 72px) !important;
+    min-height: 380px;
   }
 }
 

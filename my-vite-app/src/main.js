@@ -9375,8 +9375,10 @@ function openPremiumBeginScreen() {
     showScreen("screenGameDemo");
     setPremiumOverlayActive(false);
 
-    if (useV2Harness) {
-      destroyDemoIframe("openPremiumBeginScreen:force_v2_remount");
+    const existingDemoFrame = document.getElementById("gameRootDemoFrame");
+    const existingDemoSrc = existingDemoFrame?.getAttribute?.("src") || "";
+    if (useV2Harness && existingDemoFrame && !existingDemoSrc.includes("bcV2=1")) {
+      destroyDemoIframe("openPremiumBeginScreen:upgrade_to_v2");
     }
 
     if (!document.getElementById("gameRootDemoFrame")) {

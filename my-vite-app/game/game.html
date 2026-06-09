@@ -5,7 +5,7 @@
   <title>BottleCaller Prototype</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <!-- ✅ IMPORTANT: because this file is served at /game/game.html -->
-  <link rel="stylesheet" href="/game/game.css" />
+  <link rel="stylesheet" href="/game/game.css?v=20260609-v2mobile4" />
   <script>
     if (window.self !== window.top) {
       if (window.__BC_SUPABASE__ || window.supabase) {
@@ -12134,8 +12134,8 @@ function ensureProgLoaded() {
           showScreen("screenPlay");
 
           if (window.isDemo || window.bcMode === "demo") {
-            if (isV2DemoHarnessEnabled()) {
-              startV2HarnessEncounter({ resetSession: true });
+            if (isV2DemoHarnessRequested() || isV2DemoHarnessEnabled()) {
+              startV2HarnessEncounterWhenReady({ resetSession: true });
               return;
             }
             window.startEncounter?.();
@@ -17005,6 +17005,8 @@ function ensureProgLoaded() {
           document.getElementById("screenPlay") ||
           document.getElementById("bcShell");
         if (!panel?.scrollIntoView) return;
+        const coarsePointer = window.matchMedia?.("(pointer: coarse)")?.matches;
+        if (coarsePointer || window.innerWidth <= 760) return;
         requestAnimationFrame(() => {
           panel.scrollIntoView({ behavior: "smooth", block: "center" });
         });
@@ -23051,8 +23053,8 @@ function ensureProgLoaded() {
             try { localStorage.setItem(coverKey, "true"); } catch {}
             applyPlaySurfaceMode("encounter_only");
             showScreen("screenPlay");
-            if (isV2DemoHarnessEnabled()) {
-              startV2HarnessEncounter({ resetSession: true });
+            if (isV2DemoHarnessRequested() || isV2DemoHarnessEnabled()) {
+              startV2HarnessEncounterWhenReady({ resetSession: true });
               return;
             }
             window.startEncounter?.();
@@ -23092,6 +23094,48 @@ function ensureProgLoaded() {
 
       function getV2HarnessApi() {
         return window.__BC_V2_HARNESS__?.api || null;
+      }
+
+      function isV2DemoHarnessRequested() {
+        try {
+          return new URLSearchParams(window.location.search).get("bcV2") === "1";
+        } catch {
+          return false;
+        }
+      }
+
+      function startV2HarnessEncounterWhenReady(options = {}, attempt = 0) {
+        if (isV2DemoHarnessEnabled() && getV2HarnessApi()) {
+          startV2HarnessEncounter(options);
+          return true;
+        }
+
+        if (!isV2DemoHarnessRequested()) return false;
+
+        if (attempt === 0) {
+          applyPlaySurfaceMode("encounter_only");
+          resetNavState();
+          showScreen("screenPlay");
+          const stepHeader = document.getElementById("stepHeader");
+          const wineDisplayName = document.getElementById("wineDisplayName");
+          const stepContent = document.getElementById("stepContent");
+          const stepButtons = document.getElementById("stepButtons");
+          if (stepHeader) stepHeader.textContent = "Loading BottleCaller V2";
+          if (wineDisplayName) wineDisplayName.textContent = "Preparing demo encounter";
+          if (stepContent) {
+            stepContent.innerHTML = '<div class="card"><p class="subtle">Preparing the demo encounter...</p></div>';
+          }
+          if (stepButtons) stepButtons.innerHTML = "";
+        }
+
+        if (attempt >= 50) {
+          console.warn("[BC][V2] harness did not become ready");
+          showScreen("screenWelcome");
+          return true;
+        }
+
+        window.setTimeout(() => startV2HarnessEncounterWhenReady(options, attempt + 1), 80);
+        return true;
       }
 
       function v2HarnessLabel(value) {
@@ -23671,8 +23715,8 @@ function ensureProgLoaded() {
             btnGoPremium.__bcBound = false;
             bindInput(btnGoPremium, () => {
               resetNavState();
-              if (isV2DemoHarnessEnabled()) {
-                startV2HarnessEncounter({ resetSession: true });
+              if (isV2DemoHarnessRequested() || isV2DemoHarnessEnabled()) {
+                startV2HarnessEncounterWhenReady({ resetSession: true });
                 return;
               }
               showScreen("screenPlay");
@@ -23953,8 +23997,8 @@ function ensureProgLoaded() {
 
           bindInput(btnGoDemo, () => {
             resetNavState();
-            if (isV2DemoHarnessEnabled()) {
-              startV2HarnessEncounter({ resetSession: true });
+            if (isV2DemoHarnessRequested() || isV2DemoHarnessEnabled()) {
+              startV2HarnessEncounterWhenReady({ resetSession: true });
               return;
             }
             showScreen("screenPlay");
@@ -23974,8 +24018,8 @@ function ensureProgLoaded() {
 
             bindInput(btnGoPremium, () => {
               resetNavState();
-              if (isV2DemoHarnessEnabled()) {
-                startV2HarnessEncounter({ resetSession: true });
+              if (isV2DemoHarnessRequested() || isV2DemoHarnessEnabled()) {
+                startV2HarnessEncounterWhenReady({ resetSession: true });
                 return;
               }
               showScreen("screenPlay");
@@ -24029,8 +24073,8 @@ function ensureProgLoaded() {
 
             // DEMO: start immediately
             if (window.isDemo || window.bcMode === "demo") {
-              if (isV2DemoHarnessEnabled()) {
-                startV2HarnessEncounter({ resetSession: true });
+              if (isV2DemoHarnessRequested() || isV2DemoHarnessEnabled()) {
+                startV2HarnessEncounterWhenReady({ resetSession: true });
                 return;
               }
               window.startEncounter?.();
