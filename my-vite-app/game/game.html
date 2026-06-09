@@ -12077,6 +12077,19 @@ function ensureProgLoaded() {
         startV2HarnessEncounter({ resetSession: true });
       }
 
+      function launchV2AutoStartReload() {
+        try {
+          const url = new URL(window.location.href);
+          url.searchParams.set("bcV2AutoStart", "1");
+          url.searchParams.set("initialScreen", "screenPlay");
+          window.location.replace(url.toString());
+          return true;
+        } catch (e) {
+          console.warn("[BC][V2] auto-start reload failed", e);
+          return false;
+        }
+      }
+
       // ---------- Screens ----------
       function showScreen(screenId) {
         if (BC_VERBOSE_LOGS) {
@@ -23729,6 +23742,12 @@ function ensureProgLoaded() {
 
         document.getElementById("btnV2HarnessBack")?.addEventListener("click", () => {
           resetV2DemoSession();
+          try {
+            const url = new URL(window.location.href);
+            url.searchParams.delete("bcV2AutoStart");
+            url.searchParams.set("initialScreen", "screenWelcome");
+            window.history.replaceState({}, "", url.toString());
+          } catch {}
           allowV2WelcomeNavigationOnce();
           showScreen("screenWelcome");
         });
@@ -24133,6 +24152,7 @@ function ensureProgLoaded() {
               btnWelcomeStart.disabled = true;
               btnWelcomeStart.style.pointerEvents = "none";
               try { localStorage.setItem(coverKey, "true"); } catch {}
+              if (launchV2AutoStartReload()) return;
               queueV2AutoStart();
               attemptV2AutoStart();
               return;
@@ -24486,6 +24506,13 @@ function ensureProgLoaded() {
           return "";
         }
       })();
+      const shouldBootV2AutoStart = (() => {
+        try {
+          return new URLSearchParams(window.location.search).get("bcV2AutoStart") === "1";
+        } catch {
+          return false;
+        }
+      })();
 
       if (sessionType !== "drill") {
         if (isDemo) {
@@ -24496,6 +24523,13 @@ function ensureProgLoaded() {
       }
       updateCounts();
       renderApp();
+      if (shouldBootV2AutoStart) {
+        try { localStorage.setItem(coverKey, "true"); } catch {}
+        queueV2AutoStart();
+        setTimeout(() => {
+          try { attemptV2AutoStart(); } catch {}
+        }, 0);
+      }
 
       // Helpful debug (optional)
       console.log("[BC] game.html boot ✅", {
