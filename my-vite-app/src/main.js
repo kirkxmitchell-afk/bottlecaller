@@ -20813,15 +20813,30 @@ function routeDemoShellNoAuth() {
         return false;
       }
     })();
+  const demoScreenVisible = !document.getElementById("screenGameDemo")?.classList.contains("hidden");
+  const existingDemoFrame = document.getElementById("gameRootDemoFrame");
+  const existingSrc = String(existingDemoFrame?.getAttribute("src") || "");
+  const existingUsesV2 = existingSrc.includes("bcV2=1");
+  const canReuseExistingDemoFrame =
+    demoScreenVisible &&
+    !!existingDemoFrame &&
+    existingUsesV2 === useV2Harness;
+
   showScreen("screenGameDemo");
   setPremiumOverlayActive(false);
   destroyPremiumIframe("routeDemoShellNoAuth");
   window.__BC_DRILL_CONFIG__ = null;
   window.BC_DRILL_CONFIG = null;
   setPendingStartDrill(null);
-  destroyDemoIframe("routeDemoShellNoAuth:pre");
   document.getElementById("btnDemoPremium")?.classList.add("hidden");
   document.getElementById("btnDemoExit")?.classList.add("hidden");
+
+  if (canReuseExistingDemoFrame) {
+    console.log("[ROUTE] demo shell reuse ✅", { useV2Harness });
+    return;
+  }
+
+  destroyDemoIframe("routeDemoShellNoAuth:pre");
   mountGameIframe("gameRootDemo", "demo", {
     initialScreen: "screenWelcome",
     v2Harness: useV2Harness,
@@ -22564,9 +22579,6 @@ supabase.auth.onAuthStateChange((event, session) => {
         appState.restaurant = null;
         appState.activeRestaurantId = null;
         appMode = "demo";
-
-        // Destroy all premium/demo shells
-        try { document.querySelectorAll("iframe").forEach((f) => f.remove()); } catch {}
 
         routeDemoShellNoAuth();
         hideAllLogoutButtons();
