@@ -5213,7 +5213,7 @@ html, body{ height:100%; }
     border-radius: 0;
     background:
       linear-gradient(180deg, rgba(7, 8, 12, 0.84) 0%, rgba(7, 8, 12, 0.16) 12%, rgba(7, 8, 12, 0.02) 34%, rgba(7, 8, 12, 0.14) 74%, rgba(7, 8, 12, 0.76) 100%),
-      url("/game/tier1-encounter-scene.png") center top / contain no-repeat,
+      url("/game/tier1-encounter-scene.png") center center / cover no-repeat,
       #090a0e;
   }
 
@@ -5294,12 +5294,33 @@ html, body{ height:100%; }
   #encounterPanel[data-v2-layout="tier1"] .v2-hero-bottom{
     left: 6px;
     right: 6px;
-    bottom: calc(94px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(108px + env(safe-area-inset-bottom, 0px));
     gap: 4px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-scene-text{
-    display: none;
+    display: grid;
+    max-width: min(72vw, 286px);
+    padding: 8px 10px;
+    border-radius: 14px;
+    gap: 6px;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-scene-label{
+    font-size: 8px;
+    letter-spacing: 0.06em;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-scene-copy{
+    font-size: 10px;
+    line-height: 1.25;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-clue-list{
+    margin: 0;
+    padding-left: 14px;
+    font-size: 9px;
+    line-height: 1.2;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-quote-row{
@@ -5338,7 +5359,54 @@ html, body{ height:100%; }
   #encounterPanel[data-v2-layout="tier1"] .v2-state-grid,
   #encounterPanel[data-v2-layout="tier1"] .v2-guidance-card,
   #encounterPanel[data-v2-layout="tier1"] .v2-status-card{
-    display: none !important;
+    display: grid !important;
+    max-width: min(84vw, 320px);
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-state-grid{
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-state-card{
+    padding: 8px 6px;
+    border-radius: 12px;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-state-label{
+    font-size: 7px;
+    letter-spacing: 0.05em;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-state-value{
+    margin-top: 4px;
+    font-size: 20px;
+    line-height: 1;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-state-meta{
+    margin-top: 3px;
+    font-size: 8px;
+    line-height: 1.1;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-guidance-card,
+  #encounterPanel[data-v2-layout="tier1"] .v2-status-card{
+    padding: 8px 10px;
+    border-radius: 14px;
+    gap: 4px;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-guidance-label{
+    font-size: 8px;
+    letter-spacing: 0.06em;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-guidance-copy,
+  #encounterPanel[data-v2-layout="tier1"] .v2-guidance-meta,
+  #encounterPanel[data-v2-layout="tier1"] .v2-status-card{
+    font-size: 9px;
+    line-height: 1.22;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-shell{
@@ -5349,7 +5417,11 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-caption{
-    display: none;
+    display: block;
+    margin-top: 6px;
+    font-size: 9px;
+    line-height: 1.2;
+    color: rgba(247, 239, 223, 0.92);
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-header{
@@ -5399,7 +5471,10 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-copy{
-    display: none;
+    display: block;
+    font-size: 7px;
+    line-height: 1.1;
+    color: #8a5a1f !important;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-shell .button-row{
