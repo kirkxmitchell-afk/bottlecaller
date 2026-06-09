@@ -9370,15 +9370,6 @@ function openPremiumBeginScreen() {
           return false;
         }
       })();
-    const tryOpenDemoWelcome = () => {
-      const frame = document.getElementById("gameRootDemoFrame");
-      const nav = frame?.contentWindow?.__BC_NAV__;
-      if (nav && typeof nav.openWelcome === "function") {
-        nav.openWelcome();
-        return true;
-      }
-      return false;
-    };
 
     closeHud?.();
     showScreen("screenGameDemo");
@@ -9393,18 +9384,14 @@ function openPremiumBeginScreen() {
         initialScreen: "screenWelcome",
         v2Harness: useV2Harness,
       });
+      return;
     }
 
-    let attempts = 0;
-    const maxAttempts = 12;
-    const retryOpenDemoWelcome = () => {
-      if (tryOpenDemoWelcome()) return;
-      attempts += 1;
-      if (attempts >= maxAttempts) return;
-      window.setTimeout(retryOpenDemoWelcome, 180);
-    };
-
-    retryOpenDemoWelcome();
+    const frame = document.getElementById("gameRootDemoFrame");
+    const nav = frame?.contentWindow?.__BC_NAV__;
+    if (nav && typeof nav.openWelcome === "function") {
+      nav.openWelcome();
+    }
     return;
   }
 
