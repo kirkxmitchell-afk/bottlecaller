@@ -12127,11 +12127,15 @@ function ensureProgLoaded() {
           }
 
           try { localStorage.setItem(coverKey, "true"); } catch {}
-          applyPlaySurfaceMode("full");
+          applyPlaySurfaceMode(window.isDemo || window.bcMode === "demo" ? "encounter_only" : "full");
           resetNavState();
           showScreen("screenPlay");
 
           if (window.isDemo || window.bcMode === "demo") {
+            if (isV2DemoHarnessEnabled()) {
+              startV2HarnessEncounter({ resetSession: true });
+              return;
+            }
             window.startEncounter?.();
             return;
           }
@@ -23041,9 +23045,15 @@ function ensureProgLoaded() {
 
         bindInput(btn, async () => {
           resetNavState();
-          if (isDemo) {
-            localStorage.setItem(coverKey, "true");
-            showScreen("screenHome");
+          if (isDemo || window.bcMode === "demo") {
+            try { localStorage.setItem(coverKey, "true"); } catch {}
+            applyPlaySurfaceMode("encounter_only");
+            showScreen("screenPlay");
+            if (isV2DemoHarnessEnabled()) {
+              startV2HarnessEncounter({ resetSession: true });
+              return;
+            }
+            window.startEncounter?.();
             return;
           }
           try { localStorage.setItem(coverKey, "true"); } catch {}
