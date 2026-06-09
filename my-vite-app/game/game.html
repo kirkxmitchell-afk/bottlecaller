@@ -11957,10 +11957,13 @@ function ensureProgLoaded() {
 
       function bindInput(el, fn) {
         if (!el || typeof fn !== "function") return;
-        if (el.__bcBound) return;
-        el.__bcBound = true;
+        const primary = window.PointerEvent ? "pointerup" : "click";
 
-        const primary = "pointerup";
+        if (el.__bcBound && el.__bcBoundHandler && el.__bcBoundEvent) {
+          try {
+            el.removeEventListener(el.__bcBoundEvent, el.__bcBoundHandler);
+          } catch {}
+        }
 
         const fire = async (e) => {
           const now = Date.now();
@@ -12019,11 +12022,10 @@ function ensureProgLoaded() {
           }
         };
 
-        if (window.PointerEvent) {
-          el.addEventListener("pointerup", fire, { passive: false });
-        } else {
-          el.addEventListener("click", fire, { passive: false });
-        }
+        el.__bcBound = true;
+        el.__bcBoundEvent = primary;
+        el.__bcBoundHandler = fire;
+        el.addEventListener(primary, fire, { passive: false });
       }
 
       // ---------- Screens ----------
