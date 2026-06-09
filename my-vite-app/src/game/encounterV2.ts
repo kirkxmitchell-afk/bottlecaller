@@ -1,0 +1,152 @@
+import type { EncounterV2 } from "./typesV2";
+
+const TIER1_ENCOUNTERS: EncounterV2[] = [
+  {
+    id: "tier1_encounter_001",
+    tier: 1,
+    title: "First Taste of South Africa",
+    serviceStage: "opening",
+    family: "Explorer Pair",
+    hiddenPressure: "They want something local without feeling lost.",
+    masterProfile: "curious_but_safe",
+    variant: "story_open",
+    scene: "A couple is scanning the list for something local but still easy to trust.",
+    verbalClue: "We have never been here before. We would love to try something local.",
+    visualClues: ["Leaning into the list", "Open to guidance", "Not price-first"],
+    lesson: "Story closes best when curiosity is already open.",
+    targetProductId: "product_001",
+    targetProductCategory: "wine",
+    targetRecommendAngle: "story",
+    allowedProductIds: ["product_001", "product_002", "product_003"],
+    bestPath: [
+      { group: "ask", type: "preference" },
+      { group: "recommend", type: "story" },
+      { group: "commit", type: "recommendation" },
+    ],
+    choiceLines: {
+      ask: {
+        preference: "Do you usually enjoy fresher whites or softer reds when you try a new list?",
+        occasion: "Is this more of a local-discovery bottle or just an easy first glass?",
+        experience: "Do you enjoy trying something new, or do you want a safer lane first?",
+        budget: "Would you like me to keep it comfortable, or is this a bottle you want to remember?",
+      },
+      recommend: {
+        flavour: "Iona gives you bright citrus and a clean, fresh finish.",
+        story: "Iona is a cool-climate Cape white, so it feels local without being difficult.",
+        value: "It drinks with a premium feel without forcing a big jump in price.",
+        confidence: "If you want a clean South African starting point, I would confidently go here.",
+      },
+      commit: {
+        recommendation: "Let me put you on the Iona Sauvignon Blanc.",
+        assumption: "I will bring the Iona through for you.",
+        celebration: "That is a great first South African bottle to start with tonight.",
+        value: "It is the smartest opening bottle if you want local quality without risk.",
+      },
+    },
+    choiceScores: {
+      ask: { preference: 2, experience: 1, occasion: 1, budget: 0 },
+      recommend: { story: 3, flavour: 2, confidence: 2, value: 1 },
+      commit: { recommendation: 3, assumption: 2, celebration: 1, value: 1 },
+    },
+  },
+  {
+    id: "tier1_encounter_002",
+    tier: 1,
+    title: "The Family Bill",
+    serviceStage: "opening",
+    family: "Value Table",
+    hiddenPressure: "They want to spend well, not spend big.",
+    masterProfile: "budget_alert",
+    variant: "value_open",
+    scene: "A family table is interested, but one guest keeps glancing at the price column.",
+    verbalClue: "Is there something worth it without going crazy?",
+    visualClues: ["Price scanning", "Open to recommendation", "Needs practical confidence"],
+    lesson: "Value has to sound intelligent, not cheap.",
+    targetProductId: "product_003",
+    targetProductCategory: "wine",
+    targetRecommendAngle: "value",
+    allowedProductIds: ["product_001", "product_002", "product_003"],
+    bestPath: [
+      { group: "ask", type: "budget" },
+      { group: "recommend", type: "value" },
+      { group: "commit", type: "value" },
+    ],
+    choiceLines: {
+      ask: {
+        preference: "Are you looking for red tonight, or are you still open?",
+        occasion: "Is this more about keeping it easy for the whole table?",
+        experience: "Do you want something familiar, or are you open to a Cape blend?",
+        budget: "Do you want the smartest spend on the list, or just something safely mid-range?",
+      },
+      recommend: {
+        flavour: "The Secateurs red is juicy, smooth, and very easy to like.",
+        story: "It is a modern Cape red that feels relaxed and crowd-friendly.",
+        value: "This is one of the best-value reds on the list without feeling like a compromise.",
+        confidence: "If the table wants a red I can back without over-spending, I would use this.",
+      },
+      commit: {
+        recommendation: "I would put you on the Secateurs red.",
+        assumption: "Let me bring that through as the table red.",
+        celebration: "You will feel good about that spend once it is in the glass.",
+        value: "That is the smartest value-red move on the list.",
+      },
+    },
+    choiceScores: {
+      ask: { budget: 2, occasion: 1, preference: 0, experience: 1 },
+      recommend: { value: 3, confidence: 2, flavour: 1, story: 1 },
+      commit: { value: 3, recommendation: 2, assumption: 1, celebration: 1 },
+    },
+  },
+  {
+    id: "tier1_encounter_003",
+    tier: 1,
+    title: "Quiet Date Night",
+    serviceStage: "opening",
+    family: "Refined Couple",
+    hiddenPressure: "They want something elegant and low-noise.",
+    masterProfile: "refined_soft",
+    variant: "flavour_close",
+    scene: "A couple wants a bottle that feels polished and intimate, not loud or heavy.",
+    verbalClue: "We want something elegant, not too big.",
+    visualClues: ["Low speaking volume", "Slow pace", "Looking for refinement"],
+    lesson: "Elegant tables reward fit before confidence.",
+    targetProductId: "product_002",
+    targetProductCategory: "wine",
+    targetRecommendAngle: "flavour",
+    allowedProductIds: ["product_001", "product_002", "product_003"],
+    bestPath: [
+      { group: "ask", type: "occasion" },
+      { group: "recommend", type: "flavour" },
+      { group: "commit", type: "recommendation" },
+    ],
+    choiceLines: {
+      ask: {
+        preference: "Do you want something softer and elegant, or a little more structured?",
+        occasion: "Is this bottle more about a calm dinner than making a statement?",
+        experience: "Do you both usually enjoy pinot-style reds, or are you open?",
+        budget: "Would you like me to keep it measured, or step up slightly for elegance?",
+      },
+      recommend: {
+        flavour: "The Restless River pinot is soft, fine, and very elegant through the finish.",
+        story: "It is a Cape pinot that feels refined without trying too hard.",
+        value: "It is a considered step-up if you want elegance more than power.",
+        confidence: "If you want something graceful and date-night friendly, I would go here.",
+      },
+      commit: {
+        recommendation: "Let me put you on the Restless River pinot.",
+        assumption: "I will bring that through for the two of you.",
+        celebration: "That is a beautiful bottle for this kind of table.",
+        value: "It gives you a more polished bottle without going excessive.",
+      },
+    },
+    choiceScores: {
+      ask: { occasion: 2, preference: 1, experience: 1, budget: 0 },
+      recommend: { flavour: 3, story: 2, confidence: 2, value: 1 },
+      commit: { recommendation: 3, assumption: 2, celebration: 2, value: 0 },
+    },
+  },
+];
+
+export function getTier1VerticalSliceEncounters(): EncounterV2[] {
+  return TIER1_ENCOUNTERS.slice();
+}

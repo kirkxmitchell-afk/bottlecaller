@@ -11959,7 +11959,7 @@ function ensureProgLoaded() {
         if (!el || typeof fn !== "function") return;
         const primary = window.PointerEvent ? "pointerup" : "click";
 
-        if (el.__bcBoundHandler && el.__bcBoundEvent) {
+        if (el.__bcBound && el.__bcBoundHandler && el.__bcBoundEvent) {
           try {
             el.removeEventListener(el.__bcBoundEvent, el.__bcBoundHandler);
           } catch {}
@@ -12028,68 +12028,6 @@ function ensureProgLoaded() {
         el.addEventListener(primary, fire, { passive: false });
       }
 
-      function allowV2WelcomeNavigationOnce() {
-        window.__BC_ALLOW_V2_WELCOME__ = true;
-      }
-
-      function consumeV2WelcomeNavigationAllowance() {
-        if (!window.__BC_ALLOW_V2_WELCOME__) return false;
-        window.__BC_ALLOW_V2_WELCOME__ = false;
-        return true;
-      }
-
-      function queueV2AutoStart() {
-        window.__BC_V2_AUTOSTART_PENDING__ = true;
-        window.__BC_V2_AUTOSTART_ATTEMPTS__ = 0;
-      }
-
-      function clearV2AutoStart() {
-        window.__BC_V2_AUTOSTART_PENDING__ = false;
-        window.__BC_V2_AUTOSTART_ATTEMPTS__ = 0;
-      }
-
-      function attemptV2AutoStart() {
-        if (!window.__BC_V2_AUTOSTART_PENDING__) return;
-        if (window.__BC_V2_STARTING__) return;
-
-        const api = getV2HarnessApi?.();
-        const ready = !!(isV2DemoHarnessEnabled?.() && api && typeof api.start === "function");
-        if (!ready) {
-          const attempts = Number(window.__BC_V2_AUTOSTART_ATTEMPTS__ || 0) + 1;
-          window.__BC_V2_AUTOSTART_ATTEMPTS__ = attempts;
-          if (attempts > 40) {
-            console.warn("[BC][V2] auto-start timed out waiting for harness");
-            clearV2AutoStart();
-            const btn = document.getElementById("btnWelcomeStart");
-            if (btn) {
-              btn.disabled = false;
-              btn.style.pointerEvents = "auto";
-            }
-            return;
-          }
-          window.setTimeout(attemptV2AutoStart, 120);
-          return;
-        }
-
-        window.__BC_V2_STARTING__ = true;
-        clearV2AutoStart();
-        resetNavState();
-        startV2HarnessEncounter({ resetSession: true });
-      }
-
-      function launchV2AutoStartReload() {
-        try {
-          const url = new URL(window.location.href);
-          url.searchParams.set("bcV2AutoStart", "1");
-          url.searchParams.set("initialScreen", "screenPlay");
-          window.location.replace(url.toString());
-          return true;
-        } catch (e) {
-          console.warn("[BC][V2] auto-start reload failed", e);
-          return false;
-        }
-      }
-
       // ---------- Screens ----------
       function showScreen(screenId) {
         if (BC_VERBOSE_LOGS) {
@@ -12105,21 +12043,6 @@ function ensureProgLoaded() {
           console.warn("[NAV] blocked screen switch during drill:", screenId);
           if (BC_VERBOSE_LOGS) console.trace("[NAV] blocked caller stack");
           return;
-        }
-
-        if (
-          screenId === "screenWelcome" &&
-          typeof isV2DemoHarnessEnabled === "function" &&
-          isV2DemoHarnessEnabled()
-        ) {
-          const v2State =
-            typeof getV2DemoSessionState === "function"
-              ? getV2DemoSessionState()
-              : null;
-          if (v2State?.active && !consumeV2WelcomeNavigationAllowance()) {
-            console.warn("[NAV] blocked unexpected V2 welcome redirect");
-            return;
-          }
         }
 
         document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
@@ -12173,7 +12096,6 @@ function ensureProgLoaded() {
       window.__BC_NAV__.openWelcome = () => {
         if (sessionType === "drill") return;
         try {
-          allowV2WelcomeNavigationOnce();
           resetNavState();
           showScreen("screenWelcome");
         } catch (e) {
@@ -23109,7 +23031,6 @@ function ensureProgLoaded() {
       function bindWaiterStart() {
         const identity = getGameplayIdentity();
         if (!identity.isWaiter) return;
-        if (typeof isV2DemoHarnessEnabled === "function" && isV2DemoHarnessEnabled()) return;
 
         const btn = document.getElementById("btnWelcomeStart");
         if (!btn) {
@@ -23512,7 +23433,6 @@ function ensureProgLoaded() {
         const isFinalEncounter = isV2FinalDemoEncounter(snapshot);
         const lesson = String(encounter?.lesson || "");
         const nextStepInstruction = getV2NextStepInstruction(snapshot);
-        const isCompactMobile = !!window.matchMedia?.("(max-width: 860px)")?.matches;
         const progressNodes = Array.from({ length: Math.max(1, snapshot.encounterCount || 1) }, (_, index) => {
           const encounterNumber = index + 1;
           const nodeClass =
@@ -23534,56 +23454,8 @@ function ensureProgLoaded() {
             : snapshot.progressMood === "ready"
               ? "green"
               : "yellow";
-        const mobileDetailMarkup = `
-          <div class="v2-mobile-detail-stack">
-            <div class="v2-scene-text">
-              <div class="v2-scene-label">Table Scene</div>
-              <p class="v2-scene-copy">${escapeHtml(scene)}</p>
-              <ul class="v2-clue-list">
-                ${visualClues.map((clue) => `<li>${escapeHtml(clue)}</li>`).join("")}
-              </ul>
-            </div>
-
-            <div class="v2-quote-row">
-              <blockquote class="v2-quote-card">
-                <span class="v2-quote-mark">“</span>
-                <p>${escapeHtml(quote)}</p>
-              </blockquote>
-            </div>
-
-            <div class="v2-state-grid">
-              <div class="v2-state-card">
-                <div class="v2-state-label">Progress</div>
-                <div class="v2-state-value">${snapshot.progress}</div>
-                <div class="v2-state-meta">${escapeHtml(v2HarnessLabel(snapshot.progressMood))}</div>
-              </div>
-              <div class="v2-state-card">
-                <div class="v2-state-label">Friction</div>
-                <div class="v2-state-value">${snapshot.frustration}</div>
-                <div class="v2-state-meta">${escapeHtml(v2HarnessLabel(snapshot.frustrationMood))}</div>
-              </div>
-              <div class="v2-state-card">
-                <div class="v2-state-label">Authority</div>
-                <div class="v2-state-value">${snapshot.authorityDelta}</div>
-                <div class="v2-state-meta">${escapeHtml(outcome)}</div>
-              </div>
-            </div>
-            ${showIntroGuidance ? `
-              <div class="v2-guidance-card">
-                <div class="v2-guidance-label">What To Do Next</div>
-                <p class="v2-guidance-copy">${escapeHtml(nextStepInstruction)}</p>
-                <div class="v2-guidance-meta">${escapeHtml(walkAwayHint)}</div>
-              </div>
-            ` : ""}
-            ${isTerminal ? `
-              <div class="v2-status-card">
-                <div><strong>Lesson:</strong> ${escapeHtml(lesson)}</div>
-              </div>
-            ` : ""}
-          </div>
-        `;
         stepContent.innerHTML = `
-          <section class="v2-play-shell${isCompactMobile ? " is-mobile-v2" : ""}">
+          <section class="v2-play-shell">
             <div class="v2-hero-frame">
               <div class="v2-hero-top">
                 <div class="v2-play-header">
@@ -23604,7 +23476,7 @@ function ensureProgLoaded() {
                   <div class="v2-mood-detail">${escapeHtml(moodDescriptor)}</div>
                 </div>
               </div>
-              <div class="v2-hero-bottom${isCompactMobile ? " is-mobile-hidden" : ""}">
+              <div class="v2-hero-bottom">
                 <div class="v2-scene-text">
                   <div class="v2-scene-label">Table Scene</div>
                   <p class="v2-scene-copy">${escapeHtml(scene)}</p>
@@ -23651,7 +23523,6 @@ function ensureProgLoaded() {
                 ` : ""}
               </div>
             </div>
-            ${isCompactMobile ? mobileDetailMarkup : ""}
           </section>
         `;
 
@@ -23742,13 +23613,6 @@ function ensureProgLoaded() {
 
         document.getElementById("btnV2HarnessBack")?.addEventListener("click", () => {
           resetV2DemoSession();
-          try {
-            const url = new URL(window.location.href);
-            url.searchParams.delete("bcV2AutoStart");
-            url.searchParams.set("initialScreen", "screenWelcome");
-            window.history.replaceState({}, "", url.toString());
-          } catch {}
-          allowV2WelcomeNavigationOnce();
           showScreen("screenWelcome");
         });
       }
@@ -23756,7 +23620,6 @@ function ensureProgLoaded() {
       function startV2HarnessEncounter(options = {}) {
         const api = getV2HarnessApi();
         if (!api) return false;
-        window.__BC_V2_STARTING__ = false;
         const state = getV2DemoSessionState();
         const startingFresh = !!(options.resetSession || !state.active);
         if (startingFresh) {
@@ -24147,16 +24010,6 @@ function ensureProgLoaded() {
 
           bindInput(btnWelcomeStart, async () => {
             console.log("[CLICK] welcome start", { mode: window.bcMode, isDemo: window.isDemo });
-            if (typeof isV2DemoHarnessEnabled === "function" && isV2DemoHarnessEnabled()) {
-              if (window.__BC_V2_STARTING__) return;
-              btnWelcomeStart.disabled = true;
-              btnWelcomeStart.style.pointerEvents = "none";
-              try { localStorage.setItem(coverKey, "true"); } catch {}
-              if (launchV2AutoStartReload()) return;
-              queueV2AutoStart();
-              attemptV2AutoStart();
-              return;
-            }
             if (!window.isDemo && isStandalone()) {
               redirectToParentLogin("welcome_start");
               return;
@@ -24176,6 +24029,10 @@ function ensureProgLoaded() {
 
             // DEMO: start immediately
             if (window.isDemo || window.bcMode === "demo") {
+              if (isV2DemoHarnessEnabled()) {
+                startV2HarnessEncounter({ resetSession: true });
+                return;
+              }
               window.startEncounter?.();
               return;
             }
@@ -24469,14 +24326,9 @@ function ensureProgLoaded() {
       updateRadioSelection(ids.oakOptions);
 
       renderWineTables();
-        syncWinesToParent("initial_render");
-        initButtons();
-        if (typeof isV2DemoHarnessEnabled === "function" && isV2DemoHarnessEnabled()) {
-          setTimeout(() => {
-            try { attemptV2AutoStart(); } catch {}
-          }, 0);
-        }
-        wireIframeLogout();
+      syncWinesToParent("initial_render");
+      initButtons();
+      wireIframeLogout();
       applyDemoUIRestrictions();
       applyDemoHomeUI();
       setTimeout(() => {
@@ -24506,13 +24358,6 @@ function ensureProgLoaded() {
           return "";
         }
       })();
-      const shouldBootV2AutoStart = (() => {
-        try {
-          return new URLSearchParams(window.location.search).get("bcV2AutoStart") === "1";
-        } catch {
-          return false;
-        }
-      })();
 
       if (sessionType !== "drill") {
         if (isDemo) {
@@ -24523,13 +24368,6 @@ function ensureProgLoaded() {
       }
       updateCounts();
       renderApp();
-      if (shouldBootV2AutoStart) {
-        try { localStorage.setItem(coverKey, "true"); } catch {}
-        queueV2AutoStart();
-        setTimeout(() => {
-          try { attemptV2AutoStart(); } catch {}
-        }, 0);
-      }
 
       // Helpful debug (optional)
       console.log("[BC] game.html boot ✅", {

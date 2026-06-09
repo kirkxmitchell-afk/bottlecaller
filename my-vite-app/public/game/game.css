@@ -5206,16 +5206,16 @@ html, body{ height:100%; }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-play-shell{
     min-height: 0;
-    padding: 0 0 12px;
-    gap: 12px;
+    padding: 0 0 10px;
+    gap: 10px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-hero-frame{
     position: relative;
     width: 100%;
-    min-height: max(1040px, calc((100vw - 20px) * 1.7778958555)) !important;
+    min-height: 0 !important;
     height: auto;
-    aspect-ratio: auto;
+    aspect-ratio: 941 / 1672;
     margin: 0;
     padding: 0;
     border-radius: 0;
@@ -5229,130 +5229,131 @@ html, body{ height:100%; }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-hero-top{
     position: absolute;
-    top: max(10px, env(safe-area-inset-top, 0px));
-    left: 10px;
-    right: 10px;
+    top: max(8px, env(safe-area-inset-top, 0px));
+    left: 8px;
+    right: 8px;
     z-index: 2;
     display: grid;
-    gap: 10px;
+    gap: 8px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-play-header{
-    grid-template-columns: 50px minmax(0, 1fr) 46px;
-    gap: 8px;
-    padding: 10px 12px;
-    border-radius: 18px;
+    grid-template-columns: 44px minmax(0, 1fr) 42px;
+    gap: 7px;
+    padding: 8px 10px;
+    border-radius: 16px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-crest,
   #encounterPanel[data-v2-layout="tier1"] .v2-region-mark{
-    width: 46px;
-    height: 46px;
-    border-radius: 14px;
-    font-size: 23px;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    font-size: 20px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-header-topline{
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
-    margin-bottom: 6px;
-    font-size: 9px;
-    letter-spacing: 0.1em;
+    gap: 6px;
+    margin-bottom: 4px;
+    font-size: 8px;
+    letter-spacing: 0.08em;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-encounter-title{
-    font-size: clamp(22px, 6vw, 30px);
-    line-height: 1.05;
+    font-size: clamp(16px, 5.4vw, 24px);
+    line-height: 1.04;
     text-align: center;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-progress-rail{
-    margin-top: 8px;
-    gap: 6px;
+    margin-top: 6px;
+    gap: 5px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-mood-pill{
-    width: min(180px, 48%);
+    width: min(136px, 42%);
     margin-left: auto;
     min-height: 0;
-    padding: 12px 14px;
-    border-radius: 16px;
+    padding: 8px 10px;
+    border-radius: 14px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-mood-label{
-    font-size: 10px;
-    letter-spacing: 0.1em;
+    font-size: 8px;
+    letter-spacing: 0.08em;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-mood-value{
-    font-size: 22px;
+    font-size: 16px;
     line-height: 1.05;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-mood-detail{
     display: block;
-    font-size: 11px;
+    font-size: 9px;
+    line-height: 1.2;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-hero-bottom{
     position: absolute;
-    left: 10px;
-    right: 10px;
-    bottom: 10px;
+    left: 8px;
+    right: 8px;
+    bottom: max(8px, env(safe-area-inset-bottom, 0px));
     z-index: 2;
     display: grid;
-    gap: 10px;
+    gap: 8px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-scene-text{
     display: grid !important;
-    max-width: 78%;
-    padding: 12px 14px;
-    border-radius: 18px;
-    gap: 8px;
+    max-width: 68%;
+    padding: 8px 10px;
+    border-radius: 14px;
+    gap: 6px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-scene-label{
-    font-size: 10px;
-    letter-spacing: 0.1em;
+    font-size: 8px;
+    letter-spacing: 0.08em;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-scene-copy{
-    font-size: 13px;
-    line-height: 1.42;
+    font-size: 10px;
+    line-height: 1.28;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-clue-list{
-    margin: 2px 0 0;
-    padding-left: 18px;
-    font-size: 11px;
-    line-height: 1.35;
+    margin: 0;
+    padding-left: 15px;
+    font-size: 9px;
+    line-height: 1.22;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-quote-row{
     display: grid !important;
     grid-template-columns: minmax(0, 1fr);
-    max-width: 74%;
+    max-width: 70%;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-quote-card{
-    padding: 14px 16px 14px 52px;
-    border-radius: 20px;
+    padding: 10px 12px 10px 38px;
+    border-radius: 16px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-quote-card p{
-    font-size: 16px;
+    font-size: 10px;
     line-height: 1.28;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-quote-mark{
-    top: 12px;
-    left: 12px;
-    width: 28px;
-    height: 28px;
-    font-size: 20px;
+    top: 8px;
+    left: 8px;
+    width: 22px;
+    height: 22px;
+    font-size: 14px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-state-grid,
@@ -5364,53 +5365,53 @@ html, body{ height:100%; }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-state-grid{
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 8px;
+    gap: 6px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-state-card{
-    padding: 10px 12px;
-    border-radius: 16px;
+    padding: 8px 9px;
+    border-radius: 14px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-state-label{
-    font-size: 9px;
+    font-size: 7px;
     letter-spacing: 0.08em;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-state-value{
-    margin-top: 6px;
-    font-size: 26px;
+    margin-top: 4px;
+    font-size: 18px;
     line-height: 1;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-state-meta{
-    margin-top: 4px;
-    font-size: 10px;
-    line-height: 1.25;
+    margin-top: 3px;
+    font-size: 8px;
+    line-height: 1.2;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-guidance-card,
   #encounterPanel[data-v2-layout="tier1"] .v2-status-card{
-    max-width: 88%;
-    padding: 12px 14px;
-    border-radius: 18px;
-    gap: 6px;
+    max-width: 86%;
+    padding: 8px 10px;
+    border-radius: 14px;
+    gap: 4px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-guidance-label{
-    font-size: 10px;
-    letter-spacing: 0.1em;
+    font-size: 8px;
+    letter-spacing: 0.08em;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-guidance-copy,
   #encounterPanel[data-v2-layout="tier1"] .v2-guidance-meta,
   #encounterPanel[data-v2-layout="tier1"] .v2-status-card{
-    font-size: 11px;
-    line-height: 1.38;
+    font-size: 9px;
+    line-height: 1.25;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-shell{
-    padding: 0;
+    padding: 0 0 2px;
     border: 0;
     background: transparent;
     box-shadow: none;
@@ -5418,9 +5419,9 @@ html, body{ height:100%; }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-caption{
     display: block !important;
-    margin-top: 10px;
-    font-size: 12px;
-    line-height: 1.45;
+    margin-top: 8px;
+    font-size: 11px;
+    line-height: 1.35;
     color: rgba(247, 239, 223, 0.92);
   }
 
@@ -5433,10 +5434,10 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-group-button{
-    min-height: 46px;
-    padding: 10px 8px !important;
-    border-radius: 14px !important;
-    font-size: 12px !important;
+    min-height: 40px;
+    padding: 8px 6px !important;
+    border-radius: 12px !important;
+    font-size: 11px !important;
     letter-spacing: 0.04em;
   }
 
@@ -5448,30 +5449,30 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-card{
-    min-height: 100px;
-    padding: 12px 10px !important;
-    border-radius: 18px !important;
+    min-height: 84px;
+    padding: 10px 8px !important;
+    border-radius: 16px !important;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-title{
-    font-size: 15px;
+    font-size: 13px;
     line-height: 1.1;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-subtitle{
-    font-size: 9px;
+    font-size: 8px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-copy{
     display: block;
-    font-size: 11px;
-    line-height: 1.3;
+    font-size: 10px;
+    line-height: 1.22;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-shell .button-row{
     display: grid !important;
     grid-template-columns: 1fr;
-    gap: 10px;
+    gap: 8px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] #v2DemoCompletionCard{
@@ -5482,7 +5483,7 @@ html, body{ height:100%; }
 
 @media (max-width: 640px){
   #encounterPanel[data-v2-layout="tier1"] .v2-play-header{
-    grid-template-columns: 50px minmax(0,1fr) 46px !important;
+    grid-template-columns: 44px minmax(0,1fr) 42px !important;
     justify-items: stretch !important;
   }
 
@@ -5507,7 +5508,7 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-encounter-title{
-    font-size: clamp(20px, 6vw, 28px) !important;
+    font-size: clamp(15px, 5.4vw, 22px) !important;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-state-grid{
@@ -5524,41 +5525,5 @@ html, body{ height:100%; }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-shell .button-row{
     grid-template-columns: 1fr !important;
-  }
-}
-
-@media (max-width: 860px){
-  #encounterPanel[data-v2-layout="tier1"] .v2-play-shell.is-mobile-v2{
-    gap: 12px;
-  }
-
-  #encounterPanel[data-v2-layout="tier1"] .v2-play-shell.is-mobile-v2 .v2-hero-frame{
-    min-height: max(760px, 100dvh) !important;
-  }
-
-  #encounterPanel[data-v2-layout="tier1"] .v2-play-shell.is-mobile-v2 .v2-hero-bottom.is-mobile-hidden{
-    display: none !important;
-  }
-
-  #encounterPanel[data-v2-layout="tier1"] .v2-mobile-detail-stack{
-    display: grid;
-    gap: 10px;
-    padding: 0 10px;
-  }
-
-  #encounterPanel[data-v2-layout="tier1"] .v2-mobile-detail-stack .v2-scene-text,
-  #encounterPanel[data-v2-layout="tier1"] .v2-mobile-detail-stack .v2-quote-row,
-  #encounterPanel[data-v2-layout="tier1"] .v2-mobile-detail-stack .v2-guidance-card,
-  #encounterPanel[data-v2-layout="tier1"] .v2-mobile-detail-stack .v2-status-card{
-    max-width: 100% !important;
-  }
-
-  #encounterPanel[data-v2-layout="tier1"] .v2-mobile-detail-stack .v2-quote-row{
-    display: grid !important;
-  }
-
-  #encounterPanel[data-v2-layout="tier1"] .v2-mobile-detail-stack .v2-state-grid{
-    display: grid !important;
-    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   }
 }
