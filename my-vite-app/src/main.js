@@ -6549,6 +6549,9 @@ function renderAppChrome() {
   const profile = appState?.profile || {};
   const hasSession = !!appState?.session?.user;
   const isDemoCockpit = currentScreenId === "screenGameDemo" && appMode === "demo";
+  const isV2Demo = document.documentElement?.dataset?.bcV2Demo === "true";
+  const isMobileEnv = document.documentElement?.dataset?.bcMobileEnv === "true";
+  const suppressDemoChrome = isDemoCockpit && isV2Demo && isMobileEnv;
   const isDemoWelcomeOpen =
     isDemoCockpit &&
     window.__BC_DEMO_IFRAME_LAST_SCREEN__ === "screenWelcome";
@@ -6557,8 +6560,9 @@ function renderAppChrome() {
     : hasSession
     ? ((profile?.access_tier || profile?.accessTier || "premium").toString().toUpperCase())
     : "Public Access";
-  const showPremiumBar = (currentScreenId === "screenPremiumApp" && hasSession) || isDemoCockpit;
+  const showPremiumBar = !suppressDemoChrome && ((currentScreenId === "screenPremiumApp" && hasSession) || isDemoCockpit);
   const showPlayCta =
+    !suppressDemoChrome &&
     ((currentScreenId === "screenPremiumApp" && hasSession) || isDemoCockpit) &&
     !isDemoWelcomeOpen;
 

@@ -1433,6 +1433,10 @@ html[data-bc-mobile-env="true"][data-bc-v2-demo="true"] #gameRootDemoFrame{
   box-shadow: none !important;
 }
 
+html[data-bc-mobile-env="true"][data-bc-v2-demo="true"] .app-chrome{
+  display: none !important;
+}
+
 html[data-bc-mobile-env="true"] #hudPanel{
   width: min(100vw - 16px, 520px) !important;
   max-height: calc(100dvh - 16px) !important;
