@@ -11959,7 +11959,7 @@ function ensureProgLoaded() {
         if (!el || typeof fn !== "function") return;
         const primary = window.PointerEvent ? "pointerup" : "click";
 
-        if (el.__bcBound && el.__bcBoundHandler && el.__bcBoundEvent) {
+        if (el.__bcBoundHandler && el.__bcBoundEvent) {
           try {
             el.removeEventListener(el.__bcBoundEvent, el.__bcBoundHandler);
           } catch {}
