@@ -23057,6 +23057,7 @@ function ensureProgLoaded() {
       function bindWaiterStart() {
         const identity = getGameplayIdentity();
         if (!identity.isWaiter) return;
+        if (typeof isV2DemoHarnessEnabled === "function" && isV2DemoHarnessEnabled()) return;
 
         const btn = document.getElementById("btnWelcomeStart");
         if (!btn) {
@@ -23647,6 +23648,7 @@ function ensureProgLoaded() {
       function startV2HarnessEncounter(options = {}) {
         const api = getV2HarnessApi();
         if (!api) return false;
+        window.__BC_V2_STARTING__ = false;
         const state = getV2DemoSessionState();
         const startingFresh = !!(options.resetSession || !state.active);
         if (startingFresh) {
@@ -24037,6 +24039,14 @@ function ensureProgLoaded() {
 
           bindInput(btnWelcomeStart, async () => {
             console.log("[CLICK] welcome start", { mode: window.bcMode, isDemo: window.isDemo });
+            if (typeof isV2DemoHarnessEnabled === "function" && isV2DemoHarnessEnabled()) {
+              if (window.__BC_V2_STARTING__) return;
+              window.__BC_V2_STARTING__ = true;
+              try { localStorage.setItem(coverKey, "true"); } catch {}
+              resetNavState();
+              startV2HarnessEncounter({ resetSession: true });
+              return;
+            }
             if (!window.isDemo && isStandalone()) {
               redirectToParentLogin("welcome_start");
               return;
@@ -24056,10 +24066,6 @@ function ensureProgLoaded() {
 
             // DEMO: start immediately
             if (window.isDemo || window.bcMode === "demo") {
-              if (isV2DemoHarnessEnabled()) {
-                startV2HarnessEncounter({ resetSession: true });
-                return;
-              }
               window.startEncounter?.();
               return;
             }
