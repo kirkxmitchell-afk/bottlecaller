@@ -5144,6 +5144,7 @@ html, body{ height:100%; }
   #screenPlay{
     padding: 0 !important;
     min-height: 100dvh;
+    overflow-y: auto;
   }
 
   #bcShell.is-encounter-only{
@@ -5155,6 +5156,7 @@ html, body{ height:100%; }
 
   #bcShell.is-encounter-only #bcStage{
     height: auto;
+    overflow: visible;
   }
 
   #encounterPanel[data-v2-layout="tier1"]{
@@ -5196,34 +5198,42 @@ html, body{ height:100%; }
     right: auto;
     bottom: auto;
     z-index: 1;
-    margin-top: 10px !important;
+    margin-top: 0 !important;
     padding: 0 8px max(12px, env(safe-area-inset-bottom, 0px)) !important;
     background: transparent;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-play-shell{
     min-height: 0;
-    padding: 0;
+    padding: 0 0 10px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-hero-frame{
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    align-items: start;
     width: 100%;
     min-height: 0;
     height: auto;
     aspect-ratio: 941 / 1672;
-    padding: 0;
+    padding:
+      max(6px, env(safe-area-inset-top, 0px))
+      8px
+      8px;
     border-radius: 0;
     background:
-      linear-gradient(180deg, rgba(7, 8, 12, 0.84) 0%, rgba(7, 8, 12, 0.16) 12%, rgba(7, 8, 12, 0.02) 34%, rgba(7, 8, 12, 0.14) 74%, rgba(7, 8, 12, 0.76) 100%),
-      url("/game/tier1-encounter-scene.png") center top / cover no-repeat,
+      linear-gradient(180deg, rgba(7, 8, 12, 0.84) 0%, rgba(7, 8, 12, 0.18) 10%, rgba(7, 8, 12, 0.03) 34%, rgba(7, 8, 12, 0.12) 74%, rgba(7, 8, 12, 0.78) 100%),
+      url("/game/tier1-encounter-scene.png") center top / contain no-repeat,
       #090a0e;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-hero-top{
-    top: max(6px, env(safe-area-inset-top, 0px));
-    left: 8px;
-    right: 8px;
+    position: relative;
+    top: auto;
+    left: auto;
+    right: auto;
     gap: 6px;
+    align-self: start;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-play-header{
@@ -5268,10 +5278,10 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-mood-pill{
-    width: 112px;
+    width: 104px;
     margin-left: auto;
     min-height: 0;
-    padding: 8px 10px;
+    padding: 7px 9px;
     border-radius: 12px;
     background:
       linear-gradient(180deg, rgba(18, 19, 24, 0.94), rgba(11, 12, 18, 0.92)),
@@ -5294,18 +5304,20 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-hero-bottom{
-    left: 8px;
-    right: 8px;
-    bottom: 8px;
+    position: relative;
+    left: auto;
+    right: auto;
+    bottom: auto;
     gap: 6px;
+    align-self: end;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-scene-text{
     display: grid;
-    max-width: min(76vw, 320px);
-    padding: 8px 10px;
+    max-width: min(70vw, 300px);
+    padding: 7px 9px;
     border-radius: 14px;
-    gap: 6px;
+    gap: 5px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-scene-label{
@@ -5314,25 +5326,25 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-scene-copy{
-    font-size: 10px;
-    line-height: 1.25;
+    font-size: 9px;
+    line-height: 1.22;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-clue-list{
     margin: 0;
-    padding-left: 14px;
-    font-size: 9px;
-    line-height: 1.2;
+    padding-left: 13px;
+    font-size: 8px;
+    line-height: 1.15;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-quote-row{
     display: block;
-    max-width: min(72vw, 320px);
+    max-width: min(68vw, 290px);
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-quote-card{
-    padding: 10px 12px 10px 38px;
-    border-radius: 16px;
+    padding: 9px 10px 9px 34px;
+    border-radius: 14px;
     background:
       linear-gradient(180deg, rgba(255, 252, 243, 0.98), rgba(245, 236, 218, 0.96)),
       rgba(255,255,255,0.96);
@@ -5342,17 +5354,17 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-quote-card p{
-    font-size: 10px;
-    line-height: 1.2;
+    font-size: 9px;
+    line-height: 1.16;
     color: #362316;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-quote-mark{
-    top: 9px;
-    left: 8px;
-    width: 22px;
-    height: 22px;
-    font-size: 16px;
+    top: 8px;
+    left: 7px;
+    width: 20px;
+    height: 20px;
+    font-size: 14px;
     background: #6f2336;
     color: #f3dfb3;
     box-shadow: 0 8px 18px rgba(58, 7, 20, 0.28);
@@ -5362,7 +5374,7 @@ html, body{ height:100%; }
   #encounterPanel[data-v2-layout="tier1"] .v2-guidance-card,
   #encounterPanel[data-v2-layout="tier1"] .v2-status-card{
     display: grid !important;
-    max-width: min(88vw, 360px);
+    max-width: min(78vw, 330px);
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-state-grid{
@@ -5371,7 +5383,7 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-state-card{
-    padding: 8px 6px;
+    padding: 7px 5px;
     border-radius: 12px;
   }
 
@@ -5381,21 +5393,21 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-state-value{
-    margin-top: 4px;
-    font-size: 20px;
+    margin-top: 3px;
+    font-size: 18px;
     line-height: 1;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-state-meta{
-    margin-top: 3px;
-    font-size: 8px;
+    margin-top: 2px;
+    font-size: 7px;
     line-height: 1.1;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-guidance-card,
   #encounterPanel[data-v2-layout="tier1"] .v2-status-card{
-    padding: 8px 10px;
-    border-radius: 14px;
+    padding: 7px 9px;
+    border-radius: 12px;
     gap: 4px;
   }
 
@@ -5407,12 +5419,12 @@ html, body{ height:100%; }
   #encounterPanel[data-v2-layout="tier1"] .v2-guidance-copy,
   #encounterPanel[data-v2-layout="tier1"] .v2-guidance-meta,
   #encounterPanel[data-v2-layout="tier1"] .v2-status-card{
-    font-size: 9px;
-    line-height: 1.22;
+    font-size: 8px;
+    line-height: 1.16;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-shell{
-    padding: 10px 0 0;
+    padding: 8px 0 0;
     border: 0;
     background: transparent;
     box-shadow: none;
@@ -5431,14 +5443,14 @@ html, body{ height:100%; }
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 6px;
-    margin-top: 8px;
+    margin-top: 6px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-group-button{
-    min-height: 44px;
-    padding: 8px 6px !important;
+    min-height: 40px;
+    padding: 7px 5px !important;
     border-radius: 12px !important;
-    font-size: 11px !important;
+    font-size: 10px !important;
     letter-spacing: 0.04em;
   }
 
@@ -5450,8 +5462,8 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-card{
-    min-height: 86px;
-    padding: 8px 6px !important;
+    min-height: 78px;
+    padding: 7px 5px !important;
     border-radius: 12px !important;
     background:
       linear-gradient(180deg, rgba(255, 252, 243, 0.98), rgba(245, 236, 218, 0.96)),
@@ -5462,20 +5474,20 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-title{
-    font-size: 11px;
+    font-size: 10px;
     line-height: 1.1;
     color: #4f3421;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-subtitle{
-    font-size: 8px;
+    font-size: 7px;
     color: rgba(79, 52, 33, 0.72);
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-copy{
     display: block;
-    font-size: 9px;
-    line-height: 1.2;
+    font-size: 8px;
+    line-height: 1.12;
     color: #8a5a1f !important;
   }
 
