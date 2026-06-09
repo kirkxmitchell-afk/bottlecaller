@@ -12028,6 +12028,16 @@ function ensureProgLoaded() {
         el.addEventListener(primary, fire, { passive: false });
       }
 
+      function allowV2WelcomeNavigationOnce() {
+        window.__BC_ALLOW_V2_WELCOME__ = true;
+      }
+
+      function consumeV2WelcomeNavigationAllowance() {
+        if (!window.__BC_ALLOW_V2_WELCOME__) return false;
+        window.__BC_ALLOW_V2_WELCOME__ = false;
+        return true;
+      }
+
       // ---------- Screens ----------
       function showScreen(screenId) {
         if (BC_VERBOSE_LOGS) {
@@ -12043,6 +12053,21 @@ function ensureProgLoaded() {
           console.warn("[NAV] blocked screen switch during drill:", screenId);
           if (BC_VERBOSE_LOGS) console.trace("[NAV] blocked caller stack");
           return;
+        }
+
+        if (
+          screenId === "screenWelcome" &&
+          typeof isV2DemoHarnessEnabled === "function" &&
+          isV2DemoHarnessEnabled()
+        ) {
+          const v2State =
+            typeof getV2DemoSessionState === "function"
+              ? getV2DemoSessionState()
+              : null;
+          if (v2State?.active && !consumeV2WelcomeNavigationAllowance()) {
+            console.warn("[NAV] blocked unexpected V2 welcome redirect");
+            return;
+          }
         }
 
         document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
@@ -12096,6 +12121,7 @@ function ensureProgLoaded() {
       window.__BC_NAV__.openWelcome = () => {
         if (sessionType === "drill") return;
         try {
+          allowV2WelcomeNavigationOnce();
           resetNavState();
           showScreen("screenWelcome");
         } catch (e) {
@@ -23613,6 +23639,7 @@ function ensureProgLoaded() {
 
         document.getElementById("btnV2HarnessBack")?.addEventListener("click", () => {
           resetV2DemoSession();
+          allowV2WelcomeNavigationOnce();
           showScreen("screenWelcome");
         });
       }
