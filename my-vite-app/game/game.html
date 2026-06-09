@@ -12038,6 +12038,45 @@ function ensureProgLoaded() {
         return true;
       }
 
+      function queueV2AutoStart() {
+        window.__BC_V2_AUTOSTART_PENDING__ = true;
+        window.__BC_V2_AUTOSTART_ATTEMPTS__ = 0;
+      }
+
+      function clearV2AutoStart() {
+        window.__BC_V2_AUTOSTART_PENDING__ = false;
+        window.__BC_V2_AUTOSTART_ATTEMPTS__ = 0;
+      }
+
+      function attemptV2AutoStart() {
+        if (!window.__BC_V2_AUTOSTART_PENDING__) return;
+        if (window.__BC_V2_STARTING__) return;
+
+        const api = getV2HarnessApi?.();
+        const ready = !!(isV2DemoHarnessEnabled?.() && api && typeof api.start === "function");
+        if (!ready) {
+          const attempts = Number(window.__BC_V2_AUTOSTART_ATTEMPTS__ || 0) + 1;
+          window.__BC_V2_AUTOSTART_ATTEMPTS__ = attempts;
+          if (attempts > 40) {
+            console.warn("[BC][V2] auto-start timed out waiting for harness");
+            clearV2AutoStart();
+            const btn = document.getElementById("btnWelcomeStart");
+            if (btn) {
+              btn.disabled = false;
+              btn.style.pointerEvents = "auto";
+            }
+            return;
+          }
+          window.setTimeout(attemptV2AutoStart, 120);
+          return;
+        }
+
+        window.__BC_V2_STARTING__ = true;
+        clearV2AutoStart();
+        resetNavState();
+        startV2HarnessEncounter({ resetSession: true });
+      }
+
       // ---------- Screens ----------
       function showScreen(screenId) {
         if (BC_VERBOSE_LOGS) {
@@ -24091,12 +24130,11 @@ function ensureProgLoaded() {
             console.log("[CLICK] welcome start", { mode: window.bcMode, isDemo: window.isDemo });
             if (typeof isV2DemoHarnessEnabled === "function" && isV2DemoHarnessEnabled()) {
               if (window.__BC_V2_STARTING__) return;
-              window.__BC_V2_STARTING__ = true;
               btnWelcomeStart.disabled = true;
               btnWelcomeStart.style.pointerEvents = "none";
               try { localStorage.setItem(coverKey, "true"); } catch {}
-              resetNavState();
-              startV2HarnessEncounter({ resetSession: true });
+              queueV2AutoStart();
+              attemptV2AutoStart();
               return;
             }
             if (!window.isDemo && isStandalone()) {
@@ -24411,9 +24449,14 @@ function ensureProgLoaded() {
       updateRadioSelection(ids.oakOptions);
 
       renderWineTables();
-      syncWinesToParent("initial_render");
-      initButtons();
-      wireIframeLogout();
+        syncWinesToParent("initial_render");
+        initButtons();
+        if (typeof isV2DemoHarnessEnabled === "function" && isV2DemoHarnessEnabled()) {
+          setTimeout(() => {
+            try { attemptV2AutoStart(); } catch {}
+          }, 0);
+        }
+        wireIframeLogout();
       applyDemoUIRestrictions();
       applyDemoHomeUI();
       setTimeout(() => {
