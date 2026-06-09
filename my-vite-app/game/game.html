@@ -23460,6 +23460,7 @@ function ensureProgLoaded() {
         const isFinalEncounter = isV2FinalDemoEncounter(snapshot);
         const lesson = String(encounter?.lesson || "");
         const nextStepInstruction = getV2NextStepInstruction(snapshot);
+        const isCompactMobile = !!window.matchMedia?.("(max-width: 860px)")?.matches;
         const progressNodes = Array.from({ length: Math.max(1, snapshot.encounterCount || 1) }, (_, index) => {
           const encounterNumber = index + 1;
           const nodeClass =
@@ -23481,8 +23482,56 @@ function ensureProgLoaded() {
             : snapshot.progressMood === "ready"
               ? "green"
               : "yellow";
+        const mobileDetailMarkup = `
+          <div class="v2-mobile-detail-stack">
+            <div class="v2-scene-text">
+              <div class="v2-scene-label">Table Scene</div>
+              <p class="v2-scene-copy">${escapeHtml(scene)}</p>
+              <ul class="v2-clue-list">
+                ${visualClues.map((clue) => `<li>${escapeHtml(clue)}</li>`).join("")}
+              </ul>
+            </div>
+
+            <div class="v2-quote-row">
+              <blockquote class="v2-quote-card">
+                <span class="v2-quote-mark">“</span>
+                <p>${escapeHtml(quote)}</p>
+              </blockquote>
+            </div>
+
+            <div class="v2-state-grid">
+              <div class="v2-state-card">
+                <div class="v2-state-label">Progress</div>
+                <div class="v2-state-value">${snapshot.progress}</div>
+                <div class="v2-state-meta">${escapeHtml(v2HarnessLabel(snapshot.progressMood))}</div>
+              </div>
+              <div class="v2-state-card">
+                <div class="v2-state-label">Friction</div>
+                <div class="v2-state-value">${snapshot.frustration}</div>
+                <div class="v2-state-meta">${escapeHtml(v2HarnessLabel(snapshot.frustrationMood))}</div>
+              </div>
+              <div class="v2-state-card">
+                <div class="v2-state-label">Authority</div>
+                <div class="v2-state-value">${snapshot.authorityDelta}</div>
+                <div class="v2-state-meta">${escapeHtml(outcome)}</div>
+              </div>
+            </div>
+            ${showIntroGuidance ? `
+              <div class="v2-guidance-card">
+                <div class="v2-guidance-label">What To Do Next</div>
+                <p class="v2-guidance-copy">${escapeHtml(nextStepInstruction)}</p>
+                <div class="v2-guidance-meta">${escapeHtml(walkAwayHint)}</div>
+              </div>
+            ` : ""}
+            ${isTerminal ? `
+              <div class="v2-status-card">
+                <div><strong>Lesson:</strong> ${escapeHtml(lesson)}</div>
+              </div>
+            ` : ""}
+          </div>
+        `;
         stepContent.innerHTML = `
-          <section class="v2-play-shell">
+          <section class="v2-play-shell${isCompactMobile ? " is-mobile-v2" : ""}">
             <div class="v2-hero-frame">
               <div class="v2-hero-top">
                 <div class="v2-play-header">
@@ -23503,7 +23552,7 @@ function ensureProgLoaded() {
                   <div class="v2-mood-detail">${escapeHtml(moodDescriptor)}</div>
                 </div>
               </div>
-              <div class="v2-hero-bottom">
+              <div class="v2-hero-bottom${isCompactMobile ? " is-mobile-hidden" : ""}">
                 <div class="v2-scene-text">
                   <div class="v2-scene-label">Table Scene</div>
                   <p class="v2-scene-copy">${escapeHtml(scene)}</p>
@@ -23550,6 +23599,7 @@ function ensureProgLoaded() {
                 ` : ""}
               </div>
             </div>
+            ${isCompactMobile ? mobileDetailMarkup : ""}
           </section>
         `;
 
@@ -24042,6 +24092,8 @@ function ensureProgLoaded() {
             if (typeof isV2DemoHarnessEnabled === "function" && isV2DemoHarnessEnabled()) {
               if (window.__BC_V2_STARTING__) return;
               window.__BC_V2_STARTING__ = true;
+              btnWelcomeStart.disabled = true;
+              btnWelcomeStart.style.pointerEvents = "none";
               try { localStorage.setItem(coverKey, "true"); } catch {}
               resetNavState();
               startV2HarnessEncounter({ resetSession: true });

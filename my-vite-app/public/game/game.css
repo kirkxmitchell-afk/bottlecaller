@@ -5526,3 +5526,39 @@ html, body{ height:100%; }
     grid-template-columns: 1fr !important;
   }
 }
+
+@media (max-width: 860px){
+  #encounterPanel[data-v2-layout="tier1"] .v2-play-shell.is-mobile-v2{
+    gap: 12px;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-play-shell.is-mobile-v2 .v2-hero-frame{
+    min-height: max(760px, 100dvh) !important;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-play-shell.is-mobile-v2 .v2-hero-bottom.is-mobile-hidden{
+    display: none !important;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-mobile-detail-stack{
+    display: grid;
+    gap: 10px;
+    padding: 0 10px;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-mobile-detail-stack .v2-scene-text,
+  #encounterPanel[data-v2-layout="tier1"] .v2-mobile-detail-stack .v2-quote-row,
+  #encounterPanel[data-v2-layout="tier1"] .v2-mobile-detail-stack .v2-guidance-card,
+  #encounterPanel[data-v2-layout="tier1"] .v2-mobile-detail-stack .v2-status-card{
+    max-width: 100% !important;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-mobile-detail-stack .v2-quote-row{
+    display: grid !important;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-mobile-detail-stack .v2-state-grid{
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
