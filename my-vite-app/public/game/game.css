@@ -5413,3 +5413,224 @@ html, body{ height:100%; }
     pointer-events: auto;
   }
 }
+
+/* Mobile play-surface repair: keep the encounter and HUD usable inside the iframe. */
+@media (max-width: 760px){
+  html,
+  body{
+    width: 100%;
+    min-height: 100%;
+    overflow-x: hidden;
+  }
+
+  body{
+    overscroll-behavior: contain;
+  }
+
+  .app-game-masthead{
+    display: none !important;
+  }
+
+  #screenPlay.screen{
+    width: 100% !important;
+    max-width: none !important;
+    min-height: 100dvh;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  #screenPlay.screen.active{
+    display: block !important;
+  }
+
+  #bcShell.bc-shell{
+    width: 100% !important;
+    max-width: none !important;
+    min-height: 100dvh;
+    padding: max(8px, env(safe-area-inset-top)) 8px max(10px, env(safe-area-inset-bottom)) !important;
+    gap: 8px !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: auto minmax(0, 1fr) auto !important;
+    grid-template-areas:
+      "hud"
+      "stage"
+      "bottom" !important;
+  }
+
+  #bcRail{
+    display: none !important;
+  }
+
+  #bcHudTop{
+    position: relative !important;
+    top: auto !important;
+    z-index: 2 !important;
+  }
+
+  #bcHudTop.bc-hud-top{
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    align-items: center !important;
+    gap: 8px !important;
+    padding: 8px !important;
+    border-radius: 14px !important;
+  }
+
+  #bcHudTop .bc-brand,
+  #bcHudTop .bc-brand-copy{
+    min-width: 0;
+  }
+
+  #bcHudTop .bc-title{
+    font-size: 13px !important;
+    line-height: 1.1;
+  }
+
+  #bcHudTop .bc-subtitle{
+    width: fit-content;
+    max-width: 100%;
+    font-size: 9px !important;
+    padding: 3px 7px !important;
+    line-height: 1.1;
+  }
+
+  #bcHudTop .bc-stats{
+    grid-column: 1 / -1;
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px !important;
+    width: 100%;
+  }
+
+  #bcHudTop .bc-chip{
+    min-width: 0;
+    padding: 5px 6px !important;
+    border-radius: 10px !important;
+    font-size: 10px !important;
+    line-height: 1.15;
+    text-align: center;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  #bcHudTop .bc-actions{
+    justify-self: end;
+  }
+
+  #btnBackHomeFromPlay{
+    min-height: 32px !important;
+    padding: 6px 9px !important;
+    font-size: 10px !important;
+    border-radius: 10px !important;
+  }
+
+  #bcStage{
+    min-width: 0;
+    min-height: 0;
+    align-self: stretch;
+  }
+
+  #encounterPanel{
+    width: 100% !important;
+    min-height: 0;
+    max-height: none;
+    overflow: visible !important;
+    padding: 10px !important;
+    border-radius: 14px !important;
+  }
+
+  #encounterPanel::before,
+  #encounterPanel::after{
+    pointer-events: none;
+  }
+
+  #encounterPanel .bc-step-header,
+  #encounterPanel #stepHeader{
+    margin-bottom: 8px !important;
+    font-size: 10px !important;
+    line-height: 1.2;
+  }
+
+  #encounterPanel .bc-score-row{
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center !important;
+    gap: 8px !important;
+    padding: 7px 8px !important;
+  }
+
+  #wineDisplayName,
+  #wineBadges,
+  #stepHeader,
+  #stepContent,
+  #bcFeedbackLine{
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  #encounterPanel .bc-badges{
+    gap: 6px !important;
+    margin-top: 6px !important;
+  }
+
+  #encounterPanel #stepContent{
+    margin-top: 8px !important;
+  }
+
+  #screenPlay .encounter-lead,
+  #screenPlay .encounter-prompt,
+  #screenPlay .encounter-voice,
+  #screenPlay .notice,
+  #screenPlay .card{
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  #screenPlay .encounter-voice,
+  #screenPlay .notice,
+  #screenPlay .card{
+    padding: 9px 10px !important;
+    border-radius: 12px !important;
+  }
+
+  #stepButtons{
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+    margin-top: 10px !important;
+  }
+
+  #stepButtons > button,
+  #stepButtons .btn,
+  #stepButtons .option-btn{
+    width: 100% !important;
+    min-height: 42px !important;
+    padding: 10px !important;
+    font-size: 12px !important;
+    line-height: 1.3 !important;
+    text-align: left !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #bcHudBottom.bc-hud-bottom{
+    display: block !important;
+    padding: 8px !important;
+    border-radius: 14px !important;
+  }
+
+  #bcHudBottom .bc-hint{
+    padding: 8px 9px !important;
+    font-size: 11px;
+    line-height: 1.3;
+  }
+
+  #bcHudBottom .progress-report-status{
+    margin-top: 6px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font-size: 10px;
+  }
+}

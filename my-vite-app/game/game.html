@@ -16999,6 +16999,8 @@ function ensureProgLoaded() {
           document.getElementById("screenPlay") ||
           document.getElementById("bcShell");
         if (!panel?.scrollIntoView) return;
+        const coarsePointer = window.matchMedia?.("(pointer: coarse)")?.matches;
+        if (coarsePointer || window.innerWidth <= 760) return;
         requestAnimationFrame(() => {
           panel.scrollIntoView({ behavior: "smooth", block: "center" });
         });
