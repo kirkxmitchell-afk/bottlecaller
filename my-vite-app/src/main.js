@@ -9072,6 +9072,23 @@ function unmountDemoGame(reason = "") {
 }
 
 function destroyDemoIframe(reason = "") {
+  const reasonText = String(reason || "");
+  if (
+    isV2DemoPlayActive() &&
+    (
+      reasonText.includes("routeDemo") ||
+      reasonText.includes("openPremiumBeginScreen")
+    )
+  ) {
+    console.warn("[BC] destroyDemoIframe suppressed during active V2 demo play", reason);
+    setDebug({
+      step: "demo.destroy_suppressed",
+      reason,
+      time: new Date().toISOString(),
+      lastScreen: window.__BC_DEMO_IFRAME_LAST_SCREEN__ || null,
+    });
+    return;
+  }
   console.log("[BC] destroyDemoIframe", reason);
   try { document.getElementById("gameRootDemoFrame")?.remove(); } catch {}
   const root = document.getElementById("gameRootDemo");
@@ -9186,6 +9203,15 @@ function forceRemountForModeSwitch(nextMode) {
   currentIframeVersion = Date.now();
   clearGameMounts();
   setDebug({ step: "game.iframe.forceRemount", nextMode, v: currentIframeVersion, time: new Date().toISOString() });
+}
+
+function isV2DemoPlayActive() {
+  if (!isV2DemoRequested()) return false;
+  if (!document.getElementById("gameRootDemoFrame")) return false;
+  return (
+    window.__BC_DEMO_IFRAME_LAST_SCREEN__ === "screenPlay" ||
+    Date.now() - Number(window.__BC_DEMO_PLAY_STARTED_AT__ || 0) < 30000
+  );
 }
 
 function buildGameIframeUrl({
@@ -20582,14 +20608,29 @@ async function routeDemo(reason = "manual") {
     await loadAuthedState(`routeDemo:${reason}`);
   } catch {}
 
-  if (was !== "demo") forceRemountForModeSwitch("demo");
-
   const p = appState?.profile;
   const isPremium = String(p?.access_tier || "").toLowerCase().startsWith("premium");
   if (isPremium && !useV2Harness) {
     console.log("[BC] premium user -> skipping demo mount ✅");
     return;
   }
+
+  if (isV2DemoPlayActive()) {
+    showScreen("screenGameDemo");
+    renderDemoJoinBlock();
+    document.getElementById("btnDemoPremium")?.classList.add("hidden");
+    document.getElementById("btnDemoExit")?.classList.add("hidden");
+    destroyPremiumIframe("routeDemo:v2_play_active");
+    setDebug({
+      step: "route.demo.remount_suppressed",
+      reason,
+      time: new Date().toISOString(),
+      lastScreen: window.__BC_DEMO_IFRAME_LAST_SCREEN__ || null,
+    });
+    return;
+  }
+
+  if (was !== "demo") forceRemountForModeSwitch("demo");
 
   setDebug({ step: "route.demo", time: new Date().toISOString(), reason, authed: !!appState.session?.user });
   showScreen("screenGameDemo");
