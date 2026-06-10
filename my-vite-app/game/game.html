@@ -12167,6 +12167,23 @@ function ensureProgLoaded() {
         shell.classList.toggle("is-encounter-only", mode === "encounter_only");
       }
 
+      function notifyParentDemoPlayStarted(reason = "start") {
+        try {
+          if (!(window.isDemo || window.bcMode === "demo")) return;
+          if (!window.parent || window.parent === window) return;
+          window.parent.postMessage(
+            {
+              source: "BC_MSG",
+              v: 1,
+              type: "demo_play_started",
+              screenId: "screenPlay",
+              reason,
+            },
+            window.location.origin
+          );
+        } catch {}
+      }
+
       // ---------- Storage ----------
       function generateWineId() {
         return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -23623,6 +23640,7 @@ function ensureProgLoaded() {
           state.introEncounterId = null;
         }
         applyPlaySurfaceMode("encounter_only");
+        notifyParentDemoPlayStarted("v2_harness_start");
         resetNavState();
         showScreen("screenPlay");
         const snapshot = api.start({ tier: 1 });
@@ -24018,6 +24036,7 @@ function ensureProgLoaded() {
             try { localStorage.setItem(coverKey, "true"); } catch {}
 
             applyPlaySurfaceMode("encounter_only");
+            notifyParentDemoPlayStarted("welcome_start");
             resetNavState();
             showScreen("screenPlay");
 

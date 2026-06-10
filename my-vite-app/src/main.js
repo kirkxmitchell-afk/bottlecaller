@@ -9359,6 +9359,20 @@ function postNavToPremiumIframe(screen) {
 function openPremiumBeginScreen() {
   if (appMode === "demo") {
     const useV2Harness = isV2DemoRequested();
+    const demoPlayStartedRecently =
+      window.__BC_DEMO_IFRAME_LAST_SCREEN__ === "screenPlay" ||
+      (Date.now() - Number(window.__BC_DEMO_PLAY_STARTED_AT__ || 0) < 15000);
+    if (useV2Harness && demoPlayStartedRecently) {
+      showScreen("screenGameDemo");
+      setPremiumOverlayActive(false);
+      try { renderAppChrome?.(); } catch {}
+      setDebug({
+        step: "demo.openWelcome.suppressed",
+        reason: "demo_play_started",
+        time: new Date().toISOString(),
+      });
+      return;
+    }
     const tryOpenDemoWelcome = () => {
       const frame = document.getElementById("gameRootDemoFrame");
       const nav = frame?.contentWindow?.__BC_NAV__;
@@ -9436,6 +9450,22 @@ function openPremiumBeginScreen() {
 // ✅ Optional auto-resize (requires matching postMessage in game.html)
 window.addEventListener("message", (event) => {
   const data = event?.data;
+  if (
+    data &&
+    data.source === "BC_MSG" &&
+    data.v === 1 &&
+    data.type === "demo_play_started" &&
+    event.origin === window.location.origin
+  ) {
+    const demoFrame = document.getElementById("gameRootDemoFrame");
+    if (demoFrame && event.source === demoFrame.contentWindow) {
+      window.__BC_DEMO_PLAY_STARTED_AT__ = Date.now();
+      window.__BC_DEMO_IFRAME_LAST_SCREEN__ = "screenPlay";
+      try { renderAppChrome?.(); } catch {}
+    }
+    return;
+  }
+
   if (!data || data.type !== "BC_IFRAME_HEIGHT") return;
 
   const demoFrame = document.getElementById("gameRootDemoFrame");
