@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <!-- ✅ IMPORTANT: because this file is served at /game/game.html -->
   <link rel="stylesheet" href="/game/game.css" />
+  <script type="module" src="/src/game/gameEntry.ts"></script>
   <script>
     if (window.self !== window.top) {
       if (window.__BC_SUPABASE__ || window.supabase) {
@@ -23101,6 +23102,14 @@ function ensureProgLoaded() {
         return !!(window.__BC_V2_HARNESS__?.enabled && (window.isDemo || window.bcMode === "demo"));
       }
 
+      function isV2DemoRequestedInFrame() {
+        try {
+          return new URLSearchParams(window.location.search).get("bcV2") === "1";
+        } catch {
+          return false;
+        }
+      }
+
       function getV2HarnessApi() {
         return window.__BC_V2_HARNESS__?.api || null;
       }
@@ -23651,6 +23660,63 @@ function ensureProgLoaded() {
         return true;
       }
 
+      function showV2HarnessLoadingState() {
+        showScreen("screenPlay");
+        const encounterPanel = document.getElementById("encounterPanel");
+        const stepHeader = document.getElementById("stepHeader");
+        const wineDisplayName = document.getElementById("wineDisplayName");
+        const stepContent = document.getElementById("stepContent");
+        const stepButtons = document.getElementById("stepButtons");
+        if (encounterPanel) encounterPanel.dataset.v2Layout = "tier1";
+        if (stepHeader) stepHeader.textContent = "BottleCaller";
+        if (wineDisplayName) wineDisplayName.textContent = "";
+        if (stepContent) {
+          stepContent.innerHTML = `
+            <section class="v2-play-shell">
+              <div class="v2-guidance-card">
+                <div class="v2-guidance-label">Loading</div>
+                <p class="v2-guidance-copy">Preparing the BottleCaller demo.</p>
+              </div>
+            </section>
+          `;
+        }
+        if (stepButtons) stepButtons.innerHTML = "";
+      }
+
+      function startV2HarnessWhenReady(options = {}) {
+        const started = startV2HarnessEncounter(options);
+        if (started) return true;
+        if (!isV2DemoRequestedInFrame()) return false;
+
+        notifyParentDemoPlayStarted("v2_harness_wait");
+        applyPlaySurfaceMode("encounter_only");
+        showV2HarnessLoadingState();
+
+        let attempts = 0;
+        const maxAttempts = 30;
+        const retry = () => {
+          attempts += 1;
+          if (startV2HarnessEncounter(options)) return;
+          if (attempts >= maxAttempts) {
+            const stepContent = document.getElementById("stepContent");
+            if (stepContent) {
+              stepContent.innerHTML = `
+                <section class="v2-play-shell">
+                  <div class="v2-guidance-card">
+                    <div class="v2-guidance-label">Demo unavailable</div>
+                    <p class="v2-guidance-copy">The BottleCaller demo engine did not finish loading. Refresh and try again.</p>
+                  </div>
+                </section>
+              `;
+            }
+            return;
+          }
+          window.setTimeout(retry, 100);
+        };
+        window.setTimeout(retry, 0);
+        return true;
+      }
+
       function bindPremiumEntryButton(btn) {
         if (!btn) return;
         btn.textContent = "Play";
@@ -23683,8 +23749,8 @@ function ensureProgLoaded() {
             btnGoPremium.__bcBound = false;
             bindInput(btnGoPremium, () => {
               resetNavState();
-              if (isV2DemoHarnessEnabled()) {
-                startV2HarnessEncounter({ resetSession: true });
+              if (isV2DemoHarnessEnabled() || isV2DemoRequestedInFrame()) {
+                startV2HarnessWhenReady({ resetSession: true });
                 return;
               }
               showScreen("screenPlay");
@@ -23965,8 +24031,8 @@ function ensureProgLoaded() {
 
           bindInput(btnGoDemo, () => {
             resetNavState();
-            if (isV2DemoHarnessEnabled()) {
-              startV2HarnessEncounter({ resetSession: true });
+            if (isV2DemoHarnessEnabled() || isV2DemoRequestedInFrame()) {
+              startV2HarnessWhenReady({ resetSession: true });
               return;
             }
             showScreen("screenPlay");
@@ -23986,8 +24052,8 @@ function ensureProgLoaded() {
 
             bindInput(btnGoPremium, () => {
               resetNavState();
-              if (isV2DemoHarnessEnabled()) {
-                startV2HarnessEncounter({ resetSession: true });
+              if (isV2DemoHarnessEnabled() || isV2DemoRequestedInFrame()) {
+                startV2HarnessWhenReady({ resetSession: true });
                 return;
               }
               showScreen("screenPlay");
@@ -24042,8 +24108,8 @@ function ensureProgLoaded() {
 
             // DEMO: start immediately
             if (window.isDemo || window.bcMode === "demo") {
-              if (isV2DemoHarnessEnabled()) {
-                startV2HarnessEncounter({ resetSession: true });
+              if (isV2DemoHarnessEnabled() || isV2DemoRequestedInFrame()) {
+                startV2HarnessWhenReady({ resetSession: true });
                 return;
               }
               window.startEncounter?.();
@@ -24527,8 +24593,5 @@ function ensureProgLoaded() {
 
 </script>
 
-  <!-- ✅ MUST be inside body so the iframe reliably loads EngineBridge + encounters -->
-  <script type="module">
-    import "/src/game/gameEntry.ts";
-  </script></body>
+</body>
 </html>
