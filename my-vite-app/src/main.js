@@ -20553,6 +20553,15 @@ async function routeDemo(reason = "manual") {
 
   const was = appMode;
   appMode = "demo";
+  const useV2Harness =
+    new URLSearchParams(window.location.search).get("bcV2Demo") === "1" ||
+    (() => {
+      try {
+        return localStorage.getItem("BC_V2_DEMO") === "1";
+      } catch {
+        return false;
+      }
+    })();
 
   try {
     await loadAuthedState(`routeDemo:${reason}`);
@@ -20572,7 +20581,12 @@ async function routeDemo(reason = "manual") {
   renderDemoJoinBlock();
   document.getElementById("btnDemoPremium")?.classList.add("hidden");
   document.getElementById("btnDemoExit")?.classList.add("hidden");
-  destroyDemoIframe("routeDemo:shell_only");
+  destroyPremiumIframe("routeDemo");
+  destroyDemoIframe("routeDemo:remount");
+  mountGameIframe("gameRootDemo", "demo", {
+    initialScreen: "screenWelcome",
+    v2Harness: useV2Harness,
+  });
 }
 
 async function routePremium(reason = "manual") {
