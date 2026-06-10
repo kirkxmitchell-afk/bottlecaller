@@ -20959,15 +20959,16 @@ async function decideRoute(reason = "decideRoute") {
       return;
     }
 
+    // The explicit V2 demo URL must stay in the demo harness after sign-in.
+    if (isV2DemoRequested()) {
+      await routeDemo(`decideRoute.v2_demo_requested:${reason}`);
+      return;
+    }
+
     // 2) HARD RULE: restaurant membership => Premium always
     if (appState.profile?.restaurant_id) {
       setAuthIntent("premium");
       await routePremium(`decideRoute.restaurant:${reason}`);
-      return;
-    }
-
-    if (isV2DemoRequested()) {
-      await routeDemo(`decideRoute.v2_demo_requested:${reason}`);
       return;
     }
 
