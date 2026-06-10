@@ -9222,7 +9222,6 @@ function forceRemountForModeSwitch(nextMode) {
 }
 
 function isV2DemoPlayActive() {
-  if (!isV2DemoRequested()) return false;
   if (!document.getElementById("gameRootDemoFrame")) return false;
   return (
     window.__BC_DEMO_IFRAME_LAST_SCREEN__ === "screenPlay" ||
@@ -9295,6 +9294,7 @@ function mountGameIframe(targetId, mode /* "demo" | "premium" */, options = {}) 
     window.__BC_IFRAME_EPOCH__ = Date.now();
   }
 
+  const useV2Harness = mode === "demo" || !!options?.v2Harness;
   const src = buildGameIframeUrl({
     mode,
     initialScreen: options?.initialScreen || "",
@@ -9302,11 +9302,11 @@ function mountGameIframe(targetId, mode /* "demo" | "premium" */, options = {}) 
     backTo: options?.backTo || "screenPremiumApp",
     epoch: mode === "premium" ? window.__BC_IFRAME_EPOCH__ : 0,
     bustCache: true,
-    v2Harness: !!options?.v2Harness,
+    v2Harness: useV2Harness,
   });
   const isMobile = document.documentElement?.dataset?.bcMobileEnv === "true";
   const initialHeight =
-    mode === "demo" && options?.v2Harness && isMobile
+    mode === "demo" && useV2Harness && isMobile
       ? Math.max(window.innerHeight || 0, 680)
       : mode === "demo" && options?.initialScreen === "screenWelcome"
         ? 300
@@ -9400,7 +9400,7 @@ function postNavToPremiumIframe(screen) {
 
 function openPremiumBeginScreen() {
   if (appMode === "demo") {
-    const useV2Harness = isV2DemoRequested();
+    const useV2Harness = true;
     const demoPlayStartedRecently =
       window.__BC_DEMO_IFRAME_LAST_SCREEN__ === "screenPlay" ||
       (Date.now() - Number(window.__BC_DEMO_PLAY_STARTED_AT__ || 0) < 15000);
@@ -20618,7 +20618,8 @@ async function routeDemo(reason = "manual") {
 
   const was = appMode;
   appMode = "demo";
-  const useV2Harness = isV2DemoRequested();
+  const useV2Harness = true;
+  document.documentElement.dataset.bcV2Demo = "true";
 
   try {
     await loadAuthedState(`routeDemo:${reason}`);
@@ -20886,7 +20887,8 @@ function isAuthed() {
 function routeDemoShellNoAuth() {
   console.log("[ROUTE] demo (no auth)");
   appMode = "demo";
-  const useV2Harness = isV2DemoRequested();
+  const useV2Harness = true;
+  document.documentElement.dataset.bcV2Demo = "true";
   showScreen("screenGameDemo");
   setPremiumOverlayActive(false);
   destroyPremiumIframe("routeDemoShellNoAuth");
