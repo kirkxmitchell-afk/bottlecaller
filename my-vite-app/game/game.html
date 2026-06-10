@@ -12094,6 +12094,10 @@ function ensureProgLoaded() {
       window.__BC_NAV__.openWelcome = () => {
         if (sessionType === "drill") return;
         try {
+          const activeScreenId = document.querySelector(".screen.active")?.id || "";
+          if (activeScreenId === "screenPlay" || activeScreenId === "screenDrill") {
+            return;
+          }
           resetNavState();
           showScreen("screenWelcome");
         } catch (e) {
