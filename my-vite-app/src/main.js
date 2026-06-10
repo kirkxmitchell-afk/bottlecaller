@@ -203,6 +203,22 @@ function isV2DemoRequested() {
   }
 }
 
+function rememberV2DemoRequest() {
+  try {
+    if (new URLSearchParams(window.location.search).get("bcV2Demo") === "1") {
+      localStorage.setItem("BC_V2_DEMO", "1");
+    }
+  } catch {}
+}
+
+function replaceUrlKeepingV2Demo(url) {
+  try {
+    history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+  } catch {}
+}
+
+rememberV2DemoRequest();
+
 function syncBottleCallerViewportEnv() {
   const isMobile = isBottleCallerMobileEnv();
   document.documentElement.dataset.bcMobileEnv = isMobile ? "true" : "false";
@@ -20587,7 +20603,7 @@ function hardResetUI(reason = "") {
     const u = new URL(window.location.href);
     u.searchParams.delete("mode");
     u.searchParams.delete("demo");
-    history.replaceState({}, "", u.pathname);
+    replaceUrlKeepingV2Demo(u);
   } catch {}
 
   try {
@@ -20905,7 +20921,7 @@ function routeAuth() {
     const url = new URL(window.location.href);
     url.searchParams.delete("demo");
     url.searchParams.delete("mode");
-    window.history.replaceState({}, "", url.pathname);
+    replaceUrlKeepingV2Demo(url);
   } catch {}
   showScreen("screenHome");
   hardResetAuthUI();
@@ -22449,7 +22465,7 @@ try {
   cleanUrl.searchParams.delete("mode");
   cleanUrl.searchParams.delete("demo");
   cleanUrl.searchParams.delete("logout");
-  history.replaceState({}, "", cleanUrl.pathname);
+  replaceUrlKeepingV2Demo(cleanUrl);
 } catch {}
 
 (function watchGhostPremium() {
@@ -22482,7 +22498,7 @@ if (__BC_BOOT_LOGGED_OUT__) {
     u.searchParams.delete("loggedOut");
     u.searchParams.delete("mode");
     u.searchParams.delete("demo");
-    history.replaceState({}, "", u.pathname);
+    replaceUrlKeepingV2Demo(u);
   } catch {}
   try { routeAuth(); } catch {}
   window.__BC_SKIP_DECIDE_ROUTE__ = true;
