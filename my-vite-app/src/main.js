@@ -194,19 +194,20 @@ function isBottleCallerMobileEnv() {
   return narrow || coarseNarrow;
 }
 
+function isV2DemoRequested() {
+  if (new URLSearchParams(window.location.search).get("bcV2Demo") === "1") return true;
+  try {
+    return localStorage.getItem("BC_V2_DEMO") === "1";
+  } catch {
+    return false;
+  }
+}
+
 function syncBottleCallerViewportEnv() {
   const isMobile = isBottleCallerMobileEnv();
   document.documentElement.dataset.bcMobileEnv = isMobile ? "true" : "false";
   document.documentElement.dataset.bcViewport = isMobile ? "mobile" : "desktop";
-  const isV2Demo =
-    new URLSearchParams(window.location.search).get("bcV2Demo") === "1" ||
-    (() => {
-      try {
-        return localStorage.getItem("BC_V2_DEMO") === "1";
-      } catch {
-        return false;
-      }
-    })();
+  const isV2Demo = isV2DemoRequested();
   document.documentElement.dataset.bcV2Demo = isV2Demo ? "true" : "false";
   window.__BC_ENV__ = { ...(window.__BC_ENV__ || {}), mobile: isMobile };
   syncManagerMessengerViewportLayout();
@@ -9357,15 +9358,7 @@ function postNavToPremiumIframe(screen) {
 
 function openPremiumBeginScreen() {
   if (appMode === "demo") {
-    const useV2Harness =
-      new URLSearchParams(window.location.search).get("bcV2Demo") === "1" ||
-      (() => {
-        try {
-          return localStorage.getItem("BC_V2_DEMO") === "1";
-        } catch {
-          return false;
-        }
-      })();
+    const useV2Harness = isV2DemoRequested();
     const tryOpenDemoWelcome = () => {
       const frame = document.getElementById("gameRootDemoFrame");
       const nav = frame?.contentWindow?.__BC_NAV__;
@@ -20553,15 +20546,7 @@ async function routeDemo(reason = "manual") {
 
   const was = appMode;
   appMode = "demo";
-  const useV2Harness =
-    new URLSearchParams(window.location.search).get("bcV2Demo") === "1" ||
-    (() => {
-      try {
-        return localStorage.getItem("BC_V2_DEMO") === "1";
-      } catch {
-        return false;
-      }
-    })();
+  const useV2Harness = isV2DemoRequested();
 
   try {
     await loadAuthedState(`routeDemo:${reason}`);
@@ -20571,7 +20556,7 @@ async function routeDemo(reason = "manual") {
 
   const p = appState?.profile;
   const isPremium = String(p?.access_tier || "").toLowerCase().startsWith("premium");
-  if (isPremium) {
+  if (isPremium && !useV2Harness) {
     console.log("[BC] premium user -> skipping demo mount ✅");
     return;
   }
@@ -20814,15 +20799,7 @@ function isAuthed() {
 function routeDemoShellNoAuth() {
   console.log("[ROUTE] demo (no auth)");
   appMode = "demo";
-  const useV2Harness =
-    new URLSearchParams(window.location.search).get("bcV2Demo") === "1" ||
-    (() => {
-      try {
-        return localStorage.getItem("BC_V2_DEMO") === "1";
-      } catch {
-        return false;
-      }
-    })();
+  const useV2Harness = isV2DemoRequested();
   showScreen("screenGameDemo");
   setPremiumOverlayActive(false);
   destroyPremiumIframe("routeDemoShellNoAuth");
@@ -20915,6 +20892,11 @@ async function decideRoute(reason = "decideRoute") {
     if (appState.profile?.restaurant_id) {
       setAuthIntent("premium");
       await routePremium(`decideRoute.restaurant:${reason}`);
+      return;
+    }
+
+    if (isV2DemoRequested()) {
+      await routeDemo(`decideRoute.v2_demo_requested:${reason}`);
       return;
     }
 
