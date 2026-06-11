@@ -5227,10 +5227,10 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-play-header{
-    grid-template-columns: 36px minmax(0, 1fr) 36px;
-    gap: 6px;
-    padding: 6px 8px;
-    border-radius: 14px;
+    grid-template-columns: 28px minmax(0, 1fr) 28px;
+    gap: 4px;
+    padding: 4px 6px;
+    border-radius: 12px;
     background:
       linear-gradient(180deg, rgba(18, 18, 24, 0.96), rgba(10, 11, 16, 0.92)),
       rgba(11, 12, 16, 0.92);
@@ -5240,39 +5240,44 @@ html, body{ height:100%; }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-crest,
   #encounterPanel[data-v2-layout="tier1"] .v2-region-mark{
-    width: 36px;
-    height: 36px;
-    border-radius: 10px;
-    font-size: 18px;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    font-size: 14px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-header-topline{
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
-    gap: 6px;
-    margin-bottom: 3px;
-    font-size: 7px;
-    letter-spacing: 0.06em;
+    gap: 4px;
+    margin-bottom: 2px;
+    font-size: 6px;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    overflow: hidden;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-encounter-title{
-    font-size: clamp(15px, 4.1vw, 20px);
-    line-height: 1.02;
+    font-size: clamp(12px, 3.5vw, 16px);
+    line-height: 1;
     text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-progress-rail{
-    margin-top: 4px;
-    gap: 3px;
+    margin-top: 3px;
+    gap: 2px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-mood-pill{
-    width: 104px;
+    width: 82px;
     margin-left: auto;
     min-height: 0;
-    padding: 8px 10px;
-    border-radius: 12px;
+    padding: 5px 7px;
+    border-radius: 10px;
     background:
       linear-gradient(180deg, rgba(18, 19, 24, 0.94), rgba(11, 12, 18, 0.92)),
       rgba(14, 15, 20, 0.96);
@@ -5280,13 +5285,16 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-mood-label{
-    font-size: 8px;
-    letter-spacing: 0.06em;
+    font-size: 6px;
+    letter-spacing: 0.04em;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-mood-value{
-    font-size: 12px;
-    line-height: 1.05;
+    font-size: 10px;
+    line-height: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-mood-detail{
