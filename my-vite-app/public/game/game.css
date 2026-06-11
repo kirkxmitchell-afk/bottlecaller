@@ -5650,20 +5650,20 @@ html, body{ height:100%; }
   }
 }
 
-/* Final V2 mobile override: keep the full encounter image scrollable and preserve the bottom action HUD. */
+/* Final V2 mobile override: keep the full encounter image scrollable inside the iframe. */
 @media (max-width: 760px){
-  html:has(#encounterPanel[data-v2-layout="tier1"]),
-  body:has(#encounterPanel[data-v2-layout="tier1"]){
-    height: auto !important;
+  html,
+  body{
+    height: 100% !important;
     min-height: 100% !important;
     overflow-y: auto !important;
     -webkit-overflow-scrolling: touch;
   }
 
-  #screenPlay.screen:has(#encounterPanel[data-v2-layout="tier1"]),
-  #screenPlay.screen.active:has(#encounterPanel[data-v2-layout="tier1"]),
-  #bcShell.is-encounter-only:has(#encounterPanel[data-v2-layout="tier1"]),
-  #bcShell.is-encounter-only:has(#encounterPanel[data-v2-layout="tier1"]) #bcStage,
+  #screenPlay.screen,
+  #screenPlay.screen.active,
+  #bcShell.is-encounter-only,
+  #bcShell.is-encounter-only #bcStage,
   #encounterPanel[data-v2-layout="tier1"],
   #encounterPanel[data-v2-layout="tier1"] #stepContent,
   #encounterPanel[data-v2-layout="tier1"] .v2-play-shell{
@@ -5673,10 +5673,14 @@ html, body{ height:100%; }
     overflow: visible !important;
   }
 
-  #screenPlay.screen:has(#encounterPanel[data-v2-layout="tier1"]),
-  #bcShell.is-encounter-only:has(#encounterPanel[data-v2-layout="tier1"]),
+  #screenPlay.screen.active{
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #bcShell.is-encounter-only,
   #encounterPanel[data-v2-layout="tier1"]{
-    padding-bottom: max(18px, env(safe-area-inset-bottom, 0px)) !important;
+    padding-bottom: max(88px, calc(env(safe-area-inset-bottom, 0px) + 72px)) !important;
   }
 
   #encounterPanel[data-v2-layout="tier1"] #stepContent{
@@ -5687,9 +5691,9 @@ html, body{ height:100%; }
     display: block !important;
     position: relative !important;
     z-index: 5 !important;
-    margin-top: clamp(-190px, -24dvh, -128px) !important;
-    margin-bottom: max(28px, env(safe-area-inset-bottom, 0px)) !important;
-    padding: 70px 8px max(18px, env(safe-area-inset-bottom, 0px)) !important;
+    margin-top: clamp(-118px, -15dvh, -82px) !important;
+    margin-bottom: max(112px, calc(env(safe-area-inset-bottom, 0px) + 92px)) !important;
+    padding: 42px 8px max(18px, env(safe-area-inset-bottom, 0px)) !important;
     background:
       linear-gradient(180deg, rgba(9,10,14,0), rgba(9,10,14,0.56) 42%, rgba(9,10,14,0.92) 100%) !important;
     pointer-events: none !important;

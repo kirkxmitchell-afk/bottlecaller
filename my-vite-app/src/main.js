@@ -9651,7 +9651,7 @@ window.addEventListener("message", (event) => {
   const measuredHeight = Math.max(minHeight, Math.min(maxHeight, h + (isMobile ? 12 : 24)));
   const viewportHeight = Math.ceil(window.visualViewport?.height || window.innerHeight || 0);
   const clamped = isMobile && isV2Demo
-    ? Math.max(viewportHeight, measuredHeight)
+    ? Math.max(viewportHeight, 420)
     : measuredHeight;
   frame.style.setProperty("height", clamped + "px", "important");
 });

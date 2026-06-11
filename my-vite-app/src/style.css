@@ -1427,8 +1427,9 @@ html[data-bc-mobile-env="true"][data-bc-v2-demo="true"] #gameRootDemo{
 html[data-bc-mobile-env="true"][data-bc-v2-demo="true"] #gameRootDemoFrame{
   display: block;
   width: 100% !important;
-  min-height: 100dvh !important;
-  height: auto;
+  min-height: 0 !important;
+  height: 100dvh !important;
+  max-height: 100dvh !important;
   border: 0 !important;
   border-radius: 0 !important;
   background: transparent !important;
