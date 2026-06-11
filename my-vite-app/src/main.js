@@ -9331,6 +9331,7 @@ function mountGameIframe(targetId, mode /* "demo" | "premium" */, options = {}) 
       : mode === "demo" && options?.initialScreen === "screenWelcome"
         ? 300
         : 420;
+  const initialOpacity = mode === "demo" && useV2Harness && options?.autoStartV2 ? 0 : 1;
 
   // ✅ Smaller default height to avoid giant empty space before setup
   mount.innerHTML = `
@@ -9345,6 +9346,8 @@ function mountGameIframe(targetId, mode /* "demo" | "premium" */, options = {}) 
         border-radius: 14px;
         background: rgba(0,0,0,0.35);
         box-shadow: 0 10px 28px rgba(0,0,0,0.55);
+        opacity: ${initialOpacity};
+        transition: opacity 160ms ease;
       "
       loading="eager"
     ></iframe>
@@ -9601,6 +9604,7 @@ window.addEventListener("message", (event) => {
       window.__BC_DEMO_IFRAME_LAST_SCREEN__ = "screenPlay";
       document.documentElement.dataset.bcV2Demo = "true";
       demoFrame.dataset.bcDemoPlayStarted = "true";
+      demoFrame.style.opacity = "1";
       try { renderAppChrome?.(); } catch {}
     }
     return;

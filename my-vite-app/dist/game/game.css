@@ -498,7 +498,6 @@ p { margin: 0; color: var(--muted); line-height: 1.5; }
   padding: 0;
   border-radius: 28px;
   background:
-    linear-gradient(180deg, rgba(7, 8, 12, 0.82) 0%, rgba(7, 8, 12, 0.16) 14%, rgba(7, 8, 12, 0.04) 52%, rgba(7, 8, 12, 0.76) 100%),
     url("/game/tier1-encounter-scene.png") center top / contain no-repeat,
     #090a0e;
   box-shadow: 0 18px 44px rgba(0,0,0,0.28);
@@ -5193,28 +5192,29 @@ html, body{ height:100%; }
 
   #encounterPanel[data-v2-layout="tier1"] #stepButtons{
     position: relative;
-    z-index: 3;
-    margin-top: 0 !important;
-    padding: 8px 8px max(14px, env(safe-area-inset-bottom, 0px)) !important;
+    z-index: 5;
+    margin-top: clamp(-190px, -24dvh, -128px) !important;
+    padding: 70px 8px max(12px, env(safe-area-inset-bottom, 0px)) !important;
     background:
-      linear-gradient(180deg, rgba(9,10,14,0.72), rgba(9,10,14,0.98) 18%, #090a0e 100%);
+      linear-gradient(180deg, rgba(9,10,14,0), rgba(9,10,14,0.56) 42%, rgba(9,10,14,0.92) 100%);
+    pointer-events: none;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-play-shell{
     height: auto;
-    min-height: 100dvh;
+    min-height: 0;
     padding: 0;
     overflow: visible !important;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-hero-frame{
     width: 100%;
-    min-height: 100dvh;
+    min-height: 0;
     height: auto;
+    aspect-ratio: 941 / 1672;
     padding: 0;
     border-radius: 0;
     background:
-      linear-gradient(180deg, rgba(7, 8, 12, 0.84) 0%, rgba(7, 8, 12, 0.16) 12%, rgba(7, 8, 12, 0.02) 34%, rgba(7, 8, 12, 0.14) 74%, rgba(7, 8, 12, 0.76) 100%),
       url("/game/tier1-encounter-scene.png") center top / contain no-repeat,
       #090a0e;
   }
@@ -5296,7 +5296,7 @@ html, body{ height:100%; }
   #encounterPanel[data-v2-layout="tier1"] .v2-hero-bottom{
     left: 6px;
     right: 6px;
-    bottom: max(12px, env(safe-area-inset-bottom, 0px));
+    bottom: clamp(154px, 25dvh, 218px);
     gap: 4px;
   }
 
@@ -5344,10 +5344,15 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-shell{
-    padding: 0;
-    border: 0;
-    background: transparent;
-    box-shadow: none;
+    padding: 7px;
+    border: 1px solid rgba(245, 221, 175, 0.18);
+    border-radius: 18px 18px 0 0;
+    background:
+      linear-gradient(180deg, rgba(12, 13, 18, 0.24), rgba(10, 10, 14, 0.72)),
+      rgba(10, 10, 14, 0.38);
+    box-shadow: 0 -16px 34px rgba(0, 0, 0, 0.24);
+    backdrop-filter: blur(7px);
+    pointer-events: auto;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-caption{
