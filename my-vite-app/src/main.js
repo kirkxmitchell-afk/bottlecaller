@@ -211,6 +211,10 @@ function rememberV2DemoRequest() {
   } catch {}
 }
 
+function persistV2DemoRequest() {
+  try { localStorage.setItem("BC_V2_DEMO", "1"); } catch {}
+}
+
 function replaceUrlKeepingV2Demo(url) {
   try {
     history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
@@ -7521,11 +7525,12 @@ function hideDemoButtonsOnLogin() {
 
 function applyAuthUi() {
   const authed = !!appState?.session;
+  const isDemoScreen = appMode === "demo" && !document.getElementById("screenGameDemo")?.classList.contains("hidden");
 
   setHomeAuthUI(authed);
 
   const authFields = document.getElementById("authFields");
-  authFields?.classList.toggle("hidden", authed);
+  authFields?.classList.toggle("hidden", authed || isDemoScreen);
 
   const homeExit = document.getElementById("btnHomeExitPremium");
   if (!authed) homeExit?.classList.add("hidden");
@@ -9231,6 +9236,17 @@ function isV2DemoPlayActive() {
 
 function isDemoPlayStartRecent(ms = 60000) {
   return Date.now() - Number(window.__BC_DEMO_PLAY_STARTED_AT__ || 0) < ms;
+}
+
+function isMobileDemoSurfaceActive() {
+  return (
+    document.documentElement?.dataset?.bcMobileEnv === "true" &&
+    (
+      appMode === "demo" ||
+      !document.getElementById("screenGameDemo")?.classList.contains("hidden") ||
+      !!document.getElementById("gameRootDemoFrame")
+    )
+  );
 }
 
 function buildGameIframeUrl({
@@ -20695,6 +20711,7 @@ async function routeDemo(reason = "manual") {
   appMode = "demo";
   const useV2Harness = true;
   document.documentElement.dataset.bcV2Demo = "true";
+  persistV2DemoRequest();
 
   try {
     await loadAuthedState(`routeDemo:${reason}`);
@@ -20968,6 +20985,7 @@ function routeDemoShellNoAuth() {
   appMode = "demo";
   const useV2Harness = true;
   document.documentElement.dataset.bcV2Demo = "true";
+  persistV2DemoRequest();
   showScreen("screenGameDemo");
   setPremiumOverlayActive(false);
   destroyPremiumIframe("routeDemoShellNoAuth");
@@ -21060,8 +21078,8 @@ async function decideRoute(reason = "decideRoute") {
       return;
     }
 
-    // The explicit V2 demo URL must stay in the demo harness after sign-in.
-    if (isV2DemoRequested()) {
+    // Mobile demo must stay in the V2 demo harness after sign-in.
+    if (isV2DemoRequested() || isMobileDemoSurfaceActive()) {
       await routeDemo(`decideRoute.v2_demo_requested:${reason}`);
       return;
     }
