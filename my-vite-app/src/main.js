@@ -9448,6 +9448,12 @@ function postStartV2DemoToIframe(reason = "mobile_enter") {
 
 function startMobileDemoDirectly(reason = "mobile_enter") {
   closeHud?.();
+  appMode = "demo";
+  persistV2DemoRequest();
+  document.getElementById("authFields")?.classList.add("hidden");
+  document.getElementById("screenHome")?.classList.add("hidden");
+  document.getElementById("btnDemoPremium")?.classList.add("hidden");
+  document.getElementById("btnDemoExit")?.classList.add("hidden");
   showScreen("screenGameDemo");
   setPremiumOverlayActive(false);
   document.documentElement.dataset.bcV2Demo = "true";
@@ -21051,8 +21057,8 @@ function routeHomeShell(reason = "home_shell", message = "") {
 }
 
 async function decideRoute(reason = "decideRoute") {
-  if (isHardLoggedOut()) {
-    console.warn("[BC] decideRoute blocked (hard logged out)", reason);
+  if (isLoggingOut()) {
+    console.warn("[BC] decideRoute blocked (logging out)", reason);
     return;
   }
 
@@ -22060,6 +22066,13 @@ async function submitAuth() {
       const pr = String(appState.profile?.role || "").toLowerCase();
       if (pr === "waiter") setRole("waiter");
       else setRole("manager");
+
+      if (document.documentElement?.dataset?.bcMobileEnv === "true" && (isV2DemoRequested() || appMode === "demo")) {
+        persistV2DemoRequest();
+        startMobileDemoDirectly("login_mobile_demo");
+        setMsg("authMsg", "", "normal");
+        return;
+      }
 
       await decideRoute("login.ok.decideRoute");
       return;
