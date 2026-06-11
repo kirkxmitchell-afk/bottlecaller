@@ -350,6 +350,28 @@
     }
     function measureIframeContentHeight() {
       const activeScreen = document.querySelector(".screen.active");
+      const v2Panel = activeScreen?.querySelector?.('#encounterPanel[data-v2-layout="tier1"]');
+      if (v2Panel) {
+        const rects = [
+          activeScreen,
+          document.getElementById("bcShell"),
+          document.getElementById("bcStage"),
+          v2Panel,
+          v2Panel.querySelector(".v2-hero-frame"),
+          v2Panel.querySelector("#stepButtons"),
+          v2Panel.querySelector(".v2-action-shell"),
+        ]
+          .filter(Boolean)
+          .map((el) => el.getBoundingClientRect?.())
+          .filter((rect) => rect && Number.isFinite(rect.bottom));
+        const maxBottom = Math.max(0, ...rects.map((rect) => rect.bottom));
+        const safeBottom = Number.parseFloat(
+          getComputedStyle(document.documentElement).getPropertyValue("--bc-safe-bottom") || "0"
+        ) || 0;
+        if (maxBottom > 0) {
+          return Math.ceil(maxBottom + window.scrollY + safeBottom + 28);
+        }
+      }
       const compactShell = activeScreen?.querySelector?.(".bc-shell-center");
       const compactCard = activeScreen?.querySelector?.(".app-welcome-shell, .app-history-shell, .app-summary-shell");
       if (compactShell || compactCard) {
