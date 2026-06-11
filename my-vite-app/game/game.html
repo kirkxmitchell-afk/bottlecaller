@@ -10909,6 +10909,15 @@ function ensureProgLoaded() {
 
         if (msg.type === "start_v2_demo") {
           try {
+            const now = Date.now();
+            if (
+              window.__BC_V2_DEMO_DIRECT_START_AT__ &&
+              now - Number(window.__BC_V2_DEMO_DIRECT_START_AT__ || 0) < 2500 &&
+              document.querySelector(".screen.active")?.id === "screenPlay"
+            ) {
+              return;
+            }
+            window.__BC_V2_DEMO_DIRECT_START_AT__ = now;
             if (isV2DemoHarnessEnabled?.() || isV2DemoRequestedInFrame?.()) {
               startV2HarnessWhenReady?.({ resetSession: true });
               return;

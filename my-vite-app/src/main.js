@@ -9350,6 +9350,14 @@ function mountGameIframe(targetId, mode /* "demo" | "premium" */, options = {}) 
     ></iframe>
   `;
 
+  const mountedFrame = document.getElementById(`${targetId}Frame`);
+  if (mode === "demo" && useV2Harness && options?.autoStartV2) {
+    mountedFrame?.addEventListener("load", () => {
+      burstStartV2Demo(`${options.autoStartReason || "iframe_load"}:load`);
+    }, { once: true });
+    window.setTimeout(() => burstStartV2Demo(options.autoStartReason || "iframe_mount"), 0);
+  }
+
   // ctx is now delivered only via bc_ctx_request reply from the iframe
 
   setDebug({ step: "game.iframe.mounted", targetId, mode, src, time: new Date().toISOString() });
@@ -9446,6 +9454,18 @@ function postStartV2DemoToIframe(reason = "mobile_enter") {
   }
 }
 
+function burstStartV2Demo(reason = "mobile_enter") {
+  let attempts = 0;
+  const maxAttempts = 24;
+  const tick = () => {
+    postStartV2DemoToIframe(`${reason}:${attempts}`);
+    attempts += 1;
+    if (attempts >= maxAttempts) return;
+    window.setTimeout(tick, 125);
+  };
+  tick();
+}
+
 function startMobileDemoDirectly(reason = "mobile_enter") {
   closeHud?.();
   appMode = "demo";
@@ -9462,17 +9482,11 @@ function startMobileDemoDirectly(reason = "mobile_enter") {
   mountGameIframe("gameRootDemo", "demo", {
     initialScreen: "screenPlay",
     v2Harness: true,
+    autoStartV2: true,
+    autoStartReason: reason,
   });
 
-  let attempts = 0;
-  const maxAttempts = 18;
-  const retry = () => {
-    if (postStartV2DemoToIframe(reason)) return;
-    attempts += 1;
-    if (attempts >= maxAttempts) return;
-    window.setTimeout(retry, 120);
-  };
-  window.setTimeout(retry, 0);
+  burstStartV2Demo(reason);
 }
 
 function openPremiumBeginScreen() {
@@ -20758,9 +20772,11 @@ async function routeDemo(reason = "manual") {
   mountGameIframe("gameRootDemo", "demo", {
     initialScreen: isMobileDemo ? "screenPlay" : "screenWelcome",
     v2Harness: useV2Harness,
+    autoStartV2: isMobileDemo,
+    autoStartReason: "route_demo_mobile",
   });
   if (isMobileDemo) {
-    window.setTimeout(() => postStartV2DemoToIframe("route_demo_mobile"), 120);
+    window.setTimeout(() => burstStartV2Demo("route_demo_mobile"), 120);
   }
 }
 
@@ -21005,9 +21021,11 @@ function routeDemoShellNoAuth() {
   mountGameIframe("gameRootDemo", "demo", {
     initialScreen: isMobileDemo ? "screenPlay" : "screenWelcome",
     v2Harness: useV2Harness,
+    autoStartV2: isMobileDemo,
+    autoStartReason: "route_demo_shell_mobile",
   });
   if (isMobileDemo) {
-    window.setTimeout(() => postStartV2DemoToIframe("route_demo_shell_mobile"), 120);
+    window.setTimeout(() => burstStartV2Demo("route_demo_shell_mobile"), 120);
   }
 }
 
