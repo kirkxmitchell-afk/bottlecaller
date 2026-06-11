@@ -9402,8 +9402,64 @@ function postNavToPremiumIframe(screen) {
   setDebug({ step: "nav.post.sent", screen, time: new Date().toISOString() });
 }
 
+function postStartV2DemoToIframe(reason = "mobile_enter") {
+  const frame = document.getElementById("gameRootDemoFrame");
+  if (!frame || !frame.contentWindow) {
+    setDebug({ step: "demo.start_v2.failed", reason: "no_demo_iframe", source: reason });
+    return false;
+  }
+  try {
+    frame.contentWindow.postMessage(
+      { source: "BC_MSG", v: 1, type: "start_v2_demo", reason },
+      window.location.origin
+    );
+    window.__BC_DEMO_PLAY_STARTED_AT__ = Date.now();
+    window.__BC_DEMO_IFRAME_LAST_SCREEN__ = "screenPlay";
+    document.documentElement.dataset.bcV2Demo = "true";
+    frame.dataset.bcDemoPlayStarted = "true";
+    setDebug({ step: "demo.start_v2.sent", reason, time: new Date().toISOString() });
+    return true;
+  } catch (error) {
+    setDebug({
+      step: "demo.start_v2.failed",
+      reason,
+      error: error?.message || String(error),
+      time: new Date().toISOString(),
+    });
+    return false;
+  }
+}
+
+function startMobileDemoDirectly(reason = "mobile_enter") {
+  closeHud?.();
+  showScreen("screenGameDemo");
+  setPremiumOverlayActive(false);
+  document.documentElement.dataset.bcV2Demo = "true";
+  destroyPremiumIframe(`${reason}:premium`);
+  destroyDemoIframe(`${reason}:remount`);
+  mountGameIframe("gameRootDemo", "demo", {
+    initialScreen: "screenPlay",
+    v2Harness: true,
+  });
+
+  let attempts = 0;
+  const maxAttempts = 18;
+  const retry = () => {
+    if (postStartV2DemoToIframe(reason)) return;
+    attempts += 1;
+    if (attempts >= maxAttempts) return;
+    window.setTimeout(retry, 120);
+  };
+  window.setTimeout(retry, 0);
+}
+
 function openPremiumBeginScreen() {
   if (appMode === "demo") {
+    if (document.documentElement?.dataset?.bcMobileEnv === "true") {
+      startMobileDemoDirectly("mobile_play_enter");
+      return;
+    }
+
     const useV2Harness = true;
     const demoPlayStartedRecently =
       window.__BC_DEMO_IFRAME_LAST_SCREEN__ === "screenPlay" ||
@@ -20675,10 +20731,14 @@ async function routeDemo(reason = "manual") {
   document.getElementById("btnDemoExit")?.classList.add("hidden");
   destroyPremiumIframe("routeDemo");
   destroyDemoIframe("routeDemo:remount");
+  const isMobileDemo = document.documentElement?.dataset?.bcMobileEnv === "true";
   mountGameIframe("gameRootDemo", "demo", {
-    initialScreen: "screenWelcome",
+    initialScreen: isMobileDemo ? "screenPlay" : "screenWelcome",
     v2Harness: useV2Harness,
   });
+  if (isMobileDemo) {
+    window.setTimeout(() => postStartV2DemoToIframe("route_demo_mobile"), 120);
+  }
 }
 
 async function routePremium(reason = "manual") {
@@ -20917,10 +20977,14 @@ function routeDemoShellNoAuth() {
   destroyDemoIframe("routeDemoShellNoAuth:pre");
   document.getElementById("btnDemoPremium")?.classList.add("hidden");
   document.getElementById("btnDemoExit")?.classList.add("hidden");
+  const isMobileDemo = document.documentElement?.dataset?.bcMobileEnv === "true";
   mountGameIframe("gameRootDemo", "demo", {
-    initialScreen: "screenWelcome",
+    initialScreen: isMobileDemo ? "screenPlay" : "screenWelcome",
     v2Harness: useV2Harness,
   });
+  if (isMobileDemo) {
+    window.setTimeout(() => postStartV2DemoToIframe("route_demo_shell_mobile"), 120);
+  }
 }
 
 function routeAuth() {

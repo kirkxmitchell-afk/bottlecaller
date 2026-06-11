@@ -10907,6 +10907,20 @@ function ensureProgLoaded() {
           return;
         }
 
+        if (msg.type === "start_v2_demo") {
+          try {
+            if (isV2DemoHarnessEnabled?.() || isV2DemoRequestedInFrame?.()) {
+              startV2HarnessWhenReady?.({ resetSession: true });
+              return;
+            }
+            showScreen?.("screenPlay");
+            window.startEncounter?.();
+          } catch (e) {
+            console.warn("[BC] start_v2_demo failed", e);
+          }
+          return;
+        }
+
         if (msg.type === "drill_config") {
           window.__BC_DRILL_CONFIG__ = msg.drill || null;
           console.log("[BC] drill_config applied ✅", window.__BC_DRILL_CONFIG__);
