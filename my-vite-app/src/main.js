@@ -9229,6 +9229,10 @@ function isV2DemoPlayActive() {
   );
 }
 
+function isDemoPlayStartRecent(ms = 60000) {
+  return Date.now() - Number(window.__BC_DEMO_PLAY_STARTED_AT__ || 0) < ms;
+}
+
 function buildGameIframeUrl({
   mode = "premium",
   showBack = false,
@@ -9503,6 +9507,8 @@ window.addEventListener("message", (event) => {
     if (demoFrame && event.source === demoFrame.contentWindow) {
       window.__BC_DEMO_PLAY_STARTED_AT__ = Date.now();
       window.__BC_DEMO_IFRAME_LAST_SCREEN__ = "screenPlay";
+      document.documentElement.dataset.bcV2Demo = "true";
+      demoFrame.dataset.bcDemoPlayStarted = "true";
       try { renderAppChrome?.(); } catch {}
     }
     return;
@@ -9525,6 +9531,19 @@ window.addEventListener("message", (event) => {
   const isDemoWelcome =
     String(data.mode || "").toLowerCase() === "demo" &&
     String(data.screenId || "") === "screenWelcome";
+  const isStaleDemoWelcomeAfterPlay =
+    isV2Demo &&
+    isDemoWelcome &&
+    isDemoPlayStartRecent() &&
+    window.__BC_DEMO_IFRAME_LAST_SCREEN__ === "screenPlay";
+  if (isStaleDemoWelcomeAfterPlay) {
+    setDebug({
+      step: "demo.height_ignored_after_play",
+      reason: data.reason || null,
+      time: new Date().toISOString(),
+    });
+    return;
+  }
   if (String(data.mode || "").toLowerCase() === "demo") {
     window.__BC_DEMO_IFRAME_LAST_SCREEN__ = String(data.screenId || "") || null;
     try { renderAppChrome?.(); } catch {}
