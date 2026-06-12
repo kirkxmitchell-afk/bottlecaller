@@ -23606,19 +23606,20 @@ function ensureProgLoaded() {
 
         const actionButtons = selectedGroup
           ? api.availableActionTypes(selectedGroup)
-              .map((type) => `
+              .map((type) => {
+                const choiceLine = getV2EncounterChoiceLine(encounter, selectedGroup, type);
+                const primaryLabel = choiceLine || v2HarnessLabel(type);
+                return `
                 <button
                   type="button"
                   class="btn btnChoice v2-action-card"
                   data-v2-action="${escapeHtml(String(type))}"
                 >
-                  <span class="v2-action-title">${escapeHtml(v2HarnessLabel(type))}</span>
-                  <span class="v2-action-subtitle">${escapeHtml(v2HarnessLabel(selectedGroup))}</span>
-                  <span class="v2-action-copy">${escapeHtml(
-                    getV2EncounterChoiceLine(encounter, selectedGroup, type)
-                  )}</span>
+                  <span class="v2-action-title">${escapeHtml(primaryLabel)}</span>
+                  <span class="v2-action-subtitle">${escapeHtml(v2HarnessLabel(type))}</span>
                 </button>
-              `)
+              `;
+              })
               .join("")
           : "";
 

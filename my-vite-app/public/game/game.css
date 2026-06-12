@@ -5391,8 +5391,8 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-card{
-    min-height: 68px;
-    padding: 6px 4px !important;
+    min-height: 76px;
+    padding: 8px 7px !important;
     border-radius: 12px !important;
     background:
       linear-gradient(180deg, rgba(72, 24, 39, 0.94), rgba(25, 14, 20, 0.96)),
@@ -5403,14 +5403,20 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-title{
-    font-size: 8.5px;
-    line-height: 1.1;
+    font-size: 10px;
+    line-height: 1.18;
     color: #fff4d7;
+    text-align: center;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-subtitle{
-    font-size: 7px;
+    font-size: 6.5px;
+    line-height: 1;
     color: rgba(255, 226, 172, 0.84);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-copy{
