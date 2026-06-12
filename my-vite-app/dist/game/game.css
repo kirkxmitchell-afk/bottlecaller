@@ -5791,8 +5791,8 @@ html, body{ height:100%; }
     display: block !important;
     position: relative !important;
     z-index: 5 !important;
-    margin-top: clamp(-148px, -18dvh, -108px) !important;
-    margin-bottom: max(48px, calc(env(safe-area-inset-bottom, 0px) + 34px)) !important;
+    margin-top: clamp(-168px, -20dvh, -126px) !important;
+    margin-bottom: max(62px, calc(env(safe-area-inset-bottom, 0px) + 48px)) !important;
     padding: 8px 6px max(8px, env(safe-area-inset-bottom, 0px)) !important;
     background:
       linear-gradient(180deg, rgba(9,10,14,0), rgba(9,10,14,0.56) 42%, rgba(9,10,14,0.92) 100%) !important;
