@@ -5468,10 +5468,10 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-group-button{
-    min-height: 26px;
-    padding: 3px 3px !important;
-    border-radius: 9px !important;
-    font-size: 8px !important;
+    min-height: 22px;
+    padding: 2px 3px !important;
+    border-radius: 8px !important;
+    font-size: 7.4px !important;
     letter-spacing: 0.04em;
   }
 
@@ -5483,9 +5483,9 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-card{
-    min-height: 48px;
-    padding: 4px 5px !important;
-    border-radius: 9px !important;
+    min-height: 42px;
+    padding: 3px 5px !important;
+    border-radius: 8px !important;
     background:
       linear-gradient(180deg, rgba(72, 24, 39, 0.94), rgba(25, 14, 20, 0.96)),
       rgba(34, 16, 23, 0.96) !important;
@@ -5495,8 +5495,8 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-title{
-    font-size: 8.7px;
-    line-height: 1.08;
+    font-size: 8.1px;
+    line-height: 1.05;
     color: #fff4d7;
     text-align: center;
     white-space: normal;
@@ -5504,7 +5504,7 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-subtitle{
-    font-size: 5.7px;
+    font-size: 5.4px;
     line-height: 1;
     color: rgba(255, 226, 172, 0.84);
     text-transform: uppercase;
@@ -5524,10 +5524,10 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-shell .button-row .btn{
-    min-height: 30px;
-    padding: 5px 8px !important;
-    border-radius: 10px !important;
-    font-size: 10px !important;
+    min-height: 26px;
+    padding: 3px 8px !important;
+    border-radius: 9px !important;
+    font-size: 9px !important;
     line-height: 1.1;
   }
 
@@ -5788,7 +5788,7 @@ html, body{ height:100%; }
 
   #bcShell.is-encounter-only,
   #encounterPanel[data-v2-layout="tier1"]{
-    padding-bottom: max(88px, calc(env(safe-area-inset-bottom, 0px) + 72px)) !important;
+    padding-bottom: max(132px, calc(env(safe-area-inset-bottom, 0px) + 112px)) !important;
   }
 
   #encounterPanel[data-v2-layout="tier1"] #stepContent{
@@ -5799,8 +5799,8 @@ html, body{ height:100%; }
     display: block !important;
     position: relative !important;
     z-index: 5 !important;
-    margin-top: clamp(-168px, -20dvh, -126px) !important;
-    margin-bottom: max(62px, calc(env(safe-area-inset-bottom, 0px) + 48px)) !important;
+    margin-top: clamp(-178px, -21dvh, -134px) !important;
+    margin-bottom: max(118px, calc(env(safe-area-inset-bottom, 0px) + 96px)) !important;
     padding: 8px 6px max(8px, env(safe-area-inset-bottom, 0px)) !important;
     background:
       linear-gradient(180deg, rgba(9,10,14,0), rgba(9,10,14,0.56) 42%, rgba(9,10,14,0.92) 100%) !important;
