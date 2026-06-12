@@ -5805,7 +5805,7 @@ html, body{ height:100%; }
     display: block !important;
     position: relative !important;
     z-index: 5 !important;
-    margin-top: clamp(-96px, -11dvh, -72px) !important;
+    margin-top: clamp(-112px, -13dvh, -84px) !important;
     margin-bottom: max(118px, calc(env(safe-area-inset-bottom, 0px) + 96px)) !important;
     padding: 8px 6px max(8px, env(safe-area-inset-bottom, 0px)) !important;
     background:
@@ -5814,6 +5814,21 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-shell{
+    pointer-events: auto !important;
+  }
+
+  #bcShell.is-encounter-only #bcHudTop{
+    position: fixed !important;
+    top: max(8px, env(safe-area-inset-top, 0px)) !important;
+    right: max(8px, env(safe-area-inset-right, 0px)) !important;
+    z-index: 50 !important;
+    width: auto !important;
+    max-width: none !important;
+    pointer-events: none !important;
+  }
+
+  #bcShell.is-encounter-only #bcHudTop .bc-actions,
+  #bcShell.is-encounter-only #btnBackHomeFromPlay{
     pointer-events: auto !important;
   }
 
