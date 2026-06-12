@@ -5468,10 +5468,10 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-group-button{
-    min-height: 32px;
-    padding: 4px 3px !important;
-    border-radius: 10px !important;
-    font-size: 9px !important;
+    min-height: 26px;
+    padding: 3px 3px !important;
+    border-radius: 9px !important;
+    font-size: 8px !important;
     letter-spacing: 0.04em;
   }
 
@@ -5483,9 +5483,9 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-card{
-    min-height: 60px;
-    padding: 6px 6px !important;
-    border-radius: 10px !important;
+    min-height: 48px;
+    padding: 4px 5px !important;
+    border-radius: 9px !important;
     background:
       linear-gradient(180deg, rgba(72, 24, 39, 0.94), rgba(25, 14, 20, 0.96)),
       rgba(34, 16, 23, 0.96) !important;
@@ -5495,8 +5495,8 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-title{
-    font-size: 9.5px;
-    line-height: 1.12;
+    font-size: 8.7px;
+    line-height: 1.08;
     color: #fff4d7;
     text-align: center;
     white-space: normal;
@@ -5504,7 +5504,7 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-subtitle{
-    font-size: 6px;
+    font-size: 5.7px;
     line-height: 1;
     color: rgba(255, 226, 172, 0.84);
     text-transform: uppercase;
@@ -5519,8 +5519,16 @@ html, body{ height:100%; }
     order: 3;
     display: grid;
     grid-template-columns: 1fr;
-    gap: 3px;
+    gap: 2px;
     margin-top: 0 !important;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-action-shell .button-row .btn{
+    min-height: 30px;
+    padding: 5px 8px !important;
+    border-radius: 10px !important;
+    font-size: 10px !important;
+    line-height: 1.1;
   }
 
   #encounterPanel[data-v2-layout="tier1"] #v2DemoCompletionCard{
