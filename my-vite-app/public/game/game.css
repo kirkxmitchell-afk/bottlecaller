@@ -5792,9 +5792,23 @@ html, body{ height:100%; }
     -webkit-overflow-scrolling: touch;
   }
 
-  #bcShell.is-encounter-only,
+  #bcShell.is-encounter-only{
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: auto auto !important;
+    grid-template-areas:
+      "hud"
+      "stage" !important;
+    gap: 4px !important;
+    padding: max(8px, env(safe-area-inset-top, 0px)) 8px max(132px, calc(env(safe-area-inset-bottom, 0px) + 112px)) !important;
+  }
+
   #encounterPanel[data-v2-layout="tier1"]{
     padding-bottom: max(132px, calc(env(safe-area-inset-bottom, 0px) + 112px)) !important;
+  }
+
+  #bcShell.is-encounter-only #bcStage{
+    grid-area: stage !important;
   }
 
   #encounterPanel[data-v2-layout="tier1"] #stepContent{
@@ -5805,7 +5819,7 @@ html, body{ height:100%; }
     display: block !important;
     position: relative !important;
     z-index: 5 !important;
-    margin-top: clamp(-112px, -13dvh, -84px) !important;
+    margin-top: clamp(-122px, -14dvh, -92px) !important;
     margin-bottom: max(118px, calc(env(safe-area-inset-bottom, 0px) + 96px)) !important;
     padding: 8px 6px max(8px, env(safe-area-inset-bottom, 0px)) !important;
     background:
@@ -5818,13 +5832,19 @@ html, body{ height:100%; }
   }
 
   #bcShell.is-encounter-only #bcHudTop{
-    position: fixed !important;
-    top: max(8px, env(safe-area-inset-top, 0px)) !important;
-    right: max(8px, env(safe-area-inset-right, 0px)) !important;
-    z-index: 50 !important;
+    grid-area: hud !important;
+    display: flex !important;
+    justify-content: flex-end !important;
+    justify-self: stretch !important;
+    position: relative !important;
+    top: auto !important;
+    right: auto !important;
+    z-index: 20 !important;
     width: auto !important;
     max-width: none !important;
-    pointer-events: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    pointer-events: auto !important;
   }
 
   #bcShell.is-encounter-only #bcHudTop .bc-actions,
