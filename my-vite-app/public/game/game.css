@@ -444,6 +444,13 @@ p { margin: 0; color: var(--muted); line-height: 1.5; }
   line-height: 1.45;
 }
 
+.v2-guidance-rule{
+  margin-top: 8px;
+  color: #fff4d7;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .v2-action-shell{
   width:100%;
   padding:14px;
@@ -5419,6 +5426,14 @@ html, body{ height:100%; }
     line-height: 1.14;
   }
 
+  #encounterPanel[data-v2-layout="tier1"] .v2-guidance-rule{
+    display: block;
+    margin-top: 2px;
+    color: #fff4d7;
+    font-size: 8px;
+    line-height: 1.14;
+  }
+
   #encounterPanel[data-v2-layout="tier1"] .v2-status-card{
     max-width: min(88vw, 360px);
     padding: 8px 10px;
@@ -5445,7 +5460,7 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-header{
-    order: 2;
+    order: 1;
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 3px;
@@ -5461,7 +5476,7 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-grid{
-    order: 1;
+    order: 2;
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 3px;
