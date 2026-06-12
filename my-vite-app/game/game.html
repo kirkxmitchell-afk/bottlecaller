@@ -23500,6 +23500,7 @@ function ensureProgLoaded() {
         const lesson = String(encounter?.lesson || "");
         const guidanceLine = "Read the table, choose the right interaction, and move the guest without creating friction.";
         const feedbackMeta = feedbackText === guidanceLine ? "" : feedbackText;
+        const showGuidanceCard = Number(snapshot.encounterOrdinal || 0) <= 1;
         const nextStepInstruction = getV2NextStepInstruction(snapshot);
         const progressNodes = Array.from({ length: Math.max(1, snapshot.encounterCount || 1) }, (_, index) => {
           const encounterNumber = index + 1;
@@ -23522,6 +23523,25 @@ function ensureProgLoaded() {
             : snapshot.progressMood === "ready"
               ? "green"
               : "yellow";
+        const stateGridHtml = `
+          <div class="v2-state-grid">
+            <div class="v2-state-card">
+              <div class="v2-state-label">Progress</div>
+              <div class="v2-state-value">${snapshot.progress}</div>
+              <div class="v2-state-meta">${escapeHtml(v2HarnessLabel(snapshot.progressMood))}</div>
+            </div>
+            <div class="v2-state-card">
+              <div class="v2-state-label">Friction</div>
+              <div class="v2-state-value">${snapshot.frustration}</div>
+              <div class="v2-state-meta">${escapeHtml(v2HarnessLabel(snapshot.frustrationMood))}</div>
+            </div>
+            <div class="v2-state-card">
+              <div class="v2-state-label">Authority</div>
+              <div class="v2-state-value">${snapshot.authorityDelta}</div>
+              <div class="v2-state-meta">${escapeHtml(outcome)}</div>
+            </div>
+          </div>
+        `;
         stepContent.innerHTML = `
           <section class="v2-play-shell">
             <div class="v2-hero-frame">
@@ -23538,10 +23558,13 @@ function ensureProgLoaded() {
                   </div>
                   <div class="v2-region-mark">SA</div>
                 </div>
-                <div class="v2-mood-pill">
-                  <div class="v2-mood-label">Table Mood</div>
-                  <div class="v2-mood-value">${escapeHtml(v2HarnessLabel(snapshot.progressMood))}</div>
-                  <div class="v2-mood-detail">${escapeHtml(moodDescriptor)}</div>
+                <div class="v2-top-metrics">
+                  ${stateGridHtml}
+                  <div class="v2-mood-pill">
+                    <div class="v2-mood-label">Table Mood</div>
+                    <div class="v2-mood-value">${escapeHtml(v2HarnessLabel(snapshot.progressMood))}</div>
+                    <div class="v2-mood-detail">${escapeHtml(moodDescriptor)}</div>
+                  </div>
                 </div>
               </div>
               <div class="v2-hero-bottom">
@@ -23560,23 +23583,7 @@ function ensureProgLoaded() {
                   </blockquote>
                 </div>
 
-                <div class="v2-state-grid">
-                  <div class="v2-state-card">
-                    <div class="v2-state-label">Progress</div>
-                    <div class="v2-state-value">${snapshot.progress}</div>
-                    <div class="v2-state-meta">${escapeHtml(v2HarnessLabel(snapshot.progressMood))}</div>
-                  </div>
-                  <div class="v2-state-card">
-                    <div class="v2-state-label">Friction</div>
-                    <div class="v2-state-value">${snapshot.frustration}</div>
-                    <div class="v2-state-meta">${escapeHtml(v2HarnessLabel(snapshot.frustrationMood))}</div>
-                  </div>
-                  <div class="v2-state-card">
-                    <div class="v2-state-label">Authority</div>
-                    <div class="v2-state-value">${snapshot.authorityDelta}</div>
-                    <div class="v2-state-meta">${escapeHtml(outcome)}</div>
-                  </div>
-                </div>
+                ${showGuidanceCard ? `
                 <div class="v2-guidance-card">
                   <div class="v2-guidance-label">What To Do Next</div>
                   <p class="v2-guidance-copy">${escapeHtml(nextStepInstruction)}</p>
@@ -23584,6 +23591,7 @@ function ensureProgLoaded() {
                   ${feedbackMeta ? `<div class="v2-guidance-meta">${escapeHtml(feedbackMeta)}</div>` : ""}
                   <div class="v2-guidance-meta">${escapeHtml(walkAwayHint)}</div>
                 </div>
+                ` : ""}
                 ${isTerminal ? `
                   <div class="v2-status-card">
                     <div><strong>Lesson:</strong> ${escapeHtml(lesson)}</div>
