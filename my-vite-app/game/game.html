@@ -23499,6 +23499,7 @@ function ensureProgLoaded() {
         const isFinalEncounter = isV2FinalDemoEncounter(snapshot);
         const lesson = String(encounter?.lesson || "");
         const guidanceLine = "Read the table, choose the right interaction, and move the guest without creating friction.";
+        const feedbackMeta = feedbackText === guidanceLine ? "" : feedbackText;
         const nextStepInstruction = getV2NextStepInstruction(snapshot);
         const progressNodes = Array.from({ length: Math.max(1, snapshot.encounterCount || 1) }, (_, index) => {
           const encounterNumber = index + 1;
@@ -23580,7 +23581,7 @@ function ensureProgLoaded() {
                   <div class="v2-guidance-label">What To Do Next</div>
                   <p class="v2-guidance-copy">${escapeHtml(nextStepInstruction)}</p>
                   <div class="v2-guidance-rule">${escapeHtml(guidanceLine)}</div>
-                  <div class="v2-guidance-meta">${escapeHtml(feedbackText)}</div>
+                  ${feedbackMeta ? `<div class="v2-guidance-meta">${escapeHtml(feedbackMeta)}</div>` : ""}
                   <div class="v2-guidance-meta">${escapeHtml(walkAwayHint)}</div>
                 </div>
                 ${isTerminal ? `
