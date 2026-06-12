@@ -5443,8 +5443,8 @@ html, body{ height:100%; }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-shell{
     display: grid;
-    gap: 3px;
-    padding: 5px 6px 6px;
+    gap: 2px;
+    padding: 4px 6px 5px;
     border: 1px solid rgba(245, 221, 175, 0.18);
     border-radius: 14px 14px 0 0;
     background:
@@ -5468,10 +5468,11 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-group-button{
-    min-height: 22px;
-    padding: 2px 3px !important;
+    min-height: 18px;
+    padding: 1px 3px !important;
     border-radius: 8px !important;
-    font-size: 7.4px !important;
+    font-size: 7px !important;
+    line-height: 1 !important;
     letter-spacing: 0.04em;
   }
 
@@ -5799,7 +5800,7 @@ html, body{ height:100%; }
     display: block !important;
     position: relative !important;
     z-index: 5 !important;
-    margin-top: clamp(-178px, -21dvh, -134px) !important;
+    margin-top: clamp(-130px, -15dvh, -96px) !important;
     margin-bottom: max(118px, calc(env(safe-area-inset-bottom, 0px) + 96px)) !important;
     padding: 8px 6px max(8px, env(safe-area-inset-bottom, 0px)) !important;
     background:
