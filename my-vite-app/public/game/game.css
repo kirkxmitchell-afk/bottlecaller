@@ -5304,11 +5304,31 @@ html, body{ height:100%; }
   #encounterPanel[data-v2-layout="tier1"] .v2-hero-bottom{
     left: 6px;
     right: 6px;
-    bottom: clamp(86px, 13dvh, 124px);
+    bottom: clamp(98px, 15dvh, 138px);
     gap: 4px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-scene-text{
+    display: block;
+    max-width: min(88vw, 360px);
+    padding: 8px 10px;
+    border-radius: 14px;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-scene-label,
+  #encounterPanel[data-v2-layout="tier1"] .v2-state-label,
+  #encounterPanel[data-v2-layout="tier1"] .v2-guidance-label{
+    font-size: 6.5px;
+    letter-spacing: 0.06em;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-scene-copy{
+    margin-top: 4px;
+    font-size: 9.5px;
+    line-height: 1.25;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-clue-list{
     display: none;
   }
 
@@ -5346,9 +5366,62 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-state-grid,
-  #encounterPanel[data-v2-layout="tier1"] .v2-guidance-card,
+  #encounterPanel[data-v2-layout="tier1"] .v2-guidance-card{
+    display: grid !important;
+  }
+
   #encounterPanel[data-v2-layout="tier1"] .v2-status-card{
-    display: none !important;
+    display: block !important;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-state-grid{
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+    max-width: min(88vw, 360px);
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-state-card{
+    padding: 7px 6px;
+    border-radius: 12px;
+    text-align: center;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-state-value{
+    margin-top: 3px;
+    font-size: 18px;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-state-meta{
+    margin-top: 2px;
+    font-size: 7px;
+    line-height: 1.05;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-guidance-card{
+    max-width: min(88vw, 360px);
+    margin-top: 0;
+    padding: 8px 10px;
+    border-radius: 14px;
+    gap: 3px;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-guidance-copy{
+    margin-top: 3px;
+    font-size: 9.5px;
+    line-height: 1.25;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-guidance-meta{
+    margin-top: 2px;
+    font-size: 8px;
+    line-height: 1.22;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-status-card{
+    max-width: min(88vw, 360px);
+    padding: 8px 10px;
+    border-radius: 14px;
+    font-size: 9px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-shell{
