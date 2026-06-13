@@ -1,4 +1,8 @@
 import type {
+  AskType,
+  CommitType,
+  ChoiceQuality,
+  EncounterGuestResponseMap,
   EncounterReactionMap,
   EncounterV2,
   ProductCategory,
@@ -18,12 +22,23 @@ function makeReactionMap(
   };
 }
 
+function makeGuestResponseMap(
+  partial: EncounterGuestResponseMap = {},
+): EncounterGuestResponseMap {
+  return {
+    ask: partial.ask || {},
+    recommend: partial.recommend || {},
+    commit: partial.commit || {},
+  };
+}
+
 function makeEncounter(seed: EncounterSeed): EncounterV2 {
   return {
     ...seed,
     visualClues: Array.isArray(seed.visualClues) ? seed.visualClues : [],
     allowedProductIds: Array.isArray(seed.allowedProductIds) ? seed.allowedProductIds : [],
     guestReactions: makeReactionMap(seed.guestReactions),
+    guestResponses: makeGuestResponseMap(seed.guestResponses),
     foodOrder: seed.foodOrder || null,
   };
 }
@@ -90,6 +105,583 @@ function buildCommonChoiceLines() {
 
 const COMMON_LINES = buildCommonChoiceLines();
 
+type ResponseLineMap<T extends string> = Record<T, { text: string; quality: ChoiceQuality }>;
+
+function makeResponseSet(args: {
+  ask: ResponseLineMap<AskType>;
+  recommend: ResponseLineMap<RecommendAngle>;
+  commit: ResponseLineMap<CommitType>;
+}): EncounterGuestResponseMap {
+  return args;
+}
+
+function buildGuestResponsesForFamily(family: string): EncounterGuestResponseMap {
+  const packs: Record<string, EncounterGuestResponseMap> = {
+    tourist: makeResponseSet({
+      ask: {
+        preference: {
+          text: "Usually French reds, but we wanted to try something different while we're here.",
+          quality: "good",
+        },
+        occasion: {
+          text: "No, not really. We're just visiting and wanted dinner to feel a bit local.",
+          quality: "poor",
+        },
+        experience: {
+          text: "Honestly, not really. That's exactly why we wanted your help.",
+          quality: "optimal",
+        },
+        budget: {
+          text: "Er... price isn't really the main thing. We just wanted to try something local.",
+          quality: "disaster",
+        },
+      },
+      recommend: {
+        flavour: {
+          text: "That sounds nice, but what makes it South African?",
+          quality: "good",
+        },
+        story: {
+          text: "That sounds exactly like what we were hoping for.",
+          quality: "optimal",
+        },
+        value: {
+          text: "Er... we're not really choosing based on price tonight.",
+          quality: "disaster",
+        },
+        confidence: {
+          text: "Okay... but why that one for us?",
+          quality: "poor",
+        },
+      },
+      commit: {
+        recommendation: {
+          text: "Perfect. Let's do that.",
+          quality: "optimal",
+        },
+        assumption: {
+          text: "Alright, that sounds good.",
+          quality: "good",
+        },
+        celebration: {
+          text: "Maybe... but we're not really celebrating anything.",
+          quality: "poor",
+        },
+        value: {
+          text: "No, we said we wanted something local.",
+          quality: "disaster",
+        },
+      },
+    }),
+    skeptic: makeResponseSet({
+      ask: {
+        preference: {
+          text: "Good. I usually like something elegant, not heavy.",
+          quality: "optimal",
+        },
+        occasion: {
+          text: "Dinner. Nothing dramatic. I just want the choice to make sense.",
+          quality: "good",
+        },
+        experience: {
+          text: "I've had enough wine to know when someone is guessing.",
+          quality: "poor",
+        },
+        budget: {
+          text: "Er... that is exactly the sort of question I was hoping to avoid.",
+          quality: "disaster",
+        },
+      },
+      recommend: {
+        flavour: {
+          text: "That might work. What makes it more elegant than the others?",
+          quality: "good",
+        },
+        story: {
+          text: "That feels more considered. Keep going.",
+          quality: "optimal",
+        },
+        value: {
+          text: "No, I did not ask for the bargain bottle.",
+          quality: "disaster",
+        },
+        confidence: {
+          text: "Maybe. Confidence is fine, but I need a reason.",
+          quality: "poor",
+        },
+      },
+      commit: {
+        recommendation: {
+          text: "Alright. That sounds like you actually read the table.",
+          quality: "optimal",
+        },
+        assumption: {
+          text: "I guess that could work. Let's try it.",
+          quality: "good",
+        },
+        celebration: {
+          text: "That sounds a bit theatrical for what I asked.",
+          quality: "poor",
+        },
+        value: {
+          text: "No. You're still making this about price.",
+          quality: "disaster",
+        },
+      },
+    }),
+    regular: makeResponseSet({
+      ask: {
+        preference: {
+          text: "Exactly. You remember we like a red that is easy but not boring.",
+          quality: "optimal",
+        },
+        occasion: {
+          text: "Nothing special. Just our usual kind of night.",
+          quality: "poor",
+        },
+        experience: {
+          text: "You know us by now. We don't need the basics again.",
+          quality: "good",
+        },
+        budget: {
+          text: "Um... same sort of spend as usual, I suppose.",
+          quality: "poor",
+        },
+      },
+      recommend: {
+        flavour: {
+          text: "That sounds like us.",
+          quality: "optimal",
+        },
+        story: {
+          text: "We don't need the whole story tonight.",
+          quality: "disaster",
+        },
+        value: {
+          text: "Maybe, but don't make it feel like we're downgrading.",
+          quality: "poor",
+        },
+        confidence: {
+          text: "If you think it is in our lane, we'll listen.",
+          quality: "good",
+        },
+      },
+      commit: {
+        recommendation: {
+          text: "Yes, that is the one.",
+          quality: "optimal",
+        },
+        assumption: {
+          text: "Alright, if you think that keeps it familiar.",
+          quality: "good",
+        },
+        celebration: {
+          text: "Not really a celebration tonight. Just keep it comfortable.",
+          quality: "poor",
+        },
+        value: {
+          text: "Er... we did not ask for the value pick.",
+          quality: "disaster",
+        },
+      },
+    }),
+    family: makeResponseSet({
+      ask: {
+        preference: {
+          text: "We are flexible, as long as everyone at the table can enjoy it.",
+          quality: "good",
+        },
+        occasion: {
+          text: "Just family dinner. Nothing too fancy.",
+          quality: "poor",
+        },
+        experience: {
+          text: "We know enough to enjoy it, but not enough to gamble on something strange.",
+          quality: "good",
+        },
+        budget: {
+          text: "Yes, exactly. We don't mind spending, we just want it to make sense.",
+          quality: "optimal",
+        },
+      },
+      recommend: {
+        flavour: {
+          text: "That sounds easy enough for everyone.",
+          quality: "good",
+        },
+        story: {
+          text: "Um... we don't really need the backstory if it costs more.",
+          quality: "disaster",
+        },
+        value: {
+          text: "That's the kind of answer we were looking for.",
+          quality: "optimal",
+        },
+        confidence: {
+          text: "Maybe. Is it actually worth it for the table?",
+          quality: "poor",
+        },
+      },
+      commit: {
+        recommendation: {
+          text: "Alright, that sounds fair.",
+          quality: "good",
+        },
+        assumption: {
+          text: "I guess so, as long as it is not a big jump.",
+          quality: "poor",
+        },
+        celebration: {
+          text: "No, it's not that kind of dinner.",
+          quality: "disaster",
+        },
+        value: {
+          text: "Great. Let's go with that.",
+          quality: "optimal",
+        },
+      },
+    }),
+    date: makeResponseSet({
+      ask: {
+        preference: {
+          text: "Something smooth would be nice. Nothing too heavy.",
+          quality: "good",
+        },
+        occasion: {
+          text: "Yes, exactly. Something that fits the mood without making it a whole production.",
+          quality: "optimal",
+        },
+        experience: {
+          text: "We know a little, but we don't want to make this too technical.",
+          quality: "poor",
+        },
+        budget: {
+          text: "Er... that is not really the feeling we were going for.",
+          quality: "disaster",
+        },
+      },
+      recommend: {
+        flavour: {
+          text: "That sounds elegant but easy.",
+          quality: "optimal",
+        },
+        story: {
+          text: "That sounds nice, as long as it doesn't become a lecture.",
+          quality: "good",
+        },
+        value: {
+          text: "We're not really trying to make this about value.",
+          quality: "disaster",
+        },
+        confidence: {
+          text: "Maybe... but keep it relaxed.",
+          quality: "poor",
+        },
+      },
+      commit: {
+        recommendation: {
+          text: "That feels right. Let's do that.",
+          quality: "optimal",
+        },
+        assumption: {
+          text: "Alright, that sounds nice.",
+          quality: "good",
+        },
+        celebration: {
+          text: "I guess, but maybe not too showy.",
+          quality: "poor",
+        },
+        value: {
+          text: "No, we don't want the evening to feel like a price decision.",
+          quality: "disaster",
+        },
+      },
+    }),
+    private_table: makeResponseSet({
+      ask: {
+        preference: {
+          text: "Light and easy would be good.",
+          quality: "optimal",
+        },
+        occasion: {
+          text: "We're really just trying to keep it quiet tonight.",
+          quality: "disaster",
+        },
+        experience: {
+          text: "Um... we don't need much detail. Something simple is fine.",
+          quality: "poor",
+        },
+        budget: {
+          text: "I guess just keep it sensible.",
+          quality: "good",
+        },
+      },
+      recommend: {
+        flavour: {
+          text: "That sounds simple enough. Thank you.",
+          quality: "optimal",
+        },
+        story: {
+          text: "Not really... we don't need the story tonight.",
+          quality: "poor",
+        },
+        value: {
+          text: "Fine, as long as it is easy.",
+          quality: "good",
+        },
+        confidence: {
+          text: "Okay, but we do not need a big sell.",
+          quality: "poor",
+        },
+      },
+      commit: {
+        recommendation: {
+          text: "Yes, that is fine.",
+          quality: "optimal",
+        },
+        assumption: {
+          text: "Please do not rush us.",
+          quality: "disaster",
+        },
+        celebration: {
+          text: "No, that's too much for us tonight.",
+          quality: "disaster",
+        },
+        value: {
+          text: "Alright, that should be okay.",
+          quality: "good",
+        },
+      },
+    }),
+    celebration: makeResponseSet({
+      ask: {
+        preference: {
+          text: "Something everyone can enjoy, but still special.",
+          quality: "good",
+        },
+        occasion: {
+          text: "Exactly. We just want the right bottle for tonight.",
+          quality: "optimal",
+        },
+        experience: {
+          text: "We're not really trying to turn this into homework.",
+          quality: "disaster",
+        },
+        budget: {
+          text: "Maybe... but don't make the birthday feel cheap.",
+          quality: "poor",
+        },
+      },
+      recommend: {
+        flavour: {
+          text: "That sounds nice. Will it feel festive enough?",
+          quality: "good",
+        },
+        story: {
+          text: "Cute, but can we keep the night moving?",
+          quality: "poor",
+        },
+        value: {
+          text: "Er... it's her birthday. We're not starting with value.",
+          quality: "disaster",
+        },
+        confidence: {
+          text: "Perfect. That's the kind of lead we needed.",
+          quality: "optimal",
+        },
+      },
+      commit: {
+        recommendation: {
+          text: "Yes, let's do it.",
+          quality: "good",
+        },
+        assumption: {
+          text: "Alright, bring it. We trust you.",
+          quality: "good",
+        },
+        celebration: {
+          text: "Yes. That's the bottle.",
+          quality: "optimal",
+        },
+        value: {
+          text: "No, don't make this about the spend.",
+          quality: "disaster",
+        },
+      },
+    }),
+    business_table: makeResponseSet({
+      ask: {
+        preference: {
+          text: "Something polished but easy for everyone.",
+          quality: "good",
+        },
+        occasion: {
+          text: "Business dinner. Something easy for everyone to agree on.",
+          quality: "optimal",
+        },
+        experience: {
+          text: "We do not need a wine lesson.",
+          quality: "disaster",
+        },
+        budget: {
+          text: "Um... just keep it appropriate.",
+          quality: "poor",
+        },
+      },
+      recommend: {
+        flavour: {
+          text: "Sounds fine, but can you land the decision?",
+          quality: "poor",
+        },
+        story: {
+          text: "Maybe, but keep it brief.",
+          quality: "good",
+        },
+        value: {
+          text: "Not really the point at this table.",
+          quality: "disaster",
+        },
+        confidence: {
+          text: "Good. That is the kind of clean answer we needed.",
+          quality: "optimal",
+        },
+      },
+      commit: {
+        recommendation: {
+          text: "That works. Bring that.",
+          quality: "good",
+        },
+        assumption: {
+          text: "Yes. Please bring that.",
+          quality: "optimal",
+        },
+        celebration: {
+          text: "No, this is not a celebration table.",
+          quality: "disaster",
+        },
+        value: {
+          text: "Maybe, but do not make it sound like a compromise.",
+          quality: "poor",
+        },
+      },
+    }),
+    collector: makeResponseSet({
+      ask: {
+        preference: {
+          text: "I like bottles that feel specific to where they come from.",
+          quality: "optimal",
+        },
+        occasion: {
+          text: "No special occasion. I just want something with a point of view.",
+          quality: "good",
+        },
+        experience: {
+          text: "I know the basics. You can skip those.",
+          quality: "poor",
+        },
+        budget: {
+          text: "That is not really the filter I am using.",
+          quality: "disaster",
+        },
+      },
+      recommend: {
+        flavour: {
+          text: "Maybe. What makes it more than just tasty?",
+          quality: "good",
+        },
+        story: {
+          text: "Good. That is actually interesting.",
+          quality: "optimal",
+        },
+        value: {
+          text: "No, I am not asking for the value pick.",
+          quality: "disaster",
+        },
+        confidence: {
+          text: "Confident is fine, but why that bottle?",
+          quality: "poor",
+        },
+      },
+      commit: {
+        recommendation: {
+          text: "Yes. Let's try it.",
+          quality: "optimal",
+        },
+        assumption: {
+          text: "Alright, if that is the most specific choice.",
+          quality: "good",
+        },
+        celebration: {
+          text: "Not really. I am not looking for theatre.",
+          quality: "poor",
+        },
+        value: {
+          text: "No, value is not what makes this interesting.",
+          quality: "disaster",
+        },
+      },
+    }),
+    crew: makeResponseSet({
+      ask: {
+        preference: {
+          text: "Something reliable. We have an early start.",
+          quality: "good",
+        },
+        occasion: {
+          text: "Nothing special. Just a good bottle before we head out tomorrow.",
+          quality: "poor",
+        },
+        experience: {
+          text: "We know the place. Just help us choose well.",
+          quality: "poor",
+        },
+        budget: {
+          text: "Exactly. We want the smart spend, not the show-off bottle.",
+          quality: "optimal",
+        },
+      },
+      recommend: {
+        flavour: {
+          text: "That sounds easy enough. Is it the smart one?",
+          quality: "good",
+        },
+        story: {
+          text: "We do not need the tourist story tonight.",
+          quality: "disaster",
+        },
+        value: {
+          text: "That is the answer we wanted.",
+          quality: "optimal",
+        },
+        confidence: {
+          text: "Maybe, but don't overcomplicate it.",
+          quality: "poor",
+        },
+      },
+      commit: {
+        recommendation: {
+          text: "Alright, that works.",
+          quality: "good",
+        },
+        assumption: {
+          text: "I guess, as long as it is the sensible choice.",
+          quality: "poor",
+        },
+        celebration: {
+          text: "No, we're not trying to make a night of it.",
+          quality: "disaster",
+        },
+        value: {
+          text: "Perfect. Bring that one.",
+          quality: "optimal",
+        },
+      },
+    }),
+  };
+
+  return packs[family] || packs.tourist;
+}
+
 function makeTier1Encounter(args: {
   id: string;
   title: string;
@@ -110,6 +702,7 @@ function makeTier1Encounter(args: {
   targetRecommendAngle: RecommendAngle;
   allowedProductIds?: string[];
   reactions?: EncounterReactionMap;
+  guestResponses?: EncounterGuestResponseMap;
 }): EncounterV2 {
   return makeEncounter({
     id: args.id,
@@ -143,6 +736,7 @@ function makeTier1Encounter(args: {
       commit: { ...COMMON_LINES.commit },
     },
     guestReactions: makeReactionMap(args.reactions),
+    guestResponses: makeGuestResponseMap(args.guestResponses || buildGuestResponsesForFamily(args.family)),
     serviceStage: args.serviceStage || "opening",
     targetProductId: args.targetProductId || null,
     targetProductCategory: args.targetProductCategory || null,
@@ -201,6 +795,100 @@ export const TIER1_VERTICAL_SLICE_ENCOUNTERS: EncounterV2[] = [
   }),
   makeTier1Encounter({
     id: "encounter_v2_002",
+    title: "The Skeptic",
+    family: "skeptic",
+    modifier: "testing_confidence",
+    hiddenPressure: "needs_to_feel_seen",
+    masterProfile: "recognition",
+    variant: null,
+    scene:
+      "A guest keeps the list open but watches you more than the page, testing whether you actually understand the table.",
+    visualClues: [
+      "They pause before answering and study your confidence.",
+      "They have marked a few familiar-looking bottles.",
+      "Their tone is controlled, not confused.",
+    ],
+    verbalClue: "I know what I like, so don't just give me the usual pitch.",
+    contextClue: "They want recognition and relevance before they will trust a recommendation.",
+    redHerring: "Their confidence can tempt you into trying to prove yourself instead of first showing that you understand them.",
+    lesson:
+      "Skeptical guests do not need a speech. They need one precise read that proves you are listening.",
+    targetProductId: "product_002",
+    targetRecommendAngle: "story",
+    allowedProductIds: ["product_001", "product_002", "product_003"],
+    reactions: {
+      ask: {
+        preference: {
+          optimal: "Good. I usually like something elegant, not heavy.",
+        },
+        budget: {
+          disaster: "That is exactly the sort of waiter question I was hoping to avoid.",
+        },
+      },
+      recommend: {
+        story: {
+          optimal: "That feels more considered. Keep going.",
+        },
+        value: {
+          disaster: "I did not ask for the bargain bottle.",
+        },
+      },
+      commit: {
+        recommendation: {
+          optimal: "Alright. That sounds like you actually read the table.",
+        },
+      },
+    },
+  }),
+  makeTier1Encounter({
+    id: "encounter_v2_003",
+    title: "The Regular",
+    family: "regular",
+    modifier: "habit_driven",
+    hiddenPressure: "wants_comfort_without_boredom",
+    masterProfile: "recognition",
+    variant: "comfort",
+    scene:
+      "A regular sits down comfortably and glances at the list, clearly expecting the evening to feel familiar.",
+    visualClues: [
+      "They greet the room with ease.",
+      "They look at the same section of the wine list first.",
+      "They seem open, but only if the choice still feels safe.",
+    ],
+    verbalClue: "You know us. Something in our lane, maybe with a little change.",
+    contextClue: "They want comfort first and novelty second.",
+    redHerring: "Because they are regulars, you may overplay story or surprise when the safest move is familiar flavour.",
+    lesson:
+      "Regulars reward recognition. The best move is to anchor them in what they already trust, then offer a small lift.",
+    targetProductId: "product_003",
+    targetRecommendAngle: "flavour",
+    allowedProductIds: ["product_001", "product_002", "product_003"],
+    reactions: {
+      ask: {
+        preference: {
+          optimal: "Exactly. You remember we like a red that is easy but not boring.",
+        },
+        occasion: {
+          poor: "Nothing special. Just our usual kind of night.",
+        },
+      },
+      recommend: {
+        flavour: {
+          optimal: "That sounds like us.",
+        },
+        story: {
+          disaster: "We do not need the whole story tonight.",
+        },
+      },
+      commit: {
+        recommendation: {
+          optimal: "Yes, that is the one.",
+        },
+      },
+    },
+  }),
+  makeTier1Encounter({
+    id: "encounter_v2_004",
     title: "The Family Bill",
     family: "family",
     modifier: "price_awareness",
@@ -244,7 +932,104 @@ export const TIER1_VERTICAL_SLICE_ENCOUNTERS: EncounterV2[] = [
     },
   }),
   makeTier1Encounter({
-    id: "encounter_v2_003",
+    id: "encounter_v2_005",
+    title: "The First Date",
+    family: "date",
+    modifier: "emotional_status",
+    hiddenPressure: "wants_to_signal_taste_without_pressure",
+    masterProfile: "recognition",
+    variant: "emotional_status",
+    scene:
+      "Two guests sit close together, smiling but careful, both wanting the bottle to support the moment without making it awkward.",
+    visualClues: [
+      "They look at each other before answering.",
+      "The table feels warm, but slightly self-conscious.",
+      "They want the choice to feel tasteful, not flashy.",
+    ],
+    verbalClue: "We want something nice, but not too serious.",
+    contextClue: "The bottle needs to help the date feel easy and considered.",
+    redHerring: "A big premium push may look impressive but could make the moment feel performative.",
+    lesson:
+      "First-date tables need emotional calibration. The right bottle signals taste while keeping the pressure low.",
+    targetProductId: "product_002",
+    targetRecommendAngle: "flavour",
+    allowedProductIds: ["product_001", "product_002", "product_003"],
+    reactions: {
+      ask: {
+        occasion: {
+          optimal: "Yes, exactly. Something that fits the mood without making it a whole production.",
+        },
+        budget: {
+          disaster: "That is not really the feeling we were going for.",
+        },
+      },
+      recommend: {
+        flavour: {
+          optimal: "That sounds elegant but easy.",
+        },
+        value: {
+          disaster: "We are not really trying to make this about value.",
+        },
+      },
+      commit: {
+        recommendation: {
+          optimal: "That feels right. Let's do that.",
+        },
+      },
+    },
+  }),
+  makeTier1Encounter({
+    id: "encounter_v2_006",
+    title: "We're Fine, Thanks",
+    family: "private_table",
+    modifier: "low_contact",
+    hiddenPressure: "protecting_space",
+    masterProfile: "reassurance",
+    variant: "privacy",
+    scene:
+      "A quiet table keeps conversation low and gives short answers when approached.",
+    visualClues: [
+      "Menus stay low and close to the table.",
+      "They avoid inviting a long explanation.",
+      "Their body language asks for space, not performance.",
+    ],
+    verbalClue: "We're fine, thanks. Maybe just something easy.",
+    contextClue: "They may still buy, but only if you respect the boundary.",
+    redHerring: "The short answer can tempt you to push harder for information, which will create friction.",
+    lesson:
+      "Some tables reward restraint. A concise flavour fit protects the experience better than a full sales routine.",
+    targetProductId: "product_001",
+    targetRecommendAngle: "flavour",
+    allowedProductIds: ["product_001", "product_002", "product_003"],
+    reactions: {
+      ask: {
+        preference: {
+          optimal: "Light and easy would be good.",
+        },
+        occasion: {
+          disaster: "We are really just trying to keep it quiet tonight.",
+        },
+      },
+      recommend: {
+        flavour: {
+          optimal: "That sounds simple enough. Thank you.",
+        },
+        confidence: {
+          poor: "Okay, but we do not need a big sell.",
+        },
+      },
+      commit: {
+        recommendation: {
+          optimal: "Yes, that is fine.",
+        },
+        assumption: {
+          disaster: "Please do not rush us.",
+        },
+      },
+    },
+  }),
+  makeTier1Encounter({
+    id: "encounter_v2_007",
     title: "The Birthday Table",
     family: "celebration",
     modifier: "birthday",
@@ -287,8 +1072,152 @@ export const TIER1_VERTICAL_SLICE_ENCOUNTERS: EncounterV2[] = [
       },
     },
   }),
+  makeTier1Encounter({
+    id: "encounter_v2_008",
+    title: "The Mining Indaba Table",
+    family: "business_table",
+    modifier: "decision_hierarchy",
+    hiddenPressure: "needs_decisive_social_lead",
+    masterProfile: "recognition",
+    variant: "decision_hierarchy",
+    scene:
+      "A business table has several voices, but one quiet guest is clearly setting the direction.",
+    visualClues: [
+      "Others glance toward one guest before agreeing.",
+      "The table wants momentum but not a loud sales moment.",
+      "The decision-maker is calm and time-aware.",
+    ],
+    verbalClue: "We need something that works for the table. Keep it straightforward.",
+    contextClue: "The table needs hierarchy read correctly: lead the decision without embarrassing the decision-maker.",
+    redHerring: "The loudest guest may not be the buyer. Following them can lose authority with the real decision-maker.",
+    lesson:
+      "Decision-hierarchy tables reward calm confidence. Read who matters, then land the choice clearly.",
+    targetProductId: "product_003",
+    targetRecommendAngle: "confidence",
+    allowedProductIds: ["product_001", "product_002", "product_003"],
+    reactions: {
+      ask: {
+        occasion: {
+          optimal: "Business dinner. Something easy for everyone to agree on.",
+        },
+        experience: {
+          disaster: "We do not need a wine lesson.",
+        },
+      },
+      recommend: {
+        confidence: {
+          optimal: "Good. That is the kind of clean answer we needed.",
+        },
+        flavour: {
+          poor: "Sounds fine, but can you land the decision?",
+        },
+      },
+      commit: {
+        assumption: {
+          optimal: "Yes. Please bring that.",
+        },
+      },
+    },
+  }),
+  makeTier1Encounter({
+    id: "encounter_v2_009",
+    title: "The Collector",
+    family: "collector",
+    modifier: "expertise",
+    hiddenPressure: "wants_relevance_not_basics",
+    masterProfile: "recognition",
+    variant: "expertise",
+    scene:
+      "A guest scans the list quickly, clearly recognizing producers and regions before looking up at you.",
+    visualClues: [
+      "They move past entry-level descriptions quickly.",
+      "They notice region and producer details.",
+      "They want a meaningful recommendation, not a beginner explanation.",
+    ],
+    verbalClue: "Anything on here with a bit of a point of view?",
+    contextClue: "They want expertise that is relevant and concise.",
+    redHerring: "Their knowledge may tempt you to over-explain, but the stronger move is to offer a precise story.",
+    lesson:
+      "Collectors reward relevance. Give them one reason the bottle matters instead of a generic premium pitch.",
+    targetProductId: "product_001",
+    targetRecommendAngle: "story",
+    allowedProductIds: ["product_001", "product_002", "product_003"],
+    reactions: {
+      ask: {
+        preference: {
+          optimal: "I like bottles that feel specific to where they come from.",
+        },
+        budget: {
+          disaster: "That is not really the filter I am using.",
+        },
+      },
+      recommend: {
+        story: {
+          optimal: "Good. That is actually interesting.",
+        },
+        confidence: {
+          poor: "Confident is fine, but why that bottle?",
+        },
+      },
+      commit: {
+        recommendation: {
+          optimal: "Yes. Let's try it.",
+        },
+      },
+    },
+  }),
+  makeTier1Encounter({
+    id: "encounter_v2_010",
+    title: "The Layover Crew",
+    family: "crew",
+    modifier: "returning_guests",
+    hiddenPressure: "smart_value_with_familiarity",
+    masterProfile: "recognition",
+    variant: "smart_value",
+    scene:
+      "A relaxed crew table has been here before and wants a reliable bottle before an early flight.",
+    visualClues: [
+      "They are comfortable in the room and move quickly.",
+      "They compare value more than status.",
+      "They want a bottle that feels familiar, practical, and still good.",
+    ],
+    verbalClue: "We've been here before. What's the smart bottle tonight?",
+    contextClue: "They want to feel like returning guests who know how to spend well.",
+    redHerring: "Because they are experienced, you may chase novelty when they mainly want a smart reliable answer.",
+    lesson:
+      "Returning value-aware guests want recognition and practical confidence. The right answer makes them feel savvy.",
+    targetProductId: "product_003",
+    targetRecommendAngle: "value",
+    allowedProductIds: ["product_001", "product_002", "product_003"],
+    reactions: {
+      ask: {
+        budget: {
+          optimal: "Exactly. We want the smart spend, not the show-off bottle.",
+        },
+        experience: {
+          poor: "We know the place. Just help us choose well.",
+        },
+      },
+      recommend: {
+        value: {
+          optimal: "That is the answer we wanted.",
+        },
+        story: {
+          disaster: "We do not need the tourist story tonight.",
+        },
+      },
+      commit: {
+        value: {
+          optimal: "Perfect. Bring that one.",
+        },
+      },
+    },
+  }),
 ];
 
-export function getTier1VerticalSliceEncounters(): EncounterV2[] {
-  return TIER1_VERTICAL_SLICE_ENCOUNTERS.slice();
+export function getTier1VerticalSliceEncounters(limit = 3): EncounterV2[] {
+  const safeLimit = Number.isFinite(limit) && limit > 0
+    ? Math.min(TIER1_VERTICAL_SLICE_ENCOUNTERS.length, Math.floor(limit))
+    : 3;
+  return TIER1_VERTICAL_SLICE_ENCOUNTERS.slice(0, safeLimit);
 }

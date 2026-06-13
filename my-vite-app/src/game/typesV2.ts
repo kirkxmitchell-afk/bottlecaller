@@ -125,6 +125,17 @@ export interface EncounterReactionMap {
   commit?: Partial<Record<CommitType, Partial<Record<ChoiceQuality, string>>>>;
 }
 
+export interface GuestResponse {
+  text: string;
+  quality?: ChoiceQuality;
+}
+
+export interface EncounterGuestResponseMap {
+  ask?: Partial<Record<AskType, GuestResponse>>;
+  recommend?: Partial<Record<RecommendAngle, GuestResponse>>;
+  commit?: Partial<Record<CommitType, GuestResponse>>;
+}
+
 export interface EncounterV2 {
   id: string;
   title: string;
@@ -147,6 +158,7 @@ export interface EncounterV2 {
   rewards: EncounterRewards;
   choiceLines: EncounterChoiceLines;
   guestReactions: EncounterReactionMap;
+  guestResponses?: EncounterGuestResponseMap;
   serviceStage: ServiceStage;
   foodOrder?: FoodOrder | null;
   targetProductId?: string | null;
@@ -219,6 +231,8 @@ export interface TurnHistoryItem {
   frustrationDelta: number;
   resultingProgress: number;
   resultingFrustration: number;
+  mistakeDelta: number;
+  resultingMistakeCount: number;
   reaction: string;
 }
 
@@ -230,6 +244,7 @@ export interface GameStateV2 {
   progressMood: "guarded" | "warming_up" | "engaged" | "ready";
   frustrationMood: "normal" | "resistant" | "critical_resistance";
   walkAwayUnlocked: boolean;
+  mistakeCount: number;
   outcome: EncounterOutcome | null;
   authorityDelta: number;
   turnCount: number;
@@ -240,11 +255,13 @@ export interface ChoiceEvaluationResult {
   quality: ChoiceQuality;
   progressDelta: number;
   frustrationDelta: number;
+  mistakeDelta: number;
 }
 
 export interface ApplyChoiceResult extends ChoiceEvaluationResult {
   progress: number;
   frustration: number;
+  mistakeCount: number;
   progressMood: GameStateV2["progressMood"];
   frustrationMood: GameStateV2["frustrationMood"];
   walkAwayUnlocked: boolean;

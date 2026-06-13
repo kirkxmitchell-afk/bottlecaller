@@ -1368,6 +1368,39 @@ const appState = {
   invites: [],
 };
 
+const LOCAL_GROUP_MANAGER_EMAILS = new Set([
+  "jason.huntly.grobler@gmail.com",
+]);
+
+function isLocalGroupManagerEmail(email) {
+  return LOCAL_GROUP_MANAGER_EMAILS.has(String(email || "").trim().toLowerCase());
+}
+
+function isLocalGroupManagerProfile(profile = null) {
+  return !!profile?.__local_group_manager_override;
+}
+
+function applyLocalProfileOverrides(profile = null, sessionUser = null) {
+  if (!isLocalGroupManagerEmail(sessionUser?.email)) return profile;
+
+  const userId = profile?.user_id || sessionUser?.id || null;
+  return {
+    ...(profile || {}),
+    user_id: userId,
+    role: "group_manager",
+    display_name:
+      profile?.display_name ||
+      sessionUser?.user_metadata?.display_name ||
+      sessionUser?.email?.split("@")?.[0] ||
+      "Jason Huntly Grobler",
+    access_tier: "premium_group",
+    scope_type: "group",
+    scope_id: profile?.scope_id || userId || "local_group_manager",
+    premium_grant_source: profile?.premium_grant_source || "local_group_manager_override",
+    __local_group_manager_override: true,
+  };
+}
+
 let authedStateInflight = null;
 let authedStateLoadedAt = 0;
 const AUTHED_STATE_CACHE_MS = 10000;
@@ -1779,6 +1812,7 @@ function canActOnRestaurant(roleLike, actorProfile, restaurantId) {
   const role = normalizeMembershipRole(roleLike);
   const rid = String(restaurantId || "");
   if (!rid) return false;
+  if (isLocalGroupManagerProfile(actorProfile)) return true;
 
   if (role === "waiter") return false;
 
@@ -4147,12 +4181,25 @@ async function fetchAllowedRestaurantsForScope(scopeId) {
 
   if (error) {
     console.warn("[MB] fetchAllowedRestaurantsForScope failed", error);
-    return [];
+    if (!isLocalGroupManagerProfile(appState?.profile)) return [];
   }
 
-  return (data || [])
+  const scopedRows = (data || [])
     .map(r => r.restaurants)
     .filter(Boolean);
+  if (scopedRows.length || !isLocalGroupManagerProfile(appState?.profile)) {
+    return scopedRows;
+  }
+
+  const fallback = await supabase
+    .from("restaurants")
+    .select("id,name,code,seat_limit,require_invite")
+    .order("name", { ascending: true });
+  if (fallback.error) {
+    console.warn("[MB] local group manager restaurant fallback failed", fallback.error);
+    return [];
+  }
+  return fallback.data || [];
 }
 
 // --- Ensure active restaurant is valid for this scope ---
@@ -4571,6 +4618,7 @@ async function assertRestaurantAllowedForCtx(profile, restaurantId) {
 
   if (!restaurantId) return { ok: false, reason: "missing_restaurant" };
   if (!role) return { ok: false, reason: "missing_role" };
+  if (isLocalGroupManagerProfile(profile)) return { ok: true, reason: "local_group_manager_override" };
 
   // Managers + group/enterprise: must be in bc_scope_restaurants
   if (isManagerRole(role) && (scopeType === "group" || scopeType === "enterprise")) {
@@ -7600,6 +7648,7 @@ function hardResetAuthUI() {
 function canAccessPremium(profile) {
   const role = String(profile?.role || "").toLowerCase();
   const restaurantId = profile?.restaurant_id ?? null;
+  const accessTier = String(profile?.access_tier || "").toLowerCase();
 
   const isFirst50 = !!profile?.is_first50;
   const passExpiresAt = profile?.premium_pass_expires_at ? new Date(profile.premium_pass_expires_at) : null;
@@ -7609,6 +7658,7 @@ function canAccessPremium(profile) {
 
   // ✅ HARD OVERRIDE: restaurant membership is premium
   if (restaurantId) return { ok: true, reason: "entitled.restaurant" };
+  if (accessTier.startsWith("premium")) return { ok: true, reason: "entitled.access_tier" };
   if (isFirst50) return { ok: true, reason: "entitled.first50" };
   if (passOk) return { ok: true, reason: "entitled.pass30" };
   return { ok: false, reason: "no_entitlement" };
@@ -9270,6 +9320,7 @@ function buildGameIframeUrl({
   epoch = Date.now(),
   bustCache = false,
   v2Harness = false,
+  v2EncounterLimit = null,
 } = {}) {
   // If you pass a full override URL, use it as the base.
   // Otherwise build from same-origin /game/game.html
@@ -9290,6 +9341,8 @@ function buildGameIframeUrl({
   else base.searchParams.delete("initialScreen");
   if (v2Harness) base.searchParams.set("bcV2", "1");
   else base.searchParams.delete("bcV2");
+  if (v2Harness && v2EncounterLimit) base.searchParams.set("bcV2Encounters", String(v2EncounterLimit));
+  else base.searchParams.delete("bcV2Encounters");
 
   // Keep epoch off the URL so iframe assets can stay browser-cacheable.
   // The runtime already gets the active epoch from frameElement.dataset.bcEpoch,
@@ -9726,6 +9779,7 @@ window.addEventListener("message", (event) => {
 // Data loaders
 // ------------------------------------------------------------
 async function loadProfile(userId) {
+  const sessionUser = appState?.session?.user || null;
   const res = await withTimeout(
     supabase
       .from("profiles")
@@ -9738,7 +9792,7 @@ async function loadProfile(userId) {
     "profiles.select"
   );
   if (res.error) throw res.error;
-  return res.data;
+  return applyLocalProfileOverrides(res.data, sessionUser);
 }
 
 async function loadRestaurant(restaurantId) {
@@ -12455,6 +12509,7 @@ async function assertRestaurantAllowedForScope(scopeId, restaurantId) {
   const sid = String(scopeId || "");
   const rid = String(restaurantId || "");
   if (!sid || !rid) return false;
+  if (isLocalGroupManagerProfile(appState?.profile)) return true;
 
   const { data, error } = await supabase
     .from("bc_scope_restaurants")
@@ -12480,6 +12535,21 @@ async function resolveInitialRestaurantForScope(profile) {
   // Group/enterprise: choose active per-scope (storage -> first allowed)
   if (!isManagerRole(role)) return null; // only managers switch restaurants
   if (!scopeId) return null;
+
+  if (isLocalGroupManagerProfile(profile)) {
+    const fallbackRows = await fetchAllowedRestaurantsForScope(scopeId);
+    const fallbackIds = fallbackRows.map((row) => String(row?.id || row?.restaurant_id || "")).filter(Boolean);
+    window.__BC_ALLOWED_RESTAURANT_ROWS__ = fallbackRows;
+    window.__BC_ALLOWED_RESTAURANT_IDS__ = fallbackIds;
+    const stored = getStoredActiveRestaurantId(scopeId);
+    const next = stored && fallbackIds.includes(stored)
+      ? stored
+      : fallbackIds[0] || profile?.restaurant_id || null;
+    if (next) {
+      try { setStoredActiveRestaurantId(scopeId, next); } catch {}
+    }
+    return next;
+  }
 
   // 1) try stored
   let stored = null;
@@ -12683,11 +12753,14 @@ function mountPremiumGameIframe({
   const root = document.getElementById("premiumRoot");
   let iframe = document.getElementById("premiumRootFrame");
   if (!root && !iframe) return;
+  const roleNow = String(appState?.profile?.role || "").toLowerCase();
+  const useV2Harness = roleNow === "group_manager";
 
   // ✅ Do NOT remount if already present
   const iframeSrcNow = String(iframe?.getAttribute("src") || "");
   const hasLiveGameSrc = iframeSrcNow.includes("/game/game.html");
-  if (iframe && !forceRemount && hasLiveGameSrc) {
+  const hasRequiredV2Harness = !useV2Harness || iframeSrcNow.includes("bcV2=1");
+  if (iframe && !forceRemount && hasLiveGameSrc && hasRequiredV2Harness) {
     if (isHardLoggedOut()) return;
     if (isParentCtxReady(mode || "premium")) {
       void hydrateParentProgressionForPremiumIframe("mount.existing").finally(() => {
@@ -12708,7 +12781,6 @@ function mountPremiumGameIframe({
   } else if (!iframe) {
     return;
   }
-  const roleNow = String(appState?.profile?.role || "").toLowerCase();
   if (roleNow === "waiter" && appState?.profile) {
     setActiveProgressionOwner({
       user_id: appState.profile.user_id || null,
@@ -12738,6 +12810,8 @@ function mountPremiumGameIframe({
     urlOverride: url || null,
     epoch,
     bustCache: true,
+    v2Harness: useV2Harness,
+    v2EncounterLimit: useV2Harness ? 10 : null,
   });
   iframe.style.width = "100%";
   iframe.style.height = "78vh";
@@ -20879,9 +20953,14 @@ async function routePremium(reason = "manual") {
     }
 
     const profile = appState.profile;
+    const activePremiumRestaurantId =
+      profile?.restaurant_id ||
+      appState.activeRestaurantId ||
+      getManagerActiveRestaurantId?.() ||
+      null;
 
     // ✅ HARD RULE: restaurant membership routes to premium always (do not block on access_tier)
-    if (profile?.restaurant_id) {
+    if (activePremiumRestaurantId) {
       if (isManagerRole(profile?.role) && appState.restaurant?.id) {
         try {
           appState.invites = await loadInvites(getManagerActiveRestaurantId());
@@ -20931,7 +21010,7 @@ async function routePremium(reason = "manual") {
     }
 
     // Manager without restaurant -> create it
-    if (isManagerRole(profile?.role) && !profile?.restaurant_id) {
+    if (isManagerRole(profile?.role) && !activePremiumRestaurantId) {
       appMode = "premium";
       closeHud();
       showScreen("screenCreateRestaurant");
@@ -21171,13 +21250,18 @@ async function decideRoute(reason = "decideRoute") {
     }
 
     // Mobile demo must stay in the V2 demo harness after sign-in.
-    if (isV2DemoRequested() || isMobileDemoSurfaceActive()) {
+    if (!isLocalGroupManagerProfile(appState.profile) && (isV2DemoRequested() || isMobileDemoSurfaceActive())) {
       await routeDemo(`decideRoute.v2_demo_requested:${reason}`);
       return;
     }
 
     // 2) HARD RULE: restaurant membership => Premium always
-    if (appState.profile?.restaurant_id) {
+    const activePremiumRestaurantId =
+      appState.profile?.restaurant_id ||
+      appState.activeRestaurantId ||
+      getManagerActiveRestaurantId?.() ||
+      null;
+    if (activePremiumRestaurantId) {
       setAuthIntent("premium");
       await routePremium(`decideRoute.restaurant:${reason}`);
       return;
@@ -22153,7 +22237,11 @@ async function submitAuth() {
       if (pr === "waiter") setRole("waiter");
       else setRole("manager");
 
-      if (document.documentElement?.dataset?.bcMobileEnv === "true" && (isV2DemoRequested() || appMode === "demo")) {
+      if (
+        !isLocalGroupManagerEmail(email) &&
+        document.documentElement?.dataset?.bcMobileEnv === "true" &&
+        (isV2DemoRequested() || appMode === "demo")
+      ) {
         persistV2DemoRequest();
         openMobileDemoCockpit("login_mobile_demo");
         setMsg("authMsg", "", "normal");

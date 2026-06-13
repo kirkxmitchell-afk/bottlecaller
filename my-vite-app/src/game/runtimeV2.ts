@@ -23,12 +23,14 @@ export interface RuntimeV2Session {
   encounter: EncounterV2;
   product: Product | null;
   gameState: GameStateV2;
+  encounterLimit: number;
   outcomeEmitted?: boolean;
 }
 
 export interface RuntimeV2StartOptions {
   tier?: number;
   encounterId?: string | null;
+  encounterLimit?: number;
 }
 
 export interface RuntimeV2Snapshot {
@@ -41,6 +43,7 @@ export interface RuntimeV2Snapshot {
   tier: number;
   progress: number;
   frustration: number;
+  mistakeCount: number;
   progressMood: ReturnType<typeof getProgressMood>;
   frustrationMood: ReturnType<typeof getFrustrationMood>;
   walkAwayUnlocked: boolean;
@@ -58,9 +61,15 @@ export interface RuntimeV2ChoiceResult {
   reaction: string;
 }
 
-function getTier1EncounterById(encounterId: string | null | undefined): EncounterV2 | null {
+function normalizeEncounterLimit(limit: number | null | undefined): number {
+  const parsed = Number(limit);
+  if (Number.isFinite(parsed) && parsed > 0) return Math.floor(parsed);
+  return 3;
+}
+
+function getTier1EncounterById(encounterId: string | null | undefined, encounterLimit: number): EncounterV2 | null {
   if (!encounterId) return null;
-  return getTier1VerticalSliceEncounters().find((encounter) => encounter.id === encounterId) || null;
+  return getTier1VerticalSliceEncounters(encounterLimit).find((encounter) => encounter.id === encounterId) || null;
 }
 
 const TIER1_ROTATION_KEY = "BC_V2_TIER1_ROTATION_INDEX";
@@ -80,16 +89,17 @@ function setStoredTier1RotationIndex(index: number): void {
   } catch {}
 }
 
-function getTierEncounterPool(tier: number): EncounterV2[] {
-  const encounters = getTier1VerticalSliceEncounters().filter((encounter) => encounter.tier === tier);
-  return encounters.length ? encounters : getTier1VerticalSliceEncounters();
+function getTierEncounterPool(tier: number, encounterLimit: number): EncounterV2[] {
+  const allEncounters = getTier1VerticalSliceEncounters(encounterLimit);
+  const encounters = allEncounters.filter((encounter) => encounter.tier === tier);
+  return encounters.length ? encounters : allEncounters;
 }
 
-function chooseEncounter(tier: number, encounterId?: string | null): EncounterV2 {
-  const explicit = getTier1EncounterById(encounterId);
+function chooseEncounter(tier: number, encounterLimit: number, encounterId?: string | null): EncounterV2 {
+  const explicit = getTier1EncounterById(encounterId, encounterLimit);
   if (explicit) return explicit;
 
-  const encounters = getTierEncounterPool(tier);
+  const encounters = getTierEncounterPool(tier, encounterLimit);
   if (!encounters.length) {
     throw new Error("No V2 encounters available");
   }
@@ -137,7 +147,7 @@ export function getActionTypesForGroup(group: ActionGroup): ActionType[] {
 
 export function snapshotRuntimeV2(session: RuntimeV2Session): RuntimeV2Snapshot {
   const { encounter, product, gameState } = session;
-  const encounterPool = getTierEncounterPool(encounter.tier);
+  const encounterPool = getTierEncounterPool(encounter.tier, session.encounterLimit);
   const encounterOrdinal = Math.max(
     1,
     encounterPool.findIndex((item) => item.id === encounter.id) + 1,
@@ -152,6 +162,7 @@ export function snapshotRuntimeV2(session: RuntimeV2Session): RuntimeV2Snapshot 
     tier: encounter.tier,
     progress: gameState.progress,
     frustration: gameState.frustration,
+    mistakeCount: gameState.mistakeCount,
     progressMood: gameState.progressMood,
     frustrationMood: gameState.frustrationMood,
     walkAwayUnlocked: gameState.walkAwayUnlocked,
@@ -167,7 +178,8 @@ export function snapshotRuntimeV2(session: RuntimeV2Session): RuntimeV2Snapshot 
 
 export function startRuntimeV2Session(options: RuntimeV2StartOptions = {}): RuntimeV2Session {
   const tier = Number(options.tier || 1);
-  const encounter = chooseEncounter(tier, options.encounterId);
+  const encounterLimit = normalizeEncounterLimit(options.encounterLimit);
+  const encounter = chooseEncounter(tier, encounterLimit, options.encounterId);
   const pool = buildCampaignProductPool(encounter.tier);
   const product = selectCampaignProduct(pool, buildSelectionContext(encounter));
   const gameState = createGameStateV2(encounter, product);
@@ -176,6 +188,7 @@ export function startRuntimeV2Session(options: RuntimeV2StartOptions = {}): Runt
     encounter,
     product,
     gameState,
+    encounterLimit,
     outcomeEmitted: false,
   };
 }

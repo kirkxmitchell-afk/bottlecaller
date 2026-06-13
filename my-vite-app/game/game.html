@@ -10952,7 +10952,7 @@ function ensureProgLoaded() {
               return;
             }
             window.__BC_V2_DEMO_DIRECT_START_AT__ = now;
-            if (isV2DemoHarnessEnabled?.() || isV2DemoRequestedInFrame?.()) {
+            if (shouldUseV2Harness?.()) {
               startV2HarnessWhenReady?.({ resetSession: true });
               return;
             }
@@ -23127,6 +23127,11 @@ function ensureProgLoaded() {
             showScreen("screenHome");
             return;
           }
+          if (shouldUseV2Harness()) {
+            try { localStorage.setItem(coverKey, "true"); } catch {}
+            startV2HarnessWhenReady({ resetSession: true });
+            return;
+          }
           try { localStorage.setItem(coverKey, "true"); } catch {}
           applyPlaySurfaceMode("encounter_only");
           showScreen("screenPlay");
@@ -23159,12 +23164,32 @@ function ensureProgLoaded() {
         return !!(window.__BC_V2_HARNESS__?.enabled && (window.isDemo || window.bcMode === "demo"));
       }
 
-      function isV2DemoRequestedInFrame() {
+      function isV2HarnessRequestedInFrame() {
         try {
           return new URLSearchParams(window.location.search).get("bcV2") === "1";
         } catch {
           return false;
         }
+      }
+
+      function isV2DemoRequestedInFrame() {
+        return !!((window.isDemo || window.bcMode === "demo") && isV2HarnessRequestedInFrame());
+      }
+
+      function shouldUseV2Harness() {
+        return !!(window.__BC_V2_HARNESS__?.enabled || isV2HarnessRequestedInFrame());
+      }
+
+      function getV2EncounterLimit() {
+        if (window.isDemo || window.bcMode === "demo") return 3;
+        try {
+          const requestedLimit = Number(new URLSearchParams(window.location.search).get("bcV2Encounters") || 0);
+          if (Number.isFinite(requestedLimit) && requestedLimit > 0) return requestedLimit;
+        } catch {}
+        const identity = getGameplayIdentity();
+        const role = String(identity?.membershipRole || identity?.role || "").toLowerCase();
+        if (role === "group_manager") return 10;
+        return 3;
       }
 
       function getV2HarnessApi() {
@@ -23208,10 +23233,10 @@ function ensureProgLoaded() {
         if (snapshot?.outcome === "weak_success") return "Alright, let's do it.";
         if (snapshot?.outcome === "neutral_exit") return "No problem. Thanks for reading the table and leaving it there.";
         if (snapshot?.outcome === "failure") return "We'll leave it, thanks.";
-        if (snapshot?.frustrationMood === "critical_resistance") return "You're losing the table. One more bad push and the guest will shut down.";
-        if (snapshot?.progressMood === "ready") return "They're close. A clean commit should land this.";
-        if (snapshot?.progressMood === "engaged") return "The guest is leaning in. Keep the rhythm clean.";
-        if (snapshot?.progressMood === "warming_up") return encounter?.verbalClue || "The guest is starting to open up.";
+        if (snapshot?.frustrationMood === "critical_resistance") return "We're fine, thanks. We'll choose ourselves.";
+        if (snapshot?.progressMood === "ready") return "That sounds good. Which one would you choose?";
+        if (snapshot?.progressMood === "engaged") return "Oh, that's interesting. Tell me more about that one.";
+        if (snapshot?.progressMood === "warming_up") return encounter?.verbalClue || "Okay... that helps a bit.";
         return encounter?.verbalClue || "";
       }
 
@@ -23299,6 +23324,7 @@ function ensureProgLoaded() {
             authorityDelta: Number(snapshot.authorityDelta || 0),
             progress: Number(snapshot.progress || 0),
             frustration: Number(snapshot.frustration || 0),
+            mistakeCount: Number(snapshot.mistakeCount || 0),
             progressMood: snapshot.progressMood,
             frustrationMood: snapshot.frustrationMood,
             walkAwayUnlocked: !!snapshot.walkAwayUnlocked,
@@ -23404,6 +23430,7 @@ function ensureProgLoaded() {
         if (!shell) return;
 
         shell.querySelector("#v2DemoCompletionCard")?.remove();
+        if (!(window.isDemo || window.bcMode === "demo")) return;
         if (!isV2FinalDemoEncounter(snapshot)) return;
 
         const joinState = getV2DemoJoinState();
@@ -23695,7 +23722,11 @@ function ensureProgLoaded() {
 
         document.getElementById("btnV2HarnessReplay")?.addEventListener("click", () => {
           if (!snapshot?.encounterId) return;
-          const replaySnapshot = api.start({ tier: snapshot.tier, encounterId: snapshot.encounterId });
+          const replaySnapshot = api.start({
+            tier: snapshot.tier,
+            encounterId: snapshot.encounterId,
+            encounterLimit: getV2EncounterLimit(),
+          });
           renderV2HarnessPlay(replaySnapshot, "");
         });
 
@@ -23716,7 +23747,7 @@ function ensureProgLoaded() {
         notifyParentDemoPlayStarted("v2_harness_start");
         resetNavState();
         showScreen("screenPlay");
-        const snapshot = api.start({ tier: 1 });
+        const snapshot = api.start({ tier: 1, encounterLimit: getV2EncounterLimit() });
         if (startingFresh) {
           state.introEncounterId = snapshot?.encounterId || null;
         }
@@ -23750,7 +23781,7 @@ function ensureProgLoaded() {
       function startV2HarnessWhenReady(options = {}) {
         const started = startV2HarnessEncounter(options);
         if (started) return true;
-        if (!isV2DemoRequestedInFrame()) return false;
+        if (!isV2HarnessRequestedInFrame()) return false;
 
         notifyParentDemoPlayStarted("v2_harness_wait");
         applyPlaySurfaceMode("encounter_only");
@@ -23790,6 +23821,10 @@ function ensureProgLoaded() {
         btn.__bcBound = false;
         bindInput(btn, async () => {
           resetNavState();
+          if (shouldUseV2Harness()) {
+            startV2HarnessWhenReady({ resetSession: true });
+            return;
+          }
           beginOrResumeProgressionRun();
           await startPlayWithReadyGate();
         });
@@ -23813,7 +23848,7 @@ function ensureProgLoaded() {
             btnGoPremium.__bcBound = false;
             bindInput(btnGoPremium, () => {
               resetNavState();
-              if (isV2DemoHarnessEnabled() || isV2DemoRequestedInFrame()) {
+              if (shouldUseV2Harness()) {
                 startV2HarnessWhenReady({ resetSession: true });
                 return;
               }
@@ -24095,7 +24130,7 @@ function ensureProgLoaded() {
 
           bindInput(btnGoDemo, () => {
             resetNavState();
-            if (isV2DemoHarnessEnabled() || isV2DemoRequestedInFrame()) {
+            if (shouldUseV2Harness()) {
               startV2HarnessWhenReady({ resetSession: true });
               return;
             }
@@ -24116,7 +24151,7 @@ function ensureProgLoaded() {
 
             bindInput(btnGoPremium, () => {
               resetNavState();
-              if (isV2DemoHarnessEnabled() || isV2DemoRequestedInFrame()) {
+              if (shouldUseV2Harness()) {
                 startV2HarnessWhenReady({ resetSession: true });
                 return;
               }
@@ -24138,6 +24173,10 @@ function ensureProgLoaded() {
               return;
             }
             resetNavState();
+            if (shouldUseV2Harness()) {
+              startV2HarnessWhenReady({ resetSession: true });
+              return;
+            }
             beginOrResumeProgressionRun();
             await startPlayWithReadyGate();
           });
@@ -24172,7 +24211,7 @@ function ensureProgLoaded() {
 
             // DEMO: start immediately
             if (window.isDemo || window.bcMode === "demo") {
-              if (isV2DemoHarnessEnabled() || isV2DemoRequestedInFrame()) {
+              if (shouldUseV2Harness()) {
                 startV2HarnessWhenReady({ resetSession: true });
                 return;
               }
@@ -24181,6 +24220,10 @@ function ensureProgLoaded() {
             }
 
             // PREMIUM: ensure ctx/wines are ready then start
+            if (shouldUseV2Harness()) {
+              startV2HarnessWhenReady({ resetSession: true });
+              return;
+            }
             beginOrResumeProgressionRun();
             await startPlayWithReadyGate();
           });

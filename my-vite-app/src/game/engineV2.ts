@@ -34,6 +34,10 @@ function clampProgress(value: number): number {
   return Math.max(0, Math.round(value));
 }
 
+function clampMistakeCount(value: number): number {
+  return Math.max(0, Math.round(value));
+}
+
 export function getProgressMood(progress: number): GameStateV2["progressMood"] {
   if (progress <= 2) return "guarded";
   if (progress <= 5) return "warming_up";
@@ -106,6 +110,7 @@ export function evaluateChoice(
       quality: "poor",
       progressDelta: 1,
       frustrationDelta: 1,
+      mistakeDelta: 0,
     };
   }
 
@@ -118,6 +123,7 @@ export function evaluateChoice(
     quality,
     progressDelta: effect.progress,
     frustrationDelta: effect.frustration,
+    mistakeDelta: 0,
   };
 }
 
@@ -133,6 +139,7 @@ export function createGameStateV2(encounter: EncounterV2, product: Product | nul
     progressMood: getProgressMood(progress),
     frustrationMood: getFrustrationMood(frustration),
     walkAwayUnlocked: frustration >= 4,
+    mistakeCount: 0,
     outcome: null,
     authorityDelta: 0,
     turnCount: 0,
@@ -147,37 +154,43 @@ function buildHistoryReaction(
 ): string {
   const fallbackReaction = (() => {
     if (choice.group === "ask") {
-      if (quality === "optimal") return "The guest opens up and gives you something useful to work with.";
-      if (quality === "good") return "The guest answers and starts to lean into the conversation.";
-      if (quality === "poor") return "The guest replies, but the energy softens instead of building.";
-      return "The guest tightens slightly. That question missed what they actually needed.";
+      if (quality === "optimal") return "Yes, that is exactly the kind of thing we were hoping you would ask.";
+      if (quality === "good") return "That helps. I suppose we can narrow it from there.";
+      if (quality === "poor") return "Ya... maybe. I am not sure that is quite what we are after.";
+      return "Er... no, that is not really what we meant.";
     }
     if (choice.group === "recommend") {
-      if (quality === "optimal") return "The recommendation lands cleanly and the guest visibly settles into it.";
-      if (quality === "good") return "The guest responds positively. The bottle feels increasingly plausible.";
-      if (quality === "poor") return "The guest can follow you, but the recommendation has not really clicked.";
-      return "The guest recoils from the angle. It feels pushy or off-target for this table.";
+      if (quality === "optimal") return "That sounds exactly like what we were looking for.";
+      if (quality === "good") return "That sounds nice. What makes that one different?";
+      if (quality === "poor") return "I guess... but I am not completely sure that is the right direction.";
+      return "Er... no, that is not really what we are looking for.";
     }
     if (choice.group === "commit") {
-      if (quality === "optimal") return "The close feels natural. The guest is ready for you to land it.";
-      if (quality === "good") return "The guest is close, but your close still carries a little pressure.";
-      if (quality === "poor") return "The guest hesitates. You tried to land the bottle before the table was fully ready.";
-      return "The guest pulls back. The close came too hard and too early.";
+      if (quality === "optimal") return "Perfect. Let's do that.";
+      if (quality === "good") return "Alright, that sounds good.";
+      if (quality === "poor") return "Maybe... can we think about it for a second?";
+      return "No, thanks. We will choose ourselves.";
     }
     if (choice.group === "walk_away") {
-      if (quality === "good") return "The table relaxes as you stop pushing and preserve the experience.";
-      return "You pause, but the table still feels uncertain.";
+      if (quality === "good") return "Thanks. We appreciate you giving us a moment.";
+      return "We are fine for now, thanks.";
     }
-    return encounter.verbalClue || "The table reacts, but not in the way you wanted.";
+    return encounter.verbalClue || "I am not sure that is what we meant.";
   })();
 
   if (choice.group === "ask" && isAskType(choice.type)) {
+    const direct = encounter.guestResponses?.ask?.[choice.type];
+    if (direct?.text) return direct.text;
     return encounter.guestReactions.ask?.[choice.type]?.[quality] || fallbackReaction;
   }
   if (choice.group === "recommend" && isRecommendType(choice.type)) {
+    const direct = encounter.guestResponses?.recommend?.[choice.type];
+    if (direct?.text) return direct.text;
     return encounter.guestReactions.recommend?.[choice.type]?.[quality] || fallbackReaction;
   }
   if (choice.group === "commit" && isCommitType(choice.type)) {
+    const direct = encounter.guestResponses?.commit?.[choice.type];
+    if (direct?.text) return direct.text;
     return encounter.guestReactions.commit?.[choice.type]?.[quality] || fallbackReaction;
   }
   if (choice.group === "walk_away") {
@@ -200,6 +213,8 @@ function appendHistory(
     frustrationDelta: result.frustrationDelta,
     resultingProgress: gameState.progress,
     resultingFrustration: gameState.frustration,
+    mistakeDelta: result.mistakeDelta,
+    resultingMistakeCount: gameState.mistakeCount,
     reaction: buildHistoryReaction(gameState.encounter, choice, result.quality),
   };
   gameState.turnCount = nextTurn;
@@ -217,6 +232,27 @@ function applyEarlyCommitPenalty(gameState: GameStateV2): void {
     return;
   }
   gameState.frustration = clampFrustration(gameState.frustration + 3);
+}
+
+function isCloseWindowOpen(gameState: GameStateV2, commitQuality: ChoiceQuality): boolean {
+  return canCommitSucceed(gameState, commitQuality);
+}
+
+function getMistakeDeltaForChoice(
+  gameState: GameStateV2,
+  playerChoice: PlayerChoice,
+  quality: ChoiceQuality,
+): number {
+  let mistakeDelta = 0;
+  if (quality === "poor") mistakeDelta += 1;
+  if (quality === "disaster") mistakeDelta += 2;
+  if (playerChoice.group === "commit" && !isCloseWindowOpen(gameState, quality)) {
+    mistakeDelta += 2;
+  }
+  if (quality === "optimal" && gameState.outcome !== "failure") {
+    mistakeDelta -= 1;
+  }
+  return mistakeDelta;
 }
 
 export function canCommitSucceed(
@@ -260,9 +296,12 @@ function authorityForOutcome(encounter: EncounterV2, outcome: EncounterOutcome):
 }
 
 function finalizeState(gameState: GameStateV2, outcome: EncounterOutcome): void {
+  if (gameState.mistakeCount >= 3) {
+    gameState.frustration = Math.max(gameState.frustration, 4);
+  }
   gameState.progressMood = getProgressMood(gameState.progress);
   gameState.frustrationMood = getFrustrationMood(gameState.frustration);
-  gameState.walkAwayUnlocked = gameState.frustration >= 4;
+  gameState.walkAwayUnlocked = gameState.frustration >= 4 || gameState.mistakeCount >= 3;
   gameState.outcome = outcome;
   if (outcome !== "continue" && outcome !== "not_available") {
     gameState.authorityDelta = authorityForOutcome(gameState.encounter, outcome);
@@ -270,7 +309,7 @@ function finalizeState(gameState: GameStateV2, outcome: EncounterOutcome): void 
 }
 
 export function walkAway(gameState: GameStateV2): { outcome: EncounterOutcome; authority: number } {
-  if (gameState.frustration >= 4) {
+  if (gameState.frustration >= 4 || gameState.mistakeCount >= 3) {
     const authority = authorityForOutcome(gameState.encounter, "neutral_exit");
     finalizeState(gameState, "neutral_exit");
     return {
@@ -304,13 +343,16 @@ export function applyChoice(
       quality: result.outcome === "neutral_exit" ? "good" : "poor",
       progressDelta: 0,
       frustrationDelta: 0,
+      mistakeDelta: 0,
     });
     return {
       quality: result.outcome === "neutral_exit" ? "good" : "poor",
       progressDelta: 0,
       frustrationDelta: 0,
+      mistakeDelta: 0,
       progress: gameState.progress,
       frustration: gameState.frustration,
+      mistakeCount: gameState.mistakeCount,
       progressMood: gameState.progressMood,
       frustrationMood: gameState.frustrationMood,
       walkAwayUnlocked: gameState.walkAwayUnlocked,
@@ -322,6 +364,12 @@ export function applyChoice(
 
   gameState.progress = clampProgress(gameState.progress + result.progressDelta);
   gameState.frustration = clampFrustration(gameState.frustration + result.frustrationDelta);
+  const mistakeDelta = getMistakeDeltaForChoice(gameState, playerChoice, result.quality);
+  gameState.mistakeCount = clampMistakeCount(gameState.mistakeCount + mistakeDelta);
+  const resultWithMistakes: ChoiceEvaluationResult = {
+    ...result,
+    mistakeDelta,
+  };
 
   let outcome: EncounterOutcome = "continue";
 
@@ -330,21 +378,23 @@ export function applyChoice(
       outcome = calculateSuccessOutcome(gameState, result.quality);
     } else {
       applyEarlyCommitPenalty(gameState);
-      if (gameState.frustration >= 5 && result.quality === "disaster") {
-        outcome = "failure";
-      }
     }
-  } else if (gameState.frustration >= 5 && result.quality === "disaster") {
+  }
+
+  if (outcome === "continue" && gameState.mistakeCount >= 4) {
+    outcome = "failure";
+  } else if (outcome === "continue" && gameState.frustration >= 5 && result.quality === "disaster") {
     outcome = "failure";
   }
 
   finalizeState(gameState, outcome);
-  appendHistory(gameState, playerChoice, result);
+  appendHistory(gameState, playerChoice, resultWithMistakes);
 
   return {
-    ...result,
+    ...resultWithMistakes,
     progress: gameState.progress,
     frustration: gameState.frustration,
+    mistakeCount: gameState.mistakeCount,
     progressMood: gameState.progressMood,
     frustrationMood: gameState.frustrationMood,
     walkAwayUnlocked: gameState.walkAwayUnlocked,
