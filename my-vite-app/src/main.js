@@ -9492,10 +9492,32 @@ function startMobileDemoDirectly(reason = "mobile_enter") {
   burstStartV2Demo(reason);
 }
 
+function openMobileDemoWelcome(reason = "mobile_demo_welcome") {
+  closeHud?.();
+  appMode = "demo";
+  persistV2DemoRequest();
+  document.getElementById("authFields")?.classList.add("hidden");
+  document.getElementById("screenHome")?.classList.add("hidden");
+  document.getElementById("btnDemoPremium")?.classList.add("hidden");
+  document.getElementById("btnDemoExit")?.classList.add("hidden");
+  showScreen("screenGameDemo");
+  setPremiumOverlayActive(false);
+  document.documentElement.dataset.bcV2Demo = "true";
+  window.__BC_DEMO_PLAY_STARTED_AT__ = 0;
+  window.__BC_DEMO_IFRAME_LAST_SCREEN__ = "screenWelcome";
+  destroyPremiumIframe(`${reason}:premium`);
+  destroyDemoIframe(`${reason}:remount`);
+  mountGameIframe("gameRootDemo", "demo", {
+    initialScreen: "screenWelcome",
+    v2Harness: true,
+  });
+  try { renderAppChrome?.(); } catch {}
+}
+
 function openPremiumBeginScreen() {
   if (appMode === "demo") {
     if (document.documentElement?.dataset?.bcMobileEnv === "true") {
-      startMobileDemoDirectly("mobile_play_enter");
+      openMobileDemoWelcome("mobile_play_enter");
       return;
     }
 
@@ -22091,7 +22113,7 @@ async function submitAuth() {
 
       if (document.documentElement?.dataset?.bcMobileEnv === "true" && (isV2DemoRequested() || appMode === "demo")) {
         persistV2DemoRequest();
-        startMobileDemoDirectly("login_mobile_demo");
+        openMobileDemoWelcome("login_mobile_demo");
         setMsg("authMsg", "", "normal");
         return;
       }
