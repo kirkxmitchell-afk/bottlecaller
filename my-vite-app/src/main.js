@@ -5869,9 +5869,15 @@ if (!window.__BC_PARENT_BRIDGE__) {
           destroyPremiumIframe("nav_back");
           if (backTo === "screenGameDemo") {
             destroyDemoIframe("nav_back_demo_shell");
+            window.__BC_DEMO_PLAY_STARTED_AT__ = 0;
+            window.__BC_DEMO_IFRAME_LAST_SCREEN__ = null;
           }
           setPremiumOverlayActive(false);
           showScreen(backTo);
+          if (backTo === "screenGameDemo") {
+            try { renderDemoJoinBlock?.(); } catch {}
+            try { renderAppChrome?.(); } catch {}
+          }
           return;
         }
         const dest = msg.to || msg.target || msg.backTo || "screenHome";
@@ -9505,8 +9511,10 @@ function openMobileDemoWelcome(reason = "mobile_demo_welcome") {
   document.documentElement.dataset.bcV2Demo = "true";
   window.__BC_DEMO_PLAY_STARTED_AT__ = 0;
   window.__BC_DEMO_IFRAME_LAST_SCREEN__ = "screenWelcome";
+  document.getElementById("appChromePlayCta")?.classList.add("hidden");
   destroyPremiumIframe(`${reason}:premium`);
   destroyDemoIframe(`${reason}:remount`);
+  window.__BC_DEMO_IFRAME_LAST_SCREEN__ = "screenWelcome";
   mountGameIframe("gameRootDemo", "demo", {
     initialScreen: "screenWelcome",
     v2Harness: true,
