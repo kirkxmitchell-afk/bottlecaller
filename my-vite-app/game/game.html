@@ -399,23 +399,37 @@
       const activeScreen = document.querySelector(".screen.active");
       const height = measureIframeContentHeight();
       if (!Number.isFinite(height) || height <= 0) return false;
+      const screenId = activeScreen?.id || null;
+      const last = window.__BC_LAST_HEIGHT_REPORT__ || {};
+      if (
+        last.screenId === screenId &&
+        Math.abs(Number(last.height || 0) - height) < 2 &&
+        Date.now() - Number(last.at || 0) < 900
+      ) {
+        return false;
+      }
+      window.__BC_LAST_HEIGHT_REPORT__ = { height, screenId, at: Date.now() };
       return postToParent({
         type: "BC_IFRAME_HEIGHT",
         height,
         reason,
-        screenId: activeScreen?.id || null,
+        screenId,
       });
     }
     function scheduleIframeHeightReport(reason = "layout") {
       try { clearTimeout(window.__BC_HEIGHT_REPORT_T__); } catch {}
+      const isMobile = window.matchMedia?.("(max-width: 760px)")?.matches;
+      const delay = isMobile ? 80 : 32;
       window.__BC_HEIGHT_REPORT_T__ = setTimeout(() => {
         try {
-          reportIframeHeight(reason);
-          requestAnimationFrame(() => {
-            try { reportIframeHeight(reason + ":raf"); } catch {}
-          });
+          const didReport = reportIframeHeight(reason);
+          if (!isMobile && didReport) {
+            requestAnimationFrame(() => {
+              try { reportIframeHeight(reason + ":raf"); } catch {}
+            });
+          }
         } catch {}
-      }, 24);
+      }, delay);
     }
     function installIframeHeightSync() {
       if (window.__BC_HEIGHT_SYNC_INSTALLED__) return;
@@ -441,8 +455,6 @@
             mo.observe(document.body, {
               childList: true,
               subtree: true,
-              attributes: true,
-              characterData: true,
             });
           }
           window.__BC_HEIGHT_MUTATION_OBSERVER__ = mo;

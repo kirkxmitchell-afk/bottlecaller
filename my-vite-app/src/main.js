@@ -9367,6 +9367,7 @@ function mountGameIframe(targetId, mode /* "demo" | "premium" */, options = {}) 
 
   const mountedFrame = document.getElementById(`${targetId}Frame`);
   if (mode === "demo" && useV2Harness && options?.autoStartV2) {
+    window.__BC_DEMO_START_ACK_AT__ = 0;
     mountedFrame?.addEventListener("load", () => {
       burstStartV2Demo(`${options.autoStartReason || "iframe_load"}:load`);
     }, { once: true });
@@ -9471,12 +9472,13 @@ function postStartV2DemoToIframe(reason = "mobile_enter") {
 
 function burstStartV2Demo(reason = "mobile_enter") {
   let attempts = 0;
-  const maxAttempts = 24;
+  const maxAttempts = 10;
   const tick = () => {
+    if (Date.now() - Number(window.__BC_DEMO_START_ACK_AT__ || 0) < 8000) return;
     postStartV2DemoToIframe(`${reason}:${attempts}`);
     attempts += 1;
     if (attempts >= maxAttempts) return;
-    window.setTimeout(tick, 125);
+    window.setTimeout(tick, 140);
   };
   tick();
 }
@@ -9658,6 +9660,7 @@ window.addEventListener("message", (event) => {
     const demoFrame = document.getElementById("gameRootDemoFrame");
     if (demoFrame && event.source === demoFrame.contentWindow) {
       window.__BC_DEMO_PLAY_STARTED_AT__ = Date.now();
+      window.__BC_DEMO_START_ACK_AT__ = Date.now();
       window.__BC_DEMO_IFRAME_LAST_SCREEN__ = "screenPlay";
       document.documentElement.dataset.bcV2Demo = "true";
       demoFrame.dataset.bcDemoPlayStarted = "true";
@@ -9698,8 +9701,11 @@ window.addEventListener("message", (event) => {
     return;
   }
   if (String(data.mode || "").toLowerCase() === "demo") {
-    window.__BC_DEMO_IFRAME_LAST_SCREEN__ = String(data.screenId || "") || null;
-    try { renderAppChrome?.(); } catch {}
+    const nextScreenId = String(data.screenId || "") || null;
+    if (window.__BC_DEMO_IFRAME_LAST_SCREEN__ !== nextScreenId) {
+      window.__BC_DEMO_IFRAME_LAST_SCREEN__ = nextScreenId;
+      try { renderAppChrome?.(); } catch {}
+    }
   }
   const maxHeight = isMobile ? 6000 : 860;
   const minHeight = isDemoWelcome
@@ -9710,6 +9716,9 @@ window.addEventListener("message", (event) => {
   const clamped = isMobile && isV2Demo
     ? (isDemoWelcome ? measuredHeight : Math.max(viewportHeight, 420))
     : measuredHeight;
+  const previousHeight = Number(frame.dataset.bcFrameHeight || 0);
+  if (Math.abs(previousHeight - clamped) < 2) return;
+  frame.dataset.bcFrameHeight = String(clamped);
   frame.style.setProperty("height", clamped + "px", "important");
 });
 
