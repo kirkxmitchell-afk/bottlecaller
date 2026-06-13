@@ -9514,6 +9514,25 @@ function openMobileDemoWelcome(reason = "mobile_demo_welcome") {
   try { renderAppChrome?.(); } catch {}
 }
 
+function openMobileDemoCockpit(reason = "mobile_demo_cockpit") {
+  closeHud?.();
+  appMode = "demo";
+  persistV2DemoRequest();
+  document.getElementById("authFields")?.classList.add("hidden");
+  document.getElementById("screenHome")?.classList.add("hidden");
+  document.getElementById("btnDemoPremium")?.classList.add("hidden");
+  document.getElementById("btnDemoExit")?.classList.add("hidden");
+  showScreen("screenGameDemo");
+  setPremiumOverlayActive(false);
+  document.documentElement.dataset.bcV2Demo = "true";
+  window.__BC_DEMO_PLAY_STARTED_AT__ = 0;
+  window.__BC_DEMO_IFRAME_LAST_SCREEN__ = null;
+  destroyPremiumIframe(`${reason}:premium`);
+  destroyDemoIframe(`${reason}:demo`);
+  try { renderDemoJoinBlock?.(); } catch {}
+  try { renderAppChrome?.(); } catch {}
+}
+
 function openPremiumBeginScreen() {
   if (appMode === "demo") {
     if (document.documentElement?.dataset?.bcMobileEnv === "true") {
@@ -20795,15 +20814,14 @@ async function routeDemo(reason = "manual") {
   destroyPremiumIframe("routeDemo");
   destroyDemoIframe("routeDemo:remount");
   const isMobileDemo = document.documentElement?.dataset?.bcMobileEnv === "true";
-  mountGameIframe("gameRootDemo", "demo", {
-    initialScreen: isMobileDemo ? "screenPlay" : "screenWelcome",
-    v2Harness: useV2Harness,
-    autoStartV2: isMobileDemo,
-    autoStartReason: "route_demo_mobile",
-  });
   if (isMobileDemo) {
-    window.setTimeout(() => burstStartV2Demo("route_demo_mobile"), 120);
+    openMobileDemoCockpit("route_demo_mobile");
+    return;
   }
+  mountGameIframe("gameRootDemo", "demo", {
+    initialScreen: "screenWelcome",
+    v2Harness: useV2Harness,
+  });
 }
 
 async function routePremium(reason = "manual") {
@@ -21044,15 +21062,14 @@ function routeDemoShellNoAuth() {
   document.getElementById("btnDemoPremium")?.classList.add("hidden");
   document.getElementById("btnDemoExit")?.classList.add("hidden");
   const isMobileDemo = document.documentElement?.dataset?.bcMobileEnv === "true";
-  mountGameIframe("gameRootDemo", "demo", {
-    initialScreen: isMobileDemo ? "screenPlay" : "screenWelcome",
-    v2Harness: useV2Harness,
-    autoStartV2: isMobileDemo,
-    autoStartReason: "route_demo_shell_mobile",
-  });
   if (isMobileDemo) {
-    window.setTimeout(() => burstStartV2Demo("route_demo_shell_mobile"), 120);
+    openMobileDemoCockpit("route_demo_shell_mobile");
+    return;
   }
+  mountGameIframe("gameRootDemo", "demo", {
+    initialScreen: "screenWelcome",
+    v2Harness: useV2Harness,
+  });
 }
 
 function routeAuth() {
@@ -22113,7 +22130,7 @@ async function submitAuth() {
 
       if (document.documentElement?.dataset?.bcMobileEnv === "true" && (isV2DemoRequested() || appMode === "demo")) {
         persistV2DemoRequest();
-        openMobileDemoWelcome("login_mobile_demo");
+        openMobileDemoCockpit("login_mobile_demo");
         setMsg("authMsg", "", "normal");
         return;
       }
