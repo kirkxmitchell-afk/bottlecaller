@@ -5871,6 +5871,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
             destroyDemoIframe("nav_back_demo_shell");
             window.__BC_DEMO_PLAY_STARTED_AT__ = 0;
             window.__BC_DEMO_IFRAME_LAST_SCREEN__ = null;
+            window.__BC_DEMO_SHELL_CTA_HIDDEN = false;
           }
           setPremiumOverlayActive(false);
           showScreen(backTo);
@@ -6579,6 +6580,9 @@ function renderAppChrome() {
   const isDemoWelcomeOpen =
     isDemoCockpit &&
     window.__BC_DEMO_IFRAME_LAST_SCREEN__ === "screenWelcome";
+  const isDemoCtaSuppressed =
+    isDemoCockpit &&
+    window.__BC_DEMO_SHELL_CTA_HIDDEN === true;
   const statusLabel = isDemoCockpit
     ? "DEMO"
     : hasSession
@@ -6587,7 +6591,8 @@ function renderAppChrome() {
   const showPremiumBar = (currentScreenId === "screenPremiumApp" && hasSession) || isDemoCockpit;
   const showPlayCta =
     ((currentScreenId === "screenPremiumApp" && hasSession) || isDemoCockpit) &&
-    !isDemoWelcomeOpen;
+    !isDemoWelcomeOpen &&
+    !isDemoCtaSuppressed;
 
   if (statusEl) statusEl.textContent = statusLabel;
   premiumBarEl?.classList.toggle("hidden", !showPremiumBar);
@@ -9502,6 +9507,8 @@ function openMobileDemoWelcome(reason = "mobile_demo_welcome") {
   closeHud?.();
   appMode = "demo";
   persistV2DemoRequest();
+  window.__BC_DEMO_SHELL_CTA_HIDDEN = true;
+  document.getElementById("appChromePlayCta")?.classList.add("hidden");
   document.getElementById("authFields")?.classList.add("hidden");
   document.getElementById("screenHome")?.classList.add("hidden");
   document.getElementById("btnDemoPremium")?.classList.add("hidden");
@@ -9511,7 +9518,6 @@ function openMobileDemoWelcome(reason = "mobile_demo_welcome") {
   document.documentElement.dataset.bcV2Demo = "true";
   window.__BC_DEMO_PLAY_STARTED_AT__ = 0;
   window.__BC_DEMO_IFRAME_LAST_SCREEN__ = "screenWelcome";
-  document.getElementById("appChromePlayCta")?.classList.add("hidden");
   destroyPremiumIframe(`${reason}:premium`);
   destroyDemoIframe(`${reason}:remount`);
   window.__BC_DEMO_IFRAME_LAST_SCREEN__ = "screenWelcome";
@@ -9535,6 +9541,7 @@ function openMobileDemoCockpit(reason = "mobile_demo_cockpit") {
   document.documentElement.dataset.bcV2Demo = "true";
   window.__BC_DEMO_PLAY_STARTED_AT__ = 0;
   window.__BC_DEMO_IFRAME_LAST_SCREEN__ = null;
+  window.__BC_DEMO_SHELL_CTA_HIDDEN = false;
   destroyPremiumIframe(`${reason}:premium`);
   destroyDemoIframe(`${reason}:demo`);
   try { renderDemoJoinBlock?.(); } catch {}
@@ -22525,7 +22532,18 @@ document.getElementById("btnCopyCode").addEventListener("click", async () => {
   }
 });
 document.getElementById("btnEnterPremium").addEventListener("click", () => decideRoute("enterPremium"));
-document.getElementById("btnAppChromeEnter")?.addEventListener("click", () => openPremiumBeginScreen());
+const btnAppChromeEnter = document.getElementById("btnAppChromeEnter");
+const hideDemoShellCtaForLaunch = () => {
+  if (appMode !== "demo") return;
+  window.__BC_DEMO_SHELL_CTA_HIDDEN = true;
+  document.getElementById("appChromePlayCta")?.classList.add("hidden");
+};
+btnAppChromeEnter?.addEventListener("pointerdown", hideDemoShellCtaForLaunch, { passive: true });
+btnAppChromeEnter?.addEventListener("touchstart", hideDemoShellCtaForLaunch, { passive: true });
+btnAppChromeEnter?.addEventListener("click", () => {
+  hideDemoShellCtaForLaunch();
+  openPremiumBeginScreen();
+});
 
 wireParentButtons();
 wirePremiumTopbarMenu();
