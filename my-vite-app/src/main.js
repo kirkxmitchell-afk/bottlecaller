@@ -6597,7 +6597,7 @@ function renderAppChrome() {
   if (statusEl) statusEl.textContent = statusLabel;
   premiumBarEl?.classList.toggle("hidden", !showPremiumBar);
   playCtaEl?.classList.toggle("hidden", !showPlayCta);
-  if (playCtaEl && showPlayCta) playCtaEl.style.visibility = "";
+  if (playCtaEl && showPlayCta) playCtaEl.style.opacity = "";
 
   const premiumSignupBtn = document.getElementById("btnPremiumSignupMenu");
   const messagesBtn = document.getElementById("btnOpenMessages");
@@ -22534,27 +22534,29 @@ document.getElementById("btnCopyCode").addEventListener("click", async () => {
 });
 document.getElementById("btnEnterPremium").addEventListener("click", () => decideRoute("enterPremium"));
 const btnAppChromeEnter = document.getElementById("btnAppChromeEnter");
-const hideDemoShellCtaForLaunch = ({ keepClickTarget = false } = {}) => {
+const prehideDemoShellCtaForLaunch = () => {
+  if (appMode !== "demo") return;
+  const playCtaEl = document.getElementById("appChromePlayCta");
+  if (!playCtaEl) return;
+  playCtaEl.style.opacity = "0";
+};
+const hideDemoShellCtaForLaunch = () => {
   if (appMode !== "demo") return;
   window.__BC_DEMO_SHELL_CTA_HIDDEN = true;
   const playCtaEl = document.getElementById("appChromePlayCta");
   if (!playCtaEl) return;
-  if (keepClickTarget) {
-    playCtaEl.style.visibility = "hidden";
-    return;
-  }
-  playCtaEl.style.visibility = "";
+  playCtaEl.style.opacity = "";
   playCtaEl.classList.add("hidden");
 };
 btnAppChromeEnter?.addEventListener("pointerdown", () => {
-  hideDemoShellCtaForLaunch({ keepClickTarget: true });
+  prehideDemoShellCtaForLaunch();
 }, { passive: true });
 btnAppChromeEnter?.addEventListener("touchstart", () => {
-  hideDemoShellCtaForLaunch({ keepClickTarget: true });
+  prehideDemoShellCtaForLaunch();
 }, { passive: true });
 btnAppChromeEnter?.addEventListener("click", () => {
-  hideDemoShellCtaForLaunch();
   openPremiumBeginScreen();
+  hideDemoShellCtaForLaunch();
 });
 
 wireParentButtons();
