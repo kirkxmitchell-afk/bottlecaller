@@ -23513,7 +23513,7 @@ function ensureProgLoaded() {
           window.__BC_V2_HARNESS_STATE__?.selectedGroup &&
           snapshot.availableGroups.includes(window.__BC_V2_HARNESS_STATE__.selectedGroup)
             ? window.__BC_V2_HARNESS_STATE__.selectedGroup
-            : (snapshot.availableGroups[0] || null);
+            : null;
         window.__BC_V2_HARNESS_STATE__ = {
           ...(window.__BC_V2_HARNESS_STATE__ || {}),
           selectedGroup,
@@ -23597,16 +23597,6 @@ function ensureProgLoaded() {
                   </div>
                   <div class="v2-region-mark">SA</div>
                 </div>
-                <div class="v2-top-metrics">
-                  ${stateGridHtml}
-                  <div class="v2-mood-pill">
-                    <div class="v2-mood-label">Table Mood</div>
-                    <div class="v2-mood-value">${escapeHtml(v2HarnessLabel(snapshot.progressMood))}</div>
-                    <div class="v2-mood-detail">${escapeHtml(moodDescriptor)}</div>
-                  </div>
-                </div>
-              </div>
-              <div class="v2-hero-bottom">
                 <div class="v2-scene-text">
                   <div class="v2-scene-label">Table Scene</div>
                   <p class="v2-scene-copy">${escapeHtml(scene)}</p>
@@ -23614,12 +23604,23 @@ function ensureProgLoaded() {
                     ${visualClues.map((clue) => `<li>${escapeHtml(clue)}</li>`).join("")}
                   </ul>
                 </div>
+              </div>
+              <div class="v2-hero-bottom">
 
                 <div class="v2-quote-row">
                   <blockquote class="v2-quote-card">
                     <span class="v2-quote-mark">“</span>
                     <p>${escapeHtml(quote)}</p>
                   </blockquote>
+                </div>
+
+                <div class="v2-top-metrics">
+                  ${stateGridHtml}
+                  <div class="v2-mood-pill">
+                    <div class="v2-mood-label">Table Mood</div>
+                    <div class="v2-mood-value">${escapeHtml(v2HarnessLabel(snapshot.progressMood))}</div>
+                    <div class="v2-mood-detail">${escapeHtml(moodDescriptor)}</div>
+                  </div>
                 </div>
 
                 ${showGuidanceCard ? `
@@ -23675,7 +23676,9 @@ function ensureProgLoaded() {
 
         const actionLabel = selectedGroup
           ? `Choose one ${v2HarnessLabel(selectedGroup)} response card to continue the encounter.`
-          : "The encounter is complete. Continue, replay, or go back to welcome.";
+          : isTerminal
+            ? "The encounter is complete. Continue, replay, or go back to welcome."
+            : "Choose Ask, Recommend, or Commit to open the response options.";
         stepButtons.innerHTML = `
           <div class="v2-action-shell">
             <div class="v2-action-header">${groupButtons}</div>
@@ -23706,6 +23709,10 @@ function ensureProgLoaded() {
             const type = String(btn.getAttribute("data-v2-action") || "");
             const result = api.choose(selectedGroup, type);
             if (!result?.snapshot) return;
+            window.__BC_V2_HARNESS_STATE__ = {
+              ...(window.__BC_V2_HARNESS_STATE__ || {}),
+              selectedGroup: null,
+            };
             const liveSession = api.getSession?.() || null;
             emitV2HarnessOutcome(result.snapshot, liveSession, result.reaction || "");
             renderV2HarnessPlay(result.snapshot, result.reaction || "");

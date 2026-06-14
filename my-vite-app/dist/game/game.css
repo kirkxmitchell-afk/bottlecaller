@@ -5429,13 +5429,14 @@ html, body{ height:100%; }
   #encounterPanel[data-v2-layout="tier1"] .v2-hero-bottom{
     left: 6px;
     right: 6px;
-    bottom: clamp(76px, 12dvh, 112px);
+    top: clamp(58px, 13vw, 72px);
+    bottom: auto;
     gap: 3px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-scene-text{
     display: block;
-    max-width: min(88vw, 360px);
+    max-width: 100%;
     padding: 7px 9px;
     border-radius: 12px;
   }
