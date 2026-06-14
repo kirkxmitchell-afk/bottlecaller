@@ -23234,12 +23234,12 @@ function ensureProgLoaded() {
       }
 
       function getV2ReactiveQuote(snapshot, encounter, reaction = "") {
-        if (reaction) return reaction;
         if (snapshot?.outcome === "premium_success") return "Perfect. That's exactly the bottle we were hoping you'd land on.";
         if (snapshot?.outcome === "standard_success") return "Great, that sounds like the right call for us.";
         if (snapshot?.outcome === "weak_success") return "Alright, let's do it.";
         if (snapshot?.outcome === "neutral_exit") return "No problem. Thanks for reading the table and leaving it there.";
         if (snapshot?.outcome === "failure") return "We'll leave it, thanks.";
+        if (reaction) return reaction;
         if (snapshot?.frustrationMood === "critical_resistance") return "We're fine, thanks. We'll choose ourselves.";
         if (snapshot?.progressMood === "ready") return "That sounds good. Which one would you choose?";
         if (snapshot?.progressMood === "engaged") return "Oh, that's interesting. Tell me more about that one.";
@@ -23263,10 +23263,66 @@ function ensureProgLoaded() {
         if (snapshot?.outcome === "failure") {
           return "The table shut down. You created too much pressure before the guest was ready.";
         }
-        if (reaction) {
-          return "The guest is reacting to your line. Watch the mood before you commit.";
-        }
         return "Read the table, choose the right interaction, and move the guest without creating friction.";
+      }
+
+      function getV2SceneClue(encounter) {
+        const directClue = String(encounter?.sceneClue || "").trim();
+        if (directClue) return directClue;
+        const fallback = String(encounter?.scene || "").trim();
+        if (!fallback) return "Read the table before choosing.";
+        const firstSentence = fallback.split(/[.!?]/).find(Boolean) || fallback;
+        const compact = firstSentence.replace(/\s+/g, " ").trim();
+        return compact.endsWith(".") ? compact : `${compact}.`;
+      }
+
+      function getV2QuickFeedback(quality, choice, snapshot) {
+        const outcome = String(snapshot?.outcome || "");
+        const choiceGroup = String(choice?.group || "");
+        const normalizedQuality = String(quality || "").toLowerCase();
+        const turnIndex = Math.max(0, Number(snapshot?.turnCount || 0) - 1);
+        const pick = (items) => items[turnIndex % items.length];
+
+        if (outcome === "neutral_exit" || choiceGroup === "walk_away") {
+          return pick([
+            "Good restraint. Experience preserved.",
+            "You stepped back. Trust protected.",
+          ]);
+        }
+        if (choiceGroup === "commit" && normalizedQuality !== "optimal" && normalizedQuality !== "good") {
+          return pick([
+            "Too soon. Pressure rises.",
+            "Wrong timing. They pull back.",
+          ]);
+        }
+        if (normalizedQuality === "optimal") {
+          return pick([
+            "Good read. Momentum builds.",
+            "Smart read. The table opens up.",
+            "Strong timing. Trust improves.",
+          ]);
+        }
+        if (normalizedQuality === "good") {
+          return pick([
+            "Safe move. Progress builds.",
+            "Good direction. They stay engaged.",
+          ]);
+        }
+        if (normalizedQuality === "poor") {
+          return pick([
+            "Wrong pace. Energy dropped.",
+            "Missed signal. The table cools.",
+            "Not quite. Resistance rises.",
+          ]);
+        }
+        if (normalizedQuality === "disaster") {
+          return pick([
+            "Bad read. Trust drops.",
+            "Too much pressure. They pull back.",
+            "Wrong angle. Energy collapses.",
+          ]);
+        }
+        return "";
       }
 
       function getV2NextStepInstruction(snapshot) {
@@ -23477,13 +23533,19 @@ function ensureProgLoaded() {
         `;
         shell.insertBefore(card, shell.querySelector(".button-row"));
 
-        document.getElementById("btnV2RestartEncounterFlow")?.addEventListener("click", () => {
-          resetV2DemoProgressToStart();
-        });
+        card.addEventListener("click", async (event) => {
+          const restartButton = event.target?.closest?.("#btnV2RestartEncounterFlow");
+          if (restartButton) {
+            event.preventDefault();
+            resetV2DemoProgressToStart();
+            return;
+          }
 
-        document.getElementById("btnV2DemoJoin")?.addEventListener("click", async () => {
-          const msg = document.getElementById("v2DemoJoinMsg");
-          const input = document.getElementById("v2DemoJoinCode");
+          const joinButton = event.target?.closest?.("#btnV2DemoJoin");
+          if (!joinButton) return;
+          event.preventDefault();
+          const msg = card.querySelector("#v2DemoJoinMsg");
+          const input = card.querySelector("#v2DemoJoinCode");
           const code = String(input?.value || "");
           const api = getParentDemoJoinApi();
           if (!api || typeof api.submit !== "function") {
@@ -23500,7 +23562,7 @@ function ensureProgLoaded() {
         });
       }
 
-      function renderV2HarnessPlay(snapshot, reaction = "") {
+      function renderV2HarnessPlay(snapshot, reaction = "", quickFeedbackText = null) {
         const encounterPanel = document.getElementById("encounterPanel");
         const stepHeader = document.getElementById("stepHeader");
         const wineDisplayName = document.getElementById("wineDisplayName");
@@ -23532,15 +23594,44 @@ function ensureProgLoaded() {
           ? `Product: ${snapshot.productName}`
           : `Encounter: ${snapshot.encounterTitle}`;
         const feedbackText = getV2FeedbackLine(snapshot, reaction);
-        feedbackLine.textContent = feedbackText;
+        const feedbackIsTerminal = isV2TerminalOutcome(snapshot.outcome);
+        feedbackLine.textContent = feedbackIsTerminal ? feedbackText : "";
 
         const bestPath = Array.isArray(snapshot.bestPath) ? snapshot.bestPath.join(" → ") : "";
         const outcome = snapshot.outcome ? v2HarnessLabel(snapshot.outcome) : "In Progress";
         const angle = snapshot.targetRecommendAngle ? v2HarnessLabel(snapshot.targetRecommendAngle) : "Flexible";
         const quote = getV2ReactiveQuote(snapshot, encounter, reaction);
+        const quoteEncounterKey = `${snapshot.tier || ""}:${snapshot.encounterId || snapshot.encounterOrdinal || ""}`;
+        if (window.__BC_V2_QUOTE_ENCOUNTER_KEY__ !== quoteEncounterKey) {
+          window.__BC_V2_QUOTE_ENCOUNTER_KEY__ = quoteEncounterKey;
+          window.__BC_V2_LAST_QUOTE__ = "";
+          window.__BC_V2_QUOTE_HISTORY__ = [];
+          window.__BC_V2_LAST_QUICK_FEEDBACK__ = "";
+        }
+        if (quickFeedbackText !== null) {
+          window.__BC_V2_LAST_QUICK_FEEDBACK__ = String(quickFeedbackText || "");
+        }
+        const quickFeedback = String(window.__BC_V2_LAST_QUICK_FEEDBACK__ || "");
         const previousQuote = window.__BC_V2_LAST_QUOTE__;
         const shouldAnimateQuote = !!previousQuote && previousQuote !== quote;
+        if (shouldAnimateQuote) {
+          window.__BC_V2_QUOTE_HISTORY__ = [
+            previousQuote,
+            ...(Array.isArray(window.__BC_V2_QUOTE_HISTORY__) ? window.__BC_V2_QUOTE_HISTORY__ : []),
+          ].filter(Boolean).slice(0, 3);
+        }
         window.__BC_V2_LAST_QUOTE__ = quote;
+        const quoteHistory = (Array.isArray(window.__BC_V2_QUOTE_HISTORY__) ? window.__BC_V2_QUOTE_HISTORY__ : [])
+          .slice(0, 3);
+        const quoteHistoryHtml = quoteHistory
+          .map((item, index) => ({ item, age: index + 1 }))
+          .reverse()
+          .map(({ item, age }) => `
+            <div class="v2-quote-history-line is-age-${age}">
+              ${escapeHtml(item)}
+            </div>
+          `)
+          .join("");
         const quoteHtml = shouldAnimateQuote
           ? String(quote || "")
               .split(/(\s+)/)
@@ -23551,14 +23642,13 @@ function ensureProgLoaded() {
               )
               .join("")
           : escapeHtml(quote);
-        const scene = encounter?.scene || "";
-        const visualClues = Array.isArray(encounter?.visualClues) ? encounter.visualClues : [];
+        const sceneClue = getV2SceneClue(encounter);
         const moodDescriptor = getV2MoodDescriptor(snapshot);
-        const isTerminal = isV2TerminalOutcome(snapshot.outcome);
+        const isTerminal = feedbackIsTerminal;
         const isFinalEncounter = isV2FinalDemoEncounter(snapshot);
         const lesson = String(encounter?.lesson || "");
         const guidanceLine = "Read the table, choose the right interaction, and move the guest without creating friction.";
-        const feedbackMeta = feedbackText === guidanceLine ? "" : feedbackText;
+        const feedbackMeta = isTerminal && feedbackText !== guidanceLine ? feedbackText : "";
         const showGuidanceCard = Number(snapshot.encounterOrdinal || 0) <= 1;
         const nextStepInstruction = getV2NextStepInstruction(snapshot);
         const progressNodes = Array.from({ length: Math.max(1, snapshot.encounterCount || 1) }, (_, index) => {
@@ -23617,21 +23707,22 @@ function ensureProgLoaded() {
                   </div>
                   <div class="v2-region-mark">SA</div>
                 </div>
-                <div class="v2-scene-text">
-                  <div class="v2-scene-label">Table Scene</div>
-                  <p class="v2-scene-copy">${escapeHtml(scene)}</p>
-                  <ul class="v2-clue-list">
-                    ${visualClues.map((clue) => `<li>${escapeHtml(clue)}</li>`).join("")}
-                  </ul>
+                <div class="v2-scene-text v2-scene-clue">
+                  <div class="v2-scene-label">CLUE</div>
+                  <p class="v2-scene-copy">${escapeHtml(sceneClue)}</p>
                 </div>
               </div>
               <div class="v2-hero-bottom">
 
                 <div class="v2-quote-row">
-                  <blockquote class="v2-quote-card">
-                    <span class="v2-quote-mark">“</span>
-                    <p class="v2-quote-text${shouldAnimateQuote ? " is-entering" : ""}">${quoteHtml}</p>
-                  </blockquote>
+                  <div class="v2-quote-stack">
+                    ${quoteHistoryHtml ? `<div class="v2-quote-history">${quoteHistoryHtml}</div>` : ""}
+                    <blockquote class="v2-quote-card">
+                      <span class="v2-quote-mark">“</span>
+                      <p class="v2-quote-text${shouldAnimateQuote ? " is-entering" : ""}">${quoteHtml}</p>
+                    </blockquote>
+                    ${quickFeedback ? `<div class="v2-feedback-chip">${escapeHtml(quickFeedback)}</div>` : ""}
+                  </div>
                 </div>
 
                 ${showGuidanceCard ? `
@@ -23749,8 +23840,12 @@ function ensureProgLoaded() {
               selectedGroup: null,
             };
             const liveSession = api.getSession?.() || null;
+            const latestHistory = Array.isArray(liveSession?.gameState?.history)
+              ? liveSession.gameState.history[liveSession.gameState.history.length - 1]
+              : null;
+            const quickFeedback = getV2QuickFeedback(latestHistory?.quality, latestHistory?.choice, result.snapshot);
             emitV2HarnessOutcome(result.snapshot, liveSession, result.reaction || "");
-            renderV2HarnessPlay(result.snapshot, result.reaction || "");
+            renderV2HarnessPlay(result.snapshot, result.reaction || "", quickFeedback);
           });
         });
 

@@ -765,7 +765,7 @@ export const TIER1_VERTICAL_SLICE_ENCOUNTERS: EncounterV2[] = [
     contextClue: "They sound like visitors and want the dinner to feel connected to place.",
     redHerring: "They are well dressed, which could tempt you to oversell luxury instead of local discovery.",
     lesson:
-      "These guests did not need the most expensive bottle. They needed a local story they could feel good about choosing.",
+      "These guests needed a local story they could feel good about choosing. Price framing or rushing the close misses why they asked for help.",
     targetProductId: "product_001",
     targetRecommendAngle: "story",
     allowedProductIds: ["product_001", "product_002", "product_003"],

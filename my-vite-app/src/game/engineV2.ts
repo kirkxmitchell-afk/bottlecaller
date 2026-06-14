@@ -196,17 +196,17 @@ function buildHistoryReaction(
 
   if (choice.group === "ask" && isAskType(choice.type)) {
     const direct = encounter.guestResponses?.ask?.[choice.type];
-    if (direct?.text) return direct.text;
+    if (direct?.text && direct.quality === quality) return direct.text;
     return encounter.guestReactions.ask?.[choice.type]?.[quality] || fallbackReaction;
   }
   if (choice.group === "recommend" && isRecommendType(choice.type)) {
     const direct = encounter.guestResponses?.recommend?.[choice.type];
-    if (direct?.text) return direct.text;
+    if (direct?.text && direct.quality === quality) return direct.text;
     return encounter.guestReactions.recommend?.[choice.type]?.[quality] || fallbackReaction;
   }
   if (choice.group === "commit" && isCommitType(choice.type)) {
     const direct = encounter.guestResponses?.commit?.[choice.type];
-    if (direct?.text) return direct.text;
+    if (direct?.text && direct.quality === quality) return direct.text;
     return encounter.guestReactions.commit?.[choice.type]?.[quality] || fallbackReaction;
   }
   if (choice.group === "walk_away") {
@@ -385,20 +385,26 @@ export function applyChoice(
   gameState.frustration = clampFrustration(gameState.frustration + result.frustrationDelta);
   const mistakeDelta = getMistakeDeltaForChoice(gameState, playerChoice, result.quality);
   gameState.mistakeCount = clampMistakeCount(gameState.mistakeCount + mistakeDelta);
-  const resultWithMistakes: ChoiceEvaluationResult = {
-    ...result,
-    mistakeDelta,
-  };
 
   let outcome: EncounterOutcome = "continue";
+  let effectiveQuality = result.quality;
 
   if (playerChoice.group === "commit") {
     if (canCommitSucceed(gameState, result.quality)) {
       outcome = calculateSuccessOutcome(gameState, result.quality);
     } else {
       applyEarlyCommitPenalty(gameState);
+      if (result.quality !== "disaster") {
+        effectiveQuality = "poor";
+      }
     }
   }
+
+  const resultWithMistakes: ChoiceEvaluationResult = {
+    ...result,
+    quality: effectiveQuality,
+    mistakeDelta,
+  };
 
   if (outcome === "continue" && gameState.mistakeCount >= 4) {
     outcome = "failure";
