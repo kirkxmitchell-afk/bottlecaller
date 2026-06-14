@@ -369,7 +369,11 @@
           getComputedStyle(document.documentElement).getPropertyValue("--bc-safe-bottom") || "0"
         ) || 0;
         if (maxBottom > 0) {
-          return Math.ceil(maxBottom + window.scrollY + safeBottom + 28);
+          const isV2PlayMobile =
+            window.matchMedia?.("(max-width: 760px)")?.matches &&
+            activeScreen?.id === "screenPlay";
+          const bottomAllowance = isV2PlayMobile ? 0 : safeBottom + 28;
+          return Math.ceil(maxBottom + window.scrollY + bottomAllowance);
         }
       }
       const compactShell = activeScreen?.querySelector?.(".bc-shell-center");

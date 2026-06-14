@@ -9764,10 +9764,10 @@ window.addEventListener("message", (event) => {
   const minHeight = isDemoWelcome
     ? (isMobile ? 220 : 200)
     : (isMobile ? 320 : 360);
-  const measuredHeight = Math.max(minHeight, Math.min(maxHeight, h + (isMobile ? 12 : 24)));
+  const measuredHeight = Math.max(minHeight, Math.min(maxHeight, h + (isMobile && isV2Demo ? 0 : isMobile ? 12 : 24)));
   const viewportHeight = Math.ceil(window.visualViewport?.height || window.innerHeight || 0);
   const clamped = isMobile && isV2Demo
-    ? (isDemoWelcome ? measuredHeight : Math.max(viewportHeight, 420))
+    ? (isDemoWelcome ? measuredHeight : Math.max(measuredHeight, 420))
     : measuredHeight;
   const previousHeight = Number(frame.dataset.bcFrameHeight || 0);
   if (Math.abs(previousHeight - clamped) < 2) return;
