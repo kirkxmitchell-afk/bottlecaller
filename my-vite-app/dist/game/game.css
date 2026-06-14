@@ -370,6 +370,33 @@ p { margin: 0; color: var(--muted); line-height: 1.5; }
   line-height:1.25;
 }
 
+.v2-quote-text.is-entering .v2-quote-word{
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(8px);
+  animation: v2QuoteWordEnter 360ms cubic-bezier(.2,.8,.2,1) both;
+  animation-delay: min(calc(var(--v2-word-index, 0) * 18ms), 260ms);
+}
+
+@keyframes v2QuoteWordEnter{
+  from{
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to{
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce){
+  .v2-quote-text.is-entering .v2-quote-word{
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
 .v2-quote-mark{
   position:absolute;
   left:22px;

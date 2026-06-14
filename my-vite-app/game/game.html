@@ -23535,6 +23535,19 @@ function ensureProgLoaded() {
         const outcome = snapshot.outcome ? v2HarnessLabel(snapshot.outcome) : "In Progress";
         const angle = snapshot.targetRecommendAngle ? v2HarnessLabel(snapshot.targetRecommendAngle) : "Flexible";
         const quote = getV2ReactiveQuote(snapshot, encounter, reaction);
+        const previousQuote = window.__BC_V2_LAST_QUOTE__;
+        const shouldAnimateQuote = !!previousQuote && previousQuote !== quote;
+        window.__BC_V2_LAST_QUOTE__ = quote;
+        const quoteHtml = shouldAnimateQuote
+          ? String(quote || "")
+              .split(/(\s+)/)
+              .map((part, index) =>
+                /^\s+$/.test(part)
+                  ? escapeHtml(part)
+                  : `<span class="v2-quote-word" style="--v2-word-index:${index}">${escapeHtml(part)}</span>`
+              )
+              .join("")
+          : escapeHtml(quote);
         const scene = encounter?.scene || "";
         const visualClues = Array.isArray(encounter?.visualClues) ? encounter.visualClues : [];
         const moodDescriptor = getV2MoodDescriptor(snapshot);
@@ -23614,7 +23627,7 @@ function ensureProgLoaded() {
                 <div class="v2-quote-row">
                   <blockquote class="v2-quote-card">
                     <span class="v2-quote-mark">“</span>
-                    <p>${escapeHtml(quote)}</p>
+                    <p class="v2-quote-text${shouldAnimateQuote ? " is-entering" : ""}">${quoteHtml}</p>
                   </blockquote>
                 </div>
 
