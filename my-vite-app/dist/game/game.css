@@ -5430,8 +5430,8 @@ html, body{ height:100%; }
     left: 6px;
     right: 6px;
     top: auto;
-    bottom: calc(var(--v2-action-shell-height, 48px) + max(8px, env(safe-area-inset-bottom, 0px)));
-    gap: 3px;
+    bottom: calc(var(--v2-action-shell-height, 48px) + max(3px, env(safe-area-inset-bottom, 0px)));
+    gap: 2px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-scene-text{
