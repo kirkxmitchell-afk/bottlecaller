@@ -23614,15 +23614,6 @@ function ensureProgLoaded() {
                   </blockquote>
                 </div>
 
-                <div class="v2-top-metrics">
-                  ${stateGridHtml}
-                  <div class="v2-mood-pill">
-                    <div class="v2-mood-label">Table Mood</div>
-                    <div class="v2-mood-value">${escapeHtml(v2HarnessLabel(snapshot.progressMood))}</div>
-                    <div class="v2-mood-detail">${escapeHtml(moodDescriptor)}</div>
-                  </div>
-                </div>
-
                 ${showGuidanceCard ? `
                 <div class="v2-guidance-card">
                   <div class="v2-guidance-label">What To Do Next</div>
@@ -23632,6 +23623,15 @@ function ensureProgLoaded() {
                   <div class="v2-guidance-meta">${escapeHtml(walkAwayHint)}</div>
                 </div>
                 ` : ""}
+                <div class="v2-top-metrics">
+                  ${stateGridHtml}
+                  <div class="v2-mood-pill">
+                    <div class="v2-mood-label">Table Mood</div>
+                    <div class="v2-mood-value">${escapeHtml(v2HarnessLabel(snapshot.progressMood))}</div>
+                    <div class="v2-mood-detail">${escapeHtml(moodDescriptor)}</div>
+                  </div>
+                </div>
+
                 ${isTerminal ? `
                   <div class="v2-status-card">
                     <div><strong>Lesson:</strong> ${escapeHtml(lesson)}</div>
