@@ -5919,11 +5919,15 @@ html, body{ height:100%; }
       "hud"
       "stage" !important;
     gap: 4px !important;
-    padding: max(8px, env(safe-area-inset-top, 0px)) 8px max(10px, env(safe-area-inset-bottom, 0px)) !important;
+    padding: max(8px, env(safe-area-inset-top, 0px)) 0 0 !important;
   }
 
   #encounterPanel[data-v2-layout="tier1"]{
     padding-bottom: 0 !important;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-hero-frame{
+    min-height: calc(100dvh - 52px) !important;
   }
 
   #bcShell.is-encounter-only #bcStage{
