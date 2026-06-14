@@ -100,6 +100,22 @@ function qualityForChoice(matrix: QualityMatrix, choice: PlayerChoice): ChoiceQu
   return "poor";
 }
 
+function qualityFromGuestResponse(
+  encounter: EncounterV2,
+  playerChoice: PlayerChoice,
+): ChoiceQuality | null {
+  if (playerChoice.group === "ask" && isAskType(playerChoice.type)) {
+    return encounter.guestResponses?.ask?.[playerChoice.type]?.quality || null;
+  }
+  if (playerChoice.group === "recommend" && isRecommendType(playerChoice.type)) {
+    return encounter.guestResponses?.recommend?.[playerChoice.type]?.quality || null;
+  }
+  if (playerChoice.group === "commit" && isCommitType(playerChoice.type)) {
+    return encounter.guestResponses?.commit?.[playerChoice.type]?.quality || null;
+  }
+  return null;
+}
+
 export function evaluateChoice(
   encounter: EncounterV2,
   playerChoice: PlayerChoice,
@@ -116,7 +132,7 @@ export function evaluateChoice(
 
   const variant = getVariant(encounter.variant);
   const matrix = getQualityMatrix(masterProfile, variant);
-  const quality = qualityForChoice(matrix, playerChoice);
+  const quality = qualityFromGuestResponse(encounter, playerChoice) || qualityForChoice(matrix, playerChoice);
   const effect = getQualityEffect(quality);
 
   return {
@@ -262,11 +278,14 @@ export function canCommitSucceed(
   const progress = Number(gameState.progress || 0);
   const frustration = Number(gameState.frustration || 0);
   const profile = gameState.encounter.masterProfile;
+  const priorTurns = Number(gameState.turnCount || 0);
 
+  if (priorTurns < 2) return false;
+  if (commitQuality === "disaster") return false;
   if (frustration >= 5) return false;
+  if ((commitQuality === "optimal" || commitQuality === "good") && progress >= 6 && frustration <= 3) return true;
+  if (commitQuality === "optimal" && progress >= 6 && profile === "momentum") return true;
   if (progress >= 9 && commitQuality !== "disaster") return true;
-  if (progress >= 8 && commitQuality === "optimal") return true;
-  if (progress >= 7 && commitQuality === "optimal" && profile === "momentum") return true;
   return false;
 }
 

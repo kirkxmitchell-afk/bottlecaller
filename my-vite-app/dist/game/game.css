@@ -5586,12 +5586,12 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-group-button{
-    height: 16px !important;
-    min-height: 16px !important;
-    max-height: 16px !important;
-    padding: 0 3px !important;
+    height: 22px !important;
+    min-height: 22px !important;
+    max-height: 22px !important;
+    padding: 2px 5px !important;
     border-radius: 8px !important;
-    font-size: 6.7px !important;
+    font-size: 8.5px !important;
     line-height: 1 !important;
     letter-spacing: 0.04em;
     display: grid !important;
