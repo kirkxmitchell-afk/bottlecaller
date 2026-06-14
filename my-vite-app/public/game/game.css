@@ -5429,8 +5429,8 @@ html, body{ height:100%; }
   #encounterPanel[data-v2-layout="tier1"] .v2-hero-bottom{
     left: 6px;
     right: 6px;
-    top: clamp(58px, 13vw, 72px);
-    bottom: auto;
+    top: auto;
+    bottom: clamp(88px, 13dvh, 118px);
     gap: 3px;
   }
 
@@ -5919,11 +5919,11 @@ html, body{ height:100%; }
       "hud"
       "stage" !important;
     gap: 4px !important;
-    padding: max(8px, env(safe-area-inset-top, 0px)) 8px max(132px, calc(env(safe-area-inset-bottom, 0px) + 112px)) !important;
+    padding: max(8px, env(safe-area-inset-top, 0px)) 8px max(10px, env(safe-area-inset-bottom, 0px)) !important;
   }
 
   #encounterPanel[data-v2-layout="tier1"]{
-    padding-bottom: max(132px, calc(env(safe-area-inset-bottom, 0px) + 112px)) !important;
+    padding-bottom: 0 !important;
   }
 
   #bcShell.is-encounter-only #bcStage{
@@ -5938,11 +5938,10 @@ html, body{ height:100%; }
     display: block !important;
     position: relative !important;
     z-index: 5 !important;
-    margin-top: clamp(-122px, -14dvh, -92px) !important;
-    margin-bottom: max(118px, calc(env(safe-area-inset-bottom, 0px) + 96px)) !important;
-    padding: 8px 6px max(8px, env(safe-area-inset-bottom, 0px)) !important;
-    background:
-      linear-gradient(180deg, rgba(9,10,14,0), rgba(9,10,14,0.56) 42%, rgba(9,10,14,0.92) 100%) !important;
+    margin-top: clamp(-82px, -10dvh, -62px) !important;
+    margin-bottom: 0 !important;
+    padding: 0 6px max(6px, env(safe-area-inset-bottom, 0px)) !important;
+    background: transparent !important;
     pointer-events: none !important;
   }
 
