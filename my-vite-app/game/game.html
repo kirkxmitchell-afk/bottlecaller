@@ -23679,8 +23679,9 @@ function ensureProgLoaded() {
           : isTerminal
             ? "The encounter is complete. Continue, replay, or go back to welcome."
             : "Choose Ask, Recommend, or Commit to open the response options.";
+        stepButtons.dataset.v2ActionState = selectedGroup ? "expanded" : "collapsed";
         stepButtons.innerHTML = `
-          <div class="v2-action-shell">
+          <div class="v2-action-shell${selectedGroup ? " is-expanded" : ""}">
             <div class="v2-action-header">${groupButtons}</div>
             ${showIntroGuidance ? `<div class="small-text v2-action-caption">${escapeHtml(actionLabel)}</div>` : ""}
             <div class="v2-action-grid">${actionButtons}</div>
@@ -23691,6 +23692,13 @@ function ensureProgLoaded() {
           </div>
         `;
         renderV2DemoCompletionCard(stepButtons, snapshot);
+        requestAnimationFrame(() => {
+          const shell = stepButtons.querySelector(".v2-action-shell");
+          const shellHeight = Math.ceil(shell?.getBoundingClientRect?.().height || 0);
+          if (shellHeight > 0) {
+            encounterPanel.style.setProperty("--v2-action-shell-height", `${shellHeight}px`);
+          }
+        });
 
         stepButtons.querySelectorAll("[data-v2-group]").forEach((btn) => {
           btn.addEventListener("click", () => {
