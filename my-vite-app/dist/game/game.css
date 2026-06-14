@@ -5430,8 +5430,8 @@ html, body{ height:100%; }
     left: 6px;
     right: 6px;
     top: auto;
-    bottom: calc(var(--v2-action-shell-height, 48px) + max(6px, env(safe-area-inset-bottom, 0px)));
-    gap: 1px;
+    bottom: calc(var(--v2-action-shell-height, 48px) + max(3px, env(safe-area-inset-bottom, 0px)));
+    gap: 2px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-scene-text{
@@ -5943,7 +5943,7 @@ html, body{ height:100%; }
     bottom: 0 !important;
     margin-top: 0 !important;
     margin-bottom: 0 !important;
-    padding: 0 6px max(6px, env(safe-area-inset-bottom, 0px)) !important;
+    padding: 0 6px max(3px, env(safe-area-inset-bottom, 0px)) !important;
     background: transparent !important;
     pointer-events: none !important;
   }
