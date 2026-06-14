@@ -9743,7 +9743,7 @@ window.addEventListener("message", (event) => {
   const isStaleDemoWelcomeAfterPlay =
     isV2Demo &&
     isDemoWelcome &&
-    isDemoPlayStartRecent() &&
+    isDemoPlayStartRecent(1200) &&
     window.__BC_DEMO_IFRAME_LAST_SCREEN__ === "screenPlay";
   if (isStaleDemoWelcomeAfterPlay) {
     setDebug({

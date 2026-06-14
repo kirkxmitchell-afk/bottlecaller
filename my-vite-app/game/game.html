@@ -386,7 +386,10 @@
           compactCard?.offsetHeight || 0
         );
         if (shellHeight > 0) {
-          return shellHeight + 24;
+          const isMobileWelcome =
+            window.matchMedia?.("(max-width: 760px)")?.matches &&
+            activeScreen?.id === "screenWelcome";
+          return shellHeight + (isMobileWelcome ? 72 : 24);
         }
       }
       return Math.max(
@@ -23751,15 +23754,21 @@ function ensureProgLoaded() {
           });
         });
 
-        document.getElementById("btnV2HarnessContinue")?.addEventListener("click", () => {
-          if (isFinalEncounter) {
-            resetV2DemoProgressToStart();
+        if (stepButtons.__BC_V2_TERMINAL_HANDLER__) {
+          stepButtons.removeEventListener("click", stepButtons.__BC_V2_TERMINAL_HANDLER__);
+        }
+        stepButtons.__BC_V2_TERMINAL_HANDLER__ = (event) => {
+          const button = event.target?.closest?.("#btnV2HarnessContinue, #btnV2HarnessReplay");
+          if (!button) return;
+          event.preventDefault();
+          if (button.id === "btnV2HarnessContinue") {
+            if (isFinalEncounter) {
+              resetV2DemoProgressToStart();
+              return;
+            }
+            startV2HarnessEncounter();
             return;
           }
-          startV2HarnessEncounter();
-        });
-
-        document.getElementById("btnV2HarnessReplay")?.addEventListener("click", () => {
           if (!snapshot?.encounterId) return;
           const replaySnapshot = api.start({
             tier: snapshot.tier,
@@ -23767,7 +23776,8 @@ function ensureProgLoaded() {
             encounterLimit: getV2EncounterLimit(),
           });
           renderV2HarnessPlay(replaySnapshot, "");
-        });
+        };
+        stepButtons.addEventListener("click", stepButtons.__BC_V2_TERMINAL_HANDLER__);
 
       }
 

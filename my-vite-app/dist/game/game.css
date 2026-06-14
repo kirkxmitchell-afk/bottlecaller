@@ -397,6 +397,28 @@ p { margin: 0; color: var(--muted); line-height: 1.5; }
   }
 }
 
+@media (max-width: 760px){
+  .v2-quote-text.is-entering .v2-quote-word{
+    display: inline-block;
+    opacity: 0;
+    transform: translate3d(0, 6px, 0);
+    animation: v2QuoteWordEnterMobile 220ms cubic-bezier(.2,.8,.2,1) both;
+    animation-delay: min(calc(var(--v2-word-index, 0) * 10ms), 140ms);
+    will-change: opacity, transform;
+  }
+}
+
+@keyframes v2QuoteWordEnterMobile{
+  from{
+    opacity: 0;
+    transform: translate3d(0, 6px, 0);
+  }
+  to{
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
 .v2-quote-mark{
   position:absolute;
   left:22px;
