@@ -5927,7 +5927,7 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-hero-frame{
-    min-height: calc(100dvh - 76px) !important;
+    min-height: max(calc(100dvh - 76px), calc(100vw * 1.62)) !important;
   }
 
   #bcShell.is-encounter-only #bcStage{
