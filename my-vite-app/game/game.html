@@ -23697,6 +23697,13 @@ function ensureProgLoaded() {
         `;
         renderV2DemoCompletionCard(stepButtons, snapshot);
         requestAnimationFrame(() => {
+          const heroFrame = stepContent.querySelector(".v2-hero-frame");
+          const isV2MobileLayout = window.matchMedia?.("(max-width: 760px)")?.matches;
+          if (heroFrame && isV2MobileLayout && stepButtons.parentElement !== heroFrame) {
+            heroFrame.appendChild(stepButtons);
+          } else if (!isV2MobileLayout && stepButtons.parentElement !== encounterPanel) {
+            encounterPanel.appendChild(stepButtons);
+          }
           const shell = stepButtons.querySelector(".v2-action-shell");
           const shellHeight = Math.ceil(shell?.getBoundingClientRect?.().height || 0);
           if (shellHeight > 0) {
