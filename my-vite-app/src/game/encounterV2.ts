@@ -138,7 +138,7 @@ function buildGuestResponsesForFamily(family: string): EncounterGuestResponseMap
       },
       recommend: {
         flavour: {
-          text: "That sounds nice, but what makes it South African?",
+          text: "That helps. We wanted something local, but not too heavy.",
           quality: "good",
         },
         story: {

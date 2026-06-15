@@ -188,6 +188,10 @@ function nonCommitActionCount(gameState: GameStateV2): number {
   return (Array.isArray(gameState.history) ? gameState.history : []).filter((item) => item.choice?.group !== "commit").length;
 }
 
+function hasUsedActionType(gameState: GameStateV2, type: ActionType): boolean {
+  return (Array.isArray(gameState.history) ? gameState.history : []).some((item) => item.choice?.type === type);
+}
+
 function applyTimingPressure(
   gameState: GameStateV2,
   playerChoice: PlayerChoice,
@@ -254,10 +258,70 @@ function applyTimingPressure(
 }
 
 function buildHistoryReaction(
-  encounter: EncounterV2,
+  gameState: GameStateV2,
   choice: PlayerChoice,
-  quality: ChoiceQuality,
+  result: ChoiceEvaluationResult,
 ): string {
+  const { encounter } = gameState;
+  const quality = result.quality;
+  const progress = Number(gameState.progress || 0);
+  const friction = Number(gameState.frustration || 0);
+  const isReady = progress >= 9;
+  const isCooling =
+    choice.group !== "commit" &&
+    (friction >= 3 ||
+      result.feedbackText === "You had the opening. Now they're cooling." ||
+      result.feedbackText === "Too much detail. They pull back." ||
+      result.feedbackText === "Extra detail. Energy drops.");
+
+  const stateReaction = (() => {
+    if (choice.group === "walk_away") return "";
+    if (isCooling) {
+      if (friction >= 4) return "Okay, maybe we'll just have another look.";
+      if (choice.group === "recommend") return "I think we're overthinking it now.";
+      return "Okay, I think we've got enough to decide.";
+    }
+    if (isReady && choice.group !== "commit") {
+      return "That sounds like what we came for.";
+    }
+    if (quality === "optimal") {
+      if (progress >= 6) return "That sounds like the kind of direction we wanted.";
+      return "That helps. We wanted something local, but not too heavy.";
+    }
+    if (quality === "good") {
+      if (progress >= 6) return "Okay, that makes sense.";
+      return "That helps. We wanted something local, but not too heavy.";
+    }
+    if (quality === "poor") {
+      if (friction >= 3) return "Okay, maybe we'll just have another look.";
+      return "I guess... but I am not completely sure that is the right direction.";
+    }
+    if (quality === "disaster") {
+      if (friction >= 3) return "Okay, maybe we'll just have another look.";
+      return "Er... no, that is not really what we are looking for.";
+    }
+    if (quality === "early_commit") {
+      return "That feels a bit rushed. We are not ready to decide yet.";
+    }
+    return "";
+  })();
+
+  const directResponsePointsToUsedOption = (text: string): boolean => {
+    const normalized = text.toLowerCase();
+    if (hasUsedActionType(gameState, "story") && /south african|local|story/.test(normalized)) return true;
+    if (hasUsedActionType(gameState, "flavour") && /taste|flavour|flavor/.test(normalized)) return true;
+    if (hasUsedActionType(gameState, "value") && /worth|price|value/.test(normalized)) return true;
+    if (hasUsedActionType(gameState, "confidence") && /would you choose|why that one|choose/.test(normalized)) return true;
+    return false;
+  };
+
+  const canUseDirectResponse = (text: string | undefined): text is string => {
+    if (!text) return false;
+    if (isReady && choice.group !== "commit") return false;
+    if (isCooling) return false;
+    return !directResponsePointsToUsedOption(text);
+  };
+
   const fallbackReaction = (() => {
     if (choice.group === "ask") {
       if (quality === "optimal") return "Yes, that is exactly the kind of thing we were hoping you would ask.";
@@ -287,18 +351,24 @@ function buildHistoryReaction(
 
   if (choice.group === "ask" && isAskType(choice.type)) {
     const direct = encounter.guestResponses?.ask?.[choice.type];
-    if (direct?.text && direct.quality === quality) return direct.text;
-    return encounter.guestReactions.ask?.[choice.type]?.[quality] || fallbackReaction;
+    if (direct?.quality === quality && canUseDirectResponse(direct.text)) return direct.text;
+    const authored = encounter.guestReactions.ask?.[choice.type]?.[quality];
+    if (canUseDirectResponse(authored)) return authored;
+    return stateReaction || fallbackReaction;
   }
   if (choice.group === "recommend" && isRecommendType(choice.type)) {
     const direct = encounter.guestResponses?.recommend?.[choice.type];
-    if (direct?.text && direct.quality === quality) return direct.text;
-    return encounter.guestReactions.recommend?.[choice.type]?.[quality] || fallbackReaction;
+    if (direct?.quality === quality && canUseDirectResponse(direct.text)) return direct.text;
+    const authored = encounter.guestReactions.recommend?.[choice.type]?.[quality];
+    if (canUseDirectResponse(authored)) return authored;
+    return stateReaction || fallbackReaction;
   }
   if (choice.group === "commit" && isCommitType(choice.type)) {
     const direct = encounter.guestResponses?.commit?.[choice.type];
-    if (direct?.text && direct.quality === quality) return direct.text;
-    return encounter.guestReactions.commit?.[choice.type]?.[quality] || fallbackReaction;
+    if (direct?.quality === quality && canUseDirectResponse(direct.text)) return direct.text;
+    const authored = encounter.guestReactions.commit?.[choice.type]?.[quality];
+    if (canUseDirectResponse(authored)) return authored;
+    return stateReaction || fallbackReaction;
   }
   if (choice.group === "walk_away") {
     return fallbackReaction;
@@ -322,7 +392,7 @@ function appendHistory(
     resultingFrustration: gameState.frustration,
     mistakeDelta: result.mistakeDelta,
     resultingMistakeCount: gameState.mistakeCount,
-    reaction: buildHistoryReaction(gameState.encounter, choice, result.quality),
+    reaction: buildHistoryReaction(gameState, choice, result),
     feedbackText: result.feedbackText,
   };
   gameState.turnCount = nextTurn;
