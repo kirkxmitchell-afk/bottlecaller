@@ -3,8 +3,9 @@ import type { MasterProfile, QualityEffect, QualityMatrix } from "./typesV2";
 export const QUALITY_EFFECTS: Record<string, QualityEffect> = {
   optimal: { progress: 3, frustration: -1 },
   good: { progress: 2, frustration: 0 },
-  poor: { progress: 1, frustration: 1 },
+  poor: { progress: 0, frustration: 1 },
   disaster: { progress: 0, frustration: 2 },
+  early_commit: { progress: 0, frustration: 2 },
 };
 
 function makeMatrix(matrix: QualityMatrix): QualityMatrix {
@@ -118,4 +119,3 @@ export function getMasterProfile(profileId: string | null | undefined): MasterPr
   if (!profileId) return null;
   return MASTER_PROFILES[String(profileId).trim().toLowerCase()] || null;
 }
-

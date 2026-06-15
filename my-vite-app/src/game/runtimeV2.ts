@@ -50,6 +50,7 @@ export interface RuntimeV2Snapshot {
   outcome: EncounterOutcome | null;
   authorityDelta: number;
   turnCount: number;
+  actionCount: number;
   bestPath: string[];
   serviceStage: EncounterV2["serviceStage"];
   targetRecommendAngle: RecommendAngle | null;
@@ -170,6 +171,7 @@ export function snapshotRuntimeV2(session: RuntimeV2Session): RuntimeV2Snapshot 
     outcome: gameState.outcome,
     authorityDelta: gameState.authorityDelta,
     turnCount: gameState.turnCount,
+    actionCount: gameState.actionCount,
     bestPath: summarizeBestPath(encounter),
     serviceStage: encounter.serviceStage,
     targetRecommendAngle: encounter.targetRecommendAngle || null,

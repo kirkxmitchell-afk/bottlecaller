@@ -37,6 +37,7 @@ export type ChoiceQuality =
   | "optimal"
   | "good"
   | "poor"
+  | "early_commit"
   | "disaster";
 
 export type MasterProfileId =
@@ -236,6 +237,7 @@ export interface TurnHistoryItem {
   mistakeDelta: number;
   resultingMistakeCount: number;
   reaction: string;
+  feedbackText?: string;
 }
 
 export interface GameStateV2 {
@@ -250,6 +252,7 @@ export interface GameStateV2 {
   outcome: EncounterOutcome | null;
   authorityDelta: number;
   turnCount: number;
+  actionCount: number;
   history: TurnHistoryItem[];
   usedChoiceKeys: string[];
 }
@@ -259,6 +262,7 @@ export interface ChoiceEvaluationResult {
   progressDelta: number;
   frustrationDelta: number;
   mistakeDelta: number;
+  feedbackText?: string;
 }
 
 export interface ApplyChoiceResult extends ChoiceEvaluationResult {

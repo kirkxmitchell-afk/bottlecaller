@@ -46,7 +46,7 @@ export function getProgressMood(progress: number): GameStateV2["progressMood"] {
 }
 
 export function getFrustrationMood(frustration: number): GameStateV2["frustrationMood"] {
-  if (frustration <= 1) return "normal";
+  if (frustration <= 2) return "normal";
   if (frustration <= 3) return "resistant";
   return "critical_resistance";
 }
@@ -135,7 +135,7 @@ export function evaluateChoice(
   if (!masterProfile) {
     return {
       quality: "poor",
-      progressDelta: 1,
+      progressDelta: 0,
       frustrationDelta: 1,
       mistakeDelta: 0,
     };
@@ -170,9 +170,87 @@ export function createGameStateV2(encounter: EncounterV2, product: Product | nul
     outcome: null,
     authorityDelta: 0,
     turnCount: 0,
+    actionCount: 0,
     history: [],
     usedChoiceKeys: [],
   };
+}
+
+function groupUseCount(gameState: GameStateV2, group: ActionGroup): number {
+  return (Array.isArray(gameState.history) ? gameState.history : []).filter((item) => item.choice?.group === group).length;
+}
+
+function hasUsedGroup(gameState: GameStateV2, group: ActionGroup): boolean {
+  return groupUseCount(gameState, group) > 0;
+}
+
+function nonCommitActionCount(gameState: GameStateV2): number {
+  return (Array.isArray(gameState.history) ? gameState.history : []).filter((item) => item.choice?.group !== "commit").length;
+}
+
+function applyTimingPressure(
+  gameState: GameStateV2,
+  playerChoice: PlayerChoice,
+  result: ChoiceEvaluationResult,
+): ChoiceEvaluationResult {
+  let next: ChoiceEvaluationResult = { ...result };
+  const progress = Number(gameState.progress || 0);
+  const priorActionCount = Number(gameState.actionCount ?? gameState.turnCount ?? 0);
+
+  if (progress >= 9 && playerChoice.group === "ask") {
+    next = {
+      ...next,
+      quality: "poor",
+      progressDelta: 0,
+      frustrationDelta: Math.max(next.frustrationDelta, 1),
+      feedbackText: "Too much. Momentum stalls.",
+    };
+  } else if (progress >= 9 && playerChoice.group === "recommend" && next.quality !== "optimal") {
+    next = {
+      ...next,
+      quality: "poor",
+      progressDelta: 0,
+      frustrationDelta: Math.max(next.frustrationDelta, 1),
+      feedbackText: "Extra detail. Energy drops.",
+    };
+  }
+
+  if (playerChoice.group === "ask" && !hasUsedGroup(gameState, "recommend") && groupUseCount(gameState, "ask") >= 2) {
+    next = {
+      ...next,
+      progressDelta: Math.min(next.progressDelta, 0),
+      frustrationDelta: next.frustrationDelta + 1,
+      feedbackText: next.feedbackText || "Too many questions. Energy drops.",
+    };
+  }
+
+  if (playerChoice.group === "recommend" && progress >= 7 && groupUseCount(gameState, "recommend") >= 2) {
+    next = {
+      ...next,
+      progressDelta: Math.min(next.progressDelta, 0),
+      frustrationDelta: next.frustrationDelta + 1,
+      feedbackText: next.feedbackText || "Too much detail. They pull back.",
+    };
+  }
+
+  if (playerChoice.group !== "commit" && nonCommitActionCount(gameState) >= 4) {
+    next = {
+      ...next,
+      progressDelta: Math.min(next.progressDelta, 0),
+      frustrationDelta: next.frustrationDelta + 1,
+      feedbackText: next.feedbackText || "Wrong pace. Momentum fades.",
+    };
+  }
+
+  if (priorActionCount >= 3 && playerChoice.group !== "commit" && progress < 9) {
+    next = {
+      ...next,
+      frustrationDelta: next.frustrationDelta + 1,
+      feedbackText: next.feedbackText || "You had the opening. Now they're cooling.",
+    };
+  }
+
+  return next;
 }
 
 function buildHistoryReaction(
@@ -194,6 +272,7 @@ function buildHistoryReaction(
       return "Er... no, that is not really what we are looking for.";
     }
     if (choice.group === "commit") {
+      if (quality === "early_commit") return "That feels a bit rushed. We are not ready to decide yet.";
       if (quality === "optimal") return "Perfect. Let's do that.";
       if (quality === "good") return "Alright, that sounds good.";
       if (quality === "poor") return "Maybe... can we think about it for a second?";
@@ -244,22 +323,23 @@ function appendHistory(
     mistakeDelta: result.mistakeDelta,
     resultingMistakeCount: gameState.mistakeCount,
     reaction: buildHistoryReaction(gameState.encounter, choice, result.quality),
+    feedbackText: result.feedbackText,
   };
   gameState.turnCount = nextTurn;
+  gameState.actionCount = Number(gameState.actionCount || 0) + 1;
   gameState.history = [...gameState.history, item];
 }
 
-function applyEarlyCommitPenalty(gameState: GameStateV2): void {
-  if (gameState.progress >= 6) {
-    gameState.progress = clampProgress(gameState.progress + 1);
-    gameState.frustration = clampFrustration(gameState.frustration + 1);
-    return;
-  }
-  if (gameState.progress >= 3) {
-    gameState.frustration = clampFrustration(gameState.frustration + 2);
-    return;
-  }
-  gameState.frustration = clampFrustration(gameState.frustration + 3);
+function applyEarlyCommitPenalty(gameState: GameStateV2): ChoiceEvaluationResult {
+  const frustrationDelta = 2;
+  gameState.frustration = clampFrustration(gameState.frustration + frustrationDelta);
+  return {
+    quality: "early_commit",
+    progressDelta: 0,
+    frustrationDelta,
+    mistakeDelta: 0,
+    feedbackText: "Too soon. Pressure rises.",
+  };
 }
 
 function isCloseWindowOpen(gameState: GameStateV2, commitQuality: ChoiceQuality): boolean {
@@ -274,6 +354,7 @@ function getMistakeDeltaForChoice(
   let mistakeDelta = 0;
   if (quality === "poor") mistakeDelta += 1;
   if (quality === "disaster") mistakeDelta += 2;
+  if (quality === "early_commit") mistakeDelta += 2;
   if (playerChoice.group === "commit" && !isCloseWindowOpen(gameState, quality)) {
     mistakeDelta += 2;
   }
@@ -392,6 +473,7 @@ export function applyChoice(
       progressDelta: 0,
       frustrationDelta: 0,
       mistakeDelta: 0,
+      feedbackText: result.outcome === "neutral_exit" ? "Good restraint. Experience preserved." : "",
     });
     return {
       quality: result.outcome === "neutral_exit" ? "good" : "poor",
@@ -408,37 +490,58 @@ export function applyChoice(
     };
   }
 
-  const result = evaluateChoice(gameState.encounter, playerChoice);
+  const wasCriticalResistance = Number(gameState.frustration || 0) >= 4;
+  const result = applyTimingPressure(gameState, playerChoice, evaluateChoice(gameState.encounter, playerChoice));
   gameState.usedChoiceKeys = [...(gameState.usedChoiceKeys || []), choiceKey(playerChoice)];
 
   gameState.progress = clampProgress(gameState.progress + result.progressDelta);
   gameState.frustration = clampFrustration(gameState.frustration + result.frustrationDelta);
-  const mistakeDelta = getMistakeDeltaForChoice(gameState, playerChoice, result.quality);
+  let mistakeDelta = getMistakeDeltaForChoice(gameState, playerChoice, result.quality);
   gameState.mistakeCount = clampMistakeCount(gameState.mistakeCount + mistakeDelta);
 
   let outcome: EncounterOutcome = "continue";
   let effectiveQuality = result.quality;
+  let effectiveResult: ChoiceEvaluationResult = result;
 
   if (playerChoice.group === "commit") {
     if (canCommitSucceed(gameState, result.quality)) {
       outcome = calculateSuccessOutcome(gameState, result.quality);
     } else {
-      applyEarlyCommitPenalty(gameState);
-      if (result.quality !== "disaster") {
-        effectiveQuality = "poor";
-      }
+      gameState.progress = clampProgress(gameState.progress - result.progressDelta);
+      gameState.frustration = clampFrustration(gameState.frustration - result.frustrationDelta);
+      const earlyCommit = applyEarlyCommitPenalty(gameState);
+      const correctedMistakeDelta = 2;
+      gameState.mistakeCount = clampMistakeCount(gameState.mistakeCount - mistakeDelta + correctedMistakeDelta);
+      effectiveQuality = "early_commit";
+      mistakeDelta = correctedMistakeDelta;
+      effectiveResult = {
+        ...result,
+        quality: "early_commit",
+        progressDelta: earlyCommit.progressDelta,
+        frustrationDelta: earlyCommit.frustrationDelta,
+        mistakeDelta,
+        feedbackText: earlyCommit.feedbackText,
+      };
     }
   }
 
   const resultWithMistakes: ChoiceEvaluationResult = {
-    ...result,
+    ...effectiveResult,
     quality: effectiveQuality,
     mistakeDelta,
   };
 
-  if (outcome === "continue" && gameState.mistakeCount >= 4) {
+  if (
+    outcome === "continue" &&
+    wasCriticalResistance &&
+    (effectiveQuality === "poor" || effectiveQuality === "disaster" || effectiveQuality === "early_commit")
+  ) {
+    outcome = "failure";
+  } else if (outcome === "continue" && gameState.mistakeCount >= 4) {
     outcome = "failure";
   } else if (outcome === "continue" && gameState.frustration >= 5 && result.quality === "disaster") {
+    outcome = "failure";
+  } else if (outcome === "continue" && Number(gameState.actionCount || 0) + 1 >= 6) {
     outcome = "failure";
   }
 

@@ -23225,15 +23225,30 @@ function ensureProgLoaded() {
       function getV2MoodDescriptor(snapshot) {
         const progressMood = String(snapshot?.progressMood || "");
         const frustrationMood = String(snapshot?.frustrationMood || "");
+        const friction = Number(snapshot?.frustration || 0);
         if (snapshot?.outcome === "premium_success") return "Table fully aligned";
         if (snapshot?.outcome === "standard_success") return "Table ready to commit";
         if (snapshot?.outcome === "weak_success") return "Close secured with friction";
         if (snapshot?.outcome === "neutral_exit") return "Experience preserved";
         if (snapshot?.outcome === "failure") return "Table lost";
-        if (frustrationMood === "critical_resistance") return "Critical resistance";
+        if (friction >= 4 || frustrationMood === "critical_resistance") return "Critical resistance";
+        if (friction >= 3) return "Resistance rising";
         if (progressMood === "ready") return "Ready to commit";
         if (progressMood === "engaged") return "Strong momentum";
         if (progressMood === "warming_up") return "Warming up";
+        return "Guarded";
+      }
+
+      function getV2TableMood(snapshot) {
+        const outcome = String(snapshot?.outcome || "");
+        const progress = Number(snapshot?.progress || 0);
+        const friction = Number(snapshot?.frustration || 0);
+        if (outcome === "failure") return "Shut Down";
+        if (friction >= 4) return "Critical Resistance";
+        if (friction >= 3) return "Resistant";
+        if (progress >= 9) return "Ready";
+        if (progress >= 6) return "Engaged";
+        if (progress >= 3) return "Warming Up";
         return "Guarded";
       }
 
@@ -23280,7 +23295,8 @@ function ensureProgLoaded() {
         return compact.endsWith(".") ? compact : `${compact}.`;
       }
 
-      function getV2QuickFeedback(quality, choice, snapshot) {
+      function getV2QuickFeedback(quality, choice, snapshot, feedbackText = "") {
+        if (feedbackText) return String(feedbackText);
         const outcome = String(snapshot?.outcome || "");
         const choiceGroup = String(choice?.group || "");
         const normalizedQuality = String(quality || "").toLowerCase();
@@ -23292,6 +23308,9 @@ function ensureProgLoaded() {
             "Good restraint. Experience preserved.",
             "You stepped back. Trust protected.",
           ]);
+        }
+        if (normalizedQuality === "early_commit") {
+          return "Too soon. Pressure rises.";
         }
         if (choiceGroup === "commit" && normalizedQuality !== "optimal" && normalizedQuality !== "good") {
           return pick([
@@ -23648,6 +23667,7 @@ function ensureProgLoaded() {
           : escapeHtml(quote);
         const sceneClue = getV2SceneClue(encounter);
         const moodDescriptor = getV2MoodDescriptor(snapshot);
+        const tableMood = getV2TableMood(snapshot);
         const isTerminal = feedbackIsTerminal;
         const isFinalEncounter = isV2FinalDemoEncounter(snapshot);
         const lesson = String(encounter?.lesson || "");
@@ -23743,7 +23763,7 @@ function ensureProgLoaded() {
                   ${stateGridHtml}
                   <div class="v2-mood-pill">
                     <div class="v2-mood-label">Table Mood</div>
-                    <div class="v2-mood-value">${escapeHtml(v2HarnessLabel(snapshot.progressMood))}</div>
+                    <div class="v2-mood-value">${escapeHtml(tableMood)}</div>
                     <div class="v2-mood-detail">${escapeHtml(moodDescriptor)}</div>
                   </div>
                 </div>
@@ -23855,7 +23875,12 @@ function ensureProgLoaded() {
             const latestHistory = Array.isArray(liveSession?.gameState?.history)
               ? liveSession.gameState.history[liveSession.gameState.history.length - 1]
               : null;
-            const quickFeedback = getV2QuickFeedback(latestHistory?.quality, latestHistory?.choice, result.snapshot);
+            const quickFeedback = getV2QuickFeedback(
+              latestHistory?.quality,
+              latestHistory?.choice,
+              result.snapshot,
+              latestHistory?.feedbackText || "",
+            );
             emitV2HarnessOutcome(result.snapshot, liveSession, result.reaction || "");
             renderV2HarnessPlay(result.snapshot, result.reaction || "", quickFeedback);
           });
