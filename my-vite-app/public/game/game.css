@@ -238,6 +238,16 @@ p { margin: 0; color: var(--muted); line-height: 1.5; }
   line-height:1.02;
 }
 
+.v2-product-title{
+  margin-top:8px;
+  color:rgba(255,255,255,.94);
+  font-size:13px;
+  line-height:1.2;
+  font-weight:700;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+}
+
 .v2-progress-rail{
   margin-top:12px;
   display:grid;
@@ -5531,6 +5541,18 @@ html, body{ height:100%; }
   #encounterPanel[data-v2-layout="tier1"] .v2-encounter-title{
     font-size: clamp(12px, 3.5vw, 16px);
     line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-product-title{
+    margin-top: 2px;
+    color: #ffffff;
+    font-size: 6.4px;
+    line-height: 1;
+    letter-spacing: 0.02em;
     text-align: center;
     white-space: nowrap;
     overflow: hidden;

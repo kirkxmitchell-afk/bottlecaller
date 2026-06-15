@@ -23707,6 +23707,7 @@ function ensureProgLoaded() {
                       <span>Encounter ${String(snapshot.encounterOrdinal).padStart(3, "0")} of ${snapshot.encounterCount}</span>
                     </div>
                     <h2 class="v2-encounter-title">${escapeHtml(snapshot.encounterTitle)}</h2>
+                    ${snapshot.productName ? `<div class="v2-product-title">Product: ${escapeHtml(snapshot.productName)}</div>` : ""}
                     <div class="v2-progress-rail" style="--v2-progress-count:${Math.max(1, snapshot.encounterCount || 1)}" aria-hidden="true">${progressNodes}</div>
                   </div>
                   <div class="v2-region-mark">SA</div>
