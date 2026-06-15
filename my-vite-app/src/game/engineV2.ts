@@ -100,6 +100,15 @@ function qualityForChoice(matrix: QualityMatrix, choice: PlayerChoice): ChoiceQu
   return "poor";
 }
 
+export function choiceKey(choice: PlayerChoice): string {
+  return `${String(choice.group || "")}:${String(choice.type || "")}`;
+}
+
+export function hasChoiceBeenUsed(gameState: GameStateV2, choice: PlayerChoice): boolean {
+  const usedChoiceKeys = Array.isArray(gameState.usedChoiceKeys) ? gameState.usedChoiceKeys : [];
+  return usedChoiceKeys.includes(choiceKey(choice));
+}
+
 function qualityFromGuestResponse(
   encounter: EncounterV2,
   playerChoice: PlayerChoice,
@@ -108,6 +117,8 @@ function qualityFromGuestResponse(
     return encounter.guestResponses?.ask?.[playerChoice.type]?.quality || null;
   }
   if (playerChoice.group === "recommend" && isRecommendType(playerChoice.type)) {
+    const scoredQuality = encounter.recommendScoring?.[playerChoice.type] || null;
+    if (scoredQuality) return scoredQuality;
     return encounter.guestResponses?.recommend?.[playerChoice.type]?.quality || null;
   }
   if (playerChoice.group === "commit" && isCommitType(playerChoice.type)) {
@@ -160,6 +171,7 @@ export function createGameStateV2(encounter: EncounterV2, product: Product | nul
     authorityDelta: 0,
     turnCount: 0,
     history: [],
+    usedChoiceKeys: [],
   };
 }
 
@@ -356,8 +368,25 @@ export function applyChoice(
   gameState: GameStateV2,
   playerChoice: PlayerChoice,
 ): ApplyChoiceResult {
+  if (hasChoiceBeenUsed(gameState, playerChoice)) {
+    return {
+      quality: "poor",
+      progressDelta: 0,
+      frustrationDelta: 0,
+      mistakeDelta: 0,
+      progress: gameState.progress,
+      frustration: gameState.frustration,
+      mistakeCount: gameState.mistakeCount,
+      progressMood: gameState.progressMood,
+      frustrationMood: gameState.frustrationMood,
+      walkAwayUnlocked: gameState.walkAwayUnlocked,
+      outcome: "not_available",
+    };
+  }
+
   if (playerChoice.group === "walk_away") {
     const result = walkAway(gameState);
+    gameState.usedChoiceKeys = [...(gameState.usedChoiceKeys || []), choiceKey(playerChoice)];
     appendHistory(gameState, playerChoice, {
       quality: result.outcome === "neutral_exit" ? "good" : "poor",
       progressDelta: 0,
@@ -380,6 +409,7 @@ export function applyChoice(
   }
 
   const result = evaluateChoice(gameState.encounter, playerChoice);
+  gameState.usedChoiceKeys = [...(gameState.usedChoiceKeys || []), choiceKey(playerChoice)];
 
   gameState.progress = clampProgress(gameState.progress + result.progressDelta);
   gameState.frustration = clampFrustration(gameState.frustration + result.frustrationDelta);

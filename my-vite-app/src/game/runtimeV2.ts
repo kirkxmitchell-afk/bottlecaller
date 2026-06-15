@@ -54,6 +54,7 @@ export interface RuntimeV2Snapshot {
   serviceStage: EncounterV2["serviceStage"];
   targetRecommendAngle: RecommendAngle | null;
   availableGroups: ActionGroup[];
+  usedChoices: string[];
 }
 
 export interface RuntimeV2ChoiceResult {
@@ -173,6 +174,7 @@ export function snapshotRuntimeV2(session: RuntimeV2Session): RuntimeV2Snapshot 
     serviceStage: encounter.serviceStage,
     targetRecommendAngle: encounter.targetRecommendAngle || null,
     availableGroups: availableActionGroups(gameState),
+    usedChoices: Array.isArray(gameState.usedChoiceKeys) ? gameState.usedChoiceKeys.slice() : [],
   };
 }
 

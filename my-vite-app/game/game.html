@@ -23209,7 +23209,11 @@ function ensureProgLoaded() {
           .replace(/\b\w/g, (m) => m.toUpperCase());
       }
 
-      function getV2EncounterChoiceLine(encounter, group, type) {
+      function getV2EncounterChoiceLine(encounter, group, type, product = null) {
+        if (group === "recommend") {
+          const line = product?.recommendLines?.[type];
+          if (line) return String(line);
+        }
         if (!encounter?.choiceLines) return "";
         if (group === "ask") return String(encounter.choiceLines.ask?.[type] || "");
         if (group === "recommend") return String(encounter.choiceLines.recommend?.[type] || "");
@@ -23766,19 +23770,25 @@ function ensureProgLoaded() {
           })
           .join("");
 
+        const usedChoiceSet = new Set(Array.isArray(snapshot.usedChoices) ? snapshot.usedChoices.map(String) : []);
         const actionButtons = selectedGroup
           ? api.availableActionTypes(selectedGroup)
               .map((type) => {
-                const choiceLine = getV2EncounterChoiceLine(encounter, selectedGroup, type);
-                const primaryLabel = choiceLine || v2HarnessLabel(type);
+                const choiceLine = getV2EncounterChoiceLine(encounter, selectedGroup, type, session?.product || null);
+                const isRecommendOption = selectedGroup === "recommend";
+                const primaryLabel = v2HarnessLabel(type);
+                const detailLabel = choiceLine || "";
+                const choiceKey = `${selectedGroup}:${String(type)}`;
+                const isUsedChoice = usedChoiceSet.has(choiceKey);
                 return `
                 <button
                   type="button"
-                  class="btn btnChoice v2-action-card"
+                  class="btn btnChoice v2-action-card${isRecommendOption ? " is-recommend" : ""}${isUsedChoice ? " is-used" : ""}"
                   data-v2-action="${escapeHtml(String(type))}"
+                  ${isUsedChoice ? `disabled aria-disabled="true" data-v2-used="true"` : ""}
                 >
                   <span class="v2-action-title">${escapeHtml(primaryLabel)}</span>
-                  <span class="v2-action-subtitle">${escapeHtml(v2HarnessLabel(type))}</span>
+                  <span class="v2-action-subtitle">${isUsedChoice ? "Used" : escapeHtml(detailLabel)}</span>
                 </button>
               `;
               })
@@ -23832,6 +23842,7 @@ function ensureProgLoaded() {
         stepButtons.querySelectorAll("[data-v2-action]").forEach((btn) => {
           btn.addEventListener("click", () => {
             if (!selectedGroup) return;
+            if (btn.disabled || btn.getAttribute("data-v2-used") === "true") return;
             const type = String(btn.getAttribute("data-v2-action") || "");
             const result = api.choose(selectedGroup, type);
             if (!result?.snapshot) return;

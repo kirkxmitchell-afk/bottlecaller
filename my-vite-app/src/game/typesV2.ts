@@ -96,6 +96,7 @@ export interface Product {
   activeFromTier: number;
   activeToTier: number;
   isCoreCampaignProduct: boolean;
+  recommendLines?: Record<RecommendAngle, string>;
 }
 
 export interface FoodOrder {
@@ -164,6 +165,7 @@ export interface EncounterV2 {
   targetProductId?: string | null;
   targetProductCategory?: ProductCategory | null;
   targetRecommendAngle?: RecommendAngle | null;
+  recommendScoring?: Partial<Record<RecommendAngle, ChoiceQuality>>;
   allowedProductIds?: string[];
 }
 
@@ -249,6 +251,7 @@ export interface GameStateV2 {
   authorityDelta: number;
   turnCount: number;
   history: TurnHistoryItem[];
+  usedChoiceKeys: string[];
 }
 
 export interface ChoiceEvaluationResult {

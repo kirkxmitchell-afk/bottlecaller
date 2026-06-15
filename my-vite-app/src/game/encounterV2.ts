@@ -700,6 +700,7 @@ function makeTier1Encounter(args: {
   targetProductId?: string | null;
   targetProductCategory?: ProductCategory | null;
   targetRecommendAngle: RecommendAngle;
+  recommendScoring?: Partial<Record<RecommendAngle, ChoiceQuality>>;
   allowedProductIds?: string[];
   reactions?: EncounterReactionMap;
   guestResponses?: EncounterGuestResponseMap;
@@ -741,6 +742,7 @@ function makeTier1Encounter(args: {
     targetProductId: args.targetProductId || null,
     targetProductCategory: args.targetProductCategory || null,
     targetRecommendAngle: args.targetRecommendAngle,
+    recommendScoring: args.recommendScoring || {},
     allowedProductIds: args.allowedProductIds || [],
   });
 }
@@ -766,9 +768,15 @@ export const TIER1_VERTICAL_SLICE_ENCOUNTERS: EncounterV2[] = [
     redHerring: "They are well dressed, which could tempt you to oversell luxury instead of local discovery.",
     lesson:
       "These guests needed a local story they could feel good about choosing. Price framing or rushing the close misses why they asked for help.",
-    targetProductId: "product_001",
+    targetProductId: "product_cartology_chenin",
     targetRecommendAngle: "story",
-    allowedProductIds: ["product_001", "product_002", "product_003"],
+    recommendScoring: {
+      flavour: "good",
+      story: "optimal",
+      value: "poor",
+      confidence: "good",
+    },
+    allowedProductIds: ["product_cartology_chenin", "product_uva_mira_cabernet", "product_valmoissine_pinot_noir"],
     reactions: {
       ask: {
         experience: {
@@ -813,9 +821,15 @@ export const TIER1_VERTICAL_SLICE_ENCOUNTERS: EncounterV2[] = [
     redHerring: "Their confidence can tempt you into trying to prove yourself instead of first showing that you understand them.",
     lesson:
       "Skeptical guests do not need a speech. They need one precise read that proves you are listening.",
-    targetProductId: "product_002",
+    targetProductId: "product_uva_mira_cabernet",
     targetRecommendAngle: "story",
-    allowedProductIds: ["product_001", "product_002", "product_003"],
+    recommendScoring: {
+      flavour: "good",
+      story: "optimal",
+      value: "poor",
+      confidence: "good",
+    },
+    allowedProductIds: ["product_cartology_chenin", "product_uva_mira_cabernet", "product_valmoissine_pinot_noir"],
     reactions: {
       ask: {
         preference: {
@@ -860,9 +874,15 @@ export const TIER1_VERTICAL_SLICE_ENCOUNTERS: EncounterV2[] = [
     redHerring: "Because they are regulars, you may overplay story or surprise when the safest move is familiar flavour.",
     lesson:
       "Regulars reward recognition. The best move is to anchor them in what they already trust, then offer a small lift.",
-    targetProductId: "product_003",
+    targetProductId: "product_valmoissine_pinot_noir",
     targetRecommendAngle: "flavour",
-    allowedProductIds: ["product_001", "product_002", "product_003"],
+    recommendScoring: {
+      flavour: "optimal",
+      story: "poor",
+      value: "good",
+      confidence: "good",
+    },
+    allowedProductIds: ["product_cartology_chenin", "product_uva_mira_cabernet", "product_valmoissine_pinot_noir"],
     reactions: {
       ask: {
         preference: {
@@ -907,9 +927,9 @@ export const TIER1_VERTICAL_SLICE_ENCOUNTERS: EncounterV2[] = [
     redHerring: "They may look like they are simply cheap, but the real pressure is wanting to feel smart, not small.",
     lesson:
       "Value guests want to feel justified. The best path is not apology or luxury theatre, but a clear smart-spend answer.",
-    targetProductId: "product_003",
+    targetProductId: "product_valmoissine_pinot_noir",
     targetRecommendAngle: "value",
-    allowedProductIds: ["product_001", "product_002", "product_003"],
+    allowedProductIds: ["product_cartology_chenin", "product_uva_mira_cabernet", "product_valmoissine_pinot_noir"],
     reactions: {
       ask: {
         budget: {
@@ -951,9 +971,9 @@ export const TIER1_VERTICAL_SLICE_ENCOUNTERS: EncounterV2[] = [
     redHerring: "A big premium push may look impressive but could make the moment feel performative.",
     lesson:
       "First-date tables need emotional calibration. The right bottle signals taste while keeping the pressure low.",
-    targetProductId: "product_002",
+    targetProductId: "product_uva_mira_cabernet",
     targetRecommendAngle: "flavour",
-    allowedProductIds: ["product_001", "product_002", "product_003"],
+    allowedProductIds: ["product_cartology_chenin", "product_uva_mira_cabernet", "product_valmoissine_pinot_noir"],
     reactions: {
       ask: {
         occasion: {
@@ -998,9 +1018,9 @@ export const TIER1_VERTICAL_SLICE_ENCOUNTERS: EncounterV2[] = [
     redHerring: "The short answer can tempt you to push harder for information, which will create friction.",
     lesson:
       "Some tables reward restraint. A concise flavour fit protects the experience better than a full sales routine.",
-    targetProductId: "product_001",
+    targetProductId: "product_cartology_chenin",
     targetRecommendAngle: "flavour",
-    allowedProductIds: ["product_001", "product_002", "product_003"],
+    allowedProductIds: ["product_cartology_chenin", "product_uva_mira_cabernet", "product_valmoissine_pinot_noir"],
     reactions: {
       ask: {
         preference: {
@@ -1048,9 +1068,9 @@ export const TIER1_VERTICAL_SLICE_ENCOUNTERS: EncounterV2[] = [
     redHerring: "A romantic-feeling bottle might sound elegant, but if it slows the table down it is still the wrong move.",
     lesson:
       "Celebration tables reward momentum. The best move is one that lifts the night quickly and confidently.",
-    targetProductId: "product_002",
+    targetProductId: "product_uva_mira_cabernet",
     targetRecommendAngle: "confidence",
-    allowedProductIds: ["product_001", "product_002", "product_003"],
+    allowedProductIds: ["product_cartology_chenin", "product_uva_mira_cabernet", "product_valmoissine_pinot_noir"],
     reactions: {
       ask: {
         experience: {
@@ -1092,9 +1112,9 @@ export const TIER1_VERTICAL_SLICE_ENCOUNTERS: EncounterV2[] = [
     redHerring: "The loudest guest may not be the buyer. Following them can lose authority with the real decision-maker.",
     lesson:
       "Decision-hierarchy tables reward calm confidence. Read who matters, then land the choice clearly.",
-    targetProductId: "product_003",
+    targetProductId: "product_valmoissine_pinot_noir",
     targetRecommendAngle: "confidence",
-    allowedProductIds: ["product_001", "product_002", "product_003"],
+    allowedProductIds: ["product_cartology_chenin", "product_uva_mira_cabernet", "product_valmoissine_pinot_noir"],
     reactions: {
       ask: {
         occasion: {
@@ -1139,9 +1159,9 @@ export const TIER1_VERTICAL_SLICE_ENCOUNTERS: EncounterV2[] = [
     redHerring: "Their knowledge may tempt you to over-explain, but the stronger move is to offer a precise story.",
     lesson:
       "Collectors reward relevance. Give them one reason the bottle matters instead of a generic premium pitch.",
-    targetProductId: "product_001",
+    targetProductId: "product_cartology_chenin",
     targetRecommendAngle: "story",
-    allowedProductIds: ["product_001", "product_002", "product_003"],
+    allowedProductIds: ["product_cartology_chenin", "product_uva_mira_cabernet", "product_valmoissine_pinot_noir"],
     reactions: {
       ask: {
         preference: {
@@ -1186,9 +1206,9 @@ export const TIER1_VERTICAL_SLICE_ENCOUNTERS: EncounterV2[] = [
     redHerring: "Because they are experienced, you may chase novelty when they mainly want a smart reliable answer.",
     lesson:
       "Returning value-aware guests want recognition and practical confidence. The right answer makes them feel savvy.",
-    targetProductId: "product_003",
+    targetProductId: "product_valmoissine_pinot_noir",
     targetRecommendAngle: "value",
-    allowedProductIds: ["product_001", "product_002", "product_003"],
+    allowedProductIds: ["product_cartology_chenin", "product_uva_mira_cabernet", "product_valmoissine_pinot_noir"],
     reactions: {
       ask: {
         budget: {
