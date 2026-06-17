@@ -23222,6 +23222,279 @@ function ensureProgLoaded() {
         return "";
       }
 
+      const V2_FALLBACK_ENCOUNTER_IMAGE = "/game/tier1-encounter-scene.png";
+      const V2_VS_GRAPHIC = "/game/ui/vs-gold.png";
+
+      function getV2EncounterImages(encounter) {
+        return encounter?.images && typeof encounter.images === "object" ? encounter.images : {};
+      }
+
+      function getV2EncounterImageSrc(encounter, key, fallbackKey = "mainNeutral") {
+        const images = getV2EncounterImages(encounter);
+        return String(images[key] || images[fallbackKey] || V2_FALLBACK_ENCOUNTER_IMAGE);
+      }
+
+      function getV2LatestHistory(session) {
+        const history = Array.isArray(session?.gameState?.history) ? session.gameState.history : [];
+        return history.length ? history[history.length - 1] : null;
+      }
+
+      function getV2MainImageSrc(snapshot, encounter, latestHistory) {
+        if (isV2TerminalOutcome(snapshot?.outcome)) {
+          return getV2EncounterImageSrc(
+            encounter,
+            snapshot?.outcome === "failure" ? "endFailureArt" : "endSuccessArt",
+            "mainNeutral",
+          );
+        }
+        const lastQuality = String(latestHistory?.quality || "").toLowerCase();
+        const isNegative =
+          Number(snapshot?.frustration || 0) >= 3 ||
+          Number(snapshot?.mistakeCount || 0) >= 2 ||
+          lastQuality === "poor" ||
+          lastQuality === "disaster" ||
+          lastQuality === "early_commit";
+        if (isNegative) return getV2EncounterImageSrc(encounter, "mainNegative", "mainNeutral");
+        if (lastQuality === "good" || lastQuality === "optimal") {
+          return getV2EncounterImageSrc(encounter, "mainPositive", "mainNeutral");
+        }
+        return getV2EncounterImageSrc(encounter, "mainNeutral", "mainNeutral");
+      }
+
+      function getV2OutcomeAPFromSnapshot(snapshot) {
+        const value = Number(snapshot?.authorityDelta);
+        if (isV2TerminalOutcome(snapshot?.outcome) && Number.isFinite(value) && value !== 0) return value;
+        return getV2OutcomeAP(snapshot?.outcome);
+      }
+
+      function getV2ResultPresentation(snapshot, encounter) {
+        const outcome = String(snapshot?.outcome || "");
+        const ap = getV2OutcomeAPFromSnapshot(snapshot);
+        const map = {
+          premium_success: ["Well Done", "Sale Secured"],
+          standard_success: ["Good Recovery", "Sale Secured"],
+          weak_success: ["Barely Landed", "Sale Secured"],
+          neutral_exit: ["Good Restraint", "Experience Preserved"],
+          failure: ["Table Lost", "No Sale"],
+        };
+        const [title, subtitle] = map[outcome] || ["Encounter Complete", "In Progress"];
+        return {
+          title,
+          subtitle,
+          ap,
+          apLabel: `${ap >= 0 ? "+" : ""}${ap} AP`,
+          imageSrc: getV2EncounterImageSrc(
+            encounter,
+            outcome === "failure" ? "endFailureArt" : "endSuccessArt",
+            "mainNeutral",
+          ),
+        };
+      }
+
+      function getV2PreviewBottleImage(snapshot, product) {
+        const encounterId = String(snapshot?.encounterId || "");
+        const productId = String(snapshot?.productId || product?.id || "");
+        const imageByEncounter = {
+          encounter_v2_001: "/game/products/chenin-blanc-bottle.png",
+          encounter_v2_002: "/game/products/cabernet-sauvignon-bottle.png",
+          encounter_v2_003: "/game/products/pinot-noir-bottle.png",
+        };
+        const imageByProduct = {
+          product_cartology_chenin: "/game/products/chenin-blanc-bottle.png",
+          product_uva_mira_cabernet: "/game/products/cabernet-sauvignon-bottle.png",
+          product_valmoissine_pinot_noir: "/game/products/pinot-noir-bottle.png",
+        };
+        return imageByEncounter[encounterId] || imageByProduct[productId] || product?.bottleImage || "";
+      }
+
+      const V2_BOTTLE_REWARD_STORAGE_KEY = "BC_V2_BOTTLE_REWARDS_V1";
+      const V2_BOTTLE_REWARDS = Object.freeze([
+        { id: "starter_bottle", name: "Starter Bottle", unlockAP: 30, tier: 1, claimed: false },
+        { id: "bronze_bottle", name: "Bronze Bottle", unlockAP: 100, tier: 1, claimed: false },
+        { id: "tier_2_unlock_bottle", name: "Tier 2 Unlock Bottle", unlockAP: 180, tier: 1, claimed: false },
+        { id: "tier_1_mastery_bottle", name: "Tier 1 Mastery Bottle", unlockAP: 300, tier: 1, claimed: false },
+        { id: "silver_bottle", name: "Silver Bottle", unlockAP: 400, tier: 2, claimed: false },
+        { id: "tier_3_unlock_bottle", name: "Tier 3 Unlock Bottle", unlockAP: 500, tier: 2, claimed: false },
+        { id: "pairing_bottle", name: "Pairing Bottle", unlockAP: 650, tier: 2, claimed: false },
+        { id: "tier_2_mastery_bottle", name: "Tier 2 Mastery Bottle", unlockAP: 750, tier: 2, claimed: false },
+        { id: "gold_bottle", name: "Gold Bottle", unlockAP: 900, tier: 3, claimed: false },
+        { id: "tier_4_unlock_bottle", name: "Tier 4 Unlock Bottle", unlockAP: 1100, tier: 3, claimed: false },
+        { id: "cellar_bottle", name: "Cellar Bottle", unlockAP: 1250, tier: 3, claimed: false },
+        { id: "tier_3_mastery_bottle", name: "Tier 3 Mastery Bottle", unlockAP: 1350, tier: 3, claimed: false },
+        { id: "reserve_bottle", name: "Reserve Bottle", unlockAP: 1600, tier: 4, claimed: false },
+        { id: "private_dining_bottle", name: "Private Dining Bottle", unlockAP: 1800, tier: 4, claimed: false },
+        { id: "tier_5_unlock_bottle", name: "Tier 5 Unlock Bottle", unlockAP: 2000, tier: 4, claimed: false },
+        { id: "tier_4_mastery_bottle", name: "Tier 4 Mastery Bottle", unlockAP: 2100, tier: 4, claimed: false },
+        { id: "grand_reserve_bottle", name: "Grand Reserve Bottle", unlockAP: 2300, tier: 5, claimed: false },
+        { id: "chaos_service_bottle", name: "Chaos Service Bottle", unlockAP: 2500, tier: 5, claimed: false },
+        { id: "premium_floor_bottle", name: "Premium Floor Bottle", unlockAP: 2700, tier: 5, claimed: false },
+        { id: "master_bottle", name: "Master Bottle", unlockAP: 3000, tier: 5, claimed: false },
+      ]);
+
+      function getV2OutcomeAP(outcome) {
+        switch (String(outcome || "")) {
+          case "premium_success": return 30;
+          case "standard_success": return 20;
+          case "weak_success": return 10;
+          case "neutral_exit": return 5;
+          case "failure": return -15;
+          default: return 0;
+        }
+      }
+
+      function getV2TierUnlockedByAP(totalAP) {
+        const ap = Number(totalAP || 0);
+        if (ap >= 2000) return 5;
+        if (ap >= 1100) return 4;
+        if (ap >= 500) return 3;
+        if (ap >= 180) return 2;
+        return 1;
+      }
+
+      function getDefaultV2BottleRewardState() {
+        return {
+          v: 1,
+          totalAP: 0,
+          tierUnlocked: 1,
+          encounterScores: {},
+          rewards: V2_BOTTLE_REWARDS.map((reward) => ({ ...reward })),
+        };
+      }
+
+      function normalizeV2BottleRewardState(rawState) {
+        const state = rawState && typeof rawState === "object" ? rawState : {};
+        const existingRewards = Array.isArray(state.rewards) ? state.rewards : [];
+        const existingById = new Map(existingRewards.map((reward) => [String(reward?.id || ""), reward]));
+        const encounterScores = state.encounterScores && typeof state.encounterScores === "object"
+          ? state.encounterScores
+          : {};
+        const rewards = V2_BOTTLE_REWARDS.map((reward) => {
+          const existing = existingById.get(reward.id) || {};
+          return {
+            ...reward,
+            claimed: !!existing.claimed,
+            claimedAt: existing.claimedAt || null,
+          };
+        });
+        const scoreTotal = Object.values(encounterScores).reduce((sum, entry) => sum + Number(entry?.ap || 0), 0);
+        const totalAP = Math.max(0, Math.round(Number.isFinite(scoreTotal) ? scoreTotal : Number(state.totalAP || 0)));
+        return {
+          v: 1,
+          totalAP,
+          tierUnlocked: getV2TierUnlockedByAP(totalAP),
+          encounterScores,
+          rewards,
+        };
+      }
+
+      function loadV2BottleRewardState() {
+        try {
+          const raw = window.localStorage.getItem(V2_BOTTLE_REWARD_STORAGE_KEY);
+          return normalizeV2BottleRewardState(raw ? JSON.parse(raw) : getDefaultV2BottleRewardState());
+        } catch {
+          return normalizeV2BottleRewardState(getDefaultV2BottleRewardState());
+        }
+      }
+
+      function saveV2BottleRewardState(state) {
+        const normalized = normalizeV2BottleRewardState(state);
+        try { window.localStorage.setItem(V2_BOTTLE_REWARD_STORAGE_KEY, JSON.stringify(normalized)); } catch {}
+        window.__BC_V2_BOTTLE_REWARD_STATE__ = normalized;
+        return normalized;
+      }
+
+      window.__BC_V2_BOTTLE_REWARDS__ = V2_BOTTLE_REWARDS;
+
+      function getPendingV2BottleRewards(state) {
+        const totalAP = Number(state?.totalAP || 0);
+        return (Array.isArray(state?.rewards) ? state.rewards : [])
+          .filter((reward) => Number(reward.unlockAP || 0) <= totalAP && !reward.claimed);
+      }
+
+      function applyV2BottleRewardProgress(snapshot) {
+        let state = loadV2BottleRewardState();
+        if (!snapshot || !isV2TerminalOutcome(snapshot.outcome)) {
+          return { state, apDelta: 0, pendingRewards: getPendingV2BottleRewards(state) };
+        }
+
+        const encounterKey = String(snapshot.encounterId || `${snapshot.tier || 1}:${snapshot.encounterOrdinal || 0}`);
+        const nextAP = getV2OutcomeAPFromSnapshot(snapshot);
+        const currentScore = state.encounterScores?.[encounterKey] || null;
+        const previousBest = currentScore ? Number(currentScore.ap || 0) : null;
+        const shouldUpdate = previousBest === null || nextAP > previousBest;
+        let apDelta = 0;
+
+        if (shouldUpdate) {
+          state.encounterScores = {
+            ...(state.encounterScores || {}),
+            [encounterKey]: {
+              encounterId: snapshot.encounterId || null,
+              encounterTitle: snapshot.encounterTitle || "",
+              ap: nextAP,
+              outcome: snapshot.outcome,
+              updatedAt: Date.now(),
+            },
+          };
+          const scoreTotal = Object.values(state.encounterScores).reduce((sum, entry) => sum + Number(entry?.ap || 0), 0);
+          const previousTotal = Number(state.totalAP || 0);
+          state.totalAP = Math.max(0, Math.round(scoreTotal));
+          state.tierUnlocked = getV2TierUnlockedByAP(state.totalAP);
+          apDelta = state.totalAP - previousTotal;
+          state = saveV2BottleRewardState(state);
+        }
+
+        return { state, apDelta, pendingRewards: getPendingV2BottleRewards(state) };
+      }
+
+      function claimV2BottleReward(rewardId) {
+        let state = loadV2BottleRewardState();
+        const targetId = String(rewardId || "");
+        state.rewards = (Array.isArray(state.rewards) ? state.rewards : []).map((reward) =>
+          reward.id === targetId && Number(reward.unlockAP || 0) <= Number(state.totalAP || 0)
+            ? { ...reward, claimed: true, claimedAt: Date.now() }
+            : reward
+        );
+        return saveV2BottleRewardState(state);
+      }
+
+      function renderV2BottleRewardHtml(rewardProgress) {
+        const state = rewardProgress?.state || loadV2BottleRewardState();
+        const pendingRewards = rewardProgress?.pendingRewards || getPendingV2BottleRewards(state);
+        const totalAP = Number(state.totalAP || 0);
+        if (!pendingRewards.length && totalAP < 30) {
+          return `
+            <div class="v2-status-card">
+              <strong>Bottle Rewards</strong>
+              <div class="small-text" style="margin-top:6px;">${totalAP} AP earned. Starter Bottle opens at 30 AP.</div>
+            </div>
+          `;
+        }
+        if (!pendingRewards.length) {
+          return `
+            <div class="v2-status-card">
+              <strong>Bottle Rewards</strong>
+              <div class="small-text" style="margin-top:6px;">${totalAP} AP earned • Tier ${state.tierUnlocked} unlocked</div>
+            </div>
+          `;
+        }
+        const rewardRows = pendingRewards.map((reward) => `
+          <div class="v2-reward-row">
+            <div>
+              <strong>${escapeHtml(reward.name)}</strong>
+              <div class="small-text">${Number(reward.unlockAP || 0)} AP milestone reached</div>
+            </div>
+            <button type="button" class="btn btnChoice" data-v2-claim-reward="${escapeHtml(reward.id)}">Open Now</button>
+          </div>
+        `).join("");
+        return `
+          <div class="v2-status-card v2-bottle-reward-card">
+            <strong>Bottle unlocked</strong>
+            <div class="small-text" style="margin-top:6px;">${totalAP} AP earned • Tier ${state.tierUnlocked} unlocked</div>
+            <div class="v2-reward-list">${rewardRows}</div>
+          </div>
+        `;
+      }
+
       function getV2MoodDescriptor(snapshot) {
         const progressMood = String(snapshot?.progressMood || "");
         const frustrationMood = String(snapshot?.frustrationMood || "");
@@ -23397,6 +23670,8 @@ function ensureProgLoaded() {
         session.outcomeEmitted = true;
 
         try {
+          const rewardState = loadV2BottleRewardState();
+          const pendingRewards = getPendingV2BottleRewards(rewardState);
           const payload = {
             v: 1,
             engineVersion: "v2_preview",
@@ -23405,7 +23680,6 @@ function ensureProgLoaded() {
             encounterTitle: snapshot.encounterTitle,
             encounterTier: snapshot.tier,
             serviceStage: snapshot.serviceStage,
-            targetRecommendAngle: snapshot.targetRecommendAngle || null,
             outcome: snapshot.outcome,
             authorityDelta: Number(snapshot.authorityDelta || 0),
             progress: Number(snapshot.progress || 0),
@@ -23415,7 +23689,6 @@ function ensureProgLoaded() {
             frustrationMood: snapshot.frustrationMood,
             walkAwayUnlocked: !!snapshot.walkAwayUnlocked,
             turnCount: Number(snapshot.turnCount || 0),
-            bestPath: Array.isArray(snapshot.bestPath) ? snapshot.bestPath : [],
             product: session.product
               ? {
                   id: session.product.id || null,
@@ -23429,7 +23702,6 @@ function ensureProgLoaded() {
               ? session.gameState.history.map((item) => ({
                   turn: item.turn,
                   choice: item.choice,
-                  quality: item.quality,
                   progressDelta: item.progressDelta,
                   frustrationDelta: item.frustrationDelta,
                   resultingProgress: item.resultingProgress,
@@ -23437,11 +23709,15 @@ function ensureProgLoaded() {
                   reaction: item.reaction,
                 }))
               : [],
-            scene: {
-              family: session.encounter?.family || null,
-              hiddenPressure: session.encounter?.hiddenPressure || null,
-              masterProfile: session.encounter?.masterProfile || null,
-              variant: session.encounter?.variant || null,
+            bottleRewards: {
+              totalAP: Number(rewardState.totalAP || 0),
+              tierUnlocked: Number(rewardState.tierUnlocked || 1),
+              pending: pendingRewards.map((reward) => ({
+                id: reward.id,
+                name: reward.name,
+                unlockAP: reward.unlockAP,
+                tier: reward.tier,
+              })),
             },
             latestReaction: lastReaction || "",
           };
@@ -23585,6 +23861,105 @@ function ensureProgLoaded() {
         });
       }
 
+      function renderV2EncounterPreview(snapshot, reaction = "") {
+        const encounterPanel = document.getElementById("encounterPanel");
+        const stepHeader = document.getElementById("stepHeader");
+        const wineDisplayName = document.getElementById("wineDisplayName");
+        const stepContent = document.getElementById("stepContent");
+        const feedbackLine = document.getElementById("bcFeedbackLine");
+        const stepButtons = document.getElementById("stepButtons");
+        const api = getV2HarnessApi();
+        if (!encounterPanel || !stepHeader || !wineDisplayName || !stepContent || !feedbackLine || !stepButtons || !snapshot || !api) {
+          return;
+        }
+
+        encounterPanel.dataset.v2Layout = "tier1";
+        encounterPanel.dataset.v2Screen = "preview";
+        const session = api.getSession?.() || null;
+        const encounter = session?.encounter || null;
+        const product = session?.product || null;
+        const sceneClue = getV2SceneClue(encounter);
+        const previewArt = getV2EncounterImageSrc(encounter, "previewArt", "mainNeutral");
+        const productName = snapshot.productName || product?.name || "";
+        const bottleImage = getV2PreviewBottleImage(snapshot, product);
+        const rewardState = loadV2BottleRewardState();
+        const totalAP = Number(rewardState?.totalAP || 0);
+        const encounterPersona = v2HarnessLabel(encounter?.family || snapshot.encounterTitle || "Table");
+        const productStyle = product?.style || product?.varietalOrBlend || "";
+        const productRegion = product?.region || "";
+        const previewLine = encounter?.contextClue || "Read the table before choosing your first move.";
+
+        stepHeader.textContent = `Tier ${snapshot.tier} • Encounter ${String(snapshot.encounterOrdinal).padStart(3, "0")} • ${snapshot.encounterTitle}`;
+        wineDisplayName.textContent = productName ? `Product: ${productName}` : `Encounter: ${snapshot.encounterTitle}`;
+        feedbackLine.textContent = "";
+        stepContent.dataset.stage = "preview";
+        stepContent.dataset.signal = "yellow";
+        stepContent.innerHTML = `
+          <section class="v2-preview-screen">
+            <div class="v2-preview-art-wrap">
+              <img class="v2-preview-art" src="${escapeHtml(previewArt)}" alt="" onerror="this.onerror=null;this.src='${V2_FALLBACK_ENCOUNTER_IMAGE}';">
+              <div class="v2-preview-vignette"></div>
+              <div class="v2-preview-topbar">
+                <div class="v2-preview-title-rule"></div>
+                <div class="v2-preview-label">Encounter Preview</div>
+                <div class="v2-preview-ap"><span>AP</span>${totalAP.toLocaleString()}</div>
+              </div>
+              <div class="v2-preview-heading">
+                <div class="v2-preview-tier">Tier ${snapshot.tier} • Encounter ${String(snapshot.encounterOrdinal).padStart(2, "0")}</div>
+                <h2>${escapeHtml(snapshot.encounterTitle)}</h2>
+                <p>${escapeHtml(previewLine)}</p>
+              </div>
+              <div class="v2-preview-card v2-preview-table-card">
+                <div class="v2-preview-card-title">${escapeHtml(encounterPersona)}</div>
+                <p>${escapeHtml(sceneClue)}</p>
+              </div>
+              <div class="v2-preview-card v2-preview-product-card">
+                <div class="v2-preview-card-eyebrow">On The Line</div>
+                <div class="v2-preview-card-title">${escapeHtml(productName || "Selected Bottle")}</div>
+                ${productStyle ? `<p>${escapeHtml(productStyle)}</p>` : ""}
+                ${productRegion ? `<div class="v2-preview-card-region">${escapeHtml(productRegion)}</div>` : ""}
+              </div>
+              <div class="v2-preview-clue-panel">
+                <div class="v2-preview-clue-icon">!</div>
+                <div>
+                  <div class="v2-preview-card-eyebrow">Clue</div>
+                  <p>${escapeHtml(sceneClue)}</p>
+                </div>
+              </div>
+              <img class="v2-vs-graphic" src="${V2_VS_GRAPHIC}" alt="" onerror="this.style.display='none';">
+              ${bottleImage ? `<img class="v2-product-bottle" src="${escapeHtml(bottleImage)}" alt="" onerror="this.style.display='none';">` : ""}
+              <div class="v2-preview-footer">Prepare. Read. Recommend.</div>
+            </div>
+          </section>
+        `;
+
+        stepButtons.dataset.v2ActionState = "preview";
+        stepButtons.innerHTML = `
+          <div class="v2-action-shell v2-preview-actions">
+            <button type="button" class="btn btnChoice v2-start-encounter-button" id="btnV2StartEncounter">Start Encounter</button>
+          </div>
+        `;
+        requestAnimationFrame(() => {
+          const previewScreen = stepContent.querySelector(".v2-preview-screen");
+          if (previewScreen && stepButtons.parentElement !== previewScreen) {
+            previewScreen.appendChild(stepButtons);
+          } else if (!previewScreen && stepButtons.parentElement !== encounterPanel) {
+            encounterPanel.appendChild(stepButtons);
+          }
+          const shell = stepButtons.querySelector(".v2-action-shell");
+          const shellHeight = Math.ceil(shell?.getBoundingClientRect?.().height || 0);
+          if (shellHeight > 0) {
+            encounterPanel.style.setProperty("--v2-action-shell-height", `${shellHeight}px`);
+          }
+        });
+
+        const startButton = stepButtons.querySelector("#btnV2StartEncounter");
+        startButton?.addEventListener("click", (event) => {
+          event.preventDefault();
+          renderV2HarnessPlay(snapshot, reaction);
+        });
+      }
+
       function renderV2HarnessPlay(snapshot, reaction = "", quickFeedbackText = null) {
         const encounterPanel = document.getElementById("encounterPanel");
         const stepHeader = document.getElementById("stepHeader");
@@ -23597,9 +23972,12 @@ function ensureProgLoaded() {
           return;
         }
         encounterPanel.dataset.v2Layout = "tier1";
+        encounterPanel.dataset.v2Screen = "play";
 
         const session = api.getSession?.() || null;
         const encounter = session?.encounter || null;
+        const latestHistoryForImage = getV2LatestHistory(session);
+        const mainImageSrc = getV2MainImageSrc(snapshot, encounter, latestHistoryForImage);
 
         const selectedGroup =
           window.__BC_V2_HARNESS_STATE__?.selectedGroup &&
@@ -23620,9 +23998,7 @@ function ensureProgLoaded() {
         const feedbackIsTerminal = isV2TerminalOutcome(snapshot.outcome);
         feedbackLine.textContent = feedbackIsTerminal ? feedbackText : "";
 
-        const bestPath = Array.isArray(snapshot.bestPath) ? snapshot.bestPath.join(" → ") : "";
         const outcome = snapshot.outcome ? v2HarnessLabel(snapshot.outcome) : "In Progress";
-        const angle = snapshot.targetRecommendAngle ? v2HarnessLabel(snapshot.targetRecommendAngle) : "Flexible";
         const quote = getV2ReactiveQuote(snapshot, encounter, reaction);
         const quoteEncounterKey = `${snapshot.tier || ""}:${snapshot.encounterId || snapshot.encounterOrdinal || ""}`;
         if (window.__BC_V2_QUOTE_ENCOUNTER_KEY__ !== quoteEncounterKey) {
@@ -23669,6 +24045,8 @@ function ensureProgLoaded() {
         const moodDescriptor = getV2MoodDescriptor(snapshot);
         const tableMood = getV2TableMood(snapshot);
         const isTerminal = feedbackIsTerminal;
+        const resultPresentation = isTerminal ? getV2ResultPresentation(snapshot, encounter) : null;
+        const rewardProgress = isTerminal ? applyV2BottleRewardProgress(snapshot) : { state: loadV2BottleRewardState(), apDelta: 0, pendingRewards: [] };
         const isFinalEncounter = isV2FinalDemoEncounter(snapshot);
         const lesson = String(encounter?.lesson || "");
         const guidanceLine = "Read the table, choose the right interaction, and move the guest without creating friction.";
@@ -23715,81 +24093,97 @@ function ensureProgLoaded() {
             </div>
           </div>
         `;
-        stepContent.innerHTML = `
-          <section class="v2-play-shell">
-            <div class="v2-hero-frame">
-              <div class="v2-hero-top">
-                <div class="v2-play-header">
-                  <div class="v2-crest">B</div>
-                  <div class="v2-header-copy">
-                    <div class="v2-header-topline">
-                      <span>Tier ${snapshot.tier}</span>
-                      <span>Encounter ${String(snapshot.encounterOrdinal).padStart(3, "0")} of ${snapshot.encounterCount}</span>
+        if (isTerminal) {
+          stepContent.dataset.stage = "complete";
+          stepContent.innerHTML = `
+            <section class="v2-play-shell">
+              <div class="v2-end-screen">
+                <img class="v2-end-art" src="${escapeHtml(resultPresentation.imageSrc)}" alt="" onerror="this.onerror=null;this.src='${V2_FALLBACK_ENCOUNTER_IMAGE}';">
+                <div class="v2-end-vignette"></div>
+                <div class="v2-end-card">
+                  <div class="v2-end-kicker">Encounter Complete</div>
+                  <div class="v2-end-meta">Tier ${snapshot.tier} • ${escapeHtml(snapshot.encounterTitle)}</div>
+                  <h2>${escapeHtml(resultPresentation.title)}</h2>
+                  <p>${escapeHtml(resultPresentation.subtitle)}</p>
+                  <div class="v2-ap-card">${escapeHtml(resultPresentation.apLabel)}</div>
+                </div>
+              </div>
+            </section>
+          `;
+        } else {
+          stepContent.innerHTML = `
+            <section class="v2-play-shell">
+              <div class="v2-hero-frame">
+                <img class="v2-encounter-art" src="${escapeHtml(mainImageSrc)}" alt="" onerror="this.onerror=null;this.src='${V2_FALLBACK_ENCOUNTER_IMAGE}';">
+                <div class="v2-hero-top">
+                  <div class="v2-play-header">
+                    <div class="v2-crest">B</div>
+                    <div class="v2-header-copy">
+                      <div class="v2-header-topline">
+                        <span>Tier ${snapshot.tier}</span>
+                        <span>Encounter ${String(snapshot.encounterOrdinal).padStart(3, "0")} of ${snapshot.encounterCount}</span>
+                      </div>
+                      <h2 class="v2-encounter-title">${escapeHtml(snapshot.encounterTitle)}</h2>
+                      ${snapshot.productName ? `<div class="v2-product-title">Product: ${escapeHtml(snapshot.productName)}</div>` : ""}
+                      <div class="v2-progress-rail" style="--v2-progress-count:${Math.max(1, snapshot.encounterCount || 1)}" aria-hidden="true">${progressNodes}</div>
                     </div>
-                    <h2 class="v2-encounter-title">${escapeHtml(snapshot.encounterTitle)}</h2>
-                    ${snapshot.productName ? `<div class="v2-product-title">Product: ${escapeHtml(snapshot.productName)}</div>` : ""}
-                    <div class="v2-progress-rail" style="--v2-progress-count:${Math.max(1, snapshot.encounterCount || 1)}" aria-hidden="true">${progressNodes}</div>
+                    <div class="v2-region-mark">SA</div>
                   </div>
-                  <div class="v2-region-mark">SA</div>
+                  <div class="v2-scene-text v2-scene-clue">
+                    <div class="v2-scene-label">CLUE</div>
+                    <p class="v2-scene-copy">${escapeHtml(sceneClue)}</p>
+                  </div>
                 </div>
-                <div class="v2-scene-text v2-scene-clue">
-                  <div class="v2-scene-label">CLUE</div>
-                  <p class="v2-scene-copy">${escapeHtml(sceneClue)}</p>
+                <div class="v2-hero-bottom">
+
+                  <div class="v2-quote-row">
+                    <div class="v2-quote-stack">
+                      ${quoteHistoryHtml ? `<div class="v2-quote-history">${quoteHistoryHtml}</div>` : ""}
+                      <blockquote class="v2-quote-card">
+                        <span class="v2-quote-mark">“</span>
+                        <p class="v2-quote-text${shouldAnimateQuote ? " is-entering" : ""}">${quoteHtml}</p>
+                      </blockquote>
+                      ${quickFeedback ? `<div class="v2-feedback-chip">${escapeHtml(quickFeedback)}</div>` : ""}
+                    </div>
+                  </div>
+
+                  ${showGuidanceCard ? `
+                  <div class="v2-guidance-card">
+                    <div class="v2-guidance-label">What To Do Next</div>
+                    <p class="v2-guidance-copy">${escapeHtml(nextStepInstruction)}</p>
+                    <div class="v2-guidance-rule">${escapeHtml(guidanceLine)}</div>
+                    ${feedbackMeta ? `<div class="v2-guidance-meta">${escapeHtml(feedbackMeta)}</div>` : ""}
+                    <div class="v2-guidance-meta">${escapeHtml(walkAwayHint)}</div>
+                  </div>
+                  ` : ""}
+                  <div class="v2-top-metrics">
+                    ${stateGridHtml}
+                    <div class="v2-mood-pill">
+                      <div class="v2-mood-label">Table Mood</div>
+                      <div class="v2-mood-value">${escapeHtml(tableMood)}</div>
+                      <div class="v2-mood-detail">${escapeHtml(moodDescriptor)}</div>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div class="v2-hero-bottom">
+            </section>
+          `;
+        }
 
-                <div class="v2-quote-row">
-                  <div class="v2-quote-stack">
-                    ${quoteHistoryHtml ? `<div class="v2-quote-history">${quoteHistoryHtml}</div>` : ""}
-                    <blockquote class="v2-quote-card">
-                      <span class="v2-quote-mark">“</span>
-                      <p class="v2-quote-text${shouldAnimateQuote ? " is-entering" : ""}">${quoteHtml}</p>
-                    </blockquote>
-                    ${quickFeedback ? `<div class="v2-feedback-chip">${escapeHtml(quickFeedback)}</div>` : ""}
-                  </div>
-                </div>
-
-                ${showGuidanceCard ? `
-                <div class="v2-guidance-card">
-                  <div class="v2-guidance-label">What To Do Next</div>
-                  <p class="v2-guidance-copy">${escapeHtml(nextStepInstruction)}</p>
-                  <div class="v2-guidance-rule">${escapeHtml(guidanceLine)}</div>
-                  ${feedbackMeta ? `<div class="v2-guidance-meta">${escapeHtml(feedbackMeta)}</div>` : ""}
-                  <div class="v2-guidance-meta">${escapeHtml(walkAwayHint)}</div>
-                </div>
-                ` : ""}
-                <div class="v2-top-metrics">
-                  ${stateGridHtml}
-                  <div class="v2-mood-pill">
-                    <div class="v2-mood-label">Table Mood</div>
-                    <div class="v2-mood-value">${escapeHtml(tableMood)}</div>
-                    <div class="v2-mood-detail">${escapeHtml(moodDescriptor)}</div>
-                  </div>
-                </div>
-
-                ${isTerminal ? `
-                  <div class="v2-status-card">
-                    <div><strong>Lesson:</strong> ${escapeHtml(lesson)}</div>
-                  </div>
-                ` : ""}
-              </div>
-            </div>
-          </section>
-        `;
-
-        const groupButtons = snapshot.availableGroups
-          .map((group) => {
-            const active = group === selectedGroup;
-            return `
-              <button
-                type="button"
-                class="btn btnChoice v2-group-button${active ? " is-active" : ""}"
-                data-v2-group="${escapeHtml(group)}"
-              >${escapeHtml(v2HarnessLabel(group))}</button>
-            `;
-          })
-          .join("");
+        const groupButtons = isTerminal
+          ? ""
+          : snapshot.availableGroups
+              .map((group) => {
+                const active = group === selectedGroup;
+                return `
+                  <button
+                    type="button"
+                    class="btn btnChoice v2-group-button${active ? " is-active" : ""}"
+                    data-v2-group="${escapeHtml(group)}"
+                  >${escapeHtml(v2HarnessLabel(group))}</button>
+                `;
+              })
+              .join("");
 
         const usedChoiceSet = new Set(Array.isArray(snapshot.usedChoices) ? snapshot.usedChoices.map(String) : []);
         const actionButtons = selectedGroup
@@ -23819,26 +24213,28 @@ function ensureProgLoaded() {
         const actionLabel = selectedGroup
           ? `Choose one ${v2HarnessLabel(selectedGroup)} response card to continue the encounter.`
           : isTerminal
-            ? "The encounter is complete. Continue, replay, or go back to welcome."
+            ? "The encounter is complete. Continue when you're ready."
             : "Choose Ask, Recommend, or Commit to open the response options.";
         stepButtons.dataset.v2ActionState = selectedGroup ? "expanded" : "collapsed";
         stepButtons.innerHTML = `
           <div class="v2-action-shell${selectedGroup ? " is-expanded" : ""}">
-            <div class="v2-action-header">${groupButtons}</div>
+            ${groupButtons ? `<div class="v2-action-header">${groupButtons}</div>` : ""}
             ${showIntroGuidance ? `<div class="small-text v2-action-caption">${escapeHtml(actionLabel)}</div>` : ""}
             <div class="v2-action-grid">${actionButtons}</div>
+            ${isTerminal ? renderV2BottleRewardHtml(rewardProgress) : ""}
             ${isTerminal ? `<div class="button-row" style="width:100%;">
-              ${isTerminal && !isFinalEncounter ? `<button type="button" class="btn" id="btnV2HarnessContinue">Continue Tier 1</button>` : ""}
-              ${isTerminal ? `<button type="button" class="btn btn-ghost" id="btnV2HarnessReplay">Replay Encounter</button>` : ""}
+              <button type="button" class="btn" id="btnV2HarnessContinue">Continue</button>
             </div>` : ""}
           </div>
         `;
         renderV2DemoCompletionCard(stepButtons, snapshot);
         requestAnimationFrame(() => {
           const heroFrame = stepContent.querySelector(".v2-hero-frame");
+          const endScreen = stepContent.querySelector(".v2-end-screen");
+          const mobileMount = heroFrame || endScreen;
           const isV2MobileLayout = window.matchMedia?.("(max-width: 760px)")?.matches;
-          if (heroFrame && isV2MobileLayout && stepButtons.parentElement !== heroFrame) {
-            heroFrame.appendChild(stepButtons);
+          if (mobileMount && isV2MobileLayout && stepButtons.parentElement !== mobileMount) {
+            mobileMount.appendChild(stepButtons);
           } else if (!isV2MobileLayout && stepButtons.parentElement !== encounterPanel) {
             encounterPanel.appendChild(stepButtons);
           }
@@ -23881,8 +24277,20 @@ function ensureProgLoaded() {
               result.snapshot,
               latestHistory?.feedbackText || "",
             );
+            if (isV2TerminalOutcome(result.snapshot.outcome)) {
+              applyV2BottleRewardProgress(result.snapshot);
+            }
             emitV2HarnessOutcome(result.snapshot, liveSession, result.reaction || "");
             renderV2HarnessPlay(result.snapshot, result.reaction || "", quickFeedback);
+          });
+        });
+
+        stepButtons.querySelectorAll("[data-v2-claim-reward]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const rewardId = String(btn.getAttribute("data-v2-claim-reward") || "");
+            if (!rewardId) return;
+            claimV2BottleReward(rewardId);
+            renderV2HarnessPlay(snapshot, reaction, quickFeedbackText);
           });
         });
 
@@ -23890,24 +24298,14 @@ function ensureProgLoaded() {
           stepButtons.removeEventListener("click", stepButtons.__BC_V2_TERMINAL_HANDLER__);
         }
         stepButtons.__BC_V2_TERMINAL_HANDLER__ = (event) => {
-          const button = event.target?.closest?.("#btnV2HarnessContinue, #btnV2HarnessReplay");
+          const button = event.target?.closest?.("#btnV2HarnessContinue");
           if (!button) return;
           event.preventDefault();
-          if (button.id === "btnV2HarnessContinue") {
-            if (isFinalEncounter) {
-              resetV2DemoProgressToStart();
-              return;
-            }
-            startV2HarnessEncounter();
+          if (isFinalEncounter) {
+            resetV2DemoProgressToStart();
             return;
           }
-          if (!snapshot?.encounterId) return;
-          const replaySnapshot = api.start({
-            tier: snapshot.tier,
-            encounterId: snapshot.encounterId,
-            encounterLimit: getV2EncounterLimit(),
-          });
-          renderV2HarnessPlay(replaySnapshot, "");
+          startV2HarnessEncounter();
         };
         stepButtons.addEventListener("click", stepButtons.__BC_V2_TERMINAL_HANDLER__);
 
@@ -23932,7 +24330,7 @@ function ensureProgLoaded() {
         if (startingFresh) {
           state.introEncounterId = snapshot?.encounterId || null;
         }
-        renderV2HarnessPlay(snapshot, "");
+        renderV2EncounterPreview(snapshot, "");
         return true;
       }
 

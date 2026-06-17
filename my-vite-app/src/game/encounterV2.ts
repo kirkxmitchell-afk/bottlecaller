@@ -691,6 +691,8 @@ function makeTier1Encounter(args: {
   masterProfile: EncounterV2["masterProfile"];
   variant: EncounterV2["variant"];
   scene: string;
+  sceneClue?: string;
+  images?: EncounterV2["images"];
   visualClues: string[];
   verbalClue: string;
   contextClue: string;
@@ -719,6 +721,8 @@ function makeTier1Encounter(args: {
     startingFrustration: 0,
     idealRhythm: ["ask", "recommend", "commit"],
     scene: args.scene,
+    sceneClue: args.sceneClue,
+    images: args.images,
     visualClues: args.visualClues,
     verbalClue: args.verbalClue,
     contextClue: args.contextClue,
@@ -758,6 +762,15 @@ export const TIER1_VERTICAL_SLICE_ENCOUNTERS: EncounterV2[] = [
     variant: null,
     scene:
       "A couple sits near the window, taking in the room and scanning the local section of the wine list together.",
+    sceneClue: "Visitors scanning the local wine section.",
+    images: {
+      previewArt: "/game/encounters/001/preview-art.png",
+      mainNeutral: "/game/encounters/001/main-neutral.png",
+      mainPositive: "/game/encounters/001/main-positive.png",
+      mainNegative: "/game/encounters/001/main-negative.png",
+      endSuccessArt: "/game/encounters/001/end-success-art.png",
+      endFailureArt: "/game/encounters/001/end-failure-art.png",
+    },
     visualClues: [
       "They keep looking at unfamiliar wine names.",
       "They seem excited rather than tense.",
@@ -811,6 +824,15 @@ export const TIER1_VERTICAL_SLICE_ENCOUNTERS: EncounterV2[] = [
     variant: null,
     scene:
       "A guest keeps the list open but watches you more than the page, testing whether you actually understand the table.",
+    sceneClue: "Confident guest tests whether you understand the table.",
+    images: {
+      previewArt: "/game/encounters/002/preview-art.png",
+      mainNeutral: "/game/encounters/002/main-neutral.png",
+      mainPositive: "/game/encounters/002/main-positive.png",
+      mainNegative: "/game/encounters/002/main-negative.png",
+      endSuccessArt: "/game/encounters/002/end-success-art.png",
+      endFailureArt: "/game/encounters/002/end-failure-art.png",
+    },
     visualClues: [
       "They pause before answering and study your confidence.",
       "They have marked a few familiar-looking bottles.",
@@ -864,6 +886,15 @@ export const TIER1_VERTICAL_SLICE_ENCOUNTERS: EncounterV2[] = [
     variant: "comfort",
     scene:
       "A regular sits down comfortably and glances at the list, clearly expecting the evening to feel familiar.",
+    sceneClue: "Returning guest wants comfort with a small lift.",
+    images: {
+      previewArt: "/game/encounters/003/preview-art.png",
+      mainNeutral: "/game/encounters/003/main-neutral.png",
+      mainPositive: "/game/encounters/003/main-positive.png",
+      mainNegative: "/game/encounters/003/main-negative.png",
+      endSuccessArt: "/game/encounters/003/end-success-art.png",
+      endFailureArt: "/game/encounters/003/end-failure-art.png",
+    },
     visualClues: [
       "They greet the room with ease.",
       "They look at the same section of the wine list first.",

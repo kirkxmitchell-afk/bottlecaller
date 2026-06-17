@@ -85,6 +85,7 @@ export interface Product {
   varietalOrBlend: string;
   region: string;
   price: number;
+  bottleImage?: string;
   flavourAngle: string;
   storyAngle: string;
   valueAngle: string;
@@ -138,6 +139,15 @@ export interface EncounterGuestResponseMap {
   commit?: Partial<Record<CommitType, GuestResponse>>;
 }
 
+export interface EncounterImageSet {
+  previewArt?: string;
+  mainNeutral?: string;
+  mainPositive?: string;
+  mainNegative?: string;
+  endSuccessArt?: string;
+  endFailureArt?: string;
+}
+
 export interface EncounterV2 {
   id: string;
   title: string;
@@ -152,6 +162,8 @@ export interface EncounterV2 {
   startingFrustration: number;
   idealRhythm: ActionGroup[];
   scene: string;
+  sceneClue?: string;
+  images?: EncounterImageSet;
   visualClues: string[];
   verbalClue: string;
   contextClue: string;

@@ -124,6 +124,13 @@ function buildSelectionContext(encounter: EncounterV2): ProductSelectionContext 
   };
 }
 
+function formatProductTitle(product: Product | null): string | null {
+  if (!product) return null;
+  const name = String(product.name || "").replace(/^Scroll of\s+/i, "").trim();
+  const varietal = String(product.varietalOrBlend || "").trim();
+  return [name, varietal].filter(Boolean).join(", ") || null;
+}
+
 function availableActionGroups(gameState: GameStateV2): ActionGroup[] {
   if (gameState.outcome && gameState.outcome !== "continue" && gameState.outcome !== "not_available") {
     return [];
@@ -160,7 +167,7 @@ export function snapshotRuntimeV2(session: RuntimeV2Session): RuntimeV2Snapshot 
     encounterOrdinal,
     encounterCount: encounterPool.length,
     productId: product?.id || null,
-    productName: product?.name || null,
+    productName: formatProductTitle(product),
     tier: encounter.tier,
     progress: gameState.progress,
     frustration: gameState.frustration,
