@@ -20516,6 +20516,8 @@ async function loadAuthedState(reason = "manual") {
   }
 
   appState.session = session || null;
+  resetDemoAuthorityPointsForRequestedProfile(session?.user?.email);
+  repairStarterBottleUnlockForRequestedProfile(session?.user?.email);
   if (window.__LAST_USER_ID__ && window.__LAST_USER_ID__ !== appState.session?.user?.id) {
     destroyPremiumIframe("user_changed");
   }
@@ -20592,6 +20594,74 @@ async function loadAuthedState(reason = "manual") {
     await authedStateInflight;
   } finally {
     authedStateInflight = null;
+  }
+}
+
+function resetDemoAuthorityPointsForRequestedProfile(email) {
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  if (normalizedEmail !== "jason.grobler@icloud.com") return;
+
+  const markerKey = "BC_ONE_TIME_DEMO_AP_RESET_JASON_GROBLER_ICLOUD_20260618";
+  const rewardKey = "BC_V2_BOTTLE_REWARDS_V1";
+  try {
+    if (localStorage.getItem(markerKey) === "1") return;
+    const raw = localStorage.getItem(rewardKey);
+    const state = raw ? JSON.parse(raw) : {};
+    const rewards = Array.isArray(state.rewards)
+      ? state.rewards.map((reward) =>
+          reward?.id === "starter_bottle"
+            ? { ...reward, claimed: false, claimedAt: null }
+            : reward
+        )
+      : [];
+    const nextState = {
+      ...state,
+      v: 1,
+      totalAP: 0,
+      tierUnlocked: 1,
+      encounterScores: {},
+      rewards,
+      demoAPResetAt: Date.now(),
+    };
+    localStorage.setItem(rewardKey, JSON.stringify(nextState));
+    localStorage.setItem("BC_V2_TIER1_ROTATION_INDEX", "0");
+    localStorage.setItem(markerKey, "1");
+    window.__BC_V2_BOTTLE_REWARD_STATE__ = nextState;
+    console.warn("[BC][RESET] Demo AP reset for jason.grobler@icloud.com");
+  } catch (error) {
+    console.warn("[BC][RESET] Could not reset demo AP", error);
+  }
+}
+
+function repairStarterBottleUnlockForRequestedProfile(email) {
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  if (normalizedEmail !== "jason.grobler@icloud.com") return;
+
+  const markerKey = "BC_ONE_TIME_STARTER_BOTTLE_REPAIR_JASON_GROBLER_ICLOUD_20260618_V2";
+  const rewardKey = "BC_V2_BOTTLE_REWARDS_V1";
+  try {
+    if (localStorage.getItem(markerKey) === "1") return;
+    const raw = localStorage.getItem(rewardKey);
+    if (!raw) return;
+    const state = JSON.parse(raw);
+    const rewards = Array.isArray(state?.rewards) ? state.rewards : [];
+    const starter = rewards.find((reward) => reward?.id === "starter_bottle");
+    if (starter?.claimed) {
+      const nextState = {
+        ...state,
+        rewards: rewards.map((reward) =>
+          reward?.id === "starter_bottle"
+            ? { ...reward, claimed: false, claimedAt: null }
+            : reward
+        ),
+      };
+      localStorage.setItem(rewardKey, JSON.stringify(nextState));
+      window.__BC_V2_BOTTLE_REWARD_STATE__ = nextState;
+      console.warn("[BC][RESET] Starter Bottle repaired for jason.grobler@icloud.com");
+    }
+    localStorage.setItem(markerKey, "1");
+  } catch (error) {
+    console.warn("[BC][RESET] Could not repair starter bottle reward", error);
   }
 }
 
@@ -20917,10 +20987,7 @@ async function routeDemo(reason = "manual") {
     openMobileDemoCockpit("route_demo_mobile");
     return;
   }
-  mountGameIframe("gameRootDemo", "demo", {
-    initialScreen: "screenWelcome",
-    v2Harness: useV2Harness,
-  });
+  openMobileDemoCockpit("route_demo_cockpit");
 }
 
 async function routePremium(reason = "manual") {
@@ -21170,10 +21237,7 @@ function routeDemoShellNoAuth() {
     openMobileDemoCockpit("route_demo_shell_mobile");
     return;
   }
-  mountGameIframe("gameRootDemo", "demo", {
-    initialScreen: "screenWelcome",
-    v2Harness: useV2Harness,
-  });
+  openMobileDemoCockpit("route_demo_shell_cockpit");
 }
 
 function routeAuth() {

@@ -4867,85 +4867,92 @@
   </section>
 
   <section id="screenHome" class="screen">
-    <div class="panel app-home-shell">
-      <div class="app-home-header">
-        <div class="app-home-eyebrow">Service Training Cockpit</div>
-        <h2>BottleCaller</h2>
-        <p class="app-home-subtitle">Train the floor. Build cleaner reads. Sharpen the close.</p>
-        <div class="button-row app-home-header-actions">
-          <button id="btnStatusBackToWelcome" type="button" class="btn-ghost">Back to Welcome</button>
+    <div class="panel app-home-shell bc-service-hub">
+      <div class="bc-service-statusbar" aria-label="Player status">
+        <span id="bcHomeLevel">Lv 1</span>
+        <span id="bcHomeAP">0 AP</span>
+        <span id="bcHomeBottleStatus">0 Bottles</span>
+      </div>
+
+      <div class="bc-service-profile">
+        <div>
+          <div class="bc-service-profile-name" id="bcHomePlayerName">Guest</div>
+          <div class="bc-service-profile-title">Trainee Caller</div>
+        </div>
+        <span class="bc-service-profile-floor" id="bcHomeFloorLabel">Demo Floor</span>
+      </div>
+
+      <div class="bc-service-reward-panels">
+        <div class="bc-service-mini-panel">
+          <span>Daily Pour</span>
+          <strong>Tomorrow</strong>
+        </div>
+        <div class="bc-service-mini-panel">
+          <span>Next Bottle</span>
+          <strong id="bcHomeNextBottle">30 AP to go</strong>
         </div>
       </div>
 
-      <div class="app-home-grid">
-
-      <!-- Demo card -->
-      <div class="card app-mode-card" id="cardDemo" data-home-mode="demo">
-        <div class="app-mode-header">
-          <strong class="app-mode-title">Demo</strong>
-          <div class="app-mode-kicker">Fast reps</div>
+      <div class="bc-service-tier-card" id="btnHomeBeginTier" role="button" tabindex="0" aria-label="Begin Main Dining Floor">
+        <div class="bc-service-tier-art">
+          <img
+            src="/game/home/tier-1-main-dining-floor.png"
+            alt=""
+            onerror="this.classList.add('is-missing'); this.removeAttribute('src');"
+          />
+          <div class="bc-service-tier-placeholder">Main Dining Floor</div>
         </div>
-        <p class="app-mode-copy">Use a lightweight run to learn the interaction rhythm before stepping into the full floor-pressure loop.</p>
-        <div class="score-row app-score-row">Wines saved: <span id="homeDemoCount">0 / 3</span></div>
-        <div class="score-row app-score-row">Runs total: <span id="homeDemoRuns">0</span></div>
-        <div class="card progress-card app-progress-card">
-          <strong class="app-progress-title">Progress</strong>
-          <div class="small-text">Level: <span id="progressNameDemo">—</span></div>
-          <div class="small-text">Points: <span id="progressPointsDemo">0</span></div>
-        </div>
-        <div class="button-row app-home-actions" id="demoButtons">
-          <button id="btnGoDemo" type="button">Setup</button>
-          <button id="btnStartDrillDemo" type="button">5-Minute Drill</button>
-          <button id="btnViewHistoryDemo" type="button">View History</button>
-          <button id="btnResetProgressDemo" type="button">Restart encounter flow</button>
-          <button id="btnResetWinesDemo" type="button" data-role="manager">Reset Wines Only</button>
+        <div class="bc-service-tier-copy">
+          <span>Tier 1</span>
+          <strong>Main Dining Floor</strong>
         </div>
       </div>
 
-      <!-- Premium card -->
-      <div class="card app-mode-card" id="cardPremium" data-home-mode="premium">
-        <div class="app-premium-hero">
-          <div class="app-premium-lead">
-            <div class="app-mode-header">
-              <strong class="app-mode-title">Premium</strong>
-              <div class="app-mode-kicker">Full service pressure</div>
-            </div>
-            <p class="app-mode-copy">Run the full sequence with progression pressure, tighter reads, sharper prompt demands, and the real table-close loop.</p>
-          </div>
-          <div class="app-premium-status">
-            <div class="score-row app-score-row">Wines saved: <span id="homePremiumCount">0 / 10</span></div>
-            <div class="score-row app-score-row">Runs total: <span id="homePremiumRuns">0</span></div>
-            <div class="card progress-card app-progress-card">
-              <strong class="app-progress-title">Progress</strong>
-              <div class="app-progress-meter-wrap">
-                <div class="app-progress-meter" aria-hidden="true">
-                  <div class="app-progress-meter-bar" id="progressBarPremium"></div>
-                </div>
-                <div class="app-progress-meter-head">
-                  <strong class="app-progress-percent" id="progressPercentPremium">0%</strong>
-                  <span class="small-text app-progress-notice" id="progressNoticePremium">Opening service band</span>
-                </div>
-              </div>
-              <div class="app-progress-chip-row">
-                <span class="app-progress-chip" id="premiumPressureChip">Pressure: Low band</span>
-                <span class="app-progress-chip" id="premiumGuestChip">Guests: Core floor reads</span>
-              </div>
-              <div class="small-text">Level: <span id="progressNamePremium">—</span></div>
-              <div class="small-text">Points: <span id="progressPointsPremium">0</span></div>
-              <div class="small-text app-progress-detail"><span class="app-progress-label">Focus</span><span id="progressFocusPremium">—</span></div>
-              <div class="small-text app-progress-detail"><span class="app-progress-label">Window</span><span id="progressNextPremium">—</span></div>
-            </div>
-          </div>
+      <div class="button-row app-home-actions bc-service-main-action" id="demoButtons">
+        <button id="btnGoDemo" class="bc-next-table-button hidden" type="button">BEGIN</button>
+        <button id="btnGoPremium" class="bc-next-table-button hidden" data-tutorial="play-button" type="button">BEGIN</button>
+      </div>
+
+      <div class="bc-service-progress-strip" id="bcHomeProgressStrip">Encounter 1 / 3 Demo</div>
+
+      <div class="bc-service-bottle-slots" id="bcHomeBottleSlots" aria-label="Bottle rewards">
+        <div class="bc-service-bottle-slot">
+          <span>Starter Bottle</span>
+          <strong>30 AP to go</strong>
         </div>
-        <div class="button-row app-home-actions" id="premiumButtons">
-          <button id="btnGoPremium" data-tutorial="play-button" type="button">Setup</button>
-          <button id="btnViewHistoryPremium" type="button">View History</button>
-          <button id="btnResetProgressPremium" type="button">Restart encounter flow</button>
-          <button id="btnHardResetProgressionPremium" type="button" class="hidden">Reset waiter progression</button>
-          <button id="btnResetWinesPremium" type="button" data-role="manager">Reset Wines Only</button>
+        <div class="bc-service-bottle-slot">
+          <span>Bronze Bottle</span>
+          <strong>100 AP to go</strong>
+        </div>
+        <div class="bc-service-bottle-slot">
+          <span>Tier 2 Bottle</span>
+          <strong>Locked</strong>
         </div>
       </div>
 
+      <div class="bc-service-legacy-status" aria-hidden="true">
+        <span id="homeDemoCount">0 / 3</span>
+        <span id="homeDemoRuns">0</span>
+        <span id="homePremiumCount">0 / 10</span>
+        <span id="homePremiumRuns">0</span>
+        <span id="progressNameDemo">—</span>
+        <span id="progressPointsDemo">0</span>
+        <span id="progressNamePremium">—</span>
+        <span id="progressPercentPremium">0%</span>
+        <span id="progressNoticePremium">Opening service band</span>
+        <span id="progressPointsPremium">0</span>
+        <span id="progressFocusPremium">—</span>
+        <span id="progressNextPremium">—</span>
+        <span id="progressBarPremium"></span>
+        <button id="btnStartDrillDemo" type="button">5-Minute Drill</button>
+        <button id="btnViewHistoryDemo" type="button">View History</button>
+        <button id="btnResetProgressDemo" type="button">Restart encounter flow</button>
+        <button id="btnResetWinesDemo" type="button" data-role="manager">Reset Wines Only</button>
+        <button id="btnViewHistoryPremium" type="button">View History</button>
+        <button id="btnResetProgressPremium" type="button">Restart encounter flow</button>
+        <button id="btnHardResetProgressionPremium" type="button">Reset waiter progression</button>
+        <button id="btnResetWinesPremium" type="button" data-role="manager">Reset Wines Only</button>
+        <button id="btnStatusBackToWelcome" type="button">Back to Welcome</button>
       </div>
     </div>
   </section>
@@ -12170,6 +12177,22 @@ function ensureProgLoaded() {
         }
       };
 
+      window.__BC_NAV__.openHomeFromWelcome = () => {
+        if (sessionType === "drill") return;
+        try {
+          if (!window.isDemo && isStandalone()) {
+            redirectToParentLogin("welcome_start_home");
+            return;
+          }
+          try { localStorage.setItem(coverKey, "true"); } catch {}
+          applyPlaySurfaceMode("full");
+          resetNavState();
+          showScreen("screenHome");
+        } catch (e) {
+          console.warn("[BC] NAV openHomeFromWelcome failed", e);
+        }
+      };
+
       window.__BC_NAV__.openStatus = () => {
         if (sessionType === "drill") return;
         try {
@@ -14079,6 +14102,118 @@ function ensureProgLoaded() {
       }
 
       // ---------- UI: counts ----------
+      function getV2HomeRewardStateSafe() {
+        try {
+          if (typeof loadV2BottleRewardState === "function") return loadV2BottleRewardState();
+        } catch (e) {
+          console.warn("[BC][HOME] reward state unavailable", e);
+        }
+        return {
+          totalAP: 0,
+          tierUnlocked: 1,
+          rewards: [
+            { id: "starter_bottle", name: "Starter Bottle", unlockAP: 30, tier: 1, claimed: false },
+            { id: "bronze_bottle", name: "Bronze Bottle", unlockAP: 100, tier: 1, claimed: false },
+            { id: "tier_2_unlock_bottle", name: "Tier 2 Bottle", unlockAP: 180, tier: 1, claimed: false },
+          ],
+        };
+      }
+
+      function getV2HomeRewardStatus(reward, totalAP) {
+        if (!reward) return "";
+        if (reward.claimed) return "Opened";
+        const unlockAP = Number(reward.unlockAP || 0);
+        if (unlockAP <= Number(totalAP || 0)) return "Open Now";
+        return `${Math.max(0, unlockAP - Number(totalAP || 0))} AP to go`;
+      }
+
+      function getV2HomeEncounterProgressLabel() {
+        const isDemoNow = !!(window.isDemo || window.bcMode === "demo");
+        let limit = isDemoNow ? 3 : 10;
+        try {
+          if (typeof getV2EncounterLimit === "function") limit = getV2EncounterLimit();
+        } catch {}
+
+        let current = 0;
+        try {
+          current = typeof loadEncounterIndexSafe === "function"
+            ? Number(loadEncounterIndexSafe() || 0)
+            : Number(encounterIndex || 0);
+        } catch {
+          current = Number(encounterIndex || 0);
+        }
+
+        const position = Math.max(1, (Math.max(0, current) % Math.max(1, limit)) + 1);
+        if (isDemoNow) return `Encounter ${position} / ${limit} Demo`;
+        return `Tier 1 Progress: ${Math.min(position, 10)} / 10 Tables`;
+      }
+
+      function getV2HomePlayerName() {
+        const identity = (typeof getGameplayIdentity === "function") ? getGameplayIdentity() : {};
+        const ctx = window.__BC_CTX__ || {};
+        const raw =
+          identity?.displayName ||
+          identity?.name ||
+          ctx?.displayName ||
+          ctx?.name ||
+          ctx?.userName ||
+          "";
+        const name = String(raw || "").trim();
+        if (name) return name.split(/\s+/)[0];
+        if (window.isDemo || window.bcMode === "demo") return "Kirk";
+        return "Guest";
+      }
+
+      function renderV2ServiceHubHome() {
+        const state = getV2HomeRewardStateSafe();
+        const totalAP = Number(state.totalAP || 0);
+        const rewards = Array.isArray(state.rewards) ? state.rewards : [];
+        const pending = rewards.filter((reward) => Number(reward.unlockAP || 0) <= totalAP && !reward.claimed);
+        const claimedCount = rewards.filter((reward) => reward.claimed).length;
+        const nextReward = rewards.find((reward) => !reward.claimed) || rewards[0] || null;
+        const isDemoNow = !!(window.isDemo || window.bcMode === "demo");
+
+        const levelEl = document.getElementById("bcHomeLevel");
+        const apEl = document.getElementById("bcHomeAP");
+        const bottleStatusEl = document.getElementById("bcHomeBottleStatus");
+        const playerNameEl = document.getElementById("bcHomePlayerName");
+        const floorEl = document.getElementById("bcHomeFloorLabel");
+        const nextBottleEl = document.getElementById("bcHomeNextBottle");
+        const progressEl = document.getElementById("bcHomeProgressStrip");
+        const slotsEl = document.getElementById("bcHomeBottleSlots");
+
+        if (levelEl) levelEl.textContent = `Lv ${Number(state.tierUnlocked || 1)}`;
+        if (apEl) apEl.textContent = `${totalAP} AP`;
+        if (bottleStatusEl) {
+          bottleStatusEl.textContent = pending.length
+            ? "Bottle Ready"
+            : `${claimedCount} ${claimedCount === 1 ? "Bottle" : "Bottles"}`;
+        }
+        if (playerNameEl) playerNameEl.textContent = getV2HomePlayerName();
+        if (floorEl) floorEl.textContent = isDemoNow ? "Demo Floor" : "Service Floor";
+        if (nextBottleEl) nextBottleEl.textContent = getV2HomeRewardStatus(nextReward, totalAP) || "Locked";
+        if (progressEl) progressEl.textContent = getV2HomeEncounterProgressLabel();
+
+        if (slotsEl) {
+          const homeRewards = [
+            { id: "starter_bottle", name: "Starter Bottle", unlockAP: 30 },
+            { id: "bronze_bottle", name: "Bronze Bottle", unlockAP: 100 },
+            { id: "tier_2_unlock_bottle", name: "Tier 2 Bottle", unlockAP: 180 },
+          ];
+          slotsEl.innerHTML = homeRewards.map((fallbackReward) => {
+            const reward = rewards.find((item) => item.id === fallbackReward.id) || fallbackReward;
+            const status = getV2HomeRewardStatus(reward, totalAP) || "Locked";
+            const stateClass = status === "Open Now" ? "is-ready" : status === "Opened" ? "is-opened" : "is-locked";
+            return `
+              <div class="bc-service-bottle-slot ${stateClass}">
+                <span>${fallbackReward.name}</span>
+                <strong>${status}</strong>
+              </div>
+            `;
+          }).join("");
+        }
+      }
+
       function renderHomeCounts() {
         const snapshot = getUnifiedProgressSnapshot();
         const W = getWinesSafe();
@@ -14086,6 +14221,7 @@ function ensureProgLoaded() {
         const runsEl = document.getElementById(ids.cardRuns);
         if (countEl) countEl.innerText = W.length + " / " + LIMIT;
         if (runsEl) runsEl.innerText = snapshot.runs.active;
+        try { renderV2ServiceHubHome(); } catch (e) { console.warn("[BC][HOME] service hub render failed", e); }
       }
 
       function updateCounts() {
@@ -23384,6 +23520,7 @@ function ensureProgLoaded() {
           tierUnlocked: getV2TierUnlockedByAP(totalAP),
           encounterScores,
           rewards,
+          demoAPResetAt: state.demoAPResetAt || null,
         };
       }
 
@@ -23400,6 +23537,7 @@ function ensureProgLoaded() {
         const normalized = normalizeV2BottleRewardState(state);
         try { window.localStorage.setItem(V2_BOTTLE_REWARD_STORAGE_KEY, JSON.stringify(normalized)); } catch {}
         window.__BC_V2_BOTTLE_REWARD_STATE__ = normalized;
+        try { renderV2ServiceHubHome?.(); } catch {}
         return normalized;
       }
 
@@ -23457,6 +23595,104 @@ function ensureProgLoaded() {
         return saveV2BottleRewardState(state);
       }
 
+      function isV2DemoRewardMode() {
+        return !!(window.isDemo || window.bcMode === "demo");
+      }
+
+      function resetV2DemoAPAfterBottleOpen(state) {
+        if (!isV2DemoRewardMode()) return state;
+        const rewards = Array.isArray(state?.rewards)
+          ? state.rewards.map((reward) =>
+              reward?.id === "starter_bottle"
+                ? { ...reward, claimed: false, claimedAt: null }
+                : reward
+            )
+          : undefined;
+        const nextState = {
+          ...(state || loadV2BottleRewardState()),
+          totalAP: 0,
+          tierUnlocked: 1,
+          encounterScores: {},
+          ...(rewards ? { rewards } : {}),
+          demoAPResetAt: Date.now(),
+        };
+        return saveV2BottleRewardState(nextState);
+      }
+
+      function getV2BottleRewardTitle(rewardId) {
+        const titles = {
+          starter_bottle: "Trainee Caller",
+          bronze_bottle: "Bronze Caller",
+          tier_2_unlock_bottle: "Pairing Apprentice",
+          tier_1_mastery_bottle: "Tier 1 Caller",
+        };
+        return titles[String(rewardId || "")] || "Bottle Caller";
+      }
+
+      function showV2BottleUnlockModal(reward, onComplete) {
+        const rewardId = String(reward?.id || "");
+        const rewardName = String(reward?.name || "Starter Bottle");
+        const titleName = getV2BottleRewardTitle(rewardId);
+        document.querySelectorAll(".bc-bottle-unlock-backdrop").forEach((node) => node.remove());
+
+        const particleMarkup = Array.from({ length: 18 }, (_, index) => {
+          const angle = -82 + index * 9.5;
+          const distance = 58 + (index % 5) * 12;
+          return `<i style="--bc-particle-angle:${angle}deg; --bc-particle-distance:${distance}px; --bc-particle-delay:${(index % 6) * 26}ms;"></i>`;
+        }).join("");
+
+        const modal = document.createElement("div");
+        modal.className = "bc-bottle-unlock-backdrop";
+        modal.setAttribute("role", "dialog");
+        modal.setAttribute("aria-modal", "true");
+        modal.innerHTML = `
+          <div class="bc-bottle-unlock">
+            <div class="bc-bottle-text">
+              <div class="bc-bottle-label">Bottle Unlocked</div>
+              <div class="bc-bottle-name">${escapeHtml(rewardName)}</div>
+            </div>
+            <div class="bc-bottle-stage">
+              <div class="bc-bottle-glow bottle-glow"></div>
+              <div class="bc-bottle-wrap bottle-idle bottle-shake">
+                <img class="bc-bottle-image" src="/game/rewards/bottle-unlock-closed.png" alt="">
+                <img class="bc-bottle-cork cork-pop" src="/game/rewards/bottle-unlock-cork.png" alt="">
+                <div class="bc-particles particle-burst" aria-hidden="true">${particleMarkup}</div>
+              </div>
+            </div>
+            <button type="button" class="bc-open-button">Open</button>
+            <div class="bc-reward-card reward-reveal hidden">
+              <div class="bc-reward-type">Title Unlocked</div>
+              <div class="bc-reward-name">${escapeHtml(titleName)}</div>
+              <button type="button" class="bc-continue-button">Continue</button>
+            </div>
+          </div>
+        `;
+
+        const unlock = modal.querySelector(".bc-bottle-unlock");
+        const openButton = modal.querySelector(".bc-open-button");
+        const continueButton = modal.querySelector(".bc-continue-button");
+        const rewardCard = modal.querySelector(".bc-reward-card");
+
+        openButton?.addEventListener("click", () => {
+          if (unlock?.classList.contains("is-opening")) return;
+          unlock?.classList.add("is-opening", "bottle-open-ready");
+          openButton.classList.add("hidden");
+          window.setTimeout(() => {
+            rewardCard?.classList.remove("hidden");
+            const claimedState = claimV2BottleReward(rewardId);
+            resetV2DemoAPAfterBottleOpen(claimedState);
+          }, 920);
+        });
+
+        continueButton?.addEventListener("click", () => {
+          modal.remove();
+          if (typeof onComplete === "function") onComplete();
+        });
+
+        document.body.appendChild(modal);
+        window.setTimeout(() => openButton?.focus?.(), 50);
+      }
+
       function renderV2BottleRewardHtml(rewardProgress) {
         const state = rewardProgress?.state || loadV2BottleRewardState();
         const pendingRewards = rewardProgress?.pendingRewards || getPendingV2BottleRewards(state);
@@ -23483,7 +23719,12 @@ function ensureProgLoaded() {
               <strong>${escapeHtml(reward.name)}</strong>
               <div class="small-text">${Number(reward.unlockAP || 0)} AP milestone reached</div>
             </div>
-            <button type="button" class="btn btnChoice" data-v2-claim-reward="${escapeHtml(reward.id)}">Open Now</button>
+            <button
+              type="button"
+              class="btn btnChoice"
+              data-v2-claim-reward="${escapeHtml(reward.id)}"
+              data-v2-reward-name="${escapeHtml(reward.name)}"
+            >Open Now</button>
           </div>
         `).join("");
         return `
@@ -23493,6 +23734,14 @@ function ensureProgLoaded() {
             <div class="v2-reward-list">${rewardRows}</div>
           </div>
         `;
+      }
+
+      function showFirstPendingV2BottleReward(onComplete) {
+        const state = loadV2BottleRewardState();
+        const reward = getPendingV2BottleRewards(state)[0];
+        if (!reward) return false;
+        showV2BottleUnlockModal(reward, onComplete);
+        return true;
       }
 
       function getV2MoodDescriptor(snapshot) {
@@ -24289,10 +24538,40 @@ function ensureProgLoaded() {
           btn.addEventListener("click", () => {
             const rewardId = String(btn.getAttribute("data-v2-claim-reward") || "");
             if (!rewardId) return;
-            claimV2BottleReward(rewardId);
-            renderV2HarnessPlay(snapshot, reaction, quickFeedbackText);
+            const state = loadV2BottleRewardState();
+            const reward = (Array.isArray(state.rewards) ? state.rewards : []).find((item) => item.id === rewardId) || {
+              id: rewardId,
+              name: String(btn.getAttribute("data-v2-reward-name") || "Starter Bottle"),
+            };
+            showV2BottleUnlockModal(reward, () => {
+              if (isFinalEncounter) {
+                resetV2DemoProgressToStart();
+                return;
+              }
+              startV2HarnessEncounter();
+            });
           });
         });
+
+        if (isTerminal && Array.isArray(rewardProgress?.pendingRewards) && rewardProgress.pendingRewards.length) {
+          const rewardId = String(rewardProgress.pendingRewards[0]?.id || "");
+          const rewardState = rewardProgress?.state || loadV2BottleRewardState();
+          const autoKey = `BC_V2_REWARD_AUTO_SHOWN_${rewardId}_${Number(rewardState?.totalAP || 0)}_${Number(rewardState?.demoAPResetAt || 0)}`;
+          if (rewardId && !window.__BC_V2_REWARD_MODAL_ACTIVE__ && sessionStorage.getItem(autoKey) !== "1") {
+            sessionStorage.setItem(autoKey, "1");
+            window.setTimeout(() => {
+              window.__BC_V2_REWARD_MODAL_ACTIVE__ = true;
+              showFirstPendingV2BottleReward(() => {
+                window.__BC_V2_REWARD_MODAL_ACTIVE__ = false;
+                if (isFinalEncounter) {
+                  resetV2DemoProgressToStart();
+                  return;
+                }
+                startV2HarnessEncounter();
+              });
+            }, 250);
+          }
+        }
 
         if (stepButtons.__BC_V2_TERMINAL_HANDLER__) {
           stepButtons.removeEventListener("click", stepButtons.__BC_V2_TERMINAL_HANDLER__);
@@ -24301,6 +24580,18 @@ function ensureProgLoaded() {
           const button = event.target?.closest?.("#btnV2HarnessContinue");
           if (!button) return;
           event.preventDefault();
+          if (getPendingV2BottleRewards(loadV2BottleRewardState()).length) {
+            window.__BC_V2_REWARD_MODAL_ACTIVE__ = true;
+            showFirstPendingV2BottleReward(() => {
+              window.__BC_V2_REWARD_MODAL_ACTIVE__ = false;
+              if (isFinalEncounter) {
+                resetV2DemoProgressToStart();
+                return;
+              }
+              startV2HarnessEncounter();
+            });
+            return;
+          }
           if (isFinalEncounter) {
             resetV2DemoProgressToStart();
             return;
@@ -24393,7 +24684,7 @@ function ensureProgLoaded() {
 
       function bindPremiumEntryButton(btn) {
         if (!btn) return;
-        btn.textContent = "Play";
+        btn.textContent = "BEGIN";
         btn.classList.remove("hidden");
         btn.disabled = false;
         btn.onclick = null;
@@ -24407,6 +24698,25 @@ function ensureProgLoaded() {
           beginOrResumeProgressionRun();
           await startPlayWithReadyGate();
         });
+        bindHomeTierCardEntry(btn);
+      }
+
+      function bindHomeTierCardEntry(targetButton) {
+        const card = document.getElementById("btnHomeBeginTier");
+        if (!card || !targetButton) return;
+        card.classList.add("is-clickable");
+        card.onclick = null;
+        card.onkeydown = null;
+        card.addEventListener("click", () => {
+          if (targetButton.disabled) return;
+          targetButton.click();
+        });
+        card.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          if (targetButton.disabled) return;
+          targetButton.click();
+        });
       }
 
       function applyRoleTemplate() {
@@ -24419,8 +24729,9 @@ function ensureProgLoaded() {
           btnWelcomeBackToSetup?.classList.add("hidden");
 
           const btnGoPremium = document.getElementById("btnGoPremium");
-          if (btnGoPremium) {
-            btnGoPremium.textContent = "Play";
+          const btnGoDemo = document.getElementById("btnGoDemo");
+          if (btnGoPremium && !btnGoDemo) {
+            btnGoPremium.textContent = "BEGIN";
             btnGoPremium.classList.remove("hidden");
             btnGoPremium.disabled = false;
             btnGoPremium.onclick = null;
@@ -24434,6 +24745,9 @@ function ensureProgLoaded() {
               showScreen("screenPlay");
               window.startEncounter?.();
             });
+            bindHomeTierCardEntry(btnGoPremium);
+          } else if (btnGoPremium && btnGoDemo) {
+            btnGoPremium.classList.add("hidden");
           }
 
           document.querySelectorAll('[data-role="manager"]').forEach((el) => el.classList.add("hidden"));
@@ -24456,6 +24770,7 @@ function ensureProgLoaded() {
         const identity = getGameplayIdentity();
         const isWaiterNow = !!identity.isWaiter;
         const isManagerLike = isManagerLikeIdentity(identity);
+        document.getElementById("btnGoDemo")?.classList.add("hidden");
         console.log("[BC][ROLE_TEMPLATE]", {
           identity,
           isWaiterNow,
@@ -24671,14 +24986,21 @@ function ensureProgLoaded() {
         const btnGoPremium = document.getElementById("btnGoPremium");
         const identity = getGameplayIdentity();
         const isWaiter = !!identity.isWaiter;
+        const isDemoMode = window.isDemo || window.bcMode === "demo";
 
-        if (btnWelcomeHome && (window.isDemo || window.bcMode === "demo")) {
+        if (isDemoMode) {
+          btnGoPremium?.remove();
+        } else {
+          btnGoDemo?.remove();
+        }
+
+        if (btnWelcomeHome && isDemoMode) {
           btnWelcomeHome.remove();
         }
-        if (btnWelcomeBackToSetup && (window.isDemo || window.bcMode === "demo")) {
+        if (btnWelcomeBackToSetup && isDemoMode) {
           btnWelcomeBackToSetup.remove();
         }
-        if (btnStatusBackToWelcome && (window.isDemo || window.bcMode === "demo")) {
+        if (btnStatusBackToWelcome && isDemoMode) {
           btnStatusBackToWelcome.classList.add("hidden");
         }
 
@@ -24703,7 +25025,9 @@ function ensureProgLoaded() {
         applyRoleTemplate();
 
         if (btnGoDemo && (window.isDemo || window.bcMode === "demo")) {
-          btnGoDemo.textContent = "Play";
+          btnGoDemo.textContent = "BEGIN";
+          btnGoDemo.classList.remove("hidden");
+          btnGoDemo.disabled = false;
           btnGoDemo.onclick = null;
           btnGoDemo.__bcBound = false;
 
@@ -24716,27 +25040,33 @@ function ensureProgLoaded() {
             showScreen("screenPlay");
             window.startEncounter?.();
           });
+          bindHomeTierCardEntry(btnGoDemo);
 
           console.log("[BC][DEMO] btnGoDemo wired ✅");
         }
 
         if (window.isDemo || window.bcMode === "demo") {
           if (btnGoPremium) {
-            btnGoPremium.textContent = "Play";
-            btnGoPremium.classList.remove("hidden");
-            btnGoPremium.disabled = false;
-            btnGoPremium.onclick = null;
-            btnGoPremium.__bcBound = false;
+            if (btnGoDemo) {
+              btnGoPremium.classList.add("hidden");
+            } else {
+              btnGoPremium.textContent = "BEGIN";
+              btnGoPremium.classList.remove("hidden");
+              btnGoPremium.disabled = false;
+              btnGoPremium.onclick = null;
+              btnGoPremium.__bcBound = false;
 
-            bindInput(btnGoPremium, () => {
-              resetNavState();
-              if (shouldUseV2Harness()) {
-                startV2HarnessWhenReady({ resetSession: true });
-                return;
-              }
-              showScreen("screenPlay");
-              window.startEncounter?.();
-            });
+              bindInput(btnGoPremium, () => {
+                resetNavState();
+                if (shouldUseV2Harness()) {
+                  startV2HarnessWhenReady({ resetSession: true });
+                  return;
+                }
+                showScreen("screenPlay");
+                window.startEncounter?.();
+              });
+              bindHomeTierCardEntry(btnGoPremium);
+            }
           }
         }
 
@@ -24783,28 +25113,9 @@ function ensureProgLoaded() {
             // Mark cover as dismissed
             try { localStorage.setItem(coverKey, "true"); } catch {}
 
-            applyPlaySurfaceMode("encounter_only");
-            notifyParentDemoPlayStarted("welcome_start");
+            applyPlaySurfaceMode("full");
             resetNavState();
-            showScreen("screenPlay");
-
-            // DEMO: start immediately
-            if (window.isDemo || window.bcMode === "demo") {
-              if (shouldUseV2Harness()) {
-                startV2HarnessWhenReady({ resetSession: true });
-                return;
-              }
-              window.startEncounter?.();
-              return;
-            }
-
-            // PREMIUM: ensure ctx/wines are ready then start
-            if (shouldUseV2Harness()) {
-              startV2HarnessWhenReady({ resetSession: true });
-              return;
-            }
-            beginOrResumeProgressionRun();
-            await startPlayWithReadyGate();
+            showScreen("screenHome");
           });
 
           console.log("[BOOT] btnWelcomeStart wired ✅", { mode: window.bcMode, isDemo: window.isDemo });
