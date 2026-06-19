@@ -24136,7 +24136,7 @@ function ensureProgLoaded() {
         const encounterPersona = v2HarnessLabel(encounter?.family || snapshot.encounterTitle || "Table");
         const productStyle = product?.style || product?.varietalOrBlend || "";
         const productRegion = product?.region || "";
-        const previewProductName = String(productName || "Selected Bottle").replace(/^Scroll of\s+/i, "").trim() || productName || "Selected Bottle";
+        const previewProductName = String(product?.name || productName || "Selected Bottle").replace(/^Scroll of\s+/i, "").trim() || productName || "Selected Bottle";
         const previewLine = encounter?.contextClue || "Read the table before choosing your first move.";
 
         stepHeader.textContent = `Tier ${snapshot.tier} • Encounter ${String(snapshot.encounterOrdinal).padStart(3, "0")} • ${snapshot.encounterTitle}`;

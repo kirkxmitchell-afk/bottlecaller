@@ -7415,3 +7415,66 @@ html, body{ height:100%; }
     font-size: 10px !important;
   }
 }
+
+/* Final mobile preview compression. Keep the VS/bottle/card cluster readable on narrow phones. */
+@media (max-width: 760px){
+  #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-preview-table-card{
+    left: 9% !important;
+    top: 58% !important;
+    width: 25.5% !important;
+    min-height: 86px !important;
+    padding: 8px 7px !important;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-preview-product-card{
+    right: 9% !important;
+    top: 58% !important;
+    width: 25.5% !important;
+    min-height: 86px !important;
+    padding: 8px 7px !important;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-preview-card-title{
+    font-size: 12px !important;
+    line-height: 1.02 !important;
+    letter-spacing: .025em !important;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-preview-product-card .v2-preview-card-title{
+    font-size: 10px !important;
+    line-height: 1.02 !important;
+    letter-spacing: .015em !important;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-preview-card p{
+    font-size: 9.5px !important;
+    line-height: 1.16 !important;
+    margin-top: 6px !important;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-preview-card-eyebrow,
+  #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-preview-card-region{
+    font-size: 7px !important;
+    letter-spacing: .09em !important;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-preview-card-region{
+    margin-top: 7px !important;
+    padding-top: 7px !important;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-vs-graphic{
+    left: 44% !important;
+    top: 61.5% !important;
+    width: 44px !important;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-product-bottle{
+    left: 54.5% !important;
+    right: auto !important;
+    top: 61.5% !important;
+    width: 30px !important;
+    max-height: 15% !important;
+    transform: translate(-50%, -50%) !important;
+  }
+}
