@@ -1373,60 +1373,62 @@ p { margin: 0; color: var(--muted); line-height: 1.5; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-preview-table-card{
-    left:7.5%;
-    top:56.5%;
+    left:8.5%;
+    top:57%;
     bottom:auto;
-    width:30.5%;
-    min-height:100px;
-    padding:10px 9px;
+    width:27.5%;
+    min-height:92px;
+    padding:9px 8px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-preview-product-card{
-    right:7.5%;
-    top:56.5%;
+    right:8.5%;
+    top:57%;
     bottom:auto;
-    width:30.5%;
-    min-height:100px;
-    padding:10px 9px;
+    width:27.5%;
+    min-height:92px;
+    padding:9px 8px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-preview-card-title{
-    font-size:15px;
-    letter-spacing:.04em;
+    font-size:13px;
+    letter-spacing:.035em;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-preview-product-card .v2-preview-card-title{
-    font-size:12px;
-    line-height:1.08;
-    letter-spacing:.025em;
+    font-size:10.5px;
+    line-height:1.06;
+    letter-spacing:.02em;
     overflow-wrap:normal;
     word-break:normal;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-preview-card p,
   #encounterPanel[data-v2-layout="tier1"] .v2-preview-clue-panel p{
-    font-size:11px;
-    line-height:1.25;
+    font-size:10px;
+    line-height:1.22;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-preview-card-eyebrow,
   #encounterPanel[data-v2-layout="tier1"] .v2-preview-card-region,
   #encounterPanel[data-v2-layout="tier1"] .v2-preview-tier{
-    font-size:9px;
+    font-size:8px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-vs-graphic{
-    left:45%;
-    top:60.5%;
-    width:70px;
+    left:44%;
+    top:61%;
+    width:52px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-product-bottle{
-    right:39.5%;
-    top:52.5%;
+    left:54.5%;
+    right:auto;
+    top:61%;
     bottom:auto;
-    width:48px;
-    max-height:22%;
+    width:36px;
+    max-height:17%;
+    transform:translate(-50%, -50%);
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-preview-clue-panel{

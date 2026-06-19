@@ -24136,6 +24136,7 @@ function ensureProgLoaded() {
         const encounterPersona = v2HarnessLabel(encounter?.family || snapshot.encounterTitle || "Table");
         const productStyle = product?.style || product?.varietalOrBlend || "";
         const productRegion = product?.region || "";
+        const previewProductName = String(productName || "Selected Bottle").replace(/^Scroll of\s+/i, "").trim() || productName || "Selected Bottle";
         const previewLine = encounter?.contextClue || "Read the table before choosing your first move.";
 
         stepHeader.textContent = `Tier ${snapshot.tier} • Encounter ${String(snapshot.encounterOrdinal).padStart(3, "0")} • ${snapshot.encounterTitle}`;
@@ -24164,7 +24165,7 @@ function ensureProgLoaded() {
               </div>
               <div class="v2-preview-card v2-preview-product-card">
                 <div class="v2-preview-card-eyebrow">On The Line</div>
-                <div class="v2-preview-card-title">${escapeHtml(productName || "Selected Bottle")}</div>
+                <div class="v2-preview-card-title">${escapeHtml(previewProductName)}</div>
                 ${productStyle ? `<p>${escapeHtml(productStyle)}</p>` : ""}
                 ${productRegion ? `<div class="v2-preview-card-region">${escapeHtml(productRegion)}</div>` : ""}
               </div>
