@@ -7419,17 +7419,17 @@ html, body{ height:100%; }
 /* Final mobile preview compression. Keep the VS/bottle/card cluster readable on narrow phones. */
 @media (max-width: 760px){
   #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-preview-table-card{
-    left: 12% !important;
+    left: 8% !important;
     top: 58.5% !important;
-    width: 20.5% !important;
+    width: 24% !important;
     min-height: 70px !important;
     padding: 6px 5px !important;
   }
 
   #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-preview-product-card{
-    right: 12% !important;
+    right: 8% !important;
     top: 58.5% !important;
-    width: 20.5% !important;
+    width: 24% !important;
     min-height: 70px !important;
     padding: 6px 5px !important;
   }
@@ -7441,9 +7441,21 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-preview-product-card .v2-preview-card-title{
-    font-size: 7.8px !important;
+    font-size: 7.4px !important;
     line-height: 1.02 !important;
     letter-spacing: 0 !important;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-preview-product-card .v2-preview-mobile-varietal{
+    display: block !important;
+    margin-top: 5px !important;
+    color: rgba(255,255,255,.92) !important;
+    font-size: 7.2px !important;
+    line-height: 1.04 !important;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-preview-product-card .v2-preview-desktop-varietal{
+    display: none !important;
   }
 
   #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-preview-card p{
@@ -7464,17 +7476,17 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-vs-graphic{
-    left: 43.8% !important;
+    left: 42.8% !important;
     top: 61.7% !important;
-    width: 28px !important;
+    width: 22px !important;
   }
 
   #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-product-bottle{
-    left: 54.2% !important;
+    left: 52.2% !important;
     right: auto !important;
     top: 61.7% !important;
-    width: 19px !important;
-    max-height: 10% !important;
+    width: 15px !important;
+    max-height: 8% !important;
     transform: translate(-50%, -50%) !important;
   }
 }
