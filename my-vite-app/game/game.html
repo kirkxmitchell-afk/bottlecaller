@@ -5,7 +5,7 @@
   <title>BottleCaller Prototype</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <!-- ✅ IMPORTANT: because this file is served at /game/game.html -->
-  <link rel="stylesheet" href="/game/game.css" />
+  <link rel="stylesheet" href="/game/game.css?v=20260619-mobile-preview-compress-3" />
   <script type="module" src="/src/game/gameEntry.ts"></script>
   <script>
     if (window.self !== window.top) {
@@ -24145,6 +24145,61 @@ function ensureProgLoaded() {
         stepContent.dataset.stage = "preview";
         stepContent.dataset.signal = "yellow";
         stepContent.innerHTML = `
+          <style>
+            @media (max-width: 760px){
+              #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-preview-table-card{
+                left: 12% !important;
+                top: 58.5% !important;
+                width: 20.5% !important;
+                min-height: 70px !important;
+                padding: 6px 5px !important;
+              }
+              #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-preview-product-card{
+                right: 12% !important;
+                top: 58.5% !important;
+                width: 20.5% !important;
+                min-height: 70px !important;
+                padding: 6px 5px !important;
+              }
+              #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-preview-card-title{
+                font-size: 9.5px !important;
+                line-height: 1.02 !important;
+                letter-spacing: .01em !important;
+              }
+              #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-preview-product-card .v2-preview-card-title{
+                font-size: 7.8px !important;
+                line-height: 1.02 !important;
+                letter-spacing: 0 !important;
+              }
+              #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-preview-card p{
+                font-size: 7.6px !important;
+                line-height: 1.1 !important;
+                margin-top: 4px !important;
+              }
+              #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-preview-card-eyebrow,
+              #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-preview-card-region{
+                font-size: 5.8px !important;
+                letter-spacing: .045em !important;
+              }
+              #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-preview-card-region{
+                margin-top: 4px !important;
+                padding-top: 4px !important;
+              }
+              #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-vs-graphic{
+                left: 43.8% !important;
+                top: 61.7% !important;
+                width: 28px !important;
+              }
+              #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-product-bottle{
+                left: 54.2% !important;
+                right: auto !important;
+                top: 61.7% !important;
+                width: 19px !important;
+                max-height: 10% !important;
+                transform: translate(-50%, -50%) !important;
+              }
+            }
+          </style>
           <section class="v2-preview-screen">
             <div class="v2-preview-art-wrap">
               <img class="v2-preview-art" src="${escapeHtml(previewArt)}" alt="" onerror="this.onerror=null;this.src='${V2_FALLBACK_ENCOUNTER_IMAGE}';">
