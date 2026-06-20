@@ -667,6 +667,7 @@ p { margin: 0; color: var(--muted); line-height: 1.5; }
   position:absolute;
   left:50%;
   bottom:0;
+  z-index:2;
   width:100%;
   height:auto;
   max-height:100%;
@@ -679,6 +680,7 @@ p { margin: 0; color: var(--muted); line-height: 1.5; }
   position:absolute;
   left:50%;
   top:2px;
+  z-index:1;
   width:38%;
   transform:translateX(-50%);
   transform-origin:50% 90%;
@@ -708,6 +710,7 @@ p { margin: 0; color: var(--muted); line-height: 1.5; }
   position:absolute;
   left:50%;
   top:18px;
+  z-index:3;
   width:1px;
   height:1px;
   pointer-events:none;

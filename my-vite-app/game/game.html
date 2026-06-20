@@ -24102,7 +24102,9 @@ function ensureProgLoaded() {
       function resetV2DemoProgressToStart() {
         try { window.localStorage.setItem("BC_V2_TIER1_ROTATION_INDEX", "0"); } catch {}
         try { window.__BC_V2_HARNESS_STATE__ = {}; } catch {}
-        startV2HarnessEncounter();
+        resetV2DemoSession();
+        try { getV2HarnessApi()?.reset?.(); } catch {}
+        startV2HarnessWhenReady({ resetSession: true });
       }
 
       function renderV2DemoCompletionCard(stepButtons, snapshot) {
@@ -24761,11 +24763,28 @@ function ensureProgLoaded() {
         if (startingFresh) {
           syncV2DemoEncounterRotationFromRewardState();
         }
-        const snapshot = api.start({ tier: 1, encounterLimit: getV2EncounterLimit() });
-        if (startingFresh) {
-          state.introEncounterId = snapshot?.encounterId || null;
+        let snapshot = null;
+        try {
+          snapshot = api.start({ tier: 1, encounterLimit: getV2EncounterLimit() });
+          if (!snapshot) throw new Error("V2 demo did not return an encounter.");
+          if (startingFresh) {
+            state.introEncounterId = snapshot?.encounterId || null;
+          }
+          renderV2EncounterPreview(snapshot, "");
+        } catch (error) {
+          const stepContent = document.getElementById("stepContent");
+          if (stepContent) {
+            stepContent.innerHTML = `
+              <section class="v2-play-shell">
+                <div class="v2-guidance-card">
+                  <div class="v2-guidance-label">Demo unavailable</div>
+                  <p class="v2-guidance-copy">${escapeHtml(error?.message || "The BottleCaller demo could not restart. Refresh and try again.")}</p>
+                </div>
+              </section>
+            `;
+          }
+          return false;
         }
-        renderV2EncounterPreview(snapshot, "");
         return true;
       }
 
