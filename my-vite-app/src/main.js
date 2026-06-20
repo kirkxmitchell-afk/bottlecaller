@@ -20620,6 +20620,8 @@ function resetDemoAuthorityPointsForRequestedProfile(email) {
       totalAP: 0,
       tierUnlocked: 1,
       encounterScores: {},
+      demoCompletions: [],
+      demoCompletionCount: 0,
       rewards,
       demoAPResetAt: Date.now(),
     };

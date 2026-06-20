@@ -14134,6 +14134,12 @@ function ensureProgLoaded() {
           if (typeof getV2EncounterLimit === "function") limit = getV2EncounterLimit();
         } catch {}
 
+        if (isDemoNow) {
+          const state = getV2HomeRewardStateSafe();
+          const completionCount = Math.max(0, Number(state.demoCompletionCount || 0));
+          return `Encounter ${Math.min(completionCount, limit)} / ${limit} Demo`;
+        }
+
         let current = 0;
         try {
           current = typeof loadEncounterIndexSafe === "function"
@@ -14144,7 +14150,6 @@ function ensureProgLoaded() {
         }
 
         const position = Math.max(1, (Math.max(0, current) % Math.max(1, limit)) + 1);
-        if (isDemoNow) return `Encounter ${position} / ${limit} Demo`;
         return `Tier 1 Progress: ${Math.min(position, 10)} / 10 Tables`;
       }
 
@@ -23398,8 +23403,6 @@ function ensureProgLoaded() {
       }
 
       function getV2OutcomeAPFromSnapshot(snapshot) {
-        const value = Number(snapshot?.authorityDelta);
-        if (isV2TerminalOutcome(snapshot?.outcome) && Number.isFinite(value) && value !== 0) return value;
         return getV2OutcomeAP(snapshot?.outcome);
       }
 
@@ -23493,6 +23496,8 @@ function ensureProgLoaded() {
           totalAP: 0,
           tierUnlocked: 1,
           encounterScores: {},
+          demoCompletions: [],
+          demoCompletionCount: 0,
           rewards: V2_BOTTLE_REWARDS.map((reward) => ({ ...reward })),
         };
       }
@@ -23504,6 +23509,20 @@ function ensureProgLoaded() {
         const encounterScores = state.encounterScores && typeof state.encounterScores === "object"
           ? state.encounterScores
           : {};
+        let demoCompletions = Array.isArray(state.demoCompletions)
+          ? state.demoCompletions.filter(Boolean)
+          : [];
+        if (!demoCompletions.length && isV2DemoRewardMode() && Object.keys(encounterScores).length) {
+          demoCompletions = Object.entries(encounterScores).map(([key, entry]) => ({
+            key,
+            encounterKey: entry?.encounterKey || entry?.encounterId || key,
+            encounterId: entry?.encounterId || null,
+            encounterTitle: entry?.encounterTitle || "",
+            ap: Number(entry?.ap || 0),
+            outcome: entry?.outcome || "",
+            completedAt: entry?.completedAt || entry?.updatedAt || Date.now(),
+          }));
+        }
         const rewards = V2_BOTTLE_REWARDS.map((reward) => {
           const existing = existingById.get(reward.id) || {};
           return {
@@ -23512,13 +23531,17 @@ function ensureProgLoaded() {
             claimedAt: existing.claimedAt || null,
           };
         });
-        const scoreTotal = Object.values(encounterScores).reduce((sum, entry) => sum + Number(entry?.ap || 0), 0);
+        const demoScoreTotal = demoCompletions.reduce((sum, entry) => sum + Number(entry?.ap || 0), 0);
+        const encounterScoreTotal = Object.values(encounterScores).reduce((sum, entry) => sum + Number(entry?.ap || 0), 0);
+        const scoreTotal = demoCompletions.length ? demoScoreTotal : encounterScoreTotal;
         const totalAP = Math.max(0, Math.round(Number.isFinite(scoreTotal) ? scoreTotal : Number(state.totalAP || 0)));
         return {
           v: 1,
           totalAP,
           tierUnlocked: getV2TierUnlockedByAP(totalAP),
           encounterScores,
+          demoCompletions,
+          demoCompletionCount: demoCompletions.length,
           rewards,
           demoAPResetAt: state.demoAPResetAt || null,
         };
@@ -23541,6 +23564,19 @@ function ensureProgLoaded() {
         return normalized;
       }
 
+      function syncV2DemoEncounterRotationFromRewardState(stateArg) {
+        if (!isV2DemoRewardMode()) return;
+        const state = stateArg || loadV2BottleRewardState();
+        let limit = 3;
+        try {
+          if (typeof getV2EncounterLimit === "function") limit = getV2EncounterLimit();
+        } catch {}
+        const safeLimit = Math.max(1, Number(limit || 3));
+        const completionCount = Math.max(0, Number(state?.demoCompletionCount || 0));
+        const nextIndex = completionCount >= safeLimit ? 0 : completionCount % safeLimit;
+        try { window.localStorage.setItem("BC_V2_TIER1_ROTATION_INDEX", String(nextIndex)); } catch {}
+      }
+
       window.__BC_V2_BOTTLE_REWARDS__ = V2_BOTTLE_REWARDS;
 
       function getPendingV2BottleRewards(state) {
@@ -23557,6 +23593,37 @@ function ensureProgLoaded() {
 
         const encounterKey = String(snapshot.encounterId || `${snapshot.tier || 1}:${snapshot.encounterOrdinal || 0}`);
         const nextAP = getV2OutcomeAPFromSnapshot(snapshot);
+        if (isV2DemoRewardMode()) {
+          const previousTotal = Number(state.totalAP || 0);
+          const completionKey = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+          state.demoCompletions = [
+            ...(Array.isArray(state.demoCompletions) ? state.demoCompletions : []),
+            {
+              key: completionKey,
+              encounterKey,
+              encounterId: snapshot.encounterId || null,
+              encounterTitle: snapshot.encounterTitle || "",
+              ap: nextAP,
+              outcome: snapshot.outcome,
+              completedAt: Date.now(),
+            },
+          ];
+          state.encounterScores = {
+            ...(state.encounterScores || {}),
+            [completionKey]: state.demoCompletions[state.demoCompletions.length - 1],
+          };
+          const scoreTotal = state.demoCompletions.reduce((sum, entry) => sum + Number(entry?.ap || 0), 0);
+          state.totalAP = Math.max(0, Math.round(scoreTotal));
+          state.tierUnlocked = getV2TierUnlockedByAP(state.totalAP);
+          state = saveV2BottleRewardState(state);
+          syncV2DemoEncounterRotationFromRewardState(state);
+          return {
+            state,
+            apDelta: state.totalAP - previousTotal,
+            pendingRewards: getPendingV2BottleRewards(state),
+          };
+        }
+
         const currentScore = state.encounterScores?.[encounterKey] || null;
         const previousBest = currentScore ? Number(currentScore.ap || 0) : null;
         const shouldUpdate = previousBest === null || nextAP > previousBest;
@@ -23613,6 +23680,8 @@ function ensureProgLoaded() {
           totalAP: 0,
           tierUnlocked: 1,
           encounterScores: {},
+          demoCompletions: [],
+          demoCompletionCount: 0,
           ...(rewards ? { rewards } : {}),
           demoAPResetAt: Date.now(),
         };
@@ -24688,7 +24757,10 @@ function ensureProgLoaded() {
         applyPlaySurfaceMode("encounter_only");
         notifyParentDemoPlayStarted("v2_harness_start");
         resetNavState();
-        showScreen("screenPlay");
+        showV2HarnessLoadingState();
+        if (startingFresh) {
+          syncV2DemoEncounterRotationFromRewardState();
+        }
         const snapshot = api.start({ tier: 1, encounterLimit: getV2EncounterLimit() });
         if (startingFresh) {
           state.introEncounterId = snapshot?.encounterId || null;
