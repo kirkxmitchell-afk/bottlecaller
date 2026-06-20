@@ -7478,15 +7478,15 @@ html, body{ height:100%; }
   #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-vs-graphic{
     left: 42.8% !important;
     top: 61.7% !important;
-    width: 22px !important;
+    width: 66px !important;
   }
 
   #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-product-bottle{
     left: 52.2% !important;
     right: auto !important;
     top: 61.7% !important;
-    width: 15px !important;
-    max-height: 8% !important;
+    width: 45px !important;
+    max-height: 24% !important;
     transform: translate(-50%, -50%) !important;
   }
 }
