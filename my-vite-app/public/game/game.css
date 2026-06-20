@@ -7482,7 +7482,7 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-product-bottle{
-    left: 52.2% !important;
+    left: 60% !important;
     right: auto !important;
     top: 61.7% !important;
     width: 45px !important;
