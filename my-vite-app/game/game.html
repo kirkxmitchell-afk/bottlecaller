@@ -12251,7 +12251,9 @@ function ensureProgLoaded() {
         try {
           if ((window.isDemo || window.bcMode === "demo") && isV2WelcomeOnboardingComplete()) {
             try { localStorage.setItem(coverKey, "true"); } catch {}
-            startV2HarnessWhenReady({ resetSession: true });
+            applyPlaySurfaceMode("full");
+            resetNavState();
+            showScreen("screenHome");
             return;
           }
           const activeScreenId = document.querySelector(".screen.active")?.id || "";
@@ -14225,7 +14227,8 @@ function ensureProgLoaded() {
         if (isDemoNow) {
           const state = getV2HomeRewardStateSafe();
           const completionCount = Math.max(0, Number(state.demoCompletionCount || 0));
-          return `Encounter ${Math.min(completionCount, limit)} / ${limit} Demo`;
+          const nextEncounter = completionCount >= limit ? 1 : completionCount + 1;
+          return `Next Encounter ${nextEncounter} / ${limit} Demo`;
         }
 
         let current = 0;
@@ -24731,6 +24734,7 @@ function ensureProgLoaded() {
               .join("")
           : "";
 
+        const showTerminalContinueButton = isTerminal && !isFinalEncounter;
         const actionLabel = selectedGroup
           ? `Choose one ${v2HarnessLabel(selectedGroup)} response card to continue the encounter.`
           : isTerminal
@@ -24743,7 +24747,7 @@ function ensureProgLoaded() {
             ${showIntroGuidance ? `<div class="small-text v2-action-caption">${escapeHtml(actionLabel)}</div>` : ""}
             <div class="v2-action-grid">${actionButtons}</div>
             ${shouldShowBottleRewardPanel ? renderV2BottleRewardHtml(rewardProgress) : ""}
-            ${isTerminal ? `<div class="button-row" style="width:100%;">
+            ${showTerminalContinueButton ? `<div class="button-row" style="width:100%;">
               <button type="button" class="btn" id="btnV2HarnessContinue">Continue</button>
             </div>` : ""}
           </div>
@@ -25730,7 +25734,9 @@ function ensureProgLoaded() {
         if (isDemo) {
           const completedV2Welcome = isV2WelcomeOnboardingComplete();
           if (initialScreenParam === "screenWelcome" && completedV2Welcome) {
-            startV2HarnessWhenReady({ resetSession: true });
+            applyPlaySurfaceMode("full");
+            resetNavState();
+            showScreen("screenHome");
           } else {
             showScreen(initialScreenParam || (hasSeenCover || completedV2Welcome ? "screenHome" : "screenWelcome"));
           }
