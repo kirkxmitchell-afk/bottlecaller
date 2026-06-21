@@ -9549,14 +9549,13 @@ function startMobileDemoDirectly(reason = "mobile_enter") {
   document.documentElement.dataset.bcV2Demo = "true";
   destroyPremiumIframe(`${reason}:premium`);
   destroyDemoIframe(`${reason}:remount`);
+  window.__BC_DEMO_PLAY_STARTED_AT__ = 0;
+  window.__BC_DEMO_IFRAME_LAST_SCREEN__ = "screenHome";
   mountGameIframe("gameRootDemo", "demo", {
-    initialScreen: "screenPlay",
+    initialScreen: "screenHome",
     v2Harness: true,
-    autoStartV2: true,
-    autoStartReason: reason,
   });
-
-  burstStartV2Demo(reason);
+  try { renderAppChrome?.(); } catch {}
 }
 
 const BC_V2_WELCOME_OBJECTIVES_DONE_KEY = "BC_V2_WELCOME_OBJECTIVES_DONE_V1";
