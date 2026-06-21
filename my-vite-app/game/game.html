@@ -23774,7 +23774,21 @@ function ensureProgLoaded() {
           ...(rewards ? { rewards } : {}),
           demoAPResetAt: Date.now(),
         };
+        try { window.localStorage.setItem("BC_V2_TIER1_ROTATION_INDEX", "0"); } catch {}
         return saveV2BottleRewardState(nextState);
+      }
+
+      function markV2DemoRewardOpenedOnSummary() {
+        const rewardCard = document.querySelector(".v2-bottle-reward-card");
+        rewardCard?.querySelectorAll("[data-v2-claim-reward]").forEach((button) => {
+          button.disabled = true;
+          button.setAttribute("aria-disabled", "true");
+          button.textContent = "Opened";
+        });
+        const title = rewardCard?.querySelector("strong");
+        if (title) title.textContent = "Bottle opened";
+        const meta = rewardCard?.querySelector(".small-text");
+        if (meta) meta.textContent = "Starter Bottle opened. Demo cycle reset for your next run.";
       }
 
       function getV2BottleRewardTitle(rewardId) {
@@ -24238,8 +24252,9 @@ function ensureProgLoaded() {
                     <div class="small-text" style="margin-bottom:8px;">Join a restaurant to unlock Premium with your waiter account.</div>
                     <input id="v2DemoJoinCode" type="text" placeholder="Join code" />
                     <div class="button-row" style="margin-top:10px;">
-                      <button id="btnV2DemoJoin" type="button">Join Restaurant</button>
+                      <button id="btnV2DemoJoin" type="button">Join BottleCaller</button>
                       <button id="btnV2RestartEncounterFlow" type="button" class="btn-ghost">Return to Encounter 1</button>
+                      <button id="btnV2ReplayEncounter" type="button" class="btn-ghost">Replay Encounter</button>
                     </div>
                     <div id="v2DemoJoinMsg" class="small-text" style="margin-top:8px;"></div>
                   </div>
@@ -24247,6 +24262,7 @@ function ensureProgLoaded() {
                 : `
                   <div class="button-row">
                     <button id="btnV2RestartEncounterFlow" type="button" class="btn-ghost">Return to Encounter 1</button>
+                    <button id="btnV2ReplayEncounter" type="button" class="btn-ghost">Replay Encounter</button>
                   </div>
                 `
             }
@@ -24259,6 +24275,16 @@ function ensureProgLoaded() {
           if (restartButton) {
             event.preventDefault();
             resetV2DemoProgressToStart();
+            return;
+          }
+
+          const replayButton = event.target?.closest?.("#btnV2ReplayEncounter");
+          if (replayButton) {
+            event.preventDefault();
+            const replayIndex = Math.max(0, Number(snapshot?.encounterOrdinal || 1) - 1);
+            try { window.localStorage.setItem("BC_V2_TIER1_ROTATION_INDEX", String(replayIndex)); } catch {}
+            try { getV2HarnessApi()?.reset?.(); } catch {}
+            startV2HarnessWhenReady({ resetSession: true, skipRewardSync: true });
             return;
           }
 
@@ -24542,6 +24568,7 @@ function ensureProgLoaded() {
         const resultPresentation = isTerminal ? getV2ResultPresentation(snapshot, encounter) : null;
         const rewardProgress = isTerminal ? applyV2BottleRewardProgress(snapshot) : { state: loadV2BottleRewardState(), apDelta: 0, pendingRewards: [] };
         const isFinalEncounter = isV2FinalDemoEncounter(snapshot);
+        const shouldShowBottleRewardPanel = isTerminal && (!isV2DemoRewardMode() || isFinalEncounter);
         const lesson = String(encounter?.lesson || "");
         const guidanceLine = "Read the table, choose the right interaction, and move the guest without creating friction.";
         const feedbackMeta = isTerminal && feedbackText !== guidanceLine ? feedbackText : "";
@@ -24715,7 +24742,7 @@ function ensureProgLoaded() {
             ${groupButtons ? `<div class="v2-action-header">${groupButtons}</div>` : ""}
             ${showIntroGuidance ? `<div class="small-text v2-action-caption">${escapeHtml(actionLabel)}</div>` : ""}
             <div class="v2-action-grid">${actionButtons}</div>
-            ${isTerminal ? renderV2BottleRewardHtml(rewardProgress) : ""}
+            ${shouldShowBottleRewardPanel ? renderV2BottleRewardHtml(rewardProgress) : ""}
             ${isTerminal ? `<div class="button-row" style="width:100%;">
               <button type="button" class="btn" id="btnV2HarnessContinue">Continue</button>
             </div>` : ""}
@@ -24773,9 +24800,6 @@ function ensureProgLoaded() {
               result.snapshot,
               latestHistory?.feedbackText || "",
             );
-            if (isV2TerminalOutcome(result.snapshot.outcome)) {
-              applyV2BottleRewardProgress(result.snapshot);
-            }
             emitV2HarnessOutcome(result.snapshot, liveSession, result.reaction || "");
             renderV2HarnessPlay(result.snapshot, result.reaction || "", quickFeedback);
           });
@@ -24792,7 +24816,7 @@ function ensureProgLoaded() {
             };
             showV2BottleUnlockModal(reward, () => {
               if (isV2DemoRewardMode()) {
-                resetV2DemoProgressToHome();
+                markV2DemoRewardOpenedOnSummary();
                 return;
               }
               startV2HarnessEncounter();
@@ -24800,7 +24824,7 @@ function ensureProgLoaded() {
           });
         });
 
-        if (isTerminal && Array.isArray(rewardProgress?.pendingRewards) && rewardProgress.pendingRewards.length) {
+        if (!isV2DemoRewardMode() && isTerminal && Array.isArray(rewardProgress?.pendingRewards) && rewardProgress.pendingRewards.length) {
           const rewardId = String(rewardProgress.pendingRewards[0]?.id || "");
           const rewardState = rewardProgress?.state || loadV2BottleRewardState();
           const autoKey = `BC_V2_REWARD_AUTO_SHOWN_${rewardId}_${Number(rewardState?.totalAP || 0)}_${Number(rewardState?.demoAPResetAt || 0)}`;
@@ -24810,10 +24834,6 @@ function ensureProgLoaded() {
               window.__BC_V2_REWARD_MODAL_ACTIVE__ = true;
               showFirstPendingV2BottleReward(() => {
                 window.__BC_V2_REWARD_MODAL_ACTIVE__ = false;
-                if (isV2DemoRewardMode()) {
-                  resetV2DemoProgressToHome();
-                  return;
-                }
                 startV2HarnessEncounter();
               });
             }, 250);
@@ -24827,12 +24847,13 @@ function ensureProgLoaded() {
           const button = event.target?.closest?.("#btnV2HarnessContinue");
           if (!button) return;
           event.preventDefault();
-          if (getPendingV2BottleRewards(loadV2BottleRewardState()).length) {
+          const shouldOfferPendingReward = !isV2DemoRewardMode() || isFinalEncounter;
+          if (shouldOfferPendingReward && getPendingV2BottleRewards(loadV2BottleRewardState()).length) {
             window.__BC_V2_REWARD_MODAL_ACTIVE__ = true;
             showFirstPendingV2BottleReward(() => {
               window.__BC_V2_REWARD_MODAL_ACTIVE__ = false;
               if (isV2DemoRewardMode()) {
-                resetV2DemoProgressToHome();
+                markV2DemoRewardOpenedOnSummary();
                 return;
               }
               startV2HarnessEncounter();
@@ -24840,7 +24861,7 @@ function ensureProgLoaded() {
             return;
           }
           if (isFinalEncounter) {
-            resetV2DemoProgressToStart();
+            resetV2DemoProgressToHome();
             return;
           }
           startV2HarnessEncounter();
@@ -24864,7 +24885,7 @@ function ensureProgLoaded() {
         notifyParentDemoPlayStarted("v2_harness_start");
         resetNavState();
         showV2HarnessLoadingState();
-        if (startingFresh) {
+        if (startingFresh && !options.skipRewardSync) {
           syncV2DemoEncounterRotationFromRewardState();
         }
         let snapshot = null;
