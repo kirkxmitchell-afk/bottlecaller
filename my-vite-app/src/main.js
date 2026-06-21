@@ -9559,7 +9559,21 @@ function startMobileDemoDirectly(reason = "mobile_enter") {
   burstStartV2Demo(reason);
 }
 
+const BC_V2_WELCOME_OBJECTIVES_DONE_KEY = "BC_V2_WELCOME_OBJECTIVES_DONE_V1";
+
+function isV2WelcomeOnboardingComplete() {
+  try {
+    return window.localStorage.getItem(BC_V2_WELCOME_OBJECTIVES_DONE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
 function openMobileDemoWelcome(reason = "mobile_demo_welcome") {
+  if (isV2WelcomeOnboardingComplete()) {
+    startMobileDemoDirectly(`${reason}:onboarding_complete`);
+    return;
+  }
   closeHud?.();
   appMode = "demo";
   persistV2DemoRequest();
@@ -9606,6 +9620,11 @@ function openMobileDemoCockpit(reason = "mobile_demo_cockpit") {
 
 function openPremiumBeginScreen() {
   if (appMode === "demo") {
+    if (isV2WelcomeOnboardingComplete()) {
+      startMobileDemoDirectly("play_enter_onboarding_complete");
+      return;
+    }
+
     if (document.documentElement?.dataset?.bcMobileEnv === "true") {
       openMobileDemoWelcome("mobile_play_enter");
       return;

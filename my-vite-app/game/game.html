@@ -8491,6 +8491,89 @@ function ensureProgLoaded() {
       // ---------- Keys / limits ----------
       const demoWinesKey = "bc_demo_wines";
       const premiumWinesKey = "bc_premium_wines";
+      const V2_WELCOME_OBJECTIVES_KEY = "BC_V2_WELCOME_OBJECTIVES_V1";
+      const V2_WELCOME_OBJECTIVES_DONE_KEY = "BC_V2_WELCOME_OBJECTIVES_DONE_V1";
+      const V2_WELCOME_OBJECTIVES = [
+        {
+          id: "start",
+          html: "Press <strong>Start</strong> to enter the guest scene and read the clues.",
+        },
+        {
+          id: "choose",
+          html: "Choose your next response from <strong>Ask</strong>, <strong>Recommend</strong>, or <strong>Commit</strong>.",
+        },
+        {
+          id: "follow",
+          html: "After a guest reply, follow the instruction prompt to decide whether to keep reading, recommend, commit, or walk away.",
+        },
+      ];
+
+      function loadV2WelcomeObjectives() {
+        try {
+          const raw = localStorage.getItem(V2_WELCOME_OBJECTIVES_KEY);
+          const parsed = raw ? JSON.parse(raw) : {};
+          return V2_WELCOME_OBJECTIVES.reduce((state, item) => {
+            state[item.id] = !!parsed?.[item.id];
+            return state;
+          }, {});
+        } catch {
+          return V2_WELCOME_OBJECTIVES.reduce((state, item) => {
+            state[item.id] = false;
+            return state;
+          }, {});
+        }
+      }
+
+      function areV2WelcomeObjectivesComplete(state = loadV2WelcomeObjectives()) {
+        return V2_WELCOME_OBJECTIVES.every((item) => !!state[item.id]);
+      }
+
+      function isV2WelcomeOnboardingComplete() {
+        try {
+          if (localStorage.getItem(V2_WELCOME_OBJECTIVES_DONE_KEY) === "true") return true;
+        } catch {}
+        return areV2WelcomeObjectivesComplete();
+      }
+
+      function saveV2WelcomeObjectives(state) {
+        const normalized = V2_WELCOME_OBJECTIVES.reduce((next, item) => {
+          next[item.id] = !!state?.[item.id];
+          return next;
+        }, {});
+        try {
+          localStorage.setItem(V2_WELCOME_OBJECTIVES_KEY, JSON.stringify(normalized));
+          localStorage.setItem(V2_WELCOME_OBJECTIVES_DONE_KEY, areV2WelcomeObjectivesComplete(normalized) ? "true" : "false");
+        } catch {}
+        renderV2WelcomeChecklist();
+        return normalized;
+      }
+
+      function markV2WelcomeObjective(id) {
+        if (!isDemo) return loadV2WelcomeObjectives();
+        const key = String(id || "");
+        if (!V2_WELCOME_OBJECTIVES.some((item) => item.id === key)) return loadV2WelcomeObjectives();
+        const state = loadV2WelcomeObjectives();
+        if (state[key]) return state;
+        state[key] = true;
+        return saveV2WelcomeObjectives(state);
+      }
+
+      function renderV2WelcomeChecklist() {
+        const list = document.getElementById("welcomeBulletList");
+        if (!list || !isDemo) return;
+        const state = loadV2WelcomeObjectives();
+        list.classList.add("welcome-objective-list");
+        list.innerHTML = V2_WELCOME_OBJECTIVES.map((item) => {
+          const done = !!state[item.id];
+          return `
+            <li class="welcome-objective-item${done ? " is-complete" : ""}" data-v2-welcome-objective="${item.id}">
+              <span class="welcome-objective-check" aria-hidden="true">${done ? "✓" : ""}</span>
+              <span>${item.html}</span>
+            </li>
+          `;
+        }).join("");
+      }
+      renderV2WelcomeChecklist();
       const demoRunsKey = "bc_demo_runs";
       const premiumRunsKey = "bc_premium_runs";
       const coverKey = "bc_has_seen_cover";
@@ -12166,6 +12249,11 @@ function ensureProgLoaded() {
       window.__BC_NAV__.openWelcome = () => {
         if (sessionType === "drill") return;
         try {
+          if ((window.isDemo || window.bcMode === "demo") && isV2WelcomeOnboardingComplete()) {
+            try { localStorage.setItem(coverKey, "true"); } catch {}
+            startV2HarnessWhenReady({ resetSession: true });
+            return;
+          }
           const activeScreenId = document.querySelector(".screen.active")?.id || "";
           if (activeScreenId === "screenPlay" || activeScreenId === "screenDrill") {
             return;
@@ -23271,6 +23359,7 @@ function ensureProgLoaded() {
         bindInput(btn, async () => {
           resetNavState();
           if (isDemo) {
+            markV2WelcomeObjective("start");
             localStorage.setItem(coverKey, "true");
             showScreen("screenHome");
             return;
@@ -24655,6 +24744,7 @@ function ensureProgLoaded() {
             const type = String(btn.getAttribute("data-v2-action") || "");
             const result = api.choose(selectedGroup, type);
             if (!result?.snapshot) return;
+            markV2WelcomeObjective("choose");
             window.__BC_V2_HARNESS_STATE__ = {
               ...(window.__BC_V2_HARNESS_STATE__ || {}),
               selectedGroup: null,
@@ -24663,6 +24753,7 @@ function ensureProgLoaded() {
             const latestHistory = Array.isArray(liveSession?.gameState?.history)
               ? liveSession.gameState.history[liveSession.gameState.history.length - 1]
               : null;
+            if (latestHistory) markV2WelcomeObjective("follow");
             const quickFeedback = getV2QuickFeedback(
               latestHistory?.quality,
               latestHistory?.choice,
@@ -25273,12 +25364,13 @@ function ensureProgLoaded() {
               return;
             }
 
-            // Mark cover as dismissed
-            try { localStorage.setItem(coverKey, "true"); } catch {}
+          // Mark cover as dismissed
+          try { localStorage.setItem(coverKey, "true"); } catch {}
+          markV2WelcomeObjective("start");
 
-            applyPlaySurfaceMode("full");
-            resetNavState();
-            showScreen("screenHome");
+          applyPlaySurfaceMode("full");
+          resetNavState();
+          showScreen("screenHome");
           });
 
           console.log("[BOOT] btnWelcomeStart wired ✅", { mode: window.bcMode, isDemo: window.isDemo });
@@ -25374,6 +25466,8 @@ function ensureProgLoaded() {
             localStorage.removeItem(demoEncounterIndexKey);
             localStorage.removeItem(premiumEncounterIndexKey);
             localStorage.removeItem(coverKey);
+            localStorage.removeItem(V2_WELCOME_OBJECTIVES_KEY);
+            localStorage.removeItem(V2_WELCOME_OBJECTIVES_DONE_KEY);
             if (restaurantId) WineStore.remove(restaurantId);
 
             wines = setWines([]);
@@ -25600,7 +25694,12 @@ function ensureProgLoaded() {
 
       if (sessionType !== "drill") {
         if (isDemo) {
-          showScreen(initialScreenParam || (hasSeenCover ? "screenHome" : "screenWelcome"));
+          const completedV2Welcome = isV2WelcomeOnboardingComplete();
+          if (initialScreenParam === "screenWelcome" && completedV2Welcome) {
+            startV2HarnessWhenReady({ resetSession: true });
+          } else {
+            showScreen(initialScreenParam || (hasSeenCover || completedV2Welcome ? "screenHome" : "screenWelcome"));
+          }
         } else {
           showScreen(initialScreenParam || "screenHome");
         }

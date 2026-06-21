@@ -4371,6 +4371,56 @@ html, body{ height:100%; }
   box-shadow: 0 0 0 4px rgba(125,211,252,0.12);
 }
 
+.app-welcome-shell .cover-list.welcome-objective-list{
+  display:grid;
+  gap:10px;
+}
+
+.app-welcome-shell .cover-list.welcome-objective-list li{
+  min-height:44px;
+  padding:10px 12px 10px 46px;
+  border:1px solid rgba(234, 202, 134, .22);
+  border-radius:12px;
+  background:rgba(8, 12, 14, .38);
+  transition:border-color .2s ease, background .2s ease, color .2s ease, opacity .2s ease;
+}
+
+.app-welcome-shell .cover-list.welcome-objective-list li + li{
+  margin-top:0;
+}
+
+.app-welcome-shell .cover-list.welcome-objective-list li::before{
+  display:none;
+}
+
+.welcome-objective-check{
+  position:absolute;
+  left:12px;
+  top:50%;
+  width:22px;
+  height:22px;
+  display:grid;
+  place-items:center;
+  border:1px solid rgba(243, 196, 110, .58);
+  border-radius:999px;
+  color:#fff8dc;
+  font-weight:900;
+  transform:translateY(-50%);
+  background:rgba(0, 0, 0, .32);
+}
+
+.app-welcome-shell .cover-list.welcome-objective-list li.is-complete{
+  border-color:rgba(110, 231, 183, .46);
+  background:rgba(20, 83, 45, .18);
+  color:rgba(245, 255, 250, .84);
+}
+
+.app-welcome-shell .cover-list.welcome-objective-list li.is-complete .welcome-objective-check{
+  border-color:rgba(110, 231, 183, .72);
+  background:rgba(22, 101, 52, .66);
+  box-shadow:0 0 16px rgba(74, 222, 128, .22);
+}
+
 .app-welcome-actions,
 .app-history-actions,
 .app-summary-actions{
@@ -6075,6 +6125,28 @@ html, body{ height:100%; }
   #screenWelcome .app-welcome-shell .cover-list li::before{
     left: 12px !important;
     top: 13px !important;
+  }
+
+  #screenWelcome .app-welcome-shell .cover-list.welcome-objective-list{
+    gap: 7px !important;
+  }
+
+  #screenWelcome .app-welcome-shell .cover-list.welcome-objective-list li{
+    padding-left: 40px !important;
+  }
+
+  #screenWelcome .app-welcome-shell .cover-list.welcome-objective-list li + li{
+    margin-top: 0 !important;
+  }
+
+  #screenWelcome .app-welcome-shell .cover-list.welcome-objective-list li::before{
+    display:none !important;
+  }
+
+  #screenWelcome .welcome-objective-check{
+    left: 10px !important;
+    width: 20px !important;
+    height: 20px !important;
   }
 
   #screenWelcome .app-welcome-explainer{
