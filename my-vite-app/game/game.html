@@ -24222,8 +24222,11 @@ function ensureProgLoaded() {
         scheduleIframeHeightReport?.("v2_return_to_encounter_1_home");
       }
 
-      function resetV2DemoProgressToHome() {
-        try { window.localStorage.setItem("BC_V2_TIER1_ROTATION_INDEX", "0"); } catch {}
+      function resetV2DemoProgressToHome(options = {}) {
+        const resetCycle = options?.resetCycle !== false;
+        if (resetCycle) {
+          try { window.localStorage.setItem("BC_V2_TIER1_ROTATION_INDEX", "0"); } catch {}
+        }
         try { window.__BC_V2_HARNESS_STATE__ = {}; } catch {}
         resetV2DemoSession();
         try { getV2HarnessApi()?.reset?.(); } catch {}
@@ -24886,6 +24889,10 @@ function ensureProgLoaded() {
           }
           if (isFinalEncounter) {
             resetV2DemoProgressToHome();
+            return;
+          }
+          if (isV2DemoRewardMode()) {
+            resetV2DemoProgressToHome({ resetCycle: false });
             return;
           }
           startV2HarnessEncounter();
