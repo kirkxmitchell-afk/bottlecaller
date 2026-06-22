@@ -23500,6 +23500,30 @@ function ensureProgLoaded() {
         return getV2EncounterImageSrc(encounter, "mainNeutral", "mainNeutral");
       }
 
+      function preloadV2Image(src, timeoutMs = 800) {
+        const imageSrc = String(src || "");
+        if (!imageSrc) return Promise.resolve(false);
+        return new Promise((resolve) => {
+          const img = new Image();
+          let settled = false;
+          const finish = (ok) => {
+            if (settled) return;
+            settled = true;
+            resolve(ok);
+          };
+          const timer = window.setTimeout(() => finish(false), timeoutMs);
+          img.onload = () => {
+            window.clearTimeout(timer);
+            finish(true);
+          };
+          img.onerror = () => {
+            window.clearTimeout(timer);
+            finish(false);
+          };
+          img.src = imageSrc;
+        });
+      }
+
       function getV2OutcomeAPFromSnapshot(snapshot) {
         return getV2OutcomeAP(snapshot?.outcome);
       }
@@ -24494,8 +24518,12 @@ function ensureProgLoaded() {
         });
 
         const startButton = stepButtons.querySelector("#btnV2StartEncounter");
-        startButton?.addEventListener("click", (event) => {
+        startButton?.addEventListener("click", async (event) => {
           event.preventDefault();
+          startButton.disabled = true;
+          const liveSession = api.getSession?.() || null;
+          const nextImage = getV2MainImageSrc(snapshot, liveSession?.encounter || null, getV2LatestHistory(liveSession));
+          await preloadV2Image(nextImage, 700);
           renderV2HarnessPlay(snapshot, reaction);
         });
       }
@@ -24809,9 +24837,10 @@ function ensureProgLoaded() {
         });
 
         stepButtons.querySelectorAll("[data-v2-action]").forEach((btn) => {
-          btn.addEventListener("click", () => {
+          btn.addEventListener("click", async () => {
             if (!selectedGroup) return;
             if (btn.disabled || btn.getAttribute("data-v2-used") === "true") return;
+            btn.disabled = true;
             const type = String(btn.getAttribute("data-v2-action") || "");
             const result = api.choose(selectedGroup, type);
             if (!result?.snapshot) return;
@@ -24832,6 +24861,8 @@ function ensureProgLoaded() {
               latestHistory?.feedbackText || "",
             );
             emitV2HarnessOutcome(result.snapshot, liveSession, result.reaction || "");
+            const nextImage = getV2MainImageSrc(result.snapshot, liveSession?.encounter || null, latestHistory);
+            await preloadV2Image(nextImage, 700);
             renderV2HarnessPlay(result.snapshot, result.reaction || "", quickFeedback);
           });
         });

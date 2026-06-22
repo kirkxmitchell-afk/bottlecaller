@@ -1633,6 +1633,28 @@ html[data-bc-mobile-env="true"] #screenManagerBoard #mbInstrSend{
   }
 }
 
+html[data-bc-mobile-env="true"][data-bc-v2-demo="true"] #screenGameDemo.screen.active{
+  height: auto !important;
+  min-height: 100dvh !important;
+  max-height: none !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+html[data-bc-mobile-env="true"][data-bc-v2-demo="true"] #screenGameDemo > .panel.stack,
+html[data-bc-mobile-env="true"][data-bc-v2-demo="true"] #gameRootDemo{
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+html[data-bc-mobile-env="true"][data-bc-v2-demo="true"] #gameRootDemoFrame{
+  height: auto !important;
+  min-height: 100dvh !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
 /* =========================================================
    LOGIN SCREEN
    Keep this last so it beats the older generic home/auth rules.

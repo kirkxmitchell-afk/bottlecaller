@@ -7536,6 +7536,25 @@ html, body{ height:100%; }
   }
 }
 
+@media (max-width: 760px){
+  #screenHome,
+  #screenHome.screen,
+  #screenHome.screen.active{
+    height: auto !important;
+    min-height: 100dvh !important;
+    max-height: none !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #screenHome .bc-service-hub{
+    height: auto !important;
+    min-height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+}
+
 /* Final mobile preview compression. Keep the VS/bottle/card cluster readable on narrow phones. */
 @media (max-width: 760px){
   #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-preview-table-card{
