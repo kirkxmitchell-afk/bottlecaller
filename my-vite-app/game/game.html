@@ -11040,6 +11040,9 @@ function ensureProgLoaded() {
 
         if (msg.type === "start_v2_demo") {
           try {
+            if (window.__BC_V2_DEMO_FINAL_SUMMARY_ACTIVE__) {
+              return;
+            }
             const now = Date.now();
             if (
               window.__BC_V2_DEMO_DIRECT_START_AT__ &&
@@ -24210,7 +24213,13 @@ function ensureProgLoaded() {
         try { window.__BC_V2_HARNESS_STATE__ = {}; } catch {}
         resetV2DemoSession();
         try { getV2HarnessApi()?.reset?.(); } catch {}
-        startV2HarnessWhenReady({ resetSession: true });
+        window.__BC_V2_DEMO_FINAL_SUMMARY_ACTIVE__ = false;
+        applyPlaySurfaceMode("full");
+        resetNavState();
+        showScreen("screenHome");
+        updateCounts?.();
+        renderApp?.();
+        scheduleIframeHeightReport?.("v2_return_to_encounter_1_home");
       }
 
       function resetV2DemoProgressToHome() {
@@ -24218,6 +24227,7 @@ function ensureProgLoaded() {
         try { window.__BC_V2_HARNESS_STATE__ = {}; } catch {}
         resetV2DemoSession();
         try { getV2HarnessApi()?.reset?.(); } catch {}
+        window.__BC_V2_DEMO_FINAL_SUMMARY_ACTIVE__ = false;
         applyPlaySurfaceMode("full");
         resetNavState();
         showScreen("screenHome");
@@ -24592,6 +24602,8 @@ function ensureProgLoaded() {
           : "Walk Away unlocks only when friction reaches critical resistance.";
 
         stepContent.dataset.stage = "observe";
+        stepButtons.dataset.v2TerminalState = isTerminal ? (isFinalEncounter ? "final" : "terminal") : "";
+        window.__BC_V2_DEMO_FINAL_SUMMARY_ACTIVE__ = !!(isTerminal && isFinalEncounter);
         stepContent.dataset.signal =
           snapshot.frustrationMood === "critical_resistance"
             ? "red"
@@ -24741,8 +24753,14 @@ function ensureProgLoaded() {
             ? "The encounter is complete. Continue when you're ready."
             : "Choose Ask, Recommend, or Commit to open the response options.";
         stepButtons.dataset.v2ActionState = selectedGroup ? "expanded" : "collapsed";
+        const actionShellClasses = [
+          "v2-action-shell",
+          selectedGroup ? "is-expanded" : "",
+          isTerminal ? "is-terminal" : "",
+          isFinalEncounter ? "is-demo-final" : "",
+        ].filter(Boolean).join(" ");
         stepButtons.innerHTML = `
-          <div class="v2-action-shell${selectedGroup ? " is-expanded" : ""}">
+          <div class="${actionShellClasses}">
             ${groupButtons ? `<div class="v2-action-header">${groupButtons}</div>` : ""}
             ${showIntroGuidance ? `<div class="small-text v2-action-caption">${escapeHtml(actionLabel)}</div>` : ""}
             <div class="v2-action-grid">${actionButtons}</div>
@@ -24758,9 +24776,11 @@ function ensureProgLoaded() {
           const endScreen = stepContent.querySelector(".v2-end-screen");
           const mobileMount = heroFrame || endScreen;
           const isV2MobileLayout = window.matchMedia?.("(max-width: 760px)")?.matches;
-          if (mobileMount && isV2MobileLayout && stepButtons.parentElement !== mobileMount) {
+          if (mobileMount && isV2MobileLayout && !(isTerminal && isFinalEncounter) && stepButtons.parentElement !== mobileMount) {
             mobileMount.appendChild(stepButtons);
           } else if (!isV2MobileLayout && stepButtons.parentElement !== encounterPanel) {
+            encounterPanel.appendChild(stepButtons);
+          } else if (isV2MobileLayout && isTerminal && isFinalEncounter && stepButtons.parentElement !== encounterPanel) {
             encounterPanel.appendChild(stepButtons);
           }
           const shell = stepButtons.querySelector(".v2-action-shell");
@@ -24877,6 +24897,7 @@ function ensureProgLoaded() {
       function startV2HarnessEncounter(options = {}) {
         const api = getV2HarnessApi();
         if (!api) return false;
+        window.__BC_V2_DEMO_FINAL_SUMMARY_ACTIVE__ = false;
         const state = getV2DemoSessionState();
         const startingFresh = !!(options.resetSession || !state.active);
         if (startingFresh) {

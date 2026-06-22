@@ -7065,8 +7065,53 @@ html, body{ height:100%; }
     pointer-events: none !important;
   }
 
+  #encounterPanel[data-v2-layout="tier1"] #stepButtons[data-v2-terminal-state="final"]{
+    position: relative !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    margin: 0 !important;
+    padding: 10px 8px max(14px, env(safe-area-inset-bottom, 0px)) !important;
+    background: #090a0e !important;
+    pointer-events: none !important;
+  }
+
   #encounterPanel[data-v2-layout="tier1"] .v2-action-shell{
     pointer-events: auto !important;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-action-shell.is-demo-final{
+    display: grid !important;
+    gap: 10px !important;
+    padding: 10px !important;
+    border-radius: 16px !important;
+    background:
+      linear-gradient(180deg, rgba(16, 17, 22, 0.96), rgba(8, 9, 12, 0.98)),
+      rgba(9, 10, 14, 0.98) !important;
+    box-shadow: 0 -12px 28px rgba(0, 0, 0, 0.32) !important;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-action-shell.is-demo-final #v2DemoCompletionCard{
+    margin-top: 0 !important;
+    padding: 12px !important;
+    border-radius: 14px !important;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-action-shell.is-demo-final .v2-bottle-reward-card{
+    margin: 0 !important;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-action-shell.is-demo-final .button-row{
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+    margin-top: 8px !important;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-action-shell.is-demo-final .button-row button,
+  #encounterPanel[data-v2-layout="tier1"] .v2-action-shell.is-demo-final .button-row .btn{
+    width: 100% !important;
+    min-height: 34px !important;
   }
 
   #bcShell.is-encounter-only #bcHudTop{
