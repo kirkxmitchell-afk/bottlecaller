@@ -24916,7 +24916,20 @@ function ensureProgLoaded() {
         applyPlaySurfaceMode("encounter_only");
         notifyParentDemoPlayStarted("v2_harness_start");
         resetNavState();
-        showV2HarnessLoadingState();
+        showScreen("screenPlay");
+        const encounterPanel = document.getElementById("encounterPanel");
+        const stepHeader = document.getElementById("stepHeader");
+        const wineDisplayName = document.getElementById("wineDisplayName");
+        const stepContent = document.getElementById("stepContent");
+        const stepButtons = document.getElementById("stepButtons");
+        if (encounterPanel) {
+          encounterPanel.dataset.v2Layout = "tier1";
+          encounterPanel.dataset.v2Screen = "starting";
+        }
+        if (stepHeader) stepHeader.textContent = "BottleCaller";
+        if (wineDisplayName) wineDisplayName.textContent = "";
+        if (stepContent) stepContent.innerHTML = "";
+        if (stepButtons) stepButtons.innerHTML = "";
         if (startingFresh && !options.skipRewardSync) {
           syncV2DemoEncounterRotationFromRewardState();
         }
