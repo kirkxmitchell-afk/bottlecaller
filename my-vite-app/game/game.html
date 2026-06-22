@@ -24909,6 +24909,7 @@ function ensureProgLoaded() {
           const button = event.target?.closest?.("#btnV2HarnessContinue");
           if (!button) return;
           event.preventDefault();
+          button.disabled = true;
           const shouldOfferPendingReward = !isV2DemoRewardMode() || isFinalEncounter;
           if (shouldOfferPendingReward && getPendingV2BottleRewards(loadV2BottleRewardState()).length) {
             window.__BC_V2_REWARD_MODAL_ACTIVE__ = true;
@@ -24927,7 +24928,7 @@ function ensureProgLoaded() {
             return;
           }
           if (isV2DemoRewardMode()) {
-            resetV2DemoProgressToHome({ resetCycle: false });
+            startV2HarnessEncounter();
             return;
           }
           startV2HarnessEncounter();
