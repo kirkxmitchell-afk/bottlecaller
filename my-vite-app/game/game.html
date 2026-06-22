@@ -11040,6 +11040,9 @@ function ensureProgLoaded() {
 
         if (msg.type === "start_v2_demo") {
           try {
+            if (String(msg.reason || "").indexOf("auto_start") === -1) {
+              return;
+            }
             if (window.__BC_V2_DEMO_FINAL_SUMMARY_ACTIVE__) {
               return;
             }
@@ -24234,6 +24237,7 @@ function ensureProgLoaded() {
         applyPlaySurfaceMode("full");
         resetNavState();
         showScreen("screenHome");
+        try { localStorage.setItem(coverKey, "true"); } catch {}
         updateCounts?.();
         renderApp?.();
         scheduleIframeHeightReport?.("v2_reward_continue_home");
