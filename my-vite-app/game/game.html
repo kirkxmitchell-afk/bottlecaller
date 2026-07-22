@@ -142,8 +142,11 @@
     (function () {
       try {
         var qs = new URLSearchParams(location.search);
-        var mode = qs.get("mode") || "premium";
-        var demo = (mode === "demo") || (qs.get("demo") === "1");
+        var explicitMode = qs.get("mode");
+        var demoFlag = qs.get("demo") === "1";
+        var standaloneV2Demo = !explicitMode && qs.get("bcV2") === "1";
+        var mode = demoFlag ? "demo" : (explicitMode || (standaloneV2Demo ? "demo" : "premium"));
+        var demo = (mode === "demo") || demoFlag || standaloneV2Demo;
 
         // Force globals
         window.__BC_STANDALONE_DEMO__ = demo;
@@ -185,7 +188,14 @@
     }
 
     function getMode() {
-      try { return new URLSearchParams(location.search).get("mode") || "premium"; }
+      try {
+        const qs = new URLSearchParams(location.search);
+        if (qs.get("demo") === "1") return "demo";
+        const explicitMode = qs.get("mode");
+        if (explicitMode) return explicitMode;
+        if (qs.get("bcV2") === "1") return "demo";
+        return "premium";
+      }
       catch { return "premium"; }
     }
 
@@ -24280,6 +24290,20 @@ function ensureProgLoaded() {
         try { window.localStorage.setItem("BC_V2_TIER1_ROTATION_INDEX", String(nextIndex)); } catch {}
       }
 
+      function isV2DemoEncounterSequence(snapshot) {
+        const encounterId = String(snapshot?.encounterId || "");
+        const encounterCount = Number(snapshot?.encounterCount || 0);
+        return !!(
+          isV2DemoRewardMode() ||
+          (
+            isV2HarnessRequestedInFrame() &&
+            V2_DEMO_ENCOUNTER_IDS.includes(encounterId) &&
+            encounterCount > 0 &&
+            encounterCount <= V2_DEMO_ENCOUNTER_IDS.length
+          )
+        );
+      }
+
       function getParentDemoJoinApi() {
         try {
           if (!window.parent || window.parent === window) return null;
@@ -24725,7 +24749,8 @@ function ensureProgLoaded() {
         const resultPresentation = isTerminal ? getV2ResultPresentation(snapshot, encounter) : null;
         const rewardProgress = isTerminal ? applyV2BottleRewardProgress(snapshot) : { state: loadV2BottleRewardState(), apDelta: 0, pendingRewards: [] };
         const isFinalEncounter = isV2FinalDemoEncounter(snapshot);
-        const shouldShowBottleRewardPanel = isTerminal && (!isV2DemoRewardMode() || isFinalEncounter);
+        const isDemoEncounterSequence = isV2DemoEncounterSequence(snapshot);
+        const shouldShowBottleRewardPanel = isTerminal && (!isDemoEncounterSequence || isFinalEncounter);
         const lesson = String(encounter?.lesson || "");
         const guidanceLine = "Read the table, choose the right interaction, and move the guest without creating friction.";
         const feedbackMeta = isTerminal && feedbackText !== guidanceLine ? feedbackText : "";
@@ -24986,7 +25011,7 @@ function ensureProgLoaded() {
               name: String(btn.getAttribute("data-v2-reward-name") || "Starter Bottle"),
             };
             showV2BottleUnlockModal(reward, () => {
-              if (isV2DemoRewardMode()) {
+              if (isDemoEncounterSequence) {
                 markV2DemoRewardOpenedOnSummary();
                 return;
               }
@@ -24995,7 +25020,7 @@ function ensureProgLoaded() {
           });
         });
 
-        if (!isV2DemoRewardMode() && isTerminal && Array.isArray(rewardProgress?.pendingRewards) && rewardProgress.pendingRewards.length) {
+        if (!isDemoEncounterSequence && isTerminal && Array.isArray(rewardProgress?.pendingRewards) && rewardProgress.pendingRewards.length) {
           const rewardId = String(rewardProgress.pendingRewards[0]?.id || "");
           const rewardState = rewardProgress?.state || loadV2BottleRewardState();
           const autoKey = `BC_V2_REWARD_AUTO_SHOWN_${rewardId}_${Number(rewardState?.totalAP || 0)}_${Number(rewardState?.demoAPResetAt || 0)}`;
@@ -25005,6 +25030,10 @@ function ensureProgLoaded() {
               window.__BC_V2_REWARD_MODAL_ACTIVE__ = true;
               showFirstPendingV2BottleReward(() => {
                 window.__BC_V2_REWARD_MODAL_ACTIVE__ = false;
+                if (isDemoEncounterSequence) {
+                  markV2DemoRewardOpenedOnSummary();
+                  return;
+                }
                 startV2HarnessEncounter();
               });
             }, 250);
@@ -25019,12 +25048,12 @@ function ensureProgLoaded() {
           if (!button) return;
           event.preventDefault();
           button.disabled = true;
-          const shouldOfferPendingReward = !isV2DemoRewardMode() || isFinalEncounter;
+          const shouldOfferPendingReward = !isDemoEncounterSequence || isFinalEncounter;
           if (shouldOfferPendingReward && getPendingV2BottleRewards(loadV2BottleRewardState()).length) {
             window.__BC_V2_REWARD_MODAL_ACTIVE__ = true;
             showFirstPendingV2BottleReward(() => {
               window.__BC_V2_REWARD_MODAL_ACTIVE__ = false;
-              if (isV2DemoRewardMode()) {
+              if (isDemoEncounterSequence) {
                 markV2DemoRewardOpenedOnSummary();
                 return;
               }
@@ -25036,7 +25065,7 @@ function ensureProgLoaded() {
             resetV2DemoProgressToHome();
             return;
           }
-          if (isV2DemoRewardMode()) {
+          if (isDemoEncounterSequence) {
             const nextDemoEncounterId = getNextV2DemoEncounterId(snapshot);
             if (nextDemoEncounterId) {
               startV2HarnessEncounter({ encounterId: nextDemoEncounterId, skipRewardSync: true });
