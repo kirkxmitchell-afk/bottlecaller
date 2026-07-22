@@ -21,6 +21,7 @@ import * as EventLogBridge from "./eventLogBridge";
 import * as ProgressionBridge from "./progressionBridge.ts";
 import * as TournamentBridge from "./tournamentBridge";
 import * as ReactionRuntime from "./reaction/reactionIndex";
+import * as V2ProgressionAuthority from "./v2ProgressionAuthority";
 import { installProgressionGuards } from "./progressionGuards";
 
 
@@ -32,6 +33,7 @@ declare global {
     ProgressionBridge?: any;
     TournamentBridge?: any;
     ReactionRuntime?: any;
+    V2ProgressionAuthority?: any;
     __BC_ENCOUNTERS__?: any;
     __BC_GAME_ENTRY_INSTALLED__?: boolean;
     __BC_CTX__?: any;
@@ -77,6 +79,7 @@ function getCtxFromWindow() {
   window.ProgressionBridge = ProgressionBridge;
   window.TournamentBridge = TournamentBridge;
   window.ReactionRuntime = ReactionRuntime;
+  window.V2ProgressionAuthority = V2ProgressionAuthority;
 
   ProgressionBridge.onProgressionSnapshot((payload: any) => {
     window.__BC_PROGRESSION__ = payload || null;
@@ -122,6 +125,7 @@ function getCtxFromWindow() {
   console.log("[BC] ProgressionBridge installed ✅", window.ProgressionBridge);
   console.log("[BC] TournamentBridge installed ✅", window.TournamentBridge);
   console.log("[BC] ReactionRuntime installed ✅", window.ReactionRuntime);
+  console.log("[BC] V2ProgressionAuthority installed ✅", window.V2ProgressionAuthority);
   console.log("[BC] V2 harness installed ✅", { enabled: v2HarnessEnabled });
   console.log("[BC] Encounters loaded ✅", {
     demo: ENCOUNTERS.demo.length,

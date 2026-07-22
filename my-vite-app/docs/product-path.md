@@ -37,11 +37,30 @@ Authority points and bottle rewards are not the same thing as skill score. Autho
 
 ## Tier Serving
 
+Served tier is always the **minimum** of two independent gates:
+
+1. **Rules / evidence gate** (`rulesTierToServe`)
+   - Evaluated by `decideV2RulesTierFromSnapshot()` in `game/game.html` and `src/game/progressionEvaluator.ts`
+   - Tier 2: at least 5 progression encounters, recent window >= 5, green rate >= 60%, at most 1 red
+   - Tier 3: at least 12 progression encounters, recent window >= 10, green rate >= 80%, 0 reds, no red in T2+, at least one successful pivot
+   - `src/progressionStore.js` `deriveTier()` mirrors the encounter-count fallback: Tier 2 at 5, Tier 3 at 12
+
+2. **AP unlock gate** (`apTierUnlocked`)
+   - Evaluated by `getV2TierUnlockedByAP()` from bottle/authority points
+   - Tier 2 at 180 AP, Tier 3 at 500 AP, Tier 4 at 1100 AP, Tier 5 at 2000 AP
+   - Shared constants live in `src/game/v2ProgressionAuthority.ts` (`V2_AP_TIER_UNLOCKS`)
+
+`normalizeV2ProgressionAuthorityState()` and `getV2TierToServe()` serve `min(apTierUnlocked, rulesTierToServe, …)`.
+The V2 play HUD surfaces both gates via `getV2TierGateSummary()`.
+
+Hydration/write safety:
+
+- Iframe hydrate merges local + server authority through `mergeV2ProgressionAuthorityStates()` and never replaces richer local attempt history with AP-only server payloads.
+- Parent upserts merge through `resolveCanonicalWriteState()` / `upsertCanonicalProgressionState()`, using `basedOnUpdatedAt` so newer server rows are not blindly overwritten.
+
 - `getV2TierToServe()` in `game/game.html` chooses the premium V2 tier from the local V2 authority ledger and the parent tier gate.
-- `loadV2ProgressionAuthorityState()` in `game/game.html` seeds the local V2 ledger from parent canonical authority when the server state is richer than local storage.
+- `loadV2ProgressionAuthorityState()` in `game/game.html` seeds/merges the local V2 ledger from parent canonical authority.
 - `buildProgressionResultFromCanonicalState()` in `src/main.js` reads `bc_progression_state_v1.canonical_state`, extracts the V2 progression snapshot, and calls `decideAllowedTierLazy()`.
-- `src/game/progressionEvaluator.ts` evaluates Tier 2 and Tier 3 eligibility from recent green/red outcomes and pivot evidence.
-- `src/progressionStore.js` keeps the local point-to-tier fallback aligned with the same thresholds: Tier 2 at 5 progression encounters and Tier 3 at 12.
 
 Current limitation: `src/game/encounterV2.ts` only contains authored Tier 1 vertical-slice content. If the authority gate allows Tier 2 or Tier 3 before new content is authored, `runtimeV2.ts` falls back to the available V2 encounter pool.
 
@@ -50,5 +69,6 @@ Current limitation: `src/game/encounterV2.ts` only contains authored Tier 1 vert
 - `getV2DifficultyModeForStart()` in `game/game.html` resolves the requested mode.
 - `startRuntimeV2Session()` in `src/game/runtimeV2.ts` stores `difficultyMode` on the session and game state.
 - `getDifficultyPolicyV2()` in `src/game/engineV2.ts` applies easy, medium, and hard policy to friction, early commit pressure, close windows, max mistakes, and max actions.
+- Walk-away unlock stays at 3 mistakes via `getWalkAwayMistakeThreshold()` so medium preserves the previous V2 walk-away behavior. Failure still uses each mode's `maxMistakes`.
 
-Medium preserves the previous V2 behavior. Easy is more forgiving. Hard is stricter and fails faster.
+Medium is the default. Easy is more forgiving. Hard is stricter and fails faster.

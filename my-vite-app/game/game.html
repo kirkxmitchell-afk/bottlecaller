@@ -23652,6 +23652,25 @@ function ensureProgLoaded() {
         });
       }
 
+      function getV2TierGateSummary(authorityState = null) {
+        const state = authorityState || loadV2ProgressionAuthorityState?.() || getDefaultV2ProgressionAuthorityState();
+        const apTier = clampV2Tier(state.apTierUnlocked || getV2TierUnlockedByAP(state.totalAP || 0), 3);
+        const rulesTier = clampV2Tier(state.rulesTierToServe || 1, 3);
+        const served = clampV2Tier(state.tierToServe || Math.min(apTier, rulesTier), 3);
+        const limiter =
+          apTier < rulesTier ? "AP unlock" :
+          rulesTier < apTier ? "rules evidence" :
+          "both gates";
+        return {
+          apTier,
+          rulesTier,
+          served,
+          totalAP: Number(state.totalAP || 0),
+          label: `Serve T${served} • AP gate T${apTier} (${Number(state.totalAP || 0)} AP) • Rules gate T${rulesTier}`,
+          limiter,
+        };
+      }
+
       function getV2OutcomeAPFromSnapshot(snapshot) {
         return getV2OutcomeAP(snapshot?.outcome);
       }
@@ -24143,6 +24162,10 @@ function ensureProgLoaded() {
       }
 
       function shouldUseAuthoritativeV2Authority(authoritative, localState) {
+        const api = window.V2ProgressionAuthority;
+        if (typeof api?.shouldPreferAuthoritativeV2Authority === "function") {
+          return !!api.shouldPreferAuthoritativeV2Authority(authoritative, localState);
+        }
         if (!authoritative) return false;
         const local = localState || getDefaultV2ProgressionAuthorityState();
         const authoritativeAttempts = Array.isArray(authoritative.attempts) ? authoritative.attempts.length : 0;
@@ -24150,11 +24173,58 @@ function ensureProgLoaded() {
         const authoritativeTotal = Number(authoritative.progressionSnapshot?.encountersTotal || authoritativeAttempts || 0);
         const localTotal = Number(local.progressionSnapshot?.encountersTotal || localAttempts || 0);
 
+        // Never prefer AP-only/empty-attempt server payloads over richer local history.
+        if (authoritativeAttempts < localAttempts && authoritativeTotal <= localTotal) return false;
         if (authoritativeTotal > localTotal) return true;
         if (authoritativeAttempts > localAttempts) return true;
-        if (Number(authoritative.totalAP || 0) > Number(local.totalAP || 0) && authoritativeTotal >= localTotal) return true;
-        if (Number(authoritative.updatedAt || 0) > Number(local.updatedAt || 0) && authoritativeTotal >= localTotal) return true;
+        if (
+          Number(authoritative.totalAP || 0) > Number(local.totalAP || 0) &&
+          authoritativeTotal >= localTotal &&
+          authoritativeAttempts >= localAttempts
+        ) return true;
+        if (
+          Number(authoritative.updatedAt || 0) > Number(local.updatedAt || 0) &&
+          authoritativeTotal >= localTotal &&
+          authoritativeAttempts >= localAttempts
+        ) return true;
         return false;
+      }
+
+      function mergeV2ProgressionAuthorityStatesLocal(authoritative, localState) {
+        const api = window.V2ProgressionAuthority;
+        if (typeof api?.mergeV2ProgressionAuthorityStates === "function") {
+          return normalizeV2ProgressionAuthorityState(
+            api.mergeV2ProgressionAuthorityStates(authoritative, localState)
+          );
+        }
+
+        const local = localState || getDefaultV2ProgressionAuthorityState();
+        const auth = authoritative || getDefaultV2ProgressionAuthorityState();
+        const attemptMap = new Map();
+        const pushAttempt = (item, index) => {
+          if (!item || typeof item !== "object") return;
+          const key = String(item.key || `attempt_${index}_${item.encounterId || "unknown"}`);
+          const prev = attemptMap.get(key);
+          if (!prev || Number(item.completedAt || 0) >= Number(prev.completedAt || 0)) {
+            attemptMap.set(key, { ...prev, ...item, key });
+          }
+        };
+        (Array.isArray(local.attempts) ? local.attempts : []).forEach((item, index) => pushAttempt(item, index));
+        (Array.isArray(auth.attempts) ? auth.attempts : []).forEach((item, index) => pushAttempt(item, index + 10000));
+        const attempts = Array.from(attemptMap.values())
+          .sort((a, b) => Number(a.completedAt || 0) - Number(b.completedAt || 0))
+          .slice(-100);
+        const preferAuth = shouldUseAuthoritativeV2Authority(auth, local);
+        const base = preferAuth ? { ...local, ...auth } : { ...auth, ...local };
+        return normalizeV2ProgressionAuthorityState({
+          ...base,
+          attempts,
+          progressionSnapshot: attempts.length
+            ? buildV2ProgressionSnapshotFromAttempts(attempts)
+            : (base.progressionSnapshot || buildV2ProgressionSnapshotFromAttempts(attempts)),
+          totalAP: Math.max(Number(local.totalAP || 0), Number(auth.totalAP || 0)),
+          updatedAt: Math.max(Number(local.updatedAt || 0), Number(auth.updatedAt || 0), Date.now()),
+        });
       }
 
       function loadV2ProgressionAuthorityState() {
@@ -24166,15 +24236,17 @@ function ensureProgLoaded() {
           localState = normalizeV2ProgressionAuthorityState(getDefaultV2ProgressionAuthorityState());
         }
         const authoritativeState = getAuthoritativeV2AuthorityState();
-        if (shouldUseAuthoritativeV2Authority(authoritativeState, localState)) {
-          try {
-            window.localStorage.setItem(V2_PROGRESSION_AUTHORITY_STORAGE_KEY, JSON.stringify(authoritativeState));
-          } catch {}
-          window.__BC_V2_PROGRESSION_AUTHORITY__ = authoritativeState;
-          return authoritativeState;
+        if (!authoritativeState) {
+          window.__BC_V2_PROGRESSION_AUTHORITY__ = localState;
+          return localState;
         }
-        window.__BC_V2_PROGRESSION_AUTHORITY__ = localState;
-        return localState;
+
+        const merged = mergeV2ProgressionAuthorityStatesLocal(authoritativeState, localState);
+        try {
+          window.localStorage.setItem(V2_PROGRESSION_AUTHORITY_STORAGE_KEY, JSON.stringify(merged));
+        } catch {}
+        window.__BC_V2_PROGRESSION_AUTHORITY__ = merged;
+        return merged;
       }
 
       function saveV2ProgressionAuthorityState(state) {
@@ -24258,10 +24330,21 @@ function ensureProgLoaded() {
         const tierToServe = clampV2Tier(authorityState.tierToServe || 1, 3);
         const tierBounds = getTierRangeAndGuests(tierToServe);
         const capturedAt = Date.now();
+        const parentPayload = getAuthoritativeProgressionPayload?.() || window.__BC_PROGRESSION__ || null;
+        const basedOnUpdatedAt = firstFiniteV2Number(
+          parentPayload?.syncedAt,
+          parentPayload?.updatedAt,
+          parentPayload?.authority?.updatedAt,
+          parentPayload?.canonicalState?.capturedAt,
+          parentPayload?.canonical_state?.capturedAt,
+          authorityState?.updatedAt,
+          0
+        ) || 0;
         return {
           version: 1,
           source: "v2_harness",
           capturedAt,
+          basedOnUpdatedAt,
           economy: {
             points: Number(progressionSnapshot.encountersTotal || 0),
             authorityPoints: Number(authorityState.totalAP || 0),
@@ -25579,6 +25662,7 @@ function ensureProgLoaded() {
             : snapshot.progressMood === "ready"
               ? "green"
               : "yellow";
+        const tierGate = getV2TierGateSummary();
         const stateGridHtml = `
           <div class="v2-state-grid">
             <div class="v2-state-card">
@@ -25596,6 +25680,9 @@ function ensureProgLoaded() {
               <div class="v2-state-value">${snapshot.authorityDelta}</div>
               <div class="v2-state-meta">${escapeHtml(outcome)}</div>
             </div>
+          </div>
+          <div class="v2-tier-gate-note small-text" title="AP unlock and rules evidence are separate gates; served tier is the minimum.">
+            ${escapeHtml(tierGate.label)} • limited by ${escapeHtml(tierGate.limiter)}
           </div>
         `;
         if (isTerminal) {
