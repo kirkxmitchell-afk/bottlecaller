@@ -11061,6 +11061,11 @@ function ensureProgLoaded() {
             if (window.__BC_V2_DEMO_FINAL_SUMMARY_ACTIVE__) {
               return;
             }
+            const activeScreenId = document.querySelector(".screen.active")?.id || "";
+            const activeV2Snapshot = getV2HarnessApi?.()?.snapshot?.() || null;
+            if (activeScreenId === "screenPlay" && activeV2Snapshot) {
+              return;
+            }
             const now = Date.now();
             if (
               window.__BC_V2_DEMO_DIRECT_START_AT__ &&
@@ -24250,6 +24255,31 @@ function ensureProgLoaded() {
         );
       }
 
+      const V2_DEMO_ENCOUNTER_IDS = Object.freeze([
+        "encounter_v2_001",
+        "encounter_v2_002",
+        "encounter_v2_003",
+      ]);
+
+      function getV2DemoEncounterIdForOrdinal(ordinal) {
+        const index = Math.max(0, Number(ordinal || 1) - 1);
+        return V2_DEMO_ENCOUNTER_IDS[index] || null;
+      }
+
+      function getNextV2DemoEncounterId(snapshot) {
+        const nextOrdinal = Number(snapshot?.encounterOrdinal || 0) + 1;
+        const encounterCount = Math.max(1, Number(snapshot?.encounterCount || V2_DEMO_ENCOUNTER_IDS.length));
+        if (nextOrdinal > encounterCount) return null;
+        return getV2DemoEncounterIdForOrdinal(nextOrdinal);
+      }
+
+      function syncV2DemoRotationAfterSnapshot(snapshot) {
+        if (!isV2DemoRewardMode() || !snapshot) return;
+        const encounterCount = Math.max(1, Number(snapshot.encounterCount || V2_DEMO_ENCOUNTER_IDS.length));
+        const nextIndex = Number(snapshot.encounterOrdinal || 1) % encounterCount;
+        try { window.localStorage.setItem("BC_V2_TIER1_ROTATION_INDEX", String(nextIndex)); } catch {}
+      }
+
       function getParentDemoJoinApi() {
         try {
           if (!window.parent || window.parent === window) return null;
@@ -25007,7 +25037,12 @@ function ensureProgLoaded() {
             return;
           }
           if (isV2DemoRewardMode()) {
-            startV2HarnessEncounter();
+            const nextDemoEncounterId = getNextV2DemoEncounterId(snapshot);
+            if (nextDemoEncounterId) {
+              startV2HarnessEncounter({ encounterId: nextDemoEncounterId, skipRewardSync: true });
+              return;
+            }
+            resetV2DemoProgressToHome();
             return;
           }
           startV2HarnessEncounter();
@@ -25019,6 +25054,7 @@ function ensureProgLoaded() {
       function startV2HarnessEncounter(options = {}) {
         const api = getV2HarnessApi();
         if (!api) return false;
+        const requestedEncounterId = String(options.encounterId || "");
         window.__BC_V2_DEMO_FINAL_SUMMARY_ACTIVE__ = false;
         const state = getV2DemoSessionState();
         const startingFresh = !!(options.resetSession || !state.active);
@@ -25045,13 +25081,18 @@ function ensureProgLoaded() {
         if (wineDisplayName) wineDisplayName.textContent = "";
         if (stepContent) stepContent.innerHTML = "";
         if (stepButtons) stepButtons.innerHTML = "";
-        if (startingFresh && !options.skipRewardSync) {
+        if (startingFresh && !options.skipRewardSync && !requestedEncounterId) {
           syncV2DemoEncounterRotationFromRewardState();
         }
         let snapshot = null;
         try {
-          snapshot = api.start({ tier: 1, encounterLimit: getV2EncounterLimit() });
+          snapshot = api.start({
+            tier: 1,
+            encounterLimit: getV2EncounterLimit(),
+            encounterId: requestedEncounterId || null,
+          });
           if (!snapshot) throw new Error("V2 demo did not return an encounter.");
+          syncV2DemoRotationAfterSnapshot(snapshot);
           if (startingFresh) {
             state.introEncounterId = snapshot?.encounterId || null;
           }
