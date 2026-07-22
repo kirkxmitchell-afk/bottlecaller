@@ -11,6 +11,9 @@ export type ProgressionSnapshotPayload = {
   reasons?: string[];
   reasonsHuman?: string[];
   snapshot?: any;
+  canonicalState?: any;
+  authority?: any;
+  authorityPoints?: number | null;
   error?: string;
   retryAfterMs?: number;
   why?: string;

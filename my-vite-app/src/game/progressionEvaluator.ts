@@ -57,18 +57,20 @@ export function evaluateTierEligibility(tier: Tier, s: ProgressionSnapshot): Tie
   const needsLast10 =
     rule.minGreenRateLast10 > 0 || Number.isFinite(rule.maxRedsLast10) || rule.maxRedsLast10 !== Infinity;
 
-  if (needsLast10 && last10Count < 10) {
+  const requiredRecentCount = tier === 2 ? Math.min(10, rule.minEncountersTotal) : 10;
+
+  if (needsLast10 && last10Count < requiredRecentCount) {
     reasons.push("insufficient_last10_data");
   }
 
   // Green rate gate
   const greenRate = rate(last10Greens, last10Count);
-  if (last10Count >= 10 && greenRate < rule.minGreenRateLast10) {
+  if (last10Count >= requiredRecentCount && greenRate < rule.minGreenRateLast10) {
     reasons.push("green_rate_too_low");
   }
 
   // Reds gate
-  if (last10Count >= 10 && last10Reds > rule.maxRedsLast10) {
+  if (last10Count >= requiredRecentCount && last10Reds > rule.maxRedsLast10) {
     reasons.push("too_many_reds_last10");
   }
 
@@ -89,6 +91,7 @@ export function evaluateTierEligibility(tier: Tier, s: ProgressionSnapshot): Tie
     reasons,
     details: {
       rule,
+      requiredRecentCount,
       encountersTotal,
       last10Count,
       last10Greens,

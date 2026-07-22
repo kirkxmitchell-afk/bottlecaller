@@ -120,6 +120,11 @@ export function makeProgressionSnapshotHandler({
       reasons: result?.reasons || [],
       reasonsHuman: result?.reasonsHuman || [],
       snapshot: result?.snapshot || null,
+      canonicalState: result?.canonicalState || null,
+      authority: result?.authority || null,
+      authorityPoints: Number.isFinite(Number(result?.authorityPoints))
+        ? Number(result.authorityPoints)
+        : null,
     });
   };
 }

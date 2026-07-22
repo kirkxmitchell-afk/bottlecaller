@@ -15,6 +15,7 @@ import type {
   QualityEffect,
   QualityMatrix,
   TurnHistoryItem,
+  V2DifficultyMode,
   VariantDefinition,
 } from "./typesV2";
 
@@ -36,6 +37,81 @@ function clampProgress(value: number): number {
 
 function clampMistakeCount(value: number): number {
   return Math.max(0, Math.round(value));
+}
+
+export interface DifficultyPolicyV2 {
+  mode: V2DifficultyMode;
+  frictionMultiplier: number;
+  badChoiceExtraFriction: number;
+  positiveProgressBonus: number;
+  nonOptimalProgressPenalty: number;
+  earlyCommitFrustration: number;
+  criticalResistance: number;
+  maxMistakes: number;
+  maxActions: number;
+  minCommitTurns: number;
+  standardCommitProgress: number;
+  readyCommitProgress: number;
+  closeFrustrationLimit: number;
+}
+
+export function normalizeDifficultyModeV2(value: unknown): V2DifficultyMode {
+  const mode = String(value || "").trim().toLowerCase();
+  if (mode === "easy" || mode === "hard") return mode;
+  return "medium";
+}
+
+export function getDifficultyPolicyV2(value: unknown): DifficultyPolicyV2 {
+  const mode = normalizeDifficultyModeV2(value);
+  if (mode === "easy") {
+    return {
+      mode,
+      frictionMultiplier: 0.65,
+      badChoiceExtraFriction: 0,
+      positiveProgressBonus: 1,
+      nonOptimalProgressPenalty: 0,
+      earlyCommitFrustration: 1,
+      criticalResistance: 5,
+      maxMistakes: 5,
+      maxActions: 7,
+      minCommitTurns: 1,
+      standardCommitProgress: 5,
+      readyCommitProgress: 8,
+      closeFrustrationLimit: 5,
+    };
+  }
+  if (mode === "hard") {
+    return {
+      mode,
+      frictionMultiplier: 1.25,
+      badChoiceExtraFriction: 1,
+      positiveProgressBonus: 0,
+      nonOptimalProgressPenalty: 1,
+      earlyCommitFrustration: 3,
+      criticalResistance: 3,
+      maxMistakes: 3,
+      maxActions: 5,
+      minCommitTurns: 2,
+      standardCommitProgress: 7,
+      readyCommitProgress: 10,
+      closeFrustrationLimit: 4,
+    };
+  }
+  return {
+    mode,
+    frictionMultiplier: 1,
+    badChoiceExtraFriction: 0,
+    positiveProgressBonus: 0,
+    nonOptimalProgressPenalty: 0,
+    earlyCommitFrustration: 2,
+    criticalResistance: 4,
+    maxMistakes: 4,
+    maxActions: 6,
+    minCommitTurns: 2,
+    standardCommitProgress: 6,
+    readyCommitProgress: 9,
+    closeFrustrationLimit: 5,
+  };
 }
 
 export function getProgressMood(progress: number): GameStateV2["progressMood"] {
@@ -154,18 +230,25 @@ export function evaluateChoice(
   };
 }
 
-export function createGameStateV2(encounter: EncounterV2, product: Product | null = null): GameStateV2 {
+export function createGameStateV2(
+  encounter: EncounterV2,
+  product: Product | null = null,
+  difficultyMode: V2DifficultyMode = "medium",
+): GameStateV2 {
   const progress = clampProgress(encounter.startingProgress);
   const frustration = clampFrustration(encounter.startingFrustration);
+  const normalizedDifficulty = normalizeDifficultyModeV2(difficultyMode);
+  const policy = getDifficultyPolicyV2(normalizedDifficulty);
 
   return {
     encounter,
     product,
+    difficultyMode: normalizedDifficulty,
     progress,
     frustration,
     progressMood: getProgressMood(progress),
     frustrationMood: getFrustrationMood(frustration),
-    walkAwayUnlocked: frustration >= 4,
+    walkAwayUnlocked: frustration >= policy.criticalResistance,
     mistakeCount: 0,
     outcome: null,
     authorityDelta: 0,
@@ -198,6 +281,7 @@ function applyTimingPressure(
   result: ChoiceEvaluationResult,
 ): ChoiceEvaluationResult {
   let next: ChoiceEvaluationResult = { ...result };
+  const policy = getDifficultyPolicyV2(gameState.difficultyMode);
   const progress = Number(gameState.progress || 0);
   const priorActionCount = Number(gameState.actionCount ?? gameState.turnCount ?? 0);
 
@@ -252,6 +336,27 @@ function applyTimingPressure(
       frustrationDelta: next.frustrationDelta + 1,
       feedbackText: next.feedbackText || "You had the opening. Now they're cooling.",
     };
+  }
+
+  if (next.frustrationDelta > 0) {
+    const badChoiceExtra =
+      next.quality === "poor" || next.quality === "disaster" || next.quality === "early_commit"
+        ? policy.badChoiceExtraFriction
+        : 0;
+    next.frustrationDelta = Math.max(
+      0,
+      Math.round(next.frustrationDelta * policy.frictionMultiplier + badChoiceExtra),
+    );
+  }
+  if (next.progressDelta > 0 && policy.positiveProgressBonus > 0) {
+    next.progressDelta += policy.positiveProgressBonus;
+  }
+  if (
+    next.progressDelta > 0 &&
+    policy.nonOptimalProgressPenalty > 0 &&
+    next.quality !== "optimal"
+  ) {
+    next.progressDelta = Math.max(0, next.progressDelta - policy.nonOptimalProgressPenalty);
   }
 
   return next;
@@ -401,7 +506,7 @@ function appendHistory(
 }
 
 function applyEarlyCommitPenalty(gameState: GameStateV2): ChoiceEvaluationResult {
-  const frustrationDelta = 2;
+  const frustrationDelta = getDifficultyPolicyV2(gameState.difficultyMode).earlyCommitFrustration;
   gameState.frustration = clampFrustration(gameState.frustration + frustrationDelta);
   return {
     quality: "early_commit",
@@ -442,13 +547,18 @@ export function canCommitSucceed(
   const frustration = Number(gameState.frustration || 0);
   const profile = gameState.encounter.masterProfile;
   const priorTurns = Number(gameState.turnCount || 0);
+  const policy = getDifficultyPolicyV2(gameState.difficultyMode);
 
-  if (priorTurns < 2) return false;
+  if (priorTurns < policy.minCommitTurns) return false;
   if (commitQuality === "disaster") return false;
-  if (frustration >= 5) return false;
-  if ((commitQuality === "optimal" || commitQuality === "good") && progress >= 6 && frustration <= 3) return true;
-  if (commitQuality === "optimal" && progress >= 6 && profile === "momentum") return true;
-  if (progress >= 9 && commitQuality !== "disaster") return true;
+  if (frustration >= policy.closeFrustrationLimit) return false;
+  if (
+    (commitQuality === "optimal" || commitQuality === "good") &&
+    progress >= policy.standardCommitProgress &&
+    frustration <= 3
+  ) return true;
+  if (commitQuality === "optimal" && progress >= policy.standardCommitProgress && profile === "momentum") return true;
+  if (progress >= policy.readyCommitProgress && commitQuality !== "disaster") return true;
   return false;
 }
 
@@ -478,12 +588,15 @@ function authorityForOutcome(encounter: EncounterV2, outcome: EncounterOutcome):
 }
 
 function finalizeState(gameState: GameStateV2, outcome: EncounterOutcome): void {
+  const policy = getDifficultyPolicyV2(gameState.difficultyMode);
   if (gameState.mistakeCount >= 3) {
-    gameState.frustration = Math.max(gameState.frustration, 4);
+    gameState.frustration = Math.max(gameState.frustration, policy.criticalResistance);
   }
   gameState.progressMood = getProgressMood(gameState.progress);
   gameState.frustrationMood = getFrustrationMood(gameState.frustration);
-  gameState.walkAwayUnlocked = gameState.frustration >= 4 || gameState.mistakeCount >= 3;
+  gameState.walkAwayUnlocked =
+    gameState.frustration >= policy.criticalResistance ||
+    gameState.mistakeCount >= Math.max(3, policy.maxMistakes);
   gameState.outcome = outcome;
   if (outcome !== "continue" && outcome !== "not_available") {
     gameState.authorityDelta = authorityForOutcome(gameState.encounter, outcome);
@@ -491,7 +604,11 @@ function finalizeState(gameState: GameStateV2, outcome: EncounterOutcome): void 
 }
 
 export function walkAway(gameState: GameStateV2): { outcome: EncounterOutcome; authority: number } {
-  if (gameState.frustration >= 4 || gameState.mistakeCount >= 3) {
+  const policy = getDifficultyPolicyV2(gameState.difficultyMode);
+  if (
+    gameState.frustration >= policy.criticalResistance ||
+    gameState.mistakeCount >= Math.max(3, policy.maxMistakes)
+  ) {
     const authority = authorityForOutcome(gameState.encounter, "neutral_exit");
     finalizeState(gameState, "neutral_exit");
     return {
@@ -560,7 +677,8 @@ export function applyChoice(
     };
   }
 
-  const wasCriticalResistance = Number(gameState.frustration || 0) >= 4;
+  const policy = getDifficultyPolicyV2(gameState.difficultyMode);
+  const wasCriticalResistance = Number(gameState.frustration || 0) >= policy.criticalResistance;
   const result = applyTimingPressure(gameState, playerChoice, evaluateChoice(gameState.encounter, playerChoice));
   gameState.usedChoiceKeys = [...(gameState.usedChoiceKeys || []), choiceKey(playerChoice)];
 
@@ -607,11 +725,15 @@ export function applyChoice(
     (effectiveQuality === "poor" || effectiveQuality === "disaster" || effectiveQuality === "early_commit")
   ) {
     outcome = "failure";
-  } else if (outcome === "continue" && gameState.mistakeCount >= 4) {
+  } else if (outcome === "continue" && gameState.mistakeCount >= policy.maxMistakes) {
     outcome = "failure";
-  } else if (outcome === "continue" && gameState.frustration >= 5 && result.quality === "disaster") {
+  } else if (
+    outcome === "continue" &&
+    gameState.frustration >= policy.closeFrustrationLimit &&
+    result.quality === "disaster"
+  ) {
     outcome = "failure";
-  } else if (outcome === "continue" && Number(gameState.actionCount || 0) + 1 >= 6) {
+  } else if (outcome === "continue" && Number(gameState.actionCount || 0) + 1 >= policy.maxActions) {
     outcome = "failure";
   }
 

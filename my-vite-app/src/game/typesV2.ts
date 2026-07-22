@@ -77,6 +77,8 @@ export type EncounterOutcome =
   | "continue"
   | "not_available";
 
+export type V2DifficultyMode = "easy" | "medium" | "hard";
+
 export interface Product {
   id: string;
   name: string;
@@ -256,6 +258,7 @@ export interface TurnHistoryItem {
 export interface GameStateV2 {
   encounter: EncounterV2;
   product: Product | null;
+  difficultyMode: V2DifficultyMode;
   progress: number;
   frustration: number;
   progressMood: "guarded" | "warming_up" | "engaged" | "ready";

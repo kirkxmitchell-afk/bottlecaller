@@ -4257,6 +4257,13 @@
           }
         }
         if (msg.ok) {
+          if (msg.serverProgressionState && typeof msg.serverProgressionState === "object") {
+            window.__BC_PROGRESSION__ = {
+              ...(window.__BC_PROGRESSION__ || {}),
+              canonicalState: msg.serverProgressionState,
+              authority: msg.serverProgressionState.v2?.authority || msg.serverProgressionState.authority || null,
+            };
+          }
           reconcileLocalProgressAfterSubmit({
             syncedEncounterNumber: msg.syncedEncounterNumber,
             syncedAt: msg.syncedAt,
@@ -6797,11 +6804,22 @@ function isDrillMode() {
 
       function getAuthoritativeTierToServe(fallbackTier = null) {
         const payload = getAuthoritativeProgressionPayload();
+        const canonical =
+          payload?.canonicalState ||
+          payload?.canonical_state ||
+          payload?.progressionState ||
+          payload?.progression_state ||
+          null;
         const tierRaw =
           payload?.tierToServe ??
           payload?.tier_to_serve ??
           payload?.result?.tierToServe ??
           payload?.result?.tier_to_serve ??
+          canonical?.authority?.tierToServe ??
+          canonical?.authority?.tier_to_serve ??
+          canonical?.v2?.authority?.tierToServe ??
+          canonical?.v2?.authority?.tier_to_serve ??
+          canonical?.economy?.tier ??
           fallbackTier;
         const tierNum = Number(tierRaw);
         if (!Number.isFinite(tierNum)) return null;
@@ -23468,6 +23486,36 @@ function ensureProgLoaded() {
         return 3;
       }
 
+      function normalizeV2DifficultyMode(value) {
+        const mode = String(value || "").trim().toLowerCase();
+        if (mode === "easy" || mode === "hard") return mode;
+        return "medium";
+      }
+
+      function getV2DifficultyModeForStart() {
+        const runtimeDifficulty = getRuntimeDifficulty?.() || window.__BC_DIFFICULTY__ || null;
+        return normalizeV2DifficultyMode(
+          runtimeDifficulty?.mode ||
+          window.__BC_SELECTED_DIFFICULTY__ ||
+          getCurrentDifficultyMode?.() ||
+          "medium"
+        );
+      }
+
+      function clampV2Tier(value, maxTier = 3) {
+        const n = Number(value || 1);
+        if (!Number.isFinite(n) || n <= 1) return 1;
+        if (n >= maxTier) return maxTier;
+        return Math.round(n);
+      }
+
+      function getV2TierToServe() {
+        if (window.isDemo || window.bcMode === "demo") return 1;
+        const localAuthority = loadV2ProgressionAuthorityState?.() || null;
+        const authoritativeTier = getAuthoritativeTierToServe?.(localAuthority?.tierToServe || 1);
+        return clampV2Tier(authoritativeTier || localAuthority?.tierToServe || 1, 3);
+      }
+
       function getV2HarnessApi() {
         return window.__BC_V2_HARNESS__?.api || null;
       }
@@ -23887,6 +23935,410 @@ function ensureProgLoaded() {
         return saveV2BottleRewardState(nextState);
       }
 
+      const V2_PROGRESSION_AUTHORITY_STORAGE_KEY = "BC_V2_PROGRESSION_AUTHORITY_V1";
+
+      function getDefaultV2ProgressionAuthorityState() {
+        return {
+          v: 1,
+          source: "v2_harness",
+          totalAP: 0,
+          tierToServe: 1,
+          apTierUnlocked: 1,
+          rulesTierToServe: 1,
+          attempts: [],
+          progressionSnapshot: {
+            encountersTotal: 0,
+            last10Count: 0,
+            last10Greens: 0,
+            last10Reds: 0,
+            anyRedT2Plus: false,
+            pivotsTaken: 0,
+            pivotsSuccess: 0,
+          },
+        };
+      }
+
+      function isV2GreenOutcome(outcome) {
+        const value = String(outcome || "");
+        return value === "premium_success" || value === "standard_success";
+      }
+
+      function isV2RedOutcome(outcome) {
+        return String(outcome || "") === "failure";
+      }
+
+      function buildV2ProgressionSnapshotFromAttempts(attempts) {
+        const rows = Array.isArray(attempts) ? attempts : [];
+        const last10 = rows.slice(-10);
+        return {
+          encountersTotal: rows.length,
+          last10Count: last10.length,
+          last10Greens: last10.filter((item) => !!item.isGreen).length,
+          last10Reds: last10.filter((item) => !!item.isRed).length,
+          anyRedT2Plus: rows.some((item) => Number(item?.tier || 1) >= 2 && !!item.isRed),
+          pivotsTaken: rows.filter((item) => !!item.pivotTaken).length,
+          pivotsSuccess: rows.filter((item) => !!item.pivotSuccess).length,
+        };
+      }
+
+      function firstFiniteV2Number(...values) {
+        for (const value of values) {
+          const n = Number(value);
+          if (Number.isFinite(n)) return n;
+        }
+        return null;
+      }
+
+      function normalizeV2ProgressionSnapshot(rawSnapshot) {
+        const s = rawSnapshot && typeof rawSnapshot === "object" ? rawSnapshot : null;
+        if (!s) return null;
+        return {
+          encountersTotal: Math.max(0, Math.round(firstFiniteV2Number(s.encountersTotal, s.encounters_total, 0) || 0)),
+          last10Count: Math.max(0, Math.round(firstFiniteV2Number(s.last10Count, s.last10_count, 0) || 0)),
+          last10Greens: Math.max(0, Math.round(firstFiniteV2Number(s.last10Greens, s.last10_greens, 0) || 0)),
+          last10Reds: Math.max(0, Math.round(firstFiniteV2Number(s.last10Reds, s.last10_reds, 0) || 0)),
+          anyRedT2Plus: !!(s.anyRedT2Plus ?? s.any_red_t2plus ?? s.session_any_red_t2plus),
+          pivotsTaken: Math.max(0, Math.round(firstFiniteV2Number(s.pivotsTaken, s.pivots_taken, 0) || 0)),
+          pivotsSuccess: Math.max(0, Math.round(firstFiniteV2Number(s.pivotsSuccess, s.pivots_success, 0) || 0)),
+        };
+      }
+
+      function decideV2RulesTierFromSnapshot(snapshot) {
+        const s = snapshot || {};
+        const encountersTotal = Number(s.encountersTotal || 0);
+        const last10Count = Number(s.last10Count || 0);
+        const last10Greens = Number(s.last10Greens || 0);
+        const last10Reds = Number(s.last10Reds || 0);
+        const greenRate = last10Count > 0 ? last10Greens / last10Count : 0;
+        const tier3Ok =
+          encountersTotal >= 12 &&
+          last10Count >= 10 &&
+          greenRate >= 0.8 &&
+          last10Reds <= 0 &&
+          !s.anyRedT2Plus &&
+          Number(s.pivotsSuccess || 0) >= 1;
+        if (tier3Ok) return 3;
+        const tier2Ok =
+          encountersTotal >= 5 &&
+          last10Count >= 5 &&
+          greenRate >= 0.6 &&
+          last10Reds <= 1;
+        return tier2Ok ? 2 : 1;
+      }
+
+      function normalizeV2ProgressionAuthorityState(rawState) {
+        const state = rawState && typeof rawState === "object" ? rawState : {};
+        const attempts = (Array.isArray(state.attempts) ? state.attempts : [])
+          .filter(Boolean)
+          .slice(-100)
+          .map((item, index) => ({
+            key: String(item?.key || `attempt_${index}`),
+            encounterId: item?.encounterId || null,
+            encounterTitle: item?.encounterTitle || "",
+            tier: clampV2Tier(item?.tier || 1, 3),
+            outcome: String(item?.outcome || ""),
+            authorityDelta: Number(item?.authorityDelta || 0),
+            apAfter: Math.max(0, Number(item?.apAfter || 0)),
+            isGreen: !!item?.isGreen,
+            isRed: !!item?.isRed,
+            pivotTaken: !!item?.pivotTaken,
+            pivotSuccess: !!item?.pivotSuccess,
+            difficultyMode: normalizeV2DifficultyMode(item?.difficultyMode || "medium"),
+            completedAt: Number(item?.completedAt || Date.now()),
+          }));
+        const attemptSnapshot = buildV2ProgressionSnapshotFromAttempts(attempts);
+        const sourceSnapshot = normalizeV2ProgressionSnapshot(state.progressionSnapshot || state.snapshot);
+        const progressionSnapshot = attempts.length ? attemptSnapshot : (sourceSnapshot || attemptSnapshot);
+        const totalAP = Math.max(
+          0,
+          Math.round(firstFiniteV2Number(state.totalAP, state.authorityPoints, state.ap, 0) || 0)
+        );
+        const apTierUnlocked = clampV2Tier(
+          firstFiniteV2Number(state.apTierUnlocked, state.ap_tier_unlocked, getV2TierUnlockedByAP(totalAP)),
+          3
+        );
+        const rulesTierToServe = clampV2Tier(
+          firstFiniteV2Number(state.rulesTierToServe, state.rules_tier_to_serve, decideV2RulesTierFromSnapshot(progressionSnapshot)),
+          3
+        );
+        const rawTierToServe = state.tierToServe == null && state.tier_to_serve == null
+          ? Math.min(apTierUnlocked, rulesTierToServe)
+          : clampV2Tier(firstFiniteV2Number(state.tierToServe, state.tier_to_serve, 1), 3);
+        const tierToServe = Math.min(apTierUnlocked, rulesTierToServe, rawTierToServe);
+        return {
+          v: 1,
+          source: "v2_harness",
+          totalAP,
+          tierToServe,
+          apTierUnlocked,
+          rulesTierToServe,
+          attempts,
+          progressionSnapshot,
+          updatedAt: Number(state.updatedAt || Date.now()),
+        };
+      }
+
+      function getAuthoritativeV2AuthorityState() {
+        if (isV2DemoRewardMode()) return null;
+        const payload = getAuthoritativeProgressionPayload?.() || null;
+        if (!payload || typeof payload !== "object") return null;
+
+        const canonical =
+          payload.canonicalState ||
+          payload.canonical_state ||
+          payload.progressionState ||
+          payload.progression_state ||
+          payload.serverProgressionState ||
+          null;
+        const authority =
+          canonical?.v2?.authority ||
+          payload.authority ||
+          canonical?.authority ||
+          null;
+        const progressionSnapshot =
+          normalizeV2ProgressionSnapshot(authority?.progressionSnapshot) ||
+          normalizeV2ProgressionSnapshot(canonical?.authority?.progressionSnapshot) ||
+          normalizeV2ProgressionSnapshot(canonical?.v2?.authority?.progressionSnapshot) ||
+          normalizeV2ProgressionSnapshot(canonical?.progressionSnapshot) ||
+          normalizeV2ProgressionSnapshot(payload.snapshot);
+        const totalAP = firstFiniteV2Number(
+          authority?.totalAP,
+          authority?.authorityPoints,
+          canonical?.economy?.authorityPoints,
+          canonical?.economy?.ap,
+          payload.authorityPoints,
+          payload.ap
+        );
+        const tierToServe = firstFiniteV2Number(
+          authority?.tierToServe,
+          canonical?.authority?.tierToServe,
+          canonical?.v2?.authority?.tierToServe,
+          canonical?.economy?.tier,
+          payload.tierToServe
+        );
+        const apTierUnlocked = firstFiniteV2Number(
+          authority?.apTierUnlocked,
+          canonical?.authority?.apTierUnlocked,
+          canonical?.v2?.authority?.apTierUnlocked
+        );
+        const rulesTierToServe = firstFiniteV2Number(
+          authority?.rulesTierToServe,
+          canonical?.authority?.rulesTierToServe,
+          canonical?.v2?.authority?.rulesTierToServe
+        );
+
+        if (!authority && !progressionSnapshot && !Number.isFinite(totalAP) && !Number.isFinite(tierToServe)) {
+          return null;
+        }
+
+        return normalizeV2ProgressionAuthorityState({
+          ...(authority || {}),
+          ...(progressionSnapshot ? { progressionSnapshot } : {}),
+          ...(Number.isFinite(totalAP) ? { totalAP } : {}),
+          ...(Number.isFinite(tierToServe) ? { tierToServe } : {}),
+          ...(Number.isFinite(apTierUnlocked) ? { apTierUnlocked } : {}),
+          ...(Number.isFinite(rulesTierToServe) ? { rulesTierToServe } : {}),
+          updatedAt: firstFiniteV2Number(authority?.updatedAt, canonical?.capturedAt, payload.syncedAt, payload.updatedAt, Date.now()),
+        });
+      }
+
+      function shouldUseAuthoritativeV2Authority(authoritative, localState) {
+        if (!authoritative) return false;
+        const local = localState || getDefaultV2ProgressionAuthorityState();
+        const authoritativeAttempts = Array.isArray(authoritative.attempts) ? authoritative.attempts.length : 0;
+        const localAttempts = Array.isArray(local.attempts) ? local.attempts.length : 0;
+        const authoritativeTotal = Number(authoritative.progressionSnapshot?.encountersTotal || authoritativeAttempts || 0);
+        const localTotal = Number(local.progressionSnapshot?.encountersTotal || localAttempts || 0);
+
+        if (authoritativeTotal > localTotal) return true;
+        if (authoritativeAttempts > localAttempts) return true;
+        if (Number(authoritative.totalAP || 0) > Number(local.totalAP || 0) && authoritativeTotal >= localTotal) return true;
+        if (Number(authoritative.updatedAt || 0) > Number(local.updatedAt || 0) && authoritativeTotal >= localTotal) return true;
+        return false;
+      }
+
+      function loadV2ProgressionAuthorityState() {
+        let localState = null;
+        try {
+          const raw = window.localStorage.getItem(V2_PROGRESSION_AUTHORITY_STORAGE_KEY);
+          localState = normalizeV2ProgressionAuthorityState(raw ? JSON.parse(raw) : getDefaultV2ProgressionAuthorityState());
+        } catch {
+          localState = normalizeV2ProgressionAuthorityState(getDefaultV2ProgressionAuthorityState());
+        }
+        const authoritativeState = getAuthoritativeV2AuthorityState();
+        if (shouldUseAuthoritativeV2Authority(authoritativeState, localState)) {
+          try {
+            window.localStorage.setItem(V2_PROGRESSION_AUTHORITY_STORAGE_KEY, JSON.stringify(authoritativeState));
+          } catch {}
+          window.__BC_V2_PROGRESSION_AUTHORITY__ = authoritativeState;
+          return authoritativeState;
+        }
+        window.__BC_V2_PROGRESSION_AUTHORITY__ = localState;
+        return localState;
+      }
+
+      function saveV2ProgressionAuthorityState(state) {
+        const normalized = normalizeV2ProgressionAuthorityState({
+          ...(state || {}),
+          updatedAt: Date.now(),
+        });
+        try {
+          window.localStorage.setItem(V2_PROGRESSION_AUTHORITY_STORAGE_KEY, JSON.stringify(normalized));
+        } catch {}
+        window.__BC_V2_PROGRESSION_AUTHORITY__ = normalized;
+        return normalized;
+      }
+
+      function recordV2ProgressionAuthority(snapshot, session, rewardProgress = null) {
+        if (!snapshot || !session || !isV2TerminalOutcome(snapshot.outcome)) {
+          return loadV2ProgressionAuthorityState();
+        }
+        if (session.v2ProgressionAuthorityRecorded) {
+          return loadV2ProgressionAuthorityState();
+        }
+
+        const state = loadV2ProgressionAuthorityState();
+        const history = getV2SessionHistory(session);
+        const totalAP = Math.max(0, Math.round(Number(rewardProgress?.state?.totalAP ?? loadV2BottleRewardState().totalAP ?? 0)));
+        const recoveryPressure = hasV2RecoveryPressure(snapshot, history);
+        const outcome = String(snapshot.outcome || "");
+        const attempt = {
+          key: `v2_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          encounterId: snapshot.encounterId || null,
+          encounterTitle: snapshot.encounterTitle || "",
+          tier: clampV2Tier(snapshot.tier || session?.encounter?.tier || 1, 3),
+          outcome,
+          authorityDelta: Number(snapshot.authorityDelta || 0),
+          apAfter: totalAP,
+          isGreen: isV2GreenOutcome(outcome),
+          isRed: isV2RedOutcome(outcome),
+          pivotTaken: recoveryPressure || outcome === "neutral_exit",
+          pivotSuccess: outcome === "neutral_exit",
+          difficultyMode: normalizeV2DifficultyMode(snapshot.difficultyMode || session?.difficultyMode || getV2DifficultyModeForStart()),
+          completedAt: Date.now(),
+        };
+        session.v2ProgressionAuthorityRecorded = true;
+        return saveV2ProgressionAuthorityState({
+          ...state,
+          totalAP,
+          attempts: [...(Array.isArray(state.attempts) ? state.attempts : []), attempt],
+        });
+      }
+
+      function buildV2RewardEncounterLedger(attempts) {
+        return (Array.isArray(attempts) ? attempts : []).reduce((acc, item) => {
+          const key = String(item?.key || "");
+          if (!key) return acc;
+          acc[key] = {
+            rewardedAt: item.completedAt || Date.now(),
+            encounterId: item.encounterId || null,
+            rewardPoints: Number(item.authorityDelta || 0),
+            reward: {
+              totalPoints: Number(item.authorityDelta || 0),
+              activityType: "v2_encounter",
+            },
+            outcome: item.outcome || null,
+          };
+          return acc;
+        }, {});
+      }
+
+      function getV2DifficultySeed(mode) {
+        const normalized = normalizeV2DifficultyMode(mode);
+        if (normalized === "easy") return 2;
+        if (normalized === "hard") return 6;
+        return 4;
+      }
+
+      function buildV2CanonicalProgressionState(snapshot, session, rewardProgress = null) {
+        const authorityState = recordV2ProgressionAuthority(snapshot, session, rewardProgress);
+        const progressionSnapshot = authorityState.progressionSnapshot || buildV2ProgressionSnapshotFromAttempts(authorityState.attempts);
+        const difficultyMode = normalizeV2DifficultyMode(snapshot?.difficultyMode || session?.difficultyMode || getV2DifficultyModeForStart());
+        const difficultySeed = getV2DifficultySeed(difficultyMode);
+        const tierToServe = clampV2Tier(authorityState.tierToServe || 1, 3);
+        const tierBounds = getTierRangeAndGuests(tierToServe);
+        const capturedAt = Date.now();
+        return {
+          version: 1,
+          source: "v2_harness",
+          capturedAt,
+          economy: {
+            points: Number(progressionSnapshot.encountersTotal || 0),
+            authorityPoints: Number(authorityState.totalAP || 0),
+            ap: Number(authorityState.totalAP || 0),
+            tier: tierToServe,
+            encounterRange: tierBounds.encounterRange.slice(),
+            allowedGuestTypes: tierBounds.guestTypes.slice(),
+            tones: ["guide", "charm", "authority"],
+            modes: ["guide", "charm", "authority"],
+          },
+          session: {
+            runId: Number(window.__BC_SESSION__?.id || 0) || 0,
+            runEase: 1,
+            runEaseRemaining: 0,
+            pressureLevel: difficultyMode === "hard" ? 3 : difficultyMode === "easy" ? 1 : 2,
+            finalDifficulty: difficultySeed,
+            currentEncounterId: Number(snapshot?.encounterOrdinal || 1),
+            mode: "v2_harness",
+            guestTypeSelected: String(session?.encounter?.family || session?.encounter?.masterProfile || ""),
+          },
+          authority: {
+            engineVersion: "v2",
+            tierToServe,
+            apTierUnlocked: clampV2Tier(authorityState.apTierUnlocked || 1, 3),
+            rulesTierToServe: clampV2Tier(authorityState.rulesTierToServe || 1, 3),
+            authorityPoints: Number(authorityState.totalAP || 0),
+            lastAuthorityDelta: Number(snapshot?.authorityDelta || 0),
+            progressionSnapshot,
+            encounterRange: tierBounds.encounterRange.slice(),
+            guestTypes: tierBounds.guestTypes.slice(),
+          },
+          display: {
+            difficultySeed,
+            effectiveDifficulty: difficultySeed,
+            pressureBand: difficultyMode === "hard" ? "high" : difficultyMode === "easy" ? "low" : "mid",
+          },
+          run: {
+            runId: 0,
+            scoredThisRun: {},
+          },
+          rewards: {
+            encounters: buildV2RewardEncounterLedger(authorityState.attempts),
+            drills: {},
+            timedChallenges: {},
+            premiumByEncounter: {},
+            v2: {
+              totalAP: Number(authorityState.totalAP || 0),
+              tierToServe,
+              attempts: authorityState.attempts,
+            },
+          },
+          rewardsSummary: {
+            encounters: {
+              count: Array.isArray(authorityState.attempts) ? authorityState.attempts.length : 0,
+              totalPoints: Number(authorityState.totalAP || 0),
+            },
+            drills: { count: 0, totalPoints: 0 },
+            timedChallenges: { count: 0, totalPoints: 0 },
+            premium: { count: 0, totalPoints: 0 },
+            v2: {
+              count: Array.isArray(authorityState.attempts) ? authorityState.attempts.length : 0,
+              totalAP: Number(authorityState.totalAP || 0),
+              tierToServe,
+            },
+          },
+          v2: {
+            authority: authorityState,
+            latestSnapshot: {
+              encounterId: snapshot?.encounterId || null,
+              outcome: snapshot?.outcome || null,
+              authorityDelta: Number(snapshot?.authorityDelta || 0),
+              difficultyMode,
+            },
+          },
+        };
+      }
+
       function markV2DemoRewardOpenedOnSummary() {
         const rewardCard = document.querySelector(".v2-bottle-reward-card");
         rewardCard?.querySelectorAll("[data-v2-claim-reward]").forEach((button) => {
@@ -24183,20 +24635,360 @@ function ensureProgLoaded() {
         return "Choose the next response card to continue the encounter.";
       }
 
-      function isV2TerminalOutcome(outcome) {
-        const value = String(outcome || "");
-        return (
-          value === "premium_success" ||
-          value === "standard_success" ||
-          value === "weak_success" ||
-          value === "neutral_exit" ||
-          value === "failure"
-        );
+	      function isV2TerminalOutcome(outcome) {
+	        const value = String(outcome || "");
+	        return (
+	          value === "premium_success" ||
+	          value === "standard_success" ||
+	          value === "weak_success" ||
+	          value === "neutral_exit" ||
+	          value === "failure"
+	        );
+	      }
+
+	      function clampV2SkillScore(value) {
+	        const n = Number(value || 0);
+	        if (!Number.isFinite(n)) return 0;
+	        return Math.max(0, Math.min(100, Math.round(n)));
+	      }
+
+	      function averageV2SkillScores(values, fallback = 0) {
+	        const scores = (Array.isArray(values) ? values : [])
+	          .map((value) => Number(value))
+	          .filter((value) => Number.isFinite(value));
+	        if (!scores.length) return clampV2SkillScore(fallback);
+	        return clampV2SkillScore(scores.reduce((sum, value) => sum + value, 0) / scores.length);
+	      }
+
+	      function getV2ChoiceQualityScore(quality) {
+	        switch (String(quality || "").toLowerCase()) {
+	          case "optimal": return 100;
+	          case "good": return 75;
+	          case "early_commit": return 20;
+	          case "poor": return 35;
+	          case "disaster": return 0;
+	          default: return 50;
+	        }
+	      }
+
+	      function getV2OutcomeSkillBaseline(outcome) {
+	        switch (String(outcome || "").toLowerCase()) {
+	          case "premium_success": return 92;
+	          case "standard_success": return 78;
+	          case "weak_success": return 58;
+	          case "neutral_exit": return 62;
+	          case "failure": return 25;
+	          default: return 50;
+	        }
+	      }
+
+	      function getV2OutcomeChainSignal(outcome) {
+	        switch (String(outcome || "").toLowerCase()) {
+	          case "premium_success":
+	          case "standard_success":
+	            return "green";
+	          case "weak_success":
+	          case "neutral_exit":
+	            return "yellow";
+	          case "failure":
+	            return "red";
+	          default:
+	            return "";
+	        }
+	      }
+
+	      function getV2OutcomePerformanceGrade(outcome, skillAverage) {
+	        const normalizedOutcome = String(outcome || "").toLowerCase();
+	        const avg = Number(skillAverage || 0);
+	        if (normalizedOutcome === "premium_success" || avg >= 90) return "A";
+	        if (normalizedOutcome === "standard_success" || avg >= 75) return "B";
+	        if (normalizedOutcome === "weak_success" || normalizedOutcome === "neutral_exit" || avg >= 55) return "C";
+	        if (avg >= 40) return "D";
+	        return "F";
+	      }
+
+	      function getV2SessionHistory(session) {
+	        return Array.isArray(session?.gameState?.history) ? session.gameState.history : [];
+	      }
+
+	      function hasV2RecoveryPressure(snapshot, history) {
+	        return !!(
+	          Number(snapshot?.frustration || 0) >= 4 ||
+	          Number(snapshot?.mistakeCount || 0) >= 3 ||
+	          snapshot?.walkAwayUnlocked ||
+	          (Array.isArray(history) && history.some((item) =>
+	            Number(item?.resultingFrustration || 0) >= 4 ||
+	            Number(item?.resultingMistakeCount || 0) >= 3 ||
+	            String(item?.choice?.group || "") === "walk_away"
+	          ))
+	        );
+	      }
+
+	      function buildV2SkillSnapshot(snapshot, session) {
+	        const history = getV2SessionHistory(session);
+	        const outcome = String(snapshot?.outcome || "");
+	        const baseline = getV2OutcomeSkillBaseline(outcome);
+	        const scoreForGroup = (group, fallback) => averageV2SkillScores(
+	          history
+	            .filter((item) => String(item?.choice?.group || "") === group)
+	            .map((item) => getV2ChoiceQualityScore(item?.quality)),
+	          fallback,
+	        );
+
+	        const askCount = history.filter((item) => String(item?.choice?.group || "") === "ask").length;
+	        const recommendCount = history.filter((item) => String(item?.choice?.group || "") === "recommend").length;
+	        const commitItems = history.filter((item) => String(item?.choice?.group || "") === "commit");
+	        const finalFrustration = Number(snapshot?.frustration || 0);
+	        const finalProgress = Number(snapshot?.progress || 0);
+	        const mistakeCount = Number(snapshot?.mistakeCount || 0);
+	        const allQualityAverage = averageV2SkillScores(
+	          history
+	            .filter((item) => String(item?.choice?.group || "") !== "walk_away")
+	            .map((item) => getV2ChoiceQualityScore(item?.quality)),
+	          baseline,
+	        );
+
+	        const readFallback = baseline >= 70 ? 58 : baseline >= 50 ? 48 : 32;
+	        const framingFallback = baseline >= 70 ? 60 : baseline >= 50 ? 50 : 30;
+	        const read = clampV2SkillScore(scoreForGroup("ask", readFallback) - (askCount === 0 ? 12 : 0));
+	        const framing = clampV2SkillScore(scoreForGroup("recommend", framingFallback) - (recommendCount === 0 ? 10 : 0));
+	        const delivery = clampV2SkillScore(
+	          allQualityAverage +
+	          Math.min(10, Math.max(0, finalProgress)) * 1.5 -
+	          finalFrustration * 5 -
+	          mistakeCount * 7,
+	        );
+
+	        const recoveryPressure = hasV2RecoveryPressure(snapshot, history);
+	        let recovery = 60;
+	        if (String(outcome) === "neutral_exit") {
+	          recovery = recoveryPressure ? 92 : 78;
+	        } else if (recoveryPressure && outcome === "failure") {
+	          recovery = 22;
+	        } else if (recoveryPressure) {
+	          recovery = outcome === "premium_success" || outcome === "standard_success" ? 78 : 58;
+	        } else if (outcome === "failure") {
+	          recovery = 42;
+	        } else if (outcome === "premium_success" || outcome === "standard_success") {
+	          recovery = 70;
+	        }
+
+	        const commitScore = commitItems.length
+	          ? averageV2SkillScores(commitItems.map((item) => getV2ChoiceQualityScore(item?.quality)), baseline)
+	          : (outcome === "neutral_exit" ? 65 : baseline - 15);
+	        const closingByOutcome = {
+	          premium_success: 100,
+	          standard_success: 84,
+	          weak_success: 62,
+	          neutral_exit: 55,
+	          failure: 18,
+	        }[outcome] ?? baseline;
+	        const closing = clampV2SkillScore((commitScore * 0.45) + (closingByOutcome * 0.55) - Math.max(0, mistakeCount - 1) * 4);
+
+	        return {
+	          read,
+	          framing,
+	          delivery,
+	          recovery: clampV2SkillScore(recovery),
+	          closing,
+	        };
+	      }
+
+	      function buildV2ProgressReportDraft(snapshot, session, rewardProgress = null) {
+	        if (!snapshot || !session || !isV2TerminalOutcome(snapshot.outcome)) return null;
+
+	        const skills = buildV2SkillSnapshot(snapshot, session);
+	        const labels = pickStrongestWeakest(skills);
+	        const skillAverage = averageV2SkillScores(Object.values(skills), 0);
+	        const chainSignal = getV2OutcomeChainSignal(snapshot.outcome);
+	        const chainScore = Math.round((skillAverage / 25) * 10) / 10;
+	        const performanceGrade = getV2OutcomePerformanceGrade(snapshot.outcome, skillAverage);
+	        const history = getV2SessionHistory(session);
+	        const recoveryPressure = hasV2RecoveryPressure(snapshot, history);
+	        const product = session?.product || null;
+	        const encounter = session?.encounter || null;
+	        const payload = {
+	          v: 2,
+	          engineVersion: "v2",
+	          source: "v2_harness",
+	          encounterId: snapshot.encounterId || encounter?.id || null,
+	          encounterNumber: snapshot.encounterOrdinal ?? null,
+	          encounterTitle: snapshot.encounterTitle || encounter?.title || null,
+	          tier: Number(snapshot.tier || encounter?.tier || 1),
+	          guestStateActual: encounter?.family || encounter?.masterProfile || snapshot.encounterTitle || null,
+	          difficulty: getV2DifficultySeed(snapshot.difficultyMode || session?.difficultyMode || getV2DifficultyModeForStart()),
+	          difficultyMode: normalizeV2DifficultyMode(snapshot.difficultyMode || session?.difficultyMode || getV2DifficultyModeForStart()),
+	          chainSignal,
+	          chainScore,
+	          performanceGrade,
+	          outcome: snapshot.outcome || null,
+	          finalOutcome: snapshot.outcome || null,
+	          guestReadCorrect: skills.read >= 60,
+	          deliveryScore: skills.delivery >= 80 ? 2 : skills.delivery >= 50 ? 1 : 0,
+	          resetUsed: recoveryPressure,
+	          premiumSuccess: snapshot.outcome === "premium_success",
+	          strongPillars: Object.values(skills).filter((value) => Number(value || 0) >= 75).length,
+	          skills,
+	          progressionState: shouldSubmitV2ProgressReport()
+	            ? buildV2CanonicalProgressionState(snapshot, session, rewardProgress)
+	            : null,
+	          strongestSkill: labels.strongest,
+	          weakestSkill: labels.weakest,
+	          product: product
+	            ? {
+	                id: product.id || null,
+	                name: product.name || null,
+	                category: product.category || null,
+	                style: product.style || product.varietalOrBlend || null,
+	                region: product.region || null,
+	              }
+	            : null,
+	          v2Snapshot: {
+	            authorityDelta: Number(snapshot.authorityDelta || 0),
+	            progress: Number(snapshot.progress || 0),
+	            frustration: Number(snapshot.frustration || 0),
+	            mistakeCount: Number(snapshot.mistakeCount || 0),
+	            progressMood: snapshot.progressMood || null,
+	            frustrationMood: snapshot.frustrationMood || null,
+	            turnCount: Number(snapshot.turnCount || 0),
+	            actionCount: Number(snapshot.actionCount || 0),
+	            bottleRewards: rewardProgress?.state
+	              ? {
+	                  totalAP: Number(rewardProgress.state.totalAP || 0),
+	                  tierUnlocked: Number(rewardProgress.state.tierUnlocked || 1),
+	                }
+	              : null,
+	          },
+	          history: history.map((item) => ({
+	            turn: item.turn ?? null,
+	            choice: item.choice || null,
+	            quality: item.quality || null,
+	            progressDelta: item.progressDelta ?? null,
+	            frustrationDelta: item.frustrationDelta ?? null,
+	            mistakeDelta: item.mistakeDelta ?? null,
+	            resultingProgress: item.resultingProgress ?? null,
+	            resultingFrustration: item.resultingFrustration ?? null,
+	            resultingMistakeCount: item.resultingMistakeCount ?? null,
+	            reaction: item.reaction || "",
+	            feedbackText: item.feedbackText || "",
+	          })),
+	        };
+	        const body =
+	          `V2 progress update • Encounter ${payload.encounterNumber ?? "—"} • ` +
+	          `Outcome: ${String(payload.outcome || "—").replaceAll("_", " ")} • ` +
+	          `Signal: ${String(payload.chainSignal || "—").toUpperCase()}`;
+        return { payload, body, skills };
       }
 
-      function emitV2HarnessOutcome(snapshot, session, lastReaction = "") {
-        if (!snapshot || !session || !isV2TerminalOutcome(snapshot.outcome)) return;
-        if (session.outcomeEmitted) return;
+      function maybeEmitV2CanonicalEncounterResolved(snapshot, session, draft) {
+        if (!shouldSubmitV2ProgressReport()) return null;
+        if (!snapshot || !session || !draft?.payload || !isV2TerminalOutcome(snapshot.outcome)) return null;
+        if (session.v2CanonicalOutcomeEmitted) return session.v2CanonicalOutcomeEventId || null;
+
+        const p = draft.payload;
+        const history = getV2SessionHistory(session);
+        const lastChoice = history[history.length - 1]?.choice || null;
+        const recoveryPressure = hasV2RecoveryPressure(snapshot, history);
+        const eventId = crypto.randomUUID();
+        const sessionId = session.v2SessionId || crypto.randomUUID();
+        session.v2SessionId = sessionId;
+        const payload = {
+          v: 2,
+          engineVersion: "v2",
+          source: "v2_harness",
+          eventId,
+          sessionId,
+          encounterId: p.encounterId || null,
+          encounterNumber: p.encounterNumber ?? null,
+          encounterTitle: p.encounterTitle || null,
+          tier: Number(p.tier || 1),
+          difficulty: p.difficulty ?? null,
+          difficultyMode: p.difficultyMode || null,
+          chosen: {
+            guestType: p.guestStateActual || "",
+            mode: lastChoice?.group || "",
+            hook: lastChoice?.type || "",
+          },
+          actual: {
+            guestType: p.guestStateActual || "",
+            guestTypeNorm: p.guestStateActual || "",
+          },
+          checks: {
+            readCorrect: !!p.guestReadCorrect,
+            modeStatus: Number(p.skills?.framing || 0) >= 75 ? "right" : Number(p.skills?.framing || 0) >= 50 ? "neutral" : "damaging",
+            hookStatus: Number(p.skills?.delivery || 0) >= 75 ? "right" : Number(p.skills?.delivery || 0) >= 50 ? "neutral" : "damaging",
+            deliveryCorrect: Number(p.skills?.delivery || 0) >= 60,
+          },
+          pivot: {
+            type: recoveryPressure ? "v2_recovery_pressure" : "",
+            taken: recoveryPressure || p.outcome === "neutral_exit",
+            success: p.outcome === "neutral_exit" || (recoveryPressure && p.chainSignal === "green"),
+          },
+          outcome: p.outcome || null,
+          finalOutcome: p.finalOutcome || p.outcome || null,
+          chainScore: p.chainScore ?? null,
+          chainSignal: p.chainSignal || null,
+          performanceGrade: p.performanceGrade || null,
+          progress: p.v2Snapshot || null,
+          reflection: {
+            stepSpine: history.map((item) => item.choice?.group).filter(Boolean),
+            chosenPath: history.map((item) => `${item.choice?.group || ""}:${item.choice?.type || ""}`).filter(Boolean),
+            bestPath: Array.isArray(snapshot.bestPath) ? snapshot.bestPath : [],
+            bottleServed: p.outcome === "premium_success" || p.outcome === "standard_success" || p.outcome === "weak_success",
+          },
+          occurredAtMs: Date.now(),
+        };
+
+        session.v2CanonicalOutcomeEmitted = true;
+        session.v2CanonicalOutcomeEventId = eventId;
+        bcEmitEvent("encounter_resolved", payload);
+        return eventId;
+      }
+
+      function shouldSubmitV2ProgressReport() {
+        if (window.isDemo || String(window.bcMode || "").toLowerCase() === "demo") return false;
+        if (!isActuallyIframe()) return false;
+	        const ctx = window.__BC_CTX__ || window.BC_CTX || {};
+	        const role = String(
+	          ctx.membershipRole ||
+	          ctx.membership_role ||
+	          ctx.role ||
+	          ""
+	        ).toLowerCase();
+	        return !!(
+	          ctx.userId &&
+	          ctx.restaurantId &&
+	          ["waiter", "single_manager", "group_manager", "enterpriser"].includes(role)
+	        );
+	      }
+
+	      function maybeSubmitV2ProgressReport(snapshot, session, rewardProgress = null) {
+	        if (!shouldSubmitV2ProgressReport()) return null;
+	        if (!snapshot || !session || !isV2TerminalOutcome(snapshot.outcome)) return null;
+	        if (session.v2SkillReportSubmitted) return session.v2SkillReportReqId || null;
+
+	        const draft = buildV2ProgressReportDraft(snapshot, session, rewardProgress);
+	        if (!draft?.payload) return null;
+
+	        maybeEmitV2CanonicalEncounterResolved(snapshot, session, draft);
+	        const reqId = submitProgressReportToManager({ body: draft.body, payload: draft.payload });
+	        if (reqId) {
+	          session.v2SkillReportSubmitted = true;
+	          session.v2SkillReportReqId = reqId;
+	          window.__BC_V2_LAST_SKILL_REPORT__ = draft;
+	          console.log("[BC][V2] progress_report_submit", {
+	            reqId,
+	            encounterId: draft.payload.encounterId,
+	            outcome: draft.payload.outcome,
+	            skills: draft.payload.skills,
+	          });
+	        }
+	        return reqId;
+	      }
+
+	      function emitV2HarnessOutcome(snapshot, session, lastReaction = "") {
+	        if (!snapshot || !session || !isV2TerminalOutcome(snapshot.outcome)) return;
+	        if (session.outcomeEmitted) return;
         session.outcomeEmitted = true;
 
         try {
@@ -24209,6 +25001,7 @@ function ensureProgLoaded() {
             encounterId: snapshot.encounterId,
             encounterTitle: snapshot.encounterTitle,
             encounterTier: snapshot.tier,
+            difficultyMode: normalizeV2DifficultyMode(snapshot.difficultyMode || session?.difficultyMode || getV2DifficultyModeForStart()),
             serviceStage: snapshot.serviceStage,
             outcome: snapshot.outcome,
             authorityDelta: Number(snapshot.authorityDelta || 0),
@@ -24230,14 +25023,18 @@ function ensureProgLoaded() {
               : null,
             history: Array.isArray(session.gameState?.history)
               ? session.gameState.history.map((item) => ({
-                  turn: item.turn,
-                  choice: item.choice,
-                  progressDelta: item.progressDelta,
-                  frustrationDelta: item.frustrationDelta,
-                  resultingProgress: item.resultingProgress,
-                  resultingFrustration: item.resultingFrustration,
-                  reaction: item.reaction,
-                }))
+	                  turn: item.turn,
+	                  choice: item.choice,
+	                  quality: item.quality,
+	                  progressDelta: item.progressDelta,
+	                  frustrationDelta: item.frustrationDelta,
+	                  mistakeDelta: item.mistakeDelta,
+	                  resultingProgress: item.resultingProgress,
+	                  resultingFrustration: item.resultingFrustration,
+	                  resultingMistakeCount: item.resultingMistakeCount,
+	                  reaction: item.reaction,
+	                  feedbackText: item.feedbackText,
+	                }))
               : [],
             bottleRewards: {
               totalAP: Number(rewardState.totalAP || 0),
@@ -24746,9 +25543,12 @@ function ensureProgLoaded() {
         const moodDescriptor = getV2MoodDescriptor(snapshot);
         const tableMood = getV2TableMood(snapshot);
         const isTerminal = feedbackIsTerminal;
-        const resultPresentation = isTerminal ? getV2ResultPresentation(snapshot, encounter) : null;
-        const rewardProgress = isTerminal ? applyV2BottleRewardProgress(snapshot) : { state: loadV2BottleRewardState(), apDelta: 0, pendingRewards: [] };
-        const isFinalEncounter = isV2FinalDemoEncounter(snapshot);
+	        const resultPresentation = isTerminal ? getV2ResultPresentation(snapshot, encounter) : null;
+	        const rewardProgress = isTerminal ? applyV2BottleRewardProgress(snapshot) : { state: loadV2BottleRewardState(), apDelta: 0, pendingRewards: [] };
+	        if (isTerminal) {
+	          maybeSubmitV2ProgressReport(snapshot, session, rewardProgress);
+	        }
+	        const isFinalEncounter = isV2FinalDemoEncounter(snapshot);
         const isDemoEncounterSequence = isV2DemoEncounterSequence(snapshot);
         const shouldShowBottleRewardPanel = isTerminal && (!isDemoEncounterSequence || isFinalEncounter);
         const lesson = String(encounter?.lesson || "");
@@ -25114,12 +25914,13 @@ function ensureProgLoaded() {
           syncV2DemoEncounterRotationFromRewardState();
         }
         let snapshot = null;
-        try {
-          snapshot = api.start({
-            tier: 1,
-            encounterLimit: getV2EncounterLimit(),
-            encounterId: requestedEncounterId || null,
-          });
+	        try {
+	          snapshot = api.start({
+	            tier: getV2TierToServe(),
+	            encounterLimit: getV2EncounterLimit(),
+	            encounterId: requestedEncounterId || null,
+	            difficultyMode: getV2DifficultyModeForStart(),
+	          });
           if (!snapshot) throw new Error("V2 demo did not return an encounter.");
           syncV2DemoRotationAfterSnapshot(snapshot);
           if (startingFresh) {

@@ -6136,7 +6136,89 @@ async function buildProgressionSnapshotFromRecentEncounterLogs({ userId, restaur
   return null;
 }
 
+function clampProgressionTier(value, fallback = 1) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  if (n <= 1) return 1;
+  if (n >= 3) return 3;
+  return 2;
+}
+
+function getCanonicalProgressionSnapshot(canonicalState = null) {
+  const c = canonicalState && typeof canonicalState === "object" ? canonicalState : {};
+  return (
+    normalizeProgressionSnapshot(c?.authority?.progressionSnapshot) ||
+    normalizeProgressionSnapshot(c?.progressionSnapshot) ||
+    normalizeProgressionSnapshot(c?.v2?.authority?.progressionSnapshot) ||
+    normalizeProgressionSnapshot(c?.v2?.progressionSnapshot) ||
+    null
+  );
+}
+
+async function buildProgressionResultFromCanonicalState({ userId, restaurantId, desiredTier = 3 }) {
+  if (!userId || !restaurantId) return null;
+
+  const { data, error } = await supabase
+    .from("bc_progression_state_v1")
+    .select("canonical_state")
+    .eq("user_id", userId)
+    .eq("restaurant_id", restaurantId)
+    .maybeSingle();
+
+  if (error) {
+    if (!isMissingRelationError(error)) {
+      console.warn("[BC] canonical progression state query failed", error);
+    }
+    return null;
+  }
+
+  const canonicalState =
+    data?.canonical_state && typeof data.canonical_state === "object"
+      ? data.canonical_state
+      : null;
+  if (!canonicalState) return null;
+
+  const snapshot = getCanonicalProgressionSnapshot(canonicalState);
+  if (!snapshot) return null;
+
+  const gateAuthority = canonicalState?.authority || canonicalState?.v2?.authority || {};
+  const apTierUnlocked = clampProgressionTier(gateAuthority?.apTierUnlocked, 3);
+  const authorityTier = clampProgressionTier(gateAuthority?.tierToServe, apTierUnlocked);
+  const requestedTier = desiredTier === 1 ? 1 : desiredTier === 2 ? 2 : 3;
+  const gatedDesiredTier = Math.min(requestedTier, apTierUnlocked, authorityTier);
+
+  const result = await decideAllowedTierLazy({
+    desiredTier: gatedDesiredTier === 1 ? 1 : gatedDesiredTier === 2 ? 2 : 3,
+    userId,
+    restaurantId,
+    snapshot,
+  });
+
+  const v2Authority = canonicalState?.v2?.authority || canonicalState?.authority || null;
+  const authorityPoints = Number(
+    v2Authority?.authorityPoints ??
+    v2Authority?.totalAP ??
+    canonicalState?.economy?.authorityPoints ??
+    canonicalState?.economy?.ap ??
+    0
+  );
+
+  return {
+    ...(result || {}),
+    canonicalState,
+    authority: v2Authority,
+    authorityPoints: Number.isFinite(authorityPoints) ? authorityPoints : null,
+  };
+}
+
 async function buildProgressionResult({ userId, restaurantId, desiredTier = 3 }) {
+  const canonicalResult = await buildProgressionResultFromCanonicalState({
+    userId,
+    restaurantId,
+    desiredTier,
+  });
+  if (canonicalResult) return canonicalResult;
+
   const snapshot = await buildProgressionSnapshotFromRecentEncounterLogs({ userId, restaurantId });
   if (snapshot) {
     return await decideAllowedTierLazy({

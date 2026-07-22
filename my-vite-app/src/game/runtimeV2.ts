@@ -17,6 +17,7 @@ import type {
   Product,
   ProductSelectionContext,
   RecommendAngle,
+  V2DifficultyMode,
 } from "./typesV2";
 
 export interface RuntimeV2Session {
@@ -24,6 +25,7 @@ export interface RuntimeV2Session {
   product: Product | null;
   gameState: GameStateV2;
   encounterLimit: number;
+  difficultyMode: V2DifficultyMode;
   outcomeEmitted?: boolean;
 }
 
@@ -31,6 +33,7 @@ export interface RuntimeV2StartOptions {
   tier?: number;
   encounterId?: string | null;
   encounterLimit?: number;
+  difficultyMode?: V2DifficultyMode | string | null;
 }
 
 export interface RuntimeV2Snapshot {
@@ -41,6 +44,7 @@ export interface RuntimeV2Snapshot {
   productId: string | null;
   productName: string | null;
   tier: number;
+  difficultyMode: V2DifficultyMode;
   progress: number;
   frustration: number;
   mistakeCount: number;
@@ -169,6 +173,7 @@ export function snapshotRuntimeV2(session: RuntimeV2Session): RuntimeV2Snapshot 
     productId: product?.id || null,
     productName: formatProductTitle(product),
     tier: encounter.tier,
+    difficultyMode: session.difficultyMode || gameState.difficultyMode || "medium",
     progress: gameState.progress,
     frustration: gameState.frustration,
     mistakeCount: gameState.mistakeCount,
@@ -190,16 +195,22 @@ export function snapshotRuntimeV2(session: RuntimeV2Session): RuntimeV2Snapshot 
 export function startRuntimeV2Session(options: RuntimeV2StartOptions = {}): RuntimeV2Session {
   const tier = Number(options.tier || 1);
   const encounterLimit = normalizeEncounterLimit(options.encounterLimit);
+  const requestedDifficulty = String(options.difficultyMode || "medium").toLowerCase();
+  const difficultyMode: V2DifficultyMode =
+    requestedDifficulty === "easy" || requestedDifficulty === "hard"
+      ? requestedDifficulty
+      : "medium";
   const encounter = chooseEncounter(tier, encounterLimit, options.encounterId);
   const pool = buildCampaignProductPool(encounter.tier);
   const product = selectCampaignProduct(pool, buildSelectionContext(encounter));
-  const gameState = createGameStateV2(encounter, product);
+  const gameState = createGameStateV2(encounter, product, difficultyMode);
 
   return {
     encounter,
     product,
     gameState,
     encounterLimit,
+    difficultyMode,
     outcomeEmitted: false,
   };
 }

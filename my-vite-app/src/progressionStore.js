@@ -3,7 +3,7 @@ export const AVAILABLE_TONES = ["guide", "charm", "authority"];
 
 export function deriveTier(points) {
   const pts = Number(points || 0);
-  if (pts >= 10) return 3;
+  if (pts >= 12) return 3;
   if (pts >= 5) return 2;
   return 1;
 }
