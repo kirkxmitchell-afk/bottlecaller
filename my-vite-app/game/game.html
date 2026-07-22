@@ -425,15 +425,23 @@
     }
     function scheduleIframeHeightReport(reason = "layout") {
       try { clearTimeout(window.__BC_HEIGHT_REPORT_T__); } catch {}
+      try {
+        (window.__BC_HEIGHT_REPORT_SETTLE_TS__ || []).forEach((timer) => clearTimeout(timer));
+      } catch {}
+      window.__BC_HEIGHT_REPORT_SETTLE_TS__ = [];
       const isMobile = window.matchMedia?.("(max-width: 760px)")?.matches;
       const delay = isMobile ? 80 : 32;
+      const runReport = (label) => {
+        try { return reportIframeHeight(label); } catch { return false; }
+      };
       window.__BC_HEIGHT_REPORT_T__ = setTimeout(() => {
         try {
-          const didReport = reportIframeHeight(reason);
-          if (!isMobile && didReport) {
-            requestAnimationFrame(() => {
-              try { reportIframeHeight(reason + ":raf"); } catch {}
-            });
+          runReport(reason);
+          requestAnimationFrame(() => runReport(reason + ":raf"));
+          if (isMobile) {
+            window.__BC_HEIGHT_REPORT_SETTLE_TS__ = [180, 420].map((settleDelay) =>
+              setTimeout(() => runReport(`${reason}:settle_${settleDelay}`), settleDelay)
+            );
           }
         } catch {}
       }, delay);
@@ -23468,9 +23476,55 @@ function ensureProgLoaded() {
         return encounter?.images && typeof encounter.images === "object" ? encounter.images : {};
       }
 
+      function getV2EncounterIdentity(encounter) {
+        return String(encounter?.id || encounter?.encounterId || "");
+      }
+
+      function getV2EncounterCache() {
+        if (!window.__BC_V2_ENCOUNTER_BY_ID__ || typeof window.__BC_V2_ENCOUNTER_BY_ID__ !== "object") {
+          window.__BC_V2_ENCOUNTER_BY_ID__ = {};
+        }
+        return window.__BC_V2_ENCOUNTER_BY_ID__;
+      }
+
+      function rememberV2Encounter(encounter) {
+        const id = getV2EncounterIdentity(encounter);
+        if (id) {
+          getV2EncounterCache()[id] = encounter;
+        }
+        return encounter || null;
+      }
+
+      function getV2EncounterForSnapshot(snapshot, fallbackEncounter = null) {
+        const snapshotId = String(snapshot?.encounterId || "");
+        const fallbackId = getV2EncounterIdentity(fallbackEncounter);
+        if (fallbackId) rememberV2Encounter(fallbackEncounter);
+        if (!snapshotId) return fallbackEncounter || null;
+        if (fallbackId && fallbackId === snapshotId) return fallbackEncounter;
+        return getV2EncounterCache()[snapshotId] || null;
+      }
+
+      function isV2SessionForSnapshot(snapshot, session) {
+        const snapshotId = String(snapshot?.encounterId || "");
+        if (!snapshotId) return true;
+        return getV2EncounterIdentity(session?.encounter || null) === snapshotId;
+      }
+
       function getV2EncounterImageSrc(encounter, key, fallbackKey = "mainNeutral") {
         const images = getV2EncounterImages(encounter);
         return String(images[key] || images[fallbackKey] || V2_FALLBACK_ENCOUNTER_IMAGE);
+      }
+
+      function getV2TerminalImageSrc(encounter, outcome) {
+        const images = getV2EncounterImages(encounter);
+        const value = String(outcome || "");
+        if (value === "failure") {
+          return String(images.endFailureArt || images.mainNeutral || V2_FALLBACK_ENCOUNTER_IMAGE);
+        }
+        if (value === "neutral_exit") {
+          return String(images.neutralExitArt || images.endSuccessArt || images.mainNeutral || V2_FALLBACK_ENCOUNTER_IMAGE);
+        }
+        return String(images.endSuccessArt || images.mainNeutral || V2_FALLBACK_ENCOUNTER_IMAGE);
       }
 
       function getV2LatestHistory(session) {
@@ -23478,13 +23532,13 @@ function ensureProgLoaded() {
         return history.length ? history[history.length - 1] : null;
       }
 
+      function getV2LatestHistoryForSnapshot(snapshot, session) {
+        return isV2SessionForSnapshot(snapshot, session) ? getV2LatestHistory(session) : null;
+      }
+
       function getV2MainImageSrc(snapshot, encounter, latestHistory) {
         if (isV2TerminalOutcome(snapshot?.outcome)) {
-          return getV2EncounterImageSrc(
-            encounter,
-            snapshot?.outcome === "failure" ? "endFailureArt" : "endSuccessArt",
-            "mainNeutral",
-          );
+          return getV2TerminalImageSrc(encounter, snapshot?.outcome);
         }
         const lastQuality = String(latestHistory?.quality || "").toLowerCase();
         const isNegative =
@@ -23544,11 +23598,7 @@ function ensureProgLoaded() {
           subtitle,
           ap,
           apLabel: `${ap >= 0 ? "+" : ""}${ap} AP`,
-          imageSrc: getV2EncounterImageSrc(
-            encounter,
-            outcome === "failure" ? "endFailureArt" : "endSuccessArt",
-            "mainNeutral",
-          ),
+          imageSrc: getV2TerminalImageSrc(encounter, outcome),
         };
       }
 
@@ -24384,7 +24434,7 @@ function ensureProgLoaded() {
         encounterPanel.dataset.v2Layout = "tier1";
         encounterPanel.dataset.v2Screen = "preview";
         const session = api.getSession?.() || null;
-        const encounter = session?.encounter || null;
+        const encounter = getV2EncounterForSnapshot(snapshot, session?.encounter || null);
         const product = session?.product || null;
         const sceneClue = getV2SceneClue(encounter);
         const previewArt = getV2EncounterImageSrc(encounter, "previewArt", "mainNeutral");
@@ -24531,6 +24581,7 @@ function ensureProgLoaded() {
           if (shellHeight > 0) {
             encounterPanel.style.setProperty("--v2-action-shell-height", `${shellHeight}px`);
           }
+          scheduleIframeHeightReport?.("v2_preview_render");
         });
 
         const startButton = stepButtons.querySelector("#btnV2StartEncounter");
@@ -24538,7 +24589,8 @@ function ensureProgLoaded() {
           event.preventDefault();
           startButton.disabled = true;
           const liveSession = api.getSession?.() || null;
-          const nextImage = getV2MainImageSrc(snapshot, liveSession?.encounter || null, getV2LatestHistory(liveSession));
+          const liveEncounter = getV2EncounterForSnapshot(snapshot, liveSession?.encounter || null);
+          const nextImage = getV2MainImageSrc(snapshot, liveEncounter, getV2LatestHistoryForSnapshot(snapshot, liveSession));
           await preloadV2Image(nextImage, 700);
           renderV2HarnessPlay(snapshot, reaction);
         });
@@ -24559,8 +24611,8 @@ function ensureProgLoaded() {
         encounterPanel.dataset.v2Screen = "play";
 
         const session = api.getSession?.() || null;
-        const encounter = session?.encounter || null;
-        const latestHistoryForImage = getV2LatestHistory(session);
+        const encounter = getV2EncounterForSnapshot(snapshot, session?.encounter || null);
+        const latestHistoryForImage = getV2LatestHistoryForSnapshot(snapshot, session);
         const mainImageSrc = getV2MainImageSrc(snapshot, encounter, latestHistoryForImage);
 
         const selectedGroup =
@@ -24839,6 +24891,7 @@ function ensureProgLoaded() {
           if (shellHeight > 0) {
             encounterPanel.style.setProperty("--v2-action-shell-height", `${shellHeight}px`);
           }
+          scheduleIframeHeightReport?.("v2_play_render");
         });
 
         stepButtons.querySelectorAll("[data-v2-group]").forEach((btn) => {
@@ -24866,9 +24919,8 @@ function ensureProgLoaded() {
               selectedGroup: null,
             };
             const liveSession = api.getSession?.() || null;
-            const latestHistory = Array.isArray(liveSession?.gameState?.history)
-              ? liveSession.gameState.history[liveSession.gameState.history.length - 1]
-              : null;
+            const liveEncounter = getV2EncounterForSnapshot(result.snapshot, liveSession?.encounter || null);
+            const latestHistory = getV2LatestHistoryForSnapshot(result.snapshot, liveSession);
             if (latestHistory) markV2WelcomeObjective("follow");
             const quickFeedback = getV2QuickFeedback(
               latestHistory?.quality,
@@ -24877,7 +24929,7 @@ function ensureProgLoaded() {
               latestHistory?.feedbackText || "",
             );
             emitV2HarnessOutcome(result.snapshot, liveSession, result.reaction || "");
-            const nextImage = getV2MainImageSrc(result.snapshot, liveSession?.encounter || null, latestHistory);
+            const nextImage = getV2MainImageSrc(result.snapshot, liveEncounter, latestHistory);
             await preloadV2Image(nextImage, 700);
             renderV2HarnessPlay(result.snapshot, result.reaction || "", quickFeedback);
           });
