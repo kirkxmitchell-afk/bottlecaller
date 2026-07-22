@@ -1,0 +1,14 @@
+# OS metadata
+.DS_Store
+**/.DS_Store
+Thumbs.db
+
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Local backups, experiments, and exported workspaces
+backups/
+Bottlecaller_2/
+bottlecaller graphicture update/
+bottlecaller_godot_floor/
