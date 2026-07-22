@@ -946,9 +946,7 @@ p { margin: 0; color: var(--muted); line-height: 1.5; }
   margin: 0;
   padding: 0;
   border-radius: 28px;
-  background:
-    url("/game/tier1-encounter-scene.png") center top / contain no-repeat,
-    #090a0e;
+  background: #090a0e;
   box-shadow: 0 18px 44px rgba(0,0,0,0.28);
   overflow: hidden;
 }
@@ -6366,9 +6364,7 @@ html, body{ height:100%; }
     aspect-ratio: 941 / 1672;
     padding: 0;
     border-radius: 0;
-    background:
-      url("/game/tier1-encounter-scene.png") center top / contain no-repeat,
-      #090a0e;
+    background: #090a0e;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-hero-top{

@@ -11048,7 +11048,14 @@ function ensureProgLoaded() {
 
         if (msg.type === "start_v2_demo") {
           try {
-            if (String(msg.reason || "").indexOf("auto_start") === -1) {
+            const startReason = String(msg.reason || "");
+            const isTrustedV2Start =
+              startReason.includes("auto_start") ||
+              startReason.includes("mobile") ||
+              startReason.includes("iframe_mount") ||
+              startReason.includes("iframe_load") ||
+              startReason.includes("play_enter");
+            if (!isTrustedV2Start) {
               return;
             }
             if (window.__BC_V2_DEMO_FINAL_SUMMARY_ACTIVE__) {
@@ -23568,7 +23575,11 @@ function ensureProgLoaded() {
           const timer = window.setTimeout(() => finish(false), timeoutMs);
           img.onload = () => {
             window.clearTimeout(timer);
-            finish(true);
+            if (typeof img.decode === "function") {
+              img.decode().then(() => finish(true)).catch(() => finish(true));
+            } else {
+              finish(true);
+            }
           };
           img.onerror = () => {
             window.clearTimeout(timer);
