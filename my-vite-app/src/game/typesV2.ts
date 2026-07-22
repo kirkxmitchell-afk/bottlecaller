@@ -146,6 +146,7 @@ export interface EncounterImageSet {
   mainNegative?: string;
   endSuccessArt?: string;
   endFailureArt?: string;
+  neutralExitArt?: string;
 }
 
 export interface EncounterV2 {

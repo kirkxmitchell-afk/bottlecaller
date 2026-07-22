@@ -770,6 +770,7 @@ export const TIER1_VERTICAL_SLICE_ENCOUNTERS: EncounterV2[] = [
       mainNegative: "/game/encounters/001/main-negative.png",
       endSuccessArt: "/game/encounters/001/end-success-art.png",
       endFailureArt: "/game/encounters/001/end-failure-art.png",
+      neutralExitArt: "/game/encounters/001/neutral-exit-art.png",
     },
     visualClues: [
       "They keep looking at unfamiliar wine names.",
@@ -832,6 +833,7 @@ export const TIER1_VERTICAL_SLICE_ENCOUNTERS: EncounterV2[] = [
       mainNegative: "/game/encounters/002/main-negative.png",
       endSuccessArt: "/game/encounters/002/end-success-art.png",
       endFailureArt: "/game/encounters/002/end-failure-art.png",
+      neutralExitArt: "/game/encounters/002/neutral-exit-art.png",
     },
     visualClues: [
       "They pause before answering and study your confidence.",
@@ -894,6 +896,7 @@ export const TIER1_VERTICAL_SLICE_ENCOUNTERS: EncounterV2[] = [
       mainNegative: "/game/encounters/003/main-negative.png",
       endSuccessArt: "/game/encounters/003/end-success-art.png",
       endFailureArt: "/game/encounters/003/end-failure-art.png",
+      neutralExitArt: "/game/encounters/003/neutral-exit-art.png",
     },
     visualClues: [
       "They greet the room with ease.",
