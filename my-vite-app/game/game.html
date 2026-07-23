@@ -14273,7 +14273,7 @@ function ensureProgLoaded() {
 
       function getV2HomeEncounterProgressLabel() {
         const isDemoNow = !!(window.isDemo || window.bcMode === "demo");
-        let limit = isDemoNow ? 3 : 10;
+        let limit = isDemoNow ? 5 : 16;
         try {
           if (typeof getV2EncounterLimit === "function") limit = getV2EncounterLimit();
         } catch {}
@@ -23475,15 +23475,15 @@ function ensureProgLoaded() {
       }
 
       function getV2EncounterLimit() {
-        if (window.isDemo || window.bcMode === "demo") return 3;
+        if (window.isDemo || window.bcMode === "demo") return 5;
         try {
           const requestedLimit = Number(new URLSearchParams(window.location.search).get("bcV2Encounters") || 0);
           if (Number.isFinite(requestedLimit) && requestedLimit > 0) return requestedLimit;
         } catch {}
         const identity = getGameplayIdentity();
         const role = String(identity?.membershipRole || identity?.role || "").toLowerCase();
-        if (role === "group_manager") return 10;
-        return 3;
+        if (role === "group_manager") return 16;
+        return 5;
       }
 
       function normalizeV2DifficultyMode(value) {
@@ -23702,6 +23702,12 @@ function ensureProgLoaded() {
           encounter_v2_001: "/game/products/chenin-blanc-bottle.png",
           encounter_v2_002: "/game/products/cabernet-sauvignon-bottle.png",
           encounter_v2_003: "/game/products/pinot-noir-bottle.png",
+          encounter_v2_011: "/game/products/cabernet-sauvignon-bottle.png",
+          encounter_v2_012: "/game/products/cabernet-sauvignon-bottle.png",
+          encounter_v2_013: "/game/products/pinot-noir-bottle.png",
+          encounter_v2_014: "/game/products/cabernet-sauvignon-bottle.png",
+          encounter_v2_015: "/game/products/cabernet-sauvignon-bottle.png",
+          encounter_v2_016: "/game/products/pinot-noir-bottle.png",
         };
         const imageByProduct = {
           product_cartology_chenin: "/game/products/chenin-blanc-bottle.png",
@@ -23832,11 +23838,11 @@ function ensureProgLoaded() {
       function syncV2DemoEncounterRotationFromRewardState(stateArg) {
         if (!isV2DemoRewardMode()) return;
         const state = stateArg || loadV2BottleRewardState();
-        let limit = 3;
+        let limit = 5;
         try {
           if (typeof getV2EncounterLimit === "function") limit = getV2EncounterLimit();
         } catch {}
-        const safeLimit = Math.max(1, Number(limit || 3));
+        const safeLimit = Math.max(1, Number(limit || 5));
         const completionCount = Math.max(0, Number(state?.demoCompletionCount || 0));
         const nextIndex = completionCount >= safeLimit ? 0 : completionCount % safeLimit;
         try { window.localStorage.setItem("BC_V2_TIER1_ROTATION_INDEX", String(nextIndex)); } catch {}
@@ -25146,9 +25152,11 @@ function ensureProgLoaded() {
       }
 
       const V2_DEMO_ENCOUNTER_IDS = Object.freeze([
-        "encounter_v2_001",
-        "encounter_v2_002",
-        "encounter_v2_003",
+        "encounter_v2_014",
+        "encounter_v2_013",
+        "encounter_v2_011",
+        "encounter_v2_015",
+        "encounter_v2_016",
       ]);
 
       function getV2DemoEncounterIdForOrdinal(ordinal) {

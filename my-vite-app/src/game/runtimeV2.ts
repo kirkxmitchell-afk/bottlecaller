@@ -70,7 +70,7 @@ export interface RuntimeV2ChoiceResult {
 function normalizeEncounterLimit(limit: number | null | undefined): number {
   const parsed = Number(limit);
   if (Number.isFinite(parsed) && parsed > 0) return Math.floor(parsed);
-  return 3;
+  return 5;
 }
 
 function getTier1EncounterById(encounterId: string | null | undefined, encounterLimit: number): EncounterV2 | null {

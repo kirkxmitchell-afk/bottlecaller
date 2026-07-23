@@ -21,6 +21,21 @@ import {
   V2_RULES_TIER_UNLOCKS,
 } from "../src/game/v2ProgressionAuthority";
 
+test("V2 vertical slice uses the configured five-encounter demo order", () => {
+  const demoEncounters = getTier1VerticalSliceEncounters();
+
+  assert.equal(demoEncounters.length, 5);
+  assert.deepEqual(demoEncounters.map((encounter) => encounter.id), [
+    "encounter_v2_014",
+    "encounter_v2_013",
+    "encounter_v2_011",
+    "encounter_v2_015",
+    "encounter_v2_016",
+  ]);
+  assert.equal(getTier1VerticalSliceEncounters(16).length, 16);
+  assert.equal(getTier1VerticalSliceEncounters(16).at(-1)?.id, "encounter_v2_016");
+});
+
 test("V2 difficulty settings affect gameplay pressure", () => {
   const encounter = getTier1VerticalSliceEncounters(1)[0];
   const easy = createGameStateV2(encounter, null, "easy");
