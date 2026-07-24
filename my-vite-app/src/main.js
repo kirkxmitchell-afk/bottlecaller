@@ -5878,7 +5878,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
           console.warn("[PARENT] blocked: no live session", msg.type);
           notifyLoggedOut();
           try { destroyPremiumIframe("parent_no_session_db_gate"); } catch {}
-          try { destroyDemoIframe("parent_no_session_db_gate"); } catch {}
+          // Never destroy demo/Godot when anonymous — demo has no session by design.
           return;
         }
         appState.session = liveAuth.session;
@@ -9431,12 +9431,17 @@ function armGodotDemoLock(reason = "godot") {
   document.documentElement.dataset.bcGodotDemo = "true";
   writeGodotSessionLock(true, reason);
   // Swallow ghost clicks that fire when the Godot splash is removed.
-  window.__BC_GODOT_CLICK_SHIELD_UNTIL__ = Date.now() + 5000;
+  window.__BC_GODOT_CLICK_SHIELD_UNTIL__ = Date.now() + 8000;
+  installGodotNavigationTrap();
   try {
+    // Remove Exit entirely so ghost taps cannot hit it after splash clear.
     const exitBtn = document.getElementById("btnDemoExit");
     if (exitBtn) {
       exitBtn.classList.add("hidden");
       exitBtn.style.pointerEvents = "none";
+      exitBtn.setAttribute("disabled", "true");
+      exitBtn.onclick = null;
+      try { exitBtn.remove(); } catch {}
     }
     document.getElementById("btnDemoPremium")?.classList.add("hidden");
   } catch {}
@@ -9445,6 +9450,41 @@ function armGodotDemoLock(reason = "godot") {
     reason: window.__BC_GODOT_DEMO_LOCK_REASON__,
     time: new Date().toISOString(),
   });
+}
+
+function installGodotNavigationTrap() {
+  if (window.__BC_GODOT_NAV_TRAP__) return;
+  window.__BC_GODOT_NAV_TRAP__ = true;
+  const blocked = (url) => {
+    const text = String(url || "");
+    if (!(readGodotSessionLock() || window.__BC_GODOT_DEMO_LOCK__)) return false;
+    return (
+      text.includes("loggedOut=") ||
+      text === "/" ||
+      text.endsWith("/?") ||
+      /\/?\?/.test(text) && text.includes("loggedOut")
+    );
+  };
+  try {
+    const originalReplace = window.location.replace.bind(window.location);
+    window.location.replace = (url) => {
+      if (blocked(url)) {
+        console.warn("[BC] blocked location.replace during Godot", url);
+        return;
+      }
+      return originalReplace(url);
+    };
+  } catch {}
+  try {
+    const originalAssign = window.location.assign.bind(window.location);
+    window.location.assign = (url) => {
+      if (blocked(url)) {
+        console.warn("[BC] blocked location.assign during Godot", url);
+        return;
+      }
+      return originalAssign(url);
+    };
+  } catch {}
 }
 
 function clearGodotDemoLock(reason = "clear") {

@@ -119,9 +119,41 @@ body {
 			<div id="status-notice"></div>
 		</div>
 
+		<script>
+// Host helpers for BridgeController — keep Godot JavaScriptBridge.eval one-line only.
+(function () {
+	window.__BC_GODOT_INBOX__ = window.__BC_GODOT_INBOX__ || [];
+	window.__BC_GODOT_INSTALL_INBOX__ = function () {
+		if (window.__BC_GODOT_INBOX_INSTALLED__) return;
+		window.__BC_GODOT_INBOX_INSTALLED__ = true;
+		window.addEventListener('message', function (event) {
+			var data = event && event.data;
+			if (!data || data.source !== 'BC_APP') return;
+			try {
+				window.__BC_GODOT_INBOX__.push(JSON.stringify(data));
+			} catch (err) {}
+		});
+	};
+	window.__BC_GODOT_POST__ = function (jsonText) {
+		try {
+			var msg = typeof jsonText === 'string' ? JSON.parse(jsonText) : jsonText;
+			if (window.parent && window.parent !== window) {
+				window.parent.postMessage(msg, '*');
+			}
+		} catch (err) {
+			console.error('[BC][GODOT] post failed', err);
+		}
+	};
+	window.__BC_GODOT_POLL__ = function () {
+		if (!window.__BC_GODOT_INBOX__ || !window.__BC_GODOT_INBOX__.length) return '';
+		return window.__BC_GODOT_INBOX__.shift() || '';
+	};
+	window.__BC_GODOT_INSTALL_INBOX__();
+})();
+		</script>
 		<script src="index.js"></script>
 		<script>
-const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"ensureCrossOriginIsolationHeaders":false,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":264880800,"index.wasm":43699190},"focusCanvas":true,"gdextensionLibs":[]};
+const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"ensureCrossOriginIsolationHeaders":false,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":264880592,"index.wasm":43699190},"focusCanvas":true,"gdextensionLibs":[]};
 const GODOT_THREADS_ENABLED = false;
 const engine = new Engine(GODOT_CONFIG);
 
@@ -193,32 +225,8 @@ const engine = new Engine(GODOT_CONFIG);
 	});
 
 	if (missing.length !== 0) {
-		if (GODOT_CONFIG['serviceWorker'] && GODOT_CONFIG['ensureCrossOriginIsolationHeaders'] && 'serviceWorker' in navigator) {
-			let serviceWorkerRegistrationPromise;
-			try {
-				serviceWorkerRegistrationPromise = navigator.serviceWorker.getRegistration();
-			} catch (err) {
-				serviceWorkerRegistrationPromise = Promise.reject(new Error('Service worker registration failed.'));
-			}
-			Promise.race([
-				serviceWorkerRegistrationPromise.then((registration) => {
-					if (registration != null) {
-						return Promise.reject(new Error('Service worker already exists.'));
-					}
-					return registration;
-				}).then(() => engine.installServiceWorker()),
-				new Promise((resolve) => {
-					setTimeout(() => resolve(), 2000);
-				}),
-			]).then(() => {
-				window.location.reload();
-			}).catch((err) => {
-				console.error('Error while registering service worker:', err);
-			});
-		} else {
-			const missingMsg = 'Error\nThe following features required to run Godot projects on the Web are missing:\n';
-			displayFailureNotice(missingMsg + missing.join('\n'));
-		}
+		const missingMsg = 'Error\nThe following features required to run Godot projects on the Web are missing:\n';
+		displayFailureNotice(missingMsg + missing.join('\n'));
 	} else {
 		setStatusMode('progress');
 		postToHost('godot_load_start', {
@@ -247,7 +255,6 @@ const engine = new Engine(GODOT_CONFIG);
 				document.getElementById('canvas')?.focus?.();
 			} catch (err) {}
 		}, displayFailureNotice);
-		// Do NOT force-hide the splash on a timer. The .pck is ~265MB.
 	}
 }());
 		</script>
