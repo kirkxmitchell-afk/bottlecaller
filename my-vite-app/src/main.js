@@ -301,6 +301,16 @@ window.addEventListener("orientationchange", syncBottleCallerViewportEnv, { pass
 
 window.addEventListener("storage", (e) => {
   if (e.key === "__BC_LOGOUT_LOCK__" && e.newValue) {
+    // Never let a cross-tab logout yank an in-progress Godot/demo floor.
+    if (
+      readGodotSessionLock?.() ||
+      window.__BC_GODOT_DEMO_LOCK__ ||
+      document.documentElement?.dataset?.bcGodotDemo === "true" ||
+      document.getElementById("gameRootDemoFrame")
+    ) {
+      console.warn("[CROSS-TAB] logout lock ignored during Godot/demo play");
+      return;
+    }
     console.warn("[CROSS-TAB] logout lock detected -> forcing logout UI");
     try { window.__BC_FORCE_LOGGED_OUT__ = true; } catch {}
     try { window.location.replace("/?loggedOut=1&ts=" + Date.now()); } catch {}
@@ -9555,6 +9565,11 @@ function mountGameIframe(targetId, mode /* "demo" | "premium" */, options = {}) 
   }
 
   const useV2Harness = mode === "demo" || !!options?.v2Harness;
+  if (mode === "demo" && useV2Harness && options?.autoStartV2) {
+    // Arm before iframe paints so ghost Exit taps cannot hard-logout mid-boot.
+    persistV2DemoRequest();
+    armGodotDemoLock(options?.autoStartReason || "mount_autostart");
+  }
   const src = buildGameIframeUrl({
     mode,
     initialScreen: options?.initialScreen || "",
@@ -22710,21 +22725,38 @@ async function signOutHard() {
 
 async function doLogout(reason = "user") {
   const reasonText = String(reason || "user");
-  // Any logout during an active/recoverable Godot session is treated as a ghost
-  // click or auth blip — never tear the floor down.
-  if (isGodotDemoLocked() || readGodotSessionLock() || isGodotClickShieldActive()) {
-    console.warn("[LOGOUT] blocked during active Godot/demo play", reasonText);
+  const demoSurfaceActive = !!(
+    document.getElementById("gameRootDemoFrame") ||
+    document.documentElement?.dataset?.bcV2Demo === "true" ||
+    appMode === "demo" ||
+    isV2DemoRequested()
+  );
+  const godotProtected =
+    isGodotDemoLocked() ||
+    readGodotSessionLock() ||
+    isGodotClickShieldActive() ||
+    document.documentElement?.dataset?.bcGodotDemo === "true";
+
+  // Ghost Exit taps during Godot were calling doLogout for anonymous demo users
+  // and hard-redirecting to /?loggedOut=1. Never do that on the demo surface.
+  if (godotProtected || (demoSurfaceActive && (reasonText.includes("demo") || !appState?.session))) {
+    console.warn("[LOGOUT] blocked on demo/godot surface", reasonText);
     setDebug({
       step: "logout.blocked_during_godot",
       reason: reasonText,
       time: new Date().toISOString(),
+      godotProtected,
+      demoSurfaceActive,
     });
     try {
       document.getElementById("btnDemoExit")?.classList.add("hidden");
-      showScreen("screenGameDemo");
+      if (godotProtected) {
+        showScreen("screenGameDemo");
+      }
     } catch {}
     return;
   }
+
   if (window.__BC_LOGGING_OUT__) return;
   window.__BC_LOGGING_OUT__ = true;
   let logoutRedirectIssued = false;
@@ -22788,14 +22820,13 @@ async function doLogout(reason = "user") {
       }
     } catch {}
 
-    try {
-      try { localStorage.setItem("__BC_LOGOUT_LATCH__", String(Date.now())); } catch {}
-      window.location.replace("/?loggedOut=1&ts=" + Date.now());
-      logoutRedirectIssued = true;
-      return;
-    } catch (e) {
-      console.warn("[LOGOUT] redirect failed, falling back to auth route", e);
-    }
+    // Soft complete — avoid /?loggedOut=1 hard reloads (they fight the Godot demo).
+    logoutRedirectIssued = false;
+    try { localStorage.removeItem("__BC_LOGOUT_LOCK__"); } catch {}
+    window.__BC_LOGOUT_LOCK__ = null;
+    window.__BC_LOGGING_OUT__ = false;
+    try { routeAuth(); } catch {}
+    return;
   } finally {
     try {
       appState.session = null;
@@ -23232,7 +23263,10 @@ try {
 })();
 
 let __BC_BOOT_ROUTE_BLOCKED__ = false;
-if (__BC_BOOT_LOGGED_OUT__ && !__BC_GODOT_SESSION_RECOVER__) {
+const __BC_SHOULD_RESUME_DEMO_AFTER_LOGOUT__ =
+  __BC_GODOT_SESSION_RECOVER__ || isV2DemoRequested();
+
+if (__BC_BOOT_LOGGED_OUT__ && !__BC_SHOULD_RESUME_DEMO_AFTER_LOGOUT__) {
   console.warn("[BOOT] loggedOut latch: forcing auth screen, skipping routing");
   try { appState.session = null; appState.profile = null; } catch {}
   try { destroyPremiumIframe("boot.loggedOut"); } catch {}
@@ -23247,8 +23281,15 @@ if (__BC_BOOT_LOGGED_OUT__ && !__BC_GODOT_SESSION_RECOVER__) {
   try { routeAuth(); } catch {}
   window.__BC_SKIP_DECIDE_ROUTE__ = true;
   __BC_BOOT_ROUTE_BLOCKED__ = true;
-} else if (__BC_BOOT_LOGGED_OUT__ && __BC_GODOT_SESSION_RECOVER__) {
-  console.warn("[BOOT] ignoring loggedOut latch — Godot session recovery active");
+} else if (__BC_BOOT_LOGGED_OUT__) {
+  console.warn("[BOOT] ignoring loggedOut latch — resuming demo/Godot instead of auth");
+  try {
+    const u = new URL(location.href);
+    u.searchParams.delete("loggedOut");
+    replaceUrlKeepingV2Demo(u);
+  } catch {}
+  window.__BC_SKIP_DECIDE_ROUTE__ = false;
+  __BC_BOOT_ROUTE_BLOCKED__ = false;
 }
 
 try {
@@ -23326,9 +23367,9 @@ if (!window.__BC_TRACE_TRAPS__) {
   }
 }
 
-if (__BC_GODOT_SESSION_RECOVER__) {
-  console.warn("[BOOT] Godot session lock found — resuming demo floor instead of login");
-  armGodotDemoLock("boot_recover");
+if (__BC_GODOT_SESSION_RECOVER__ || (__BC_BOOT_LOGGED_OUT__ && isV2DemoRequested())) {
+  console.warn("[BOOT] Godot/demo recovery — opening floor instead of login");
+  armGodotDemoLock(__BC_GODOT_SESSION_RECOVER__ ? "boot_recover" : "boot_loggedout_demo");
   showScreen("screenGameDemo");
 } else {
   showScreen("screenHome");
@@ -23357,7 +23398,7 @@ async function enforceAuthRoute() {
   const { data } = await supabase.auth.getSession();
   const session = data?.session || null;
 
-  if (__BC_GODOT_SESSION_RECOVER__ || readGodotSessionLock()) {
+  if (__BC_GODOT_SESSION_RECOVER__ || readGodotSessionLock() || (__BC_BOOT_LOGGED_OUT__ && isV2DemoRequested())) {
     console.warn("[ROUTE] resuming Godot demo after interrupt");
     appMode = "demo";
     window.__BC_FORCE_AUTH__ = false;
