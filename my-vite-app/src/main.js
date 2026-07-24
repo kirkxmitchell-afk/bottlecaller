@@ -9584,9 +9584,18 @@ function postStartV2DemoToIframe(reason = "mobile_enter") {
     return false;
   }
   try {
+    const payload = {
+      source: "BC_MSG",
+      v: 1,
+      type: "start_v2_demo",
+      reason: String(reason || "mobile_enter"),
+      preferGodot: true,
+    };
+    frame.contentWindow.postMessage(payload, window.location.origin);
+    // Also send explicit Godot start for newer iframes.
     frame.contentWindow.postMessage(
-      { source: "BC_MSG", v: 1, type: "start_v2_demo", reason },
-      window.location.origin
+      { ...payload, type: "start_godot_shift" },
+      window.location.origin,
     );
     window.__BC_DEMO_PLAY_STARTED_AT__ = Date.now();
     window.__BC_DEMO_IFRAME_LAST_SCREEN__ = "screenGodotShift";

@@ -11099,16 +11099,18 @@ function ensureProgLoaded() {
           return;
         }
 
-        if (msg.type === "start_v2_demo") {
+        if (msg.type === "start_v2_demo" || msg.type === "start_godot_shift") {
           try {
-            const startReason = String(msg.reason || "");
+            const startReason = String(msg.reason || msg.type || "");
             const isTrustedV2Start =
               startReason.includes("auto_start") ||
               startReason.includes("mobile") ||
               startReason.includes("iframe_mount") ||
               startReason.includes("iframe_load") ||
               startReason.includes("play_enter") ||
-              startReason.includes("godot");
+              startReason.includes("godot") ||
+              msg.type === "start_godot_shift" ||
+              msg.preferGodot === true;
             if (!isTrustedV2Start) {
               return;
             }
@@ -11116,33 +11118,37 @@ function ensureProgLoaded() {
               return;
             }
             const activeScreenId = document.querySelector(".screen.active")?.id || "";
-            const activeV2Snapshot = getV2HarnessApi?.()?.snapshot?.() || null;
             if (activeScreenId === "screenGodotShift" && window.__BC_GODOT_SHIFT_ACTIVE__) {
               return;
             }
-            if (activeScreenId === "screenPlay" && activeV2Snapshot && !window.__BC_GODOT_WINE_OFFER__?.active) {
+            // Prefer Godot for demo auto-start. Retry until the Godot API is exposed
+            // so we never silently fall back to the old V2 HTML play path.
+            const tryStartGodot = () => {
+              const starter = window.__BC_START_GODOT_SHIFT__;
+              const shouldUse = window.__BC_SHOULD_USE_GODOT_SHIFT__;
+              if (typeof starter !== "function") return false;
+              if (typeof shouldUse === "function" && !shouldUse()) return false;
+              starter({ reason: startReason || "start_v2_demo" });
+              return true;
+            };
+            if (tryStartGodot()) {
+              window.__BC_V2_DEMO_DIRECT_START_AT__ = Date.now();
               return;
             }
-            const now = Date.now();
-            if (
-              window.__BC_V2_DEMO_DIRECT_START_AT__ &&
-              now - Number(window.__BC_V2_DEMO_DIRECT_START_AT__ || 0) < 2500 &&
-              (activeScreenId === "screenPlay" || activeScreenId === "screenGodotShift")
-            ) {
-              return;
+            if (!window.__BC_GODOT_START_RETRY__) {
+              window.__BC_GODOT_START_RETRY__ = true;
+              let attempts = 0;
+              const timer = window.setInterval(() => {
+                attempts += 1;
+                if (tryStartGodot() || attempts >= 40) {
+                  window.clearInterval(timer);
+                  window.__BC_GODOT_START_RETRY__ = false;
+                  if (attempts >= 40 && typeof window.__BC_START_GODOT_SHIFT__ !== "function") {
+                    console.warn("[BC] Godot start API never became ready; not falling back to V2");
+                  }
+                }
+              }, 100);
             }
-            window.__BC_V2_DEMO_DIRECT_START_AT__ = now;
-            // Mobile / parent auto-start should enter the Godot floor, not V2 HTML play.
-            if (typeof shouldUseGodotShiftFloor === "function" && shouldUseGodotShiftFloor()) {
-              startGodotShiftFloor?.({ reason: startReason || "start_v2_demo" });
-              return;
-            }
-            if (shouldUseV2Harness?.()) {
-              startV2HarnessWhenReady?.({ resetSession: true });
-              return;
-            }
-            showScreen?.("screenPlay");
-            window.startEncounter?.();
           } catch (e) {
             console.warn("[BC] start_v2_demo failed", e);
           }
@@ -26019,12 +26025,23 @@ function ensureProgLoaded() {
       }
 
       function shouldUseGodotShiftFloor() {
-        if (!(window.isDemo || window.bcMode === "demo")) return false;
-        if (!shouldUseV2Harness()) return false;
         try {
           if (new URLSearchParams(window.location.search).get("bcGodot") === "0") return false;
         } catch {}
-        return true;
+        let modeDemo = false;
+        try {
+          modeDemo = new URLSearchParams(window.location.search).get("mode") === "demo";
+        } catch {}
+        const isDemoMode = !!(window.isDemo || window.bcMode === "demo" || modeDemo);
+        if (!isDemoMode) return false;
+        // Demo + V2 flag (URL or harness module) means Godot owns the floor entry.
+        return !!(shouldUseV2Harness() || (() => {
+          try {
+            return new URLSearchParams(window.location.search).get("bcV2") === "1";
+          } catch {
+            return false;
+          }
+        })());
       }
 
       function isGodotShiftWineOfferActive() {
@@ -26193,6 +26210,9 @@ function ensureProgLoaded() {
         scheduleIframeHeightReport?.("godot_shift_start");
         return true;
       }
+
+      window.__BC_SHOULD_USE_GODOT_SHIFT__ = shouldUseGodotShiftFloor;
+      window.__BC_START_GODOT_SHIFT__ = startGodotShiftFloor;
 
       function returnToGodotShiftFloor() {
         window.__BC_GODOT_WINE_OFFER__ = null;
