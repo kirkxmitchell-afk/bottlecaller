@@ -27165,7 +27165,20 @@ function ensureProgLoaded() {
           window.__BC_GODOT_WINE_OFFER__ = null;
           document.documentElement.dataset.bcGodotShift = "";
           document.documentElement.dataset.bcGodotMobile = "";
-          notifyParentGodotShiftActive?.(false);
+          try {
+            window.parent?.postMessage?.(
+              {
+                source: "BC_MSG",
+                v: 1,
+                type: "godot_shift_active",
+                active: false,
+                clearLock: true,
+                mode: window.bcMode || "demo",
+                screenId: null,
+              },
+              window.location.origin,
+            );
+          } catch {}
           resetNavState();
           showScreen("screenHome");
         });

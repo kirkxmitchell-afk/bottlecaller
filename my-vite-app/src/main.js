@@ -6648,6 +6648,16 @@ window.__BC_GET_PROGRESSION_SNAPSHOT__ = async function (opts = {}) {
 // Helpers
 // ------------------------------------------------------------
 function showScreen(id) {
+  // Never drop to the lobby/login shell while a Godot session is marked active
+  // (includes recovery after a mobile tab reload/OOM).
+  if (
+    (id === "screenHome" || id === "screenCreateRestaurant") &&
+    (isGodotDemoLocked() || readGodotSessionLock())
+  ) {
+    console.warn("[NAV] blocked showScreen ->", id, "(godot session lock)");
+    id = "screenGameDemo";
+  }
+
   const screens = document.querySelectorAll(".screen");
   screens.forEach((s) => s.classList.add("hidden"));
 
@@ -9239,11 +9249,11 @@ function unmountDemoGame(reason = "") {
 function destroyDemoIframe(reason = "") {
   const reasonText = String(reason || "");
   const forceDestroy =
-    reasonText.includes("logout") ||
-    reasonText.includes("nav_back") ||
+    reasonText.includes("user_exit") ||
     reasonText.includes("hardReset") ||
-    reasonText.includes("user_exit");
-  if (isV2DemoPlayActive() && !forceDestroy) {
+    (reasonText.includes("nav_back") && !readGodotSessionLock()) ||
+    (reasonText.includes("logout") && !readGodotSessionLock());
+  if ((isV2DemoPlayActive() || readGodotSessionLock()) && !forceDestroy) {
     console.warn("[BC] destroyDemoIframe suppressed during active V2/Godot demo play", reason);
     setDebug({
       step: "demo.destroy_suppressed",
@@ -9375,8 +9385,31 @@ function isGodotShiftDemoActive() {
   return (
     document.documentElement?.dataset?.bcGodotDemo === "true" ||
     window.__BC_DEMO_IFRAME_LAST_SCREEN__ === "screenGodotShift" ||
-    !!window.__BC_GODOT_DEMO_LOCK__
+    !!window.__BC_GODOT_DEMO_LOCK__ ||
+    readGodotSessionLock()
   );
+}
+
+function readGodotSessionLock() {
+  try {
+    return sessionStorage.getItem("BC_GODOT_ACTIVE") === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeGodotSessionLock(active, reason = "") {
+  try {
+    if (active) {
+      sessionStorage.setItem("BC_GODOT_ACTIVE", "1");
+      sessionStorage.setItem("BC_GODOT_ACTIVE_AT", String(Date.now()));
+      sessionStorage.setItem("BC_GODOT_ACTIVE_REASON", String(reason || "godot"));
+    } else {
+      sessionStorage.removeItem("BC_GODOT_ACTIVE");
+      sessionStorage.removeItem("BC_GODOT_ACTIVE_AT");
+      sessionStorage.removeItem("BC_GODOT_ACTIVE_REASON");
+    }
+  } catch {}
 }
 
 function armGodotDemoLock(reason = "godot") {
@@ -9384,8 +9417,9 @@ function armGodotDemoLock(reason = "godot") {
   window.__BC_GODOT_DEMO_LOCK_AT__ = Date.now();
   window.__BC_GODOT_DEMO_LOCK_REASON__ = String(reason || "godot");
   document.documentElement.dataset.bcGodotDemo = "true";
+  writeGodotSessionLock(true, reason);
   // Swallow ghost clicks that fire when the Godot splash is removed.
-  window.__BC_GODOT_CLICK_SHIELD_UNTIL__ = Date.now() + 2500;
+  window.__BC_GODOT_CLICK_SHIELD_UNTIL__ = Date.now() + 5000;
   try {
     const exitBtn = document.getElementById("btnDemoExit");
     if (exitBtn) {
@@ -9407,6 +9441,7 @@ function clearGodotDemoLock(reason = "clear") {
   window.__BC_GODOT_DEMO_LOCK_REASON__ = "";
   window.__BC_GODOT_CLICK_SHIELD_UNTIL__ = 0;
   document.documentElement.dataset.bcGodotDemo = "";
+  writeGodotSessionLock(false, reason);
   try {
     const exitBtn = document.getElementById("btnDemoExit");
     if (exitBtn) exitBtn.style.pointerEvents = "";
@@ -9696,10 +9731,21 @@ function startMobileDemoDirectly(reason = "mobile_enter") {
   showScreen("screenGameDemo");
   setPremiumOverlayActive(false);
   document.documentElement.dataset.bcV2Demo = "true";
+  // Keep/re-arm Godot lock for recoveries and first entry alike.
+  armGodotDemoLock(reason);
   destroyPremiumIframe(`${reason}:premium`);
-  destroyDemoIframe(`${reason}:remount`);
-  window.__BC_DEMO_PLAY_STARTED_AT__ = 0;
-  window.__BC_DEMO_IFRAME_LAST_SCREEN__ = "screenHome";
+  // Force remount when recovering so a dead iframe is replaced.
+  if (String(reason || "").includes("recover") || String(reason || "").includes("godot")) {
+    try { document.getElementById("gameRootDemoFrame")?.remove(); } catch {}
+    try {
+      const root = document.getElementById("gameRootDemo");
+      if (root) root.innerHTML = "";
+    } catch {}
+  } else {
+    destroyDemoIframe(`${reason}:remount`);
+  }
+  window.__BC_DEMO_PLAY_STARTED_AT__ = Date.now();
+  window.__BC_DEMO_IFRAME_LAST_SCREEN__ = "screenGodotShift";
   mountGameIframe("gameRootDemo", "demo", {
     initialScreen: "screenHome",
     v2Harness: true,
@@ -9901,7 +9947,7 @@ window.addEventListener("message", (event) => {
         demoFrame.style.setProperty("height", `${nextHeight}px`, "important");
         demoFrame.style.setProperty("max-width", "100%", "important");
         demoFrame.style.opacity = "1";
-      } else {
+      } else if (data.clearLock) {
         clearGodotDemoLock("godot_shift_inactive");
       }
       try { wireDemoButtons?.(); } catch {}
@@ -21131,6 +21177,10 @@ function isHardLoggedOut() {
 }
 
 function hardResetUI(reason = "") {
+  if (isGodotDemoLocked() || readGodotSessionLock()) {
+    console.warn("[LOGOUT] hardResetUI blocked during Godot session", reason);
+    return;
+  }
   console.log("[LOGOUT] hardResetUI", reason);
 
   window.__BC_PENDING_START_DRILL__ = null;
@@ -22660,10 +22710,9 @@ async function signOutHard() {
 
 async function doLogout(reason = "user") {
   const reasonText = String(reason || "user");
-  if (
-    (isGodotDemoLocked() || isV2DemoPlayActive() || isGodotClickShieldActive()) &&
-    (reasonText.includes("demo") || reasonText.includes("exit") || reasonText === "user")
-  ) {
+  // Any logout during an active/recoverable Godot session is treated as a ghost
+  // click or auth blip — never tear the floor down.
+  if (isGodotDemoLocked() || readGodotSessionLock() || isGodotClickShieldActive()) {
     console.warn("[LOGOUT] blocked during active Godot/demo play", reasonText);
     setDebug({
       step: "logout.blocked_during_godot",
@@ -23144,11 +23193,22 @@ window.closeManagerMessengerWindow = closeManagerMessengerWindow;
 const __BC_BOOT_LOGGED_OUT__ = new URLSearchParams(location.search).get("loggedOut") === "1";
 window.__BC_SKIP_DECIDE_ROUTE__ = false;
 
+// If a Godot floor was active and the tab reloaded (common on mobile OOM),
+// ignore ghost loggedOut redirects and resume the demo instead of login.
+const __BC_GODOT_SESSION_RECOVER__ = (() => {
+  try {
+    return sessionStorage.getItem("BC_GODOT_ACTIVE") === "1";
+  } catch {
+    return false;
+  }
+})();
+
 try {
   const cleanUrl = new URL(window.location.href);
   cleanUrl.searchParams.delete("mode");
   cleanUrl.searchParams.delete("demo");
   cleanUrl.searchParams.delete("logout");
+  if (__BC_GODOT_SESSION_RECOVER__) cleanUrl.searchParams.delete("loggedOut");
   replaceUrlKeepingV2Demo(cleanUrl);
 } catch {}
 
@@ -23172,7 +23232,7 @@ try {
 })();
 
 let __BC_BOOT_ROUTE_BLOCKED__ = false;
-if (__BC_BOOT_LOGGED_OUT__) {
+if (__BC_BOOT_LOGGED_OUT__ && !__BC_GODOT_SESSION_RECOVER__) {
   console.warn("[BOOT] loggedOut latch: forcing auth screen, skipping routing");
   try { appState.session = null; appState.profile = null; } catch {}
   try { destroyPremiumIframe("boot.loggedOut"); } catch {}
@@ -23187,6 +23247,8 @@ if (__BC_BOOT_LOGGED_OUT__) {
   try { routeAuth(); } catch {}
   window.__BC_SKIP_DECIDE_ROUTE__ = true;
   __BC_BOOT_ROUTE_BLOCKED__ = true;
+} else if (__BC_BOOT_LOGGED_OUT__ && __BC_GODOT_SESSION_RECOVER__) {
+  console.warn("[BOOT] ignoring loggedOut latch — Godot session recovery active");
 }
 
 try {
@@ -23264,7 +23326,13 @@ if (!window.__BC_TRACE_TRAPS__) {
   }
 }
 
-showScreen("screenHome");
+if (__BC_GODOT_SESSION_RECOVER__) {
+  console.warn("[BOOT] Godot session lock found — resuming demo floor instead of login");
+  armGodotDemoLock("boot_recover");
+  showScreen("screenGameDemo");
+} else {
+  showScreen("screenHome");
+}
 setManagerPackage("single_manager");
 setSeatPlan("15");
 setRole("waiter");
@@ -23288,6 +23356,15 @@ setDebug({ step: "boot.ready", time: new Date().toISOString(), supabaseUrl: impo
 async function enforceAuthRoute() {
   const { data } = await supabase.auth.getSession();
   const session = data?.session || null;
+
+  if (__BC_GODOT_SESSION_RECOVER__ || readGodotSessionLock()) {
+    console.warn("[ROUTE] resuming Godot demo after interrupt");
+    appMode = "demo";
+    window.__BC_FORCE_AUTH__ = false;
+    armGodotDemoLock("enforce_auth_recover");
+    startMobileDemoDirectly("godot_session_recover");
+    return;
+  }
 
   if (!session) {
     console.log("[ROUTE] no session -> forcing demo shell");
