@@ -241,3 +241,23 @@ test("progress report payload keeps skill score separate from progression author
   assert.equal(split.authorityPoints, 120);
   assert.notEqual(split.skills?.delivery, split.authorityPoints);
 });
+
+test("Godot guests map 1:1 onto the V2 demo encounter order", async () => {
+  const {
+    GODOT_GUEST_ORDER,
+    V2_DEMO_ENCOUNTER_ORDER,
+    resolveV2EncounterIdFromGodotGuest,
+  } = await import("../src/game/godotShiftBridge");
+
+  assert.equal(GODOT_GUEST_ORDER.length, 5);
+  assert.deepEqual(
+    GODOT_GUEST_ORDER.map((guestId, guestIndex) =>
+      resolveV2EncounterIdFromGodotGuest({ guestId, guestIndex }),
+    ),
+    [...V2_DEMO_ENCOUNTER_ORDER],
+  );
+  assert.equal(
+    resolveV2EncounterIdFromGodotGuest({ guestId: "blonde_date" }),
+    "encounter_v2_014",
+  );
+});

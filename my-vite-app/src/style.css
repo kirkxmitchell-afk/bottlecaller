@@ -1655,6 +1655,25 @@ html[data-bc-mobile-env="true"][data-bc-v2-demo="true"] #gameRootDemoFrame{
   overflow: visible !important;
 }
 
+/* Desktop Godot floor: expand the demo shell to a horizontal stage. */
+html[data-bc-godot-demo="true"] #screenGameDemo{
+  width: min(1200px, 100%) !important;
+}
+html[data-bc-godot-demo="true"] #screenGameDemo > .panel.stack{
+  max-width: none !important;
+  width: 100% !important;
+}
+html[data-bc-godot-demo="true"] #gameRootDemo,
+html[data-bc-godot-demo="true"] #gameRootDemoFrame{
+  width: 100% !important;
+  max-width: 100% !important;
+}
+html[data-bc-godot-demo="true"] #gameRootDemoFrame{
+  aspect-ratio: 16 / 9;
+  min-height: 420px !important;
+  max-height: 85vh !important;
+}
+
 /* =========================================================
    LOGIN SCREEN
    Keep this last so it beats the older generic home/auth rules.

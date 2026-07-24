@@ -16,6 +16,7 @@ if (window.self !== window.top) {
 import { installEngineBridge } from "./engineBridge";
 import { ENCOUNTERS, validateEncounters } from "./encounter";
 import { createDemoRuntimeV2Api } from "./runtimeV2";
+import { createGodotShiftBridgeApi } from "./godotShiftBridge";
 import * as WineBridge from "./wineBridge";
 import * as EventLogBridge from "./eventLogBridge";
 import * as ProgressionBridge from "./progressionBridge.ts";
@@ -39,6 +40,7 @@ declare global {
     __BC_CTX__?: any;
     __BC_PROGRESSION__?: any;
     __BC_V2_HARNESS__?: any;
+    __BC_GODOT_SHIFT__?: any;
   }
 }
 
@@ -119,6 +121,7 @@ function getCtxFromWindow() {
     enabled: v2HarnessEnabled,
     api: createDemoRuntimeV2Api(),
   };
+  window.__BC_GODOT_SHIFT__ = createGodotShiftBridgeApi();
 
   console.log("[BC] EngineBridge installed ✅", window.EngineBridge);
   console.log("[BC] WineBridge installed ✅", window.WineBridge);
@@ -127,6 +130,7 @@ function getCtxFromWindow() {
   console.log("[BC] ReactionRuntime installed ✅", window.ReactionRuntime);
   console.log("[BC] V2ProgressionAuthority installed ✅", window.V2ProgressionAuthority);
   console.log("[BC] V2 harness installed ✅", { enabled: v2HarnessEnabled });
+  console.log("[BC] Godot shift bridge installed ✅", window.__BC_GODOT_SHIFT__);
   console.log("[BC] Encounters loaded ✅", {
     demo: ENCOUNTERS.demo.length,
     premium: ENCOUNTERS.premium.length,

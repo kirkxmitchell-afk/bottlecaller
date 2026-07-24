@@ -5,7 +5,7 @@
   <title>BottleCaller Prototype</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <!-- ✅ IMPORTANT: because this file is served at /game/game.html -->
-  <link rel="stylesheet" href="/game/game.css?v=20260620-mobile-preview-bottle-gap" />
+  <link rel="stylesheet" href="/game/game.css?v=20260724-godot-desktop-fix" />
   <script type="module" src="/src/game/gameEntry.ts"></script>
   <script>
     if (window.self !== window.top) {
@@ -1861,6 +1861,9 @@
         }
 
         if (activeScreen === "screenPlay" && fireBoundBack("btnBackHomeFromPlay")) {
+          return true;
+        }
+        if (activeScreen === "screenGodotShift" && fireBoundBack("btnBackHomeFromGodot")) {
           return true;
         }
 
@@ -5230,6 +5233,28 @@
           <div id="progressReportStatus" class="small-text progress-report-status"></div>
         </div>
       </footer>
+    </div>
+  </section>
+
+  <section id="screenGodotShift" class="screen screen-godot-shift" aria-label="Main Dining Floor">
+    <div class="godot-shift-shell">
+      <header class="godot-shift-chrome">
+        <div class="godot-shift-brand">
+          <strong>BottleCaller</strong>
+          <span>Main Dining Floor</span>
+        </div>
+        <button id="btnBackHomeFromGodot" class="btn btn-ghost" type="button">Back</button>
+      </header>
+      <div class="godot-shift-stage" id="godotShiftStage">
+        <iframe
+          id="godotShiftFrame"
+          title="BottleCaller Godot Floor"
+          src="about:blank"
+          allow="autoplay; fullscreen; gamepad"
+          loading="lazy"
+        ></iframe>
+        <div id="godotShiftStatus" class="godot-shift-status" hidden>Loading floor…</div>
+      </div>
     </div>
   </section>
 
@@ -25639,9 +25664,14 @@ function ensureProgLoaded() {
 	        if (isTerminal) {
 	          maybeSubmitV2ProgressReport(snapshot, session, rewardProgress);
 	        }
+	        if (isTerminal && (isGodotShiftWineOfferActive() || window.__BC_V2_FROM_GODOT__)) {
+	          window.__BC_V2_FROM_GODOT__ = false;
+	          completeGodotWineOfferFromV2(snapshot, session, rewardProgress);
+	          return;
+	        }
 	        const isFinalEncounter = isV2FinalDemoEncounter(snapshot);
         const isDemoEncounterSequence = isV2DemoEncounterSequence(snapshot);
-        const shouldShowBottleRewardPanel = isTerminal && (!isDemoEncounterSequence || isFinalEncounter);
+        const shouldShowBottleRewardPanel = isTerminal && (!isDemoEncounterSequence || isFinalEncounter) && !isGodotShiftWineOfferActive();
         const lesson = String(encounter?.lesson || "");
         const guidanceLine = "Read the table, choose the right interaction, and move the guest without creating friction.";
         const feedbackMeta = isTerminal && feedbackText !== guidanceLine ? feedbackText : "";
@@ -25975,11 +26005,323 @@ function ensureProgLoaded() {
 
       }
 
+      function getGodotShiftBridge() {
+        return window.__BC_GODOT_SHIFT__ || null;
+      }
+
+      function shouldUseGodotShiftFloor() {
+        if (!(window.isDemo || window.bcMode === "demo")) return false;
+        if (!shouldUseV2Harness()) return false;
+        try {
+          if (new URLSearchParams(window.location.search).get("bcGodot") === "0") return false;
+        } catch {}
+        return true;
+      }
+
+      function isGodotShiftWineOfferActive() {
+        return !!window.__BC_GODOT_WINE_OFFER__?.active;
+      }
+
+      function getGodotShiftFrame() {
+        return document.getElementById("godotShiftFrame");
+      }
+
+      function setGodotShiftStatus(text, visible = true) {
+        const status = document.getElementById("godotShiftStatus");
+        if (!status) return;
+        status.textContent = String(text || "");
+        if (visible) {
+          status.hidden = false;
+          status.removeAttribute("hidden");
+          status.style.display = "";
+          status.style.pointerEvents = "auto";
+        } else {
+          status.hidden = true;
+          status.setAttribute("hidden", "");
+          status.style.display = "none";
+          status.style.pointerEvents = "none";
+        }
+      }
+
+      function isGodotMobileHost() {
+        try {
+          if (window.parent && window.parent !== window) {
+            return window.parent.document?.documentElement?.dataset?.bcMobileEnv === "true";
+          }
+        } catch {}
+        try {
+          return window.matchMedia("(max-width: 760px) and (pointer: coarse)").matches;
+        } catch {
+          return false;
+        }
+      }
+
+      function notifyParentGodotShiftActive(active) {
+        try {
+          window.parent?.postMessage?.(
+            {
+              source: "BC_MSG",
+              v: 1,
+              type: "godot_shift_active",
+              active: !!active,
+              mode: window.bcMode || "demo",
+              screenId: active ? "screenGodotShift" : null,
+            },
+            window.location.origin,
+          );
+        } catch {}
+      }
+
+      function focusGodotShiftCanvas() {
+        const frame = getGodotShiftFrame();
+        try {
+          const canvas = frame?.contentDocument?.getElementById?.("canvas");
+          canvas?.focus?.();
+        } catch {}
+        try {
+          frame?.contentWindow?.focus?.();
+        } catch {}
+      }
+
+      function postMessageToGodot(type, payload = {}) {
+        const bridge = getGodotShiftBridge();
+        const frame = getGodotShiftFrame();
+        if (!frame?.contentWindow) return false;
+        const message = bridge?.createAppMessageToGodot
+          ? bridge.createAppMessageToGodot(type, payload)
+          : { source: "BC_APP", v: 1, type, payload, at: Date.now() };
+        try {
+          frame.contentWindow.postMessage(message, window.location.origin);
+          return true;
+        } catch (error) {
+          console.warn("[BC][GODOT] postMessage failed", error);
+          return false;
+        }
+      }
+
+      function ensureGodotShiftListener() {
+        if (window.__BC_GODOT_SHIFT_LISTENER__) return;
+        window.__BC_GODOT_SHIFT_LISTENER__ = true;
+        window.addEventListener("message", (event) => {
+          if (event.origin !== window.location.origin) return;
+          const bridge = getGodotShiftBridge();
+          const data = event.data;
+          if (!(bridge?.isGodotBridgeMessage?.(data) || (data && data.source === "BC_GODOT"))) return;
+          handleGodotShiftMessage(data);
+        });
+      }
+
+      function ensureGodotShiftIframe() {
+        const frame = getGodotShiftFrame();
+        if (!frame) return null;
+        ensureGodotShiftListener();
+        const targetSrc = "/godot-shift/index.html?bcEmbed=1";
+        const onReady = () => {
+          setGodotShiftStatus("", false);
+          postMessageToGodot("host_hello", {
+            mode: window.bcMode || "demo",
+            demo: !!(window.isDemo || window.bcMode === "demo"),
+          });
+          window.setTimeout(() => {
+            setGodotShiftStatus("", false);
+            focusGodotShiftCanvas();
+          }, 250);
+          window.setTimeout(() => focusGodotShiftCanvas(), 1200);
+        };
+        if (!frame.dataset.bcMounted || frame.getAttribute("src") === "about:blank") {
+          setGodotShiftStatus("Loading floor…", true);
+          frame.dataset.bcMounted = "1";
+          frame.addEventListener("load", onReady, { once: true });
+          frame.src = targetSrc;
+        } else {
+          onReady();
+        }
+        // Safety: never leave the dark loader covering input.
+        window.setTimeout(() => setGodotShiftStatus("", false), 8000);
+        return frame;
+      }
+
+      function startGodotShiftFloor(options = {}) {
+        ensureGodotShiftListener();
+        window.__BC_GODOT_SHIFT_ACTIVE__ = true;
+        window.__BC_GODOT_WINE_OFFER__ = null;
+        applyPlaySurfaceMode("full");
+        notifyParentDemoPlayStarted(options.reason || "godot_shift_begin");
+        resetNavState();
+        const mobileHost = isGodotMobileHost();
+        document.documentElement.dataset.bcGodotMobile = mobileHost ? "1" : "0";
+        document.documentElement.dataset.bcGodotShift = "true";
+        showScreen("screenGodotShift");
+        notifyParentGodotShiftActive(true);
+        ensureGodotShiftIframe();
+        setGodotShiftStatus("", false);
+        scheduleIframeHeightReport?.("godot_shift_start");
+        return true;
+      }
+
+      function returnToGodotShiftFloor() {
+        window.__BC_GODOT_WINE_OFFER__ = null;
+        document.documentElement.dataset.bcGodotMobile = isGodotMobileHost() ? "1" : "0";
+        document.documentElement.dataset.bcGodotShift = "true";
+        showScreen("screenGodotShift");
+        notifyParentGodotShiftActive(true);
+        setGodotShiftStatus("", false);
+        const frame = ensureGodotShiftIframe();
+        focusGodotShiftCanvas();
+        try { frame?.contentWindow?.focus?.(); } catch {}
+        scheduleIframeHeightReport?.("godot_shift_return");
+      }
+
+      function handleGodotOfferWine(payload = {}) {
+        const bridge = getGodotShiftBridge();
+        const encounterId = bridge?.resolveV2EncounterIdFromGodotGuest?.(payload)
+          || null;
+        if (!encounterId) {
+          console.warn("[BC][GODOT] No V2 encounter mapped for guest", payload);
+          postMessageToGodot("v2_encounter_result", {
+            ok: false,
+            error: "unmapped_guest",
+            guestId: payload.guestId || null,
+            authorityDelta: 0,
+          });
+          return false;
+        }
+
+        window.__BC_GODOT_WINE_OFFER__ = {
+          active: true,
+          guestId: String(payload.guestId || ""),
+          tableId: String(payload.tableId || ""),
+          guestDisplayName: String(payload.guestDisplayName || ""),
+          encounterId,
+          startedAt: Date.now(),
+        };
+
+        document.documentElement.dataset.bcGodotShift = "wine_offer";
+        notifyParentGodotShiftActive(false);
+        startV2HarnessWhenReady({
+          encounterId,
+          resetSession: true,
+          skipRewardSync: true,
+          fromGodot: true,
+          skipPreview: true,
+        });
+        return true;
+      }
+
+      function completeGodotWineOfferFromV2(snapshot, session, rewardProgress = null) {
+        const offer = window.__BC_GODOT_WINE_OFFER__ || {};
+        const authorityDelta = Number(snapshot?.authorityDelta || 0);
+        const outcome = String(snapshot?.outcome || "");
+        const wineSold = ["premium_success", "standard_success", "weak_success"].includes(outcome);
+
+        // Keep local/premium telemetry path alive, but skip V2 end UX.
+        try {
+          recordV2ProgressionAuthority?.(snapshot, session, rewardProgress);
+        } catch {}
+
+        postMessageToGodot("v2_encounter_result", {
+          ok: true,
+          guestId: offer.guestId || null,
+          tableId: offer.tableId || null,
+          encounterId: snapshot?.encounterId || offer.encounterId || null,
+          encounterTitle: snapshot?.encounterTitle || null,
+          outcome,
+          authorityDelta,
+          wineSold,
+          totalAP: Number(rewardProgress?.state?.totalAP || loadV2BottleRewardState?.()?.totalAP || 0),
+          progress: Number(snapshot?.progress || 0),
+          frustration: Number(snapshot?.frustration || 0),
+        });
+
+        window.__BC_GODOT_WINE_OFFER__ = null;
+        returnToGodotShiftFloor();
+      }
+
+      function handleGodotShiftMessage(data) {
+        const type = String(data?.type || "");
+        const payload = data?.payload && typeof data.payload === "object" ? data.payload : {};
+        if (type === "godot_ready") {
+          setGodotShiftStatus("", false);
+          focusGodotShiftCanvas();
+          postMessageToGodot("host_hello", {
+            mode: window.bcMode || "demo",
+            demo: !!(window.isDemo || window.bcMode === "demo"),
+          });
+          scheduleIframeHeightReport?.("godot_ready");
+          return;
+        }
+        if (type === "offer_wine") {
+          handleGodotOfferWine(payload);
+          return;
+        }
+        if (type === "telemetry") {
+          try {
+            window.parent?.postMessage?.({
+              source: "BC_MSG",
+              v: 1,
+              type: "event_log",
+              payload: {
+                v: 2,
+                engineVersion: "godot_shift",
+                source: "godot_shift",
+                eventType: payload.eventType || "godot_telemetry",
+                ...payload,
+                mode: window.bcMode || "demo",
+                demo: !!(window.isDemo || window.bcMode === "demo"),
+              },
+            }, window.location.origin);
+          } catch {}
+          return;
+        }
+        if (type === "shift_complete") {
+          window.__BC_GODOT_SHIFT_SUMMARY__ = payload;
+          try {
+            const totalAP = Math.max(
+              0,
+              Math.round(Number(payload.ap || 0)),
+            );
+            const authorityState = loadV2ProgressionAuthorityState?.() || {};
+            saveV2ProgressionAuthorityState?.({
+              ...authorityState,
+              totalAP: Math.max(Number(authorityState.totalAP || 0), totalAP),
+              updatedAt: Date.now(),
+            });
+            const bottleState = loadV2BottleRewardState?.() || {};
+            saveV2BottleRewardState?.({
+              ...bottleState,
+              totalAP: Math.max(Number(bottleState.totalAP || 0), totalAP),
+              updatedAt: Date.now(),
+            });
+          } catch {}
+          try {
+            window.parent?.postMessage?.({
+              source: "BC_MSG",
+              v: 1,
+              type: "event_log",
+              payload: {
+                v: 2,
+                engineVersion: "godot_shift",
+                source: "godot_shift",
+                eventType: "shift_complete",
+                ...payload,
+                mode: window.bcMode || "demo",
+                demo: !!(window.isDemo || window.bcMode === "demo"),
+              },
+            }, window.location.origin);
+          } catch {}
+        }
+      }
+
       function startV2HarnessEncounter(options = {}) {
         const api = getV2HarnessApi();
         if (!api) return false;
         const requestedEncounterId = String(options.encounterId || "");
+        const fromGodot = !!(options.fromGodot || isGodotShiftWineOfferActive());
+        const skipPreview = !!(options.skipPreview || fromGodot);
         window.__BC_V2_DEMO_FINAL_SUMMARY_ACTIVE__ = false;
+        if (fromGodot) {
+          window.__BC_V2_FROM_GODOT__ = true;
+        }
         const state = getV2DemoSessionState();
         const startingFresh = !!(options.resetSession || !state.active);
         if (startingFresh) {
@@ -25989,7 +26331,7 @@ function ensureProgLoaded() {
           state.introEncounterId = null;
         }
         applyPlaySurfaceMode("encounter_only");
-        notifyParentDemoPlayStarted("v2_harness_start");
+        notifyParentDemoPlayStarted(fromGodot ? "v2_from_godot" : "v2_harness_start");
         resetNavState();
         showScreen("screenPlay");
         const encounterPanel = document.getElementById("encounterPanel");
@@ -26021,7 +26363,11 @@ function ensureProgLoaded() {
           if (startingFresh) {
             state.introEncounterId = snapshot?.encounterId || null;
           }
-          renderV2EncounterPreview(snapshot, "");
+          if (skipPreview) {
+            renderV2HarnessPlay(snapshot, "");
+          } else {
+            renderV2EncounterPreview(snapshot, "");
+          }
         } catch (error) {
           const stepContent = document.getElementById("stepContent");
           if (stepContent) {
@@ -26033,6 +26379,14 @@ function ensureProgLoaded() {
                 </div>
               </section>
             `;
+          }
+          if (fromGodot) {
+            postMessageToGodot("v2_encounter_result", {
+              ok: false,
+              error: error?.message || "v2_start_failed",
+              authorityDelta: 0,
+            });
+            returnToGodotShiftFloor();
           }
           return false;
         }
@@ -26105,6 +26459,10 @@ function ensureProgLoaded() {
         btn.__bcBound = false;
         bindInput(btn, async () => {
           resetNavState();
+          if (shouldUseGodotShiftFloor()) {
+            startGodotShiftFloor({ reason: "begin_premium_entry" });
+            return;
+          }
           if (shouldUseV2Harness()) {
             startV2HarnessWhenReady({ resetSession: true });
             return;
@@ -26152,6 +26510,10 @@ function ensureProgLoaded() {
             btnGoPremium.__bcBound = false;
             bindInput(btnGoPremium, () => {
               resetNavState();
+              if (shouldUseGodotShiftFloor()) {
+                startGodotShiftFloor({ reason: "demo_begin" });
+                return;
+              }
               if (shouldUseV2Harness()) {
                 startV2HarnessWhenReady({ resetSession: true });
                 return;
@@ -26447,6 +26809,10 @@ function ensureProgLoaded() {
 
           bindInput(btnGoDemo, () => {
             resetNavState();
+            if (shouldUseGodotShiftFloor()) {
+              startGodotShiftFloor({ reason: "demo_begin" });
+              return;
+            }
             if (shouldUseV2Harness()) {
               startV2HarnessWhenReady({ resetSession: true });
               return;
@@ -26472,6 +26838,10 @@ function ensureProgLoaded() {
 
               bindInput(btnGoPremium, () => {
                 resetNavState();
+                if (shouldUseGodotShiftFloor()) {
+                  startGodotShiftFloor({ reason: "demo_begin" });
+                  return;
+                }
                 if (shouldUseV2Harness()) {
                   startV2HarnessWhenReady({ resetSession: true });
                   return;
@@ -26691,6 +27061,17 @@ function ensureProgLoaded() {
           }
           resetNavState();
           showScreen("screenWelcome");
+        });
+
+        const btnBackHomeFromGodot = document.getElementById("btnBackHomeFromGodot");
+        bindInput(btnBackHomeFromGodot, () => {
+          window.__BC_GODOT_SHIFT_ACTIVE__ = false;
+          window.__BC_GODOT_WINE_OFFER__ = null;
+          document.documentElement.dataset.bcGodotShift = "";
+          document.documentElement.dataset.bcGodotMobile = "";
+          notifyParentGodotShiftActive?.(false);
+          resetNavState();
+          showScreen("screenHome");
         });
 
         bindInput(btnBackHomeFromHistory, () => {

@@ -9806,6 +9806,35 @@ window.addEventListener("message", (event) => {
   if (
     data &&
     data.source === "BC_MSG" &&
+    data.type === "godot_shift_active" &&
+    event.origin === window.location.origin
+  ) {
+    const demoFrame = document.getElementById("gameRootDemoFrame");
+    if (demoFrame && event.source === demoFrame.contentWindow) {
+      const active = !!data.active;
+      document.documentElement.dataset.bcGodotDemo = active ? "true" : "";
+      window.__BC_DEMO_IFRAME_LAST_SCREEN__ = active
+        ? "screenGodotShift"
+        : (window.__BC_DEMO_IFRAME_LAST_SCREEN__ || null);
+      if (active) {
+        const rect = demoFrame.getBoundingClientRect();
+        const width = Math.max(rect.width || demoFrame.clientWidth || 960, 640);
+        const landscapeHeight = Math.round((width * 9) / 16) + 64;
+        const maxHeight = document.documentElement?.dataset?.bcMobileEnv === "true" ? 6000 : 920;
+        const nextHeight = Math.max(420, Math.min(maxHeight, landscapeHeight));
+        demoFrame.dataset.bcFrameHeight = String(nextHeight);
+        demoFrame.style.setProperty("width", "100%", "important");
+        demoFrame.style.setProperty("height", `${nextHeight}px`, "important");
+        demoFrame.style.setProperty("max-width", "100%", "important");
+        demoFrame.style.opacity = "1";
+      }
+      try { renderAppChrome?.(); } catch {}
+    }
+    return;
+  }
+  if (
+    data &&
+    data.source === "BC_MSG" &&
     data.v === 1 &&
     data.type === "demo_play_started" &&
     event.origin === window.location.origin
@@ -9837,6 +9866,9 @@ window.addEventListener("message", (event) => {
   const isV2Demo =
     String(data.mode || "").toLowerCase() === "demo" &&
     document.documentElement?.dataset?.bcV2Demo === "true";
+  const isGodotShift =
+    String(data.screenId || "") === "screenGodotShift" ||
+    document.documentElement?.dataset?.bcGodotDemo === "true";
   const isDemoWelcome =
     String(data.mode || "").toLowerCase() === "demo" &&
     String(data.screenId || "") === "screenWelcome";
@@ -9844,7 +9876,8 @@ window.addEventListener("message", (event) => {
     isV2Demo &&
     isDemoWelcome &&
     isDemoPlayStartRecent(1200) &&
-    window.__BC_DEMO_IFRAME_LAST_SCREEN__ === "screenPlay";
+    (window.__BC_DEMO_IFRAME_LAST_SCREEN__ === "screenPlay" ||
+      window.__BC_DEMO_IFRAME_LAST_SCREEN__ === "screenGodotShift");
   if (isStaleDemoWelcomeAfterPlay) {
     setDebug({
       step: "demo.height_ignored_after_play",
@@ -9860,11 +9893,15 @@ window.addEventListener("message", (event) => {
       try { renderAppChrome?.(); } catch {}
     }
   }
-  const maxHeight = isMobile ? 6000 : 860;
+  const maxHeight = isMobile ? 6000 : isGodotShift ? 920 : 860;
   const minHeight = isDemoWelcome
     ? (isMobile ? 220 : 200)
-    : (isMobile ? 320 : 360);
-  const measuredHeight = Math.max(minHeight, Math.min(maxHeight, h + (isMobile && isV2Demo ? 0 : isMobile ? 12 : 24)));
+    : (isGodotShift ? (isMobile ? 360 : 420) : (isMobile ? 320 : 360));
+  let measuredHeight = Math.max(minHeight, Math.min(maxHeight, h + (isMobile && isV2Demo ? 0 : isMobile ? 12 : 24)));
+  if (isGodotShift && !isMobile) {
+    const width = Math.max(frame.getBoundingClientRect().width || frame.clientWidth || 960, 640);
+    measuredHeight = Math.max(measuredHeight, Math.min(maxHeight, Math.round((width * 9) / 16) + 64));
+  }
   const viewportHeight = Math.ceil(window.visualViewport?.height || window.innerHeight || 0);
   const clamped = isMobile && isV2Demo
     ? (isDemoWelcome ? measuredHeight : Math.max(measuredHeight, 420))
@@ -9873,6 +9910,10 @@ window.addEventListener("message", (event) => {
   if (Math.abs(previousHeight - clamped) < 2) return;
   frame.dataset.bcFrameHeight = String(clamped);
   frame.style.setProperty("height", clamped + "px", "important");
+  if (isGodotShift) {
+    document.documentElement.dataset.bcGodotDemo = "true";
+    frame.style.setProperty("width", "100%", "important");
+  }
 });
 
 // ------------------------------------------------------------

@@ -7631,3 +7631,118 @@ html, body{ height:100%; }
     transform: translate(-50%, -50%) !important;
   }
 }
+
+/* ---- Godot shift floor embed ---- */
+.screen-godot-shift{
+  background:#050505;
+  padding:0 !important;
+  width:100% !important;
+  max-width:none !important;
+  margin:0 !important;
+}
+#screenGodotShift.screen.active{
+  display:flex !important;
+  flex-direction:column;
+  min-height:100%;
+}
+.godot-shift-shell{
+  position:relative;
+  width:100%;
+  flex:1 1 auto;
+  min-height:min(100dvh, 100%);
+  display:flex;
+  flex-direction:column;
+  background:#050505;
+  color:#f4f1ea;
+}
+.godot-shift-chrome{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:10px 14px;
+  background:rgba(0,0,0,.72);
+  border-bottom:1px solid rgba(255,255,255,.08);
+  z-index:2;
+  flex:0 0 auto;
+}
+.godot-shift-brand{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  min-width:0;
+}
+.godot-shift-brand strong{
+  font-size:14px;
+  letter-spacing:.04em;
+}
+.godot-shift-brand span{
+  font-size:12px;
+  opacity:.72;
+}
+.godot-shift-stage{
+  position:relative;
+  flex:1 1 auto;
+  min-height:280px;
+  width:100%;
+  background:#000;
+  overflow:hidden;
+  /* Desktop / embedded: keep the floor horizontal (16:9). */
+  aspect-ratio:16 / 9;
+  max-height:100%;
+}
+#godotShiftFrame{
+  display:block;
+  width:100%;
+  height:100%;
+  border:0;
+  background:#000;
+  touch-action:none;
+  pointer-events:auto;
+  position:relative;
+  z-index:0;
+}
+.godot-shift-status{
+  position:absolute;
+  inset:0;
+  display:grid;
+  place-items:center;
+  background:rgba(0,0,0,.72);
+  color:#f4f1ea;
+  font-size:14px;
+  letter-spacing:.04em;
+  z-index:3;
+  pointer-events:auto;
+}
+.godot-shift-status[hidden]{
+  display:none !important;
+  pointer-events:none !important;
+}
+html[data-bc-godot-shift="true"] #screenGodotShift{
+  background:#050505;
+}
+/* Real mobile portrait only — not a narrow desktop demo iframe. */
+html[data-bc-godot-mobile="1"] .godot-shift-stage{
+  aspect-ratio:auto;
+  max-height:none;
+}
+@media (orientation: portrait){
+  html[data-bc-godot-mobile="1"] .godot-shift-shell{
+    min-height:100dvh;
+  }
+  html[data-bc-godot-mobile="1"] .godot-shift-stage{
+    position:absolute;
+    top:50%;
+    left:50%;
+    width:100dvh;
+    height:100dvw;
+    transform:translate(-50%, -50%) rotate(90deg);
+    transform-origin:center center;
+  }
+  html[data-bc-godot-mobile="1"] .godot-shift-chrome{
+    position:absolute;
+    top:0;
+    left:0;
+    right:0;
+  }
+}
