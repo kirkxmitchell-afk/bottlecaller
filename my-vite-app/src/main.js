@@ -9238,19 +9238,19 @@ function unmountDemoGame(reason = "") {
 
 function destroyDemoIframe(reason = "") {
   const reasonText = String(reason || "");
-  if (
-    isV2DemoPlayActive() &&
-    (
-      reasonText.includes("routeDemo") ||
-      reasonText.includes("openPremiumBeginScreen")
-    )
-  ) {
-    console.warn("[BC] destroyDemoIframe suppressed during active V2 demo play", reason);
+  const forceDestroy =
+    reasonText.includes("logout") ||
+    reasonText.includes("nav_back") ||
+    reasonText.includes("hardReset") ||
+    reasonText.includes("user_exit");
+  if (isV2DemoPlayActive() && !forceDestroy) {
+    console.warn("[BC] destroyDemoIframe suppressed during active V2/Godot demo play", reason);
     setDebug({
       step: "demo.destroy_suppressed",
       reason,
       time: new Date().toISOString(),
       lastScreen: window.__BC_DEMO_IFRAME_LAST_SCREEN__ || null,
+      godot: isGodotShiftDemoActive(),
     });
     return;
   }
@@ -9259,6 +9259,7 @@ function destroyDemoIframe(reason = "") {
   const root = document.getElementById("gameRootDemo");
   if (root) root.innerHTML = "";
   window.__BC_DEMO_IFRAME_LAST_SCREEN__ = null;
+  document.documentElement.dataset.bcGodotDemo = "";
   try { currentIframeMode = null; } catch {}
 }
 
@@ -9370,11 +9371,20 @@ function forceRemountForModeSwitch(nextMode) {
   setDebug({ step: "game.iframe.forceRemount", nextMode, v: currentIframeVersion, time: new Date().toISOString() });
 }
 
+function isGodotShiftDemoActive() {
+  return (
+    document.documentElement?.dataset?.bcGodotDemo === "true" ||
+    window.__BC_DEMO_IFRAME_LAST_SCREEN__ === "screenGodotShift"
+  );
+}
+
 function isV2DemoPlayActive() {
   if (!document.getElementById("gameRootDemoFrame")) return false;
+  if (isGodotShiftDemoActive()) return true;
   return (
     window.__BC_DEMO_IFRAME_LAST_SCREEN__ === "screenPlay" ||
-    Date.now() - Number(window.__BC_DEMO_PLAY_STARTED_AT__ || 0) < 30000
+    // Godot .pck can take several minutes; keep the play latch alive long enough.
+    Date.now() - Number(window.__BC_DEMO_PLAY_STARTED_AT__ || 0) < 15 * 60 * 1000
   );
 }
 
@@ -9829,6 +9839,9 @@ window.addEventListener("message", (event) => {
         ? "screenGodotShift"
         : (window.__BC_DEMO_IFRAME_LAST_SCREEN__ || null);
       if (active) {
+        // Keep the play latch fresh for the whole Godot download/boot window.
+        window.__BC_DEMO_PLAY_STARTED_AT__ = Date.now();
+        demoFrame.dataset.bcDemoPlayStarted = "true";
         const rect = demoFrame.getBoundingClientRect();
         const width = Math.max(rect.width || demoFrame.clientWidth || 960, 640);
         const landscapeHeight = Math.round((width * 9) / 16) + 64;
@@ -9855,7 +9868,11 @@ window.addEventListener("message", (event) => {
     if (demoFrame && event.source === demoFrame.contentWindow) {
       window.__BC_DEMO_PLAY_STARTED_AT__ = Date.now();
       window.__BC_DEMO_START_ACK_AT__ = Date.now();
-      window.__BC_DEMO_IFRAME_LAST_SCREEN__ = "screenPlay";
+      if (document.documentElement.dataset.bcGodotDemo === "true") {
+        window.__BC_DEMO_IFRAME_LAST_SCREEN__ = "screenGodotShift";
+      } else if (window.__BC_DEMO_IFRAME_LAST_SCREEN__ !== "screenGodotShift") {
+        window.__BC_DEMO_IFRAME_LAST_SCREEN__ = "screenPlay";
+      }
       document.documentElement.dataset.bcV2Demo = "true";
       demoFrame.dataset.bcDemoPlayStarted = "true";
       demoFrame.style.opacity = "1";
@@ -21378,6 +21395,24 @@ function routeDemoShellNoAuth() {
   const useV2Harness = true;
   document.documentElement.dataset.bcV2Demo = "true";
   persistV2DemoRequest();
+
+  // Never remount/destroy while Godot or V2 demo play is in progress.
+  // Anonymous auth callbacks and boot re-routes used to wipe the iframe mid-load.
+  if (isV2DemoPlayActive()) {
+    showScreen("screenGameDemo");
+    setPremiumOverlayActive(false);
+    destroyPremiumIframe("routeDemoShellNoAuth:v2_play_active");
+    document.getElementById("btnDemoPremium")?.classList.add("hidden");
+    document.getElementById("btnDemoExit")?.classList.add("hidden");
+    setDebug({
+      step: "route.demo_shell.remount_suppressed",
+      time: new Date().toISOString(),
+      lastScreen: window.__BC_DEMO_IFRAME_LAST_SCREEN__ || null,
+      godot: isGodotShiftDemoActive(),
+    });
+    return;
+  }
+
   showScreen("screenGameDemo");
   setPremiumOverlayActive(false);
   destroyPremiumIframe("routeDemoShellNoAuth");
@@ -23177,6 +23212,16 @@ supabase.auth.onAuthStateChange((event, session) => {
         appState.restaurant = null;
         appState.activeRestaurantId = null;
         appMode = "demo";
+
+        // Do not tear down an in-progress Godot/V2 demo when auth simply reports null
+        // (anonymous demo users, token refresh edge cases, visibility resumes).
+        if (isV2DemoPlayActive()) {
+          console.warn("[AUTH] session null ignored during active demo/godot play");
+          hideAllLogoutButtons();
+          hideDemoButtonsOnLogin();
+          applyAuthUi();
+          return;
+        }
 
         // Destroy all premium/demo shells
         try { document.querySelectorAll("iframe").forEach((f) => f.remove()); } catch {}

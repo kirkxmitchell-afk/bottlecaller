@@ -26167,16 +26167,25 @@ function ensureProgLoaded() {
         const payload = data?.payload && typeof data.payload === "object" ? data.payload : {};
         if (type === "godot_load_start") {
           setGodotShiftStatus("Downloading floor assets…", true);
+          notifyParentDemoPlayStarted?.("godot_load_start");
+          notifyParentGodotShiftActive?.(true);
           return true;
         }
         if (type === "godot_load_progress") {
           const pct = Math.max(0, Math.min(100, Number(payload.pct) || 0));
           setGodotShiftStatus(`Loading floor… ${pct}%`, true);
+          // Heartbeat so parent auth/route logic won't tear down mid-download.
+          if (pct === 0 || pct === 100 || pct % 10 === 0) {
+            notifyParentDemoPlayStarted?.(`godot_load_${pct}`);
+            notifyParentGodotShiftActive?.(true);
+          }
           return true;
         }
         if (type === "godot_load_ready") {
           setGodotShiftStatus("", false);
           focusGodotShiftCanvas();
+          notifyParentDemoPlayStarted?.("godot_load_ready");
+          notifyParentGodotShiftActive?.(true);
           return true;
         }
         if (type === "godot_load_error") {
