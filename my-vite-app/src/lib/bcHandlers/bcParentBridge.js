@@ -57,7 +57,7 @@ export function mountBcParentBridge({
       console.warn("[PARENT] BC_MSG blocked: live session is null", { type });
       notifyLoggedOut(event);
       try { destroyPremiumIframe("parent_no_session_msg_gate"); } catch {}
-      try { destroyDemoIframe("parent_no_session_msg_gate"); } catch {}
+      // Never destroy demo/Godot — anonymous demo has no session by design.
       return null;
     }
     appState.session = liveSession;
