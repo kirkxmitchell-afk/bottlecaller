@@ -1632,20 +1632,29 @@ window.__BC_PARENT_SMOKE_TEST__ = function __BC_PARENT_SMOKE_TEST__() {
   window.__BC_AUTH_WATCHDOG__ = true;
 
   function killPremium(reason) {
+    const keepDemo =
+      !!window.__BC_GODOT_DEMO_LOCK__ ||
+      readGodotSessionLock?.() ||
+      document.documentElement?.dataset?.bcGodotDemo === "true" ||
+      document.documentElement?.dataset?.bcV2Demo === "true" ||
+      !!document.getElementById("gameRootDemoFrame");
+
     try { document.getElementById("premiumRootFrame")?.remove(); } catch {}
     try {
       const r = document.getElementById("premiumRoot");
       if (r) r.innerHTML = "";
     } catch {}
-    try {
-      const d = document.getElementById("gameRootDemo");
-      if (d) d.innerHTML = "";
-    } catch {}
+    if (!keepDemo) {
+      try {
+        const d = document.getElementById("gameRootDemo");
+        if (d) d.innerHTML = "";
+      } catch {}
+    }
     try {
       const b = document.getElementById("btnLogout");
       if (b) b.style.display = "none";
     } catch {}
-    try { showScreen("screenHome"); } catch {}
+    try { showScreen(keepDemo ? "screenGameDemo" : "screenHome"); } catch {}
 
     window.__BC_PENDING_START_DRILL__ = null;
     window.BC_PENDING_START_DRILL = null;
@@ -10056,10 +10065,18 @@ window.addEventListener("message", (event) => {
     const demoFrame = document.getElementById("gameRootDemoFrame");
     if (demoFrame && event.source === demoFrame.contentWindow) {
       const active = !!data.active;
-      document.documentElement.dataset.bcGodotDemo = active ? "true" : "";
+      // Wine-offer handoff sets active=false temporarily; keep the Godot demo
+      // latch so mobile auth/route logic cannot eject mid-encounter.
+      if (active || readGodotSessionLock() || window.__BC_GODOT_DEMO_LOCK__) {
+        document.documentElement.dataset.bcGodotDemo = "true";
+      } else {
+        document.documentElement.dataset.bcGodotDemo = "";
+      }
       window.__BC_DEMO_IFRAME_LAST_SCREEN__ = active
         ? "screenGodotShift"
-        : (window.__BC_DEMO_IFRAME_LAST_SCREEN__ || null);
+        : (String(data.screenId || "") === "screenPlay"
+          ? "screenPlay"
+          : (window.__BC_DEMO_IFRAME_LAST_SCREEN__ || null));
       if (active) {
         armGodotDemoLock(data.reason || "godot_shift_active");
         // Keep the play latch fresh for the whole Godot download/boot window.

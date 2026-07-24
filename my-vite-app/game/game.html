@@ -26137,8 +26137,11 @@ function ensureProgLoaded() {
               v: 1,
               type: "godot_shift_active",
               active: !!active,
+              // Wine offer temporarily leaves the floor UI but must NOT clear the
+              // parent Godot lock (that was ejecting mobile back to login).
+              clearLock: false,
               mode: window.bcMode || "demo",
-              screenId: active ? "screenGodotShift" : null,
+              screenId: active ? "screenGodotShift" : (window.__BC_GODOT_WINE_OFFER__?.active ? "screenPlay" : null),
             },
             window.location.origin,
           );
@@ -26230,6 +26233,10 @@ function ensureProgLoaded() {
         }
         if (type === "godot_load_ready") {
           setGodotShiftStatus("", false);
+          try {
+            const frame = getGodotShiftFrame();
+            if (frame) frame.dataset.bcGodotReady = "1";
+          } catch {}
           window.__BC_GODOT_BACK_SHIELD_UNTIL__ = Date.now() + 8000;
           focusGodotShiftCanvas();
           notifyParentDemoPlayStarted?.("godot_load_ready");
@@ -26245,14 +26252,25 @@ function ensureProgLoaded() {
         return false;
       }
 
-      function ensureGodotShiftIframe() {
+      function ensureGodotShiftIframe(options = {}) {
         const frame = getGodotShiftFrame();
         if (!frame) return null;
         ensureGodotShiftListener();
         const targetSrc = getGodotShiftEmbedUrl();
-        const onReady = () => {
-          // HTML/shell loaded; keep status until godot_load_ready (pck can take minutes).
-          setGodotShiftStatus("Downloading floor assets…", true);
+        const resumeOnly = !!options.resumeOnly;
+        const alreadyMounted =
+          frame.dataset.bcMounted === "1" &&
+          frame.getAttribute("src") !== "about:blank" &&
+          frame.dataset.bcSrc === targetSrc;
+        const alreadyReady = frame.dataset.bcGodotReady === "1";
+
+        const onShellReady = () => {
+          // First boot only — never flash this overlay when resuming after wine.
+          if (!alreadyReady) {
+            setGodotShiftStatus("Downloading floor assets…", true);
+          } else {
+            setGodotShiftStatus("", false);
+          }
           postMessageToGodot("host_hello", {
             mode: window.bcMode || "demo",
             demo: !!(window.isDemo || window.bcMode === "demo"),
@@ -26260,14 +26278,29 @@ function ensureProgLoaded() {
           window.setTimeout(() => focusGodotShiftCanvas(), 250);
           window.setTimeout(() => focusGodotShiftCanvas(), 1200);
         };
-        if (!frame.dataset.bcMounted || frame.getAttribute("src") === "about:blank" || frame.dataset.bcSrc !== targetSrc) {
+
+        if (!alreadyMounted) {
+          frame.dataset.bcGodotReady = "";
           setGodotShiftStatus("Loading floor…", true);
           frame.dataset.bcMounted = "1";
           frame.dataset.bcSrc = targetSrc;
-          frame.addEventListener("load", onReady, { once: true });
+          frame.addEventListener("load", onShellReady, { once: true });
           frame.src = targetSrc;
+        } else if (resumeOnly || alreadyReady) {
+          // Godot is already running behind the V2 wine screen — just resume.
+          setGodotShiftStatus("", false);
+          postMessageToGodot("host_hello", {
+            mode: window.bcMode || "demo",
+            demo: !!(window.isDemo || window.bcMode === "demo"),
+          });
+          postMessageToGodot("resume_shift", {
+            mode: window.bcMode || "demo",
+            demo: !!(window.isDemo || window.bcMode === "demo"),
+          });
+          window.setTimeout(() => focusGodotShiftCanvas(), 50);
+          window.setTimeout(() => focusGodotShiftCanvas(), 250);
         } else {
-          onReady();
+          onShellReady();
         }
         return frame;
       }
@@ -26300,7 +26333,7 @@ function ensureProgLoaded() {
         } catch {}
         showScreen("screenGodotShift");
         notifyParentGodotShiftActive(true);
-        ensureGodotShiftIframe();
+        ensureGodotShiftIframe({ resumeOnly: false });
         scheduleIframeHeightReport?.("godot_shift_start");
         return true;
       }
@@ -26310,11 +26343,13 @@ function ensureProgLoaded() {
 
       function returnToGodotShiftFloor() {
         window.__BC_GODOT_WINE_OFFER__ = null;
+        window.__BC_GODOT_SHIFT_ACTIVE__ = true;
         document.documentElement.dataset.bcGodotMobile = isGodotMobileHost() ? "1" : "0";
         document.documentElement.dataset.bcGodotShift = "true";
+        setGodotShiftStatus("", false);
         showScreen("screenGodotShift");
         notifyParentGodotShiftActive(true);
-        const frame = ensureGodotShiftIframe();
+        const frame = ensureGodotShiftIframe({ resumeOnly: true });
         focusGodotShiftCanvas();
         try { frame?.contentWindow?.focus?.(); } catch {}
         scheduleIframeHeightReport?.("godot_shift_return");
@@ -26391,6 +26426,10 @@ function ensureProgLoaded() {
         const payload = data?.payload && typeof data.payload === "object" ? data.payload : {};
         if (type === "godot_ready") {
           window.__BC_GODOT_BACK_SHIELD_UNTIL__ = Date.now() + 8000;
+          try {
+            const frame = getGodotShiftFrame();
+            if (frame) frame.dataset.bcGodotReady = "1";
+          } catch {}
           setGodotShiftStatus("", false);
           focusGodotShiftCanvas();
           postMessageToGodot("host_hello", {
