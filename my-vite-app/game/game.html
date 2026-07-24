@@ -8434,11 +8434,19 @@ function ensureProgLoaded() {
               return;
             }
             if (msg.type === "auth_state" && msg.authed === false) {
+              if (window.__BC_GODOT_SHIFT_ACTIVE__ || document.documentElement?.dataset?.bcGodotShift === "true") {
+                console.warn("[IFRAME] auth_state=false ignored during Godot shift");
+                return;
+              }
               console.warn("[IFRAME] auth_state=false -> shutting down");
               window.location.replace("game.html?mode=demo&demo=1");
               return;
             }
             if (msg.type === "parent_logged_out") {
+              if (window.__BC_GODOT_SHIFT_ACTIVE__ || document.documentElement?.dataset?.bcGodotShift === "true") {
+                console.warn("[IFRAME] parent_logged_out ignored during Godot shift");
+                return;
+              }
               console.warn("[IFRAME] parent logged out -> shutting down");
               window.location.replace("game.html?mode=demo&demo=1");
               return;
@@ -11028,6 +11036,10 @@ function ensureProgLoaded() {
         if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
 
         if (msg.type === "auth_state" && msg.authed === false) {
+          if (window.__BC_GODOT_SHIFT_ACTIVE__ || document.documentElement?.dataset?.bcGodotShift === "true") {
+            console.warn("[IFRAME] auth_state=false ignored during Godot shift");
+            return;
+          }
           console.warn("[IFRAME] auth_state=false -> shutting down");
           try { localStorage.removeItem("bc_ctx"); } catch {}
           window.location.replace("/game/game.html?mode=demo&demo=1");
@@ -11035,6 +11047,10 @@ function ensureProgLoaded() {
         }
 
         if (msg.type === "parent_logged_out") {
+          if (window.__BC_GODOT_SHIFT_ACTIVE__ || document.documentElement?.dataset?.bcGodotShift === "true") {
+            console.warn("[IFRAME] parent_logged_out ignored during Godot shift");
+            return;
+          }
           console.warn("[IFRAME] parent logged out -> shutting down");
           try { localStorage.removeItem("bc_ctx"); } catch {}
           window.location.replace("/game/game.html?mode=demo&demo=1");

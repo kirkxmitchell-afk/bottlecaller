@@ -410,7 +410,6 @@ export function mountBcParentBridge({
         console.warn("[PARENT] BC_MSG blocked: hard logged out", type);
         notifyLoggedOut(event);
         try { destroyPremiumIframe("hard_logged_out_msg_gate"); } catch {}
-        try { destroyDemoIframe("hard_logged_out_msg_gate"); } catch {}
         return;
       }
 
@@ -418,12 +417,20 @@ export function mountBcParentBridge({
         console.warn("[PARENT] BC_MSG blocked: logout lock active", type);
         notifyLoggedOut(event);
         try { destroyPremiumIframe("logout_lock"); } catch {}
-        try { destroyDemoIframe("logout_lock"); } catch {}
         return;
       }
 
-      // allow logout requests even if session is dead
+      // allow logout requests even if session is dead — but never during Godot/demo play
       if (type === "logout" || type === "bc_logout_request") {
+        const godotOrDemo =
+          typeof window.__BC_GODOT_DEMO_LOCK__ !== "undefined" && window.__BC_GODOT_DEMO_LOCK__ ||
+          document.documentElement?.dataset?.bcGodotDemo === "true" ||
+          document.documentElement?.dataset?.bcV2Demo === "true" ||
+          !!document.getElementById("gameRootDemoFrame");
+        if (godotOrDemo) {
+          console.warn("[PARENT] logout request ignored during Godot/demo play", type);
+          return;
+        }
         await handlers[type]?.({ msg, event });
         return;
       }

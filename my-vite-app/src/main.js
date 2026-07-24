@@ -301,19 +301,22 @@ window.addEventListener("orientationchange", syncBottleCallerViewportEnv, { pass
 
 window.addEventListener("storage", (e) => {
   if (e.key === "__BC_LOGOUT_LOCK__" && e.newValue) {
-    // Never let a cross-tab logout yank an in-progress Godot/demo floor.
+    // Never hard-redirect during Godot/demo — this was ejecting players to /?loggedOut=1.
     if (
       readGodotSessionLock?.() ||
       window.__BC_GODOT_DEMO_LOCK__ ||
       document.documentElement?.dataset?.bcGodotDemo === "true" ||
-      document.getElementById("gameRootDemoFrame")
+      document.documentElement?.dataset?.bcV2Demo === "true" ||
+      document.getElementById("gameRootDemoFrame") ||
+      appMode === "demo" ||
+      isV2DemoRequested?.()
     ) {
       console.warn("[CROSS-TAB] logout lock ignored during Godot/demo play");
       return;
     }
-    console.warn("[CROSS-TAB] logout lock detected -> forcing logout UI");
+    console.warn("[CROSS-TAB] logout lock detected -> soft auth route (no hard reload)");
     try { window.__BC_FORCE_LOGGED_OUT__ = true; } catch {}
-    try { window.location.replace("/?loggedOut=1&ts=" + Date.now()); } catch {}
+    try { routeAuth?.(); } catch {}
   }
 });
 
@@ -5816,15 +5819,14 @@ if (!window.__BC_PARENT_BRIDGE__) {
         console.warn("[PARENT] BC_MSG blocked: hard logged out", type);
         notifyLoggedOut();
         try { destroyPremiumIframe("hard_logged_out_msg_gate"); } catch {}
-        try { destroyDemoIframe("hard_logged_out_msg_gate"); } catch {}
+        // Never destroy the demo/Godot floor from the anonymous-session gate.
         return;
       }
 
       if (window.__BC_LOGOUT_LOCK__) {
         console.warn("[PARENT] BC_MSG blocked: logout lock active", type);
         notifyLoggedOut();
-        try { destroyPremiumIframe("logout_lock"); } catch {}
-        try { destroyDemoIframe("logout_lock"); } catch {}
+        try { destroyPremiumIframe("logout_lock_msg_gate"); } catch {}
         return;
       }
 
@@ -21188,7 +21190,22 @@ function isLoggingOut() {
 }
 
 function isHardLoggedOut() {
-  return !!window.__BC_LOGGING_OUT__ || !appState?.session;
+  // Logging-out latch only. Anonymous demo users have no session by design —
+  // treating that as "hard logged out" was destroying the Godot floor when
+  // ordinary BC_MSG traffic arrived at load-complete.
+  if (window.__BC_LOGGING_OUT__ === true) return true;
+  if (
+    appMode === "demo" ||
+    isV2DemoRequested?.() ||
+    readGodotSessionLock?.() ||
+    window.__BC_GODOT_DEMO_LOCK__ ||
+    document.documentElement?.dataset?.bcGodotDemo === "true" ||
+    document.documentElement?.dataset?.bcV2Demo === "true" ||
+    !!document.getElementById("gameRootDemoFrame")
+  ) {
+    return false;
+  }
+  return !appState?.session;
 }
 
 function hardResetUI(reason = "") {
