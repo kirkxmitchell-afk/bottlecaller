@@ -70,12 +70,35 @@ export function createAppMessageToGodot(type: string, payload: Record<string, un
   };
 }
 
-export function createGodotShiftBridgeApi() {
+/** Local `/godot-shift` or an absolute CDN/R2 base (no trailing slash). */
+export function normalizeGodotShiftBase(raw?: string | null): string {
+  const value = String(raw || "/godot-shift").trim() || "/godot-shift";
+  return value.replace(/\/$/, "");
+}
+
+export function resolveGodotShiftOrigin(base: string, fallbackOrigin = ""): string {
+  const normalized = normalizeGodotShiftBase(base);
+  if (/^https?:\/\//i.test(normalized)) {
+    try {
+      return new URL(normalized).origin;
+    } catch {
+      return fallbackOrigin || "";
+    }
+  }
+  return fallbackOrigin || "";
+}
+
+export function createGodotShiftBridgeApi(options: { baseUrl?: string | null } = {}) {
+  const baseUrl = normalizeGodotShiftBase(options.baseUrl);
   return {
     GODOT_GUEST_ORDER,
     V2_DEMO_ENCOUNTER_ORDER,
     GODOT_GUEST_TO_V2_ENCOUNTER,
     V2_ENCOUNTER_TO_GODOT_GUEST,
+    baseUrl,
+    origin: resolveGodotShiftOrigin(baseUrl),
+    normalizeGodotShiftBase,
+    resolveGodotShiftOrigin,
     resolveV2EncounterIdFromGodotGuest,
     isGodotBridgeMessage,
     createAppMessageToGodot,

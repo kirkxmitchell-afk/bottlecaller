@@ -16,6 +16,29 @@ Set these environment variables in the Pages project before deploying:
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
+- `VITE_GODOT_SHIFT_BASE` (required for Cloudflare production Godot floor)
+
+### Godot floor assets (Cloudflare 25 MiB limit)
+
+Cloudflare Workers/Pages reject any single static asset over **25 MiB**. The Godot export includes:
+
+- `public/godot-shift/index.pck` (~253 MiB)
+- `public/godot-shift/index.wasm` (~42 MiB)
+
+Those files are kept out of the Workers upload via `.assetsignore` and a post-build strip step. Host them separately (Cloudflare R2 is the usual choice), then set:
+
+```bash
+VITE_GODOT_SHIFT_BASE=https://<your-public-r2-or-cdn-host>/godot-shift
+```
+
+Upload the full contents of `public/godot-shift/` to that location so these URLs resolve:
+
+- `$VITE_GODOT_SHIFT_BASE/index.html`
+- `$VITE_GODOT_SHIFT_BASE/index.js`
+- `$VITE_GODOT_SHIFT_BASE/index.pck`
+- `$VITE_GODOT_SHIFT_BASE/index.wasm`
+
+Local `npm run dev` still serves `/godot-shift` from `public/` without the env var.
 
 For local development:
 

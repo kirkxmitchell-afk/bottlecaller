@@ -26083,6 +26083,28 @@ function ensureProgLoaded() {
         } catch {}
       }
 
+      function getGodotShiftBaseUrl() {
+        const bridge = getGodotShiftBridge();
+        const fromWindow = String(window.__BC_GODOT_SHIFT_BASE__ || "").trim();
+        const fromBridge = String(bridge?.baseUrl || "").trim();
+        const raw = fromWindow || fromBridge || "/godot-shift";
+        return String(raw).replace(/\/$/, "") || "/godot-shift";
+      }
+
+      function getGodotShiftTargetOrigin() {
+        const base = getGodotShiftBaseUrl();
+        if (/^https?:\/\//i.test(base)) {
+          try {
+            return new URL(base).origin;
+          } catch {}
+        }
+        return window.location.origin;
+      }
+
+      function getGodotShiftEmbedUrl() {
+        return `${getGodotShiftBaseUrl()}/index.html?bcEmbed=1`;
+      }
+
       function postMessageToGodot(type, payload = {}) {
         const bridge = getGodotShiftBridge();
         const frame = getGodotShiftFrame();
@@ -26091,7 +26113,7 @@ function ensureProgLoaded() {
           ? bridge.createAppMessageToGodot(type, payload)
           : { source: "BC_APP", v: 1, type, payload, at: Date.now() };
         try {
-          frame.contentWindow.postMessage(message, window.location.origin);
+          frame.contentWindow.postMessage(message, getGodotShiftTargetOrigin());
           return true;
         } catch (error) {
           console.warn("[BC][GODOT] postMessage failed", error);
@@ -26103,7 +26125,10 @@ function ensureProgLoaded() {
         if (window.__BC_GODOT_SHIFT_LISTENER__) return;
         window.__BC_GODOT_SHIFT_LISTENER__ = true;
         window.addEventListener("message", (event) => {
-          if (event.origin !== window.location.origin) return;
+          const frame = getGodotShiftFrame();
+          if (!frame?.contentWindow || event.source !== frame.contentWindow) return;
+          const allowedOrigin = getGodotShiftTargetOrigin();
+          if (event.origin !== allowedOrigin && event.origin !== window.location.origin) return;
           const bridge = getGodotShiftBridge();
           const data = event.data;
           if (!(bridge?.isGodotBridgeMessage?.(data) || (data && data.source === "BC_GODOT"))) return;
@@ -26115,7 +26140,7 @@ function ensureProgLoaded() {
         const frame = getGodotShiftFrame();
         if (!frame) return null;
         ensureGodotShiftListener();
-        const targetSrc = "/godot-shift/index.html?bcEmbed=1";
+        const targetSrc = getGodotShiftEmbedUrl();
         const onReady = () => {
           setGodotShiftStatus("", false);
           postMessageToGodot("host_hello", {
@@ -26128,9 +26153,10 @@ function ensureProgLoaded() {
           }, 250);
           window.setTimeout(() => focusGodotShiftCanvas(), 1200);
         };
-        if (!frame.dataset.bcMounted || frame.getAttribute("src") === "about:blank") {
+        if (!frame.dataset.bcMounted || frame.getAttribute("src") === "about:blank" || frame.dataset.bcSrc !== targetSrc) {
           setGodotShiftStatus("Loading floor…", true);
           frame.dataset.bcMounted = "1";
+          frame.dataset.bcSrc = targetSrc;
           frame.addEventListener("load", onReady, { once: true });
           frame.src = targetSrc;
         } else {

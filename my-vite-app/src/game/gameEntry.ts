@@ -41,6 +41,7 @@ declare global {
     __BC_PROGRESSION__?: any;
     __BC_V2_HARNESS__?: any;
     __BC_GODOT_SHIFT__?: any;
+    __BC_GODOT_SHIFT_BASE__?: string;
   }
 }
 
@@ -121,7 +122,12 @@ function getCtxFromWindow() {
     enabled: v2HarnessEnabled,
     api: createDemoRuntimeV2Api(),
   };
-  window.__BC_GODOT_SHIFT__ = createGodotShiftBridgeApi();
+  window.__BC_GODOT_SHIFT_BASE__ = String(
+    (import.meta as any).env?.VITE_GODOT_SHIFT_BASE || "/godot-shift",
+  ).replace(/\/$/, "") || "/godot-shift";
+  window.__BC_GODOT_SHIFT__ = createGodotShiftBridgeApi({
+    baseUrl: window.__BC_GODOT_SHIFT_BASE__,
+  });
 
   console.log("[BC] EngineBridge installed ✅", window.EngineBridge);
   console.log("[BC] WineBridge installed ✅", window.WineBridge);
