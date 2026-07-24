@@ -223,6 +223,43 @@ function replaceUrlKeepingV2Demo(url) {
 
 rememberV2DemoRequest();
 
+// Permanently block the obsolete hard-logout URL. Old bundles used
+// /?loggedOut=1&ts=… and ghost taps / cached JS can still navigate there.
+(function installLoggedOutNavigationBan() {
+  if (window.__BC_LOGGED_OUT_NAV_BAN__) return;
+  window.__BC_LOGGED_OUT_NAV_BAN__ = true;
+  const isLoggedOutUrl = (url) => {
+    try {
+      const text = String(url || "");
+      if (text.includes("loggedOut=")) return true;
+      const abs = new URL(text, window.location.href);
+      return abs.searchParams.get("loggedOut") === "1";
+    } catch {
+      return String(url || "").includes("loggedOut=");
+    }
+  };
+  try {
+    const originalReplace = window.location.replace.bind(window.location);
+    window.location.replace = (url) => {
+      if (isLoggedOutUrl(url)) {
+        console.warn("[BC] blocked obsolete loggedOut redirect", url);
+        return;
+      }
+      return originalReplace(url);
+    };
+  } catch {}
+  try {
+    const originalAssign = window.location.assign.bind(window.location);
+    window.location.assign = (url) => {
+      if (isLoggedOutUrl(url)) {
+        console.warn("[BC] blocked obsolete loggedOut assign", url);
+        return;
+      }
+      return originalAssign(url);
+    };
+  } catch {}
+})();
+
 function syncBottleCallerViewportEnv() {
   const isMobile = isBottleCallerMobileEnv();
   document.documentElement.dataset.bcMobileEnv = isMobile ? "true" : "false";
@@ -23296,7 +23333,8 @@ try {
   cleanUrl.searchParams.delete("mode");
   cleanUrl.searchParams.delete("demo");
   cleanUrl.searchParams.delete("logout");
-  if (__BC_GODOT_SESSION_RECOVER__) cleanUrl.searchParams.delete("loggedOut");
+  cleanUrl.searchParams.delete("loggedOut");
+  cleanUrl.searchParams.delete("ts");
   replaceUrlKeepingV2Demo(cleanUrl);
 } catch {}
 
@@ -23323,30 +23361,23 @@ let __BC_BOOT_ROUTE_BLOCKED__ = false;
 const __BC_SHOULD_RESUME_DEMO_AFTER_LOGOUT__ =
   __BC_GODOT_SESSION_RECOVER__ || isV2DemoRequested();
 
-if (__BC_BOOT_LOGGED_OUT__ && !__BC_SHOULD_RESUME_DEMO_AFTER_LOGOUT__) {
-  console.warn("[BOOT] loggedOut latch: forcing auth screen, skipping routing");
-  try { appState.session = null; appState.profile = null; } catch {}
-  try { destroyPremiumIframe("boot.loggedOut"); } catch {}
-  try { destroyDemoIframe("boot.loggedOut"); } catch {}
+if (__BC_BOOT_LOGGED_OUT__) {
+  // Obsolete latch from old /?loggedOut=1&ts= redirects. Never force-auth /
+  // tear down the demo from this URL — that was ejecting the Godot floor.
+  console.warn("[BOOT] stripping obsolete loggedOut latch (no force-auth)");
   try {
     const u = new URL(location.href);
     u.searchParams.delete("loggedOut");
+    u.searchParams.delete("ts");
     u.searchParams.delete("mode");
     u.searchParams.delete("demo");
     replaceUrlKeepingV2Demo(u);
   } catch {}
-  try { routeAuth(); } catch {}
-  window.__BC_SKIP_DECIDE_ROUTE__ = true;
-  __BC_BOOT_ROUTE_BLOCKED__ = true;
-} else if (__BC_BOOT_LOGGED_OUT__) {
-  console.warn("[BOOT] ignoring loggedOut latch — resuming demo/Godot instead of auth");
-  try {
-    const u = new URL(location.href);
-    u.searchParams.delete("loggedOut");
-    replaceUrlKeepingV2Demo(u);
-  } catch {}
   window.__BC_SKIP_DECIDE_ROUTE__ = false;
   __BC_BOOT_ROUTE_BLOCKED__ = false;
+  if (__BC_SHOULD_RESUME_DEMO_AFTER_LOGOUT__) {
+    console.warn("[BOOT] resuming demo/Godot after obsolete loggedOut URL");
+  }
 }
 
 try {
