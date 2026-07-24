@@ -8434,8 +8434,14 @@ function ensureProgLoaded() {
               return;
             }
             if (msg.type === "auth_state" && msg.authed === false) {
-              if (window.__BC_GODOT_SHIFT_ACTIVE__ || document.documentElement?.dataset?.bcGodotShift === "true") {
-                console.warn("[IFRAME] auth_state=false ignored during Godot shift");
+              // Demo/Godot is anonymous — parent session-null kicks must never reload us.
+              if (
+                window.__BC_GODOT_SHIFT_ACTIVE__ ||
+                document.documentElement?.dataset?.bcGodotShift === "true" ||
+                window.isDemo ||
+                window.bcMode === "demo"
+              ) {
+                console.warn("[IFRAME] auth_state=false ignored during demo/Godot");
                 return;
               }
               console.warn("[IFRAME] auth_state=false -> shutting down");
@@ -8443,8 +8449,13 @@ function ensureProgLoaded() {
               return;
             }
             if (msg.type === "parent_logged_out") {
-              if (window.__BC_GODOT_SHIFT_ACTIVE__ || document.documentElement?.dataset?.bcGodotShift === "true") {
-                console.warn("[IFRAME] parent_logged_out ignored during Godot shift");
+              if (
+                window.__BC_GODOT_SHIFT_ACTIVE__ ||
+                document.documentElement?.dataset?.bcGodotShift === "true" ||
+                window.isDemo ||
+                window.bcMode === "demo"
+              ) {
+                console.warn("[IFRAME] parent_logged_out ignored during demo/Godot");
                 return;
               }
               console.warn("[IFRAME] parent logged out -> shutting down");
@@ -11036,8 +11047,14 @@ function ensureProgLoaded() {
         if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
 
         if (msg.type === "auth_state" && msg.authed === false) {
-          if (window.__BC_GODOT_SHIFT_ACTIVE__ || document.documentElement?.dataset?.bcGodotShift === "true") {
-            console.warn("[IFRAME] auth_state=false ignored during Godot shift");
+          // Demo/Godot is anonymous — parent session-null kicks must never reload us.
+          if (
+            window.__BC_GODOT_SHIFT_ACTIVE__ ||
+            document.documentElement?.dataset?.bcGodotShift === "true" ||
+            window.isDemo ||
+            window.bcMode === "demo"
+          ) {
+            console.warn("[IFRAME] auth_state=false ignored during demo/Godot");
             return;
           }
           console.warn("[IFRAME] auth_state=false -> shutting down");
@@ -11047,8 +11064,13 @@ function ensureProgLoaded() {
         }
 
         if (msg.type === "parent_logged_out") {
-          if (window.__BC_GODOT_SHIFT_ACTIVE__ || document.documentElement?.dataset?.bcGodotShift === "true") {
-            console.warn("[IFRAME] parent_logged_out ignored during Godot shift");
+          if (
+            window.__BC_GODOT_SHIFT_ACTIVE__ ||
+            document.documentElement?.dataset?.bcGodotShift === "true" ||
+            window.isDemo ||
+            window.bcMode === "demo"
+          ) {
+            console.warn("[IFRAME] parent_logged_out ignored during demo/Godot");
             return;
           }
           console.warn("[IFRAME] parent logged out -> shutting down");
@@ -26249,12 +26271,23 @@ function ensureProgLoaded() {
         ensureGodotShiftListener();
         window.__BC_GODOT_SHIFT_ACTIVE__ = true;
         window.__BC_GODOT_WINE_OFFER__ = null;
+        window.__BC_GODOT_BACK_SHIELD_UNTIL__ = Date.now() + 120000;
         applyPlaySurfaceMode("full");
         notifyParentDemoPlayStarted(options.reason || "godot_shift_begin");
         resetNavState();
         const mobileHost = isGodotMobileHost();
         document.documentElement.dataset.bcGodotMobile = mobileHost ? "1" : "0";
         document.documentElement.dataset.bcGodotShift = "true";
+        // Hide Back for the whole floor session — ghost taps at splash-clear
+        // were leaving Godot and looking like a logout.
+        try {
+          const backBtn = document.getElementById("btnBackHomeFromGodot");
+          if (backBtn) {
+            backBtn.classList.add("hidden");
+            backBtn.style.pointerEvents = "none";
+            backBtn.setAttribute("aria-hidden", "true");
+          }
+        } catch {}
         showScreen("screenGodotShift");
         notifyParentGodotShiftActive(true);
         ensureGodotShiftIframe();
@@ -27172,9 +27205,19 @@ function ensureProgLoaded() {
 
         const btnBackHomeFromGodot = document.getElementById("btnBackHomeFromGodot");
         bindInput(btnBackHomeFromGodot, () => {
-          // Ignore ghost clicks that fire when the Godot splash/canvas swap happens.
-          if (Date.now() < Number(window.__BC_GODOT_BACK_SHIELD_UNTIL__ || 0)) {
-            console.warn("[BC][GODOT] Back ignored (click shield)");
+          // Demo Godot floor owns the session — Back is disabled so splash-clear
+          // ghost taps cannot eject to home/login.
+          if (
+            window.__BC_GODOT_SHIFT_ACTIVE__ ||
+            document.documentElement?.dataset?.bcGodotShift === "true" ||
+            window.isDemo ||
+            window.bcMode === "demo" ||
+            Date.now() < Number(window.__BC_GODOT_BACK_SHIELD_UNTIL__ || 0)
+          ) {
+            console.warn("[BC][GODOT] Back ignored during active floor");
+            try {
+              btnBackHomeFromGodot?.classList?.add("hidden");
+            } catch {}
             return;
           }
           window.__BC_GODOT_SHIFT_ACTIVE__ = false;

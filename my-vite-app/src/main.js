@@ -5838,6 +5838,11 @@ if (!window.__BC_PARENT_BRIDGE__) {
       const type = msg.type;
       if (window.__BC_BRIDGE__ && window.__BC_BRIDGE_HANDLED_TYPES__?.has(type)) return;
       const notifyLoggedOut = () => {
+        // Never kick the anonymous demo/Godot iframe with auth_state:false.
+        try {
+          const demoWin = document.getElementById("gameRootDemoFrame")?.contentWindow;
+          if (demoWin && event.source === demoWin) return;
+        } catch {}
         try {
           if (event.source && typeof event.source.postMessage === "function") {
             event.source.postMessage(
@@ -10042,7 +10047,13 @@ window.addEventListener("message", (event) => {
         demoFrame.style.setProperty("max-width", "100%", "important");
         demoFrame.style.opacity = "1";
       } else if (data.clearLock) {
-        clearGodotDemoLock("godot_shift_inactive");
+        // Only clear when the floor is intentionally finished — never on a
+        // mid-load/ghost inactive blip while the demo frame is still mounted.
+        if (isV2DemoPlayActive() || readGodotSessionLock()) {
+          console.warn("[BC] ignoring godot_shift clearLock during active play");
+        } else {
+          clearGodotDemoLock("godot_shift_inactive");
+        }
       }
       try { wireDemoButtons?.(); } catch {}
       try { renderAppChrome?.(); } catch {}
@@ -23537,7 +23548,13 @@ supabase.auth.onAuthStateChange((event, session) => {
 
         // Do not tear down an in-progress Godot/V2 demo when auth simply reports null
         // (anonymous demo users, token refresh edge cases, visibility resumes).
-        if (isV2DemoPlayActive()) {
+        if (
+          isV2DemoPlayActive() ||
+          isGodotDemoLocked() ||
+          readGodotSessionLock() ||
+          document.documentElement?.dataset?.bcGodotDemo === "true" ||
+          !!document.getElementById("gameRootDemoFrame")
+        ) {
           console.warn("[AUTH] session null ignored during active demo/godot play");
           hideAllLogoutButtons();
           hideDemoButtonsOnLogin();

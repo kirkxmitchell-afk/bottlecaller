@@ -49,15 +49,28 @@ export function mountBcParentBridge({
     return frame?.contentWindow || null;
   };
 
+  const getDemoFrameWindow = () => {
+    return document.getElementById("gameRootDemoFrame")?.contentWindow || null;
+  };
+
+  const isDemoFrameSource = (event) => {
+    const demoWin = getDemoFrameWindow();
+    return !!(demoWin && event?.source === demoWin);
+  };
+
   // 🔒 central auth gate: single helper (so it’s not copied everywhere)
   async function requireLiveSessionOrKick(event, type) {
+    // Anonymous demo/Godot has no parent session. Never emit auth_state:false
+    // at them — that was reloading the demo iframe at Godot 100%.
+    if (isDemoFrameSource(event)) {
+      return null;
+    }
     const { data: live } = await supabase.auth.getSession();
     const liveSession = live?.session || null;
     if (!liveSession) {
       console.warn("[PARENT] BC_MSG blocked: live session is null", { type });
       notifyLoggedOut(event);
       try { destroyPremiumIframe("parent_no_session_msg_gate"); } catch {}
-      // Never destroy demo/Godot — anonymous demo has no session by design.
       return null;
     }
     appState.session = liveSession;
@@ -404,6 +417,13 @@ export function mountBcParentBridge({
       if (event.origin !== ORIGIN) return;
 
       const type = msg.type;
+
+      // Demo/Godot iframe is anonymous — this bridge is premium-only.
+      // Returning here prevents requireLiveSessionOrKick from posting
+      // auth_state:false on every godot_load_* heartbeat.
+      if (isDemoFrameSource(event)) {
+        return;
+      }
 
       // global logout gates
       if (isHardLoggedOut()) {
