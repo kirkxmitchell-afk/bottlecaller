@@ -1673,6 +1673,16 @@ html[data-bc-godot-demo="true"] #gameRootDemoFrame{
   min-height: 420px !important;
   max-height: 85vh !important;
 }
+html[data-bc-godot-demo="true"] #screenGameDemo .topbar,
+html[data-bc-godot-demo="true"] #btnDemoExit,
+html[data-bc-godot-demo="true"] #btnDemoPremium{
+  display: none !important;
+  pointer-events: none !important;
+}
+html[data-bc-godot-demo="true"] #appChromePlayCta{
+  display: none !important;
+  pointer-events: none !important;
+}
 
 /* =========================================================
    LOGIN SCREEN

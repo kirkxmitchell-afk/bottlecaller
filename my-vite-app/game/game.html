@@ -12443,12 +12443,16 @@ function ensureProgLoaded() {
         try {
           if (!(window.isDemo || window.bcMode === "demo")) return;
           if (!window.parent || window.parent === window) return;
+          const onGodot =
+            !!window.__BC_GODOT_SHIFT_ACTIVE__ ||
+            document.documentElement?.dataset?.bcGodotShift === "true" ||
+            String(reason || "").includes("godot");
           window.parent.postMessage(
             {
               source: "BC_MSG",
               v: 1,
               type: "demo_play_started",
-              screenId: "screenPlay",
+              screenId: onGodot ? "screenGodotShift" : "screenPlay",
               reason,
             },
             window.location.origin
@@ -26183,6 +26187,7 @@ function ensureProgLoaded() {
         }
         if (type === "godot_load_ready") {
           setGodotShiftStatus("", false);
+          window.__BC_GODOT_BACK_SHIELD_UNTIL__ = Date.now() + 2500;
           focusGodotShiftCanvas();
           notifyParentDemoPlayStarted?.("godot_load_ready");
           notifyParentGodotShiftActive?.(true);
@@ -26326,6 +26331,7 @@ function ensureProgLoaded() {
         const type = String(data?.type || "");
         const payload = data?.payload && typeof data.payload === "object" ? data.payload : {};
         if (type === "godot_ready") {
+          window.__BC_GODOT_BACK_SHIELD_UNTIL__ = Date.now() + 2500;
           setGodotShiftStatus("", false);
           focusGodotShiftCanvas();
           postMessageToGodot("host_hello", {
@@ -27150,6 +27156,11 @@ function ensureProgLoaded() {
 
         const btnBackHomeFromGodot = document.getElementById("btnBackHomeFromGodot");
         bindInput(btnBackHomeFromGodot, () => {
+          // Ignore ghost clicks that fire when the Godot splash/canvas swap happens.
+          if (Date.now() < Number(window.__BC_GODOT_BACK_SHIELD_UNTIL__ || 0)) {
+            console.warn("[BC][GODOT] Back ignored (click shield)");
+            return;
+          }
           window.__BC_GODOT_SHIFT_ACTIVE__ = false;
           window.__BC_GODOT_WINE_OFFER__ = null;
           document.documentElement.dataset.bcGodotShift = "";

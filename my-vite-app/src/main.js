@@ -9374,8 +9374,56 @@ function forceRemountForModeSwitch(nextMode) {
 function isGodotShiftDemoActive() {
   return (
     document.documentElement?.dataset?.bcGodotDemo === "true" ||
-    window.__BC_DEMO_IFRAME_LAST_SCREEN__ === "screenGodotShift"
+    window.__BC_DEMO_IFRAME_LAST_SCREEN__ === "screenGodotShift" ||
+    !!window.__BC_GODOT_DEMO_LOCK__
   );
+}
+
+function armGodotDemoLock(reason = "godot") {
+  window.__BC_GODOT_DEMO_LOCK__ = true;
+  window.__BC_GODOT_DEMO_LOCK_AT__ = Date.now();
+  window.__BC_GODOT_DEMO_LOCK_REASON__ = String(reason || "godot");
+  document.documentElement.dataset.bcGodotDemo = "true";
+  // Swallow ghost clicks that fire when the Godot splash is removed.
+  window.__BC_GODOT_CLICK_SHIELD_UNTIL__ = Date.now() + 2500;
+  try {
+    const exitBtn = document.getElementById("btnDemoExit");
+    if (exitBtn) {
+      exitBtn.classList.add("hidden");
+      exitBtn.style.pointerEvents = "none";
+    }
+    document.getElementById("btnDemoPremium")?.classList.add("hidden");
+  } catch {}
+  setDebug({
+    step: "godot.lock_armed",
+    reason: window.__BC_GODOT_DEMO_LOCK_REASON__,
+    time: new Date().toISOString(),
+  });
+}
+
+function clearGodotDemoLock(reason = "clear") {
+  window.__BC_GODOT_DEMO_LOCK__ = false;
+  window.__BC_GODOT_DEMO_LOCK_AT__ = 0;
+  window.__BC_GODOT_DEMO_LOCK_REASON__ = "";
+  window.__BC_GODOT_CLICK_SHIELD_UNTIL__ = 0;
+  document.documentElement.dataset.bcGodotDemo = "";
+  try {
+    const exitBtn = document.getElementById("btnDemoExit");
+    if (exitBtn) exitBtn.style.pointerEvents = "";
+  } catch {}
+  setDebug({
+    step: "godot.lock_cleared",
+    reason: String(reason || "clear"),
+    time: new Date().toISOString(),
+  });
+}
+
+function isGodotDemoLocked() {
+  return !!window.__BC_GODOT_DEMO_LOCK__ || document.documentElement?.dataset?.bcGodotDemo === "true";
+}
+
+function isGodotClickShieldActive() {
+  return Date.now() < Number(window.__BC_GODOT_CLICK_SHIELD_UNTIL__ || 0);
 }
 
 function isV2DemoPlayActive() {
@@ -9839,6 +9887,7 @@ window.addEventListener("message", (event) => {
         ? "screenGodotShift"
         : (window.__BC_DEMO_IFRAME_LAST_SCREEN__ || null);
       if (active) {
+        armGodotDemoLock(data.reason || "godot_shift_active");
         // Keep the play latch fresh for the whole Godot download/boot window.
         window.__BC_DEMO_PLAY_STARTED_AT__ = Date.now();
         demoFrame.dataset.bcDemoPlayStarted = "true";
@@ -9852,7 +9901,10 @@ window.addEventListener("message", (event) => {
         demoFrame.style.setProperty("height", `${nextHeight}px`, "important");
         demoFrame.style.setProperty("max-width", "100%", "important");
         demoFrame.style.opacity = "1";
+      } else {
+        clearGodotDemoLock("godot_shift_inactive");
       }
+      try { wireDemoButtons?.(); } catch {}
       try { renderAppChrome?.(); } catch {}
     }
     return;
@@ -9868,14 +9920,21 @@ window.addEventListener("message", (event) => {
     if (demoFrame && event.source === demoFrame.contentWindow) {
       window.__BC_DEMO_PLAY_STARTED_AT__ = Date.now();
       window.__BC_DEMO_START_ACK_AT__ = Date.now();
-      if (document.documentElement.dataset.bcGodotDemo === "true") {
+      const reasonText = String(data.reason || "");
+      const onGodot =
+        document.documentElement.dataset.bcGodotDemo === "true" ||
+        String(data.screenId || "") === "screenGodotShift" ||
+        reasonText.includes("godot");
+      if (onGodot) {
         window.__BC_DEMO_IFRAME_LAST_SCREEN__ = "screenGodotShift";
+        armGodotDemoLock(reasonText || "demo_play_started");
       } else if (window.__BC_DEMO_IFRAME_LAST_SCREEN__ !== "screenGodotShift") {
         window.__BC_DEMO_IFRAME_LAST_SCREEN__ = "screenPlay";
       }
       document.documentElement.dataset.bcV2Demo = "true";
       demoFrame.dataset.bcDemoPlayStarted = "true";
       demoFrame.style.opacity = "1";
+      try { wireDemoButtons?.(); } catch {}
       try { renderAppChrome?.(); } catch {}
     }
     return;
@@ -21431,6 +21490,21 @@ function routeDemoShellNoAuth() {
 }
 
 function routeAuth() {
+  if (isGodotDemoLocked() || isV2DemoPlayActive()) {
+    console.warn("[ROUTE] auth blocked during active Godot/demo play");
+    setDebug({
+      step: "route.auth.blocked_during_play",
+      time: new Date().toISOString(),
+      godotLock: isGodotDemoLocked(),
+      lastScreen: window.__BC_DEMO_IFRAME_LAST_SCREEN__ || null,
+    });
+    showScreen("screenGameDemo");
+    try {
+      document.getElementById("btnDemoExit")?.classList.add("hidden");
+      document.getElementById("btnDemoPremium")?.classList.add("hidden");
+    } catch {}
+    return;
+  }
   console.log("[ROUTE] auth (no user)");
   destroyPremiumIframe("routeAuth");
   destroyDemoIframe("routeAuth");
@@ -22585,6 +22659,23 @@ async function signOutHard() {
 }
 
 async function doLogout(reason = "user") {
+  const reasonText = String(reason || "user");
+  if (
+    (isGodotDemoLocked() || isV2DemoPlayActive() || isGodotClickShieldActive()) &&
+    (reasonText.includes("demo") || reasonText.includes("exit") || reasonText === "user")
+  ) {
+    console.warn("[LOGOUT] blocked during active Godot/demo play", reasonText);
+    setDebug({
+      step: "logout.blocked_during_godot",
+      reason: reasonText,
+      time: new Date().toISOString(),
+    });
+    try {
+      document.getElementById("btnDemoExit")?.classList.add("hidden");
+      showScreen("screenGameDemo");
+    } catch {}
+    return;
+  }
   if (window.__BC_LOGGING_OUT__) return;
   window.__BC_LOGGING_OUT__ = true;
   let logoutRedirectIssued = false;
@@ -22747,6 +22838,15 @@ function wireGlobalDemoExit() {
       const btn = e.target?.closest?.("button");
       if (!btn || btn.id !== "btnDemoExit") return;
 
+      if (isGodotDemoLocked() || isV2DemoPlayActive() || isGodotClickShieldActive()) {
+        console.warn("[UI] Demo exit blocked during Godot/demo play");
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation?.();
+        btn.classList.add("hidden");
+        return;
+      }
+
       console.log("[UI] Demo exit captured ✅");
       e.preventDefault();
       e.stopPropagation();
@@ -22781,11 +22881,20 @@ function forceWireHomeLogout() {
 function wireDemoButtons() {
   const btnPremium = document.getElementById("btnDemoPremium");
   const btnExit = document.getElementById("btnDemoExit");
+  const playLocked = isGodotDemoLocked() || isV2DemoPlayActive();
 
   if (btnExit) {
-    btnExit.classList.remove("hidden");
-    if (btnExit.textContent !== "Logout") {
-      btnExit.textContent = "Logout";
+    // Never expose Exit/Logout over an active Godot session — ghost clicks after
+    // the splash clears were sending users straight to the login screen.
+    if (playLocked || isGodotClickShieldActive()) {
+      btnExit.classList.add("hidden");
+      btnExit.style.pointerEvents = "none";
+    } else {
+      btnExit.classList.remove("hidden");
+      btnExit.style.pointerEvents = "";
+      if (btnExit.textContent !== "Logout") {
+        btnExit.textContent = "Logout";
+      }
     }
     btnExit.onclick = null;
     if (!btnExit.__bcBound) {
@@ -22793,6 +22902,11 @@ function wireDemoButtons() {
       btnExit.addEventListener("click", async (e) => {
         e.preventDefault();
         e.stopPropagation();
+        if (isGodotDemoLocked() || isV2DemoPlayActive() || isGodotClickShieldActive()) {
+          console.warn("[DEMO] Exit ignored during Godot/demo play");
+          btnExit.classList.add("hidden");
+          return;
+        }
         console.log("[DEMO] Logout clicked ✅");
         await doLogout("demo_logout");
       });
@@ -22802,12 +22916,14 @@ function wireDemoButtons() {
   }
 
   if (btnPremium) {
+    if (playLocked) btnPremium.classList.add("hidden");
     btnPremium.onclick = null;
     if (!btnPremium.__bcBound) {
       btnPremium.__bcBound = true;
       btnPremium.addEventListener("click", async (e) => {
         e.preventDefault();
         e.stopPropagation();
+        if (isGodotDemoLocked() || isV2DemoPlayActive()) return;
         console.log("[DEMO] Premium clicked");
         setAuthIntent("premium");
         await routePremium("demo.premium");
