@@ -11107,7 +11107,8 @@ function ensureProgLoaded() {
               startReason.includes("mobile") ||
               startReason.includes("iframe_mount") ||
               startReason.includes("iframe_load") ||
-              startReason.includes("play_enter");
+              startReason.includes("play_enter") ||
+              startReason.includes("godot");
             if (!isTrustedV2Start) {
               return;
             }
@@ -11116,18 +11117,26 @@ function ensureProgLoaded() {
             }
             const activeScreenId = document.querySelector(".screen.active")?.id || "";
             const activeV2Snapshot = getV2HarnessApi?.()?.snapshot?.() || null;
-            if (activeScreenId === "screenPlay" && activeV2Snapshot) {
+            if (activeScreenId === "screenGodotShift" && window.__BC_GODOT_SHIFT_ACTIVE__) {
+              return;
+            }
+            if (activeScreenId === "screenPlay" && activeV2Snapshot && !window.__BC_GODOT_WINE_OFFER__?.active) {
               return;
             }
             const now = Date.now();
             if (
               window.__BC_V2_DEMO_DIRECT_START_AT__ &&
               now - Number(window.__BC_V2_DEMO_DIRECT_START_AT__ || 0) < 2500 &&
-              document.querySelector(".screen.active")?.id === "screenPlay"
+              (activeScreenId === "screenPlay" || activeScreenId === "screenGodotShift")
             ) {
               return;
             }
             window.__BC_V2_DEMO_DIRECT_START_AT__ = now;
+            // Mobile / parent auto-start should enter the Godot floor, not V2 HTML play.
+            if (typeof shouldUseGodotShiftFloor === "function" && shouldUseGodotShiftFloor()) {
+              startGodotShiftFloor?.({ reason: startReason || "start_v2_demo" });
+              return;
+            }
             if (shouldUseV2Harness?.()) {
               startV2HarnessWhenReady?.({ resetSession: true });
               return;

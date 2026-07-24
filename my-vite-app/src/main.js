@@ -9589,7 +9589,7 @@ function postStartV2DemoToIframe(reason = "mobile_enter") {
       window.location.origin
     );
     window.__BC_DEMO_PLAY_STARTED_AT__ = Date.now();
-    window.__BC_DEMO_IFRAME_LAST_SCREEN__ = "screenPlay";
+    window.__BC_DEMO_IFRAME_LAST_SCREEN__ = "screenGodotShift";
     document.documentElement.dataset.bcV2Demo = "true";
     frame.dataset.bcDemoPlayStarted = "true";
     setDebug({ step: "demo.start_v2.sent", reason, time: new Date().toISOString() });
@@ -9636,6 +9636,9 @@ function startMobileDemoDirectly(reason = "mobile_enter") {
   mountGameIframe("gameRootDemo", "demo", {
     initialScreen: "screenHome",
     v2Harness: true,
+    // Kick the iframe into the Godot floor on mobile (handled as start_v2_demo → Godot).
+    autoStartV2: true,
+    autoStartReason: `${reason}:godot`,
   });
   try { renderAppChrome?.(); } catch {}
 }
