@@ -26162,21 +26162,45 @@ function ensureProgLoaded() {
         });
       }
 
+      function handleGodotBootMessage(data) {
+        const type = String(data?.type || "");
+        const payload = data?.payload && typeof data.payload === "object" ? data.payload : {};
+        if (type === "godot_load_start") {
+          setGodotShiftStatus("Downloading floor assets…", true);
+          return true;
+        }
+        if (type === "godot_load_progress") {
+          const pct = Math.max(0, Math.min(100, Number(payload.pct) || 0));
+          setGodotShiftStatus(`Loading floor… ${pct}%`, true);
+          return true;
+        }
+        if (type === "godot_load_ready") {
+          setGodotShiftStatus("", false);
+          focusGodotShiftCanvas();
+          return true;
+        }
+        if (type === "godot_load_error") {
+          const message = String(payload.message || "Godot failed to load.");
+          setGodotShiftStatus(message, true);
+          console.warn("[BC][GODOT] load error", message);
+          return true;
+        }
+        return false;
+      }
+
       function ensureGodotShiftIframe() {
         const frame = getGodotShiftFrame();
         if (!frame) return null;
         ensureGodotShiftListener();
         const targetSrc = getGodotShiftEmbedUrl();
         const onReady = () => {
-          setGodotShiftStatus("", false);
+          // HTML/shell loaded; keep status until godot_load_ready (pck can take minutes).
+          setGodotShiftStatus("Downloading floor assets…", true);
           postMessageToGodot("host_hello", {
             mode: window.bcMode || "demo",
             demo: !!(window.isDemo || window.bcMode === "demo"),
           });
-          window.setTimeout(() => {
-            setGodotShiftStatus("", false);
-            focusGodotShiftCanvas();
-          }, 250);
+          window.setTimeout(() => focusGodotShiftCanvas(), 250);
           window.setTimeout(() => focusGodotShiftCanvas(), 1200);
         };
         if (!frame.dataset.bcMounted || frame.getAttribute("src") === "about:blank" || frame.dataset.bcSrc !== targetSrc) {
@@ -26188,8 +26212,6 @@ function ensureProgLoaded() {
         } else {
           onReady();
         }
-        // Safety: never leave the dark loader covering input.
-        window.setTimeout(() => setGodotShiftStatus("", false), 8000);
         return frame;
       }
 
@@ -26206,7 +26228,6 @@ function ensureProgLoaded() {
         showScreen("screenGodotShift");
         notifyParentGodotShiftActive(true);
         ensureGodotShiftIframe();
-        setGodotShiftStatus("", false);
         scheduleIframeHeightReport?.("godot_shift_start");
         return true;
       }
@@ -26220,7 +26241,6 @@ function ensureProgLoaded() {
         document.documentElement.dataset.bcGodotShift = "true";
         showScreen("screenGodotShift");
         notifyParentGodotShiftActive(true);
-        setGodotShiftStatus("", false);
         const frame = ensureGodotShiftIframe();
         focusGodotShiftCanvas();
         try { frame?.contentWindow?.focus?.(); } catch {}
@@ -26293,6 +26313,7 @@ function ensureProgLoaded() {
       }
 
       function handleGodotShiftMessage(data) {
+        if (handleGodotBootMessage(data)) return;
         const type = String(data?.type || "");
         const payload = data?.payload && typeof data.payload === "object" ? data.payload : {};
         if (type === "godot_ready") {

@@ -121,7 +121,7 @@ body {
 
 		<script src="index.js"></script>
 		<script>
-const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":264880752,"index.wasm":43699190},"focusCanvas":true,"gdextensionLibs":[]};
+const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"ensureCrossOriginIsolationHeaders":false,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":264880752,"index.wasm":43699190},"focusCanvas":true,"gdextensionLibs":[]};
 const GODOT_THREADS_ENABLED = false;
 const engine = new Engine(GODOT_CONFIG);
 
@@ -132,6 +132,21 @@ const engine = new Engine(GODOT_CONFIG);
 
 	let initializing = true;
 	let statusMode = '';
+	let lastProgressPct = -1;
+
+	function postToHost(type, payload) {
+		try {
+			if (window.parent && window.parent !== window) {
+				window.parent.postMessage({
+					source: 'BC_GODOT',
+					v: 1,
+					type: type,
+					payload: payload || {},
+					at: Date.now(),
+				}, '*');
+			}
+		} catch (err) {}
+	}
 
 	function setStatusMode(mode) {
 		if (statusMode === mode || !initializing) {
@@ -161,15 +176,16 @@ const engine = new Engine(GODOT_CONFIG);
 
 	function displayFailureNotice(err) {
 		console.error(err);
+		let message = 'An unknown error occurred.';
 		if (err instanceof Error) {
-			setStatusNotice(err.message);
+			message = err.message;
 		} else if (typeof err === 'string') {
-			setStatusNotice(err);
-		} else {
-			setStatusNotice('An unknown error occurred.');
+			message = err;
 		}
+		setStatusNotice(message);
 		setStatusMode('notice');
 		initializing = false;
+		postToHost('godot_load_error', { message: message });
 	}
 
 	const missing = Engine.getMissingFeatures({
@@ -209,11 +225,20 @@ const engine = new Engine(GODOT_CONFIG);
 		}
 	} else {
 		setStatusMode('progress');
+		postToHost('godot_load_start', {
+			pckBytes: GODOT_CONFIG.fileSizes['index.pck'] || 0,
+			wasmBytes: GODOT_CONFIG.fileSizes['index.wasm'] || 0,
+		});
 		engine.startGame({
 			'onProgress': function (current, total) {
 				if (current > 0 && total > 0) {
 					statusProgress.value = current;
 					statusProgress.max = total;
+					const pct = Math.min(100, Math.floor((current / total) * 100));
+					if (pct !== lastProgressPct && (pct === 0 || pct === 100 || pct - lastProgressPct >= 5)) {
+						lastProgressPct = pct;
+						postToHost('godot_load_progress', { current: current, total: total, pct: pct });
+					}
 				} else {
 					statusProgress.removeAttribute('value');
 					statusProgress.removeAttribute('max');
@@ -221,21 +246,13 @@ const engine = new Engine(GODOT_CONFIG);
 			},
 		}).then(() => {
 			setStatusMode('hidden');
+			postToHost('godot_load_ready', {});
 			try {
 				document.getElementById('canvas')?.focus?.();
 			} catch (err) {}
 		}, displayFailureNotice);
-		// Embedded safety: never leave the boot splash blocking input.
-		window.setTimeout(() => {
-			try {
-				if (statusOverlay && statusOverlay.parentNode) {
-					setStatusMode('hidden');
-				}
-			} catch (err) {}
-			try {
-				document.getElementById('canvas')?.focus?.();
-			} catch (err) {}
-		}, 12000);
+		// Do NOT force-hide the splash on a timer. The .pck is ~265MB and often
+		// takes far longer than a few seconds; hiding early leaves a black canvas.
 	}
 }());
 		</script>
