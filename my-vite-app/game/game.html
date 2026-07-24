@@ -5,7 +5,7 @@
   <title>BottleCaller Prototype</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <!-- ✅ IMPORTANT: because this file is served at /game/game.html -->
-  <link rel="stylesheet" href="/game/game.css?v=20260724-godot-desktop-fix" />
+  <link rel="stylesheet" href="/game/game.css?v=20260724-godot-landscape-fix" />
   <script type="module" src="/src/game/gameEntry.ts"></script>
   <script>
     if (window.self !== window.top) {
@@ -26112,13 +26112,18 @@ function ensureProgLoaded() {
       }
 
       function isGodotMobileHost() {
+        // Must match parent mobile detection: coarse pointer + narrow.
+        // Never treat a narrow desktop window as mobile (portrait rotate CSS).
         try {
           if (window.parent && window.parent !== window) {
-            return window.parent.document?.documentElement?.dataset?.bcMobileEnv === "true";
+            const parentMobile = window.parent.document?.documentElement?.dataset?.bcMobileEnv === "true";
+            if (parentMobile) return true;
           }
         } catch {}
         try {
-          return window.matchMedia("(max-width: 760px) and (pointer: coarse)").matches;
+          const coarse = window.matchMedia("(pointer: coarse)").matches;
+          if (!coarse) return false;
+          return window.matchMedia("(max-width: 860px)").matches;
         } catch {
           return false;
         }
@@ -26271,21 +26276,26 @@ function ensureProgLoaded() {
         ensureGodotShiftListener();
         window.__BC_GODOT_SHIFT_ACTIVE__ = true;
         window.__BC_GODOT_WINE_OFFER__ = null;
-        window.__BC_GODOT_BACK_SHIELD_UNTIL__ = Date.now() + 120000;
+        // Short shield for splash-clear ghost taps only.
+        window.__BC_GODOT_BACK_SHIELD_UNTIL__ = Date.now() + 8000;
         applyPlaySurfaceMode("full");
         notifyParentDemoPlayStarted(options.reason || "godot_shift_begin");
         resetNavState();
         const mobileHost = isGodotMobileHost();
         document.documentElement.dataset.bcGodotMobile = mobileHost ? "1" : "0";
         document.documentElement.dataset.bcGodotShift = "true";
-        // Hide Back for the whole floor session — ghost taps at splash-clear
-        // were leaving Godot and looking like a logout.
         try {
           const backBtn = document.getElementById("btnBackHomeFromGodot");
           if (backBtn) {
             backBtn.classList.add("hidden");
             backBtn.style.pointerEvents = "none";
             backBtn.setAttribute("aria-hidden", "true");
+            window.setTimeout(() => {
+              if (Date.now() < Number(window.__BC_GODOT_BACK_SHIELD_UNTIL__ || 0)) return;
+              backBtn.classList.remove("hidden");
+              backBtn.style.pointerEvents = "";
+              backBtn.removeAttribute("aria-hidden");
+            }, 8200);
           }
         } catch {}
         showScreen("screenGodotShift");
@@ -27205,19 +27215,9 @@ function ensureProgLoaded() {
 
         const btnBackHomeFromGodot = document.getElementById("btnBackHomeFromGodot");
         bindInput(btnBackHomeFromGodot, () => {
-          // Demo Godot floor owns the session — Back is disabled so splash-clear
-          // ghost taps cannot eject to home/login.
-          if (
-            window.__BC_GODOT_SHIFT_ACTIVE__ ||
-            document.documentElement?.dataset?.bcGodotShift === "true" ||
-            window.isDemo ||
-            window.bcMode === "demo" ||
-            Date.now() < Number(window.__BC_GODOT_BACK_SHIELD_UNTIL__ || 0)
-          ) {
-            console.warn("[BC][GODOT] Back ignored during active floor");
-            try {
-              btnBackHomeFromGodot?.classList?.add("hidden");
-            } catch {}
+          // Ghost taps only — after the shield, Back is a real leave action.
+          if (Date.now() < Number(window.__BC_GODOT_BACK_SHIELD_UNTIL__ || 0)) {
+            console.warn("[BC][GODOT] Back ignored (click shield)");
             return;
           }
           window.__BC_GODOT_SHIFT_ACTIVE__ = false;
@@ -27234,6 +27234,7 @@ function ensureProgLoaded() {
                 clearLock: true,
                 mode: window.bcMode || "demo",
                 screenId: null,
+                reason: "user_back",
               },
               window.location.origin,
             );

@@ -7721,12 +7721,12 @@ html, body{ height:100%; }
 html[data-bc-godot-shift="true"] #screenGodotShift{
   background:#050505;
 }
-/* Real mobile portrait only — not a narrow desktop demo iframe. */
+/* Real mobile portrait only — not a narrow desktop window. */
 html[data-bc-godot-mobile="1"] .godot-shift-stage{
   aspect-ratio:auto;
   max-height:none;
 }
-@media (orientation: portrait){
+@media (orientation: portrait) and (pointer: coarse){
   html[data-bc-godot-mobile="1"] .godot-shift-shell{
     min-height:100dvh;
   }

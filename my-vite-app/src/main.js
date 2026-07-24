@@ -188,10 +188,14 @@ if (window.__BOTTLECALLER_BOOTED__) {
 window.__BOTTLECALLER_BOOTED__ = true;
 
 function isBottleCallerMobileEnv() {
-  const narrow = window.matchMedia("(max-width: 860px)").matches;
+  // Real phones/tablets only. A narrow desktop window must NOT count as mobile
+  // (that was flipping the Godot floor into the portrait rotate CSS).
   const coarse = window.matchMedia("(pointer: coarse)").matches;
-  const coarseNarrow = coarse && window.matchMedia("(max-width: 1100px)").matches;
-  return narrow || coarseNarrow;
+  if (!coarse) return false;
+  return (
+    window.matchMedia("(max-width: 860px)").matches ||
+    window.matchMedia("(max-width: 1100px)").matches
+  );
 }
 
 function isV2DemoRequested() {
@@ -9472,26 +9476,50 @@ function armGodotDemoLock(reason = "godot") {
   window.__BC_GODOT_DEMO_LOCK_REASON__ = String(reason || "godot");
   document.documentElement.dataset.bcGodotDemo = "true";
   writeGodotSessionLock(true, reason);
-  // Swallow ghost clicks that fire when the Godot splash is removed.
+  persistV2DemoRequest();
+  try { localStorage.setItem("BC_GODOT_FLOOR", "1"); } catch {}
+  // Short shield only — swallow splash-clear ghost taps, then allow Exit again.
   window.__BC_GODOT_CLICK_SHIELD_UNTIL__ = Date.now() + 8000;
   installGodotNavigationTrap();
   try {
-    // Remove Exit entirely so ghost taps cannot hit it after splash clear.
-    const exitBtn = document.getElementById("btnDemoExit");
+    const exitBtn = ensureDemoExitButton();
     if (exitBtn) {
       exitBtn.classList.add("hidden");
       exitBtn.style.pointerEvents = "none";
-      exitBtn.setAttribute("disabled", "true");
-      exitBtn.onclick = null;
-      try { exitBtn.remove(); } catch {}
     }
     document.getElementById("btnDemoPremium")?.classList.add("hidden");
   } catch {}
+  window.setTimeout(() => {
+    try {
+      if (isGodotClickShieldActive()) return;
+      const exitBtn = ensureDemoExitButton();
+      if (exitBtn && (isGodotDemoLocked() || isV2DemoPlayActive())) {
+        exitBtn.classList.remove("hidden");
+        exitBtn.style.pointerEvents = "";
+        exitBtn.disabled = false;
+        exitBtn.textContent = "Exit";
+      }
+      wireDemoButtons?.();
+    } catch {}
+  }, 8200);
   setDebug({
     step: "godot.lock_armed",
     reason: window.__BC_GODOT_DEMO_LOCK_REASON__,
     time: new Date().toISOString(),
   });
+}
+
+function ensureDemoExitButton() {
+  let exitBtn = document.getElementById("btnDemoExit");
+  if (exitBtn) return exitBtn;
+  const row = document.querySelector("#screenGameDemo .topbar .row");
+  if (!row) return null;
+  exitBtn = document.createElement("button");
+  exitBtn.id = "btnDemoExit";
+  exitBtn.type = "button";
+  exitBtn.textContent = "Exit";
+  row.appendChild(exitBtn);
+  return exitBtn;
 }
 
 function installGodotNavigationTrap() {
@@ -9536,8 +9564,9 @@ function clearGodotDemoLock(reason = "clear") {
   window.__BC_GODOT_CLICK_SHIELD_UNTIL__ = 0;
   document.documentElement.dataset.bcGodotDemo = "";
   writeGodotSessionLock(false, reason);
+  try { localStorage.removeItem("BC_GODOT_FLOOR"); } catch {}
   try {
-    const exitBtn = document.getElementById("btnDemoExit");
+    const exitBtn = ensureDemoExitButton();
     if (exitBtn) exitBtn.style.pointerEvents = "";
   } catch {}
   setDebug({
@@ -10047,12 +10076,13 @@ window.addEventListener("message", (event) => {
         demoFrame.style.setProperty("max-width", "100%", "important");
         demoFrame.style.opacity = "1";
       } else if (data.clearLock) {
-        // Only clear when the floor is intentionally finished — never on a
-        // mid-load/ghost inactive blip while the demo frame is still mounted.
-        if (isV2DemoPlayActive() || readGodotSessionLock()) {
+        const reasonText = String(data.reason || "");
+        const userLeave = reasonText.includes("user_back") || reasonText.includes("user_exit");
+        // Ignore mid-load/ghost inactive blips; allow explicit Back/Exit.
+        if (!userLeave && (isV2DemoPlayActive() || readGodotSessionLock())) {
           console.warn("[BC] ignoring godot_shift clearLock during active play");
         } else {
-          clearGodotDemoLock("godot_shift_inactive");
+          clearGodotDemoLock(userLeave ? reasonText : "godot_shift_inactive");
         }
       }
       try { wireDemoButtons?.(); } catch {}
@@ -21297,7 +21327,12 @@ function isHardLoggedOut() {
 }
 
 function hardResetUI(reason = "") {
-  if (isGodotDemoLocked() || readGodotSessionLock()) {
+  const reasonText = String(reason || "");
+  const intentional =
+    reasonText.includes("logout") ||
+    reasonText.includes("user_exit") ||
+    reasonText.includes("demo_logout");
+  if (!intentional && (isGodotDemoLocked() || readGodotSessionLock())) {
     console.warn("[LOGOUT] hardResetUI blocked during Godot session", reason);
     return;
   }
@@ -21660,7 +21695,9 @@ function routeDemoShellNoAuth() {
 }
 
 function routeAuth() {
-  if (isGodotDemoLocked() || isV2DemoPlayActive()) {
+  if (window.__BC_LOGGING_OUT__) {
+    // Intentional logout must reach the auth screen.
+  } else if (isGodotDemoLocked() || isV2DemoPlayActive()) {
     console.warn("[ROUTE] auth blocked during active Godot/demo play");
     setDebug({
       step: "route.auth.blocked_during_play",
@@ -22830,35 +22867,29 @@ async function signOutHard() {
 
 async function doLogout(reason = "user") {
   const reasonText = String(reason || "user");
-  const demoSurfaceActive = !!(
-    document.getElementById("gameRootDemoFrame") ||
-    document.documentElement?.dataset?.bcV2Demo === "true" ||
-    appMode === "demo" ||
-    isV2DemoRequested()
-  );
-  const godotProtected =
+  const intentionalExit =
+    reasonText.includes("demo_logout") ||
+    reasonText.includes("btnDemoExit") ||
+    reasonText.includes("user_exit") ||
+    reasonText.includes("home_logout") ||
+    reasonText.startsWith("ui:");
+
+  // Only block accidental/ghost logout during the short splash shield.
+  if (isGodotClickShieldActive() && !intentionalExit) {
+    console.warn("[LOGOUT] blocked during Godot click shield", reasonText);
+    return;
+  }
+
+  // Intentional Exit from Godot/demo must actually leave.
+  if (intentionalExit) {
+    try { clearGodotDemoLock(`logout:${reasonText}`); } catch {}
+  } else if (
     isGodotDemoLocked() ||
     readGodotSessionLock() ||
-    isGodotClickShieldActive() ||
-    document.documentElement?.dataset?.bcGodotDemo === "true";
-
-  // Ghost Exit taps during Godot were calling doLogout for anonymous demo users
-  // and hard-redirecting to /?loggedOut=1. Never do that on the demo surface.
-  if (godotProtected || (demoSurfaceActive && (reasonText.includes("demo") || !appState?.session))) {
-    console.warn("[LOGOUT] blocked on demo/godot surface", reasonText);
-    setDebug({
-      step: "logout.blocked_during_godot",
-      reason: reasonText,
-      time: new Date().toISOString(),
-      godotProtected,
-      demoSurfaceActive,
-    });
-    try {
-      document.getElementById("btnDemoExit")?.classList.add("hidden");
-      if (godotProtected) {
-        showScreen("screenGameDemo");
-      }
-    } catch {}
+    document.documentElement?.dataset?.bcGodotDemo === "true"
+  ) {
+    console.warn("[LOGOUT] blocked on godot surface (non-intentional)", reasonText);
+    try { showScreen("screenGameDemo"); } catch {}
     return;
   }
 
@@ -22892,12 +22923,14 @@ async function doLogout(reason = "user") {
         win.postMessage({ source: "BC_MSG", v: 1, type: "parent_logged_out" }, origin);
       };
       notify("premiumRootFrame");
+      // Demo iframe ignores auth_state while in demo mode; still notify for cleanup.
       notify("gameRootDemoFrame");
     } catch {}
 
     // 1) detach UI immediately
     try { hardResetUI("logout.start"); } catch (e) { console.warn("hardResetUI failed", e); }
     try { destroyPremiumIframe("logout"); } catch (e) { console.warn("destroyPremiumIframe failed", e); }
+    try { destroyDemoIframe("user_exit:logout"); } catch (e) { console.warn("destroyDemoIframe failed", e); }
     try { routeAuth(); } catch (e) { console.warn("routeAuth failed", e); }
     try { applyAuthUi(); } catch {}
 
@@ -23023,12 +23056,12 @@ function wireGlobalDemoExit() {
       const btn = e.target?.closest?.("button");
       if (!btn || btn.id !== "btnDemoExit") return;
 
-      if (isGodotDemoLocked() || isV2DemoPlayActive() || isGodotClickShieldActive()) {
-        console.warn("[UI] Demo exit blocked during Godot/demo play");
+      // Ghost taps only — intentional Exit after the shield must work.
+      if (isGodotClickShieldActive()) {
+        console.warn("[UI] Demo exit blocked during Godot click shield");
         e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation?.();
-        btn.classList.add("hidden");
         return;
       }
 
@@ -23036,7 +23069,7 @@ function wireGlobalDemoExit() {
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation?.();
-      routeAuth();
+      void doLogout("demo_logout");
     },
     true
   );
@@ -23065,21 +23098,19 @@ function forceWireHomeLogout() {
 
 function wireDemoButtons() {
   const btnPremium = document.getElementById("btnDemoPremium");
-  const btnExit = document.getElementById("btnDemoExit");
-  const playLocked = isGodotDemoLocked() || isV2DemoPlayActive();
+  const btnExit = ensureDemoExitButton();
+  const shieldOnly = isGodotClickShieldActive();
 
   if (btnExit) {
-    // Never expose Exit/Logout over an active Godot session — ghost clicks after
-    // the splash clears were sending users straight to the login screen.
-    if (playLocked || isGodotClickShieldActive()) {
+    // Hide only during the short splash shield; keep Exit available in Godot after that.
+    if (shieldOnly) {
       btnExit.classList.add("hidden");
       btnExit.style.pointerEvents = "none";
     } else {
       btnExit.classList.remove("hidden");
       btnExit.style.pointerEvents = "";
-      if (btnExit.textContent !== "Logout") {
-        btnExit.textContent = "Logout";
-      }
+      btnExit.disabled = false;
+      btnExit.textContent = "Exit";
     }
     btnExit.onclick = null;
     if (!btnExit.__bcBound) {
@@ -23087,12 +23118,11 @@ function wireDemoButtons() {
       btnExit.addEventListener("click", async (e) => {
         e.preventDefault();
         e.stopPropagation();
-        if (isGodotDemoLocked() || isV2DemoPlayActive() || isGodotClickShieldActive()) {
-          console.warn("[DEMO] Exit ignored during Godot/demo play");
-          btnExit.classList.add("hidden");
+        if (isGodotClickShieldActive()) {
+          console.warn("[DEMO] Exit ignored during Godot click shield");
           return;
         }
-        console.log("[DEMO] Logout clicked ✅");
+        console.log("[DEMO] Exit clicked ✅");
         await doLogout("demo_logout");
       });
     }
@@ -23101,7 +23131,7 @@ function wireDemoButtons() {
   }
 
   if (btnPremium) {
-    if (playLocked) btnPremium.classList.add("hidden");
+    if (isGodotDemoLocked() || isV2DemoPlayActive()) btnPremium.classList.add("hidden");
     btnPremium.onclick = null;
     if (!btnPremium.__bcBound) {
       btnPremium.__bcBound = true;
@@ -23333,7 +23363,11 @@ window.__BC_SKIP_DECIDE_ROUTE__ = false;
 // ignore ghost loggedOut redirects and resume the demo instead of login.
 const __BC_GODOT_SESSION_RECOVER__ = (() => {
   try {
-    return sessionStorage.getItem("BC_GODOT_ACTIVE") === "1";
+    if (sessionStorage.getItem("BC_GODOT_ACTIVE") === "1") return true;
+  } catch {}
+  try {
+    // Survive mobile OOM reloads; cleared on intentional Exit.
+    return localStorage.getItem("BC_GODOT_FLOOR") === "1";
   } catch {
     return false;
   }
