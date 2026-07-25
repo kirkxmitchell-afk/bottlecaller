@@ -1,0 +1,6 @@
+# Cloudflare Workers static assets max out at 25 MiB per file.
+# Godot web exports (index.pck / index.wasm) exceed that, so keep them
+# out of Workers/Pages uploads and host them separately (e.g. R2).
+godot-shift/
+**/*.pck
+**/*.wasm

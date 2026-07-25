@@ -13,7 +13,7 @@ node_modules/
 # -----------------------------
 # BUILD OUTPUT
 # -----------------------------
-dist/
+# dist/ is committed for sharing built UI via GitHub
 dist-ssr/
 
 # -----------------------------

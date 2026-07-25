@@ -1,8 +1,132 @@
-import { getSupabaseParent } from "./supabaseParent";
+import { getSupabaseParent, SUPABASE_ANON_KEY, SUPABASE_URL } from "./supabaseParent";
+
+const SDK_SIGN_IN_TIMEOUT_MS = 5000;
+const DIRECT_AUTH_TIMEOUT_MS = 8000;
+const SIGN_OUT_TIMEOUT_MS = 3000;
+
+function isNetworkFetchError(error) {
+  const message = String(error?.message || error || "").toLowerCase();
+  const name = String(error?.name || "").toLowerCase();
+  return (
+    message.includes("failed to fetch") ||
+    message.includes("networkerror") ||
+    message.includes("network request failed") ||
+    name.includes("fetch")
+  );
+}
+
+function makeAuthError(message, extras = {}) {
+  const error = new Error(message);
+  Object.assign(error, extras);
+  return error;
+}
+
+function withDeadline(promise, ms, label) {
+  let timer = null;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      reject(
+        makeAuthError(`${label} timed out after ${ms}ms`, {
+          code: "auth_timeout",
+        })
+      );
+    }, ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
+async function directPasswordGrant(email, password) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), DIRECT_AUTH_TIMEOUT_MS);
+  let response;
+
+  try {
+    response = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email, password }),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw makeAuthError(
+        `Direct Supabase auth request timed out after ${DIRECT_AUTH_TIMEOUT_MS}ms.`,
+        { code: "direct_auth_timeout" }
+      );
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    return {
+      data: { session: null, user: null },
+      error: makeAuthError(
+        payload?.msg ||
+          payload?.error_description ||
+          payload?.message ||
+          `Auth request failed (${response.status}).`,
+        {
+          status: response.status,
+          code: payload?.error_code || payload?.error || payload?.code || "auth_request_failed",
+          payload,
+        }
+      ),
+    };
+  }
+
+  const sb = getSupabaseParent();
+  return sb.auth.setSession({
+    access_token: payload.access_token,
+    refresh_token: payload.refresh_token,
+  });
+}
 
 export async function parentSignIn(email, password) {
   const sb = getSupabaseParent();
-  return sb.auth.signInWithPassword({ email, password });
+  try {
+    const result = await withDeadline(
+      sb.auth.signInWithPassword({ email, password }),
+      SDK_SIGN_IN_TIMEOUT_MS,
+      "Supabase SDK sign-in"
+    );
+    if (!isNetworkFetchError(result?.error)) return result;
+
+    console.warn("[AUTH] signInWithPassword fetch failed, retrying via direct password grant", result.error);
+    try {
+      return await directPasswordGrant(email, password);
+    } catch (fallbackError) {
+      throw makeAuthError(
+        `Browser could not reach Supabase auth at ${SUPABASE_URL}. Check browser privacy shields, extensions, VPN/proxy rules, or retry in a fresh tab.`,
+        {
+          cause: fallbackError,
+          code: "browser_fetch_blocked",
+        }
+      );
+    }
+  } catch (error) {
+    if (!isNetworkFetchError(error) && error?.code !== "auth_timeout") throw error;
+
+    console.warn("[AUTH] signInWithPassword stalled or threw fetch error, retrying via direct password grant", error);
+    try {
+      return await directPasswordGrant(email, password);
+    } catch (fallbackError) {
+      throw makeAuthError(
+        `Browser could not reach Supabase auth at ${SUPABASE_URL}. Check browser privacy shields, extensions, VPN/proxy rules, or retry in a fresh tab.`,
+        {
+          cause: fallbackError,
+          code: "browser_fetch_blocked",
+        }
+      );
+    }
+  }
 }
 
 export async function parentSignUp(email, password, metadata = {}) {
@@ -19,7 +143,25 @@ export async function parentSignUp(email, password, metadata = {}) {
 
 export async function parentSignOutGlobal() {
   const sb = getSupabaseParent();
-  return sb.auth.signOut({ scope: "global" });
+  try {
+    return await withDeadline(
+      sb.auth.signOut({ scope: "global" }),
+      SIGN_OUT_TIMEOUT_MS,
+      "Supabase SDK sign-out"
+    );
+  } catch (error) {
+    console.warn("[AUTH] global signOut stalled, retrying local signOut", error);
+    try {
+      return await withDeadline(
+        sb.auth.signOut(),
+        SIGN_OUT_TIMEOUT_MS,
+        "Supabase local sign-out"
+      );
+    } catch (fallbackError) {
+      console.warn("[AUTH] local signOut failed after global signOut stall", fallbackError);
+      return { error: fallbackError };
+    }
+  }
 }
 
 export async function signOutLocal() {

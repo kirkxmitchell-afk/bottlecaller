@@ -188,25 +188,87 @@ if (window.__BOTTLECALLER_BOOTED__) {
 window.__BOTTLECALLER_BOOTED__ = true;
 
 function isBottleCallerMobileEnv() {
-  const narrow = window.matchMedia("(max-width: 860px)").matches;
+  // Real phones/tablets only. A narrow desktop window must NOT count as mobile
+  // (that was flipping the Godot floor into the portrait rotate CSS).
   const coarse = window.matchMedia("(pointer: coarse)").matches;
-  const coarseNarrow = coarse && window.matchMedia("(max-width: 1100px)").matches;
-  return narrow || coarseNarrow;
+  if (!coarse) return false;
+  return (
+    window.matchMedia("(max-width: 860px)").matches ||
+    window.matchMedia("(max-width: 1100px)").matches
+  );
 }
+
+function isV2DemoRequested() {
+  if (new URLSearchParams(window.location.search).get("bcV2Demo") === "1") return true;
+  try {
+    return localStorage.getItem("BC_V2_DEMO") === "1";
+  } catch {
+    return false;
+  }
+}
+
+function rememberV2DemoRequest() {
+  try {
+    if (new URLSearchParams(window.location.search).get("bcV2Demo") === "1") {
+      localStorage.setItem("BC_V2_DEMO", "1");
+    }
+  } catch {}
+}
+
+function persistV2DemoRequest() {
+  try { localStorage.setItem("BC_V2_DEMO", "1"); } catch {}
+}
+
+function replaceUrlKeepingV2Demo(url) {
+  try {
+    history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+  } catch {}
+}
+
+rememberV2DemoRequest();
+
+// Permanently block the obsolete hard-logout URL. Old bundles used
+// /?loggedOut=1&ts=… and ghost taps / cached JS can still navigate there.
+(function installLoggedOutNavigationBan() {
+  if (window.__BC_LOGGED_OUT_NAV_BAN__) return;
+  window.__BC_LOGGED_OUT_NAV_BAN__ = true;
+  const isLoggedOutUrl = (url) => {
+    try {
+      const text = String(url || "");
+      if (text.includes("loggedOut=")) return true;
+      const abs = new URL(text, window.location.href);
+      return abs.searchParams.get("loggedOut") === "1";
+    } catch {
+      return String(url || "").includes("loggedOut=");
+    }
+  };
+  try {
+    const originalReplace = window.location.replace.bind(window.location);
+    window.location.replace = (url) => {
+      if (isLoggedOutUrl(url)) {
+        console.warn("[BC] blocked obsolete loggedOut redirect", url);
+        return;
+      }
+      return originalReplace(url);
+    };
+  } catch {}
+  try {
+    const originalAssign = window.location.assign.bind(window.location);
+    window.location.assign = (url) => {
+      if (isLoggedOutUrl(url)) {
+        console.warn("[BC] blocked obsolete loggedOut assign", url);
+        return;
+      }
+      return originalAssign(url);
+    };
+  } catch {}
+})();
 
 function syncBottleCallerViewportEnv() {
   const isMobile = isBottleCallerMobileEnv();
   document.documentElement.dataset.bcMobileEnv = isMobile ? "true" : "false";
   document.documentElement.dataset.bcViewport = isMobile ? "mobile" : "desktop";
-  const isV2Demo =
-    new URLSearchParams(window.location.search).get("bcV2Demo") === "1" ||
-    (() => {
-      try {
-        return localStorage.getItem("BC_V2_DEMO") === "1";
-      } catch {
-        return false;
-      }
-    })();
+  const isV2Demo = isV2DemoRequested();
   document.documentElement.dataset.bcV2Demo = isV2Demo ? "true" : "false";
   window.__BC_ENV__ = { ...(window.__BC_ENV__ || {}), mobile: isMobile };
   syncManagerMessengerViewportLayout();
@@ -280,9 +342,22 @@ window.addEventListener("orientationchange", syncBottleCallerViewportEnv, { pass
 
 window.addEventListener("storage", (e) => {
   if (e.key === "__BC_LOGOUT_LOCK__" && e.newValue) {
-    console.warn("[CROSS-TAB] logout lock detected -> forcing logout UI");
+    // Never hard-redirect during Godot/demo — this was ejecting players to /?loggedOut=1.
+    if (
+      readGodotSessionLock?.() ||
+      window.__BC_GODOT_DEMO_LOCK__ ||
+      document.documentElement?.dataset?.bcGodotDemo === "true" ||
+      document.documentElement?.dataset?.bcV2Demo === "true" ||
+      document.getElementById("gameRootDemoFrame") ||
+      appMode === "demo" ||
+      isV2DemoRequested?.()
+    ) {
+      console.warn("[CROSS-TAB] logout lock ignored during Godot/demo play");
+      return;
+    }
+    console.warn("[CROSS-TAB] logout lock detected -> soft auth route (no hard reload)");
     try { window.__BC_FORCE_LOGGED_OUT__ = true; } catch {}
-    try { window.location.replace("/?loggedOut=1&ts=" + Date.now()); } catch {}
+    try { routeAuth?.(); } catch {}
   }
 });
 
@@ -1347,6 +1422,39 @@ const appState = {
   invites: [],
 };
 
+const LOCAL_GROUP_MANAGER_EMAILS = new Set([
+  "jason.huntly.grobler@gmail.com",
+]);
+
+function isLocalGroupManagerEmail(email) {
+  return LOCAL_GROUP_MANAGER_EMAILS.has(String(email || "").trim().toLowerCase());
+}
+
+function isLocalGroupManagerProfile(profile = null) {
+  return !!profile?.__local_group_manager_override;
+}
+
+function applyLocalProfileOverrides(profile = null, sessionUser = null) {
+  if (!isLocalGroupManagerEmail(sessionUser?.email)) return profile;
+
+  const userId = profile?.user_id || sessionUser?.id || null;
+  return {
+    ...(profile || {}),
+    user_id: userId,
+    role: "group_manager",
+    display_name:
+      profile?.display_name ||
+      sessionUser?.user_metadata?.display_name ||
+      sessionUser?.email?.split("@")?.[0] ||
+      "Jason Huntly Grobler",
+    access_tier: "premium_group",
+    scope_type: "group",
+    scope_id: profile?.scope_id || userId || "local_group_manager",
+    premium_grant_source: profile?.premium_grant_source || "local_group_manager_override",
+    __local_group_manager_override: true,
+  };
+}
+
 let authedStateInflight = null;
 let authedStateLoadedAt = 0;
 const AUTHED_STATE_CACHE_MS = 10000;
@@ -1524,20 +1632,29 @@ window.__BC_PARENT_SMOKE_TEST__ = function __BC_PARENT_SMOKE_TEST__() {
   window.__BC_AUTH_WATCHDOG__ = true;
 
   function killPremium(reason) {
+    const keepDemo =
+      !!window.__BC_GODOT_DEMO_LOCK__ ||
+      readGodotSessionLock?.() ||
+      document.documentElement?.dataset?.bcGodotDemo === "true" ||
+      document.documentElement?.dataset?.bcV2Demo === "true" ||
+      !!document.getElementById("gameRootDemoFrame");
+
     try { document.getElementById("premiumRootFrame")?.remove(); } catch {}
     try {
       const r = document.getElementById("premiumRoot");
       if (r) r.innerHTML = "";
     } catch {}
-    try {
-      const d = document.getElementById("gameRootDemo");
-      if (d) d.innerHTML = "";
-    } catch {}
+    if (!keepDemo) {
+      try {
+        const d = document.getElementById("gameRootDemo");
+        if (d) d.innerHTML = "";
+      } catch {}
+    }
     try {
       const b = document.getElementById("btnLogout");
       if (b) b.style.display = "none";
     } catch {}
-    try { showScreen("screenHome"); } catch {}
+    try { showScreen(keepDemo ? "screenGameDemo" : "screenHome"); } catch {}
 
     window.__BC_PENDING_START_DRILL__ = null;
     window.BC_PENDING_START_DRILL = null;
@@ -1758,6 +1875,7 @@ function canActOnRestaurant(roleLike, actorProfile, restaurantId) {
   const role = normalizeMembershipRole(roleLike);
   const rid = String(restaurantId || "");
   if (!rid) return false;
+  if (isLocalGroupManagerProfile(actorProfile)) return true;
 
   if (role === "waiter") return false;
 
@@ -4126,12 +4244,25 @@ async function fetchAllowedRestaurantsForScope(scopeId) {
 
   if (error) {
     console.warn("[MB] fetchAllowedRestaurantsForScope failed", error);
-    return [];
+    if (!isLocalGroupManagerProfile(appState?.profile)) return [];
   }
 
-  return (data || [])
+  const scopedRows = (data || [])
     .map(r => r.restaurants)
     .filter(Boolean);
+  if (scopedRows.length || !isLocalGroupManagerProfile(appState?.profile)) {
+    return scopedRows;
+  }
+
+  const fallback = await supabase
+    .from("restaurants")
+    .select("id,name,code,seat_limit,require_invite")
+    .order("name", { ascending: true });
+  if (fallback.error) {
+    console.warn("[MB] local group manager restaurant fallback failed", fallback.error);
+    return [];
+  }
+  return fallback.data || [];
 }
 
 // --- Ensure active restaurant is valid for this scope ---
@@ -4550,6 +4681,7 @@ async function assertRestaurantAllowedForCtx(profile, restaurantId) {
 
   if (!restaurantId) return { ok: false, reason: "missing_restaurant" };
   if (!role) return { ok: false, reason: "missing_role" };
+  if (isLocalGroupManagerProfile(profile)) return { ok: true, reason: "local_group_manager_override" };
 
   // Managers + group/enterprise: must be in bc_scope_restaurants
   if (isManagerRole(role) && (scopeType === "group" || scopeType === "enterprise")) {
@@ -5719,6 +5851,11 @@ if (!window.__BC_PARENT_BRIDGE__) {
       const type = msg.type;
       if (window.__BC_BRIDGE__ && window.__BC_BRIDGE_HANDLED_TYPES__?.has(type)) return;
       const notifyLoggedOut = () => {
+        // Never kick the anonymous demo/Godot iframe with auth_state:false.
+        try {
+          const demoWin = document.getElementById("gameRootDemoFrame")?.contentWindow;
+          if (demoWin && event.source === demoWin) return;
+        } catch {}
         try {
           if (event.source && typeof event.source.postMessage === "function") {
             event.source.postMessage(
@@ -5737,15 +5874,14 @@ if (!window.__BC_PARENT_BRIDGE__) {
         console.warn("[PARENT] BC_MSG blocked: hard logged out", type);
         notifyLoggedOut();
         try { destroyPremiumIframe("hard_logged_out_msg_gate"); } catch {}
-        try { destroyDemoIframe("hard_logged_out_msg_gate"); } catch {}
+        // Never destroy the demo/Godot floor from the anonymous-session gate.
         return;
       }
 
       if (window.__BC_LOGOUT_LOCK__) {
         console.warn("[PARENT] BC_MSG blocked: logout lock active", type);
         notifyLoggedOut();
-        try { destroyPremiumIframe("logout_lock"); } catch {}
-        try { destroyDemoIframe("logout_lock"); } catch {}
+        try { destroyPremiumIframe("logout_lock_msg_gate"); } catch {}
         return;
       }
 
@@ -5797,7 +5933,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
           console.warn("[PARENT] blocked: no live session", msg.type);
           notifyLoggedOut();
           try { destroyPremiumIframe("parent_no_session_db_gate"); } catch {}
-          try { destroyDemoIframe("parent_no_session_db_gate"); } catch {}
+          // Never destroy demo/Godot when anonymous — demo has no session by design.
           return;
         }
         appState.session = liveAuth.session;
@@ -5848,9 +5984,16 @@ if (!window.__BC_PARENT_BRIDGE__) {
           destroyPremiumIframe("nav_back");
           if (backTo === "screenGameDemo") {
             destroyDemoIframe("nav_back_demo_shell");
+            window.__BC_DEMO_PLAY_STARTED_AT__ = 0;
+            window.__BC_DEMO_IFRAME_LAST_SCREEN__ = null;
+            window.__BC_DEMO_SHELL_CTA_HIDDEN = false;
           }
           setPremiumOverlayActive(false);
           showScreen(backTo);
+          if (backTo === "screenGameDemo") {
+            try { renderDemoJoinBlock?.(); } catch {}
+            try { renderAppChrome?.(); } catch {}
+          }
           return;
         }
         const dest = msg.to || msg.target || msg.backTo || "screenHome";
@@ -6060,7 +6203,89 @@ async function buildProgressionSnapshotFromRecentEncounterLogs({ userId, restaur
   return null;
 }
 
+function clampProgressionTier(value, fallback = 1) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  if (n <= 1) return 1;
+  if (n >= 3) return 3;
+  return 2;
+}
+
+function getCanonicalProgressionSnapshot(canonicalState = null) {
+  const c = canonicalState && typeof canonicalState === "object" ? canonicalState : {};
+  return (
+    normalizeProgressionSnapshot(c?.authority?.progressionSnapshot) ||
+    normalizeProgressionSnapshot(c?.progressionSnapshot) ||
+    normalizeProgressionSnapshot(c?.v2?.authority?.progressionSnapshot) ||
+    normalizeProgressionSnapshot(c?.v2?.progressionSnapshot) ||
+    null
+  );
+}
+
+async function buildProgressionResultFromCanonicalState({ userId, restaurantId, desiredTier = 3 }) {
+  if (!userId || !restaurantId) return null;
+
+  const { data, error } = await supabase
+    .from("bc_progression_state_v1")
+    .select("canonical_state")
+    .eq("user_id", userId)
+    .eq("restaurant_id", restaurantId)
+    .maybeSingle();
+
+  if (error) {
+    if (!isMissingRelationError(error)) {
+      console.warn("[BC] canonical progression state query failed", error);
+    }
+    return null;
+  }
+
+  const canonicalState =
+    data?.canonical_state && typeof data.canonical_state === "object"
+      ? data.canonical_state
+      : null;
+  if (!canonicalState) return null;
+
+  const snapshot = getCanonicalProgressionSnapshot(canonicalState);
+  if (!snapshot) return null;
+
+  const gateAuthority = canonicalState?.authority || canonicalState?.v2?.authority || {};
+  const apTierUnlocked = clampProgressionTier(gateAuthority?.apTierUnlocked, 3);
+  const authorityTier = clampProgressionTier(gateAuthority?.tierToServe, apTierUnlocked);
+  const requestedTier = desiredTier === 1 ? 1 : desiredTier === 2 ? 2 : 3;
+  const gatedDesiredTier = Math.min(requestedTier, apTierUnlocked, authorityTier);
+
+  const result = await decideAllowedTierLazy({
+    desiredTier: gatedDesiredTier === 1 ? 1 : gatedDesiredTier === 2 ? 2 : 3,
+    userId,
+    restaurantId,
+    snapshot,
+  });
+
+  const v2Authority = canonicalState?.v2?.authority || canonicalState?.authority || null;
+  const authorityPoints = Number(
+    v2Authority?.authorityPoints ??
+    v2Authority?.totalAP ??
+    canonicalState?.economy?.authorityPoints ??
+    canonicalState?.economy?.ap ??
+    0
+  );
+
+  return {
+    ...(result || {}),
+    canonicalState,
+    authority: v2Authority,
+    authorityPoints: Number.isFinite(authorityPoints) ? authorityPoints : null,
+  };
+}
+
 async function buildProgressionResult({ userId, restaurantId, desiredTier = 3 }) {
+  const canonicalResult = await buildProgressionResultFromCanonicalState({
+    userId,
+    restaurantId,
+    desiredTier,
+  });
+  if (canonicalResult) return canonicalResult;
+
   const snapshot = await buildProgressionSnapshotFromRecentEncounterLogs({ userId, restaurantId });
   if (snapshot) {
     return await decideAllowedTierLazy({
@@ -6490,6 +6715,16 @@ window.__BC_GET_PROGRESSION_SNAPSHOT__ = async function (opts = {}) {
 // Helpers
 // ------------------------------------------------------------
 function showScreen(id) {
+  // Never drop to the lobby/login shell while a Godot session is marked active
+  // (includes recovery after a mobile tab reload/OOM).
+  if (
+    (id === "screenHome" || id === "screenCreateRestaurant") &&
+    (isGodotDemoLocked() || readGodotSessionLock())
+  ) {
+    console.warn("[NAV] blocked showScreen ->", id, "(godot session lock)");
+    id = "screenGameDemo";
+  }
+
   const screens = document.querySelectorAll(".screen");
   screens.forEach((s) => s.classList.add("hidden"));
 
@@ -6549,26 +6784,27 @@ function renderAppChrome() {
   const profile = appState?.profile || {};
   const hasSession = !!appState?.session?.user;
   const isDemoCockpit = currentScreenId === "screenGameDemo" && appMode === "demo";
-  const isV2Demo = document.documentElement?.dataset?.bcV2Demo === "true";
-  const isMobileEnv = document.documentElement?.dataset?.bcMobileEnv === "true";
-  const suppressDemoChrome = isDemoCockpit && isV2Demo && isMobileEnv;
   const isDemoWelcomeOpen =
     isDemoCockpit &&
     window.__BC_DEMO_IFRAME_LAST_SCREEN__ === "screenWelcome";
+  const isDemoCtaSuppressed =
+    isDemoCockpit &&
+    window.__BC_DEMO_SHELL_CTA_HIDDEN === true;
   const statusLabel = isDemoCockpit
     ? "DEMO"
     : hasSession
     ? ((profile?.access_tier || profile?.accessTier || "premium").toString().toUpperCase())
     : "Public Access";
-  const showPremiumBar = !suppressDemoChrome && ((currentScreenId === "screenPremiumApp" && hasSession) || isDemoCockpit);
+  const showPremiumBar = (currentScreenId === "screenPremiumApp" && hasSession) || isDemoCockpit;
   const showPlayCta =
-    !suppressDemoChrome &&
     ((currentScreenId === "screenPremiumApp" && hasSession) || isDemoCockpit) &&
-    !isDemoWelcomeOpen;
+    !isDemoWelcomeOpen &&
+    !isDemoCtaSuppressed;
 
   if (statusEl) statusEl.textContent = statusLabel;
   premiumBarEl?.classList.toggle("hidden", !showPremiumBar);
   playCtaEl?.classList.toggle("hidden", !showPlayCta);
+  if (playCtaEl && showPlayCta) playCtaEl.style.opacity = "";
 
   const premiumSignupBtn = document.getElementById("btnPremiumSignupMenu");
   const messagesBtn = document.getElementById("btnOpenMessages");
@@ -7508,11 +7744,12 @@ function hideDemoButtonsOnLogin() {
 
 function applyAuthUi() {
   const authed = !!appState?.session;
+  const isDemoScreen = appMode === "demo" && !document.getElementById("screenGameDemo")?.classList.contains("hidden");
 
   setHomeAuthUI(authed);
 
   const authFields = document.getElementById("authFields");
-  authFields?.classList.toggle("hidden", authed);
+  authFields?.classList.toggle("hidden", authed || isDemoScreen);
 
   const homeExit = document.getElementById("btnHomeExitPremium");
   if (!authed) homeExit?.classList.add("hidden");
@@ -7570,6 +7807,7 @@ function hardResetAuthUI() {
 function canAccessPremium(profile) {
   const role = String(profile?.role || "").toLowerCase();
   const restaurantId = profile?.restaurant_id ?? null;
+  const accessTier = String(profile?.access_tier || "").toLowerCase();
 
   const isFirst50 = !!profile?.is_first50;
   const passExpiresAt = profile?.premium_pass_expires_at ? new Date(profile.premium_pass_expires_at) : null;
@@ -7579,6 +7817,7 @@ function canAccessPremium(profile) {
 
   // ✅ HARD OVERRIDE: restaurant membership is premium
   if (restaurantId) return { ok: true, reason: "entitled.restaurant" };
+  if (accessTier.startsWith("premium")) return { ok: true, reason: "entitled.access_tier" };
   if (isFirst50) return { ok: true, reason: "entitled.first50" };
   if (passOk) return { ok: true, reason: "entitled.pass30" };
   return { ok: false, reason: "no_entitlement" };
@@ -9075,11 +9314,29 @@ function unmountDemoGame(reason = "") {
 }
 
 function destroyDemoIframe(reason = "") {
+  const reasonText = String(reason || "");
+  const forceDestroy =
+    reasonText.includes("user_exit") ||
+    reasonText.includes("hardReset") ||
+    (reasonText.includes("nav_back") && !readGodotSessionLock()) ||
+    (reasonText.includes("logout") && !readGodotSessionLock());
+  if ((isV2DemoPlayActive() || readGodotSessionLock()) && !forceDestroy) {
+    console.warn("[BC] destroyDemoIframe suppressed during active V2/Godot demo play", reason);
+    setDebug({
+      step: "demo.destroy_suppressed",
+      reason,
+      time: new Date().toISOString(),
+      lastScreen: window.__BC_DEMO_IFRAME_LAST_SCREEN__ || null,
+      godot: isGodotShiftDemoActive(),
+    });
+    return;
+  }
   console.log("[BC] destroyDemoIframe", reason);
   try { document.getElementById("gameRootDemoFrame")?.remove(); } catch {}
   const root = document.getElementById("gameRootDemo");
   if (root) root.innerHTML = "";
   window.__BC_DEMO_IFRAME_LAST_SCREEN__ = null;
+  document.documentElement.dataset.bcGodotDemo = "";
   try { currentIframeMode = null; } catch {}
 }
 
@@ -9191,6 +9448,176 @@ function forceRemountForModeSwitch(nextMode) {
   setDebug({ step: "game.iframe.forceRemount", nextMode, v: currentIframeVersion, time: new Date().toISOString() });
 }
 
+function isGodotShiftDemoActive() {
+  return (
+    document.documentElement?.dataset?.bcGodotDemo === "true" ||
+    window.__BC_DEMO_IFRAME_LAST_SCREEN__ === "screenGodotShift" ||
+    !!window.__BC_GODOT_DEMO_LOCK__ ||
+    readGodotSessionLock()
+  );
+}
+
+function readGodotSessionLock() {
+  try {
+    return sessionStorage.getItem("BC_GODOT_ACTIVE") === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeGodotSessionLock(active, reason = "") {
+  try {
+    if (active) {
+      sessionStorage.setItem("BC_GODOT_ACTIVE", "1");
+      sessionStorage.setItem("BC_GODOT_ACTIVE_AT", String(Date.now()));
+      sessionStorage.setItem("BC_GODOT_ACTIVE_REASON", String(reason || "godot"));
+    } else {
+      sessionStorage.removeItem("BC_GODOT_ACTIVE");
+      sessionStorage.removeItem("BC_GODOT_ACTIVE_AT");
+      sessionStorage.removeItem("BC_GODOT_ACTIVE_REASON");
+    }
+  } catch {}
+}
+
+function armGodotDemoLock(reason = "godot") {
+  window.__BC_GODOT_DEMO_LOCK__ = true;
+  window.__BC_GODOT_DEMO_LOCK_AT__ = Date.now();
+  window.__BC_GODOT_DEMO_LOCK_REASON__ = String(reason || "godot");
+  document.documentElement.dataset.bcGodotDemo = "true";
+  writeGodotSessionLock(true, reason);
+  persistV2DemoRequest();
+  try { localStorage.setItem("BC_GODOT_FLOOR", "1"); } catch {}
+  // Short shield only — swallow splash-clear ghost taps, then allow Exit again.
+  window.__BC_GODOT_CLICK_SHIELD_UNTIL__ = Date.now() + 8000;
+  installGodotNavigationTrap();
+  try {
+    const exitBtn = ensureDemoExitButton();
+    if (exitBtn) {
+      exitBtn.classList.add("hidden");
+      exitBtn.style.pointerEvents = "none";
+    }
+    document.getElementById("btnDemoPremium")?.classList.add("hidden");
+  } catch {}
+  window.setTimeout(() => {
+    try {
+      if (isGodotClickShieldActive()) return;
+      const exitBtn = ensureDemoExitButton();
+      if (exitBtn && (isGodotDemoLocked() || isV2DemoPlayActive())) {
+        exitBtn.classList.remove("hidden");
+        exitBtn.style.pointerEvents = "";
+        exitBtn.disabled = false;
+        exitBtn.textContent = "Exit";
+      }
+      wireDemoButtons?.();
+    } catch {}
+  }, 8200);
+  setDebug({
+    step: "godot.lock_armed",
+    reason: window.__BC_GODOT_DEMO_LOCK_REASON__,
+    time: new Date().toISOString(),
+  });
+}
+
+function ensureDemoExitButton() {
+  let exitBtn = document.getElementById("btnDemoExit");
+  if (exitBtn) return exitBtn;
+  const row = document.querySelector("#screenGameDemo .topbar .row");
+  if (!row) return null;
+  exitBtn = document.createElement("button");
+  exitBtn.id = "btnDemoExit";
+  exitBtn.type = "button";
+  exitBtn.textContent = "Exit";
+  row.appendChild(exitBtn);
+  return exitBtn;
+}
+
+function installGodotNavigationTrap() {
+  if (window.__BC_GODOT_NAV_TRAP__) return;
+  window.__BC_GODOT_NAV_TRAP__ = true;
+  const blocked = (url) => {
+    const text = String(url || "");
+    if (!(readGodotSessionLock() || window.__BC_GODOT_DEMO_LOCK__)) return false;
+    return (
+      text.includes("loggedOut=") ||
+      text === "/" ||
+      text.endsWith("/?") ||
+      /\/?\?/.test(text) && text.includes("loggedOut")
+    );
+  };
+  try {
+    const originalReplace = window.location.replace.bind(window.location);
+    window.location.replace = (url) => {
+      if (blocked(url)) {
+        console.warn("[BC] blocked location.replace during Godot", url);
+        return;
+      }
+      return originalReplace(url);
+    };
+  } catch {}
+  try {
+    const originalAssign = window.location.assign.bind(window.location);
+    window.location.assign = (url) => {
+      if (blocked(url)) {
+        console.warn("[BC] blocked location.assign during Godot", url);
+        return;
+      }
+      return originalAssign(url);
+    };
+  } catch {}
+}
+
+function clearGodotDemoLock(reason = "clear") {
+  window.__BC_GODOT_DEMO_LOCK__ = false;
+  window.__BC_GODOT_DEMO_LOCK_AT__ = 0;
+  window.__BC_GODOT_DEMO_LOCK_REASON__ = "";
+  window.__BC_GODOT_CLICK_SHIELD_UNTIL__ = 0;
+  document.documentElement.dataset.bcGodotDemo = "";
+  writeGodotSessionLock(false, reason);
+  try { localStorage.removeItem("BC_GODOT_FLOOR"); } catch {}
+  try {
+    const exitBtn = ensureDemoExitButton();
+    if (exitBtn) exitBtn.style.pointerEvents = "";
+  } catch {}
+  setDebug({
+    step: "godot.lock_cleared",
+    reason: String(reason || "clear"),
+    time: new Date().toISOString(),
+  });
+}
+
+function isGodotDemoLocked() {
+  return !!window.__BC_GODOT_DEMO_LOCK__ || document.documentElement?.dataset?.bcGodotDemo === "true";
+}
+
+function isGodotClickShieldActive() {
+  return Date.now() < Number(window.__BC_GODOT_CLICK_SHIELD_UNTIL__ || 0);
+}
+
+function isV2DemoPlayActive() {
+  if (isGodotShiftDemoActive()) return true;
+  if (!document.getElementById("gameRootDemoFrame")) return false;
+  return (
+    window.__BC_DEMO_IFRAME_LAST_SCREEN__ === "screenPlay" ||
+    // Godot .pck can take several minutes; keep the play latch alive long enough.
+    Date.now() - Number(window.__BC_DEMO_PLAY_STARTED_AT__ || 0) < 15 * 60 * 1000
+  );
+}
+
+function isDemoPlayStartRecent(ms = 60000) {
+  return Date.now() - Number(window.__BC_DEMO_PLAY_STARTED_AT__ || 0) < ms;
+}
+
+function isMobileDemoSurfaceActive() {
+  return (
+    document.documentElement?.dataset?.bcMobileEnv === "true" &&
+    (
+      appMode === "demo" ||
+      !document.getElementById("screenGameDemo")?.classList.contains("hidden") ||
+      !!document.getElementById("gameRootDemoFrame")
+    )
+  );
+}
+
 function buildGameIframeUrl({
   mode = "premium",
   showBack = false,
@@ -9200,6 +9627,7 @@ function buildGameIframeUrl({
   epoch = Date.now(),
   bustCache = false,
   v2Harness = false,
+  v2EncounterLimit = null,
 } = {}) {
   // If you pass a full override URL, use it as the base.
   // Otherwise build from same-origin /game/game.html
@@ -9220,6 +9648,8 @@ function buildGameIframeUrl({
   else base.searchParams.delete("initialScreen");
   if (v2Harness) base.searchParams.set("bcV2", "1");
   else base.searchParams.delete("bcV2");
+  if (v2Harness && v2EncounterLimit) base.searchParams.set("bcV2Encounters", String(v2EncounterLimit));
+  else base.searchParams.delete("bcV2Encounters");
 
   // Keep epoch off the URL so iframe assets can stay browser-cacheable.
   // The runtime already gets the active epoch from frameElement.dataset.bcEpoch,
@@ -9256,6 +9686,12 @@ function mountGameIframe(targetId, mode /* "demo" | "premium" */, options = {}) 
     window.__BC_IFRAME_EPOCH__ = Date.now();
   }
 
+  const useV2Harness = mode === "demo" || !!options?.v2Harness;
+  if (mode === "demo" && useV2Harness && options?.autoStartV2) {
+    // Arm before iframe paints so ghost Exit taps cannot hard-logout mid-boot.
+    persistV2DemoRequest();
+    armGodotDemoLock(options?.autoStartReason || "mount_autostart");
+  }
   const src = buildGameIframeUrl({
     mode,
     initialScreen: options?.initialScreen || "",
@@ -9263,15 +9699,16 @@ function mountGameIframe(targetId, mode /* "demo" | "premium" */, options = {}) 
     backTo: options?.backTo || "screenPremiumApp",
     epoch: mode === "premium" ? window.__BC_IFRAME_EPOCH__ : 0,
     bustCache: true,
-    v2Harness: !!options?.v2Harness,
+    v2Harness: useV2Harness,
   });
   const isMobile = document.documentElement?.dataset?.bcMobileEnv === "true";
   const initialHeight =
-    mode === "demo" && options?.v2Harness && isMobile
+    mode === "demo" && useV2Harness && isMobile
       ? Math.max(window.innerHeight || 0, 680)
       : mode === "demo" && options?.initialScreen === "screenWelcome"
         ? 300
         : 420;
+  const initialOpacity = mode === "demo" && useV2Harness && options?.autoStartV2 ? 0 : 1;
 
   // ✅ Smaller default height to avoid giant empty space before setup
   mount.innerHTML = `
@@ -9286,10 +9723,21 @@ function mountGameIframe(targetId, mode /* "demo" | "premium" */, options = {}) 
         border-radius: 14px;
         background: rgba(0,0,0,0.35);
         box-shadow: 0 10px 28px rgba(0,0,0,0.55);
+        opacity: ${initialOpacity};
+        transition: opacity 160ms ease;
       "
       loading="eager"
     ></iframe>
   `;
+
+  const mountedFrame = document.getElementById(`${targetId}Frame`);
+  if (mode === "demo" && useV2Harness && options?.autoStartV2) {
+    window.__BC_DEMO_START_ACK_AT__ = 0;
+    mountedFrame?.addEventListener("load", () => {
+      burstStartV2Demo(`${options.autoStartReason || "iframe_load"}:load`);
+    }, { once: true });
+    window.setTimeout(() => burstStartV2Demo(options.autoStartReason || "iframe_mount"), 0);
+  }
 
   // ctx is now delivered only via bc_ctx_request reply from the iframe
 
@@ -9359,26 +9807,194 @@ function postNavToPremiumIframe(screen) {
   setDebug({ step: "nav.post.sent", screen, time: new Date().toISOString() });
 }
 
+function postStartV2DemoToIframe(reason = "mobile_enter") {
+  const frame = document.getElementById("gameRootDemoFrame");
+  if (!frame || !frame.contentWindow) {
+    setDebug({ step: "demo.start_v2.failed", reason: "no_demo_iframe", source: reason });
+    return false;
+  }
+  try {
+    const payload = {
+      source: "BC_MSG",
+      v: 1,
+      type: "start_v2_demo",
+      reason: String(reason || "mobile_enter"),
+      preferGodot: true,
+    };
+    frame.contentWindow.postMessage(payload, window.location.origin);
+    // Also send explicit Godot start for newer iframes.
+    frame.contentWindow.postMessage(
+      { ...payload, type: "start_godot_shift" },
+      window.location.origin,
+    );
+    window.__BC_DEMO_PLAY_STARTED_AT__ = Date.now();
+    window.__BC_DEMO_IFRAME_LAST_SCREEN__ = "screenGodotShift";
+    document.documentElement.dataset.bcV2Demo = "true";
+    frame.dataset.bcDemoPlayStarted = "true";
+    setDebug({ step: "demo.start_v2.sent", reason, time: new Date().toISOString() });
+    return true;
+  } catch (error) {
+    setDebug({
+      step: "demo.start_v2.failed",
+      reason,
+      error: error?.message || String(error),
+      time: new Date().toISOString(),
+    });
+    return false;
+  }
+}
+
+function burstStartV2Demo(reason = "mobile_enter") {
+  let attempts = 0;
+  const maxAttempts = 10;
+  const tick = () => {
+    if (Date.now() - Number(window.__BC_DEMO_START_ACK_AT__ || 0) < 8000) return;
+    postStartV2DemoToIframe(`${reason}:${attempts}`);
+    attempts += 1;
+    if (attempts >= maxAttempts) return;
+    window.setTimeout(tick, 140);
+  };
+  tick();
+}
+
+function startMobileDemoDirectly(reason = "mobile_enter") {
+  closeHud?.();
+  appMode = "demo";
+  persistV2DemoRequest();
+  document.getElementById("authFields")?.classList.add("hidden");
+  document.getElementById("screenHome")?.classList.add("hidden");
+  document.getElementById("btnDemoPremium")?.classList.add("hidden");
+  document.getElementById("btnDemoExit")?.classList.add("hidden");
+  showScreen("screenGameDemo");
+  setPremiumOverlayActive(false);
+  document.documentElement.dataset.bcV2Demo = "true";
+  // Keep/re-arm Godot lock for recoveries and first entry alike.
+  armGodotDemoLock(reason);
+  destroyPremiumIframe(`${reason}:premium`);
+  // Force remount when recovering so a dead iframe is replaced.
+  if (String(reason || "").includes("recover") || String(reason || "").includes("godot")) {
+    try { document.getElementById("gameRootDemoFrame")?.remove(); } catch {}
+    try {
+      const root = document.getElementById("gameRootDemo");
+      if (root) root.innerHTML = "";
+    } catch {}
+  } else {
+    destroyDemoIframe(`${reason}:remount`);
+  }
+  window.__BC_DEMO_PLAY_STARTED_AT__ = Date.now();
+  window.__BC_DEMO_IFRAME_LAST_SCREEN__ = "screenGodotShift";
+  mountGameIframe("gameRootDemo", "demo", {
+    initialScreen: "screenHome",
+    v2Harness: true,
+    // Kick the iframe into the Godot floor on mobile (handled as start_v2_demo → Godot).
+    autoStartV2: true,
+    autoStartReason: `${reason}:godot`,
+  });
+  try { renderAppChrome?.(); } catch {}
+}
+
+const BC_V2_WELCOME_OBJECTIVES_DONE_KEY = "BC_V2_WELCOME_OBJECTIVES_DONE_V1";
+
+function isV2WelcomeOnboardingComplete() {
+  try {
+    return window.localStorage.getItem(BC_V2_WELCOME_OBJECTIVES_DONE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function openMobileDemoWelcome(reason = "mobile_demo_welcome") {
+  if (isV2WelcomeOnboardingComplete()) {
+    startMobileDemoDirectly(`${reason}:onboarding_complete`);
+    return;
+  }
+  closeHud?.();
+  appMode = "demo";
+  persistV2DemoRequest();
+  window.__BC_DEMO_SHELL_CTA_HIDDEN = true;
+  document.getElementById("appChromePlayCta")?.classList.add("hidden");
+  document.getElementById("authFields")?.classList.add("hidden");
+  document.getElementById("screenHome")?.classList.add("hidden");
+  document.getElementById("btnDemoPremium")?.classList.add("hidden");
+  document.getElementById("btnDemoExit")?.classList.add("hidden");
+  showScreen("screenGameDemo");
+  setPremiumOverlayActive(false);
+  document.documentElement.dataset.bcV2Demo = "true";
+  window.__BC_DEMO_PLAY_STARTED_AT__ = 0;
+  window.__BC_DEMO_IFRAME_LAST_SCREEN__ = "screenWelcome";
+  destroyPremiumIframe(`${reason}:premium`);
+  destroyDemoIframe(`${reason}:remount`);
+  window.__BC_DEMO_IFRAME_LAST_SCREEN__ = "screenWelcome";
+  mountGameIframe("gameRootDemo", "demo", {
+    initialScreen: "screenWelcome",
+    v2Harness: true,
+  });
+  try { renderAppChrome?.(); } catch {}
+}
+
+function openMobileDemoCockpit(reason = "mobile_demo_cockpit") {
+  closeHud?.();
+  appMode = "demo";
+  persistV2DemoRequest();
+  document.getElementById("authFields")?.classList.add("hidden");
+  document.getElementById("screenHome")?.classList.add("hidden");
+  document.getElementById("btnDemoPremium")?.classList.add("hidden");
+  document.getElementById("btnDemoExit")?.classList.add("hidden");
+  showScreen("screenGameDemo");
+  setPremiumOverlayActive(false);
+  document.documentElement.dataset.bcV2Demo = "true";
+  window.__BC_DEMO_PLAY_STARTED_AT__ = 0;
+  window.__BC_DEMO_IFRAME_LAST_SCREEN__ = null;
+  window.__BC_DEMO_SHELL_CTA_HIDDEN = false;
+  destroyPremiumIframe(`${reason}:premium`);
+  destroyDemoIframe(`${reason}:demo`);
+  try { renderDemoJoinBlock?.(); } catch {}
+  try { renderAppChrome?.(); } catch {}
+}
+
 function openPremiumBeginScreen() {
   if (appMode === "demo") {
-    const useV2Harness =
-      new URLSearchParams(window.location.search).get("bcV2Demo") === "1" ||
-      (() => {
-        try {
-          return localStorage.getItem("BC_V2_DEMO") === "1";
-        } catch {
-          return false;
-        }
-      })();
+    if (isV2WelcomeOnboardingComplete()) {
+      startMobileDemoDirectly("play_enter_onboarding_complete");
+      return;
+    }
+
+    if (document.documentElement?.dataset?.bcMobileEnv === "true") {
+      openMobileDemoWelcome("mobile_play_enter");
+      return;
+    }
+
+    const useV2Harness = true;
+    const demoPlayStartedRecently =
+      window.__BC_DEMO_IFRAME_LAST_SCREEN__ === "screenPlay" ||
+      (Date.now() - Number(window.__BC_DEMO_PLAY_STARTED_AT__ || 0) < 15000);
+    if (useV2Harness && demoPlayStartedRecently) {
+      showScreen("screenGameDemo");
+      setPremiumOverlayActive(false);
+      try { renderAppChrome?.(); } catch {}
+      setDebug({
+        step: "demo.openWelcome.suppressed",
+        reason: "demo_play_started",
+        time: new Date().toISOString(),
+      });
+      return;
+    }
+    const tryOpenDemoWelcome = () => {
+      const frame = document.getElementById("gameRootDemoFrame");
+      const nav = frame?.contentWindow?.__BC_NAV__;
+      if (nav && typeof nav.openWelcome === "function") {
+        nav.openWelcome();
+        return true;
+      }
+      return false;
+    };
 
     closeHud?.();
     showScreen("screenGameDemo");
     setPremiumOverlayActive(false);
 
-    const existingDemoFrame = document.getElementById("gameRootDemoFrame");
-    const existingDemoSrc = existingDemoFrame?.getAttribute?.("src") || "";
-    if (useV2Harness && existingDemoFrame && !existingDemoSrc.includes("bcV2=1")) {
-      destroyDemoIframe("openPremiumBeginScreen:upgrade_to_v2");
+    if (useV2Harness) {
+      destroyDemoIframe("openPremiumBeginScreen:force_v2_remount");
     }
 
     if (!document.getElementById("gameRootDemoFrame")) {
@@ -9386,14 +10002,18 @@ function openPremiumBeginScreen() {
         initialScreen: "screenWelcome",
         v2Harness: useV2Harness,
       });
-      return;
     }
 
-    const frame = document.getElementById("gameRootDemoFrame");
-    const nav = frame?.contentWindow?.__BC_NAV__;
-    if (nav && typeof nav.openWelcome === "function") {
-      nav.openWelcome();
-    }
+    let attempts = 0;
+    const maxAttempts = 12;
+    const retryOpenDemoWelcome = () => {
+      if (tryOpenDemoWelcome()) return;
+      attempts += 1;
+      if (attempts >= maxAttempts) return;
+      window.setTimeout(retryOpenDemoWelcome, 180);
+    };
+
+    retryOpenDemoWelcome();
     return;
   }
 
@@ -9436,6 +10056,88 @@ function openPremiumBeginScreen() {
 // ✅ Optional auto-resize (requires matching postMessage in game.html)
 window.addEventListener("message", (event) => {
   const data = event?.data;
+  if (
+    data &&
+    data.source === "BC_MSG" &&
+    data.type === "godot_shift_active" &&
+    event.origin === window.location.origin
+  ) {
+    const demoFrame = document.getElementById("gameRootDemoFrame");
+    if (demoFrame && event.source === demoFrame.contentWindow) {
+      const active = !!data.active;
+      // Wine-offer handoff sets active=false temporarily; keep the Godot demo
+      // latch so mobile auth/route logic cannot eject mid-encounter.
+      if (active || readGodotSessionLock() || window.__BC_GODOT_DEMO_LOCK__) {
+        document.documentElement.dataset.bcGodotDemo = "true";
+      } else {
+        document.documentElement.dataset.bcGodotDemo = "";
+      }
+      window.__BC_DEMO_IFRAME_LAST_SCREEN__ = active
+        ? "screenGodotShift"
+        : (String(data.screenId || "") === "screenPlay"
+          ? "screenPlay"
+          : (window.__BC_DEMO_IFRAME_LAST_SCREEN__ || null));
+      if (active) {
+        armGodotDemoLock(data.reason || "godot_shift_active");
+        // Keep the play latch fresh for the whole Godot download/boot window.
+        window.__BC_DEMO_PLAY_STARTED_AT__ = Date.now();
+        demoFrame.dataset.bcDemoPlayStarted = "true";
+        const rect = demoFrame.getBoundingClientRect();
+        const width = Math.max(rect.width || demoFrame.clientWidth || 960, 640);
+        const landscapeHeight = Math.round((width * 9) / 16) + 64;
+        const maxHeight = document.documentElement?.dataset?.bcMobileEnv === "true" ? 6000 : 920;
+        const nextHeight = Math.max(420, Math.min(maxHeight, landscapeHeight));
+        demoFrame.dataset.bcFrameHeight = String(nextHeight);
+        demoFrame.style.setProperty("width", "100%", "important");
+        demoFrame.style.setProperty("height", `${nextHeight}px`, "important");
+        demoFrame.style.setProperty("max-width", "100%", "important");
+        demoFrame.style.opacity = "1";
+      } else if (data.clearLock) {
+        const reasonText = String(data.reason || "");
+        const userLeave = reasonText.includes("user_back") || reasonText.includes("user_exit");
+        // Ignore mid-load/ghost inactive blips; allow explicit Back/Exit.
+        if (!userLeave && (isV2DemoPlayActive() || readGodotSessionLock())) {
+          console.warn("[BC] ignoring godot_shift clearLock during active play");
+        } else {
+          clearGodotDemoLock(userLeave ? reasonText : "godot_shift_inactive");
+        }
+      }
+      try { wireDemoButtons?.(); } catch {}
+      try { renderAppChrome?.(); } catch {}
+    }
+    return;
+  }
+  if (
+    data &&
+    data.source === "BC_MSG" &&
+    data.v === 1 &&
+    data.type === "demo_play_started" &&
+    event.origin === window.location.origin
+  ) {
+    const demoFrame = document.getElementById("gameRootDemoFrame");
+    if (demoFrame && event.source === demoFrame.contentWindow) {
+      window.__BC_DEMO_PLAY_STARTED_AT__ = Date.now();
+      window.__BC_DEMO_START_ACK_AT__ = Date.now();
+      const reasonText = String(data.reason || "");
+      const onGodot =
+        document.documentElement.dataset.bcGodotDemo === "true" ||
+        String(data.screenId || "") === "screenGodotShift" ||
+        reasonText.includes("godot");
+      if (onGodot) {
+        window.__BC_DEMO_IFRAME_LAST_SCREEN__ = "screenGodotShift";
+        armGodotDemoLock(reasonText || "demo_play_started");
+      } else if (window.__BC_DEMO_IFRAME_LAST_SCREEN__ !== "screenGodotShift") {
+        window.__BC_DEMO_IFRAME_LAST_SCREEN__ = "screenPlay";
+      }
+      document.documentElement.dataset.bcV2Demo = "true";
+      demoFrame.dataset.bcDemoPlayStarted = "true";
+      demoFrame.style.opacity = "1";
+      try { wireDemoButtons?.(); } catch {}
+      try { renderAppChrome?.(); } catch {}
+    }
+    return;
+  }
+
   if (!data || data.type !== "BC_IFRAME_HEIGHT") return;
 
   const demoFrame = document.getElementById("gameRootDemoFrame");
@@ -9450,29 +10152,61 @@ window.addEventListener("message", (event) => {
   const isV2Demo =
     String(data.mode || "").toLowerCase() === "demo" &&
     document.documentElement?.dataset?.bcV2Demo === "true";
+  const isGodotShift =
+    String(data.screenId || "") === "screenGodotShift" ||
+    document.documentElement?.dataset?.bcGodotDemo === "true";
   const isDemoWelcome =
     String(data.mode || "").toLowerCase() === "demo" &&
     String(data.screenId || "") === "screenWelcome";
-  if (String(data.mode || "").toLowerCase() === "demo") {
-    window.__BC_DEMO_IFRAME_LAST_SCREEN__ = String(data.screenId || "") || null;
-    try { renderAppChrome?.(); } catch {}
+  const isStaleDemoWelcomeAfterPlay =
+    isV2Demo &&
+    isDemoWelcome &&
+    isDemoPlayStartRecent(1200) &&
+    (window.__BC_DEMO_IFRAME_LAST_SCREEN__ === "screenPlay" ||
+      window.__BC_DEMO_IFRAME_LAST_SCREEN__ === "screenGodotShift");
+  if (isStaleDemoWelcomeAfterPlay) {
+    setDebug({
+      step: "demo.height_ignored_after_play",
+      reason: data.reason || null,
+      time: new Date().toISOString(),
+    });
+    return;
   }
-  const maxHeight = isMobile ? 6000 : 860;
+  if (String(data.mode || "").toLowerCase() === "demo") {
+    const nextScreenId = String(data.screenId || "") || null;
+    if (window.__BC_DEMO_IFRAME_LAST_SCREEN__ !== nextScreenId) {
+      window.__BC_DEMO_IFRAME_LAST_SCREEN__ = nextScreenId;
+      try { renderAppChrome?.(); } catch {}
+    }
+  }
+  const maxHeight = isMobile ? 6000 : isGodotShift ? 920 : 860;
   const minHeight = isDemoWelcome
     ? (isMobile ? 220 : 200)
-    : (isMobile ? 320 : 360);
-  const measuredHeight = Math.max(minHeight, Math.min(maxHeight, h + (isMobile ? 12 : 24)));
+    : (isGodotShift ? (isMobile ? 360 : 420) : (isMobile ? 320 : 360));
+  let measuredHeight = Math.max(minHeight, Math.min(maxHeight, h + (isMobile && isV2Demo ? 0 : isMobile ? 12 : 24)));
+  if (isGodotShift && !isMobile) {
+    const width = Math.max(frame.getBoundingClientRect().width || frame.clientWidth || 960, 640);
+    measuredHeight = Math.max(measuredHeight, Math.min(maxHeight, Math.round((width * 9) / 16) + 64));
+  }
   const viewportHeight = Math.ceil(window.visualViewport?.height || window.innerHeight || 0);
   const clamped = isMobile && isV2Demo
-    ? Math.max(viewportHeight, measuredHeight)
+    ? (isDemoWelcome ? measuredHeight : Math.max(measuredHeight, 420))
     : measuredHeight;
+  const previousHeight = Number(frame.dataset.bcFrameHeight || 0);
+  if (Math.abs(previousHeight - clamped) < 2) return;
+  frame.dataset.bcFrameHeight = String(clamped);
   frame.style.setProperty("height", clamped + "px", "important");
+  if (isGodotShift) {
+    document.documentElement.dataset.bcGodotDemo = "true";
+    frame.style.setProperty("width", "100%", "important");
+  }
 });
 
 // ------------------------------------------------------------
 // Data loaders
 // ------------------------------------------------------------
 async function loadProfile(userId) {
+  const sessionUser = appState?.session?.user || null;
   const res = await withTimeout(
     supabase
       .from("profiles")
@@ -9485,7 +10219,7 @@ async function loadProfile(userId) {
     "profiles.select"
   );
   if (res.error) throw res.error;
-  return res.data;
+  return applyLocalProfileOverrides(res.data, sessionUser);
 }
 
 async function loadRestaurant(restaurantId) {
@@ -12202,6 +12936,7 @@ async function assertRestaurantAllowedForScope(scopeId, restaurantId) {
   const sid = String(scopeId || "");
   const rid = String(restaurantId || "");
   if (!sid || !rid) return false;
+  if (isLocalGroupManagerProfile(appState?.profile)) return true;
 
   const { data, error } = await supabase
     .from("bc_scope_restaurants")
@@ -12227,6 +12962,21 @@ async function resolveInitialRestaurantForScope(profile) {
   // Group/enterprise: choose active per-scope (storage -> first allowed)
   if (!isManagerRole(role)) return null; // only managers switch restaurants
   if (!scopeId) return null;
+
+  if (isLocalGroupManagerProfile(profile)) {
+    const fallbackRows = await fetchAllowedRestaurantsForScope(scopeId);
+    const fallbackIds = fallbackRows.map((row) => String(row?.id || row?.restaurant_id || "")).filter(Boolean);
+    window.__BC_ALLOWED_RESTAURANT_ROWS__ = fallbackRows;
+    window.__BC_ALLOWED_RESTAURANT_IDS__ = fallbackIds;
+    const stored = getStoredActiveRestaurantId(scopeId);
+    const next = stored && fallbackIds.includes(stored)
+      ? stored
+      : fallbackIds[0] || profile?.restaurant_id || null;
+    if (next) {
+      try { setStoredActiveRestaurantId(scopeId, next); } catch {}
+    }
+    return next;
+  }
 
   // 1) try stored
   let stored = null;
@@ -12430,11 +13180,14 @@ function mountPremiumGameIframe({
   const root = document.getElementById("premiumRoot");
   let iframe = document.getElementById("premiumRootFrame");
   if (!root && !iframe) return;
+  const roleNow = String(appState?.profile?.role || "").toLowerCase();
+  const useV2Harness = roleNow === "group_manager";
 
   // ✅ Do NOT remount if already present
   const iframeSrcNow = String(iframe?.getAttribute("src") || "");
   const hasLiveGameSrc = iframeSrcNow.includes("/game/game.html");
-  if (iframe && !forceRemount && hasLiveGameSrc) {
+  const hasRequiredV2Harness = !useV2Harness || iframeSrcNow.includes("bcV2=1");
+  if (iframe && !forceRemount && hasLiveGameSrc && hasRequiredV2Harness) {
     if (isHardLoggedOut()) return;
     if (isParentCtxReady(mode || "premium")) {
       void hydrateParentProgressionForPremiumIframe("mount.existing").finally(() => {
@@ -12455,7 +13208,6 @@ function mountPremiumGameIframe({
   } else if (!iframe) {
     return;
   }
-  const roleNow = String(appState?.profile?.role || "").toLowerCase();
   if (roleNow === "waiter" && appState?.profile) {
     setActiveProgressionOwner({
       user_id: appState.profile.user_id || null,
@@ -12485,6 +13237,8 @@ function mountPremiumGameIframe({
     urlOverride: url || null,
     epoch,
     bustCache: true,
+    v2Harness: useV2Harness,
+    v2EncounterLimit: useV2Harness ? 10 : null,
   });
   iframe.style.width = "100%";
   iframe.style.height = "78vh";
@@ -20189,6 +20943,8 @@ async function loadAuthedState(reason = "manual") {
   }
 
   appState.session = session || null;
+  resetDemoAuthorityPointsForRequestedProfile(session?.user?.email);
+  repairStarterBottleUnlockForRequestedProfile(session?.user?.email);
   if (window.__LAST_USER_ID__ && window.__LAST_USER_ID__ !== appState.session?.user?.id) {
     destroyPremiumIframe("user_changed");
   }
@@ -20265,6 +21021,76 @@ async function loadAuthedState(reason = "manual") {
     await authedStateInflight;
   } finally {
     authedStateInflight = null;
+  }
+}
+
+function resetDemoAuthorityPointsForRequestedProfile(email) {
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  if (normalizedEmail !== "jason.grobler@icloud.com") return;
+
+  const markerKey = "BC_ONE_TIME_DEMO_AP_RESET_JASON_GROBLER_ICLOUD_20260618";
+  const rewardKey = "BC_V2_BOTTLE_REWARDS_V1";
+  try {
+    if (localStorage.getItem(markerKey) === "1") return;
+    const raw = localStorage.getItem(rewardKey);
+    const state = raw ? JSON.parse(raw) : {};
+    const rewards = Array.isArray(state.rewards)
+      ? state.rewards.map((reward) =>
+          reward?.id === "starter_bottle"
+            ? { ...reward, claimed: false, claimedAt: null }
+            : reward
+        )
+      : [];
+    const nextState = {
+      ...state,
+      v: 1,
+      totalAP: 0,
+      tierUnlocked: 1,
+      encounterScores: {},
+      demoCompletions: [],
+      demoCompletionCount: 0,
+      rewards,
+      demoAPResetAt: Date.now(),
+    };
+    localStorage.setItem(rewardKey, JSON.stringify(nextState));
+    localStorage.setItem("BC_V2_TIER1_ROTATION_INDEX", "0");
+    localStorage.setItem(markerKey, "1");
+    window.__BC_V2_BOTTLE_REWARD_STATE__ = nextState;
+    console.warn("[BC][RESET] Demo AP reset for jason.grobler@icloud.com");
+  } catch (error) {
+    console.warn("[BC][RESET] Could not reset demo AP", error);
+  }
+}
+
+function repairStarterBottleUnlockForRequestedProfile(email) {
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  if (normalizedEmail !== "jason.grobler@icloud.com") return;
+
+  const markerKey = "BC_ONE_TIME_STARTER_BOTTLE_REPAIR_JASON_GROBLER_ICLOUD_20260618_V2";
+  const rewardKey = "BC_V2_BOTTLE_REWARDS_V1";
+  try {
+    if (localStorage.getItem(markerKey) === "1") return;
+    const raw = localStorage.getItem(rewardKey);
+    if (!raw) return;
+    const state = JSON.parse(raw);
+    const rewards = Array.isArray(state?.rewards) ? state.rewards : [];
+    const starter = rewards.find((reward) => reward?.id === "starter_bottle");
+    if (starter?.claimed) {
+      const nextState = {
+        ...state,
+        rewards: rewards.map((reward) =>
+          reward?.id === "starter_bottle"
+            ? { ...reward, claimed: false, claimedAt: null }
+            : reward
+        ),
+      };
+      localStorage.setItem(rewardKey, JSON.stringify(nextState));
+      window.__BC_V2_BOTTLE_REWARD_STATE__ = nextState;
+      console.warn("[BC][RESET] Starter Bottle repaired for jason.grobler@icloud.com");
+    }
+    localStorage.setItem(markerKey, "1");
+  } catch (error) {
+    console.warn("[BC][RESET] Could not repair starter bottle reward", error);
   }
 }
 
@@ -20499,10 +21325,34 @@ function isLoggingOut() {
 }
 
 function isHardLoggedOut() {
-  return !!window.__BC_LOGGING_OUT__ || !appState?.session;
+  // Logging-out latch only. Anonymous demo users have no session by design —
+  // treating that as "hard logged out" was destroying the Godot floor when
+  // ordinary BC_MSG traffic arrived at load-complete.
+  if (window.__BC_LOGGING_OUT__ === true) return true;
+  if (
+    appMode === "demo" ||
+    isV2DemoRequested?.() ||
+    readGodotSessionLock?.() ||
+    window.__BC_GODOT_DEMO_LOCK__ ||
+    document.documentElement?.dataset?.bcGodotDemo === "true" ||
+    document.documentElement?.dataset?.bcV2Demo === "true" ||
+    !!document.getElementById("gameRootDemoFrame")
+  ) {
+    return false;
+  }
+  return !appState?.session;
 }
 
 function hardResetUI(reason = "") {
+  const reasonText = String(reason || "");
+  const intentional =
+    reasonText.includes("logout") ||
+    reasonText.includes("user_exit") ||
+    reasonText.includes("demo_logout");
+  if (!intentional && (isGodotDemoLocked() || readGodotSessionLock())) {
+    console.warn("[LOGOUT] hardResetUI blocked during Godot session", reason);
+    return;
+  }
   console.log("[LOGOUT] hardResetUI", reason);
 
   window.__BC_PENDING_START_DRILL__ = null;
@@ -20531,7 +21381,7 @@ function hardResetUI(reason = "") {
     const u = new URL(window.location.href);
     u.searchParams.delete("mode");
     u.searchParams.delete("demo");
-    history.replaceState({}, "", u.pathname);
+    replaceUrlKeepingV2Demo(u);
   } catch {}
 
   try {
@@ -20546,26 +21396,51 @@ async function routeDemo(reason = "manual") {
 
   const was = appMode;
   appMode = "demo";
+  const useV2Harness = true;
+  document.documentElement.dataset.bcV2Demo = "true";
+  persistV2DemoRequest();
 
   try {
     await loadAuthedState(`routeDemo:${reason}`);
   } catch {}
 
-  if (was !== "demo") forceRemountForModeSwitch("demo");
-
   const p = appState?.profile;
   const isPremium = String(p?.access_tier || "").toLowerCase().startsWith("premium");
-  if (isPremium) {
+  if (isPremium && !useV2Harness) {
     console.log("[BC] premium user -> skipping demo mount ✅");
     return;
   }
+
+  if (isV2DemoPlayActive()) {
+    showScreen("screenGameDemo");
+    renderDemoJoinBlock();
+    document.getElementById("btnDemoPremium")?.classList.add("hidden");
+    document.getElementById("btnDemoExit")?.classList.add("hidden");
+    destroyPremiumIframe("routeDemo:v2_play_active");
+    setDebug({
+      step: "route.demo.remount_suppressed",
+      reason,
+      time: new Date().toISOString(),
+      lastScreen: window.__BC_DEMO_IFRAME_LAST_SCREEN__ || null,
+    });
+    return;
+  }
+
+  if (was !== "demo") forceRemountForModeSwitch("demo");
 
   setDebug({ step: "route.demo", time: new Date().toISOString(), reason, authed: !!appState.session?.user });
   showScreen("screenGameDemo");
   renderDemoJoinBlock();
   document.getElementById("btnDemoPremium")?.classList.add("hidden");
   document.getElementById("btnDemoExit")?.classList.add("hidden");
-  destroyDemoIframe("routeDemo:shell_only");
+  destroyPremiumIframe("routeDemo");
+  destroyDemoIframe("routeDemo:remount");
+  const isMobileDemo = document.documentElement?.dataset?.bcMobileEnv === "true";
+  if (isMobileDemo) {
+    openMobileDemoCockpit("route_demo_mobile");
+    return;
+  }
+  openMobileDemoCockpit("route_demo_cockpit");
 }
 
 async function routePremium(reason = "manual") {
@@ -20598,9 +21473,14 @@ async function routePremium(reason = "manual") {
     }
 
     const profile = appState.profile;
+    const activePremiumRestaurantId =
+      profile?.restaurant_id ||
+      appState.activeRestaurantId ||
+      getManagerActiveRestaurantId?.() ||
+      null;
 
     // ✅ HARD RULE: restaurant membership routes to premium always (do not block on access_tier)
-    if (profile?.restaurant_id) {
+    if (activePremiumRestaurantId) {
       if (isManagerRole(profile?.role) && appState.restaurant?.id) {
         try {
           appState.invites = await loadInvites(getManagerActiveRestaurantId());
@@ -20650,7 +21530,7 @@ async function routePremium(reason = "manual") {
     }
 
     // Manager without restaurant -> create it
-    if (isManagerRole(profile?.role) && !profile?.restaurant_id) {
+    if (isManagerRole(profile?.role) && !activePremiumRestaurantId) {
       appMode = "premium";
       closeHud();
       showScreen("screenCreateRestaurant");
@@ -20793,23 +21673,26 @@ function isAuthed() {
 function routeDemoShellNoAuth() {
   console.log("[ROUTE] demo (no auth)");
   appMode = "demo";
-  const useV2Harness =
-    new URLSearchParams(window.location.search).get("bcV2Demo") === "1" ||
-    (() => {
-      try {
-        return localStorage.getItem("BC_V2_DEMO") === "1";
-      } catch {
-        return false;
-      }
-    })();
-  const demoScreenVisible = !document.getElementById("screenGameDemo")?.classList.contains("hidden");
-  const existingDemoFrame = document.getElementById("gameRootDemoFrame");
-  const existingSrc = String(existingDemoFrame?.getAttribute("src") || "");
-  const existingUsesV2 = existingSrc.includes("bcV2=1");
-  const canReuseExistingDemoFrame =
-    demoScreenVisible &&
-    !!existingDemoFrame &&
-    existingUsesV2 === useV2Harness;
+  const useV2Harness = true;
+  document.documentElement.dataset.bcV2Demo = "true";
+  persistV2DemoRequest();
+
+  // Never remount/destroy while Godot or V2 demo play is in progress.
+  // Anonymous auth callbacks and boot re-routes used to wipe the iframe mid-load.
+  if (isV2DemoPlayActive()) {
+    showScreen("screenGameDemo");
+    setPremiumOverlayActive(false);
+    destroyPremiumIframe("routeDemoShellNoAuth:v2_play_active");
+    document.getElementById("btnDemoPremium")?.classList.add("hidden");
+    document.getElementById("btnDemoExit")?.classList.add("hidden");
+    setDebug({
+      step: "route.demo_shell.remount_suppressed",
+      time: new Date().toISOString(),
+      lastScreen: window.__BC_DEMO_IFRAME_LAST_SCREEN__ || null,
+      godot: isGodotShiftDemoActive(),
+    });
+    return;
+  }
 
   showScreen("screenGameDemo");
   setPremiumOverlayActive(false);
@@ -20817,22 +21700,35 @@ function routeDemoShellNoAuth() {
   window.__BC_DRILL_CONFIG__ = null;
   window.BC_DRILL_CONFIG = null;
   setPendingStartDrill(null);
+  destroyDemoIframe("routeDemoShellNoAuth:pre");
   document.getElementById("btnDemoPremium")?.classList.add("hidden");
   document.getElementById("btnDemoExit")?.classList.add("hidden");
-
-  if (canReuseExistingDemoFrame) {
-    console.log("[ROUTE] demo shell reuse ✅", { useV2Harness });
+  const isMobileDemo = document.documentElement?.dataset?.bcMobileEnv === "true";
+  if (isMobileDemo) {
+    openMobileDemoCockpit("route_demo_shell_mobile");
     return;
   }
-
-  destroyDemoIframe("routeDemoShellNoAuth:pre");
-  mountGameIframe("gameRootDemo", "demo", {
-    initialScreen: "screenWelcome",
-    v2Harness: useV2Harness,
-  });
+  openMobileDemoCockpit("route_demo_shell_cockpit");
 }
 
 function routeAuth() {
+  if (window.__BC_LOGGING_OUT__) {
+    // Intentional logout must reach the auth screen.
+  } else if (isGodotDemoLocked() || isV2DemoPlayActive()) {
+    console.warn("[ROUTE] auth blocked during active Godot/demo play");
+    setDebug({
+      step: "route.auth.blocked_during_play",
+      time: new Date().toISOString(),
+      godotLock: isGodotDemoLocked(),
+      lastScreen: window.__BC_DEMO_IFRAME_LAST_SCREEN__ || null,
+    });
+    showScreen("screenGameDemo");
+    try {
+      document.getElementById("btnDemoExit")?.classList.add("hidden");
+      document.getElementById("btnDemoPremium")?.classList.add("hidden");
+    } catch {}
+    return;
+  }
   console.log("[ROUTE] auth (no user)");
   destroyPremiumIframe("routeAuth");
   destroyDemoIframe("routeAuth");
@@ -20851,13 +21747,25 @@ function routeAuth() {
     const url = new URL(window.location.href);
     url.searchParams.delete("demo");
     url.searchParams.delete("mode");
-    window.history.replaceState({}, "", url.pathname);
+    replaceUrlKeepingV2Demo(url);
   } catch {}
   showScreen("screenHome");
   hardResetAuthUI();
 }
 
 function routeHomeShell(reason = "home_shell", message = "") {
+  if (isGodotDemoLocked() || isV2DemoPlayActive() || readGodotSessionLock()) {
+    console.warn("[ROUTE] home shell blocked during active Godot/demo play", reason);
+    appMode = "demo";
+    showScreen("screenGameDemo");
+    try {
+      document.getElementById("authFields")?.classList.add("hidden");
+      document.getElementById("btnDemoExit")?.classList.add("hidden");
+      document.getElementById("btnDemoPremium")?.classList.add("hidden");
+    } catch {}
+    return;
+  }
+
   console.log("[ROUTE] home shell", { reason, authed: !!appState?.session?.user });
   destroyPremiumIframe(`routeHomeShell:${reason}`);
   destroyDemoIframe(`routeHomeShell:${reason}`);
@@ -20878,8 +21786,8 @@ function routeHomeShell(reason = "home_shell", message = "") {
 }
 
 async function decideRoute(reason = "decideRoute") {
-  if (isHardLoggedOut()) {
-    console.warn("[BC] decideRoute blocked (hard logged out)", reason);
+  if (isLoggingOut()) {
+    console.warn("[BC] decideRoute blocked (logging out)", reason);
     return;
   }
 
@@ -20905,8 +21813,19 @@ async function decideRoute(reason = "decideRoute") {
       return;
     }
 
+    // Mobile demo must stay in the V2 demo harness after sign-in.
+    if (!isLocalGroupManagerProfile(appState.profile) && (isV2DemoRequested() || isMobileDemoSurfaceActive())) {
+      await routeDemo(`decideRoute.v2_demo_requested:${reason}`);
+      return;
+    }
+
     // 2) HARD RULE: restaurant membership => Premium always
-    if (appState.profile?.restaurant_id) {
+    const activePremiumRestaurantId =
+      appState.profile?.restaurant_id ||
+      appState.activeRestaurantId ||
+      getManagerActiveRestaurantId?.() ||
+      null;
+    if (activePremiumRestaurantId) {
       setAuthIntent("premium");
       await routePremium(`decideRoute.restaurant:${reason}`);
       return;
@@ -21882,6 +22801,17 @@ async function submitAuth() {
       if (pr === "waiter") setRole("waiter");
       else setRole("manager");
 
+      if (
+        !isLocalGroupManagerEmail(email) &&
+        document.documentElement?.dataset?.bcMobileEnv === "true" &&
+        (isV2DemoRequested() || appMode === "demo")
+      ) {
+        persistV2DemoRequest();
+        openMobileDemoCockpit("login_mobile_demo");
+        setMsg("authMsg", "", "normal");
+        return;
+      }
+
       await decideRoute("login.ok.decideRoute");
       return;
     }
@@ -21965,6 +22895,33 @@ async function signOutHard() {
 }
 
 async function doLogout(reason = "user") {
+  const reasonText = String(reason || "user");
+  const intentionalExit =
+    reasonText.includes("demo_logout") ||
+    reasonText.includes("btnDemoExit") ||
+    reasonText.includes("user_exit") ||
+    reasonText.includes("home_logout") ||
+    reasonText.startsWith("ui:");
+
+  // Only block accidental/ghost logout during the short splash shield.
+  if (isGodotClickShieldActive() && !intentionalExit) {
+    console.warn("[LOGOUT] blocked during Godot click shield", reasonText);
+    return;
+  }
+
+  // Intentional Exit from Godot/demo must actually leave.
+  if (intentionalExit) {
+    try { clearGodotDemoLock(`logout:${reasonText}`); } catch {}
+  } else if (
+    isGodotDemoLocked() ||
+    readGodotSessionLock() ||
+    document.documentElement?.dataset?.bcGodotDemo === "true"
+  ) {
+    console.warn("[LOGOUT] blocked on godot surface (non-intentional)", reasonText);
+    try { showScreen("screenGameDemo"); } catch {}
+    return;
+  }
+
   if (window.__BC_LOGGING_OUT__) return;
   window.__BC_LOGGING_OUT__ = true;
   let logoutRedirectIssued = false;
@@ -21995,12 +22952,14 @@ async function doLogout(reason = "user") {
         win.postMessage({ source: "BC_MSG", v: 1, type: "parent_logged_out" }, origin);
       };
       notify("premiumRootFrame");
+      // Demo iframe ignores auth_state while in demo mode; still notify for cleanup.
       notify("gameRootDemoFrame");
     } catch {}
 
     // 1) detach UI immediately
     try { hardResetUI("logout.start"); } catch (e) { console.warn("hardResetUI failed", e); }
     try { destroyPremiumIframe("logout"); } catch (e) { console.warn("destroyPremiumIframe failed", e); }
+    try { destroyDemoIframe("user_exit:logout"); } catch (e) { console.warn("destroyDemoIframe failed", e); }
     try { routeAuth(); } catch (e) { console.warn("routeAuth failed", e); }
     try { applyAuthUi(); } catch {}
 
@@ -22028,14 +22987,13 @@ async function doLogout(reason = "user") {
       }
     } catch {}
 
-    try {
-      try { localStorage.setItem("__BC_LOGOUT_LATCH__", String(Date.now())); } catch {}
-      window.location.replace("/?loggedOut=1&ts=" + Date.now());
-      logoutRedirectIssued = true;
-      return;
-    } catch (e) {
-      console.warn("[LOGOUT] redirect failed, falling back to auth route", e);
-    }
+    // Soft complete — avoid /?loggedOut=1 hard reloads (they fight the Godot demo).
+    logoutRedirectIssued = false;
+    try { localStorage.removeItem("__BC_LOGOUT_LOCK__"); } catch {}
+    window.__BC_LOGOUT_LOCK__ = null;
+    window.__BC_LOGGING_OUT__ = false;
+    try { routeAuth(); } catch {}
+    return;
   } finally {
     try {
       appState.session = null;
@@ -22127,11 +23085,20 @@ function wireGlobalDemoExit() {
       const btn = e.target?.closest?.("button");
       if (!btn || btn.id !== "btnDemoExit") return;
 
+      // Ghost taps only — intentional Exit after the shield must work.
+      if (isGodotClickShieldActive()) {
+        console.warn("[UI] Demo exit blocked during Godot click shield");
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation?.();
+        return;
+      }
+
       console.log("[UI] Demo exit captured ✅");
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation?.();
-      routeAuth();
+      void doLogout("demo_logout");
     },
     true
   );
@@ -22160,12 +23127,19 @@ function forceWireHomeLogout() {
 
 function wireDemoButtons() {
   const btnPremium = document.getElementById("btnDemoPremium");
-  const btnExit = document.getElementById("btnDemoExit");
+  const btnExit = ensureDemoExitButton();
+  const shieldOnly = isGodotClickShieldActive();
 
   if (btnExit) {
-    btnExit.classList.remove("hidden");
-    if (btnExit.textContent !== "Logout") {
-      btnExit.textContent = "Logout";
+    // Hide only during the short splash shield; keep Exit available in Godot after that.
+    if (shieldOnly) {
+      btnExit.classList.add("hidden");
+      btnExit.style.pointerEvents = "none";
+    } else {
+      btnExit.classList.remove("hidden");
+      btnExit.style.pointerEvents = "";
+      btnExit.disabled = false;
+      btnExit.textContent = "Exit";
     }
     btnExit.onclick = null;
     if (!btnExit.__bcBound) {
@@ -22173,7 +23147,11 @@ function wireDemoButtons() {
       btnExit.addEventListener("click", async (e) => {
         e.preventDefault();
         e.stopPropagation();
-        console.log("[DEMO] Logout clicked ✅");
+        if (isGodotClickShieldActive()) {
+          console.warn("[DEMO] Exit ignored during Godot click shield");
+          return;
+        }
+        console.log("[DEMO] Exit clicked ✅");
         await doLogout("demo_logout");
       });
     }
@@ -22182,12 +23160,14 @@ function wireDemoButtons() {
   }
 
   if (btnPremium) {
+    if (isGodotDemoLocked() || isV2DemoPlayActive()) btnPremium.classList.add("hidden");
     btnPremium.onclick = null;
     if (!btnPremium.__bcBound) {
       btnPremium.__bcBound = true;
       btnPremium.addEventListener("click", async (e) => {
         e.preventDefault();
         e.stopPropagation();
+        if (isGodotDemoLocked() || isV2DemoPlayActive()) return;
         console.log("[DEMO] Premium clicked");
         setAuthIntent("premium");
         await routePremium("demo.premium");
@@ -22264,7 +23244,31 @@ document.getElementById("btnCopyCode").addEventListener("click", async () => {
   }
 });
 document.getElementById("btnEnterPremium").addEventListener("click", () => decideRoute("enterPremium"));
-document.getElementById("btnAppChromeEnter")?.addEventListener("click", () => openPremiumBeginScreen());
+const btnAppChromeEnter = document.getElementById("btnAppChromeEnter");
+const prehideDemoShellCtaForLaunch = () => {
+  if (appMode !== "demo") return;
+  const playCtaEl = document.getElementById("appChromePlayCta");
+  if (!playCtaEl) return;
+  playCtaEl.style.opacity = "0";
+};
+const hideDemoShellCtaForLaunch = () => {
+  if (appMode !== "demo") return;
+  window.__BC_DEMO_SHELL_CTA_HIDDEN = true;
+  const playCtaEl = document.getElementById("appChromePlayCta");
+  if (!playCtaEl) return;
+  playCtaEl.style.opacity = "";
+  playCtaEl.classList.add("hidden");
+};
+btnAppChromeEnter?.addEventListener("pointerdown", () => {
+  prehideDemoShellCtaForLaunch();
+}, { passive: true });
+btnAppChromeEnter?.addEventListener("touchstart", () => {
+  prehideDemoShellCtaForLaunch();
+}, { passive: true });
+btnAppChromeEnter?.addEventListener("click", () => {
+  openPremiumBeginScreen();
+  hideDemoShellCtaForLaunch();
+});
 
 wireParentButtons();
 wirePremiumTopbarMenu();
@@ -22384,12 +23388,28 @@ window.closeManagerMessengerWindow = closeManagerMessengerWindow;
 const __BC_BOOT_LOGGED_OUT__ = new URLSearchParams(location.search).get("loggedOut") === "1";
 window.__BC_SKIP_DECIDE_ROUTE__ = false;
 
+// If a Godot floor was active and the tab reloaded (common on mobile OOM),
+// ignore ghost loggedOut redirects and resume the demo instead of login.
+const __BC_GODOT_SESSION_RECOVER__ = (() => {
+  try {
+    if (sessionStorage.getItem("BC_GODOT_ACTIVE") === "1") return true;
+  } catch {}
+  try {
+    // Survive mobile OOM reloads; cleared on intentional Exit.
+    return localStorage.getItem("BC_GODOT_FLOOR") === "1";
+  } catch {
+    return false;
+  }
+})();
+
 try {
   const cleanUrl = new URL(window.location.href);
   cleanUrl.searchParams.delete("mode");
   cleanUrl.searchParams.delete("demo");
   cleanUrl.searchParams.delete("logout");
-  history.replaceState({}, "", cleanUrl.pathname);
+  cleanUrl.searchParams.delete("loggedOut");
+  cleanUrl.searchParams.delete("ts");
+  replaceUrlKeepingV2Demo(cleanUrl);
 } catch {}
 
 (function watchGhostPremium() {
@@ -22412,40 +23432,49 @@ try {
 })();
 
 let __BC_BOOT_ROUTE_BLOCKED__ = false;
+const __BC_SHOULD_RESUME_DEMO_AFTER_LOGOUT__ =
+  __BC_GODOT_SESSION_RECOVER__ || isV2DemoRequested();
+
 if (__BC_BOOT_LOGGED_OUT__) {
-  console.warn("[BOOT] loggedOut latch: forcing auth screen, skipping routing");
-  try { appState.session = null; appState.profile = null; } catch {}
-  try { destroyPremiumIframe("boot.loggedOut"); } catch {}
-  try { destroyDemoIframe("boot.loggedOut"); } catch {}
+  // Obsolete latch from old /?loggedOut=1&ts= redirects. Never force-auth /
+  // tear down the demo from this URL — that was ejecting the Godot floor.
+  console.warn("[BOOT] stripping obsolete loggedOut latch (no force-auth)");
   try {
     const u = new URL(location.href);
     u.searchParams.delete("loggedOut");
+    u.searchParams.delete("ts");
     u.searchParams.delete("mode");
     u.searchParams.delete("demo");
-    history.replaceState({}, "", u.pathname);
+    replaceUrlKeepingV2Demo(u);
   } catch {}
-  try { routeAuth(); } catch {}
-  window.__BC_SKIP_DECIDE_ROUTE__ = true;
-  __BC_BOOT_ROUTE_BLOCKED__ = true;
+  window.__BC_SKIP_DECIDE_ROUTE__ = false;
+  __BC_BOOT_ROUTE_BLOCKED__ = false;
+  if (__BC_SHOULD_RESUME_DEMO_AFTER_LOGOUT__) {
+    console.warn("[BOOT] resuming demo/Godot after obsolete loggedOut URL");
+  }
 }
 
 try {
   const latch = localStorage.getItem("__BC_LOGOUT_LATCH__");
   if (latch) {
-    console.warn("[BOOT] logout latch active -> forcing logged-out UI");
     localStorage.removeItem("__BC_LOGOUT_LATCH__");
+    if (__BC_SHOULD_RESUME_DEMO_AFTER_LOGOUT__) {
+      console.warn("[BOOT] cleared stale logout latch during Godot/demo recovery");
+    } else {
+      console.warn("[BOOT] logout latch active -> forcing logged-out UI");
 
-    try { appState.session = null; } catch {}
-    try { appState.profile = null; } catch {}
-    try { document.getElementById("premiumRoot") && (document.getElementById("premiumRoot").innerHTML = ""); } catch {}
-    try { document.getElementById("premiumRootFrame")?.remove(); } catch {}
-    try { document.getElementById("btnLogout") && (document.getElementById("btnLogout").style.display = "none"); } catch {}
-    try { showScreen("screenHome"); } catch {}
+      try { appState.session = null; } catch {}
+      try { appState.profile = null; } catch {}
+      try { document.getElementById("premiumRoot") && (document.getElementById("premiumRoot").innerHTML = ""); } catch {}
+      try { document.getElementById("premiumRootFrame")?.remove(); } catch {}
+      try { document.getElementById("btnLogout") && (document.getElementById("btnLogout").style.display = "none"); } catch {}
+      try { showScreen("screenHome"); } catch {}
 
-    __BC_BOOT_ROUTE_BLOCKED__ = true;
-    setTimeout(() => {
-      __BC_BOOT_ROUTE_BLOCKED__ = false;
-    }, 1000);
+      __BC_BOOT_ROUTE_BLOCKED__ = true;
+      setTimeout(() => {
+        __BC_BOOT_ROUTE_BLOCKED__ = false;
+      }, 1000);
+    }
   }
 } catch {}
 
@@ -22504,7 +23533,13 @@ if (!window.__BC_TRACE_TRAPS__) {
   }
 }
 
-showScreen("screenHome");
+if (__BC_GODOT_SESSION_RECOVER__ || (__BC_BOOT_LOGGED_OUT__ && isV2DemoRequested())) {
+  console.warn("[BOOT] Godot/demo recovery — opening floor instead of login");
+  armGodotDemoLock(__BC_GODOT_SESSION_RECOVER__ ? "boot_recover" : "boot_loggedout_demo");
+  showScreen("screenGameDemo");
+} else {
+  showScreen("screenHome");
+}
 setManagerPackage("single_manager");
 setSeatPlan("15");
 setRole("waiter");
@@ -22528,6 +23563,15 @@ setDebug({ step: "boot.ready", time: new Date().toISOString(), supabaseUrl: impo
 async function enforceAuthRoute() {
   const { data } = await supabase.auth.getSession();
   const session = data?.session || null;
+
+  if (__BC_GODOT_SESSION_RECOVER__ || readGodotSessionLock() || (__BC_BOOT_LOGGED_OUT__ && isV2DemoRequested())) {
+    console.warn("[ROUTE] resuming Godot demo after interrupt");
+    appMode = "demo";
+    window.__BC_FORCE_AUTH__ = false;
+    armGodotDemoLock("enforce_auth_recover");
+    startMobileDemoDirectly("godot_session_recover");
+    return;
+  }
 
   if (!session) {
     console.log("[ROUTE] no session -> forcing demo shell");
@@ -22568,6 +23612,25 @@ supabase.auth.onAuthStateChange((event, session) => {
         appState.restaurant = null;
         appState.activeRestaurantId = null;
         appMode = "demo";
+
+        // Do not tear down an in-progress Godot/V2 demo when auth simply reports null
+        // (anonymous demo users, token refresh edge cases, visibility resumes).
+        if (
+          isV2DemoPlayActive() ||
+          isGodotDemoLocked() ||
+          readGodotSessionLock() ||
+          document.documentElement?.dataset?.bcGodotDemo === "true" ||
+          !!document.getElementById("gameRootDemoFrame")
+        ) {
+          console.warn("[AUTH] session null ignored during active demo/godot play");
+          hideAllLogoutButtons();
+          hideDemoButtonsOnLogin();
+          applyAuthUi();
+          return;
+        }
+
+        // Destroy all premium/demo shells
+        try { document.querySelectorAll("iframe").forEach((f) => f.remove()); } catch {}
 
         routeDemoShellNoAuth();
         hideAllLogoutButtons();

@@ -102,7 +102,7 @@ export async function buildProgressionInputs(params: {
     r1.data?.last10_avg_chain_score != null ? Number(r1.data.last10_avg_chain_score) : null;
 
   const eventRows = Array.isArray(e1.data) ? e1.data : [];
-  const recentEvents = eventRows.map(classifyEncounterResolveEvent);
+  const recentEvents = eventRows.map(classifyEncounterResolutionForProgression);
   const recent10 = recentEvents.slice(0, 10);
   const dbRecentWindow = recent10.length
     ? {

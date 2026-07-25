@@ -1,1 +1,17 @@
-{"name":"bottlecaller","version":"1.0.0","private":true,"scripts":{"dev":"vite","build":"vite build","preview":"vite preview"},"dependencies":{"@supabase/supabase-js":"^2.90.1"},"devDependencies":{"vite":"^7.3.1"}}
+{
+  "name": "bottlecaller",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && node scripts/strip-oversized-assets.mjs",
+    "preview": "vite preview",
+    "test": "node tests/run-node-tests.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.90.1"
+  },
+  "devDependencies": {
+    "vite": "^7.3.1"
+  }
+}

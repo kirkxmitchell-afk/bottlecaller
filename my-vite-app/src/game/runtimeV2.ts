@@ -10,27 +10,33 @@ import {
 import type {
   ActionGroup,
   ActionType,
+  EncounterOutcome,
   EncounterV2,
   GameStateV2,
   PlayerChoice,
   Product,
   ProductSelectionContext,
   RecommendAngle,
+  V2DifficultyMode,
 } from "./typesV2";
 
-interface RuntimeV2Session {
+export interface RuntimeV2Session {
   encounter: EncounterV2;
   product: Product | null;
   gameState: GameStateV2;
+  encounterLimit: number;
+  difficultyMode: V2DifficultyMode;
   outcomeEmitted?: boolean;
 }
 
-interface RuntimeV2StartOptions {
+export interface RuntimeV2StartOptions {
   tier?: number;
   encounterId?: string | null;
+  encounterLimit?: number;
+  difficultyMode?: V2DifficultyMode | string | null;
 }
 
-interface RuntimeV2Snapshot {
+export interface RuntimeV2Snapshot {
   encounterId: string;
   encounterTitle: string;
   encounterOrdinal: number;
@@ -38,23 +44,38 @@ interface RuntimeV2Snapshot {
   productId: string | null;
   productName: string | null;
   tier: number;
+  difficultyMode: V2DifficultyMode;
   progress: number;
   frustration: number;
+  mistakeCount: number;
   progressMood: ReturnType<typeof getProgressMood>;
   frustrationMood: ReturnType<typeof getFrustrationMood>;
   walkAwayUnlocked: boolean;
-  outcome: string | null;
+  outcome: EncounterOutcome | null;
   authorityDelta: number;
   turnCount: number;
+  actionCount: number;
   bestPath: string[];
   serviceStage: EncounterV2["serviceStage"];
   targetRecommendAngle: RecommendAngle | null;
   availableGroups: ActionGroup[];
+  usedChoices: string[];
 }
 
-interface RuntimeV2ChoiceResult {
+export interface RuntimeV2ChoiceResult {
   snapshot: RuntimeV2Snapshot;
   reaction: string;
+}
+
+function normalizeEncounterLimit(limit: number | null | undefined): number {
+  const parsed = Number(limit);
+  if (Number.isFinite(parsed) && parsed > 0) return Math.floor(parsed);
+  return 5;
+}
+
+function getTier1EncounterById(encounterId: string | null | undefined, encounterLimit: number): EncounterV2 | null {
+  if (!encounterId) return null;
+  return getTier1VerticalSliceEncounters(encounterLimit).find((encounter) => encounter.id === encounterId) || null;
 }
 
 const TIER1_ROTATION_KEY = "BC_V2_TIER1_ROTATION_INDEX";
@@ -74,20 +95,21 @@ function setStoredTier1RotationIndex(index: number): void {
   } catch {}
 }
 
-function getTierEncounterPool(tier: number): EncounterV2[] {
-  const encounters = getTier1VerticalSliceEncounters().filter((encounter) => encounter.tier === tier);
-  return encounters.length ? encounters : getTier1VerticalSliceEncounters();
+function getTierEncounterPool(tier: number, encounterLimit: number): EncounterV2[] {
+  const allEncounters = getTier1VerticalSliceEncounters(encounterLimit);
+  const encounters = allEncounters.filter((encounter) => encounter.tier === tier);
+  return encounters.length ? encounters : allEncounters;
 }
 
-function chooseEncounter(tier: number, encounterId?: string | null): EncounterV2 {
-  const encounters = getTierEncounterPool(tier);
+function chooseEncounter(tier: number, encounterLimit: number, encounterId?: string | null): EncounterV2 {
+  const explicit = getTier1EncounterById(encounterId, encounterLimit);
+  if (explicit) return explicit;
+
+  const encounters = getTierEncounterPool(tier, encounterLimit);
   if (!encounters.length) {
     throw new Error("No V2 encounters available");
   }
-  if (encounterId) {
-    const explicit = encounters.find((encounter) => encounter.id === encounterId);
-    if (explicit) return explicit;
-  }
+
   const index = getStoredTier1RotationIndex();
   const nextEncounter = encounters[index % encounters.length] || encounters[0];
   setStoredTier1RotationIndex(index + 1);
@@ -106,29 +128,39 @@ function buildSelectionContext(encounter: EncounterV2): ProductSelectionContext 
   };
 }
 
+function formatProductTitle(product: Product | null): string | null {
+  if (!product) return null;
+  const name = String(product.name || "").replace(/^Scroll of\s+/i, "").trim();
+  const varietal = String(product.varietalOrBlend || "").trim();
+  return [name, varietal].filter(Boolean).join(", ") || null;
+}
+
 function availableActionGroups(gameState: GameStateV2): ActionGroup[] {
-  if (
-    gameState.outcome &&
-    gameState.outcome !== "continue" &&
-    gameState.outcome !== "not_available"
-  ) {
+  if (gameState.outcome && gameState.outcome !== "continue" && gameState.outcome !== "not_available") {
     return [];
   }
+
   const groups: ActionGroup[] = ["ask", "recommend", "commit"];
   if (gameState.walkAwayUnlocked) groups.push("walk_away");
   return groups;
 }
 
 export function getActionTypesForGroup(group: ActionGroup): ActionType[] {
-  if (group === "ask") return ["preference", "occasion", "experience", "budget"];
-  if (group === "recommend") return ["flavour", "story", "value", "confidence"];
-  if (group === "commit") return ["recommendation", "assumption", "celebration", "value"];
+  if (group === "ask") {
+    return ["preference", "occasion", "experience", "budget"];
+  }
+  if (group === "recommend") {
+    return ["flavour", "story", "value", "confidence"];
+  }
+  if (group === "commit") {
+    return ["recommendation", "assumption", "celebration", "value"];
+  }
   return ["walk_away"];
 }
 
-function snapshotRuntimeV2(session: RuntimeV2Session): RuntimeV2Snapshot {
+export function snapshotRuntimeV2(session: RuntimeV2Session): RuntimeV2Snapshot {
   const { encounter, product, gameState } = session;
-  const encounterPool = getTierEncounterPool(encounter.tier);
+  const encounterPool = getTierEncounterPool(encounter.tier, session.encounterLimit);
   const encounterOrdinal = Math.max(
     1,
     encounterPool.findIndex((item) => item.id === encounter.id) + 1,
@@ -139,37 +171,55 @@ function snapshotRuntimeV2(session: RuntimeV2Session): RuntimeV2Snapshot {
     encounterOrdinal,
     encounterCount: encounterPool.length,
     productId: product?.id || null,
-    productName: product?.name || null,
+    productName: formatProductTitle(product),
     tier: encounter.tier,
+    difficultyMode: session.difficultyMode || gameState.difficultyMode || "medium",
     progress: gameState.progress,
     frustration: gameState.frustration,
+    mistakeCount: gameState.mistakeCount,
     progressMood: gameState.progressMood,
     frustrationMood: gameState.frustrationMood,
     walkAwayUnlocked: gameState.walkAwayUnlocked,
     outcome: gameState.outcome,
     authorityDelta: gameState.authorityDelta,
     turnCount: gameState.turnCount,
+    actionCount: gameState.actionCount,
     bestPath: summarizeBestPath(encounter),
     serviceStage: encounter.serviceStage,
     targetRecommendAngle: encounter.targetRecommendAngle || null,
     availableGroups: availableActionGroups(gameState),
+    usedChoices: Array.isArray(gameState.usedChoiceKeys) ? gameState.usedChoiceKeys.slice() : [],
   };
 }
 
-function startRuntimeV2Session(options: RuntimeV2StartOptions = {}): RuntimeV2Session {
+export function startRuntimeV2Session(options: RuntimeV2StartOptions = {}): RuntimeV2Session {
   const tier = Number(options.tier || 1);
-  const encounter = chooseEncounter(tier, options.encounterId);
+  const encounterLimit = normalizeEncounterLimit(options.encounterLimit);
+  const requestedDifficulty = String(options.difficultyMode || "medium").toLowerCase();
+  const difficultyMode: V2DifficultyMode =
+    requestedDifficulty === "easy" || requestedDifficulty === "hard"
+      ? requestedDifficulty
+      : "medium";
+  const encounter = chooseEncounter(tier, encounterLimit, options.encounterId);
   const pool = buildCampaignProductPool(encounter.tier);
   const product = selectCampaignProduct(pool, buildSelectionContext(encounter));
-  const gameState = createGameStateV2(encounter, product);
-  return { encounter, product, gameState, outcomeEmitted: false };
+  const gameState = createGameStateV2(encounter, product, difficultyMode);
+
+  return {
+    encounter,
+    product,
+    gameState,
+    encounterLimit,
+    difficultyMode,
+    outcomeEmitted: false,
+  };
 }
 
-function applyChoiceRuntimeV2(
+export function applyChoiceRuntimeV2(
   session: RuntimeV2Session,
   choice: PlayerChoice,
 ): RuntimeV2ChoiceResult {
-  applyChoice(session.gameState, choice, session.encounter);
+  const result = applyChoice(session.gameState, choice);
   const reaction = session.gameState.history[session.gameState.history.length - 1]?.reaction || "";
   return {
     snapshot: snapshotRuntimeV2(session),

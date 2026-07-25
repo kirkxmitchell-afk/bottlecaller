@@ -119,6 +119,13 @@ export function classifyEncounterResolutionForProgression(row = {}) {
     row?.latest_grade ??
     ""
   ).trim().toUpperCase();
+  const outcome = String(
+    payload?.finalOutcome ??
+    payload?.final_outcome ??
+    payload?.outcome ??
+    row?.outcome ??
+    ""
+  ).trim().toLowerCase();
   const chainSignal = String(
     payload?.chainSignal ??
     payload?.chain_signal ??
@@ -134,17 +141,28 @@ export function classifyEncounterResolutionForProgression(row = {}) {
     NaN
   );
 
+  const explicitGreenOutcome = [
+    "clean_close",
+    "soft_close",
+    "recovered_close",
+  ].includes(outcome);
+  const explicitRedOutcome = [
+    "failed_recovery",
+    "recovery",
+    "recovery_pending",
+    "timeout",
+  ].includes(outcome);
+
   const isGreen =
+    explicitGreenOutcome ||
     row?.is_green === true ||
-    checks?.modeStatus === "optimal" ||
-    checks?.hookStatus === "optimal" ||
-    !!checks?.deliveryCorrect ||
     chainSignal === "green" ||
     performanceGrade === "A" ||
     performanceGrade === "B" ||
-    (Number.isFinite(chainScore) && chainScore >= 3);
+    (Number.isFinite(chainScore) && chainScore >= 3 && !!checks?.readCorrect && !!checks?.deliveryCorrect);
 
   const isRed =
+    explicitRedOutcome ||
     row?.is_red === true ||
     chainSignal === "red" ||
     performanceGrade === "C" ||

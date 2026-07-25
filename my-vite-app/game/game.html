@@ -5,7 +5,8 @@
   <title>BottleCaller Prototype</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <!-- ✅ IMPORTANT: because this file is served at /game/game.html -->
-  <link rel="stylesheet" href="/game/game.css?v=20260609-v2mobile4" />
+  <link rel="stylesheet" href="/game/game.css?v=20260724-godot-landscape-fix" />
+  <script type="module" src="/src/game/gameEntry.ts"></script>
   <script>
     if (window.self !== window.top) {
       if (window.__BC_SUPABASE__ || window.supabase) {
@@ -141,8 +142,11 @@
     (function () {
       try {
         var qs = new URLSearchParams(location.search);
-        var mode = qs.get("mode") || "premium";
-        var demo = (mode === "demo") || (qs.get("demo") === "1");
+        var explicitMode = qs.get("mode");
+        var demoFlag = qs.get("demo") === "1";
+        var standaloneV2Demo = !explicitMode && qs.get("bcV2") === "1";
+        var mode = demoFlag ? "demo" : (explicitMode || (standaloneV2Demo ? "demo" : "premium"));
+        var demo = (mode === "demo") || demoFlag || standaloneV2Demo;
 
         // Force globals
         window.__BC_STANDALONE_DEMO__ = demo;
@@ -184,7 +188,14 @@
     }
 
     function getMode() {
-      try { return new URLSearchParams(location.search).get("mode") || "premium"; }
+      try {
+        const qs = new URLSearchParams(location.search);
+        if (qs.get("demo") === "1") return "demo";
+        const explicitMode = qs.get("mode");
+        if (explicitMode) return explicitMode;
+        if (qs.get("bcV2") === "1") return "demo";
+        return "premium";
+      }
       catch { return "premium"; }
     }
 
@@ -349,6 +360,32 @@
     }
     function measureIframeContentHeight() {
       const activeScreen = document.querySelector(".screen.active");
+      const v2Panel = activeScreen?.querySelector?.('#encounterPanel[data-v2-layout="tier1"]');
+      if (v2Panel) {
+        const rects = [
+          activeScreen,
+          document.getElementById("bcShell"),
+          document.getElementById("bcStage"),
+          v2Panel,
+          v2Panel.querySelector(".v2-hero-frame"),
+          v2Panel.querySelector("#stepButtons"),
+          v2Panel.querySelector(".v2-action-shell"),
+        ]
+          .filter(Boolean)
+          .map((el) => el.getBoundingClientRect?.())
+          .filter((rect) => rect && Number.isFinite(rect.bottom));
+        const maxBottom = Math.max(0, ...rects.map((rect) => rect.bottom));
+        const safeBottom = Number.parseFloat(
+          getComputedStyle(document.documentElement).getPropertyValue("--bc-safe-bottom") || "0"
+        ) || 0;
+        if (maxBottom > 0) {
+          const isV2PlayMobile =
+            window.matchMedia?.("(max-width: 760px)")?.matches &&
+            activeScreen?.id === "screenPlay";
+          const bottomAllowance = isV2PlayMobile ? 16 : safeBottom + 28;
+          return Math.ceil(maxBottom + window.scrollY + bottomAllowance);
+        }
+      }
       const compactShell = activeScreen?.querySelector?.(".bc-shell-center");
       const compactCard = activeScreen?.querySelector?.(".app-welcome-shell, .app-history-shell, .app-summary-shell");
       if (compactShell || compactCard) {
@@ -359,7 +396,10 @@
           compactCard?.offsetHeight || 0
         );
         if (shellHeight > 0) {
-          return shellHeight + 24;
+          const isMobileWelcome =
+            window.matchMedia?.("(max-width: 760px)")?.matches &&
+            activeScreen?.id === "screenWelcome";
+          return shellHeight + (isMobileWelcome ? 72 : 24);
         }
       }
       return Math.max(
@@ -376,23 +416,45 @@
       const activeScreen = document.querySelector(".screen.active");
       const height = measureIframeContentHeight();
       if (!Number.isFinite(height) || height <= 0) return false;
+      const screenId = activeScreen?.id || null;
+      const last = window.__BC_LAST_HEIGHT_REPORT__ || {};
+      if (
+        last.screenId === screenId &&
+        Math.abs(Number(last.height || 0) - height) < 2 &&
+        Date.now() - Number(last.at || 0) < 900
+      ) {
+        return false;
+      }
+      window.__BC_LAST_HEIGHT_REPORT__ = { height, screenId, at: Date.now() };
       return postToParent({
         type: "BC_IFRAME_HEIGHT",
         height,
         reason,
-        screenId: activeScreen?.id || null,
+        screenId,
       });
     }
     function scheduleIframeHeightReport(reason = "layout") {
       try { clearTimeout(window.__BC_HEIGHT_REPORT_T__); } catch {}
+      try {
+        (window.__BC_HEIGHT_REPORT_SETTLE_TS__ || []).forEach((timer) => clearTimeout(timer));
+      } catch {}
+      window.__BC_HEIGHT_REPORT_SETTLE_TS__ = [];
+      const isMobile = window.matchMedia?.("(max-width: 760px)")?.matches;
+      const delay = isMobile ? 80 : 32;
+      const runReport = (label) => {
+        try { return reportIframeHeight(label); } catch { return false; }
+      };
       window.__BC_HEIGHT_REPORT_T__ = setTimeout(() => {
         try {
-          reportIframeHeight(reason);
-          requestAnimationFrame(() => {
-            try { reportIframeHeight(reason + ":raf"); } catch {}
-          });
+          runReport(reason);
+          requestAnimationFrame(() => runReport(reason + ":raf"));
+          if (isMobile) {
+            window.__BC_HEIGHT_REPORT_SETTLE_TS__ = [180, 420].map((settleDelay) =>
+              setTimeout(() => runReport(`${reason}:settle_${settleDelay}`), settleDelay)
+            );
+          }
         } catch {}
-      }, 24);
+      }, delay);
     }
     function installIframeHeightSync() {
       if (window.__BC_HEIGHT_SYNC_INSTALLED__) return;
@@ -418,8 +480,6 @@
             mo.observe(document.body, {
               childList: true,
               subtree: true,
-              attributes: true,
-              characterData: true,
             });
           }
           window.__BC_HEIGHT_MUTATION_OBSERVER__ = mo;
@@ -1801,6 +1861,9 @@
         }
 
         if (activeScreen === "screenPlay" && fireBoundBack("btnBackHomeFromPlay")) {
+          return true;
+        }
+        if (activeScreen === "screenGodotShift" && fireBoundBack("btnBackHomeFromGodot")) {
           return true;
         }
 
@@ -4197,6 +4260,13 @@
           }
         }
         if (msg.ok) {
+          if (msg.serverProgressionState && typeof msg.serverProgressionState === "object") {
+            window.__BC_PROGRESSION__ = {
+              ...(window.__BC_PROGRESSION__ || {}),
+              canonicalState: msg.serverProgressionState,
+              authority: msg.serverProgressionState.v2?.authority || msg.serverProgressionState.authority || null,
+            };
+          }
           reconcileLocalProgressAfterSubmit({
             syncedEncounterNumber: msg.syncedEncounterNumber,
             syncedAt: msg.syncedAt,
@@ -4825,85 +4895,92 @@
   </section>
 
   <section id="screenHome" class="screen">
-    <div class="panel app-home-shell">
-      <div class="app-home-header">
-        <div class="app-home-eyebrow">Service Training Cockpit</div>
-        <h2>BottleCaller</h2>
-        <p class="app-home-subtitle">Train the floor. Build cleaner reads. Sharpen the close.</p>
-        <div class="button-row app-home-header-actions">
-          <button id="btnStatusBackToWelcome" type="button" class="btn-ghost">Back to Welcome</button>
+    <div class="panel app-home-shell bc-service-hub">
+      <div class="bc-service-statusbar" aria-label="Player status">
+        <span id="bcHomeLevel">Lv 1</span>
+        <span id="bcHomeAP">0 AP</span>
+        <span id="bcHomeBottleStatus">0 Bottles</span>
+      </div>
+
+      <div class="bc-service-profile">
+        <div>
+          <div class="bc-service-profile-name" id="bcHomePlayerName">Guest</div>
+          <div class="bc-service-profile-title">Trainee Caller</div>
+        </div>
+        <span class="bc-service-profile-floor" id="bcHomeFloorLabel">Demo Floor</span>
+      </div>
+
+      <div class="bc-service-reward-panels">
+        <div class="bc-service-mini-panel">
+          <span>Daily Pour</span>
+          <strong>Tomorrow</strong>
+        </div>
+        <div class="bc-service-mini-panel">
+          <span>Next Bottle</span>
+          <strong id="bcHomeNextBottle">30 AP to go</strong>
         </div>
       </div>
 
-      <div class="app-home-grid">
-
-      <!-- Demo card -->
-      <div class="card app-mode-card" id="cardDemo" data-home-mode="demo">
-        <div class="app-mode-header">
-          <strong class="app-mode-title">Demo</strong>
-          <div class="app-mode-kicker">Fast reps</div>
+      <div class="bc-service-tier-card" id="btnHomeBeginTier" role="button" tabindex="0" aria-label="Begin Main Dining Floor">
+        <div class="bc-service-tier-art">
+          <img
+            src="/game/home/tier-1-main-dining-floor.png"
+            alt=""
+            onerror="this.classList.add('is-missing'); this.removeAttribute('src');"
+          />
+          <div class="bc-service-tier-placeholder">Main Dining Floor</div>
         </div>
-        <p class="app-mode-copy">Use a lightweight run to learn the interaction rhythm before stepping into the full floor-pressure loop.</p>
-        <div class="score-row app-score-row">Wines saved: <span id="homeDemoCount">0 / 3</span></div>
-        <div class="score-row app-score-row">Runs total: <span id="homeDemoRuns">0</span></div>
-        <div class="card progress-card app-progress-card">
-          <strong class="app-progress-title">Progress</strong>
-          <div class="small-text">Level: <span id="progressNameDemo">—</span></div>
-          <div class="small-text">Points: <span id="progressPointsDemo">0</span></div>
-        </div>
-        <div class="button-row app-home-actions" id="demoButtons">
-          <button id="btnGoDemo" type="button">Setup</button>
-          <button id="btnStartDrillDemo" type="button">5-Minute Drill</button>
-          <button id="btnViewHistoryDemo" type="button">View History</button>
-          <button id="btnResetProgressDemo" type="button">Restart encounter flow</button>
-          <button id="btnResetWinesDemo" type="button" data-role="manager">Reset Wines Only</button>
+        <div class="bc-service-tier-copy">
+          <span>Tier 1</span>
+          <strong>Main Dining Floor</strong>
         </div>
       </div>
 
-      <!-- Premium card -->
-      <div class="card app-mode-card" id="cardPremium" data-home-mode="premium">
-        <div class="app-premium-hero">
-          <div class="app-premium-lead">
-            <div class="app-mode-header">
-              <strong class="app-mode-title">Premium</strong>
-              <div class="app-mode-kicker">Full service pressure</div>
-            </div>
-            <p class="app-mode-copy">Run the full sequence with progression pressure, tighter reads, sharper prompt demands, and the real table-close loop.</p>
-          </div>
-          <div class="app-premium-status">
-            <div class="score-row app-score-row">Wines saved: <span id="homePremiumCount">0 / 10</span></div>
-            <div class="score-row app-score-row">Runs total: <span id="homePremiumRuns">0</span></div>
-            <div class="card progress-card app-progress-card">
-              <strong class="app-progress-title">Progress</strong>
-              <div class="app-progress-meter-wrap">
-                <div class="app-progress-meter" aria-hidden="true">
-                  <div class="app-progress-meter-bar" id="progressBarPremium"></div>
-                </div>
-                <div class="app-progress-meter-head">
-                  <strong class="app-progress-percent" id="progressPercentPremium">0%</strong>
-                  <span class="small-text app-progress-notice" id="progressNoticePremium">Opening service band</span>
-                </div>
-              </div>
-              <div class="app-progress-chip-row">
-                <span class="app-progress-chip" id="premiumPressureChip">Pressure: Low band</span>
-                <span class="app-progress-chip" id="premiumGuestChip">Guests: Core floor reads</span>
-              </div>
-              <div class="small-text">Level: <span id="progressNamePremium">—</span></div>
-              <div class="small-text">Points: <span id="progressPointsPremium">0</span></div>
-              <div class="small-text app-progress-detail"><span class="app-progress-label">Focus</span><span id="progressFocusPremium">—</span></div>
-              <div class="small-text app-progress-detail"><span class="app-progress-label">Window</span><span id="progressNextPremium">—</span></div>
-            </div>
-          </div>
+      <div class="button-row app-home-actions bc-service-main-action" id="demoButtons">
+        <button id="btnGoDemo" class="bc-next-table-button hidden" type="button">BEGIN</button>
+        <button id="btnGoPremium" class="bc-next-table-button hidden" data-tutorial="play-button" type="button">BEGIN</button>
+      </div>
+
+      <div class="bc-service-progress-strip" id="bcHomeProgressStrip">Encounter 1 / 3 Demo</div>
+
+      <div class="bc-service-bottle-slots" id="bcHomeBottleSlots" aria-label="Bottle rewards">
+        <div class="bc-service-bottle-slot">
+          <span>Starter Bottle</span>
+          <strong>30 AP to go</strong>
         </div>
-        <div class="button-row app-home-actions" id="premiumButtons">
-          <button id="btnGoPremium" data-tutorial="play-button" type="button">Setup</button>
-          <button id="btnViewHistoryPremium" type="button">View History</button>
-          <button id="btnResetProgressPremium" type="button">Restart encounter flow</button>
-          <button id="btnHardResetProgressionPremium" type="button" class="hidden">Reset waiter progression</button>
-          <button id="btnResetWinesPremium" type="button" data-role="manager">Reset Wines Only</button>
+        <div class="bc-service-bottle-slot">
+          <span>Bronze Bottle</span>
+          <strong>100 AP to go</strong>
+        </div>
+        <div class="bc-service-bottle-slot">
+          <span>Tier 2 Bottle</span>
+          <strong>Locked</strong>
         </div>
       </div>
 
+      <div class="bc-service-legacy-status" aria-hidden="true">
+        <span id="homeDemoCount">0 / 3</span>
+        <span id="homeDemoRuns">0</span>
+        <span id="homePremiumCount">0 / 10</span>
+        <span id="homePremiumRuns">0</span>
+        <span id="progressNameDemo">—</span>
+        <span id="progressPointsDemo">0</span>
+        <span id="progressNamePremium">—</span>
+        <span id="progressPercentPremium">0%</span>
+        <span id="progressNoticePremium">Opening service band</span>
+        <span id="progressPointsPremium">0</span>
+        <span id="progressFocusPremium">—</span>
+        <span id="progressNextPremium">—</span>
+        <span id="progressBarPremium"></span>
+        <button id="btnStartDrillDemo" type="button">5-Minute Drill</button>
+        <button id="btnViewHistoryDemo" type="button">View History</button>
+        <button id="btnResetProgressDemo" type="button">Restart encounter flow</button>
+        <button id="btnResetWinesDemo" type="button" data-role="manager">Reset Wines Only</button>
+        <button id="btnViewHistoryPremium" type="button">View History</button>
+        <button id="btnResetProgressPremium" type="button">Restart encounter flow</button>
+        <button id="btnHardResetProgressionPremium" type="button">Reset waiter progression</button>
+        <button id="btnResetWinesPremium" type="button" data-role="manager">Reset Wines Only</button>
+        <button id="btnStatusBackToWelcome" type="button">Back to Welcome</button>
       </div>
     </div>
   </section>
@@ -5156,6 +5233,28 @@
           <div id="progressReportStatus" class="small-text progress-report-status"></div>
         </div>
       </footer>
+    </div>
+  </section>
+
+  <section id="screenGodotShift" class="screen screen-godot-shift" aria-label="Main Dining Floor">
+    <div class="godot-shift-shell">
+      <header class="godot-shift-chrome">
+        <div class="godot-shift-brand">
+          <strong>BottleCaller</strong>
+          <span>Main Dining Floor</span>
+        </div>
+        <button id="btnBackHomeFromGodot" class="btn btn-ghost" type="button">Back</button>
+      </header>
+      <div class="godot-shift-stage" id="godotShiftStage">
+        <iframe
+          id="godotShiftFrame"
+          title="BottleCaller Godot Floor"
+          src="about:blank"
+          allow="autoplay; fullscreen; gamepad"
+          loading="lazy"
+        ></iframe>
+        <div id="godotShiftStatus" class="godot-shift-status" hidden>Loading floor…</div>
+      </div>
     </div>
   </section>
 
@@ -6730,11 +6829,22 @@ function isDrillMode() {
 
       function getAuthoritativeTierToServe(fallbackTier = null) {
         const payload = getAuthoritativeProgressionPayload();
+        const canonical =
+          payload?.canonicalState ||
+          payload?.canonical_state ||
+          payload?.progressionState ||
+          payload?.progression_state ||
+          null;
         const tierRaw =
           payload?.tierToServe ??
           payload?.tier_to_serve ??
           payload?.result?.tierToServe ??
           payload?.result?.tier_to_serve ??
+          canonical?.authority?.tierToServe ??
+          canonical?.authority?.tier_to_serve ??
+          canonical?.v2?.authority?.tierToServe ??
+          canonical?.v2?.authority?.tier_to_serve ??
+          canonical?.economy?.tier ??
           fallbackTier;
         const tierNum = Number(tierRaw);
         if (!Number.isFinite(tierNum)) return null;
@@ -8324,11 +8434,30 @@ function ensureProgLoaded() {
               return;
             }
             if (msg.type === "auth_state" && msg.authed === false) {
+              // Demo/Godot is anonymous — parent session-null kicks must never reload us.
+              if (
+                window.__BC_GODOT_SHIFT_ACTIVE__ ||
+                document.documentElement?.dataset?.bcGodotShift === "true" ||
+                window.isDemo ||
+                window.bcMode === "demo"
+              ) {
+                console.warn("[IFRAME] auth_state=false ignored during demo/Godot");
+                return;
+              }
               console.warn("[IFRAME] auth_state=false -> shutting down");
               window.location.replace("game.html?mode=demo&demo=1");
               return;
             }
             if (msg.type === "parent_logged_out") {
+              if (
+                window.__BC_GODOT_SHIFT_ACTIVE__ ||
+                document.documentElement?.dataset?.bcGodotShift === "true" ||
+                window.isDemo ||
+                window.bcMode === "demo"
+              ) {
+                console.warn("[IFRAME] parent_logged_out ignored during demo/Godot");
+                return;
+              }
               console.warn("[IFRAME] parent logged out -> shutting down");
               window.location.replace("game.html?mode=demo&demo=1");
               return;
@@ -8442,6 +8571,89 @@ function ensureProgLoaded() {
       // ---------- Keys / limits ----------
       const demoWinesKey = "bc_demo_wines";
       const premiumWinesKey = "bc_premium_wines";
+      const V2_WELCOME_OBJECTIVES_KEY = "BC_V2_WELCOME_OBJECTIVES_V1";
+      const V2_WELCOME_OBJECTIVES_DONE_KEY = "BC_V2_WELCOME_OBJECTIVES_DONE_V1";
+      const V2_WELCOME_OBJECTIVES = [
+        {
+          id: "start",
+          html: "Press <strong>Start</strong> to enter the guest scene and read the clues.",
+        },
+        {
+          id: "choose",
+          html: "Choose your next response from <strong>Ask</strong>, <strong>Recommend</strong>, or <strong>Commit</strong>.",
+        },
+        {
+          id: "follow",
+          html: "After a guest reply, follow the instruction prompt to decide whether to keep reading, recommend, commit, or walk away.",
+        },
+      ];
+
+      function loadV2WelcomeObjectives() {
+        try {
+          const raw = localStorage.getItem(V2_WELCOME_OBJECTIVES_KEY);
+          const parsed = raw ? JSON.parse(raw) : {};
+          return V2_WELCOME_OBJECTIVES.reduce((state, item) => {
+            state[item.id] = !!parsed?.[item.id];
+            return state;
+          }, {});
+        } catch {
+          return V2_WELCOME_OBJECTIVES.reduce((state, item) => {
+            state[item.id] = false;
+            return state;
+          }, {});
+        }
+      }
+
+      function areV2WelcomeObjectivesComplete(state = loadV2WelcomeObjectives()) {
+        return V2_WELCOME_OBJECTIVES.every((item) => !!state[item.id]);
+      }
+
+      function isV2WelcomeOnboardingComplete() {
+        try {
+          if (localStorage.getItem(V2_WELCOME_OBJECTIVES_DONE_KEY) === "true") return true;
+        } catch {}
+        return areV2WelcomeObjectivesComplete();
+      }
+
+      function saveV2WelcomeObjectives(state) {
+        const normalized = V2_WELCOME_OBJECTIVES.reduce((next, item) => {
+          next[item.id] = !!state?.[item.id];
+          return next;
+        }, {});
+        try {
+          localStorage.setItem(V2_WELCOME_OBJECTIVES_KEY, JSON.stringify(normalized));
+          localStorage.setItem(V2_WELCOME_OBJECTIVES_DONE_KEY, areV2WelcomeObjectivesComplete(normalized) ? "true" : "false");
+        } catch {}
+        renderV2WelcomeChecklist();
+        return normalized;
+      }
+
+      function markV2WelcomeObjective(id) {
+        if (!isDemo) return loadV2WelcomeObjectives();
+        const key = String(id || "");
+        if (!V2_WELCOME_OBJECTIVES.some((item) => item.id === key)) return loadV2WelcomeObjectives();
+        const state = loadV2WelcomeObjectives();
+        if (state[key]) return state;
+        state[key] = true;
+        return saveV2WelcomeObjectives(state);
+      }
+
+      function renderV2WelcomeChecklist() {
+        const list = document.getElementById("welcomeBulletList");
+        if (!list || !isDemo) return;
+        const state = loadV2WelcomeObjectives();
+        list.classList.add("welcome-objective-list");
+        list.innerHTML = V2_WELCOME_OBJECTIVES.map((item) => {
+          const done = !!state[item.id];
+          return `
+            <li class="welcome-objective-item${done ? " is-complete" : ""}" data-v2-welcome-objective="${item.id}">
+              <span class="welcome-objective-check" aria-hidden="true">${done ? "✓" : ""}</span>
+              <span>${item.html}</span>
+            </li>
+          `;
+        }).join("");
+      }
+      renderV2WelcomeChecklist();
       const demoRunsKey = "bc_demo_runs";
       const premiumRunsKey = "bc_premium_runs";
       const coverKey = "bc_has_seen_cover";
@@ -10835,6 +11047,16 @@ function ensureProgLoaded() {
         if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
 
         if (msg.type === "auth_state" && msg.authed === false) {
+          // Demo/Godot is anonymous — parent session-null kicks must never reload us.
+          if (
+            window.__BC_GODOT_SHIFT_ACTIVE__ ||
+            document.documentElement?.dataset?.bcGodotShift === "true" ||
+            window.isDemo ||
+            window.bcMode === "demo"
+          ) {
+            console.warn("[IFRAME] auth_state=false ignored during demo/Godot");
+            return;
+          }
           console.warn("[IFRAME] auth_state=false -> shutting down");
           try { localStorage.removeItem("bc_ctx"); } catch {}
           window.location.replace("/game/game.html?mode=demo&demo=1");
@@ -10842,6 +11064,15 @@ function ensureProgLoaded() {
         }
 
         if (msg.type === "parent_logged_out") {
+          if (
+            window.__BC_GODOT_SHIFT_ACTIVE__ ||
+            document.documentElement?.dataset?.bcGodotShift === "true" ||
+            window.isDemo ||
+            window.bcMode === "demo"
+          ) {
+            console.warn("[IFRAME] parent_logged_out ignored during demo/Godot");
+            return;
+          }
           console.warn("[IFRAME] parent logged out -> shutting down");
           try { localStorage.removeItem("bc_ctx"); } catch {}
           window.location.replace("/game/game.html?mode=demo&demo=1");
@@ -10902,6 +11133,66 @@ function ensureProgLoaded() {
             window.startEncounter?.();
           } catch (e) {
             console.warn("[BC] reset_to_encounter_1 failed", e);
+          }
+          return;
+        }
+
+        if (msg.type === "start_v2_demo" || msg.type === "start_godot_shift") {
+          try {
+            const startReason = String(msg.reason || msg.type || "");
+            const isTrustedV2Start =
+              startReason.includes("auto_start") ||
+              startReason.includes("mobile") ||
+              startReason.includes("iframe_mount") ||
+              startReason.includes("iframe_load") ||
+              startReason.includes("play_enter") ||
+              startReason.includes("godot") ||
+              msg.type === "start_godot_shift" ||
+              msg.preferGodot === true;
+            if (!isTrustedV2Start) {
+              return;
+            }
+            if (window.__BC_V2_DEMO_FINAL_SUMMARY_ACTIVE__) {
+              return;
+            }
+            const activeScreenId = document.querySelector(".screen.active")?.id || "";
+            if (activeScreenId === "screenGodotShift" && window.__BC_GODOT_SHIFT_ACTIVE__) {
+              return;
+            }
+            window.__BC_GODOT_SHIFT_ACTIVE__ = true;
+            document.documentElement.dataset.bcGodotShift = "true";
+            notifyParentDemoPlayStarted?.("godot_start_requested");
+            notifyParentGodotShiftActive?.(true);
+            // Prefer Godot for demo auto-start. Retry until the Godot API is exposed
+            // so we never silently fall back to the old V2 HTML play path.
+            const tryStartGodot = () => {
+              const starter = window.__BC_START_GODOT_SHIFT__;
+              const shouldUse = window.__BC_SHOULD_USE_GODOT_SHIFT__;
+              if (typeof starter !== "function") return false;
+              if (typeof shouldUse === "function" && !shouldUse()) return false;
+              starter({ reason: startReason || "start_v2_demo" });
+              return true;
+            };
+            if (tryStartGodot()) {
+              window.__BC_V2_DEMO_DIRECT_START_AT__ = Date.now();
+              return;
+            }
+            if (!window.__BC_GODOT_START_RETRY__) {
+              window.__BC_GODOT_START_RETRY__ = true;
+              let attempts = 0;
+              const timer = window.setInterval(() => {
+                attempts += 1;
+                if (tryStartGodot() || attempts >= 40) {
+                  window.clearInterval(timer);
+                  window.__BC_GODOT_START_RETRY__ = false;
+                  if (attempts >= 40 && typeof window.__BC_START_GODOT_SHIFT__ !== "function") {
+                    console.warn("[BC] Godot start API never became ready; not falling back to V2");
+                  }
+                }
+              }, 100);
+            }
+          } catch (e) {
+            console.warn("[BC] start_v2_demo failed", e);
           }
           return;
         }
@@ -11957,13 +12248,10 @@ function ensureProgLoaded() {
 
       function bindInput(el, fn) {
         if (!el || typeof fn !== "function") return;
-        const primary = window.PointerEvent ? "pointerup" : "click";
+        if (el.__bcBound) return;
+        el.__bcBound = true;
 
-        if (el.__bcBound && el.__bcBoundHandler && el.__bcBoundEvent) {
-          try {
-            el.removeEventListener(el.__bcBoundEvent, el.__bcBoundHandler);
-          } catch {}
-        }
+        const primary = "pointerup";
 
         const fire = async (e) => {
           const now = Date.now();
@@ -12022,10 +12310,11 @@ function ensureProgLoaded() {
           }
         };
 
-        el.__bcBound = true;
-        el.__bcBoundEvent = primary;
-        el.__bcBoundHandler = fire;
-        el.addEventListener(primary, fire, { passive: false });
+        if (window.PointerEvent) {
+          el.addEventListener("pointerup", fire, { passive: false });
+        } else {
+          el.addEventListener("click", fire, { passive: false });
+        }
       }
 
       // ---------- Screens ----------
@@ -12096,6 +12385,13 @@ function ensureProgLoaded() {
       window.__BC_NAV__.openWelcome = () => {
         if (sessionType === "drill") return;
         try {
+          if ((window.isDemo || window.bcMode === "demo") && isV2WelcomeOnboardingComplete()) {
+            try { localStorage.setItem(coverKey, "true"); } catch {}
+            applyPlaySurfaceMode("full");
+            resetNavState();
+            showScreen("screenHome");
+            return;
+          }
           const activeScreenId = document.querySelector(".screen.active")?.id || "";
           if (activeScreenId === "screenPlay" || activeScreenId === "screenDrill") {
             return;
@@ -12104,6 +12400,22 @@ function ensureProgLoaded() {
           showScreen("screenWelcome");
         } catch (e) {
           console.warn("[BC] NAV openWelcome failed", e);
+        }
+      };
+
+      window.__BC_NAV__.openHomeFromWelcome = () => {
+        if (sessionType === "drill") return;
+        try {
+          if (!window.isDemo && isStandalone()) {
+            redirectToParentLogin("welcome_start_home");
+            return;
+          }
+          try { localStorage.setItem(coverKey, "true"); } catch {}
+          applyPlaySurfaceMode("full");
+          resetNavState();
+          showScreen("screenHome");
+        } catch (e) {
+          console.warn("[BC] NAV openHomeFromWelcome failed", e);
         }
       };
 
@@ -12133,15 +12445,11 @@ function ensureProgLoaded() {
           }
 
           try { localStorage.setItem(coverKey, "true"); } catch {}
-          applyPlaySurfaceMode(window.isDemo || window.bcMode === "demo" ? "encounter_only" : "full");
+          applyPlaySurfaceMode("full");
           resetNavState();
           showScreen("screenPlay");
 
           if (window.isDemo || window.bcMode === "demo") {
-            if (isV2DemoHarnessRequested() || isV2DemoHarnessEnabled()) {
-              startV2HarnessEncounterWhenReady({ resetSession: true });
-              return;
-            }
             window.startEncounter?.();
             return;
           }
@@ -12171,6 +12479,27 @@ function ensureProgLoaded() {
         const shell = document.getElementById("bcShell");
         if (!shell) return;
         shell.classList.toggle("is-encounter-only", mode === "encounter_only");
+      }
+
+      function notifyParentDemoPlayStarted(reason = "start") {
+        try {
+          if (!(window.isDemo || window.bcMode === "demo")) return;
+          if (!window.parent || window.parent === window) return;
+          const onGodot =
+            !!window.__BC_GODOT_SHIFT_ACTIVE__ ||
+            document.documentElement?.dataset?.bcGodotShift === "true" ||
+            String(reason || "").includes("godot");
+          window.parent.postMessage(
+            {
+              source: "BC_MSG",
+              v: 1,
+              type: "demo_play_started",
+              screenId: onGodot ? "screenGodotShift" : "screenPlay",
+              reason,
+            },
+            window.location.origin
+          );
+        } catch {}
       }
 
       // ---------- Storage ----------
@@ -14003,6 +14332,124 @@ function ensureProgLoaded() {
       }
 
       // ---------- UI: counts ----------
+      function getV2HomeRewardStateSafe() {
+        try {
+          if (typeof loadV2BottleRewardState === "function") return loadV2BottleRewardState();
+        } catch (e) {
+          console.warn("[BC][HOME] reward state unavailable", e);
+        }
+        return {
+          totalAP: 0,
+          tierUnlocked: 1,
+          rewards: [
+            { id: "starter_bottle", name: "Starter Bottle", unlockAP: 30, tier: 1, claimed: false },
+            { id: "bronze_bottle", name: "Bronze Bottle", unlockAP: 100, tier: 1, claimed: false },
+            { id: "tier_2_unlock_bottle", name: "Tier 2 Bottle", unlockAP: 180, tier: 1, claimed: false },
+          ],
+        };
+      }
+
+      function getV2HomeRewardStatus(reward, totalAP) {
+        if (!reward) return "";
+        if (reward.claimed) return "Opened";
+        const unlockAP = Number(reward.unlockAP || 0);
+        if (unlockAP <= Number(totalAP || 0)) return "Open Now";
+        return `${Math.max(0, unlockAP - Number(totalAP || 0))} AP to go`;
+      }
+
+      function getV2HomeEncounterProgressLabel() {
+        const isDemoNow = !!(window.isDemo || window.bcMode === "demo");
+        let limit = isDemoNow ? 5 : 16;
+        try {
+          if (typeof getV2EncounterLimit === "function") limit = getV2EncounterLimit();
+        } catch {}
+
+        if (isDemoNow) {
+          const state = getV2HomeRewardStateSafe();
+          const completionCount = Math.max(0, Number(state.demoCompletionCount || 0));
+          const nextEncounter = completionCount >= limit ? 1 : completionCount + 1;
+          return `Next Encounter ${nextEncounter} / ${limit} Demo`;
+        }
+
+        let current = 0;
+        try {
+          current = typeof loadEncounterIndexSafe === "function"
+            ? Number(loadEncounterIndexSafe() || 0)
+            : Number(encounterIndex || 0);
+        } catch {
+          current = Number(encounterIndex || 0);
+        }
+
+        const position = Math.max(1, (Math.max(0, current) % Math.max(1, limit)) + 1);
+        return `Tier 1 Progress: ${Math.min(position, 10)} / 10 Tables`;
+      }
+
+      function getV2HomePlayerName() {
+        const identity = (typeof getGameplayIdentity === "function") ? getGameplayIdentity() : {};
+        const ctx = window.__BC_CTX__ || {};
+        const raw =
+          identity?.displayName ||
+          identity?.name ||
+          ctx?.displayName ||
+          ctx?.name ||
+          ctx?.userName ||
+          "";
+        const name = String(raw || "").trim();
+        if (name) return name.split(/\s+/)[0];
+        if (window.isDemo || window.bcMode === "demo") return "Kirk";
+        return "Guest";
+      }
+
+      function renderV2ServiceHubHome() {
+        const state = getV2HomeRewardStateSafe();
+        const totalAP = Number(state.totalAP || 0);
+        const rewards = Array.isArray(state.rewards) ? state.rewards : [];
+        const pending = rewards.filter((reward) => Number(reward.unlockAP || 0) <= totalAP && !reward.claimed);
+        const claimedCount = rewards.filter((reward) => reward.claimed).length;
+        const nextReward = rewards.find((reward) => !reward.claimed) || rewards[0] || null;
+        const isDemoNow = !!(window.isDemo || window.bcMode === "demo");
+
+        const levelEl = document.getElementById("bcHomeLevel");
+        const apEl = document.getElementById("bcHomeAP");
+        const bottleStatusEl = document.getElementById("bcHomeBottleStatus");
+        const playerNameEl = document.getElementById("bcHomePlayerName");
+        const floorEl = document.getElementById("bcHomeFloorLabel");
+        const nextBottleEl = document.getElementById("bcHomeNextBottle");
+        const progressEl = document.getElementById("bcHomeProgressStrip");
+        const slotsEl = document.getElementById("bcHomeBottleSlots");
+
+        if (levelEl) levelEl.textContent = `Lv ${Number(state.tierUnlocked || 1)}`;
+        if (apEl) apEl.textContent = `${totalAP} AP`;
+        if (bottleStatusEl) {
+          bottleStatusEl.textContent = pending.length
+            ? "Bottle Ready"
+            : `${claimedCount} ${claimedCount === 1 ? "Bottle" : "Bottles"}`;
+        }
+        if (playerNameEl) playerNameEl.textContent = getV2HomePlayerName();
+        if (floorEl) floorEl.textContent = isDemoNow ? "Demo Floor" : "Service Floor";
+        if (nextBottleEl) nextBottleEl.textContent = getV2HomeRewardStatus(nextReward, totalAP) || "Locked";
+        if (progressEl) progressEl.textContent = getV2HomeEncounterProgressLabel();
+
+        if (slotsEl) {
+          const homeRewards = [
+            { id: "starter_bottle", name: "Starter Bottle", unlockAP: 30 },
+            { id: "bronze_bottle", name: "Bronze Bottle", unlockAP: 100 },
+            { id: "tier_2_unlock_bottle", name: "Tier 2 Bottle", unlockAP: 180 },
+          ];
+          slotsEl.innerHTML = homeRewards.map((fallbackReward) => {
+            const reward = rewards.find((item) => item.id === fallbackReward.id) || fallbackReward;
+            const status = getV2HomeRewardStatus(reward, totalAP) || "Locked";
+            const stateClass = status === "Open Now" ? "is-ready" : status === "Opened" ? "is-opened" : "is-locked";
+            return `
+              <div class="bc-service-bottle-slot ${stateClass}">
+                <span>${fallbackReward.name}</span>
+                <strong>${status}</strong>
+              </div>
+            `;
+          }).join("");
+        }
+      }
+
       function renderHomeCounts() {
         const snapshot = getUnifiedProgressSnapshot();
         const W = getWinesSafe();
@@ -14010,6 +14457,7 @@ function ensureProgLoaded() {
         const runsEl = document.getElementById(ids.cardRuns);
         if (countEl) countEl.innerText = W.length + " / " + LIMIT;
         if (runsEl) runsEl.innerText = snapshot.runs.active;
+        try { renderV2ServiceHubHome(); } catch (e) { console.warn("[BC][HOME] service hub render failed", e); }
       }
 
       function updateCounts() {
@@ -23053,15 +23501,15 @@ function ensureProgLoaded() {
 
         bindInput(btn, async () => {
           resetNavState();
-          if (isDemo || window.bcMode === "demo") {
+          if (isDemo) {
+            markV2WelcomeObjective("start");
+            localStorage.setItem(coverKey, "true");
+            showScreen("screenHome");
+            return;
+          }
+          if (shouldUseV2Harness()) {
             try { localStorage.setItem(coverKey, "true"); } catch {}
-            applyPlaySurfaceMode("encounter_only");
-            showScreen("screenPlay");
-            if (isV2DemoHarnessRequested() || isV2DemoHarnessEnabled()) {
-              startV2HarnessEncounterWhenReady({ resetSession: true });
-              return;
-            }
-            window.startEncounter?.();
+            startV2HarnessWhenReady({ resetSession: true });
             return;
           }
           try { localStorage.setItem(coverKey, "true"); } catch {}
@@ -23096,11 +23544,7 @@ function ensureProgLoaded() {
         return !!(window.__BC_V2_HARNESS__?.enabled && (window.isDemo || window.bcMode === "demo"));
       }
 
-      function getV2HarnessApi() {
-        return window.__BC_V2_HARNESS__?.api || null;
-      }
-
-      function isV2DemoHarnessRequested() {
+      function isV2HarnessRequestedInFrame() {
         try {
           return new URLSearchParams(window.location.search).get("bcV2") === "1";
         } catch {
@@ -23108,38 +23552,58 @@ function ensureProgLoaded() {
         }
       }
 
-      function startV2HarnessEncounterWhenReady(options = {}, attempt = 0) {
-        if (isV2DemoHarnessEnabled() && getV2HarnessApi()) {
-          startV2HarnessEncounter(options);
-          return true;
-        }
+      function isV2DemoRequestedInFrame() {
+        return !!((window.isDemo || window.bcMode === "demo") && isV2HarnessRequestedInFrame());
+      }
 
-        if (!isV2DemoHarnessRequested()) return false;
+      function shouldUseV2Harness() {
+        return !!(window.__BC_V2_HARNESS__?.enabled || isV2HarnessRequestedInFrame());
+      }
 
-        if (attempt === 0) {
-          applyPlaySurfaceMode("encounter_only");
-          resetNavState();
-          showScreen("screenPlay");
-          const stepHeader = document.getElementById("stepHeader");
-          const wineDisplayName = document.getElementById("wineDisplayName");
-          const stepContent = document.getElementById("stepContent");
-          const stepButtons = document.getElementById("stepButtons");
-          if (stepHeader) stepHeader.textContent = "Loading BottleCaller V2";
-          if (wineDisplayName) wineDisplayName.textContent = "Preparing demo encounter";
-          if (stepContent) {
-            stepContent.innerHTML = '<div class="card"><p class="subtle">Preparing the demo encounter...</p></div>';
-          }
-          if (stepButtons) stepButtons.innerHTML = "";
-        }
+      function getV2EncounterLimit() {
+        if (window.isDemo || window.bcMode === "demo") return 5;
+        try {
+          const requestedLimit = Number(new URLSearchParams(window.location.search).get("bcV2Encounters") || 0);
+          if (Number.isFinite(requestedLimit) && requestedLimit > 0) return requestedLimit;
+        } catch {}
+        const identity = getGameplayIdentity();
+        const role = String(identity?.membershipRole || identity?.role || "").toLowerCase();
+        if (role === "group_manager") return 16;
+        return 5;
+      }
 
-        if (attempt >= 50) {
-          console.warn("[BC][V2] harness did not become ready");
-          showScreen("screenWelcome");
-          return true;
-        }
+      function normalizeV2DifficultyMode(value) {
+        const mode = String(value || "").trim().toLowerCase();
+        if (mode === "easy" || mode === "hard") return mode;
+        return "medium";
+      }
 
-        window.setTimeout(() => startV2HarnessEncounterWhenReady(options, attempt + 1), 80);
-        return true;
+      function getV2DifficultyModeForStart() {
+        const runtimeDifficulty = getRuntimeDifficulty?.() || window.__BC_DIFFICULTY__ || null;
+        return normalizeV2DifficultyMode(
+          runtimeDifficulty?.mode ||
+          window.__BC_SELECTED_DIFFICULTY__ ||
+          getCurrentDifficultyMode?.() ||
+          "medium"
+        );
+      }
+
+      function clampV2Tier(value, maxTier = 3) {
+        const n = Number(value || 1);
+        if (!Number.isFinite(n) || n <= 1) return 1;
+        if (n >= maxTier) return maxTier;
+        return Math.round(n);
+      }
+
+      function getV2TierToServe() {
+        if (window.isDemo || window.bcMode === "demo") return 1;
+        const localAuthority = loadV2ProgressionAuthorityState?.() || null;
+        const authoritativeTier = getAuthoritativeTierToServe?.(localAuthority?.tierToServe || 1);
+        return clampV2Tier(authoritativeTier || localAuthority?.tierToServe || 1, 3);
+      }
+
+      function getV2HarnessApi() {
+        return window.__BC_V2_HARNESS__?.api || null;
       }
 
       function v2HarnessLabel(value) {
@@ -23148,7 +23612,11 @@ function ensureProgLoaded() {
           .replace(/\b\w/g, (m) => m.toUpperCase());
       }
 
-      function getV2EncounterChoiceLine(encounter, group, type) {
+      function getV2EncounterChoiceLine(encounter, group, type, product = null) {
+        if (group === "recommend") {
+          const line = product?.recommendLines?.[type];
+          if (line) return String(line);
+        }
         if (!encounter?.choiceLines) return "";
         if (group === "ask") return String(encounter.choiceLines.ask?.[type] || "");
         if (group === "recommend") return String(encounter.choiceLines.recommend?.[type] || "");
@@ -23157,32 +23625,1074 @@ function ensureProgLoaded() {
         return "";
       }
 
+      const V2_FALLBACK_ENCOUNTER_IMAGE = "/game/tier1-encounter-scene.png";
+      const V2_VS_GRAPHIC = "/game/ui/vs-gold.png";
+
+      function getV2EncounterImages(encounter) {
+        return encounter?.images && typeof encounter.images === "object" ? encounter.images : {};
+      }
+
+      function getV2EncounterIdentity(encounter) {
+        return String(encounter?.id || encounter?.encounterId || "");
+      }
+
+      function getV2EncounterCache() {
+        if (!window.__BC_V2_ENCOUNTER_BY_ID__ || typeof window.__BC_V2_ENCOUNTER_BY_ID__ !== "object") {
+          window.__BC_V2_ENCOUNTER_BY_ID__ = {};
+        }
+        return window.__BC_V2_ENCOUNTER_BY_ID__;
+      }
+
+      function rememberV2Encounter(encounter) {
+        const id = getV2EncounterIdentity(encounter);
+        if (id) {
+          getV2EncounterCache()[id] = encounter;
+        }
+        return encounter || null;
+      }
+
+      function getV2EncounterForSnapshot(snapshot, fallbackEncounter = null) {
+        const snapshotId = String(snapshot?.encounterId || "");
+        const fallbackId = getV2EncounterIdentity(fallbackEncounter);
+        if (fallbackId) rememberV2Encounter(fallbackEncounter);
+        if (!snapshotId) return fallbackEncounter || null;
+        if (fallbackId && fallbackId === snapshotId) return fallbackEncounter;
+        return getV2EncounterCache()[snapshotId] || null;
+      }
+
+      function isV2SessionForSnapshot(snapshot, session) {
+        const snapshotId = String(snapshot?.encounterId || "");
+        if (!snapshotId) return true;
+        return getV2EncounterIdentity(session?.encounter || null) === snapshotId;
+      }
+
+      function getV2EncounterImageSrc(encounter, key, fallbackKey = "mainNeutral") {
+        const images = getV2EncounterImages(encounter);
+        return String(images[key] || images[fallbackKey] || V2_FALLBACK_ENCOUNTER_IMAGE);
+      }
+
+      function getV2TerminalImageSrc(encounter, outcome) {
+        const images = getV2EncounterImages(encounter);
+        const value = String(outcome || "");
+        if (value === "failure") {
+          return String(images.endFailureArt || images.mainNeutral || V2_FALLBACK_ENCOUNTER_IMAGE);
+        }
+        if (value === "neutral_exit") {
+          return String(images.neutralExitArt || images.endSuccessArt || images.mainNeutral || V2_FALLBACK_ENCOUNTER_IMAGE);
+        }
+        return String(images.endSuccessArt || images.mainNeutral || V2_FALLBACK_ENCOUNTER_IMAGE);
+      }
+
+      function getV2LatestHistory(session) {
+        const history = Array.isArray(session?.gameState?.history) ? session.gameState.history : [];
+        return history.length ? history[history.length - 1] : null;
+      }
+
+      function getV2LatestHistoryForSnapshot(snapshot, session) {
+        return isV2SessionForSnapshot(snapshot, session) ? getV2LatestHistory(session) : null;
+      }
+
+      function getV2MainImageSrc(snapshot, encounter, latestHistory) {
+        if (isV2TerminalOutcome(snapshot?.outcome)) {
+          return getV2TerminalImageSrc(encounter, snapshot?.outcome);
+        }
+        const lastQuality = String(latestHistory?.quality || "").toLowerCase();
+        const isNegative =
+          Number(snapshot?.frustration || 0) >= 3 ||
+          Number(snapshot?.mistakeCount || 0) >= 2 ||
+          lastQuality === "poor" ||
+          lastQuality === "disaster" ||
+          lastQuality === "early_commit";
+        if (isNegative) return getV2EncounterImageSrc(encounter, "mainNegative", "mainNeutral");
+        if (lastQuality === "good" || lastQuality === "optimal") {
+          return getV2EncounterImageSrc(encounter, "mainPositive", "mainNeutral");
+        }
+        return getV2EncounterImageSrc(encounter, "mainNeutral", "mainNeutral");
+      }
+
+      function preloadV2Image(src, timeoutMs = 800) {
+        const imageSrc = String(src || "");
+        if (!imageSrc) return Promise.resolve(false);
+        return new Promise((resolve) => {
+          const img = new Image();
+          let settled = false;
+          const finish = (ok) => {
+            if (settled) return;
+            settled = true;
+            resolve(ok);
+          };
+          const timer = window.setTimeout(() => finish(false), timeoutMs);
+          img.onload = () => {
+            window.clearTimeout(timer);
+            if (typeof img.decode === "function") {
+              img.decode().then(() => finish(true)).catch(() => finish(true));
+            } else {
+              finish(true);
+            }
+          };
+          img.onerror = () => {
+            window.clearTimeout(timer);
+            finish(false);
+          };
+          img.src = imageSrc;
+        });
+      }
+
+      function getV2TierGateSummary(authorityState = null) {
+        const state = authorityState || loadV2ProgressionAuthorityState?.() || getDefaultV2ProgressionAuthorityState();
+        const apTier = clampV2Tier(state.apTierUnlocked || getV2TierUnlockedByAP(state.totalAP || 0), 3);
+        const rulesTier = clampV2Tier(state.rulesTierToServe || 1, 3);
+        const served = clampV2Tier(state.tierToServe || Math.min(apTier, rulesTier), 3);
+        const limiter =
+          apTier < rulesTier ? "AP unlock" :
+          rulesTier < apTier ? "rules evidence" :
+          "both gates";
+        return {
+          apTier,
+          rulesTier,
+          served,
+          totalAP: Number(state.totalAP || 0),
+          label: `Serve T${served} • AP gate T${apTier} (${Number(state.totalAP || 0)} AP) • Rules gate T${rulesTier}`,
+          limiter,
+        };
+      }
+
+      function getV2OutcomeAPFromSnapshot(snapshot) {
+        return getV2OutcomeAP(snapshot?.outcome);
+      }
+
+      function getV2ResultPresentation(snapshot, encounter) {
+        const outcome = String(snapshot?.outcome || "");
+        const ap = getV2OutcomeAPFromSnapshot(snapshot);
+        const map = {
+          premium_success: ["Well Done", "Sale Secured"],
+          standard_success: ["Good Recovery", "Sale Secured"],
+          weak_success: ["Barely Landed", "Sale Secured"],
+          neutral_exit: ["Good Restraint", "Experience Preserved"],
+          failure: ["Table Lost", "No Sale"],
+        };
+        const [title, subtitle] = map[outcome] || ["Encounter Complete", "In Progress"];
+        return {
+          title,
+          subtitle,
+          ap,
+          apLabel: `${ap >= 0 ? "+" : ""}${ap} AP`,
+          imageSrc: getV2TerminalImageSrc(encounter, outcome),
+        };
+      }
+
+      function getV2PreviewBottleImage(snapshot, product) {
+        const encounterId = String(snapshot?.encounterId || "");
+        const productId = String(snapshot?.productId || product?.id || "");
+        const imageByEncounter = {
+          encounter_v2_001: "/game/products/chenin-blanc-bottle.png",
+          encounter_v2_002: "/game/products/cabernet-sauvignon-bottle.png",
+          encounter_v2_003: "/game/products/pinot-noir-bottle.png",
+          encounter_v2_011: "/game/products/cabernet-sauvignon-bottle.png",
+          encounter_v2_012: "/game/products/cabernet-sauvignon-bottle.png",
+          encounter_v2_013: "/game/products/pinot-noir-bottle.png",
+          encounter_v2_014: "/game/products/cabernet-sauvignon-bottle.png",
+          encounter_v2_015: "/game/products/cabernet-sauvignon-bottle.png",
+          encounter_v2_016: "/game/products/pinot-noir-bottle.png",
+        };
+        const imageByProduct = {
+          product_cartology_chenin: "/game/products/chenin-blanc-bottle.png",
+          product_uva_mira_cabernet: "/game/products/cabernet-sauvignon-bottle.png",
+          product_valmoissine_pinot_noir: "/game/products/pinot-noir-bottle.png",
+        };
+        return imageByEncounter[encounterId] || imageByProduct[productId] || product?.bottleImage || "";
+      }
+
+      const V2_BOTTLE_REWARD_STORAGE_KEY = "BC_V2_BOTTLE_REWARDS_V1";
+      const V2_BOTTLE_REWARDS = Object.freeze([
+        { id: "starter_bottle", name: "Starter Bottle", unlockAP: 30, tier: 1, claimed: false },
+        { id: "bronze_bottle", name: "Bronze Bottle", unlockAP: 100, tier: 1, claimed: false },
+        { id: "tier_2_unlock_bottle", name: "Tier 2 Unlock Bottle", unlockAP: 180, tier: 1, claimed: false },
+        { id: "tier_1_mastery_bottle", name: "Tier 1 Mastery Bottle", unlockAP: 300, tier: 1, claimed: false },
+        { id: "silver_bottle", name: "Silver Bottle", unlockAP: 400, tier: 2, claimed: false },
+        { id: "tier_3_unlock_bottle", name: "Tier 3 Unlock Bottle", unlockAP: 500, tier: 2, claimed: false },
+        { id: "pairing_bottle", name: "Pairing Bottle", unlockAP: 650, tier: 2, claimed: false },
+        { id: "tier_2_mastery_bottle", name: "Tier 2 Mastery Bottle", unlockAP: 750, tier: 2, claimed: false },
+        { id: "gold_bottle", name: "Gold Bottle", unlockAP: 900, tier: 3, claimed: false },
+        { id: "tier_4_unlock_bottle", name: "Tier 4 Unlock Bottle", unlockAP: 1100, tier: 3, claimed: false },
+        { id: "cellar_bottle", name: "Cellar Bottle", unlockAP: 1250, tier: 3, claimed: false },
+        { id: "tier_3_mastery_bottle", name: "Tier 3 Mastery Bottle", unlockAP: 1350, tier: 3, claimed: false },
+        { id: "reserve_bottle", name: "Reserve Bottle", unlockAP: 1600, tier: 4, claimed: false },
+        { id: "private_dining_bottle", name: "Private Dining Bottle", unlockAP: 1800, tier: 4, claimed: false },
+        { id: "tier_5_unlock_bottle", name: "Tier 5 Unlock Bottle", unlockAP: 2000, tier: 4, claimed: false },
+        { id: "tier_4_mastery_bottle", name: "Tier 4 Mastery Bottle", unlockAP: 2100, tier: 4, claimed: false },
+        { id: "grand_reserve_bottle", name: "Grand Reserve Bottle", unlockAP: 2300, tier: 5, claimed: false },
+        { id: "chaos_service_bottle", name: "Chaos Service Bottle", unlockAP: 2500, tier: 5, claimed: false },
+        { id: "premium_floor_bottle", name: "Premium Floor Bottle", unlockAP: 2700, tier: 5, claimed: false },
+        { id: "master_bottle", name: "Master Bottle", unlockAP: 3000, tier: 5, claimed: false },
+      ]);
+
+      function getV2OutcomeAP(outcome) {
+        switch (String(outcome || "")) {
+          case "premium_success": return 30;
+          case "standard_success": return 20;
+          case "weak_success": return 10;
+          case "neutral_exit": return 5;
+          case "failure": return -15;
+          default: return 0;
+        }
+      }
+
+      function getV2TierUnlockedByAP(totalAP) {
+        const ap = Number(totalAP || 0);
+        if (ap >= 2000) return 5;
+        if (ap >= 1100) return 4;
+        if (ap >= 500) return 3;
+        if (ap >= 180) return 2;
+        return 1;
+      }
+
+      function getDefaultV2BottleRewardState() {
+        return {
+          v: 1,
+          totalAP: 0,
+          tierUnlocked: 1,
+          encounterScores: {},
+          demoCompletions: [],
+          demoCompletionCount: 0,
+          rewards: V2_BOTTLE_REWARDS.map((reward) => ({ ...reward })),
+        };
+      }
+
+      function normalizeV2BottleRewardState(rawState) {
+        const state = rawState && typeof rawState === "object" ? rawState : {};
+        const existingRewards = Array.isArray(state.rewards) ? state.rewards : [];
+        const existingById = new Map(existingRewards.map((reward) => [String(reward?.id || ""), reward]));
+        const encounterScores = state.encounterScores && typeof state.encounterScores === "object"
+          ? state.encounterScores
+          : {};
+        let demoCompletions = Array.isArray(state.demoCompletions)
+          ? state.demoCompletions.filter(Boolean)
+          : [];
+        if (!demoCompletions.length && isV2DemoRewardMode() && Object.keys(encounterScores).length) {
+          demoCompletions = Object.entries(encounterScores).map(([key, entry]) => ({
+            key,
+            encounterKey: entry?.encounterKey || entry?.encounterId || key,
+            encounterId: entry?.encounterId || null,
+            encounterTitle: entry?.encounterTitle || "",
+            ap: Number(entry?.ap || 0),
+            outcome: entry?.outcome || "",
+            completedAt: entry?.completedAt || entry?.updatedAt || Date.now(),
+          }));
+        }
+        const rewards = V2_BOTTLE_REWARDS.map((reward) => {
+          const existing = existingById.get(reward.id) || {};
+          return {
+            ...reward,
+            claimed: !!existing.claimed,
+            claimedAt: existing.claimedAt || null,
+          };
+        });
+        const demoScoreTotal = demoCompletions.reduce((sum, entry) => sum + Number(entry?.ap || 0), 0);
+        const encounterScoreTotal = Object.values(encounterScores).reduce((sum, entry) => sum + Number(entry?.ap || 0), 0);
+        const scoreTotal = demoCompletions.length ? demoScoreTotal : encounterScoreTotal;
+        const totalAP = Math.max(0, Math.round(Number.isFinite(scoreTotal) ? scoreTotal : Number(state.totalAP || 0)));
+        return {
+          v: 1,
+          totalAP,
+          tierUnlocked: getV2TierUnlockedByAP(totalAP),
+          encounterScores,
+          demoCompletions,
+          demoCompletionCount: demoCompletions.length,
+          rewards,
+          demoAPResetAt: state.demoAPResetAt || null,
+        };
+      }
+
+      function loadV2BottleRewardState() {
+        try {
+          const raw = window.localStorage.getItem(V2_BOTTLE_REWARD_STORAGE_KEY);
+          return normalizeV2BottleRewardState(raw ? JSON.parse(raw) : getDefaultV2BottleRewardState());
+        } catch {
+          return normalizeV2BottleRewardState(getDefaultV2BottleRewardState());
+        }
+      }
+
+      function saveV2BottleRewardState(state) {
+        const normalized = normalizeV2BottleRewardState(state);
+        try { window.localStorage.setItem(V2_BOTTLE_REWARD_STORAGE_KEY, JSON.stringify(normalized)); } catch {}
+        window.__BC_V2_BOTTLE_REWARD_STATE__ = normalized;
+        try { renderV2ServiceHubHome?.(); } catch {}
+        return normalized;
+      }
+
+      function syncV2DemoEncounterRotationFromRewardState(stateArg) {
+        if (!isV2DemoRewardMode()) return;
+        const state = stateArg || loadV2BottleRewardState();
+        let limit = 5;
+        try {
+          if (typeof getV2EncounterLimit === "function") limit = getV2EncounterLimit();
+        } catch {}
+        const safeLimit = Math.max(1, Number(limit || 5));
+        const completionCount = Math.max(0, Number(state?.demoCompletionCount || 0));
+        const nextIndex = completionCount >= safeLimit ? 0 : completionCount % safeLimit;
+        try { window.localStorage.setItem("BC_V2_TIER1_ROTATION_INDEX", String(nextIndex)); } catch {}
+      }
+
+      window.__BC_V2_BOTTLE_REWARDS__ = V2_BOTTLE_REWARDS;
+
+      function getPendingV2BottleRewards(state) {
+        const totalAP = Number(state?.totalAP || 0);
+        return (Array.isArray(state?.rewards) ? state.rewards : [])
+          .filter((reward) => Number(reward.unlockAP || 0) <= totalAP && !reward.claimed);
+      }
+
+      function applyV2BottleRewardProgress(snapshot) {
+        let state = loadV2BottleRewardState();
+        if (!snapshot || !isV2TerminalOutcome(snapshot.outcome)) {
+          return { state, apDelta: 0, pendingRewards: getPendingV2BottleRewards(state) };
+        }
+
+        const encounterKey = String(snapshot.encounterId || `${snapshot.tier || 1}:${snapshot.encounterOrdinal || 0}`);
+        const nextAP = getV2OutcomeAPFromSnapshot(snapshot);
+        if (isV2DemoRewardMode()) {
+          const previousTotal = Number(state.totalAP || 0);
+          const completionKey = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+          state.demoCompletions = [
+            ...(Array.isArray(state.demoCompletions) ? state.demoCompletions : []),
+            {
+              key: completionKey,
+              encounterKey,
+              encounterId: snapshot.encounterId || null,
+              encounterTitle: snapshot.encounterTitle || "",
+              ap: nextAP,
+              outcome: snapshot.outcome,
+              completedAt: Date.now(),
+            },
+          ];
+          state.encounterScores = {
+            ...(state.encounterScores || {}),
+            [completionKey]: state.demoCompletions[state.demoCompletions.length - 1],
+          };
+          const scoreTotal = state.demoCompletions.reduce((sum, entry) => sum + Number(entry?.ap || 0), 0);
+          state.totalAP = Math.max(0, Math.round(scoreTotal));
+          state.tierUnlocked = getV2TierUnlockedByAP(state.totalAP);
+          state = saveV2BottleRewardState(state);
+          syncV2DemoEncounterRotationFromRewardState(state);
+          return {
+            state,
+            apDelta: state.totalAP - previousTotal,
+            pendingRewards: getPendingV2BottleRewards(state),
+          };
+        }
+
+        const currentScore = state.encounterScores?.[encounterKey] || null;
+        const previousBest = currentScore ? Number(currentScore.ap || 0) : null;
+        const shouldUpdate = previousBest === null || nextAP > previousBest;
+        let apDelta = 0;
+
+        if (shouldUpdate) {
+          state.encounterScores = {
+            ...(state.encounterScores || {}),
+            [encounterKey]: {
+              encounterId: snapshot.encounterId || null,
+              encounterTitle: snapshot.encounterTitle || "",
+              ap: nextAP,
+              outcome: snapshot.outcome,
+              updatedAt: Date.now(),
+            },
+          };
+          const scoreTotal = Object.values(state.encounterScores).reduce((sum, entry) => sum + Number(entry?.ap || 0), 0);
+          const previousTotal = Number(state.totalAP || 0);
+          state.totalAP = Math.max(0, Math.round(scoreTotal));
+          state.tierUnlocked = getV2TierUnlockedByAP(state.totalAP);
+          apDelta = state.totalAP - previousTotal;
+          state = saveV2BottleRewardState(state);
+        }
+
+        return { state, apDelta, pendingRewards: getPendingV2BottleRewards(state) };
+      }
+
+      function claimV2BottleReward(rewardId) {
+        let state = loadV2BottleRewardState();
+        const targetId = String(rewardId || "");
+        state.rewards = (Array.isArray(state.rewards) ? state.rewards : []).map((reward) =>
+          reward.id === targetId && Number(reward.unlockAP || 0) <= Number(state.totalAP || 0)
+            ? { ...reward, claimed: true, claimedAt: Date.now() }
+            : reward
+        );
+        return saveV2BottleRewardState(state);
+      }
+
+      function isV2DemoRewardMode() {
+        return !!(window.isDemo || window.bcMode === "demo");
+      }
+
+      function resetV2DemoAPAfterBottleOpen(state) {
+        if (!isV2DemoRewardMode()) return state;
+        const rewards = Array.isArray(state?.rewards)
+          ? state.rewards.map((reward) =>
+              reward?.id === "starter_bottle"
+                ? { ...reward, claimed: false, claimedAt: null }
+                : reward
+            )
+          : undefined;
+        const nextState = {
+          ...(state || loadV2BottleRewardState()),
+          totalAP: 0,
+          tierUnlocked: 1,
+          encounterScores: {},
+          demoCompletions: [],
+          demoCompletionCount: 0,
+          ...(rewards ? { rewards } : {}),
+          demoAPResetAt: Date.now(),
+        };
+        try { window.localStorage.setItem("BC_V2_TIER1_ROTATION_INDEX", "0"); } catch {}
+        return saveV2BottleRewardState(nextState);
+      }
+
+      const V2_PROGRESSION_AUTHORITY_STORAGE_KEY = "BC_V2_PROGRESSION_AUTHORITY_V1";
+
+      function getDefaultV2ProgressionAuthorityState() {
+        return {
+          v: 1,
+          source: "v2_harness",
+          totalAP: 0,
+          tierToServe: 1,
+          apTierUnlocked: 1,
+          rulesTierToServe: 1,
+          attempts: [],
+          progressionSnapshot: {
+            encountersTotal: 0,
+            last10Count: 0,
+            last10Greens: 0,
+            last10Reds: 0,
+            anyRedT2Plus: false,
+            pivotsTaken: 0,
+            pivotsSuccess: 0,
+          },
+        };
+      }
+
+      function isV2GreenOutcome(outcome) {
+        const value = String(outcome || "");
+        return value === "premium_success" || value === "standard_success";
+      }
+
+      function isV2RedOutcome(outcome) {
+        return String(outcome || "") === "failure";
+      }
+
+      function buildV2ProgressionSnapshotFromAttempts(attempts) {
+        const rows = Array.isArray(attempts) ? attempts : [];
+        const last10 = rows.slice(-10);
+        return {
+          encountersTotal: rows.length,
+          last10Count: last10.length,
+          last10Greens: last10.filter((item) => !!item.isGreen).length,
+          last10Reds: last10.filter((item) => !!item.isRed).length,
+          anyRedT2Plus: rows.some((item) => Number(item?.tier || 1) >= 2 && !!item.isRed),
+          pivotsTaken: rows.filter((item) => !!item.pivotTaken).length,
+          pivotsSuccess: rows.filter((item) => !!item.pivotSuccess).length,
+        };
+      }
+
+      function firstFiniteV2Number(...values) {
+        for (const value of values) {
+          const n = Number(value);
+          if (Number.isFinite(n)) return n;
+        }
+        return null;
+      }
+
+      function normalizeV2ProgressionSnapshot(rawSnapshot) {
+        const s = rawSnapshot && typeof rawSnapshot === "object" ? rawSnapshot : null;
+        if (!s) return null;
+        return {
+          encountersTotal: Math.max(0, Math.round(firstFiniteV2Number(s.encountersTotal, s.encounters_total, 0) || 0)),
+          last10Count: Math.max(0, Math.round(firstFiniteV2Number(s.last10Count, s.last10_count, 0) || 0)),
+          last10Greens: Math.max(0, Math.round(firstFiniteV2Number(s.last10Greens, s.last10_greens, 0) || 0)),
+          last10Reds: Math.max(0, Math.round(firstFiniteV2Number(s.last10Reds, s.last10_reds, 0) || 0)),
+          anyRedT2Plus: !!(s.anyRedT2Plus ?? s.any_red_t2plus ?? s.session_any_red_t2plus),
+          pivotsTaken: Math.max(0, Math.round(firstFiniteV2Number(s.pivotsTaken, s.pivots_taken, 0) || 0)),
+          pivotsSuccess: Math.max(0, Math.round(firstFiniteV2Number(s.pivotsSuccess, s.pivots_success, 0) || 0)),
+        };
+      }
+
+      function decideV2RulesTierFromSnapshot(snapshot) {
+        const s = snapshot || {};
+        const encountersTotal = Number(s.encountersTotal || 0);
+        const last10Count = Number(s.last10Count || 0);
+        const last10Greens = Number(s.last10Greens || 0);
+        const last10Reds = Number(s.last10Reds || 0);
+        const greenRate = last10Count > 0 ? last10Greens / last10Count : 0;
+        const tier3Ok =
+          encountersTotal >= 12 &&
+          last10Count >= 10 &&
+          greenRate >= 0.8 &&
+          last10Reds <= 0 &&
+          !s.anyRedT2Plus &&
+          Number(s.pivotsSuccess || 0) >= 1;
+        if (tier3Ok) return 3;
+        const tier2Ok =
+          encountersTotal >= 5 &&
+          last10Count >= 5 &&
+          greenRate >= 0.6 &&
+          last10Reds <= 1;
+        return tier2Ok ? 2 : 1;
+      }
+
+      function normalizeV2ProgressionAuthorityState(rawState) {
+        const state = rawState && typeof rawState === "object" ? rawState : {};
+        const attempts = (Array.isArray(state.attempts) ? state.attempts : [])
+          .filter(Boolean)
+          .slice(-100)
+          .map((item, index) => ({
+            key: String(item?.key || `attempt_${index}`),
+            encounterId: item?.encounterId || null,
+            encounterTitle: item?.encounterTitle || "",
+            tier: clampV2Tier(item?.tier || 1, 3),
+            outcome: String(item?.outcome || ""),
+            authorityDelta: Number(item?.authorityDelta || 0),
+            apAfter: Math.max(0, Number(item?.apAfter || 0)),
+            isGreen: !!item?.isGreen,
+            isRed: !!item?.isRed,
+            pivotTaken: !!item?.pivotTaken,
+            pivotSuccess: !!item?.pivotSuccess,
+            difficultyMode: normalizeV2DifficultyMode(item?.difficultyMode || "medium"),
+            completedAt: Number(item?.completedAt || Date.now()),
+          }));
+        const attemptSnapshot = buildV2ProgressionSnapshotFromAttempts(attempts);
+        const sourceSnapshot = normalizeV2ProgressionSnapshot(state.progressionSnapshot || state.snapshot);
+        const progressionSnapshot = attempts.length ? attemptSnapshot : (sourceSnapshot || attemptSnapshot);
+        const totalAP = Math.max(
+          0,
+          Math.round(firstFiniteV2Number(state.totalAP, state.authorityPoints, state.ap, 0) || 0)
+        );
+        const apTierUnlocked = clampV2Tier(
+          firstFiniteV2Number(state.apTierUnlocked, state.ap_tier_unlocked, getV2TierUnlockedByAP(totalAP)),
+          3
+        );
+        const rulesTierToServe = clampV2Tier(
+          firstFiniteV2Number(state.rulesTierToServe, state.rules_tier_to_serve, decideV2RulesTierFromSnapshot(progressionSnapshot)),
+          3
+        );
+        const rawTierToServe = state.tierToServe == null && state.tier_to_serve == null
+          ? Math.min(apTierUnlocked, rulesTierToServe)
+          : clampV2Tier(firstFiniteV2Number(state.tierToServe, state.tier_to_serve, 1), 3);
+        const tierToServe = Math.min(apTierUnlocked, rulesTierToServe, rawTierToServe);
+        return {
+          v: 1,
+          source: "v2_harness",
+          totalAP,
+          tierToServe,
+          apTierUnlocked,
+          rulesTierToServe,
+          attempts,
+          progressionSnapshot,
+          updatedAt: Number(state.updatedAt || Date.now()),
+        };
+      }
+
+      function getAuthoritativeV2AuthorityState() {
+        if (isV2DemoRewardMode()) return null;
+        const payload = getAuthoritativeProgressionPayload?.() || null;
+        if (!payload || typeof payload !== "object") return null;
+
+        const canonical =
+          payload.canonicalState ||
+          payload.canonical_state ||
+          payload.progressionState ||
+          payload.progression_state ||
+          payload.serverProgressionState ||
+          null;
+        const authority =
+          canonical?.v2?.authority ||
+          payload.authority ||
+          canonical?.authority ||
+          null;
+        const progressionSnapshot =
+          normalizeV2ProgressionSnapshot(authority?.progressionSnapshot) ||
+          normalizeV2ProgressionSnapshot(canonical?.authority?.progressionSnapshot) ||
+          normalizeV2ProgressionSnapshot(canonical?.v2?.authority?.progressionSnapshot) ||
+          normalizeV2ProgressionSnapshot(canonical?.progressionSnapshot) ||
+          normalizeV2ProgressionSnapshot(payload.snapshot);
+        const totalAP = firstFiniteV2Number(
+          authority?.totalAP,
+          authority?.authorityPoints,
+          canonical?.economy?.authorityPoints,
+          canonical?.economy?.ap,
+          payload.authorityPoints,
+          payload.ap
+        );
+        const tierToServe = firstFiniteV2Number(
+          authority?.tierToServe,
+          canonical?.authority?.tierToServe,
+          canonical?.v2?.authority?.tierToServe,
+          canonical?.economy?.tier,
+          payload.tierToServe
+        );
+        const apTierUnlocked = firstFiniteV2Number(
+          authority?.apTierUnlocked,
+          canonical?.authority?.apTierUnlocked,
+          canonical?.v2?.authority?.apTierUnlocked
+        );
+        const rulesTierToServe = firstFiniteV2Number(
+          authority?.rulesTierToServe,
+          canonical?.authority?.rulesTierToServe,
+          canonical?.v2?.authority?.rulesTierToServe
+        );
+
+        if (!authority && !progressionSnapshot && !Number.isFinite(totalAP) && !Number.isFinite(tierToServe)) {
+          return null;
+        }
+
+        return normalizeV2ProgressionAuthorityState({
+          ...(authority || {}),
+          ...(progressionSnapshot ? { progressionSnapshot } : {}),
+          ...(Number.isFinite(totalAP) ? { totalAP } : {}),
+          ...(Number.isFinite(tierToServe) ? { tierToServe } : {}),
+          ...(Number.isFinite(apTierUnlocked) ? { apTierUnlocked } : {}),
+          ...(Number.isFinite(rulesTierToServe) ? { rulesTierToServe } : {}),
+          updatedAt: firstFiniteV2Number(authority?.updatedAt, canonical?.capturedAt, payload.syncedAt, payload.updatedAt, Date.now()),
+        });
+      }
+
+      function shouldUseAuthoritativeV2Authority(authoritative, localState) {
+        const api = window.V2ProgressionAuthority;
+        if (typeof api?.shouldPreferAuthoritativeV2Authority === "function") {
+          return !!api.shouldPreferAuthoritativeV2Authority(authoritative, localState);
+        }
+        if (!authoritative) return false;
+        const local = localState || getDefaultV2ProgressionAuthorityState();
+        const authoritativeAttempts = Array.isArray(authoritative.attempts) ? authoritative.attempts.length : 0;
+        const localAttempts = Array.isArray(local.attempts) ? local.attempts.length : 0;
+        const authoritativeTotal = Number(authoritative.progressionSnapshot?.encountersTotal || authoritativeAttempts || 0);
+        const localTotal = Number(local.progressionSnapshot?.encountersTotal || localAttempts || 0);
+
+        // Never prefer AP-only/empty-attempt server payloads over richer local history.
+        if (authoritativeAttempts < localAttempts && authoritativeTotal <= localTotal) return false;
+        if (authoritativeTotal > localTotal) return true;
+        if (authoritativeAttempts > localAttempts) return true;
+        if (
+          Number(authoritative.totalAP || 0) > Number(local.totalAP || 0) &&
+          authoritativeTotal >= localTotal &&
+          authoritativeAttempts >= localAttempts
+        ) return true;
+        if (
+          Number(authoritative.updatedAt || 0) > Number(local.updatedAt || 0) &&
+          authoritativeTotal >= localTotal &&
+          authoritativeAttempts >= localAttempts
+        ) return true;
+        return false;
+      }
+
+      function mergeV2ProgressionAuthorityStatesLocal(authoritative, localState) {
+        const api = window.V2ProgressionAuthority;
+        if (typeof api?.mergeV2ProgressionAuthorityStates === "function") {
+          return normalizeV2ProgressionAuthorityState(
+            api.mergeV2ProgressionAuthorityStates(authoritative, localState)
+          );
+        }
+
+        const local = localState || getDefaultV2ProgressionAuthorityState();
+        const auth = authoritative || getDefaultV2ProgressionAuthorityState();
+        const attemptMap = new Map();
+        const pushAttempt = (item, index) => {
+          if (!item || typeof item !== "object") return;
+          const key = String(item.key || `attempt_${index}_${item.encounterId || "unknown"}`);
+          const prev = attemptMap.get(key);
+          if (!prev || Number(item.completedAt || 0) >= Number(prev.completedAt || 0)) {
+            attemptMap.set(key, { ...prev, ...item, key });
+          }
+        };
+        (Array.isArray(local.attempts) ? local.attempts : []).forEach((item, index) => pushAttempt(item, index));
+        (Array.isArray(auth.attempts) ? auth.attempts : []).forEach((item, index) => pushAttempt(item, index + 10000));
+        const attempts = Array.from(attemptMap.values())
+          .sort((a, b) => Number(a.completedAt || 0) - Number(b.completedAt || 0))
+          .slice(-100);
+        const preferAuth = shouldUseAuthoritativeV2Authority(auth, local);
+        const base = preferAuth ? { ...local, ...auth } : { ...auth, ...local };
+        return normalizeV2ProgressionAuthorityState({
+          ...base,
+          attempts,
+          progressionSnapshot: attempts.length
+            ? buildV2ProgressionSnapshotFromAttempts(attempts)
+            : (base.progressionSnapshot || buildV2ProgressionSnapshotFromAttempts(attempts)),
+          totalAP: Math.max(Number(local.totalAP || 0), Number(auth.totalAP || 0)),
+          updatedAt: Math.max(Number(local.updatedAt || 0), Number(auth.updatedAt || 0), Date.now()),
+        });
+      }
+
+      function loadV2ProgressionAuthorityState() {
+        let localState = null;
+        try {
+          const raw = window.localStorage.getItem(V2_PROGRESSION_AUTHORITY_STORAGE_KEY);
+          localState = normalizeV2ProgressionAuthorityState(raw ? JSON.parse(raw) : getDefaultV2ProgressionAuthorityState());
+        } catch {
+          localState = normalizeV2ProgressionAuthorityState(getDefaultV2ProgressionAuthorityState());
+        }
+        const authoritativeState = getAuthoritativeV2AuthorityState();
+        if (!authoritativeState) {
+          window.__BC_V2_PROGRESSION_AUTHORITY__ = localState;
+          return localState;
+        }
+
+        const merged = mergeV2ProgressionAuthorityStatesLocal(authoritativeState, localState);
+        try {
+          window.localStorage.setItem(V2_PROGRESSION_AUTHORITY_STORAGE_KEY, JSON.stringify(merged));
+        } catch {}
+        window.__BC_V2_PROGRESSION_AUTHORITY__ = merged;
+        return merged;
+      }
+
+      function saveV2ProgressionAuthorityState(state) {
+        const normalized = normalizeV2ProgressionAuthorityState({
+          ...(state || {}),
+          updatedAt: Date.now(),
+        });
+        try {
+          window.localStorage.setItem(V2_PROGRESSION_AUTHORITY_STORAGE_KEY, JSON.stringify(normalized));
+        } catch {}
+        window.__BC_V2_PROGRESSION_AUTHORITY__ = normalized;
+        return normalized;
+      }
+
+      function recordV2ProgressionAuthority(snapshot, session, rewardProgress = null) {
+        if (!snapshot || !session || !isV2TerminalOutcome(snapshot.outcome)) {
+          return loadV2ProgressionAuthorityState();
+        }
+        if (session.v2ProgressionAuthorityRecorded) {
+          return loadV2ProgressionAuthorityState();
+        }
+
+        const state = loadV2ProgressionAuthorityState();
+        const history = getV2SessionHistory(session);
+        const totalAP = Math.max(0, Math.round(Number(rewardProgress?.state?.totalAP ?? loadV2BottleRewardState().totalAP ?? 0)));
+        const recoveryPressure = hasV2RecoveryPressure(snapshot, history);
+        const outcome = String(snapshot.outcome || "");
+        const attempt = {
+          key: `v2_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          encounterId: snapshot.encounterId || null,
+          encounterTitle: snapshot.encounterTitle || "",
+          tier: clampV2Tier(snapshot.tier || session?.encounter?.tier || 1, 3),
+          outcome,
+          authorityDelta: Number(snapshot.authorityDelta || 0),
+          apAfter: totalAP,
+          isGreen: isV2GreenOutcome(outcome),
+          isRed: isV2RedOutcome(outcome),
+          pivotTaken: recoveryPressure || outcome === "neutral_exit",
+          pivotSuccess: outcome === "neutral_exit",
+          difficultyMode: normalizeV2DifficultyMode(snapshot.difficultyMode || session?.difficultyMode || getV2DifficultyModeForStart()),
+          completedAt: Date.now(),
+        };
+        session.v2ProgressionAuthorityRecorded = true;
+        return saveV2ProgressionAuthorityState({
+          ...state,
+          totalAP,
+          attempts: [...(Array.isArray(state.attempts) ? state.attempts : []), attempt],
+        });
+      }
+
+      function buildV2RewardEncounterLedger(attempts) {
+        return (Array.isArray(attempts) ? attempts : []).reduce((acc, item) => {
+          const key = String(item?.key || "");
+          if (!key) return acc;
+          acc[key] = {
+            rewardedAt: item.completedAt || Date.now(),
+            encounterId: item.encounterId || null,
+            rewardPoints: Number(item.authorityDelta || 0),
+            reward: {
+              totalPoints: Number(item.authorityDelta || 0),
+              activityType: "v2_encounter",
+            },
+            outcome: item.outcome || null,
+          };
+          return acc;
+        }, {});
+      }
+
+      function getV2DifficultySeed(mode) {
+        const normalized = normalizeV2DifficultyMode(mode);
+        if (normalized === "easy") return 2;
+        if (normalized === "hard") return 6;
+        return 4;
+      }
+
+      function buildV2CanonicalProgressionState(snapshot, session, rewardProgress = null) {
+        const authorityState = recordV2ProgressionAuthority(snapshot, session, rewardProgress);
+        const progressionSnapshot = authorityState.progressionSnapshot || buildV2ProgressionSnapshotFromAttempts(authorityState.attempts);
+        const difficultyMode = normalizeV2DifficultyMode(snapshot?.difficultyMode || session?.difficultyMode || getV2DifficultyModeForStart());
+        const difficultySeed = getV2DifficultySeed(difficultyMode);
+        const tierToServe = clampV2Tier(authorityState.tierToServe || 1, 3);
+        const tierBounds = getTierRangeAndGuests(tierToServe);
+        const capturedAt = Date.now();
+        const parentPayload = getAuthoritativeProgressionPayload?.() || window.__BC_PROGRESSION__ || null;
+        const basedOnUpdatedAt = firstFiniteV2Number(
+          parentPayload?.syncedAt,
+          parentPayload?.updatedAt,
+          parentPayload?.authority?.updatedAt,
+          parentPayload?.canonicalState?.capturedAt,
+          parentPayload?.canonical_state?.capturedAt,
+          authorityState?.updatedAt,
+          0
+        ) || 0;
+        return {
+          version: 1,
+          source: "v2_harness",
+          capturedAt,
+          basedOnUpdatedAt,
+          economy: {
+            points: Number(progressionSnapshot.encountersTotal || 0),
+            authorityPoints: Number(authorityState.totalAP || 0),
+            ap: Number(authorityState.totalAP || 0),
+            tier: tierToServe,
+            encounterRange: tierBounds.encounterRange.slice(),
+            allowedGuestTypes: tierBounds.guestTypes.slice(),
+            tones: ["guide", "charm", "authority"],
+            modes: ["guide", "charm", "authority"],
+          },
+          session: {
+            runId: Number(window.__BC_SESSION__?.id || 0) || 0,
+            runEase: 1,
+            runEaseRemaining: 0,
+            pressureLevel: difficultyMode === "hard" ? 3 : difficultyMode === "easy" ? 1 : 2,
+            finalDifficulty: difficultySeed,
+            currentEncounterId: Number(snapshot?.encounterOrdinal || 1),
+            mode: "v2_harness",
+            guestTypeSelected: String(session?.encounter?.family || session?.encounter?.masterProfile || ""),
+          },
+          authority: {
+            engineVersion: "v2",
+            tierToServe,
+            apTierUnlocked: clampV2Tier(authorityState.apTierUnlocked || 1, 3),
+            rulesTierToServe: clampV2Tier(authorityState.rulesTierToServe || 1, 3),
+            authorityPoints: Number(authorityState.totalAP || 0),
+            lastAuthorityDelta: Number(snapshot?.authorityDelta || 0),
+            progressionSnapshot,
+            encounterRange: tierBounds.encounterRange.slice(),
+            guestTypes: tierBounds.guestTypes.slice(),
+          },
+          display: {
+            difficultySeed,
+            effectiveDifficulty: difficultySeed,
+            pressureBand: difficultyMode === "hard" ? "high" : difficultyMode === "easy" ? "low" : "mid",
+          },
+          run: {
+            runId: 0,
+            scoredThisRun: {},
+          },
+          rewards: {
+            encounters: buildV2RewardEncounterLedger(authorityState.attempts),
+            drills: {},
+            timedChallenges: {},
+            premiumByEncounter: {},
+            v2: {
+              totalAP: Number(authorityState.totalAP || 0),
+              tierToServe,
+              attempts: authorityState.attempts,
+            },
+          },
+          rewardsSummary: {
+            encounters: {
+              count: Array.isArray(authorityState.attempts) ? authorityState.attempts.length : 0,
+              totalPoints: Number(authorityState.totalAP || 0),
+            },
+            drills: { count: 0, totalPoints: 0 },
+            timedChallenges: { count: 0, totalPoints: 0 },
+            premium: { count: 0, totalPoints: 0 },
+            v2: {
+              count: Array.isArray(authorityState.attempts) ? authorityState.attempts.length : 0,
+              totalAP: Number(authorityState.totalAP || 0),
+              tierToServe,
+            },
+          },
+          v2: {
+            authority: authorityState,
+            latestSnapshot: {
+              encounterId: snapshot?.encounterId || null,
+              outcome: snapshot?.outcome || null,
+              authorityDelta: Number(snapshot?.authorityDelta || 0),
+              difficultyMode,
+            },
+          },
+        };
+      }
+
+      function markV2DemoRewardOpenedOnSummary() {
+        const rewardCard = document.querySelector(".v2-bottle-reward-card");
+        rewardCard?.querySelectorAll("[data-v2-claim-reward]").forEach((button) => {
+          button.disabled = true;
+          button.setAttribute("aria-disabled", "true");
+          button.textContent = "Opened";
+        });
+        const title = rewardCard?.querySelector("strong");
+        if (title) title.textContent = "Bottle opened";
+        const meta = rewardCard?.querySelector(".small-text");
+        if (meta) meta.textContent = "Starter Bottle opened. Demo cycle reset for your next run.";
+      }
+
+      function getV2BottleRewardTitle(rewardId) {
+        const titles = {
+          starter_bottle: "Trainee Caller",
+          bronze_bottle: "Bronze Caller",
+          tier_2_unlock_bottle: "Pairing Apprentice",
+          tier_1_mastery_bottle: "Tier 1 Caller",
+        };
+        return titles[String(rewardId || "")] || "Bottle Caller";
+      }
+
+      function showV2BottleUnlockModal(reward, onComplete) {
+        const rewardId = String(reward?.id || "");
+        const rewardName = String(reward?.name || "Starter Bottle");
+        const titleName = getV2BottleRewardTitle(rewardId);
+        document.querySelectorAll(".bc-bottle-unlock-backdrop").forEach((node) => node.remove());
+
+        const particleMarkup = Array.from({ length: 18 }, (_, index) => {
+          const angle = -82 + index * 9.5;
+          const distance = 58 + (index % 5) * 12;
+          return `<i style="--bc-particle-angle:${angle}deg; --bc-particle-distance:${distance}px; --bc-particle-delay:${(index % 6) * 26}ms;"></i>`;
+        }).join("");
+
+        const modal = document.createElement("div");
+        modal.className = "bc-bottle-unlock-backdrop";
+        modal.setAttribute("role", "dialog");
+        modal.setAttribute("aria-modal", "true");
+        modal.innerHTML = `
+          <div class="bc-bottle-unlock">
+            <div class="bc-bottle-text">
+              <div class="bc-bottle-label">Bottle Unlocked</div>
+              <div class="bc-bottle-name">${escapeHtml(rewardName)}</div>
+            </div>
+            <div class="bc-bottle-stage">
+              <div class="bc-bottle-glow bottle-glow"></div>
+              <div class="bc-bottle-wrap bottle-idle bottle-shake">
+                <img class="bc-bottle-image" src="/game/rewards/bottle-unlock-closed.png" alt="">
+                <img class="bc-bottle-cork cork-pop" src="/game/rewards/bottle-unlock-cork.png" alt="">
+                <div class="bc-particles particle-burst" aria-hidden="true">${particleMarkup}</div>
+              </div>
+            </div>
+            <button type="button" class="bc-open-button">Open</button>
+            <div class="bc-reward-card reward-reveal hidden">
+              <div class="bc-reward-type">Title Unlocked</div>
+              <div class="bc-reward-name">${escapeHtml(titleName)}</div>
+              <button type="button" class="bc-continue-button">Continue</button>
+            </div>
+          </div>
+        `;
+
+        const unlock = modal.querySelector(".bc-bottle-unlock");
+        const openButton = modal.querySelector(".bc-open-button");
+        const continueButton = modal.querySelector(".bc-continue-button");
+        const rewardCard = modal.querySelector(".bc-reward-card");
+
+        openButton?.addEventListener("click", () => {
+          if (unlock?.classList.contains("is-opening")) return;
+          unlock?.classList.add("is-opening", "bottle-open-ready");
+          openButton.classList.add("hidden");
+          window.setTimeout(() => {
+            rewardCard?.classList.remove("hidden");
+            const claimedState = claimV2BottleReward(rewardId);
+            resetV2DemoAPAfterBottleOpen(claimedState);
+          }, 920);
+        });
+
+        continueButton?.addEventListener("click", () => {
+          modal.remove();
+          if (typeof onComplete === "function") onComplete();
+        });
+
+        document.body.appendChild(modal);
+        window.setTimeout(() => openButton?.focus?.(), 50);
+      }
+
+      function renderV2BottleRewardHtml(rewardProgress) {
+        const state = rewardProgress?.state || loadV2BottleRewardState();
+        const pendingRewards = rewardProgress?.pendingRewards || getPendingV2BottleRewards(state);
+        const totalAP = Number(state.totalAP || 0);
+        if (!pendingRewards.length && totalAP < 30) {
+          return `
+            <div class="v2-status-card">
+              <strong>Bottle Rewards</strong>
+              <div class="small-text" style="margin-top:6px;">${totalAP} AP earned. Starter Bottle opens at 30 AP.</div>
+            </div>
+          `;
+        }
+        if (!pendingRewards.length) {
+          return `
+            <div class="v2-status-card">
+              <strong>Bottle Rewards</strong>
+              <div class="small-text" style="margin-top:6px;">${totalAP} AP earned • Tier ${state.tierUnlocked} unlocked</div>
+            </div>
+          `;
+        }
+        const rewardRows = pendingRewards.map((reward) => `
+          <div class="v2-reward-row">
+            <div>
+              <strong>${escapeHtml(reward.name)}</strong>
+              <div class="small-text">${Number(reward.unlockAP || 0)} AP milestone reached</div>
+            </div>
+            <button
+              type="button"
+              class="btn btnChoice"
+              data-v2-claim-reward="${escapeHtml(reward.id)}"
+              data-v2-reward-name="${escapeHtml(reward.name)}"
+            >Open Now</button>
+          </div>
+        `).join("");
+        return `
+          <div class="v2-status-card v2-bottle-reward-card">
+            <strong>Bottle unlocked</strong>
+            <div class="small-text" style="margin-top:6px;">${totalAP} AP earned • Tier ${state.tierUnlocked} unlocked</div>
+            <div class="v2-reward-list">${rewardRows}</div>
+          </div>
+        `;
+      }
+
+      function showFirstPendingV2BottleReward(onComplete) {
+        const state = loadV2BottleRewardState();
+        const reward = getPendingV2BottleRewards(state)[0];
+        if (!reward) return false;
+        showV2BottleUnlockModal(reward, onComplete);
+        return true;
+      }
+
       function getV2MoodDescriptor(snapshot) {
         const progressMood = String(snapshot?.progressMood || "");
         const frustrationMood = String(snapshot?.frustrationMood || "");
+        const friction = Number(snapshot?.frustration || 0);
         if (snapshot?.outcome === "premium_success") return "Table fully aligned";
         if (snapshot?.outcome === "standard_success") return "Table ready to commit";
         if (snapshot?.outcome === "weak_success") return "Close secured with friction";
         if (snapshot?.outcome === "neutral_exit") return "Experience preserved";
         if (snapshot?.outcome === "failure") return "Table lost";
-        if (frustrationMood === "critical_resistance") return "Critical resistance";
+        if (friction >= 4 || frustrationMood === "critical_resistance") return "Critical resistance";
+        if (friction >= 3) return "Resistance rising";
         if (progressMood === "ready") return "Ready to commit";
         if (progressMood === "engaged") return "Strong momentum";
         if (progressMood === "warming_up") return "Warming up";
         return "Guarded";
       }
 
+      function getV2TableMood(snapshot) {
+        const outcome = String(snapshot?.outcome || "");
+        const progress = Number(snapshot?.progress || 0);
+        const friction = Number(snapshot?.frustration || 0);
+        if (outcome === "failure") return "Shut Down";
+        if (friction >= 4) return "Critical Resistance";
+        if (friction >= 3) return "Resistant";
+        if (progress >= 9) return "Ready";
+        if (progress >= 6) return "Engaged";
+        if (progress >= 3) return "Warming Up";
+        return "Guarded";
+      }
+
       function getV2ReactiveQuote(snapshot, encounter, reaction = "") {
-        if (reaction) return reaction;
         if (snapshot?.outcome === "premium_success") return "Perfect. That's exactly the bottle we were hoping you'd land on.";
         if (snapshot?.outcome === "standard_success") return "Great, that sounds like the right call for us.";
         if (snapshot?.outcome === "weak_success") return "Alright, let's do it.";
         if (snapshot?.outcome === "neutral_exit") return "No problem. Thanks for reading the table and leaving it there.";
         if (snapshot?.outcome === "failure") return "We'll leave it, thanks.";
-        if (snapshot?.frustrationMood === "critical_resistance") return "You're losing the table. One more bad push and the guest will shut down.";
-        if (snapshot?.progressMood === "ready") return "They're close. A clean commit should land this.";
-        if (snapshot?.progressMood === "engaged") return "The guest is leaning in. Keep the rhythm clean.";
-        if (snapshot?.progressMood === "warming_up") return encounter?.verbalClue || "The guest is starting to open up.";
+        if (reaction) return reaction;
+        if (snapshot?.frustrationMood === "critical_resistance") return "We're fine, thanks. We'll choose ourselves.";
+        if (snapshot?.progressMood === "ready") return "That sounds good. Which one would you choose?";
+        if (snapshot?.progressMood === "engaged") return "Oh, that's interesting. Tell me more about that one.";
+        if (snapshot?.progressMood === "warming_up") return encounter?.verbalClue || "Okay... that helps a bit.";
         return encounter?.verbalClue || "";
       }
 
@@ -23202,10 +24712,70 @@ function ensureProgLoaded() {
         if (snapshot?.outcome === "failure") {
           return "The table shut down. You created too much pressure before the guest was ready.";
         }
-        if (reaction) {
-          return "The guest is reacting to your line. Watch the mood before you commit.";
-        }
         return "Read the table, choose the right interaction, and move the guest without creating friction.";
+      }
+
+      function getV2SceneClue(encounter) {
+        const directClue = String(encounter?.sceneClue || "").trim();
+        if (directClue) return directClue;
+        const fallback = String(encounter?.scene || "").trim();
+        if (!fallback) return "Read the table before choosing.";
+        const firstSentence = fallback.split(/[.!?]/).find(Boolean) || fallback;
+        const compact = firstSentence.replace(/\s+/g, " ").trim();
+        return compact.endsWith(".") ? compact : `${compact}.`;
+      }
+
+      function getV2QuickFeedback(quality, choice, snapshot, feedbackText = "") {
+        if (feedbackText) return String(feedbackText);
+        const outcome = String(snapshot?.outcome || "");
+        const choiceGroup = String(choice?.group || "");
+        const normalizedQuality = String(quality || "").toLowerCase();
+        const turnIndex = Math.max(0, Number(snapshot?.turnCount || 0) - 1);
+        const pick = (items) => items[turnIndex % items.length];
+
+        if (outcome === "neutral_exit" || choiceGroup === "walk_away") {
+          return pick([
+            "Good restraint. Experience preserved.",
+            "You stepped back. Trust protected.",
+          ]);
+        }
+        if (normalizedQuality === "early_commit") {
+          return "Too soon. Pressure rises.";
+        }
+        if (choiceGroup === "commit" && normalizedQuality !== "optimal" && normalizedQuality !== "good") {
+          return pick([
+            "Too soon. Pressure rises.",
+            "Wrong timing. They pull back.",
+          ]);
+        }
+        if (normalizedQuality === "optimal") {
+          return pick([
+            "Good read. Momentum builds.",
+            "Smart read. The table opens up.",
+            "Strong timing. Trust improves.",
+          ]);
+        }
+        if (normalizedQuality === "good") {
+          return pick([
+            "Safe move. Progress builds.",
+            "Good direction. They stay engaged.",
+          ]);
+        }
+        if (normalizedQuality === "poor") {
+          return pick([
+            "Wrong pace. Energy dropped.",
+            "Missed signal. The table cools.",
+            "Not quite. Resistance rises.",
+          ]);
+        }
+        if (normalizedQuality === "disaster") {
+          return pick([
+            "Bad read. Trust drops.",
+            "Too much pressure. They pull back.",
+            "Wrong angle. Energy collapses.",
+          ]);
+        }
+        return "";
       }
 
       function getV2NextStepInstruction(snapshot) {
@@ -23240,23 +24810,365 @@ function ensureProgLoaded() {
         return "Choose the next response card to continue the encounter.";
       }
 
-      function isV2TerminalOutcome(outcome) {
-        const value = String(outcome || "");
-        return (
-          value === "premium_success" ||
-          value === "standard_success" ||
-          value === "weak_success" ||
-          value === "neutral_exit" ||
-          value === "failure"
-        );
+	      function isV2TerminalOutcome(outcome) {
+	        const value = String(outcome || "");
+	        return (
+	          value === "premium_success" ||
+	          value === "standard_success" ||
+	          value === "weak_success" ||
+	          value === "neutral_exit" ||
+	          value === "failure"
+	        );
+	      }
+
+	      function clampV2SkillScore(value) {
+	        const n = Number(value || 0);
+	        if (!Number.isFinite(n)) return 0;
+	        return Math.max(0, Math.min(100, Math.round(n)));
+	      }
+
+	      function averageV2SkillScores(values, fallback = 0) {
+	        const scores = (Array.isArray(values) ? values : [])
+	          .map((value) => Number(value))
+	          .filter((value) => Number.isFinite(value));
+	        if (!scores.length) return clampV2SkillScore(fallback);
+	        return clampV2SkillScore(scores.reduce((sum, value) => sum + value, 0) / scores.length);
+	      }
+
+	      function getV2ChoiceQualityScore(quality) {
+	        switch (String(quality || "").toLowerCase()) {
+	          case "optimal": return 100;
+	          case "good": return 75;
+	          case "early_commit": return 20;
+	          case "poor": return 35;
+	          case "disaster": return 0;
+	          default: return 50;
+	        }
+	      }
+
+	      function getV2OutcomeSkillBaseline(outcome) {
+	        switch (String(outcome || "").toLowerCase()) {
+	          case "premium_success": return 92;
+	          case "standard_success": return 78;
+	          case "weak_success": return 58;
+	          case "neutral_exit": return 62;
+	          case "failure": return 25;
+	          default: return 50;
+	        }
+	      }
+
+	      function getV2OutcomeChainSignal(outcome) {
+	        switch (String(outcome || "").toLowerCase()) {
+	          case "premium_success":
+	          case "standard_success":
+	            return "green";
+	          case "weak_success":
+	          case "neutral_exit":
+	            return "yellow";
+	          case "failure":
+	            return "red";
+	          default:
+	            return "";
+	        }
+	      }
+
+	      function getV2OutcomePerformanceGrade(outcome, skillAverage) {
+	        const normalizedOutcome = String(outcome || "").toLowerCase();
+	        const avg = Number(skillAverage || 0);
+	        if (normalizedOutcome === "premium_success" || avg >= 90) return "A";
+	        if (normalizedOutcome === "standard_success" || avg >= 75) return "B";
+	        if (normalizedOutcome === "weak_success" || normalizedOutcome === "neutral_exit" || avg >= 55) return "C";
+	        if (avg >= 40) return "D";
+	        return "F";
+	      }
+
+	      function getV2SessionHistory(session) {
+	        return Array.isArray(session?.gameState?.history) ? session.gameState.history : [];
+	      }
+
+	      function hasV2RecoveryPressure(snapshot, history) {
+	        return !!(
+	          Number(snapshot?.frustration || 0) >= 4 ||
+	          Number(snapshot?.mistakeCount || 0) >= 3 ||
+	          snapshot?.walkAwayUnlocked ||
+	          (Array.isArray(history) && history.some((item) =>
+	            Number(item?.resultingFrustration || 0) >= 4 ||
+	            Number(item?.resultingMistakeCount || 0) >= 3 ||
+	            String(item?.choice?.group || "") === "walk_away"
+	          ))
+	        );
+	      }
+
+	      function buildV2SkillSnapshot(snapshot, session) {
+	        const history = getV2SessionHistory(session);
+	        const outcome = String(snapshot?.outcome || "");
+	        const baseline = getV2OutcomeSkillBaseline(outcome);
+	        const scoreForGroup = (group, fallback) => averageV2SkillScores(
+	          history
+	            .filter((item) => String(item?.choice?.group || "") === group)
+	            .map((item) => getV2ChoiceQualityScore(item?.quality)),
+	          fallback,
+	        );
+
+	        const askCount = history.filter((item) => String(item?.choice?.group || "") === "ask").length;
+	        const recommendCount = history.filter((item) => String(item?.choice?.group || "") === "recommend").length;
+	        const commitItems = history.filter((item) => String(item?.choice?.group || "") === "commit");
+	        const finalFrustration = Number(snapshot?.frustration || 0);
+	        const finalProgress = Number(snapshot?.progress || 0);
+	        const mistakeCount = Number(snapshot?.mistakeCount || 0);
+	        const allQualityAverage = averageV2SkillScores(
+	          history
+	            .filter((item) => String(item?.choice?.group || "") !== "walk_away")
+	            .map((item) => getV2ChoiceQualityScore(item?.quality)),
+	          baseline,
+	        );
+
+	        const readFallback = baseline >= 70 ? 58 : baseline >= 50 ? 48 : 32;
+	        const framingFallback = baseline >= 70 ? 60 : baseline >= 50 ? 50 : 30;
+	        const read = clampV2SkillScore(scoreForGroup("ask", readFallback) - (askCount === 0 ? 12 : 0));
+	        const framing = clampV2SkillScore(scoreForGroup("recommend", framingFallback) - (recommendCount === 0 ? 10 : 0));
+	        const delivery = clampV2SkillScore(
+	          allQualityAverage +
+	          Math.min(10, Math.max(0, finalProgress)) * 1.5 -
+	          finalFrustration * 5 -
+	          mistakeCount * 7,
+	        );
+
+	        const recoveryPressure = hasV2RecoveryPressure(snapshot, history);
+	        let recovery = 60;
+	        if (String(outcome) === "neutral_exit") {
+	          recovery = recoveryPressure ? 92 : 78;
+	        } else if (recoveryPressure && outcome === "failure") {
+	          recovery = 22;
+	        } else if (recoveryPressure) {
+	          recovery = outcome === "premium_success" || outcome === "standard_success" ? 78 : 58;
+	        } else if (outcome === "failure") {
+	          recovery = 42;
+	        } else if (outcome === "premium_success" || outcome === "standard_success") {
+	          recovery = 70;
+	        }
+
+	        const commitScore = commitItems.length
+	          ? averageV2SkillScores(commitItems.map((item) => getV2ChoiceQualityScore(item?.quality)), baseline)
+	          : (outcome === "neutral_exit" ? 65 : baseline - 15);
+	        const closingByOutcome = {
+	          premium_success: 100,
+	          standard_success: 84,
+	          weak_success: 62,
+	          neutral_exit: 55,
+	          failure: 18,
+	        }[outcome] ?? baseline;
+	        const closing = clampV2SkillScore((commitScore * 0.45) + (closingByOutcome * 0.55) - Math.max(0, mistakeCount - 1) * 4);
+
+	        return {
+	          read,
+	          framing,
+	          delivery,
+	          recovery: clampV2SkillScore(recovery),
+	          closing,
+	        };
+	      }
+
+	      function buildV2ProgressReportDraft(snapshot, session, rewardProgress = null) {
+	        if (!snapshot || !session || !isV2TerminalOutcome(snapshot.outcome)) return null;
+
+	        const skills = buildV2SkillSnapshot(snapshot, session);
+	        const labels = pickStrongestWeakest(skills);
+	        const skillAverage = averageV2SkillScores(Object.values(skills), 0);
+	        const chainSignal = getV2OutcomeChainSignal(snapshot.outcome);
+	        const chainScore = Math.round((skillAverage / 25) * 10) / 10;
+	        const performanceGrade = getV2OutcomePerformanceGrade(snapshot.outcome, skillAverage);
+	        const history = getV2SessionHistory(session);
+	        const recoveryPressure = hasV2RecoveryPressure(snapshot, history);
+	        const product = session?.product || null;
+	        const encounter = session?.encounter || null;
+	        const payload = {
+	          v: 2,
+	          engineVersion: "v2",
+	          source: "v2_harness",
+	          encounterId: snapshot.encounterId || encounter?.id || null,
+	          encounterNumber: snapshot.encounterOrdinal ?? null,
+	          encounterTitle: snapshot.encounterTitle || encounter?.title || null,
+	          tier: Number(snapshot.tier || encounter?.tier || 1),
+	          guestStateActual: encounter?.family || encounter?.masterProfile || snapshot.encounterTitle || null,
+	          difficulty: getV2DifficultySeed(snapshot.difficultyMode || session?.difficultyMode || getV2DifficultyModeForStart()),
+	          difficultyMode: normalizeV2DifficultyMode(snapshot.difficultyMode || session?.difficultyMode || getV2DifficultyModeForStart()),
+	          chainSignal,
+	          chainScore,
+	          performanceGrade,
+	          outcome: snapshot.outcome || null,
+	          finalOutcome: snapshot.outcome || null,
+	          guestReadCorrect: skills.read >= 60,
+	          deliveryScore: skills.delivery >= 80 ? 2 : skills.delivery >= 50 ? 1 : 0,
+	          resetUsed: recoveryPressure,
+	          premiumSuccess: snapshot.outcome === "premium_success",
+	          strongPillars: Object.values(skills).filter((value) => Number(value || 0) >= 75).length,
+	          skills,
+	          progressionState: shouldSubmitV2ProgressReport()
+	            ? buildV2CanonicalProgressionState(snapshot, session, rewardProgress)
+	            : null,
+	          strongestSkill: labels.strongest,
+	          weakestSkill: labels.weakest,
+	          product: product
+	            ? {
+	                id: product.id || null,
+	                name: product.name || null,
+	                category: product.category || null,
+	                style: product.style || product.varietalOrBlend || null,
+	                region: product.region || null,
+	              }
+	            : null,
+	          v2Snapshot: {
+	            authorityDelta: Number(snapshot.authorityDelta || 0),
+	            progress: Number(snapshot.progress || 0),
+	            frustration: Number(snapshot.frustration || 0),
+	            mistakeCount: Number(snapshot.mistakeCount || 0),
+	            progressMood: snapshot.progressMood || null,
+	            frustrationMood: snapshot.frustrationMood || null,
+	            turnCount: Number(snapshot.turnCount || 0),
+	            actionCount: Number(snapshot.actionCount || 0),
+	            bottleRewards: rewardProgress?.state
+	              ? {
+	                  totalAP: Number(rewardProgress.state.totalAP || 0),
+	                  tierUnlocked: Number(rewardProgress.state.tierUnlocked || 1),
+	                }
+	              : null,
+	          },
+	          history: history.map((item) => ({
+	            turn: item.turn ?? null,
+	            choice: item.choice || null,
+	            quality: item.quality || null,
+	            progressDelta: item.progressDelta ?? null,
+	            frustrationDelta: item.frustrationDelta ?? null,
+	            mistakeDelta: item.mistakeDelta ?? null,
+	            resultingProgress: item.resultingProgress ?? null,
+	            resultingFrustration: item.resultingFrustration ?? null,
+	            resultingMistakeCount: item.resultingMistakeCount ?? null,
+	            reaction: item.reaction || "",
+	            feedbackText: item.feedbackText || "",
+	          })),
+	        };
+	        const body =
+	          `V2 progress update • Encounter ${payload.encounterNumber ?? "—"} • ` +
+	          `Outcome: ${String(payload.outcome || "—").replaceAll("_", " ")} • ` +
+	          `Signal: ${String(payload.chainSignal || "—").toUpperCase()}`;
+        return { payload, body, skills };
       }
 
-      function emitV2HarnessOutcome(snapshot, session, lastReaction = "") {
-        if (!snapshot || !session || !isV2TerminalOutcome(snapshot.outcome)) return;
-        if (session.outcomeEmitted) return;
+      function maybeEmitV2CanonicalEncounterResolved(snapshot, session, draft) {
+        if (!shouldSubmitV2ProgressReport()) return null;
+        if (!snapshot || !session || !draft?.payload || !isV2TerminalOutcome(snapshot.outcome)) return null;
+        if (session.v2CanonicalOutcomeEmitted) return session.v2CanonicalOutcomeEventId || null;
+
+        const p = draft.payload;
+        const history = getV2SessionHistory(session);
+        const lastChoice = history[history.length - 1]?.choice || null;
+        const recoveryPressure = hasV2RecoveryPressure(snapshot, history);
+        const eventId = crypto.randomUUID();
+        const sessionId = session.v2SessionId || crypto.randomUUID();
+        session.v2SessionId = sessionId;
+        const payload = {
+          v: 2,
+          engineVersion: "v2",
+          source: "v2_harness",
+          eventId,
+          sessionId,
+          encounterId: p.encounterId || null,
+          encounterNumber: p.encounterNumber ?? null,
+          encounterTitle: p.encounterTitle || null,
+          tier: Number(p.tier || 1),
+          difficulty: p.difficulty ?? null,
+          difficultyMode: p.difficultyMode || null,
+          chosen: {
+            guestType: p.guestStateActual || "",
+            mode: lastChoice?.group || "",
+            hook: lastChoice?.type || "",
+          },
+          actual: {
+            guestType: p.guestStateActual || "",
+            guestTypeNorm: p.guestStateActual || "",
+          },
+          checks: {
+            readCorrect: !!p.guestReadCorrect,
+            modeStatus: Number(p.skills?.framing || 0) >= 75 ? "right" : Number(p.skills?.framing || 0) >= 50 ? "neutral" : "damaging",
+            hookStatus: Number(p.skills?.delivery || 0) >= 75 ? "right" : Number(p.skills?.delivery || 0) >= 50 ? "neutral" : "damaging",
+            deliveryCorrect: Number(p.skills?.delivery || 0) >= 60,
+          },
+          pivot: {
+            type: recoveryPressure ? "v2_recovery_pressure" : "",
+            taken: recoveryPressure || p.outcome === "neutral_exit",
+            success: p.outcome === "neutral_exit" || (recoveryPressure && p.chainSignal === "green"),
+          },
+          outcome: p.outcome || null,
+          finalOutcome: p.finalOutcome || p.outcome || null,
+          chainScore: p.chainScore ?? null,
+          chainSignal: p.chainSignal || null,
+          performanceGrade: p.performanceGrade || null,
+          progress: p.v2Snapshot || null,
+          reflection: {
+            stepSpine: history.map((item) => item.choice?.group).filter(Boolean),
+            chosenPath: history.map((item) => `${item.choice?.group || ""}:${item.choice?.type || ""}`).filter(Boolean),
+            bestPath: Array.isArray(snapshot.bestPath) ? snapshot.bestPath : [],
+            bottleServed: p.outcome === "premium_success" || p.outcome === "standard_success" || p.outcome === "weak_success",
+          },
+          occurredAtMs: Date.now(),
+        };
+
+        session.v2CanonicalOutcomeEmitted = true;
+        session.v2CanonicalOutcomeEventId = eventId;
+        bcEmitEvent("encounter_resolved", payload);
+        return eventId;
+      }
+
+      function shouldSubmitV2ProgressReport() {
+        if (window.isDemo || String(window.bcMode || "").toLowerCase() === "demo") return false;
+        if (!isActuallyIframe()) return false;
+	        const ctx = window.__BC_CTX__ || window.BC_CTX || {};
+	        const role = String(
+	          ctx.membershipRole ||
+	          ctx.membership_role ||
+	          ctx.role ||
+	          ""
+	        ).toLowerCase();
+	        return !!(
+	          ctx.userId &&
+	          ctx.restaurantId &&
+	          ["waiter", "single_manager", "group_manager", "enterpriser"].includes(role)
+	        );
+	      }
+
+	      function maybeSubmitV2ProgressReport(snapshot, session, rewardProgress = null) {
+	        if (!shouldSubmitV2ProgressReport()) return null;
+	        if (!snapshot || !session || !isV2TerminalOutcome(snapshot.outcome)) return null;
+	        if (session.v2SkillReportSubmitted) return session.v2SkillReportReqId || null;
+
+	        const draft = buildV2ProgressReportDraft(snapshot, session, rewardProgress);
+	        if (!draft?.payload) return null;
+
+	        maybeEmitV2CanonicalEncounterResolved(snapshot, session, draft);
+	        const reqId = submitProgressReportToManager({ body: draft.body, payload: draft.payload });
+	        if (reqId) {
+	          session.v2SkillReportSubmitted = true;
+	          session.v2SkillReportReqId = reqId;
+	          window.__BC_V2_LAST_SKILL_REPORT__ = draft;
+	          console.log("[BC][V2] progress_report_submit", {
+	            reqId,
+	            encounterId: draft.payload.encounterId,
+	            outcome: draft.payload.outcome,
+	            skills: draft.payload.skills,
+	          });
+	        }
+	        return reqId;
+	      }
+
+	      function emitV2HarnessOutcome(snapshot, session, lastReaction = "") {
+	        if (!snapshot || !session || !isV2TerminalOutcome(snapshot.outcome)) return;
+	        if (session.outcomeEmitted) return;
         session.outcomeEmitted = true;
 
         try {
+          const rewardState = loadV2BottleRewardState();
+          const pendingRewards = getPendingV2BottleRewards(rewardState);
           const payload = {
             v: 1,
             engineVersion: "v2_preview",
@@ -23264,17 +25176,17 @@ function ensureProgLoaded() {
             encounterId: snapshot.encounterId,
             encounterTitle: snapshot.encounterTitle,
             encounterTier: snapshot.tier,
+            difficultyMode: normalizeV2DifficultyMode(snapshot.difficultyMode || session?.difficultyMode || getV2DifficultyModeForStart()),
             serviceStage: snapshot.serviceStage,
-            targetRecommendAngle: snapshot.targetRecommendAngle || null,
             outcome: snapshot.outcome,
             authorityDelta: Number(snapshot.authorityDelta || 0),
             progress: Number(snapshot.progress || 0),
             frustration: Number(snapshot.frustration || 0),
+            mistakeCount: Number(snapshot.mistakeCount || 0),
             progressMood: snapshot.progressMood,
             frustrationMood: snapshot.frustrationMood,
             walkAwayUnlocked: !!snapshot.walkAwayUnlocked,
             turnCount: Number(snapshot.turnCount || 0),
-            bestPath: Array.isArray(snapshot.bestPath) ? snapshot.bestPath : [],
             product: session.product
               ? {
                   id: session.product.id || null,
@@ -23286,21 +25198,28 @@ function ensureProgLoaded() {
               : null,
             history: Array.isArray(session.gameState?.history)
               ? session.gameState.history.map((item) => ({
-                  turn: item.turn,
-                  choice: item.choice,
-                  quality: item.quality,
-                  progressDelta: item.progressDelta,
-                  frustrationDelta: item.frustrationDelta,
-                  resultingProgress: item.resultingProgress,
-                  resultingFrustration: item.resultingFrustration,
-                  reaction: item.reaction,
-                }))
+	                  turn: item.turn,
+	                  choice: item.choice,
+	                  quality: item.quality,
+	                  progressDelta: item.progressDelta,
+	                  frustrationDelta: item.frustrationDelta,
+	                  mistakeDelta: item.mistakeDelta,
+	                  resultingProgress: item.resultingProgress,
+	                  resultingFrustration: item.resultingFrustration,
+	                  resultingMistakeCount: item.resultingMistakeCount,
+	                  reaction: item.reaction,
+	                  feedbackText: item.feedbackText,
+	                }))
               : [],
-            scene: {
-              family: session.encounter?.family || null,
-              hiddenPressure: session.encounter?.hiddenPressure || null,
-              masterProfile: session.encounter?.masterProfile || null,
-              variant: session.encounter?.variant || null,
+            bottleRewards: {
+              totalAP: Number(rewardState.totalAP || 0),
+              tierUnlocked: Number(rewardState.tierUnlocked || 1),
+              pending: pendingRewards.map((reward) => ({
+                id: reward.id,
+                name: reward.name,
+                unlockAP: reward.unlockAP,
+                tier: reward.tier,
+              })),
             },
             latestReaction: lastReaction || "",
           };
@@ -23315,6 +25234,47 @@ function ensureProgLoaded() {
           snapshot &&
           isV2TerminalOutcome(snapshot.outcome) &&
           Number(snapshot.encounterOrdinal || 0) >= Number(snapshot.encounterCount || 0)
+        );
+      }
+
+      const V2_DEMO_ENCOUNTER_IDS = Object.freeze([
+        "encounter_v2_014",
+        "encounter_v2_013",
+        "encounter_v2_011",
+        "encounter_v2_015",
+        "encounter_v2_016",
+      ]);
+
+      function getV2DemoEncounterIdForOrdinal(ordinal) {
+        const index = Math.max(0, Number(ordinal || 1) - 1);
+        return V2_DEMO_ENCOUNTER_IDS[index] || null;
+      }
+
+      function getNextV2DemoEncounterId(snapshot) {
+        const nextOrdinal = Number(snapshot?.encounterOrdinal || 0) + 1;
+        const encounterCount = Math.max(1, Number(snapshot?.encounterCount || V2_DEMO_ENCOUNTER_IDS.length));
+        if (nextOrdinal > encounterCount) return null;
+        return getV2DemoEncounterIdForOrdinal(nextOrdinal);
+      }
+
+      function syncV2DemoRotationAfterSnapshot(snapshot) {
+        if (!isV2DemoRewardMode() || !snapshot) return;
+        const encounterCount = Math.max(1, Number(snapshot.encounterCount || V2_DEMO_ENCOUNTER_IDS.length));
+        const nextIndex = Number(snapshot.encounterOrdinal || 1) % encounterCount;
+        try { window.localStorage.setItem("BC_V2_TIER1_ROTATION_INDEX", String(nextIndex)); } catch {}
+      }
+
+      function isV2DemoEncounterSequence(snapshot) {
+        const encounterId = String(snapshot?.encounterId || "");
+        const encounterCount = Number(snapshot?.encounterCount || 0);
+        return !!(
+          isV2DemoRewardMode() ||
+          (
+            isV2HarnessRequestedInFrame() &&
+            V2_DEMO_ENCOUNTER_IDS.includes(encounterId) &&
+            encounterCount > 0 &&
+            encounterCount <= V2_DEMO_ENCOUNTER_IDS.length
+          )
         );
       }
 
@@ -23364,10 +25324,52 @@ function ensureProgLoaded() {
         );
       }
 
+      function ensureV2StepButtonsContainer() {
+        const encounterPanel = document.getElementById("encounterPanel");
+        if (!encounterPanel) return null;
+        let stepButtons = document.getElementById("stepButtons");
+        if (!stepButtons) {
+          stepButtons = document.createElement("div");
+          stepButtons.id = "stepButtons";
+          stepButtons.className = "bc-button-row button-row";
+          stepButtons.setAttribute("data-tutorial", "action-area");
+        }
+        if (stepButtons.parentElement !== encounterPanel) {
+          const feedbackLine = document.getElementById("bcFeedbackLine");
+          if (feedbackLine?.parentElement === encounterPanel) {
+            feedbackLine.insertAdjacentElement("afterend", stepButtons);
+          } else {
+            encounterPanel.appendChild(stepButtons);
+          }
+        }
+        return stepButtons;
+      }
+
       function resetV2DemoProgressToStart() {
         try { window.localStorage.setItem("BC_V2_TIER1_ROTATION_INDEX", "0"); } catch {}
         try { window.__BC_V2_HARNESS_STATE__ = {}; } catch {}
-        startV2HarnessEncounter();
+        resetV2DemoSession();
+        try { getV2HarnessApi()?.reset?.(); } catch {}
+        window.__BC_V2_DEMO_FINAL_SUMMARY_ACTIVE__ = false;
+        startV2HarnessWhenReady({ resetSession: true, skipRewardSync: true });
+      }
+
+      function resetV2DemoProgressToHome(options = {}) {
+        const resetCycle = options?.resetCycle !== false;
+        if (resetCycle) {
+          try { window.localStorage.setItem("BC_V2_TIER1_ROTATION_INDEX", "0"); } catch {}
+        }
+        try { window.__BC_V2_HARNESS_STATE__ = {}; } catch {}
+        resetV2DemoSession();
+        try { getV2HarnessApi()?.reset?.(); } catch {}
+        window.__BC_V2_DEMO_FINAL_SUMMARY_ACTIVE__ = false;
+        applyPlaySurfaceMode("full");
+        resetNavState();
+        showScreen("screenHome");
+        try { localStorage.setItem(coverKey, "true"); } catch {}
+        updateCounts?.();
+        renderApp?.();
+        scheduleIframeHeightReport?.("v2_reward_continue_home");
       }
 
       function renderV2DemoCompletionCard(stepButtons, snapshot) {
@@ -23375,6 +25377,7 @@ function ensureProgLoaded() {
         if (!shell) return;
 
         shell.querySelector("#v2DemoCompletionCard")?.remove();
+        if (!(window.isDemo || window.bcMode === "demo")) return;
         if (!isV2FinalDemoEncounter(snapshot)) return;
 
         const joinState = getV2DemoJoinState();
@@ -23398,8 +25401,9 @@ function ensureProgLoaded() {
                     <div class="small-text" style="margin-bottom:8px;">Join a restaurant to unlock Premium with your waiter account.</div>
                     <input id="v2DemoJoinCode" type="text" placeholder="Join code" />
                     <div class="button-row" style="margin-top:10px;">
-                      <button id="btnV2DemoJoin" type="button">Join Restaurant</button>
+                      <button id="btnV2DemoJoin" type="button">Join BottleCaller</button>
                       <button id="btnV2RestartEncounterFlow" type="button" class="btn-ghost">Return to Encounter 1</button>
+                      <button id="btnV2ReplayEncounter" type="button" class="btn-ghost">Replay Encounter</button>
                     </div>
                     <div id="v2DemoJoinMsg" class="small-text" style="margin-top:8px;"></div>
                   </div>
@@ -23407,6 +25411,7 @@ function ensureProgLoaded() {
                 : `
                   <div class="button-row">
                     <button id="btnV2RestartEncounterFlow" type="button" class="btn-ghost">Return to Encounter 1</button>
+                    <button id="btnV2ReplayEncounter" type="button" class="btn-ghost">Replay Encounter</button>
                   </div>
                 `
             }
@@ -23414,13 +25419,29 @@ function ensureProgLoaded() {
         `;
         shell.insertBefore(card, shell.querySelector(".button-row"));
 
-        document.getElementById("btnV2RestartEncounterFlow")?.addEventListener("click", () => {
-          resetV2DemoProgressToStart();
-        });
+        card.addEventListener("click", async (event) => {
+          const restartButton = event.target?.closest?.("#btnV2RestartEncounterFlow");
+          if (restartButton) {
+            event.preventDefault();
+            resetV2DemoProgressToStart();
+            return;
+          }
 
-        document.getElementById("btnV2DemoJoin")?.addEventListener("click", async () => {
-          const msg = document.getElementById("v2DemoJoinMsg");
-          const input = document.getElementById("v2DemoJoinCode");
+          const replayButton = event.target?.closest?.("#btnV2ReplayEncounter");
+          if (replayButton) {
+            event.preventDefault();
+            const replayIndex = Math.max(0, Number(snapshot?.encounterOrdinal || 1) - 1);
+            try { window.localStorage.setItem("BC_V2_TIER1_ROTATION_INDEX", String(replayIndex)); } catch {}
+            try { getV2HarnessApi()?.reset?.(); } catch {}
+            startV2HarnessWhenReady({ resetSession: true, skipRewardSync: true });
+            return;
+          }
+
+          const joinButton = event.target?.closest?.("#btnV2DemoJoin");
+          if (!joinButton) return;
+          event.preventDefault();
+          const msg = card.querySelector("#v2DemoJoinMsg");
+          const input = card.querySelector("#v2DemoJoinCode");
           const code = String(input?.value || "");
           const api = getParentDemoJoinApi();
           if (!api || typeof api.submit !== "function") {
@@ -23437,27 +25458,207 @@ function ensureProgLoaded() {
         });
       }
 
-      function renderV2HarnessPlay(snapshot, reaction = "") {
+      function renderV2EncounterPreview(snapshot, reaction = "") {
         const encounterPanel = document.getElementById("encounterPanel");
         const stepHeader = document.getElementById("stepHeader");
         const wineDisplayName = document.getElementById("wineDisplayName");
         const stepContent = document.getElementById("stepContent");
         const feedbackLine = document.getElementById("bcFeedbackLine");
-        const stepButtons = document.getElementById("stepButtons");
+        const stepButtons = ensureV2StepButtonsContainer();
+        const api = getV2HarnessApi();
+        if (!encounterPanel || !stepHeader || !wineDisplayName || !stepContent || !feedbackLine || !stepButtons || !snapshot || !api) {
+          return;
+        }
+
+        encounterPanel.dataset.v2Layout = "tier1";
+        encounterPanel.dataset.v2Screen = "preview";
+        const session = api.getSession?.() || null;
+        const encounter = getV2EncounterForSnapshot(snapshot, session?.encounter || null);
+        const product = session?.product || null;
+        const sceneClue = getV2SceneClue(encounter);
+        const previewArt = getV2EncounterImageSrc(encounter, "previewArt", "mainNeutral");
+        const productName = snapshot.productName || product?.name || "";
+        const bottleImage = getV2PreviewBottleImage(snapshot, product);
+        const rewardState = loadV2BottleRewardState();
+        const totalAP = Number(rewardState?.totalAP || 0);
+        const encounterPersona = v2HarnessLabel(encounter?.family || snapshot.encounterTitle || "Table");
+        const productStyle = product?.style || product?.varietalOrBlend || "";
+        const productRegion = product?.region || "";
+        const previewVarietal = String(product?.varietalOrBlend || product?.style || "").trim();
+        let previewProductName = String(product?.name || productName || "Selected Bottle").replace(/^Scroll of\s+/i, "").trim() || productName || "Selected Bottle";
+        if (previewVarietal) {
+          previewProductName = previewProductName.replace(new RegExp(`,?\\s*${previewVarietal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"), "").trim();
+        }
+        previewProductName = previewProductName.replace(/,\s*$/, "") || productName || "Selected Bottle";
+        const previewLine = encounter?.contextClue || "Read the table before choosing your first move.";
+
+        stepHeader.textContent = `Tier ${snapshot.tier} • Encounter ${String(snapshot.encounterOrdinal).padStart(3, "0")} • ${snapshot.encounterTitle}`;
+        wineDisplayName.textContent = productName ? `Product: ${productName}` : `Encounter: ${snapshot.encounterTitle}`;
+        feedbackLine.textContent = "";
+        stepContent.dataset.stage = "preview";
+        stepContent.dataset.signal = "yellow";
+        stepContent.innerHTML = `
+          <style>
+            @media (max-width: 760px){
+              #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-preview-table-card{
+                left: 8% !important;
+                top: 58.5% !important;
+                width: 24% !important;
+                min-height: 70px !important;
+                padding: 6px 5px !important;
+              }
+              #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-preview-product-card{
+                right: 8% !important;
+                top: 58.5% !important;
+                width: 24% !important;
+                min-height: 70px !important;
+                padding: 6px 5px !important;
+              }
+              #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-preview-card-title{
+                font-size: 9.5px !important;
+                line-height: 1.02 !important;
+                letter-spacing: .01em !important;
+              }
+              #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-preview-product-card .v2-preview-card-title{
+                font-size: 7.4px !important;
+                line-height: 1.02 !important;
+                letter-spacing: 0 !important;
+              }
+              #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-preview-product-card .v2-preview-mobile-varietal{
+                display: block !important;
+                margin-top: 5px !important;
+                color: rgba(255,255,255,.92) !important;
+                font-size: 7.2px !important;
+                line-height: 1.04 !important;
+              }
+              #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-preview-product-card .v2-preview-desktop-varietal{
+                display: none !important;
+              }
+              #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-preview-card p{
+                font-size: 7.6px !important;
+                line-height: 1.1 !important;
+                margin-top: 4px !important;
+              }
+              #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-preview-card-eyebrow,
+              #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-preview-card-region{
+                font-size: 5.8px !important;
+                letter-spacing: .045em !important;
+              }
+              #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-preview-card-region{
+                margin-top: 4px !important;
+                padding-top: 4px !important;
+              }
+              #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-vs-graphic{
+                left: 42.8% !important;
+                top: 61.7% !important;
+                width: 66px !important;
+              }
+              #encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-product-bottle{
+                left: 60% !important;
+                right: auto !important;
+                top: 61.7% !important;
+                width: 45px !important;
+                max-height: 24% !important;
+                transform: translate(-50%, -50%) !important;
+              }
+            }
+          </style>
+          <section class="v2-preview-screen">
+            <div class="v2-preview-art-wrap">
+              <img class="v2-preview-art" src="${escapeHtml(previewArt)}" alt="" onerror="this.onerror=null;this.src='${V2_FALLBACK_ENCOUNTER_IMAGE}';">
+              <div class="v2-preview-vignette"></div>
+              <div class="v2-preview-topbar">
+                <div class="v2-preview-title-rule"></div>
+                <div class="v2-preview-label">Encounter Preview</div>
+                <div class="v2-preview-ap"><span>AP</span>${totalAP.toLocaleString()}</div>
+              </div>
+              <div class="v2-preview-heading">
+                <div class="v2-preview-tier">Tier ${snapshot.tier} • Encounter ${String(snapshot.encounterOrdinal).padStart(2, "0")}</div>
+                <h2>${escapeHtml(snapshot.encounterTitle)}</h2>
+                <p>${escapeHtml(previewLine)}</p>
+              </div>
+              <div class="v2-preview-card v2-preview-table-card">
+                <div class="v2-preview-card-title">${escapeHtml(encounterPersona)}</div>
+                <p>${escapeHtml(sceneClue)}</p>
+              </div>
+              <div class="v2-preview-card v2-preview-product-card">
+                <div class="v2-preview-card-eyebrow">On The Line</div>
+                <div class="v2-preview-card-title">${escapeHtml(previewProductName)}</div>
+                ${previewVarietal ? `<div class="v2-preview-mobile-varietal">${escapeHtml(previewVarietal)}</div>` : ""}
+                ${productStyle ? `<p class="v2-preview-desktop-varietal">${escapeHtml(productStyle)}</p>` : ""}
+                ${productRegion ? `<div class="v2-preview-card-region">${escapeHtml(productRegion)}</div>` : ""}
+              </div>
+              <div class="v2-preview-clue-panel">
+                <div class="v2-preview-clue-icon">!</div>
+                <div>
+                  <div class="v2-preview-card-eyebrow">Clue</div>
+                  <p>${escapeHtml(sceneClue)}</p>
+                </div>
+              </div>
+              <img class="v2-vs-graphic" src="${V2_VS_GRAPHIC}" alt="" onerror="this.style.display='none';">
+              ${bottleImage ? `<img class="v2-product-bottle" src="${escapeHtml(bottleImage)}" alt="" onerror="this.style.display='none';">` : ""}
+              <div class="v2-preview-footer">Prepare. Read. Recommend.</div>
+            </div>
+          </section>
+        `;
+
+        stepButtons.dataset.v2ActionState = "preview";
+        stepButtons.innerHTML = `
+          <div class="v2-action-shell v2-preview-actions">
+            <button type="button" class="btn btnChoice v2-start-encounter-button" id="btnV2StartEncounter">Start Encounter</button>
+          </div>
+        `;
+        requestAnimationFrame(() => {
+          const previewScreen = stepContent.querySelector(".v2-preview-screen");
+          if (previewScreen && stepButtons.parentElement !== previewScreen) {
+            previewScreen.appendChild(stepButtons);
+          } else if (!previewScreen && stepButtons.parentElement !== encounterPanel) {
+            encounterPanel.appendChild(stepButtons);
+          }
+          const shell = stepButtons.querySelector(".v2-action-shell");
+          const shellHeight = Math.ceil(shell?.getBoundingClientRect?.().height || 0);
+          if (shellHeight > 0) {
+            encounterPanel.style.setProperty("--v2-action-shell-height", `${shellHeight}px`);
+          }
+          scheduleIframeHeightReport?.("v2_preview_render");
+        });
+
+        const startButton = stepButtons.querySelector("#btnV2StartEncounter");
+        startButton?.addEventListener("click", async (event) => {
+          event.preventDefault();
+          startButton.disabled = true;
+          const liveSession = api.getSession?.() || null;
+          const liveEncounter = getV2EncounterForSnapshot(snapshot, liveSession?.encounter || null);
+          const nextImage = getV2MainImageSrc(snapshot, liveEncounter, getV2LatestHistoryForSnapshot(snapshot, liveSession));
+          await preloadV2Image(nextImage, 700);
+          renderV2HarnessPlay(snapshot, reaction);
+        });
+      }
+
+      function renderV2HarnessPlay(snapshot, reaction = "", quickFeedbackText = null) {
+        const encounterPanel = document.getElementById("encounterPanel");
+        const stepHeader = document.getElementById("stepHeader");
+        const wineDisplayName = document.getElementById("wineDisplayName");
+        const stepContent = document.getElementById("stepContent");
+        const feedbackLine = document.getElementById("bcFeedbackLine");
+        const stepButtons = ensureV2StepButtonsContainer();
         const api = getV2HarnessApi();
         if (!encounterPanel || !stepHeader || !wineDisplayName || !stepContent || !feedbackLine || !stepButtons || !snapshot || !api) {
           return;
         }
         encounterPanel.dataset.v2Layout = "tier1";
+        encounterPanel.dataset.v2Screen = "play";
 
         const session = api.getSession?.() || null;
-        const encounter = session?.encounter || null;
+        const encounter = getV2EncounterForSnapshot(snapshot, session?.encounter || null);
+        const latestHistoryForImage = getV2LatestHistoryForSnapshot(snapshot, session);
+        const mainImageSrc = getV2MainImageSrc(snapshot, encounter, latestHistoryForImage);
 
         const selectedGroup =
           window.__BC_V2_HARNESS_STATE__?.selectedGroup &&
           snapshot.availableGroups.includes(window.__BC_V2_HARNESS_STATE__.selectedGroup)
             ? window.__BC_V2_HARNESS_STATE__.selectedGroup
-            : (snapshot.availableGroups[0] || null);
+            : null;
         window.__BC_V2_HARNESS_STATE__ = {
           ...(window.__BC_V2_HARNESS_STATE__ || {}),
           selectedGroup,
@@ -23468,18 +25669,74 @@ function ensureProgLoaded() {
         wineDisplayName.textContent = snapshot.productName
           ? `Product: ${snapshot.productName}`
           : `Encounter: ${snapshot.encounterTitle}`;
-        feedbackLine.textContent = showIntroGuidance ? getV2FeedbackLine(snapshot, reaction) : "";
+        const feedbackText = getV2FeedbackLine(snapshot, reaction);
+        const feedbackIsTerminal = isV2TerminalOutcome(snapshot.outcome);
+        feedbackLine.textContent = feedbackIsTerminal ? feedbackText : "";
 
-        const bestPath = Array.isArray(snapshot.bestPath) ? snapshot.bestPath.join(" → ") : "";
         const outcome = snapshot.outcome ? v2HarnessLabel(snapshot.outcome) : "In Progress";
-        const angle = snapshot.targetRecommendAngle ? v2HarnessLabel(snapshot.targetRecommendAngle) : "Flexible";
         const quote = getV2ReactiveQuote(snapshot, encounter, reaction);
-        const scene = encounter?.scene || "";
-        const visualClues = Array.isArray(encounter?.visualClues) ? encounter.visualClues : [];
+        const quoteEncounterKey = `${snapshot.tier || ""}:${snapshot.encounterId || snapshot.encounterOrdinal || ""}`;
+        if (window.__BC_V2_QUOTE_ENCOUNTER_KEY__ !== quoteEncounterKey) {
+          window.__BC_V2_QUOTE_ENCOUNTER_KEY__ = quoteEncounterKey;
+          window.__BC_V2_LAST_QUOTE__ = "";
+          window.__BC_V2_QUOTE_HISTORY__ = [];
+          window.__BC_V2_LAST_QUICK_FEEDBACK__ = "";
+        }
+        if (quickFeedbackText !== null) {
+          window.__BC_V2_LAST_QUICK_FEEDBACK__ = String(quickFeedbackText || "");
+        }
+        const quickFeedback = String(window.__BC_V2_LAST_QUICK_FEEDBACK__ || "");
+        const previousQuote = window.__BC_V2_LAST_QUOTE__;
+        const shouldAnimateQuote = !!previousQuote && previousQuote !== quote;
+        if (shouldAnimateQuote) {
+          window.__BC_V2_QUOTE_HISTORY__ = [
+            previousQuote,
+            ...(Array.isArray(window.__BC_V2_QUOTE_HISTORY__) ? window.__BC_V2_QUOTE_HISTORY__ : []),
+          ].filter(Boolean).slice(0, 3);
+        }
+        window.__BC_V2_LAST_QUOTE__ = quote;
+        const quoteHistory = (Array.isArray(window.__BC_V2_QUOTE_HISTORY__) ? window.__BC_V2_QUOTE_HISTORY__ : [])
+          .slice(0, 3);
+        const quoteHistoryHtml = quoteHistory
+          .map((item, index) => ({ item, age: index + 1 }))
+          .reverse()
+          .map(({ item, age }) => `
+            <div class="v2-quote-history-line is-age-${age}">
+              ${escapeHtml(item)}
+            </div>
+          `)
+          .join("");
+        const quoteHtml = shouldAnimateQuote
+          ? String(quote || "")
+              .split(/(\s+)/)
+              .map((part, index) =>
+                /^\s+$/.test(part)
+                  ? escapeHtml(part)
+                  : `<span class="v2-quote-word" style="--v2-word-index:${index}">${escapeHtml(part)}</span>`
+              )
+              .join("")
+          : escapeHtml(quote);
+        const sceneClue = getV2SceneClue(encounter);
         const moodDescriptor = getV2MoodDescriptor(snapshot);
-        const isTerminal = isV2TerminalOutcome(snapshot.outcome);
-        const isFinalEncounter = isV2FinalDemoEncounter(snapshot);
+        const tableMood = getV2TableMood(snapshot);
+        const isTerminal = feedbackIsTerminal;
+	        const resultPresentation = isTerminal ? getV2ResultPresentation(snapshot, encounter) : null;
+	        const rewardProgress = isTerminal ? applyV2BottleRewardProgress(snapshot) : { state: loadV2BottleRewardState(), apDelta: 0, pendingRewards: [] };
+	        if (isTerminal) {
+	          maybeSubmitV2ProgressReport(snapshot, session, rewardProgress);
+	        }
+	        if (isTerminal && (isGodotShiftWineOfferActive() || window.__BC_V2_FROM_GODOT__)) {
+	          window.__BC_V2_FROM_GODOT__ = false;
+	          completeGodotWineOfferFromV2(snapshot, session, rewardProgress);
+	          return;
+	        }
+	        const isFinalEncounter = isV2FinalDemoEncounter(snapshot);
+        const isDemoEncounterSequence = isV2DemoEncounterSequence(snapshot);
+        const shouldShowBottleRewardPanel = isTerminal && (!isDemoEncounterSequence || isFinalEncounter) && !isGodotShiftWineOfferActive();
         const lesson = String(encounter?.lesson || "");
+        const guidanceLine = "Read the table, choose the right interaction, and move the guest without creating friction.";
+        const feedbackMeta = isTerminal && feedbackText !== guidanceLine ? feedbackText : "";
+        const showGuidanceCard = Number(snapshot.encounterOrdinal || 0) <= 1;
         const nextStepInstruction = getV2NextStepInstruction(snapshot);
         const progressNodes = Array.from({ length: Math.max(1, snapshot.encounterCount || 1) }, (_, index) => {
           const encounterNumber = index + 1;
@@ -23496,131 +25753,198 @@ function ensureProgLoaded() {
           : "Walk Away unlocks only when friction reaches critical resistance.";
 
         stepContent.dataset.stage = "observe";
+        stepButtons.dataset.v2TerminalState = isTerminal ? (isFinalEncounter ? "final" : "terminal") : "";
+        window.__BC_V2_DEMO_FINAL_SUMMARY_ACTIVE__ = !!(isTerminal && isFinalEncounter);
         stepContent.dataset.signal =
           snapshot.frustrationMood === "critical_resistance"
             ? "red"
             : snapshot.progressMood === "ready"
               ? "green"
               : "yellow";
-        stepContent.innerHTML = `
-          <section class="v2-play-shell">
-            <div class="v2-hero-frame">
-              <div class="v2-hero-top">
-                <div class="v2-play-header">
-                  <div class="v2-crest">B</div>
-                  <div class="v2-header-copy">
-                    <div class="v2-header-topline">
-                      <span>Tier ${snapshot.tier}</span>
-                      <span>Encounter ${String(snapshot.encounterOrdinal).padStart(3, "0")} of ${snapshot.encounterCount}</span>
-                    </div>
-                    <h2 class="v2-encounter-title">${escapeHtml(snapshot.encounterTitle)}</h2>
-                    <div class="v2-progress-rail" style="--v2-progress-count:${Math.max(1, snapshot.encounterCount || 1)}" aria-hidden="true">${progressNodes}</div>
-                  </div>
-                  <div class="v2-region-mark">SA</div>
-                </div>
-                <div class="v2-mood-pill">
-                  <div class="v2-mood-label">Table Mood</div>
-                  <div class="v2-mood-value">${escapeHtml(v2HarnessLabel(snapshot.progressMood))}</div>
-                  <div class="v2-mood-detail">${escapeHtml(moodDescriptor)}</div>
+        const tierGate = getV2TierGateSummary();
+        const stateGridHtml = `
+          <div class="v2-state-grid">
+            <div class="v2-state-card">
+              <div class="v2-state-label">Progress</div>
+              <div class="v2-state-value">${snapshot.progress}</div>
+              <div class="v2-state-meta">${escapeHtml(v2HarnessLabel(snapshot.progressMood))}</div>
+            </div>
+            <div class="v2-state-card">
+              <div class="v2-state-label">Friction</div>
+              <div class="v2-state-value">${snapshot.frustration}</div>
+              <div class="v2-state-meta">${escapeHtml(v2HarnessLabel(snapshot.frustrationMood))}</div>
+            </div>
+            <div class="v2-state-card">
+              <div class="v2-state-label">Authority</div>
+              <div class="v2-state-value">${snapshot.authorityDelta}</div>
+              <div class="v2-state-meta">${escapeHtml(outcome)}</div>
+            </div>
+          </div>
+          <div class="v2-tier-gate-note small-text" title="AP unlock and rules evidence are separate gates; served tier is the minimum.">
+            ${escapeHtml(tierGate.label)} • limited by ${escapeHtml(tierGate.limiter)}
+          </div>
+        `;
+        if (isTerminal) {
+          stepContent.dataset.stage = "complete";
+          stepContent.innerHTML = `
+            <section class="v2-play-shell">
+              <div class="v2-end-screen">
+                <img class="v2-end-art" src="${escapeHtml(resultPresentation.imageSrc)}" alt="" onerror="this.onerror=null;this.src='${V2_FALLBACK_ENCOUNTER_IMAGE}';">
+                <div class="v2-end-vignette"></div>
+                <div class="v2-end-card">
+                  <div class="v2-end-kicker">Encounter Complete</div>
+                  <div class="v2-end-meta">Tier ${snapshot.tier} • ${escapeHtml(snapshot.encounterTitle)}</div>
+                  <h2>${escapeHtml(resultPresentation.title)}</h2>
+                  <p>${escapeHtml(resultPresentation.subtitle)}</p>
+                  <div class="v2-ap-card">${escapeHtml(resultPresentation.apLabel)}</div>
                 </div>
               </div>
-              <div class="v2-hero-bottom">
-                <div class="v2-scene-text">
-                  <div class="v2-scene-label">Table Scene</div>
-                  <p class="v2-scene-copy">${escapeHtml(scene)}</p>
-                  <ul class="v2-clue-list">
-                    ${visualClues.map((clue) => `<li>${escapeHtml(clue)}</li>`).join("")}
-                  </ul>
+            </section>
+          `;
+        } else {
+          stepContent.innerHTML = `
+            <section class="v2-play-shell">
+              <div class="v2-hero-frame">
+                <img class="v2-encounter-art" src="${escapeHtml(mainImageSrc)}" alt="" onerror="this.onerror=null;this.src='${V2_FALLBACK_ENCOUNTER_IMAGE}';">
+                <div class="v2-hero-top">
+                  <div class="v2-play-header">
+                    <div class="v2-crest">B</div>
+                    <div class="v2-header-copy">
+                      <div class="v2-header-topline">
+                        <span>Tier ${snapshot.tier}</span>
+                        <span>Encounter ${String(snapshot.encounterOrdinal).padStart(3, "0")} of ${snapshot.encounterCount}</span>
+                      </div>
+                      <h2 class="v2-encounter-title">${escapeHtml(snapshot.encounterTitle)}</h2>
+                      ${snapshot.productName ? `<div class="v2-product-title">Product: ${escapeHtml(snapshot.productName)}</div>` : ""}
+                      <div class="v2-progress-rail" style="--v2-progress-count:${Math.max(1, snapshot.encounterCount || 1)}" aria-hidden="true">${progressNodes}</div>
+                    </div>
+                    <div class="v2-region-mark">SA</div>
+                  </div>
+                  <div class="v2-scene-text v2-scene-clue">
+                    <div class="v2-scene-label">CLUE</div>
+                    <p class="v2-scene-copy">${escapeHtml(sceneClue)}</p>
+                  </div>
                 </div>
+                <div class="v2-hero-bottom">
 
-                <div class="v2-quote-row">
-                  <blockquote class="v2-quote-card">
-                    <span class="v2-quote-mark">“</span>
-                    <p>${escapeHtml(quote)}</p>
-                  </blockquote>
-                </div>
+                  <div class="v2-quote-row">
+                    <div class="v2-quote-stack">
+                      ${quoteHistoryHtml ? `<div class="v2-quote-history">${quoteHistoryHtml}</div>` : ""}
+                      <blockquote class="v2-quote-card">
+                        <span class="v2-quote-mark">“</span>
+                        <p class="v2-quote-text${shouldAnimateQuote ? " is-entering" : ""}">${quoteHtml}</p>
+                      </blockquote>
+                      ${quickFeedback ? `<div class="v2-feedback-chip">${escapeHtml(quickFeedback)}</div>` : ""}
+                    </div>
+                  </div>
 
-                <div class="v2-state-grid">
-                  <div class="v2-state-card">
-                    <div class="v2-state-label">Progress</div>
-                    <div class="v2-state-value">${snapshot.progress}</div>
-                    <div class="v2-state-meta">${escapeHtml(v2HarnessLabel(snapshot.progressMood))}</div>
-                  </div>
-                  <div class="v2-state-card">
-                    <div class="v2-state-label">Friction</div>
-                    <div class="v2-state-value">${snapshot.frustration}</div>
-                    <div class="v2-state-meta">${escapeHtml(v2HarnessLabel(snapshot.frustrationMood))}</div>
-                  </div>
-                  <div class="v2-state-card">
-                    <div class="v2-state-label">Authority</div>
-                    <div class="v2-state-value">${snapshot.authorityDelta}</div>
-                    <div class="v2-state-meta">${escapeHtml(outcome)}</div>
-                  </div>
-                </div>
-                ${showIntroGuidance ? `
+                  ${showGuidanceCard ? `
                   <div class="v2-guidance-card">
                     <div class="v2-guidance-label">What To Do Next</div>
                     <p class="v2-guidance-copy">${escapeHtml(nextStepInstruction)}</p>
+                    <div class="v2-guidance-rule">${escapeHtml(guidanceLine)}</div>
+                    ${feedbackMeta ? `<div class="v2-guidance-meta">${escapeHtml(feedbackMeta)}</div>` : ""}
                     <div class="v2-guidance-meta">${escapeHtml(walkAwayHint)}</div>
                   </div>
-                ` : ""}
-                ${isTerminal ? `
-                  <div class="v2-status-card">
-                    <div><strong>Lesson:</strong> ${escapeHtml(lesson)}</div>
+                  ` : ""}
+                  <div class="v2-top-metrics">
+                    ${stateGridHtml}
+                    <div class="v2-mood-pill">
+                      <div class="v2-mood-label">Table Mood</div>
+                      <div class="v2-mood-value">${escapeHtml(tableMood)}</div>
+                      <div class="v2-mood-detail">${escapeHtml(moodDescriptor)}</div>
+                    </div>
                   </div>
-                ` : ""}
+                </div>
               </div>
-            </div>
-          </section>
-        `;
+            </section>
+          `;
+        }
 
-        const groupButtons = snapshot.availableGroups
-          .map((group) => {
-            const active = group === selectedGroup;
-            return `
-              <button
-                type="button"
-                class="btn btnChoice v2-group-button${active ? " is-active" : ""}"
-                data-v2-group="${escapeHtml(group)}"
-              >${escapeHtml(v2HarnessLabel(group))}</button>
-            `;
-          })
-          .join("");
+        const groupButtons = isTerminal
+          ? ""
+          : snapshot.availableGroups
+              .map((group) => {
+                const active = group === selectedGroup;
+                return `
+                  <button
+                    type="button"
+                    class="btn btnChoice v2-group-button${active ? " is-active" : ""}"
+                    data-v2-group="${escapeHtml(group)}"
+                  >${escapeHtml(v2HarnessLabel(group))}</button>
+                `;
+              })
+              .join("");
 
+        const usedChoiceSet = new Set(Array.isArray(snapshot.usedChoices) ? snapshot.usedChoices.map(String) : []);
         const actionButtons = selectedGroup
           ? api.availableActionTypes(selectedGroup)
-              .map((type) => `
+              .map((type) => {
+                const choiceLine = getV2EncounterChoiceLine(encounter, selectedGroup, type, session?.product || null);
+                const isRecommendOption = selectedGroup === "recommend";
+                const primaryLabel = v2HarnessLabel(type);
+                const detailLabel = choiceLine || "";
+                const choiceKey = `${selectedGroup}:${String(type)}`;
+                const isUsedChoice = usedChoiceSet.has(choiceKey);
+                return `
                 <button
                   type="button"
-                  class="btn btnChoice v2-action-card"
+                  class="btn btnChoice v2-action-card${isRecommendOption ? " is-recommend" : ""}${isUsedChoice ? " is-used" : ""}"
                   data-v2-action="${escapeHtml(String(type))}"
+                  ${isUsedChoice ? `disabled aria-disabled="true" data-v2-used="true"` : ""}
                 >
-                  <span class="v2-action-title">${escapeHtml(v2HarnessLabel(type))}</span>
-                  <span class="v2-action-subtitle">${escapeHtml(v2HarnessLabel(selectedGroup))}</span>
-                  <span class="v2-action-copy">${escapeHtml(
-                    getV2EncounterChoiceLine(encounter, selectedGroup, type)
-                  )}</span>
+                  <span class="v2-action-title">${escapeHtml(primaryLabel)}</span>
+                  <span class="v2-action-subtitle">${isUsedChoice ? "Used" : escapeHtml(detailLabel)}</span>
                 </button>
-              `)
+              `;
+              })
               .join("")
           : "";
 
+        const showTerminalContinueButton = isTerminal && !isFinalEncounter;
         const actionLabel = selectedGroup
           ? `Choose one ${v2HarnessLabel(selectedGroup)} response card to continue the encounter.`
-          : "The encounter is complete. Continue, replay, or go back to welcome.";
+          : isTerminal
+            ? "The encounter is complete. Continue when you're ready."
+            : "Choose Ask, Recommend, or Commit to open the response options.";
+        stepButtons.dataset.v2ActionState = selectedGroup ? "expanded" : "collapsed";
+        const actionShellClasses = [
+          "v2-action-shell",
+          selectedGroup ? "is-expanded" : "",
+          isTerminal ? "is-terminal" : "",
+          isFinalEncounter ? "is-demo-final" : "",
+        ].filter(Boolean).join(" ");
         stepButtons.innerHTML = `
-          <div class="v2-action-shell">
-            <div class="v2-action-header">${groupButtons}</div>
+          <div class="${actionShellClasses}">
+            ${groupButtons ? `<div class="v2-action-header">${groupButtons}</div>` : ""}
             ${showIntroGuidance ? `<div class="small-text v2-action-caption">${escapeHtml(actionLabel)}</div>` : ""}
             <div class="v2-action-grid">${actionButtons}</div>
-            <div class="button-row" style="width:100%; margin-top:10px;">
-              ${isTerminal ? `<button type="button" class="btn" id="btnV2HarnessContinue">${isFinalEncounter ? "Return to Encounter 1" : "Continue Tier 1"}</button>` : ""}
-              ${isTerminal ? `<button type="button" class="btn btn-ghost" id="btnV2HarnessReplay">Replay Encounter</button>` : ""}
-              <button type="button" class="btn btn-ghost" id="btnV2HarnessBack">Back</button>
-            </div>
+            ${shouldShowBottleRewardPanel ? renderV2BottleRewardHtml(rewardProgress) : ""}
+            ${showTerminalContinueButton ? `<div class="button-row" style="width:100%;">
+              <button type="button" class="btn" id="btnV2HarnessContinue">Continue</button>
+            </div>` : ""}
           </div>
         `;
         renderV2DemoCompletionCard(stepButtons, snapshot);
+        requestAnimationFrame(() => {
+          const heroFrame = stepContent.querySelector(".v2-hero-frame");
+          const endScreen = stepContent.querySelector(".v2-end-screen");
+          const mobileMount = heroFrame || endScreen;
+          const isV2MobileLayout = window.matchMedia?.("(max-width: 760px)")?.matches;
+          if (mobileMount && isV2MobileLayout && !(isTerminal && isFinalEncounter) && stepButtons.parentElement !== mobileMount) {
+            mobileMount.appendChild(stepButtons);
+          } else if (!isV2MobileLayout && stepButtons.parentElement !== encounterPanel) {
+            encounterPanel.appendChild(stepButtons);
+          } else if (isV2MobileLayout && isTerminal && isFinalEncounter && stepButtons.parentElement !== encounterPanel) {
+            encounterPanel.appendChild(stepButtons);
+          }
+          const shell = stepButtons.querySelector(".v2-action-shell");
+          const shellHeight = Math.ceil(shell?.getBoundingClientRect?.().height || 0);
+          if (shellHeight > 0) {
+            encounterPanel.style.setProperty("--v2-action-shell-height", `${shellHeight}px`);
+          }
+          scheduleIframeHeightReport?.("v2_play_render");
+        });
 
         stepButtons.querySelectorAll("[data-v2-group]").forEach((btn) => {
           btn.addEventListener("click", () => {
@@ -23634,40 +25958,565 @@ function ensureProgLoaded() {
         });
 
         stepButtons.querySelectorAll("[data-v2-action]").forEach((btn) => {
-          btn.addEventListener("click", () => {
+          btn.addEventListener("click", async () => {
             if (!selectedGroup) return;
+            if (btn.disabled || btn.getAttribute("data-v2-used") === "true") return;
+            btn.disabled = true;
             const type = String(btn.getAttribute("data-v2-action") || "");
             const result = api.choose(selectedGroup, type);
             if (!result?.snapshot) return;
+            markV2WelcomeObjective("choose");
+            window.__BC_V2_HARNESS_STATE__ = {
+              ...(window.__BC_V2_HARNESS_STATE__ || {}),
+              selectedGroup: null,
+            };
             const liveSession = api.getSession?.() || null;
+            const liveEncounter = getV2EncounterForSnapshot(result.snapshot, liveSession?.encounter || null);
+            const latestHistory = getV2LatestHistoryForSnapshot(result.snapshot, liveSession);
+            if (latestHistory) markV2WelcomeObjective("follow");
+            const quickFeedback = getV2QuickFeedback(
+              latestHistory?.quality,
+              latestHistory?.choice,
+              result.snapshot,
+              latestHistory?.feedbackText || "",
+            );
             emitV2HarnessOutcome(result.snapshot, liveSession, result.reaction || "");
-            renderV2HarnessPlay(result.snapshot, result.reaction || "");
+            const nextImage = getV2MainImageSrc(result.snapshot, liveEncounter, latestHistory);
+            await preloadV2Image(nextImage, 700);
+            renderV2HarnessPlay(result.snapshot, result.reaction || "", quickFeedback);
           });
         });
 
-        document.getElementById("btnV2HarnessContinue")?.addEventListener("click", () => {
+        stepButtons.querySelectorAll("[data-v2-claim-reward]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const rewardId = String(btn.getAttribute("data-v2-claim-reward") || "");
+            if (!rewardId) return;
+            const state = loadV2BottleRewardState();
+            const reward = (Array.isArray(state.rewards) ? state.rewards : []).find((item) => item.id === rewardId) || {
+              id: rewardId,
+              name: String(btn.getAttribute("data-v2-reward-name") || "Starter Bottle"),
+            };
+            showV2BottleUnlockModal(reward, () => {
+              if (isDemoEncounterSequence) {
+                markV2DemoRewardOpenedOnSummary();
+                return;
+              }
+              startV2HarnessEncounter();
+            });
+          });
+        });
+
+        if (!isDemoEncounterSequence && isTerminal && Array.isArray(rewardProgress?.pendingRewards) && rewardProgress.pendingRewards.length) {
+          const rewardId = String(rewardProgress.pendingRewards[0]?.id || "");
+          const rewardState = rewardProgress?.state || loadV2BottleRewardState();
+          const autoKey = `BC_V2_REWARD_AUTO_SHOWN_${rewardId}_${Number(rewardState?.totalAP || 0)}_${Number(rewardState?.demoAPResetAt || 0)}`;
+          if (rewardId && !window.__BC_V2_REWARD_MODAL_ACTIVE__ && sessionStorage.getItem(autoKey) !== "1") {
+            sessionStorage.setItem(autoKey, "1");
+            window.setTimeout(() => {
+              window.__BC_V2_REWARD_MODAL_ACTIVE__ = true;
+              showFirstPendingV2BottleReward(() => {
+                window.__BC_V2_REWARD_MODAL_ACTIVE__ = false;
+                if (isDemoEncounterSequence) {
+                  markV2DemoRewardOpenedOnSummary();
+                  return;
+                }
+                startV2HarnessEncounter();
+              });
+            }, 250);
+          }
+        }
+
+        if (stepButtons.__BC_V2_TERMINAL_HANDLER__) {
+          stepButtons.removeEventListener("click", stepButtons.__BC_V2_TERMINAL_HANDLER__);
+        }
+        stepButtons.__BC_V2_TERMINAL_HANDLER__ = (event) => {
+          const button = event.target?.closest?.("#btnV2HarnessContinue");
+          if (!button) return;
+          event.preventDefault();
+          button.disabled = true;
+          const shouldOfferPendingReward = !isDemoEncounterSequence || isFinalEncounter;
+          if (shouldOfferPendingReward && getPendingV2BottleRewards(loadV2BottleRewardState()).length) {
+            window.__BC_V2_REWARD_MODAL_ACTIVE__ = true;
+            showFirstPendingV2BottleReward(() => {
+              window.__BC_V2_REWARD_MODAL_ACTIVE__ = false;
+              if (isDemoEncounterSequence) {
+                markV2DemoRewardOpenedOnSummary();
+                return;
+              }
+              startV2HarnessEncounter();
+            });
+            return;
+          }
           if (isFinalEncounter) {
-            resetV2DemoProgressToStart();
+            resetV2DemoProgressToHome();
+            return;
+          }
+          if (isDemoEncounterSequence) {
+            const nextDemoEncounterId = getNextV2DemoEncounterId(snapshot);
+            if (nextDemoEncounterId) {
+              startV2HarnessEncounter({ encounterId: nextDemoEncounterId, skipRewardSync: true });
+              return;
+            }
+            resetV2DemoProgressToHome();
             return;
           }
           startV2HarnessEncounter();
+        };
+        stepButtons.addEventListener("click", stepButtons.__BC_V2_TERMINAL_HANDLER__);
+
+      }
+
+      function getGodotShiftBridge() {
+        return window.__BC_GODOT_SHIFT__ || null;
+      }
+
+      function shouldUseGodotShiftFloor() {
+        try {
+          if (new URLSearchParams(window.location.search).get("bcGodot") === "0") return false;
+        } catch {}
+        let modeDemo = false;
+        try {
+          modeDemo = new URLSearchParams(window.location.search).get("mode") === "demo";
+        } catch {}
+        const isDemoMode = !!(window.isDemo || window.bcMode === "demo" || modeDemo);
+        if (!isDemoMode) return false;
+        // Demo + V2 flag (URL or harness module) means Godot owns the floor entry.
+        return !!(shouldUseV2Harness() || (() => {
+          try {
+            return new URLSearchParams(window.location.search).get("bcV2") === "1";
+          } catch {
+            return false;
+          }
+        })());
+      }
+
+      function isGodotShiftWineOfferActive() {
+        return !!window.__BC_GODOT_WINE_OFFER__?.active;
+      }
+
+      function getGodotShiftFrame() {
+        return document.getElementById("godotShiftFrame");
+      }
+
+      function setGodotShiftStatus(text, visible = true) {
+        const status = document.getElementById("godotShiftStatus");
+        if (!status) return;
+        status.textContent = String(text || "");
+        if (visible) {
+          status.hidden = false;
+          status.removeAttribute("hidden");
+          status.style.display = "";
+          status.style.pointerEvents = "auto";
+        } else {
+          status.hidden = true;
+          status.setAttribute("hidden", "");
+          status.style.display = "none";
+          status.style.pointerEvents = "none";
+        }
+      }
+
+      function isGodotMobileHost() {
+        // Must match parent mobile detection: coarse pointer + narrow.
+        // Never treat a narrow desktop window as mobile (portrait rotate CSS).
+        try {
+          if (window.parent && window.parent !== window) {
+            const parentMobile = window.parent.document?.documentElement?.dataset?.bcMobileEnv === "true";
+            if (parentMobile) return true;
+          }
+        } catch {}
+        try {
+          const coarse = window.matchMedia("(pointer: coarse)").matches;
+          if (!coarse) return false;
+          return window.matchMedia("(max-width: 860px)").matches;
+        } catch {
+          return false;
+        }
+      }
+
+      function notifyParentGodotShiftActive(active) {
+        try {
+          window.parent?.postMessage?.(
+            {
+              source: "BC_MSG",
+              v: 1,
+              type: "godot_shift_active",
+              active: !!active,
+              // Wine offer temporarily leaves the floor UI but must NOT clear the
+              // parent Godot lock (that was ejecting mobile back to login).
+              clearLock: false,
+              mode: window.bcMode || "demo",
+              screenId: active ? "screenGodotShift" : (window.__BC_GODOT_WINE_OFFER__?.active ? "screenPlay" : null),
+            },
+            window.location.origin,
+          );
+        } catch {}
+      }
+
+      function focusGodotShiftCanvas() {
+        const frame = getGodotShiftFrame();
+        try {
+          const canvas = frame?.contentDocument?.getElementById?.("canvas");
+          canvas?.focus?.();
+        } catch {}
+        try {
+          frame?.contentWindow?.focus?.();
+        } catch {}
+      }
+
+      function getGodotShiftBaseUrl() {
+        const bridge = getGodotShiftBridge();
+        const fromWindow = String(window.__BC_GODOT_SHIFT_BASE__ || "").trim();
+        const fromBridge = String(bridge?.baseUrl || "").trim();
+        const raw = fromWindow || fromBridge || "/godot-shift";
+        return String(raw).replace(/\/$/, "") || "/godot-shift";
+      }
+
+      function getGodotShiftTargetOrigin() {
+        const base = getGodotShiftBaseUrl();
+        if (/^https?:\/\//i.test(base)) {
+          try {
+            return new URL(base).origin;
+          } catch {}
+        }
+        return window.location.origin;
+      }
+
+      function getGodotShiftEmbedUrl() {
+        return `${getGodotShiftBaseUrl()}/index.html?bcEmbed=1`;
+      }
+
+      function postMessageToGodot(type, payload = {}) {
+        const bridge = getGodotShiftBridge();
+        const frame = getGodotShiftFrame();
+        if (!frame?.contentWindow) return false;
+        const message = bridge?.createAppMessageToGodot
+          ? bridge.createAppMessageToGodot(type, payload)
+          : { source: "BC_APP", v: 1, type, payload, at: Date.now() };
+        try {
+          frame.contentWindow.postMessage(message, getGodotShiftTargetOrigin());
+          return true;
+        } catch (error) {
+          console.warn("[BC][GODOT] postMessage failed", error);
+          return false;
+        }
+      }
+
+      function ensureGodotShiftListener() {
+        if (window.__BC_GODOT_SHIFT_LISTENER__) return;
+        window.__BC_GODOT_SHIFT_LISTENER__ = true;
+        window.addEventListener("message", (event) => {
+          const frame = getGodotShiftFrame();
+          if (!frame?.contentWindow || event.source !== frame.contentWindow) return;
+          const allowedOrigin = getGodotShiftTargetOrigin();
+          if (event.origin !== allowedOrigin && event.origin !== window.location.origin) return;
+          const bridge = getGodotShiftBridge();
+          const data = event.data;
+          if (!(bridge?.isGodotBridgeMessage?.(data) || (data && data.source === "BC_GODOT"))) return;
+          handleGodotShiftMessage(data);
+        });
+      }
+
+      function handleGodotBootMessage(data) {
+        const type = String(data?.type || "");
+        const payload = data?.payload && typeof data.payload === "object" ? data.payload : {};
+        if (type === "godot_load_start") {
+          setGodotShiftStatus("Downloading floor assets…", true);
+          notifyParentDemoPlayStarted?.("godot_load_start");
+          notifyParentGodotShiftActive?.(true);
+          return true;
+        }
+        if (type === "godot_load_progress") {
+          const pct = Math.max(0, Math.min(100, Number(payload.pct) || 0));
+          setGodotShiftStatus(`Loading floor… ${pct}%`, true);
+          // Heartbeat so parent auth/route logic won't tear down mid-download.
+          if (pct === 0 || pct === 100 || pct % 10 === 0) {
+            notifyParentDemoPlayStarted?.(`godot_load_${pct}`);
+            notifyParentGodotShiftActive?.(true);
+          }
+          return true;
+        }
+        if (type === "godot_load_ready") {
+          setGodotShiftStatus("", false);
+          try {
+            const frame = getGodotShiftFrame();
+            if (frame) frame.dataset.bcGodotReady = "1";
+          } catch {}
+          window.__BC_GODOT_BACK_SHIELD_UNTIL__ = Date.now() + 8000;
+          focusGodotShiftCanvas();
+          notifyParentDemoPlayStarted?.("godot_load_ready");
+          notifyParentGodotShiftActive?.(true);
+          return true;
+        }
+        if (type === "godot_load_error") {
+          const message = String(payload.message || "Godot failed to load.");
+          setGodotShiftStatus(message, true);
+          console.warn("[BC][GODOT] load error", message);
+          return true;
+        }
+        return false;
+      }
+
+      function ensureGodotShiftIframe(options = {}) {
+        const frame = getGodotShiftFrame();
+        if (!frame) return null;
+        ensureGodotShiftListener();
+        const targetSrc = getGodotShiftEmbedUrl();
+        const resumeOnly = !!options.resumeOnly;
+        const alreadyMounted =
+          frame.dataset.bcMounted === "1" &&
+          frame.getAttribute("src") !== "about:blank" &&
+          frame.dataset.bcSrc === targetSrc;
+        const alreadyReady = frame.dataset.bcGodotReady === "1";
+
+        const onShellReady = () => {
+          // First boot only — never flash this overlay when resuming after wine.
+          if (!alreadyReady) {
+            setGodotShiftStatus("Downloading floor assets…", true);
+          } else {
+            setGodotShiftStatus("", false);
+          }
+          postMessageToGodot("host_hello", {
+            mode: window.bcMode || "demo",
+            demo: !!(window.isDemo || window.bcMode === "demo"),
+          });
+          window.setTimeout(() => focusGodotShiftCanvas(), 250);
+          window.setTimeout(() => focusGodotShiftCanvas(), 1200);
+        };
+
+        if (!alreadyMounted) {
+          frame.dataset.bcGodotReady = "";
+          setGodotShiftStatus("Loading floor…", true);
+          frame.dataset.bcMounted = "1";
+          frame.dataset.bcSrc = targetSrc;
+          frame.addEventListener("load", onShellReady, { once: true });
+          frame.src = targetSrc;
+        } else if (resumeOnly || alreadyReady) {
+          // Godot is already running behind the V2 wine screen — just resume.
+          setGodotShiftStatus("", false);
+          postMessageToGodot("host_hello", {
+            mode: window.bcMode || "demo",
+            demo: !!(window.isDemo || window.bcMode === "demo"),
+          });
+          postMessageToGodot("resume_shift", {
+            mode: window.bcMode || "demo",
+            demo: !!(window.isDemo || window.bcMode === "demo"),
+          });
+          window.setTimeout(() => focusGodotShiftCanvas(), 50);
+          window.setTimeout(() => focusGodotShiftCanvas(), 250);
+        } else {
+          onShellReady();
+        }
+        return frame;
+      }
+
+      function startGodotShiftFloor(options = {}) {
+        ensureGodotShiftListener();
+        window.__BC_GODOT_SHIFT_ACTIVE__ = true;
+        window.__BC_GODOT_WINE_OFFER__ = null;
+        // Short shield for splash-clear ghost taps only.
+        window.__BC_GODOT_BACK_SHIELD_UNTIL__ = Date.now() + 8000;
+        applyPlaySurfaceMode("full");
+        notifyParentDemoPlayStarted(options.reason || "godot_shift_begin");
+        resetNavState();
+        const mobileHost = isGodotMobileHost();
+        document.documentElement.dataset.bcGodotMobile = mobileHost ? "1" : "0";
+        document.documentElement.dataset.bcGodotShift = "true";
+        try {
+          const backBtn = document.getElementById("btnBackHomeFromGodot");
+          if (backBtn) {
+            backBtn.classList.add("hidden");
+            backBtn.style.pointerEvents = "none";
+            backBtn.setAttribute("aria-hidden", "true");
+            window.setTimeout(() => {
+              if (Date.now() < Number(window.__BC_GODOT_BACK_SHIELD_UNTIL__ || 0)) return;
+              backBtn.classList.remove("hidden");
+              backBtn.style.pointerEvents = "";
+              backBtn.removeAttribute("aria-hidden");
+            }, 8200);
+          }
+        } catch {}
+        showScreen("screenGodotShift");
+        notifyParentGodotShiftActive(true);
+        ensureGodotShiftIframe({ resumeOnly: false });
+        scheduleIframeHeightReport?.("godot_shift_start");
+        return true;
+      }
+
+      window.__BC_SHOULD_USE_GODOT_SHIFT__ = shouldUseGodotShiftFloor;
+      window.__BC_START_GODOT_SHIFT__ = startGodotShiftFloor;
+
+      function returnToGodotShiftFloor() {
+        window.__BC_GODOT_WINE_OFFER__ = null;
+        window.__BC_GODOT_SHIFT_ACTIVE__ = true;
+        document.documentElement.dataset.bcGodotMobile = isGodotMobileHost() ? "1" : "0";
+        document.documentElement.dataset.bcGodotShift = "true";
+        setGodotShiftStatus("", false);
+        showScreen("screenGodotShift");
+        notifyParentGodotShiftActive(true);
+        const frame = ensureGodotShiftIframe({ resumeOnly: true });
+        focusGodotShiftCanvas();
+        try { frame?.contentWindow?.focus?.(); } catch {}
+        scheduleIframeHeightReport?.("godot_shift_return");
+      }
+
+      function handleGodotOfferWine(payload = {}) {
+        const bridge = getGodotShiftBridge();
+        const encounterId = bridge?.resolveV2EncounterIdFromGodotGuest?.(payload)
+          || null;
+        if (!encounterId) {
+          console.warn("[BC][GODOT] No V2 encounter mapped for guest", payload);
+          postMessageToGodot("v2_encounter_result", {
+            ok: false,
+            error: "unmapped_guest",
+            guestId: payload.guestId || null,
+            authorityDelta: 0,
+          });
+          return false;
+        }
+
+        window.__BC_GODOT_WINE_OFFER__ = {
+          active: true,
+          guestId: String(payload.guestId || ""),
+          tableId: String(payload.tableId || ""),
+          guestDisplayName: String(payload.guestDisplayName || ""),
+          encounterId,
+          startedAt: Date.now(),
+        };
+
+        document.documentElement.dataset.bcGodotShift = "wine_offer";
+        notifyParentGodotShiftActive(false);
+        startV2HarnessWhenReady({
+          encounterId,
+          resetSession: true,
+          skipRewardSync: true,
+          fromGodot: true,
+          skipPreview: true,
+        });
+        return true;
+      }
+
+      function completeGodotWineOfferFromV2(snapshot, session, rewardProgress = null) {
+        const offer = window.__BC_GODOT_WINE_OFFER__ || {};
+        const authorityDelta = Number(snapshot?.authorityDelta || 0);
+        const outcome = String(snapshot?.outcome || "");
+        const wineSold = ["premium_success", "standard_success", "weak_success"].includes(outcome);
+
+        // Keep local/premium telemetry path alive, but skip V2 end UX.
+        try {
+          recordV2ProgressionAuthority?.(snapshot, session, rewardProgress);
+        } catch {}
+
+        postMessageToGodot("v2_encounter_result", {
+          ok: true,
+          guestId: offer.guestId || null,
+          tableId: offer.tableId || null,
+          encounterId: snapshot?.encounterId || offer.encounterId || null,
+          encounterTitle: snapshot?.encounterTitle || null,
+          outcome,
+          authorityDelta,
+          wineSold,
+          totalAP: Number(rewardProgress?.state?.totalAP || loadV2BottleRewardState?.()?.totalAP || 0),
+          progress: Number(snapshot?.progress || 0),
+          frustration: Number(snapshot?.frustration || 0),
         });
 
-        document.getElementById("btnV2HarnessReplay")?.addEventListener("click", () => {
-          if (!snapshot?.encounterId) return;
-          const replaySnapshot = api.start({ tier: snapshot.tier, encounterId: snapshot.encounterId });
-          renderV2HarnessPlay(replaySnapshot, "");
-        });
+        window.__BC_GODOT_WINE_OFFER__ = null;
+        returnToGodotShiftFloor();
+      }
 
-        document.getElementById("btnV2HarnessBack")?.addEventListener("click", () => {
-          resetV2DemoSession();
-          showScreen("screenWelcome");
-        });
+      function handleGodotShiftMessage(data) {
+        if (handleGodotBootMessage(data)) return;
+        const type = String(data?.type || "");
+        const payload = data?.payload && typeof data.payload === "object" ? data.payload : {};
+        if (type === "godot_ready") {
+          window.__BC_GODOT_BACK_SHIELD_UNTIL__ = Date.now() + 8000;
+          try {
+            const frame = getGodotShiftFrame();
+            if (frame) frame.dataset.bcGodotReady = "1";
+          } catch {}
+          setGodotShiftStatus("", false);
+          focusGodotShiftCanvas();
+          notifyParentDemoPlayStarted?.("godot_ready");
+          notifyParentGodotShiftActive(true);
+          postMessageToGodot("host_hello", {
+            mode: window.bcMode || "demo",
+            demo: !!(window.isDemo || window.bcMode === "demo"),
+          });
+          scheduleIframeHeightReport?.("godot_ready");
+          return;
+        }
+        if (type === "offer_wine") {
+          handleGodotOfferWine(payload);
+          return;
+        }
+        if (type === "telemetry") {
+          try {
+            window.parent?.postMessage?.({
+              source: "BC_MSG",
+              v: 1,
+              type: "event_log",
+              payload: {
+                v: 2,
+                engineVersion: "godot_shift",
+                source: "godot_shift",
+                eventType: payload.eventType || "godot_telemetry",
+                ...payload,
+                mode: window.bcMode || "demo",
+                demo: !!(window.isDemo || window.bcMode === "demo"),
+              },
+            }, window.location.origin);
+          } catch {}
+          return;
+        }
+        if (type === "shift_complete") {
+          window.__BC_GODOT_SHIFT_SUMMARY__ = payload;
+          try {
+            const totalAP = Math.max(
+              0,
+              Math.round(Number(payload.ap || 0)),
+            );
+            const authorityState = loadV2ProgressionAuthorityState?.() || {};
+            saveV2ProgressionAuthorityState?.({
+              ...authorityState,
+              totalAP: Math.max(Number(authorityState.totalAP || 0), totalAP),
+              updatedAt: Date.now(),
+            });
+            const bottleState = loadV2BottleRewardState?.() || {};
+            saveV2BottleRewardState?.({
+              ...bottleState,
+              totalAP: Math.max(Number(bottleState.totalAP || 0), totalAP),
+              updatedAt: Date.now(),
+            });
+          } catch {}
+          try {
+            window.parent?.postMessage?.({
+              source: "BC_MSG",
+              v: 1,
+              type: "event_log",
+              payload: {
+                v: 2,
+                engineVersion: "godot_shift",
+                source: "godot_shift",
+                eventType: "shift_complete",
+                ...payload,
+                mode: window.bcMode || "demo",
+                demo: !!(window.isDemo || window.bcMode === "demo"),
+              },
+            }, window.location.origin);
+          } catch {}
+        }
       }
 
       function startV2HarnessEncounter(options = {}) {
         const api = getV2HarnessApi();
         if (!api) return false;
+        const requestedEncounterId = String(options.encounterId || "");
+        const fromGodot = !!(options.fromGodot || isGodotShiftWineOfferActive());
+        const skipPreview = !!(options.skipPreview || fromGodot);
+        window.__BC_V2_DEMO_FINAL_SUMMARY_ACTIVE__ = false;
+        if (fromGodot) {
+          window.__BC_V2_FROM_GODOT__ = true;
+        }
         const state = getV2DemoSessionState();
         const startingFresh = !!(options.resetSession || !state.active);
         if (startingFresh) {
@@ -23677,27 +26526,163 @@ function ensureProgLoaded() {
           state.introEncounterId = null;
         }
         applyPlaySurfaceMode("encounter_only");
+        notifyParentDemoPlayStarted(fromGodot ? "v2_from_godot" : "v2_harness_start");
         resetNavState();
         showScreen("screenPlay");
-        const snapshot = api.start({ tier: 1 });
-        if (startingFresh) {
-          state.introEncounterId = snapshot?.encounterId || null;
+        const encounterPanel = document.getElementById("encounterPanel");
+        const stepHeader = document.getElementById("stepHeader");
+        const wineDisplayName = document.getElementById("wineDisplayName");
+        const stepContent = document.getElementById("stepContent");
+        const stepButtons = ensureV2StepButtonsContainer();
+        if (encounterPanel) {
+          encounterPanel.dataset.v2Layout = "tier1";
+          encounterPanel.dataset.v2Screen = "starting";
         }
-        renderV2HarnessPlay(snapshot, "");
+        if (stepHeader) stepHeader.textContent = "BottleCaller";
+        if (wineDisplayName) wineDisplayName.textContent = "";
+        if (stepContent) stepContent.innerHTML = "";
+        if (stepButtons) stepButtons.innerHTML = "";
+        if (startingFresh && !options.skipRewardSync && !requestedEncounterId) {
+          syncV2DemoEncounterRotationFromRewardState();
+        }
+        let snapshot = null;
+	        try {
+	          snapshot = api.start({
+	            tier: getV2TierToServe(),
+	            encounterLimit: getV2EncounterLimit(),
+	            encounterId: requestedEncounterId || null,
+	            difficultyMode: getV2DifficultyModeForStart(),
+	          });
+          if (!snapshot) throw new Error("V2 demo did not return an encounter.");
+          syncV2DemoRotationAfterSnapshot(snapshot);
+          if (startingFresh) {
+            state.introEncounterId = snapshot?.encounterId || null;
+          }
+          if (skipPreview) {
+            renderV2HarnessPlay(snapshot, "");
+          } else {
+            renderV2EncounterPreview(snapshot, "");
+          }
+        } catch (error) {
+          const stepContent = document.getElementById("stepContent");
+          if (stepContent) {
+            stepContent.innerHTML = `
+              <section class="v2-play-shell">
+                <div class="v2-guidance-card">
+                  <div class="v2-guidance-label">Demo unavailable</div>
+                  <p class="v2-guidance-copy">${escapeHtml(error?.message || "The BottleCaller demo could not restart. Refresh and try again.")}</p>
+                </div>
+              </section>
+            `;
+          }
+          if (fromGodot) {
+            postMessageToGodot("v2_encounter_result", {
+              ok: false,
+              error: error?.message || "v2_start_failed",
+              authorityDelta: 0,
+            });
+            returnToGodotShiftFloor();
+          }
+          return false;
+        }
+        return true;
+      }
+
+      function showV2HarnessLoadingState() {
+        showScreen("screenPlay");
+        const encounterPanel = document.getElementById("encounterPanel");
+        const stepHeader = document.getElementById("stepHeader");
+        const wineDisplayName = document.getElementById("wineDisplayName");
+        const stepContent = document.getElementById("stepContent");
+        const stepButtons = document.getElementById("stepButtons");
+        if (encounterPanel) encounterPanel.dataset.v2Layout = "tier1";
+        if (stepHeader) stepHeader.textContent = "BottleCaller";
+        if (wineDisplayName) wineDisplayName.textContent = "";
+        if (stepContent) {
+          stepContent.innerHTML = `
+            <section class="v2-play-shell">
+              <div class="v2-guidance-card">
+                <div class="v2-guidance-label">Loading</div>
+                <p class="v2-guidance-copy">Preparing the BottleCaller demo.</p>
+              </div>
+            </section>
+          `;
+        }
+        if (stepButtons) stepButtons.innerHTML = "";
+      }
+
+      function startV2HarnessWhenReady(options = {}) {
+        const started = startV2HarnessEncounter(options);
+        if (started) return true;
+        if (!isV2HarnessRequestedInFrame()) return false;
+
+        notifyParentDemoPlayStarted("v2_harness_wait");
+        applyPlaySurfaceMode("encounter_only");
+        showV2HarnessLoadingState();
+
+        let attempts = 0;
+        const maxAttempts = 30;
+        const retry = () => {
+          attempts += 1;
+          if (startV2HarnessEncounter(options)) return;
+          if (attempts >= maxAttempts) {
+            const stepContent = document.getElementById("stepContent");
+            if (stepContent) {
+              stepContent.innerHTML = `
+                <section class="v2-play-shell">
+                  <div class="v2-guidance-card">
+                    <div class="v2-guidance-label">Demo unavailable</div>
+                    <p class="v2-guidance-copy">The BottleCaller demo engine did not finish loading. Refresh and try again.</p>
+                  </div>
+                </section>
+              `;
+            }
+            return;
+          }
+          window.setTimeout(retry, 100);
+        };
+        window.setTimeout(retry, 0);
         return true;
       }
 
       function bindPremiumEntryButton(btn) {
         if (!btn) return;
-        btn.textContent = "Play";
+        btn.textContent = "BEGIN";
         btn.classList.remove("hidden");
         btn.disabled = false;
         btn.onclick = null;
         btn.__bcBound = false;
         bindInput(btn, async () => {
           resetNavState();
+          if (shouldUseGodotShiftFloor()) {
+            startGodotShiftFloor({ reason: "begin_premium_entry" });
+            return;
+          }
+          if (shouldUseV2Harness()) {
+            startV2HarnessWhenReady({ resetSession: true });
+            return;
+          }
           beginOrResumeProgressionRun();
           await startPlayWithReadyGate();
+        });
+        bindHomeTierCardEntry(btn);
+      }
+
+      function bindHomeTierCardEntry(targetButton) {
+        const card = document.getElementById("btnHomeBeginTier");
+        if (!card || !targetButton) return;
+        card.classList.add("is-clickable");
+        card.onclick = null;
+        card.onkeydown = null;
+        card.addEventListener("click", () => {
+          if (targetButton.disabled) return;
+          targetButton.click();
+        });
+        card.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          if (targetButton.disabled) return;
+          targetButton.click();
         });
       }
 
@@ -23711,21 +26696,29 @@ function ensureProgLoaded() {
           btnWelcomeBackToSetup?.classList.add("hidden");
 
           const btnGoPremium = document.getElementById("btnGoPremium");
-          if (btnGoPremium) {
-            btnGoPremium.textContent = "Play";
+          const btnGoDemo = document.getElementById("btnGoDemo");
+          if (btnGoPremium && !btnGoDemo) {
+            btnGoPremium.textContent = "BEGIN";
             btnGoPremium.classList.remove("hidden");
             btnGoPremium.disabled = false;
             btnGoPremium.onclick = null;
             btnGoPremium.__bcBound = false;
             bindInput(btnGoPremium, () => {
               resetNavState();
-              if (isV2DemoHarnessRequested() || isV2DemoHarnessEnabled()) {
-                startV2HarnessEncounterWhenReady({ resetSession: true });
+              if (shouldUseGodotShiftFloor()) {
+                startGodotShiftFloor({ reason: "demo_begin" });
+                return;
+              }
+              if (shouldUseV2Harness()) {
+                startV2HarnessWhenReady({ resetSession: true });
                 return;
               }
               showScreen("screenPlay");
               window.startEncounter?.();
             });
+            bindHomeTierCardEntry(btnGoPremium);
+          } else if (btnGoPremium && btnGoDemo) {
+            btnGoPremium.classList.add("hidden");
           }
 
           document.querySelectorAll('[data-role="manager"]').forEach((el) => el.classList.add("hidden"));
@@ -23748,6 +26741,7 @@ function ensureProgLoaded() {
         const identity = getGameplayIdentity();
         const isWaiterNow = !!identity.isWaiter;
         const isManagerLike = isManagerLikeIdentity(identity);
+        document.getElementById("btnGoDemo")?.classList.add("hidden");
         console.log("[BC][ROLE_TEMPLATE]", {
           identity,
           isWaiterNow,
@@ -23963,14 +26957,21 @@ function ensureProgLoaded() {
         const btnGoPremium = document.getElementById("btnGoPremium");
         const identity = getGameplayIdentity();
         const isWaiter = !!identity.isWaiter;
+        const isDemoMode = window.isDemo || window.bcMode === "demo";
 
-        if (btnWelcomeHome && (window.isDemo || window.bcMode === "demo")) {
+        if (isDemoMode) {
+          btnGoPremium?.remove();
+        } else {
+          btnGoDemo?.remove();
+        }
+
+        if (btnWelcomeHome && isDemoMode) {
           btnWelcomeHome.remove();
         }
-        if (btnWelcomeBackToSetup && (window.isDemo || window.bcMode === "demo")) {
+        if (btnWelcomeBackToSetup && isDemoMode) {
           btnWelcomeBackToSetup.remove();
         }
-        if (btnStatusBackToWelcome && (window.isDemo || window.bcMode === "demo")) {
+        if (btnStatusBackToWelcome && isDemoMode) {
           btnStatusBackToWelcome.classList.add("hidden");
         }
 
@@ -23995,40 +26996,56 @@ function ensureProgLoaded() {
         applyRoleTemplate();
 
         if (btnGoDemo && (window.isDemo || window.bcMode === "demo")) {
-          btnGoDemo.textContent = "Play";
+          btnGoDemo.textContent = "BEGIN";
+          btnGoDemo.classList.remove("hidden");
+          btnGoDemo.disabled = false;
           btnGoDemo.onclick = null;
           btnGoDemo.__bcBound = false;
 
           bindInput(btnGoDemo, () => {
             resetNavState();
-            if (isV2DemoHarnessRequested() || isV2DemoHarnessEnabled()) {
-              startV2HarnessEncounterWhenReady({ resetSession: true });
+            if (shouldUseGodotShiftFloor()) {
+              startGodotShiftFloor({ reason: "demo_begin" });
+              return;
+            }
+            if (shouldUseV2Harness()) {
+              startV2HarnessWhenReady({ resetSession: true });
               return;
             }
             showScreen("screenPlay");
             window.startEncounter?.();
           });
+          bindHomeTierCardEntry(btnGoDemo);
 
           console.log("[BC][DEMO] btnGoDemo wired ✅");
         }
 
         if (window.isDemo || window.bcMode === "demo") {
           if (btnGoPremium) {
-            btnGoPremium.textContent = "Play";
-            btnGoPremium.classList.remove("hidden");
-            btnGoPremium.disabled = false;
-            btnGoPremium.onclick = null;
-            btnGoPremium.__bcBound = false;
+            if (btnGoDemo) {
+              btnGoPremium.classList.add("hidden");
+            } else {
+              btnGoPremium.textContent = "BEGIN";
+              btnGoPremium.classList.remove("hidden");
+              btnGoPremium.disabled = false;
+              btnGoPremium.onclick = null;
+              btnGoPremium.__bcBound = false;
 
-            bindInput(btnGoPremium, () => {
-              resetNavState();
-              if (isV2DemoHarnessRequested() || isV2DemoHarnessEnabled()) {
-                startV2HarnessEncounterWhenReady({ resetSession: true });
-                return;
-              }
-              showScreen("screenPlay");
-              window.startEncounter?.();
-            });
+              bindInput(btnGoPremium, () => {
+                resetNavState();
+                if (shouldUseGodotShiftFloor()) {
+                  startGodotShiftFloor({ reason: "demo_begin" });
+                  return;
+                }
+                if (shouldUseV2Harness()) {
+                  startV2HarnessWhenReady({ resetSession: true });
+                  return;
+                }
+                showScreen("screenPlay");
+                window.startEncounter?.();
+              });
+              bindHomeTierCardEntry(btnGoPremium);
+            }
           }
         }
 
@@ -24044,6 +27061,10 @@ function ensureProgLoaded() {
               return;
             }
             resetNavState();
+            if (shouldUseV2Harness()) {
+              startV2HarnessWhenReady({ resetSession: true });
+              return;
+            }
             beginOrResumeProgressionRun();
             await startPlayWithReadyGate();
           });
@@ -24068,26 +27089,13 @@ function ensureProgLoaded() {
               return;
             }
 
-            // Mark cover as dismissed
-            try { localStorage.setItem(coverKey, "true"); } catch {}
+          // Mark cover as dismissed
+          try { localStorage.setItem(coverKey, "true"); } catch {}
+          markV2WelcomeObjective("start");
 
-            applyPlaySurfaceMode("encounter_only");
-            resetNavState();
-            showScreen("screenPlay");
-
-            // DEMO: start immediately
-            if (window.isDemo || window.bcMode === "demo") {
-              if (isV2DemoHarnessRequested() || isV2DemoHarnessEnabled()) {
-                startV2HarnessEncounterWhenReady({ resetSession: true });
-                return;
-              }
-              window.startEncounter?.();
-              return;
-            }
-
-            // PREMIUM: ensure ctx/wines are ready then start
-            beginOrResumeProgressionRun();
-            await startPlayWithReadyGate();
+          applyPlaySurfaceMode("full");
+          resetNavState();
+          showScreen("screenHome");
           });
 
           console.log("[BOOT] btnWelcomeStart wired ✅", { mode: window.bcMode, isDemo: window.isDemo });
@@ -24183,6 +27191,8 @@ function ensureProgLoaded() {
             localStorage.removeItem(demoEncounterIndexKey);
             localStorage.removeItem(premiumEncounterIndexKey);
             localStorage.removeItem(coverKey);
+            localStorage.removeItem(V2_WELCOME_OBJECTIVES_KEY);
+            localStorage.removeItem(V2_WELCOME_OBJECTIVES_DONE_KEY);
             if (restaurantId) WineStore.remove(restaurantId);
 
             wines = setWines([]);
@@ -24246,6 +27256,36 @@ function ensureProgLoaded() {
           }
           resetNavState();
           showScreen("screenWelcome");
+        });
+
+        const btnBackHomeFromGodot = document.getElementById("btnBackHomeFromGodot");
+        bindInput(btnBackHomeFromGodot, () => {
+          // Ghost taps only — after the shield, Back is a real leave action.
+          if (Date.now() < Number(window.__BC_GODOT_BACK_SHIELD_UNTIL__ || 0)) {
+            console.warn("[BC][GODOT] Back ignored (click shield)");
+            return;
+          }
+          window.__BC_GODOT_SHIFT_ACTIVE__ = false;
+          window.__BC_GODOT_WINE_OFFER__ = null;
+          document.documentElement.dataset.bcGodotShift = "";
+          document.documentElement.dataset.bcGodotMobile = "";
+          try {
+            window.parent?.postMessage?.(
+              {
+                source: "BC_MSG",
+                v: 1,
+                type: "godot_shift_active",
+                active: false,
+                clearLock: true,
+                mode: window.bcMode || "demo",
+                screenId: null,
+                reason: "user_back",
+              },
+              window.location.origin,
+            );
+          } catch {}
+          resetNavState();
+          showScreen("screenHome");
         });
 
         bindInput(btnBackHomeFromHistory, () => {
@@ -24409,7 +27449,14 @@ function ensureProgLoaded() {
 
       if (sessionType !== "drill") {
         if (isDemo) {
-          showScreen(initialScreenParam || (hasSeenCover ? "screenHome" : "screenWelcome"));
+          const completedV2Welcome = isV2WelcomeOnboardingComplete();
+          if (initialScreenParam === "screenWelcome" && completedV2Welcome) {
+            applyPlaySurfaceMode("full");
+            resetNavState();
+            showScreen("screenHome");
+          } else {
+            showScreen(initialScreenParam || (hasSeenCover || completedV2Welcome ? "screenHome" : "screenWelcome"));
+          }
         } else {
           showScreen(initialScreenParam || "screenHome");
         }
@@ -24562,8 +27609,5 @@ function ensureProgLoaded() {
 
 </script>
 
-  <!-- ✅ MUST be inside body so the iframe reliably loads EngineBridge + encounters -->
-  <script type="module">
-    import "/src/game/gameEntry.ts";
-  </script></body>
+</body>
 </html>

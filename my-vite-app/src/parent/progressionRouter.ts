@@ -34,7 +34,7 @@ export type DecideAllowedTierOutput = {
 function buildSnapshotFromPoints(pointsTotal: number): ProgressionSnapshot {
   const points = Math.max(0, Math.floor(Number(pointsTotal || 0)));
 
-  if (points >= 10) {
+  if (points >= 12) {
     return {
       encountersTotal: 12,
       last10Count: 10,
