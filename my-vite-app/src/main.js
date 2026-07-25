@@ -9594,8 +9594,8 @@ function isGodotClickShieldActive() {
 }
 
 function isV2DemoPlayActive() {
-  if (!document.getElementById("gameRootDemoFrame")) return false;
   if (isGodotShiftDemoActive()) return true;
+  if (!document.getElementById("gameRootDemoFrame")) return false;
   return (
     window.__BC_DEMO_IFRAME_LAST_SCREEN__ === "screenPlay" ||
     // Godot .pck can take several minutes; keep the play latch alive long enough.
@@ -21754,6 +21754,18 @@ function routeAuth() {
 }
 
 function routeHomeShell(reason = "home_shell", message = "") {
+  if (isGodotDemoLocked() || isV2DemoPlayActive() || readGodotSessionLock()) {
+    console.warn("[ROUTE] home shell blocked during active Godot/demo play", reason);
+    appMode = "demo";
+    showScreen("screenGameDemo");
+    try {
+      document.getElementById("authFields")?.classList.add("hidden");
+      document.getElementById("btnDemoExit")?.classList.add("hidden");
+      document.getElementById("btnDemoPremium")?.classList.add("hidden");
+    } catch {}
+    return;
+  }
+
   console.log("[ROUTE] home shell", { reason, authed: !!appState?.session?.user });
   destroyPremiumIframe(`routeHomeShell:${reason}`);
   destroyDemoIframe(`routeHomeShell:${reason}`);
@@ -23445,20 +23457,24 @@ if (__BC_BOOT_LOGGED_OUT__) {
 try {
   const latch = localStorage.getItem("__BC_LOGOUT_LATCH__");
   if (latch) {
-    console.warn("[BOOT] logout latch active -> forcing logged-out UI");
     localStorage.removeItem("__BC_LOGOUT_LATCH__");
+    if (__BC_SHOULD_RESUME_DEMO_AFTER_LOGOUT__) {
+      console.warn("[BOOT] cleared stale logout latch during Godot/demo recovery");
+    } else {
+      console.warn("[BOOT] logout latch active -> forcing logged-out UI");
 
-    try { appState.session = null; } catch {}
-    try { appState.profile = null; } catch {}
-    try { document.getElementById("premiumRoot") && (document.getElementById("premiumRoot").innerHTML = ""); } catch {}
-    try { document.getElementById("premiumRootFrame")?.remove(); } catch {}
-    try { document.getElementById("btnLogout") && (document.getElementById("btnLogout").style.display = "none"); } catch {}
-    try { showScreen("screenHome"); } catch {}
+      try { appState.session = null; } catch {}
+      try { appState.profile = null; } catch {}
+      try { document.getElementById("premiumRoot") && (document.getElementById("premiumRoot").innerHTML = ""); } catch {}
+      try { document.getElementById("premiumRootFrame")?.remove(); } catch {}
+      try { document.getElementById("btnLogout") && (document.getElementById("btnLogout").style.display = "none"); } catch {}
+      try { showScreen("screenHome"); } catch {}
 
-    __BC_BOOT_ROUTE_BLOCKED__ = true;
-    setTimeout(() => {
-      __BC_BOOT_ROUTE_BLOCKED__ = false;
-    }, 1000);
+      __BC_BOOT_ROUTE_BLOCKED__ = true;
+      setTimeout(() => {
+        __BC_BOOT_ROUTE_BLOCKED__ = false;
+      }, 1000);
+    }
   }
 } catch {}
 
