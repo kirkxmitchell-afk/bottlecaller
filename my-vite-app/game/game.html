@@ -11159,6 +11159,10 @@ function ensureProgLoaded() {
             if (activeScreenId === "screenGodotShift" && window.__BC_GODOT_SHIFT_ACTIVE__) {
               return;
             }
+            window.__BC_GODOT_SHIFT_ACTIVE__ = true;
+            document.documentElement.dataset.bcGodotShift = "true";
+            notifyParentDemoPlayStarted?.("godot_start_requested");
+            notifyParentGodotShiftActive?.(true);
             // Prefer Godot for demo auto-start. Retry until the Godot API is exposed
             // so we never silently fall back to the old V2 HTML play path.
             const tryStartGodot = () => {
@@ -26432,6 +26436,8 @@ function ensureProgLoaded() {
           } catch {}
           setGodotShiftStatus("", false);
           focusGodotShiftCanvas();
+          notifyParentDemoPlayStarted?.("godot_ready");
+          notifyParentGodotShiftActive(true);
           postMessageToGodot("host_hello", {
             mode: window.bcMode || "demo",
             demo: !!(window.isDemo || window.bcMode === "demo"),
