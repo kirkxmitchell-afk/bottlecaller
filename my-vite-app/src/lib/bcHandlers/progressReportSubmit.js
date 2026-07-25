@@ -1,4 +1,5 @@
 import { BC_TYPES } from "../bcMessages";
+import { resolveCanonicalWriteState } from "../../game/v2ProgressionAuthority.ts";
 
 function isMissingRelationError(error) {
   const code = String(error?.code || "");
@@ -352,11 +353,46 @@ async function upsertCanonicalProgressionState({
     throw new Error("Missing waiter-owned progression target");
   }
 
+  const { data: existingRow, error: existingError } = await supabase
+    .from("bc_progression_state_v1")
+    .select("canonical_state, updated_at")
+    .eq("user_id", progressionOwnerUserId)
+    .eq("restaurant_id", progressionOwnerRestaurantId)
+    .maybeSingle();
+
+  if (existingError && !isMissingRelationError(existingError)) {
+    console.warn("[PROGRESSION STATE] existing row lookup failed", existingError);
+    return { ok: false, error: existingError.message || String(existingError) };
+  }
+
+  if (existingError && isMissingRelationError(existingError)) {
+    console.warn("[PROGRESSION STATE] dedicated table missing, using snapshot payload fallback");
+    return { ok: false, skipped: true, reason: "missing_table" };
+  }
+
+  const writePlan = resolveCanonicalWriteState({
+    serverRow: existingRow || null,
+    incomingState: canonicalState,
+  });
+
+  const nextCanonicalState = {
+    ...writePlan.state,
+    rewardsSummary:
+      writePlan.state?.rewardsSummary && typeof writePlan.state.rewardsSummary === "object"
+        ? writePlan.state.rewardsSummary
+        : buildRewardsSummary(writePlan.state),
+    basedOnUpdatedAt:
+      Number(writePlan.state?.basedOnUpdatedAt || canonicalState?.basedOnUpdatedAt || 0) ||
+      (existingRow?.updated_at ? Date.parse(String(existingRow.updated_at)) : 0) ||
+      0,
+    capturedAt: Date.now(),
+  };
+
   const row = {
     user_id: progressionOwnerUserId,
     restaurant_id: progressionOwnerRestaurantId,
     scope_id: ctx.scopeId || null,
-    canonical_state: canonicalState,
+    canonical_state: nextCanonicalState,
     source_type: "progress_report",
     updated_at: new Date().toISOString(),
   };
@@ -374,7 +410,12 @@ async function upsertCanonicalProgressionState({
     return { ok: false, error: error.message || String(error) };
   }
 
-  return { ok: true };
+  return {
+    ok: true,
+    merged: !!writePlan.merged,
+    staleBaseMerged: !!writePlan.rejectedStale,
+    canonicalState: nextCanonicalState,
+  };
 }
 
 export function makeProgressReportSubmitHandler({

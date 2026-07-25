@@ -942,6 +942,132 @@ export const TIER1_VERTICAL_SLICE_ENCOUNTERS: EncounterV2[] = [
     },
   }),
   makeTier1Encounter({
+    id: "encounter_v2_011",
+    title: "The Skeptic: First Read",
+    family: "skeptic",
+    modifier: "testing_confidence_glasses",
+    hiddenPressure: "needs_to_feel_seen_without_being_sold",
+    masterProfile: "recognition",
+    variant: null,
+    scene:
+      "A sharply dressed guest watches the table before the list, giving you only enough attention to prove the recommendation is worth hearing.",
+    sceneClue: "Skeptical guest tests whether you can read the table before pitching.",
+    images: {
+      previewArt: "/game/encounters/011/preview-art.png",
+      mainNeutral: "/game/encounters/011/main-neutral.png",
+      mainPositive: "/game/encounters/011/main-positive.png",
+      mainNegative: "/game/encounters/011/main-negative.png",
+      endSuccessArt: "/game/encounters/011/end-success-art.png",
+      endFailureArt: "/game/encounters/011/end-failure-art.png",
+      neutralExitArt: "/game/encounters/011/neutral-exit-art.png",
+    },
+    visualClues: [
+      "They keep their arms close and let silence do some testing.",
+      "Two empty glasses are already placed, so the choice still matters.",
+      "They are open to being impressed, but only by relevance.",
+    ],
+    verbalClue: "Convince me it fits the table, not just the list.",
+    contextClue: "They want recognition before recommendation: one precise read should come before the bottle.",
+    redHerring: "Their confidence can tempt you to push authority, but a generic confident close will feel like a pitch.",
+    lesson:
+      "Skeptics reward being read accurately. Lead with relevance, then use the bottle as proof rather than performance.",
+    targetProductId: "product_uva_mira_cabernet",
+    targetRecommendAngle: "story",
+    recommendScoring: {
+      flavour: "good",
+      story: "optimal",
+      value: "disaster",
+      confidence: "poor",
+    },
+    allowedProductIds: ["product_cartology_chenin", "product_uva_mira_cabernet", "product_valmoissine_pinot_noir"],
+    reactions: {
+      ask: {
+        preference: {
+          optimal: "Elegant and structured. I do not want anything heavy-handed.",
+        },
+        budget: {
+          disaster: "That is not the point. I am asking whether you understand the table.",
+        },
+      },
+      recommend: {
+        story: {
+          optimal: "That is a useful reason. Keep it there.",
+        },
+        confidence: {
+          disaster: "Confidence without a reason is just pressure.",
+        },
+      },
+      commit: {
+        recommendation: {
+          optimal: "Alright. That was specific enough. Bring it.",
+        },
+      },
+    },
+  }),
+  makeTier1Encounter({
+    id: "encounter_v2_012",
+    title: "The Measured Skeptic",
+    family: "skeptic",
+    modifier: "precision_test",
+    hiddenPressure: "needs_relevance_not_pitch",
+    masterProfile: "recognition",
+    variant: "expertise",
+    scene:
+      "A reserved guest studies the list quietly, then looks up as if weighing whether you can offer anything more useful than a pitch.",
+    sceneClue: "Reserved skeptic tests whether the recommendation has a point.",
+    images: {
+      previewArt: "/game/encounters/012/preview-art.png",
+      mainNeutral: "/game/encounters/012/main-neutral.png",
+      mainPositive: "/game/encounters/012/main-positive.png",
+      mainNegative: "/game/encounters/012/main-negative.png",
+      endSuccessArt: "/game/encounters/012/end-success-art.png",
+      endFailureArt: "/game/encounters/012/end-failure-art.png",
+      neutralExitArt: "/game/encounters/012/neutral-exit-art.png",
+    },
+    visualClues: [
+      "They hold the list close and keep their answers short.",
+      "They are not confused; they are deciding whether your read is useful.",
+      "They respond better to precision than charm.",
+    ],
+    verbalClue: "I do not need the usual explanation. Tell me what actually makes sense.",
+    contextClue: "They want one relevant reason before they will trust the bottle.",
+    redHerring: "Their restraint can tempt you to fill the silence with detail, but that makes the recommendation feel generic.",
+    lesson:
+      "Measured skeptics reward precision. Read their filter, give one relevant reason, then close without overselling.",
+    targetProductId: "product_uva_mira_cabernet",
+    targetRecommendAngle: "story",
+    recommendScoring: {
+      flavour: "good",
+      story: "optimal",
+      value: "disaster",
+      confidence: "poor",
+    },
+    allowedProductIds: ["product_cartology_chenin", "product_uva_mira_cabernet", "product_valmoissine_pinot_noir"],
+    reactions: {
+      ask: {
+        preference: {
+          optimal: "Elegant, structured, and not too heavy. That is the lane.",
+        },
+        budget: {
+          disaster: "That is not the question. I am asking whether the bottle makes sense.",
+        },
+      },
+      recommend: {
+        story: {
+          optimal: "Good. That is a reason, not a speech.",
+        },
+        value: {
+          disaster: "No. I am not looking for the value bottle.",
+        },
+      },
+      commit: {
+        recommendation: {
+          optimal: "Alright. That is clear enough. Let's do it.",
+        },
+      },
+    },
+  }),
+  makeTier1Encounter({
     id: "encounter_v2_004",
     title: "The Family Bill",
     family: "family",
@@ -1267,11 +1393,280 @@ export const TIER1_VERTICAL_SLICE_ENCOUNTERS: EncounterV2[] = [
       },
     },
   }),
+  makeTier1Encounter({
+    id: "encounter_v2_013",
+    title: "African Regular",
+    family: "regular",
+    modifier: "known_room_local_regular",
+    hiddenPressure: "wants_familiar_respect_without_fuss",
+    masterProfile: "recognition",
+    variant: "comfort",
+    scene:
+      "A familiar local regular settles into the room with relaxed confidence, expecting the recommendation to respect what he already enjoys.",
+    sceneClue: "Known regular wants familiar comfort with a respectful lift.",
+    images: {
+      previewArt: "/game/encounters/013/preview-art.png",
+      mainNeutral: "/game/encounters/013/main-neutral.png",
+      mainPositive: "/game/encounters/013/main-positive.png",
+      mainNegative: "/game/encounters/013/main-negative.png",
+      endSuccessArt: "/game/encounters/013/end-success-art.png",
+      endFailureArt: "/game/encounters/013/end-failure-art.png",
+      neutralExitArt: "/game/encounters/013/neutral-exit-art.png",
+    },
+    visualClues: [
+      "He looks comfortable in the room and does not need a long introduction.",
+      "The empty glasses suggest the bottle is still part of the evening's rhythm.",
+      "His expression asks for recognition before novelty.",
+    ],
+    verbalClue: "You know the kind of thing I like. Keep it in that lane.",
+    contextClue: "He wants to feel remembered, not sold to.",
+    redHerring: "Because he is relaxed, you may assume anything familiar will work, but he still wants a small lift.",
+    lesson:
+      "Regulars reward precise recognition. Anchor the recommendation in their known comfort zone, then make the choice feel considered.",
+    targetProductId: "product_valmoissine_pinot_noir",
+    targetRecommendAngle: "flavour",
+    recommendScoring: {
+      flavour: "optimal",
+      story: "poor",
+      value: "good",
+      confidence: "good",
+    },
+    allowedProductIds: ["product_cartology_chenin", "product_uva_mira_cabernet", "product_valmoissine_pinot_noir"],
+    reactions: {
+      ask: {
+        preference: {
+          optimal: "Exactly. You remember the style.",
+        },
+        experience: {
+          good: "You know I have been here before. No need for the basics.",
+        },
+      },
+      recommend: {
+        flavour: {
+          optimal: "That sounds right. Familiar, but not lazy.",
+        },
+        story: {
+          disaster: "I do not need the long story tonight.",
+        },
+      },
+      commit: {
+        recommendation: {
+          optimal: "Yes. That is the kind of bottle I meant.",
+        },
+      },
+    },
+  }),
+  makeTier1Encounter({
+    id: "encounter_v2_014",
+    title: "Blonde Date",
+    family: "date",
+    modifier: "romantic_tourist_table",
+    hiddenPressure: "wants_romance_without_pressure",
+    masterProfile: "recognition",
+    variant: "emotional_status",
+    scene:
+      "A polished couple sits close by the window, wanting the bottle to make the night feel romantic without becoming too serious.",
+    sceneClue: "Date table wants charm and emotional ease.",
+    images: {
+      previewArt: "/game/encounters/014/preview-art.png",
+      mainNeutral: "/game/encounters/014/main-neutral.png",
+      mainPositive: "/game/encounters/014/main-positive.png",
+      mainNegative: "/game/encounters/014/main-negative.png",
+      endSuccessArt: "/game/encounters/014/end-success-art.png",
+      endFailureArt: "/game/encounters/014/end-failure-art.png",
+      neutralExitArt: "/game/encounters/014/neutral-exit-art.png",
+    },
+    visualClues: [
+      "They sit close but are still careful about the tone of the night.",
+      "The room and view matter as much as the wine itself.",
+      "They want the choice to feel attractive, not forced.",
+    ],
+    verbalClue: "Something nice for the two of us, but not too intense.",
+    contextClue: "The bottle needs to support the date without making the table feel pressured.",
+    redHerring: "The romantic setting can tempt a showy premium push, but that may make the moment feel heavy.",
+    lesson:
+      "Date tables reward emotional calibration. Keep the bottle elegant, easy to accept, and connected to the mood.",
+    targetProductId: "product_uva_mira_cabernet",
+    targetRecommendAngle: "flavour",
+    recommendScoring: {
+      flavour: "optimal",
+      story: "good",
+      value: "poor",
+      confidence: "good",
+    },
+    allowedProductIds: ["product_cartology_chenin", "product_uva_mira_cabernet", "product_valmoissine_pinot_noir"],
+    reactions: {
+      ask: {
+        occasion: {
+          optimal: "Exactly. We want it to feel like the night, not a big production.",
+        },
+        budget: {
+          disaster: "That makes it feel a bit transactional.",
+        },
+      },
+      recommend: {
+        flavour: {
+          optimal: "That sounds elegant and easy. That is the mood.",
+        },
+        value: {
+          disaster: "We are not really trying to make this about value.",
+        },
+      },
+      commit: {
+        recommendation: {
+          optimal: "Yes, that feels right for us.",
+        },
+      },
+    },
+  }),
+  makeTier1Encounter({
+    id: "encounter_v2_015",
+    title: "Skeptic V3",
+    family: "skeptic",
+    modifier: "v3_precision_test",
+    hiddenPressure: "needs_relevance_before_trust",
+    masterProfile: "recognition",
+    variant: "expertise",
+    scene:
+      "A guarded guest with glasses studies the table and waits to see whether your recommendation has a precise reason behind it.",
+    sceneClue: "Skeptical guest tests whether the recommendation is relevant.",
+    images: {
+      previewArt: "/game/encounters/015/preview-art.png",
+      mainNeutral: "/game/encounters/015/main-neutral.png",
+      mainPositive: "/game/encounters/015/main-positive.png",
+      mainNegative: "/game/encounters/015/main-negative.png",
+      endSuccessArt: "/game/encounters/015/end-success-art.png",
+      endFailureArt: "/game/encounters/015/end-failure-art.png",
+      neutralExitArt: "/game/encounters/015/neutral-exit-art.png",
+    },
+    visualClues: [
+      "He watches the recommendation more than the list.",
+      "His expression shifts quickly when the answer feels generic.",
+      "He warms only when the reason feels specific.",
+    ],
+    verbalClue: "I do not need the pitch. Tell me why that bottle makes sense.",
+    contextClue: "He wants one clear reason before he gives the recommendation trust.",
+    redHerring: "The serious tone can tempt you into overexplaining, but too much detail will feel like a performance.",
+    lesson:
+      "Skeptics reward precision. Give one relevant reason, connect it to the table, then close without overworking the sale.",
+    targetProductId: "product_uva_mira_cabernet",
+    targetRecommendAngle: "story",
+    recommendScoring: {
+      flavour: "good",
+      story: "optimal",
+      value: "disaster",
+      confidence: "poor",
+    },
+    allowedProductIds: ["product_cartology_chenin", "product_uva_mira_cabernet", "product_valmoissine_pinot_noir"],
+    reactions: {
+      ask: {
+        preference: {
+          optimal: "Structured, elegant, not too heavy. That is the lane.",
+        },
+        budget: {
+          disaster: "That is not the question I asked.",
+        },
+      },
+      recommend: {
+        story: {
+          optimal: "Good. That is an actual reason.",
+        },
+        value: {
+          disaster: "No. I am not asking for the value bottle.",
+        },
+      },
+      commit: {
+        recommendation: {
+          optimal: "Alright. That makes sense. Bring it.",
+        },
+      },
+    },
+  }),
+  makeTier1Encounter({
+    id: "encounter_v2_016",
+    title: "African Regular Couple",
+    family: "regular",
+    modifier: "cape_town_young_regular_couple",
+    hiddenPressure: "wants_recognition_without_overexplaining",
+    masterProfile: "recognition",
+    variant: "comfort",
+    scene:
+      "A young Cape Town regular couple settles into a familiar table, expecting the bottle to feel like it remembers their style without turning into a pitch.",
+    sceneClue: "Regular couple wants recognition, comfort, and a small lift.",
+    images: {
+      previewArt: "/game/encounters/016/preview-art.png",
+      mainNeutral: "/game/encounters/016/main-neutral.png",
+      mainPositive: "/game/encounters/016/main-positive.png",
+      mainNegative: "/game/encounters/016/main-negative.png",
+      endSuccessArt: "/game/encounters/016/end-success-art.png",
+      endFailureArt: "/game/encounters/016/end-failure-art.png",
+      neutralExitArt: "/game/encounters/016/neutral-exit-art.png",
+    },
+    visualClues: [
+      "They sit like they know the room already.",
+      "They look warm, but they do not want the basics repeated.",
+      "Their attention sharpens when the recommendation sounds personally remembered.",
+    ],
+    verbalClue: "You know our kind of bottle. Something familiar, but still worth opening.",
+    contextClue: "They want to feel recognized as regulars while still getting a considered recommendation.",
+    redHerring: "Their relaxed energy can tempt you to get casual, but they still expect the recommendation to be precise.",
+    lesson:
+      "Regular couples reward remembered preference. Anchor the bottle in their usual lane, then add one clear reason it improves tonight.",
+    targetProductId: "product_valmoissine_pinot_noir",
+    targetRecommendAngle: "flavour",
+    recommendScoring: {
+      flavour: "optimal",
+      story: "poor",
+      value: "good",
+      confidence: "good",
+    },
+    allowedProductIds: ["product_cartology_chenin", "product_uva_mira_cabernet", "product_valmoissine_pinot_noir"],
+    reactions: {
+      ask: {
+        preference: {
+          optimal: "Exactly. Same lane, just something with a little more lift.",
+        },
+        experience: {
+          good: "You know we have been here before. No need to start from zero.",
+        },
+      },
+      recommend: {
+        flavour: {
+          optimal: "That sounds like us. Familiar, but still interesting.",
+        },
+        story: {
+          disaster: "We do not need the whole story tonight.",
+        },
+      },
+      commit: {
+        recommendation: {
+          optimal: "Yes, that feels right. Bring that one.",
+        },
+      },
+    },
+  }),
 ];
 
-export function getTier1VerticalSliceEncounters(limit = 3): EncounterV2[] {
+const DEMO_TIER1_VERTICAL_SLICE_IDS = [
+  "encounter_v2_014",
+  "encounter_v2_013",
+  "encounter_v2_011",
+  "encounter_v2_015",
+  "encounter_v2_016",
+] as const;
+
+const DEMO_TIER1_VERTICAL_SLICE_ENCOUNTERS = DEMO_TIER1_VERTICAL_SLICE_IDS
+  .map((id) => TIER1_VERTICAL_SLICE_ENCOUNTERS.find((encounter) => encounter.id === id))
+  .filter((encounter): encounter is EncounterV2 => !!encounter);
+
+export function getTier1VerticalSliceEncounters(limit = 5): EncounterV2[] {
   const safeLimit = Number.isFinite(limit) && limit > 0
     ? Math.min(TIER1_VERTICAL_SLICE_ENCOUNTERS.length, Math.floor(limit))
-    : 3;
+    : 5;
+
+  if (safeLimit <= DEMO_TIER1_VERTICAL_SLICE_ENCOUNTERS.length) {
+    return DEMO_TIER1_VERTICAL_SLICE_ENCOUNTERS.slice(0, safeLimit);
+  }
+
   return TIER1_VERTICAL_SLICE_ENCOUNTERS.slice(0, safeLimit);
 }

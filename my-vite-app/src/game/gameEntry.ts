@@ -16,11 +16,13 @@ if (window.self !== window.top) {
 import { installEngineBridge } from "./engineBridge";
 import { ENCOUNTERS, validateEncounters } from "./encounter";
 import { createDemoRuntimeV2Api } from "./runtimeV2";
+import { createGodotShiftBridgeApi } from "./godotShiftBridge";
 import * as WineBridge from "./wineBridge";
 import * as EventLogBridge from "./eventLogBridge";
 import * as ProgressionBridge from "./progressionBridge.ts";
 import * as TournamentBridge from "./tournamentBridge";
 import * as ReactionRuntime from "./reaction/reactionIndex";
+import * as V2ProgressionAuthority from "./v2ProgressionAuthority";
 import { installProgressionGuards } from "./progressionGuards";
 
 
@@ -32,11 +34,14 @@ declare global {
     ProgressionBridge?: any;
     TournamentBridge?: any;
     ReactionRuntime?: any;
+    V2ProgressionAuthority?: any;
     __BC_ENCOUNTERS__?: any;
     __BC_GAME_ENTRY_INSTALLED__?: boolean;
     __BC_CTX__?: any;
     __BC_PROGRESSION__?: any;
     __BC_V2_HARNESS__?: any;
+    __BC_GODOT_SHIFT__?: any;
+    __BC_GODOT_SHIFT_BASE__?: string;
   }
 }
 
@@ -77,6 +82,7 @@ function getCtxFromWindow() {
   window.ProgressionBridge = ProgressionBridge;
   window.TournamentBridge = TournamentBridge;
   window.ReactionRuntime = ReactionRuntime;
+  window.V2ProgressionAuthority = V2ProgressionAuthority;
 
   ProgressionBridge.onProgressionSnapshot((payload: any) => {
     window.__BC_PROGRESSION__ = payload || null;
@@ -116,13 +122,21 @@ function getCtxFromWindow() {
     enabled: v2HarnessEnabled,
     api: createDemoRuntimeV2Api(),
   };
+  window.__BC_GODOT_SHIFT_BASE__ = String(
+    (import.meta as any).env?.VITE_GODOT_SHIFT_BASE || "/godot-shift",
+  ).replace(/\/$/, "") || "/godot-shift";
+  window.__BC_GODOT_SHIFT__ = createGodotShiftBridgeApi({
+    baseUrl: window.__BC_GODOT_SHIFT_BASE__,
+  });
 
   console.log("[BC] EngineBridge installed ✅", window.EngineBridge);
   console.log("[BC] WineBridge installed ✅", window.WineBridge);
   console.log("[BC] ProgressionBridge installed ✅", window.ProgressionBridge);
   console.log("[BC] TournamentBridge installed ✅", window.TournamentBridge);
   console.log("[BC] ReactionRuntime installed ✅", window.ReactionRuntime);
+  console.log("[BC] V2ProgressionAuthority installed ✅", window.V2ProgressionAuthority);
   console.log("[BC] V2 harness installed ✅", { enabled: v2HarnessEnabled });
+  console.log("[BC] Godot shift bridge installed ✅", window.__BC_GODOT_SHIFT__);
   console.log("[BC] Encounters loaded ✅", {
     demo: ENCOUNTERS.demo.length,
     premium: ENCOUNTERS.premium.length,

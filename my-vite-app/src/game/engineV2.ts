@@ -18,6 +18,7 @@ import type {
   V2DifficultyMode,
   VariantDefinition,
 } from "./typesV2";
+import { getWalkAwayMistakeThreshold } from "./v2ProgressionAuthority";
 
 const DEFAULT_REWARDS = {
   premiumSuccess: 30,
@@ -596,7 +597,7 @@ function finalizeState(gameState: GameStateV2, outcome: EncounterOutcome): void 
   gameState.frustrationMood = getFrustrationMood(gameState.frustration);
   gameState.walkAwayUnlocked =
     gameState.frustration >= policy.criticalResistance ||
-    gameState.mistakeCount >= Math.max(3, policy.maxMistakes);
+    gameState.mistakeCount >= getWalkAwayMistakeThreshold(policy.maxMistakes);
   gameState.outcome = outcome;
   if (outcome !== "continue" && outcome !== "not_available") {
     gameState.authorityDelta = authorityForOutcome(gameState.encounter, outcome);
@@ -607,7 +608,7 @@ export function walkAway(gameState: GameStateV2): { outcome: EncounterOutcome; a
   const policy = getDifficultyPolicyV2(gameState.difficultyMode);
   if (
     gameState.frustration >= policy.criticalResistance ||
-    gameState.mistakeCount >= Math.max(3, policy.maxMistakes)
+    gameState.mistakeCount >= getWalkAwayMistakeThreshold(policy.maxMistakes)
   ) {
     const authority = authorityForOutcome(gameState.encounter, "neutral_exit");
     finalizeState(gameState, "neutral_exit");

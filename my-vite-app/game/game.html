@@ -5,7 +5,7 @@
   <title>BottleCaller Prototype</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <!-- ✅ IMPORTANT: because this file is served at /game/game.html -->
-  <link rel="stylesheet" href="/game/game.css?v=20260620-mobile-preview-bottle-gap" />
+  <link rel="stylesheet" href="/game/game.css?v=20260724-godot-landscape-fix" />
   <script type="module" src="/src/game/gameEntry.ts"></script>
   <script>
     if (window.self !== window.top) {
@@ -1861,6 +1861,9 @@
         }
 
         if (activeScreen === "screenPlay" && fireBoundBack("btnBackHomeFromPlay")) {
+          return true;
+        }
+        if (activeScreen === "screenGodotShift" && fireBoundBack("btnBackHomeFromGodot")) {
           return true;
         }
 
@@ -5233,6 +5236,28 @@
     </div>
   </section>
 
+  <section id="screenGodotShift" class="screen screen-godot-shift" aria-label="Main Dining Floor">
+    <div class="godot-shift-shell">
+      <header class="godot-shift-chrome">
+        <div class="godot-shift-brand">
+          <strong>BottleCaller</strong>
+          <span>Main Dining Floor</span>
+        </div>
+        <button id="btnBackHomeFromGodot" class="btn btn-ghost" type="button">Back</button>
+      </header>
+      <div class="godot-shift-stage" id="godotShiftStage">
+        <iframe
+          id="godotShiftFrame"
+          title="BottleCaller Godot Floor"
+          src="about:blank"
+          allow="autoplay; fullscreen; gamepad"
+          loading="lazy"
+        ></iframe>
+        <div id="godotShiftStatus" class="godot-shift-status" hidden>Loading floor…</div>
+      </div>
+    </div>
+  </section>
+
   <section id="screenHistory" class="screen">
     <div class="panel app-history-shell">
       <div class="app-history-header">
@@ -8409,11 +8434,30 @@ function ensureProgLoaded() {
               return;
             }
             if (msg.type === "auth_state" && msg.authed === false) {
+              // Demo/Godot is anonymous — parent session-null kicks must never reload us.
+              if (
+                window.__BC_GODOT_SHIFT_ACTIVE__ ||
+                document.documentElement?.dataset?.bcGodotShift === "true" ||
+                window.isDemo ||
+                window.bcMode === "demo"
+              ) {
+                console.warn("[IFRAME] auth_state=false ignored during demo/Godot");
+                return;
+              }
               console.warn("[IFRAME] auth_state=false -> shutting down");
               window.location.replace("game.html?mode=demo&demo=1");
               return;
             }
             if (msg.type === "parent_logged_out") {
+              if (
+                window.__BC_GODOT_SHIFT_ACTIVE__ ||
+                document.documentElement?.dataset?.bcGodotShift === "true" ||
+                window.isDemo ||
+                window.bcMode === "demo"
+              ) {
+                console.warn("[IFRAME] parent_logged_out ignored during demo/Godot");
+                return;
+              }
               console.warn("[IFRAME] parent logged out -> shutting down");
               window.location.replace("game.html?mode=demo&demo=1");
               return;
@@ -11003,6 +11047,16 @@ function ensureProgLoaded() {
         if (!msg || msg.source !== "BC_MSG" || msg.v !== 1) return;
 
         if (msg.type === "auth_state" && msg.authed === false) {
+          // Demo/Godot is anonymous — parent session-null kicks must never reload us.
+          if (
+            window.__BC_GODOT_SHIFT_ACTIVE__ ||
+            document.documentElement?.dataset?.bcGodotShift === "true" ||
+            window.isDemo ||
+            window.bcMode === "demo"
+          ) {
+            console.warn("[IFRAME] auth_state=false ignored during demo/Godot");
+            return;
+          }
           console.warn("[IFRAME] auth_state=false -> shutting down");
           try { localStorage.removeItem("bc_ctx"); } catch {}
           window.location.replace("/game/game.html?mode=demo&demo=1");
@@ -11010,6 +11064,15 @@ function ensureProgLoaded() {
         }
 
         if (msg.type === "parent_logged_out") {
+          if (
+            window.__BC_GODOT_SHIFT_ACTIVE__ ||
+            document.documentElement?.dataset?.bcGodotShift === "true" ||
+            window.isDemo ||
+            window.bcMode === "demo"
+          ) {
+            console.warn("[IFRAME] parent_logged_out ignored during demo/Godot");
+            return;
+          }
           console.warn("[IFRAME] parent logged out -> shutting down");
           try { localStorage.removeItem("bc_ctx"); } catch {}
           window.location.replace("/game/game.html?mode=demo&demo=1");
@@ -11074,15 +11137,18 @@ function ensureProgLoaded() {
           return;
         }
 
-        if (msg.type === "start_v2_demo") {
+        if (msg.type === "start_v2_demo" || msg.type === "start_godot_shift") {
           try {
-            const startReason = String(msg.reason || "");
+            const startReason = String(msg.reason || msg.type || "");
             const isTrustedV2Start =
               startReason.includes("auto_start") ||
               startReason.includes("mobile") ||
               startReason.includes("iframe_mount") ||
               startReason.includes("iframe_load") ||
-              startReason.includes("play_enter");
+              startReason.includes("play_enter") ||
+              startReason.includes("godot") ||
+              msg.type === "start_godot_shift" ||
+              msg.preferGodot === true;
             if (!isTrustedV2Start) {
               return;
             }
@@ -11090,25 +11156,41 @@ function ensureProgLoaded() {
               return;
             }
             const activeScreenId = document.querySelector(".screen.active")?.id || "";
-            const activeV2Snapshot = getV2HarnessApi?.()?.snapshot?.() || null;
-            if (activeScreenId === "screenPlay" && activeV2Snapshot) {
+            if (activeScreenId === "screenGodotShift" && window.__BC_GODOT_SHIFT_ACTIVE__) {
               return;
             }
-            const now = Date.now();
-            if (
-              window.__BC_V2_DEMO_DIRECT_START_AT__ &&
-              now - Number(window.__BC_V2_DEMO_DIRECT_START_AT__ || 0) < 2500 &&
-              document.querySelector(".screen.active")?.id === "screenPlay"
-            ) {
+            window.__BC_GODOT_SHIFT_ACTIVE__ = true;
+            document.documentElement.dataset.bcGodotShift = "true";
+            notifyParentDemoPlayStarted?.("godot_start_requested");
+            notifyParentGodotShiftActive?.(true);
+            // Prefer Godot for demo auto-start. Retry until the Godot API is exposed
+            // so we never silently fall back to the old V2 HTML play path.
+            const tryStartGodot = () => {
+              const starter = window.__BC_START_GODOT_SHIFT__;
+              const shouldUse = window.__BC_SHOULD_USE_GODOT_SHIFT__;
+              if (typeof starter !== "function") return false;
+              if (typeof shouldUse === "function" && !shouldUse()) return false;
+              starter({ reason: startReason || "start_v2_demo" });
+              return true;
+            };
+            if (tryStartGodot()) {
+              window.__BC_V2_DEMO_DIRECT_START_AT__ = Date.now();
               return;
             }
-            window.__BC_V2_DEMO_DIRECT_START_AT__ = now;
-            if (shouldUseV2Harness?.()) {
-              startV2HarnessWhenReady?.({ resetSession: true });
-              return;
+            if (!window.__BC_GODOT_START_RETRY__) {
+              window.__BC_GODOT_START_RETRY__ = true;
+              let attempts = 0;
+              const timer = window.setInterval(() => {
+                attempts += 1;
+                if (tryStartGodot() || attempts >= 40) {
+                  window.clearInterval(timer);
+                  window.__BC_GODOT_START_RETRY__ = false;
+                  if (attempts >= 40 && typeof window.__BC_START_GODOT_SHIFT__ !== "function") {
+                    console.warn("[BC] Godot start API never became ready; not falling back to V2");
+                  }
+                }
+              }, 100);
             }
-            showScreen?.("screenPlay");
-            window.startEncounter?.();
           } catch (e) {
             console.warn("[BC] start_v2_demo failed", e);
           }
@@ -12403,12 +12485,16 @@ function ensureProgLoaded() {
         try {
           if (!(window.isDemo || window.bcMode === "demo")) return;
           if (!window.parent || window.parent === window) return;
+          const onGodot =
+            !!window.__BC_GODOT_SHIFT_ACTIVE__ ||
+            document.documentElement?.dataset?.bcGodotShift === "true" ||
+            String(reason || "").includes("godot");
           window.parent.postMessage(
             {
               source: "BC_MSG",
               v: 1,
               type: "demo_play_started",
-              screenId: "screenPlay",
+              screenId: onGodot ? "screenGodotShift" : "screenPlay",
               reason,
             },
             window.location.origin
@@ -14273,7 +14359,7 @@ function ensureProgLoaded() {
 
       function getV2HomeEncounterProgressLabel() {
         const isDemoNow = !!(window.isDemo || window.bcMode === "demo");
-        let limit = isDemoNow ? 3 : 10;
+        let limit = isDemoNow ? 5 : 16;
         try {
           if (typeof getV2EncounterLimit === "function") limit = getV2EncounterLimit();
         } catch {}
@@ -23475,15 +23561,15 @@ function ensureProgLoaded() {
       }
 
       function getV2EncounterLimit() {
-        if (window.isDemo || window.bcMode === "demo") return 3;
+        if (window.isDemo || window.bcMode === "demo") return 5;
         try {
           const requestedLimit = Number(new URLSearchParams(window.location.search).get("bcV2Encounters") || 0);
           if (Number.isFinite(requestedLimit) && requestedLimit > 0) return requestedLimit;
         } catch {}
         const identity = getGameplayIdentity();
         const role = String(identity?.membershipRole || identity?.role || "").toLowerCase();
-        if (role === "group_manager") return 10;
-        return 3;
+        if (role === "group_manager") return 16;
+        return 5;
       }
 
       function normalizeV2DifficultyMode(value) {
@@ -23652,6 +23738,25 @@ function ensureProgLoaded() {
         });
       }
 
+      function getV2TierGateSummary(authorityState = null) {
+        const state = authorityState || loadV2ProgressionAuthorityState?.() || getDefaultV2ProgressionAuthorityState();
+        const apTier = clampV2Tier(state.apTierUnlocked || getV2TierUnlockedByAP(state.totalAP || 0), 3);
+        const rulesTier = clampV2Tier(state.rulesTierToServe || 1, 3);
+        const served = clampV2Tier(state.tierToServe || Math.min(apTier, rulesTier), 3);
+        const limiter =
+          apTier < rulesTier ? "AP unlock" :
+          rulesTier < apTier ? "rules evidence" :
+          "both gates";
+        return {
+          apTier,
+          rulesTier,
+          served,
+          totalAP: Number(state.totalAP || 0),
+          label: `Serve T${served} • AP gate T${apTier} (${Number(state.totalAP || 0)} AP) • Rules gate T${rulesTier}`,
+          limiter,
+        };
+      }
+
       function getV2OutcomeAPFromSnapshot(snapshot) {
         return getV2OutcomeAP(snapshot?.outcome);
       }
@@ -23683,6 +23788,12 @@ function ensureProgLoaded() {
           encounter_v2_001: "/game/products/chenin-blanc-bottle.png",
           encounter_v2_002: "/game/products/cabernet-sauvignon-bottle.png",
           encounter_v2_003: "/game/products/pinot-noir-bottle.png",
+          encounter_v2_011: "/game/products/cabernet-sauvignon-bottle.png",
+          encounter_v2_012: "/game/products/cabernet-sauvignon-bottle.png",
+          encounter_v2_013: "/game/products/pinot-noir-bottle.png",
+          encounter_v2_014: "/game/products/cabernet-sauvignon-bottle.png",
+          encounter_v2_015: "/game/products/cabernet-sauvignon-bottle.png",
+          encounter_v2_016: "/game/products/pinot-noir-bottle.png",
         };
         const imageByProduct = {
           product_cartology_chenin: "/game/products/chenin-blanc-bottle.png",
@@ -23813,11 +23924,11 @@ function ensureProgLoaded() {
       function syncV2DemoEncounterRotationFromRewardState(stateArg) {
         if (!isV2DemoRewardMode()) return;
         const state = stateArg || loadV2BottleRewardState();
-        let limit = 3;
+        let limit = 5;
         try {
           if (typeof getV2EncounterLimit === "function") limit = getV2EncounterLimit();
         } catch {}
-        const safeLimit = Math.max(1, Number(limit || 3));
+        const safeLimit = Math.max(1, Number(limit || 5));
         const completionCount = Math.max(0, Number(state?.demoCompletionCount || 0));
         const nextIndex = completionCount >= safeLimit ? 0 : completionCount % safeLimit;
         try { window.localStorage.setItem("BC_V2_TIER1_ROTATION_INDEX", String(nextIndex)); } catch {}
@@ -24143,6 +24254,10 @@ function ensureProgLoaded() {
       }
 
       function shouldUseAuthoritativeV2Authority(authoritative, localState) {
+        const api = window.V2ProgressionAuthority;
+        if (typeof api?.shouldPreferAuthoritativeV2Authority === "function") {
+          return !!api.shouldPreferAuthoritativeV2Authority(authoritative, localState);
+        }
         if (!authoritative) return false;
         const local = localState || getDefaultV2ProgressionAuthorityState();
         const authoritativeAttempts = Array.isArray(authoritative.attempts) ? authoritative.attempts.length : 0;
@@ -24150,11 +24265,58 @@ function ensureProgLoaded() {
         const authoritativeTotal = Number(authoritative.progressionSnapshot?.encountersTotal || authoritativeAttempts || 0);
         const localTotal = Number(local.progressionSnapshot?.encountersTotal || localAttempts || 0);
 
+        // Never prefer AP-only/empty-attempt server payloads over richer local history.
+        if (authoritativeAttempts < localAttempts && authoritativeTotal <= localTotal) return false;
         if (authoritativeTotal > localTotal) return true;
         if (authoritativeAttempts > localAttempts) return true;
-        if (Number(authoritative.totalAP || 0) > Number(local.totalAP || 0) && authoritativeTotal >= localTotal) return true;
-        if (Number(authoritative.updatedAt || 0) > Number(local.updatedAt || 0) && authoritativeTotal >= localTotal) return true;
+        if (
+          Number(authoritative.totalAP || 0) > Number(local.totalAP || 0) &&
+          authoritativeTotal >= localTotal &&
+          authoritativeAttempts >= localAttempts
+        ) return true;
+        if (
+          Number(authoritative.updatedAt || 0) > Number(local.updatedAt || 0) &&
+          authoritativeTotal >= localTotal &&
+          authoritativeAttempts >= localAttempts
+        ) return true;
         return false;
+      }
+
+      function mergeV2ProgressionAuthorityStatesLocal(authoritative, localState) {
+        const api = window.V2ProgressionAuthority;
+        if (typeof api?.mergeV2ProgressionAuthorityStates === "function") {
+          return normalizeV2ProgressionAuthorityState(
+            api.mergeV2ProgressionAuthorityStates(authoritative, localState)
+          );
+        }
+
+        const local = localState || getDefaultV2ProgressionAuthorityState();
+        const auth = authoritative || getDefaultV2ProgressionAuthorityState();
+        const attemptMap = new Map();
+        const pushAttempt = (item, index) => {
+          if (!item || typeof item !== "object") return;
+          const key = String(item.key || `attempt_${index}_${item.encounterId || "unknown"}`);
+          const prev = attemptMap.get(key);
+          if (!prev || Number(item.completedAt || 0) >= Number(prev.completedAt || 0)) {
+            attemptMap.set(key, { ...prev, ...item, key });
+          }
+        };
+        (Array.isArray(local.attempts) ? local.attempts : []).forEach((item, index) => pushAttempt(item, index));
+        (Array.isArray(auth.attempts) ? auth.attempts : []).forEach((item, index) => pushAttempt(item, index + 10000));
+        const attempts = Array.from(attemptMap.values())
+          .sort((a, b) => Number(a.completedAt || 0) - Number(b.completedAt || 0))
+          .slice(-100);
+        const preferAuth = shouldUseAuthoritativeV2Authority(auth, local);
+        const base = preferAuth ? { ...local, ...auth } : { ...auth, ...local };
+        return normalizeV2ProgressionAuthorityState({
+          ...base,
+          attempts,
+          progressionSnapshot: attempts.length
+            ? buildV2ProgressionSnapshotFromAttempts(attempts)
+            : (base.progressionSnapshot || buildV2ProgressionSnapshotFromAttempts(attempts)),
+          totalAP: Math.max(Number(local.totalAP || 0), Number(auth.totalAP || 0)),
+          updatedAt: Math.max(Number(local.updatedAt || 0), Number(auth.updatedAt || 0), Date.now()),
+        });
       }
 
       function loadV2ProgressionAuthorityState() {
@@ -24166,15 +24328,17 @@ function ensureProgLoaded() {
           localState = normalizeV2ProgressionAuthorityState(getDefaultV2ProgressionAuthorityState());
         }
         const authoritativeState = getAuthoritativeV2AuthorityState();
-        if (shouldUseAuthoritativeV2Authority(authoritativeState, localState)) {
-          try {
-            window.localStorage.setItem(V2_PROGRESSION_AUTHORITY_STORAGE_KEY, JSON.stringify(authoritativeState));
-          } catch {}
-          window.__BC_V2_PROGRESSION_AUTHORITY__ = authoritativeState;
-          return authoritativeState;
+        if (!authoritativeState) {
+          window.__BC_V2_PROGRESSION_AUTHORITY__ = localState;
+          return localState;
         }
-        window.__BC_V2_PROGRESSION_AUTHORITY__ = localState;
-        return localState;
+
+        const merged = mergeV2ProgressionAuthorityStatesLocal(authoritativeState, localState);
+        try {
+          window.localStorage.setItem(V2_PROGRESSION_AUTHORITY_STORAGE_KEY, JSON.stringify(merged));
+        } catch {}
+        window.__BC_V2_PROGRESSION_AUTHORITY__ = merged;
+        return merged;
       }
 
       function saveV2ProgressionAuthorityState(state) {
@@ -24258,10 +24422,21 @@ function ensureProgLoaded() {
         const tierToServe = clampV2Tier(authorityState.tierToServe || 1, 3);
         const tierBounds = getTierRangeAndGuests(tierToServe);
         const capturedAt = Date.now();
+        const parentPayload = getAuthoritativeProgressionPayload?.() || window.__BC_PROGRESSION__ || null;
+        const basedOnUpdatedAt = firstFiniteV2Number(
+          parentPayload?.syncedAt,
+          parentPayload?.updatedAt,
+          parentPayload?.authority?.updatedAt,
+          parentPayload?.canonicalState?.capturedAt,
+          parentPayload?.canonical_state?.capturedAt,
+          authorityState?.updatedAt,
+          0
+        ) || 0;
         return {
           version: 1,
           source: "v2_harness",
           capturedAt,
+          basedOnUpdatedAt,
           economy: {
             points: Number(progressionSnapshot.encountersTotal || 0),
             authorityPoints: Number(authorityState.totalAP || 0),
@@ -25063,9 +25238,11 @@ function ensureProgLoaded() {
       }
 
       const V2_DEMO_ENCOUNTER_IDS = Object.freeze([
-        "encounter_v2_001",
-        "encounter_v2_002",
-        "encounter_v2_003",
+        "encounter_v2_014",
+        "encounter_v2_013",
+        "encounter_v2_011",
+        "encounter_v2_015",
+        "encounter_v2_016",
       ]);
 
       function getV2DemoEncounterIdForOrdinal(ordinal) {
@@ -25548,9 +25725,14 @@ function ensureProgLoaded() {
 	        if (isTerminal) {
 	          maybeSubmitV2ProgressReport(snapshot, session, rewardProgress);
 	        }
+	        if (isTerminal && (isGodotShiftWineOfferActive() || window.__BC_V2_FROM_GODOT__)) {
+	          window.__BC_V2_FROM_GODOT__ = false;
+	          completeGodotWineOfferFromV2(snapshot, session, rewardProgress);
+	          return;
+	        }
 	        const isFinalEncounter = isV2FinalDemoEncounter(snapshot);
         const isDemoEncounterSequence = isV2DemoEncounterSequence(snapshot);
-        const shouldShowBottleRewardPanel = isTerminal && (!isDemoEncounterSequence || isFinalEncounter);
+        const shouldShowBottleRewardPanel = isTerminal && (!isDemoEncounterSequence || isFinalEncounter) && !isGodotShiftWineOfferActive();
         const lesson = String(encounter?.lesson || "");
         const guidanceLine = "Read the table, choose the right interaction, and move the guest without creating friction.";
         const feedbackMeta = isTerminal && feedbackText !== guidanceLine ? feedbackText : "";
@@ -25579,6 +25761,7 @@ function ensureProgLoaded() {
             : snapshot.progressMood === "ready"
               ? "green"
               : "yellow";
+        const tierGate = getV2TierGateSummary();
         const stateGridHtml = `
           <div class="v2-state-grid">
             <div class="v2-state-card">
@@ -25596,6 +25779,9 @@ function ensureProgLoaded() {
               <div class="v2-state-value">${snapshot.authorityDelta}</div>
               <div class="v2-state-meta">${escapeHtml(outcome)}</div>
             </div>
+          </div>
+          <div class="v2-tier-gate-note small-text" title="AP unlock and rules evidence are separate gates; served tier is the minimum.">
+            ${escapeHtml(tierGate.label)} • limited by ${escapeHtml(tierGate.limiter)}
           </div>
         `;
         if (isTerminal) {
@@ -25880,11 +26066,457 @@ function ensureProgLoaded() {
 
       }
 
+      function getGodotShiftBridge() {
+        return window.__BC_GODOT_SHIFT__ || null;
+      }
+
+      function shouldUseGodotShiftFloor() {
+        try {
+          if (new URLSearchParams(window.location.search).get("bcGodot") === "0") return false;
+        } catch {}
+        let modeDemo = false;
+        try {
+          modeDemo = new URLSearchParams(window.location.search).get("mode") === "demo";
+        } catch {}
+        const isDemoMode = !!(window.isDemo || window.bcMode === "demo" || modeDemo);
+        if (!isDemoMode) return false;
+        // Demo + V2 flag (URL or harness module) means Godot owns the floor entry.
+        return !!(shouldUseV2Harness() || (() => {
+          try {
+            return new URLSearchParams(window.location.search).get("bcV2") === "1";
+          } catch {
+            return false;
+          }
+        })());
+      }
+
+      function isGodotShiftWineOfferActive() {
+        return !!window.__BC_GODOT_WINE_OFFER__?.active;
+      }
+
+      function getGodotShiftFrame() {
+        return document.getElementById("godotShiftFrame");
+      }
+
+      function setGodotShiftStatus(text, visible = true) {
+        const status = document.getElementById("godotShiftStatus");
+        if (!status) return;
+        status.textContent = String(text || "");
+        if (visible) {
+          status.hidden = false;
+          status.removeAttribute("hidden");
+          status.style.display = "";
+          status.style.pointerEvents = "auto";
+        } else {
+          status.hidden = true;
+          status.setAttribute("hidden", "");
+          status.style.display = "none";
+          status.style.pointerEvents = "none";
+        }
+      }
+
+      function isGodotMobileHost() {
+        // Must match parent mobile detection: coarse pointer + narrow.
+        // Never treat a narrow desktop window as mobile (portrait rotate CSS).
+        try {
+          if (window.parent && window.parent !== window) {
+            const parentMobile = window.parent.document?.documentElement?.dataset?.bcMobileEnv === "true";
+            if (parentMobile) return true;
+          }
+        } catch {}
+        try {
+          const coarse = window.matchMedia("(pointer: coarse)").matches;
+          if (!coarse) return false;
+          return window.matchMedia("(max-width: 860px)").matches;
+        } catch {
+          return false;
+        }
+      }
+
+      function notifyParentGodotShiftActive(active) {
+        try {
+          window.parent?.postMessage?.(
+            {
+              source: "BC_MSG",
+              v: 1,
+              type: "godot_shift_active",
+              active: !!active,
+              // Wine offer temporarily leaves the floor UI but must NOT clear the
+              // parent Godot lock (that was ejecting mobile back to login).
+              clearLock: false,
+              mode: window.bcMode || "demo",
+              screenId: active ? "screenGodotShift" : (window.__BC_GODOT_WINE_OFFER__?.active ? "screenPlay" : null),
+            },
+            window.location.origin,
+          );
+        } catch {}
+      }
+
+      function focusGodotShiftCanvas() {
+        const frame = getGodotShiftFrame();
+        try {
+          const canvas = frame?.contentDocument?.getElementById?.("canvas");
+          canvas?.focus?.();
+        } catch {}
+        try {
+          frame?.contentWindow?.focus?.();
+        } catch {}
+      }
+
+      function getGodotShiftBaseUrl() {
+        const bridge = getGodotShiftBridge();
+        const fromWindow = String(window.__BC_GODOT_SHIFT_BASE__ || "").trim();
+        const fromBridge = String(bridge?.baseUrl || "").trim();
+        const raw = fromWindow || fromBridge || "/godot-shift";
+        return String(raw).replace(/\/$/, "") || "/godot-shift";
+      }
+
+      function getGodotShiftTargetOrigin() {
+        const base = getGodotShiftBaseUrl();
+        if (/^https?:\/\//i.test(base)) {
+          try {
+            return new URL(base).origin;
+          } catch {}
+        }
+        return window.location.origin;
+      }
+
+      function getGodotShiftEmbedUrl() {
+        return `${getGodotShiftBaseUrl()}/index.html?bcEmbed=1`;
+      }
+
+      function postMessageToGodot(type, payload = {}) {
+        const bridge = getGodotShiftBridge();
+        const frame = getGodotShiftFrame();
+        if (!frame?.contentWindow) return false;
+        const message = bridge?.createAppMessageToGodot
+          ? bridge.createAppMessageToGodot(type, payload)
+          : { source: "BC_APP", v: 1, type, payload, at: Date.now() };
+        try {
+          frame.contentWindow.postMessage(message, getGodotShiftTargetOrigin());
+          return true;
+        } catch (error) {
+          console.warn("[BC][GODOT] postMessage failed", error);
+          return false;
+        }
+      }
+
+      function ensureGodotShiftListener() {
+        if (window.__BC_GODOT_SHIFT_LISTENER__) return;
+        window.__BC_GODOT_SHIFT_LISTENER__ = true;
+        window.addEventListener("message", (event) => {
+          const frame = getGodotShiftFrame();
+          if (!frame?.contentWindow || event.source !== frame.contentWindow) return;
+          const allowedOrigin = getGodotShiftTargetOrigin();
+          if (event.origin !== allowedOrigin && event.origin !== window.location.origin) return;
+          const bridge = getGodotShiftBridge();
+          const data = event.data;
+          if (!(bridge?.isGodotBridgeMessage?.(data) || (data && data.source === "BC_GODOT"))) return;
+          handleGodotShiftMessage(data);
+        });
+      }
+
+      function handleGodotBootMessage(data) {
+        const type = String(data?.type || "");
+        const payload = data?.payload && typeof data.payload === "object" ? data.payload : {};
+        if (type === "godot_load_start") {
+          setGodotShiftStatus("Downloading floor assets…", true);
+          notifyParentDemoPlayStarted?.("godot_load_start");
+          notifyParentGodotShiftActive?.(true);
+          return true;
+        }
+        if (type === "godot_load_progress") {
+          const pct = Math.max(0, Math.min(100, Number(payload.pct) || 0));
+          setGodotShiftStatus(`Loading floor… ${pct}%`, true);
+          // Heartbeat so parent auth/route logic won't tear down mid-download.
+          if (pct === 0 || pct === 100 || pct % 10 === 0) {
+            notifyParentDemoPlayStarted?.(`godot_load_${pct}`);
+            notifyParentGodotShiftActive?.(true);
+          }
+          return true;
+        }
+        if (type === "godot_load_ready") {
+          setGodotShiftStatus("", false);
+          try {
+            const frame = getGodotShiftFrame();
+            if (frame) frame.dataset.bcGodotReady = "1";
+          } catch {}
+          window.__BC_GODOT_BACK_SHIELD_UNTIL__ = Date.now() + 8000;
+          focusGodotShiftCanvas();
+          notifyParentDemoPlayStarted?.("godot_load_ready");
+          notifyParentGodotShiftActive?.(true);
+          return true;
+        }
+        if (type === "godot_load_error") {
+          const message = String(payload.message || "Godot failed to load.");
+          setGodotShiftStatus(message, true);
+          console.warn("[BC][GODOT] load error", message);
+          return true;
+        }
+        return false;
+      }
+
+      function ensureGodotShiftIframe(options = {}) {
+        const frame = getGodotShiftFrame();
+        if (!frame) return null;
+        ensureGodotShiftListener();
+        const targetSrc = getGodotShiftEmbedUrl();
+        const resumeOnly = !!options.resumeOnly;
+        const alreadyMounted =
+          frame.dataset.bcMounted === "1" &&
+          frame.getAttribute("src") !== "about:blank" &&
+          frame.dataset.bcSrc === targetSrc;
+        const alreadyReady = frame.dataset.bcGodotReady === "1";
+
+        const onShellReady = () => {
+          // First boot only — never flash this overlay when resuming after wine.
+          if (!alreadyReady) {
+            setGodotShiftStatus("Downloading floor assets…", true);
+          } else {
+            setGodotShiftStatus("", false);
+          }
+          postMessageToGodot("host_hello", {
+            mode: window.bcMode || "demo",
+            demo: !!(window.isDemo || window.bcMode === "demo"),
+          });
+          window.setTimeout(() => focusGodotShiftCanvas(), 250);
+          window.setTimeout(() => focusGodotShiftCanvas(), 1200);
+        };
+
+        if (!alreadyMounted) {
+          frame.dataset.bcGodotReady = "";
+          setGodotShiftStatus("Loading floor…", true);
+          frame.dataset.bcMounted = "1";
+          frame.dataset.bcSrc = targetSrc;
+          frame.addEventListener("load", onShellReady, { once: true });
+          frame.src = targetSrc;
+        } else if (resumeOnly || alreadyReady) {
+          // Godot is already running behind the V2 wine screen — just resume.
+          setGodotShiftStatus("", false);
+          postMessageToGodot("host_hello", {
+            mode: window.bcMode || "demo",
+            demo: !!(window.isDemo || window.bcMode === "demo"),
+          });
+          postMessageToGodot("resume_shift", {
+            mode: window.bcMode || "demo",
+            demo: !!(window.isDemo || window.bcMode === "demo"),
+          });
+          window.setTimeout(() => focusGodotShiftCanvas(), 50);
+          window.setTimeout(() => focusGodotShiftCanvas(), 250);
+        } else {
+          onShellReady();
+        }
+        return frame;
+      }
+
+      function startGodotShiftFloor(options = {}) {
+        ensureGodotShiftListener();
+        window.__BC_GODOT_SHIFT_ACTIVE__ = true;
+        window.__BC_GODOT_WINE_OFFER__ = null;
+        // Short shield for splash-clear ghost taps only.
+        window.__BC_GODOT_BACK_SHIELD_UNTIL__ = Date.now() + 8000;
+        applyPlaySurfaceMode("full");
+        notifyParentDemoPlayStarted(options.reason || "godot_shift_begin");
+        resetNavState();
+        const mobileHost = isGodotMobileHost();
+        document.documentElement.dataset.bcGodotMobile = mobileHost ? "1" : "0";
+        document.documentElement.dataset.bcGodotShift = "true";
+        try {
+          const backBtn = document.getElementById("btnBackHomeFromGodot");
+          if (backBtn) {
+            backBtn.classList.add("hidden");
+            backBtn.style.pointerEvents = "none";
+            backBtn.setAttribute("aria-hidden", "true");
+            window.setTimeout(() => {
+              if (Date.now() < Number(window.__BC_GODOT_BACK_SHIELD_UNTIL__ || 0)) return;
+              backBtn.classList.remove("hidden");
+              backBtn.style.pointerEvents = "";
+              backBtn.removeAttribute("aria-hidden");
+            }, 8200);
+          }
+        } catch {}
+        showScreen("screenGodotShift");
+        notifyParentGodotShiftActive(true);
+        ensureGodotShiftIframe({ resumeOnly: false });
+        scheduleIframeHeightReport?.("godot_shift_start");
+        return true;
+      }
+
+      window.__BC_SHOULD_USE_GODOT_SHIFT__ = shouldUseGodotShiftFloor;
+      window.__BC_START_GODOT_SHIFT__ = startGodotShiftFloor;
+
+      function returnToGodotShiftFloor() {
+        window.__BC_GODOT_WINE_OFFER__ = null;
+        window.__BC_GODOT_SHIFT_ACTIVE__ = true;
+        document.documentElement.dataset.bcGodotMobile = isGodotMobileHost() ? "1" : "0";
+        document.documentElement.dataset.bcGodotShift = "true";
+        setGodotShiftStatus("", false);
+        showScreen("screenGodotShift");
+        notifyParentGodotShiftActive(true);
+        const frame = ensureGodotShiftIframe({ resumeOnly: true });
+        focusGodotShiftCanvas();
+        try { frame?.contentWindow?.focus?.(); } catch {}
+        scheduleIframeHeightReport?.("godot_shift_return");
+      }
+
+      function handleGodotOfferWine(payload = {}) {
+        const bridge = getGodotShiftBridge();
+        const encounterId = bridge?.resolveV2EncounterIdFromGodotGuest?.(payload)
+          || null;
+        if (!encounterId) {
+          console.warn("[BC][GODOT] No V2 encounter mapped for guest", payload);
+          postMessageToGodot("v2_encounter_result", {
+            ok: false,
+            error: "unmapped_guest",
+            guestId: payload.guestId || null,
+            authorityDelta: 0,
+          });
+          return false;
+        }
+
+        window.__BC_GODOT_WINE_OFFER__ = {
+          active: true,
+          guestId: String(payload.guestId || ""),
+          tableId: String(payload.tableId || ""),
+          guestDisplayName: String(payload.guestDisplayName || ""),
+          encounterId,
+          startedAt: Date.now(),
+        };
+
+        document.documentElement.dataset.bcGodotShift = "wine_offer";
+        notifyParentGodotShiftActive(false);
+        startV2HarnessWhenReady({
+          encounterId,
+          resetSession: true,
+          skipRewardSync: true,
+          fromGodot: true,
+          skipPreview: true,
+        });
+        return true;
+      }
+
+      function completeGodotWineOfferFromV2(snapshot, session, rewardProgress = null) {
+        const offer = window.__BC_GODOT_WINE_OFFER__ || {};
+        const authorityDelta = Number(snapshot?.authorityDelta || 0);
+        const outcome = String(snapshot?.outcome || "");
+        const wineSold = ["premium_success", "standard_success", "weak_success"].includes(outcome);
+
+        // Keep local/premium telemetry path alive, but skip V2 end UX.
+        try {
+          recordV2ProgressionAuthority?.(snapshot, session, rewardProgress);
+        } catch {}
+
+        postMessageToGodot("v2_encounter_result", {
+          ok: true,
+          guestId: offer.guestId || null,
+          tableId: offer.tableId || null,
+          encounterId: snapshot?.encounterId || offer.encounterId || null,
+          encounterTitle: snapshot?.encounterTitle || null,
+          outcome,
+          authorityDelta,
+          wineSold,
+          totalAP: Number(rewardProgress?.state?.totalAP || loadV2BottleRewardState?.()?.totalAP || 0),
+          progress: Number(snapshot?.progress || 0),
+          frustration: Number(snapshot?.frustration || 0),
+        });
+
+        window.__BC_GODOT_WINE_OFFER__ = null;
+        returnToGodotShiftFloor();
+      }
+
+      function handleGodotShiftMessage(data) {
+        if (handleGodotBootMessage(data)) return;
+        const type = String(data?.type || "");
+        const payload = data?.payload && typeof data.payload === "object" ? data.payload : {};
+        if (type === "godot_ready") {
+          window.__BC_GODOT_BACK_SHIELD_UNTIL__ = Date.now() + 8000;
+          try {
+            const frame = getGodotShiftFrame();
+            if (frame) frame.dataset.bcGodotReady = "1";
+          } catch {}
+          setGodotShiftStatus("", false);
+          focusGodotShiftCanvas();
+          notifyParentDemoPlayStarted?.("godot_ready");
+          notifyParentGodotShiftActive(true);
+          postMessageToGodot("host_hello", {
+            mode: window.bcMode || "demo",
+            demo: !!(window.isDemo || window.bcMode === "demo"),
+          });
+          scheduleIframeHeightReport?.("godot_ready");
+          return;
+        }
+        if (type === "offer_wine") {
+          handleGodotOfferWine(payload);
+          return;
+        }
+        if (type === "telemetry") {
+          try {
+            window.parent?.postMessage?.({
+              source: "BC_MSG",
+              v: 1,
+              type: "event_log",
+              payload: {
+                v: 2,
+                engineVersion: "godot_shift",
+                source: "godot_shift",
+                eventType: payload.eventType || "godot_telemetry",
+                ...payload,
+                mode: window.bcMode || "demo",
+                demo: !!(window.isDemo || window.bcMode === "demo"),
+              },
+            }, window.location.origin);
+          } catch {}
+          return;
+        }
+        if (type === "shift_complete") {
+          window.__BC_GODOT_SHIFT_SUMMARY__ = payload;
+          try {
+            const totalAP = Math.max(
+              0,
+              Math.round(Number(payload.ap || 0)),
+            );
+            const authorityState = loadV2ProgressionAuthorityState?.() || {};
+            saveV2ProgressionAuthorityState?.({
+              ...authorityState,
+              totalAP: Math.max(Number(authorityState.totalAP || 0), totalAP),
+              updatedAt: Date.now(),
+            });
+            const bottleState = loadV2BottleRewardState?.() || {};
+            saveV2BottleRewardState?.({
+              ...bottleState,
+              totalAP: Math.max(Number(bottleState.totalAP || 0), totalAP),
+              updatedAt: Date.now(),
+            });
+          } catch {}
+          try {
+            window.parent?.postMessage?.({
+              source: "BC_MSG",
+              v: 1,
+              type: "event_log",
+              payload: {
+                v: 2,
+                engineVersion: "godot_shift",
+                source: "godot_shift",
+                eventType: "shift_complete",
+                ...payload,
+                mode: window.bcMode || "demo",
+                demo: !!(window.isDemo || window.bcMode === "demo"),
+              },
+            }, window.location.origin);
+          } catch {}
+        }
+      }
+
       function startV2HarnessEncounter(options = {}) {
         const api = getV2HarnessApi();
         if (!api) return false;
         const requestedEncounterId = String(options.encounterId || "");
+        const fromGodot = !!(options.fromGodot || isGodotShiftWineOfferActive());
+        const skipPreview = !!(options.skipPreview || fromGodot);
         window.__BC_V2_DEMO_FINAL_SUMMARY_ACTIVE__ = false;
+        if (fromGodot) {
+          window.__BC_V2_FROM_GODOT__ = true;
+        }
         const state = getV2DemoSessionState();
         const startingFresh = !!(options.resetSession || !state.active);
         if (startingFresh) {
@@ -25894,7 +26526,7 @@ function ensureProgLoaded() {
           state.introEncounterId = null;
         }
         applyPlaySurfaceMode("encounter_only");
-        notifyParentDemoPlayStarted("v2_harness_start");
+        notifyParentDemoPlayStarted(fromGodot ? "v2_from_godot" : "v2_harness_start");
         resetNavState();
         showScreen("screenPlay");
         const encounterPanel = document.getElementById("encounterPanel");
@@ -25926,7 +26558,11 @@ function ensureProgLoaded() {
           if (startingFresh) {
             state.introEncounterId = snapshot?.encounterId || null;
           }
-          renderV2EncounterPreview(snapshot, "");
+          if (skipPreview) {
+            renderV2HarnessPlay(snapshot, "");
+          } else {
+            renderV2EncounterPreview(snapshot, "");
+          }
         } catch (error) {
           const stepContent = document.getElementById("stepContent");
           if (stepContent) {
@@ -25938,6 +26574,14 @@ function ensureProgLoaded() {
                 </div>
               </section>
             `;
+          }
+          if (fromGodot) {
+            postMessageToGodot("v2_encounter_result", {
+              ok: false,
+              error: error?.message || "v2_start_failed",
+              authorityDelta: 0,
+            });
+            returnToGodotShiftFloor();
           }
           return false;
         }
@@ -26010,6 +26654,10 @@ function ensureProgLoaded() {
         btn.__bcBound = false;
         bindInput(btn, async () => {
           resetNavState();
+          if (shouldUseGodotShiftFloor()) {
+            startGodotShiftFloor({ reason: "begin_premium_entry" });
+            return;
+          }
           if (shouldUseV2Harness()) {
             startV2HarnessWhenReady({ resetSession: true });
             return;
@@ -26057,6 +26705,10 @@ function ensureProgLoaded() {
             btnGoPremium.__bcBound = false;
             bindInput(btnGoPremium, () => {
               resetNavState();
+              if (shouldUseGodotShiftFloor()) {
+                startGodotShiftFloor({ reason: "demo_begin" });
+                return;
+              }
               if (shouldUseV2Harness()) {
                 startV2HarnessWhenReady({ resetSession: true });
                 return;
@@ -26352,6 +27004,10 @@ function ensureProgLoaded() {
 
           bindInput(btnGoDemo, () => {
             resetNavState();
+            if (shouldUseGodotShiftFloor()) {
+              startGodotShiftFloor({ reason: "demo_begin" });
+              return;
+            }
             if (shouldUseV2Harness()) {
               startV2HarnessWhenReady({ resetSession: true });
               return;
@@ -26377,6 +27033,10 @@ function ensureProgLoaded() {
 
               bindInput(btnGoPremium, () => {
                 resetNavState();
+                if (shouldUseGodotShiftFloor()) {
+                  startGodotShiftFloor({ reason: "demo_begin" });
+                  return;
+                }
                 if (shouldUseV2Harness()) {
                   startV2HarnessWhenReady({ resetSession: true });
                   return;
@@ -26596,6 +27256,36 @@ function ensureProgLoaded() {
           }
           resetNavState();
           showScreen("screenWelcome");
+        });
+
+        const btnBackHomeFromGodot = document.getElementById("btnBackHomeFromGodot");
+        bindInput(btnBackHomeFromGodot, () => {
+          // Ghost taps only — after the shield, Back is a real leave action.
+          if (Date.now() < Number(window.__BC_GODOT_BACK_SHIELD_UNTIL__ || 0)) {
+            console.warn("[BC][GODOT] Back ignored (click shield)");
+            return;
+          }
+          window.__BC_GODOT_SHIFT_ACTIVE__ = false;
+          window.__BC_GODOT_WINE_OFFER__ = null;
+          document.documentElement.dataset.bcGodotShift = "";
+          document.documentElement.dataset.bcGodotMobile = "";
+          try {
+            window.parent?.postMessage?.(
+              {
+                source: "BC_MSG",
+                v: 1,
+                type: "godot_shift_active",
+                active: false,
+                clearLock: true,
+                mode: window.bcMode || "demo",
+                screenId: null,
+                reason: "user_back",
+              },
+              window.location.origin,
+            );
+          } catch {}
+          resetNavState();
+          showScreen("screenHome");
         });
 
         bindInput(btnBackHomeFromHistory, () => {

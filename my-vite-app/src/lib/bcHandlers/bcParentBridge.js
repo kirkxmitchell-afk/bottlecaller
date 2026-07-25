@@ -49,15 +49,28 @@ export function mountBcParentBridge({
     return frame?.contentWindow || null;
   };
 
+  const getDemoFrameWindow = () => {
+    return document.getElementById("gameRootDemoFrame")?.contentWindow || null;
+  };
+
+  const isDemoFrameSource = (event) => {
+    const demoWin = getDemoFrameWindow();
+    return !!(demoWin && event?.source === demoWin);
+  };
+
   // 🔒 central auth gate: single helper (so it’s not copied everywhere)
   async function requireLiveSessionOrKick(event, type) {
+    // Anonymous demo/Godot has no parent session. Never emit auth_state:false
+    // at them — that was reloading the demo iframe at Godot 100%.
+    if (isDemoFrameSource(event)) {
+      return null;
+    }
     const { data: live } = await supabase.auth.getSession();
     const liveSession = live?.session || null;
     if (!liveSession) {
       console.warn("[PARENT] BC_MSG blocked: live session is null", { type });
       notifyLoggedOut(event);
       try { destroyPremiumIframe("parent_no_session_msg_gate"); } catch {}
-      try { destroyDemoIframe("parent_no_session_msg_gate"); } catch {}
       return null;
     }
     appState.session = liveSession;
@@ -405,12 +418,18 @@ export function mountBcParentBridge({
 
       const type = msg.type;
 
+      // Demo/Godot iframe is anonymous — this bridge is premium-only.
+      // Returning here prevents requireLiveSessionOrKick from posting
+      // auth_state:false on every godot_load_* heartbeat.
+      if (isDemoFrameSource(event)) {
+        return;
+      }
+
       // global logout gates
       if (isHardLoggedOut()) {
         console.warn("[PARENT] BC_MSG blocked: hard logged out", type);
         notifyLoggedOut(event);
         try { destroyPremiumIframe("hard_logged_out_msg_gate"); } catch {}
-        try { destroyDemoIframe("hard_logged_out_msg_gate"); } catch {}
         return;
       }
 
@@ -418,12 +437,20 @@ export function mountBcParentBridge({
         console.warn("[PARENT] BC_MSG blocked: logout lock active", type);
         notifyLoggedOut(event);
         try { destroyPremiumIframe("logout_lock"); } catch {}
-        try { destroyDemoIframe("logout_lock"); } catch {}
         return;
       }
 
-      // allow logout requests even if session is dead
+      // allow logout requests even if session is dead — but never during Godot/demo play
       if (type === "logout" || type === "bc_logout_request") {
+        const godotOrDemo =
+          typeof window.__BC_GODOT_DEMO_LOCK__ !== "undefined" && window.__BC_GODOT_DEMO_LOCK__ ||
+          document.documentElement?.dataset?.bcGodotDemo === "true" ||
+          document.documentElement?.dataset?.bcV2Demo === "true" ||
+          !!document.getElementById("gameRootDemoFrame");
+        if (godotOrDemo) {
+          console.warn("[PARENT] logout request ignored during Godot/demo play", type);
+          return;
+        }
         await handlers[type]?.({ msg, event });
         return;
       }
