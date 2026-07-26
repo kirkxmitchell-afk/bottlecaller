@@ -261,3 +261,63 @@ test("Godot guests map 1:1 onto the V2 demo encounter order", async () => {
     "encounter_v2_014",
   );
 });
+
+test("v2.1 composition: party shape explicit + inferred, type lanes differ", async () => {
+  const {
+    GUEST_PROFILES,
+    inferPartyShapeFromArt,
+    resolvePartyShape,
+  } = await import("../src/game/guestProfiles");
+  const {
+    composeGuestV21,
+    TYPE_OPTIMAL_LANES,
+  } = await import("../src/game/guestCompositionV21");
+  const { startRuntimeV2Session } = await import("../src/game/runtimeV2");
+  const { evaluateChoice } = await import("../src/game/engineV2");
+
+  assert.equal(GUEST_PROFILES.blonde_date.partyShape, "couple");
+  assert.equal(GUEST_PROFILES.african_older_gentleman.partyShape, "single");
+  assert.equal(inferPartyShapeFromArt({ depiction: "African regular couple" }), "couple");
+  assert.equal(inferPartyShapeFromArt({ guestId: "skeptic_reader" }), "single");
+  assert.equal(
+    resolvePartyShape({ explicit: "couple", depiction: "solo gentleman" }),
+    "couple",
+  );
+
+  assert.notDeepEqual(TYPE_OPTIMAL_LANES.tourist, TYPE_OPTIMAL_LANES.regular);
+  assert.notDeepEqual(TYPE_OPTIMAL_LANES.tourist, TYPE_OPTIMAL_LANES.skeptic);
+
+  const tourist = composeGuestV21("blonde_date");
+  assert.equal(tourist?.partyShape, "couple");
+  assert.match(String(tourist?.depiction || ""), /^Couple table\./);
+
+  const singleRegular = composeGuestV21("african_older_gentleman");
+  assert.equal(singleRegular?.partyShape, "single");
+
+  const touristSession = startRuntimeV2Session({
+    encounterId: "encounter_v2_014",
+    guestId: "blonde_date",
+  });
+  const regularSession = startRuntimeV2Session({
+    encounterId: "encounter_v2_013",
+    guestId: "african_older_gentleman",
+  });
+  const skepticSession = startRuntimeV2Session({
+    encounterId: "encounter_v2_011",
+    guestId: "skeptic_reader",
+  });
+
+  const path = { group: "recommend", type: "flavour" };
+  const touristFlavour = evaluateChoice(touristSession.encounter, path).quality;
+  const regularFlavour = evaluateChoice(regularSession.encounter, path).quality;
+  const skepticFlavour = evaluateChoice(skepticSession.encounter, path).quality;
+
+  assert.equal(regularFlavour, "optimal");
+  assert.notEqual(touristFlavour, "optimal");
+  assert.notEqual(skepticFlavour, "optimal");
+
+  assert.match(String(touristSession.encounter.verbalClue || ""), /us|we|two/i);
+  assert.equal(touristSession.composition?.version, "v2.1");
+  assert.equal(touristSession.composition?.partyShape, "couple");
+  assert.equal(regularSession.composition?.partyShape, "single");
+});

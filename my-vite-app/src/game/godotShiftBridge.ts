@@ -1,4 +1,25 @@
-/** Godot floor ↔ V2 encounter linking for demo (premium-ready). */
+/** Godot floor ↔ V2 encounter linking for demo (premium-ready).
+ *  Guest type / depictions / floor lines: see guestProfiles.ts (source of truth).
+ */
+
+import {
+  GUEST_PROFILES,
+  getGuestProfile,
+  getGuestType,
+  getGuestPartyShape,
+  evaluateObjectPath,
+  guestTypeMatchesV2Family,
+  inferPartyShapeFromArt,
+  resolvePartyShape,
+} from "./guestProfiles";
+import {
+  GUEST_COMPOSITION_VERSION,
+  TYPE_OPTIMAL_LANES,
+  TYPE_WINE_SERVICE_TIME_MULTIPLIER,
+  composeGuestV21,
+  applyGuestCompositionToEncounter,
+  applyPartyShapeToDialogue,
+} from "./guestCompositionV21";
 
 export const GODOT_GUEST_ORDER = [
   "blonde_date",
@@ -19,13 +40,13 @@ export const V2_DEMO_ENCOUNTER_ORDER = [
 export type GodotGuestId = (typeof GODOT_GUEST_ORDER)[number];
 export type V2DemoEncounterId = (typeof V2_DEMO_ENCOUNTER_ORDER)[number];
 
-/** Same-order 1:1 map: Godot guest → V2 demo encounter. */
+/** Same-order 1:1 map: Godot guest → V2 demo encounter (from guest profile SOT). */
 export const GODOT_GUEST_TO_V2_ENCOUNTER: Record<GodotGuestId, V2DemoEncounterId> = {
-  blonde_date: "encounter_v2_014",
-  african_older_gentleman: "encounter_v2_013",
-  skeptic_reader: "encounter_v2_011",
-  skeptic_v1: "encounter_v2_015",
-  african_regular_table: "encounter_v2_016",
+  blonde_date: GUEST_PROFILES.blonde_date.v2EncounterId,
+  african_older_gentleman: GUEST_PROFILES.african_older_gentleman.v2EncounterId,
+  skeptic_reader: GUEST_PROFILES.skeptic_reader.v2EncounterId,
+  skeptic_v1: GUEST_PROFILES.skeptic_v1.v2EncounterId,
+  african_regular_table: GUEST_PROFILES.african_regular_table.v2EncounterId,
 };
 
 export const V2_ENCOUNTER_TO_GODOT_GUEST: Record<V2DemoEncounterId, GodotGuestId> = {
@@ -34,6 +55,23 @@ export const V2_ENCOUNTER_TO_GODOT_GUEST: Record<V2DemoEncounterId, GodotGuestId
   encounter_v2_011: "skeptic_reader",
   encounter_v2_015: "skeptic_v1",
   encounter_v2_016: "african_regular_table",
+};
+
+export {
+  GUEST_PROFILES,
+  getGuestProfile,
+  getGuestType,
+  getGuestPartyShape,
+  evaluateObjectPath,
+  guestTypeMatchesV2Family,
+  inferPartyShapeFromArt,
+  resolvePartyShape,
+  GUEST_COMPOSITION_VERSION,
+  TYPE_OPTIMAL_LANES,
+  TYPE_WINE_SERVICE_TIME_MULTIPLIER,
+  composeGuestV21,
+  applyGuestCompositionToEncounter,
+  applyPartyShapeToDialogue,
 };
 
 export const GODOT_SOURCE = "BC_GODOT";
@@ -95,6 +133,20 @@ export function createGodotShiftBridgeApi(options: { baseUrl?: string | null } =
     V2_DEMO_ENCOUNTER_ORDER,
     GODOT_GUEST_TO_V2_ENCOUNTER,
     V2_ENCOUNTER_TO_GODOT_GUEST,
+    GUEST_PROFILES,
+    GUEST_COMPOSITION_VERSION,
+    TYPE_OPTIMAL_LANES,
+    TYPE_WINE_SERVICE_TIME_MULTIPLIER,
+    getGuestProfile,
+    getGuestType,
+    getGuestPartyShape,
+    evaluateObjectPath,
+    guestTypeMatchesV2Family,
+    inferPartyShapeFromArt,
+    resolvePartyShape,
+    composeGuestV21,
+    applyGuestCompositionToEncounter,
+    applyPartyShapeToDialogue,
     baseUrl,
     origin: resolveGodotShiftOrigin(baseUrl),
     normalizeGodotShiftBase,

@@ -5,7 +5,7 @@
   <title>BottleCaller Prototype</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <!-- ✅ IMPORTANT: because this file is served at /game/game.html -->
-  <link rel="stylesheet" href="/game/game.css?v=20260724-godot-landscape-fix" />
+  <link rel="stylesheet" href="/game/game.css?v=20260726-metrics-row" />
   <script type="module" src="/src/game/gameEntry.ts"></script>
   <script>
     if (window.self !== window.top) {
@@ -360,6 +360,16 @@
     }
     function measureIframeContentHeight() {
       const activeScreen = document.querySelector(".screen.active");
+      if (activeScreen?.id === "screenGodotShift") {
+        // Inside an iframe, 100dvh is the outer browser — use the iframe's own box.
+        const shell = activeScreen.querySelector(".godot-shift-shell");
+        return Math.max(
+          activeScreen.clientHeight || 0,
+          shell?.clientHeight || 0,
+          document.documentElement?.clientHeight || 0,
+          420
+        );
+      }
       const v2Panel = activeScreen?.querySelector?.('#encounterPanel[data-v2-layout="tier1"]');
       if (v2Panel) {
         const rects = [
@@ -5238,13 +5248,7 @@
 
   <section id="screenGodotShift" class="screen screen-godot-shift" aria-label="Main Dining Floor">
     <div class="godot-shift-shell">
-      <header class="godot-shift-chrome">
-        <div class="godot-shift-brand">
-          <strong>BottleCaller</strong>
-          <span>Main Dining Floor</span>
-        </div>
-        <button id="btnBackHomeFromGodot" class="btn btn-ghost" type="button">Back</button>
-      </header>
+      <button id="btnBackHomeFromGodot" class="btn btn-ghost godot-shift-back" type="button">Back</button>
       <div class="godot-shift-stage" id="godotShiftStage">
         <iframe
           id="godotShiftFrame"
@@ -25378,6 +25382,14 @@ function ensureProgLoaded() {
 
         shell.querySelector("#v2DemoCompletionCard")?.remove();
         if (!(window.isDemo || window.bcMode === "demo")) return;
+        // Godot wine returns to the floor — never inject the HTML demo finale card.
+        if (
+          window.__BC_V2_GODOT_PENDING_EXIT__
+          || window.__BC_V2_FROM_GODOT__
+          || (typeof isGodotShiftWineOfferActive === "function" && isGodotShiftWineOfferActive())
+        ) {
+          return;
+        }
         if (!isV2FinalDemoEncounter(snapshot)) return;
 
         const joinState = getV2DemoJoinState();
@@ -25671,6 +25683,9 @@ function ensureProgLoaded() {
           : `Encounter: ${snapshot.encounterTitle}`;
         const feedbackText = getV2FeedbackLine(snapshot, reaction);
         const feedbackIsTerminal = isV2TerminalOutcome(snapshot.outcome);
+        if (feedbackIsTerminal && (isGodotShiftWineOfferActive() || window.__BC_V2_FROM_GODOT__)) {
+          clearGodotWineEncounterTimer();
+        }
         feedbackLine.textContent = feedbackIsTerminal ? feedbackText : "";
 
         const outcome = snapshot.outcome ? v2HarnessLabel(snapshot.outcome) : "In Progress";
@@ -25726,18 +25741,59 @@ function ensureProgLoaded() {
 	          maybeSubmitV2ProgressReport(snapshot, session, rewardProgress);
 	        }
 	        if (isTerminal && (isGodotShiftWineOfferActive() || window.__BC_V2_FROM_GODOT__)) {
-	          window.__BC_V2_FROM_GODOT__ = false;
-	          completeGodotWineOfferFromV2(snapshot, session, rewardProgress);
-	          return;
+	          // Keep Godot latch true until the player exits the end-success screen.
+	          window.__BC_V2_FROM_GODOT__ = true;
+	          window.__BC_V2_GODOT_PENDING_EXIT__ = {
+	            snapshot,
+	            session,
+	            rewardProgress,
+	          };
+	          // Fall through to render end-success art + Exit Encounter button.
+	        } else if (isTerminal) {
+	          window.__BC_V2_GODOT_PENDING_EXIT__ = null;
 	        }
-	        const isFinalEncounter = isV2FinalDemoEncounter(snapshot);
+	        const isGodotWineTerminal = isTerminal && !!(
+	          window.__BC_V2_GODOT_PENDING_EXIT__
+	          || isGodotShiftWineOfferActive()
+	          || window.__BC_V2_FROM_GODOT__
+	        );
+	        // Final demo UX (no Exit, HTML completion card) must not apply to Godot wine.
+	        const isFinalEncounter = isV2FinalDemoEncounter(snapshot) && !isGodotWineTerminal;
         const isDemoEncounterSequence = isV2DemoEncounterSequence(snapshot);
-        const shouldShowBottleRewardPanel = isTerminal && (!isDemoEncounterSequence || isFinalEncounter) && !isGodotShiftWineOfferActive();
+        const shouldShowBottleRewardPanel = isTerminal && (!isDemoEncounterSequence || isFinalEncounter) && !isGodotWineTerminal;
         const lesson = String(encounter?.lesson || "");
         const guidanceLine = "Read the table, choose the right interaction, and move the guest without creating friction.";
         const feedbackMeta = isTerminal && feedbackText !== guidanceLine ? feedbackText : "";
-        const showGuidanceCard = Number(snapshot.encounterOrdinal || 0) <= 1;
         const nextStepInstruction = getV2NextStepInstruction(snapshot);
+        const walkAwayHint = snapshot.walkAwayUnlocked
+          ? "Walk Away is now available because the table has reached critical resistance."
+          : "Walk Away unlocks only when friction reaches critical resistance.";
+        const showGuidanceCard = (
+          Number(snapshot.encounterOrdinal || 0) <= 1
+          || isGodotWineEncounterTimerActive()
+        );
+        const wineTimerHtml = isGodotWineEncounterTimerActive()
+          ? `<div class="v2-wine-timer" id="v2GodotWineTimer" aria-live="polite">${escapeHtml(getGodotWineTimerLabel())}</div>`
+          : "";
+        const guidanceCardHtml = showGuidanceCard
+          ? `
+                  <div class="v2-guidance-card">
+                    <div class="v2-guidance-label">What To Do Next</div>
+                    <p class="v2-guidance-copy">${escapeHtml(nextStepInstruction)}</p>
+                    <div class="v2-guidance-rule">${escapeHtml(guidanceLine)}</div>
+                    ${feedbackMeta ? `<div class="v2-guidance-meta">${escapeHtml(feedbackMeta)}</div>` : ""}
+                    <div class="v2-guidance-meta">${escapeHtml(walkAwayHint)}</div>
+                  </div>
+                  `
+          : "";
+        const guidanceTimerRowHtml = (showGuidanceCard || wineTimerHtml)
+          ? `
+                  <div class="v2-guidance-timer-row${wineTimerHtml ? " has-timer" : ""}">
+                    ${guidanceCardHtml || `<div class="v2-guidance-spacer" aria-hidden="true"></div>`}
+                    ${wineTimerHtml}
+                  </div>
+                  `
+          : "";
         const progressNodes = Array.from({ length: Math.max(1, snapshot.encounterCount || 1) }, (_, index) => {
           const encounterNumber = index + 1;
           const nodeClass =
@@ -25748,9 +25804,6 @@ function ensureProgLoaded() {
                 : "v2-progress-node";
           return `<span class="${nodeClass}"></span>`;
         }).join("");
-        const walkAwayHint = snapshot.walkAwayUnlocked
-          ? "Walk Away is now available because the table has reached critical resistance."
-          : "Walk Away unlocks only when friction reaches critical resistance.";
 
         stepContent.dataset.stage = "observe";
         stepButtons.dataset.v2TerminalState = isTerminal ? (isFinalEncounter ? "final" : "terminal") : "";
@@ -25780,6 +25833,8 @@ function ensureProgLoaded() {
               <div class="v2-state-meta">${escapeHtml(outcome)}</div>
             </div>
           </div>
+        `;
+        const tierGateHtml = `
           <div class="v2-tier-gate-note small-text" title="AP unlock and rules evidence are separate gates; served tier is the minimum.">
             ${escapeHtml(tierGate.label)} • limited by ${escapeHtml(tierGate.limiter)}
           </div>
@@ -25838,22 +25893,17 @@ function ensureProgLoaded() {
                     </div>
                   </div>
 
-                  ${showGuidanceCard ? `
-                  <div class="v2-guidance-card">
-                    <div class="v2-guidance-label">What To Do Next</div>
-                    <p class="v2-guidance-copy">${escapeHtml(nextStepInstruction)}</p>
-                    <div class="v2-guidance-rule">${escapeHtml(guidanceLine)}</div>
-                    ${feedbackMeta ? `<div class="v2-guidance-meta">${escapeHtml(feedbackMeta)}</div>` : ""}
-                    <div class="v2-guidance-meta">${escapeHtml(walkAwayHint)}</div>
-                  </div>
-                  ` : ""}
+                  ${guidanceTimerRowHtml}
                   <div class="v2-top-metrics">
-                    ${stateGridHtml}
-                    <div class="v2-mood-pill">
-                      <div class="v2-mood-label">Table Mood</div>
-                      <div class="v2-mood-value">${escapeHtml(tableMood)}</div>
-                      <div class="v2-mood-detail">${escapeHtml(moodDescriptor)}</div>
+                    <div class="v2-metrics-row">
+                      ${stateGridHtml}
+                      <div class="v2-mood-pill">
+                        <div class="v2-mood-label">Table Mood</div>
+                        <div class="v2-mood-value">${escapeHtml(tableMood)}</div>
+                        <div class="v2-mood-detail">${escapeHtml(moodDescriptor)}</div>
+                      </div>
                     </div>
+                    ${tierGateHtml}
                   </div>
                 </div>
               </div>
@@ -25901,11 +25951,14 @@ function ensureProgLoaded() {
               .join("")
           : "";
 
-        const showTerminalContinueButton = isTerminal && !isFinalEncounter;
+        const showGodotExitButton = isTerminal && !!(window.__BC_V2_GODOT_PENDING_EXIT__ || isGodotShiftWineOfferActive());
+        const showTerminalContinueButton = isTerminal && !isFinalEncounter && !showGodotExitButton;
         const actionLabel = selectedGroup
           ? `Choose one ${v2HarnessLabel(selectedGroup)} response card to continue the encounter.`
           : isTerminal
-            ? "The encounter is complete. Continue when you're ready."
+            ? (showGodotExitButton
+              ? "Encounter complete. Exit when you're ready to return to the floor."
+              : "The encounter is complete. Continue when you're ready.")
             : "Choose Ask, Recommend, or Commit to open the response options.";
         stepButtons.dataset.v2ActionState = selectedGroup ? "expanded" : "collapsed";
         const actionShellClasses = [
@@ -25923,6 +25976,9 @@ function ensureProgLoaded() {
             ${showTerminalContinueButton ? `<div class="button-row" style="width:100%;">
               <button type="button" class="btn" id="btnV2HarnessContinue">Continue</button>
             </div>` : ""}
+            ${showGodotExitButton ? `<div class="button-row" style="width:100%;">
+              <button type="button" class="btn" id="btnV2ExitEncounter">Exit Encounter</button>
+            </div>` : ""}
           </div>
         `;
         renderV2DemoCompletionCard(stepButtons, snapshot);
@@ -25931,9 +25987,11 @@ function ensureProgLoaded() {
           const endScreen = stepContent.querySelector(".v2-end-screen");
           const mobileMount = heroFrame || endScreen;
           const isV2MobileLayout = window.matchMedia?.("(max-width: 760px)")?.matches;
-          if (mobileMount && isV2MobileLayout && !(isTerminal && isFinalEncounter) && stepButtons.parentElement !== mobileMount) {
+          if (showGodotExitButton && endScreen && stepButtons.parentElement !== endScreen) {
+            endScreen.appendChild(stepButtons);
+          } else if (mobileMount && isV2MobileLayout && !(isTerminal && isFinalEncounter) && stepButtons.parentElement !== mobileMount) {
             mobileMount.appendChild(stepButtons);
-          } else if (!isV2MobileLayout && stepButtons.parentElement !== encounterPanel) {
+          } else if (!isV2MobileLayout && !showGodotExitButton && stepButtons.parentElement !== encounterPanel) {
             encounterPanel.appendChild(stepButtons);
           } else if (isV2MobileLayout && isTerminal && isFinalEncounter && stepButtons.parentElement !== encounterPanel) {
             encounterPanel.appendChild(stepButtons);
@@ -26030,6 +26088,24 @@ function ensureProgLoaded() {
           stepButtons.removeEventListener("click", stepButtons.__BC_V2_TERMINAL_HANDLER__);
         }
         stepButtons.__BC_V2_TERMINAL_HANDLER__ = (event) => {
+          const exitButton = event.target?.closest?.("#btnV2ExitEncounter");
+          if (exitButton) {
+            event.preventDefault();
+            exitButton.disabled = true;
+            const pending = window.__BC_V2_GODOT_PENDING_EXIT__ || {
+              snapshot,
+              session,
+              rewardProgress,
+            };
+            window.__BC_V2_GODOT_PENDING_EXIT__ = null;
+            window.__BC_V2_FROM_GODOT__ = false;
+            completeGodotWineOfferFromV2(
+              pending.snapshot || snapshot,
+              pending.session || session,
+              pending.rewardProgress || rewardProgress
+            );
+            return;
+          }
           const button = event.target?.closest?.("#btnV2HarnessContinue");
           if (!button) return;
           event.preventDefault();
@@ -26346,7 +26422,10 @@ function ensureProgLoaded() {
       window.__BC_START_GODOT_SHIFT__ = startGodotShiftFloor;
 
       function returnToGodotShiftFloor() {
+        clearGodotWineEncounterTimer();
         window.__BC_GODOT_WINE_OFFER__ = null;
+        window.__BC_V2_FROM_GODOT__ = false;
+        window.__BC_V2_GODOT_PENDING_EXIT__ = null;
         window.__BC_GODOT_SHIFT_ACTIVE__ = true;
         document.documentElement.dataset.bcGodotMobile = isGodotMobileHost() ? "1" : "0";
         document.documentElement.dataset.bcGodotShift = "true";
@@ -26357,6 +26436,82 @@ function ensureProgLoaded() {
         focusGodotShiftCanvas();
         try { frame?.contentWindow?.focus?.(); } catch {}
         scheduleIframeHeightReport?.("godot_shift_return");
+      }
+
+      const GODOT_WINE_ENCOUNTER_TIMER_SEC = 45;
+
+      function clearGodotWineEncounterTimer() {
+        const timer = window.__BC_GODOT_WINE_TIMER__;
+        if (timer?.intervalId) {
+          window.clearInterval(timer.intervalId);
+        }
+        window.__BC_GODOT_WINE_TIMER__ = null;
+        const node = document.getElementById("v2GodotWineTimer");
+        if (node) node.remove();
+      }
+
+      function getGodotWineTimerRemainingSec() {
+        const timer = window.__BC_GODOT_WINE_TIMER__;
+        if (!timer?.expiresAt) return 0;
+        return Math.max(0, Math.ceil((timer.expiresAt - Date.now()) / 1000));
+      }
+
+      function getGodotWineTimerLabel() {
+        const remaining = getGodotWineTimerRemainingSec();
+        return `${remaining}s`;
+      }
+
+      function isGodotWineEncounterTimerActive() {
+        if (!(isGodotShiftWineOfferActive() || window.__BC_V2_FROM_GODOT__)) {
+          return false;
+        }
+        return !!window.__BC_GODOT_WINE_TIMER__;
+      }
+
+      function updateGodotWineTimerDisplay() {
+        const node = document.getElementById("v2GodotWineTimer");
+        if (!node) return;
+        const remaining = getGodotWineTimerRemainingSec();
+        node.textContent = `${remaining}s`;
+        node.dataset.urgent = remaining <= 5 ? "1" : "0";
+      }
+
+      function failGodotWineEncounterTimeout() {
+        clearGodotWineEncounterTimer();
+        if (!(isGodotShiftWineOfferActive() || window.__BC_V2_FROM_GODOT__)) return;
+        const api = getV2HarnessApi();
+        if (!api?.fail) return;
+        const current = api.snapshot?.();
+        if (current && isV2TerminalOutcome(current.outcome)) return;
+        const result = api.fail("Time ran out.");
+        if (!result?.snapshot) return;
+        window.__BC_V2_HARNESS_STATE__ = {
+          ...(window.__BC_V2_HARNESS_STATE__ || {}),
+          selectedGroup: null,
+        };
+        renderV2HarnessPlay(result.snapshot, "Time ran out.");
+      }
+
+      function tickGodotWineEncounterTimer() {
+        const timer = window.__BC_GODOT_WINE_TIMER__;
+        if (!timer) return;
+        updateGodotWineTimerDisplay();
+        if (Date.now() >= timer.expiresAt) {
+          failGodotWineEncounterTimeout();
+        }
+      }
+
+      function startGodotWineEncounterTimer(durationSec = GODOT_WINE_ENCOUNTER_TIMER_SEC) {
+        clearGodotWineEncounterTimer();
+        const seconds = Math.max(1, Math.round(Number(durationSec) || GODOT_WINE_ENCOUNTER_TIMER_SEC));
+        const startedAt = Date.now();
+        window.__BC_GODOT_WINE_TIMER__ = {
+          startedAt,
+          expiresAt: startedAt + seconds * 1000,
+          durationSec: seconds,
+          intervalId: window.setInterval(tickGodotWineEncounterTimer, 200),
+        };
+        updateGodotWineTimerDisplay();
       }
 
       function handleGodotOfferWine(payload = {}) {
@@ -26379,23 +26534,62 @@ function ensureProgLoaded() {
           guestId: String(payload.guestId || ""),
           tableId: String(payload.tableId || ""),
           guestDisplayName: String(payload.guestDisplayName || ""),
+          guestType: String(payload.guestType || bridge?.getGuestType?.(payload.guestId) || ""),
+          partyShape: String(
+            payload.partyShape
+            || bridge?.getGuestPartyShape?.(payload.guestId, {
+              guestHint: payload.guestHint || payload.depiction || "",
+              artPath: payload.artPath || "",
+              explicit: payload.partyShape || null,
+            })
+            || ""
+          ),
+          depiction: String(
+            payload.depiction
+            || bridge?.getGuestProfile?.(payload.guestId)?.depiction
+            || payload.guestHint
+            || ""
+          ),
+          greetingChoice: String(payload.greetingChoice || ""),
+          objectPathKind: String(payload.objectPathKind || ""),
+          objectSuccess: payload.objectSuccess !== false,
           encounterId,
           startedAt: Date.now(),
         };
 
         document.documentElement.dataset.bcGodotShift = "wine_offer";
         notifyParentGodotShiftActive(false);
+        try {
+          window.scrollTo(0, 0);
+          document.documentElement.scrollTop = 0;
+          document.body.scrollTop = 0;
+        } catch {}
+        // Start the timer before the first wine frame renders so the
+        // countdown is present on the opening encounter screen.
+        startGodotWineEncounterTimer(GODOT_WINE_ENCOUNTER_TIMER_SEC);
         startV2HarnessWhenReady({
           encounterId,
           resetSession: true,
           skipRewardSync: true,
           fromGodot: true,
           skipPreview: true,
+          guestId: window.__BC_GODOT_WINE_OFFER__.guestId,
+          partyShape: window.__BC_GODOT_WINE_OFFER__.partyShape,
+          depiction: window.__BC_GODOT_WINE_OFFER__.depiction,
         });
+        window.setTimeout(() => {
+          try {
+            window.scrollTo(0, 0);
+            document.getElementById("screenPlay")?.scrollIntoView?.({ block: "start" });
+          } catch {}
+          scheduleIframeHeightReport?.("godot_wine_offer");
+        }, 60);
+        window.setTimeout(() => scheduleIframeHeightReport?.("godot_wine_offer_settle"), 320);
         return true;
       }
 
       function completeGodotWineOfferFromV2(snapshot, session, rewardProgress = null) {
+        clearGodotWineEncounterTimer();
         const offer = window.__BC_GODOT_WINE_OFFER__ || {};
         const authorityDelta = Number(snapshot?.authorityDelta || 0);
         const outcome = String(snapshot?.outcome || "");
@@ -26410,6 +26604,10 @@ function ensureProgLoaded() {
           ok: true,
           guestId: offer.guestId || null,
           tableId: offer.tableId || null,
+          guestType: offer.guestType || null,
+          greetingChoice: offer.greetingChoice || null,
+          objectPathKind: offer.objectPathKind || null,
+          objectSuccess: offer.objectSuccess !== false,
           encounterId: snapshot?.encounterId || offer.encounterId || null,
           encounterTitle: snapshot?.encounterTitle || null,
           outcome,
@@ -26552,6 +26750,11 @@ function ensureProgLoaded() {
 	            encounterLimit: getV2EncounterLimit(),
 	            encounterId: requestedEncounterId || null,
 	            difficultyMode: getV2DifficultyModeForStart(),
+	            guestId: options.guestId || window.__BC_GODOT_WINE_OFFER__?.guestId || null,
+	            partyShape: options.partyShape || window.__BC_GODOT_WINE_OFFER__?.partyShape || null,
+	            depiction: options.depiction || window.__BC_GODOT_WINE_OFFER__?.depiction || null,
+	            guestHint: options.guestHint || null,
+	            artPath: options.artPath || null,
 	          });
           if (!snapshot) throw new Error("V2 demo did not return an encounter.");
           syncV2DemoRotationAfterSnapshot(snapshot);

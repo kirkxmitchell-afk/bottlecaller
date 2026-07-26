@@ -215,6 +215,53 @@ p { margin: 0; color: var(--muted); line-height: 1.5; }
   font-size:18px;
 }
 
+.v2-wine-timer{
+  display:grid;
+  place-items:center;
+  min-width:64px;
+  height:64px;
+  padding:0 12px;
+  border-radius:18px;
+  border:1px solid rgba(227,187,117,.42);
+  background: linear-gradient(180deg, rgba(28,36,28,.96), rgba(12,16,12,.94));
+  color:#f4deba;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 22px;
+  letter-spacing: 0.04em;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+}
+
+.v2-wine-timer[data-urgent="1"]{
+  border-color: rgba(248,113,113,.55);
+  color:#fecaca;
+  background: linear-gradient(180deg, rgba(72,20,20,.96), rgba(28,10,10,.94));
+}
+
+.v2-guidance-timer-row{
+  display:grid;
+  grid-template-columns: minmax(0, 1fr) minmax(160px, 220px);
+  gap:8px;
+  align-items:stretch;
+}
+
+.v2-guidance-timer-row .v2-guidance-card{
+  margin:0;
+}
+
+.v2-guidance-timer-row .v2-guidance-spacer{
+  min-height:0;
+}
+
+.v2-guidance-timer-row .v2-wine-timer{
+  width:100%;
+  min-width:0;
+  height:auto;
+  min-height:72px;
+  align-self:stretch;
+  border-radius:18px;
+  font-size:28px;
+}
+
 .v2-header-copy{
   min-width:0;
 }
@@ -957,6 +1004,39 @@ p { margin: 0; color: var(--muted); line-height: 1.5; }
   overflow: hidden;
 }
 
+/* Desktop: landscape frame so encounter fills the screen without phone letterboxing. */
+@media (min-width: 761px){
+  #encounterPanel[data-v2-layout="tier1"] .v2-hero-frame{
+    width: min(980px, 100%);
+    margin-inline: auto;
+    aspect-ratio: 16 / 10;
+    min-height: 0;
+    height: min(820px, calc(100vh - 48px));
+    max-height: min(820px, calc(100vh - 48px));
+    border-radius: 18px;
+  }
+  #encounterPanel[data-v2-layout="tier1"] .v2-encounter-art{
+    object-fit: cover;
+    object-position: center 22%;
+  }
+  #encounterPanel[data-v2-layout="tier1"] .v2-preview-screen,
+  #encounterPanel[data-v2-layout="tier1"] .v2-end-screen{
+    width: min(980px, 100%);
+    margin-inline: auto;
+    aspect-ratio: 16 / 10;
+    min-height: 0;
+    height: min(820px, calc(100vh - 48px));
+    max-height: min(820px, calc(100vh - 48px));
+  }
+  #encounterPanel[data-v2-layout="tier1"] .v2-action-shell{
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    z-index: 6;
+  }
+}
+
 #encounterPanel[data-v2-layout="tier1"] .v2-encounter-art{
   position:absolute;
   inset:0;
@@ -1501,19 +1581,65 @@ p { margin: 0; color: var(--muted); line-height: 1.5; }
 }
 
 #encounterPanel[data-v2-layout="tier1"] .v2-top-metrics{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  align-items:stretch;
+}
+
+#encounterPanel[data-v2-layout="tier1"] .v2-metrics-row{
   display:grid;
-  grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
-  gap:12px;
+  grid-template-columns: minmax(0, 1fr) minmax(160px, 220px);
+  gap:8px;
   align-items:stretch;
 }
 
 #encounterPanel[data-v2-layout="tier1"] .v2-top-metrics .v2-mood-pill{
   width: auto;
   margin-left: 0;
+  align-self: stretch;
+  display:grid;
+  align-content:center;
+  min-height:0;
 }
 
 #encounterPanel[data-v2-layout="tier1"] .v2-top-metrics .v2-state-grid{
   max-width: none;
+}
+
+#encounterPanel[data-v2-layout="tier1"] .v2-tier-gate-note{
+  margin-top:0;
+  opacity:0.7;
+  font-size:11px;
+  line-height:1.25;
+}
+
+#encounterPanel[data-v2-layout="tier1"] .v2-state-grid{
+  max-width: 100%;
+  align-items: stretch;
+}
+
+#encounterPanel[data-v2-layout="tier1"] .v2-state-card{
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 8px 10px !important;
+  border-radius: 14px;
+  align-self: stretch;
+  display: grid;
+  align-content: center;
+  gap: 2px;
+}
+
+#encounterPanel[data-v2-layout="tier1"] .v2-state-value{
+  margin-top: 2px;
+  font-size: 26px;
+  line-height: 1;
+}
+
+#encounterPanel[data-v2-layout="tier1"] .v2-state-meta{
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.15;
 }
 
 #encounterPanel[data-v2-layout="tier1"] .v2-scene-text{
@@ -1527,11 +1653,35 @@ p { margin: 0; color: var(--muted); line-height: 1.5; }
 
 #encounterPanel[data-v2-layout="tier1"] .v2-state-grid{
   max-width: 100%;
+  align-items: start;
 }
 
 #encounterPanel[data-v2-layout="tier1"] .v2-guidance-card,
 #encounterPanel[data-v2-layout="tier1"] .v2-status-card{
   max-width: 88%;
+}
+
+#encounterPanel[data-v2-layout="tier1"] .v2-guidance-timer-row{
+  display:grid;
+  grid-template-columns: minmax(0, 1fr) minmax(160px, 220px);
+  gap:8px;
+  align-items:stretch;
+  max-width:100%;
+}
+
+#encounterPanel[data-v2-layout="tier1"] .v2-guidance-timer-row .v2-guidance-card{
+  max-width:none;
+  width:auto;
+  margin:0;
+}
+
+#encounterPanel[data-v2-layout="tier1"] .v2-guidance-timer-row .v2-wine-timer{
+  width:100%;
+  min-width:0;
+  min-height:72px;
+  height:auto;
+  border-radius:16px;
+  font-size:28px;
 }
 
 #encounterPanel[data-v2-layout="tier1"] .v2-scene-text,
@@ -6600,12 +6750,17 @@ html, body{ height:100%; }
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 3px;
     max-width: min(88vw, 360px);
+    align-items: start;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-state-card{
     padding: 5px 5px;
     border-radius: 10px;
     text-align: center;
+    height: auto !important;
+    min-height: 0 !important;
+    align-self: start;
+    align-content: start;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-state-value{
@@ -7634,62 +7789,66 @@ html, body{ height:100%; }
 
 /* ---- Godot shift floor embed ---- */
 .screen-godot-shift{
-  background:#050505;
+  background:#000;
   padding:0 !important;
   width:100% !important;
   max-width:none !important;
   margin:0 !important;
 }
+html[data-bc-godot-shift="true"],
+html[data-bc-godot-shift="true"] body{
+  height:100%;
+  min-height:100%;
+  margin:0;
+  overflow:hidden;
+  background:#000;
+}
 #screenGodotShift.screen.active{
   display:flex !important;
   flex-direction:column;
+  height:100%;
   min-height:100%;
+  max-height:100%;
 }
 .godot-shift-shell{
   position:relative;
   width:100%;
   flex:1 1 auto;
-  min-height:min(100dvh, 100%);
+  height:100%;
+  min-height:0;
+  max-height:100%;
   display:flex;
   flex-direction:column;
-  background:#050505;
+  background:#000;
   color:#f4f1ea;
 }
-.godot-shift-chrome{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:12px;
-  padding:10px 14px;
-  background:rgba(0,0,0,.72);
-  border-bottom:1px solid rgba(255,255,255,.08);
-  z-index:2;
-  flex:0 0 auto;
-}
+/* Title chrome removed — only a floating Back control remains. */
+.godot-shift-chrome,
 .godot-shift-brand{
-  display:flex;
-  flex-direction:column;
-  gap:2px;
-  min-width:0;
+  display:none !important;
 }
-.godot-shift-brand strong{
-  font-size:14px;
-  letter-spacing:.04em;
-}
-.godot-shift-brand span{
-  font-size:12px;
-  opacity:.72;
+.godot-shift-back{
+  position:absolute;
+  top:10px;
+  right:10px;
+  z-index:5;
+  min-height:34px;
+  padding:6px 12px;
+  background:rgba(0,0,0,.62) !important;
+  border:1px solid rgba(255,255,255,.16) !important;
+  backdrop-filter:blur(6px);
 }
 .godot-shift-stage{
   position:relative;
   flex:1 1 auto;
-  min-height:280px;
+  min-height:0;
   width:100%;
+  height:100%;
   background:#000;
   overflow:hidden;
-  /* Desktop / embedded: keep the floor horizontal (16:9). */
-  aspect-ratio:16 / 9;
-  max-height:100%;
+  aspect-ratio:auto;
+  max-height:none;
+  margin:0;
 }
 #godotShiftFrame{
   display:block;
@@ -7699,7 +7858,8 @@ html, body{ height:100%; }
   background:#000;
   touch-action:none;
   pointer-events:auto;
-  position:relative;
+  position:absolute;
+  inset:0;
   z-index:0;
 }
 .godot-shift-status{
@@ -7719,7 +7879,92 @@ html, body{ height:100%; }
   pointer-events:none !important;
 }
 html[data-bc-godot-shift="true"] #screenGodotShift{
-  background:#050505;
+  background:#000;
+}
+/* Wine handoff: collapse the floor so it cannot steal scroll / sit under the encounter. */
+html[data-bc-godot-shift="wine_offer"] #screenGodotShift{
+  display:none !important;
+  height:0 !important;
+  min-height:0 !important;
+  overflow:hidden !important;
+  pointer-events:none !important;
+  visibility:hidden !important;
+}
+html[data-bc-godot-shift="wine_offer"],
+html[data-bc-godot-shift="wine_offer"] body{
+  height:auto;
+  min-height:0;
+  overflow-x:hidden;
+  overflow-y:auto;
+  background:#090a0e;
+  scroll-behavior:auto;
+}
+html[data-bc-godot-shift="wine_offer"] #screenPlay.screen.active{
+  display:block !important;
+  width:100% !important;
+  max-width:none !important;
+  margin:0 !important;
+  padding:0 !important;
+}
+/* Desktop wine play: fill width/height instead of phone portrait letterboxing. */
+@media (min-width: 761px){
+  html[data-bc-godot-shift="wine_offer"] #bcShell.bc-shell,
+  html[data-bc-godot-shift="wine_offer"] #bcShell.is-encounter-only{
+    width:100% !important;
+    max-width:none !important;
+    min-height:0 !important;
+    padding:12px !important;
+    gap:0 !important;
+  }
+  html[data-bc-godot-shift="wine_offer"] #encounterPanel[data-v2-layout="tier1"]{
+    width:min(980px, 100%);
+    margin:0 auto;
+  }
+  html[data-bc-godot-shift="wine_offer"] #encounterPanel[data-v2-layout="tier1"] .v2-hero-frame{
+    width:100%;
+    aspect-ratio:16 / 10;
+    min-height:0;
+    height:min(820px, calc(100vh - 48px));
+    max-height:min(820px, calc(100vh - 48px));
+    border-radius:18px;
+  }
+  html[data-bc-godot-shift="wine_offer"] #encounterPanel[data-v2-layout="tier1"] .v2-encounter-art{
+    object-fit:cover;
+    object-position:center 22%;
+  }
+  html[data-bc-godot-shift="wine_offer"] #encounterPanel[data-v2-layout="tier1"] .v2-action-shell{
+    position:absolute;
+    left:12px;
+    right:12px;
+    bottom:12px;
+    z-index:6;
+  }
+}
+#encounterPanel[data-v2-layout="tier1"] .v2-end-screen .v2-action-shell{
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 6;
+}
+/* Keep Exit Encounter visible above Well Done art (incl. last Godot wine). */
+#encounterPanel[data-v2-layout="tier1"] .v2-end-screen #stepButtons{
+  position: absolute !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  z-index: 7 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  pointer-events: none !important;
+}
+#encounterPanel[data-v2-layout="tier1"] .v2-end-screen #stepButtons .v2-action-shell{
+  pointer-events: auto !important;
+}
+#encounterPanel[data-v2-layout="tier1"] #btnV2ExitEncounter{
+  width: 100%;
+  min-height: 44px;
 }
 /* Real mobile portrait only — not a narrow desktop window. */
 html[data-bc-godot-mobile="1"] .godot-shift-stage{

@@ -3,10 +3,16 @@ import { getTier1VerticalSliceEncounters } from "./encounterV2";
 import {
   applyChoice,
   createGameStateV2,
+  failEncounter,
   getFrustrationMood,
   getProgressMood,
   summarizeBestPath,
 } from "./engineV2";
+import {
+  applyGuestCompositionToEncounter,
+  composeGuestV21,
+  type GuestCompositionV21,
+} from "./guestCompositionV21";
 import type {
   ActionGroup,
   ActionType,
@@ -27,6 +33,7 @@ export interface RuntimeV2Session {
   encounterLimit: number;
   difficultyMode: V2DifficultyMode;
   outcomeEmitted?: boolean;
+  composition?: GuestCompositionV21 | null;
 }
 
 export interface RuntimeV2StartOptions {
@@ -34,6 +41,12 @@ export interface RuntimeV2StartOptions {
   encounterId?: string | null;
   encounterLimit?: number;
   difficultyMode?: V2DifficultyMode | string | null;
+  /** v2.1 — when set, applies guest type + party-shape depiction to dialogue/scoring. */
+  guestId?: string | null;
+  partyShape?: string | null;
+  depiction?: string | null;
+  guestHint?: string | null;
+  artPath?: string | null;
 }
 
 export interface RuntimeV2Snapshot {
@@ -60,6 +73,12 @@ export interface RuntimeV2Snapshot {
   targetRecommendAngle: RecommendAngle | null;
   availableGroups: ActionGroup[];
   usedChoices: string[];
+  /** v2.1 composition metadata when a guest profile drove the session. */
+  guestId?: string | null;
+  guestType?: string | null;
+  partyShape?: string | null;
+  depiction?: string | null;
+  compositionVersion?: string | null;
 }
 
 export interface RuntimeV2ChoiceResult {
@@ -159,7 +178,7 @@ export function getActionTypesForGroup(group: ActionGroup): ActionType[] {
 }
 
 export function snapshotRuntimeV2(session: RuntimeV2Session): RuntimeV2Snapshot {
-  const { encounter, product, gameState } = session;
+  const { encounter, product, gameState, composition } = session;
   const encounterPool = getTierEncounterPool(encounter.tier, session.encounterLimit);
   const encounterOrdinal = Math.max(
     1,
@@ -189,6 +208,11 @@ export function snapshotRuntimeV2(session: RuntimeV2Session): RuntimeV2Snapshot 
     targetRecommendAngle: encounter.targetRecommendAngle || null,
     availableGroups: availableActionGroups(gameState),
     usedChoices: Array.isArray(gameState.usedChoiceKeys) ? gameState.usedChoiceKeys.slice() : [],
+    guestId: composition?.guestId || null,
+    guestType: composition?.guestType || null,
+    partyShape: composition?.partyShape || null,
+    depiction: composition?.depiction || null,
+    compositionVersion: composition?.version || null,
   };
 }
 
@@ -200,7 +224,21 @@ export function startRuntimeV2Session(options: RuntimeV2StartOptions = {}): Runt
     requestedDifficulty === "easy" || requestedDifficulty === "hard"
       ? requestedDifficulty
       : "medium";
-  const encounter = chooseEncounter(tier, encounterLimit, options.encounterId);
+  let encounter = chooseEncounter(tier, encounterLimit, options.encounterId);
+
+  const composition = options.guestId
+    ? composeGuestV21(options.guestId, {
+        partyShape: options.partyShape,
+        depiction: options.depiction,
+        guestHint: options.guestHint,
+        artPath: options.artPath,
+      })
+    : null;
+
+  if (composition) {
+    encounter = applyGuestCompositionToEncounter(encounter, composition);
+  }
+
   const pool = buildCampaignProductPool(encounter.tier);
   const product = selectCampaignProduct(pool, buildSelectionContext(encounter));
   const gameState = createGameStateV2(encounter, product, difficultyMode);
@@ -212,6 +250,7 @@ export function startRuntimeV2Session(options: RuntimeV2StartOptions = {}): Runt
     encounterLimit,
     difficultyMode,
     outcomeEmitted: false,
+    composition,
   };
 }
 
@@ -244,6 +283,24 @@ export function createDemoRuntimeV2Api() {
     choose(group: ActionGroup, type: ActionType) {
       if (!activeSession) return null;
       return applyChoiceRuntimeV2(activeSession, { group, type });
+    },
+    fail(reason = "timeout") {
+      if (!activeSession) return null;
+      if (
+        activeSession.gameState.outcome &&
+        activeSession.gameState.outcome !== "continue" &&
+        activeSession.gameState.outcome !== "not_available"
+      ) {
+        return {
+          snapshot: snapshotRuntimeV2(activeSession),
+          reaction: String(reason || "Encounter ended."),
+        };
+      }
+      failEncounter(activeSession.gameState);
+      return {
+        snapshot: snapshotRuntimeV2(activeSession),
+        reaction: String(reason || "Time ran out."),
+      };
     },
     availableActionGroups() {
       if (!activeSession) return [];

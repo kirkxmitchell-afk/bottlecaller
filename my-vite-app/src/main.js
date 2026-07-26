@@ -10084,14 +10084,28 @@ window.addEventListener("message", (event) => {
         demoFrame.dataset.bcDemoPlayStarted = "true";
         const rect = demoFrame.getBoundingClientRect();
         const width = Math.max(rect.width || demoFrame.clientWidth || 960, 640);
-        const landscapeHeight = Math.round((width * 9) / 16) + 64;
-        const maxHeight = document.documentElement?.dataset?.bcMobileEnv === "true" ? 6000 : 920;
-        const nextHeight = Math.max(420, Math.min(maxHeight, landscapeHeight));
+        const viewportH = Math.ceil(window.visualViewport?.height || window.innerHeight || 800);
+        const landscapeHeight = Math.round((width * 9) / 16);
+        const maxHeight = document.documentElement?.dataset?.bcMobileEnv === "true" ? 6000 : Math.max(520, viewportH - 16);
+        // Fit the visible browser window — do not create a tall box that letterboxes the floor.
+        const nextHeight = Math.max(420, Math.min(maxHeight, landscapeHeight, viewportH - 16));
         demoFrame.dataset.bcFrameHeight = String(nextHeight);
         demoFrame.style.setProperty("width", "100%", "important");
         demoFrame.style.setProperty("height", `${nextHeight}px`, "important");
         demoFrame.style.setProperty("max-width", "100%", "important");
         demoFrame.style.opacity = "1";
+      } else if (String(data.screenId || "") === "screenPlay") {
+        // Wine-offer handoff: unlock height from Godot landscape clamp so
+        // encounter action buttons at the bottom of the art remain reachable.
+        demoFrame.dataset.bcFrameHeight = "";
+        const viewportH = Math.ceil(window.visualViewport?.height || window.innerHeight || 800);
+        demoFrame.style.setProperty("height", `${Math.max(640, Math.min(2400, viewportH + 80))}px`, "important");
+        demoFrame.style.opacity = "1";
+        try {
+          demoFrame.scrollIntoView?.({ block: "start", behavior: "instant" });
+        } catch {
+          try { demoFrame.scrollIntoView?.(true); } catch {}
+        }
       } else if (data.clearLock) {
         const reasonText = String(data.reason || "");
         const userLeave = reasonText.includes("user_back") || reasonText.includes("user_exit");
@@ -10152,9 +10166,12 @@ window.addEventListener("message", (event) => {
   const isV2Demo =
     String(data.mode || "").toLowerCase() === "demo" &&
     document.documentElement?.dataset?.bcV2Demo === "true";
-  const isGodotShift =
-    String(data.screenId || "") === "screenGodotShift" ||
-    document.documentElement?.dataset?.bcGodotDemo === "true";
+  // Only size for Godot when the active child screen is the floor.
+  // Wine-offer keeps bcGodotDemo locked true, but screenPlay must use V2 height.
+  const isGodotShift = String(data.screenId || "") === "screenGodotShift";
+  const isWinePlay =
+    String(data.screenId || "") === "screenPlay" ||
+    window.__BC_DEMO_IFRAME_LAST_SCREEN__ === "screenPlay";
   const isDemoWelcome =
     String(data.mode || "").toLowerCase() === "demo" &&
     String(data.screenId || "") === "screenWelcome";
@@ -10179,16 +10196,23 @@ window.addEventListener("message", (event) => {
       try { renderAppChrome?.(); } catch {}
     }
   }
-  const maxHeight = isMobile ? 6000 : isGodotShift ? 920 : 860;
+  const maxHeight = isMobile
+    ? 6000
+    : isGodotShift
+      ? Math.max(520, Math.ceil((window.visualViewport?.height || window.innerHeight || 800) - 16))
+      : isWinePlay
+        ? 2400
+        : 860;
   const minHeight = isDemoWelcome
     ? (isMobile ? 220 : 200)
     : (isGodotShift ? (isMobile ? 360 : 420) : (isMobile ? 320 : 360));
   let measuredHeight = Math.max(minHeight, Math.min(maxHeight, h + (isMobile && isV2Demo ? 0 : isMobile ? 12 : 24)));
   if (isGodotShift && !isMobile) {
     const width = Math.max(frame.getBoundingClientRect().width || frame.clientWidth || 960, 640);
-    measuredHeight = Math.max(measuredHeight, Math.min(maxHeight, Math.round((width * 9) / 16) + 64));
+    const viewportH = Math.ceil(window.visualViewport?.height || window.innerHeight || 800);
+    const landscapeHeight = Math.round((width * 9) / 16);
+    measuredHeight = Math.max(minHeight, Math.min(maxHeight, landscapeHeight, viewportH - 16));
   }
-  const viewportHeight = Math.ceil(window.visualViewport?.height || window.innerHeight || 0);
   const clamped = isMobile && isV2Demo
     ? (isDemoWelcome ? measuredHeight : Math.max(measuredHeight, 420))
     : measuredHeight;
@@ -10199,6 +10223,14 @@ window.addEventListener("message", (event) => {
   if (isGodotShift) {
     document.documentElement.dataset.bcGodotDemo = "true";
     frame.style.setProperty("width", "100%", "important");
+  }
+  if (isWinePlay && !isGodotShift) {
+    try {
+      frame.scrollIntoView?.({ block: "start", behavior: "instant" });
+    } catch {
+      try { frame.scrollIntoView?.(true); } catch {}
+    }
+    try { window.scrollTo?.(0, Math.max(0, frame.getBoundingClientRect().top + window.scrollY - 12)); } catch {}
   }
 });
 

@@ -121,11 +121,11 @@ function buildGuestResponsesForFamily(family: string): EncounterGuestResponseMap
       ask: {
         preference: {
           text: "Usually French reds, but we wanted to try something different while we're here.",
-          quality: "good",
+          quality: "poor",
         },
         occasion: {
           text: "No, not really. We're just visiting and wanted dinner to feel a bit local.",
-          quality: "poor",
+          quality: "good",
         },
         experience: {
           text: "Honestly, not really. That's exactly why we wanted your help.",
@@ -195,7 +195,7 @@ function buildGuestResponsesForFamily(family: string): EncounterGuestResponseMap
       recommend: {
         flavour: {
           text: "That might work. What makes it more elegant than the others?",
-          quality: "good",
+          quality: "poor",
         },
         story: {
           text: "That feels more considered. Keep going.",
@@ -943,15 +943,15 @@ export const TIER1_VERTICAL_SLICE_ENCOUNTERS: EncounterV2[] = [
   }),
   makeTier1Encounter({
     id: "encounter_v2_011",
-    title: "The Skeptic: First Read",
+    title: "One Clear Reason",
     family: "skeptic",
     modifier: "testing_confidence_glasses",
     hiddenPressure: "needs_to_feel_seen_without_being_sold",
     masterProfile: "recognition",
     variant: null,
     scene:
-      "A sharply dressed guest watches the table before the list, giving you only enough attention to prove the recommendation is worth hearing.",
-    sceneClue: "Skeptical guest tests whether you can read the table before pitching.",
+      "A sharply dressed skeptic watches the table before the list, giving you only enough attention to prove the recommendation is worth hearing.",
+    sceneClue: "Skeptic guest tests whether you can read the table before pitching.",
     images: {
       previewArt: "/game/encounters/011/preview-art.png",
       mainNeutral: "/game/encounters/011/main-neutral.png",
@@ -1395,7 +1395,7 @@ export const TIER1_VERTICAL_SLICE_ENCOUNTERS: EncounterV2[] = [
   }),
   makeTier1Encounter({
     id: "encounter_v2_013",
-    title: "African Regular",
+    title: "Same Lane Tonight",
     family: "regular",
     modifier: "known_room_local_regular",
     hiddenPressure: "wants_familiar_respect_without_fuss",
@@ -1458,15 +1458,15 @@ export const TIER1_VERTICAL_SLICE_ENCOUNTERS: EncounterV2[] = [
   }),
   makeTier1Encounter({
     id: "encounter_v2_014",
-    title: "Blonde Date",
-    family: "date",
+    title: "The Window Date",
+    family: "tourist",
     modifier: "romantic_tourist_table",
     hiddenPressure: "wants_romance_without_pressure",
     masterProfile: "recognition",
     variant: "emotional_status",
     scene:
-      "A polished couple sits close by the window, wanting the bottle to make the night feel romantic without becoming too serious.",
-    sceneClue: "Date table wants charm and emotional ease.",
+      "A tourist-like date couple sits close by the window, wanting the bottle to make the night feel special without becoming too serious.",
+    sceneClue: "Tourist date table wants charm, local ease, and emotional calm.",
     images: {
       previewArt: "/game/encounters/014/preview-art.png",
       mainNeutral: "/game/encounters/014/main-neutral.png",
@@ -1485,14 +1485,14 @@ export const TIER1_VERTICAL_SLICE_ENCOUNTERS: EncounterV2[] = [
     contextClue: "The bottle needs to support the date without making the table feel pressured.",
     redHerring: "The romantic setting can tempt a showy premium push, but that may make the moment feel heavy.",
     lesson:
-      "Date tables reward emotional calibration. Keep the bottle elegant, easy to accept, and connected to the mood.",
+      "Tourist date tables reward emotional calibration. Keep the bottle elegant, easy to accept, and connected to the mood.",
     targetProductId: "product_uva_mira_cabernet",
-    targetRecommendAngle: "flavour",
+    targetRecommendAngle: "story",
     recommendScoring: {
-      flavour: "optimal",
-      story: "good",
-      value: "poor",
-      confidence: "good",
+      flavour: "good",
+      story: "optimal",
+      value: "disaster",
+      confidence: "poor",
     },
     allowedProductIds: ["product_cartology_chenin", "product_uva_mira_cabernet", "product_valmoissine_pinot_noir"],
     reactions: {
@@ -1521,15 +1521,15 @@ export const TIER1_VERTICAL_SLICE_ENCOUNTERS: EncounterV2[] = [
   }),
   makeTier1Encounter({
     id: "encounter_v2_015",
-    title: "Skeptic V3",
+    title: "Don't Guess",
     family: "skeptic",
-    modifier: "v3_precision_test",
+    modifier: "v2_precision_test",
     hiddenPressure: "needs_relevance_before_trust",
     masterProfile: "recognition",
     variant: "expertise",
     scene:
-      "A guarded guest with glasses studies the table and waits to see whether your recommendation has a precise reason behind it.",
-    sceneClue: "Skeptical guest tests whether the recommendation is relevant.",
+      "A guarded skeptic with glasses studies the table and waits to see whether your recommendation has a precise reason behind it.",
+    sceneClue: "Skeptic guest tests whether the recommendation is relevant.",
     images: {
       previewArt: "/game/encounters/015/preview-art.png",
       mainNeutral: "/game/encounters/015/main-neutral.png",
@@ -1584,7 +1584,7 @@ export const TIER1_VERTICAL_SLICE_ENCOUNTERS: EncounterV2[] = [
   }),
   makeTier1Encounter({
     id: "encounter_v2_016",
-    title: "African Regular Couple",
+    title: "You Know Our Bottle",
     family: "regular",
     modifier: "cape_town_young_regular_couple",
     hiddenPressure: "wants_recognition_without_overexplaining",
