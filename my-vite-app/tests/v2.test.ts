@@ -20,6 +20,16 @@ import {
   V2_AP_TIER_UNLOCKS,
   V2_RULES_TIER_UNLOCKS,
 } from "../src/game/v2ProgressionAuthority";
+import {
+  buildV2EconomyEvidence,
+  createPlayerAuthoritySnapshot,
+  PLAYER_SKILL_UNLOCKS,
+  resolveGuestGreetingAccess,
+} from "../src/game/playerAuthorityContract";
+import {
+  getEncounterMoodImageV3,
+  resolveEncounterMoodV3,
+} from "../src/game/encounterV3";
 
 test("V2 vertical slice uses the configured five-encounter demo order", () => {
   const demoEncounters = getTier1VerticalSliceEncounters();
@@ -50,6 +60,84 @@ test("V2 difficulty settings affect gameplay pressure", () => {
   assert.equal(hardResult.quality, "disaster");
   assert.ok(hardResult.frustration > easyResult.frustration);
   assert.ok(getDifficultyPolicyV2("hard").maxActions < getDifficultyPolicyV2("easy").maxActions);
+});
+
+test("V3 mood ladder is deterministic and keeps friction authoritative", () => {
+  assert.equal(resolveEncounterMoodV3({ progress: 0 }), "neutral");
+  assert.equal(resolveEncounterMoodV3({ progress: 2 }), "mild_interest");
+  assert.equal(resolveEncounterMoodV3({ progress: 3 }), "mild_interest");
+  assert.equal(resolveEncounterMoodV3({ progress: 5 }), "engaged");
+  assert.equal(resolveEncounterMoodV3({ progress: 7 }), "very_engaged");
+  assert.equal(resolveEncounterMoodV3({ progress: 9 }), "ready_to_buy");
+  assert.equal(resolveEncounterMoodV3({ progress: 9, lastQuality: "poor" }), "confused");
+  assert.equal(resolveEncounterMoodV3({ progress: 9, frustration: 2 }), "slightly_annoyed");
+  assert.equal(resolveEncounterMoodV3({ progress: 9, lastQuality: "disaster" }), "annoyed");
+  assert.equal(
+    resolveEncounterMoodV3({ progress: 9, frustration: 3, difficultyMode: "hard" }),
+    "furious",
+  );
+  assert.equal(
+    resolveEncounterMoodV3({ progress: 8, difficultyMode: "easy" }),
+    "ready_to_buy",
+  );
+});
+
+test("V3 image lookup uses exact mood art and legacy seven-frame fallbacks", () => {
+  assert.equal(
+    getEncounterMoodImageV3(
+      {
+        schema: "v3",
+        mainNeutral: "/neutral.png",
+        mainPositive: "/positive.png",
+        mainNegative: "/negative.png",
+        moods: { engaged: "/exact-engaged.png" },
+      },
+      "engaged",
+    ),
+    "/exact-engaged.png",
+  );
+  assert.equal(
+    getEncounterMoodImageV3(
+      {
+        schema: "v3",
+        mainNeutral: "/neutral.png",
+        mainPositive: "/positive.png",
+        mainNegative: "/negative.png",
+      },
+      "furious",
+    ),
+    "/negative.png",
+  );
+});
+
+test("the five Godot-linked demo guests are V3 visual-state enabled", () => {
+  const demoEncounters = getTier1VerticalSliceEncounters();
+  const expectedMoods = [
+    "confused",
+    "slightly_annoyed",
+    "annoyed",
+    "furious",
+    "neutral",
+    "mild_interest",
+    "engaged",
+    "very_engaged",
+    "ready_to_buy",
+  ];
+
+  for (const encounter of demoEncounters) {
+    assert.equal(encounter.images?.schema, "v3");
+    assert.deepEqual(Object.keys(encounter.images?.moods || {}).sort(), [...expectedMoods].sort());
+  }
+
+  for (const id of ["encounter_v2_014", "encounter_v2_015", "encounter_v2_016"]) {
+    const encounter = demoEncounters.find((item) => item.id === id);
+    assert.equal(new Set(Object.values(encounter?.images?.moods || {})).size, 9);
+    assert.match(String(encounter?.images?.previewArt || ""), /\/v3\/preview-art\.png$/);
+  }
+
+  const dontGuess = demoEncounters.find((item) => item.id === "encounter_v2_015");
+  assert.equal(dontGuess?.images?.moods?.neutral, dontGuess?.images?.previewArt);
+  assert.equal(dontGuess?.images?.mainNeutral, dontGuess?.images?.previewArt);
 });
 
 test("medium walk-away unlock stays at 3 mistakes", () => {
@@ -240,6 +328,72 @@ test("progress report payload keeps skill score separate from progression author
   assert.equal(split.skills?.delivery, 80);
   assert.equal(split.authorityPoints, 120);
   assert.notEqual(split.skills?.delivery, split.authorityPoints);
+});
+
+test("player authority contract keeps AP, measured skills, unlocks, and Godot coins separate", () => {
+  const snapshot = createPlayerAuthoritySnapshot({
+    authorityPoints: 240,
+    tierToServe: 2,
+    apTierUnlocked: 2,
+    rulesTierToServe: 2,
+    unlockedSkillIds: [PLAYER_SKILL_UNLOCKS.FOOD_RECOVERY],
+    skillMeasurements: { read: 81, delivery: 73 },
+    godotCoins: 47,
+  });
+
+  assert.equal(snapshot.progression.authorityPoints, 240);
+  assert.equal(snapshot.progression.tierToServe, 2);
+  assert.deepEqual(snapshot.skills.unlockedSkillIds, [
+    PLAYER_SKILL_UNLOCKS.FOOD_RECOVERY,
+  ]);
+  assert.equal(snapshot.skills.measurements.read, 81);
+  assert.equal(snapshot.economy.godotCoins, 47);
+  assert.equal(snapshot.economy.owner, "godot_shift");
+});
+
+test("guest greeting access uses guest type plus tier and explicit unlock authority", () => {
+  const lockedFood = resolveGuestGreetingAccess({
+    guestType: "skeptic",
+    greeting: "food",
+    profileTier: 2,
+    unlockedSkillIds: [],
+  });
+  const recoveredFood = resolveGuestGreetingAccess({
+    guestType: "skeptic",
+    greeting: "food",
+    profileTier: 2,
+    unlockedSkillIds: [PLAYER_SKILL_UNLOCKS.FOOD_RECOVERY],
+  });
+  const wine = resolveGuestGreetingAccess({
+    guestType: "skeptic",
+    greeting: "wine",
+    profileTier: 1,
+    unlockedSkillIds: [],
+  });
+
+  assert.equal(lockedFood.accepted, false);
+  assert.deepEqual(lockedFood.allowedOffers, []);
+  assert.equal(recoveredFood.recovered, true);
+  assert.deepEqual(recoveredFood.allowedOffers, ["food"]);
+  assert.deepEqual(wine.allowedOffers, ["wine"]);
+});
+
+test("V2 sends economy evidence but never calculates a Godot coin amount", () => {
+  const evidence = buildV2EconomyEvidence({
+    resultId: "result-1",
+    outcome: "premium_success",
+    wineSold: true,
+    progress: 10,
+    frustration: 0,
+    mistakes: 0,
+    actionCount: 4,
+    turn: 4,
+  });
+
+  assert.equal(evidence.coinAuthority, "godot_shift");
+  assert.equal(evidence.outcome, "premium_success");
+  assert.equal(Object.hasOwn(evidence, "coins"), false);
+  assert.equal(Object.hasOwn(evidence, "coinReward"), false);
 });
 
 test("Godot guests map 1:1 onto the V2 demo encounter order", async () => {

@@ -5,7 +5,7 @@
   <title>BottleCaller Prototype</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <!-- ✅ IMPORTANT: because this file is served at /game/game.html -->
-  <link rel="stylesheet" href="/game/game.css?v=20260726-metrics-row" />
+  <link rel="stylesheet" href="/game/game.css?v=20260729-desktop-portrait-overlay" />
   <script type="module" src="/src/game/gameEntry.ts"></script>
   <script>
     if (window.self !== window.top) {
@@ -10813,6 +10813,7 @@ function ensureProgLoaded() {
           const isOnSetup = document.getElementById("screenSetupPremium")?.classList.contains("active");
           if (isOnSetup) openSetupScreen("premium");
         } catch {}
+        try { window.__BC_SYNC_PLAYER_AUTHORITY_TO_GODOT__?.(); } catch {}
         // no-op: ctx gate resolves only via setCtx when valid
       }
 
@@ -23696,28 +23697,73 @@ function ensureProgLoaded() {
         return isV2SessionForSnapshot(snapshot, session) ? getV2LatestHistory(session) : null;
       }
 
-      function getV2MainImageSrc(snapshot, encounter, latestHistory) {
+      function getV2MainImagePresentation(snapshot, encounter, latestHistory) {
         if (isV2TerminalOutcome(snapshot?.outcome)) {
-          return getV2TerminalImageSrc(encounter, snapshot?.outcome);
+          return {
+            mood: "",
+            src: getV2TerminalImageSrc(encounter, snapshot?.outcome),
+          };
         }
         const lastQuality = String(latestHistory?.quality || "").toLowerCase();
+        const images = getV2EncounterImages(encounter);
+        const v3Api = window.EncounterV3;
+        if (
+          images.schema === "v3" &&
+          typeof v3Api?.resolveEncounterMoodV3 === "function" &&
+          typeof v3Api?.getEncounterMoodImageV3 === "function"
+        ) {
+          const mood = v3Api.resolveEncounterMoodV3({
+            progress: snapshot?.progress,
+            frustration: snapshot?.frustration,
+            mistakeCount: snapshot?.mistakeCount,
+            difficultyMode: snapshot?.difficultyMode,
+            lastQuality,
+          });
+          return {
+            mood,
+            src: String(
+              v3Api.getEncounterMoodImageV3(images, mood) ||
+              images.mainNeutral ||
+              V2_FALLBACK_ENCOUNTER_IMAGE,
+            ),
+          };
+        }
         const isNegative =
           Number(snapshot?.frustration || 0) >= 3 ||
           Number(snapshot?.mistakeCount || 0) >= 2 ||
           lastQuality === "poor" ||
           lastQuality === "disaster" ||
           lastQuality === "early_commit";
-        if (isNegative) return getV2EncounterImageSrc(encounter, "mainNegative", "mainNeutral");
-        if (lastQuality === "good" || lastQuality === "optimal") {
-          return getV2EncounterImageSrc(encounter, "mainPositive", "mainNeutral");
+        if (isNegative) {
+          return {
+            mood: "negative",
+            src: getV2EncounterImageSrc(encounter, "mainNegative", "mainNeutral"),
+          };
         }
-        return getV2EncounterImageSrc(encounter, "mainNeutral", "mainNeutral");
+        if (lastQuality === "good" || lastQuality === "optimal") {
+          return {
+            mood: "positive",
+            src: getV2EncounterImageSrc(encounter, "mainPositive", "mainNeutral"),
+          };
+        }
+        return {
+          mood: "neutral",
+          src: getV2EncounterImageSrc(encounter, "mainNeutral", "mainNeutral"),
+        };
       }
+
+      function getV2MainImageSrc(snapshot, encounter, latestHistory) {
+        return getV2MainImagePresentation(snapshot, encounter, latestHistory).src;
+      }
+
+      const V2_IMAGE_PRELOAD_CACHE = new Map();
 
       function preloadV2Image(src, timeoutMs = 800) {
         const imageSrc = String(src || "");
         if (!imageSrc) return Promise.resolve(false);
-        return new Promise((resolve) => {
+        const cached = V2_IMAGE_PRELOAD_CACHE.get(imageSrc);
+        if (cached) return cached;
+        const pending = new Promise((resolve) => {
           const img = new Image();
           let settled = false;
           const finish = (ok) => {
@@ -23740,6 +23786,30 @@ function ensureProgLoaded() {
           };
           img.src = imageSrc;
         });
+        V2_IMAGE_PRELOAD_CACHE.set(imageSrc, pending);
+        pending.then((ok) => {
+          if (!ok) V2_IMAGE_PRELOAD_CACHE.delete(imageSrc);
+        });
+        return pending;
+      }
+
+      function preloadV3MoodWindow(snapshot, encounter, latestHistory) {
+        const images = getV2EncounterImages(encounter);
+        const v3Api = window.EncounterV3;
+        if (
+          images.schema !== "v3" ||
+          typeof v3Api?.getEncounterMoodNeighborsV3 !== "function" ||
+          typeof v3Api?.getEncounterMoodImageV3 !== "function"
+        ) {
+          return Promise.resolve([]);
+        }
+        const presentation = getV2MainImagePresentation(snapshot, encounter, latestHistory);
+        if (!presentation.mood) return Promise.resolve([]);
+        const sources = [
+          ...v3Api.getEncounterMoodNeighborsV3(presentation.mood)
+            .map((mood) => v3Api.getEncounterMoodImageV3(images, mood)),
+        ].filter((source, index, all) => source && all.indexOf(source) === index);
+        return Promise.all(sources.map((source) => preloadV2Image(source, 1400)));
       }
 
       function getV2TierGateSummary(authorityState = null) {
@@ -24370,8 +24440,14 @@ function ensureProgLoaded() {
         const totalAP = Math.max(0, Math.round(Number(rewardProgress?.state?.totalAP ?? loadV2BottleRewardState().totalAP ?? 0)));
         const recoveryPressure = hasV2RecoveryPressure(snapshot, history);
         const outcome = String(snapshot.outcome || "");
+        const authorityEventId = String(
+          session.v2AuthorityEventId ||
+          window.__BC_GODOT_WINE_OFFER__?.resultId ||
+          `v2_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+        );
+        session.v2AuthorityEventId = authorityEventId;
         const attempt = {
-          key: `v2_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          key: authorityEventId,
           encounterId: snapshot.encounterId || null,
           encounterTitle: snapshot.encounterTitle || "",
           tier: clampV2Tier(snapshot.tier || session?.encounter?.tier || 1, 3),
@@ -24427,6 +24503,31 @@ function ensureProgLoaded() {
         const tierBounds = getTierRangeAndGuests(tierToServe);
         const capturedAt = Date.now();
         const parentPayload = getAuthoritativeProgressionPayload?.() || window.__BC_PROGRESSION__ || null;
+        const parentCanonical =
+          parentPayload?.canonicalState ||
+          parentPayload?.canonical_state ||
+          parentPayload?.progressionState ||
+          parentPayload?.progression_state ||
+          {};
+        const existingUnlocks = getExplicitPlayerSkillUnlocks?.(parentCanonical);
+        const skillMeasurements = buildV2SkillSnapshot?.(snapshot, session) || {};
+        const authorityContract = window.PlayerAuthorityContract;
+        const sharedSkills =
+          typeof authorityContract?.createPlayerAuthoritySnapshot === "function"
+            ? authorityContract.createPlayerAuthoritySnapshot({
+                authorityPoints: authorityState.totalAP,
+                tierToServe,
+                apTierUnlocked: authorityState.apTierUnlocked,
+                rulesTierToServe: authorityState.rulesTierToServe,
+                ...(Array.isArray(existingUnlocks) ? { unlockedSkillIds: existingUnlocks } : {}),
+                skillMeasurements,
+                godotCoins: Number(parentCanonical?.economy?.godotCoins || 0),
+              }).skills
+            : {
+                unlockedSkillIds: Array.isArray(existingUnlocks) ? existingUnlocks : [],
+                measurements: skillMeasurements,
+                unlockSource: Array.isArray(existingUnlocks) ? "explicit" : "legacy_tier_fallback",
+              };
         const basedOnUpdatedAt = firstFiniteV2Number(
           parentPayload?.syncedAt,
           parentPayload?.updatedAt,
@@ -24445,6 +24546,7 @@ function ensureProgLoaded() {
             points: Number(progressionSnapshot.encountersTotal || 0),
             authorityPoints: Number(authorityState.totalAP || 0),
             ap: Number(authorityState.totalAP || 0),
+            godotCoins: Math.max(0, Number(parentCanonical?.economy?.godotCoins || 0)),
             tier: tierToServe,
             encounterRange: tierBounds.encounterRange.slice(),
             allowedGuestTypes: tierBounds.guestTypes.slice(),
@@ -24471,6 +24573,10 @@ function ensureProgLoaded() {
             progressionSnapshot,
             encounterRange: tierBounds.encounterRange.slice(),
             guestTypes: tierBounds.guestTypes.slice(),
+          },
+          skills: {
+            ...(parentCanonical?.skills || {}),
+            ...sharedSkills,
           },
           display: {
             difficultySeed,
@@ -25487,6 +25593,11 @@ function ensureProgLoaded() {
         const session = api.getSession?.() || null;
         const encounter = getV2EncounterForSnapshot(snapshot, session?.encounter || null);
         const product = session?.product || null;
+        void preloadV3MoodWindow(
+          snapshot,
+          encounter,
+          getV2LatestHistoryForSnapshot(snapshot, session),
+        );
         const sceneClue = getV2SceneClue(encounter);
         const previewArt = getV2EncounterImageSrc(encounter, "previewArt", "mainNeutral");
         const productName = snapshot.productName || product?.name || "";
@@ -25664,7 +25775,10 @@ function ensureProgLoaded() {
         const session = api.getSession?.() || null;
         const encounter = getV2EncounterForSnapshot(snapshot, session?.encounter || null);
         const latestHistoryForImage = getV2LatestHistoryForSnapshot(snapshot, session);
-        const mainImageSrc = getV2MainImageSrc(snapshot, encounter, latestHistoryForImage);
+        const mainImagePresentation = getV2MainImagePresentation(snapshot, encounter, latestHistoryForImage);
+        const mainImageSrc = mainImagePresentation.src;
+        encounterPanel.dataset.v3Mood = mainImagePresentation.mood || "";
+        void preloadV3MoodWindow(snapshot, encounter, latestHistoryForImage);
 
         const selectedGroup =
           window.__BC_V2_HARNESS_STATE__?.selectedGroup &&
@@ -25860,7 +25974,7 @@ function ensureProgLoaded() {
           stepContent.innerHTML = `
             <section class="v2-play-shell">
               <div class="v2-hero-frame">
-                <img class="v2-encounter-art" src="${escapeHtml(mainImageSrc)}" alt="" onerror="this.onerror=null;this.src='${V2_FALLBACK_ENCOUNTER_IMAGE}';">
+                <img class="v2-encounter-art" src="${escapeHtml(mainImageSrc)}" data-v3-mood="${escapeHtml(mainImagePresentation.mood || "")}" alt="" onerror="this.onerror=null;this.src='${V2_FALLBACK_ENCOUNTER_IMAGE}';">
                 <div class="v2-hero-top">
                   <div class="v2-play-header">
                     <div class="v2-crest">B</div>
@@ -25985,15 +26099,12 @@ function ensureProgLoaded() {
         requestAnimationFrame(() => {
           const heroFrame = stepContent.querySelector(".v2-hero-frame");
           const endScreen = stepContent.querySelector(".v2-end-screen");
-          const mobileMount = heroFrame || endScreen;
-          const isV2MobileLayout = window.matchMedia?.("(max-width: 760px)")?.matches;
+          const imageMount = heroFrame || endScreen;
           if (showGodotExitButton && endScreen && stepButtons.parentElement !== endScreen) {
             endScreen.appendChild(stepButtons);
-          } else if (mobileMount && isV2MobileLayout && !(isTerminal && isFinalEncounter) && stepButtons.parentElement !== mobileMount) {
-            mobileMount.appendChild(stepButtons);
-          } else if (!isV2MobileLayout && !showGodotExitButton && stepButtons.parentElement !== encounterPanel) {
-            encounterPanel.appendChild(stepButtons);
-          } else if (isV2MobileLayout && isTerminal && isFinalEncounter && stepButtons.parentElement !== encounterPanel) {
+          } else if (imageMount && !(isTerminal && isFinalEncounter) && stepButtons.parentElement !== imageMount) {
+            imageMount.appendChild(stepButtons);
+          } else if (stepButtons.parentElement !== encounterPanel) {
             encounterPanel.appendChild(stepButtons);
           }
           const shell = stepButtons.querySelector(".v2-action-shell");
@@ -26258,7 +26369,306 @@ function ensureProgLoaded() {
       }
 
       function getGodotShiftEmbedUrl() {
-        return `${getGodotShiftBaseUrl()}/index.html?bcEmbed=1`;
+        // Bust cached Godot index/pck after floor re-exports.
+        const assetV = String(window.__BC_GODOT_SHIFT_ASSET_V__ || "232586304-20260730-authority-v1");
+        return `${getGodotShiftBaseUrl()}/index.html?bcEmbed=1&v=${encodeURIComponent(assetV)}`;
+      }
+
+      const GODOT_PLAYER_RUNTIME_STORAGE_VERSION = 1;
+
+      function createGodotRuntimeId(prefix = "godot") {
+        try {
+          if (typeof crypto?.randomUUID === "function") {
+            return `${prefix}_${crypto.randomUUID()}`;
+          }
+        } catch {}
+        return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+      }
+
+      function getGodotShiftRunId({ renew = false } = {}) {
+        if (renew || !window.__BC_GODOT_SHIFT_RUN_ID__) {
+          window.__BC_GODOT_SHIFT_RUN_ID__ = createGodotRuntimeId("shift");
+        }
+        return String(window.__BC_GODOT_SHIFT_RUN_ID__);
+      }
+
+      function getGodotPlayerRuntimeStorageKey() {
+        const ctx = window.__BC_CTX__ || {};
+        const userKey = String(ctx.userId || ctx.user_id || "demo");
+        const restaurantKey = String(
+          ctx.restaurantId ||
+          ctx.restaurant_id ||
+          ctx.scopeId ||
+          ctx.scope_id ||
+          "local"
+        );
+        return `BC_GODOT_PLAYER_RUNTIME_V${GODOT_PLAYER_RUNTIME_STORAGE_VERSION}:${userKey}:${restaurantKey}`;
+      }
+
+      function loadGodotPlayerRuntimeState() {
+        const fallback = {
+          v: GODOT_PLAYER_RUNTIME_STORAGE_VERSION,
+          godotCoins: 0,
+          skillMeasurements: {},
+          processedShiftIds: [],
+          updatedAt: 0,
+        };
+        try {
+          const raw = window.localStorage.getItem(getGodotPlayerRuntimeStorageKey());
+          const parsed = raw ? JSON.parse(raw) : {};
+          return {
+            ...fallback,
+            ...(parsed && typeof parsed === "object" ? parsed : {}),
+            godotCoins: Math.max(0, Math.floor(Number(parsed?.godotCoins || 0))),
+            skillMeasurements:
+              parsed?.skillMeasurements && typeof parsed.skillMeasurements === "object"
+                ? parsed.skillMeasurements
+                : {},
+            processedShiftIds: Array.isArray(parsed?.processedShiftIds)
+              ? parsed.processedShiftIds.map(String).filter(Boolean).slice(-50)
+              : [],
+          };
+        } catch {
+          return fallback;
+        }
+      }
+
+      function saveGodotPlayerRuntimeState(state = {}) {
+        const next = {
+          ...loadGodotPlayerRuntimeState(),
+          ...(state && typeof state === "object" ? state : {}),
+          v: GODOT_PLAYER_RUNTIME_STORAGE_VERSION,
+          updatedAt: Date.now(),
+        };
+        next.godotCoins = Math.max(0, Math.floor(Number(next.godotCoins || 0)));
+        next.processedShiftIds = Array.from(
+          new Set((Array.isArray(next.processedShiftIds) ? next.processedShiftIds : []).map(String).filter(Boolean))
+        ).slice(-50);
+        try {
+          window.localStorage.setItem(getGodotPlayerRuntimeStorageKey(), JSON.stringify(next));
+        } catch {}
+        window.__BC_GODOT_PLAYER_RUNTIME__ = next;
+        return next;
+      }
+
+      function getCanonicalPlayerProgressionState() {
+        const payload = getAuthoritativeProgressionPayload?.() || {};
+        return (
+          payload.canonicalState ||
+          payload.canonical_state ||
+          payload.progressionState ||
+          payload.progression_state ||
+          null
+        );
+      }
+
+      function getExplicitPlayerSkillUnlocks(canonical = null) {
+        const payload = getAuthoritativeProgressionPayload?.() || {};
+        const state = canonical || getCanonicalPlayerProgressionState() || {};
+        const candidates = [
+          state?.skills?.unlockedSkillIds,
+          state?.skills?.unlocked_skill_ids,
+          state?.skillTree?.unlockedSkillIds,
+          state?.skill_tree?.unlocked_skill_ids,
+          state?.authority?.unlockedSkillIds,
+          payload?.unlockedSkillIds,
+          payload?.unlocked_skill_ids,
+        ];
+        return candidates.find((candidate) => Array.isArray(candidate));
+      }
+
+      function getSharedPlayerAuthoritySnapshot() {
+        const contract = window.PlayerAuthorityContract;
+        const state = loadV2ProgressionAuthorityState?.() || {};
+        const canonical = getCanonicalPlayerProgressionState() || {};
+        const runtime = loadGodotPlayerRuntimeState();
+        const explicitUnlocks = getExplicitPlayerSkillUnlocks(canonical);
+        const latestSkills =
+          window.__BC_V2_LAST_SKILL_REPORT__?.payload?.skills ||
+          canonical?.skills?.measurements ||
+          canonical?.skills?.scores ||
+          runtime.skillMeasurements ||
+          {};
+        const canonicalCoins = Math.max(
+          0,
+          Number(canonical?.economy?.godotCoins || 0),
+          Number(canonical?.godotShift?.coinBalance || 0),
+          Number(canonical?.godot_shift?.coin_balance || 0)
+        );
+        const snapshotInput = {
+          source: "bottlecaller_web",
+          authorityPoints: Number(state.totalAP || 0),
+          tierToServe: Number(state.tierToServe || 1),
+          apTierUnlocked: Number(state.apTierUnlocked || 1),
+          rulesTierToServe: Number(state.rulesTierToServe || 1),
+          ...(Array.isArray(explicitUnlocks) ? { unlockedSkillIds: explicitUnlocks } : {}),
+          skillMeasurements: latestSkills,
+          godotCoins: Math.max(canonicalCoins, Number(runtime.godotCoins || 0)),
+        };
+        return typeof contract?.createPlayerAuthoritySnapshot === "function"
+          ? contract.createPlayerAuthoritySnapshot(snapshotInput)
+          : {
+              v: 1,
+              source: "bottlecaller_web",
+              progression: {
+                authorityPoints: snapshotInput.authorityPoints,
+                tierToServe: snapshotInput.tierToServe,
+                apTierUnlocked: snapshotInput.apTierUnlocked,
+                rulesTierToServe: snapshotInput.rulesTierToServe,
+              },
+              skills: {
+                unlockedSkillIds: Array.isArray(explicitUnlocks) ? explicitUnlocks : [],
+                measurements: latestSkills,
+                unlockSource: Array.isArray(explicitUnlocks) ? "explicit" : "legacy_tier_fallback",
+              },
+              economy: {
+                godotCoins: snapshotInput.godotCoins,
+                owner: "godot_shift",
+              },
+              updatedAt: new Date().toISOString(),
+            };
+      }
+
+      function getGodotHostPayload() {
+        return {
+          mode: window.bcMode || "demo",
+          demo: !!(window.isDemo || window.bcMode === "demo"),
+          shiftRunId: getGodotShiftRunId(),
+          playerAuthority: getSharedPlayerAuthoritySnapshot(),
+        };
+      }
+
+      function syncPlayerAuthorityToGodot() {
+        if (!window.__BC_GODOT_SHIFT_ACTIVE__) return false;
+        return postMessageToGodot("host_hello", getGodotHostPayload());
+      }
+      window.__BC_SYNC_PLAYER_AUTHORITY_TO_GODOT__ = syncPlayerAuthorityToGodot;
+
+      function applyGodotShiftAuthorityAndEconomy(payload = {}) {
+        const shiftRunId = String(payload.shiftRunId || getGodotShiftRunId());
+        const runtime = loadGodotPlayerRuntimeState();
+        if (runtime.processedShiftIds.includes(shiftRunId)) {
+          return {
+            duplicate: true,
+            authorityState: loadV2ProgressionAuthorityState?.() || null,
+            runtime,
+          };
+        }
+
+        const authorityState = loadV2ProgressionAuthorityState?.() || {};
+        const authorityDeltaTotal = Number(payload.authorityDeltaTotal ?? payload.shiftScore ?? payload.ap ?? 0);
+        const v2AuthorityDelta = Number(payload.v2AuthorityDeltaTotal || 0);
+        const operationalAuthorityDelta = Number(
+          payload.operationalAuthorityDelta ?? (authorityDeltaTotal - v2AuthorityDelta)
+        );
+        const totalAP = Math.max(
+          0,
+          Math.round(Number(authorityState.totalAP || 0) + operationalAuthorityDelta)
+        );
+        const progressionSnapshot =
+          authorityState.progressionSnapshot ||
+          buildV2ProgressionSnapshotFromAttempts(authorityState.attempts);
+        const apTierUnlocked = Number(
+          window.V2ProgressionAuthority?.getV2TierUnlockedByAP?.(totalAP) ||
+          getV2TierUnlockedByAP(totalAP)
+        );
+        const rulesTierToServe = Number(
+          authorityState.rulesTierToServe ||
+          decideV2RulesTierFromSnapshot(progressionSnapshot)
+        );
+        const tierToServe = Math.max(1, Math.min(apTierUnlocked, rulesTierToServe));
+        const nextAuthority = saveV2ProgressionAuthorityState?.({
+          ...authorityState,
+          totalAP,
+          apTierUnlocked,
+          rulesTierToServe,
+          tierToServe,
+          progressionSnapshot,
+          updatedAt: Date.now(),
+        }) || authorityState;
+
+        const bottleState = loadV2BottleRewardState?.() || {};
+        saveV2BottleRewardState?.({
+          ...bottleState,
+          totalAP,
+          tierUnlocked: apTierUnlocked,
+          updatedAt: Date.now(),
+        });
+
+        const nextRuntime = saveGodotPlayerRuntimeState({
+          ...runtime,
+          godotCoins: Math.max(0, Math.floor(Number(payload.coinBalance ?? payload.coins ?? runtime.godotCoins ?? 0))),
+          skillMeasurements:
+            payload.skillMeasurements && typeof payload.skillMeasurements === "object"
+              ? payload.skillMeasurements
+              : runtime.skillMeasurements,
+          processedShiftIds: [...runtime.processedShiftIds, shiftRunId],
+        });
+
+        if (shouldSubmitV2ProgressReport?.()) {
+          const baseCanonical = getCanonicalPlayerProgressionState() || {};
+          const sharedSnapshot = getSharedPlayerAuthoritySnapshot();
+          const progressionState = {
+            ...baseCanonical,
+            version: Number(baseCanonical.version || 1),
+            source: "godot_shift",
+            economy: {
+              ...(baseCanonical.economy || {}),
+              authorityPoints: totalAP,
+              ap: totalAP,
+              tier: tierToServe,
+              godotCoins: nextRuntime.godotCoins,
+            },
+            authority: {
+              ...(baseCanonical.authority || {}),
+              ...nextAuthority,
+              authorityPoints: totalAP,
+              totalAP,
+              apTierUnlocked,
+              rulesTierToServe,
+              tierToServe,
+              progressionSnapshot,
+            },
+            skills: {
+              ...(baseCanonical.skills || {}),
+              unlockedSkillIds: sharedSnapshot.skills.unlockedSkillIds,
+              measurements: sharedSnapshot.skills.measurements,
+              unlockSource: sharedSnapshot.skills.unlockSource,
+            },
+            godotShift: {
+              ...(baseCanonical.godotShift || {}),
+              coinBalance: nextRuntime.godotCoins,
+              lastShiftRunId: shiftRunId,
+              lastShiftCompletedAt: Date.now(),
+            },
+            capturedAt: Date.now(),
+            basedOnUpdatedAt: Number(
+              baseCanonical.capturedAt ||
+              baseCanonical.updatedAt ||
+              getAuthoritativeProgressionPayload?.()?.syncedAt ||
+              0
+            ),
+          };
+          submitProgressReportToManager({
+            body: "Godot shift complete",
+            payload: {
+              v: 2,
+              engineVersion: "godot_shift",
+              source: "godot_shift",
+              canonicalOnly: true,
+              shiftRunId,
+              progressionState,
+              godotShift: payload,
+            },
+          });
+        }
+
+        return {
+          duplicate: false,
+          authorityState: nextAuthority,
+          runtime: nextRuntime,
+          operationalAuthorityDelta,
+        };
       }
 
       function postMessageToGodot(type, payload = {}) {
@@ -26351,10 +26761,7 @@ function ensureProgLoaded() {
           } else {
             setGodotShiftStatus("", false);
           }
-          postMessageToGodot("host_hello", {
-            mode: window.bcMode || "demo",
-            demo: !!(window.isDemo || window.bcMode === "demo"),
-          });
+          postMessageToGodot("host_hello", getGodotHostPayload());
           window.setTimeout(() => focusGodotShiftCanvas(), 250);
           window.setTimeout(() => focusGodotShiftCanvas(), 1200);
         };
@@ -26369,14 +26776,8 @@ function ensureProgLoaded() {
         } else if (resumeOnly || alreadyReady) {
           // Godot is already running behind the V2 wine screen — just resume.
           setGodotShiftStatus("", false);
-          postMessageToGodot("host_hello", {
-            mode: window.bcMode || "demo",
-            demo: !!(window.isDemo || window.bcMode === "demo"),
-          });
-          postMessageToGodot("resume_shift", {
-            mode: window.bcMode || "demo",
-            demo: !!(window.isDemo || window.bcMode === "demo"),
-          });
+          postMessageToGodot("host_hello", getGodotHostPayload());
+          postMessageToGodot("resume_shift", getGodotHostPayload());
           window.setTimeout(() => focusGodotShiftCanvas(), 50);
           window.setTimeout(() => focusGodotShiftCanvas(), 250);
         } else {
@@ -26387,6 +26788,9 @@ function ensureProgLoaded() {
 
       function startGodotShiftFloor(options = {}) {
         ensureGodotShiftListener();
+        if (!window.__BC_GODOT_SHIFT_ACTIVE__) {
+          getGodotShiftRunId({ renew: true });
+        }
         window.__BC_GODOT_SHIFT_ACTIVE__ = true;
         window.__BC_GODOT_WINE_OFFER__ = null;
         // Short shield for splash-clear ghost taps only.
@@ -26529,8 +26933,13 @@ function ensureProgLoaded() {
           return false;
         }
 
+        const startedAt = Date.now();
+        const resultId = createGodotRuntimeId(
+          `godot_v2_${getGodotShiftRunId()}_${String(payload.tableId || "table")}`
+        );
         window.__BC_GODOT_WINE_OFFER__ = {
           active: true,
+          resultId,
           guestId: String(payload.guestId || ""),
           tableId: String(payload.tableId || ""),
           guestDisplayName: String(payload.guestDisplayName || ""),
@@ -26554,7 +26963,7 @@ function ensureProgLoaded() {
           objectPathKind: String(payload.objectPathKind || ""),
           objectSuccess: payload.objectSuccess !== false,
           encounterId,
-          startedAt: Date.now(),
+          startedAt,
         };
 
         document.documentElement.dataset.bcGodotShift = "wine_offer";
@@ -26594,14 +27003,50 @@ function ensureProgLoaded() {
         const authorityDelta = Number(snapshot?.authorityDelta || 0);
         const outcome = String(snapshot?.outcome || "");
         const wineSold = ["premium_success", "standard_success", "weak_success"].includes(outcome);
+        const resultId = String(offer.resultId || createGodotRuntimeId("godot_v2_result"));
+        const skillMeasurements = buildV2SkillSnapshot?.(snapshot, session) || {};
+        const history = getV2SessionHistory?.(session) || [];
+        const economyEvidence =
+          typeof window.PlayerAuthorityContract?.buildV2EconomyEvidence === "function"
+            ? window.PlayerAuthorityContract.buildV2EconomyEvidence({
+                resultId,
+                outcome,
+                wineSold,
+                progress: snapshot?.progress,
+                frustration: snapshot?.frustration,
+                mistakes: snapshot?.mistakeCount,
+                actionCount: history.length,
+                turn: snapshot?.turnCount,
+              })
+            : {
+                v: 1,
+                resultId,
+                outcome,
+                wineSold,
+                progress: Number(snapshot?.progress || 0),
+                frustration: Number(snapshot?.frustration || 0),
+                mistakes: Number(snapshot?.mistakeCount || 0),
+                actionCount: history.length,
+                turn: Number(snapshot?.turnCount || 0),
+                coinAuthority: "godot_shift",
+              };
 
         // Keep local/premium telemetry path alive, but skip V2 end UX.
         try {
+          session.v2AuthorityEventId = resultId;
           recordV2ProgressionAuthority?.(snapshot, session, rewardProgress);
+        } catch {}
+        try {
+          const runtime = loadGodotPlayerRuntimeState();
+          saveGodotPlayerRuntimeState({
+            ...runtime,
+            skillMeasurements,
+          });
         } catch {}
 
         postMessageToGodot("v2_encounter_result", {
           ok: true,
+          resultId,
           guestId: offer.guestId || null,
           tableId: offer.tableId || null,
           guestType: offer.guestType || null,
@@ -26616,6 +27061,10 @@ function ensureProgLoaded() {
           totalAP: Number(rewardProgress?.state?.totalAP || loadV2BottleRewardState?.()?.totalAP || 0),
           progress: Number(snapshot?.progress || 0),
           frustration: Number(snapshot?.frustration || 0),
+          mistakeCount: Number(snapshot?.mistakeCount || 0),
+          turnCount: Number(snapshot?.turnCount || 0),
+          skillMeasurements,
+          economyEvidence,
         });
 
         window.__BC_GODOT_WINE_OFFER__ = null;
@@ -26636,10 +27085,7 @@ function ensureProgLoaded() {
           focusGodotShiftCanvas();
           notifyParentDemoPlayStarted?.("godot_ready");
           notifyParentGodotShiftActive(true);
-          postMessageToGodot("host_hello", {
-            mode: window.bcMode || "demo",
-            demo: !!(window.isDemo || window.bcMode === "demo"),
-          });
+          postMessageToGodot("host_hello", getGodotHostPayload());
           scheduleIframeHeightReport?.("godot_ready");
           return;
         }
@@ -26669,23 +27115,10 @@ function ensureProgLoaded() {
         if (type === "shift_complete") {
           window.__BC_GODOT_SHIFT_SUMMARY__ = payload;
           try {
-            const totalAP = Math.max(
-              0,
-              Math.round(Number(payload.ap || 0)),
-            );
-            const authorityState = loadV2ProgressionAuthorityState?.() || {};
-            saveV2ProgressionAuthorityState?.({
-              ...authorityState,
-              totalAP: Math.max(Number(authorityState.totalAP || 0), totalAP),
-              updatedAt: Date.now(),
-            });
-            const bottleState = loadV2BottleRewardState?.() || {};
-            saveV2BottleRewardState?.({
-              ...bottleState,
-              totalAP: Math.max(Number(bottleState.totalAP || 0), totalAP),
-              updatedAt: Date.now(),
-            });
-          } catch {}
+            applyGodotShiftAuthorityAndEconomy(payload);
+          } catch (error) {
+            console.warn("[BC][GODOT] shift authority/economy apply failed", error);
+          }
           try {
             window.parent?.postMessage?.({
               source: "BC_MSG",
@@ -26702,6 +27135,7 @@ function ensureProgLoaded() {
               },
             }, window.location.origin);
           } catch {}
+          window.__BC_GODOT_SHIFT_RUN_ID__ = null;
         }
       }
 

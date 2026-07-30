@@ -79,6 +79,17 @@ export type EncounterOutcome =
 
 export type V2DifficultyMode = "easy" | "medium" | "hard";
 
+export type EncounterMoodV3 =
+  | "confused"
+  | "slightly_annoyed"
+  | "annoyed"
+  | "furious"
+  | "neutral"
+  | "mild_interest"
+  | "engaged"
+  | "very_engaged"
+  | "ready_to_buy";
+
 export interface Product {
   id: string;
   name: string;
@@ -142,6 +153,7 @@ export interface EncounterGuestResponseMap {
 }
 
 export interface EncounterImageSet {
+  schema?: "v2" | "v3";
   previewArt?: string;
   mainNeutral?: string;
   mainPositive?: string;
@@ -149,6 +161,7 @@ export interface EncounterImageSet {
   endSuccessArt?: string;
   endFailureArt?: string;
   neutralExitArt?: string;
+  moods?: Partial<Record<EncounterMoodV3, string>>;
 }
 
 export interface EncounterV2 {

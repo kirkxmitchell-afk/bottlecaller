@@ -13,12 +13,20 @@ const godotDir = join(root, "public/godot-shift");
 const templatePath = join(root, "scripts/godot-shift-index.template.html");
 const outPath = join(godotDir, "index.html");
 
+/** Suffix so browser cache busts even when pck byte-size is unchanged. */
+const BUILD_ID = "20260730-authority-v1";
+
 const pck = statSync(join(godotDir, "index.pck")).size;
 const wasm = statSync(join(godotDir, "index.wasm")).size;
+const assetV = `${pck}-${BUILD_ID}`;
 let html = readFileSync(templatePath, "utf8");
 html = html.replace(
-  /"fileSizes":\{"index\.pck":\d+,"index\.wasm":\d+\}/,
-  `"fileSizes":{"index.pck":${pck},"index.wasm":${wasm}}`
+  /"fileSizes":\{[^}]+\}/,
+  `"fileSizes":{"index.pck":${pck},"index.pck?v=${pck}":${pck},"index.pck?v=${assetV}":${pck},"index.wasm":${wasm}}`
+);
+html = html.replace(
+  /GODOT_CONFIG\.fileSizes\['index\.pck'\]\s*\+\s*'-[^']+'/,
+  `GODOT_CONFIG.fileSizes['index.pck'] + '-${BUILD_ID}'`
 );
 if (!html.includes("__BC_GODOT_INBOX__") || !html.includes("godot_load_ready")) {
   console.error("Template missing BC bridge helpers.");
@@ -26,4 +34,4 @@ if (!html.includes("__BC_GODOT_INBOX__") || !html.includes("godot_load_ready")) 
 }
 writeFileSync(outPath, html);
 console.log(`Restored ${outPath}`);
-console.log(`fileSizes: pck=${pck} wasm=${wasm}`);
+console.log(`fileSizes: pck=${pck} wasm=${wasm} assetV=${assetV}`);

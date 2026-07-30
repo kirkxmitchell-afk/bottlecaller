@@ -23,6 +23,8 @@ import * as ProgressionBridge from "./progressionBridge.ts";
 import * as TournamentBridge from "./tournamentBridge";
 import * as ReactionRuntime from "./reaction/reactionIndex";
 import * as V2ProgressionAuthority from "./v2ProgressionAuthority";
+import * as PlayerAuthorityContract from "./playerAuthorityContract";
+import * as EncounterV3 from "./encounterV3";
 import { installProgressionGuards } from "./progressionGuards";
 
 
@@ -35,6 +37,8 @@ declare global {
     TournamentBridge?: any;
     ReactionRuntime?: any;
     V2ProgressionAuthority?: any;
+    PlayerAuthorityContract?: any;
+    EncounterV3?: any;
     __BC_ENCOUNTERS__?: any;
     __BC_GAME_ENTRY_INSTALLED__?: boolean;
     __BC_CTX__?: any;
@@ -42,6 +46,7 @@ declare global {
     __BC_V2_HARNESS__?: any;
     __BC_GODOT_SHIFT__?: any;
     __BC_GODOT_SHIFT_BASE__?: string;
+    __BC_SYNC_PLAYER_AUTHORITY_TO_GODOT__?: () => void;
   }
 }
 
@@ -83,6 +88,8 @@ function getCtxFromWindow() {
   window.TournamentBridge = TournamentBridge;
   window.ReactionRuntime = ReactionRuntime;
   window.V2ProgressionAuthority = V2ProgressionAuthority;
+  window.PlayerAuthorityContract = PlayerAuthorityContract;
+  window.EncounterV3 = EncounterV3;
 
   ProgressionBridge.onProgressionSnapshot((payload: any) => {
     window.__BC_PROGRESSION__ = payload || null;
@@ -91,6 +98,7 @@ function getCtxFromWindow() {
       demo: !!payload?.demo,
       tierToServe: payload?.tierToServe ?? null,
     });
+    window.__BC_SYNC_PLAYER_AUTHORITY_TO_GODOT__?.();
   });
 
   async function refreshProgressionSnapshot() {
@@ -135,6 +143,8 @@ function getCtxFromWindow() {
   console.log("[BC] TournamentBridge installed ✅", window.TournamentBridge);
   console.log("[BC] ReactionRuntime installed ✅", window.ReactionRuntime);
   console.log("[BC] V2ProgressionAuthority installed ✅", window.V2ProgressionAuthority);
+  console.log("[BC] PlayerAuthorityContract installed ✅", window.PlayerAuthorityContract);
+  console.log("[BC] EncounterV3 installed ✅", window.EncounterV3);
   console.log("[BC] V2 harness installed ✅", { enabled: v2HarnessEnabled });
   console.log("[BC] Godot shift bridge installed ✅", window.__BC_GODOT_SHIFT__);
   console.log("[BC] Encounters loaded ✅", {

@@ -241,21 +241,36 @@ const engine = new Engine(GODOT_CONFIG);
 			pckBytes: GODOT_CONFIG.fileSizes['index.pck'] || 0,
 			wasmBytes: GODOT_CONFIG.fileSizes['index.wasm'] || 0,
 		});
-		engine.startGame({
-			'onProgress': function (current, total) {
-				if (current > 0 && total > 0) {
-					statusProgress.value = current;
-					statusProgress.max = total;
-					const pct = Math.min(100, Math.floor((current / total) * 100));
-					if (pct !== lastProgressPct && (pct === 0 || pct === 100 || pct - lastProgressPct >= 5)) {
-						lastProgressPct = pct;
-						postToHost('godot_load_progress', { current: current, total: total, pct: pct });
-					}
-				} else {
-					statusProgress.removeAttribute('value');
-					statusProgress.removeAttribute('max');
+		// Bust browser cache even when pck byte-size is unchanged across exports.
+		const assetV = String(
+			(window.__BC_GODOT_SHIFT_ASSET_V__)
+			|| (GODOT_CONFIG.fileSizes && GODOT_CONFIG.fileSizes['index.pck']
+				? (GODOT_CONFIG.fileSizes['index.pck'] + '-20260730-authority-v1')
+				: Date.now())
+		);
+		const packPath = 'index.pck';
+		const packUrl = packPath + '?v=' + assetV;
+		const onProgress = function (current, total) {
+			if (current > 0 && total > 0) {
+				statusProgress.value = current;
+				statusProgress.max = total;
+				const pct = Math.min(100, Math.floor((current / total) * 100));
+				if (pct !== lastProgressPct && (pct === 0 || pct === 100 || pct - lastProgressPct >= 5)) {
+					lastProgressPct = pct;
+					postToHost('godot_load_progress', { current: current, total: total, pct: pct });
 				}
-			},
+			} else {
+				statusProgress.removeAttribute('value');
+				statusProgress.removeAttribute('max');
+			}
+		};
+		engine.config.update({ onProgress: onProgress });
+		engine.config.args = ['--main-pack', packPath].concat(engine.config.args || []);
+		Promise.all([
+			engine.init(GODOT_CONFIG.executable),
+			engine.preloadFile(packUrl, packPath),
+		]).then(function () {
+			return engine.start();
 		}).then(() => {
 			setStatusMode('hidden');
 			postToHost('godot_load_ready', {});

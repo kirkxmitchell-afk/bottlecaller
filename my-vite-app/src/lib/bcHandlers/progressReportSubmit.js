@@ -496,14 +496,17 @@ export function makeProgressReportSubmitHandler({
         updatedAt: Date.now()
       };
 
-      const writeResult = await upsertProgressReportMessage({
-        supabase,
-        ctx,
-        scopeType,
-        scopeId,
-        body,
-        payload: nextPayload,
-      });
+      const canonicalOnly = nextPayload?.canonicalOnly === true;
+      const writeResult = canonicalOnly
+        ? { ok: true, inserted: 0, updated: false, skipped: true }
+        : await upsertProgressReportMessage({
+            supabase,
+            ctx,
+            scopeType,
+            scopeId,
+            body,
+            payload: nextPayload,
+          });
 
       if (!writeResult?.ok) {
         reply(replyType, {
@@ -524,11 +527,13 @@ export function makeProgressReportSubmitHandler({
         authUserId: authed,
       });
 
-      const snapshotResult = await insertSkillSnapshotAndDrillEffect({
-        supabase,
-        ctx,
-        payload,
-      });
+      const snapshotResult = canonicalOnly
+        ? { ok: true, skipped: true }
+        : await insertSkillSnapshotAndDrillEffect({
+            supabase,
+            ctx,
+            payload,
+          });
 
       reply(replyType, {
         reqId,
