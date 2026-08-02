@@ -38,6 +38,17 @@ Upload the full contents of `public/godot-shift/` to that location so these URLs
 - `$VITE_GODOT_SHIFT_BASE/index.pck`
 - `$VITE_GODOT_SHIFT_BASE/index.wasm`
 
+Use the repository's authenticated multipart publisher for the large Godot export:
+
+```bash
+npm run godot:web:restore
+npm run godot:r2:dry-run
+npm run godot:r2:publish
+```
+
+See [`docs/godot-r2-publishing.md`](docs/godot-r2-publishing.md) for the complete
+export, upload, verification, cleanup, and Windows routine.
+
 Local `npm run dev` still serves `/godot-shift` from `public/` without the env var.
 
 For local development:

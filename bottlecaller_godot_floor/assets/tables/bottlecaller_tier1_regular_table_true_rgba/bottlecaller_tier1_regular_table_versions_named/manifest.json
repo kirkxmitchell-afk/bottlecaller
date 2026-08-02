@@ -1,0 +1,32 @@
+{
+  "asset_set": "BottleCaller Tier 1 Regular Table Versions",
+  "files": [
+    "table_regular_tier1_happy.png",
+    "table_regular_tier1_uncertain.png",
+    "table_regular_tier1_drinking.png",
+    "table_regular_tier1_eating.png",
+    "table_regular_tier1_wine_engaged.png",
+    "table_regular_tier1_ready_to_clear.png"
+  ],
+  "godot_states": {
+    "regular_happy": [
+      "table_regular_tier1_happy.png"
+    ],
+    "regular_uncertain": [
+      "table_regular_tier1_uncertain.png"
+    ],
+    "regular_drinking": [
+      "table_regular_tier1_drinking.png"
+    ],
+    "regular_eating": [
+      "table_regular_tier1_eating.png"
+    ],
+    "regular_wine_engaged": [
+      "table_regular_tier1_wine_engaged.png"
+    ],
+    "regular_ready_to_clear": [
+      "table_regular_tier1_ready_to_clear.png"
+    ]
+  },
+  "note": "Named batch from approved generated regular table versions."
+}

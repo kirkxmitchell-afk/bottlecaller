@@ -1,0 +1,8 @@
+{
+  "files": [
+    "station_scullery_tier1_empty.png",
+    "station_scullery_tier1_active.png",
+    "station_scullery_tier1_full.png"
+  ],
+  "note": "True RGBA cleaned versions with checkerboard removed."
+}

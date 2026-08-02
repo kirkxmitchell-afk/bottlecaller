@@ -1,0 +1,33 @@
+[gd_resource type="Resource" script_class="GuestTableProfile" load_steps=9 format=3 uid="uid://b86f1tc2e62gx"]
+
+[ext_resource type="Script" uid="uid://cnu07mrme3aas" path="res://assets/scripts/tables/GuestTableProfile.gd" id="1_n3s0d"]
+[ext_resource type="Texture2D" uid="uid://cm5qeec6fgyip" path="res://assets/tables/bottlecaller_tier1_blonde_date_table_versions_named/transparencies/table_blonde_date_tier1_annoyed copy.png" id="1_pl87g"]
+[ext_resource type="Texture2D" uid="uid://cujsi8dgo2nwn" path="res://assets/tables/bottlecaller_tier1_blonde_date_table_versions_named/transparencies/table_blonde_date_tier1_appertief.png" id="2_jn26f"]
+[ext_resource type="Texture2D" uid="uid://c5nfakbu4rmxe" path="res://assets/tables/bottlecaller_tier1_blonde_date_table_versions_named/transparencies/table_blonde_date_tier1_eating.png" id="3_ruhpg"]
+[ext_resource type="Texture2D" uid="uid://c30c137d6ue4q" path="res://assets/tables/bottlecaller_tier1_blonde_date_table_versions_named/transparencies/table_blonde_date_tier1_empty.png" id="4_ndr17"]
+[ext_resource type="Texture2D" uid="uid://xh37dqt6ijy" path="res://assets/tables/bottlecaller_tier1_blonde_date_table_versions_named/transparencies/table_blonde_date_tier1_neutral.png" id="5_serpm"]
+[ext_resource type="Texture2D" uid="uid://dumjw6lnqcs0g" path="res://assets/tables/bottlecaller_tier1_blonde_date_table_versions_named/transparencies/table_blonde_date_tier1_ready_to_clear.png" id="6_b0a8d"]
+[ext_resource type="Texture2D" uid="uid://dnslilug3fxfq" path="res://assets/tables/bottlecaller_tier1_blonde_date_table_versions_named/transparencies/table_blonde_date_tier1_wine.png" id="8_81o7r"]
+
+[resource]
+script = ExtResource("1_n3s0d")
+guest_id = "blonde_date"
+guest_display_name = "Window Date"
+guest_type = "tourist"
+party_shape = "couple"
+floor_character_key = "the_window_date"
+guest_hint = "Tourist date couple by the window: polished, a little unfamiliar with the room — wanting the night to feel special without pressure."
+greet_wine_response = "We wanted something that feels local — what would you suggest for us?"
+greet_aperitif_response = "Something light to start could help while we settle into the room."
+greet_food_response = "We are ready to eat, but we are still figuring out what fits the night."
+walk_away_response = "Give us a moment. We will call you when we are ready."
+offer_food_response = "Yes — start us with food and we will follow your lead."
+offer_wine_response = "Alright. If you have a bottle that fits us, we will listen."
+annoyed_texture = ExtResource("1_pl87g")
+aperitif_texture = ExtResource("2_jn26f")
+eating_texture = ExtResource("3_ruhpg")
+empty_texture = ExtResource("4_ndr17")
+neutral_texture = ExtResource("5_serpm")
+ready_to_clear_texture = ExtResource("6_b0a8d")
+wine_texture = ExtResource("8_81o7r")
+metadata/_custom_type_script = "uid://cnu07mrme3aas"

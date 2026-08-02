@@ -1,0 +1,122 @@
+{
+  "asset": "station_kitchen_chef_tier1",
+  "source": "chef_at_work_moods_through_cooking.png",
+  "description": "Tier 1 kitchen pass with chef phase states. Transparent RGBA. Use fixed frame sizes for Godot switching.",
+  "sheet": "station_kitchen_chef_tier1_sheet_rgba.png",
+  "grid": {
+    "columns": 4,
+    "rows": 2,
+    "frame_width": 444,
+    "frame_height": 444
+  },
+  "frames": [
+    {
+      "name": "idle_1",
+      "file": "station_kitchen_chef_tier1_idle_1.png",
+      "frame_index": 0,
+      "grid_col": 0,
+      "grid_row": 0,
+      "size": [
+        444,
+        444
+      ]
+    },
+    {
+      "name": "idle_2",
+      "file": "station_kitchen_chef_tier1_idle_2.png",
+      "frame_index": 1,
+      "grid_col": 1,
+      "grid_row": 0,
+      "size": [
+        443,
+        444
+      ]
+    },
+    {
+      "name": "cooking_1",
+      "file": "station_kitchen_chef_tier1_cooking_1.png",
+      "frame_index": 2,
+      "grid_col": 2,
+      "grid_row": 0,
+      "size": [
+        443,
+        444
+      ]
+    },
+    {
+      "name": "cooking_2",
+      "file": "station_kitchen_chef_tier1_cooking_2.png",
+      "frame_index": 3,
+      "grid_col": 3,
+      "grid_row": 0,
+      "size": [
+        444,
+        444
+      ]
+    },
+    {
+      "name": "ready",
+      "file": "station_kitchen_chef_tier1_ready.png",
+      "frame_index": 4,
+      "grid_col": 0,
+      "grid_row": 1,
+      "size": [
+        444,
+        443
+      ]
+    },
+    {
+      "name": "annoyed_1",
+      "file": "station_kitchen_chef_tier1_annoyed_1.png",
+      "frame_index": 5,
+      "grid_col": 1,
+      "grid_row": 1,
+      "size": [
+        443,
+        443
+      ]
+    },
+    {
+      "name": "annoyed_2",
+      "file": "station_kitchen_chef_tier1_annoyed_2.png",
+      "frame_index": 6,
+      "grid_col": 2,
+      "grid_row": 1,
+      "size": [
+        443,
+        443
+      ]
+    },
+    {
+      "name": "recovered",
+      "file": "station_kitchen_chef_tier1_recovered.png",
+      "frame_index": 7,
+      "grid_col": 3,
+      "grid_row": 1,
+      "size": [
+        444,
+        443
+      ]
+    }
+  ],
+  "suggested_godot_animations": {
+    "kitchen_idle": [
+      "idle_1",
+      "idle_2"
+    ],
+    "kitchen_cooking": [
+      "cooking_1",
+      "cooking_2"
+    ],
+    "kitchen_ready": [
+      "ready"
+    ],
+    "kitchen_annoyed": [
+      "annoyed_1",
+      "annoyed_2"
+    ],
+    "kitchen_recovered": [
+      "recovered"
+    ]
+  }
+}

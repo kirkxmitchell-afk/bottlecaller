@@ -1,0 +1,16 @@
+{
+  "asset_set": "BottleCaller Tier 1 Compact POS Station",
+  "files": [
+    "station_pos_tier1_idle.png",
+    "station_pos_tier1_active.png"
+  ],
+  "godot_states": {
+    "pos_idle": [
+      "station_pos_tier1_idle.png"
+    ],
+    "pos_active": [
+      "station_pos_tier1_active.png"
+    ]
+  },
+  "note": "True RGBA PNGs with checkerboard/white background removed. Active is the same compact POS concept with glow/attention state."
+}

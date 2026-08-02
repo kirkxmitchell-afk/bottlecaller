@@ -1,0 +1,16 @@
+{
+  "asset_set": "BottleCaller Tier 1 Mise en Place Station",
+  "files": [
+    "station_mise_en_place_tier1_stocked.png",
+    "station_mise_en_place_tier1_low.png"
+  ],
+  "godot_states": {
+    "mise_en_place_stocked": [
+      "station_mise_en_place_tier1_stocked.png"
+    ],
+    "mise_en_place_low": [
+      "station_mise_en_place_tier1_low.png"
+    ]
+  },
+  "note": "True RGBA versions with checkerboard removed. Station body kept consistent; items differ between stocked and low."
+}

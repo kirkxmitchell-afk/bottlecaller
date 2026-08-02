@@ -1,2 +1,13 @@
 my-vite-app/public/godot-shift/*.pck filter=lfs diff=lfs merge=lfs -text
 my-vite-app/public/godot-shift/*.wasm filter=lfs diff=lfs merge=lfs -text
+bottlecaller_godot_floor/assets/**/*.png filter=lfs diff=lfs merge=lfs -text
+bottlecaller_godot_floor/assets/**/*.tif filter=lfs diff=lfs merge=lfs -text
+bottlecaller_godot_floor/assets/**/*.tiff filter=lfs diff=lfs merge=lfs -text
+bottlecaller_godot_floor/assets/**/*.zip filter=lfs diff=lfs merge=lfs -text
+bottlecaller_godot_floor/assets/**/*.jpg filter=lfs diff=lfs merge=lfs -text
+bottlecaller_godot_floor/assets/**/*.jpeg filter=lfs diff=lfs merge=lfs -text
+bottlecaller_godot_floor/assets/**/*.webp filter=lfs diff=lfs merge=lfs -text
+bottlecaller_godot_floor/assets/**/*.wav filter=lfs diff=lfs merge=lfs -text
+bottlecaller_godot_floor/assets/**/*.ogg filter=lfs diff=lfs merge=lfs -text
+bottlecaller_godot_floor/assets/**/*.mp3 filter=lfs diff=lfs merge=lfs -text
+bottlecaller_godot_floor/assets/**/*.mp4 filter=lfs diff=lfs merge=lfs -text

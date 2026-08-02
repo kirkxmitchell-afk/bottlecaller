@@ -1,0 +1,60 @@
+{
+  "asset_set": "BottleCaller Tier 1 Bar Station",
+  "files": [
+    {
+      "filename": "station_bar_bartender_tier1_idle_1.png",
+      "source": "cozy_wooden_bar_interior_illustration.png"
+    },
+    {
+      "filename": "station_bar_bartender_tier1_idle_2.png",
+      "source": "cozy_wooden_bar_with_attentive_bartender.png"
+    },
+    {
+      "filename": "station_bar_bartender_tier1_annoyed_1.png",
+      "source": "cozy_bar_with_grumpy_bartender.png"
+    },
+    {
+      "filename": "station_bar_bartender_tier1_annoyed_2.png",
+      "source": "wooden_bar_interior_with_bartender.png"
+    },
+    {
+      "filename": "station_bar_bartender_tier1_ready.png",
+      "source": "cozy_pub_bartending_scene_illustration.png"
+    },
+    {
+      "filename": "station_bar_bartender_tier1_mixing_1.png",
+      "source": "cozy_bar_scene_with_bartender.png"
+    },
+    {
+      "filename": "station_bar_bartender_tier1_mixing_2.png",
+      "source": "cosy_bar_scene_with_bartender.png"
+    }
+  ],
+  "suggested_godot_animations": {
+    "bar_idle": [
+      "station_bar_bartender_tier1_idle_1.png",
+      "station_bar_bartender_tier1_idle_2.png"
+    ],
+    "bar_mixing": [
+      "station_bar_bartender_tier1_mixing_1.png",
+      "station_bar_bartender_tier1_mixing_2.png"
+    ],
+    "bar_ready": [
+      "station_bar_bartender_tier1_ready.png"
+    ],
+    "bar_annoyed": [
+      "station_bar_bartender_tier1_annoyed_1.png",
+      "station_bar_bartender_tier1_annoyed_2.png"
+    ]
+  },
+  "alpha_note": "Checkerboard background removed; PNGs saved as true RGBA transparency.",
+  "processed_files": [
+    "station_bar_bartender_tier1_annoyed_1.png",
+    "station_bar_bartender_tier1_annoyed_2.png",
+    "station_bar_bartender_tier1_idle_1.png",
+    "station_bar_bartender_tier1_idle_2.png",
+    "station_bar_bartender_tier1_mixing_1.png",
+    "station_bar_bartender_tier1_mixing_2.png",
+    "station_bar_bartender_tier1_ready.png"
+  ]
+}

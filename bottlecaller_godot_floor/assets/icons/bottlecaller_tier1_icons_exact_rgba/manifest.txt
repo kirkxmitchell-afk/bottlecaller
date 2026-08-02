@@ -1,0 +1,12 @@
+BottleCaller Tier 1 icons cropped from the user-approved reference sheet.
+Format: PNG RGBA, 256x256, transparent background.
+
+icon_mood_happy.png
+icon_mood_neutral.png
+icon_mood_sad.png
+icon_wine_opportunity.png
+icon_food_order.png
+icon_drink_order.png
+icon_clear_table.png
+icon_bill.png
+icon_exclamation.png

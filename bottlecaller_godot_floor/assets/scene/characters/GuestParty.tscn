@@ -1,0 +1,21 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://assets/scripts/character/GuestParty.gd" id="1_guest_party"]
+[ext_resource type="Texture2D" path="res://assets/icons/bottlecaller_tier1_icons_exact_rgba/icon_exclamation.png" id="2_attention"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_party"]
+size = Vector2(130, 220)
+
+[node name="GuestParty" type="Area2D"]
+script = ExtResource("1_guest_party")
+
+[node name="SelectionShape" type="CollisionShape2D" parent="."]
+position = Vector2(0, -92)
+shape = SubResource("RectangleShape2D_party")
+disabled = true
+
+[node name="SelectionIcon" type="Sprite2D" parent="."]
+z_index = 1000
+position = Vector2(0, -205)
+scale = Vector2(0.16, 0.16)
+texture = ExtResource("2_attention")

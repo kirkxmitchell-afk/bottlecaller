@@ -5,6 +5,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build && node scripts/strip-oversized-assets.mjs",
+    "godot:web:restore": "node scripts/restore-godot-index.mjs",
+    "godot:r2:dry-run": "node scripts/publish-godot-r2.mjs --dry-run",
+    "godot:r2:publish": "node scripts/publish-godot-r2.mjs",
     "preview": "vite preview",
     "test": "node tests/run-node-tests.mjs"
   },
@@ -12,6 +15,7 @@
     "@supabase/supabase-js": "^2.90.1"
   },
   "devDependencies": {
-    "vite": "^7.3.1"
+    "vite": "^7.3.1",
+    "wrangler": "4.118.0"
   }
 }

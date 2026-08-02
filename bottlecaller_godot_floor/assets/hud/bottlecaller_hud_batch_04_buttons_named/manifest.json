@@ -1,0 +1,23 @@
+{
+  "asset_set": "BottleCaller HUD Batch 4 - Buttons",
+  "files": [
+    "button_stats.png",
+    "button_bottles.png",
+    "button_training.png",
+    "button_shift.png",
+    "button_settings.png"
+  ],
+  "source_mapping": {
+    "ornate_game_menu_button_with_stats.png": "button_stats.png",
+    "golden_bottle_label_with_ornate_trim.png": "button_bottles.png",
+    "training_button_with_ornate_gold_frame.png": "button_training.png",
+    "elegant_gold_and_green_game_badge.png": "button_shift.png",
+    "golden_gear_medallion_emblem_icon.png": "button_settings.png"
+  },
+  "notes": [
+    "Files are renamed for Godot import.",
+    "Use these as button art assets in the HUD CanvasLayer.",
+    "If you want fully text-free buttons later, those should be generated as a separate clean button-base set."
+  ],
+  "missing_sources": []
+}

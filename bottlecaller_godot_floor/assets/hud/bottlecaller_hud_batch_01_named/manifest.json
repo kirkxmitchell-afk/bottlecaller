@@ -1,0 +1,17 @@
+{
+  "asset_set": "BottleCaller HUD Batch 1 - Main Frames",
+  "files": [
+    "hud_top_bar.png",
+    "hud_goals_panel.png",
+    "hud_currency_panel.png",
+    "hud_bottom_button.png",
+    "hud_station_label.png",
+    "hud_choice_card.png",
+    "hud_speech_bubble.png"
+  ],
+  "notes": [
+    "All PNGs are true RGBA with transparent background.",
+    "No text or numbers are baked in; Godot should place labels/progress dynamically.",
+    "Use these as UI skins inside a CanvasLayer."
+  ]
+}

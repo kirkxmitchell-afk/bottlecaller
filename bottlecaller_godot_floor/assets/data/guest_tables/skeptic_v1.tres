@@ -1,0 +1,33 @@
+[gd_resource type="Resource" script_class="GuestTableProfile" load_steps=9 format=3 uid="uid://cotyncqpeahyq"]
+
+[ext_resource type="Script" uid="uid://cnu07mrme3aas" path="res://assets/scripts/tables/GuestTableProfile.gd" id="1_0bddr"]
+[ext_resource type="Texture2D" uid="uid://ceaixaeos23q3" path="res://assets/tables/bottlecaller_tier1_skeptic_table_versions_named/transparencies/table_skeptic_tier1_annoyed.png" id="1_fn656"]
+[ext_resource type="Texture2D" uid="uid://mbs3ivbmej4k" path="res://assets/tables/bottlecaller_tier1_skeptic_table_versions_named/transparencies/table_skeptic_tier1_appertief.png" id="2_hbvo4"]
+[ext_resource type="Texture2D" uid="uid://dbn28b3mdhlu5" path="res://assets/tables/bottlecaller_tier1_skeptic_table_versions_named/transparencies/table_skeptic_tier1_eating.png" id="3_vtpn8"]
+[ext_resource type="Texture2D" uid="uid://cx7fex15s0sot" path="res://assets/tables/bottlecaller_tier1_skeptic_table_versions_named/transparencies/table_skeptic_tier1_empty.png" id="4_jrrwl"]
+[ext_resource type="Texture2D" uid="uid://x181cyquubpd" path="res://assets/tables/bottlecaller_tier1_skeptic_table_versions_named/transparencies/table_skeptic_tier1_neutral.png" id="5_qaph3"]
+[ext_resource type="Texture2D" uid="uid://cr1dcjy0oe56r" path="res://assets/tables/bottlecaller_tier1_skeptic_table_versions_named/transparencies/table_skeptic_tier1_ready_to_clear.png" id="6_t2jpr"]
+[ext_resource type="Texture2D" uid="uid://dxcrsm2o4550p" path="res://assets/tables/bottlecaller_tier1_skeptic_table_versions_named/transparencies/table_skeptic_tier1_wine.png" id="8_on285"]
+
+[resource]
+script = ExtResource("1_0bddr")
+guest_id = "skeptic_v1"
+guest_display_name = "Precision Guest"
+guest_type = "skeptic"
+party_shape = "single"
+floor_character_key = "dont_guess"
+guest_hint = "Precision skeptic: relevance before trust, no guessing."
+greet_wine_response = "Convince me the bottle fits the table — not just the list."
+greet_aperitif_response = "An aperitif only if there is a clear reason for it."
+greet_food_response = "Food is fine. Just do not turn the table into a sales floor."
+walk_away_response = "Not yet. Come back when you have something specific."
+offer_food_response = "Fine. Start with food. Keep the rest precise."
+offer_wine_response = "Alright. One clear reason, then we will decide."
+annoyed_texture = ExtResource("1_fn656")
+aperitif_texture = ExtResource("2_hbvo4")
+eating_texture = ExtResource("3_vtpn8")
+empty_texture = ExtResource("4_jrrwl")
+neutral_texture = ExtResource("5_qaph3")
+ready_to_clear_texture = ExtResource("6_t2jpr")
+wine_texture = ExtResource("8_on285")
+metadata/_custom_type_script = "uid://cnu07mrme3aas"

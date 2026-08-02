@@ -4,7 +4,8 @@
  * run: node scripts/restore-godot-index.mjs
  * Restores BC bridge helpers and syncs fileSizes to the exported .pck/.wasm.
  */
-import { readFileSync, writeFileSync, statSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { createReadStream, readFileSync, writeFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -13,11 +14,20 @@ const godotDir = join(root, "public/godot-shift");
 const templatePath = join(root, "scripts/godot-shift-index.template.html");
 const outPath = join(godotDir, "index.html");
 
-/** Suffix so browser cache busts even when pck byte-size is unchanged. */
-const BUILD_ID = "20260801-skeptic-walker-swap-v1";
+async function sha256(path) {
+  return await new Promise((accept, reject) => {
+    const hash = createHash("sha256");
+    const stream = createReadStream(path);
+    stream.on("error", reject);
+    stream.on("data", (chunk) => hash.update(chunk));
+    stream.on("end", () => accept(hash.digest("hex")));
+  });
+}
 
-const pck = statSync(join(godotDir, "index.pck")).size;
+const pckPath = join(godotDir, "index.pck");
+const pck = statSync(pckPath).size;
 const wasm = statSync(join(godotDir, "index.wasm")).size;
+const BUILD_ID = `pck-${(await sha256(pckPath)).slice(0, 16)}`;
 const assetV = `${pck}-${BUILD_ID}`;
 let html = readFileSync(templatePath, "utf8");
 html = html.replace(

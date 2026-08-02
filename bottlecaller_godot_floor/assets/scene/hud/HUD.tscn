@@ -1,0 +1,328 @@
+[gd_scene load_steps=13 format=3 uid="uid://bg5k7p4lsabog"]
+
+[ext_resource type="Texture2D" uid="uid://vec7tc1lp6dg" path="res://assets/hud/bottlecaller_hud_batch_01_named/hud_top_bar.png" id="1_obt56"]
+[ext_resource type="Script" uid="uid://cbx3jm2sabxqi" path="res://assets/scripts/hud/HUDController.gd" id="1_uf7i5"]
+[ext_resource type="Texture2D" uid="uid://bfqsx3exioi3u" path="res://assets/hud/bottlecaller_hud_batch_02_icons_named/icon_coin.png" id="2_n0idc"]
+[ext_resource type="Texture2D" uid="uid://08vtfjn8bv7c" path="res://assets/hud/bottlecaller_hud_batch_02_icons_named/icon_bottle.png" id="3_qf7da"]
+[ext_resource type="Texture2D" uid="uid://br1uv1dvcrojo" path="res://assets/hud/bottlecaller_hud_batch_02_icons_named/icon_timer.png" id="4_4714r"]
+[ext_resource type="Texture2D" uid="uid://b0gcqjs5ug48d" path="res://assets/hud/bottlecaller_hud_batch_02_icons_named/icon_level.png" id="5_64kv3"]
+[ext_resource type="Texture2D" uid="uid://23eo5x6nv03w" path="res://assets/hud/bottlecaller_hud_objective_status_backgrounds/gameplay tier objective menu.png" id="6_64kv3"]
+[ext_resource type="Texture2D" uid="uid://4umjexemvm4a" path="res://assets/hud/bottlecaller_hud_objective_status_backgrounds/gameplay status menu.png" id="7_fu0mg"]
+[ext_resource type="Texture2D" uid="uid://dj01fg56sgag8" path="res://assets/icons/bottlecaller_icons_04/Icon Mise En Place transparent.png" id="8_uf7i5"]
+[ext_resource type="Texture2D" uid="uid://xd4wf47bra5a" path="res://assets/hud/bottlecaller_hud_batch_03_named/hud_progress_bar_frame.png" id="10_0tlwq"]
+[ext_resource type="Texture2D" uid="uid://dqe6ce14uogex" path="res://assets/hud/bottlecaller_hud_batch_03_named/hud_progress_bar_fill.png" id="11_mctcb"]
+[ext_resource type="Texture2D" uid="uid://cqynaqns3y73i" path="res://assets/hud/bottlecaller_hud_batch_03_named/hud_meter_slot_filled.png" id="12_mctcb"]
+
+[node name="Hud" type="CanvasLayer"]
+script = ExtResource("1_uf7i5")
+
+[node name="HUDRoot" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_right = 448.0
+offset_bottom = 252.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="TopBar" type="TextureRect" parent="HUDRoot"]
+layout_mode = 0
+offset_right = 1640.0
+offset_bottom = 128.0
+mouse_filter = 2
+texture = ExtResource("1_obt56")
+
+[node name="APLabel" type="Label" parent="HUDRoot"]
+visible = false
+layout_mode = 0
+offset_left = 136.13
+offset_top = 57.0
+offset_right = 176.13
+offset_bottom = 80.0
+text = "AP: 0"
+
+[node name="CoinDisplay" type="Label" parent="HUDRoot"]
+layout_mode = 0
+offset_left = 1272.0
+offset_top = 168.0
+offset_right = 1333.0
+offset_bottom = 191.0
+text = "Coins: 0"
+
+[node name="BottleMeter" type="Label" parent="HUDRoot"]
+layout_mode = 0
+offset_left = 1125.0
+offset_top = 97.0
+offset_right = 1221.0
+offset_bottom = 120.0
+text = "Bottles: 0 / 5"
+
+[node name="ShiftTimer" type="Label" parent="HUDRoot"]
+layout_mode = 0
+offset_left = 832.0
+offset_top = 55.0
+offset_right = 920.0
+offset_bottom = 78.0
+text = "Time: 05:00"
+
+[node name="GoalPanel" type="TextureRect" parent="HUDRoot"]
+visible = false
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 40.0
+mouse_filter = 2
+
+[node name="BottomButtons" type="Control" parent="HUDRoot"]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 37.0
+offset_bottom = 40.0
+mouse_filter = 2
+
+[node name="CoinIcon" type="TextureRect" parent="HUDRoot"]
+layout_mode = 0
+offset_left = 1179.0
+offset_top = 152.0
+offset_right = 3099.0
+offset_bottom = 1232.0
+scale = Vector2(0.05, 0.05)
+texture = ExtResource("2_n0idc")
+
+[node name="BottleIcon" type="TextureRect" parent="HUDRoot"]
+layout_mode = 0
+offset_left = 1106.0
+offset_top = 22.0
+offset_right = 2130.0
+offset_bottom = 1046.0
+scale = Vector2(0.08, 0.08)
+texture = ExtResource("3_qf7da")
+
+[node name="TimerIcon" type="TextureRect" parent="HUDRoot"]
+layout_mode = 0
+offset_left = 676.0
+offset_top = 33.0
+offset_right = 2596.0
+offset_bottom = 1113.0
+scale = Vector2(0.06, 0.06)
+texture = ExtResource("4_4714r")
+expand_mode = 1
+
+[node name="LevelIcon" type="TextureRect" parent="HUDRoot"]
+layout_mode = 0
+offset_left = -24.0
+offset_top = 11.0
+offset_right = 1896.0
+offset_bottom = 1091.0
+scale = Vector2(0.11, 0.11)
+texture = ExtResource("5_64kv3")
+
+[node name="TierGoalsHUD" type="TextureRect" parent="HUDRoot"]
+visible = false
+layout_mode = 0
+offset_left = 228.0
+offset_top = 183.0
+offset_right = 483.0
+offset_bottom = 452.0
+mouse_filter = 2
+texture = ExtResource("6_64kv3")
+expand_mode = 1
+
+[node name="TierTitleLabel" type="Label" parent="HUDRoot/TierGoalsHUD"]
+layout_mode = 0
+offset_left = 71.0
+offset_top = 10.0
+offset_right = 174.0
+offset_bottom = 33.0
+text = "TIER 1 GOALS"
+
+[node name="TierGoalLabel" type="Label" parent="HUDRoot/TierGoalsHUD"]
+layout_mode = 0
+offset_left = 15.0
+offset_top = 41.0
+offset_right = 317.0
+offset_bottom = 64.0
+scale = Vector2(0.75, 0.75)
+text = "Complete all four goals to unlock Tier 2"
+
+[node name="TablesRequirementLabel" type="Label" parent="HUDRoot/TierGoalsHUD"]
+layout_mode = 0
+offset_left = 72.0
+offset_top = 71.0
+offset_right = 174.0
+offset_bottom = 94.0
+text = "TABLES   0 / 5"
+
+[node name="CoinsRequirementLabel" type="Label" parent="HUDRoot/TierGoalsHUD"]
+layout_mode = 0
+offset_left = 73.0
+offset_top = 106.0
+offset_right = 177.0
+offset_bottom = 129.0
+text = "COINS   0 / 60"
+
+[node name="WinesRequirementLabel" type="Label" parent="HUDRoot/TierGoalsHUD"]
+layout_mode = 0
+offset_left = 54.0
+offset_top = 150.0
+offset_right = 196.0
+offset_bottom = 173.0
+text = "WINES SOLD   0 / 4"
+
+[node name="StationRequirementLabel" type="Label" parent="HUDRoot/TierGoalsHUD"]
+layout_mode = 0
+offset_left = 37.0
+offset_top = 192.0
+offset_right = 214.0
+offset_bottom = 215.0
+text = "STATION SCORE   0 / 12"
+
+[node name="GoalsCompleteLabel" type="Label" parent="HUDRoot/TierGoalsHUD"]
+layout_mode = 0
+offset_left = 36.0
+offset_top = 236.0
+offset_right = 221.0
+offset_bottom = 259.0
+text = "GOALS COMPLETE   0 / 4"
+
+[node name="LiveStatusHUD" type="TextureRect" parent="HUDRoot"]
+visible = false
+layout_mode = 0
+offset_left = 1110.0
+offset_top = 285.0
+offset_right = 2627.0
+offset_bottom = 1820.0
+scale = Vector2(0.16, 0.16)
+mouse_filter = 2
+texture = ExtResource("7_fu0mg")
+stretch_mode = 5
+
+[node name="MiseIcon" type="TextureRect" parent="HUDRoot/LiveStatusHUD"]
+layout_mode = 0
+offset_left = 275.0
+offset_top = 100.0
+offset_right = 1617.0
+offset_bottom = 1442.0
+scale = Vector2(0.34, 0.34)
+texture = ExtResource("8_uf7i5")
+
+[node name="MiseLabel" type="Label" parent="HUDRoot/LiveStatusHUD"]
+layout_mode = 0
+offset_left = 331.25
+offset_top = 556.25
+offset_right = 458.25
+offset_bottom = 579.25
+scale = Vector2(2.78, 2.78)
+text = "MISE NEEDED ×1"
+
+[node name="TaskLabel" type="Label" parent="HUDRoot/LiveStatusHUD"]
+layout_mode = 0
+offset_left = 156.0
+offset_top = 681.0
+offset_right = 474.0
+offset_bottom = 764.0
+scale = Vector2(3.7, 3.7)
+text = "TASK
+Collect food from Chef for TableSlot_02"
+autowrap_mode = 2
+
+[node name="LocationLabel" type="Label" parent="HUDRoot/LiveStatusHUD"]
+layout_mode = 0
+offset_left = 163.0
+offset_top = 1056.0
+offset_right = 444.0
+offset_bottom = 1127.0
+scale = Vector2(4.12, 4.12)
+text = "LOCATION
+Chef Station → TableSlot_02"
+autowrap_mode = 2
+
+[node name="APProgressBar" type="TextureProgressBar" parent="HUDRoot"]
+layout_mode = 0
+offset_left = 162.857
+offset_top = -54.2857
+offset_right = 2082.86
+offset_bottom = 1025.71
+scale = Vector2(0.22, 0.22)
+value = 45.0
+texture_under = ExtResource("10_0tlwq")
+texture_progress = ExtResource("11_mctcb")
+
+[node name="APValueLabel" type="Label" parent="HUDRoot"]
+layout_mode = 0
+offset_left = 207.0
+offset_top = 55.0
+offset_right = 547.0
+offset_bottom = 78.0
+text = "AP: 45 / 100"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="LevelLabel" type="Label" parent="HUDRoot"]
+layout_mode = 0
+offset_left = 60.0
+offset_top = 50.0
+offset_right = 100.0
+offset_bottom = 73.0
+text = "1"
+
+[node name="BottleFill_01" type="TextureRect" parent="HUDRoot"]
+layout_mode = 0
+offset_left = 1138.57
+offset_top = 22.8572
+offset_right = 3058.57
+offset_bottom = 1102.86
+scale = Vector2(0.08, 0.08)
+mouse_filter = 2
+texture = ExtResource("12_mctcb")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="BottleFill_02" type="TextureRect" parent="HUDRoot"]
+layout_mode = 0
+offset_left = 1205.71
+offset_top = 22.8571
+offset_right = 3125.71
+offset_bottom = 1102.86
+scale = Vector2(0.08, 0.08)
+mouse_filter = 2
+texture = ExtResource("12_mctcb")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="BottleFill_03" type="TextureRect" parent="HUDRoot"]
+layout_mode = 0
+offset_left = 1274.29
+offset_top = 22.8571
+offset_right = 3194.29
+offset_bottom = 1102.86
+scale = Vector2(0.08, 0.08)
+mouse_filter = 2
+texture = ExtResource("12_mctcb")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="BottleFill_04" type="TextureRect" parent="HUDRoot"]
+layout_mode = 0
+offset_left = 1341.43
+offset_top = 22.8571
+offset_right = 3261.43
+offset_bottom = 1102.86
+scale = Vector2(0.08, 0.08)
+mouse_filter = 2
+texture = ExtResource("12_mctcb")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="BottleFill_05" type="TextureRect" parent="HUDRoot"]
+layout_mode = 0
+offset_left = 1410.0
+offset_top = 24.2857
+offset_right = 3330.0
+offset_bottom = 1104.29
+scale = Vector2(0.08, 0.08)
+mouse_filter = 2
+texture = ExtResource("12_mctcb")
+expand_mode = 1
+stretch_mode = 5

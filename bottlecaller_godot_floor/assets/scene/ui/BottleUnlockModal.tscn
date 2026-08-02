@@ -1,0 +1,10 @@
+[gd_scene load_steps=4 format=3 uid="uid://ds40sqyarj3b7"]
+
+[ext_resource type="Script" uid="uid://b3eas53bogs5t" path="res://assets/scripts/ui/BottleUnlockModal.gd" id="1_l1wew"]
+[ext_resource type="Texture2D" uid="uid://dibn1xf2d5sv5" path="res://assets/rewards/bottle_unlock_closed_rgba.png" id="2_you3x"]
+[ext_resource type="Texture2D" uid="uid://72tt8ikcdgr3" path="res://assets/rewards/bottle_unlock_cork_rgba.png" id="3_g40bj"]
+
+[node name="BottleUnlockModal" type="CanvasLayer"]
+script = ExtResource("1_l1wew")
+bottle_texture = ExtResource("2_you3x")
+cork_texture = ExtResource("3_g40bj")

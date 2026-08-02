@@ -1,0 +1,29 @@
+{
+  "asset_set": "BottleCaller Tier 1 - Blonde Date Couple Table Setup Variations",
+  "created_at": "2026-07-01T10:25:51.773936+00:00",
+  "purpose": "Godot table state sprites for the blonde date couple encounter.",
+  "files": [
+    "table_blonde_date_tier1_empty.png",
+    "table_blonde_date_tier1_neutral.png",
+    "table_blonde_date_tier1_place_settings.png",
+    "table_blonde_date_tier1_wine_engaged.png",
+    "table_blonde_date_tier1_eating.png",
+    "table_blonde_date_tier1_ready_to_clear.png",
+    "table_blonde_date_tier1_toast.png"
+  ],
+  "notes": [
+    "Use these as Sprite2D/TextureRect table-state assets in Godot.",
+    "Keep the same table footprint, booth, green mat, gold border, camera angle, and simplified graphic style.",
+    "This batch is based on the uploaded blonde couple encounter image and the approved table setup style."
+  ],
+  "source_mapping": {
+    "cozy_diner_booth_setting_illustration.png": "table_blonde_date_tier1_empty.png",
+    "cozy_booth_for_two_in_candlelight.png": "table_blonde_date_tier1_neutral.png",
+    "romantic_dinner_booth_scene.png": "table_blonde_date_tier1_place_settings.png",
+    "romantic_dinner_in_a_cozy_booth.png": "table_blonde_date_tier1_wine_engaged.png",
+    "romantic_dinner_in_cozy_booth.png": "table_blonde_date_tier1_eating.png",
+    "cozy_dinner_booth_for_two.png": "table_blonde_date_tier1_ready_to_clear.png",
+    "romantic_dinner_toast_in_cosy_booth.png": "table_blonde_date_tier1_toast.png"
+  },
+  "missing_sources": []
+}

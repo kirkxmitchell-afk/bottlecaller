@@ -1,0 +1,9 @@
+[gd_scene format=3 uid="uid://cbnnv3ic21w3f"]
+
+[node name="Main" type="Node2D"]
+
+[node name="RestaurantFloor" type="Node" parent="."]
+
+[node name="HUDLayer" type="Node" parent="."]
+
+[node name="BridgeController" type="Node" parent="."]
