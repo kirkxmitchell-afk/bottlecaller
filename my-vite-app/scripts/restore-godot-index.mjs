@@ -14,7 +14,7 @@ const templatePath = join(root, "scripts/godot-shift-index.template.html");
 const outPath = join(godotDir, "index.html");
 
 /** Suffix so browser cache busts even when pck byte-size is unchanged. */
-const BUILD_ID = "20260730-authority-v1";
+const BUILD_ID = "20260801-skeptic-walker-swap-v1";
 
 const pck = statSync(join(godotDir, "index.pck")).size;
 const wasm = statSync(join(godotDir, "index.wasm")).size;

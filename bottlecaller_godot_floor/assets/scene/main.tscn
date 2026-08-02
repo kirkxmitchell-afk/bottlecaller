@@ -1,0 +1,325 @@
+[gd_scene load_steps=45 format=3 uid="uid://bevu6ra0jqmt3"]
+
+[ext_resource type="Texture2D" uid="uid://c0cmy5dtpbpve" path="res://assets/stations/bottlecaller_tier1_bar_station_true_rgba/station_bar_bartender_tier1_idle_1.png" id="1_2xo41"]
+[ext_resource type="Script" uid="uid://co1vooocewfaq" path="res://assets/scripts/core/Main_MULTI_TABLE_SHIFT_SUMMARY_CONTAINED.gd" id="1_qbxcr"]
+[ext_resource type="Texture2D" uid="uid://ckeap5iw4gbr7" path="res://assets/stations/bottlecaller_tier1_chef_station_rgba/station_kitchen_chef_tier1_idle_1.png" id="2_qey4p"]
+[ext_resource type="Texture2D" uid="uid://4y8b6eqf3dq4" path="res://assets/stations/bottlecaller_scullery_rgba_pack/station_scullery_tier1_empty.png" id="3_xksna"]
+[ext_resource type="Texture2D" uid="uid://dyvqhkoni7b87" path="res://assets/stations/bottlecaller_tier1_mise_en_place_true_rgba_v2/station_mise_en_place_tier1_stocked.png" id="4_bhk2f"]
+[ext_resource type="Resource" uid="uid://cptmu8v1kld8j" path="res://assets/data/guest_tables/skeptic_reader.tres" id="5_5wykg"]
+[ext_resource type="Texture2D" uid="uid://bykmste2r2tuo" path="res://assets/stations/bottlecaller_tier1_bar_station_true_rgba/station_bar_bartender_tier1_mixing_1.png" id="5_ie087"]
+[ext_resource type="Texture2D" uid="uid://dlv25sc605hph" path="res://assets/stations/bottlecaller_tier1_pos_compact_true_rgba/station_pos_tier1_idle.png" id="5_l33ta"]
+[ext_resource type="Texture2D" uid="uid://ccbst3pgxdh24" path="res://assets/stations/bottlecaller_tier1_bar_station_true_rgba/station_bar_bartender_tier1_ready.png" id="6_i4ti5"]
+[ext_resource type="Resource" uid="uid://cotyncqpeahyq" path="res://assets/data/guest_tables/skeptic_v1.tres" id="6_lkaa4"]
+[ext_resource type="Resource" uid="uid://dd0qe700ptjgq" path="res://assets/data/guest_tables/african_regular_table.tres" id="7_qbxcr"]
+[ext_resource type="Texture2D" uid="uid://b64wnc18y06v" path="res://assets/stations/bottlecaller_tier1_bar_station_true_rgba/station_bar_bartender_tier1_annoyed_2.png" id="7_wgram"]
+[ext_resource type="PackedScene" uid="uid://ds40sqyarj3b7" path="res://assets/scene/ui/BottleUnlockModal.tscn" id="7_ybg3o"]
+[ext_resource type="Texture2D" uid="uid://xh37dqt6ijy" path="res://assets/tables/bottlecaller_tier1_blonde_date_table_versions_named/transparencies/table_blonde_date_tier1_neutral.png" id="7_ypxfr"]
+[ext_resource type="Texture2D" uid="uid://bxxi7b7x2w6cl" path="res://assets/background/tier1_restaurant_background_matte.png" id="8_cgi7o"]
+[ext_resource type="Script" uid="uid://chvrtl5527k37" path="res://assets/scripts/stations/StationController.gd" id="8_hoeb4"]
+[ext_resource type="PackedScene" uid="uid://bhavcoj6serx1" path="res://assets/scene/characters/Waiter.tscn" id="10_bhk2f"]
+[ext_resource type="Texture2D" uid="uid://do3nr1e2bel62" path="res://assets/stations/bottlecaller_tier1_chef_station_rgba/station_kitchen_chef_tier1_annoyed_1.png" id="10_i4ti5"]
+[ext_resource type="Texture2D" uid="uid://beuqbhoiurgas" path="res://assets/stations/bottlecaller_tier1_chef_station_rgba/station_kitchen_chef_tier1_cooking_1.png" id="10_wgram"]
+[ext_resource type="Texture2D" uid="uid://x181cyquubpd" path="res://assets/tables/bottlecaller_tier1_skeptic_table_versions_named/transparencies/table_skeptic_tier1_neutral.png" id="11_4ke7j"]
+[ext_resource type="Texture2D" uid="uid://iudmehqyqldv" path="res://assets/stations/bottlecaller_tier1_chef_station_rgba/station_kitchen_chef_tier1_ready.png" id="11_d05g7"]
+[ext_resource type="Texture2D" uid="uid://4wsctdf2fbsk" path="res://assets/stations/bottlecaller_tier1_pos_compact_true_rgba/station_pos_tier1_active.png" id="14_3c4ny"]
+[ext_resource type="Texture2D" uid="uid://62yui35wuonl" path="res://assets/stations/bottlecaller_scullery_rgba_pack/station_scullery_tier1_active.png" id="14_l5fta"]
+[ext_resource type="Texture2D" uid="uid://bfdr8myi0obbb" path="res://assets/stations/bottlecaller_scullery_rgba_pack/station_scullery_tier1_full.png" id="15_3c4ny"]
+[ext_resource type="Texture2D" uid="uid://f1d0orcviqor" path="res://assets/stations/bottlecaller_tier1_mise_en_place_true_rgba_v2/station_mise_en_place_tier1_low.png" id="17_3c4ny"]
+[ext_resource type="Resource" uid="uid://b86f1tc2e62gx" path="res://assets/data/guest_tables/blonde_date.tres" id="19_wgram"]
+[ext_resource type="Resource" uid="uid://dgjmkp16ve572" path="res://assets/data/guest_tables/african_older_gentleman.tres" id="21_d05g7"]
+[ext_resource type="Texture2D" uid="uid://bvra0cp1g78ct" path="res://assets/icons/bottlecaller_tier1_icons_exact_rgba/icon_mood_happy.png" id="25_hoeb4"]
+[ext_resource type="Texture2D" uid="uid://b5pu452b2s11l" path="res://assets/icons/bottlecaller_tier1_icons_exact_rgba/icon_mood_neutral.png" id="26_a14qu"]
+[ext_resource type="Script" uid="uid://cnynmjboba47f" path="res://assets/scripts/character/WaiterController_STRICT_NAVIGATION.gd" id="27_3c4ny"]
+[ext_resource type="Texture2D" uid="uid://dtqcwu4mjfblo" path="res://assets/icons/bottlecaller_tier1_icons_exact_rgba/icon_mood_sad.png" id="27_bcunw"]
+[ext_resource type="Script" uid="uid://bga6qwffheix" path="res://assets/scripts/tables/TableController.gd" id="27_ybg3o"]
+[ext_resource type="Texture2D" uid="uid://cgtsb6lnimyj6" path="res://assets/icons/bottlecaller_tier1_icons_exact_rgba/icon_exclamation.png" id="28_exclaim"]
+[ext_resource type="Texture2D" uid="uid://dvfs5pwk7sbj1" path="res://assets/stations/bottlecaller_tier1_bar_station_true_rgba/station_bar_bartender_tier1_getting_wine.png" id="29_getwine"]
+[ext_resource type="Texture2D" uid="uid://c87w2lj0l34qu" path="res://assets/stations/bottlecaller_tier1_bar_station_true_rgba/station_bar_bartender_tier1_wine_ready.png" id="30_wineready"]
+[ext_resource type="Script" uid="uid://boftiu1lblsuj" path="res://assets/scripts/core/BridgeController.gd" id="bridge_controller_script"]
+[ext_resource type="Script" path="res://assets/scripts/core/ShiftServiceSystem.gd" id="shift_service_system_script"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_edll7"]
+size = Vector2(230, 231)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_koyy4"]
+size = Vector2(203, 205)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_5q150"]
+size = Vector2(108, 200)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_pbdpv"]
+size = Vector2(149, 193)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_l5fta"]
+size = Vector2(140, 177)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_4ke7j"]
+size = Vector2(192, 136)
+
+[sub_resource type="NavigationPolygon" id="NavigationPolygon_2bv1t"]
+vertices = PackedVector2Array(818.188, -204, 924.562, -30.1719, 930.453, 163.523, 867.023, 127.547, 696.633, -94.0391, 701.25, -222.992, 1117.03, -20.9219, 1128.1, 39.9766, 849.812, 209.656, 1002.98, 309.07, 1006.88, 329.102, 674.891, 331.906, 674.062, 255.258, 776.992, 205.859, 709.656, 108.922, 747.523, 137.539, 1110.36, -204, 420.617, -101.539, 138.953, -73.8516, 95.3203, -122.922, 168.602, -183.977, 473.773, -182.992, -310.367, 293.203, -277.641, -235.242, -189.094, -228.359, -141.938, -87.7031, -146.219, 109.039, 584.281, 212.047, 579.477, 310.797, 141.117, 107.961, 406.297, 111.078, 634.75, -129.07, 516.82, -221.031, 586.852, -109.898, -115, -135.977, 664.859, 165.852)
+polygons = Array[PackedInt32Array]([PackedInt32Array(0, 1, 2, 3, 4, 5), PackedInt32Array(6, 7, 1), PackedInt32Array(8, 9, 10, 11, 12, 13), PackedInt32Array(14, 4, 3, 8, 15), PackedInt32Array(16, 6, 1, 0), PackedInt32Array(17, 18, 19, 20, 21), PackedInt32Array(22, 23, 24, 25, 26), PackedInt32Array(27, 28, 22, 26, 29, 30), PackedInt32Array(5, 4, 31, 32), PackedInt32Array(32, 31, 33, 17, 21), PackedInt32Array(18, 17, 30, 29), PackedInt32Array(24, 34, 25), PackedInt32Array(27, 30, 14, 35), PackedInt32Array(15, 35, 14), PackedInt32Array(15, 8, 13)])
+outlines = Array[PackedVector2Array]([PackedVector2Array(417, 101, 699, 99, 687, -88, 634, -118, 589, -100, 430, -92), PackedVector2Array(-321, 303, -287, -246, -184, -238, -103, -137, -132, -85, -136, 99, 131, 98, 129, -70, 81, -124, 165, -194, 470, -193, 513, -231, 702, -233, 819, -214, 1120, -214, 1127, -22, 1141, 55, 935, -16, 941, 181, 874, 143, 861, 205, 1012, 303, 1019, 339, 665, 342, 664, 249, 764, 201, 742, 150, 669, 175, 594, 218, 589, 321)])
+
+[node name="Main" type="Node2D"]
+script = ExtResource("1_qbxcr")
+guest_profile_resources = Array[Resource]([ExtResource("19_wgram"), ExtResource("21_d05g7"), ExtResource("5_5wykg"), ExtResource("6_lkaa4"), ExtResource("7_qbxcr")])
+tier_2_required_wine_sales = 4
+bottle_unlock_modal_scene = ExtResource("7_ybg3o")
+
+[node name="ShiftServiceSystem" type="Node" parent="."]
+script = ExtResource("shift_service_system_script")
+
+[node name="BridgeController" type="Node" parent="."]
+script = ExtResource("bridge_controller_script")
+
+[node name="RestaurantFloor" type="Node2D" parent="."]
+
+[node name="Stations" type="Node" parent="RestaurantFloor"]
+
+[node name="BarStation" type="Area2D" parent="RestaurantFloor/Stations"]
+position = Vector2(4.39, -44.55)
+scale = Vector2(0.88, 0.88)
+script = ExtResource("8_hoeb4")
+idle_texture = ExtResource("1_2xo41")
+active_texture = ExtResource("5_ie087")
+ready_texture = ExtResource("6_i4ti5")
+annoyed_texture = ExtResource("7_wgram")
+getting_wine_texture = ExtResource("29_getwine")
+wine_ready_texture = ExtResource("30_wineready")
+mood_happy_texture = ExtResource("25_hoeb4")
+mood_neutral_texture = ExtResource("26_a14qu")
+mood_annoyed_texture = ExtResource("27_bcunw")
+speech_bubble_head_offset = Vector2(36, 55)
+happy_icon_hold_seconds = 2.5
+
+[node name="Sprite2D" type="Sprite2D" parent="RestaurantFloor/Stations/BarStation"]
+position = Vector2(-1.448, -275.3)
+scale = Vector2(0.366826, 0.366826)
+texture = ExtResource("1_2xo41")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="RestaurantFloor/Stations/BarStation"]
+position = Vector2(0, -295.5)
+shape = SubResource("RectangleShape2D_edll7")
+
+[node name="InteractionPoint" type="Marker2D" parent="RestaurantFloor/Stations/BarStation"]
+position = Vector2(193.15, -136.43)
+
+[node name="MoodAnchor" type="Marker2D" parent="RestaurantFloor/Stations/BarStation"]
+position = Vector2(0, -400)
+
+[node name="ChefStation" type="Area2D" parent="RestaurantFloor/Stations"]
+position = Vector2(-4.23, 18.43)
+script = ExtResource("8_hoeb4")
+station_id = "chef"
+display_name = "chef"
+idle_texture = ExtResource("2_qey4p")
+active_texture = ExtResource("10_wgram")
+ready_texture = ExtResource("11_d05g7")
+annoyed_texture = ExtResource("10_i4ti5")
+mood_happy_texture = ExtResource("25_hoeb4")
+mood_neutral_texture = ExtResource("26_a14qu")
+mood_annoyed_texture = ExtResource("27_bcunw")
+mood_icon_z_index = 1000
+speech_bubble_head_offset = Vector2(-12, 58)
+mood_hover_amplitude = 5.0
+mood_hover_speed = 2.2
+happy_icon_hold_seconds = 2.5
+
+[node name="Sprite2D" type="Sprite2D" parent="RestaurantFloor/Stations/ChefStation"]
+position = Vector2(331.79, -358.62)
+scale = Vector2(0.66, 0.66)
+texture = ExtResource("2_qey4p")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="RestaurantFloor/Stations/ChefStation"]
+position = Vector2(343.5, -336.5)
+shape = SubResource("RectangleShape2D_koyy4")
+
+[node name="InteractionPoint" type="Marker2D" parent="RestaurantFloor/Stations/ChefStation"]
+position = Vector2(359, -150)
+
+[node name="MoodAnchor" type="Marker2D" parent="RestaurantFloor/Stations/ChefStation"]
+position = Vector2(350, -430)
+
+[node name="SculleryStation" type="Area2D" parent="RestaurantFloor/Stations"]
+position = Vector2(0, -24.15)
+script = ExtResource("8_hoeb4")
+station_id = "scullery"
+display_name = "scullery"
+idle_texture = ExtResource("3_xksna")
+active_texture = ExtResource("14_l5fta")
+empty_texture = ExtResource("3_xksna")
+full_texture = ExtResource("15_3c4ny")
+mood_happy_texture = ExtResource("25_hoeb4")
+mood_neutral_texture = ExtResource("26_a14qu")
+mood_annoyed_texture = ExtResource("27_bcunw")
+mood_icon_z_index = 1000
+mood_hover_amplitude = 5.0
+mood_hover_speed = 2.2
+happy_icon_hold_seconds = 2.5
+
+[node name="Sprite2D" type="Sprite2D" parent="RestaurantFloor/Stations/SculleryStation"]
+position = Vector2(621.13, -325.18)
+scale = Vector2(0.18, 0.18)
+texture = ExtResource("3_xksna")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="RestaurantFloor/Stations/SculleryStation"]
+position = Vector2(621, -326)
+shape = SubResource("RectangleShape2D_5q150")
+
+[node name="InteractionPoint" type="Marker2D" parent="RestaurantFloor/Stations/SculleryStation"]
+position = Vector2(620, -150)
+
+[node name="MoodAnchor" type="Marker2D" parent="RestaurantFloor/Stations/SculleryStation"]
+position = Vector2(620, -430)
+
+[node name="POSStation" type="Area2D" parent="RestaurantFloor/Stations"]
+script = ExtResource("8_hoeb4")
+station_id = "pos"
+display_name = "pos"
+idle_texture = ExtResource("5_l33ta")
+active_texture = ExtResource("14_3c4ny")
+mood_happy_texture = ExtResource("25_hoeb4")
+mood_neutral_texture = ExtResource("26_a14qu")
+mood_annoyed_texture = ExtResource("27_bcunw")
+mood_icon_z_index = 1000
+attention_texture = ExtResource("28_exclaim")
+mood_hover_amplitude = 5.0
+mood_hover_speed = 2.2
+show_happy_mood = false
+happy_icon_hold_seconds = 2.5
+
+[node name="Sprite2D" type="Sprite2D" parent="RestaurantFloor/Stations/POSStation"]
+position = Vector2(1022.58, 94.11)
+scale = Vector2(0.22, 0.22)
+texture = ExtResource("5_l33ta")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="RestaurantFloor/Stations/POSStation"]
+position = Vector2(1028.5, 93.5)
+shape = SubResource("RectangleShape2D_pbdpv")
+
+[node name="InteractionPoint" type="Marker2D" parent="RestaurantFloor/Stations/POSStation"]
+position = Vector2(1050, 16.93)
+
+[node name="MoodAnchor" type="Marker2D" parent="RestaurantFloor/Stations/POSStation"]
+position = Vector2(1050, 0)
+
+[node name="MiseEnPlaceStation" type="Area2D" parent="RestaurantFloor/Stations"]
+position = Vector2(12.32, -3.91)
+script = ExtResource("8_hoeb4")
+station_id = "mise_en_place"
+display_name = "mise_en_place"
+stocked_texture = ExtResource("4_bhk2f")
+low_texture = ExtResource("17_3c4ny")
+mood_happy_texture = ExtResource("25_hoeb4")
+mood_neutral_texture = ExtResource("26_a14qu")
+mood_annoyed_texture = ExtResource("27_bcunw")
+mood_icon_z_index = 1000
+attention_texture = ExtResource("28_exclaim")
+mood_hover_amplitude = 5.0
+mood_hover_speed = 2.2
+happy_icon_hold_seconds = 2.5
+
+[node name="Sprite2D" type="Sprite2D" parent="RestaurantFloor/Stations/MiseEnPlaceStation"]
+position = Vector2(896.37, -316.83)
+scale = Vector2(0.18, 0.18)
+texture = ExtResource("4_bhk2f")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="RestaurantFloor/Stations/MiseEnPlaceStation"]
+position = Vector2(893, -322.5)
+shape = SubResource("RectangleShape2D_l5fta")
+
+[node name="InteractionPoint" type="Marker2D" parent="RestaurantFloor/Stations/MiseEnPlaceStation"]
+position = Vector2(900, -150)
+
+[node name="MoodAnchor" type="Marker2D" parent="RestaurantFloor/Stations/MiseEnPlaceStation"]
+position = Vector2(900, -400)
+
+[node name="Tables" type="Node" parent="RestaurantFloor"]
+
+[node name="TableSlot_01" type="Area2D" parent="RestaurantFloor/Tables" groups=["service_tables"]]
+script = ExtResource("27_ybg3o")
+table_id = "TableSlot_01"
+starting_guest_profile = ExtResource("19_wgram")
+starts_with_guests = false
+status_offset = Vector2(-110, -95)
+mood_happy_texture = ExtResource("25_hoeb4")
+mood_neutral_texture = ExtResource("26_a14qu")
+mood_annoyed_texture = ExtResource("27_bcunw")
+mood_icon_z_index = 1000
+attention_texture = ExtResource("28_exclaim")
+mood_hover_amplitude = 5.0
+mood_hover_speed = 2.2
+happy_icon_hold_seconds = 2.5
+
+[node name="Sprite2D" type="Sprite2D" parent="RestaurantFloor/Tables/TableSlot_01"]
+scale = Vector2(0.24, 0.24)
+texture = ExtResource("7_ypxfr")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="RestaurantFloor/Tables/TableSlot_01"]
+position = Vector2(-7, 16)
+shape = SubResource("RectangleShape2D_4ke7j")
+
+[node name="InteractionPoint" type="Marker2D" parent="RestaurantFloor/Tables/TableSlot_01"]
+position = Vector2(0, 170)
+
+[node name="TableSlot_02" type="Area2D" parent="RestaurantFloor/Tables" groups=["service_tables"]]
+position = Vector2(560, 0)
+script = ExtResource("27_ybg3o")
+table_id = "TableSlot_02"
+encounter_id = "skeptic"
+starting_guest_profile = ExtResource("21_d05g7")
+starts_with_guests = false
+status_offset = Vector2(-110, -95)
+mood_happy_texture = ExtResource("25_hoeb4")
+mood_neutral_texture = ExtResource("26_a14qu")
+mood_annoyed_texture = ExtResource("27_bcunw")
+mood_icon_z_index = 1000
+attention_texture = ExtResource("28_exclaim")
+mood_hover_amplitude = 5.0
+mood_hover_speed = 2.2
+happy_icon_hold_seconds = 2.5
+
+[node name="Sprite2D" type="Sprite2D" parent="RestaurantFloor/Tables/TableSlot_02"]
+scale = Vector2(0.24, 0.24)
+texture = ExtResource("11_4ke7j")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="RestaurantFloor/Tables/TableSlot_02"]
+position = Vector2(-7, 16)
+shape = SubResource("RectangleShape2D_4ke7j")
+
+[node name="InteractionPoint" type="Marker2D" parent="RestaurantFloor/Tables/TableSlot_02"]
+position = Vector2(0, 170)
+
+[node name="GuestEntrance" type="Marker2D" parent="RestaurantFloor"]
+position = Vector2(815, 250)
+
+[node name="Characters" type="Node" parent="RestaurantFloor"]
+
+[node name="WorldIcons" type="Node" parent="RestaurantFloor"]
+
+[node name="Background" type="Sprite2D" parent="RestaurantFloor"]
+z_index = -100
+position = Vector2(381, -101)
+texture = ExtResource("8_cgi7o")
+
+[node name="FloorNavigation" type="NavigationRegion2D" parent="RestaurantFloor"]
+navigation_polygon = SubResource("NavigationPolygon_2bv1t")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+offset = Vector2(384.52, -100)
+zoom = Vector2(0.96, 0.96)
+
+[node name="Waiter" parent="." instance=ExtResource("10_bhk2f")]
+position = Vector2(356, 7)
+scale = Vector2(0.21, 0.21)
+script = ExtResource("27_3c4ny")
+waiter_z_index = 200
+navigation_speed = 280.0
+path_desired_distance = 16.0
+target_desired_distance = 14.0
+navigation_map_wait_frames = 120
+clamp_targets_to_navigation = true
+use_direct_fallback = false
+navigation_debug_enabled = false
+default_direction = "up"

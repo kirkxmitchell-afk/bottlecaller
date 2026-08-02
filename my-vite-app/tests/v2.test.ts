@@ -30,6 +30,7 @@ import {
   getEncounterMoodImageV3,
   resolveEncounterMoodV3,
 } from "../src/game/encounterV3";
+import { evaluateObjectPath } from "../src/game/guestProfiles";
 
 test("V2 vertical slice uses the configured five-encounter demo order", () => {
   const demoEncounters = getTier1VerticalSliceEncounters();
@@ -129,7 +130,13 @@ test("the five Godot-linked demo guests are V3 visual-state enabled", () => {
     assert.deepEqual(Object.keys(encounter.images?.moods || {}).sort(), [...expectedMoods].sort());
   }
 
-  for (const id of ["encounter_v2_014", "encounter_v2_015", "encounter_v2_016"]) {
+  for (const id of [
+    "encounter_v2_011",
+    "encounter_v2_013",
+    "encounter_v2_014",
+    "encounter_v2_015",
+    "encounter_v2_016",
+  ]) {
     const encounter = demoEncounters.find((item) => item.id === id);
     assert.equal(new Set(Object.values(encounter?.images?.moods || {})).size, 9);
     assert.match(String(encounter?.images?.previewArt || ""), /\/v3\/preview-art\.png$/);
@@ -376,6 +383,16 @@ test("guest greeting access uses guest type plus tier and explicit unlock author
   assert.equal(recoveredFood.recovered, true);
   assert.deepEqual(recoveredFood.allowedOffers, ["food"]);
   assert.deepEqual(wine.allowedOffers, ["wine"]);
+});
+
+test("walking away after an aperitif rejection does not consume another greeting attempt", () => {
+  const deferred = evaluateObjectPath("greet_aperitif", "walk_away");
+  const converted = evaluateObjectPath("greet_aperitif", "offer_food");
+
+  assert.equal(deferred.objectSuccess, false);
+  assert.equal(deferred.aperitifOpportunityUsed, false);
+  assert.equal(converted.objectSuccess, true);
+  assert.equal(converted.aperitifOpportunityUsed, true);
 });
 
 test("V2 sends economy evidence but never calculates a Godot coin amount", () => {

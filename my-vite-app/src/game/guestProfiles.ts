@@ -38,7 +38,7 @@ export type ObjectPathResult = {
   kind: ObjectPathKind | "mismatch" | "walk_away";
   /** Matched greet→offer object path (food / wine) or aperitif conversion. */
   objectSuccess: boolean;
-  /** Aperitif may be opened only once per table session via greet_aperitif. */
+  /** A completed aperitif conversion may occur only once per table session. */
   aperitifOpportunityUsed: boolean;
   note: string;
 };
@@ -70,7 +70,7 @@ export type GuestProfile = {
 };
 
 /** Object success pairs: greet food↔offer food, greet wine↔offer wine.
- *  Aperitif: single opportunity (greet_aperitif), then offer food or wine converts. */
+ *  Aperitif is consumed only when offer food or wine completes the conversion. */
 export function evaluateObjectPath(
   greeting: GreetChoice | string,
   offer: OfferChoice | string
@@ -79,7 +79,7 @@ export function evaluateObjectPath(
     return {
       kind: "walk_away",
       objectSuccess: false,
-      aperitifOpportunityUsed: greeting === "greet_aperitif",
+      aperitifOpportunityUsed: false,
       note: "Guest deferred; no object path closed.",
     };
   }
@@ -90,7 +90,7 @@ export function evaluateObjectPath(
       objectSuccess: offer === "offer_food" || offer === "offer_wine",
       aperitifOpportunityUsed: true,
       note:
-        "Single aperitif opportunity used. Follow-up offer converts aperitif + food (and wine if offered).",
+        "Aperitif opportunity used by the completed food or wine conversion.",
     };
   }
 
