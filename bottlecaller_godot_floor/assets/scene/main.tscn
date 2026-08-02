@@ -322,4 +322,5 @@ navigation_map_wait_frames = 120
 clamp_targets_to_navigation = true
 use_direct_fallback = false
 navigation_debug_enabled = false
+walk_animation_fps = 30.0
 default_direction = "up"
