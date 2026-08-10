@@ -24,6 +24,7 @@ const WAITER_IMPORT_WIDTH = 512.0
 const WAITER_REFERENCE_HEIGHT = 860.0
 const WAITER_REFERENCE_BOTTOM = 961.0
 const AUTHORED_WALK_ANIMATION_FPS = 30.0
+const FLOOR_DEPTH_MIN_Z = 101
 
 # Source-image silhouette height and bottom edge for frame zero of each
 # animation. Every active waiter source uses the same 1920x1080 canvas.
@@ -44,8 +45,10 @@ const WAITER_VISUAL_METRICS = {
 	"walk_aperitif_up": Vector2(737.0, 860.0),
 	"walk_aperitif_up_left": Vector2(723.0, 890.0),
 	"walk_aperitif_up_right": Vector2(723.0, 890.0),
+	"walk_dirty_plates_left": Vector2(814.0, 959.0),
 	"walk_dirty_plates_right": Vector2(814.0, 959.0),
 	"walk_dirty_plates_up": Vector2(924.0, 1008.0),
+	"walk_dirty_plates_up_left": Vector2(843.0, 968.0),
 	"walk_dirty_plates_up_right": Vector2(843.0, 968.0),
 	"walk_empty_down": Vector2(915.0, 1001.0),
 	"walk_empty_down_left": Vector2(905.0, 998.0),
@@ -80,12 +83,6 @@ const WAITER_VISUAL_METRICS = {
 	"walk_wine_bottle_up_left": Vector2(972.0, 1010.0),
 	"walk_wine_bottle_up_right": Vector2(972.0, 1010.0)
 }
-
-
-@export_category("Drawing")
-
-## Keep the waiter below table artwork.
-@export var waiter_z_index = 100
 
 
 @export_category("Navigation")
@@ -163,7 +160,6 @@ func _ready():
 	print("WAITER READY")
 
 	z_as_relative = false
-	z_index = waiter_z_index
 	last_direction = _normalise_direction(default_direction)
 
 	if sprite == null:
@@ -173,10 +169,7 @@ func _ready():
 		return
 
 	sprite.visible = true
-	# Use an absolute sprite layer so parent ordering cannot place the
-	# waiter above table artwork.
 	sprite.z_as_relative = false
-	sprite.z_index = waiter_z_index
 	sprite.speed_scale = animation_speed_scale
 	_base_sprite_scale = sprite.scale
 	_base_sprite_offset = sprite.offset
@@ -184,6 +177,7 @@ func _ready():
 
 	_configure_navigation_agent()
 	play_idle(true)
+	_update_floor_depth()
 
 
 func _configure_walk_animation_fps():
@@ -199,6 +193,8 @@ func _configure_walk_animation_fps():
 
 
 func _physics_process(_delta):
+	_update_floor_depth()
+
 	if not _navigation_active:
 		velocity = Vector2.ZERO
 		return
@@ -216,6 +212,14 @@ func _physics_process(_delta):
 		return
 
 	_fail_navigation("Unknown navigation mode.")
+
+
+func _update_floor_depth() -> void:
+	var depth = maxi(int(global_position.y), FLOOR_DEPTH_MIN_Z)
+	if z_index != depth:
+		z_index = depth
+	if sprite != null and sprite.z_index != depth:
+		sprite.z_index = depth
 
 
 ## Starts a pathfinding request to a global position.
@@ -895,16 +899,37 @@ func _build_walk_animation_options(direction):
 	var direction_options = _get_direction_fallbacks(direction)
 	var exact_direction = direction_options[0]
 
-	# Carrying clips are exact-direction only (e.g. dirty plates has
-	# only right / up / up_right). Never reuse another facing's carry
-	# clip as a fallback — that looked like walking the wrong way.
-	_append_unique(
-		options,
-		"walk_"
-		+ carrying_visual
-		+ "_"
-		+ exact_direction
-	)
+	if carrying_visual == CARRY_DIRTY_PLATES:
+		# Dirty plates only have: left, up_left, right, up, up_right.
+		# There is no down / down_left / down_right clip — map those to left/right.
+		for dirty_direction in _get_dirty_plates_direction_fallbacks(direction):
+			_append_unique(
+				options,
+				"walk_dirty_plates_"
+				+ dirty_direction
+			)
+	else:
+		# Prefer an exact carry clip for this facing.
+		_append_unique(
+			options,
+			"walk_"
+			+ carrying_visual
+			+ "_"
+			+ exact_direction
+		)
+
+		# Keep other carry visuals when the exact clip is missing:
+		# try nearby carry facings before empty-handed fallbacks.
+		if carrying_visual != CARRY_EMPTY:
+			for index in range(1, direction_options.size()):
+				_append_unique(
+					options,
+					"walk_"
+					+ carrying_visual
+					+ "_"
+					+ direction_options[index]
+				)
+
 	_append_unique(
 		options,
 		"walk_empty_"
@@ -916,7 +941,6 @@ func _build_walk_animation_options(direction):
 		+ exact_direction
 	)
 
-	# Nearby cardinal fallbacks stay empty-handed so facing stays true.
 	for index in range(1, direction_options.size()):
 		var direction_name = direction_options[index]
 
@@ -952,9 +976,16 @@ func _build_idle_animation_options(direction):
 		+ exact_direction
 	)
 
-	# Carrying states have no dedicated idle clips. Freeze their exact
-	# directional walk frame before considering an empty-handed idle.
-	if carrying_visual != CARRY_EMPTY:
+	# Carrying states have no dedicated idle clips. Freeze a matching walk
+	# frame before considering an empty-handed idle.
+	if carrying_visual == CARRY_DIRTY_PLATES:
+		for dirty_direction in _get_dirty_plates_direction_fallbacks(direction):
+			_append_unique(
+				options,
+				"walk_dirty_plates_"
+				+ dirty_direction
+			)
+	elif carrying_visual != CARRY_EMPTY:
 		_append_unique(
 			options,
 			"walk_"
@@ -962,6 +993,15 @@ func _build_idle_animation_options(direction):
 			+ "_"
 			+ exact_direction
 		)
+
+		for index in range(1, direction_options.size()):
+			_append_unique(
+				options,
+				"walk_"
+				+ carrying_visual
+				+ "_"
+				+ direction_options[index]
+			)
 
 	for direction_name in direction_options:
 		_append_unique(
@@ -998,6 +1038,30 @@ func _build_idle_animation_options(direction):
 	_append_unique(options, "walk_down")
 
 	return options
+
+
+# Available dirty-plate walks: left, up_left, right, up, up_right.
+# No down / down_left / down_right — remap those to the nearest existing clip.
+func _get_dirty_plates_direction_fallbacks(direction) -> Array:
+	match direction:
+		"left":
+			return ["left", "up_left"]
+		"up_left":
+			return ["up_left", "left", "up"]
+		"down_left":
+			return ["left", "up_left"]
+		"down":
+			return ["left", "right", "up_left", "up_right"]
+		"right":
+			return ["right", "up_right"]
+		"up_right":
+			return ["up_right", "right", "up"]
+		"down_right":
+			return ["right", "up_right"]
+		"up":
+			return ["up", "up_left", "up_right"]
+		_:
+			return ["left", "up_left", "right", "up_right", "up"]
 
 
 func _get_direction_fallbacks(direction):

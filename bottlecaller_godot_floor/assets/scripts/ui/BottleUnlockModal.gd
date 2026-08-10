@@ -1,6 +1,7 @@
 extends CanvasLayer
 
 signal reward_claimed(reward_data: Dictionary)
+signal reward_deferred(reward_data: Dictionary)
 signal modal_closed
 
 
@@ -101,6 +102,7 @@ var reward_title_label: Label
 
 var open_button: Button
 var continue_button: Button
+var close_button: Button
 
 var current_state := UnlockState.HIDDEN
 var current_reward: Dictionary = {}
@@ -260,6 +262,29 @@ func _build_interface() -> void:
 	)
 	modal_panel.add_child(
 		heading_label
+	)
+
+	close_button = Button.new()
+	close_button.name = "CloseButton"
+	close_button.text = "×"
+	close_button.position = Vector2(
+		panel_size.x - 56.0,
+		12.0
+	)
+	close_button.size = Vector2(
+		40.0,
+		40.0
+	)
+	close_button.focus_mode = Control.FOCUS_NONE
+	close_button.add_theme_font_size_override(
+		"font_size",
+		28
+	)
+	close_button.pressed.connect(
+		_on_close_pressed
+	)
+	modal_panel.add_child(
+		close_button
 	)
 
 	bottle_name_label = Label.new()
@@ -668,6 +693,22 @@ func _on_continue_pressed() -> void:
 	if current_state != UnlockState.REWARD_REVEALED:
 		return
 
+	_claim_and_close()
+
+
+func _on_close_pressed() -> void:
+	if current_state == UnlockState.HIDDEN:
+		return
+
+	_defer_and_close()
+
+
+func _claim_and_close() -> void:
+	if current_state == UnlockState.HIDDEN:
+		return
+
+	_stop_idle_animation()
+
 	var claimed_reward := (
 		current_reward.duplicate(
 			true
@@ -678,6 +719,26 @@ func _on_continue_pressed() -> void:
 
 	reward_claimed.emit(
 		claimed_reward
+	)
+
+
+func _defer_and_close() -> void:
+	if current_state == UnlockState.HIDDEN:
+		return
+
+	_stop_idle_animation()
+
+	var deferred_reward := (
+		current_reward.duplicate(
+			true
+		)
+	)
+
+	visible = false
+	current_state = UnlockState.HIDDEN
+	modal_closed.emit()
+	reward_deferred.emit(
+		deferred_reward
 	)
 
 

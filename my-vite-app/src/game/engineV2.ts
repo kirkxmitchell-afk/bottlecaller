@@ -19,6 +19,15 @@ import type {
   VariantDefinition,
 } from "./typesV2";
 import { getWalkAwayMistakeThreshold } from "./v2ProgressionAuthority";
+import {
+  askProgressMultiplier,
+  commitProgressFloor,
+  DEFAULT_ENCOUNTER_TRAITS,
+  maxAskBeforePenalty,
+  maxRecommendBeforePenalty,
+  pressureFrictionMultiplier,
+} from "./guestService/encounterTraitsRuntime";
+import type { GuestEncounterTraits } from "./guestService/types";
 
 const DEFAULT_REWARDS = {
   premiumSuccess: 30,
@@ -235,6 +244,11 @@ export function createGameStateV2(
   encounter: EncounterV2,
   product: Product | null = null,
   difficultyMode: V2DifficultyMode = "medium",
+  traitRuntime: {
+    traits?: GuestEncounterTraits | null;
+    resistanceLevel?: "low" | "medium" | "high" | null;
+    discoveryNeed?: "low" | "medium" | "high" | null;
+  } = {},
 ): GameStateV2 {
   const progress = clampProgress(encounter.startingProgress);
   const frustration = clampFrustration(encounter.startingFrustration);
@@ -257,6 +271,12 @@ export function createGameStateV2(
     actionCount: 0,
     history: [],
     usedChoiceKeys: [],
+    bottleChoice: null,
+    selectionAuthorityBonus: 0,
+    knownGuestInformation: {},
+    encounterTraits: traitRuntime.traits || { ...DEFAULT_ENCOUNTER_TRAITS },
+    resistanceLevel: traitRuntime.resistanceLevel || "medium",
+    discoveryNeed: traitRuntime.discoveryNeed || "medium",
   };
 }
 
@@ -276,15 +296,86 @@ function hasUsedActionType(gameState: GameStateV2, type: ActionType): boolean {
   return (Array.isArray(gameState.history) ? gameState.history : []).some((item) => item.choice?.type === type);
 }
 
+function isAskAlreadyKnown(
+  gameState: GameStateV2,
+  askType: string,
+): boolean {
+  const known = gameState.knownGuestInformation || {};
+  if (askType === "preference" && known.foodChoice) return true;
+  // Only concrete wine preferences count — vague "open" must not lock preference Asks.
+  if (
+    askType === "preference" &&
+    known.winePreference &&
+    String(known.winePreference).trim().toLowerCase() !== "open"
+  ) {
+    return true;
+  }
+  if (askType === "occasion" && known.occasion) return true;
+  if (askType === "budget" && known.budgetSignal && known.budgetSignal !== "unknown") {
+    return true;
+  }
+  return false;
+}
+
+function applyKnownAskPenalty(
+  gameState: GameStateV2,
+  playerChoice: PlayerChoice,
+  result: ChoiceEvaluationResult,
+): ChoiceEvaluationResult {
+  if (playerChoice.group !== "ask" || !isAskType(playerChoice.type)) {
+    return result;
+  }
+  if (!isAskAlreadyKnown(gameState, String(playerChoice.type))) {
+    return result;
+  }
+  return {
+    ...result,
+    quality: "poor",
+    progressDelta: Math.min(result.progressDelta, 0),
+    frustrationDelta: Math.max(result.frustrationDelta, 1),
+    feedbackText: "They already made that clear. Asking again wastes the table.",
+  };
+}
+
+function resolveTraits(gameState: GameStateV2): GuestEncounterTraits {
+  return {
+    ...DEFAULT_ENCOUNTER_TRAITS,
+    ...(gameState.encounterTraits || {}),
+  };
+}
+
 function applyTimingPressure(
   gameState: GameStateV2,
   playerChoice: PlayerChoice,
   result: ChoiceEvaluationResult,
 ): ChoiceEvaluationResult {
-  let next: ChoiceEvaluationResult = { ...result };
+  let next: ChoiceEvaluationResult = applyKnownAskPenalty(
+    gameState,
+    playerChoice,
+    { ...result },
+  );
   const policy = getDifficultyPolicyV2(gameState.difficultyMode);
   const progress = Number(gameState.progress || 0);
   const priorActionCount = Number(gameState.actionCount ?? gameState.turnCount ?? 0);
+  const traits = resolveTraits(gameState);
+  const resistance = gameState.resistanceLevel || "medium";
+  const discoveryNeed = gameState.discoveryNeed || "medium";
+  const askLimit = maxAskBeforePenalty(traits.askTolerance);
+  const recommendLimit = maxRecommendBeforePenalty(traits.recommendationTolerance);
+  const askCount = groupUseCount(gameState, "ask");
+  const recommendCount = groupUseCount(gameState, "recommend");
+
+  if (playerChoice.group === "ask" && next.progressDelta > 0) {
+    const multiplier = askProgressMultiplier(discoveryNeed, askCount);
+    next = {
+      ...next,
+      progressDelta: Math.max(0, Math.round(next.progressDelta * multiplier)),
+      feedbackText:
+        discoveryNeed === "low" && askCount >= 1
+          ? next.feedbackText || "They already know what they want."
+          : next.feedbackText,
+    };
+  }
 
   if (progress >= 9 && playerChoice.group === "ask") {
     next = {
@@ -304,25 +395,36 @@ function applyTimingPressure(
     };
   }
 
-  if (playerChoice.group === "ask" && !hasUsedGroup(gameState, "recommend") && groupUseCount(gameState, "ask") >= 2) {
+  if (
+    playerChoice.group === "ask" &&
+    !hasUsedGroup(gameState, "recommend") &&
+    askCount >= askLimit
+  ) {
     next = {
       ...next,
+      quality: next.quality === "optimal" ? "poor" : next.quality,
       progressDelta: Math.min(next.progressDelta, 0),
-      frustrationDelta: next.frustrationDelta + 1,
+      frustrationDelta: next.frustrationDelta + (traits.askTolerance === "low" ? 2 : 1),
       feedbackText: next.feedbackText || "Too many questions. Energy drops.",
     };
   }
 
-  if (playerChoice.group === "recommend" && progress >= 7 && groupUseCount(gameState, "recommend") >= 2) {
+  const recommendPressureProgress = traits.recommendationTolerance === "low" ? 6 : 7;
+  if (
+    playerChoice.group === "recommend" &&
+    progress >= recommendPressureProgress &&
+    recommendCount >= recommendLimit
+  ) {
     next = {
       ...next,
       progressDelta: Math.min(next.progressDelta, 0),
-      frustrationDelta: next.frustrationDelta + 1,
+      frustrationDelta: next.frustrationDelta + (traits.recommendationTolerance === "low" ? 2 : 1),
       feedbackText: next.feedbackText || "Too much detail. They pull back.",
     };
   }
 
-  if (playerChoice.group !== "commit" && nonCommitActionCount(gameState) >= 4) {
+  const nonCommitLimit = traits.pressureSensitivity === "high" ? 3 : 4;
+  if (playerChoice.group !== "commit" && nonCommitActionCount(gameState) >= nonCommitLimit) {
     next = {
       ...next,
       progressDelta: Math.min(next.progressDelta, 0),
@@ -331,7 +433,8 @@ function applyTimingPressure(
     };
   }
 
-  if (priorActionCount >= 3 && playerChoice.group !== "commit" && progress < 9) {
+  const coolingTurn = traits.commitReadiness === "early" ? 2 : 3;
+  if (priorActionCount >= coolingTurn && playerChoice.group !== "commit" && progress < 9) {
     next = {
       ...next,
       frustrationDelta: next.frustrationDelta + 1,
@@ -344,9 +447,15 @@ function applyTimingPressure(
       next.quality === "poor" || next.quality === "disaster" || next.quality === "early_commit"
         ? policy.badChoiceExtraFriction
         : 0;
+    const traitFriction = pressureFrictionMultiplier(
+      traits.pressureSensitivity,
+      resistance,
+    );
     next.frustrationDelta = Math.max(
       0,
-      Math.round(next.frustrationDelta * policy.frictionMultiplier + badChoiceExtra),
+      Math.round(
+        next.frustrationDelta * policy.frictionMultiplier * traitFriction + badChoiceExtra,
+      ),
     );
   }
   if (next.progressDelta > 0 && policy.positiveProgressBonus > 0) {
@@ -368,6 +477,12 @@ function buildHistoryReaction(
   choice: PlayerChoice,
   result: ChoiceEvaluationResult,
 ): string {
+  if (
+    result.feedbackText &&
+    /already made that clear|Asking again wastes the table/i.test(result.feedbackText)
+  ) {
+    return result.feedbackText;
+  }
   const { encounter } = gameState;
   const quality = result.quality;
   const progress = Number(gameState.progress || 0);
@@ -549,17 +664,39 @@ export function canCommitSucceed(
   const profile = gameState.encounter.masterProfile;
   const priorTurns = Number(gameState.turnCount || 0);
   const policy = getDifficultyPolicyV2(gameState.difficultyMode);
+  const traits = resolveTraits(gameState);
+  const resistance = gameState.resistanceLevel || "medium";
+  const commitFloor = commitProgressFloor(
+    traits.commitReadiness,
+    policy.standardCommitProgress,
+    policy.readyCommitProgress,
+  );
+  const minTurns = Math.max(0, policy.minCommitTurns + commitFloor.minTurnsDelta);
+  const closeFrustrationLimit =
+    resistance === "high"
+      ? Math.max(1, policy.closeFrustrationLimit - 1)
+      : resistance === "low"
+        ? policy.closeFrustrationLimit + 1
+        : policy.closeFrustrationLimit;
 
-  if (priorTurns < policy.minCommitTurns) return false;
+  if (priorTurns < minTurns) return false;
   if (commitQuality === "disaster") return false;
-  if (frustration >= policy.closeFrustrationLimit) return false;
+  if (frustration >= closeFrustrationLimit) return false;
   if (
     (commitQuality === "optimal" || commitQuality === "good") &&
-    progress >= policy.standardCommitProgress &&
+    progress >= commitFloor.standard &&
     frustration <= 3
-  ) return true;
-  if (commitQuality === "optimal" && progress >= policy.standardCommitProgress && profile === "momentum") return true;
-  if (progress >= policy.readyCommitProgress && commitQuality !== "disaster") return true;
+  ) {
+    return true;
+  }
+  if (
+    commitQuality === "optimal" &&
+    progress >= commitFloor.standard &&
+    profile === "momentum"
+  ) {
+    return true;
+  }
+  if (progress >= commitFloor.ready && commitQuality !== "disaster") return true;
   return false;
 }
 
@@ -600,7 +737,10 @@ function finalizeState(gameState: GameStateV2, outcome: EncounterOutcome): void 
     gameState.mistakeCount >= getWalkAwayMistakeThreshold(policy.maxMistakes);
   gameState.outcome = outcome;
   if (outcome !== "continue" && outcome !== "not_available") {
-    gameState.authorityDelta = authorityForOutcome(gameState.encounter, outcome);
+    gameState.authorityDelta =
+      authorityForOutcome(gameState.encounter, outcome) +
+      Number(gameState.bottleChoice?.score || 0) +
+      Number(gameState.selectionAuthorityBonus || 0);
   }
 }
 

@@ -14,13 +14,15 @@ const REFERENCE_FEET_BOTTOM = 961.0
 const WAITER_SPRITE_SCALE = 3.75 * 0.21
 const WAITER_BASE_OFFSET_Y = -114.667
 const GUEST_TO_WAITER_HEIGHT_RATIO = 0.95
+# Matched to navigation_speed so step cadence tracks floor travel.
 const WALK_ANIMATION_FPS = 30.0
 const WALK_DIRECTIONS = ["down", "left", "right", "up"]
 const FRAME_COUNT = 26
+const FLOOR_DEPTH_MIN_Z = 101
 
 
 @export_range(40.0, 500.0, 5.0)
-var navigation_speed = 210.0
+var navigation_speed = 157.5
 
 @export_range(0.1, 3.0, 0.05)
 var animation_speed_scale = 1.0
@@ -46,14 +48,13 @@ var requested_target = Vector2.ZERO
 
 func _ready():
 	z_as_relative = false
-	z_index = 180
 	# Guests follow navigation but never physically obstruct the waiter.
 	collision_layer = 0
 	collision_mask = 0
 
 	sprite.z_as_relative = false
-	sprite.z_index = 180
 	sprite.speed_scale = animation_speed_scale
+	_update_floor_depth()
 
 	navigation_agent.path_desired_distance = 8.0
 	navigation_agent.target_desired_distance = 12.0
@@ -67,18 +68,22 @@ func configure(
 ) -> bool:
 	character_asset_root = asset_root.trim_suffix("/")
 	animation_phase_frame = maxi(phase_frame, 0)
+	# Building hundreds of walk frames synchronously blocked web startup.
+	call_deferred("_deferred_build_sprite_frames")
+	return true
 
+
+func _deferred_build_sprite_frames() -> void:
 	var frames = _build_sprite_frames()
 	if frames == null:
 		navigation_failed.emit(
 			"Guest walk frames could not be loaded from "
 			+ character_asset_root
 		)
-		return false
+		return
 
 	sprite.sprite_frames = frames
 	_play_idle("up")
-	return true
 
 
 func navigate_to(target_position: Vector2):
@@ -97,6 +102,8 @@ func cancel_navigation():
 
 
 func _physics_process(_delta):
+	_update_floor_depth()
+
 	if navigation_pending:
 		_try_begin_navigation()
 		return
@@ -236,6 +243,9 @@ func _play_direction(
 	direction: String,
 	force_restart = false
 ):
+	if sprite.sprite_frames == null:
+		return
+
 	var animation_name = "walk_" + direction
 	if not sprite.sprite_frames.has_animation(animation_name):
 		return
@@ -269,6 +279,9 @@ func _play_direction(
 
 
 func _play_idle(direction: String):
+	if sprite.sprite_frames == null:
+		return
+
 	var animation_name = "idle_" + direction
 	if not sprite.sprite_frames.has_animation(animation_name):
 		return
@@ -337,3 +350,11 @@ func _direction_from_vector(direction: Vector2) -> String:
 		return "right" if direction.x >= 0.0 else "left"
 
 	return "down" if direction.y >= 0.0 else "up"
+
+
+func _update_floor_depth() -> void:
+	var depth = maxi(int(global_position.y), FLOOR_DEPTH_MIN_Z)
+	if z_index != depth:
+		z_index = depth
+	if sprite != null and sprite.z_index != depth:
+		sprite.z_index = depth

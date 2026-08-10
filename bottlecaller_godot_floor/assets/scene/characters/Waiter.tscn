@@ -1,4 +1,4 @@
-[gd_scene load_steps=872 format=3 uid="uid://bhavcoj6serx1"]
+[gd_scene load_steps=912 format=3 uid="uid://bhavcoj6serx1"]
 
 [ext_resource type="Texture2D" uid="uid://brvyniq3patsl" path="res://assets/characters/waiter/waiter walking freehand/waiter walking straight down freehand/0001.png" id="1_3gv8h"]
 [ext_resource type="Script" uid="uid://cqer6pc44gnhq" path="res://assets/scripts/character/WaiterController.gd" id="1_mnuxk"]
@@ -409,22 +409,42 @@
 [ext_resource type="Texture2D" uid="uid://dyurw13xuiqyd" path="res://assets/characters/waiter/waiter walking appertief/waiter walking up towards right with appertief/0018.png" id="167_hxv2d"]
 [ext_resource type="Texture2D" uid="uid://bpo4f4nugofwe" path="res://assets/characters/waiter/waiter walking appertief/waiter walking up towards right with appertief/0019.png" id="168_at6rq"]
 [ext_resource type="Texture2D" uid="uid://cglqy6sp700sb" path="res://assets/characters/waiter/waiter walking appertief/waiter walking up towards right with appertief/0020.png" id="169_cfplo"]
+[ext_resource type="Texture2D" uid="uid://viyu4ys8v75i" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight left dishes/frame-000000.png" id="170_6dq31"]
+[ext_resource type="Texture2D" uid="uid://ol2dhknkkd7h" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight left dishes/frame-000001.png" id="171_4uo8o"]
+[ext_resource type="Texture2D" uid="uid://dj3h1caerd772" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight left dishes/frame-000002.png" id="172_w35ow"]
+[ext_resource type="Texture2D" uid="uid://bepxwqf7o05dt" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight left dishes/frame-000003.png" id="173_k6s2u"]
+[ext_resource type="Texture2D" uid="uid://vgyjed1gup63" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight left dishes/frame-000004.png" id="174_u7ei1"]
+[ext_resource type="Texture2D" uid="uid://75bwds71efjv" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight left dishes/frame-000005.png" id="175_4kmte"]
+[ext_resource type="Texture2D" uid="uid://dimx0ull6f5qw" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight left dishes/frame-000006.png" id="176_plu0x"]
+[ext_resource type="Texture2D" uid="uid://w36wk4lhs6hy" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight left dishes/frame-000007.png" id="177_kuuwq"]
+[ext_resource type="Texture2D" uid="uid://cgjexvwvdf53c" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight left dishes/frame-000008.png" id="178_eh800"]
+[ext_resource type="Texture2D" uid="uid://c7ab2vivgtxut" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight left dishes/frame-000009.png" id="179_djijx"]
+[ext_resource type="Texture2D" uid="uid://bkjlh376n8kr" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight left dishes/frame-000010.png" id="180_766vy"]
+[ext_resource type="Texture2D" uid="uid://d3yrycwg3roep" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight left dishes/frame-000011.png" id="181_krwkr"]
 [ext_resource type="Texture2D" uid="uid://c7pgcj3fna8xq" path="res://assets/characters/waiter/waiter walking freehand/waiter walking up to the left freehand/frame-000000.png" id="182_5lcv5"]
 [ext_resource type="Texture2D" uid="uid://bm1kp0k54ef7k" path="res://assets/characters/waiter/waiter bottle/walking straight down with bottle/0020.png0001.png" id="182_8eh8l"]
+[ext_resource type="Texture2D" uid="uid://boapw0jbkvv22" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight left dishes/frame-000012.png" id="182_lu5vu"]
 [ext_resource type="Texture2D" uid="uid://b76leo8we4g21" path="res://assets/characters/waiter/waiter bottle/walking straight down with bottle/0020.png0002.png" id="183_fjqwm"]
+[ext_resource type="Texture2D" uid="uid://cjvva5ybjq15b" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight left dishes/frame-000013.png" id="183_jj23c"]
 [ext_resource type="Texture2D" uid="uid://bf6c8u26ny3wj" path="res://assets/characters/waiter/waiter walking freehand/waiter walking up to the left freehand/frame-000001.png" id="183_rp206"]
 [ext_resource type="Texture2D" uid="uid://7eflew2531ks" path="res://assets/characters/waiter/waiter walking freehand/waiter walking up to the left freehand/frame-000002.png" id="184_cnukc"]
+[ext_resource type="Texture2D" uid="uid://cyi6fq5sahlsn" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight left dishes/frame-000014.png" id="184_mpty2"]
 [ext_resource type="Texture2D" uid="uid://dsko4yo42akcl" path="res://assets/characters/waiter/waiter bottle/walking straight down with bottle/0020.png0003.png" id="184_t6avm"]
 [ext_resource type="Texture2D" uid="uid://djsyyj2wbv0dr" path="res://assets/characters/waiter/waiter walking freehand/waiter walking up to the left freehand/frame-000003.png" id="185_aekxc"]
+[ext_resource type="Texture2D" uid="uid://c4tdev6ngiqx1" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight left dishes/frame-000015.png" id="185_iqg4l"]
 [ext_resource type="Texture2D" uid="uid://blyupm84m4hj2" path="res://assets/characters/waiter/waiter bottle/walking straight down with bottle/0020.png0004.png" id="185_leo3x"]
 [ext_resource type="Texture2D" uid="uid://b6buf7v5rjoet" path="res://assets/characters/waiter/waiter walking freehand/waiter walking up to the left freehand/frame-000004.png" id="186_bb5t7"]
+[ext_resource type="Texture2D" uid="uid://bmol60nie0wdk" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight left dishes/frame-000016.png" id="186_m0mt0"]
 [ext_resource type="Texture2D" uid="uid://chl45bm0dnspc" path="res://assets/characters/waiter/waiter bottle/walking straight down with bottle/0020.png0005.png" id="186_p7vfa"]
 [ext_resource type="Texture2D" uid="uid://rsmp1ylewvo6" path="res://assets/characters/waiter/waiter walking freehand/waiter walking up to the left freehand/frame-000005.png" id="187_1pxbf"]
 [ext_resource type="Texture2D" uid="uid://bj7fo5dum7fby" path="res://assets/characters/waiter/waiter bottle/walking straight down with bottle/0020.png0006.png" id="187_2mvr4"]
+[ext_resource type="Texture2D" uid="uid://b4gufc61uisn5" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight left dishes/frame-000017.png" id="187_nawil"]
 [ext_resource type="Texture2D" uid="uid://cao8nt41e3ruj" path="res://assets/characters/waiter/waiter walking freehand/waiter walking up to the left freehand/frame-000006.png" id="188_53b73"]
 [ext_resource type="Texture2D" uid="uid://pb6b3ikrq1ma" path="res://assets/characters/waiter/waiter bottle/walking straight down with bottle/0020.png0007.png" id="188_nnagd"]
+[ext_resource type="Texture2D" uid="uid://xmj2atxugdqi" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight left dishes/frame-000018.png" id="188_oyems"]
 [ext_resource type="Texture2D" uid="uid://cn772fa6ya0t6" path="res://assets/characters/waiter/waiter bottle/walking straight down with bottle/0020.png0008.png" id="189_04gts"]
 [ext_resource type="Texture2D" uid="uid://gsxjvpn0p07k" path="res://assets/characters/waiter/waiter walking freehand/waiter walking up to the left freehand/frame-000007.png" id="189_n1fal"]
+[ext_resource type="Texture2D" uid="uid://ua8rjosfulpt" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight left dishes/frame-000019.png" id="189_x3j7t"]
 [ext_resource type="Texture2D" uid="uid://c1r11fpw1dbti" path="res://assets/characters/waiter/waiter bottle/walking straight down with bottle/0020.png0009.png" id="190_6d47t"]
 [ext_resource type="Texture2D" uid="uid://dh6w0vrprrea5" path="res://assets/characters/waiter/waiter walking freehand/waiter walking up to the left freehand/frame-000008.png" id="190_yfthn"]
 [ext_resource type="Texture2D" uid="uid://csxku6jvxktel" path="res://assets/characters/waiter/waiter bottle/walking straight down with bottle/0020.png0010.png" id="191_b7qmh"]
@@ -497,34 +517,54 @@
 [ext_resource type="Texture2D" uid="uid://s4cympv0nve1" path="res://assets/characters/waiter/waiter bottle/walking down towards right with bottle/frame-000005.png" id="227_740cm"]
 [ext_resource type="Texture2D" uid="uid://b8nt4hy7svuhx" path="res://assets/characters/waiter/waiter bottle/walking down towards right with bottle/frame-000006.png" id="228_7s226"]
 [ext_resource type="Texture2D" uid="uid://bt7v1cegtwnqw" path="res://assets/characters/waiter/waiter bottle/walking down towards right with bottle/frame-000007.png" id="229_doc8j"]
+[ext_resource type="Texture2D" uid="uid://bg7c1fy8ya5hb" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight up left dishes/frame-000000.png" id="230_noxda"]
 [ext_resource type="Texture2D" uid="uid://f0y40uyb1550" path="res://assets/characters/waiter/waiter bottle/walking down towards right with bottle/frame-000008.png" id="230_ts25x"]
+[ext_resource type="Texture2D" uid="uid://v7act8j4suwr" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight up left dishes/frame-000001.png" id="231_8k3ms"]
 [ext_resource type="Texture2D" uid="uid://cm1dss0ir7udx" path="res://assets/characters/waiter/waiter bottle/walking down towards right with bottle/frame-000009.png" id="231_ufe5f"]
+[ext_resource type="Texture2D" uid="uid://o0a41ixvypo" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight up left dishes/frame-000002.png" id="232_5hex8"]
 [ext_resource type="Texture2D" uid="uid://wy7tqxxe5h83" path="res://assets/characters/waiter/waiter bottle/walking down towards right with bottle/frame-000010.png" id="232_a7mhs"]
+[ext_resource type="Texture2D" uid="uid://fefxul8nabaa" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight up left dishes/frame-000003.png" id="233_3juyl"]
 [ext_resource type="Texture2D" uid="uid://44j8y0o40ivg" path="res://assets/characters/waiter/waiter bottle/walking down towards right with bottle/frame-000011.png" id="233_u5da6"]
+[ext_resource type="Texture2D" uid="uid://cgkni80w23ae1" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight up left dishes/frame-000004.png" id="234_1la4a"]
 [ext_resource type="Texture2D" uid="uid://d2ktsx5vgqe81" path="res://assets/characters/waiter/waiter bottle/walking down towards right with bottle/frame-000012.png" id="234_noiei"]
 [ext_resource type="Texture2D" uid="uid://2yncv036xv00" path="res://assets/characters/waiter/waiter bottle/walking down towards right with bottle/frame-000013.png" id="235_rivem"]
+[ext_resource type="Texture2D" uid="uid://bhk43fxebgjwg" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight up left dishes/frame-000005.png" id="235_v7bsk"]
 [ext_resource type="Texture2D" uid="uid://dotcw5x2bqkrd" path="res://assets/characters/waiter/waiter bottle/walking down towards right with bottle/frame-000014.png" id="236_upjco"]
+[ext_resource type="Texture2D" uid="uid://cs655eklhqahs" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight up left dishes/frame-000006.png" id="236_yyrtr"]
 [ext_resource type="Texture2D" uid="uid://umua4qalsulk" path="res://assets/characters/waiter/waiter bottle/walking down towards right with bottle/frame-000015.png" id="237_emnyt"]
+[ext_resource type="Texture2D" uid="uid://p66bpl1yhk00" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight up left dishes/frame-000007.png" id="237_nkhm6"]
+[ext_resource type="Texture2D" uid="uid://bkiqi20pxnjwx" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight up left dishes/frame-000008.png" id="238_37012"]
 [ext_resource type="Texture2D" uid="uid://bkcjytvdribwb" path="res://assets/characters/waiter/waiter bottle/walking down towards right with bottle/frame-000016.png" id="238_ssjal"]
+[ext_resource type="Texture2D" uid="uid://dx6dk7qbshdbq" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight up left dishes/frame-000009.png" id="239_pp55b"]
 [ext_resource type="Texture2D" uid="uid://dllrkvwy8y855" path="res://assets/characters/waiter/waiter bottle/walking down towards right with bottle/frame-000017.png" id="239_ules0"]
 [ext_resource type="Texture2D" uid="uid://bwfby4cxblyrh" path="res://assets/characters/waiter/waiter bottle/walking down towards right with bottle/frame-000018.png" id="240_n1wn3"]
+[ext_resource type="Texture2D" uid="uid://c8aplqfyip4rt" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight up left dishes/frame-000010.png" id="240_odkf4"]
+[ext_resource type="Texture2D" uid="uid://dkpa2f7v6dllx" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight up left dishes/frame-000011.png" id="241_76jgv"]
 [ext_resource type="Texture2D" uid="uid://b3iw4kv8lhvh8" path="res://assets/characters/waiter/waiter bottle/walking down towards right with bottle/frame-000019.png" id="241_qrlbk"]
 [ext_resource type="Texture2D" uid="uid://c684tcfa0gn7c" path="res://assets/characters/waiter/waiter tray/waiter walking down towards left with tray/0001.png" id="242_4axoj"]
+[ext_resource type="Texture2D" uid="uid://cajudp8rcg2aa" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight up left dishes/frame-000012.png" id="242_mxfc1"]
 [ext_resource type="Texture2D" uid="uid://cxkxapv3qbkjn" path="res://assets/characters/waiter/waiter bottle/walking straight left with bottle/frame-000000.png" id="242_w37gx"]
+[ext_resource type="Texture2D" uid="uid://cjcntus7dv5cc" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight up left dishes/frame-000013.png" id="243_na4wq"]
 [ext_resource type="Texture2D" uid="uid://castcjxjmkc0a" path="res://assets/characters/waiter/waiter tray/waiter walking down towards left with tray/0002.png" id="243_t0jtn"]
 [ext_resource type="Texture2D" uid="uid://b4y048xvvo01d" path="res://assets/characters/waiter/waiter bottle/walking straight left with bottle/frame-000001.png" id="243_wwlc1"]
 [ext_resource type="Texture2D" uid="uid://ily7xsy2p0mp" path="res://assets/characters/waiter/waiter tray/waiter walking down towards left with tray/0003.png" id="244_au61u"]
 [ext_resource type="Texture2D" uid="uid://b4cbtewni4280" path="res://assets/characters/waiter/waiter bottle/walking straight left with bottle/frame-000002.png" id="244_o1gs1"]
+[ext_resource type="Texture2D" uid="uid://dobajo2sv0i0s" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight up left dishes/frame-000014.png" id="244_q1dbc"]
 [ext_resource type="Texture2D" uid="uid://c65yteijl3g2e" path="res://assets/characters/waiter/waiter tray/waiter walking down towards left with tray/0004.png" id="245_lgru7"]
 [ext_resource type="Texture2D" uid="uid://cjbbi7r6eryt3" path="res://assets/characters/waiter/waiter bottle/walking straight left with bottle/frame-000003.png" id="245_o6t8a"]
+[ext_resource type="Texture2D" uid="uid://xtkeqvbmhrrr" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight up left dishes/frame-000015.png" id="245_s53x2"]
 [ext_resource type="Texture2D" uid="uid://eb5bbx3u2yk7" path="res://assets/characters/waiter/waiter tray/waiter walking down towards left with tray/0005.png" id="246_mkxhp"]
+[ext_resource type="Texture2D" uid="uid://bgou62ar245l1" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight up left dishes/frame-000016.png" id="246_rjcba"]
 [ext_resource type="Texture2D" uid="uid://dsqnc8ypyr6xi" path="res://assets/characters/waiter/waiter bottle/walking straight left with bottle/frame-000004.png" id="246_yj45s"]
+[ext_resource type="Texture2D" uid="uid://x72mp3w14x0w" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight up left dishes/frame-000017.png" id="247_ddovf"]
 [ext_resource type="Texture2D" uid="uid://cuvf1w2pfxu12" path="res://assets/characters/waiter/waiter tray/waiter walking down towards left with tray/0006.png" id="247_huyf6"]
 [ext_resource type="Texture2D" uid="uid://b5a4uu12jmqj0" path="res://assets/characters/waiter/waiter bottle/walking straight left with bottle/frame-000005.png" id="247_wub8k"]
 [ext_resource type="Texture2D" uid="uid://cwpyie1vy2s0l" path="res://assets/characters/waiter/waiter bottle/walking straight left with bottle/frame-000006.png" id="248_amq05"]
 [ext_resource type="Texture2D" uid="uid://cv4nyygwbwr4i" path="res://assets/characters/waiter/waiter tray/waiter walking down towards left with tray/0007.png" id="248_norwy"]
+[ext_resource type="Texture2D" uid="uid://coose0exn22r2" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight up left dishes/frame-000018.png" id="248_ryoqs"]
 [ext_resource type="Texture2D" uid="uid://bnj8xreb1rgng" path="res://assets/characters/waiter/waiter tray/waiter walking down towards left with tray/0008.png" id="249_2c235"]
 [ext_resource type="Texture2D" uid="uid://b1gftxrnlhdm4" path="res://assets/characters/waiter/waiter bottle/walking straight left with bottle/frame-000007.png" id="249_img8f"]
+[ext_resource type="Texture2D" uid="uid://gpfbw3ftld8a" path="res://assets/characters/waiter/waiter walking dishes/waiter walking straight up left dishes/frame-000019.png" id="249_qgxfb"]
 [ext_resource type="Texture2D" uid="uid://dm5oorlgcvc2p" path="res://assets/characters/waiter/waiter tray/waiter walking down towards left with tray/0009.png" id="250_jpnbw"]
 [ext_resource type="Texture2D" uid="uid://cuyo7ki4gbbpb" path="res://assets/characters/waiter/waiter bottle/walking straight left with bottle/frame-000008.png" id="250_qep8q"]
 [ext_resource type="Texture2D" uid="uid://diot04uoklfi2" path="res://assets/characters/waiter/waiter bottle/walking straight left with bottle/frame-000009.png" id="251_00kvb"]
@@ -1458,6 +1498,71 @@ animations = [{
 }, {
 "frames": [{
 "duration": 1.0,
+"texture": ExtResource("170_6dq31")
+}, {
+"duration": 1.0,
+"texture": ExtResource("171_4uo8o")
+}, {
+"duration": 1.0,
+"texture": ExtResource("172_w35ow")
+}, {
+"duration": 1.0,
+"texture": ExtResource("173_k6s2u")
+}, {
+"duration": 1.0,
+"texture": ExtResource("174_u7ei1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("175_4kmte")
+}, {
+"duration": 1.0,
+"texture": ExtResource("176_plu0x")
+}, {
+"duration": 1.0,
+"texture": ExtResource("177_kuuwq")
+}, {
+"duration": 1.0,
+"texture": ExtResource("178_eh800")
+}, {
+"duration": 1.0,
+"texture": ExtResource("179_djijx")
+}, {
+"duration": 1.0,
+"texture": ExtResource("180_766vy")
+}, {
+"duration": 1.0,
+"texture": ExtResource("181_krwkr")
+}, {
+"duration": 1.0,
+"texture": ExtResource("182_lu5vu")
+}, {
+"duration": 1.0,
+"texture": ExtResource("183_jj23c")
+}, {
+"duration": 1.0,
+"texture": ExtResource("184_mpty2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("185_iqg4l")
+}, {
+"duration": 1.0,
+"texture": ExtResource("186_m0mt0")
+}, {
+"duration": 1.0,
+"texture": ExtResource("187_nawil")
+}, {
+"duration": 1.0,
+"texture": ExtResource("188_oyems")
+}, {
+"duration": 1.0,
+"texture": ExtResource("189_x3j7t")
+}],
+"loop": true,
+"name": &"walk_dirty_plates_left",
+"speed": 10.0
+}, {
+"frames": [{
+"duration": 1.0,
 "texture": ExtResource("2_8eh8l")
 }, {
 "duration": 1.0,
@@ -1584,6 +1689,71 @@ animations = [{
 }],
 "loop": true,
 "name": &"walk_dirty_plates_up",
+"speed": 10.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("230_noxda")
+}, {
+"duration": 1.0,
+"texture": ExtResource("231_8k3ms")
+}, {
+"duration": 1.0,
+"texture": ExtResource("232_5hex8")
+}, {
+"duration": 1.0,
+"texture": ExtResource("233_3juyl")
+}, {
+"duration": 1.0,
+"texture": ExtResource("234_1la4a")
+}, {
+"duration": 1.0,
+"texture": ExtResource("235_v7bsk")
+}, {
+"duration": 1.0,
+"texture": ExtResource("236_yyrtr")
+}, {
+"duration": 1.0,
+"texture": ExtResource("237_nkhm6")
+}, {
+"duration": 1.0,
+"texture": ExtResource("238_37012")
+}, {
+"duration": 1.0,
+"texture": ExtResource("239_pp55b")
+}, {
+"duration": 1.0,
+"texture": ExtResource("240_odkf4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("241_76jgv")
+}, {
+"duration": 1.0,
+"texture": ExtResource("242_mxfc1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("243_na4wq")
+}, {
+"duration": 1.0,
+"texture": ExtResource("244_q1dbc")
+}, {
+"duration": 1.0,
+"texture": ExtResource("245_s53x2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("246_rjcba")
+}, {
+"duration": 1.0,
+"texture": ExtResource("247_ddovf")
+}, {
+"duration": 1.0,
+"texture": ExtResource("248_ryoqs")
+}, {
+"duration": 1.0,
+"texture": ExtResource("249_qgxfb")
+}],
+"loop": true,
+"name": &"walk_dirty_plates_up_left",
 "speed": 10.0
 }, {
 "frames": [{
@@ -4259,7 +4429,7 @@ size = Vector2(130, 361.5)
 script = ExtResource("1_mnuxk")
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
-position = Vector2(0, 2)
+position = Vector2(0, 6)
 scale = Vector2(3.75, 3.75)
 sprite_frames = SubResource("SpriteFrames_cdwuv")
 animation = &"walk_empty_down_left"

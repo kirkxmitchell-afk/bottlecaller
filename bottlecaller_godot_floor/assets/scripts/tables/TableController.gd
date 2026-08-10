@@ -1085,7 +1085,16 @@ func set_patience_mood_band(
 		&"red":
 			set_mood_unhappy(reason)
 		&"annoyed":
-			set_annoyed(reason)
+			# Ready-to-clear must keep dirty-plate table art. Only the floating
+			# mood icon shows unhappiness until plates are collected.
+			if (
+				table_state == STATE_READY_TO_CLEAR
+				or table_visual_state == VISUAL_READY_TO_CLEAR
+			):
+				annoyed_reason = str(reason)
+				set_mood_unhappy(annoyed_reason)
+			else:
+				set_annoyed(reason)
 		_:
 			push_warning(
 				"UNSUPPORTED PATIENCE MOOD BAND: "

@@ -38,28 +38,28 @@ const PREPARATION_TIMES := {
 }
 
 const PATIENCE_STAGE_TIMES := {
-	&"waiting_first_greeting": 25.0,
-	&"waiting_follow_up": 25.0,
-	&"waiting_pos_order": 30.0,
-	&"waiting_aperitif": 25.0,
-	&"waiting_wine": 30.0,
-	&"waiting_mise": 30.0,
-	&"waiting_food": 40.0,
-	&"waiting_to_clear": 30.0,
-	&"waiting_for_bill_and_payment": 30.0,
-	&"waiting_for_bill_close": 25.0,
+	&"waiting_first_greeting": 90.0,
+	&"waiting_follow_up": 90.0,
+	&"waiting_pos_order": 100.0,
+	&"waiting_aperitif": 90.0,
+	&"waiting_wine": 100.0,
+	&"waiting_mise": 100.0,
+	&"waiting_food": 120.0,
+	&"waiting_to_clear": 130.0,
+	&"waiting_for_bill_and_payment": 100.0,
+	&"waiting_for_bill_close": 90.0,
 }
 
 const MOOD_RECOVERY := {
-	&"offer_wine": 5.0,
-	&"offer_food": 5.0,
+	&"offer_wine": 12.0,
+	&"offer_food": 12.0,
 	&"walk_away": 0.0,
-	&"lay_mise": 8.0,
-	&"serve_aperitif": 12.0,
-	&"serve_wine": 15.0,
-	&"serve_food": 15.0,
-	&"collect_dirty_plates": 10.0,
-	&"take_payment": 10.0,
+	&"lay_mise": 16.0,
+	&"serve_aperitif": 22.0,
+	&"serve_wine": 25.0,
+	&"serve_food": 25.0,
+	&"collect_dirty_plates": 18.0,
+	&"take_payment": 18.0,
 }
 
 const GREETING_MINIMUM_PERCENT = 85.0
@@ -260,6 +260,12 @@ func set_table_patience_paused(
 		table.set_patience_paused(paused)
 
 
+func set_all_table_patience_paused(paused: bool) -> void:
+	_cleanup_invalid_tables()
+	for table_id in _registered_tables.keys():
+		set_table_patience_paused(StringName(table_id), paused)
+
+
 func stop_table_patience(table_id: StringName) -> void:
 	var table = _get_table(table_id)
 	if table != null and table.has_method("stop_patience"):
@@ -303,11 +309,12 @@ func get_stage_duration(
 
 func get_mood_from_patience(percent: float) -> StringName:
 	var clamped_percent = clampf(percent, 0.0, 100.0)
-	if clamped_percent >= 60.0:
+	# Wider green/yellow so mood does not drop through the bands as fast.
+	if clamped_percent >= 45.0:
 		return &"green"
-	if clamped_percent >= 35.0:
+	if clamped_percent >= 25.0:
 		return &"yellow"
-	if clamped_percent >= 15.0:
+	if clamped_percent >= 10.0:
 		return &"orange"
 	if clamped_percent > 0.0:
 		return &"red"

@@ -173,6 +173,7 @@ const engine = new Engine(GODOT_CONFIG);
 	let initializing = true;
 	let statusMode = '';
 	let lastProgressPct = -1;
+	let loadReadyPosted = false;
 
 	function postToHost(type, payload) {
 		try {
@@ -251,6 +252,7 @@ const engine = new Engine(GODOT_CONFIG);
 		const packPath = 'index.pck';
 		const packUrl = packPath + '?v=' + assetV;
 		const onProgress = function (current, total) {
+			if (loadReadyPosted) return;
 			if (current > 0 && total > 0) {
 				statusProgress.value = current;
 				statusProgress.max = total;
@@ -272,6 +274,7 @@ const engine = new Engine(GODOT_CONFIG);
 		]).then(function () {
 			return engine.start();
 		}).then(() => {
+			loadReadyPosted = true;
 			setStatusMode('hidden');
 			postToHost('godot_load_ready', {});
 			try {

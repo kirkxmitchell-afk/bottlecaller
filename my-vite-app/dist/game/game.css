@@ -266,6 +266,52 @@ p { margin: 0; color: var(--muted); line-height: 1.5; }
   min-width:0;
 }
 
+.v2-header-title-row{
+  display:flex;
+  align-items:flex-start;
+  justify-content:flex-start;
+  gap:10px;
+  min-width:0;
+}
+
+.v2-header-title-block{
+  min-width:0;
+  flex:0 1 auto;
+  max-width:100%;
+}
+
+.v2-header-shift-time{
+  flex:0 0 auto;
+  display:grid;
+  justify-items:end;
+  align-content:center;
+  gap:2px;
+  margin-left:auto;
+  padding:4px 8px;
+  border-radius:12px;
+  border:1px solid rgba(227,187,117,.32);
+  background: rgba(12,14,18,.72);
+  min-width:4.5em;
+}
+
+.v2-header-shift-label{
+  color:rgba(230,190,124,.78);
+  font-size:9px;
+  font-weight:700;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  line-height:1;
+}
+
+.v2-header-shift-value{
+  color:#f4deba;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size:20px;
+  line-height:1;
+  letter-spacing:.04em;
+  font-variant-numeric: tabular-nums;
+}
+
 .v2-header-topline{
   display:flex;
   justify-content:space-between;
@@ -648,6 +694,26 @@ p { margin: 0; color: var(--muted); line-height: 1.5; }
   box-shadow:0 30px 90px rgba(0, 0, 0, .62), inset 0 1px 0 rgba(255,255,255,.1);
 }
 
+.bc-bottle-close{
+  position:absolute;
+  top:12px;
+  right:12px;
+  z-index:5;
+  width:40px;
+  height:40px;
+  border:1px solid rgba(237, 199, 127, .34);
+  border-radius:999px;
+  background:rgba(0,0,0,.42);
+  color:#fff7df;
+  font-size:28px;
+  line-height:1;
+  cursor:pointer;
+}
+
+.bc-bottle-close:hover{
+  background:rgba(40,30,18,.72);
+}
+
 .bc-bottle-unlock::before{
   content:"";
   position:absolute;
@@ -1020,6 +1086,7 @@ p { margin: 0; color: var(--muted); line-height: 1.5; }
     object-position: center 22%;
   }
   #encounterPanel[data-v2-layout="tier1"] .v2-preview-screen,
+  #encounterPanel[data-v2-layout="tier1"] .v2-choose-screen,
   #encounterPanel[data-v2-layout="tier1"] .v2-end-screen{
     width: min(980px, 100%);
     margin-inline: auto;
@@ -1049,6 +1116,7 @@ p { margin: 0; color: var(--muted); line-height: 1.5; }
 }
 
 #encounterPanel[data-v2-layout="tier1"] .v2-preview-screen,
+#encounterPanel[data-v2-layout="tier1"] .v2-choose-screen,
 #encounterPanel[data-v2-layout="tier1"] .v2-end-screen{
   position:relative;
   min-height: clamp(720px, 82vh, 1120px);
@@ -7196,6 +7264,7 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-preview-screen,
+  #encounterPanel[data-v2-layout="tier1"] .v2-choose-screen,
   #encounterPanel[data-v2-layout="tier1"] .v2-end-screen{
     min-height: calc(100vw * 1.62) !important;
   }
@@ -7606,6 +7675,28 @@ html, body{ height:100%; }
 .bc-service-bottle-slot.is-ready{
   border-color: rgba(255,220,140,0.44);
   box-shadow: 0 0 20px rgba(220,184,112,0.12), inset 0 1px 0 rgba(255,238,197,0.08);
+}
+
+button.bc-service-bottle-slot.is-button{
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+button.bc-service-bottle-slot.is-button:hover,
+button.bc-service-bottle-slot.is-button:focus-visible{
+  border-color: rgba(255,230,160,0.72);
+  box-shadow: 0 0 24px rgba(220,184,112,0.22), inset 0 1px 0 rgba(255,238,197,0.12);
+  outline: none;
+}
+
+button.bc-service-bottle-slot.is-button:active{
+  transform: translateY(1px);
 }
 
 .bc-service-bottle-slot.is-opened strong{
@@ -8055,9 +8146,11 @@ html[data-bc-godot-mobile="1"] .godot-shift-stage{
 
   #encounterPanel[data-v2-layout="tier1"] .v2-hero-frame,
   #encounterPanel[data-v2-layout="tier1"] .v2-preview-screen,
+  #encounterPanel[data-v2-layout="tier1"] .v2-choose-screen,
   #encounterPanel[data-v2-layout="tier1"] .v2-end-screen,
   html[data-bc-godot-shift="wine_offer"] #encounterPanel[data-v2-layout="tier1"] .v2-hero-frame,
   html[data-bc-godot-shift="wine_offer"] #encounterPanel[data-v2-layout="tier1"] .v2-preview-screen,
+  html[data-bc-godot-shift="wine_offer"] #encounterPanel[data-v2-layout="tier1"] .v2-choose-screen,
   html[data-bc-godot-shift="wine_offer"] #encounterPanel[data-v2-layout="tier1"] .v2-end-screen{
     position:relative !important;
     width:min(462px, calc((100dvh - 32px) * 941 / 1672), 100%) !important;
@@ -8123,6 +8216,25 @@ html[data-bc-godot-mobile="1"] .godot-shift-stage{
     white-space:nowrap;
     overflow:hidden;
     text-overflow:ellipsis;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-header-title-row{
+    gap:6px;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-header-shift-time{
+    padding:3px 6px;
+    border-radius:8px;
+    min-width:3.6em;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-header-shift-label{
+    font-size:7px;
+    letter-spacing:.12em;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-header-shift-value{
+    font-size:14px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-product-title{
@@ -8673,4 +8785,74 @@ html[data-bc-godot-mobile="1"] .godot-shift-stage{
     margin:0;
     box-sizing:border-box;
   }
+}
+
+#encounterPanel[data-v2-layout="tier1"] .v2-choose-clue{
+  position:absolute;
+  left:6%;
+  right:6%;
+  top:46%;
+  z-index:4;
+  padding:10px 12px;
+  border:1px solid rgba(241,200,120,.28);
+  border-radius:14px;
+  background:rgba(8,10,14,.78);
+  color:#fff;
+}
+
+#encounterPanel[data-v2-layout="tier1"] .v2-choose-clue p{
+  margin:6px 0 0;
+  font-size:13px;
+  line-height:1.35;
+}
+
+#encounterPanel[data-v2-layout="tier1"] .v2-choose-options{
+  position:absolute;
+  left:4%;
+  right:4%;
+  bottom:86px;
+  z-index:5;
+  display:grid;
+  grid-template-columns:repeat(3, minmax(0, 1fr));
+  gap:8px;
+}
+
+#encounterPanel[data-v2-layout="tier1"] .v2-choose-option{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:6px;
+  min-height:148px;
+  padding:10px 8px 12px;
+  border:1px solid rgba(241,200,120,.35);
+  border-radius:16px;
+  background:rgba(8,10,14,.86);
+  color:#fff;
+  text-align:center;
+  cursor:pointer;
+}
+
+#encounterPanel[data-v2-layout="tier1"] .v2-choose-option img{
+  width:42px;
+  max-height:72px;
+  object-fit:contain;
+}
+
+#encounterPanel[data-v2-layout="tier1"] .v2-choose-option strong{
+  font-size:11px;
+  line-height:1.15;
+}
+
+#encounterPanel[data-v2-layout="tier1"] .v2-choose-option span,
+#encounterPanel[data-v2-layout="tier1"] .v2-choose-option em{
+  font-size:10px;
+  font-style:normal;
+  opacity:.82;
+}
+
+#encounterPanel[data-v2-layout="tier1"] .v2-choose-hint{
+  width:100%;
+  text-align:center;
+  font-size:12px;
+  opacity:.88;
 }

@@ -497,6 +497,7 @@ document.querySelector("#app").innerHTML = `
           </svg>
         </button>
         <div id="premiumTopbarMenuPanel" class="premium-topbar-menu-panel hidden">
+          <button id="btnCockpitHomepage" class="btn-ghost" type="button">Homepage</button>
           <button id="btnPremiumSignupMenu" class="btn-ghost hidden" type="button">Premium Sign Up</button>
           <button id="btnOpenMessages" class="btn-ghost" type="button">Messages</button>
           <button id="btnWaiterPerformanceLeaderboard" class="btn-ghost" type="button">Leaderboard</button>
@@ -7703,6 +7704,14 @@ function wireParentButtons() {
     });
   }
 
+  const btnCockpitHomepage = document.getElementById("btnCockpitHomepage");
+  if (btnCockpitHomepage && !btnCockpitHomepage.__bcBound) {
+    btnCockpitHomepage.__bcBound = true;
+    btnCockpitHomepage.addEventListener("click", () => {
+      routeCockpitHomepage("ui:btnCockpitHomepage");
+    });
+  }
+
 }
 
 function setHomeAuthUI(isAuthed) {
@@ -8129,11 +8138,12 @@ Score: ${escapeHtml(String(p.chainScore ?? "-"))}
 
 <div><strong>Skill Tree</strong></div>
 
-<div class="small-text">Guest Reading: ${skills.read ?? 0}%</div>
-<div class="small-text">Framing: ${skills.framing ?? 0}%</div>
-<div class="small-text">Delivery: ${skills.delivery ?? 0}%</div>
-<div class="small-text">Recovery: ${skills.recovery ?? 0}%</div>
-<div class="small-text">Closing: ${skills.closing ?? 0}%</div>
+<div class="small-text">Ask: ${skills.read ?? skills.ask ?? 0}%</div>
+<div class="small-text">Recommend: ${skills.framing ?? skills.recommend ?? 0}%</div>
+<div class="small-text">Encounter: ${skills.delivery ?? skills.encounter_success ?? 0}%</div>
+<div class="small-text">Recover: ${skills.recovery ?? skills.recover ?? 0}%</div>
+<div class="small-text">Commit: ${skills.closing ?? skills.commit ?? 0}%</div>
+<div class="small-text">Speed: ${skills.speed ?? 0}%</div>
 
 <div class="small-text" style="margin-top:8px; opacity:.75;">
 Strongest: ${escapeHtml(String(p.strongestSkill ?? "-"))}
@@ -8621,7 +8631,7 @@ async function buildLeaderboardUserDetail(userId, restaurantId, fallbackUser = {
     .maybeSingle();
   const snapshotsQuery = supabase
     .from("bc_skill_snapshots_v1")
-    .select("created_at, read_pct, framing_pct, delivery_pct, recovery_pct, closing_pct")
+    .select("created_at, read_pct, framing_pct, delivery_pct, recovery_pct, closing_pct, payload")
     .eq("user_id", uid)
     .order("created_at", { ascending: false })
     .limit(20);
@@ -8701,7 +8711,7 @@ async function buildLeaderboardUserDetail(userId, restaurantId, fallbackUser = {
     try {
       const crossSnapshotsRes = await supabase
         .from("bc_skill_snapshots_v1")
-        .select("created_at, read_pct, framing_pct, delivery_pct, recovery_pct, closing_pct")
+        .select("created_at, read_pct, framing_pct, delivery_pct, recovery_pct, closing_pct, payload")
         .eq("user_id", uid)
         .order("created_at", { ascending: false })
         .limit(20);
@@ -11166,12 +11176,38 @@ function userLabel(userId, nameMap) {
 }
 
 const MANAGER_PERFORMANCE_SKILLS = [
-  { key: "read", label: "READ", color: "#60a5fa" },
-  { key: "framing", label: "FRAME", color: "#34d399" },
-  { key: "delivery", label: "DELIVER", color: "#f59e0b" },
-  { key: "recovery", label: "RECOVER", color: "#f472b6" },
-  { key: "closing", label: "CLOSE", color: "#a78bfa" },
+  { key: "read", label: "ASK", color: "#60a5fa", pctKey: "read_pct" },
+  { key: "framing", label: "RECOMMEND", color: "#34d399", pctKey: "framing_pct" },
+  { key: "delivery", label: "ENCOUNTER", color: "#f59e0b", pctKey: "delivery_pct" },
+  { key: "recovery", label: "RECOVER", color: "#f472b6", pctKey: "recovery_pct" },
+  { key: "closing", label: "COMMIT", color: "#a78bfa", pctKey: "closing_pct" },
+  { key: "speed", label: "SPEED", color: "#38bdf8", pctKey: "speed_pct" },
 ];
+
+function extractSkillShapeFromSnapshotRow(row = {}) {
+  const skills =
+    (row?.payload && typeof row.payload === "object" && row.payload.skills && typeof row.payload.skills === "object"
+      ? row.payload.skills
+      : null) ||
+    (row?.skills && typeof row.skills === "object" ? row.skills : {}) ||
+    {};
+  return {
+    read: Number(row?.read_pct ?? skills.read ?? skills.ask ?? row?.read ?? 0) || 0,
+    framing: Number(row?.framing_pct ?? skills.framing ?? skills.recommend ?? row?.framing ?? 0) || 0,
+    delivery:
+      Number(row?.delivery_pct ?? skills.delivery ?? skills.encounter_success ?? row?.delivery ?? 0) || 0,
+    recovery: Number(row?.recovery_pct ?? skills.recovery ?? skills.recover ?? row?.recovery ?? 0) || 0,
+    closing: Number(row?.closing_pct ?? skills.closing ?? skills.commit ?? row?.closing ?? 0) || 0,
+    speed: Number(row?.speed_pct ?? skills.speed ?? row?.speed ?? 0) || 0,
+  };
+}
+
+function averageSkillScoreFromRow(row = {}) {
+  const shape = extractSkillShapeFromSnapshotRow(row);
+  const values = MANAGER_PERFORMANCE_SKILLS.map((skill) => Number(shape?.[skill.key] || 0));
+  if (!values.length) return 0;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
 
 function firstFinite(...values) {
   for (const value of values) {
@@ -11260,6 +11296,7 @@ function averageSkillShape(rows = []) {
     delivery: 0,
     recovery: 0,
     closing: 0,
+    speed: 0,
   };
 
   if (!source.length) return totals;
@@ -11268,11 +11305,13 @@ function averageSkillShape(rows = []) {
   source.forEach((row, index) => {
     const weight = weights[index] || 0;
     appliedWeight += weight;
-    totals.read += Number(row?.read_pct || row?.read || 0) * weight;
-    totals.framing += Number(row?.framing_pct || row?.framing || 0) * weight;
-    totals.delivery += Number(row?.delivery_pct || row?.delivery || 0) * weight;
-    totals.recovery += Number(row?.recovery_pct || row?.recovery || 0) * weight;
-    totals.closing += Number(row?.closing_pct || row?.closing || 0) * weight;
+    const shape = extractSkillShapeFromSnapshotRow(row);
+    totals.read += Number(shape.read || 0) * weight;
+    totals.framing += Number(shape.framing || 0) * weight;
+    totals.delivery += Number(shape.delivery || 0) * weight;
+    totals.recovery += Number(shape.recovery || 0) * weight;
+    totals.closing += Number(shape.closing || 0) * weight;
+    totals.speed += Number(shape.speed || 0) * weight;
   });
 
   Object.keys(totals).forEach((key) => {
@@ -11915,7 +11954,7 @@ async function getManagerPerformanceModel({ force = false } = {}) {
       .limit(200),
     supabase
       .from("bc_skill_snapshots_v1")
-      .select("user_id, created_at, read_pct, framing_pct, delivery_pct, recovery_pct, closing_pct")
+      .select("user_id, created_at, read_pct, framing_pct, delivery_pct, recovery_pct, closing_pct, payload")
       .eq("restaurant_id", restaurantId)
       .order("created_at", { ascending: false })
       .limit(2000),
@@ -14419,11 +14458,12 @@ function getCoachingSuggestionsFromReport(payload) {
   const s = payload.skills;
 
   const skillMap = [
-    { key: "read", label: "Guest Reading", drillFocus: "read" },
-    { key: "framing", label: "Framing", drillFocus: "frame" },
-    { key: "delivery", label: "Delivery", drillFocus: "delivery" },
-    { key: "recovery", label: "Recovery", drillFocus: "recovery" },
-    { key: "closing", label: "Closing", drillFocus: "closing" }
+    { key: "read", label: "Ask", drillFocus: "read" },
+    { key: "framing", label: "Recommend", drillFocus: "frame" },
+    { key: "delivery", label: "Encounter", drillFocus: "delivery" },
+    { key: "recovery", label: "Recover", drillFocus: "recovery" },
+    { key: "closing", label: "Commit", drillFocus: "closing" },
+    { key: "speed", label: "Speed", drillFocus: "speed" }
   ];
 
   skillMap.sort((a, b) => (s[a.key] ?? 0) - (s[b.key] ?? 0));
@@ -14527,11 +14567,12 @@ function getAutomaticDrillRecommendationForThread(thread) {
   if (!skills) return null;
 
   const entries = [
-    { key: "read", label: "Guest Reading", focus: "read" },
-    { key: "framing", label: "Framing", focus: "frame" },
-    { key: "delivery", label: "Delivery", focus: "delivery" },
-    { key: "recovery", label: "Recovery", focus: "recovery" },
-    { key: "closing", label: "Closing", focus: "closing" }
+    { key: "read", label: "Ask", focus: "read" },
+    { key: "framing", label: "Recommend", focus: "frame" },
+    { key: "delivery", label: "Encounter", focus: "delivery" },
+    { key: "recovery", label: "Recover", focus: "recovery" },
+    { key: "closing", label: "Commit", focus: "closing" },
+    { key: "speed", label: "Speed", focus: "speed" }
   ].sort((a, b) => (skills[a.key] ?? 0) - (skills[b.key] ?? 0));
 
   const lastDrill = getLastAssignedDrill(rows);
@@ -15263,13 +15304,7 @@ function drawSkillRadar(canvas, skills) {
 
   ctx.clearRect(0, 0, w, h);
 
-  const labels = [
-    { key: "read", label: "READ" },
-    { key: "framing", label: "FRAME" },
-    { key: "delivery", label: "DELIVER" },
-    { key: "recovery", label: "RECOVER" },
-    { key: "closing", label: "CLOSE" },
-  ];
+  const labels = MANAGER_PERFORMANCE_SKILLS.map(({ key, label }) => ({ key, label }));
 
   const values = labels.map(({ key }) => Math.max(0, Math.min(100, Number(skills?.[key] || 0))) / 100);
 
@@ -15676,13 +15711,12 @@ function drawPerformanceHistoryChart(rows) {
   const ctx = canvas.getContext("2d");
   const w = canvas.width;
   const h = canvas.height;
-  const skills = [
-    { key: "read_pct", label: "READ", color: "#60a5fa" },
-    { key: "framing_pct", label: "FRAME", color: "#34d399" },
-    { key: "delivery_pct", label: "DELIVER", color: "#f59e0b" },
-    { key: "recovery_pct", label: "RECOVER", color: "#f472b6" },
-    { key: "closing_pct", label: "CLOSE", color: "#a78bfa" }
-  ];
+  const skills = MANAGER_PERFORMANCE_SKILLS.map((skill) => ({
+    key: skill.pctKey || `${skill.key}_pct`,
+    label: skill.label,
+    color: skill.color,
+    shapeKey: skill.key,
+  }));
 
   ctx.clearRect(0, 0, w, h);
   renderPerformanceLegend(skills);
@@ -15725,13 +15759,25 @@ function drawPerformanceHistoryChart(rows) {
   });
 
   const xStep = rows.length > 1 ? plotW / (rows.length - 1) : plotW / 2;
+  const normalizedRows = rows.map((row) => {
+    const shape = extractSkillShapeFromSnapshotRow(row);
+    return {
+      ...row,
+      read_pct: shape.read,
+      framing_pct: shape.framing,
+      delivery_pct: shape.delivery,
+      recovery_pct: shape.recovery,
+      closing_pct: shape.closing,
+      speed_pct: shape.speed,
+    };
+  });
 
   skills.forEach((skill) => {
     ctx.beginPath();
     ctx.lineWidth = 2;
     ctx.strokeStyle = skill.color;
 
-    rows.forEach((r, i) => {
+    normalizedRows.forEach((r, i) => {
       const pct = Math.max(0, Math.min(100, Number(r?.[skill.key] || 0)));
       const x = padL + i * xStep;
       const y = padT + plotH - (pct / 100) * plotH;
@@ -15787,11 +15833,12 @@ function renderMbMessageItem(row, nameMap) {
     if (Object.keys(p).length) {
       const skills = p.skills || {};
       const metricRows = [
-        ["Read", `${skills.read ?? 0}%`],
-        ["Frame", `${skills.framing ?? 0}%`],
-        ["Delivery", `${skills.delivery ?? 0}%`],
-        ["Recovery", `${skills.recovery ?? 0}%`],
-        ["Closing", `${skills.closing ?? 0}%`],
+        ["Ask", `${skills.read ?? skills.ask ?? 0}%`],
+        ["Recommend", `${skills.framing ?? skills.recommend ?? 0}%`],
+        ["Encounter", `${skills.delivery ?? skills.encounter_success ?? 0}%`],
+        ["Recover", `${skills.recovery ?? skills.recover ?? 0}%`],
+        ["Commit", `${skills.closing ?? skills.commit ?? 0}%`],
+        ["Speed", `${skills.speed ?? 0}%`],
       ];
 
       payloadHtml = `
@@ -16504,11 +16551,19 @@ function getManagerDrillFocusLabel(focus = "") {
   const key = String(focus || "").toLowerCase();
 
   const map = {
-    read: "Read",
-    frame: "Frame",
-    delivery: "Delivery",
-    recovery: "Recovery",
-    closing: "Closing",
+    read: "Ask",
+    ask: "Ask",
+    frame: "Recommend",
+    framing: "Recommend",
+    recommend: "Recommend",
+    delivery: "Encounter",
+    encounter: "Encounter",
+    encounter_success: "Encounter",
+    recovery: "Recover",
+    recover: "Recover",
+    closing: "Commit",
+    commit: "Commit",
+    speed: "Speed",
   };
 
   return map[key] || (focus ? String(focus) : "Drill");
@@ -17730,11 +17785,12 @@ async function renderProfileSkillDashboard() {
       </div>
 
       <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px 12px; margin-bottom:10px;">
-        <div class="small-text">Reading: <span id="profileSkillRead">0%</span></div>
-        <div class="small-text">Framing: <span id="profileSkillFraming">0%</span></div>
-        <div class="small-text">Delivery: <span id="profileSkillDelivery">0%</span></div>
-        <div class="small-text">Recovery: <span id="profileSkillRecovery">0%</span></div>
-        <div class="small-text">Closing: <span id="profileSkillClosing">0%</span></div>
+        <div class="small-text">Ask: <span id="profileSkillRead">0%</span></div>
+        <div class="small-text">Recommend: <span id="profileSkillFraming">0%</span></div>
+        <div class="small-text">Encounter: <span id="profileSkillDelivery">0%</span></div>
+        <div class="small-text">Recover: <span id="profileSkillRecovery">0%</span></div>
+        <div class="small-text">Commit: <span id="profileSkillClosing">0%</span></div>
+        <div class="small-text">Speed: <span id="profileSkillSpeed">0%</span></div>
       </div>
 
       <canvas id="profileSkillRadar" width="240" height="240" style="display:block; margin:0 auto;"></canvas>
@@ -17765,14 +17821,13 @@ async function renderProfileSkillDashboard() {
     setText("profileSkillDelivery", snap.delivery ?? 0);
     setText("profileSkillRecovery", snap.recovery ?? 0);
     setText("profileSkillClosing", snap.closing ?? 0);
+    setText("profileSkillSpeed", snap.speed ?? 0);
 
-    const entries = [
-      { key: "read", label: "Reading", val: snap.read ?? 0 },
-      { key: "framing", label: "Framing", val: snap.framing ?? 0 },
-      { key: "delivery", label: "Delivery", val: snap.delivery ?? 0 },
-      { key: "recovery", label: "Recovery", val: snap.recovery ?? 0 },
-      { key: "closing", label: "Closing", val: snap.closing ?? 0 },
-    ].sort((a, b) => b.val - a.val);
+    const entries = MANAGER_PERFORMANCE_SKILLS.map((skill) => ({
+      key: skill.key,
+      label: prettySkillLabel(skill.key),
+      val: snap?.[skill.key] ?? 0,
+    })).sort((a, b) => b.val - a.val);
 
     const strongest = entries[0];
     const weakest = entries[entries.length - 1];
@@ -20414,7 +20469,8 @@ async function loadLeaderboard() {
       framing_pct,
       delivery_pct,
       recovery_pct,
-      closing_pct
+      closing_pct,
+      payload
     `)
     .eq("restaurant_id", restaurantId)
     .order("created_at", { ascending: false })
@@ -20439,12 +20495,7 @@ async function loadLeaderboard() {
       };
     }
 
-    const score =
-      (row.read_pct +
-       row.framing_pct +
-       row.delivery_pct +
-       row.recovery_pct +
-       row.closing_pct) / 5;
+    const score = averageSkillScoreFromRow(row);
 
     map[id].total += score;
     map[id].count += 1;
@@ -20476,7 +20527,8 @@ function renderWeeklyTrainingReport(rows) {
     framing: 0,
     delivery: 0,
     recovery: 0,
-    closing: 0
+    closing: 0,
+    speed: 0,
   };
 
   rows.forEach((r) => {
@@ -20490,21 +20542,18 @@ function renderWeeklyTrainingReport(rows) {
       };
     }
 
-    const score =
-      (r.read_pct +
-       r.framing_pct +
-       r.delivery_pct +
-       r.recovery_pct +
-       r.closing_pct) / 5;
+    const shape = extractSkillShapeFromSnapshotRow(r);
+    const score = averageSkillScoreFromRow(r);
 
     waiterMap[id].total += score;
     waiterMap[id].count += 1;
 
-    skillGrowth.read += r.read_pct;
-    skillGrowth.framing += r.framing_pct;
-    skillGrowth.delivery += r.delivery_pct;
-    skillGrowth.recovery += r.recovery_pct;
-    skillGrowth.closing += r.closing_pct;
+    skillGrowth.read += shape.read;
+    skillGrowth.framing += shape.framing;
+    skillGrowth.delivery += shape.delivery;
+    skillGrowth.recovery += shape.recovery;
+    skillGrowth.closing += shape.closing;
+    skillGrowth.speed += shape.speed;
   });
 
   const waiters = Object.values(waiterMap)
@@ -20518,7 +20567,7 @@ function renderWeeklyTrainingReport(rows) {
 
   const skillAvg = Object.entries(skillGrowth)
     .map(([k, v]) => ({
-      skill: k,
+      skill: prettySkillLabel(k),
       avg: v / rows.length
     }))
     .sort((a, b) => a.avg - b.avg);
@@ -20567,6 +20616,7 @@ async function loadWeeklyTrainingReport() {
       delivery_pct,
       recovery_pct,
       closing_pct,
+      payload,
       created_at
     `)
     .eq("restaurant_id", restaurantId)
@@ -20597,11 +20647,14 @@ function getWeekStartIso(d = new Date()) {
 
 function prettySkillLabel(key) {
   const k = String(key || "").toLowerCase();
-  if (k === "read") return "Reading";
-  if (k === "framing") return "Framing";
-  if (k === "delivery") return "Delivery";
-  if (k === "recovery") return "Recovery";
-  if (k === "closing") return "Closing";
+  if (k === "read" || k === "ask") return "Ask";
+  if (k === "framing" || k === "recommend") return "Recommend";
+  if (k === "delivery" || k === "encounter" || k === "encounter_success" || k === "success") {
+    return "Encounter";
+  }
+  if (k === "recovery" || k === "recover") return "Recover";
+  if (k === "closing" || k === "commit") return "Commit";
+  if (k === "speed") return "Speed";
   return key || "—";
 }
 
@@ -20620,22 +20673,23 @@ async function maybeSendWeeklyManagerSummary(rows) {
     if (localStorage.getItem(sentKey) === "1") return;
 
     const waiterMap = {};
-    const skillGrowth = { read: 0, framing: 0, delivery: 0, recovery: 0, closing: 0 };
+    const skillGrowth = { read: 0, framing: 0, delivery: 0, recovery: 0, closing: 0, speed: 0 };
 
     rows.forEach((r) => {
       const id = r.user_id;
       if (!waiterMap[id]) {
         waiterMap[id] = { name: r.__displayName || id, total: 0, count: 0 };
       }
-      const score =
-        (r.read_pct + r.framing_pct + r.delivery_pct + r.recovery_pct + r.closing_pct) / 5;
+      const shape = extractSkillShapeFromSnapshotRow(r);
+      const score = averageSkillScoreFromRow(r);
       waiterMap[id].total += score;
       waiterMap[id].count += 1;
-      skillGrowth.read += r.read_pct;
-      skillGrowth.framing += r.framing_pct;
-      skillGrowth.delivery += r.delivery_pct;
-      skillGrowth.recovery += r.recovery_pct;
-      skillGrowth.closing += r.closing_pct;
+      skillGrowth.read += shape.read;
+      skillGrowth.framing += shape.framing;
+      skillGrowth.delivery += shape.delivery;
+      skillGrowth.recovery += shape.recovery;
+      skillGrowth.closing += shape.closing;
+      skillGrowth.speed += shape.speed;
     });
 
     const waiters = Object.values(waiterMap)
@@ -20654,11 +20708,11 @@ async function maybeSendWeeklyManagerSummary(rows) {
     const n = Math.max(1, Math.min(5, Math.floor(byTime.length / 2) || 1));
     const first = byTime.slice(0, n);
     const last = byTime.slice(-n);
-    const keys = ["read_pct", "framing_pct", "delivery_pct", "recovery_pct", "closing_pct"];
+    const keys = ["read", "framing", "delivery", "recovery", "closing", "speed"];
 
     const mean = (arr, k) => {
       if (!arr.length) return 0;
-      const total = arr.reduce((acc, r) => acc + Number(r?.[k] ?? 0), 0);
+      const total = arr.reduce((acc, r) => acc + Number(extractSkillShapeFromSnapshotRow(r)?.[k] ?? 0), 0);
       return total / arr.length;
     };
 
@@ -21817,6 +21871,47 @@ function routeHomeShell(reason = "home_shell", message = "") {
   if (message) setMsg("authMsg", message, "normal");
 }
 
+function routeCockpitHomepage(reason = "cockpit_homepage") {
+  // Homepage = in-game Begin hub (game.html screenHome), not the Join Game lobby.
+  console.log("[ROUTE] cockpit homepage", {
+    reason,
+    authed: !!appState?.session?.user,
+  });
+
+  try { clearGodotDemoLock(`homepage:${reason}`); } catch {}
+  window.__BC_DEMO_PLAY_STARTED_AT__ = 0;
+  window.__BC_DEMO_SHELL_CTA_HIDDEN = false;
+  window.__BC_DRILL_CONFIG__ = null;
+  window.BC_DRILL_CONFIG = null;
+  setPendingStartDrill(null);
+
+  closeHud();
+  closePremiumTopbarMenu();
+  clearMsgs();
+
+  appMode = "demo";
+  persistV2DemoRequest();
+  document.documentElement.dataset.bcV2Demo = "true";
+  document.documentElement.dataset.bcGodotDemo = "";
+
+  destroyPremiumIframe(`routeCockpitHomepage:${reason}`);
+  destroyDemoIframe(`user_exit:${reason}`);
+  setPremiumOverlayActive(false);
+
+  document.getElementById("authFields")?.classList.add("hidden");
+  document.getElementById("btnDemoPremium")?.classList.add("hidden");
+  document.getElementById("btnDemoExit")?.classList.add("hidden");
+
+  showScreen("screenGameDemo");
+  window.__BC_DEMO_IFRAME_LAST_SCREEN__ = "screenHome";
+  mountGameIframe("gameRootDemo", "demo", {
+    initialScreen: "screenHome",
+    v2Harness: true,
+  });
+  try { renderDemoJoinBlock?.(); } catch {}
+  try { renderAppChrome?.(); } catch {}
+}
+
 async function decideRoute(reason = "decideRoute") {
   if (isLoggingOut()) {
     console.warn("[BC] decideRoute blocked (logging out)", reason);
@@ -22046,6 +22141,7 @@ async function loadHudSkillSnapshot() {
       delivery: 0,
       recovery: 0,
       closing: 0,
+      speed: 0,
     };
   }
 
@@ -22057,6 +22153,7 @@ async function loadHudSkillSnapshot() {
       delivery_pct,
       recovery_pct,
       closing_pct,
+      payload,
       created_at
     `)
     .eq("user_id", ctx.userId)
@@ -22072,16 +22169,11 @@ async function loadHudSkillSnapshot() {
       delivery: 0,
       recovery: 0,
       closing: 0,
+      speed: 0,
     };
   }
 
-  return {
-    read: Number(data.read_pct || 0),
-    framing: Number(data.framing_pct || 0),
-    delivery: Number(data.delivery_pct || 0),
-    recovery: Number(data.recovery_pct || 0),
-    closing: Number(data.closing_pct || 0),
-  };
+  return extractSkillShapeFromSnapshotRow(data);
 }
 
 async function loadProfileSkillShape() {
@@ -22093,6 +22185,7 @@ async function loadProfileSkillShape() {
       delivery: 0,
       recovery: 0,
       closing: 0,
+      speed: 0,
     };
   }
 
@@ -22104,6 +22197,7 @@ async function loadProfileSkillShape() {
       delivery_pct,
       recovery_pct,
       closing_pct,
+      payload,
       created_at
     `)
     .eq("user_id", ctx.userId)
@@ -22118,6 +22212,7 @@ async function loadProfileSkillShape() {
       delivery: 0,
       recovery: 0,
       closing: 0,
+      speed: 0,
     };
   }
 
@@ -22137,14 +22232,13 @@ async function renderHudSkillDashboard() {
   setText("hudSkillDelivery", snap.delivery ?? 0);
   setText("hudSkillRecovery", snap.recovery ?? 0);
   setText("hudSkillClosing", snap.closing ?? 0);
+  setText("hudSkillSpeed", snap.speed ?? 0);
 
-  const entries = [
-    { key: "read", label: "Reading", val: snap.read ?? 0 },
-    { key: "framing", label: "Framing", val: snap.framing ?? 0 },
-    { key: "delivery", label: "Delivery", val: snap.delivery ?? 0 },
-    { key: "recovery", label: "Recovery", val: snap.recovery ?? 0 },
-    { key: "closing", label: "Closing", val: snap.closing ?? 0 },
-  ].sort((a, b) => b.val - a.val);
+  const entries = MANAGER_PERFORMANCE_SKILLS.map((skill) => ({
+    key: skill.key,
+    label: prettySkillLabel(skill.key),
+    val: snap?.[skill.key] ?? 0,
+  })).sort((a, b) => b.val - a.val);
 
   const strongest = entries[0];
   const weakest = entries[entries.length - 1];
@@ -22447,9 +22541,9 @@ function renderHudTimeline(rows) {
         </div>
 
         <div style="margin-top:4px;">
-          Reading ${r.read_pct}% ${readTrend}
+          Ask ${r.read_pct}% ${readTrend}
           &nbsp;&nbsp;|&nbsp;&nbsp;
-          Recovery ${r.recovery_pct}% ${recTrend}
+          Recover ${r.recovery_pct}% ${recTrend}
         </div>
 
       </div>
@@ -23383,7 +23477,11 @@ document.getElementById("mbListingAddInvite")?.addEventListener("click", async (
   await adminAddInvite(v);
   if (input) input.value = "";
 });
-document.getElementById("btnSaveRequireInvite").addEventListener("click", adminSaveRequireInvite);
+(function wireSaveRequireInvite() {
+  const btn = document.getElementById("btnSaveRequireInvite");
+  if (!btn) return;
+  btn.addEventListener("click", adminSaveRequireInvite);
+})();
 document.getElementById("btnSaveSeatLimit")?.addEventListener("click", adminSaveSeatLimit);
 
 // Debug + cross-module access (safe to ship)

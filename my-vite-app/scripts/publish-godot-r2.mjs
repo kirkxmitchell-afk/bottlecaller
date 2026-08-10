@@ -24,7 +24,7 @@ const WORKER_NAME = "bottlecaller-r2-uploader-temp";
 const KEY_PREFIX = "godot-shift";
 const PART_SIZE = 20 * 1024 * 1024;
 const CONCURRENCY = 2;
-const MAX_RETRIES = 5;
+const MAX_RETRIES = 8;
 const CACHE_CONTROL = "public, max-age=0, must-revalidate";
 const DRY_RUN = process.argv.includes("--dry-run");
 
@@ -149,7 +149,16 @@ async function responseError(response) {
     const parsed = JSON.parse(text);
     return parsed.error || text;
   } catch {
-    return text || `${response.status} ${response.statusText}`;
+    if (
+      text.includes("There is nothing here yet")
+      || text.includes("Page not found")
+      || text.includes("<!DOCTYPE html")
+      || text.includes("error code: 1042")
+    ) {
+      return `${response.status} Worker not ready yet (Cloudflare placeholder page)`;
+    }
+    const compact = text.replace(/\s+/g, " ").trim().slice(0, 180);
+    return compact || `${response.status} ${response.statusText}`;
   }
 }
 
@@ -163,6 +172,12 @@ async function requestJson(url, token, options = {}) {
   });
   if (!response.ok) {
     throw new Error(`${options.method || "GET"} ${url.pathname}: ${await responseError(response)}`);
+  }
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.includes("application/json")) {
+    throw new Error(
+      `${options.method || "GET"} ${url.pathname}: expected JSON, got ${contentType || "unknown"}`,
+    );
   }
   return await response.json();
 }
@@ -181,6 +196,33 @@ async function retry(label, operation) {
     }
   }
   throw lastError;
+}
+
+async function waitForUploader(endpoint, token) {
+  // workers.dev can return Cloudflare's "nothing here yet" HTML for a
+  // minute or more after a fresh deploy/delete cycle of the same name.
+  const maxAttempts = 24;
+  let lastError;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const health = await requestJson(new URL("/health", endpoint), token);
+      if (health?.ok) {
+        if (attempt > 1) {
+          console.log(`Uploader ready after ${attempt} health checks.`);
+        }
+        return;
+      }
+      lastError = new Error("Health check returned unexpected payload.");
+    } catch (error) {
+      lastError = error;
+    }
+    const delay = Math.min(15_000, 1_500 * attempt);
+    console.warn(
+      `  uploader not ready (${attempt}/${maxAttempts}); waiting ${delay} ms.`,
+    );
+    await sleep(delay);
+  }
+  throw lastError || new Error("Uploader health check timed out.");
 }
 
 async function readPart(path, offset, length) {
@@ -241,14 +283,16 @@ async function uploadSmall(endpoint, token, file, digest) {
 }
 
 async function uploadMultipart(endpoint, token, file, digest) {
-  const created = await requestJson(objectUrl(endpoint, file.key, { action: "create" }), token, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      cacheControl: CACHE_CONTROL,
-      contentType: file.contentType,
-      sha256: digest,
-    }),
+  const created = await retry(`${file.name} create multipart`, async () => {
+    return await requestJson(objectUrl(endpoint, file.key, { action: "create" }), token, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        cacheControl: CACHE_CONTROL,
+        contentType: file.contentType,
+        sha256: digest,
+      }),
+    });
   });
   const count = Math.ceil(file.size / PART_SIZE);
   const parts = new Array(count);
@@ -369,9 +413,9 @@ async function main() {
       throw new Error("Could not find the temporary Worker URL in Wrangler output.");
     }
 
-    await retry("uploader health check", async () => {
-      await requestJson(new URL("/health", endpoint), token);
-    });
+    await waitForUploader(endpoint, token);
+    // Brief settle time after workers.dev starts answering /health.
+    await sleep(2000);
     await publishFiles(endpoint, token, files);
     console.log("\nGodot R2 publish completed successfully.");
   } finally {

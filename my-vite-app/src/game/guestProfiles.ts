@@ -70,7 +70,8 @@ export type GuestProfile = {
 };
 
 /** Object success pairs: greet food↔offer food, greet wine↔offer wine.
- *  Aperitif is consumed only when offer food or wine completes the conversion. */
+ *  Aperitif is consumed only when offer food or wine completes the conversion.
+ *  Food and wine remain independent guest decisions — wine never implies food. */
 export function evaluateObjectPath(
   greeting: GreetChoice | string,
   offer: OfferChoice | string
@@ -117,6 +118,104 @@ export function evaluateObjectPath(
     objectSuccess: false,
     aperitifOpportunityUsed: false,
     note: `Mismatched path (${greeting} → ${offer}); object success requires matching food or wine pairs.`,
+  };
+}
+
+export type OfferAccessResult = {
+  accepted: boolean;
+  reason: string;
+  /** True when this offer places a food ticket. Never true for wine-only. */
+  placesFoodOrder: boolean;
+  /** True when this offer places a wine ticket / launches wine encounter. */
+  placesWineOrder: boolean;
+};
+
+/**
+ * Independent accept/decline for food vs wine offers.
+ * Wine acceptance never places food; food acceptance never places wine.
+ */
+export function evaluateOfferAccess(args: {
+  guestType?: GuestType | string | null;
+  greeting?: GreetChoice | string | null;
+  offer: OfferChoice | string;
+  greetingRecovered?: boolean;
+  allowedFollowUps?: string[];
+  profileTier?: number;
+  hasFoodRecovery?: boolean;
+}): OfferAccessResult {
+  const guestType = String(args.guestType || "").trim().toLowerCase();
+  const greeting = String(args.greeting || "").trim();
+  const offer = String(args.offer || "").trim();
+  const path = evaluateObjectPath(greeting, offer);
+  let pathOk = path.objectSuccess;
+  if (
+    args.greetingRecovered &&
+    Array.isArray(args.allowedFollowUps) &&
+    args.allowedFollowUps.includes(offer)
+  ) {
+    pathOk = true;
+  }
+
+  if (offer === "offer_food") {
+    if (!pathOk && greeting !== "greet_aperitif") {
+      return {
+        accepted: false,
+        reason: "food_offer_path_blocked",
+        placesFoodOrder: false,
+        placesWineOrder: false,
+      };
+    }
+    if (guestType === "regular" || guestType === "tourist") {
+      return {
+        accepted: true,
+        reason:
+          guestType === "regular"
+            ? "regular_accepts_food_offer"
+            : "tourist_accepts_food_offer",
+        placesFoodOrder: true,
+        placesWineOrder: false,
+      };
+    }
+    const foodRecovered =
+      Number(args.profileTier || 0) >= 2 && !!args.hasFoodRecovery;
+    return {
+      accepted: foodRecovered,
+      reason: foodRecovered ? "food_offer_recovered" : "guest_declines_food_offer",
+      placesFoodOrder: foodRecovered,
+      placesWineOrder: false,
+    };
+  }
+
+  if (offer === "offer_wine") {
+    if (!pathOk) {
+      return {
+        accepted: false,
+        reason: "wine_offer_path_blocked",
+        placesFoodOrder: false,
+        placesWineOrder: false,
+      };
+    }
+    if (guestType === "skeptic" && greeting === "greet_food") {
+      return {
+        accepted: false,
+        reason: "skeptic_declines_wine_after_food_greet",
+        placesFoodOrder: false,
+        placesWineOrder: false,
+      };
+    }
+    return {
+      accepted: true,
+      reason: "guest_accepts_wine_offer",
+      placesFoodOrder: false,
+      placesWineOrder: true,
+    };
+  }
+
+  return {
+    accepted: false,
+    reason: "unknown_offer",
+    placesFoodOrder: false,
+    placesWineOrder: false,
   };
 }
 

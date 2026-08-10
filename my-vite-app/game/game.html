@@ -3501,12 +3501,13 @@
 
     function pickStrongestWeakest(snapshot) {
       const entries = [
-        ["read", Number(snapshot?.read || 0)],
-        ["framing", Number(snapshot?.framing || 0)],
-        ["delivery", Number(snapshot?.delivery || 0)],
-        ["recovery", Number(snapshot?.recovery || 0)],
-        ["closing", Number(snapshot?.closing || 0)],
-      ];
+        ["read", Number(snapshot?.read ?? snapshot?.ask ?? 0)],
+        ["framing", Number(snapshot?.framing ?? snapshot?.recommend ?? 0)],
+        ["delivery", Number(snapshot?.delivery ?? snapshot?.encounter_success ?? 0)],
+        ["recovery", Number(snapshot?.recovery ?? snapshot?.recover ?? 0)],
+        ["closing", Number(snapshot?.closing ?? snapshot?.commit ?? 0)],
+        ["speed", Number(snapshot?.speed ?? 0)],
+      ].filter(([, value]) => Number.isFinite(value));
 
       const strongest = [...entries].sort((a, b) => b[1] - a[1])[0]?.[0] || null;
       const weakest = [...entries].sort((a, b) => a[1] - b[1])[0]?.[0] || null;
@@ -14346,6 +14347,7 @@ function ensureProgLoaded() {
         return {
           totalAP: 0,
           tierUnlocked: 1,
+          readyRewardIds: [],
           rewards: [
             { id: "starter_bottle", name: "Starter Bottle", unlockAP: 30, tier: 1, claimed: false },
             { id: "bronze_bottle", name: "Bronze Bottle", unlockAP: 100, tier: 1, claimed: false },
@@ -14354,9 +14356,13 @@ function ensureProgLoaded() {
         };
       }
 
-      function getV2HomeRewardStatus(reward, totalAP) {
+      function getV2HomeRewardStatus(reward, totalAP, state = null) {
         if (!reward) return "";
         if (reward.claimed) return "Opened";
+        const readyIds = new Set(
+          (Array.isArray(state?.readyRewardIds) ? state.readyRewardIds : []).map((id) => String(id || ""))
+        );
+        if (readyIds.has(String(reward.id || ""))) return "Open Now";
         const unlockAP = Number(reward.unlockAP || 0);
         if (unlockAP <= Number(totalAP || 0)) return "Open Now";
         return `${Math.max(0, unlockAP - Number(totalAP || 0))} AP to go`;
@@ -14432,7 +14438,7 @@ function ensureProgLoaded() {
         }
         if (playerNameEl) playerNameEl.textContent = getV2HomePlayerName();
         if (floorEl) floorEl.textContent = isDemoNow ? "Demo Floor" : "Service Floor";
-        if (nextBottleEl) nextBottleEl.textContent = getV2HomeRewardStatus(nextReward, totalAP) || "Locked";
+        if (nextBottleEl) nextBottleEl.textContent = getV2HomeRewardStatus(nextReward, totalAP, state) || "Locked";
         if (progressEl) progressEl.textContent = getV2HomeEncounterProgressLabel();
 
         if (slotsEl) {
@@ -14443,15 +14449,61 @@ function ensureProgLoaded() {
           ];
           slotsEl.innerHTML = homeRewards.map((fallbackReward) => {
             const reward = rewards.find((item) => item.id === fallbackReward.id) || fallbackReward;
-            const status = getV2HomeRewardStatus(reward, totalAP) || "Locked";
+            const status = getV2HomeRewardStatus(reward, totalAP, state) || "Locked";
             const stateClass = status === "Open Now" ? "is-ready" : status === "Opened" ? "is-opened" : "is-locked";
+            const canOpen = status === "Open Now";
+            if (canOpen) {
+              return `
+                <button
+                  type="button"
+                  class="bc-service-bottle-slot ${stateClass} is-button"
+                  data-v2-hub-claim-reward="${escapeHtml(String(reward.id || fallbackReward.id))}"
+                  data-v2-hub-reward-name="${escapeHtml(String(reward.name || fallbackReward.name))}"
+                  aria-label="Open ${escapeHtml(fallbackReward.name)}"
+                >
+                  <span>${fallbackReward.name}</span>
+                  <strong>${status}</strong>
+                </button>
+              `;
+            }
             return `
-              <div class="bc-service-bottle-slot ${stateClass}">
+              <div class="bc-service-bottle-slot ${stateClass}" aria-disabled="true">
                 <span>${fallbackReward.name}</span>
                 <strong>${status}</strong>
               </div>
             `;
           }).join("");
+
+          slotsEl.querySelectorAll("[data-v2-hub-claim-reward]").forEach((btn) => {
+            if (btn.__bcHubBottleBound) return;
+            btn.__bcHubBottleBound = true;
+            btn.addEventListener("click", () => {
+              const rewardId = String(btn.getAttribute("data-v2-hub-claim-reward") || "");
+              if (!rewardId || typeof showV2BottleUnlockModal !== "function") return;
+              if (window.__BC_V2_REWARD_MODAL_ACTIVE__) return;
+              const liveState = typeof loadV2BottleRewardState === "function"
+                ? loadV2BottleRewardState()
+                : getV2HomeRewardStateSafe();
+              const liveReadyIds = new Set(
+                (Array.isArray(liveState.readyRewardIds) ? liveState.readyRewardIds : []).map((id) => String(id || ""))
+              );
+              const reward = (Array.isArray(liveState.rewards) ? liveState.rewards : []).find(
+                (item) => item.id === rewardId
+              ) || {
+                id: rewardId,
+                name: String(btn.getAttribute("data-v2-hub-reward-name") || "Starter Bottle"),
+              };
+              if (reward.claimed) return;
+              const isReady = liveReadyIds.has(rewardId) ||
+                Number(reward.unlockAP || 0) <= Number(liveState.totalAP || 0);
+              if (!isReady) return;
+              window.__BC_V2_REWARD_MODAL_ACTIVE__ = true;
+              showV2BottleUnlockModal(reward, () => {
+                window.__BC_V2_REWARD_MODAL_ACTIVE__ = false;
+                try { renderV2ServiceHubHome(); } catch {}
+              });
+            });
+          });
         }
       }
 
@@ -23873,8 +23925,11 @@ function ensureProgLoaded() {
           product_cartology_chenin: "/game/products/chenin-blanc-bottle.png",
           product_uva_mira_cabernet: "/game/products/cabernet-sauvignon-bottle.png",
           product_valmoissine_pinot_noir: "/game/products/pinot-noir-bottle.png",
+          product_coastal_sauvignon: "/game/products/sauvignon-blanc-bottle.png",
+          product_cape_rose: "/game/products/rose-bottle.png",
+          product_006: "/game/products/chardonnay-bottle.png",
         };
-        return imageByEncounter[encounterId] || imageByProduct[productId] || product?.bottleImage || "";
+        return product?.bottleImage || imageByProduct[productId] || imageByEncounter[encounterId] || "";
       }
 
       const V2_BOTTLE_REWARD_STORAGE_KEY = "BC_V2_BOTTLE_REWARDS_V1";
@@ -23929,6 +23984,7 @@ function ensureProgLoaded() {
           encounterScores: {},
           demoCompletions: [],
           demoCompletionCount: 0,
+          readyRewardIds: [],
           rewards: V2_BOTTLE_REWARDS.map((reward) => ({ ...reward })),
         };
       }
@@ -23965,7 +24021,17 @@ function ensureProgLoaded() {
         const demoScoreTotal = demoCompletions.reduce((sum, entry) => sum + Number(entry?.ap || 0), 0);
         const encounterScoreTotal = Object.values(encounterScores).reduce((sum, entry) => sum + Number(entry?.ap || 0), 0);
         const scoreTotal = demoCompletions.length ? demoScoreTotal : encounterScoreTotal;
-        const totalAP = Math.max(0, Math.round(Number.isFinite(scoreTotal) ? scoreTotal : Number(state.totalAP || 0)));
+        // Prefer scored AP, but keep an explicit floor when Godot deferred a bottle open.
+        const scoredAP = Number.isFinite(scoreTotal) ? scoreTotal : 0;
+        const totalAP = Math.max(0, Math.round(Math.max(scoredAP, Number(state.totalAP || 0))));
+        const claimedIds = new Set(
+          rewards.filter((reward) => reward.claimed).map((reward) => String(reward.id))
+        );
+        const readyRewardIds = Array.from(new Set(
+          (Array.isArray(state.readyRewardIds) ? state.readyRewardIds : [])
+            .map((id) => String(id || "").trim())
+            .filter((id) => id && !claimedIds.has(id))
+        ));
         return {
           v: 1,
           totalAP,
@@ -23973,6 +24039,7 @@ function ensureProgLoaded() {
           encounterScores,
           demoCompletions,
           demoCompletionCount: demoCompletions.length,
+          readyRewardIds,
           rewards,
           demoAPResetAt: state.demoAPResetAt || null,
         };
@@ -24012,8 +24079,16 @@ function ensureProgLoaded() {
 
       function getPendingV2BottleRewards(state) {
         const totalAP = Number(state?.totalAP || 0);
+        const readyIds = new Set(
+          (Array.isArray(state?.readyRewardIds) ? state.readyRewardIds : []).map((id) => String(id || ""))
+        );
         return (Array.isArray(state?.rewards) ? state.rewards : [])
-          .filter((reward) => Number(reward.unlockAP || 0) <= totalAP && !reward.claimed);
+          .filter((reward) => {
+            if (reward?.claimed) return false;
+            const rewardId = String(reward?.id || "");
+            if (readyIds.has(rewardId)) return true;
+            return Number(reward.unlockAP || 0) <= totalAP;
+          });
       }
 
       function applyV2BottleRewardProgress(snapshot) {
@@ -24085,12 +24160,57 @@ function ensureProgLoaded() {
       function claimV2BottleReward(rewardId) {
         let state = loadV2BottleRewardState();
         const targetId = String(rewardId || "");
+        const readyIds = new Set(
+          (Array.isArray(state.readyRewardIds) ? state.readyRewardIds : []).map((id) => String(id || ""))
+        );
+        const canClaim = readyIds.has(targetId) ||
+          (Array.isArray(state.rewards) ? state.rewards : []).some(
+            (reward) => reward.id === targetId && Number(reward.unlockAP || 0) <= Number(state.totalAP || 0)
+          );
         state.rewards = (Array.isArray(state.rewards) ? state.rewards : []).map((reward) =>
-          reward.id === targetId && Number(reward.unlockAP || 0) <= Number(state.totalAP || 0)
+          reward.id === targetId && canClaim
             ? { ...reward, claimed: true, claimedAt: Date.now() }
             : reward
         );
+        state.readyRewardIds = Array.from(readyIds).filter((id) => id !== targetId);
         return saveV2BottleRewardState(state);
+      }
+
+      function ensureV2BottleRewardReadyFromGodot(payload = {}) {
+        const rewardId = String(payload.rewardId || payload.reward_id || "starter_bottle");
+        const requiredAp = Math.max(0, Number(payload.requiredAp || payload.required_ap || 0));
+        const godotAp = Math.max(0, Number(payload.ap || payload.godotAp || 0));
+        let state = loadV2BottleRewardState();
+        const knownUnlock = Number(
+          (Array.isArray(state.rewards) ? state.rewards : []).find((reward) => reward.id === rewardId)?.unlockAP || 0
+        );
+        const unlockFloor = Math.max(requiredAp, knownUnlock, 30);
+        state.totalAP = Math.max(Number(state.totalAP || 0), godotAp, unlockFloor);
+        state.tierUnlocked = getV2TierUnlockedByAP(state.totalAP);
+        state.rewards = (Array.isArray(state.rewards) ? state.rewards : []).map((reward) =>
+          reward.id === rewardId
+            ? { ...reward, claimed: false, claimedAt: null }
+            : reward
+        );
+        const readyIds = new Set(
+          (Array.isArray(state.readyRewardIds) ? state.readyRewardIds : []).map((id) => String(id || ""))
+        );
+        if (rewardId) readyIds.add(rewardId);
+        state.readyRewardIds = Array.from(readyIds);
+        return saveV2BottleRewardState(state);
+      }
+
+      function claimV2BottleRewardFromGodot(payload = {}) {
+        const rewardId = String(payload.rewardId || payload.reward_id || "");
+        if (!rewardId) return loadV2BottleRewardState();
+        let state = loadV2BottleRewardState();
+        const unlockAp = Number(
+          (Array.isArray(state.rewards) ? state.rewards : []).find((reward) => reward.id === rewardId)?.unlockAP || 0
+        );
+        state.totalAP = Math.max(Number(state.totalAP || 0), Number(payload.ap || 0), unlockAp);
+        state.tierUnlocked = getV2TierUnlockedByAP(state.totalAP);
+        state = saveV2BottleRewardState(state);
+        return claimV2BottleReward(rewardId);
       }
 
       function isV2DemoRewardMode() {
@@ -24665,6 +24785,7 @@ function ensureProgLoaded() {
         modal.setAttribute("aria-modal", "true");
         modal.innerHTML = `
           <div class="bc-bottle-unlock">
+            <button type="button" class="bc-bottle-close" aria-label="Close bottle reward">×</button>
             <div class="bc-bottle-text">
               <div class="bc-bottle-label">Bottle Unlocked</div>
               <div class="bc-bottle-name">${escapeHtml(rewardName)}</div>
@@ -24689,22 +24810,40 @@ function ensureProgLoaded() {
         const unlock = modal.querySelector(".bc-bottle-unlock");
         const openButton = modal.querySelector(".bc-open-button");
         const continueButton = modal.querySelector(".bc-continue-button");
+        const closeButton = modal.querySelector(".bc-bottle-close");
         const rewardCard = modal.querySelector(".bc-reward-card");
+        let rewardClaimed = false;
+
+        const dismissWithoutClaim = () => {
+          if (rewardClaimed) return;
+          modal.remove();
+          window.__BC_V2_REWARD_MODAL_ACTIVE__ = false;
+          if (typeof onComplete === "function") onComplete({ deferred: true });
+        };
+
+        closeButton?.addEventListener("click", () => {
+          if (unlock?.classList.contains("is-opening") || rewardClaimed) return;
+          dismissWithoutClaim();
+        });
 
         openButton?.addEventListener("click", () => {
           if (unlock?.classList.contains("is-opening")) return;
           unlock?.classList.add("is-opening", "bottle-open-ready");
           openButton.classList.add("hidden");
+          closeButton?.classList.add("hidden");
           window.setTimeout(() => {
             rewardCard?.classList.remove("hidden");
+            rewardClaimed = true;
             const claimedState = claimV2BottleReward(rewardId);
             resetV2DemoAPAfterBottleOpen(claimedState);
+            try { renderV2ServiceHubHome?.(); } catch {}
           }, 920);
         });
 
         continueButton?.addEventListener("click", () => {
           modal.remove();
-          if (typeof onComplete === "function") onComplete();
+          window.__BC_V2_REWARD_MODAL_ACTIVE__ = false;
+          if (typeof onComplete === "function") onComplete({ deferred: false });
         });
 
         document.body.appendChild(modal);
@@ -24758,7 +24897,14 @@ function ensureProgLoaded() {
         const state = loadV2BottleRewardState();
         const reward = getPendingV2BottleRewards(state)[0];
         if (!reward) return false;
-        showV2BottleUnlockModal(reward, onComplete);
+        showV2BottleUnlockModal(reward, (result) => {
+          if (result?.deferred) {
+            window.__BC_V2_REWARD_MODAL_ACTIVE__ = false;
+            try { renderV2ServiceHubHome?.(); } catch {}
+            return;
+          }
+          if (typeof onComplete === "function") onComplete(result);
+        });
         return true;
       }
 
@@ -25009,6 +25155,84 @@ function ensureProgLoaded() {
 	        );
 	      }
 
+	      // Speed is shift-level (elapsedShiftTime for a completed 5-guest demo shift).
+	      // Encounter snapshots carry the rolling average until the next shift_complete sample.
+	      const BC_SHIFT_SPEED_FAST_SEC = 8 * 60;
+	      const BC_SHIFT_SPEED_SLOW_SEC = 30 * 60;
+
+	      function scoreShiftSpeedPct(elapsedSec) {
+	        const t = Math.max(1, Number(elapsedSec) || 0);
+	        if (t <= BC_SHIFT_SPEED_FAST_SEC) return 100;
+	        if (t >= BC_SHIFT_SPEED_SLOW_SEC) return 10;
+	        return Math.round(
+	          100 - ((t - BC_SHIFT_SPEED_FAST_SEC) / (BC_SHIFT_SPEED_SLOW_SEC - BC_SHIFT_SPEED_FAST_SEC)) * 90
+	        );
+	      }
+
+	      function getShiftSpeedStorageKey() {
+	        const ctx = window.__BC_CTX__ || {};
+	        const userKey = String(ctx.userId || ctx.user_id || "demo");
+	        const restaurantKey = String(
+	          ctx.restaurantId || ctx.restaurant_id || ctx.scopeId || ctx.scope_id || "local"
+	        );
+	        return `bc_shift_speed_v1:${userKey}:${restaurantKey}`;
+	      }
+
+	      function loadShiftSpeedState() {
+	        try {
+	          const raw = window.localStorage.getItem(getShiftSpeedStorageKey());
+	          const parsed = raw ? JSON.parse(raw) : null;
+	          const samples = Array.isArray(parsed?.samples) ? parsed.samples.slice(-20) : [];
+	          return {
+	            samples,
+	            averagePct: Number(parsed?.averagePct || 0) || 0,
+	            lastElapsedSec: Number(parsed?.lastElapsedSec || 0) || 0,
+	            lastPct: Number(parsed?.lastPct || 0) || 0,
+	          };
+	        } catch {
+	          return { samples: [], averagePct: 0, lastElapsedSec: 0, lastPct: 0 };
+	        }
+	      }
+
+	      function recordShiftSpeedSample(elapsedSec) {
+	        const pct = scoreShiftSpeedPct(elapsedSec);
+	        const prev = loadShiftSpeedState();
+	        const samples = [
+	          ...prev.samples,
+	          {
+	            elapsedSec: Math.round(Number(elapsedSec) || 0),
+	            pct,
+	            at: Date.now(),
+	          },
+	        ].slice(-20);
+	        const averagePct = Math.round(
+	          samples.reduce((sum, row) => sum + Number(row?.pct || 0), 0) / Math.max(1, samples.length)
+	        );
+	        const next = {
+	          samples,
+	          averagePct,
+	          lastElapsedSec: Math.round(Number(elapsedSec) || 0),
+	          lastPct: pct,
+	          updatedAt: Date.now(),
+	        };
+	        try {
+	          window.localStorage.setItem(getShiftSpeedStorageKey(), JSON.stringify(next));
+	        } catch {}
+	        window.__BC_SHIFT_SPEED__ = next;
+	        return next;
+	      }
+
+	      function getShiftSpeedPct(fallback = 55) {
+	        const state = window.__BC_SHIFT_SPEED__ || loadShiftSpeedState();
+	        if (Number.isFinite(Number(state?.averagePct)) && Number(state.averagePct) > 0) {
+	          return Math.round(Number(state.averagePct));
+	        }
+	        if (Number.isFinite(Number(state?.lastPct)) && Number(state.lastPct) > 0) {
+	          return Math.round(Number(state.lastPct));
+	        }
+	        return Math.round(Number(fallback) || 55);
+	      }
+
 	      function buildV2SkillSnapshot(snapshot, session) {
 	        const history = getV2SessionHistory(session);
 	        const outcome = String(snapshot?.outcome || "");
@@ -25023,8 +25247,6 @@ function ensureProgLoaded() {
 	        const askCount = history.filter((item) => String(item?.choice?.group || "") === "ask").length;
 	        const recommendCount = history.filter((item) => String(item?.choice?.group || "") === "recommend").length;
 	        const commitItems = history.filter((item) => String(item?.choice?.group || "") === "commit");
-	        const finalFrustration = Number(snapshot?.frustration || 0);
-	        const finalProgress = Number(snapshot?.progress || 0);
 	        const mistakeCount = Number(snapshot?.mistakeCount || 0);
 	        const allQualityAverage = averageV2SkillScores(
 	          history
@@ -25033,58 +25255,83 @@ function ensureProgLoaded() {
 	          baseline,
 	        );
 
-	        const readFallback = baseline >= 70 ? 58 : baseline >= 50 ? 48 : 32;
-	        const framingFallback = baseline >= 70 ? 60 : baseline >= 50 ? 50 : 30;
-	        const read = clampV2SkillScore(scoreForGroup("ask", readFallback) - (askCount === 0 ? 12 : 0));
-	        const framing = clampV2SkillScore(scoreForGroup("recommend", framingFallback) - (recommendCount === 0 ? 10 : 0));
-	        const delivery = clampV2SkillScore(
-	          allQualityAverage +
-	          Math.min(10, Math.max(0, finalProgress)) * 1.5 -
-	          finalFrustration * 5 -
-	          mistakeCount * 7,
+	        const askFallback = baseline >= 70 ? 58 : baseline >= 50 ? 48 : 32;
+	        const recommendFallback = baseline >= 70 ? 60 : baseline >= 50 ? 50 : 30;
+	        // Axis map (storage keys keep DB column aliases):
+	        // ask→read, recommend→framing, encounter success→delivery, recover→recovery, commit→closing, speed→payload
+	        const ask = clampV2SkillScore(scoreForGroup("ask", askFallback) - (askCount === 0 ? 12 : 0));
+	        const recommend = clampV2SkillScore(
+	          scoreForGroup("recommend", recommendFallback) - (recommendCount === 0 ? 10 : 0)
 	        );
 
 	        const recoveryPressure = hasV2RecoveryPressure(snapshot, history);
-	        let recovery = 60;
+	        let recover = 60;
 	        if (String(outcome) === "neutral_exit") {
-	          recovery = recoveryPressure ? 92 : 78;
+	          recover = recoveryPressure ? 92 : 78;
 	        } else if (recoveryPressure && outcome === "failure") {
-	          recovery = 22;
+	          recover = 22;
 	        } else if (recoveryPressure) {
-	          recovery = outcome === "premium_success" || outcome === "standard_success" ? 78 : 58;
+	          recover = outcome === "premium_success" || outcome === "standard_success" ? 78 : 58;
 	        } else if (outcome === "failure") {
-	          recovery = 42;
+	          recover = 42;
 	        } else if (outcome === "premium_success" || outcome === "standard_success") {
-	          recovery = 70;
+	          recover = 70;
 	        }
 
-	        const commitScore = commitItems.length
-	          ? averageV2SkillScores(commitItems.map((item) => getV2ChoiceQualityScore(item?.quality)), baseline)
-	          : (outcome === "neutral_exit" ? 65 : baseline - 15);
-	        const closingByOutcome = {
+	        const commit = clampV2SkillScore(
+	          commitItems.length
+	            ? averageV2SkillScores(commitItems.map((item) => getV2ChoiceQualityScore(item?.quality)), baseline)
+	            : (outcome === "neutral_exit" ? 65 : baseline - 15)
+	        );
+	        const outcomeSuccess = {
 	          premium_success: 100,
 	          standard_success: 84,
 	          weak_success: 62,
 	          neutral_exit: 55,
 	          failure: 18,
 	        }[outcome] ?? baseline;
-	        const closing = clampV2SkillScore((commitScore * 0.45) + (closingByOutcome * 0.55) - Math.max(0, mistakeCount - 1) * 4);
+	        const encounterSuccess = clampV2SkillScore(
+	          (outcomeSuccess * 0.7) + (allQualityAverage * 0.3) - Math.max(0, mistakeCount - 1) * 4
+	        );
+	        const speed = clampV2SkillScore(getShiftSpeedPct(55));
+	        const recovery = clampV2SkillScore(recover);
 
 	        return {
-	          read,
-	          framing,
-	          delivery,
-	          recovery: clampV2SkillScore(recovery),
-	          closing,
+	          // DB / board storage keys
+	          read: ask,
+	          framing: recommend,
+	          delivery: encounterSuccess,
+	          recovery,
+	          closing: commit,
+	          speed,
+	          // Semantic aliases
+	          ask,
+	          recommend,
+	          encounter_success: encounterSuccess,
+	          recover: recovery,
+	          commit,
 	        };
 	      }
+
+	      window.scoreShiftSpeedPct = scoreShiftSpeedPct;
+	      window.recordShiftSpeedSample = recordShiftSpeedSample;
+	      window.getShiftSpeedPct = getShiftSpeedPct;
+	      window.buildV2SkillSnapshot = buildV2SkillSnapshot;
 
 	      function buildV2ProgressReportDraft(snapshot, session, rewardProgress = null) {
 	        if (!snapshot || !session || !isV2TerminalOutcome(snapshot.outcome)) return null;
 
 	        const skills = buildV2SkillSnapshot(snapshot, session);
 	        const labels = pickStrongestWeakest(skills);
-	        const skillAverage = averageV2SkillScores(Object.values(skills), 0);
+	        const skillAxisValues = [
+	          skills.read,
+	          skills.framing,
+	          skills.delivery,
+	          skills.recovery,
+	          skills.closing,
+	          skills.speed,
+	        ];
+	        const skillAverage = averageV2SkillScores(skillAxisValues, 0);
 	        const chainSignal = getV2OutcomeChainSignal(snapshot.outcome);
 	        const chainScore = Math.round((skillAverage / 25) * 10) / 10;
 	        const performanceGrade = getV2OutcomePerformanceGrade(snapshot.outcome, skillAverage);
@@ -25112,13 +25359,27 @@ function ensureProgLoaded() {
 	          deliveryScore: skills.delivery >= 80 ? 2 : skills.delivery >= 50 ? 1 : 0,
 	          resetUsed: recoveryPressure,
 	          premiumSuccess: snapshot.outcome === "premium_success",
-	          strongPillars: Object.values(skills).filter((value) => Number(value || 0) >= 75).length,
+	          strongPillars: skillAxisValues.filter((value) => Number(value || 0) >= 75).length,
 	          skills,
 	          progressionState: shouldSubmitV2ProgressReport()
 	            ? buildV2CanonicalProgressionState(snapshot, session, rewardProgress)
 	            : null,
-	          strongestSkill: labels.strongest,
-	          weakestSkill: labels.weakest,
+	          strongestSkill: ({
+	            read: "Ask",
+	            framing: "Recommend",
+	            delivery: "Encounter",
+	            recovery: "Recover",
+	            closing: "Commit",
+	            speed: "Speed",
+	          })[labels.strongest] || labels.strongest,
+	          weakestSkill: ({
+	            read: "Ask",
+	            framing: "Recommend",
+	            delivery: "Encounter",
+	            recovery: "Recover",
+	            closing: "Commit",
+	            speed: "Speed",
+	          })[labels.weakest] || labels.weakest,
 	          product: product
 	            ? {
 	                id: product.id || null,
@@ -25128,8 +25389,16 @@ function ensureProgLoaded() {
 	                region: product.region || null,
 	              }
 	            : null,
+	          bottleChoice: session?.gameState?.bottleChoice || {
+	            fit: snapshot.bottleChoiceFit || null,
+	            score: Number(snapshot.bottleChoiceScore || 0) || 0,
+	            reaction: snapshot.bottleChoiceReaction || null,
+	            productId: snapshot.productId || null,
+	          },
 	          v2Snapshot: {
 	            authorityDelta: Number(snapshot.authorityDelta || 0),
+	            bottleChoiceScore: Number(snapshot.bottleChoiceScore || 0) || 0,
+	            bottleChoiceFit: snapshot.bottleChoiceFit || null,
 	            progress: Number(snapshot.progress || 0),
 	            frustration: Number(snapshot.frustration || 0),
 	            mistakeCount: Number(snapshot.mistakeCount || 0),
@@ -25576,6 +25845,107 @@ function ensureProgLoaded() {
         });
       }
 
+      function renderV2ChooseBottle(snapshot) {
+        const encounterPanel = document.getElementById("encounterPanel");
+        const stepHeader = document.getElementById("stepHeader");
+        const wineDisplayName = document.getElementById("wineDisplayName");
+        const stepContent = document.getElementById("stepContent");
+        const feedbackLine = document.getElementById("bcFeedbackLine");
+        const stepButtons = ensureV2StepButtonsContainer();
+        const api = getV2HarnessApi();
+        if (!encounterPanel || !stepHeader || !wineDisplayName || !stepContent || !feedbackLine || !stepButtons || !snapshot || !api) {
+          return;
+        }
+
+        encounterPanel.dataset.v2Layout = "tier1";
+        encounterPanel.dataset.v2Screen = "choose_bottle";
+        const session = api.getSession?.() || null;
+        const encounter = getV2EncounterForSnapshot(snapshot, session?.encounter || null);
+        const choiceSet =
+          api.getBottleChoiceSet?.() ||
+          window.BottleChoice?.getBottleChoiceSet?.(encounter) ||
+          { clue: getV2SceneClue(encounter), options: [] };
+        const previewArt = getV2EncounterImageSrc(encounter, "previewArt", "mainNeutral");
+        const rewardState = loadV2BottleRewardState();
+        const totalAP = Number(rewardState?.totalAP || 0);
+        const clue = String(choiceSet?.clue || encounter?.verbalClue || getV2SceneClue(encounter) || "Read the guest, then choose the bottle.");
+        const options = Array.isArray(choiceSet?.options) ? choiceSet.options : [];
+
+        stepHeader.textContent = `Tier ${snapshot.tier} • Encounter ${String(snapshot.encounterOrdinal).padStart(3, "0")} • Choose Bottle`;
+        wineDisplayName.textContent = "Choose the bottle that fits this table";
+        feedbackLine.textContent = "";
+        stepContent.dataset.stage = "choose_bottle";
+        stepContent.dataset.signal = "yellow";
+        stepContent.innerHTML = `
+          <section class="v2-preview-screen v2-choose-screen">
+            <div class="v2-preview-art-wrap">
+              <img class="v2-preview-art" src="${escapeHtml(previewArt)}" alt="" onerror="this.onerror=null;this.src='${V2_FALLBACK_ENCOUNTER_IMAGE}';">
+              <div class="v2-preview-vignette"></div>
+              <div class="v2-preview-topbar">
+                <div class="v2-preview-title-rule"></div>
+                <div class="v2-preview-label">Choose Bottle</div>
+                <div class="v2-preview-ap"><span>AP</span>${totalAP.toLocaleString()}</div>
+              </div>
+              <div class="v2-preview-heading">
+                <div class="v2-preview-tier">Tier ${snapshot.tier} • Encounter ${String(snapshot.encounterOrdinal).padStart(2, "0")}</div>
+                <h2>${escapeHtml(snapshot.encounterTitle)}</h2>
+                <p>${escapeHtml(clue)}</p>
+              </div>
+              <div class="v2-choose-clue">
+                <div class="v2-preview-card-eyebrow">Guest clue</div>
+                <p>${escapeHtml(clue)}</p>
+              </div>
+              <div class="v2-choose-options">
+                ${options.map((option) => {
+                  const product = option?.product || {};
+                  const bottleImage = product.bottleImage || getV2PreviewBottleImage(snapshot, product);
+                  const name = String(product.name || "Bottle").replace(/^Scroll of\s+/i, "").trim();
+                  const style = String(product.varietalOrBlend || product.style || "");
+                  const region = String(product.region || "");
+                  return `
+                    <button type="button" class="v2-choose-option" data-product-id="${escapeHtml(option.productId)}">
+                      ${bottleImage ? `<img src="${escapeHtml(bottleImage)}" alt="" onerror="this.style.display='none';">` : ""}
+                      <strong>${escapeHtml(name)}</strong>
+                      ${style ? `<span>${escapeHtml(style)}</span>` : ""}
+                      ${region ? `<em>${escapeHtml(region)}</em>` : ""}
+                    </button>
+                  `;
+                }).join("")}
+              </div>
+            </div>
+          </section>
+        `;
+
+        stepButtons.dataset.v2ActionState = "choose_bottle";
+        stepButtons.innerHTML = `
+          <div class="v2-action-shell v2-preview-actions">
+            <div class="v2-choose-hint">Pick the bottle that fits the guest — not the most expensive one.</div>
+          </div>
+        `;
+        requestAnimationFrame(() => {
+          const chooseScreen = stepContent.querySelector(".v2-choose-screen");
+          if (chooseScreen && stepButtons.parentElement !== chooseScreen) {
+            chooseScreen.appendChild(stepButtons);
+          } else if (!chooseScreen && stepButtons.parentElement !== encounterPanel) {
+            encounterPanel.appendChild(stepButtons);
+          }
+          scheduleIframeHeightReport?.("v2_choose_bottle_render");
+        });
+
+        stepContent.querySelectorAll(".v2-choose-option").forEach((button) => {
+          button.addEventListener("click", (event) => {
+            event.preventDefault();
+            const productId = String(button.getAttribute("data-product-id") || "");
+            if (!productId) return;
+            stepContent.querySelectorAll(".v2-choose-option").forEach((node) => {
+              node.disabled = true;
+            });
+            const nextSnapshot = api.chooseBottle?.(productId) || snapshot;
+            renderV2EncounterPreview(nextSnapshot, "");
+          });
+        });
+      }
+
       function renderV2EncounterPreview(snapshot, reaction = "") {
         const encounterPanel = document.getElementById("encounterPanel");
         const stepHeader = document.getElementById("stepHeader");
@@ -25613,7 +25983,10 @@ function ensureProgLoaded() {
           previewProductName = previewProductName.replace(new RegExp(`,?\\s*${previewVarietal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"), "").trim();
         }
         previewProductName = previewProductName.replace(/,\s*$/, "") || productName || "Selected Bottle";
-        const previewLine = encounter?.contextClue || "Read the table before choosing your first move.";
+        const previewLine =
+          session?.encounterStartContext?.variant?.guestOpeningLine
+          || encounter?.contextClue
+          || "Read the table before choosing your first move.";
 
         stepHeader.textContent = `Tier ${snapshot.tier} • Encounter ${String(snapshot.encounterOrdinal).padStart(3, "0")} • ${snapshot.encounterTitle}`;
         wineDisplayName.textContent = productName ? `Product: ${productName}` : `Encounter: ${snapshot.encounterTitle}`;
@@ -25882,13 +26255,8 @@ function ensureProgLoaded() {
         const walkAwayHint = snapshot.walkAwayUnlocked
           ? "Walk Away is now available because the table has reached critical resistance."
           : "Walk Away unlocks only when friction reaches critical resistance.";
-        const showGuidanceCard = (
-          Number(snapshot.encounterOrdinal || 0) <= 1
-          || isGodotWineEncounterTimerActive()
-        );
-        const wineTimerHtml = isGodotWineEncounterTimerActive()
-          ? `<div class="v2-wine-timer" id="v2GodotWineTimer" aria-live="polite">${escapeHtml(getGodotWineTimerLabel())}</div>`
-          : "";
+        const showGuidanceCard = Number(snapshot.encounterOrdinal || 0) <= 1;
+        const wineTimerHtml = "";
         const guidanceCardHtml = showGuidanceCard
           ? `
                   <div class="v2-guidance-card">
@@ -25900,11 +26268,10 @@ function ensureProgLoaded() {
                   </div>
                   `
           : "";
-        const guidanceTimerRowHtml = (showGuidanceCard || wineTimerHtml)
+        const guidanceTimerRowHtml = showGuidanceCard
           ? `
-                  <div class="v2-guidance-timer-row${wineTimerHtml ? " has-timer" : ""}">
-                    ${guidanceCardHtml || `<div class="v2-guidance-spacer" aria-hidden="true"></div>`}
-                    ${wineTimerHtml}
+                  <div class="v2-guidance-timer-row">
+                    ${guidanceCardHtml}
                   </div>
                   `
           : "";
@@ -25971,20 +26338,32 @@ function ensureProgLoaded() {
             </section>
           `;
         } else {
+          const showShiftClock = !!(isGodotShiftWineOfferActive() || window.__BC_V2_FROM_GODOT__);
+          const headerShiftTimeHtml = showShiftClock
+            ? `<div class="v2-header-shift-time" title="Shift time continues during the wine encounter">
+                <span class="v2-header-shift-label">SHIFT</span>
+                <span class="v2-header-shift-value" id="v2GodotShiftTime">${escapeHtml(formatGodotShiftTime(getContinuingGodotShiftElapsedSec()))}</span>
+              </div>`
+            : "";
           stepContent.innerHTML = `
             <section class="v2-play-shell">
               <div class="v2-hero-frame">
                 <img class="v2-encounter-art" src="${escapeHtml(mainImageSrc)}" data-v3-mood="${escapeHtml(mainImagePresentation.mood || "")}" alt="" onerror="this.onerror=null;this.src='${V2_FALLBACK_ENCOUNTER_IMAGE}';">
                 <div class="v2-hero-top">
-                  <div class="v2-play-header">
+                  <div class="v2-play-header${showShiftClock ? " has-shift-time" : ""}">
                     <div class="v2-crest">B</div>
                     <div class="v2-header-copy">
                       <div class="v2-header-topline">
                         <span>Tier ${snapshot.tier}</span>
                         <span>Encounter ${String(snapshot.encounterOrdinal).padStart(3, "0")} of ${snapshot.encounterCount}</span>
                       </div>
-                      <h2 class="v2-encounter-title">${escapeHtml(snapshot.encounterTitle)}</h2>
-                      ${snapshot.productName ? `<div class="v2-product-title">Product: ${escapeHtml(snapshot.productName)}</div>` : ""}
+                      <div class="v2-header-title-row">
+                        <div class="v2-header-title-block">
+                          <h2 class="v2-encounter-title">${escapeHtml(snapshot.encounterTitle)}</h2>
+                          ${snapshot.productName ? `<div class="v2-product-title">Product: ${escapeHtml(snapshot.productName)}</div>` : ""}
+                        </div>
+                        ${headerShiftTimeHtml}
+                      </div>
                       <div class="v2-progress-rail" style="--v2-progress-count:${Math.max(1, snapshot.encounterCount || 1)}" aria-hidden="true">${progressNodes}</div>
                     </div>
                     <div class="v2-region-mark">SA</div>
@@ -26096,6 +26475,10 @@ function ensureProgLoaded() {
           </div>
         `;
         renderV2DemoCompletionCard(stepButtons, snapshot);
+        if (isGodotShiftWineOfferActive() || window.__BC_V2_FROM_GODOT__) {
+          startGodotShiftTimeTicker();
+          updateGodotShiftTimeDisplay();
+        }
         requestAnimationFrame(() => {
           const heroFrame = stepContent.querySelector(".v2-hero-frame");
           const endScreen = stepContent.querySelector(".v2-end-screen");
@@ -26165,7 +26548,12 @@ function ensureProgLoaded() {
               id: rewardId,
               name: String(btn.getAttribute("data-v2-reward-name") || "Starter Bottle"),
             };
-            showV2BottleUnlockModal(reward, () => {
+            showV2BottleUnlockModal(reward, (result) => {
+              if (result?.deferred) {
+                window.__BC_V2_REWARD_MODAL_ACTIVE__ = false;
+                try { renderV2ServiceHubHome?.(); } catch {}
+                return;
+              }
               if (isDemoEncounterSequence) {
                 markV2DemoRewardOpenedOnSummary();
                 return;
@@ -26183,8 +26571,12 @@ function ensureProgLoaded() {
             sessionStorage.setItem(autoKey, "1");
             window.setTimeout(() => {
               window.__BC_V2_REWARD_MODAL_ACTIVE__ = true;
-              showFirstPendingV2BottleReward(() => {
+              showFirstPendingV2BottleReward((result) => {
                 window.__BC_V2_REWARD_MODAL_ACTIVE__ = false;
+                if (result?.deferred) {
+                  try { renderV2ServiceHubHome?.(); } catch {}
+                  return;
+                }
                 if (isDemoEncounterSequence) {
                   markV2DemoRewardOpenedOnSummary();
                   return;
@@ -26224,8 +26616,12 @@ function ensureProgLoaded() {
           const shouldOfferPendingReward = !isDemoEncounterSequence || isFinalEncounter;
           if (shouldOfferPendingReward && getPendingV2BottleRewards(loadV2BottleRewardState()).length) {
             window.__BC_V2_REWARD_MODAL_ACTIVE__ = true;
-            showFirstPendingV2BottleReward(() => {
+            showFirstPendingV2BottleReward((result) => {
               window.__BC_V2_REWARD_MODAL_ACTIVE__ = false;
+              if (result?.deferred) {
+                try { renderV2ServiceHubHome?.(); } catch {}
+                return;
+              }
               if (isDemoEncounterSequence) {
                 markV2DemoRewardOpenedOnSummary();
                 return;
@@ -26595,13 +26991,48 @@ function ensureProgLoaded() {
           updatedAt: Date.now(),
         });
 
+        const elapsedShiftTime = Math.max(
+          0,
+          Number(payload.elapsedShiftTime ?? payload.elapsed_shift_time ?? 0) || 0
+        );
+        const speedState =
+          typeof window.recordShiftSpeedSample === "function" && elapsedShiftTime > 0
+            ? window.recordShiftSpeedSample(elapsedShiftTime)
+            : (typeof window.getShiftSpeedPct === "function"
+                ? { averagePct: window.getShiftSpeedPct(55), lastPct: window.getShiftSpeedPct(55), lastElapsedSec: elapsedShiftTime }
+                : { averagePct: 55, lastPct: 55, lastElapsedSec: elapsedShiftTime });
+        const speedPct = Math.round(Number(speedState?.averagePct || speedState?.lastPct || 55));
+        const baseSkillMeasurements =
+          (payload.skillMeasurements && typeof payload.skillMeasurements === "object"
+            ? payload.skillMeasurements
+            : null) ||
+          runtime.skillMeasurements ||
+          {};
+        const skillMeasurements = {
+          ...baseSkillMeasurements,
+          speed: speedPct,
+          read: Number(baseSkillMeasurements.read ?? baseSkillMeasurements.ask ?? 0),
+          framing: Number(baseSkillMeasurements.framing ?? baseSkillMeasurements.recommend ?? 0),
+          delivery: Number(
+            baseSkillMeasurements.delivery ?? baseSkillMeasurements.encounter_success ?? 0
+          ),
+          recovery: Number(baseSkillMeasurements.recovery ?? baseSkillMeasurements.recover ?? 0),
+          closing: Number(baseSkillMeasurements.closing ?? baseSkillMeasurements.commit ?? 0),
+          ask: Number(baseSkillMeasurements.ask ?? baseSkillMeasurements.read ?? 0),
+          recommend: Number(baseSkillMeasurements.recommend ?? baseSkillMeasurements.framing ?? 0),
+          encounter_success: Number(
+            baseSkillMeasurements.encounter_success ?? baseSkillMeasurements.delivery ?? 0
+          ),
+          recover: Number(baseSkillMeasurements.recover ?? baseSkillMeasurements.recovery ?? 0),
+          commit: Number(baseSkillMeasurements.commit ?? baseSkillMeasurements.closing ?? 0),
+          elapsedShiftTime,
+          shiftSpeedLastPct: Number(speedState?.lastPct || speedPct),
+        };
+
         const nextRuntime = saveGodotPlayerRuntimeState({
           ...runtime,
           godotCoins: Math.max(0, Math.floor(Number(payload.coinBalance ?? payload.coins ?? runtime.godotCoins ?? 0))),
-          skillMeasurements:
-            payload.skillMeasurements && typeof payload.skillMeasurements === "object"
-              ? payload.skillMeasurements
-              : runtime.skillMeasurements,
+          skillMeasurements,
           processedShiftIds: [...runtime.processedShiftIds, shiftRunId],
         });
 
@@ -26632,7 +27063,7 @@ function ensureProgLoaded() {
             skills: {
               ...(baseCanonical.skills || {}),
               unlockedSkillIds: sharedSnapshot.skills.unlockedSkillIds,
-              measurements: sharedSnapshot.skills.measurements,
+              measurements: skillMeasurements,
               unlockSource: sharedSnapshot.skills.unlockSource,
             },
             godotShift: {
@@ -26640,6 +27071,8 @@ function ensureProgLoaded() {
               coinBalance: nextRuntime.godotCoins,
               lastShiftRunId: shiftRunId,
               lastShiftCompletedAt: Date.now(),
+              elapsedShiftTime,
+              speedPct,
             },
             capturedAt: Date.now(),
             basedOnUpdatedAt: Number(
@@ -26659,6 +27092,34 @@ function ensureProgLoaded() {
               shiftRunId,
               progressionState,
               godotShift: payload,
+            },
+          });
+          // Persist remapped skills + Speed into radar history without a chat message.
+          const skillLabels = pickStrongestWeakest?.(skillMeasurements) || {};
+          const skillLabelMap = {
+            read: "Ask",
+            framing: "Recommend",
+            delivery: "Encounter",
+            recovery: "Recover",
+            closing: "Commit",
+            speed: "Speed",
+          };
+          submitProgressReportToManager({
+            body: `Shift speed ${speedPct}%`,
+            payload: {
+              v: 2,
+              engineVersion: "godot_shift",
+              source: "godot_shift_speed",
+              snapshotOnly: true,
+              shiftRunId,
+              elapsedShiftTime,
+              skills: skillMeasurements,
+              strongestSkill: skillLabelMap[skillLabels.strongest] || skillLabels.strongest || null,
+              weakestSkill: skillLabelMap[skillLabels.weakest] || skillLabels.weakest || null,
+              guestStateActual: "shift_complete",
+              chainSignal: "shift",
+              chainScore: Math.round((speedPct / 25) * 10) / 10,
+              progressionState,
             },
           });
         }
@@ -26702,16 +27163,46 @@ function ensureProgLoaded() {
         });
       }
 
+      function clearGodotLoadReadyFallback() {
+        if (window.__BC_GODOT_LOAD_READY_FALLBACK__) {
+          window.clearTimeout(window.__BC_GODOT_LOAD_READY_FALLBACK__);
+          window.__BC_GODOT_LOAD_READY_FALLBACK__ = null;
+        }
+      }
+
+      function markGodotShiftReadyFromBoot(reason = "godot_load_ready") {
+        clearGodotLoadReadyFallback();
+        setGodotShiftStatus("", false);
+        try {
+          const frame = getGodotShiftFrame();
+          if (frame) frame.dataset.bcGodotReady = "1";
+        } catch {}
+        window.__BC_GODOT_BACK_SHIELD_UNTIL__ = Date.now() + 8000;
+        focusGodotShiftCanvas();
+        notifyParentDemoPlayStarted?.(reason);
+        notifyParentGodotShiftActive?.(true);
+      }
+
       function handleGodotBootMessage(data) {
         const type = String(data?.type || "");
         const payload = data?.payload && typeof data.payload === "object" ? data.payload : {};
         if (type === "godot_load_start") {
+          clearGodotLoadReadyFallback();
+          try {
+            const frame = getGodotShiftFrame();
+            if (frame) frame.dataset.bcGodotReady = "";
+          } catch {}
           setGodotShiftStatus("Downloading floor assets…", true);
           notifyParentDemoPlayStarted?.("godot_load_start");
           notifyParentGodotShiftActive?.(true);
           return true;
         }
         if (type === "godot_load_progress") {
+          try {
+            const frame = getGodotShiftFrame();
+            // Late 100% progress can arrive after start/ready and re-show the overlay.
+            if (frame?.dataset?.bcGodotReady === "1") return true;
+          } catch {}
           const pct = Math.max(0, Math.min(100, Number(payload.pct) || 0));
           setGodotShiftStatus(`Loading floor… ${pct}%`, true);
           // Heartbeat so parent auth/route logic won't tear down mid-download.
@@ -26719,21 +27210,24 @@ function ensureProgLoaded() {
             notifyParentDemoPlayStarted?.(`godot_load_${pct}`);
             notifyParentGodotShiftActive?.(true);
           }
+          if (pct >= 100) {
+            clearGodotLoadReadyFallback();
+            window.__BC_GODOT_LOAD_READY_FALLBACK__ = window.setTimeout(() => {
+              try {
+                const frame = getGodotShiftFrame();
+                if (frame?.dataset?.bcGodotReady === "1") return;
+              } catch {}
+              markGodotShiftReadyFromBoot("godot_load_progress_fallback");
+            }, 1500);
+          }
           return true;
         }
         if (type === "godot_load_ready") {
-          setGodotShiftStatus("", false);
-          try {
-            const frame = getGodotShiftFrame();
-            if (frame) frame.dataset.bcGodotReady = "1";
-          } catch {}
-          window.__BC_GODOT_BACK_SHIELD_UNTIL__ = Date.now() + 8000;
-          focusGodotShiftCanvas();
-          notifyParentDemoPlayStarted?.("godot_load_ready");
-          notifyParentGodotShiftActive?.(true);
+          markGodotShiftReadyFromBoot("godot_load_ready");
           return true;
         }
         if (type === "godot_load_error") {
+          clearGodotLoadReadyFallback();
           const message = String(payload.message || "Godot failed to load.");
           setGodotShiftStatus(message, true);
           console.warn("[BC][GODOT] load error", message);
@@ -26827,6 +27321,7 @@ function ensureProgLoaded() {
 
       function returnToGodotShiftFloor() {
         clearGodotWineEncounterTimer();
+        stopGodotShiftTimeTicker();
         window.__BC_GODOT_WINE_OFFER__ = null;
         window.__BC_V2_FROM_GODOT__ = false;
         window.__BC_V2_GODOT_PENDING_EXIT__ = null;
@@ -26842,7 +27337,7 @@ function ensureProgLoaded() {
         scheduleIframeHeightReport?.("godot_shift_return");
       }
 
-      const GODOT_WINE_ENCOUNTER_TIMER_SEC = 45;
+      const GODOT_WINE_ENCOUNTER_TIMER_SEC = 0;
 
       function clearGodotWineEncounterTimer() {
         const timer = window.__BC_GODOT_WINE_TIMER__;
@@ -26854,68 +27349,76 @@ function ensureProgLoaded() {
         if (node) node.remove();
       }
 
+      function formatGodotShiftTime(totalSec) {
+        const sec = Math.max(0, Math.floor(Number(totalSec) || 0));
+        const mins = Math.floor(sec / 60);
+        const rem = sec % 60;
+        return `${String(mins).padStart(2, "0")}:${String(rem).padStart(2, "0")}`;
+      }
+
+      function getContinuingGodotShiftElapsedSec() {
+        const offer = window.__BC_GODOT_WINE_OFFER__;
+        if (!offer?.active) return 0;
+        const base = Number(offer.elapsedShiftTime || 0) || 0;
+        const startedAt = Number(offer.startedAt || Date.now()) || Date.now();
+        return base + Math.max(0, (Date.now() - startedAt) / 1000);
+      }
+
+      function getGodotShiftTimeLabel() {
+        return formatGodotShiftTime(getContinuingGodotShiftElapsedSec());
+      }
+
+      function stopGodotShiftTimeTicker() {
+        if (window.__BC_GODOT_SHIFT_TIME_TICKER__) {
+          window.clearInterval(window.__BC_GODOT_SHIFT_TIME_TICKER__);
+          window.__BC_GODOT_SHIFT_TIME_TICKER__ = null;
+        }
+      }
+
+      function updateGodotShiftTimeDisplay() {
+        const node = document.getElementById("v2GodotShiftTime");
+        if (!node) return;
+        node.textContent = getGodotShiftTimeLabel();
+      }
+
+      function startGodotShiftTimeTicker() {
+        stopGodotShiftTimeTicker();
+        updateGodotShiftTimeDisplay();
+        window.__BC_GODOT_SHIFT_TIME_TICKER__ = window.setInterval(() => {
+          if (!(isGodotShiftWineOfferActive() || window.__BC_V2_FROM_GODOT__)) {
+            stopGodotShiftTimeTicker();
+            return;
+          }
+          updateGodotShiftTimeDisplay();
+        }, 250);
+      }
+
       function getGodotWineTimerRemainingSec() {
-        const timer = window.__BC_GODOT_WINE_TIMER__;
-        if (!timer?.expiresAt) return 0;
-        return Math.max(0, Math.ceil((timer.expiresAt - Date.now()) / 1000));
+        return 0;
       }
 
       function getGodotWineTimerLabel() {
-        const remaining = getGodotWineTimerRemainingSec();
-        return `${remaining}s`;
+        return "";
       }
 
       function isGodotWineEncounterTimerActive() {
-        if (!(isGodotShiftWineOfferActive() || window.__BC_V2_FROM_GODOT__)) {
-          return false;
-        }
-        return !!window.__BC_GODOT_WINE_TIMER__;
+        return false;
       }
 
       function updateGodotWineTimerDisplay() {
-        const node = document.getElementById("v2GodotWineTimer");
-        if (!node) return;
-        const remaining = getGodotWineTimerRemainingSec();
-        node.textContent = `${remaining}s`;
-        node.dataset.urgent = remaining <= 5 ? "1" : "0";
+        // Wine encounter timer removed — no countdown UI.
       }
 
       function failGodotWineEncounterTimeout() {
-        clearGodotWineEncounterTimer();
-        if (!(isGodotShiftWineOfferActive() || window.__BC_V2_FROM_GODOT__)) return;
-        const api = getV2HarnessApi();
-        if (!api?.fail) return;
-        const current = api.snapshot?.();
-        if (current && isV2TerminalOutcome(current.outcome)) return;
-        const result = api.fail("Time ran out.");
-        if (!result?.snapshot) return;
-        window.__BC_V2_HARNESS_STATE__ = {
-          ...(window.__BC_V2_HARNESS_STATE__ || {}),
-          selectedGroup: null,
-        };
-        renderV2HarnessPlay(result.snapshot, "Time ran out.");
+        // Wine encounter timer removed — timeouts disabled.
       }
 
       function tickGodotWineEncounterTimer() {
-        const timer = window.__BC_GODOT_WINE_TIMER__;
-        if (!timer) return;
-        updateGodotWineTimerDisplay();
-        if (Date.now() >= timer.expiresAt) {
-          failGodotWineEncounterTimeout();
-        }
+        // Wine encounter timer removed.
       }
 
-      function startGodotWineEncounterTimer(durationSec = GODOT_WINE_ENCOUNTER_TIMER_SEC) {
+      function startGodotWineEncounterTimer(_durationSec = GODOT_WINE_ENCOUNTER_TIMER_SEC) {
         clearGodotWineEncounterTimer();
-        const seconds = Math.max(1, Math.round(Number(durationSec) || GODOT_WINE_ENCOUNTER_TIMER_SEC));
-        const startedAt = Date.now();
-        window.__BC_GODOT_WINE_TIMER__ = {
-          startedAt,
-          expiresAt: startedAt + seconds * 1000,
-          durationSec: seconds,
-          intervalId: window.setInterval(tickGodotWineEncounterTimer, 200),
-        };
-        updateGodotWineTimerDisplay();
       }
 
       function handleGodotOfferWine(payload = {}) {
@@ -26960,10 +27463,15 @@ function ensureProgLoaded() {
             || ""
           ),
           greetingChoice: String(payload.greetingChoice || ""),
+          greetingRating: String(payload.greetingRating || ""),
+          knownFoodChoice: String(payload.knownFoodChoice || ""),
+          foodOrdered: !!payload.foodOrdered,
+          wineOpportunityNumber: Number(payload.wineOpportunityNumber || 1) || 1,
           objectPathKind: String(payload.objectPathKind || ""),
           objectSuccess: payload.objectSuccess !== false,
           encounterId,
           startedAt,
+          elapsedShiftTime: Number(payload.elapsedShiftTime || 0) || 0,
         };
 
         document.documentElement.dataset.bcGodotShift = "wine_offer";
@@ -26973,18 +27481,22 @@ function ensureProgLoaded() {
           document.documentElement.scrollTop = 0;
           document.body.scrollTop = 0;
         } catch {}
-        // Start the timer before the first wine frame renders so the
-        // countdown is present on the opening encounter screen.
-        startGodotWineEncounterTimer(GODOT_WINE_ENCOUNTER_TIMER_SEC);
+        // Wine encounter has no countdown — play until the table resolves.
+        // Shift playthrough time keeps running and is shown in the wine UI.
+        clearGodotWineEncounterTimer();
+        startGodotShiftTimeTicker();
         startV2HarnessWhenReady({
           encounterId,
           resetSession: true,
           skipRewardSync: true,
           fromGodot: true,
-          skipPreview: true,
           guestId: window.__BC_GODOT_WINE_OFFER__.guestId,
           partyShape: window.__BC_GODOT_WINE_OFFER__.partyShape,
           depiction: window.__BC_GODOT_WINE_OFFER__.depiction,
+          greetingChoice: window.__BC_GODOT_WINE_OFFER__.greetingChoice,
+          greetingRating: window.__BC_GODOT_WINE_OFFER__.greetingRating,
+          knownFoodChoice: window.__BC_GODOT_WINE_OFFER__.knownFoodChoice,
+          foodOrdered: window.__BC_GODOT_WINE_OFFER__.foodOrdered,
         });
         window.setTimeout(() => {
           try {
@@ -26997,8 +27509,9 @@ function ensureProgLoaded() {
         return true;
       }
 
-      function completeGodotWineOfferFromV2(snapshot, session, rewardProgress = null) {
+      function completeGodotWineOfferFromV2(snapshot, session, rewardProgress = null, options = {}) {
         clearGodotWineEncounterTimer();
+        const returnToFloor = options.returnToFloor !== false;
         const offer = window.__BC_GODOT_WINE_OFFER__ || {};
         const authorityDelta = Number(snapshot?.authorityDelta || 0);
         const outcome = String(snapshot?.outcome || "");
@@ -27051,13 +27564,39 @@ function ensureProgLoaded() {
           tableId: offer.tableId || null,
           guestType: offer.guestType || null,
           greetingChoice: offer.greetingChoice || null,
+          greetingRating: offer.greetingRating || snapshot?.greetingRating || null,
           objectPathKind: offer.objectPathKind || null,
           objectSuccess: offer.objectSuccess !== false,
           encounterId: snapshot?.encounterId || offer.encounterId || null,
           encounterTitle: snapshot?.encounterTitle || null,
+          selectedWineId: snapshot?.productId || null,
+          commercialRole: snapshot?.wineCommercialRole || null,
+          matchRating: snapshot?.wineMatchRating || null,
+          wineVariantId: snapshot?.wineVariantId || null,
+          scenarioId: snapshot?.scenarioId || null,
           outcome,
           authorityDelta,
           wineSold,
+          allowSecondWineOpportunity: (() => {
+            if (wineSold) return false;
+            const opportunityNumber =
+              Number(window.__BC_GODOT_WINE_OFFER__?.wineOpportunityNumber || 1) || 1;
+            if (opportunityNumber >= 2) return false;
+            const guestId = String(offer.guestId || snapshot?.guestId || "");
+            const scenario =
+              window.GuestService?.getScenarioForGuest?.(guestId) || null;
+            if (!scenario) {
+              // Unmapped guests do not get a free second wine shot.
+              return false;
+            }
+            if (
+              typeof window.GuestService?.scenarioHasSecondWineOpportunity === "function"
+            ) {
+              return !!window.GuestService.scenarioHasSecondWineOpportunity(scenario);
+            }
+            return !!scenario.secondWineOpportunityAllowed;
+          })(),
+          nextTablePhase: wineSold ? "continuing_service" : "ready_for_second_wine_opportunity",
           totalAP: Number(rewardProgress?.state?.totalAP || loadV2BottleRewardState?.()?.totalAP || 0),
           progress: Number(snapshot?.progress || 0),
           frustration: Number(snapshot?.frustration || 0),
@@ -27065,10 +27604,162 @@ function ensureProgLoaded() {
           turnCount: Number(snapshot?.turnCount || 0),
           skillMeasurements,
           economyEvidence,
+          awayElapsedSec: Math.max(
+            0,
+            (Date.now() - Number(offer.startedAt || Date.now())) / 1000
+          ),
+          elapsedShiftTime: getContinuingGodotShiftElapsedSec(),
         });
 
+        stopGodotShiftTimeTicker();
         window.__BC_GODOT_WINE_OFFER__ = null;
-        returnToGodotShiftFloor();
+        window.__BC_V2_GODOT_PENDING_EXIT__ = null;
+        if (returnToFloor) {
+          window.__BC_V2_FROM_GODOT__ = false;
+          returnToGodotShiftFloor();
+        }
+      }
+
+      function unloadGodotShiftFloorFrame() {
+        const frame = getGodotShiftFrame();
+        if (!frame) return;
+        try {
+          frame.dataset.bcMounted = "";
+          frame.dataset.bcGodotReady = "";
+          frame.dataset.bcSrc = "";
+          frame.src = "about:blank";
+        } catch {}
+      }
+
+      function restartGameplayFromWineSummary() {
+        stopGodotShiftTimeTicker();
+        clearGodotWineEncounterTimer();
+        window.__BC_GODOT_WINE_OFFER__ = null;
+        window.__BC_V2_FROM_GODOT__ = false;
+        window.__BC_V2_GODOT_PENDING_EXIT__ = null;
+        window.__BC_GODOT_SHIFT_SUMMARY__ = null;
+        window.__BC_V2_DEMO_FINAL_SUMMARY_ACTIVE__ = false;
+        try { window.__BC_V2_HARNESS_STATE__ = {}; } catch {}
+        try { resetV2DemoSession?.(); } catch {}
+        try { getV2HarnessApi()?.reset?.(); } catch {}
+        unloadGodotShiftFloorFrame();
+        getGodotShiftRunId({ renew: true });
+        startGodotShiftFloor({ reason: "wine_summary_restart" });
+      }
+
+      function returnToMainFromWineSummary() {
+        stopGodotShiftTimeTicker();
+        clearGodotWineEncounterTimer();
+        window.__BC_GODOT_WINE_OFFER__ = null;
+        window.__BC_V2_FROM_GODOT__ = false;
+        window.__BC_V2_GODOT_PENDING_EXIT__ = null;
+        window.__BC_GODOT_SHIFT_ACTIVE__ = false;
+        window.__BC_GODOT_SHIFT_SUMMARY__ = null;
+        window.__BC_V2_DEMO_FINAL_SUMMARY_ACTIVE__ = false;
+        try { window.__BC_V2_HARNESS_STATE__ = {}; } catch {}
+        try { resetV2DemoSession?.(); } catch {}
+        try { getV2HarnessApi()?.reset?.(); } catch {}
+        unloadGodotShiftFloorFrame();
+        document.documentElement.dataset.bcGodotShift = "false";
+        document.documentElement.dataset.bcGodotMobile = "0";
+        applyPlaySurfaceMode("full");
+        resetNavState();
+        try {
+          window.parent?.postMessage?.(
+            {
+              source: "BC_MSG",
+              v: 1,
+              type: "godot_shift_active",
+              active: false,
+              clearLock: true,
+              mode: window.bcMode || "demo",
+              screenId: "screenHome",
+            },
+            window.location.origin,
+          );
+        } catch {}
+        showScreen("screenHome");
+        try { localStorage.setItem(coverKey, "true"); } catch {}
+        updateCounts?.();
+        renderApp?.();
+        try { renderV2ServiceHubHome?.(); } catch {}
+        scheduleIframeHeightReport?.("wine_summary_back_to_home");
+      }
+
+      function showWineEncounterSummary(snapshot, session, rewardProgress = null) {
+        const pending = window.__BC_V2_GODOT_PENDING_EXIT__ || {
+          snapshot,
+          session,
+          rewardProgress,
+        };
+        const summarySnapshot = pending.snapshot || snapshot || {};
+        const summarySession = pending.session || session || {};
+        const summaryRewards = pending.rewardProgress || rewardProgress || null;
+
+        // Sync wine result into Godot, but stay on the summary screen.
+        if (isGodotShiftWineOfferActive() || window.__BC_V2_FROM_GODOT__ || window.__BC_V2_GODOT_PENDING_EXIT__) {
+          completeGodotWineOfferFromV2(summarySnapshot, summarySession, summaryRewards, {
+            returnToFloor: false,
+          });
+        }
+
+        window.__BC_V2_FROM_GODOT__ = false;
+        window.__BC_V2_GODOT_PENDING_EXIT__ = null;
+        window.__BC_V2_DEMO_FINAL_SUMMARY_ACTIVE__ = true;
+
+        const outcome = String(summarySnapshot.outcome || "complete");
+        const title = String(summarySnapshot.encounterTitle || "Wine encounter");
+        const apDelta = Number(summarySnapshot.authorityDelta || 0);
+        const apLabel = `${apDelta >= 0 ? "+" : ""}${apDelta} AP`;
+
+        applyPlaySurfaceMode("encounter_only");
+        resetNavState();
+        showScreen("screenPlay");
+
+        const stepContent = document.getElementById("stepContent");
+        const stepButtons = ensureV2StepButtonsContainer?.() || document.getElementById("stepButtons");
+        if (stepContent) {
+          stepContent.dataset.stage = "complete";
+          stepContent.innerHTML = `
+            <section class="v2-play-shell">
+              <div class="v2-end-screen">
+                <div class="v2-end-vignette"></div>
+                <div class="v2-end-card">
+                  <div class="v2-end-kicker">Encounter Summary</div>
+                  <div class="v2-end-meta">${escapeHtml(title)}</div>
+                  <h2>Wine encounter complete</h2>
+                  <p>Outcome: ${escapeHtml(outcome.replace(/_/g, " "))}</p>
+                  <div class="v2-ap-card">${escapeHtml(apLabel)}</div>
+                </div>
+              </div>
+            </section>
+          `;
+        }
+        if (stepButtons) {
+          stepButtons.innerHTML = `
+            <div class="v2-action-shell is-terminal is-demo-final">
+              <div class="button-row" style="width:100%; gap:10px; flex-wrap:wrap;">
+                <button type="button" class="btn" id="btnWineSummaryRestart">Restart gameplay</button>
+                <button type="button" class="btn btn-ghost" id="btnWineSummaryBackMain">Back to main</button>
+              </div>
+            </div>
+          `;
+          const endScreen = stepContent?.querySelector?.(".v2-end-screen");
+          if (endScreen && stepButtons.parentElement !== endScreen) {
+            endScreen.appendChild(stepButtons);
+          } else if (stepButtons.parentElement !== document.getElementById("encounterPanel")) {
+            document.getElementById("encounterPanel")?.appendChild(stepButtons);
+          }
+          stepButtons.querySelector("#btnWineSummaryRestart")?.addEventListener("click", (event) => {
+            event.preventDefault();
+            restartGameplayFromWineSummary();
+          });
+          stepButtons.querySelector("#btnWineSummaryBackMain")?.addEventListener("click", (event) => {
+            event.preventDefault();
+            returnToMainFromWineSummary();
+          });
+        }
+        scheduleIframeHeightReport?.("wine_encounter_summary");
       }
 
       function handleGodotShiftMessage(data) {
@@ -27136,6 +27827,31 @@ function ensureProgLoaded() {
             }, window.location.origin);
           } catch {}
           window.__BC_GODOT_SHIFT_RUN_ID__ = null;
+          return;
+        }
+        if (type === "bottle_reward_deferred") {
+          try {
+            ensureV2BottleRewardReadyFromGodot(payload || {});
+          } catch (error) {
+            console.warn("[BC][GODOT] bottle reward defer sync failed", error);
+          }
+          return;
+        }
+        if (type === "bottle_reward_claimed") {
+          try {
+            claimV2BottleRewardFromGodot(payload || {});
+          } catch (error) {
+            console.warn("[BC][GODOT] bottle reward claim sync failed", error);
+          }
+          return;
+        }
+        if (type === "restart_shift") {
+          restartGameplayFromWineSummary();
+          return;
+        }
+        if (type === "return_to_main") {
+          returnToMainFromWineSummary();
+          return;
         }
       }
 
@@ -27144,7 +27860,7 @@ function ensureProgLoaded() {
         if (!api) return false;
         const requestedEncounterId = String(options.encounterId || "");
         const fromGodot = !!(options.fromGodot || isGodotShiftWineOfferActive());
-        const skipPreview = !!(options.skipPreview || fromGodot);
+        const skipPreview = !!options.skipPreview;
         window.__BC_V2_DEMO_FINAL_SUMMARY_ACTIVE__ = false;
         if (fromGodot) {
           window.__BC_V2_FROM_GODOT__ = true;
@@ -27189,14 +27905,21 @@ function ensureProgLoaded() {
 	            depiction: options.depiction || window.__BC_GODOT_WINE_OFFER__?.depiction || null,
 	            guestHint: options.guestHint || null,
 	            artPath: options.artPath || null,
+	            greetingChoice: options.greetingChoice || window.__BC_GODOT_WINE_OFFER__?.greetingChoice || null,
+	            greetingRating: options.greetingRating || window.__BC_GODOT_WINE_OFFER__?.greetingRating || null,
+	            knownFoodChoice: options.knownFoodChoice || window.__BC_GODOT_WINE_OFFER__?.knownFoodChoice || null,
+	            foodOrdered: !!(options.foodOrdered || window.__BC_GODOT_WINE_OFFER__?.foodOrdered),
 	          });
           if (!snapshot) throw new Error("V2 demo did not return an encounter.");
           syncV2DemoRotationAfterSnapshot(snapshot);
           if (startingFresh) {
             state.introEncounterId = snapshot?.encounterId || null;
           }
-          if (skipPreview) {
+          const bottleChosen = !!(api.getSession?.()?.gameState?.bottleChoice);
+          if (skipPreview && bottleChosen) {
             renderV2HarnessPlay(snapshot, "");
+          } else if (!bottleChosen) {
+            renderV2ChooseBottle(snapshot);
           } else {
             renderV2EncounterPreview(snapshot, "");
           }

@@ -161,7 +161,7 @@ html {
 		</script>
 		<script src="index.js"></script>
 		<script>
-const GODOT_CONFIG = {"args":["--","display/window/stretch/aspect=ignore"],"canvasResizePolicy":2,"ensureCrossOriginIsolationHeaders":false,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":340440896,"index.pck?v=340440896":340440896,"index.pck?v=340440896-pck-d95db7ff62d52214":340440896,"index.wasm":43699190},"focusCanvas":true,"gdextensionLibs":[]};
+const GODOT_CONFIG = {"args":["--","display/window/stretch/aspect=ignore"],"canvasResizePolicy":2,"ensureCrossOriginIsolationHeaders":false,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":346415232,"index.pck?v=346415232":346415232,"index.pck?v=346415232-pck-145a72c224d97f95":346415232,"index.wasm":43699190},"focusCanvas":true,"gdextensionLibs":[]};
 const GODOT_THREADS_ENABLED = false;
 const engine = new Engine(GODOT_CONFIG);
 
@@ -173,6 +173,7 @@ const engine = new Engine(GODOT_CONFIG);
 	let initializing = true;
 	let statusMode = '';
 	let lastProgressPct = -1;
+	let loadReadyPosted = false;
 
 	function postToHost(type, payload) {
 		try {
@@ -245,12 +246,13 @@ const engine = new Engine(GODOT_CONFIG);
 		const assetV = String(
 			(window.__BC_GODOT_SHIFT_ASSET_V__)
 			|| (GODOT_CONFIG.fileSizes && GODOT_CONFIG.fileSizes['index.pck']
-				? (GODOT_CONFIG.fileSizes['index.pck'] + '-pck-d95db7ff62d52214')
+				? (GODOT_CONFIG.fileSizes['index.pck'] + '-pck-145a72c224d97f95')
 				: Date.now())
 		);
 		const packPath = 'index.pck';
 		const packUrl = packPath + '?v=' + assetV;
 		const onProgress = function (current, total) {
+			if (loadReadyPosted) return;
 			if (current > 0 && total > 0) {
 				statusProgress.value = current;
 				statusProgress.max = total;
@@ -272,6 +274,7 @@ const engine = new Engine(GODOT_CONFIG);
 		]).then(function () {
 			return engine.start();
 		}).then(() => {
+			loadReadyPosted = true;
 			setStatusMode('hidden');
 			postToHost('godot_load_ready', {});
 			try {

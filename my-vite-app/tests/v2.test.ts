@@ -30,7 +30,7 @@ import {
   getEncounterMoodImageV3,
   resolveEncounterMoodV3,
 } from "../src/game/encounterV3";
-import { evaluateObjectPath } from "../src/game/guestProfiles";
+import { evaluateObjectPath, evaluateOfferAccess } from "../src/game/guestProfiles";
 
 test("V2 vertical slice uses the configured five-encounter demo order", () => {
   const demoEncounters = getTier1VerticalSliceEncounters();
@@ -395,6 +395,45 @@ test("walking away after an aperitif rejection does not consume another greeting
   assert.equal(converted.aperitifOpportunityUsed, true);
 });
 
+test("food and wine offers are independent accept/decline paths", () => {
+  const wineOnly = evaluateOfferAccess({
+    guestType: "tourist",
+    greeting: "greet_wine",
+    offer: "offer_wine",
+  });
+  assert.equal(wineOnly.accepted, true);
+  assert.equal(wineOnly.placesWineOrder, true);
+  assert.equal(wineOnly.placesFoodOrder, false);
+
+  const foodOnly = evaluateOfferAccess({
+    guestType: "regular",
+    greeting: "greet_food",
+    offer: "offer_food",
+  });
+  assert.equal(foodOnly.accepted, true);
+  assert.equal(foodOnly.placesFoodOrder, true);
+  assert.equal(foodOnly.placesWineOrder, false);
+
+  const aperitifWine = evaluateOfferAccess({
+    guestType: "tourist",
+    greeting: "greet_aperitif",
+    offer: "offer_wine",
+  });
+  assert.equal(aperitifWine.accepted, true);
+  assert.equal(aperitifWine.placesWineOrder, true);
+  assert.equal(aperitifWine.placesFoodOrder, false);
+
+  const skepticFoodLocked = evaluateOfferAccess({
+    guestType: "skeptic",
+    greeting: "greet_food",
+    offer: "offer_food",
+    profileTier: 1,
+    hasFoodRecovery: false,
+  });
+  assert.equal(skepticFoodLocked.accepted, false);
+  assert.equal(skepticFoodLocked.placesFoodOrder, false);
+});
+
 test("V2 sends economy evidence but never calculates a Godot coin amount", () => {
   const evidence = buildV2EconomyEvidence({
     resultId: "result-1",
@@ -491,4 +530,315 @@ test("v2.1 composition: party shape explicit + inferred, type lanes differ", asy
   assert.equal(touristSession.composition?.version, "v2.1");
   assert.equal(touristSession.composition?.partyShape, "couple");
   assert.equal(regularSession.composition?.partyShape, "single");
+});
+
+test("V2 choose bottle scores ideal safe and trap without replacing encounter play", async () => {
+  const { startRuntimeV2Session, applyBottleChoiceRuntimeV2 } = await import("../src/game/runtimeV2");
+  const { applyChoice } = await import("../src/game/engineV2");
+  const { getBottleChoiceSet, BOTTLE_CHOICE_SCORES } = await import("../src/game/bottleChoice");
+
+  const session = startRuntimeV2Session({ encounterId: "encounter_v2_001" });
+  const set = getBottleChoiceSet(session.encounter);
+  assert.equal(set.idealProductId, "product_coastal_sauvignon");
+  assert.equal(set.safeProductId, "product_cartology_chenin");
+  assert.equal(set.trapProductId, "product_uva_mira_cabernet");
+  assert.match(String(set.clue || ""), /local, fresh/i);
+
+  const trapSnapshot = applyBottleChoiceRuntimeV2(session, set.trapProductId);
+  assert.equal(trapSnapshot.bottleChoiceFit, "trap");
+  assert.equal(trapSnapshot.bottleChoiceScore, BOTTLE_CHOICE_SCORES.trap);
+  assert.equal(session.product?.id, set.trapProductId);
+
+  applyChoice(session.gameState, { group: "ask", type: "experience" });
+  assert.equal(session.gameState.bottleChoice?.score, BOTTLE_CHOICE_SCORES.trap);
+});
+
+test("guest review clues stay player-facing and hide evaluation fields", async () => {
+  const {
+    getReviewProfileForGuest,
+    getVisibleReviewClues,
+    evaluateGreeting,
+    resolveWineCandidates,
+    commercialRoleAffectsScoring,
+    createEncounterStartContext,
+    getScenarioForGuest,
+  } = await import("../src/game/guestService");
+
+  const review = getReviewProfileForGuest("blonde_date");
+  assert.ok(review);
+  const clues = getVisibleReviewClues(review);
+  assert.equal(clues.length, 4);
+  assert.match(clues.join(" "), /steak/i);
+  assert.equal(clues.join(" ").includes("aperitif"), false);
+  assert.equal(clues.join(" ").toLowerCase().includes("premium"), false);
+
+  const aperitif = evaluateGreeting(review!, "aperitif");
+  assert.equal(aperitif.rating, "strong");
+  assert.equal(aperitif.nextStep, "complete_aperitif_service");
+  assert.equal(aperitif.createsStationTask?.stationId, "bar");
+
+  const wine = evaluateGreeting(review!, "wine");
+  assert.equal(wine.rating, "acceptable");
+  assert.equal(wine.nextStep, "open_wine_selection");
+
+  const food = evaluateGreeting(review!, "food");
+  assert.equal(food.rating, "acceptable");
+  assert.equal(food.revealsFoodChoice, true);
+
+  const fish = getReviewProfileForGuest("african_older_gentleman");
+  assert.equal(evaluateGreeting(fish!, "wine").rating, "strong");
+  assert.equal(evaluateGreeting(fish!, "aperitif").rating, "acceptable");
+  assert.equal(evaluateGreeting(fish!, "food").rating, "weak");
+
+  const steakWines = resolveWineCandidates("blonde_date");
+  assert.equal(steakWines.length, 3);
+  const roles = steakWines.map((item) => item.commercialRole).sort();
+  assert.deepEqual(roles, ["partner", "premium", "safe"]);
+  const safe = steakWines.find((item) => item.commercialRole === "safe");
+  assert.equal(safe?.matchRating, "strong");
+  assert.equal(commercialRoleAffectsScoring("partner"), false);
+
+  const partner = steakWines.find((item) => item.commercialRole === "partner");
+  const partnerContext = createEncounterStartContext({
+    guestId: "blonde_date",
+    greetingRoute: "greet_aperitif",
+    greetingEvaluation: aperitif,
+    selectedWineId: partner?.productId,
+  });
+  assert.equal(partnerContext?.selectedWineCommercialRole, "partner");
+  assert.equal(partnerContext?.selectionApHint, 5);
+  assert.ok(partnerContext?.variant?.guestOpeningLine);
+
+  const fishScenario = getScenarioForGuest("african_older_gentleman");
+  assert.equal(fishScenario?.id, "regular_fish_guest");
+  const fishWines = resolveWineCandidates("african_older_gentleman");
+  assert.equal(fishWines.every((item) => item.productId.includes("product_")), true);
+  assert.ok(fishWines.some((item) => item.matchRating === "strong" && item.commercialRole === "safe"));
+});
+
+test("scenario wine selection uses match rating not commercial role for AP", async () => {
+  const { startRuntimeV2Session, applyBottleChoiceRuntimeV2 } = await import("../src/game/runtimeV2");
+  const { getBottleChoiceSet } = await import("../src/game/bottleChoice");
+  const { evaluateOfferAccess } = await import("../src/game/guestProfiles");
+
+  const session = startRuntimeV2Session({
+    encounterId: "encounter_v2_014",
+    guestId: "blonde_date",
+    greetingChoice: "greet_wine",
+  });
+  const set = getBottleChoiceSet(session.encounter, { guestId: "blonde_date" });
+  assert.equal(set.options.length, 3);
+  assert.ok(set.options.every((option) => option.commercialRole));
+  assert.equal(
+    set.options.some((option) => /premium|safe|partner|ideal|correct/i.test(String(option.product?.name || ""))),
+    false,
+  );
+
+  const safeOption = set.options.find((option) => option.commercialRole === "safe");
+  assert.ok(safeOption);
+  const snapshot = applyBottleChoiceRuntimeV2(session, safeOption!.productId);
+  assert.equal(snapshot.wineCommercialRole, "safe");
+  assert.equal(snapshot.wineMatchRating, "strong");
+  assert.equal(snapshot.bottleChoiceScore, 10);
+  assert.equal(snapshot.greetingRoute, "wine");
+  assert.ok(snapshot.wineVariantId);
+  assert.match(String(session.encounter.contextClue || ""), /normally enjoy|serious bottle|producer/i);
+
+  // Food remains independent of wine selection/sale path.
+  const wineOffer = evaluateOfferAccess({
+    guestType: "tourist",
+    greeting: "greet_wine",
+    offer: "offer_wine",
+  });
+  assert.equal(wineOffer.placesFoodOrder, false);
+  assert.equal(wineOffer.placesWineOrder, true);
+});
+
+test("partner maxAp does not stack on match rating; second wine is scenario-gated", async () => {
+  const {
+    createEncounterStartContext,
+    getScenarioForGuest,
+    scenarioHasSecondWineOpportunity,
+    evaluateGreeting,
+    getReviewProfileForGuest,
+  } = await import("../src/game/guestService");
+
+  const steak = getScenarioForGuest("blonde_date");
+  const skeptic = getScenarioForGuest("skeptic_reader");
+  assert.equal(scenarioHasSecondWineOpportunity(steak), true);
+  assert.equal(scenarioHasSecondWineOpportunity(skeptic), false);
+
+  const partner = steak!.wineCandidates.find((item) => item.commercialRole === "partner");
+  assert.ok(partner);
+  // Even if a candidate carries maxApModifier, start context must ignore it.
+  partner!.maxApModifier = -5;
+  const review = getReviewProfileForGuest("blonde_date");
+  const greet = evaluateGreeting(review!, "wine");
+  const context = createEncounterStartContext({
+    guestId: "blonde_date",
+    greetingRoute: "greet_wine",
+    greetingEvaluation: greet,
+    selectedWineId: partner!.productId,
+  });
+  assert.equal(context?.selectedWineCommercialRole, "partner");
+  assert.equal(context?.modifiers.maxApModifier, greet.maxApModifier);
+  assert.equal(context?.selectionApHint, 5);
+
+  const poorPartner = skeptic!.wineCandidates.find(
+    (item) => item.commercialRole === "partner",
+  );
+  assert.ok(poorPartner);
+  const skepticContext = createEncounterStartContext({
+    guestId: "skeptic_reader",
+    greetingRoute: "greet_wine",
+    selectedWineId: poorPartner!.productId,
+  });
+  assert.equal(skepticContext?.selectedWineMatchRating, "poor");
+  assert.equal(skepticContext?.selectionApHint, -5);
+  assert.equal(skepticContext?.modifiers.maxApModifier, 0);
+});
+
+test("encounterTraits reshape Ask tolerance and Commit readiness", async () => {
+  const { startRuntimeV2Session, applyBottleChoiceRuntimeV2, applyChoiceRuntimeV2 } = await import(
+    "../src/game/runtimeV2"
+  );
+  const { getBottleChoiceSet } = await import("../src/game/bottleChoice");
+  const { canCommitSucceed } = await import("../src/game/engineV2");
+  const { maxAskBeforePenalty } = await import("../src/game/guestService");
+
+  const regular = startRuntimeV2Session({
+    encounterId: "encounter_v2_013",
+    guestId: "african_older_gentleman",
+    greetingChoice: "greet_wine",
+  });
+  assert.equal(regular.gameState.encounterTraits?.askTolerance, "low");
+  assert.equal(regular.gameState.encounterTraits?.commitReadiness, "early");
+  assert.equal(regular.gameState.discoveryNeed, "low");
+  assert.equal(maxAskBeforePenalty("low"), 1);
+
+  const set = getBottleChoiceSet(regular.encounter, { guestId: "african_older_gentleman" });
+  const safe = set.options.find((option) => option.commercialRole === "safe");
+  applyBottleChoiceRuntimeV2(regular, safe!.productId);
+  assert.equal(regular.gameState.resistanceLevel, "low");
+
+  // First ask is allowed; second ask (before recommend) should draw over-ask pressure for low tolerance.
+  applyChoiceRuntimeV2(regular, { group: "ask", type: "experience" });
+  const frustrationBefore = Number(regular.gameState.frustration || 0);
+  const secondAsk = applyChoiceRuntimeV2(regular, { group: "ask", type: "budget" });
+  assert.ok(Number(regular.gameState.frustration || 0) > frustrationBefore);
+  assert.match(
+    String(regular.gameState.history.at(-1)?.feedbackText || secondAsk.reaction || ""),
+    /questions|Energy drops|already|pull/i,
+  );
+
+  // Early commit readiness: with enough progress, commit can succeed sooner than late guests.
+  regular.gameState.progress = 7;
+  regular.gameState.frustration = 0;
+  regular.gameState.turnCount = 1;
+  assert.equal(canCommitSucceed(regular.gameState, "optimal"), true);
+
+  const tourist = startRuntimeV2Session({
+    encounterId: "encounter_v2_014",
+    guestId: "blonde_date",
+    greetingChoice: "greet_wine",
+  });
+  assert.equal(tourist.gameState.encounterTraits?.askTolerance, "medium");
+  assert.equal(tourist.gameState.encounterTraits?.commitReadiness, "normal");
+  tourist.gameState.progress = 7;
+  tourist.gameState.frustration = 0;
+  tourist.gameState.turnCount = 1;
+  assert.equal(canCommitSucceed(tourist.gameState, "optimal"), false);
+});
+
+test("polish: forced greeting rating recomputes modifiers; vague winePreference does not lock Ask", async () => {
+  const {
+    evaluateGreeting,
+    getReviewProfileForGuest,
+    buildKnownGuestInformation,
+    scenarioHasSecondWineOpportunity,
+    getScenarioForGuest,
+  } = await import("../src/game/guestService");
+  const { startRuntimeV2Session, applyChoiceRuntimeV2 } = await import("../src/game/runtimeV2");
+
+  const review = getReviewProfileForGuest("blonde_date");
+  const natural = evaluateGreeting(review!, "wine");
+  assert.equal(natural.rating, "acceptable");
+  const forcedPoor = evaluateGreeting(review!, "wine", "poor");
+  assert.equal(forcedPoor.rating, "poor");
+  assert.ok(forcedPoor.maxApModifier < natural.maxApModifier);
+  assert.ok(forcedPoor.moodDelta < natural.moodDelta);
+
+  const session = startRuntimeV2Session({
+    encounterId: "encounter_v2_014",
+    guestId: "blonde_date",
+    greetingChoice: "greet_wine",
+    greetingRating: "poor",
+  });
+  assert.equal(session.greetingEvaluation?.rating, "poor");
+  assert.equal(
+    session.greetingEvaluation?.maxApModifier,
+    forcedPoor.maxApModifier,
+  );
+  assert.equal(session.knownGuestInformation?.winePreference, undefined);
+
+  const known = buildKnownGuestInformation({
+    greeting: { ...natural, revealsWinePreference: true },
+    discovered: { winePreference: "open" },
+  });
+  assert.equal(known.winePreference, undefined);
+
+  // Preference Ask remains available when only a vague open preference exists.
+  session.gameState.knownGuestInformation = { winePreference: "open" };
+  const ask = applyChoiceRuntimeV2(session, { group: "ask", type: "preference" });
+  assert.equal(
+    /already made that clear/i.test(String(ask.reaction || "")),
+    false,
+  );
+
+  assert.equal(scenarioHasSecondWineOpportunity(getScenarioForGuest("skeptic_reader")), false);
+  assert.equal(scenarioHasSecondWineOpportunity(null), false);
+});
+
+test("known Ask is penalized and greeting maxAp survives finalize", async () => {
+  const { startRuntimeV2Session, applyBottleChoiceRuntimeV2, applyChoiceRuntimeV2 } = await import(
+    "../src/game/runtimeV2"
+  );
+  const { getBottleChoiceSet } = await import("../src/game/bottleChoice");
+  const { evaluateGreeting, getReviewProfileForGuest } = await import("../src/game/guestService");
+  const { failEncounter } = await import("../src/game/engineV2");
+
+  const review = getReviewProfileForGuest("african_older_gentleman");
+  const weakFood = evaluateGreeting(review!, "food");
+  assert.equal(weakFood.rating, "weak");
+  assert.ok(weakFood.maxApModifier < 0);
+
+  const session = startRuntimeV2Session({
+    encounterId: "encounter_v2_013",
+    guestId: "african_older_gentleman",
+    greetingChoice: "greet_food",
+    knownFoodChoice: "fish",
+  });
+  assert.equal(session.knownGuestInformation?.foodChoice, "fish");
+  assert.equal(session.greetingEvaluation?.rating, "weak");
+
+  const set = getBottleChoiceSet(session.encounter, { guestId: "african_older_gentleman" });
+  const safe = set.options.find((option) => option.commercialRole === "safe");
+  applyBottleChoiceRuntimeV2(session, safe!.productId);
+  assert.equal(
+    Number(session.gameState.selectionAuthorityBonus || 0),
+    Number(session.greetingEvaluation?.maxApModifier || 0),
+  );
+
+  const ask = applyChoiceRuntimeV2(session, { group: "ask", type: "preference" });
+  assert.match(String(ask.reaction || ""), /already/i);
+
+  const failed = failEncounter(session.gameState);
+  assert.equal(failed.outcome, "failure");
+  const rewards = session.encounter.rewards || {};
+  assert.equal(
+    Number(session.gameState.authorityDelta),
+    Number(rewards.failure || 0) +
+      Number(session.gameState.bottleChoice?.score || 0) +
+      Number(session.gameState.selectionAuthorityBonus || 0),
+  );
 });

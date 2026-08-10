@@ -36,7 +36,7 @@
 [ext_resource type="Texture2D" uid="uid://dvfs5pwk7sbj1" path="res://assets/stations/bottlecaller_tier1_bar_station_true_rgba/station_bar_bartender_tier1_getting_wine.png" id="29_getwine"]
 [ext_resource type="Texture2D" uid="uid://c87w2lj0l34qu" path="res://assets/stations/bottlecaller_tier1_bar_station_true_rgba/station_bar_bartender_tier1_wine_ready.png" id="30_wineready"]
 [ext_resource type="Script" uid="uid://boftiu1lblsuj" path="res://assets/scripts/core/BridgeController.gd" id="bridge_controller_script"]
-[ext_resource type="Script" path="res://assets/scripts/core/ShiftServiceSystem.gd" id="shift_service_system_script"]
+[ext_resource type="Script" uid="uid://hny7icc2i5gp" path="res://assets/scripts/core/ShiftServiceSystem.gd" id="shift_service_system_script"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_edll7"]
 size = Vector2(230, 231)
@@ -218,6 +218,7 @@ mood_icon_z_index = 1000
 attention_texture = ExtResource("28_exclaim")
 mood_hover_amplitude = 5.0
 mood_hover_speed = 2.2
+show_mood_icon = false
 happy_icon_hold_seconds = 2.5
 
 [node name="Sprite2D" type="Sprite2D" parent="RestaurantFloor/Stations/MiseEnPlaceStation"]
@@ -314,7 +315,6 @@ zoom = Vector2(0.96, 0.96)
 position = Vector2(356, 7)
 scale = Vector2(0.21, 0.21)
 script = ExtResource("27_3c4ny")
-waiter_z_index = 200
 navigation_speed = 280.0
 path_desired_distance = 16.0
 target_desired_distance = 14.0

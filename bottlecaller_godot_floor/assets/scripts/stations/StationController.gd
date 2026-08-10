@@ -166,6 +166,9 @@ var mood_hover_speed = 2.4
 ## Happy remains visible while the station is satisfied.
 @export var show_happy_mood = true
 
+## Mise en Place uses attention alerts only; other stations show mood icons.
+@export var show_mood_icon = true
+
 ## Zero keeps the happy icon visible until the station mood changes.
 ## Use a positive value only when a temporary happy confirmation is wanted.
 @export_range(0.0, 10.0, 0.1)
@@ -723,6 +726,11 @@ func set_mood_state(
 			mood_state,
 			(" | " + mood_reason if mood_reason != "" else "")
 		)
+
+	if not show_mood_icon:
+		if mood_icon != null:
+			mood_icon.visible = false
+		return true
 
 	if mood_icon == null:
 		return true

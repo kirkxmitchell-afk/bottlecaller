@@ -704,6 +704,10 @@ function makeTier1Encounter(args: {
   targetRecommendAngle: RecommendAngle;
   recommendScoring?: Partial<Record<RecommendAngle, ChoiceQuality>>;
   allowedProductIds?: string[];
+  idealProductId?: string | null;
+  safeProductId?: string | null;
+  trapProductId?: string | null;
+  bottleChoiceClue?: string | null;
   reactions?: EncounterReactionMap;
   guestResponses?: EncounterGuestResponseMap;
 }): EncounterV2 {
@@ -748,6 +752,10 @@ function makeTier1Encounter(args: {
     targetRecommendAngle: args.targetRecommendAngle,
     recommendScoring: args.recommendScoring || {},
     allowedProductIds: args.allowedProductIds || [],
+    idealProductId: args.idealProductId || null,
+    safeProductId: args.safeProductId || null,
+    trapProductId: args.trapProductId || null,
+    bottleChoiceClue: args.bottleChoiceClue || null,
   });
 }
 
@@ -783,6 +791,10 @@ export const TIER1_VERTICAL_SLICE_ENCOUNTERS: EncounterV2[] = [
     lesson:
       "These guests needed a local story they could feel good about choosing. Price framing or rushing the close misses why they asked for help.",
     targetProductId: "product_cartology_chenin",
+    idealProductId: "product_coastal_sauvignon",
+    safeProductId: "product_cartology_chenin",
+    trapProductId: "product_uva_mira_cabernet",
+    bottleChoiceClue: "We want something local, fresh, and not too heavy before starters.",
     targetRecommendAngle: "story",
     recommendScoring: {
       flavour: "good",

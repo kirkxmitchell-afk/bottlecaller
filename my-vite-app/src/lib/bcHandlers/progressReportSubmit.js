@@ -122,11 +122,11 @@ async function insertSkillSnapshotAndDrillEffect({
     chain_signal: p?.chainSignal ?? null,
     chain_score: p?.chainScore ?? null,
 
-    read_pct: skills.read ?? 0,
-    framing_pct: skills.framing ?? 0,
-    delivery_pct: skills.delivery ?? 0,
-    recovery_pct: skills.recovery ?? 0,
-    closing_pct: skills.closing ?? 0,
+    read_pct: skills.read ?? skills.ask ?? 0,
+    framing_pct: skills.framing ?? skills.recommend ?? 0,
+    delivery_pct: skills.delivery ?? skills.encounter_success ?? 0,
+    recovery_pct: skills.recovery ?? skills.recover ?? 0,
+    closing_pct: skills.closing ?? skills.commit ?? 0,
 
     strongest_skill: p?.strongestSkill ?? null,
     weakest_skill: p?.weakestSkill ?? null,
@@ -163,17 +163,35 @@ async function insertSkillSnapshotAndDrillEffect({
 
     const focusMap = {
       read: "read",
+      ask: "read",
       frame: "framing",
       framing: "framing",
+      recommend: "framing",
       delivery: "delivery",
+      encounter: "delivery",
+      encounter_success: "delivery",
+      success: "delivery",
       recovery: "recovery",
+      recover: "recovery",
       closing: "closing",
+      commit: "closing",
+      speed: "speed",
     };
 
     const skillKey = focusMap[String(recentDrill.focus || "").toLowerCase()] || null;
-    const currentSkillValue = skillKey ? Number(skills?.[skillKey] || 0) : null;
+    const currentSkillValue = skillKey
+      ? Number(
+          skills?.[skillKey] ??
+          (skillKey === "read" ? skills?.ask : null) ??
+          (skillKey === "framing" ? skills?.recommend : null) ??
+          (skillKey === "delivery" ? skills?.encounter_success : null) ??
+          (skillKey === "recovery" ? skills?.recover : null) ??
+          (skillKey === "closing" ? skills?.commit : null) ??
+          0
+        )
+      : null;
 
-    if (!skillKey || currentSkillValue == null) {
+    if (!skillKey || skillKey === "speed" || currentSkillValue == null) {
       return { ok: true };
     }
 
@@ -497,7 +515,8 @@ export function makeProgressReportSubmitHandler({
       };
 
       const canonicalOnly = nextPayload?.canonicalOnly === true;
-      const writeResult = canonicalOnly
+      const snapshotOnly = nextPayload?.snapshotOnly === true;
+      const writeResult = canonicalOnly || snapshotOnly
         ? { ok: true, inserted: 0, updated: false, skipped: true }
         : await upsertProgressReportMessage({
             supabase,
@@ -543,11 +562,14 @@ export function makeProgressReportSubmitHandler({
         serverSkillSnapshot:
           nextPayload?.skills && typeof nextPayload.skills === "object"
             ? {
-                read: Number(nextPayload.skills.read || 0),
-                framing: Number(nextPayload.skills.framing || 0),
-                delivery: Number(nextPayload.skills.delivery || 0),
-                recovery: Number(nextPayload.skills.recovery || 0),
-                closing: Number(nextPayload.skills.closing || 0),
+                read: Number(nextPayload.skills.read ?? nextPayload.skills.ask ?? 0),
+                framing: Number(nextPayload.skills.framing ?? nextPayload.skills.recommend ?? 0),
+                delivery: Number(
+                  nextPayload.skills.delivery ?? nextPayload.skills.encounter_success ?? 0
+                ),
+                recovery: Number(nextPayload.skills.recovery ?? nextPayload.skills.recover ?? 0),
+                closing: Number(nextPayload.skills.closing ?? nextPayload.skills.commit ?? 0),
+                speed: Number(nextPayload.skills.speed ?? 0),
               }
             : null,
         serverProgressionState:

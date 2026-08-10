@@ -16,6 +16,8 @@ if (window.self !== window.top) {
 import { installEngineBridge } from "./engineBridge";
 import { ENCOUNTERS, validateEncounters } from "./encounter";
 import { createDemoRuntimeV2Api } from "./runtimeV2";
+import * as BottleChoice from "./bottleChoice";
+import * as GuestService from "./guestService";
 import { createGodotShiftBridgeApi } from "./godotShiftBridge";
 import * as WineBridge from "./wineBridge";
 import * as EventLogBridge from "./eventLogBridge";
@@ -37,6 +39,8 @@ declare global {
     TournamentBridge?: any;
     ReactionRuntime?: any;
     V2ProgressionAuthority?: any;
+    BottleChoice?: typeof BottleChoice;
+    GuestService?: typeof GuestService;
     PlayerAuthorityContract?: any;
     EncounterV3?: any;
     __BC_ENCOUNTERS__?: any;
@@ -88,6 +92,8 @@ function getCtxFromWindow() {
   window.TournamentBridge = TournamentBridge;
   window.ReactionRuntime = ReactionRuntime;
   window.V2ProgressionAuthority = V2ProgressionAuthority;
+  window.BottleChoice = BottleChoice;
+  window.GuestService = GuestService;
   window.PlayerAuthorityContract = PlayerAuthorityContract;
   window.EncounterV3 = EncounterV3;
 

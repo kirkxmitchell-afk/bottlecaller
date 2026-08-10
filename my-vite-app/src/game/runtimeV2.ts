@@ -1,5 +1,7 @@
+import { getBottleChoiceSet, scoreBottleChoice } from "./bottleChoice";
 import { buildCampaignProductPool, selectCampaignProduct } from "./campaign";
 import { getTier1VerticalSliceEncounters } from "./encounterV2";
+import { getCoreCampaignProducts, getProductById } from "./products";
 import {
   applyChoice,
   createGameStateV2,
@@ -13,6 +15,20 @@ import {
   composeGuestV21,
   type GuestCompositionV21,
 } from "./guestCompositionV21";
+import {
+  applyEncounterStartToGameState,
+  buildKnownGuestInformation,
+  createEncounterStartContext,
+  evaluateGreeting,
+  getReviewProfileForGuest,
+  greetingChoiceToRoute,
+  normalizeDiscoveryNeed,
+  normalizeResistanceLevel,
+  DEFAULT_ENCOUNTER_TRAITS,
+  type EncounterStartContext,
+  type GreetingEvaluation,
+  type KnownGuestInformation,
+} from "./guestService";
 import type {
   ActionGroup,
   ActionType,
@@ -34,6 +50,9 @@ export interface RuntimeV2Session {
   difficultyMode: V2DifficultyMode;
   outcomeEmitted?: boolean;
   composition?: GuestCompositionV21 | null;
+  greetingEvaluation?: GreetingEvaluation | null;
+  knownGuestInformation?: KnownGuestInformation;
+  encounterStartContext?: EncounterStartContext | null;
 }
 
 export interface RuntimeV2StartOptions {
@@ -47,6 +66,13 @@ export interface RuntimeV2StartOptions {
   depiction?: string | null;
   guestHint?: string | null;
   artPath?: string | null;
+  /** Modular table-service context from Godot floor. */
+  greetingChoice?: string | null;
+  greetingRating?: string | null;
+  knownFoodChoice?: string | null;
+  knownOccasion?: string | null;
+  knownBudgetSignal?: string | null;
+  foodOrdered?: boolean;
 }
 
 export interface RuntimeV2Snapshot {
@@ -79,6 +105,15 @@ export interface RuntimeV2Snapshot {
   partyShape?: string | null;
   depiction?: string | null;
   compositionVersion?: string | null;
+  bottleChoiceFit?: string | null;
+  bottleChoiceScore?: number;
+  bottleChoiceReaction?: string | null;
+  wineCommercialRole?: string | null;
+  wineMatchRating?: string | null;
+  wineVariantId?: string | null;
+  greetingRoute?: string | null;
+  greetingRating?: string | null;
+  scenarioId?: string | null;
 }
 
 export interface RuntimeV2ChoiceResult {
@@ -213,7 +248,114 @@ export function snapshotRuntimeV2(session: RuntimeV2Session): RuntimeV2Snapshot 
     partyShape: composition?.partyShape || null,
     depiction: composition?.depiction || null,
     compositionVersion: composition?.version || null,
+    bottleChoiceFit: gameState.bottleChoice?.fit || null,
+    bottleChoiceScore: Number(gameState.bottleChoice?.score || 0) || 0,
+    bottleChoiceReaction: gameState.bottleChoice?.reaction || null,
+    wineCommercialRole: session.encounterStartContext?.selectedWineCommercialRole || null,
+    wineMatchRating: session.encounterStartContext?.selectedWineMatchRating || null,
+    wineVariantId: session.encounterStartContext?.wineVariantId || null,
+    greetingRoute: session.encounterStartContext?.greetingRoute || session.greetingEvaluation?.route || null,
+    greetingRating: session.encounterStartContext?.greetingRating || session.greetingEvaluation?.rating || null,
+    scenarioId: session.encounterStartContext?.scenarioId || null,
   };
+}
+
+export function applyBottleChoiceRuntimeV2(
+  session: RuntimeV2Session,
+  productId: string | null | undefined,
+): RuntimeV2Snapshot {
+  const guestId = session.composition?.guestId || null;
+  const choiceSet = getBottleChoiceSet(session.encounter, { guestId });
+  const result = scoreBottleChoice(productId, choiceSet);
+  const product =
+    getProductById(getCoreCampaignProducts(), result.productId) ||
+    session.product ||
+    null;
+  session.product = product;
+  session.encounter = {
+    ...session.encounter,
+    targetProductId: product?.id || session.encounter.targetProductId || null,
+  };
+  session.gameState.product = product;
+  session.gameState.bottleChoice = {
+    ...result,
+    productName: product?.name || result.productName || null,
+  };
+
+  const startContext = createEncounterStartContext({
+    guestId,
+    greetingRoute: session.greetingEvaluation?.route || null,
+    greetingEvaluation: session.greetingEvaluation || null,
+    selectedWineId: product?.id || result.productId,
+    knownGuestInformation: session.knownGuestInformation || {},
+    encounterId: session.encounter.id,
+  });
+  session.encounterStartContext = startContext;
+
+  if (startContext) {
+    const next = applyEncounterStartToGameState({
+      progress: session.gameState.progress,
+      frustration: session.gameState.frustration,
+      context: startContext,
+    });
+    session.gameState.progress = next.progress;
+    session.gameState.frustration = next.frustration;
+    session.gameState.progressMood = getProgressMood(session.gameState.progress);
+    session.gameState.frustrationMood = getFrustrationMood(session.gameState.frustration);
+
+    const variant = startContext.variant;
+    if (variant?.guestOpeningLine) {
+      session.encounter = {
+        ...session.encounter,
+        contextClue: variant.guestOpeningLine,
+        verbalClue: variant.guestOpeningLine,
+      };
+    }
+    if (variant?.resistanceLevel) {
+      session.gameState.resistanceLevel = normalizeResistanceLevel(variant.resistanceLevel);
+    } else if (
+      startContext.selectedWineMatchRating === "risky" ||
+      startContext.selectedWineMatchRating === "poor"
+    ) {
+      session.gameState.resistanceLevel = "high";
+    } else if (startContext.selectedWineMatchRating === "strong") {
+      session.gameState.resistanceLevel = "low";
+    } else {
+      session.gameState.resistanceLevel = "medium";
+    }
+    if (variant?.preferredRecommendAngles?.length) {
+      const recommendScoring: Record<string, string> = {
+        ...(session.encounter.recommendScoring || {}),
+      };
+      for (const angle of variant.preferredRecommendAngles) {
+        recommendScoring[angle] = "optimal";
+      }
+      for (const angle of variant.acceptableRecommendAngles || []) {
+        if (!recommendScoring[angle] || recommendScoring[angle] === "disaster") {
+          recommendScoring[angle] = "good";
+        }
+      }
+      for (const angle of variant.weakRecommendAngles || []) {
+        if (!recommendScoring[angle]) {
+          recommendScoring[angle] = "poor";
+        }
+      }
+      session.encounter = {
+        ...session.encounter,
+        targetRecommendAngle:
+          variant.preferredRecommendAngles[0] || session.encounter.targetRecommendAngle,
+        recommendScoring: recommendScoring as typeof session.encounter.recommendScoring,
+      };
+    }
+
+    // Greeting judgement only. Match rating already scored via bottleChoice.
+    // Partner / candidate maxApModifier must never stack on top of match AP.
+    session.gameState.selectionAuthorityBonus =
+      Number(session.gameState.selectionAuthorityBonus || 0) +
+      Number(startContext.modifiers.maxApModifier || 0);
+  }
+
+  return snapshotRuntimeV2(session);
 }
 
 export function startRuntimeV2Session(options: RuntimeV2StartOptions = {}): RuntimeV2Session {
@@ -239,9 +381,33 @@ export function startRuntimeV2Session(options: RuntimeV2StartOptions = {}): Runt
     encounter = applyGuestCompositionToEncounter(encounter, composition);
   }
 
+  const review = getReviewProfileForGuest(options.guestId);
+  const route = greetingChoiceToRoute(options.greetingChoice);
+  let greetingEvaluation: GreetingEvaluation | null = null;
+  if (review && route) {
+    // Forced floor rating recomputes all modifiers — never label-only overwrite.
+    greetingEvaluation = evaluateGreeting(review, route, options.greetingRating);
+  }
+
+  const knownGuestInformation = buildKnownGuestInformation({
+    reviewFoodIntent: review?.knownFoodIntent,
+    greeting: greetingEvaluation,
+    foodOrdered: !!options.foodOrdered,
+    discovered: {
+      foodChoice: options.knownFoodChoice || undefined,
+      occasion: options.knownOccasion || undefined,
+      budgetSignal: options.knownBudgetSignal || undefined,
+    },
+  });
+
   const pool = buildCampaignProductPool(encounter.tier);
   const product = selectCampaignProduct(pool, buildSelectionContext(encounter));
-  const gameState = createGameStateV2(encounter, product, difficultyMode);
+  const gameState = createGameStateV2(encounter, product, difficultyMode, {
+    traits: review?.encounterTraits || DEFAULT_ENCOUNTER_TRAITS,
+    resistanceLevel: "medium",
+    discoveryNeed: normalizeDiscoveryNeed(review?.discoveryNeed),
+  });
+  gameState.knownGuestInformation = knownGuestInformation;
 
   return {
     encounter,
@@ -251,6 +417,9 @@ export function startRuntimeV2Session(options: RuntimeV2StartOptions = {}): Runt
     difficultyMode,
     outcomeEmitted: false,
     composition,
+    greetingEvaluation,
+    knownGuestInformation,
+    encounterStartContext: null,
   };
 }
 
@@ -279,6 +448,19 @@ export function createDemoRuntimeV2Api() {
     },
     snapshot() {
       return activeSession ? snapshotRuntimeV2(activeSession) : null;
+    },
+    chooseBottle(productId: string | null | undefined) {
+      if (!activeSession) return null;
+      if (activeSession.gameState.bottleChoice) {
+        return snapshotRuntimeV2(activeSession);
+      }
+      return applyBottleChoiceRuntimeV2(activeSession, productId);
+    },
+    getBottleChoiceSet() {
+      if (!activeSession) return getBottleChoiceSet(null);
+      return getBottleChoiceSet(activeSession.encounter, {
+        guestId: activeSession.composition?.guestId || null,
+      });
     },
     choose(group: ActionGroup, type: ActionType) {
       if (!activeSession) return null;

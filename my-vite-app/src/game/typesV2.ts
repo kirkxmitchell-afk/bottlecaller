@@ -77,6 +77,16 @@ export type EncounterOutcome =
   | "continue"
   | "not_available";
 
+export type BottleFit = "ideal" | "safe" | "trap";
+
+export interface BottleChoiceResult {
+  productId: string;
+  productName?: string | null;
+  fit: BottleFit;
+  score: number;
+  reaction: string;
+}
+
 export type V2DifficultyMode = "easy" | "medium" | "hard";
 
 export type EncounterMoodV3 =
@@ -196,6 +206,10 @@ export interface EncounterV2 {
   targetRecommendAngle?: RecommendAngle | null;
   recommendScoring?: Partial<Record<RecommendAngle, ChoiceQuality>>;
   allowedProductIds?: string[];
+  idealProductId?: string | null;
+  safeProductId?: string | null;
+  trapProductId?: string | null;
+  bottleChoiceClue?: string | null;
 }
 
 export interface QualityEffect {
@@ -284,6 +298,24 @@ export interface GameStateV2 {
   actionCount: number;
   history: TurnHistoryItem[];
   usedChoiceKeys: string[];
+  bottleChoice?: BottleChoiceResult | null;
+  /** Survives finalize — greeting + wine maxApModifier that must not be wiped. */
+  selectionAuthorityBonus?: number;
+  knownGuestInformation?: {
+    foodChoice?: string;
+    occasion?: string;
+    budgetSignal?: string;
+    winePreference?: string;
+  };
+  /** Scenario guest traits that reshape Ask / Recommend / Commit timing. */
+  encounterTraits?: {
+    askTolerance: "low" | "medium" | "high";
+    recommendationTolerance: "low" | "medium" | "high";
+    commitReadiness: "early" | "normal" | "late";
+    pressureSensitivity: "low" | "medium" | "high";
+  };
+  resistanceLevel?: "low" | "medium" | "high";
+  discoveryNeed?: "low" | "medium" | "high";
 }
 
 export interface ChoiceEvaluationResult {
