@@ -24,7 +24,7 @@ const ACTION_TIMES := {
 	&"collect_food": 5.0,
 	&"serve_food": 7.0,
 	&"collect_dirty_plates": 8.0,
-	&"scullery_dropoff": 7.0,
+	&"scullery_dropoff": 2.0,
 	&"print_bill": 1.0,
 	&"take_payment": 5.0,
 	&"close_bill": 1.0,

@@ -568,9 +568,10 @@ test("guest review clues stay player-facing and hide evaluation fields", async (
   assert.ok(review);
   const clues = getVisibleReviewClues(review);
   assert.equal(clues.length, 4);
-  assert.match(clues.join(" "), /steak/i);
   assert.equal(clues.join(" ").includes("aperitif"), false);
   assert.equal(clues.join(" ").toLowerCase().includes("premium"), false);
+  assert.equal(clues.join(" ").toLowerCase().includes("partner"), false);
+  assert.match(String(review?.mealIntent?.dish || ""), /rib-eye/i);
 
   const aperitif = evaluateGreeting(review!, "aperitif");
   assert.equal(aperitif.rating, "strong");
@@ -614,6 +615,72 @@ test("guest review clues stay player-facing and hide evaluation fields", async (
   const fishWines = resolveWineCandidates("african_older_gentleman");
   assert.equal(fishWines.every((item) => item.productId.includes("product_")), true);
   assert.ok(fishWines.some((item) => item.matchRating === "strong" && item.commercialRole === "safe"));
+});
+
+test("each first-run guest review has its own meal before wine is committed", async () => {
+  const {
+    getReviewProfileForGuest,
+    getVisibleReviewClues,
+    formatGuestReviewCard,
+    mealHeadingForCertainty,
+  } = await import("../src/game/guestService");
+  const { startRuntimeV2Session, applyBottleChoiceRuntimeV2 } = await import("../src/game/runtimeV2");
+  const { getBottleChoiceSet } = await import("../src/game/bottleChoice");
+
+  const guests = [
+    { id: "blonde_date", dish: /rib-eye/i, heading: "LIKELY MEAL" },
+    { id: "african_older_gentleman", dish: /kingklip/i, heading: "ORDERING" },
+    { id: "skeptic_reader", dish: /lamb/i, heading: "CONSIDERING MEAL" },
+    { id: "skeptic_v1", dish: /chicken/i, heading: "ORDERING" },
+    { id: "african_regular_table", dish: /line fish/i, heading: "LIKELY MEAL" },
+  ];
+  const dishes = new Set<string>();
+  for (const guest of guests) {
+    const review = getReviewProfileForGuest(guest.id);
+    assert.ok(review, guest.id);
+    const card = formatGuestReviewCard(review);
+    assert.match(card.mealDish, guest.dish);
+    assert.equal(card.mealHeading, guest.heading);
+    assert.equal(mealHeadingForCertainty(review!.mealIntent?.certainty), guest.heading);
+    assert.ok(review!.mealProfile?.protein);
+    dishes.add(card.mealDish.toLowerCase());
+    const leaked = `${card.body} ${getVisibleReviewClues(review).join(" ")}`.toLowerCase();
+    assert.equal(leaked.includes("aperitif"), false, guest.id);
+    assert.equal(leaked.includes("premium"), false, guest.id);
+    assert.equal(leaked.includes("choose red"), false, guest.id);
+    assert.equal(leaked.includes("partner"), false, guest.id);
+
+    const session = startRuntimeV2Session({
+      encounterId: "encounter_v2_001",
+      guestId: guest.id,
+      greetingChoice: "greet_wine",
+    });
+    assert.match(String(session.knownGuestInformation?.mealIntent?.dish || ""), guest.dish);
+    assert.equal(session.gameState.bottleChoice, null);
+    const set = getBottleChoiceSet(session.encounter, { guestId: guest.id });
+    const chosen = set.options[1]?.productId || set.options[0]?.productId;
+    applyBottleChoiceRuntimeV2(session, chosen);
+    assert.equal(session.product?.id, chosen);
+    assert.equal(session.encounterStartContext?.selectedWineId, chosen);
+  }
+  assert.equal(dishes.size, 5);
+});
+
+test("first-run guests allow a second wine opportunity so food can reopen after two fails", async () => {
+  const { getScenarioForGuest, scenarioHasSecondWineOpportunity } = await import(
+    "../src/game/guestService"
+  );
+  for (const guestId of [
+    "blonde_date",
+    "african_older_gentleman",
+    "skeptic_reader",
+    "skeptic_v1",
+    "african_regular_table",
+  ]) {
+    const scenario = getScenarioForGuest(guestId);
+    assert.equal(scenario?.secondWineOpportunityAllowed, true, guestId);
+    assert.equal(scenarioHasSecondWineOpportunity(scenario), true, guestId);
+  }
 });
 
 test("scenario wine selection uses match rating not commercial role for AP", async () => {
@@ -666,7 +733,7 @@ test("partner maxAp does not stack on match rating; second wine is scenario-gate
   const steak = getScenarioForGuest("blonde_date");
   const skeptic = getScenarioForGuest("skeptic_reader");
   assert.equal(scenarioHasSecondWineOpportunity(steak), true);
-  assert.equal(scenarioHasSecondWineOpportunity(skeptic), false);
+  assert.equal(scenarioHasSecondWineOpportunity(skeptic), true);
 
   const partner = steak!.wineCandidates.find((item) => item.commercialRole === "partner");
   assert.ok(partner);

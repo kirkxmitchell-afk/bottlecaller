@@ -10,6 +10,21 @@ export type BudgetSignal = "low" | "medium" | "high" | "unknown";
 export type Tolerance = "low" | "medium" | "high";
 export type CommitReadiness = "early" | "normal" | "late";
 
+export type MealCertainty = "confirmed" | "likely" | "considering";
+
+export interface MealIntent {
+  dish: string;
+  description?: string;
+  certainty: MealCertainty;
+}
+
+export interface MealProfile {
+  protein?: string;
+  richness?: "low" | "medium" | "high";
+  sauce?: string;
+  preparation?: string;
+}
+
 export type WineCommercialRole = "premium" | "safe" | "partner";
 export type WineMatchRating = "strong" | "acceptable" | "risky" | "poor";
 export type Compatibility = "strong" | "acceptable" | "poor";
@@ -55,6 +70,10 @@ export interface GuestReviewProfile {
   pace: GuestPace;
   familiarity: Familiarity;
   discoveryNeed: DiscoveryNeed;
+  /** Short player-facing who/why line. Never names a wine or opening. */
+  reviewContext?: string;
+  mealIntent?: MealIntent;
+  mealProfile?: MealProfile;
   knownFoodIntent?: string;
   knownFoodCategory?: string;
   knownOccasion?: string;
@@ -138,6 +157,8 @@ export interface KnownGuestInformation {
   occasion?: string;
   budgetSignal?: string;
   winePreference?: string;
+  mealIntent?: MealIntent;
+  mealProfile?: MealProfile;
 }
 
 export interface EncounterStartModifiers {

@@ -219,6 +219,31 @@ function persistV2DemoRequest() {
   try { localStorage.setItem("BC_V2_DEMO", "1"); } catch {}
 }
 
+function clearV2DemoRequest(reason = "clear") {
+  try { localStorage.removeItem("BC_V2_DEMO"); } catch {}
+  try {
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("bcV2Demo") || url.searchParams.has("demo") || url.searchParams.has("mode")) {
+      url.searchParams.delete("bcV2Demo");
+      url.searchParams.delete("demo");
+      url.searchParams.delete("mode");
+      history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+    }
+  } catch {}
+  try { document.documentElement.dataset.bcV2Demo = ""; } catch {}
+  console.log("[DEMO] cleared V2 demo latch", reason);
+}
+
+function leaveDemoHarnessForPremiumAuth(reason = "premium_auth") {
+  clearV2DemoRequest(reason);
+  try { clearGodotDemoLock?.(reason); } catch {}
+  window.__BC_DEMO_PLAY_STARTED_AT__ = 0;
+  window.__BC_DEMO_IFRAME_LAST_SCREEN__ = null;
+  window.__BC_DEMO_SHELL_CTA_HIDDEN = false;
+  try { document.documentElement.dataset.bcGodotDemo = ""; } catch {}
+  try { destroyDemoIframe?.(reason); } catch {}
+}
+
 function replaceUrlKeepingV2Demo(url) {
   try {
     history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
@@ -1765,6 +1790,7 @@ const PREMIUM_ROLE_CAPABILITIES = Object.freeze({
   waiter: Object.freeze({
     canAccessManagerBoard: false,
     canOpenSetupPremium: false,
+    canEditWineList: false,
     canInviteWaiters: false,
     canReadInvites: false,
     canAssignDrills: false,
@@ -1777,6 +1803,7 @@ const PREMIUM_ROLE_CAPABILITIES = Object.freeze({
   single_manager: Object.freeze({
     canAccessManagerBoard: true,
     canOpenSetupPremium: true,
+    canEditWineList: true,
     canInviteWaiters: true,
     canReadInvites: true,
     canAssignDrills: true,
@@ -1789,6 +1816,7 @@ const PREMIUM_ROLE_CAPABILITIES = Object.freeze({
   group_manager: Object.freeze({
     canAccessManagerBoard: true,
     canOpenSetupPremium: true,
+    canEditWineList: true,
     canInviteWaiters: true,
     canReadInvites: true,
     canAssignDrills: true,
@@ -1801,6 +1829,7 @@ const PREMIUM_ROLE_CAPABILITIES = Object.freeze({
   enterpriser: Object.freeze({
     canAccessManagerBoard: true,
     canOpenSetupPremium: true,
+    canEditWineList: true,
     canInviteWaiters: true,
     canReadInvites: true,
     canAssignDrills: true,
@@ -4469,10 +4498,55 @@ function dedupeWineRows(rows = []) {
   return out;
 }
 
+function canEditPremiumWineList() {
+  return !!getPremiumRoleCapabilities(appState?.profile || null).canEditWineList;
+}
+
+function applyWineSetupAccessMode() {
+  const canEdit = canEditPremiumWineList();
+  const canOpen = !!getPremiumRoleCapabilities(appState?.profile || null).canOpenSetupPremium;
+  const setupScreen = document.getElementById("screenSetupPremium");
+  const header = setupScreen?.querySelector(".app-setup-header h2");
+  const advanced = document.getElementById("premiumWineAdvanced");
+  const adminPanel = document.getElementById("wineAdminPanel");
+  const addBtn = document.getElementById("addWineBtnPremium");
+  const backBtn = document.getElementById("btnBackHomeFromSetupPremium");
+  const startBtn = document.getElementById("btnContinuePremium");
+  const actionHeader = setupScreen?.querySelector(".wine-table thead th:last-child");
+
+  if (header) header.textContent = canEdit ? "Setup" : "Wine List";
+  if (backBtn) {
+    backBtn.style.display = canOpen ? "" : "none";
+    backBtn.classList.remove("hidden");
+  }
+  if (startBtn) {
+    // Managers keep Start; waiters only need Back to leave the list.
+    startBtn.style.display = canEdit ? "" : "none";
+  }
+  if (advanced) {
+    const summary = advanced.querySelector("summary");
+    if (summary) summary.textContent = canEdit ? "Advanced (add wines + table)" : "Full wine list";
+    if (!canEdit) advanced.open = true;
+  }
+  if (adminPanel) {
+    adminPanel.querySelectorAll(
+      ".app-form-row, .app-form-section, #addWineBtnPremium, #wineNameInputPremium, #wineVarietalInputPremium, #regionInputPremium, #processInputPremium, #storyInputPremium, #fruitOptionsPremium, #textureOptionsPremium, #oakOptionsPremium"
+    ).forEach((el) => {
+      el.style.display = canEdit ? "" : "none";
+    });
+    adminPanel.querySelectorAll("h3").forEach((el) => {
+      if (/wine list/i.test(el.textContent || "")) el.style.display = "";
+    });
+  }
+  if (addBtn) addBtn.style.display = canEdit ? "" : "none";
+  if (actionHeader) actionHeader.style.display = canEdit ? "" : "none";
+}
+
 function renderWineTable(wines) {
   const safeWines = Array.isArray(wines) ? wines : [];
   const body = document.getElementById("premiumWineTableBody");
   const cards = document.getElementById("premiumWineCards");
+  const canEdit = canEditPremiumWineList();
   if (body) body.innerHTML = "";
   if (cards) cards.innerHTML = "";
 
@@ -4492,6 +4566,7 @@ function renderWineTable(wines) {
 
   safeWines.forEach((w, idx) => {
     const wine = w || {};
+    const wineId = escapeHtml(String(wine.id || wine.wine_id || wine.created_at || idx));
     if (body) {
       const tr = document.createElement("tr");
       tr.innerHTML = `
@@ -4501,7 +4576,7 @@ function renderWineTable(wines) {
       <td>${escapeHtml(Array.isArray(wine.textureTags) ? wine.textureTags.join(", ") : Array.isArray(wine.texture_tags) ? wine.texture_tags.join(", ") : "")}</td>
       <td>${escapeHtml(wine.oakLevel || wine.oak_level || "")}</td>
       <td>${escapeHtml(wine.region || "")}</td>
-      <td><button type="button" class="btn-danger" data-wine-del="${escapeHtml(String(wine.id || wine.wine_id || wine.created_at || idx))}">Delete</button></td>
+      ${canEdit ? `<td><button type="button" class="btn-danger" data-wine-del="${wineId}">Delete</button></td>` : `<td style="display:none"></td>`}
       `;
       body.appendChild(tr);
     }
@@ -4514,7 +4589,7 @@ function renderWineTable(wines) {
         <div><strong>${escapeHtml(wine.name || `Wine ${idx + 1}`)}</strong> — ${escapeHtml(wine.varietal || "")}</div>
         <div>${escapeHtml((Array.isArray(wine.fruitTags) ? wine.fruitTags : wine.fruit_tags || []).join(", "))} · ${escapeHtml((Array.isArray(wine.textureTags) ? wine.textureTags : wine.texture_tags || []).join(", "))} · ${escapeHtml(wine.oakLevel || wine.oak_level || "")}</div>
         <div>${escapeHtml(wine.region || "")}</div>
-        <button type="button" class="btn-danger" data-wine-del="${escapeHtml(String(wine.id || wine.wine_id || wine.created_at || idx))}">Delete</button>
+        ${canEdit ? `<button type="button" class="btn-danger" data-wine-del="${wineId}">Delete</button>` : ""}
       `;
       cards.appendChild(div);
     }
@@ -6807,27 +6882,8 @@ function renderAppChrome() {
   playCtaEl?.classList.toggle("hidden", !showPlayCta);
   if (playCtaEl && showPlayCta) playCtaEl.style.opacity = "";
 
-  const premiumSignupBtn = document.getElementById("btnPremiumSignupMenu");
-  const messagesBtn = document.getElementById("btnOpenMessages");
-  const leaderboardBtn = document.getElementById("btnWaiterPerformanceLeaderboard");
-  const wineSetupBtn = document.getElementById("btnPremiumWineSetup");
-  const tutorialBtn = document.getElementById("btnTutorial");
-  const managerBoardBtn = document.getElementById("btnManagerBoard");
-  const profileBtn = document.getElementById("btnOpenProfile");
-  const logoutBtn = document.getElementById("btnLogoutPremium");
-
-  if (isDemoCockpit) {
-    premiumSignupBtn?.classList.remove("hidden");
-    messagesBtn?.classList.add("hidden");
-    leaderboardBtn?.classList.add("hidden");
-    wineSetupBtn?.classList.add("hidden");
-    tutorialBtn?.classList.add("hidden");
-    managerBoardBtn?.classList.add("hidden");
-    profileBtn?.classList.add("hidden");
-    logoutBtn?.classList.toggle("hidden", !hasSession);
-  } else {
-    premiumSignupBtn?.classList.add("hidden");
-  }
+  // Role profile (MEMBERSHIP_UI_GATES) owns cog visibility — waiter ≠ group_manager.
+  applyPremiumCogMenu({ isDemoCockpit, hasSession });
 }
 
 function removeGlobalResetButtons() {
@@ -6896,6 +6952,9 @@ const MEMBERSHIP_UI_GATES = {
       progress: true,
       skills: true,
       messages: true,
+      leaderboard: true,
+      wineSetup: false,
+      tutorials: false,
       restaurant: false,
       restaurants: false,
       waiterInvites: false,
@@ -6925,6 +6984,9 @@ const MEMBERSHIP_UI_GATES = {
       progress: true,
       skills: true,
       messages: true,
+      leaderboard: true,
+      wineSetup: true,
+      tutorials: true,
       restaurant: true,
       restaurants: false,
       waiterInvites: true,
@@ -6954,6 +7016,9 @@ const MEMBERSHIP_UI_GATES = {
       progress: true,
       skills: true,
       messages: true,
+      leaderboard: true,
+      wineSetup: true,
+      tutorials: true,
       restaurant: true,
       restaurants: true,
       waiterInvites: true,
@@ -6983,6 +7048,9 @@ const MEMBERSHIP_UI_GATES = {
       progress: true,
       skills: true,
       messages: true,
+      leaderboard: true,
+      wineSetup: true,
+      tutorials: true,
       restaurant: true,
       restaurants: true,
       waiterInvites: true,
@@ -7008,6 +7076,73 @@ const MEMBERSHIP_UI_GATES = {
 
 function getUiGates(role) {
   return MEMBERSHIP_UI_GATES[role] || MEMBERSHIP_UI_GATES.waiter;
+}
+
+/** Cog dropdown visibility from the signed-in membership role profile — not shared with other roles. */
+function getPremiumCogVisibility(profileLike = null) {
+  const profile = profileLike || appState?.profile || null;
+  const role = normalizeMembershipRole(profile) || "waiter";
+  const nav = getUiGates(role).nav || {};
+  return {
+    role,
+    homepage: nav.home !== false,
+    messages: !!nav.messages,
+    // Waiter-exclusive surface in product terms: standing / rank live here too.
+    leaderboard: !!nav.leaderboard,
+    wineSetup: !!nav.wineSetup,
+    tutorials: !!nav.tutorials,
+    managerBoard: !!nav.managerBoard,
+    profile: !!nav.profile,
+    logout: true,
+  };
+}
+
+function applyPremiumCogMenu(options = {}) {
+  const {
+    isDemoCockpit = false,
+    hasSession = !!appState?.session?.user,
+  } = options;
+  const cog = getPremiumCogVisibility(appState?.profile);
+  const premiumSignupBtn = document.getElementById("btnPremiumSignupMenu");
+  const homepageBtn = document.getElementById("btnCockpitHomepage");
+  const messagesBtn = document.getElementById("btnOpenMessages");
+  const leaderboardBtn = document.getElementById("btnWaiterPerformanceLeaderboard");
+  const wineSetupBtn = document.getElementById("btnPremiumWineSetup");
+  const tutorialBtn = document.getElementById("btnTutorial");
+  const managerBoardBtn = document.getElementById("btnManagerBoard");
+  const profileBtn = document.getElementById("btnOpenProfile");
+  const logoutBtn = document.getElementById("btnLogoutPremium");
+
+  const setCogItem = (btn, show, label = null) => {
+    if (!btn) return;
+    if (label != null) btn.textContent = label;
+    btn.classList.toggle("hidden", !show);
+    btn.style.display = show ? "" : "none";
+  };
+
+  if (isDemoCockpit) {
+    setCogItem(premiumSignupBtn, true);
+    setCogItem(homepageBtn, true);
+    setCogItem(messagesBtn, false);
+    setCogItem(leaderboardBtn, false);
+    setCogItem(wineSetupBtn, false);
+    setCogItem(tutorialBtn, false);
+    setCogItem(managerBoardBtn, false);
+    setCogItem(profileBtn, false);
+    setCogItem(logoutBtn, !!hasSession);
+    return cog;
+  }
+
+  setCogItem(premiumSignupBtn, false);
+  setCogItem(homepageBtn, cog.homepage);
+  setCogItem(messagesBtn, cog.messages);
+  setCogItem(leaderboardBtn, cog.leaderboard);
+  setCogItem(wineSetupBtn, cog.wineSetup, "Wine Setup");
+  setCogItem(tutorialBtn, cog.tutorials);
+  setCogItem(managerBoardBtn, cog.managerBoard);
+  setCogItem(profileBtn, cog.profile);
+  setCogItem(logoutBtn, cog.logout && hasSession);
+  return cog;
 }
 
 function setVisible(id, show) {
@@ -7063,6 +7198,8 @@ function applyRoleTemplateGates() {
   window.requirePower = requirePower;
 
   const idsToHideForWaiter = [
+    // Manager restaurant-setup entry points only. Cog items are owned by
+    // MEMBERSHIP_UI_GATES via applyPremiumCogMenu / getPremiumCogVisibility.
     "btnPremiumWineSetup",
     "btnTutorial",
     "btnWineSetup",
@@ -7083,6 +7220,16 @@ function applyRoleTemplateGates() {
     el.style.display = gates.powers.canManageRestaurant ? "" : "none";
     el.style.pointerEvents = gates.powers.canManageRestaurant ? "" : "none";
   });
+
+  // Re-apply cog from waiter/manager profile after template display:none gates.
+  const isDemoCockpit =
+    appMode === "demo" &&
+    !document.getElementById("screenGameDemo")?.classList.contains("hidden");
+  applyPremiumCogMenu({
+    isDemoCockpit,
+    hasSession: !!appState?.session?.user,
+  });
+  applyWineSetupAccessMode();
 }
 
 function applyWaiterTemplateGates() {
@@ -7446,6 +7593,9 @@ async function deleteParentRestaurantWine(wineId) {
 }
 
 async function openPremiumSetupScreen() {
+  const caps = getPremiumRoleCapabilities(appState?.profile || null);
+  if (!caps.canOpenSetupPremium) return;
+
   try {
     await ensureManagerRestaurantChoices?.();
     await ensureActiveRestaurantValid?.();
@@ -7454,6 +7604,7 @@ async function openPremiumSetupScreen() {
   }
 
   showScreen("screenSetupPremium");
+  applyWineSetupAccessMode();
 
   const backBtn = document.getElementById("btnBackHomeFromSetupPremium");
   if (backBtn && !backBtn.__bcBound) {
@@ -7471,7 +7622,11 @@ async function openPremiumSetupScreen() {
     });
   }
 
-  const restaurantId = getManagerActiveRestaurantId() || getRestaurantIdOrNull();
+  const restaurantId =
+    getManagerActiveRestaurantId() ||
+    getRestaurantIdOrNull() ||
+    appState?.profile?.restaurant_id ||
+    null;
   if (!restaurantId) {
     try {
       const fallbackWines = await fetchAnyAccessibleParentWines();
@@ -7485,6 +7640,7 @@ async function openPremiumSetupScreen() {
       renderWineCount(cachedFallback.length);
       renderWineTable(cachedFallback.slice(0, WINE_LIMIT));
     }
+    applyWineSetupAccessMode();
     return;
   }
 
@@ -7539,6 +7695,7 @@ async function openPremiumSetupScreen() {
   if (addBtn && !addBtn.__bcBound) {
     addBtn.__bcBound = true;
     addBtn.addEventListener("click", async () => {
+      if (!canEditPremiumWineList()) return;
       const name = (document.getElementById("wineNameInputPremium")?.value || "").trim();
       const varietal = (document.getElementById("wineVarietalInputPremium")?.value || "").trim();
       const process = (document.getElementById("processInputPremium")?.value || "").trim();
@@ -7602,6 +7759,7 @@ async function openPremiumSetupScreen() {
     if (!root || root.__bcBound) return;
     root.__bcBound = true;
     root.addEventListener("click", async (ev) => {
+      if (!canEditPremiumWineList()) return;
       const btn = ev.target?.closest?.("[data-wine-del]");
       const wineId = btn?.getAttribute?.("data-wine-del");
       if (!wineId) return;
@@ -7622,6 +7780,7 @@ async function openPremiumSetupScreen() {
   };
   bindDeleteDelegation(body);
   bindDeleteDelegation(cards);
+  applyWineSetupAccessMode();
 
 }
 
@@ -17606,6 +17765,13 @@ function renderProfileScreen() {
   }
 
   void renderProfileSkillDashboard();
+  const weeklyReportPanel = document.getElementById("profileWeeklyReportPanel");
+  if (weeklyReportPanel) {
+    const caps = getPremiumRoleCapabilities(profile);
+    const showWeekly = !!caps.canAccessManagerBoard;
+    weeklyReportPanel.classList.toggle("hidden", !showWeekly);
+    weeklyReportPanel.style.display = showWeekly ? "" : "none";
+  }
   const multiCard = document.getElementById("profileMultiRestaurantCard");
   if (multiCard) {
     const caps = getPremiumRoleCapabilities(profile);
@@ -21541,6 +21707,7 @@ async function routePremium(reason = "manual") {
   routingLock = true;
 
   const was = appMode;
+  leaveDemoHarnessForPremiumAuth(`routePremium:${reason}`);
 
   try {
     if (isHardLoggedOut()) return;
@@ -21940,37 +22107,39 @@ async function decideRoute(reason = "decideRoute") {
       return;
     }
 
-    // Mobile demo must stay in the V2 demo harness after sign-in.
-    if (!isLocalGroupManagerProfile(appState.profile) && (isV2DemoRequested() || isMobileDemoSurfaceActive())) {
-      await routeDemo(`decideRoute.v2_demo_requested:${reason}`);
-      return;
-    }
-
     // 2) HARD RULE: restaurant membership => Premium always
+    // (must beat sticky BC_V2_DEMO / mobile demo latch from anonymous play)
     const activePremiumRestaurantId =
       appState.profile?.restaurant_id ||
       appState.activeRestaurantId ||
       getManagerActiveRestaurantId?.() ||
       null;
     if (activePremiumRestaurantId) {
+      leaveDemoHarnessForPremiumAuth(`decideRoute.restaurant:${reason}`);
       setAuthIntent("premium");
       await routePremium(`decideRoute.restaurant:${reason}`);
       return;
     }
 
-    // 3) No restaurant:
-    // - standard demo users should go straight into Demo
-    // - premium-capable users can stay on the parent shell for setup
+    // 3) Premium-capable accounts without a restaurant stay on parent setup —
+    // do not trap them in the anonymous demo shell.
     const entitlement = canAccessPremium(appState.profile || {});
-    if (!entitlement.ok) {
-      await routeDemo(`decideRoute.no_restaurant.demo:${reason}`);
+    if (entitlement.ok) {
+      leaveDemoHarnessForPremiumAuth(`decideRoute.premium_capable:${reason}`);
+      routeHomeShell(
+        `decideRoute.no_restaurant:${reason}`,
+        "Finish login or Premium setup on the parent screen before entering the game."
+      );
       return;
     }
 
-    routeHomeShell(
-      `decideRoute.no_restaurant:${reason}`,
-      "Finish login or Premium setup on the parent screen before entering the game."
-    );
+    // 4) Standard / demo waiters may continue in the V2 demo harness after sign-in.
+    if (!isLocalGroupManagerProfile(appState.profile) && (isV2DemoRequested() || isMobileDemoSurfaceActive())) {
+      await routeDemo(`decideRoute.v2_demo_requested:${reason}`);
+      return;
+    }
+
+    await routeDemo(`decideRoute.no_restaurant.demo:${reason}`);
   } catch (e) {
     console.error(e);
     closeHud();
@@ -22589,10 +22758,9 @@ function renderHud() {
   if (msgBtn) msgBtn.classList.remove("hidden");
   const leaderboardBtn = document.getElementById("btnWaiterPerformanceLeaderboard");
   if (leaderboardBtn) {
-    leaderboardBtn.classList.toggle(
-      "hidden",
-      !(caps.canAccessManagerBoard || String(normalizedRole).toLowerCase() === "waiter")
-    );
+    const cog = getPremiumCogVisibility(profile);
+    leaderboardBtn.classList.toggle("hidden", !cog.leaderboard);
+    leaderboardBtn.style.display = cog.leaderboard ? "" : "none";
   }
 
   const badge = document.getElementById("premiumBadge");
@@ -22927,7 +23095,18 @@ async function submitAuth() {
       if (pr === "waiter") setRole("waiter");
       else setRole("manager");
 
+      const activeRestaurantId =
+        appState.profile?.restaurant_id ||
+        appState.activeRestaurantId ||
+        getManagerActiveRestaurantId?.() ||
+        null;
+      const premiumCapable = canAccessPremium(appState.profile || {}).ok;
+
+      // Restaurant / premium waiters must leave the anonymous demo shell.
+      // Only keep mobile demo after login when there is no restaurant membership.
       if (
+        !activeRestaurantId &&
+        !premiumCapable &&
         !isLocalGroupManagerEmail(email) &&
         document.documentElement?.dataset?.bcMobileEnv === "true" &&
         (isV2DemoRequested() || appMode === "demo")
@@ -22936,6 +23115,10 @@ async function submitAuth() {
         openMobileDemoCockpit("login_mobile_demo");
         setMsg("authMsg", "", "normal");
         return;
+      }
+
+      if (activeRestaurantId || premiumCapable) {
+        leaveDemoHarnessForPremiumAuth("login.ok.premium_waiter");
       }
 
       await decideRoute("login.ok.decideRoute");
@@ -23693,6 +23876,25 @@ setDebug({ step: "boot.ready", time: new Date().toISOString(), supabaseUrl: impo
 async function enforceAuthRoute() {
   const { data } = await supabase.auth.getSession();
   const session = data?.session || null;
+
+  if (session) {
+    // Authed premium/restaurant users must never be forced back into the demo shell
+    // by a leftover Godot/demo latch from anonymous play.
+    try {
+      if (!appState?.profile) await loadAuthedState("enforceAuthRoute.session");
+    } catch {}
+    const rid =
+      appState?.profile?.restaurant_id ||
+      appState?.activeRestaurantId ||
+      getManagerActiveRestaurantId?.() ||
+      null;
+    const premiumCapable = canAccessPremium(appState?.profile || {}).ok;
+    if (rid || premiumCapable) {
+      leaveDemoHarnessForPremiumAuth("enforceAuthRoute.premium_session");
+      console.log("[ROUTE] session present -> allow premium flow");
+      return;
+    }
+  }
 
   if (__BC_GODOT_SESSION_RECOVER__ || readGodotSessionLock() || (__BC_BOOT_LOGGED_OUT__ && isV2DemoRequested())) {
     console.warn("[ROUTE] resuming Godot demo after interrupt");

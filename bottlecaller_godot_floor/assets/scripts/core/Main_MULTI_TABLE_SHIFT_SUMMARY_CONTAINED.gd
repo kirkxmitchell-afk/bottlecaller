@@ -400,6 +400,7 @@ var encounter_table_id = ""
 
 var encounter_panel: Panel
 var encounter_title_label: Label
+var encounter_hint_host: Control
 var encounter_hint_label: Label
 var encounter_response_label: Label
 
@@ -411,6 +412,7 @@ var review_continue_button: Button
 var walk_away_button: Button
 var offer_food_button: Button
 var offer_wine_button: Button
+var offer_bill_button: Button
 
 
 # -------------------------------------------------------------------
@@ -457,6 +459,15 @@ var chef_ready_timer: Timer
 var chef_annoyed_timer: Timer
 var chef_unhappy_timer: Timer
 var mise_restock_timer: Timer
+var scullery_timer: Timer
+var scullery_unhappy_timer: Timer
+
+## One cleared table = one dish set. Two sets = full visual.
+var scullery_dish_sets = 0
+const SCULLERY_MAX_DISH_SETS = 2
+## Cleaning one dish set. Second drop waits in capacity without restarting.
+var scullery_clean_seconds = 4.0
+var scullery_full_unhappy_seconds = 6.0
 
 
 # -------------------------------------------------------------------
@@ -874,6 +885,12 @@ func _create_ready_table_session(table) -> Dictionary:
 		"service_phase": "ready_for_review",
 		"wine_opportunity_pending": false,
 		"wine_opportunity_number": 1,
+		"wine_offer_attempts": 0,
+		"food_offer_reopened": false,
+		"post_wine_follow_up": false,
+		"bill_phase_service": false,
+		"mid_service_offer": false,
+		"cross_offer_return_phase": "",
 		"allowed_follow_ups": [],
 		"required_skill_id": "",
 
@@ -1491,6 +1508,12 @@ func _create_active_guest_session(
 		"service_phase": "ready_for_review",
 		"wine_opportunity_pending": false,
 		"wine_opportunity_number": 1,
+		"wine_offer_attempts": 0,
+		"food_offer_reopened": false,
+		"post_wine_follow_up": false,
+		"bill_phase_service": false,
+		"mid_service_offer": false,
+		"cross_offer_return_phase": "",
 		"allowed_follow_ups": [],
 		"required_skill_id": "",
 
@@ -1971,6 +1994,8 @@ func _handle_table_arrival(
 		"waiting_to_greet":
 			if bool(session.get("wine_opportunity_pending", false)):
 				_open_pending_wine_opportunity(table_id)
+			elif bool(session.get("post_wine_follow_up", false)):
+				_open_post_wine_service_panel(table_id)
 			else:
 				_open_guest_encounter(
 					table_id
@@ -1979,20 +2004,28 @@ func _handle_table_arrival(
 			_open_pending_wine_opportunity(table_id)
 
 		"order_pending_pos":
-			_set_prompt(
-				"Order selected for "
-				+ table_id
-				+ ". Go to POS to place the order."
-			)
+			if _try_open_mid_service_cross_offer(table_id):
+				pass
+			else:
+				_set_prompt(
+					"Order selected for "
+					+ table_id
+					+ ". Go to POS to place the order."
+				)
 
 		"service_active":
-			_explain_active_table_tasks(
-				table_id
-			)
+			if _try_open_mid_service_cross_offer(table_id):
+				pass
+			else:
+				_explain_active_table_tasks(
+					table_id
+				)
 
 		"waiting_for_mise":
 			if mise_inventory_filled:
 				_assign_mise_to_table(table_id)
+			elif _try_open_mid_service_cross_offer(table_id):
+				pass
 			else:
 				_set_prompt(
 					table_id
@@ -2006,11 +2039,15 @@ func _handle_table_arrival(
 			):
 				if mise_inventory_filled:
 					_assign_mise_to_table(table_id)
+				elif _try_open_mid_service_cross_offer(table_id):
+					pass
 				else:
 					_set_prompt(
 						table_id
 						+ " is waiting for cutlery. Collect Mise en Place, then return."
 					)
+			elif _try_open_mid_service_cross_offer(table_id):
+				pass
 			else:
 				_set_prompt(
 					"The guests are still eating."
@@ -2046,11 +2083,7 @@ func _handle_table_arrival(
 			)
 
 		"waiting_for_bill":
-			_set_prompt(
-				"Bill selected for "
-				+ table_id
-				+ ". Go to POS."
-			)
+			_open_bill_phase_service_panel(table_id)
 
 		"waiting_for_bill_close":
 			_set_prompt(
@@ -2186,25 +2219,13 @@ func _open_guest_encounter(
 	if review_continue_button != null:
 		review_continue_button.visible = false
 
-	# Review must happen before greeting. Clues only — no correct route labels.
+	# One panel: guest title + review (pace/context + meal) + greeting choices.
+	# No separate "Continue to Greeting" step.
 	if not bool(session.get("guest_reviewed", false)):
-		encounter_stage = "review"
-		session["service_phase"] = "ready_for_review"
-		table_sessions[table_id] = session
-		var clues = _get_guest_review_clues(str(session.get("guest_id", "")))
-		if clues.is_empty() and profile != null:
-			clues = [str(profile.guest_hint)]
-		encounter_hint_label.text = "\n".join(PackedStringArray(clues))
-		encounter_response_label.text = (
-			"Review the table. Clues only — decide the greeting yourself."
-		)
-		if review_continue_button != null:
-			review_continue_button.visible = true
-		_position_encounter_panel_above_table(table)
-		encounter_panel.visible = true
-		_set_prompt("Review the guest before you greet them.")
-		return
-
+		session["guest_reviewed"] = true
+		session["review_count"] = int(session.get("review_count", 0)) + 1
+	_store_guest_meal_on_session(session)
+	table_sessions[table_id] = session
 	_show_greeting_stage_after_review(session)
 
 
@@ -2213,16 +2234,7 @@ func _show_greeting_stage_after_review(session: Dictionary) -> void:
 	session["service_phase"] = "reviewed"
 	table_sessions[encounter_table_id] = session
 
-	var clues = _get_guest_review_clues(str(session.get("guest_id", "")))
-	if clues.is_empty():
-		var profile = session.get("profile", null)
-		if profile != null:
-			encounter_hint_label.text = str(profile.guest_hint)
-		else:
-			encounter_hint_label.text = ""
-	else:
-		encounter_hint_label.text = "\n".join(PackedStringArray(clues))
-
+	encounter_hint_label.text = _format_guest_review_body(str(session.get("guest_id", "")), null)
 	encounter_response_label.text = "How will you greet this table?"
 	_set_greeting_buttons_visible(true)
 	if review_continue_button != null:
@@ -2230,23 +2242,27 @@ func _show_greeting_stage_after_review(session: Dictionary) -> void:
 	if bool(session.get("aperitif_opportunity_used", false)):
 		greet_aperitif_button.visible = false
 	_set_follow_up_buttons_visible(false)
+	_layout_encounter_panel_for_stage("greeting")
 
 	var table = session.get("table", null)
 	if table != null:
 		_position_encounter_panel_above_table(table)
 	encounter_panel.visible = true
-	_set_prompt("Read the table and choose how to greet them.")
+	_set_prompt("Read the table, the meal, and choose how to greet them.")
 
 
 func _continue_after_guest_review() -> void:
-	if not encounter_is_open or encounter_stage != "review":
+	# Legacy button path — review is now part of the greeting panel.
+	if not encounter_is_open:
 		return
 	if not table_sessions.has(encounter_table_id):
 		return
 	var session = table_sessions[encounter_table_id]
-	session["guest_reviewed"] = true
-	session["review_count"] = int(session.get("review_count", 0)) + 1
+	if not bool(session.get("guest_reviewed", false)):
+		session["guest_reviewed"] = true
+		session["review_count"] = int(session.get("review_count", 0)) + 1
 	session["service_phase"] = "reviewed"
+	_store_guest_meal_on_session(session)
 	table_sessions[encounter_table_id] = session
 	_show_greeting_stage_after_review(session)
 
@@ -2258,22 +2274,22 @@ func _get_guest_review_clues(guest_id: String) -> PackedStringArray:
 			return PackedStringArray([
 				"They appear relaxed and settled in.",
 				"They are taking time over the menu.",
-				"They seem interested in the steak selection.",
 				"They do not appear to be in a hurry.",
+				"The evening looks unhurried rather than decisive.",
 			])
 		"african_older_gentleman":
 			return PackedStringArray([
 				"This guest visits regularly.",
-				"They usually order the same fish dish.",
 				"They know the menu well.",
 				"They prefer confident, efficient service.",
+				"They look ready to get on with the evening.",
 			])
 		"african_regular_table":
 			return PackedStringArray([
 				"This couple visits regularly.",
-				"They usually share the fish.",
 				"They know the menu and the room.",
 				"They prefer confident, efficient service.",
+				"The table looks settled rather than browsing.",
 			])
 		"skeptic_reader":
 			return PackedStringArray([
@@ -2291,6 +2307,236 @@ func _get_guest_review_clues(guest_id: String) -> PackedStringArray:
 			])
 		_:
 			return PackedStringArray()
+
+
+func _get_guest_review_context(guest_id: String) -> String:
+	match guest_id:
+		"blonde_date":
+			return "Date night — slow dinner, not rushing the menu."
+		"african_older_gentleman":
+			return "Comfortable regular — measured pace, already decided."
+		"african_regular_table":
+			return "Familiar regulars — unhurried, know the room."
+		"skeptic_reader":
+			return "Careful reader — will test anything that sounds like a pitch."
+		"skeptic_v1":
+			return "Direct guest — wants to get on with dinner."
+		_:
+			return ""
+
+
+func _get_guest_meal_intent(guest_id: String) -> Dictionary:
+	match guest_id:
+		"blonde_date":
+			return {
+				"dish": "Dry-aged rib-eye steak with peppercorn sauce",
+				"description": "",
+				"certainty": "likely",
+			}
+		"african_older_gentleman":
+			return {
+				"dish": "Grilled kingklip with lemon butter and seasonal vegetables",
+				"description": "",
+				"certainty": "confirmed",
+			}
+		"african_regular_table":
+			return {
+				"dish": "Grilled line fish with lemon butter",
+				"description": "",
+				"certainty": "likely",
+			}
+		"skeptic_reader":
+			return {
+				"dish": "Slow-roasted lamb with rosemary jus",
+				"description": "",
+				"certainty": "considering",
+			}
+		"skeptic_v1":
+			return {
+				"dish": "Chargrilled chicken with a creamy herb sauce",
+				"description": "",
+				"certainty": "confirmed",
+			}
+		_:
+			return {}
+
+
+func _meal_heading_for_certainty(certainty: String) -> String:
+	match certainty:
+		"confirmed":
+			return "ORDERING"
+		"considering":
+			return "CONSIDERING MEAL"
+		_:
+			return "LIKELY MEAL"
+
+
+func _format_guest_review_body(guest_id: String, profile = null) -> String:
+	# Context, meal heading, dish — separate lines so nothing gets clipped mid-glyph.
+	var lines := PackedStringArray()
+	var context_line = _get_guest_review_context(guest_id)
+	if context_line == "" and profile != null:
+		context_line = str(profile.guest_hint)
+	if context_line != "":
+		lines.append(context_line)
+	var meal = _get_guest_meal_intent(guest_id)
+	var dish = str(meal.get("dish", ""))
+	if dish != "":
+		lines.append(_meal_heading_for_certainty(str(meal.get("certainty", "likely"))))
+		lines.append(dish)
+	return "\n".join(lines)
+
+
+func _format_guest_greeting_hint(guest_id: String) -> String:
+	return _format_guest_review_body(guest_id, null)
+
+
+func _store_guest_meal_on_session(session: Dictionary) -> void:
+	var meal = _get_guest_meal_intent(str(session.get("guest_id", "")))
+	var dish = str(meal.get("dish", ""))
+	if dish == "":
+		return
+	session["meal_dish"] = dish
+	session["meal_certainty"] = str(meal.get("certainty", "likely"))
+	session["meal_description"] = str(meal.get("description", ""))
+
+
+func _estimate_wrapped_label_height(
+	label: Label,
+	width: float,
+	font_size: float,
+	min_h: float,
+	max_h: float
+) -> float:
+	if label == null:
+		return min_h
+	var raw = str(label.text).strip_edges()
+	if raw == "":
+		return min_h
+	# Conservative wrap estimate so long meal lines never sit under buttons.
+	var chars_per_line = maxi(18, int(width / maxf(6.0, font_size * 0.55)))
+	var visual_lines = 0
+	for paragraph in raw.split("\n"):
+		var chunk = str(paragraph)
+		if chunk.strip_edges() == "":
+			visual_lines += 1
+			continue
+		visual_lines += maxi(1, int(ceili(float(chunk.length()) / float(chars_per_line))))
+	var line_h = font_size + 5.0
+	return clampf(float(visual_lines) * line_h + 6.0, min_h, max_h)
+
+
+func _layout_encounter_panel_for_stage(stage: String) -> void:
+	# Compact card sized from real text so meal/reply lines are never covered.
+	if encounter_panel == null:
+		return
+
+	var is_follow_up = stage == "follow_up"
+	var panel_w = 440.0 if is_follow_up else 460.0
+	var side = 12.0
+	var content_w = panel_w - side * 2.0
+
+	if review_continue_button != null:
+		review_continue_button.visible = false
+
+	if encounter_title_label != null:
+		encounter_title_label.position = Vector2(side, 8)
+		encounter_title_label.size = Vector2(content_w, 26)
+		encounter_title_label.add_theme_font_size_override("font_size", 22)
+
+	var hint_font = 14.0 if is_follow_up else 15.0
+	var hint_h = _estimate_wrapped_label_height(
+		encounter_hint_label,
+		content_w,
+		hint_font,
+		34.0 if is_follow_up else 54.0,
+		110.0
+	)
+	if encounter_hint_host != null:
+		encounter_hint_host.position = Vector2(side, 36)
+		encounter_hint_host.size = Vector2(content_w, hint_h)
+		# Never clip meal/context glyphs — grow the host instead.
+		encounter_hint_host.clip_contents = false
+	if encounter_hint_label != null:
+		encounter_hint_label.position = Vector2.ZERO
+		encounter_hint_label.size = Vector2(content_w, hint_h)
+		encounter_hint_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+		encounter_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		encounter_hint_label.clip_text = false
+		encounter_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		encounter_hint_label.add_theme_font_size_override("font_size", int(hint_font))
+		encounter_hint_label.add_theme_color_override(
+			"font_color",
+			Color(0.92, 0.90, 0.84, 1.0)
+		)
+
+	var buttons_y = 36.0 + hint_h + 12.0
+	var action_buttons: Array = []
+	if is_follow_up:
+		action_buttons = [
+			walk_away_button,
+			offer_food_button,
+			offer_wine_button,
+			offer_bill_button,
+		]
+	else:
+		action_buttons = [
+			greet_wine_button,
+			greet_aperitif_button,
+			greet_food_button,
+		]
+	_pack_encounter_action_buttons(action_buttons, buttons_y, panel_w)
+
+	var response_font = 13.0
+	var response_h = _estimate_wrapped_label_height(
+		encounter_response_label,
+		content_w,
+		response_font,
+		28.0,
+		72.0
+	)
+	var response_y = buttons_y + 48.0
+	if encounter_response_label != null:
+		encounter_response_label.position = Vector2(side, response_y)
+		encounter_response_label.size = Vector2(content_w, response_h)
+		encounter_response_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+		encounter_response_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		encounter_response_label.clip_text = false
+		encounter_response_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		encounter_response_label.add_theme_font_size_override("font_size", int(response_font))
+		encounter_response_label.add_theme_color_override(
+			"font_color",
+			Color(0.82, 0.78, 0.70, 1.0)
+		)
+
+	# Keep panel clip on, but size tall enough that no text sits under the edge.
+	encounter_panel.size = Vector2(panel_w, response_y + response_h + 14.0)
+
+
+func _pack_encounter_action_buttons(
+	buttons: Array,
+	row_y: float,
+	panel_w: float
+) -> void:
+	var visible_buttons: Array = []
+	for button in buttons:
+		if button != null and bool(button.visible):
+			visible_buttons.append(button)
+	var count = visible_buttons.size()
+	if count <= 0:
+		return
+
+	var side = 12.0
+	var gap = 8.0
+	var avail = panel_w - side * 2.0
+	var btn_w = minf(148.0, (avail - gap * float(count - 1)) / float(count))
+	var total_w = float(count) * btn_w + float(count - 1) * gap
+	var start_x = (panel_w - total_w) * 0.5
+	for i in range(count):
+		var button: Button = visible_buttons[i]
+		button.size = Vector2(btn_w, 40)
+		button.position = Vector2(start_x + float(i) * (btn_w + gap), row_y)
+		button.add_theme_font_size_override("font_size", 15)
 
 
 func _rate_greeting_route(guest_id: String, choice: String) -> String:
@@ -2322,6 +2568,10 @@ func _rate_greeting_route(guest_id: String, choice: String) -> String:
 
 
 func _get_known_food_intent(guest_id: String) -> String:
+	var meal = _get_guest_meal_intent(guest_id)
+	var dish = str(meal.get("dish", ""))
+	if dish != "":
+		return dish
 	match guest_id:
 		"blonde_date":
 			return "steak"
@@ -2396,6 +2646,158 @@ func _open_pending_wine_opportunity(table_id: String) -> void:
 	_set_prompt(
 		"Wine selection could not open. Return to the table shortly."
 	)
+
+
+func _session_food_fill_pending(session: Dictionary) -> bool:
+	return (
+		bool(session.get("food_ordered", false))
+		and not bool(session.get("food_delivered", false))
+	)
+
+
+func _session_wine_fill_pending(session: Dictionary) -> bool:
+	return (
+		bool(session.get("wine_ordered", false))
+		and not bool(session.get("wine_delivered", false))
+	)
+
+
+func _get_mid_service_cross_offers(session: Dictionary) -> Array:
+	# While one side is still being filled, the other offer stays available.
+	var allowed: Array = []
+	var food_pending = _session_food_fill_pending(session)
+	var wine_pending = _session_wine_fill_pending(session)
+	if food_pending and not bool(session.get("wine_ordered", false)):
+		if not bool(session.get("wine_opportunity_pending", false)):
+			allowed.append("offer_wine")
+	if wine_pending and not bool(session.get("food_ordered", false)):
+		allowed.append("offer_food")
+	return allowed
+
+
+func _try_open_mid_service_cross_offer(table_id: String) -> bool:
+	if not table_sessions.has(table_id):
+		return false
+	var session = table_sessions[table_id]
+	var allowed = _get_mid_service_cross_offers(session)
+	if allowed.is_empty():
+		return false
+
+	session["mid_service_offer"] = true
+	session["bill_phase_service"] = false
+	session["post_wine_follow_up"] = false
+	session["cross_offer_return_phase"] = str(session.get("phase", ""))
+	session["allowed_follow_ups"] = allowed
+	if allowed.has("offer_food"):
+		session["food_offer_reopened"] = true
+	table_sessions[table_id] = session
+
+	var hint = "Another order is still possible while this table waits."
+	if allowed.has("offer_wine") and not allowed.has("offer_food"):
+		hint = "Food is on the way. You can still offer wine."
+	elif allowed.has("offer_food") and not allowed.has("offer_wine"):
+		hint = "Wine is on the way. You can still offer food."
+	_open_service_follow_up_panel(
+		table_id,
+		hint,
+		"Offer the other item, or walk away and keep serving."
+	)
+	return true
+
+
+func _restore_mid_service_phase(table_id: String, session: Dictionary) -> void:
+	var return_phase = str(session.get("cross_offer_return_phase", ""))
+	session["mid_service_offer"] = false
+	session["food_offer_reopened"] = false
+	session["cross_offer_return_phase"] = ""
+	if return_phase != "":
+		session["phase"] = return_phase
+	table_sessions[table_id] = session
+	_refresh_table_status(table_id)
+
+
+func _open_post_wine_service_panel(table_id: String) -> void:
+	if not table_sessions.has(table_id):
+		return
+	var session = table_sessions[table_id]
+	session["post_wine_follow_up"] = true
+	session["food_offer_reopened"] = true
+	session["bill_phase_service"] = false
+	var allowed: Array = []
+	if not bool(session.get("food_ordered", false)):
+		allowed.append("offer_food")
+	if allowed.is_empty():
+		session["post_wine_follow_up"] = false
+		session["food_offer_reopened"] = false
+		table_sessions[table_id] = session
+		_set_prompt(
+			"No further food offer for "
+			+ table_id
+			+ ". Continue service."
+		)
+		return
+	session["allowed_follow_ups"] = allowed
+	table_sessions[table_id] = session
+	_open_service_follow_up_panel(
+		table_id,
+		"Wine opportunity closed. Food is open again.",
+		"Offer food, or walk away and return later."
+	)
+
+
+func _open_bill_phase_service_panel(table_id: String) -> void:
+	if not table_sessions.has(table_id):
+		return
+	var session = table_sessions[table_id]
+	session["bill_phase_service"] = true
+	session["post_wine_follow_up"] = false
+	var allowed: Array = []
+	if not bool(session.get("food_ordered", false)):
+		allowed.append("offer_food")
+	if not bool(session.get("wine_ordered", false)):
+		allowed.append("offer_wine")
+	allowed.append("offer_bill")
+	session["allowed_follow_ups"] = allowed
+	table_sessions[table_id] = session
+	var hint = "Bill phase — offer another item, or offer the bill."
+	if bool(session.get("food_ordered", false)) and bool(session.get("wine_ordered", false)):
+		hint = "Service is complete. Offer the bill when ready."
+	_open_service_follow_up_panel(
+		table_id,
+		hint,
+		"Choose an offer, or walk away and return later."
+	)
+
+
+func _open_service_follow_up_panel(
+	table_id: String,
+	hint_text: String,
+	response_text: String
+) -> void:
+	if not table_sessions.has(table_id):
+		return
+	var session = table_sessions[table_id]
+	var profile = session.get("profile", null)
+	var table = session.get("table", null)
+
+	encounter_is_open = true
+	encounter_table_id = table_id
+	if table != null and table.has_method("mark_in_encounter"):
+		table.mark_in_encounter()
+
+	if profile != null:
+		encounter_title_label.text = str(profile.guest_display_name)
+	else:
+		encounter_title_label.text = table_id
+
+	encounter_hint_label.text = hint_text
+	encounter_response_label.text = response_text
+	_set_greeting_buttons_visible(false)
+	_show_encounter_follow_up_panel(session)
+	if table != null:
+		_position_encounter_panel_above_table(table)
+	encounter_panel.visible = true
+	_set_prompt(hint_text)
 
 
 func _evaluate_object_path(
@@ -2550,13 +2952,31 @@ func _get_offer_access(
 	var greeting = str(session.get("greeting_choice", ""))
 	var path = _evaluate_object_path(greeting, choice)
 	var path_ok = bool(path.get("object_success", false))
+	var food_reopened = bool(session.get("food_offer_reopened", false))
+	var bill_phase = bool(session.get("bill_phase_service", false))
+	var mid_service = bool(session.get("mid_service_offer", false))
 	if (
 		bool(session.get("greeting_recovered", false))
 		and Array(session.get("allowed_follow_ups", [])).has(choice)
 	):
 		path_ok = true
+	if food_reopened or bill_phase or mid_service:
+		path_ok = true
 
 	if choice == "offer_food":
+		if food_reopened or bill_phase or mid_service:
+			return {
+				"accepted": true,
+				"reason": (
+					"bill_phase_food_offer"
+					if bill_phase
+					else (
+						"mid_service_food_offer"
+						if mid_service
+						else "food_reopened_after_wine"
+					)
+				),
+			}
 		if not path_ok and greeting != "greet_aperitif":
 			return {
 				"accepted": false,
@@ -2586,6 +3006,15 @@ func _get_offer_access(
 		}
 
 	if choice == "offer_wine":
+		if bill_phase or mid_service:
+			return {
+				"accepted": true,
+				"reason": (
+					"bill_phase_wine_offer"
+					if bill_phase
+					else "mid_service_wine_offer"
+				),
+			}
 		if not path_ok:
 			return {
 				"accepted": false,
@@ -2767,6 +3196,21 @@ func _choose_follow_up(
 	):
 		session["object_path_kind"] = "skill_recovery"
 		session["object_success"] = true
+	if (
+		choice in ["offer_food", "offer_wine"]
+		and (
+			bool(session.get("food_offer_reopened", false))
+			or bool(session.get("bill_phase_service", false))
+			or bool(session.get("mid_service_offer", false))
+		)
+	):
+		if bool(session.get("bill_phase_service", false)):
+			session["object_path_kind"] = "bill_phase"
+		elif bool(session.get("mid_service_offer", false)):
+			session["object_path_kind"] = "mid_service"
+		else:
+			session["object_path_kind"] = "food_reopen"
+		session["object_success"] = true
 	if bool(path.get("aperitif_opportunity_used", false)):
 		# Opportunity is only consumed when the conversion offer is accepted.
 		pass
@@ -2804,8 +3248,41 @@ func _choose_follow_up(
 			+ guest_reply
 		)
 
+	if choice == "offer_bill":
+		session["bill_phase_service"] = false
+		session["phase"] = "waiting_for_bill"
+		table_sessions[table_id] = session
+		focused_table_id = table_id
+		_close_encounter_panel()
+		_set_prompt(
+			"Bill offered for "
+			+ table_id
+			+ ". Go to POS to print it."
+		)
+		return
+
 	if choice == "walk_away":
 		walk_aways += 1
+		if bool(session.get("bill_phase_service", false)):
+			session["bill_phase_service"] = false
+			session["phase"] = "waiting_for_bill"
+			table_sessions[table_id] = session
+			_close_encounter_panel()
+			_set_prompt(
+				guest_reply
+				+ " Bill still waiting — return to the table or go to POS."
+			)
+			return
+
+		if bool(session.get("mid_service_offer", false)):
+			_restore_mid_service_phase(table_id, session)
+			_close_encounter_panel()
+			_set_prompt(
+				guest_reply
+				+ " Keep serving the pending order, or return later to offer the other item."
+			)
+			return
+
 		session["phase"] = "waiting_to_greet"
 		table_sessions[table_id] = session
 
@@ -2850,8 +3327,28 @@ func _choose_follow_up(
 				+ " They decline wine for now."
 			)
 
-		session["phase"] = "waiting_to_greet"
 		session["follow_up_choice"] = ""
+		if bool(session.get("bill_phase_service", false)):
+			session["bill_phase_service"] = false
+			session["phase"] = "waiting_for_bill"
+			table_sessions[table_id] = session
+			_close_encounter_panel()
+			_set_prompt(
+				guest_reply
+				+ " Bill still waiting — offer again or go to POS."
+			)
+			return
+
+		if bool(session.get("mid_service_offer", false)):
+			_restore_mid_service_phase(table_id, session)
+			_close_encounter_panel()
+			_set_prompt(
+				guest_reply
+				+ " Pending order continues. Return later to try the other offer."
+			)
+			return
+
+		session["phase"] = "waiting_to_greet"
 		table_sessions[table_id] = session
 		if table.has_method("resume_waiting_to_greet"):
 			table.resume_waiting_to_greet("Browsing — return later")
@@ -2867,6 +3364,11 @@ func _choose_follow_up(
 	if choice == "offer_food":
 		food_offers += 1
 		session["food_ordered"] = true
+		session["food_offer_reopened"] = false
+		session["post_wine_follow_up"] = false
+		session["bill_phase_service"] = false
+		session["mid_service_offer"] = false
+		session["cross_offer_return_phase"] = ""
 
 		# An aperitif greeting can convert into an aperitif before food.
 		if session["greeting_choice"] == "greet_aperitif":
@@ -2875,6 +3377,11 @@ func _choose_follow_up(
 
 	elif choice == "offer_wine":
 		wine_offers += 1
+		session["food_offer_reopened"] = false
+		session["post_wine_follow_up"] = false
+		session["bill_phase_service"] = false
+		session["mid_service_offer"] = false
+		session["cross_offer_return_phase"] = ""
 
 		# Apéritif route: complete Bar service before wine selection opens.
 		if (
@@ -3323,7 +3830,14 @@ func _begin_v2_wine_offer(
 			"guestHint": guest_hint,
 			"greetingChoice": str(session.get("greeting_choice", "")),
 			"greetingRating": str(session.get("greeting_rating", "")),
-			"knownFoodChoice": str(session.get("known_food_choice", "")),
+			"knownFoodChoice": str(
+				session.get("known_food_choice", "")
+				if str(session.get("known_food_choice", "")) != ""
+				else session.get("meal_dish", "")
+			),
+			"knownMealDish": str(session.get("meal_dish", "")),
+			"knownMealCertainty": str(session.get("meal_certainty", "")),
+			"knownMealDescription": str(session.get("meal_description", "")),
 			"foodOrdered": bool(session.get("food_ordered", false)),
 			"wineOpportunityNumber": int(session.get("wine_opportunity_number", 1)),
 			"objectPathKind": str(session.get("object_path_kind", "")),
@@ -3578,17 +4092,24 @@ func _on_bridge_v2_result_received(payload: Dictionary = {}):
 		"wine"
 	)
 
-	var allow_second = bool(payload.get("allowSecondWineOpportunity", false))
+	if not wine_sold:
+		session["wine_offer_attempts"] = int(
+			session.get("wine_offer_attempts", 0)
+		) + 1
 	var opportunity_number = int(session.get("wine_opportunity_number", 1))
-	if (
+	var wine_attempts = int(session.get("wine_offer_attempts", 0))
+	# First-run tables always get up to two wine approaches, then food can reopen.
+	var can_retry_wine = (
 		not wine_sold
-		and allow_second
+		and wine_attempts < 2
 		and opportunity_number < 2
-	):
+	)
+	if can_retry_wine:
 		session["wine_opportunity_pending"] = true
 		session["wine_opportunity_number"] = opportunity_number + 1
 		session["service_phase"] = "ready_for_second_wine_opportunity"
 		session["phase"] = "waiting_to_greet"
+		session["post_wine_follow_up"] = false
 		table_sessions[table_id] = session
 		var table_retry = session.get("table", null)
 		if table_retry != null and table_retry.has_method("resume_waiting_to_greet"):
@@ -3597,6 +4118,28 @@ func _on_bridge_v2_result_received(payload: Dictionary = {}):
 		_set_prompt(
 			guest_reply
 			+ " No sale yet. Return to the table for a second wine approach."
+		)
+		return
+
+	# After wine attempts are exhausted, reopen food so the table is not boxed in.
+	if (
+		not wine_sold
+		and wine_attempts >= 2
+		and not bool(session.get("food_ordered", false))
+	):
+		session["wine_opportunity_pending"] = false
+		session["food_offer_reopened"] = true
+		session["post_wine_follow_up"] = true
+		session["service_phase"] = "food_reopened_after_wine"
+		session["phase"] = "waiting_to_greet"
+		table_sessions[table_id] = session
+		var table_food = session.get("table", null)
+		if table_food != null and table_food.has_method("resume_waiting_to_greet"):
+			table_food.resume_waiting_to_greet("Food offer open again")
+		_close_encounter_panel()
+		_set_prompt(
+			guest_reply
+			+ " Wine closed after two attempts. Return to offer food."
 		)
 		return
 
@@ -3744,6 +4287,7 @@ func _close_encounter_panel():
 	encounter_is_open = false
 	encounter_stage = ""
 	encounter_table_id = ""
+	_layout_encounter_panel_for_stage("greeting")
 
 	if encounter_panel != null:
 		encounter_panel.visible = false
@@ -3765,6 +4309,8 @@ func _set_follow_up_buttons_visible(
 	walk_away_button.visible = show_buttons
 	offer_food_button.visible = show_buttons
 	offer_wine_button.visible = show_buttons
+	if offer_bill_button != null:
+		offer_bill_button.visible = false
 	if review_continue_button != null and show_buttons:
 		review_continue_button.visible = false
 
@@ -3786,6 +4332,11 @@ func _show_encounter_follow_up_panel(
 	offer_wine_button.visible = allowed_follow_ups.has(
 		"offer_wine"
 	)
+	if offer_bill_button != null:
+		offer_bill_button.visible = allowed_follow_ups.has(
+			"offer_bill"
+		)
+	_layout_encounter_panel_for_stage("follow_up")
 	_mark_table_progress(encounter_table_id)
 
 
@@ -5994,23 +6545,31 @@ func _collect_dirty_plates(
 
 func _handle_scullery_arrival():
 	if waiter_carrying != CARRY_DIRTY:
-		_set_prompt("Bring dirty plates here for cleaning.")
+		_set_prompt(
+			"Scullery has "
+			+ str(scullery_dish_sets)
+			+ " / "
+			+ str(SCULLERY_MAX_DISH_SETS)
+			+ " dish sets. Bring dirty plates here for cleaning."
+		)
+		return
+
+	if scullery_dish_sets >= SCULLERY_MAX_DISH_SETS:
+		_set_prompt(
+			"Scullery is full with "
+			+ str(SCULLERY_MAX_DISH_SETS)
+			+ " dish sets. Keep carrying these plates until one set has been cleaned."
+		)
 		return
 
 	var table_id = carrying_table_id
 
-	_set_station_state("scullery", "full", true)
-	_set_station_state("scullery", "active", true)
 	_apply_fixed_action(&"scullery_dropoff")
+	_add_station_interaction(1, "Scullery drop")
 
-	_add_station_interaction(
-		1,
-		"Scullery clean"
-	)
-
+	# One cleared table contributes exactly one dish set.
+	scullery_dish_sets += 1
 	_clear_normal_carrying()
-	_set_station_state("scullery", "idle", true)
-	_set_station_mood("scullery", "happy")
 
 	if table_sessions.has(table_id):
 		var session = table_sessions[table_id]
@@ -6018,22 +6577,93 @@ func _handle_scullery_arrival():
 		table_sessions[table_id] = session
 
 		var table = session["table"]
-
-		if table.has_method(
-			"set_waiting_for_bill"
-		):
+		if table.has_method("set_waiting_for_bill"):
 			table.set_waiting_for_bill()
 
 		focused_table_id = table_id
 		_mark_table_progress(table_id)
 		_maybe_spawn_early_guest_for_closing_table(table_id)
 
+	_refresh_scullery_visual()
+
+	# First dish set starts cleaning. A second set waits in capacity
+	# without restarting the current clean timer.
+	if scullery_timer != null and scullery_timer.is_stopped():
+		scullery_timer.start(scullery_clean_seconds)
+
 	_set_prompt(
 		"Plates from "
 		+ table_id
-		+ " cleaned at Scullery. Go to POS for the bill."
+		+ " dropped at Scullery. Capacity: "
+		+ str(scullery_dish_sets)
+		+ " / "
+		+ str(SCULLERY_MAX_DISH_SETS)
+		+ ". Return to the table to offer another item, or go to POS for the bill."
 	)
 	_refresh_station_attention_alerts()
+
+
+func _on_scullery_timer_timeout():
+	if scullery_dish_sets <= 0:
+		scullery_dish_sets = 0
+		_refresh_scullery_visual()
+		return
+
+	scullery_dish_sets -= 1
+	print(
+		"SCULLERY CLEANED ONE SET | Remaining: ",
+		scullery_dish_sets,
+		" / ",
+		SCULLERY_MAX_DISH_SETS
+	)
+	_refresh_scullery_visual()
+
+	if scullery_dish_sets > 0 and scullery_timer != null:
+		scullery_timer.start(scullery_clean_seconds)
+
+
+func _refresh_scullery_visual():
+	scullery_dish_sets = clampi(scullery_dish_sets, 0, SCULLERY_MAX_DISH_SETS)
+
+	if scullery_dish_sets <= 0:
+		if scullery_unhappy_timer != null:
+			scullery_unhappy_timer.stop()
+		_set_station_state("scullery", "idle", true)
+		_set_station_mood("scullery", "happy")
+		return
+
+	if scullery_dish_sets == 1:
+		if scullery_unhappy_timer != null:
+			scullery_unhappy_timer.stop()
+		# One set in the bay = washing / active art, not empty.
+		_set_station_state("scullery", "active", true)
+		_set_station_mood("scullery", "happy")
+		return
+
+	# Two sets = full art. Do not overwrite with idle/active.
+	_set_station_state("scullery", "full", true)
+	_set_station_mood(
+		"scullery",
+		"neutral",
+		"Scullery is at full capacity"
+	)
+	if scullery_unhappy_timer != null and scullery_unhappy_timer.is_stopped():
+		scullery_unhappy_timer.start(scullery_full_unhappy_seconds)
+
+
+func _on_scullery_unhappy_timer_timeout():
+	if scullery_dish_sets < SCULLERY_MAX_DISH_SETS:
+		return
+
+	annoyed_station_events += 1
+	_add_station_interaction(-1, "Scullery became unhappy")
+	_add_level_ap(-station_unhappy_ap_penalty, "Scullery became unhappy")
+	_set_station_mood(
+		"scullery",
+		"annoyed",
+		"Scullery has remained full too long"
+	)
+	_set_prompt("Scullery is unhappy because it has remained full.")
 
 
 func _deliver_bill_and_take_payment(
@@ -6568,6 +7198,11 @@ func _reset_all_station_states():
 		"idle",
 		true
 	)
+	scullery_dish_sets = 0
+	if scullery_timer != null:
+		scullery_timer.stop()
+	if scullery_unhappy_timer != null:
+		scullery_unhappy_timer.stop()
 	_set_station_state(
 		"scullery",
 		"idle",
@@ -6684,6 +7319,16 @@ func _create_runtime_timers():
 	chef_unhappy_timer = _create_one_shot_timer(
 		"ChefUnhappyTimer",
 		_on_chef_unhappy_timer_timeout
+	)
+
+	scullery_timer = _create_one_shot_timer(
+		"SculleryCleanTimer",
+		_on_scullery_timer_timeout
+	)
+
+	scullery_unhappy_timer = _create_one_shot_timer(
+		"SculleryUnhappyTimer",
+		_on_scullery_unhappy_timer_timeout
 	)
 
 	mise_restock_timer = _create_one_shot_timer(
@@ -7358,105 +8003,56 @@ func _create_hud():
 func _create_encounter_panel():
 	encounter_panel = Panel.new()
 	encounter_panel.name = "GuestEncounterPanel"
-	encounter_panel.position = Vector2(
-		520,
-		110
-	)
-	encounter_panel.size = Vector2(
-		560,
-		268
-	)
+	encounter_panel.position = Vector2(520, 110)
+	encounter_panel.size = Vector2(448, 220)
 	encounter_panel.clip_contents = true
 	encounter_panel.visible = false
-	hud_root.add_child(
-		encounter_panel
-	)
+	hud_root.add_child(encounter_panel)
 
 	var panel_style = StyleBoxFlat.new()
-	panel_style.bg_color = Color(
-		0.02,
-		0.10,
-		0.06,
-		0.96
-	)
-	panel_style.border_color = Color(
-		0.95,
-		0.62,
-		0.18,
-		1.0
-	)
-	panel_style.set_border_width_all(3)
-	panel_style.set_corner_radius_all(12)
+	panel_style.bg_color = Color(0.03, 0.11, 0.07, 0.94)
+	panel_style.border_color = Color(0.95, 0.62, 0.18, 1.0)
+	panel_style.set_border_width_all(2)
+	panel_style.set_corner_radius_all(10)
 	panel_style.content_margin_left = 10
 	panel_style.content_margin_right = 10
-	panel_style.content_margin_top = 8
-	panel_style.content_margin_bottom = 8
-	encounter_panel.add_theme_stylebox_override(
-		"panel",
-		panel_style
-	)
+	panel_style.content_margin_top = 6
+	panel_style.content_margin_bottom = 6
+	panel_style.shadow_color = Color(0.0, 0.0, 0.0, 0.35)
+	panel_style.shadow_size = 8
+	encounter_panel.add_theme_stylebox_override("panel", panel_style)
 
 	encounter_title_label = Label.new()
-	encounter_title_label.position = Vector2(
-		10,
-		8
-	)
-	encounter_title_label.size = Vector2(
-		540,
-		32
-	)
-	encounter_title_label.horizontal_alignment = \
-		HORIZONTAL_ALIGNMENT_CENTER
-	encounter_title_label.vertical_alignment = \
-		VERTICAL_ALIGNMENT_CENTER
+	encounter_title_label.position = Vector2(12, 8)
+	encounter_title_label.size = Vector2(424, 26)
+	encounter_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	encounter_title_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	encounter_title_label.clip_text = true
-	encounter_title_label.add_theme_font_size_override(
-		"font_size",
-		32
+	encounter_title_label.add_theme_font_size_override("font_size", 22)
+	encounter_title_label.add_theme_color_override(
+		"font_color",
+		Color(0.98, 0.96, 0.90, 1.0)
 	)
-	encounter_panel.add_child(
-		encounter_title_label
-	)
+	encounter_panel.add_child(encounter_title_label)
 
-	# Clip long tourist hints so they never bleed into the button row.
-	var hint_host = Control.new()
-	hint_host.name = "GuestHintHost"
-	hint_host.position = Vector2(
-		10,
-		40
-	)
-	hint_host.size = Vector2(
-		540,
-		52
-	)
-	hint_host.clip_contents = true
-	hint_host.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	encounter_panel.add_child(
-		hint_host
-	)
+	encounter_hint_host = Control.new()
+	encounter_hint_host.name = "GuestHintHost"
+	encounter_hint_host.position = Vector2(12, 36)
+	encounter_hint_host.size = Vector2(424, 78)
+	encounter_hint_host.clip_contents = false
+	encounter_hint_host.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	encounter_panel.add_child(encounter_hint_host)
 
 	encounter_hint_label = Label.new()
 	encounter_hint_label.position = Vector2.ZERO
-	encounter_hint_label.size = Vector2(
-		540,
-		52
-	)
-	encounter_hint_label.autowrap_mode = \
-		TextServer.AUTOWRAP_WORD_SMART
-	encounter_hint_label.horizontal_alignment = \
-		HORIZONTAL_ALIGNMENT_CENTER
-	encounter_hint_label.vertical_alignment = \
-		VERTICAL_ALIGNMENT_CENTER
-	encounter_hint_label.clip_text = true
-	encounter_hint_label.mouse_filter = \
-		Control.MOUSE_FILTER_IGNORE
-	encounter_hint_label.add_theme_font_size_override(
-		"font_size",
-		22
-	)
-	hint_host.add_child(
-		encounter_hint_label
-	)
+	encounter_hint_label.size = Vector2(424, 78)
+	encounter_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	encounter_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	encounter_hint_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	encounter_hint_label.clip_text = false
+	encounter_hint_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	encounter_hint_label.add_theme_font_size_override("font_size", 15)
+	encounter_hint_host.add_child(encounter_hint_label)
 
 	# Tight horizontal packing: 10px side inset, 8px gaps between buttons.
 	review_continue_button = _make_encounter_button(
@@ -7522,30 +8118,25 @@ func _create_encounter_panel():
 			)
 	)
 
-	# Instruction sits under the option buttons with a small gap.
+	offer_bill_button = _make_encounter_button(
+		"Offer Bill",
+		Vector2(192, 220),
+		func():
+			_choose_follow_up(
+				"offer_bill"
+			)
+	)
+	offer_bill_button.visible = false
+
 	encounter_response_label = Label.new()
-	encounter_response_label.position = Vector2(
-		10,
-		164
-	)
-	encounter_response_label.size = Vector2(
-		540,
-		88
-	)
-	encounter_response_label.autowrap_mode = \
-		TextServer.AUTOWRAP_WORD_SMART
-	encounter_response_label.horizontal_alignment = \
-		HORIZONTAL_ALIGNMENT_CENTER
-	encounter_response_label.vertical_alignment = \
-		VERTICAL_ALIGNMENT_CENTER
+	encounter_response_label.position = Vector2(12, 164)
+	encounter_response_label.size = Vector2(424, 28)
+	encounter_response_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	encounter_response_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	encounter_response_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	encounter_response_label.clip_text = true
-	encounter_response_label.add_theme_font_size_override(
-		"font_size",
-		22
-	)
-	encounter_panel.add_child(
-		encounter_response_label
-	)
+	encounter_response_label.add_theme_font_size_override("font_size", 13)
+	encounter_panel.add_child(encounter_response_label)
 
 	_set_follow_up_buttons_visible(false)
 
@@ -7694,21 +8285,31 @@ func _make_encounter_button(
 	var button = Button.new()
 	button.text = button_text
 	button.position = button_position
-	button.size = Vector2(
-		174,
-		52
-	)
+	button.size = Vector2(140, 40)
 	button.z_index = 2
-	button.add_theme_font_size_override(
-		"font_size",
-		20
-	)
-	button.pressed.connect(
-		callback
-	)
-	encounter_panel.add_child(
-		button
-	)
+	button.focus_mode = Control.FOCUS_NONE
+	button.add_theme_font_size_override("font_size", 15)
+
+	var normal = StyleBoxFlat.new()
+	normal.bg_color = Color(0.10, 0.14, 0.12, 0.98)
+	normal.border_color = Color(0.78, 0.55, 0.22, 0.85)
+	normal.set_border_width_all(1)
+	normal.set_corner_radius_all(6)
+	normal.content_margin_left = 8
+	normal.content_margin_right = 8
+	var hover = normal.duplicate()
+	hover.bg_color = Color(0.16, 0.22, 0.18, 1.0)
+	hover.border_color = Color(0.95, 0.68, 0.28, 1.0)
+	var pressed = normal.duplicate()
+	pressed.bg_color = Color(0.08, 0.11, 0.09, 1.0)
+	button.add_theme_stylebox_override("normal", normal)
+	button.add_theme_stylebox_override("hover", hover)
+	button.add_theme_stylebox_override("pressed", pressed)
+	button.add_theme_color_override("font_color", Color(0.96, 0.94, 0.88, 1.0))
+	button.add_theme_color_override("font_hover_color", Color(1.0, 0.96, 0.86, 1.0))
+
+	button.pressed.connect(callback)
+	encounter_panel.add_child(button)
 	return button
 
 
@@ -8593,9 +9194,9 @@ func _get_current_objective() -> String:
 
 			"waiting_for_bill":
 				return (
-					"Request the bill for "
+					"Return to "
 					+ focused_table_id
-					+ " at POS."
+					+ " to offer an item or the bill, then use POS if needed."
 				)
 
 			"waiting_for_bill_close":
@@ -8626,7 +9227,7 @@ func _get_current_objective() -> String:
 			return "Choose a table that is ready to clear."
 
 		if phase == "waiting_for_bill":
-			return "Choose a table waiting for its bill, then visit POS."
+			return "Choose a table waiting for its bill to offer an item or print at POS."
 
 		if phase == "waiting_for_bill_close":
 			return "Return the table payment to POS and close the bill."

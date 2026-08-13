@@ -18,11 +18,26 @@ export function buildKnownGuestInformation(args: {
   greeting?: GreetingEvaluation | null;
   foodOrdered?: boolean;
   discovered?: KnownGuestInformation | null;
+  mealIntent?: KnownGuestInformation["mealIntent"] | null;
+  mealProfile?: KnownGuestInformation["mealProfile"] | null;
 }): KnownGuestInformation {
   const known: KnownGuestInformation = { ...(args.discovered || {}) };
+  if (args.mealIntent?.dish) {
+    known.mealIntent = {
+      dish: String(args.mealIntent.dish).trim(),
+      description: String(args.mealIntent.description || "").trim() || undefined,
+      certainty: args.mealIntent.certainty || "likely",
+    };
+  }
+  if (args.mealProfile) {
+    known.mealProfile = { ...args.mealProfile };
+  }
   if (args.greeting?.revealsFoodChoice || args.foodOrdered) {
     known.foodChoice =
-      known.foodChoice || String(args.reviewFoodIntent || "").trim() || undefined;
+      known.foodChoice ||
+      known.mealIntent?.dish ||
+      String(args.reviewFoodIntent || "").trim() ||
+      undefined;
   }
   if (args.greeting?.revealsOccasion) {
     known.occasion = known.occasion || "leisure";

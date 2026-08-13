@@ -72,6 +72,9 @@ export interface RuntimeV2StartOptions {
   knownFoodChoice?: string | null;
   knownOccasion?: string | null;
   knownBudgetSignal?: string | null;
+  knownMealDish?: string | null;
+  knownMealCertainty?: string | null;
+  knownMealDescription?: string | null;
   foodOrdered?: boolean;
 }
 
@@ -393,6 +396,20 @@ export function startRuntimeV2Session(options: RuntimeV2StartOptions = {}): Runt
     reviewFoodIntent: review?.knownFoodIntent,
     greeting: greetingEvaluation,
     foodOrdered: !!options.foodOrdered,
+    mealIntent:
+      review?.mealIntent ||
+      (String(options.knownMealDish || "").trim()
+        ? {
+            dish: String(options.knownMealDish || "").trim(),
+            description: String(options.knownMealDescription || "").trim() || undefined,
+            certainty:
+              options.knownMealCertainty === "confirmed" ||
+              options.knownMealCertainty === "considering"
+                ? options.knownMealCertainty
+                : "likely",
+          }
+        : null),
+    mealProfile: review?.mealProfile,
     discovered: {
       foodChoice: options.knownFoodChoice || undefined,
       occasion: options.knownOccasion || undefined,
