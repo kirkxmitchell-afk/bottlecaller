@@ -182,6 +182,335 @@ export function mergeV2ProgressionAuthorityStates(
   };
 }
 
+export function mergeBottleRewardStates(
+  serverState: Record<string, any> | null | undefined,
+  incomingState: Record<string, any> | null | undefined,
+): Record<string, any> | null {
+  const server = asObject(serverState);
+  const incoming = asObject(incomingState);
+  if (!server && !incoming) return null;
+
+  const serverRewards = Array.isArray(server?.rewards) ? server.rewards : [];
+  const incomingRewards = Array.isArray(incoming?.rewards) ? incoming.rewards : [];
+  const byId = new Map<string, Record<string, any>>();
+
+  for (const reward of serverRewards) {
+    const id = String(reward?.id || "");
+    if (id) byId.set(id, { ...reward });
+  }
+  for (const reward of incomingRewards) {
+    const id = String(reward?.id || "");
+    if (!id) continue;
+    const previous = byId.get(id);
+    const nextClaimed = !!reward?.claimed;
+    const prevClaimed = !!previous?.claimed;
+    const nextClaimedAt = Number(reward?.claimedAt || 0);
+    const prevClaimedAt = Number(previous?.claimedAt || 0);
+    if (
+      !previous ||
+      (nextClaimed && !prevClaimed) ||
+      (nextClaimed && prevClaimed && nextClaimedAt >= prevClaimedAt)
+    ) {
+      byId.set(id, { ...(previous || {}), ...reward });
+    }
+  }
+
+  return {
+    totalAP: Math.max(Number(server?.totalAP || 0), Number(incoming?.totalAP || 0)),
+    tierUnlocked: Math.max(Number(server?.tierUnlocked || 1), Number(incoming?.tierUnlocked || 1)),
+    rewards: Array.from(byId.values()),
+  };
+}
+
+function countAcceptedGodotGreetings(events: unknown): { accepted: number; samples: number } {
+  const rows = Array.isArray(events) ? events : [];
+  let accepted = 0;
+  rows.forEach((row) => {
+    const rating = String(row?.greetingRating || row?.greeting_rating || "").trim().toLowerCase();
+    if (
+      row?.accepted === true ||
+      row?.recovered === true ||
+      rating === "strong" ||
+      rating === "acceptable" ||
+      rating === "good" ||
+      rating === "excellent"
+    ) {
+      accepted += 1;
+    }
+  });
+  return { accepted, samples: rows.length };
+}
+
+function getGodotGuestOutcomes(payload: Record<string, any>): Record<string, any>[] {
+  const rows = payload.guestOutcomes ?? payload.guest_outcomes;
+  return (Array.isArray(rows) ? rows : [])
+    .map((row) => asObject(row))
+    .filter((row): row is Record<string, any> => !!row);
+}
+
+function isLostGodotGuestOutcome(row: Record<string, any>): boolean {
+  const completionKind = String(row.completionKind || row.completion_kind || "").toLowerCase();
+  if (row.paid === true || completionKind === "paid_completion") return false;
+  return (
+    row.walkedOut === true ||
+    row.walked_out === true ||
+    completionKind.includes("walkout") ||
+    String(row.outcome || "").toLowerCase() === "failure"
+  );
+}
+
+export function accumulateGodotShiftStats(
+  previous: Record<string, any> | null | undefined,
+  payload: Record<string, any> | null | undefined,
+  extras: Record<string, any> = {},
+): Record<string, any> {
+  const prev = asObject(previous) || {};
+  const p = asObject(payload) || {};
+  const extra = asObject(extras) || {};
+  const shiftRunId = String(
+    extra.shiftRunId || p.shiftRunId || p.lastShiftRunId || prev.lastShiftRunId || "",
+  ).trim();
+  const duplicate = !!(shiftRunId && String(prev.lastShiftRunId || "") === shiftRunId);
+
+  const guestOutcomes = getGodotGuestOutcomes(p);
+  const completedGuests = Math.max(
+    0,
+    Math.round(firstFinite(p.guestServices, p.guestsServed, p.completedGuestServices, 0) || 0),
+  );
+  const aggregateLost = Math.max(
+    0,
+    Math.round(firstFinite(p.walkAways, p.guestsLost, p.walk_aways, 0) || 0),
+  );
+  const explicitServed = firstFinite(p.guestsServed, p.guests_served);
+  const lost = guestOutcomes.length
+    ? guestOutcomes.filter(isLostGodotGuestOutcome).length
+    : aggregateLost;
+  const served = guestOutcomes.length
+    ? guestOutcomes.length - lost
+    : Math.max(
+        0,
+        Math.round(explicitServed ?? Math.max(0, completedGuests - lost)),
+      );
+  const wineSales = Math.max(
+    0,
+    Math.round(firstFinite(p.wineSales, p.bottlesSold, 0) || 0),
+  );
+  const wineOffers = Math.max(
+    0,
+    Math.round(firstFinite(p.wineOffers, p.bottlesAttempted, wineSales, 0) || 0),
+  );
+  const greetings = countAcceptedGodotGreetings(p.interactionAuthorityEvents);
+  const opDelta = firstFinite(
+    p.operationalAuthorityDelta,
+    p.authorityDeltaTotal,
+    p.shiftScore,
+    extra.operationalAuthorityDelta,
+  );
+  const prevDeltas = Array.isArray(prev.authorityDeltas) ? prev.authorityDeltas.map(Number).filter(Number.isFinite) : [];
+  const authorityDeltas = duplicate
+    ? prevDeltas
+    : (opDelta != null ? [...prevDeltas, opDelta].slice(-50) : prevDeltas);
+  const elapsedShiftTime = firstFinite(extra.elapsedShiftTime, p.elapsedShiftTime, p.elapsed_shift_time);
+  const avgTimeSellingBottleSec =
+    wineSales > 0 && elapsedShiftTime != null ? elapsedShiftTime / wineSales : null;
+
+  return {
+    ...prev,
+    coinBalance: Math.max(
+      0,
+      firstFinite(extra.coinBalance, p.coinBalance, p.coins, prev.coinBalance, 0) || 0,
+    ),
+    lastShiftRunId: shiftRunId || prev.lastShiftRunId || null,
+    lastShiftCompletedAt: extra.lastShiftCompletedAt || Date.now(),
+    elapsedShiftTime: elapsedShiftTime ?? prev.elapsedShiftTime ?? null,
+    speedPct: firstFinite(extra.speedPct, p.speedPct, prev.speedPct),
+    bottleMeter: firstFinite(p.bottleMeter, p.bottlesSold, prev.bottleMeter),
+    bottleMeterMax: firstFinite(p.bottleMeterMax, p.bottleTarget, prev.bottleMeterMax),
+    guestServices: completedGuests,
+    servedGuestServices: served,
+    walkAways: lost,
+    guestOutcomes,
+    wineSales,
+    wineOffers,
+    foodOffers: Math.max(0, Math.round(firstFinite(p.foodOffers, 0) || 0)),
+    lastWineStreak: wineSales,
+    lastOperationalAuthorityDelta: opDelta,
+    avgTimeSellingBottleSec,
+    guestsServed: Number(prev.guestsServed || 0) + (duplicate ? 0 : served),
+    guestsLost: Number(prev.guestsLost || 0) + (duplicate ? 0 : lost),
+    bottlesSold: Number(prev.bottlesSold || 0) + (duplicate ? 0 : wineSales),
+    bottlesAttempted: Number(prev.bottlesAttempted || 0) + (duplicate ? 0 : wineOffers),
+    shiftsCompleted: Number(prev.shiftsCompleted || 0) + (duplicate ? 0 : 1),
+    greetingAcceptedCount: Number(prev.greetingAcceptedCount || 0) + (duplicate ? 0 : greetings.accepted),
+    greetingSampleCount: Number(prev.greetingSampleCount || 0) + (duplicate ? 0 : greetings.samples),
+    authorityDeltas,
+  };
+}
+
+export function mergeGodotShiftCanonical(
+  serverShift: Record<string, any> | null | undefined,
+  incomingShift: Record<string, any> | null | undefined,
+): Record<string, any> {
+  const server = asObject(serverShift) || {};
+  const incoming = asObject(incomingShift) || {};
+  if (!Object.keys(server).length) return { ...incoming };
+  if (!Object.keys(incoming).length) return { ...server };
+
+  const incomingNewer =
+    Number(incoming.lastShiftCompletedAt || 0) >= Number(server.lastShiftCompletedAt || 0);
+  const newer = incomingNewer ? incoming : server;
+  const older = incomingNewer ? server : incoming;
+  const sameRun = !!(
+    incoming.lastShiftRunId &&
+    String(incoming.lastShiftRunId) === String(server.lastShiftRunId || "")
+  );
+  const mergeLifetime = (lifetimeKey: string, lastShiftKey: string) => {
+    const serverLife = Number(server[lifetimeKey] || 0);
+    const incomingLife = Number(incoming[lifetimeKey] || 0);
+    if (sameRun) return Math.max(serverLife, incomingLife);
+    const fromLastShift = Number(incoming[lastShiftKey] || 0);
+    return Math.max(serverLife + fromLastShift, incomingLife, serverLife);
+  };
+  const mergeDeltas = [
+    ...(Array.isArray(server.authorityDeltas) ? server.authorityDeltas : []),
+    ...(Array.isArray(incoming.authorityDeltas) ? incoming.authorityDeltas : []),
+  ]
+    .map(Number)
+    .filter(Number.isFinite)
+    .slice(-50);
+
+  return {
+    ...older,
+    ...newer,
+    guestsServed: mergeLifetime("guestsServed", "servedGuestServices"),
+    guestsLost: mergeLifetime("guestsLost", "walkAways"),
+    bottlesSold: mergeLifetime("bottlesSold", "wineSales"),
+    bottlesAttempted: mergeLifetime("bottlesAttempted", "wineOffers"),
+    shiftsCompleted: sameRun
+      ? Math.max(Number(server.shiftsCompleted || 0), Number(incoming.shiftsCompleted || 0))
+      : Math.max(
+          Number(server.shiftsCompleted || 0) + (incoming.lastShiftRunId ? 1 : 0),
+          Number(incoming.shiftsCompleted || 0),
+          Number(server.shiftsCompleted || 0),
+        ),
+    greetingAcceptedCount: Math.max(
+      Number(server.greetingAcceptedCount || 0),
+      Number(incoming.greetingAcceptedCount || 0),
+    ),
+    greetingSampleCount: Math.max(
+      Number(server.greetingSampleCount || 0),
+      Number(incoming.greetingSampleCount || 0),
+    ),
+    authorityDeltas: mergeDeltas.length ? mergeDeltas : (newer.authorityDeltas || older.authorityDeltas || []),
+    coinBalance: Math.max(Number(server.coinBalance || 0), Number(incoming.coinBalance || 0)),
+  };
+}
+
+export function buildGodotShiftEncounterDrafts(payload: Record<string, any> | null | undefined = {}): Array<Record<string, any>> {
+  const p = asObject(payload) || {};
+  const shiftRunId = String(p.shiftRunId || p.lastShiftRunId || "").trim() || `godot_${Date.now()}`;
+  const guestOutcomes = getGodotGuestOutcomes(p);
+  if (guestOutcomes.length) {
+    return guestOutcomes.map((row, index) => {
+      const lost = isLostGodotGuestOutcome(row);
+      const rawGrade = String(row.performanceGrade || row.performance_grade || "").toUpperCase();
+      const performanceGrade = /^[A-F]$/.test(rawGrade) ? rawGrade : lost ? "F" : "C";
+      const rawSignal = String(row.chainSignal || row.chain_signal || "").toLowerCase();
+      const chainSignal = ["green", "yellow", "red"].includes(rawSignal)
+        ? rawSignal
+        : lost
+          ? "red"
+          : ["A", "B"].includes(performanceGrade)
+            ? "green"
+            : "yellow";
+      const suppliedOutcome = String(row.outcome || "").toLowerCase();
+      const outcome = suppliedOutcome || (
+        lost
+          ? "failure"
+          : performanceGrade === "A"
+            ? "premium_success"
+            : performanceGrade === "B"
+              ? "standard_success"
+              : "weak_success"
+      );
+      const guestId = String(row.guestId || row.guest_id || "guest").trim() || "guest";
+      const serviceId = String(
+        row.serviceId || row.service_id || `${row.guestIndex ?? row.guest_index ?? index}:${guestId}`,
+      );
+      const encounterId = String(
+        row.v2EncounterId ||
+        row.v2_encounter_id ||
+        row.encounterId ||
+        row.encounter_id ||
+        `godot_shift_guest_${guestId}`,
+      );
+      const bottleServedValue = row.bottleServed ?? row.bottle_served ?? row.wineSold ?? row.wine_sold;
+
+      return {
+        eventId: `${shiftRunId}:guest:${serviceId}`,
+        encounterId,
+        performanceGrade,
+        chainSignal,
+        isGreen: chainSignal === "green",
+        isRed: chainSignal === "red",
+        outcome,
+        mode: String(row.mode || row.difficultyMode || "premium"),
+        bottleServed: typeof bottleServedValue === "boolean" ? bottleServedValue : null,
+        reflection: {
+          ...row,
+          source: "godot_shift",
+          kind: String(row.completionKind || row.completion_kind || (lost ? "walk_away" : "guest_served")),
+          shiftRunId,
+        },
+      };
+    });
+  }
+
+  const completedGuests = Math.max(
+    0,
+    Math.round(firstFinite(p.guestServices, p.guestsServed, p.completedGuestServices, 0) || 0),
+  );
+  const lost = Math.max(
+    0,
+    Math.round(firstFinite(p.walkAways, p.guestsLost, p.walk_aways, 0) || 0),
+  );
+  const explicitServed = firstFinite(p.guestsServed, p.guests_served);
+  const served = Math.max(
+    0,
+    Math.round(explicitServed ?? Math.max(0, completedGuests - lost)),
+  );
+  const drafts: Array<Record<string, any>> = [];
+  for (let i = 0; i < served; i += 1) {
+    drafts.push({
+      eventId: `${shiftRunId}:served:${i}`,
+      encounterId: `godot_shift_served_${shiftRunId}_${i}`,
+      performanceGrade: "B",
+      chainSignal: "green",
+      isGreen: true,
+      isRed: false,
+      outcome: "standard_success",
+      mode: "premium",
+      bottleServed: null,
+      reflection: { source: "godot_shift", kind: "guest_served", shiftRunId },
+    });
+  }
+  for (let i = 0; i < lost; i += 1) {
+    drafts.push({
+      eventId: `${shiftRunId}:lost:${i}`,
+      encounterId: `godot_shift_lost_${shiftRunId}_${i}`,
+      performanceGrade: "F",
+      chainSignal: "red",
+      isGreen: false,
+      isRed: true,
+      outcome: "failure",
+      mode: "premium",
+      bottleServed: false,
+      reflection: { source: "godot_shift", kind: "walk_away", shiftRunId },
+    });
+  }
+  return drafts;
+}
+
 export function mergeCanonicalProgressionState(
   serverState: Record<string, any> | null | undefined,
   incomingState: Record<string, any> | null | undefined,
@@ -195,6 +524,10 @@ export function mergeCanonicalProgressionState(
   const incomingAuthority = asObject(incoming.v2?.authority) || asObject(incoming.authority) || {};
   const mergedAuthority = mergeV2ProgressionAuthorityStates(serverAuthority, incomingAuthority);
   const preferIncoming = shouldPreferAuthoritativeV2Authority(incomingAuthority, serverAuthority);
+  const mergedBottleRewards = mergeBottleRewardStates(
+    asObject(server.v2)?.bottleRewards || asObject(server.bottleRewards),
+    asObject(incoming.v2)?.bottleRewards || asObject(incoming.bottleRewards),
+  );
 
   const merged = {
     ...server,
@@ -236,10 +569,30 @@ export function mergeCanonicalProgressionState(
       ...(asObject(server.v2) || {}),
       ...(asObject(incoming.v2) || {}),
       authority: mergedAuthority,
+      ...(mergedBottleRewards ? { bottleRewards: mergedBottleRewards } : {}),
       latestSnapshot: preferIncoming
         ? incoming.v2?.latestSnapshot || server.v2?.latestSnapshot || null
         : server.v2?.latestSnapshot || incoming.v2?.latestSnapshot || null,
     },
+    ...(mergedBottleRewards ? { bottleRewards: mergedBottleRewards } : {}),
+    // Preserve long-term skill bank across merges; bank writes are applied server-side.
+    skills: {
+      ...(asObject(server.skills) || {}),
+      ...(asObject(incoming.skills) || {}),
+      bank:
+        asObject(incoming.skills)?.bank ||
+        asObject(server.skills)?.bank ||
+        null,
+      bankMeta:
+        asObject(incoming.skills)?.bankMeta ||
+        asObject(server.skills)?.bankMeta ||
+        null,
+      measurements:
+        asObject(incoming.skills)?.measurements ||
+        asObject(server.skills)?.measurements ||
+        null,
+    },
+    godotShift: mergeGodotShiftCanonical(asObject(server.godotShift), asObject(incoming.godotShift)),
     capturedAt: Math.max(Number(server.capturedAt || 0), Number(incoming.capturedAt || 0), Date.now()),
     basedOnUpdatedAt:
       firstFinite(incoming.basedOnUpdatedAt, server.basedOnUpdatedAt, server.updatedAt, 0) || 0,

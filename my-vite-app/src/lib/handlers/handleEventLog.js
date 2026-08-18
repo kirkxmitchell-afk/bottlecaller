@@ -1,4 +1,5 @@
-// src/lib/handlers/handleEventLog.js
+import { persistGodotShiftEncounterRows, upsertWaiterLeaderboardRow } from "./persistGodotShiftBoard.js";
+
 export async function handleEventLog({
   msg,
   event,
@@ -119,6 +120,37 @@ export async function handleEventLog({
           tier: p.tier ?? null,
           encounter_number: p.encounterNumber ?? p.encounter_number ?? null,
           session_id: p.sessionId ?? p.session_id ?? null,
+          encounter_id: p.encounterId ?? p.encounter_id ?? null,
+          role: p.role ?? null,
+          mode: String(p.mode || "premium").toLowerCase() === "demo" ? "demo" : "premium",
+          outcome: p.outcome ?? p.finalOutcome ?? null,
+          reflection: p.reflection && typeof p.reflection === "object" ? p.reflection : null,
+          ai_perception:
+            p.aiPerception ??
+            p.ai_perception ??
+            p.reflection?.aiPerception ??
+            null,
+          bottle_served:
+            typeof p.reflection?.bottleServed === "boolean"
+              ? p.reflection.bottleServed
+              : typeof p.bottleServed === "boolean"
+                ? p.bottleServed
+                : null,
+          chosen_path: Array.isArray(p.reflection?.chosenPath)
+            ? p.reflection.chosenPath
+            : Array.isArray(p.chosenPath)
+              ? p.chosenPath
+              : null,
+          best_path: Array.isArray(p.reflection?.bestPath)
+            ? p.reflection.bestPath
+            : Array.isArray(p.bestPath)
+              ? p.bestPath
+              : null,
+          step_spine: Array.isArray(p.reflection?.stepSpine)
+            ? p.reflection.stepSpine
+            : Array.isArray(p.stepSpine)
+              ? p.stepSpine
+              : null,
         },
       },
       {
@@ -132,6 +164,7 @@ export async function handleEventLog({
           encounter_number: p.encounterNumber ?? p.encounter_number ?? null,
           session_id: p.sessionId ?? p.session_id ?? null,
           role: p.role ?? null,
+          mode: String(p.mode || "premium").toLowerCase() === "demo" ? "demo" : "premium",
           guest_state_actual: actualGuestTypeNorm,
           guest_read: chosenGuestTypeNorm,
           mode_selected: chosen.mode ?? p.chosenMode ?? p.chosen_mode ?? null,
@@ -159,6 +192,7 @@ export async function handleEventLog({
           encounter_number: p.encounterNumber ?? p.encounter_number ?? null,
           session_id: p.sessionId ?? p.session_id ?? null,
           role: p.role ?? null,
+          mode: String(p.mode || "premium").toLowerCase() === "demo" ? "demo" : "premium",
           guest_state_actual: actualGuestTypeNorm,
           guest_read: chosenGuestTypeNorm,
           mode_selected: chosen.mode ?? p.chosenMode ?? p.chosen_mode ?? null,
@@ -205,7 +239,8 @@ export async function handleEventLog({
   }
 
   try {
-    const { eventType, payload } = msg || {};
+    const eventType = msg?.eventType || msg?.payload?.eventType || null;
+    const payload = msg?.payload || {};
     if (!eventType) return;
 
     // Parent guarantees ctx is valid & restaurant-bound.
@@ -255,6 +290,39 @@ export async function handleEventLog({
       });
 
       if (!up.ok) console.warn("[BC] encounter_resolutions upsert failed", up.error);
+    }
+
+    if (eventType === "shift_complete") {
+      try {
+        await persistGodotShiftEncounterRows({
+          supabase,
+          userId,
+          restaurantId,
+          payload: payload || {},
+          occurredAt,
+        });
+      } catch (error) {
+        console.warn("[BC] godot shift encounter persist failed", error);
+      }
+      try {
+        await upsertWaiterLeaderboardRow({
+          supabase,
+          userId,
+          restaurantId,
+          canonicalState: {
+            economy: {
+              authorityPoints: payload?.authorityPointsProjected ?? payload?.ap,
+              ap: payload?.authorityPointsProjected ?? payload?.ap,
+            },
+            authority: {
+              totalAP: payload?.authorityPointsProjected ?? payload?.ap,
+              tierToServe: payload?.profileTier ?? payload?.apTierUnlocked ?? payload?.rulesTierToServe,
+            },
+          },
+        });
+      } catch (error) {
+        console.warn("[BC] godot shift leaderboard persist failed", error);
+      }
     }
 
     event.source?.postMessage(

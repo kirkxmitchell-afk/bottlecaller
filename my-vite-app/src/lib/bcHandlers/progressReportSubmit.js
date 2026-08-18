@@ -1,5 +1,18 @@
 import { BC_TYPES } from "../bcMessages";
-import { resolveCanonicalWriteState } from "../../game/v2ProgressionAuthority.ts";
+import {
+  accumulateGodotShiftStats,
+  resolveCanonicalWriteState,
+} from "../../game/v2ProgressionAuthority.ts";
+import {
+  persistGodotShiftEncounterRows,
+  upsertWaiterLeaderboardRow,
+} from "../handlers/persistGodotShiftBoard.js";
+import {
+  applySkillBankUpdate,
+  attachSkillBankToCanonicalState,
+  extractSkillBankFromCanonicalState,
+  normalizeSkillMeasurement,
+} from "../../game/skillBank.ts";
 
 function isMissingRelationError(error) {
   const code = String(error?.code || "");
@@ -273,6 +286,27 @@ async function insertSkillSnapshotAndDrillEffect({
   return { ok: true };
 }
 
+function resolveSkillMeasurementFromPayload(payload = {}) {
+  return (
+    normalizeSkillMeasurement(payload?.skills) ||
+    normalizeSkillMeasurement(payload?.progressionState?.skills?.measurements) ||
+    normalizeSkillMeasurement(payload?.progression_state?.skills?.measurements) ||
+    null
+  );
+}
+
+function resolveSkillBankUpdateMode(payload = {}) {
+  const source = String(payload?.source || "").toLowerCase();
+  if (
+    payload?.snapshotOnly === true ||
+    source === "godot_shift_speed" ||
+    source === "shift_speed"
+  ) {
+    return "speed_only";
+  }
+  return "full";
+}
+
 async function upsertCanonicalProgressionState({
   supabase,
   ctx,
@@ -283,9 +317,13 @@ async function upsertCanonicalProgressionState({
     payload?.progressionState ||
     payload?.progression_state ||
     null;
+  const skillMeasurement = resolveSkillMeasurementFromPayload(payload || {});
 
   if (!canonicalStateRaw || typeof canonicalStateRaw !== "object") {
-    return { ok: false, skipped: true, reason: "missing_progression_state" };
+    // Still allow long-term skill bank updates when only a skill measurement arrived.
+    if (!skillMeasurement) {
+      return { ok: false, skipped: true, reason: "missing_progression_state" };
+    }
   }
 
   const buildRewardsSummary = (state) => {
@@ -324,13 +362,10 @@ async function upsertCanonicalProgressionState({
     };
   };
 
-  const canonicalState = {
-    ...canonicalStateRaw,
-    rewardsSummary:
-      canonicalStateRaw?.rewardsSummary && typeof canonicalStateRaw.rewardsSummary === "object"
-        ? canonicalStateRaw.rewardsSummary
-        : buildRewardsSummary(canonicalStateRaw),
-  };
+  const incomingCanonical =
+    canonicalStateRaw && typeof canonicalStateRaw === "object"
+      ? canonicalStateRaw
+      : {};
 
   const session = globalThis?.appState?.session || null;
   const profile = globalThis?.appState?.profile || null;
@@ -349,15 +384,6 @@ async function upsertCanonicalProgressionState({
         ctx?.progressionOwnerRestaurantId ||
         null,
     });
-
-  console.log("[BC progression upsert target]", {
-    authUserId: session?.user?.id || authUserId || null,
-    authProfileUserId: profile?.user_id || null,
-    progressionOwnerUserId,
-    progressionOwnerRestaurantId,
-    canonicalPoints: canonicalState?.economy?.points ?? null,
-    rewardsSummary: canonicalState?.rewardsSummary ?? null,
-  });
 
   if (!progressionOwnerUserId || !progressionOwnerRestaurantId) {
     console.warn("[BC progression upsert] missing owner identity", {
@@ -388,12 +414,65 @@ async function upsertCanonicalProgressionState({
     return { ok: false, skipped: true, reason: "missing_table" };
   }
 
+  const existingGodotShift =
+    existingRow?.canonical_state?.godotShift && typeof existingRow.canonical_state.godotShift === "object"
+      ? existingRow.canonical_state.godotShift
+      : {};
+  const incomingGodotShift =
+    incomingCanonical?.godotShift && typeof incomingCanonical.godotShift === "object"
+      ? incomingCanonical.godotShift
+      : {};
+  const rawGodotPayload =
+    payload?.godotShift && typeof payload.godotShift === "object"
+      ? payload.godotShift
+      : null;
+  const incomingAlreadyAccumulated =
+    Number(incomingGodotShift?.shiftsCompleted || 0) > 0 ||
+    Number(incomingGodotShift?.guestsServed || incomingGodotShift?.guestsLost || 0) > 0;
+  const source = String(payload?.source || incomingCanonical?.source || "").toLowerCase();
+  const shouldHydrateGodot =
+    !!rawGodotPayload || source === "godot_shift" || source === "godot_shift_speed";
+  const shiftExtras = {
+    shiftRunId:
+      payload?.shiftRunId ||
+      rawGodotPayload?.shiftRunId ||
+      incomingGodotShift?.lastShiftRunId,
+    coinBalance: incomingCanonical?.economy?.godotCoins,
+    elapsedShiftTime: incomingGodotShift?.elapsedShiftTime ?? rawGodotPayload?.elapsedShiftTime,
+    speedPct: incomingGodotShift?.speedPct,
+  };
+  const hydratedGodotShift = rawGodotPayload
+    ? accumulateGodotShiftStats(existingGodotShift, rawGodotPayload, shiftExtras)
+    : shouldHydrateGodot
+      ? (incomingAlreadyAccumulated
+          ? incomingGodotShift
+          : accumulateGodotShiftStats(existingGodotShift, incomingGodotShift, shiftExtras))
+      : incomingGodotShift;
+
+  const canonicalState = {
+    ...incomingCanonical,
+    ...(shouldHydrateGodot ? { godotShift: hydratedGodotShift } : {}),
+    rewardsSummary:
+      incomingCanonical?.rewardsSummary && typeof incomingCanonical.rewardsSummary === "object"
+        ? incomingCanonical.rewardsSummary
+        : buildRewardsSummary(incomingCanonical),
+  };
+
+  console.log("[BC progression upsert target]", {
+    authUserId: session?.user?.id || authUserId || null,
+    authProfileUserId: profile?.user_id || null,
+    progressionOwnerUserId,
+    progressionOwnerRestaurantId,
+    canonicalPoints: canonicalState?.economy?.points ?? null,
+    rewardsSummary: canonicalState?.rewardsSummary ?? null,
+    skillBankMode: skillMeasurement ? resolveSkillBankUpdateMode(payload || {}) : null,
+  });
   const writePlan = resolveCanonicalWriteState({
     serverRow: existingRow || null,
     incomingState: canonicalState,
   });
 
-  const nextCanonicalState = {
+  let nextCanonicalState = {
     ...writePlan.state,
     rewardsSummary:
       writePlan.state?.rewardsSummary && typeof writePlan.state.rewardsSummary === "object"
@@ -405,6 +484,27 @@ async function upsertCanonicalProgressionState({
       0,
     capturedAt: Date.now(),
   };
+
+  // Long-term skill radar bank: blend encounter measurement into persistent skills.
+  // Always base the bank on the server row so client snapshots cannot hard-replace it.
+  const previousBankState = extractSkillBankFromCanonicalState(existingRow?.canonical_state);
+  const bankUpdate = applySkillBankUpdate({
+    currentBank: previousBankState.bank,
+    measurement: skillMeasurement,
+    outcome: payload?.outcome || payload?.finalOutcome || null,
+    mode: resolveSkillBankUpdateMode(payload || {}),
+    sampleCount: previousBankState.meta?.sampleCount || 0,
+  });
+  if (bankUpdate) {
+    nextCanonicalState = attachSkillBankToCanonicalState(nextCanonicalState, bankUpdate);
+    console.log("[BC skill bank] updated", {
+      mode: bankUpdate.meta.lastMode,
+      seeded: bankUpdate.seeded,
+      sampleCount: bankUpdate.meta.sampleCount,
+      bank: bankUpdate.bank,
+      outcome: bankUpdate.meta.lastOutcome,
+    });
+  }
 
   const row = {
     user_id: progressionOwnerUserId,
@@ -428,11 +528,39 @@ async function upsertCanonicalProgressionState({
     return { ok: false, error: error.message || String(error) };
   }
 
+  try {
+    await upsertWaiterLeaderboardRow({
+      supabase,
+      userId: progressionOwnerUserId,
+      restaurantId: progressionOwnerRestaurantId,
+      canonicalState: nextCanonicalState,
+    });
+  } catch (leaderboardError) {
+    console.warn("[LEADERBOARD] post-progression upsert failed", leaderboardError);
+  }
+
+  const persistSource = String(payload?.source || "").toLowerCase();
+  if (persistSource === "godot_shift" && payload?.canonicalOnly === true) {
+    try {
+      await persistGodotShiftEncounterRows({
+        supabase,
+        userId: progressionOwnerUserId,
+        restaurantId: progressionOwnerRestaurantId,
+        payload: payload?.godotShift && typeof payload.godotShift === "object"
+          ? { ...payload.godotShift, shiftRunId: payload.shiftRunId || payload.godotShift.shiftRunId }
+          : payload,
+      });
+    } catch (encounterError) {
+      console.warn("[GODOT BOARD] encounter persist failed", encounterError);
+    }
+  }
+
   return {
     ok: true,
     merged: !!writePlan.merged,
     staleBaseMerged: !!writePlan.rejectedStale,
     canonicalState: nextCanonicalState,
+    skillBank: bankUpdate?.bank || previousBankState.bank || null,
   };
 }
 
@@ -560,7 +688,8 @@ export function makeProgressReportSubmitHandler({
         inserted,
         updated: !!writeResult?.updated,
         serverSkillSnapshot:
-          nextPayload?.skills && typeof nextPayload.skills === "object"
+          progressionStateResult?.skillBank ||
+          (nextPayload?.skills && typeof nextPayload.skills === "object"
             ? {
                 read: Number(nextPayload.skills.read ?? nextPayload.skills.ask ?? 0),
                 framing: Number(nextPayload.skills.framing ?? nextPayload.skills.recommend ?? 0),
@@ -571,11 +700,12 @@ export function makeProgressReportSubmitHandler({
                 closing: Number(nextPayload.skills.closing ?? nextPayload.skills.commit ?? 0),
                 speed: Number(nextPayload.skills.speed ?? 0),
               }
-            : null,
+            : null),
         serverProgressionState:
-          nextPayload?.progressionState && typeof nextPayload.progressionState === "object"
+          progressionStateResult?.canonicalState ||
+          (nextPayload?.progressionState && typeof nextPayload.progressionState === "object"
             ? nextPayload.progressionState
-            : null,
+            : null),
         syncedEncounterNumber: nextPayload?.encounterNumber ?? null,
         syncedAt: nextPayload?.updatedAt ?? Date.now(),
         progressionStateOk: !!progressionStateResult?.ok,

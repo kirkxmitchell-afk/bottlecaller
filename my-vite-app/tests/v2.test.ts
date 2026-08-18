@@ -13,6 +13,7 @@ import { calculateRewardValue, deriveTier } from "../src/progressionStore.js";
 import {
   getWalkAwayMistakeThreshold,
   mergeV2ProgressionAuthorityStates,
+  mergeBottleRewardStates,
   resolveCanonicalWriteState,
   shouldPreferAuthoritativeV2Authority,
   shouldSubmitV2ProgressReportGate,
@@ -30,6 +31,11 @@ import {
   getEncounterMoodImageV3,
   resolveEncounterMoodV3,
 } from "../src/game/encounterV3";
+import {
+  applySkillBankUpdate,
+  outcomeBiasForSkillBank,
+  SKILL_BANK_LEARNING_RATE,
+} from "../src/game/skillBank";
 import { evaluateObjectPath, evaluateOfferAccess } from "../src/game/guestProfiles";
 
 test("V2 vertical slice uses the configured five-encounter demo order", () => {
@@ -45,6 +51,14 @@ test("V2 vertical slice uses the configured five-encounter demo order", () => {
   ]);
   assert.equal(getTier1VerticalSliceEncounters(16).length, 16);
   assert.equal(getTier1VerticalSliceEncounters(16).at(-1)?.id, "encounter_v2_016");
+});
+
+test("V2 success quality awards 20, 15, or 10 authority points", () => {
+  for (const encounter of getTier1VerticalSliceEncounters(16)) {
+    assert.equal(encounter.rewards?.premiumSuccess, 20, encounter.id);
+    assert.equal(encounter.rewards?.standardSuccess, 15, encounter.id);
+    assert.equal(encounter.rewards?.weakSuccess, 10, encounter.id);
+  }
 });
 
 test("V2 difficulty settings affect gameplay pressure", () => {
@@ -240,6 +254,30 @@ test("hydrate prefers merge and never replaces richer local attempts with AP-onl
   assert.equal(merged.totalAP, 100);
 });
 
+test("bottle reward merge keeps claimed rewards from both server and incoming", () => {
+  const merged = mergeBottleRewardStates(
+    {
+      totalAP: 120,
+      tierUnlocked: 2,
+      rewards: [
+        { id: "starter_bottle", name: "Starter Bottle", claimed: true, claimedAt: 100 },
+      ],
+    },
+    {
+      totalAP: 180,
+      tierUnlocked: 2,
+      rewards: [
+        { id: "bronze_bottle", name: "Bronze Bottle", claimed: true, claimedAt: 200 },
+      ],
+    },
+  );
+
+  assert.equal(merged?.totalAP, 180);
+  assert.equal(merged?.rewards?.length, 2);
+  assert.ok(merged?.rewards?.some((reward) => reward.id === "starter_bottle" && reward.claimed));
+  assert.ok(merged?.rewards?.some((reward) => reward.id === "bronze_bottle" && reward.claimed));
+});
+
 test("canonical upsert merges attempts and keeps server base when client basedOn is stale", () => {
   const serverRow = {
     updated_at: new Date(2_000).toISOString(),
@@ -297,6 +335,168 @@ test("canonical upsert merges attempts and keeps server base when client basedOn
   assert.equal(result.state.v2.authority.attempts.length, 2);
   assert.ok(result.state.v2.authority.attempts.some((item: any) => item.key === "s1"));
   assert.ok(result.state.v2.authority.attempts.some((item: any) => item.key === "c1"));
+});
+
+test("Godot shift stats accumulate guests, bottles, and greetings without double-counting a rerun", async () => {
+  const {
+    accumulateGodotShiftStats,
+    mergeGodotShiftCanonical,
+    buildGodotShiftEncounterDrafts,
+    mergeCanonicalProgressionState,
+  } = await import("../src/game/v2ProgressionAuthority");
+
+  const first = accumulateGodotShiftStats(null, {
+    shiftRunId: "shift-1",
+    guestServices: 3,
+    walkAways: 1,
+    wineSales: 2,
+    wineOffers: 3,
+    bottleMeter: 2,
+    bottleMeterMax: 5,
+    operationalAuthorityDelta: 12,
+    elapsedShiftTime: 240,
+    interactionAuthorityEvents: [
+      { accepted: true, greetingRating: "strong" },
+      { accepted: false, greetingRating: "poor" },
+      { recovered: true, greetingRating: "acceptable" },
+    ],
+  }, { shiftRunId: "shift-1", coinBalance: 9, speedPct: 61 });
+
+  assert.equal(first.guestsServed, 2);
+  assert.equal(first.guestsLost, 1);
+  assert.equal(first.bottlesSold, 2);
+  assert.equal(first.bottlesAttempted, 3);
+  assert.equal(first.shiftsCompleted, 1);
+  assert.equal(first.greetingAcceptedCount, 2);
+  assert.equal(first.greetingSampleCount, 3);
+  assert.equal(first.lastWineStreak, 2);
+  assert.equal(first.avgTimeSellingBottleSec, 120);
+
+  const rerun = accumulateGodotShiftStats(first, {
+    shiftRunId: "shift-1",
+    guestServices: 3,
+    walkAways: 1,
+    wineSales: 2,
+    wineOffers: 3,
+  }, { shiftRunId: "shift-1" });
+  assert.equal(rerun.guestsServed, 2);
+  assert.equal(rerun.shiftsCompleted, 1);
+
+  const second = accumulateGodotShiftStats(first, {
+    shiftRunId: "shift-2",
+    guestServices: 1,
+    walkAways: 0,
+    wineSales: 1,
+    wineOffers: 1,
+    operationalAuthorityDelta: 4,
+  }, { shiftRunId: "shift-2" });
+  assert.equal(second.guestsServed, 3);
+  assert.equal(second.bottlesSold, 3);
+  assert.equal(second.shiftsCompleted, 2);
+  assert.equal(second.authorityDeltas.length, 2);
+
+  const merged = mergeGodotShiftCanonical(first, second);
+  assert.equal(merged.guestsServed, 3);
+  assert.equal(merged.lastShiftRunId, "shift-2");
+
+  const staleClient = accumulateGodotShiftStats(null, {
+    shiftRunId: "shift-2",
+    guestServices: 1,
+    walkAways: 0,
+    wineSales: 1,
+    wineOffers: 1,
+  }, { shiftRunId: "shift-2" });
+  const recovered = mergeGodotShiftCanonical(first, staleClient);
+  assert.equal(recovered.guestsServed, 3);
+  assert.equal(recovered.bottlesSold, 3);
+
+  const drafts = buildGodotShiftEncounterDrafts({
+    shiftRunId: "shift-1",
+    guestServices: 2,
+    walkAways: 1,
+  });
+  assert.equal(drafts.length, 2);
+  assert.equal(drafts.filter((row) => row.chainSignal === "green").length, 1);
+  assert.equal(drafts.filter((row) => row.chainSignal === "red").length, 1);
+
+  const detailedDrafts = buildGodotShiftEncounterDrafts({
+    shiftRunId: "shift-detailed",
+    guestServices: 3,
+    walkAways: 1,
+    guestOutcomes: [
+      {
+        serviceId: "0:guest-a",
+        guestId: "guest-a",
+        v2EncounterId: "encounter_v2_014",
+        completionKind: "paid_completion",
+        performanceGrade: "A",
+        chainSignal: "green",
+        outcome: "premium_success",
+        finalMood: "green",
+        serviceQualityScore: 94,
+        moodHistory: [{ mood: "green", reason: "seated" }],
+        wineSold: true,
+      },
+      {
+        serviceId: "1:guest-b",
+        guestId: "guest-b",
+        completionKind: "paid_completion",
+        performanceGrade: "C",
+        chainSignal: "yellow",
+        outcome: "weak_success",
+        finalMood: "orange",
+        serviceQualityScore: 64,
+        moodHistory: [
+          { mood: "green", reason: "seated" },
+          { mood: "orange", reason: "table_patience" },
+        ],
+        wineSold: false,
+      },
+      {
+        serviceId: "2:guest-c",
+        guestId: "guest-c",
+        completionKind: "seated_walkout",
+        performanceGrade: "F",
+        chainSignal: "red",
+        outcome: "failure",
+        finalMood: "annoyed",
+        serviceQualityScore: 0,
+        walkedOut: true,
+      },
+    ],
+  });
+  assert.deepEqual(detailedDrafts.map((row) => row.performanceGrade), ["A", "C", "F"]);
+  assert.deepEqual(detailedDrafts.map((row) => row.chainSignal), ["green", "yellow", "red"]);
+  assert.deepEqual(
+    detailedDrafts.map((row) => row.outcome),
+    ["premium_success", "weak_success", "failure"],
+  );
+  assert.equal(detailedDrafts[0].bottleServed, true);
+  assert.equal(detailedDrafts[1].reflection.serviceQualityScore, 64);
+  assert.equal(detailedDrafts[1].reflection.moodHistory.length, 2);
+  assert.equal(detailedDrafts[2].reflection.finalMood, "annoyed");
+  assert.equal(new Set(detailedDrafts.map((row) => row.eventId)).size, 3);
+
+  const detailedStats = accumulateGodotShiftStats(null, {
+    shiftRunId: "shift-detailed",
+    guestServices: 3,
+    guestsServed: 99,
+    walkAways: 99,
+    guestOutcomes: [
+      { serviceId: "0:guest-a", outcome: "premium_success" },
+      { serviceId: "1:guest-b", outcome: "weak_success" },
+      { serviceId: "2:guest-c", outcome: "failure", walkedOut: true },
+    ],
+  });
+  assert.equal(detailedStats.guestsServed, 2);
+  assert.equal(detailedStats.guestsLost, 1);
+  assert.equal(detailedStats.guestOutcomes.length, 3);
+
+  const canonical = mergeCanonicalProgressionState(
+    { godotShift: first, economy: { ap: 10 } },
+    { godotShift: second, economy: { ap: 20 } },
+  );
+  assert.equal(canonical.godotShift.guestsServed, 3);
 });
 
 test("demo mode does not submit premium V2 progress reports", () => {
@@ -423,15 +623,24 @@ test("food and wine offers are independent accept/decline paths", () => {
   assert.equal(aperitifWine.placesWineOrder, true);
   assert.equal(aperitifWine.placesFoodOrder, false);
 
-  const skepticFoodLocked = evaluateOfferAccess({
+  const skepticFood = evaluateOfferAccess({
     guestType: "skeptic",
     greeting: "greet_food",
     offer: "offer_food",
     profileTier: 1,
     hasFoodRecovery: false,
   });
-  assert.equal(skepticFoodLocked.accepted, false);
-  assert.equal(skepticFoodLocked.placesFoodOrder, false);
+  assert.equal(skepticFood.accepted, true);
+  assert.equal(skepticFood.placesFoodOrder, true);
+
+  const skepticWineAfterFood = evaluateOfferAccess({
+    guestType: "skeptic",
+    greeting: "greet_food",
+    offer: "offer_wine",
+  });
+  assert.equal(skepticWineAfterFood.accepted, true);
+  assert.equal(skepticWineAfterFood.placesWineOrder, true);
+  assert.equal(skepticWineAfterFood.placesFoodOrder, false);
 });
 
 test("V2 sends economy evidence but never calculates a Godot coin amount", () => {
@@ -666,7 +875,7 @@ test("each first-run guest review has its own meal before wine is committed", as
   assert.equal(dishes.size, 5);
 });
 
-test("first-run guests allow a second wine opportunity so food can reopen after two fails", async () => {
+test("first-run guests reopen food after one wine fail, then allow a dependent second wine", async () => {
   const { getScenarioForGuest, scenarioHasSecondWineOpportunity } = await import(
     "../src/game/guestService"
   );
@@ -862,7 +1071,7 @@ test("polish: forced greeting rating recomputes modifiers; vague winePreference 
     false,
   );
 
-  assert.equal(scenarioHasSecondWineOpportunity(getScenarioForGuest("skeptic_reader")), false);
+  assert.equal(scenarioHasSecondWineOpportunity(getScenarioForGuest("skeptic_reader")), true);
   assert.equal(scenarioHasSecondWineOpportunity(null), false);
 });
 
@@ -908,4 +1117,65 @@ test("known Ask is penalized and greeting maxAp survives finalize", async () => 
       Number(session.gameState.bottleChoice?.score || 0) +
       Number(session.gameState.selectionAuthorityBonus || 0),
   );
+});
+
+test("skill bank seeds on first measurement then blends with outcome bias", () => {
+  assert.equal(outcomeBiasForSkillBank("premium_success"), 2);
+  assert.equal(outcomeBiasForSkillBank("failure"), -2);
+
+  const seed = applySkillBankUpdate({
+    currentBank: null,
+    measurement: {
+      read: 70,
+      framing: 60,
+      delivery: 80,
+      recovery: 50,
+      closing: 75,
+      speed: 55,
+    },
+    outcome: "premium_success",
+    mode: "full",
+  });
+  assert.ok(seed);
+  assert.equal(seed.seeded, true);
+  assert.equal(seed.bank.read, 70);
+
+  const afterFail = applySkillBankUpdate({
+    currentBank: seed.bank,
+    measurement: {
+      read: 40,
+      framing: 40,
+      delivery: 30,
+      recovery: 20,
+      closing: 25,
+      speed: 40,
+    },
+    outcome: "failure",
+    mode: "full",
+    sampleCount: seed.meta.sampleCount,
+  });
+  assert.ok(afterFail);
+  assert.equal(afterFail.seeded, false);
+  // Sticky blend: moves partway toward 40, plus failure bias (-2).
+  const expectedRead = Math.round(70 + SKILL_BANK_LEARNING_RATE * (40 - 70) - 2);
+  assert.equal(afterFail.bank.read, expectedRead);
+  assert.ok(afterFail.bank.read < 70 && afterFail.bank.read > 40);
+
+  const speedOnly = applySkillBankUpdate({
+    currentBank: afterFail.bank,
+    measurement: {
+      read: 0,
+      framing: 0,
+      delivery: 0,
+      recovery: 0,
+      closing: 0,
+      speed: 90,
+    },
+    mode: "speed_only",
+    sampleCount: afterFail.meta.sampleCount,
+  });
+  assert.ok(speedOnly);
+  assert.equal(speedOnly.bank.read, afterFail.bank.read);
+  assert.ok(speedOnly.bank.speed > afterFail.bank.speed);
+  assert.ok(speedOnly.bank.speed < 90);
 });

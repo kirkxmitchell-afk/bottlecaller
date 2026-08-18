@@ -1405,7 +1405,7 @@ html[data-bc-mobile-env="true"][data-bc-v2-demo="true"] #screenGameDemo{
 }
 
 html[data-bc-mobile-env="true"][data-bc-v2-demo="true"] #screenGameDemo > .panel.stack{
-  min-height: 100dvh;
+  min-height: 0;
   padding: 0 !important;
   gap: 0 !important;
   border: 0 !important;
@@ -1421,15 +1421,15 @@ html[data-bc-mobile-env="true"][data-bc-v2-demo="true"] #demoContactFooter{
 }
 
 html[data-bc-mobile-env="true"][data-bc-v2-demo="true"] #gameRootDemo{
-  min-height: 100dvh;
+  min-height: 0;
 }
 
 html[data-bc-mobile-env="true"][data-bc-v2-demo="true"] #gameRootDemoFrame{
   display: block;
   width: 100% !important;
   min-height: 0 !important;
-  height: 100dvh !important;
-  max-height: 100dvh !important;
+  height: calc(100dvh - 92px) !important;
+  max-height: calc(100dvh - 92px) !important;
   border: 0 !important;
   border-radius: 0 !important;
   background: transparent !important;
@@ -1631,28 +1631,33 @@ html[data-bc-mobile-env="true"] #screenManagerBoard #mbInstrSend{
     height: calc(100dvh - 72px) !important;
     min-height: 380px;
   }
+  html[data-bc-mobile-env="true"][data-bc-godot-demo="true"] #premiumRootFrame,
+  html[data-bc-mobile-env="true"][data-bc-godot-demo="true"] #gameRootDemoFrame{
+    height: 100dvh !important;
+    min-height: 0 !important;
+    max-height: 100dvh !important;
+  }
 }
 
 html[data-bc-mobile-env="true"][data-bc-v2-demo="true"] #screenGameDemo.screen.active{
-  height: auto !important;
-  min-height: 100dvh !important;
-  max-height: none !important;
-  overflow-y: auto !important;
-  -webkit-overflow-scrolling: touch;
+  height: calc(100dvh - 92px) !important;
+  min-height: 0 !important;
+  max-height: calc(100dvh - 92px) !important;
+  overflow: hidden !important;
 }
 
 html[data-bc-mobile-env="true"][data-bc-v2-demo="true"] #screenGameDemo > .panel.stack,
 html[data-bc-mobile-env="true"][data-bc-v2-demo="true"] #gameRootDemo{
-  height: auto !important;
+  height: 100% !important;
   max-height: none !important;
-  overflow: visible !important;
+  overflow: hidden !important;
 }
 
 html[data-bc-mobile-env="true"][data-bc-v2-demo="true"] #gameRootDemoFrame{
-  height: auto !important;
-  min-height: 100dvh !important;
-  max-height: none !important;
-  overflow: visible !important;
+  height: calc(100dvh - 92px) !important;
+  min-height: 0 !important;
+  max-height: calc(100dvh - 92px) !important;
+  overflow: hidden !important;
 }
 
 /* Desktop Godot floor: expand the demo shell to a horizontal stage. */
@@ -1682,6 +1687,65 @@ html[data-bc-godot-demo="true"] #btnDemoPremium{
 html[data-bc-godot-demo="true"] #appChromePlayCta{
   display: none !important;
   pointer-events: none !important;
+}
+
+html[data-bc-mobile-env="true"][data-bc-godot-demo="true"] .app-chrome{
+  display: none !important;
+}
+html[data-bc-mobile-env="true"][data-bc-godot-demo="true"] #app{
+  padding: 0 !important;
+  gap: 0 !important;
+}
+html[data-bc-mobile-env="true"][data-bc-godot-demo="true"] #screenGameDemo,
+html[data-bc-mobile-env="true"][data-bc-godot-demo="true"] #screenGameDemo.screen.active,
+html[data-bc-mobile-env="true"][data-bc-godot-demo="true"] #screenPremiumApp{
+  width: 100% !important;
+  height: 100dvh !important;
+  min-height: 100dvh !important;
+  max-height: 100dvh !important;
+  overflow: hidden !important;
+}
+html[data-bc-mobile-env="true"][data-bc-godot-demo="true"] #gameRootDemo,
+html[data-bc-mobile-env="true"][data-bc-godot-demo="true"] #premiumRoot,
+html[data-bc-mobile-env="true"][data-bc-godot-demo="true"] #screenGameDemo > .panel.stack{
+  height: 100dvh !important;
+  min-height: 0 !important;
+  max-height: 100dvh !important;
+  overflow: hidden !important;
+}
+html[data-bc-mobile-env="true"][data-bc-godot-demo="true"] #gameRootDemoFrame,
+html[data-bc-mobile-env="true"][data-bc-godot-demo="true"] #premiumRootFrame{
+  width: 100% !important;
+  height: 100dvh !important;
+  min-height: 0 !important;
+  max-height: 100dvh !important;
+  aspect-ratio: auto !important;
+  border-radius: 0 !important;
+  overflow: hidden !important;
+}
+html[data-bc-mobile-env="true"][data-bc-godot-demo="true"][data-bc-godot-wine="true"] #screenGameDemo,
+html[data-bc-mobile-env="true"][data-bc-godot-demo="true"][data-bc-godot-wine="true"] #screenGameDemo.screen.active,
+html[data-bc-mobile-env="true"][data-bc-godot-demo="true"][data-bc-godot-wine="true"] #screenPremiumApp{
+  height: auto !important;
+  min-height: 100dvh !important;
+  max-height: none !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+html[data-bc-mobile-env="true"][data-bc-godot-demo="true"][data-bc-godot-wine="true"] #gameRootDemo,
+html[data-bc-mobile-env="true"][data-bc-godot-demo="true"][data-bc-godot-wine="true"] #premiumRoot,
+html[data-bc-mobile-env="true"][data-bc-godot-demo="true"][data-bc-godot-wine="true"] #screenGameDemo > .panel.stack{
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+html[data-bc-mobile-env="true"][data-bc-godot-demo="true"][data-bc-godot-wine="true"] #gameRootDemoFrame,
+html[data-bc-mobile-env="true"][data-bc-godot-demo="true"][data-bc-godot-wine="true"] #premiumRootFrame{
+  height: auto !important;
+  min-height: 100dvh !important;
+  max-height: none !important;
+  overflow: visible !important;
 }
 
 /* =========================================================
@@ -2938,6 +3002,21 @@ html[data-bc-godot-demo="true"] #appChromePlayCta{
 
 #screenWaiterLeaderboard > .panel.stack{
   width: min(1180px, calc(100vw - 24px));
+  overflow: visible;
+  max-height: none;
+}
+
+#waiterLeaderboardPlayerStatsPanel{
+  display:block !important;
+  margin-top: 18px !important;
+}
+
+#waiterLeaderboardRows .waiter-user-player-stats-row,
+#waiterLeaderboardRows .waiter-leaderboard-self-stats,
+#waiterLeaderboardRows .waiter-user-team-stats,
+#waiterLeaderboardRows .mb-player-stats-grid,
+#waiterLeaderboardRows .mb-player-stats-card{
+  display:none !important;
 }
 
 #screenProfile .topbar,
@@ -3126,7 +3205,7 @@ html[data-bc-godot-demo="true"] #appChromePlayCta{
 }
 
 #screenWaiterLeaderboard .waiter-user-detail-row.hidden{
-  display:none;
+  display:none !important;
 }
 
 #screenWaiterLeaderboard .waiter-user-detail-panel{
@@ -3161,6 +3240,24 @@ html[data-bc-godot-demo="true"] #appChromePlayCta{
   display:flex;
   flex-wrap:wrap;
   gap:8px;
+}
+
+#screenWaiterLeaderboard .waiter-user-team-stats,
+#screenManagerBoard .waiter-user-team-stats,
+#profileStandingCard .waiter-user-team-stats{
+  grid-column:1 / -1;
+  padding:12px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:
+    linear-gradient(180deg, rgba(196,181,253,0.08), rgba(255,255,255,0.02)),
+    rgba(255,255,255,0.03);
+}
+
+#screenWaiterLeaderboard .waiter-user-team-stats-title,
+#screenManagerBoard .waiter-user-team-stats-title,
+#profileStandingCard .waiter-user-team-stats-title{
+  margin-bottom:4px;
 }
 
 #screenWaiterLeaderboard .mb-badge,
@@ -3791,6 +3888,13 @@ html[data-bc-godot-demo="true"] #appChromePlayCta{
     grid-template-columns: 1fr;
   }
 
+  #screenManagerBoard .mb-player-stats-grid,
+  #screenWaiterLeaderboard .mb-player-stats-grid,
+  #profileStandingCard .mb-player-stats-grid,
+  .mb-player-stats-grid{
+    grid-template-columns:repeat(2, minmax(0, 1fr)) !important;
+  }
+
   #screenManagerBoard #mbTab_messenger > .card > div[style*="grid-template-columns: 280px 1fr"]{
     grid-template-columns: 1fr !important;
   }
@@ -4217,6 +4321,106 @@ html[data-bc-mobile-env="true"] #screenManagerBoard .mb-message-card .mbCoachSug
   gap:12px;
 }
 
+#screenManagerBoard .mb-player-stats-list,
+#screenWaiterLeaderboard .mb-player-stats-list{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+
+#screenManagerBoard .mb-player-stats-card,
+#screenWaiterLeaderboard .mb-player-stats-card{
+  border:1px solid rgba(255,255,255,0.08);
+  border-radius:12px;
+  background:
+    linear-gradient(180deg, rgba(196,181,253,0.08), rgba(255,255,255,0.02)),
+    rgba(255,255,255,0.03);
+  padding:12px 14px;
+}
+
+#screenManagerBoard .mb-player-stats-summary,
+#screenWaiterLeaderboard .mb-player-stats-summary{
+  list-style:none;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  flex-wrap:wrap;
+}
+
+#screenManagerBoard .mb-player-stats-summary::-webkit-details-marker,
+#screenWaiterLeaderboard .mb-player-stats-summary::-webkit-details-marker,
+#screenManagerBoard .mb-player-stats-summary::marker,
+#screenWaiterLeaderboard .mb-player-stats-summary::marker{
+  display:none;
+  content:"";
+}
+
+#screenManagerBoard .mb-player-stats-name,
+#screenWaiterLeaderboard .mb-player-stats-name{
+  font-weight:600;
+  color:rgba(244,246,247,0.96);
+}
+
+#screenManagerBoard .mb-player-stats-summary .small-text,
+#screenWaiterLeaderboard .mb-player-stats-summary .small-text{
+  color:rgba(244,246,247,0.62);
+}
+
+#screenWaiterLeaderboard .mb-player-stats-grid,
+#screenManagerBoard .mb-player-stats-grid,
+#profileStandingCard .mb-player-stats-grid,
+.mb-player-stats-grid{
+  grid-template-columns:repeat(4, minmax(0, 1fr)) !important;
+  gap:10px !important;
+  margin-top:12px !important;
+}
+
+details.mb-player-stats-card:not([open]) > .mb-player-stats-grid{
+  display:none !important;
+}
+
+details.mb-player-stats-card[open] > .mb-player-stats-grid,
+#screenWaiterLeaderboard details[open] .mb-player-stats-grid,
+#screenManagerBoard details[open] .mb-player-stats-grid{
+  display:grid !important;
+}
+
+#screenWaiterLeaderboard .mb-player-stat-cell,
+#screenManagerBoard .mb-player-stat-cell,
+#profileStandingCard .mb-player-stat-cell,
+.mb-player-stat-cell{
+  display:flex !important;
+  flex-direction:column !important;
+  justify-content:flex-start !important;
+  gap:6px !important;
+  min-height:72px !important;
+  padding:14px 16px !important;
+  border-radius:12px !important;
+  border:1px solid rgba(255,255,255,0.06) !important;
+  background:rgba(255,255,255,0.04) !important;
+}
+
+#screenManagerBoard .mb-player-stat-cell .small-text,
+#screenWaiterLeaderboard .mb-player-stat-cell .small-text,
+#profileStandingCard .mb-player-stat-cell .small-text{
+  font-size:12px;
+  line-height:1.35;
+  color:rgba(244,246,247,0.62);
+}
+
+#screenManagerBoard .mb-player-stat-cell strong,
+#screenWaiterLeaderboard .mb-player-stat-cell strong,
+#profileStandingCard .mb-player-stat-cell strong{
+  display:block;
+  margin-top:0;
+  font-size:18px;
+  font-weight:700;
+  line-height:1.2;
+  color:rgba(244,246,247,0.96);
+}
+
 #screenManagerBoard .mb-performance-card,
 #screenManagerBoard .mb-user-metric-card,
 #screenManagerBoard .mb-selection-preview-card,
@@ -4375,18 +4579,30 @@ html[data-bc-mobile-env="true"] #screenManagerBoard .mb-message-card .mbCoachSug
   font-size:12px;
 }
 
+#mbPerformanceHistoryPanel .manager-encounter-summary-host,
 #screenManagerBoard .manager-encounter-summary-host{
   display:flex;
   flex-direction:column;
   gap:12px;
+  margin-top:4px;
 }
 
+#mbPerformanceHistoryPanel .manager-encounter-summary-title,
+#screenManagerBoard .manager-encounter-summary-title{
+  margin: 4px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(248,244,255,0.94);
+}
+
+#mbPerformanceHistoryPanel .manager-encounter-summary-list,
 #screenManagerBoard .manager-encounter-summary-list{
   display:flex;
   flex-direction:column;
   gap:12px;
 }
 
+#mbPerformanceHistoryPanel .manager-encounter-summary-card,
 #screenManagerBoard .manager-encounter-summary-card{
   padding:12px;
   display:flex;
@@ -4394,6 +4610,7 @@ html[data-bc-mobile-env="true"] #screenManagerBoard .mb-message-card .mbCoachSug
   gap:10px;
 }
 
+#mbPerformanceHistoryPanel .manager-encounter-user-btn,
 #screenManagerBoard .manager-encounter-user-btn{
   width:100%;
   display:flex;
@@ -4409,15 +4626,18 @@ html[data-bc-mobile-env="true"] #screenManagerBoard .mb-message-card .mbCoachSug
   text-align:left;
 }
 
+#mbPerformanceHistoryPanel .manager-encounter-user-title,
 #screenManagerBoard .manager-encounter-user-title{
   font-weight:600;
 }
 
+#mbPerformanceHistoryPanel .manager-encounter-user-meta,
 #screenManagerBoard .manager-encounter-user-meta{
   font-size:12px;
   opacity:.78;
 }
 
+#mbPerformanceHistoryPanel .manager-encounter-detail-window,
 #screenManagerBoard .manager-encounter-detail-window{
   padding:14px;
   display:flex;
@@ -4425,6 +4645,7 @@ html[data-bc-mobile-env="true"] #screenManagerBoard .mb-message-card .mbCoachSug
   gap:12px;
 }
 
+#mbPerformanceHistoryPanel .manager-encounter-detail-header,
 #screenManagerBoard .manager-encounter-detail-header{
   display:flex;
   align-items:flex-start;
@@ -4433,31 +4654,87 @@ html[data-bc-mobile-env="true"] #screenManagerBoard .mb-message-card .mbCoachSug
   flex-wrap:wrap;
 }
 
+#mbPerformanceHistoryPanel .manager-encounter-detail-title,
 #screenManagerBoard .manager-encounter-detail-title{
   font-weight:600;
   font-size:16px;
 }
 
+#mbPerformanceHistoryPanel .manager-encounter-detail-meta,
 #screenManagerBoard .manager-encounter-detail-meta{
   margin-top:4px;
   font-size:12px;
   opacity:.78;
 }
 
+#mbPerformanceHistoryPanel .manager-encounter-detail-list,
 #screenManagerBoard .manager-encounter-detail-list{
   display:flex;
   flex-direction:column;
   gap:10px;
 }
 
+#mbPerformanceHistoryPanel .manager-encounter-summary-item,
 #screenManagerBoard .manager-encounter-summary-item{
   display:flex;
   flex-direction:column;
   gap:8px;
-  padding:10px;
-  border-radius:12px;
-  border:1px solid rgba(255,255,255,0.07);
-  background:rgba(255,255,255,0.03);
+  padding:10px 12px;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015)),
+    rgba(255,255,255,0.02);
+}
+
+#mbPerformanceHistoryPanel .manager-encounter-summary-toggle,
+#screenManagerBoard .manager-encounter-summary-toggle{
+  width:100%;
+  display:block;
+  padding:0;
+  border:0;
+  background:transparent;
+  color:rgba(244,246,247,0.94);
+  font:inherit;
+  font-size:13px;
+  font-weight:560;
+  text-align:left;
+  cursor:pointer;
+  line-height:1.35;
+}
+
+#mbPerformanceHistoryPanel .manager-encounter-summary-details,
+#screenManagerBoard .manager-encounter-summary-details{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  padding-top:2px;
+}
+
+#mbPerformanceHistoryPanel .manager-encounter-summary-details.is-collapsed,
+#screenManagerBoard .manager-encounter-summary-details.is-collapsed{
+  display:none;
+}
+
+#mbPerformanceHistoryPanel .manager-encounter-summary-field,
+#screenManagerBoard .manager-encounter-summary-field{
+  display:grid;
+  grid-template-columns: 78px 1fr;
+  gap:8px;
+  align-items:start;
+  font-size:12px;
+  line-height:1.4;
+}
+
+#mbPerformanceHistoryPanel .manager-encounter-summary-field-label,
+#screenManagerBoard .manager-encounter-summary-field-label{
+  opacity:.72;
+  font-weight:600;
+}
+
+#mbPerformanceHistoryPanel .manager-encounter-summary-field-value,
+#screenManagerBoard .manager-encounter-summary-field-value{
+  color:rgba(239,247,255,0.92);
 }
 
 @keyframes mbDetailFadeIn{

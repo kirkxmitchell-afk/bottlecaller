@@ -733,8 +733,8 @@ function makeTier1Encounter(args: {
     redHerring: args.redHerring,
     lesson: args.lesson,
     rewards: {
-      premiumSuccess: 30,
-      standardSuccess: 20,
+      premiumSuccess: 20,
+      standardSuccess: 15,
       weakSuccess: 10,
       neutralExit: 5,
       failure: -15,

@@ -87,16 +87,12 @@ var guest_entrance_pause = 1.5
 var couple_follow_delay = 0.20
 
 ## How long an entrance party stays green→annoyed while waiting for a free table.
-@export_range(15.0, 180.0, 0.1)
-var entrance_wait_patience_seconds = 110.0
+@export_range(15.0, 240.0, 0.1)
+var entrance_wait_patience_seconds = 180.0
 
-## After entrance mood hits annoyed, how long before they leave and return later.
+## After entrance mood hits annoyed, how long before they leave for good.
 @export_range(5.0, 90.0, 0.1)
-var entrance_annoyed_leave_seconds = 28.0
-
-## How long browsing guests stay away before returning to the entrance.
-@export_range(5.0, 90.0, 0.1)
-var entrance_return_later_seconds = 18.0
+var entrance_annoyed_leave_seconds = 55.0
 
 const GUEST_ENTRANCE_SLOT_OFFSETS = [
 	Vector2.ZERO,
@@ -120,8 +116,8 @@ var table_enjoy_seconds = 5.0
 var table_drinking_seconds = 8.0
 
 ## Continuous time in red or annoyed mood before guests walk out unpaid.
-@export_range(5.0, 90.0, 0.1)
-var critical_mood_walkout_seconds = 28.0
+@export_range(5.0, 120.0, 0.1)
+var critical_mood_walkout_seconds = 75.0
 
 
 @export_category("Action Time Indicator")
@@ -190,13 +186,13 @@ var mise_restock_seconds = 7.0
 @export_category("Tier 2 Unlock Requirements")
 
 @export_range(1, 20, 1)
-var tier_2_required_guest_services = 5
+var tier_2_required_guest_services = 4
 
 @export_range(0, 500, 1)
 var tier_2_required_coins = 60
 
 @export_range(0, 20, 1)
-var tier_2_required_wine_sales = 5
+var tier_2_required_wine_sales = 4
 
 @export_range(0, 50, 1)
 var tier_2_required_station_score = 12
@@ -211,16 +207,16 @@ var tier_2_required_ap = 100
 var ap_meter_max = 100
 
 @export_range(0, 100, 1)
-var table_complete_ap_reward = 10
+var table_complete_ap_reward = 5
 
 @export_range(0, 100, 1)
-var wine_sale_ap_reward = 5
+var wine_sale_ap_reward = 2
 
 @export_range(0, 100, 1)
-var happy_guest_ap_bonus = 3
+var happy_guest_ap_bonus = 1
 
 @export_range(0, 100, 1)
-var clean_station_ap_bonus = 2
+var clean_station_ap_bonus = 1
 
 @export_range(0, 100, 1)
 var guest_unhappy_ap_penalty = 5
@@ -271,6 +267,11 @@ var clean_station_coin_bonus = 1
 ## always clamped between 0 and AP Meter Max.
 var ap = 0
 
+## Vite bottle-wallet AP from wine outcomes. Starter / bottle unlocks
+## follow this total, not floor table AP.
+var vite_reported_total_ap = 0
+var vite_ap_at_shift_start = 0
+
 ## Shift score preserves positive and negative performance for the
 ## result screen and future Vite scoring integration.
 var shift_score = 0
@@ -295,6 +296,7 @@ var shift_run_id = ""
 var processed_v2_result_ids: Dictionary = {}
 var v2_authority_delta_total = 0
 var interaction_authority_events: Array = []
+var guest_service_outcomes: Array = []
 
 var elapsed_shift_time = 0.0
 var shift_is_active = true
@@ -310,8 +312,8 @@ var wine_sales_count = 0
 var station_interaction_score = 0
 
 ## When embedded in the BottleCaller web app, Offer Wine opens the V2
-## encounter. Shift time keeps running (wall-clock) so the playthrough
-## clock continues inside the wine game; that table's patience is paused.
+## encounter. Real wine time is halved onto the floor clock; that table's
+## patience is paused. Encounter return then adds a fixed 2s action.
 var waiting_for_v2_encounter = false
 var pending_v2_table_id = ""
 var pending_v2_guest_reply = ""
@@ -319,6 +321,7 @@ var bridge_controller: Node = null
 var _v2_offer_wall_start_sec := 0.0
 var _v2_offer_elapsed_start := 0.0
 var _v2_last_wall_sync_sec := 0.0
+const V2_WINE_TIME_SCALE := 0.5
 
 
 # -------------------------------------------------------------------
@@ -601,7 +604,7 @@ func _process(delta):
 		return
 
 	# Wine overlay may throttle the iframe; keep the playthrough clock
-	# aligned to wall time so shift time continues during the encounter.
+	# moving at half wall time so a 2-minute wine visit costs 1 minute.
 	if waiting_for_v2_encounter:
 		_sync_shift_clock_during_v2_wine()
 		_process_scheduled_events()
@@ -627,7 +630,8 @@ func _sync_shift_clock_during_v2_wine() -> void:
 
 	var now_sec = Time.get_unix_time_from_system()
 	var wall_elapsed = maxf(0.0, now_sec - _v2_offer_wall_start_sec)
-	var target_elapsed = _v2_offer_elapsed_start + wall_elapsed
+	var floor_elapsed = wall_elapsed * V2_WINE_TIME_SCALE
+	var target_elapsed = _v2_offer_elapsed_start + floor_elapsed
 	var step = target_elapsed - elapsed_shift_time
 	if step <= 0.001:
 		return
@@ -886,7 +890,11 @@ func _create_ready_table_session(table) -> Dictionary:
 		"wine_opportunity_pending": false,
 		"wine_opportunity_number": 1,
 		"wine_offer_attempts": 0,
+		"wine_offer_opened": 0,
 		"food_offer_reopened": false,
+		"second_wine_after_food": false,
+		"second_wine_available": false,
+		"wine_return_phase": "",
 		"post_wine_follow_up": false,
 		"bill_phase_service": false,
 		"mid_service_offer": false,
@@ -905,7 +913,11 @@ func _create_ready_table_session(table) -> Dictionary:
 		"wine_sale_pending": false,
 		"wine_coin_reward_pending": 0,
 		"v2_result_id": "",
+		"v2_encounter_id": "",
 		"v2_outcome": "",
+		"v2_performance_grade": "",
+		"v2_chain_signal": "",
+		"v2_authority_delta": 0,
 		"had_guest_unhappy": false,
 		"station_annoyance_start": annoyed_station_events,
 		"pos_entered": false,
@@ -922,7 +934,9 @@ func _create_ready_table_session(table) -> Dictionary:
 		"paid": false,
 
 		"last_progress_time": elapsed_shift_time,
-		"mood_state": "happy",
+		"service_started_at": elapsed_shift_time,
+		"mood_state": "green",
+		"mood_history": [],
 		"annoyed": false,
 		"critical_mood_elapsed": 0.0,
 		"critical_mood_warned": false,
@@ -1044,6 +1058,14 @@ func _spawn_next_guest_for_table(table) -> bool:
 		"requires_player_seating": requires_player_seating,
 		"wait_patience_percent": 100.0,
 		"wait_mood": "green",
+		"arrival_time": elapsed_shift_time,
+		"mood_history": [{
+			"mood": "green",
+			"elapsedShiftTime": snappedf(elapsed_shift_time, 0.1),
+			"phase": "entrance_waiting",
+			"reason": "arrived",
+			"patiencePercent": 100.0,
+		}],
 		"annoyed_wait_elapsed": 0.0,
 		"return_at": -1.0,
 		"had_entrance_unhappy": false,
@@ -1087,8 +1109,6 @@ func _update_guest_arrivals():
 	for party_id in guest_parties_by_id.keys():
 		var record: Dictionary = guest_parties_by_id[party_id]
 		var state = str(record.get("state", ""))
-		if state == "browsing_away":
-			continue
 		if state != "waiting":
 			continue
 
@@ -1101,9 +1121,12 @@ func _update_guest_arrivals():
 			continue
 
 		var table_id = str(record.get("table_id", ""))
-		if not _is_table_open_for_guest(table_id):
+		var seat_table_id = _find_open_table_for_party(str(party_id))
+		if seat_table_id == "":
 			party.set_selectable(false)
 			continue
+		if seat_table_id != table_id:
+			_rebind_waiting_party_to_table(str(party_id), seat_table_id)
 
 		if bool(record.get("requires_player_seating", false)):
 			party.set_selectable(true)
@@ -1116,18 +1139,12 @@ func _update_entrance_waiting_moods(delta: float) -> void:
 		return
 
 	var leave_ids: Array[String] = []
-	var return_ids: Array[String] = []
 
 	for party_id_variant in guest_parties_by_id.keys():
 		var party_id = str(party_id_variant)
 		var record: Dictionary = guest_parties_by_id[party_id]
 		var state = str(record.get("state", ""))
 		var party = record.get("party")
-
-		if state == "browsing_away":
-			if elapsed_shift_time >= float(record.get("return_at", 0.0)):
-				return_ids.append(party_id)
-			continue
 
 		if state != "waiting":
 			continue
@@ -1152,6 +1169,13 @@ func _update_entrance_waiting_moods(delta: float) -> void:
 		var mood = _mood_band_from_percent(patience)
 		var previous_mood = str(record.get("wait_mood", "green"))
 		record["wait_mood"] = mood
+		if mood != previous_mood:
+			record = _append_mood_history_to_record(
+				record,
+				mood,
+				"entrance_patience",
+				patience
+			)
 		if party.has_method("set_mood_band"):
 			party.set_mood_band(mood)
 
@@ -1187,17 +1211,14 @@ func _update_entrance_waiting_moods(delta: float) -> void:
 		guest_parties_by_id[party_id] = record
 
 	for leave_id in leave_ids:
-		_send_entrance_party_browsing_away(leave_id)
-
-	for return_id in return_ids:
-		_return_entrance_party_from_browsing(return_id)
+		_dismiss_entrance_party(leave_id)
 
 
 func _mood_band_from_percent(percent: float) -> String:
 	var clamped = clampf(percent, 0.0, 100.0)
-	if clamped >= 45.0:
+	if clamped >= 42.0:
 		return "green"
-	if clamped >= 25.0:
+	if clamped >= 24.0:
 		return "yellow"
 	if clamped >= 10.0:
 		return "orange"
@@ -1206,7 +1227,7 @@ func _mood_band_from_percent(percent: float) -> String:
 	return "annoyed"
 
 
-func _send_entrance_party_browsing_away(party_id: String) -> void:
+func _dismiss_entrance_party(party_id: String) -> void:
 	if not guest_parties_by_id.has(party_id):
 		return
 
@@ -1216,71 +1237,41 @@ func _send_entrance_party_browsing_away(party_id: String) -> void:
 
 	var party = record.get("party")
 	var profile = record.get("profile")
-	record["state"] = "browsing_away"
-	record["return_at"] = (
-		elapsed_shift_time + entrance_return_later_seconds
-	)
-	record["requires_player_seating"] = true
-	guest_parties_by_id[party_id] = record
+	var table_id = str(record.get("table_id", ""))
+
+	guest_parties_by_id.erase(party_id)
+	if table_id != "" and str(guest_party_id_by_table.get(table_id, "")) == party_id:
+		guest_party_id_by_table.erase(table_id)
 
 	if is_instance_valid(party):
 		party.set_selectable(false)
-		if party.has_method("set_party_visible"):
-			party.set_party_visible(false)
-		elif party.has_method("hide_mood"):
-			party.hide_mood()
-			party.visible = false
+		party.queue_free()
+
+	# They will not return. Count the lost cover so the shift can still close.
+	completed_guest_services += 1
+	walk_aways += 1
+	_append_guest_service_outcome(
+		_build_entrance_walkout_outcome(record)
+	)
 
 	var name = "Guests"
 	if profile != null:
 		name = str(profile.guest_display_name)
 	_set_prompt(
 		name
-		+ " left the entrance to browse — they will return later."
+		+ " left the entrance and will not return."
 	)
-	print("ENTRANCE BROWSE AWAY: ", party_id)
+	print("ENTRANCE LEFT FOR GOOD: ", party_id)
 
+	if table_id != "":
+		_maybe_spawn_early_guest_for_closing_table(table_id)
+		if (
+			table_by_id.has(table_id)
+			and _is_table_open_for_guest(table_id)
+		):
+			_spawn_next_guest_for_table(table_by_id[table_id])
 
-func _return_entrance_party_from_browsing(party_id: String) -> void:
-	if not guest_parties_by_id.has(party_id):
-		return
-
-	var record: Dictionary = guest_parties_by_id[party_id]
-	if str(record.get("state", "")) != "browsing_away":
-		return
-
-	var party = record.get("party")
-	var profile = record.get("profile")
-	var entrance_position = _next_guest_entrance_position()
-
-	record["state"] = "waiting"
-	record["ready_time"] = elapsed_shift_time + guest_entrance_pause
-	record["return_at"] = -1.0
-	record["wait_patience_percent"] = 70.0
-	record["wait_mood"] = "yellow"
-	record["annoyed_wait_elapsed"] = 0.0
-	record["requires_player_seating"] = true
-	guest_parties_by_id[party_id] = record
-
-	if is_instance_valid(party):
-		party.party_state = "waiting"
-		party.global_position = entrance_position
-		if party.has_method("set_party_visible"):
-			party.set_party_visible(true)
-		else:
-			party.visible = true
-		if party.has_method("set_mood_band"):
-			party.set_mood_band("yellow")
-		party.set_selectable(false)
-
-	var name = "Guests"
-	if profile != null:
-		name = str(profile.guest_display_name)
-	_set_prompt(
-		name
-		+ " have returned to the entrance."
-	)
-	print("ENTRANCE RETURN LATER: ", party_id)
+	_maybe_finish_shift_after_departures()
 
 
 func _maybe_spawn_early_guest_for_closing_table(table_id: String) -> void:
@@ -1320,6 +1311,61 @@ func _is_table_open_for_guest(table_id: String) -> bool:
 	)
 
 
+func _table_available_to_waiting_party(table_id: String, party_id: String) -> bool:
+	if not _is_table_open_for_guest(table_id):
+		return false
+	var claimed_id = str(guest_party_id_by_table.get(table_id, ""))
+	if claimed_id == "" or claimed_id == party_id:
+		return true
+	if not guest_parties_by_id.has(claimed_id):
+		return true
+	var other: Dictionary = guest_parties_by_id[claimed_id]
+	if str(other.get("state", "")) == "walking":
+		return false
+	# Another waiting party still owns this table as its assignment.
+	return str(other.get("table_id", "")) != table_id
+
+
+func _find_open_table_for_party(party_id: String) -> String:
+	if not guest_parties_by_id.has(party_id):
+		return ""
+	var record: Dictionary = guest_parties_by_id[party_id]
+	var preferred = str(record.get("table_id", ""))
+	if preferred != "" and _table_available_to_waiting_party(preferred, party_id):
+		return preferred
+	for table in table_slots:
+		var table_id = str(table.get_table_id())
+		if _table_available_to_waiting_party(table_id, party_id):
+			return table_id
+	return ""
+
+
+func _rebind_waiting_party_to_table(party_id: String, new_table_id: String) -> bool:
+	if not guest_parties_by_id.has(party_id) or new_table_id == "":
+		return false
+	var record: Dictionary = guest_parties_by_id[party_id]
+	var old_table_id = str(record.get("table_id", ""))
+	if old_table_id == new_table_id:
+		return true
+
+	if old_table_id != "" and str(guest_party_id_by_table.get(old_table_id, "")) == party_id:
+		guest_party_id_by_table.erase(old_table_id)
+
+	record["table_id"] = new_table_id
+	guest_parties_by_id[party_id] = record
+	guest_party_id_by_table[new_table_id] = party_id
+
+	var party = record.get("party")
+	if is_instance_valid(party):
+		party.assigned_table_id = new_table_id
+
+	var table = table_by_id.get(new_table_id)
+	var profile = record.get("profile")
+	if is_instance_valid(table) and profile != null:
+		_prepare_table_for_profile(table, profile)
+	return true
+
+
 func _on_guest_party_selected(
 	party_id: String,
 	table_id: String
@@ -1327,17 +1373,23 @@ func _on_guest_party_selected(
 	if not guest_parties_by_id.has(party_id):
 		return
 
-	if not _is_table_open_for_guest(table_id):
+	var seat_table_id = _find_open_table_for_party(party_id)
+	if seat_table_id == "":
 		var phase = "unavailable"
-		if table_sessions.has(table_id):
-			phase = str(table_sessions[table_id].get("phase", phase))
+		var assigned_id = str(table_id)
+		if guest_parties_by_id.has(party_id):
+			assigned_id = str(guest_parties_by_id[party_id].get("table_id", assigned_id))
+		if table_sessions.has(assigned_id):
+			phase = str(table_sessions[assigned_id].get("phase", phase))
 		_set_prompt(
-			"The assigned table is not open yet: "
+			"No open table yet. Reset a finished table, then seat them. "
+			+ "("
 			+ phase.replace("_", " ")
-			+ "."
+			+ ")"
 		)
 		return
 
+	_rebind_waiting_party_to_table(party_id, seat_table_id)
 	_start_guest_party_walk(party_id)
 
 
@@ -1403,18 +1455,24 @@ func _on_guest_party_arrived(
 	if table.has_method("seat_guests"):
 		table.seat_guests()
 
-	table_sessions[table_id] = _create_active_guest_session(
+	var active_session = _create_active_guest_session(
 		table,
 		profile,
 		int(record.get("guest_index", -1))
 	)
+	active_session["entrance_wait_seconds"] = maxf(
+		0.0,
+		elapsed_shift_time - float(record.get("arrival_time", elapsed_shift_time))
+	)
+	var entrance_history = record.get("mood_history", [])
+	if typeof(entrance_history) == TYPE_ARRAY:
+		active_session["entrance_mood_history"] = (
+			entrance_history as Array
+		).duplicate(true)
+	table_sessions[table_id] = active_session
 
-	# Carry entrance wait mood into the greeting window.
-	var session: Dictionary = table_sessions[table_id]
-	if bool(record.get("had_entrance_unhappy", false)):
-		session["had_guest_unhappy"] = true
-		table_sessions[table_id] = session
-
+	# Carry a little door-wait wear, but never sit them already in the red.
+	# Last parties were inheriting ~20% and walking out during greeting.
 	shift_service_system.start_table_patience(
 		StringName(table_id),
 		&"waiting_first_greeting"
@@ -1422,13 +1480,14 @@ func _on_guest_party_arrived(
 	var entrance_percent = float(
 		record.get("wait_patience_percent", 100.0)
 	)
-	if entrance_percent < 100.0 and is_instance_valid(table):
+	var seated_percent = maxf(entrance_percent, 75.0)
+	if seated_percent < 100.0 and is_instance_valid(table):
 		if table.has_method("set_patience_from_percent"):
-			table.set_patience_from_percent(entrance_percent)
+			table.set_patience_from_percent(seated_percent)
 		if table.has_method("set_patience_mood_band"):
 			table.set_patience_mood_band(
 				shift_service_system.get_mood_from_patience(
-					entrance_percent
+					seated_percent
 				),
 				"Waited at the entrance"
 			)
@@ -1509,7 +1568,11 @@ func _create_active_guest_session(
 		"wine_opportunity_pending": false,
 		"wine_opportunity_number": 1,
 		"wine_offer_attempts": 0,
+		"wine_offer_opened": 0,
 		"food_offer_reopened": false,
+		"second_wine_after_food": false,
+		"second_wine_available": false,
+		"wine_return_phase": "",
 		"post_wine_follow_up": false,
 		"bill_phase_service": false,
 		"mid_service_offer": false,
@@ -1548,7 +1611,17 @@ func _create_active_guest_session(
 		"floor_dialogue_last_time": -999.0,
 
 		"last_progress_time": elapsed_shift_time,
-		"mood_state": "happy",
+		"service_started_at": elapsed_shift_time,
+		"entrance_wait_seconds": 0.0,
+		"entrance_mood_history": [],
+		"mood_state": "green",
+		"mood_history": [{
+			"mood": "green",
+			"elapsedShiftTime": snappedf(elapsed_shift_time, 0.1),
+			"phase": "waiting_to_greet",
+			"reason": "seated",
+			"patiencePercent": 100.0,
+		}],
 		"annoyed": false,
 		"critical_mood_elapsed": 0.0,
 		"critical_mood_warned": false,
@@ -1992,10 +2065,18 @@ func _handle_table_arrival(
 
 	match phase:
 		"waiting_to_greet":
-			if bool(session.get("wine_opportunity_pending", false)):
-				_open_pending_wine_opportunity(table_id)
-			elif bool(session.get("post_wine_follow_up", false)):
+			if bool(session.get("post_wine_follow_up", false)):
 				_open_post_wine_service_panel(table_id)
+			elif _try_resume_food_given_table(table_id):
+				pass
+			elif (
+				_session_can_offer_wine(session)
+				and (
+					bool(session.get("wine_opportunity_pending", false))
+					or bool(session.get("second_wine_available", false))
+				)
+			):
+				_open_pending_wine_opportunity(table_id)
 			else:
 				_open_guest_encounter(
 					table_id
@@ -2608,9 +2689,11 @@ func _apply_greeting_rating_effects(
 
 	if not table_sessions.has(table_id):
 		return
-	var table = table_sessions[table_id].get("table", null)
-	if table != null and table.has_method("restore_patience_percent"):
-		table.restore_patience_percent(patience_delta)
+	if patience_delta != 0.0:
+		shift_service_system.adjust_table_patience(
+			StringName(table_id),
+			patience_delta
+		)
 		_sync_session_patience_mood(table_id)
 
 
@@ -2618,6 +2701,17 @@ func _open_pending_wine_opportunity(table_id: String) -> void:
 	if not table_sessions.has(table_id):
 		return
 	var session = table_sessions[table_id]
+	if not _session_can_offer_wine(session):
+		session["wine_opportunity_pending"] = false
+		session["second_wine_available"] = false
+		table_sessions[table_id] = session
+		_restore_table_after_unresolved_wine(
+			table_id,
+			session,
+			"",
+			" Wine is closed for this table. Continue service or offer the bill when they are ready."
+		)
+		return
 
 	if (
 		bool(session.get("aperitif_ordered", false))
@@ -2662,14 +2756,27 @@ func _session_wine_fill_pending(session: Dictionary) -> bool:
 	)
 
 
+func _session_can_offer_wine(session: Dictionary) -> bool:
+	# One table seating: at most two V2 wine overlays. A third was leaking
+	# through mid-service and bill phase after two fails.
+	if bool(session.get("wine_ordered", false)):
+		return false
+	return int(session.get("wine_offer_opened", 0)) < 2
+
+
 func _get_mid_service_cross_offers(session: Dictionary) -> Array:
-	# While one side is still being filled, the other offer stays available.
+	# Food and wine stay independent. Wine remains available after food is
+	# given, but only for the unused wine slots (max two per table).
 	var allowed: Array = []
-	var food_pending = _session_food_fill_pending(session)
 	var wine_pending = _session_wine_fill_pending(session)
-	if food_pending and not bool(session.get("wine_ordered", false)):
-		if not bool(session.get("wine_opportunity_pending", false)):
-			allowed.append("offer_wine")
+	if (
+		_session_can_offer_wine(session)
+		and (
+			bool(session.get("food_ordered", false))
+			or bool(session.get("second_wine_available", false))
+		)
+	):
+		allowed.append("offer_wine")
 	if wine_pending and not bool(session.get("food_ordered", false)):
 		allowed.append("offer_food")
 	return allowed
@@ -2694,7 +2801,10 @@ func _try_open_mid_service_cross_offer(table_id: String) -> bool:
 
 	var hint = "Another order is still possible while this table waits."
 	if allowed.has("offer_wine") and not allowed.has("offer_food"):
-		hint = "Food is on the way. You can still offer wine."
+		if bool(session.get("food_delivered", false)):
+			hint = "Food is already given. Wine is still optional — or continue service toward the bill."
+		else:
+			hint = "Food is on the way. You can still offer wine."
 	elif allowed.has("offer_food") and not allowed.has("offer_wine"):
 		hint = "Wine is on the way. You can still offer food."
 	_open_service_follow_up_panel(
@@ -2714,6 +2824,118 @@ func _restore_mid_service_phase(table_id: String, session: Dictionary) -> void:
 		session["phase"] = return_phase
 	table_sessions[table_id] = session
 	_refresh_table_status(table_id)
+
+
+func _try_resume_food_given_table(table_id: String) -> bool:
+	# Wine fail used to park a fed table in browsing, which blocked the bill.
+	if not table_sessions.has(table_id):
+		return false
+	var session = table_sessions[table_id]
+	if not bool(session.get("food_delivered", false)):
+		return false
+	if bool(session.get("walked_out", false)):
+		return false
+	if bool(session.get("wine_ordered", false)) and _session_has_undelivered_tickets(session):
+		return false
+	_restore_table_after_unresolved_wine(
+		table_id,
+		session,
+		"",
+		" Food is already given. Continue service, offer wine if you want, or wait for the bill."
+	)
+	_try_open_mid_service_cross_offer(table_id)
+	return true
+
+
+func _restore_table_after_unresolved_wine(
+	table_id: String,
+	session: Dictionary,
+	guest_reply: String,
+	extra_prompt: String
+) -> void:
+	session["mid_service_offer"] = false
+	session["bill_phase_service"] = false
+	session["post_wine_follow_up"] = false
+	session["wine_opportunity_pending"] = false
+
+	var saved_phase = str(session.get("wine_return_phase", ""))
+	session["wine_return_phase"] = ""
+	if saved_phase == "" or saved_phase in ["waiting_to_greet", "ready_for_wine_selection"]:
+		saved_phase = str(session.get("cross_offer_return_phase", ""))
+	session["cross_offer_return_phase"] = ""
+
+	var prompt = str(guest_reply).strip_edges()
+	if extra_prompt != "":
+		if prompt != "":
+			prompt += extra_prompt
+		else:
+			prompt = extra_prompt.strip_edges()
+
+	if _session_has_undelivered_tickets(session):
+		var phase = saved_phase
+		if phase in ["", "waiting_to_greet", "ready_for_wine_selection"]:
+			phase = "service_active"
+		session["phase"] = phase
+		session["service_phase"] = "continuing_service"
+		table_sessions[table_id] = session
+		_refresh_service_patience_stage(table_id)
+		_refresh_table_status(table_id)
+		_close_encounter_panel()
+		if prompt != "":
+			_set_prompt(prompt)
+		return
+
+	if saved_phase in [
+		"waiting_for_bill",
+		"waiting_for_bill_close",
+		"ready_to_clear",
+		"plates_collected",
+	]:
+		session["phase"] = saved_phase
+		session["service_phase"] = "continuing_service"
+		table_sessions[table_id] = session
+		_refresh_service_patience_stage(table_id)
+		_refresh_table_status(table_id)
+		_close_encounter_panel()
+		if prompt != "":
+			_set_prompt(prompt)
+		return
+
+	if (
+		bool(session.get("food_delivered", false))
+		and not bool(session.get("mise_set", false))
+	):
+		session["mise_required"] = true
+		session["phase"] = "waiting_for_mise"
+		session["service_phase"] = "continuing_service"
+		table_sessions[table_id] = session
+		_refresh_service_patience_stage(table_id)
+		_refresh_table_status(table_id)
+		_close_encounter_panel()
+		var mise_prompt = (
+			table_id
+			+ " still needs mise / cutlery before guests can finish."
+		)
+		if prompt != "":
+			mise_prompt = prompt + " " + mise_prompt
+		_set_prompt(mise_prompt)
+		return
+
+	session["phase"] = "eating"
+	session["service_phase"] = "continuing_service"
+	table_sessions[table_id] = session
+	_refresh_service_patience_stage(table_id)
+	_refresh_table_status(table_id)
+	_close_encounter_panel()
+	if _table_service_fully_delivered(session):
+		_begin_table_drinking(table_id)
+		if prompt == "":
+			prompt = (
+				table_id
+				+ " can finish the meal. Wine is optional — food is enough to offer the bill after they enjoy."
+			)
+	if prompt != "":
+		_set_prompt(prompt)
 
 
 func _open_post_wine_service_panel(table_id: String) -> void:
@@ -2740,8 +2962,8 @@ func _open_post_wine_service_panel(table_id: String) -> void:
 	table_sessions[table_id] = session
 	_open_service_follow_up_panel(
 		table_id,
-		"Wine opportunity closed. Food is open again.",
-		"Offer food, or walk away and return later."
+		"Wine did not land. Food is open again.",
+		"Offer food first. Wine can reopen after that offer."
 	)
 
 
@@ -2754,7 +2976,7 @@ func _open_bill_phase_service_panel(table_id: String) -> void:
 	var allowed: Array = []
 	if not bool(session.get("food_ordered", false)):
 		allowed.append("offer_food")
-	if not bool(session.get("wine_ordered", false)):
+	if _session_can_offer_wine(session):
 		allowed.append("offer_wine")
 	allowed.append("offer_bill")
 	session["allowed_follow_ups"] = allowed
@@ -2880,6 +3102,17 @@ func _get_greeting_access(
 				"reason": "regular_accepts_food_greeting",
 			}
 
+		# Scenario preferred/acceptable food routes must open food (Guarded Reader).
+		var food_rating = str(session.get("greeting_rating", ""))
+		if food_rating == "strong" or food_rating == "acceptable":
+			return {
+				"accepted": true,
+				"recovered": false,
+				"allowed_follow_ups": ["offer_food", "offer_wine"],
+				"required_skill_id": "",
+				"reason": "scenario_accepts_food_greeting",
+			}
+
 		var food_recovered = (
 			profile_tier >= 2
 			and _has_skill_unlock(SKILL_UNLOCK_FOOD_RECOVERY)
@@ -2948,7 +3181,6 @@ func _get_offer_access(
 ) -> Dictionary:
 	# Food and wine are independent guest decisions.
 	# A wine path must never imply a food order.
-	var guest_type = _get_session_guest_type(session)
 	var greeting = str(session.get("greeting_choice", ""))
 	var path = _evaluate_object_path(greeting, choice)
 	var path_ok = bool(path.get("object_success", false))
@@ -2982,30 +3214,18 @@ func _get_offer_access(
 				"accepted": false,
 				"reason": "food_offer_path_blocked",
 			}
-		if guest_type == "regular":
-			return {
-				"accepted": true,
-				"reason": "regular_accepts_food_offer",
-			}
-		if guest_type == "tourist":
-			return {
-				"accepted": true,
-				"reason": "tourist_accepts_food_offer",
-			}
-		var food_recovered = (
-			profile_tier >= 2
-			and _has_skill_unlock(SKILL_UNLOCK_FOOD_RECOVERY)
-		)
+		# Matching food path is independent of guest-type skill gates.
 		return {
-			"accepted": food_recovered,
-			"reason": (
-				"food_offer_recovered"
-				if food_recovered
-				else "guest_declines_food_offer"
-			),
+			"accepted": true,
+			"reason": "guest_accepts_food_offer",
 		}
 
 	if choice == "offer_wine":
+		if not _session_can_offer_wine(session):
+			return {
+				"accepted": false,
+				"reason": "wine_offers_exhausted",
+			}
 		if bill_phase or mid_service:
 			return {
 				"accepted": true,
@@ -3015,17 +3235,7 @@ func _get_offer_access(
 					else "mid_service_wine_offer"
 				),
 			}
-		if not path_ok:
-			return {
-				"accepted": false,
-				"reason": "wine_offer_path_blocked",
-			}
-		# Wine accept/decline is its own exchange — not tied to food.
-		if guest_type == "skeptic" and greeting == "greet_food":
-			return {
-				"accepted": false,
-				"reason": "skeptic_declines_wine_after_food_greet",
-			}
+		# Wine is independent of the food greeting. A mismatch only weakens AP.
 		return {
 			"accepted": true,
 			"reason": "guest_accepts_wine_offer",
@@ -3348,6 +3558,31 @@ func _choose_follow_up(
 			)
 			return
 
+		if (
+			choice == "offer_food"
+			and bool(session.get("second_wine_after_food", false))
+		):
+			session["post_wine_follow_up"] = false
+			session["food_offer_reopened"] = false
+			session["second_wine_after_food"] = false
+			session["wine_opportunity_pending"] = true
+			session["wine_opportunity_number"] = int(
+				session.get("wine_opportunity_number", 1)
+			) + 1
+			session["service_phase"] = "ready_for_second_wine_opportunity"
+			session["phase"] = "waiting_to_greet"
+			table_sessions[table_id] = session
+			if table.has_method("resume_waiting_to_greet"):
+				table.resume_waiting_to_greet("Wine offer open again")
+			if table.has_method("set_status_text"):
+				table.set_status_text("Wine offer open again")
+			_close_encounter_panel()
+			_set_prompt(
+				guest_reply
+				+ " Food closed. Return to the table for the wine offer."
+			)
+			return
+
 		session["phase"] = "waiting_to_greet"
 		table_sessions[table_id] = session
 		if table.has_method("resume_waiting_to_greet"):
@@ -3369,6 +3604,11 @@ func _choose_follow_up(
 		session["bill_phase_service"] = false
 		session["mid_service_offer"] = false
 		session["cross_offer_return_phase"] = ""
+		if bool(session.get("second_wine_after_food", false)):
+			session["wine_opportunity_number"] = int(
+				session.get("wine_opportunity_number", 1)
+			) + 1
+			# Keep second_wine_after_food so mid-service can open wine after this food order.
 
 		# An aperitif greeting can convert into an aperitif before food.
 		if session["greeting_choice"] == "greet_aperitif":
@@ -3379,6 +3619,7 @@ func _choose_follow_up(
 		wine_offers += 1
 		session["food_offer_reopened"] = false
 		session["post_wine_follow_up"] = false
+		session["second_wine_after_food"] = false
 		session["bill_phase_service"] = false
 		session["mid_service_offer"] = false
 		session["cross_offer_return_phase"] = ""
@@ -3775,6 +4016,9 @@ func _begin_v2_wine_offer(
 	if waiting_for_v2_encounter:
 		return true
 
+	if int(session.get("wine_offer_opened", 0)) >= 2:
+		return false
+
 	var profile = session.get("profile", null)
 	var guest_id = str(session.get("guest_id", ""))
 	if guest_id == "" and profile != null:
@@ -3787,7 +4031,9 @@ func _begin_v2_wine_offer(
 	waiting_for_v2_encounter = true
 	pending_v2_table_id = table_id
 	pending_v2_guest_reply = guest_reply
+	session["wine_offer_opened"] = int(session.get("wine_offer_opened", 0)) + 1
 	session["wine_opportunity_pending"] = false
+	session["wine_return_phase"] = str(session.get("phase", ""))
 	session["service_phase"] = "encounter_active"
 	table_sessions[table_id] = session
 	_v2_offer_wall_start_sec = Time.get_unix_time_from_system()
@@ -3918,6 +4164,18 @@ func _on_bridge_host_ready(payload: Dictionary = {}):
 					progression.get("authorityPoints", 0)
 				)))
 			)
+			vite_reported_total_ap = max(
+				vite_reported_total_ap,
+				max(
+					int(round(float(
+						progression.get("authorityPoints", 0)
+					))),
+					int(round(float(
+						progression.get("totalAP", 0)
+					)))
+				)
+			)
+			vite_ap_at_shift_start = vite_reported_total_ap
 		if typeof(economy) == TYPE_DICTIONARY:
 			coins = max(
 				coins,
@@ -3990,11 +4248,11 @@ func _on_bridge_v2_result_received(payload: Dictionary = {}):
 	var table_id = pending_v2_table_id
 	var guest_reply = pending_v2_guest_reply
 
-	# Final wall-clock catch-up before unpausing tables after wine.
+	# Final catch-up: real wine time is halved onto the floor clock.
 	_sync_shift_clock_during_v2_wine()
 	var away_from_payload = float(payload.get("awayElapsedSec", 0.0))
 	if away_from_payload > 0.0 and _v2_offer_wall_start_sec > 0.0:
-		var target = _v2_offer_elapsed_start + away_from_payload
+		var target = _v2_offer_elapsed_start + (away_from_payload * V2_WINE_TIME_SCALE)
 		var step = target - elapsed_shift_time
 		if step > 0.05:
 			elapsed_shift_time = target
@@ -4017,23 +4275,22 @@ func _on_bridge_v2_result_received(payload: Dictionary = {}):
 		round(float(payload.get("authorityDelta", 0)))
 	)
 
-	# Object-path mismatch (e.g. greet food → offer wine) weakens wine AP credit.
-	var object_success = true
-	if table_id != "" and table_sessions.has(table_id):
-		object_success = bool(
-			table_sessions[table_id].get("object_success", true)
+	# Wine AP lives in the Vite bottle wallet (20/15/10 by outcome). Do not dump
+	# V2 authorityDelta into floor Level AP or starter still pops on wine 1.
+	var incoming_vite_ap = int(
+		round(float(payload.get("totalAP", vite_reported_total_ap)))
+	)
+	if payload.has("totalAP") or incoming_vite_ap > vite_reported_total_ap:
+		var previous_vite_ap = vite_reported_total_ap
+		vite_reported_total_ap = max(
+			vite_reported_total_ap,
+			incoming_vite_ap
 		)
-	if payload.has("objectSuccess"):
-		object_success = bool(payload.get("objectSuccess", true))
-	if not object_success and authority_delta > 0:
-		authority_delta = int(round(float(authority_delta) * 0.5))
+		_check_bottle_reward_milestones(
+			previous_vite_ap,
+			vite_reported_total_ap
+		)
 
-	if authority_delta != 0:
-		_add_level_ap(
-			authority_delta,
-			"v2_encounter:"
-			+ str(payload.get("encounterId", ""))
-		)
 	v2_authority_delta_total += authority_delta
 
 	var skill_measurements = payload.get(
@@ -4083,7 +4340,13 @@ func _on_bridge_v2_result_received(payload: Dictionary = {}):
 		session["wine_sale_pending"] = true
 		session["wine_coin_reward_pending"] = v2_coin_reward
 	session["v2_result_id"] = result_id
+	session["v2_encounter_id"] = str(payload.get("encounterId", ""))
 	session["v2_outcome"] = str(payload.get("outcome", ""))
+	session["v2_performance_grade"] = str(
+		payload.get("performanceGrade", "")
+	)
+	session["v2_chain_signal"] = str(payload.get("chainSignal", ""))
+	session["v2_authority_delta"] = authority_delta
 
 	_maybe_show_table_guest_dialogue(
 		table_id,
@@ -4098,36 +4361,37 @@ func _on_bridge_v2_result_received(payload: Dictionary = {}):
 		) + 1
 	var opportunity_number = int(session.get("wine_opportunity_number", 1))
 	var wine_attempts = int(session.get("wine_offer_attempts", 0))
-	# First-run tables always get up to two wine approaches, then food can reopen.
-	var can_retry_wine = (
+	var food_already_ordered = bool(session.get("food_ordered", false))
+	var openings = int(session.get("wine_offer_opened", 0))
+	var scenario_allows_second = true
+	if payload.has("allowSecondWineOpportunity"):
+		scenario_allows_second = bool(
+			payload.get("allowSecondWineOpportunity", false)
+		)
+	var can_second_wine = (
 		not wine_sold
+		and openings < 2
 		and wine_attempts < 2
 		and opportunity_number < 2
+		and scenario_allows_second
 	)
-	if can_retry_wine:
-		session["wine_opportunity_pending"] = true
-		session["wine_opportunity_number"] = opportunity_number + 1
-		session["service_phase"] = "ready_for_second_wine_opportunity"
-		session["phase"] = "waiting_to_greet"
-		session["post_wine_follow_up"] = false
-		table_sessions[table_id] = session
-		var table_retry = session.get("table", null)
-		if table_retry != null and table_retry.has_method("resume_waiting_to_greet"):
-			table_retry.resume_waiting_to_greet("Wine opportunity still open")
-		_close_encounter_panel()
-		_set_prompt(
+
+	if wine_sold:
+		session["second_wine_available"] = false
+		session["wine_opportunity_pending"] = false
+		session["service_phase"] = "continuing_service"
+		_complete_follow_up_order(
+			table_id,
+			session,
 			guest_reply
-			+ " No sale yet. Return to the table for a second wine approach."
 		)
 		return
 
-	# After wine attempts are exhausted, reopen food so the table is not boxed in.
-	if (
-		not wine_sold
-		and wine_attempts >= 2
-		and not bool(session.get("food_ordered", false))
-	):
+	# Wine fail → food must reopen first. Second wine waits on that food offer.
+	if can_second_wine and not food_already_ordered:
 		session["wine_opportunity_pending"] = false
+		session["second_wine_after_food"] = true
+		session["second_wine_available"] = false
 		session["food_offer_reopened"] = true
 		session["post_wine_follow_up"] = true
 		session["service_phase"] = "food_reopened_after_wine"
@@ -4139,31 +4403,50 @@ func _on_bridge_v2_result_received(payload: Dictionary = {}):
 		_close_encounter_panel()
 		_set_prompt(
 			guest_reply
-			+ " Wine closed after two attempts. Return to offer food."
+			+ " Wine did not land. Return to the table to offer food. Wine can reopen after that."
 		)
 		return
 
-	# Only reopen POS when there are undelivered tickets (e.g. newly sold wine).
-	# Do not invent another POS pass for already-delivered aperitif after a failed wine.
-	if not _session_has_undelivered_tickets(session):
-		session["phase"] = "waiting_to_greet"
-		session["service_phase"] = "continuing_service"
-		table_sessions[table_id] = session
-		_close_encounter_panel()
-		var table_idle = session.get("table", null)
-		if table_idle != null and table_idle.has_method("resume_waiting_to_greet"):
-			table_idle.resume_waiting_to_greet("Browsing — return later")
-		_set_prompt(
-			guest_reply
-			+ " No new food or drink to enter. Return later if needed."
+	# Food already happened. Second wine is optional — it must not block the bill.
+	if can_second_wine and food_already_ordered:
+		session["second_wine_after_food"] = false
+		session["second_wine_available"] = true
+		session["wine_opportunity_number"] = opportunity_number + 1
+		session["service_phase"] = "ready_for_second_wine_opportunity"
+		session["post_wine_follow_up"] = false
+		_restore_table_after_unresolved_wine(
+			table_id,
+			session,
+			guest_reply,
+			" No sale yet. Wine is still optional — food already given is enough to continue to the bill."
 		)
 		return
 
+	session["second_wine_available"] = false
+	if (
+		food_already_ordered
+		or bool(session.get("food_delivered", false))
+		or _session_has_undelivered_tickets(session)
+	):
+		_restore_table_after_unresolved_wine(
+			table_id,
+			session,
+			guest_reply,
+			" No wine sale. Continue service — food is enough to offer the bill when they are ready."
+		)
+		return
+
+	# Nothing ticketed: idle browse, then greet again.
+	session["phase"] = "waiting_to_greet"
 	session["service_phase"] = "continuing_service"
-	_complete_follow_up_order(
-		table_id,
-		session,
+	table_sessions[table_id] = session
+	_close_encounter_panel()
+	var table_idle = session.get("table", null)
+	if table_idle != null and table_idle.has_method("resume_waiting_to_greet"):
+		table_idle.resume_waiting_to_greet("Browsing — return later")
+	_set_prompt(
 		guest_reply
+		+ " No new food or drink to enter. Return later if needed."
 	)
 
 
@@ -4407,19 +4690,12 @@ func _add_level_ap(
 	points: int,
 	reason: String = ""
 ):
-	var previous_ap = ap
-
 	shift_score += points
 
 	ap = clamp(
 		ap + points,
 		0,
 		ap_meter_max
-	)
-
-	_check_bottle_reward_milestones(
-		previous_ap,
-		ap
 	)
 
 	if reason != "":
@@ -4554,7 +4830,10 @@ func _on_bottle_reward_claimed(
 		bridge_controller.post_to_parent("bottle_reward_claimed", {
 			"rewardId": reward_id,
 			"title": title_name,
-			"ap": ap,
+			"totalAP": vite_reported_total_ap,
+			"viteAp": vite_reported_total_ap,
+			"ap": vite_reported_total_ap,
+			"godotAp": ap,
 		})
 
 	if reset_ap_after_demo_reward:
@@ -4587,7 +4866,10 @@ func _on_bottle_reward_deferred(
 			"bottleName": str(reward_data.get("bottle_name", "")),
 			"title": str(reward_data.get("title", "")),
 			"requiredAp": int(reward_data.get("required_ap", 0)),
-			"ap": ap,
+			"totalAP": vite_reported_total_ap,
+			"viteAp": vite_reported_total_ap,
+			"ap": vite_reported_total_ap,
+			"godotAp": ap,
 		})
 	_return_to_encounter_summary_after_reward("")
 	_set_prompt(
@@ -5469,7 +5751,12 @@ func _table_service_fully_delivered(
 ) -> bool:
 	# Food is only required when the guest accepted a food offer.
 	# Drink-only tables (wine and/or aperitif) can finish without Chef.
-	if bool(session.get("wine_opportunity_pending", false)):
+	# First wine after aperitif still has to stay open. A second wine after
+	# food is optional and must not block enjoy / bill.
+	if (
+		bool(session.get("wine_opportunity_pending", false))
+		and not bool(session.get("food_ordered", false))
+	):
 		return false
 
 	var food_ordered = bool(session.get("food_ordered", false))
@@ -6703,6 +6990,7 @@ func _complete_paid_table(
 	if not table_sessions.has(table_id):
 		return
 
+	_sync_session_patience_mood(table_id)
 	var session = table_sessions[table_id]
 	var table = session["table"]
 
@@ -6720,9 +7008,18 @@ func _complete_paid_table(
 	completed_guest_services += 1
 	_mark_table_progress(table_id)
 
-	_award_table_completion_rewards(
+	var rewards = _award_table_completion_rewards(
 		table_id,
 		session
+	)
+	_append_guest_service_outcome(
+		_build_guest_service_outcome(
+			table_id,
+			session,
+			"paid_completion",
+			int(rewards.get("ap", 0)),
+			int(rewards.get("coins", 0))
+		)
 	)
 
 	print(
@@ -6886,7 +7183,7 @@ func _maybe_finish_shift_after_departures():
 func _award_table_completion_rewards(
 	table_id: String,
 	session: Dictionary
-):
+) -> Dictionary:
 	var sold_wine = bool(
 		session.get(
 			"wine_sale_counted",
@@ -6962,6 +7259,10 @@ func _award_table_completion_rewards(
 		" | Stations clean: ",
 		station_service_clean
 	)
+	return {
+		"ap": ap_reward,
+		"coins": coin_reward,
+	}
 
 
 func _enable_table_reset(
@@ -7009,6 +7310,291 @@ func _enable_table_reset(
 # ===================================================================
 # Guest patience
 # ===================================================================
+
+
+func _normalize_service_mood(value: Variant) -> String:
+	var mood = str(value).strip_edges().to_lower()
+	match mood:
+		"happy", "positive":
+			return "green"
+		"neutral":
+			return "yellow"
+		"negative":
+			return "red"
+		"green", "yellow", "orange", "red", "annoyed":
+			return mood
+	return "green"
+
+
+func _mood_severity(mood_value: Variant) -> int:
+	match _normalize_service_mood(mood_value):
+		"yellow":
+			return 1
+		"orange":
+			return 2
+		"red":
+			return 3
+		"annoyed":
+			return 4
+	return 0
+
+
+func _append_mood_history_to_record(
+	record: Dictionary,
+	mood_value: Variant,
+	reason: String,
+	patience_percent: float = -1.0
+) -> Dictionary:
+	var mood = _normalize_service_mood(mood_value)
+	var history: Array = []
+	var existing_history = record.get("mood_history", [])
+	if typeof(existing_history) == TYPE_ARRAY:
+		history = (existing_history as Array).duplicate(true)
+
+	if not history.is_empty():
+		var previous = history[history.size() - 1]
+		if (
+			typeof(previous) == TYPE_DICTIONARY
+			and _normalize_service_mood(previous.get("mood", "")) == mood
+		):
+			return record
+
+	var entry = {
+		"mood": mood,
+		"elapsedShiftTime": snappedf(elapsed_shift_time, 0.1),
+		"phase": str(record.get("phase", record.get("state", ""))),
+		"reason": reason,
+	}
+	if patience_percent >= 0.0:
+		entry["patiencePercent"] = snappedf(
+			clampf(patience_percent, 0.0, 100.0),
+			0.1
+		)
+	history.append(entry)
+	record["mood_history"] = history
+	return record
+
+
+func _service_quality_grade(score: int) -> String:
+	if score >= 95:
+		return "A"
+	if score >= 80:
+		return "B"
+	if score >= 60:
+		return "C"
+	if score >= 40:
+		return "D"
+	return "F"
+
+
+func _service_outcome_from_grade(grade: String, walked_out: bool) -> String:
+	if walked_out or grade == "F":
+		return "failure"
+	match grade:
+		"A":
+			return "premium_success"
+		"B":
+			return "standard_success"
+	return "weak_success"
+
+
+func _build_guest_service_outcome(
+	table_id: String,
+	session: Dictionary,
+	completion_kind: String,
+	ap_awarded: int = 0,
+	coins_awarded: int = 0
+) -> Dictionary:
+	var walked_out = bool(session.get("walked_out", false))
+	var final_mood = _normalize_service_mood(
+		session.get("mood_state", "annoyed" if walked_out else "green")
+	)
+	var mood_history: Array = []
+	var raw_history = session.get("mood_history", [])
+	if typeof(raw_history) == TYPE_ARRAY:
+		mood_history = (raw_history as Array).duplicate(true)
+	var entrance_history: Array = []
+	var raw_entrance_history = session.get("entrance_mood_history", [])
+	if typeof(raw_entrance_history) == TYPE_ARRAY:
+		entrance_history = (raw_entrance_history as Array).duplicate(true)
+
+	var worst_mood_severity = _mood_severity(final_mood)
+	for item in entrance_history + mood_history:
+		if typeof(item) == TYPE_DICTIONARY:
+			worst_mood_severity = maxi(
+				worst_mood_severity,
+				_mood_severity(item.get("mood", "green"))
+			)
+
+	var station_annoyance_count = maxi(
+		0,
+		annoyed_station_events - int(
+			session.get("station_annoyance_start", annoyed_station_events)
+		)
+	)
+	var score = 100
+	match worst_mood_severity:
+		1:
+			score -= 10
+		2:
+			score -= 25
+		3:
+			score -= 45
+		4:
+			score -= 60
+	score -= mini(station_annoyance_count * 8, 24)
+	match str(session.get("greeting_rating", "")).to_lower():
+		"strong", "excellent":
+			pass
+		"acceptable", "good":
+			score -= 10
+		"weak":
+			score -= 25
+		"poor":
+			score -= 40
+		_:
+			score -= 15
+	if str(session.get("v2_result_id", "")) != "":
+		match str(session.get("v2_performance_grade", "")).to_upper():
+			"B":
+				score -= 5
+			"C":
+				score -= 12
+			"D":
+				score -= 20
+			"F":
+				score -= 30
+	if bool(session.get("had_guest_unhappy", false)) and worst_mood_severity < 3:
+		score -= 10
+	if walked_out:
+		score = 0
+	score = clampi(score, 0, 100)
+
+	var grade = _service_quality_grade(score)
+	var chain_signal = "yellow"
+	if walked_out or grade == "F":
+		chain_signal = "red"
+	elif grade in ["A", "B"]:
+		chain_signal = "green"
+
+	var profile = session.get("profile", null)
+	var guest_display_name = "Guest"
+	if profile != null:
+		guest_display_name = str(profile.guest_display_name)
+	var guest_index = int(session.get("guest_index", -1))
+	var guest_id = str(session.get("guest_id", ""))
+
+	return {
+		"serviceId": str(guest_index) + ":" + guest_id,
+		"guestIndex": guest_index,
+		"tableId": table_id,
+		"guestId": guest_id,
+		"guestDisplayName": guest_display_name,
+		"completionKind": completion_kind,
+		"paid": bool(session.get("paid", false)),
+		"walkedOut": walked_out,
+		"finalMood": final_mood,
+		"worstMoodSeverity": worst_mood_severity,
+		"moodHistory": mood_history,
+		"entranceMoodHistory": entrance_history,
+		"serviceQualityScore": score,
+		"performanceGrade": grade,
+		"chainSignal": chain_signal,
+		"outcome": _service_outcome_from_grade(grade, walked_out),
+		"hadGuestUnhappy": bool(session.get("had_guest_unhappy", false)),
+		"stationServiceClean": station_annoyance_count == 0,
+		"stationAnnoyanceCount": station_annoyance_count,
+		"greetingChoice": str(session.get("greeting_choice", "")),
+		"greetingRating": str(session.get("greeting_rating", "")),
+		"greetingAccepted": bool(session.get("greeting_accepted", false)),
+		"greetingRecovered": bool(session.get("greeting_recovered", false)),
+		"foodOrdered": bool(session.get("food_ordered", false)),
+		"aperitifOrdered": bool(session.get("aperitif_ordered", false)),
+		"wineOffered": int(session.get("wine_offer_opened", 0)) > 0,
+		"wineSold": bool(session.get("wine_sale_counted", false)),
+		"bottleServed": bool(session.get("wine_sale_counted", false)),
+		"v2EncounterId": str(session.get("v2_encounter_id", "")),
+		"v2Outcome": str(session.get("v2_outcome", "")),
+		"v2PerformanceGrade": str(session.get("v2_performance_grade", "")),
+		"v2ChainSignal": str(session.get("v2_chain_signal", "")),
+		"v2AuthorityDelta": int(session.get("v2_authority_delta", 0)),
+		"entranceWaitSec": snappedf(
+			maxf(0.0, float(session.get("entrance_wait_seconds", 0.0))),
+			0.1
+		),
+		"serviceDurationSec": snappedf(
+			maxf(
+				0.0,
+				elapsed_shift_time - float(
+					session.get("service_started_at", elapsed_shift_time)
+				)
+			),
+			0.1
+		),
+		"apAwarded": ap_awarded,
+		"coinsAwarded": coins_awarded,
+	}
+
+
+func _build_entrance_walkout_outcome(record: Dictionary) -> Dictionary:
+	var profile = record.get("profile", null)
+	var guest_id = ""
+	var guest_display_name = "Guest"
+	if profile != null:
+		guest_id = str(profile.guest_id)
+		guest_display_name = str(profile.guest_display_name)
+	var history: Array = []
+	var raw_history = record.get("mood_history", [])
+	if typeof(raw_history) == TYPE_ARRAY:
+		history = (raw_history as Array).duplicate(true)
+	var guest_index = int(record.get("guest_index", -1))
+	return {
+		"serviceId": str(guest_index) + ":" + guest_id,
+		"guestIndex": guest_index,
+		"tableId": str(record.get("table_id", "")),
+		"guestId": guest_id,
+		"guestDisplayName": guest_display_name,
+		"completionKind": "entrance_walkout",
+		"paid": false,
+		"walkedOut": true,
+		"finalMood": _normalize_service_mood(record.get("wait_mood", "annoyed")),
+		"worstMoodSeverity": 4,
+		"moodHistory": [],
+		"entranceMoodHistory": history,
+		"serviceQualityScore": 0,
+		"performanceGrade": "F",
+		"chainSignal": "red",
+		"outcome": "failure",
+		"hadGuestUnhappy": true,
+		"stationServiceClean": true,
+		"stationAnnoyanceCount": 0,
+		"wineOffered": false,
+		"wineSold": false,
+		"bottleServed": false,
+		"entranceWaitSec": snappedf(
+			maxf(
+				0.0,
+				elapsed_shift_time - float(record.get("arrival_time", elapsed_shift_time))
+			),
+			0.1
+		),
+		"serviceDurationSec": 0.0,
+		"apAwarded": 0,
+		"coinsAwarded": 0,
+	}
+
+
+func _append_guest_service_outcome(outcome: Dictionary) -> void:
+	var service_id = str(outcome.get("serviceId", ""))
+	for existing in guest_service_outcomes:
+		if (
+			typeof(existing) == TYPE_DICTIONARY
+			and service_id != ""
+			and str(existing.get("serviceId", "")) == service_id
+		):
+			return
+	guest_service_outcomes.append(outcome.duplicate(true))
+
 
 func _mark_table_progress(
 	table_id: String
@@ -7389,16 +7975,24 @@ func _on_table_patience_breached(table_id: String) -> void:
 	session["mood_state"] = "annoyed"
 	session["annoyed"] = true
 	session["had_guest_unhappy"] = true
+	session = _append_mood_history_to_record(
+		session,
+		"annoyed",
+		"patience_breached",
+		0.0
+	)
 	# Start / keep critical timer running once patience hits zero.
 	if float(session.get("critical_mood_elapsed", 0.0)) <= 0.0:
 		session["critical_mood_elapsed"] = 0.01
+	# One AP hit per annoyed streak. Stage changes were stacking 11 events.
+	if not bool(session.get("patience_breach_penalized", false)):
+		session["patience_breach_penalized"] = true
+		annoyed_guest_events += 1
+		_add_level_ap(
+			-guest_unhappy_ap_penalty,
+			table_id + " breached patience"
+		)
 	table_sessions[table_id] = session
-	annoyed_guest_events += 1
-
-	_add_level_ap(
-		-guest_unhappy_ap_penalty,
-		table_id + " breached patience"
-	)
 	_maybe_show_table_guest_dialogue(table_id, "negative", true, "patience")
 	_set_prompt(
 		table_id
@@ -7457,7 +8051,7 @@ func _refresh_service_patience_stage(
 		var recovery = 0.0
 		if recovery_id != &"":
 			recovery = shift_service_system.get_recovery_value(recovery_id)
-		# Fresh clear window: don't inherit a nearly empty meter from earlier waits.
+		# Fresh clear window still cools only one mood band — never snaps to green.
 		if stage_id == &"waiting_to_clear":
 			recovery = 100.0
 		shift_service_system.change_table_patience_stage(
@@ -7476,11 +8070,26 @@ func _sync_session_patience_mood(table_id: String) -> void:
 	if not is_instance_valid(table):
 		return
 	var mood_band = str(table.patience_mood_band)
+	var previous_mood = _normalize_service_mood(
+		session.get("mood_state", "green")
+	)
 	session["mood_state"] = mood_band
 	session["annoyed"] = mood_band == "annoyed"
+	if previous_mood != _normalize_service_mood(mood_band):
+		var patience_percent = -1.0
+		if table.has_method("get_patience_percent"):
+			patience_percent = float(table.get_patience_percent())
+		session = _append_mood_history_to_record(
+			session,
+			mood_band,
+			"table_patience",
+			patience_percent
+		)
 	if mood_band not in ["red", "annoyed"]:
 		session["critical_mood_elapsed"] = 0.0
 		session["critical_mood_warned"] = false
+		if mood_band in ["green", "yellow"]:
+			session["patience_breach_penalized"] = false
 	table_sessions[table_id] = session
 
 
@@ -7512,8 +8121,21 @@ func _update_critical_mood_walkouts(delta: float) -> void:
 			continue
 
 		var mood_band = str(table.patience_mood_band)
+		var previous_mood = _normalize_service_mood(
+			session.get("mood_state", "green")
+		)
 		session["mood_state"] = mood_band
 		session["annoyed"] = mood_band == "annoyed"
+		if previous_mood != _normalize_service_mood(mood_band):
+			var patience_percent = -1.0
+			if table.has_method("get_patience_percent"):
+				patience_percent = float(table.get_patience_percent())
+			session = _append_mood_history_to_record(
+				session,
+				mood_band,
+				"table_patience",
+				patience_percent
+			)
 
 		if mood_band not in ["red", "annoyed"]:
 			session["critical_mood_elapsed"] = 0.0
@@ -7525,7 +8147,7 @@ func _update_critical_mood_walkouts(delta: float) -> void:
 		# and ticks slower while still only red.
 		var mood_tick = delta
 		if mood_band == "red":
-			mood_tick = delta * 0.35
+			mood_tick = delta * 0.22
 
 		var elapsed = (
 			float(session.get("critical_mood_elapsed", 0.0))
@@ -7569,12 +8191,18 @@ func _force_guest_walkout(table_id: String) -> void:
 	session["had_guest_unhappy"] = true
 	session["annoyed"] = true
 	session["mood_state"] = "annoyed"
+	session = _append_mood_history_to_record(
+		session,
+		"annoyed",
+		"seated_walkout",
+		0.0
+	)
 	session["phase"] = "leaving"
 	session["paid"] = false
 	table_sessions[table_id] = session
 
-	# Seated-table walkouts count toward shift completion. Entrance browse-aways
-	# do not — those parties are expected to return later.
+	# Seated-table walkouts count toward shift completion. Entrance parties
+	# who leave after waiting also count — they do not return.
 	completed_guest_services += 1
 	walk_aways += 1
 	shift_service_system.stop_table_patience(StringName(table_id))
@@ -7612,12 +8240,26 @@ func _force_guest_walkout(table_id: String) -> void:
 		if table.has_method("set_status_text"):
 			table.set_status_text("Empty — walked out")
 
+	var walkout_ap_awarded = 0
 	if not already_unhappy:
 		_add_level_ap(
 			-guest_unhappy_ap_penalty,
 			table_id + " walked out"
 		)
 		annoyed_guest_events += 1
+		walkout_ap_awarded = -guest_unhappy_ap_penalty
+	elif bool(session.get("patience_breach_penalized", false)):
+		walkout_ap_awarded = -guest_unhappy_ap_penalty
+
+	_append_guest_service_outcome(
+		_build_guest_service_outcome(
+			table_id,
+			session,
+			"seated_walkout",
+			walkout_ap_awarded,
+			0
+		)
+	)
 
 	print(
 		"GUEST TABLE WALKOUT COMPLETE: ",
@@ -8531,11 +9173,20 @@ func _on_result_continue_pressed():
 # HUD updates
 # ===================================================================
 
+func _get_shift_wine_ap() -> int:
+	return max(0, vite_reported_total_ap - vite_ap_at_shift_start)
+
+
+func _get_shift_display_ap() -> int:
+	return max(0, ap + _get_shift_wine_ap())
+
+
 func _get_profile_authority_points() -> int:
 	return max(
 		0,
 		profile_authority_points_at_shift_start
 		+ shift_score
+		+ _get_shift_wine_ap()
 	)
 
 
@@ -8570,7 +9221,7 @@ func update_hud():
 		"station_score": station_interaction_score,
 		"station_required": tier_2_required_station_score,
 		"goals_met": _count_tier_2_requirements_met(),
-		"goals_required": 5,
+		"goals_required": 4,
 		"tier_unlocked": _is_tier_2_unlocked(),
 		"profile_tier": profile_tier,
 		"ap_tier_unlocked": profile_ap_tier_unlocked,
@@ -8586,12 +9237,12 @@ func update_hud():
 			"update_progression_hud"
 		)
 	):
-		# Top-bar AP meter is shift Level AP (starts empty).
-		# Profile / career AP stays in tier_progress for unlock goals.
+		# Top-bar AP meter is this-shift Level AP (starts empty).
+		# Career AP stays in PROFILE AP / bottle wallet.
 		primary_hud_controller.call(
 			"update_progression_hud",
 			_get_display_level(),
-			ap,
+			_get_shift_display_ap(),
 			ap_meter_max,
 			coins,
 			bottle_meter,
@@ -8605,7 +9256,7 @@ func update_hud():
 	if not used_progression_controller:
 		if ap_label != null:
 			ap_label.text = (
-				str(ap)
+				str(_get_shift_display_ap())
 				+ " / "
 				+ str(ap_meter_max)
 			)
@@ -8884,9 +9535,6 @@ func _count_tables_needing_mise() -> int:
 
 func _count_tier_2_requirements_met() -> int:
 	var met = 0
-
-	if ap >= tier_2_required_ap:
-		met += 1
 
 	if completed_guest_services >= tier_2_required_guest_services:
 		met += 1
@@ -9279,12 +9927,19 @@ func _set_prompt(
 
 func _finish_shift():
 	shift_is_active = false
+	var guests_served = 0
+	var guests_lost = 0
+	for raw_outcome in guest_service_outcomes:
+		if typeof(raw_outcome) != TYPE_DICTIONARY:
+			continue
+		if bool(raw_outcome.get("walkedOut", false)):
+			guests_lost += 1
+		else:
+			guests_served += 1
 	var projected_authority_points = \
 		_get_profile_authority_points()
 	var coin_delta = coins - coins_at_shift_start
-	var operational_authority_delta = (
-		shift_score - v2_authority_delta_total
-	)
+	var operational_authority_delta = shift_score
 
 	if waiter_node != null:
 		if waiter_node.has_method(
@@ -9379,6 +10034,9 @@ func _finish_shift():
 			"bottleMeter": bottle_meter,
 			"bottleMeterMax": bottle_meter_max,
 			"guestServices": completed_guest_services,
+			"guestsServed": guests_served,
+			"guestsLost": guests_lost,
+			"guestOutcomes": guest_service_outcomes.duplicate(true),
 			"targetGuestServices": target_guest_services,
 			"wineOffers": wine_offers,
 			"foodOffers": food_offers,

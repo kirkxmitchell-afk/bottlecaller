@@ -5,7 +5,7 @@
   <title>BottleCaller Prototype</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <!-- ✅ IMPORTANT: because this file is served at /game/game.html -->
-  <link rel="stylesheet" href="/game/game.css?v=20260729-desktop-portrait-overlay" />
+  <link rel="stylesheet" href="/game/game.css?v=20260816-real-landscape" />
   <script type="module" src="/src/game/gameEntry.ts"></script>
   <script>
     if (window.self !== window.top) {
@@ -4278,11 +4278,13 @@
               authority: msg.serverProgressionState.v2?.authority || msg.serverProgressionState.authority || null,
             };
           }
-          reconcileLocalProgressAfterSubmit({
-            syncedEncounterNumber: msg.syncedEncounterNumber,
-            syncedAt: msg.syncedAt,
-            serverSkillSnapshot: msg.serverSkillSnapshot || null,
-          });
+          if (typeof window.reconcileLocalProgressAfterSubmit === "function") {
+            window.reconcileLocalProgressAfterSubmit({
+              syncedEncounterNumber: msg.syncedEncounterNumber,
+              syncedAt: msg.syncedAt,
+              serverSkillSnapshot: msg.serverSkillSnapshot || null,
+            });
+          }
         }
         if (msg.ok && typeof window.ProgressionBridge?.requestProgressionSnapshot === "function") {
           try {
@@ -4916,7 +4918,7 @@
       <div class="bc-service-profile">
         <div>
           <div class="bc-service-profile-name" id="bcHomePlayerName">Guest</div>
-          <div class="bc-service-profile-title">Trainee Caller</div>
+          <div class="bc-service-profile-title" id="bcHomePlayerTitle">Trainee Caller</div>
         </div>
         <span class="bc-service-profile-floor" id="bcHomeFloorLabel">Demo Floor</span>
       </div>
@@ -5259,6 +5261,12 @@
           loading="lazy"
         ></iframe>
         <div id="godotShiftStatus" class="godot-shift-status" hidden>Loading floor…</div>
+      </div>
+      <div id="godotLandscapeGate" class="godot-landscape-gate" hidden>
+        <div class="godot-landscape-gate-card">
+          <p>Turn your phone sideways to play the dining floor.</p>
+          <button type="button" id="godotLandscapeLockBtn">Use landscape</button>
+        </div>
       </div>
     </div>
   </section>
@@ -5792,7 +5800,8 @@ console.log("BC3_MARKER_V1");
               eventId: payload?.eventId || crypto.randomUUID(),
               ...(payload || {}),
               sessionType: window.__BC_SESSION_TYPE__ || null,
-              role: ctx?.role || null,
+              role: ctx?.role || ctx?.membershipRole || null,
+              mode: window.bcMode || ctx?.mode || null,
             },
           });
         } catch (e) {
@@ -6617,6 +6626,8 @@ function isDrillMode() {
           scopeId: ctx.scopeId || ctx.scope_id || null,
           scopeType: ctx.scopeType || ctx.scope_type || null,
           accessTier: ctx.accessTier || ctx.access_tier || "demo",
+          displayName: String(ctx.displayName || ctx.display_name || "").trim(),
+          display_name: String(ctx.displayName || ctx.display_name || "").trim(),
           membershipRole,
           role: membershipRole,
           gameplayRole: membershipRole,
@@ -6639,6 +6650,7 @@ function isDrillMode() {
           rawRole: membershipRole || "",
           membershipRole: membershipRole || "",
           gameplayRole: gameplayRole || "",
+          displayName: String(nctx.displayName || nctx.display_name || rawProfile.displayName || rawProfile.display_name || "").trim(),
           isDemo: gameplayRole === "demo",
           isWaiter,
           isSingleManager,
@@ -6674,13 +6686,25 @@ function isDrillMode() {
               ctx.identity.gameplayRole ||
               ctx.identity.membershipRole ||
               ctx.role ||
+              "",
+            displayName:
+              ctx.identity.displayName ||
+              ctx.displayName ||
+              ctx.display_name ||
+              "",
+            display_name:
+              ctx.identity.displayName ||
+              ctx.displayName ||
+              ctx.display_name ||
               ""
           });
         }
 
         return resolveGameplayIdentity({
           membershipRole: ctx.membershipRole || ctx.membership_role || ctx.role || "",
-          role: ctx.role || ""
+          role: ctx.role || "",
+          displayName: ctx.displayName || ctx.display_name || "",
+          display_name: ctx.displayName || ctx.display_name || ""
         });
       }
       function getGameplayIdentity() {
@@ -10685,7 +10709,9 @@ function ensureProgLoaded() {
 
         const identity = resolveGameplayIdentity({
           membership_role: membershipRole || "",
-          role: membershipRole || role || ""
+          role: membershipRole || role || "",
+          displayName: nctx.displayName || msg.displayName || msg.display_name || "",
+          display_name: nctx.displayName || msg.displayName || msg.display_name || ""
         });
 
         window.__BC_CTX__ = {
@@ -10695,6 +10721,8 @@ function ensureProgLoaded() {
           scopeId: nctx.scopeId || null,
           scopeType: nctx.scopeType || null,
           accessTier: nctx.accessTier || null,
+          displayName: identity.displayName || nctx.displayName || "",
+          display_name: identity.displayName || nctx.displayName || "",
           user_id: userId,
           restaurant_id: restaurantId,
           scope_id: nctx.scopeId || null,
@@ -10712,7 +10740,9 @@ function ensureProgLoaded() {
         console.log("[BC][APPLY_CTX][AFTER_SET]", window.__BC_CTX__);
         applyGameplayIdentity({
           membership_role: membershipRole || "",
-          role: membershipRole || role || ""
+          role: membershipRole || role || "",
+          displayName: identity.displayName || nctx.displayName || "",
+          display_name: identity.displayName || nctx.displayName || ""
         });
         try { renderStateHealthWarning(); } catch {}
         renderGameplayRail?.();
@@ -10815,6 +10845,7 @@ function ensureProgLoaded() {
           if (isOnSetup) openSetupScreen("premium");
         } catch {}
         try { window.__BC_SYNC_PLAYER_AUTHORITY_TO_GODOT__?.(); } catch {}
+        try { renderV2ServiceHubHome?.(); } catch {}
         // no-op: ctx gate resolves only via setCtx when valid
       }
 
@@ -12391,7 +12422,14 @@ function ensureProgLoaded() {
       window.__BC_NAV__.openWelcome = () => {
         if (sessionType === "drill") return;
         try {
-          if ((window.isDemo || window.bcMode === "demo") && isV2WelcomeOnboardingComplete()) {
+          const isDemoLike = !!(window.isDemo || window.bcMode === "demo");
+          const isPremiumV2 =
+            String(window.bcMode || "").toLowerCase() === "premium" &&
+            !!(window.__BC_V2_HARNESS__?.enabled || (() => {
+              try { return new URLSearchParams(window.location.search).get("bcV2") === "1"; }
+              catch { return false; }
+            })());
+          if ((isDemoLike || isPremiumV2) && isV2WelcomeOnboardingComplete()) {
             try { localStorage.setItem(coverKey, "true"); } catch {}
             applyPlaySurfaceMode("full");
             resetNavState();
@@ -12409,10 +12447,22 @@ function ensureProgLoaded() {
         }
       };
 
+      window.__BC_NAV__.openHome = () => {
+        if (sessionType === "drill") return;
+        try {
+          try { localStorage.setItem(coverKey, "true"); } catch {}
+          applyPlaySurfaceMode("full");
+          resetNavState();
+          showScreen("screenHome");
+        } catch (e) {
+          console.warn("[BC] NAV openHome failed", e);
+        }
+      };
+
       window.__BC_NAV__.openHomeFromWelcome = () => {
         if (sessionType === "drill") return;
         try {
-          if (!window.isDemo && isStandalone()) {
+          if (!window.isDemo && window.bcMode !== "premium" && isStandalone()) {
             redirectToParentLogin("welcome_start_home");
             return;
           }
@@ -12489,7 +12539,8 @@ function ensureProgLoaded() {
 
       function notifyParentDemoPlayStarted(reason = "start") {
         try {
-          if (!(window.isDemo || window.bcMode === "demo")) return;
+          const mode = String(window.bcMode || "premium").toLowerCase();
+          if (!(window.isDemo || mode === "demo" || mode === "premium")) return;
           if (!window.parent || window.parent === window) return;
           const onGodot =
             !!window.__BC_GODOT_SHIFT_ACTIVE__ ||
@@ -12502,6 +12553,7 @@ function ensureProgLoaded() {
               type: "demo_play_started",
               screenId: onGodot ? "screenGodotShift" : "screenPlay",
               reason,
+              mode,
             },
             window.location.origin
           );
@@ -12850,6 +12902,7 @@ function ensureProgLoaded() {
           console.warn("[BC] local progress reconciliation failed", e);
         }
       }
+      window.reconcileLocalProgressAfterSubmit = reconcileLocalProgressAfterSubmit;
 
       // TEMP one-time reset/migration for broken local data. Remove after confirmation.
       try {
@@ -14395,6 +14448,26 @@ function ensureProgLoaded() {
         return `Tier 1 Progress: ${Math.min(position, 10)} / 10 Tables`;
       }
 
+      function readParentDisplayName() {
+        try {
+          const parentWin = window.parent;
+          if (!parentWin || parentWin === window) return "";
+          const state = parentWin.appState || {};
+          const profile = state.profile || {};
+          const user = state.session?.user || {};
+          return String(
+            profile.display_name ||
+            profile.displayName ||
+            user?.user_metadata?.display_name ||
+            user?.user_metadata?.full_name ||
+            user?.user_metadata?.name ||
+            ""
+          ).trim();
+        } catch {
+          return "";
+        }
+      }
+
       function getV2HomePlayerName() {
         const identity = (typeof getGameplayIdentity === "function") ? getGameplayIdentity() : {};
         const ctx = window.__BC_CTX__ || {};
@@ -14402,13 +14475,31 @@ function ensureProgLoaded() {
           identity?.displayName ||
           identity?.name ||
           ctx?.displayName ||
+          ctx?.display_name ||
           ctx?.name ||
           ctx?.userName ||
+          readParentDisplayName() ||
           "";
         const name = String(raw || "").trim();
         if (name) return name.split(/\s+/)[0];
         if (window.isDemo || window.bcMode === "demo") return "Kirk";
         return "Guest";
+      }
+
+      function getV2HomeCallerTitle(state = null) {
+        const titles = {
+          starter_bottle: "Trainee Caller",
+          bronze_bottle: "Bronze Caller",
+          tier_2_unlock_bottle: "Pairing Apprentice",
+          tier_1_mastery_bottle: "Tier 1 Caller",
+        };
+        const rewards = Array.isArray(state?.rewards) ? state.rewards : [];
+        let title = titles.starter_bottle;
+        Object.keys(titles).forEach((rewardId) => {
+          const reward = rewards.find((row) => String(row?.id || "") === rewardId);
+          if (reward?.claimed) title = titles[rewardId];
+        });
+        return title;
       }
 
       function renderV2ServiceHubHome() {
@@ -14424,6 +14515,7 @@ function ensureProgLoaded() {
         const apEl = document.getElementById("bcHomeAP");
         const bottleStatusEl = document.getElementById("bcHomeBottleStatus");
         const playerNameEl = document.getElementById("bcHomePlayerName");
+        const playerTitleEl = document.getElementById("bcHomePlayerTitle");
         const floorEl = document.getElementById("bcHomeFloorLabel");
         const nextBottleEl = document.getElementById("bcHomeNextBottle");
         const progressEl = document.getElementById("bcHomeProgressStrip");
@@ -14437,6 +14529,7 @@ function ensureProgLoaded() {
             : `${claimedCount} ${claimedCount === 1 ? "Bottle" : "Bottles"}`;
         }
         if (playerNameEl) playerNameEl.textContent = getV2HomePlayerName();
+        if (playerTitleEl) playerTitleEl.textContent = getV2HomeCallerTitle(state);
         if (floorEl) floorEl.textContent = isDemoNow ? "Demo Floor" : "Service Floor";
         if (nextBottleEl) nextBottleEl.textContent = getV2HomeRewardStatus(nextReward, totalAP, state) || "Locked";
         if (progressEl) progressEl.textContent = getV2HomeEncounterProgressLabel();
@@ -23618,14 +23711,13 @@ function ensureProgLoaded() {
       }
 
       function getV2EncounterLimit() {
+        // Demo catalog is 5 encounters. Premium currently uses the same 5
+        // until premium tier 1 ships as a later catalog, not a demo expansion.
         if (window.isDemo || window.bcMode === "demo") return 5;
         try {
           const requestedLimit = Number(new URLSearchParams(window.location.search).get("bcV2Encounters") || 0);
           if (Number.isFinite(requestedLimit) && requestedLimit > 0) return requestedLimit;
         } catch {}
-        const identity = getGameplayIdentity();
-        const role = String(identity?.membershipRole || identity?.role || "").toLowerCase();
-        if (role === "group_manager") return 16;
         return 5;
       }
 
@@ -23958,9 +24050,9 @@ function ensureProgLoaded() {
 
       function getV2OutcomeAP(outcome) {
         switch (String(outcome || "")) {
-          case "premium_success": return 30;
-          case "standard_success": return 20;
-          case "weak_success": return 10;
+          case "premium_success": return 15;
+          case "standard_success": return 15;
+          case "weak_success": return 15;
           case "neutral_exit": return 5;
           case "failure": return -15;
           default: return 0;
@@ -24179,13 +24271,15 @@ function ensureProgLoaded() {
       function ensureV2BottleRewardReadyFromGodot(payload = {}) {
         const rewardId = String(payload.rewardId || payload.reward_id || "starter_bottle");
         const requiredAp = Math.max(0, Number(payload.requiredAp || payload.required_ap || 0));
-        const godotAp = Math.max(0, Number(payload.ap || payload.godotAp || 0));
         let state = loadV2BottleRewardState();
         const knownUnlock = Number(
           (Array.isArray(state.rewards) ? state.rewards : []).find((reward) => reward.id === rewardId)?.unlockAP || 0
         );
-        const unlockFloor = Math.max(requiredAp, knownUnlock, 30);
-        state.totalAP = Math.max(Number(state.totalAP || 0), godotAp, unlockFloor);
+        const unlockNeed = Math.max(requiredAp, knownUnlock, 0);
+        const reportedAp = firstFiniteV2Number(payload.totalAP, payload.viteAp);
+        if (reportedAp != null) {
+          state.totalAP = Math.max(Number(state.totalAP || 0), Math.max(0, Math.round(Number(reportedAp))));
+        }
         state.tierUnlocked = getV2TierUnlockedByAP(state.totalAP);
         state.rewards = (Array.isArray(state.rewards) ? state.rewards : []).map((reward) =>
           reward.id === rewardId
@@ -24195,7 +24289,7 @@ function ensureProgLoaded() {
         const readyIds = new Set(
           (Array.isArray(state.readyRewardIds) ? state.readyRewardIds : []).map((id) => String(id || ""))
         );
-        if (rewardId) readyIds.add(rewardId);
+        if (rewardId && Number(state.totalAP || 0) >= unlockNeed) readyIds.add(rewardId);
         state.readyRewardIds = Array.from(readyIds);
         return saveV2BottleRewardState(state);
       }
@@ -24207,9 +24301,13 @@ function ensureProgLoaded() {
         const unlockAp = Number(
           (Array.isArray(state.rewards) ? state.rewards : []).find((reward) => reward.id === rewardId)?.unlockAP || 0
         );
-        state.totalAP = Math.max(Number(state.totalAP || 0), Number(payload.ap || 0), unlockAp);
+        const reportedAp = firstFiniteV2Number(payload.totalAP, payload.viteAp, payload.ap);
+        if (reportedAp != null) {
+          state.totalAP = Math.max(Number(state.totalAP || 0), Math.max(0, Math.round(Number(reportedAp))));
+        }
         state.tierUnlocked = getV2TierUnlockedByAP(state.totalAP);
         state = saveV2BottleRewardState(state);
+        if (Number(state.totalAP || 0) < unlockAp) return state;
         return claimV2BottleReward(rewardId);
       }
 
@@ -24614,8 +24712,28 @@ function ensureProgLoaded() {
         return 4;
       }
 
+      function serializeBottleRewardsForCanonical(rewardState) {
+        if (!rewardState || typeof rewardState !== "object") return null;
+        const rewards = Array.isArray(rewardState.rewards) ? rewardState.rewards : [];
+        return {
+          totalAP: Number(rewardState.totalAP || 0),
+          tierUnlocked: Number(rewardState.tierUnlocked || 1),
+          rewards: rewards.map((reward) => ({
+            id: String(reward?.id || ""),
+            name: String(reward?.name || ""),
+            tier: Number(reward?.tier || 1),
+            unlockAP: Number(reward?.unlockAP || 0),
+            claimed: !!reward?.claimed,
+            claimedAt: reward?.claimedAt || null,
+          })).filter((reward) => reward.id),
+        };
+      }
+
       function buildV2CanonicalProgressionState(snapshot, session, rewardProgress = null) {
         const authorityState = recordV2ProgressionAuthority(snapshot, session, rewardProgress);
+        const bottleRewardsState =
+          serializeBottleRewardsForCanonical(rewardProgress?.state) ||
+          serializeBottleRewardsForCanonical(loadV2BottleRewardState());
         const progressionSnapshot = authorityState.progressionSnapshot || buildV2ProgressionSnapshotFromAttempts(authorityState.attempts);
         const difficultyMode = normalizeV2DifficultyMode(snapshot?.difficultyMode || session?.difficultyMode || getV2DifficultyModeForStart());
         const difficultySeed = getV2DifficultySeed(difficultyMode);
@@ -24734,6 +24852,7 @@ function ensureProgLoaded() {
           },
           v2: {
             authority: authorityState,
+            ...(bottleRewardsState ? { bottleRewards: bottleRewardsState } : {}),
             latestSnapshot: {
               encounterId: snapshot?.encounterId || null,
               outcome: snapshot?.outcome || null,
@@ -24741,6 +24860,7 @@ function ensureProgLoaded() {
               difficultyMode,
             },
           },
+          ...(bottleRewardsState ? { bottleRewards: bottleRewardsState } : {}),
         };
       }
 
@@ -25489,7 +25609,34 @@ function ensureProgLoaded() {
             chosenPath: history.map((item) => `${item.choice?.group || ""}:${item.choice?.type || ""}`).filter(Boolean),
             bestPath: Array.isArray(snapshot.bestPath) ? snapshot.bestPath : [],
             bottleServed: p.outcome === "premium_success" || p.outcome === "standard_success" || p.outcome === "weak_success",
+            product: p.product
+              ? {
+                  id: p.product.id || null,
+                  name: p.product.name || null,
+                  category: p.product.category || null,
+                  style: p.product.style || null,
+                  region: p.product.region || null,
+                }
+              : session?.product
+                ? {
+                    id: session.product.id || null,
+                    name: session.product.name || null,
+                    category: session.product.category || null,
+                    style: session.product.style || session.product.varietalOrBlend || null,
+                    region: session.product.region || null,
+                  }
+                : null,
+            aiPerception: p.aiPerception || null,
           },
+          product: p.product || (session?.product
+            ? {
+                id: session.product.id || null,
+                name: session.product.name || null,
+                category: session.product.category || null,
+                style: session.product.style || session.product.varietalOrBlend || null,
+                region: session.product.region || null,
+              }
+            : null),
           occurredAtMs: Date.now(),
         };
 
@@ -26671,20 +26818,23 @@ function ensureProgLoaded() {
         try {
           if (new URLSearchParams(window.location.search).get("bcGodot") === "0") return false;
         } catch {}
-        let modeDemo = false;
-        try {
-          modeDemo = new URLSearchParams(window.location.search).get("mode") === "demo";
-        } catch {}
-        const isDemoMode = !!(window.isDemo || window.bcMode === "demo" || modeDemo);
-        if (!isDemoMode) return false;
-        // Demo + V2 flag (URL or harness module) means Godot owns the floor entry.
-        return !!(shouldUseV2Harness() || (() => {
+        const hasV2 = !!(shouldUseV2Harness() || (() => {
           try {
             return new URLSearchParams(window.location.search).get("bcV2") === "1";
           } catch {
             return false;
           }
         })());
+        if (!hasV2) return false;
+
+        let mode = "";
+        try {
+          mode = String(new URLSearchParams(window.location.search).get("mode") || "").toLowerCase();
+        } catch {}
+        const isDemoMode = !!(window.isDemo || window.bcMode === "demo" || mode === "demo");
+        // Premium waiter/manager cockpit uses the same Godot floor with mode=premium&bcV2=1.
+        const isPremiumCockpit = mode === "premium" || window.bcMode === "premium";
+        return isDemoMode || isPremiumCockpit;
       }
 
       function isGodotShiftWineOfferActive() {
@@ -26714,7 +26864,7 @@ function ensureProgLoaded() {
 
       function isGodotMobileHost() {
         // Must match parent mobile detection: coarse pointer + narrow.
-        // Never treat a narrow desktop window as mobile (portrait rotate CSS).
+        // Never treat a narrow desktop window as mobile.
         try {
           if (window.parent && window.parent !== window) {
             const parentMobile = window.parent.document?.documentElement?.dataset?.bcMobileEnv === "true";
@@ -26727,6 +26877,93 @@ function ensureProgLoaded() {
           return window.matchMedia("(max-width: 860px)").matches;
         } catch {
           return false;
+        }
+      }
+
+      function isGodotPortrait() {
+        try {
+          if (window.matchMedia("(orientation: portrait)").matches) return true;
+          if (window.matchMedia("(orientation: landscape)").matches) return false;
+        } catch {}
+        return window.innerHeight > window.innerWidth;
+      }
+
+      async function requestGodotLandscapeLock() {
+        try {
+          const orientation = window.screen?.orientation;
+          if (!orientation || typeof orientation.lock !== "function") return false;
+          await orientation.lock("landscape");
+          return true;
+        } catch {
+          return false;
+        }
+      }
+
+      async function unlockGodotLandscape() {
+        try {
+          window.screen?.orientation?.unlock?.();
+        } catch {}
+      }
+
+      function isGodotFloorLandscapeRequired() {
+        return isGodotMobileHost()
+          && !!window.__BC_GODOT_SHIFT_ACTIVE__
+          && !window.__BC_GODOT_WINE_OFFER__?.active;
+      }
+
+      function syncGodotLandscapeGate() {
+        const gate = document.getElementById("godotLandscapeGate");
+        if (!gate) return;
+        const need = isGodotFloorLandscapeRequired() && isGodotPortrait();
+        if (need) {
+          gate.removeAttribute("hidden");
+          gate.setAttribute("aria-hidden", "false");
+        } else {
+          gate.setAttribute("hidden", "");
+          gate.setAttribute("aria-hidden", "true");
+        }
+      }
+
+      async function enterGodotLandscapeFloor() {
+        if (!isGodotMobileHost()) {
+          syncGodotLandscapeGate();
+          return;
+        }
+        await requestGodotLandscapeLock();
+        syncGodotLandscapeGate();
+      }
+
+      async function leaveGodotLandscapeFloor() {
+        await unlockGodotLandscape();
+        syncGodotLandscapeGate();
+      }
+
+      function installGodotLandscapeGate() {
+        if (window.__BC_LANDSCAPE_GATE__) return;
+        window.__BC_LANDSCAPE_GATE__ = true;
+        try {
+          const onChange = () => {
+            try { syncGodotLandscapeGate(); } catch {}
+          };
+          try {
+            const media = window.matchMedia("(orientation: portrait)");
+            if (typeof media.addEventListener === "function") {
+              media.addEventListener("change", onChange);
+            } else if (typeof media.addListener === "function") {
+              media.addListener(onChange);
+            }
+          } catch {}
+          window.addEventListener("orientationchange", onChange);
+          window.addEventListener("resize", onChange);
+          document.getElementById("godotLandscapeLockBtn")?.addEventListener("click", async () => {
+            try {
+              await requestGodotLandscapeLock();
+              syncGodotLandscapeGate();
+            } catch {}
+          });
+          syncGodotLandscapeGate();
+        } catch {
+          window.__BC_LANDSCAPE_GATE__ = false;
         }
       }
 
@@ -26780,7 +27017,7 @@ function ensureProgLoaded() {
 
       function getGodotShiftEmbedUrl() {
         // Bust cached Godot index/pck after floor re-exports.
-        const assetV = String(window.__BC_GODOT_SHIFT_ASSET_V__ || "232586304-20260730-authority-v1");
+        const assetV = String(window.__BC_GODOT_SHIFT_ASSET_V__ || "346434464-pck-84b9543ead24adc9");
         return `${getGodotShiftBaseUrl()}/index.html?bcEmbed=1&v=${encodeURIComponent(assetV)}`;
       }
 
@@ -26966,15 +27203,22 @@ function ensureProgLoaded() {
         }
 
         const authorityState = loadV2ProgressionAuthorityState?.() || {};
+        const bottleState = loadV2BottleRewardState?.() || {};
         const authorityDeltaTotal = Number(payload.authorityDeltaTotal ?? payload.shiftScore ?? payload.ap ?? 0);
         const v2AuthorityDelta = Number(payload.v2AuthorityDeltaTotal || 0);
-        const operationalAuthorityDelta = Number(
+        const rawOperational = Number(
           payload.operationalAuthorityDelta ?? (authorityDeltaTotal - v2AuthorityDelta)
         );
-        const totalAP = Math.max(
+        // Wine AP is already in the bottle wallet from each sale. Floor table
+        // AP is operational. Never subtract wines again (that wiped waiter AP).
+        const floorDelta = Math.max(0, Math.round(rawOperational));
+        const earnedWineAp = Math.max(
           0,
-          Math.round(Number(authorityState.totalAP || 0) + operationalAuthorityDelta)
+          Math.round(Number(bottleState.totalAP || 0)),
+          Math.round(Number(authorityState.totalAP || 0))
         );
+        const totalAP = earnedWineAp + floorDelta;
+        const operationalAuthorityDelta = floorDelta;
         const progressionSnapshot =
           authorityState.progressionSnapshot ||
           buildV2ProgressionSnapshotFromAttempts(authorityState.attempts);
@@ -26997,7 +27241,6 @@ function ensureProgLoaded() {
           updatedAt: Date.now(),
         }) || authorityState;
 
-        const bottleState = loadV2BottleRewardState?.() || {};
         saveV2BottleRewardState?.({
           ...bottleState,
           totalAP,
@@ -27050,8 +27293,45 @@ function ensureProgLoaded() {
           processedShiftIds: [...runtime.processedShiftIds, shiftRunId],
         });
 
+        const baseCanonical = getCanonicalPlayerProgressionState() || {};
+        const accumulateGodot =
+          window.V2ProgressionAuthority?.accumulateGodotShiftStats ||
+          null;
+        const previousGodotShift =
+          (baseCanonical?.godotShift && typeof baseCanonical.godotShift === "object")
+            ? baseCanonical.godotShift
+            : {};
+        const accumulatedGodotShift = typeof accumulateGodot === "function"
+          ? accumulateGodot(previousGodotShift, payload, {
+              shiftRunId,
+              coinBalance: nextRuntime.godotCoins,
+              elapsedShiftTime,
+              speedPct,
+              lastShiftCompletedAt: Date.now(),
+              operationalAuthorityDelta,
+            })
+          : {
+              ...(previousGodotShift || {}),
+              coinBalance: nextRuntime.godotCoins,
+              lastShiftRunId: shiftRunId,
+              lastShiftCompletedAt: Date.now(),
+              elapsedShiftTime,
+              speedPct,
+              bottleMeter: Number(payload.bottleMeter ?? payload.bottlesSold ?? 0) || 0,
+              bottleMeterMax: Number(payload.bottleMeterMax ?? payload.bottleTarget ?? 0) || 0,
+              guestServices: Number(payload.guestServices ?? payload.guestsServed ?? 0) || 0,
+              walkAways: Number(payload.walkAways ?? payload.guestsLost ?? 0) || 0,
+              wineSales: Number(payload.wineSales ?? 0) || 0,
+              wineOffers: Number(payload.wineOffers ?? 0) || 0,
+              guestsServed: Number((previousGodotShift.guestsServed || 0) + (payload.guestServices ?? payload.guestsServed ?? 0)),
+              guestsLost: Number((previousGodotShift.guestsLost || 0) + (payload.walkAways ?? payload.guestsLost ?? 0)),
+              bottlesSold: Number((previousGodotShift.bottlesSold || 0) + (payload.wineSales ?? 0)),
+              bottlesAttempted: Number((previousGodotShift.bottlesAttempted || 0) + (payload.wineOffers ?? 0)),
+              shiftsCompleted: Number((previousGodotShift.shiftsCompleted || 0) + 1),
+              lastWineStreak: Number(payload.wineSales ?? 0) || 0,
+            };
+
         if (shouldSubmitV2ProgressReport?.()) {
-          const baseCanonical = getCanonicalPlayerProgressionState() || {};
           const sharedSnapshot = getSharedPlayerAuthoritySnapshot();
           const progressionState = {
             ...baseCanonical,
@@ -27080,14 +27360,7 @@ function ensureProgLoaded() {
               measurements: skillMeasurements,
               unlockSource: sharedSnapshot.skills.unlockSource,
             },
-            godotShift: {
-              ...(baseCanonical.godotShift || {}),
-              coinBalance: nextRuntime.godotCoins,
-              lastShiftRunId: shiftRunId,
-              lastShiftCompletedAt: Date.now(),
-              elapsedShiftTime,
-              speedPct,
-            },
+            godotShift: accumulatedGodotShift,
             capturedAt: Date.now(),
             basedOnUpdatedAt: Number(
               baseCanonical.capturedAt ||
@@ -27326,6 +27599,10 @@ function ensureProgLoaded() {
         showScreen("screenGodotShift");
         notifyParentGodotShiftActive(true);
         ensureGodotShiftIframe({ resumeOnly: false });
+        try {
+          installGodotLandscapeGate();
+          void enterGodotLandscapeFloor();
+        } catch {}
         scheduleIframeHeightReport?.("godot_shift_start");
         return true;
       }
@@ -27348,6 +27625,10 @@ function ensureProgLoaded() {
         const frame = ensureGodotShiftIframe({ resumeOnly: true });
         focusGodotShiftCanvas();
         try { frame?.contentWindow?.focus?.(); } catch {}
+        try {
+          installGodotLandscapeGate();
+          void enterGodotLandscapeFloor();
+        } catch {}
         scheduleIframeHeightReport?.("godot_shift_return");
       }
 
@@ -27375,7 +27656,8 @@ function ensureProgLoaded() {
         if (!offer?.active) return 0;
         const base = Number(offer.elapsedShiftTime || 0) || 0;
         const startedAt = Number(offer.startedAt || Date.now()) || Date.now();
-        return base + Math.max(0, (Date.now() - startedAt) / 1000);
+        const wallSec = Math.max(0, (Date.now() - startedAt) / 1000);
+        return base + wallSec * 0.5;
       }
 
       function getGodotShiftTimeLabel() {
@@ -27493,6 +27775,7 @@ function ensureProgLoaded() {
 
         document.documentElement.dataset.bcGodotShift = "wine_offer";
         notifyParentGodotShiftActive(false);
+        try { void leaveGodotLandscapeFloor(); } catch {}
         try {
           window.scrollTo(0, 0);
           document.documentElement.scrollTop = 0;
@@ -27616,7 +27899,11 @@ function ensureProgLoaded() {
             }
             return !!scenario.secondWineOpportunityAllowed;
           })(),
-          nextTablePhase: wineSold ? "continuing_service" : "ready_for_second_wine_opportunity",
+          nextTablePhase: wineSold
+            ? "continuing_service"
+            : (Number(window.__BC_GODOT_WINE_OFFER__?.wineOpportunityNumber || 1) >= 2
+              ? "continuing_service"
+              : "food_reopened_after_wine"),
           totalAP: Number(rewardProgress?.state?.totalAP || loadV2BottleRewardState?.()?.totalAP || 0),
           progress: Number(snapshot?.progress || 0),
           frustration: Number(snapshot?.frustration || 0),
@@ -27682,6 +27969,7 @@ function ensureProgLoaded() {
         unloadGodotShiftFloorFrame();
         document.documentElement.dataset.bcGodotShift = "false";
         document.documentElement.dataset.bcGodotMobile = "0";
+        try { void leaveGodotLandscapeFloor(); } catch {}
         applyPlaySurfaceMode("full");
         resetNavState();
         try {
@@ -27806,15 +28094,17 @@ function ensureProgLoaded() {
         }
         if (type === "telemetry") {
           try {
+            const telemetryType = payload.eventType || "godot_telemetry";
             window.parent?.postMessage?.({
               source: "BC_MSG",
               v: 1,
               type: "event_log",
+              eventType: telemetryType,
               payload: {
                 v: 2,
                 engineVersion: "godot_shift",
                 source: "godot_shift",
-                eventType: payload.eventType || "godot_telemetry",
+                eventType: telemetryType,
                 ...payload,
                 mode: window.bcMode || "demo",
                 demo: !!(window.isDemo || window.bcMode === "demo"),
@@ -27835,6 +28125,7 @@ function ensureProgLoaded() {
               source: "BC_MSG",
               v: 1,
               type: "event_log",
+              eventType: "shift_complete",
               payload: {
                 v: 2,
                 engineVersion: "godot_shift",
@@ -28652,6 +28943,7 @@ function ensureProgLoaded() {
           window.__BC_GODOT_WINE_OFFER__ = null;
           document.documentElement.dataset.bcGodotShift = "";
           document.documentElement.dataset.bcGodotMobile = "";
+          try { void leaveGodotLandscapeFloor(); } catch {}
           try {
             window.parent?.postMessage?.(
               {

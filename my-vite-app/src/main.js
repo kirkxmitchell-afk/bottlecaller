@@ -18,6 +18,11 @@ import { makeProgressReportSubmitHandler } from "./lib/bcHandlers/progressReport
 import { makeHardResetProgressionHandler } from "./lib/bcHandlers/hardResetProgression.js";
 import { makeTournamentHandlers } from "./lib/bcHandlers/tournament.js";
 import { handleEventLog } from "./lib/handlers/handleEventLog.js";
+import {
+  requestLandscapeLock,
+  unlockLandscape,
+  visualViewportHeight,
+} from "./lib/bcLandscape.js";
 import { createProgressionStore } from "./progressionStore.js";
 import {
   classifyEncounterResolutionForProgression,
@@ -695,6 +700,7 @@ document.querySelector("#app").innerHTML = `
           <span class="badge">PREMIUM</span>
         </div>
         <div class="row">
+          <button id="btnResetOwnProgression" class="btn-ghost" type="button">Reset Progression</button>
           <button id="btnBackFromProfile" class="btn-ghost" type="button">Back</button>
         </div>
       </div>
@@ -708,8 +714,18 @@ document.querySelector("#app").innerHTML = `
         <div class="score-row">Access tier: <span id="profileAccessTier">-</span></div>
       </div>
 
+      <div id="profileResetCard" class="card" style="margin-top:12px;">
+        <strong>Reset Progression</strong>
+        <div class="small-text" style="margin-top:6px; opacity:.85;">
+          Clears skills, standing, readiness, encounter summaries, and restaurant progression for this signed-in account.
+        </div>
+        <button id="btnResetOwnProgressionCard" class="btn-danger" type="button" style="margin-top:10px;">Reset Progression</button>
+        <div id="profileResetMsg" class="small-text" style="margin-top:8px;"></div>
+      </div>
+
       <div id="profileStandingCard" style="margin-top:12px;"></div>
       <div id="profileBadgeShelf" style="margin-top:12px;"></div>
+      <div id="profileCellarCollectionCard" style="margin-top:12px;"></div>
       <div id="profileSkillsCard" style="margin-top:12px;"></div>
       <div id="profilePerformanceHistoryCard" style="margin-top:12px;">
         <div id="mbPerformanceHistoryPanel" style="margin-top:12px;">
@@ -721,8 +737,8 @@ document.querySelector("#app").innerHTML = `
                   Skill growth and encounter reactions for your profile.
                 </div>
               </div>
-              <label class="small-text" style="display:flex; align-items:center; gap:8px;">
-                Waiter
+              <label id="mbHistoryUserPicker" class="small-text" style="display:flex; align-items:center; gap:8px;">
+                Player
                 <select id="mbHistoryUser" class="input" style="min-width:220px;"></select>
               </label>
             </summary>
@@ -743,7 +759,7 @@ document.querySelector("#app").innerHTML = `
         <strong>Weekly Training Report</strong>
 
         <div class="small-text" style="margin-top:6px; opacity:.85;">
-          Summary of team progress over the last 7 days.
+          Team competitive metrics and skill focus from the last 7 days.
         </div>
 
         <div id="mbWeeklyReport" style="margin-top:10px;">
@@ -788,18 +804,34 @@ document.querySelector("#app").innerHTML = `
               <tr>
                 <th>Rank</th>
                 <th>Team Member</th>
-                <th>Total Points</th>
-                <th>Drill Pass %</th>
+                <th>Authority Points</th>
                 <th>Encounter Pass %</th>
-                <th>Challenge Success %</th>
-                <th>Premium Success %</th>
                 <th>Mastery %</th>
+                <th>Wine Streak</th>
+                <th>Top Wine Sold</th>
+                <th>Readiness</th>
                 <th>Last Active</th>
               </tr>
             </thead>
             <tbody id="waiterLeaderboardRows"></tbody>
           </table>
         </div>
+      </div>
+      <div class="card" id="waiterLeaderboardPlayerStatsPanel">
+        <style>
+          #waiterLeaderboardPlayerStatsPanel .mb-player-stats-summary{display:flex !important;align-items:center !important;justify-content:space-between !important;gap:12px !important;flex-wrap:wrap !important;list-style:none !important;}
+          #waiterLeaderboardPlayerStatsPanel details.mb-player-stats-card:not([open]) > .mb-player-stats-grid{display:none !important;}
+          #waiterLeaderboardPlayerStatsPanel details.mb-player-stats-card[open] > .mb-player-stats-grid{display:grid !important;grid-template-columns:repeat(4,minmax(0,1fr)) !important;gap:10px !important;margin-top:12px !important;}
+          #waiterLeaderboardPlayerStatsPanel .mb-player-stat-cell{display:flex !important;flex-direction:column !important;gap:6px !important;min-height:72px !important;padding:14px 16px !important;border-radius:12px !important;border:1px solid rgba(255,255,255,0.06) !important;background:rgba(255,255,255,0.04) !important;}
+          #waiterLeaderboardPlayerStatsPanel .mb-player-stat-cell .small-text{font-size:12px !important;color:rgba(244,246,247,0.62) !important;}
+          #waiterLeaderboardPlayerStatsPanel .mb-player-stat-cell strong{display:block !important;font-size:18px !important;font-weight:700 !important;color:rgba(244,246,247,0.96) !important;}
+          @media (max-width:980px){#waiterLeaderboardPlayerStatsPanel details[open] > .mb-player-stats-grid{grid-template-columns:repeat(2,minmax(0,1fr)) !important;}}
+        </style>
+        <div class="mb-section-header">
+          <strong>Player stats</strong>
+          <div class="small-text">Open to review your stats.</div>
+        </div>
+        <div id="waiterLeaderboardPlayerStats" class="mb-player-stats-list" data-panel-mode="player-stats" style="margin-top:14px;"></div>
       </div>
     </div>
   </section>
@@ -1272,10 +1304,7 @@ document.querySelector("#app").innerHTML = `
       <button id="btnCloseMessages" type="button" style="font-size:12px;">Close</button>
     </div>
 
-    <div style="margin-top:14px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.10);">
-      <button id="btnWaiterSendProgress" class="btn-ghost" type="button">Send Progress</button>
-      <div id="waiterSendProgressStatus" class="small-text" style="margin-top:6px; opacity:.85;"></div>
-    </div>
+    <div id="waiterMessagesStatus" class="small-text" style="margin-top:10px; opacity:.85;"></div>
 
     <div id="waiterMessagesThread" style="margin-top:12px; display:flex; flex-direction:column; gap:8px;">
       <div class="small-text" style="opacity:.8;">No messages yet.</div>
@@ -1317,11 +1346,6 @@ document.querySelector("#app").innerHTML = `
       <div><b>Seat limit:</b> <span id="hudSeatLimit">-</span></div>
       <div><b>Invite required:</b> <span id="hudRequireInvite">-</span></div>
     </div>
-    <div style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.10);">
-      <button id="btnHudSendProgress" class="btn-ghost" type="button">Send progress to manager</button>
-      <div id="hudSendProgressStatus" class="small-text" style="margin-top:6px; opacity:.85;"></div>
-    </div>
-
     <div id="managerOnlyBlock" class="hidden">
       <hr style="opacity:.25; margin:12px 0;" />
 
@@ -1532,6 +1556,23 @@ function shouldBypassAuthedStateCache(reason = "") {
   );
 }
 
+function resolveProfileDisplayName(profile = null, session = null) {
+  // Prefer the signed-in profile name for parent -> iframe ctx.
+  const user = session?.user || session || null;
+  const candidates = [
+    profile?.display_name,
+    profile?.displayName,
+    user?.user_metadata?.display_name,
+    user?.user_metadata?.full_name,
+    user?.user_metadata?.name,
+  ];
+  for (const candidate of candidates) {
+    const name = String(candidate || "").trim();
+    if (name) return name;
+  }
+  return "";
+}
+
 function getParentCtxSnapshot(requestedMode = "premium") {
   const session = appState?.session || null;
   const profile = appState?.profile || null;
@@ -1550,6 +1591,7 @@ function getParentCtxSnapshot(requestedMode = "premium") {
   const scopeId = profile?.scope_id || null;
   const scopeType = profile?.scope_type || null;
   const accessTier = profile?.access_tier || "demo";
+  const displayName = resolveProfileDisplayName(profile, session);
 
   return {
     session,
@@ -1559,6 +1601,8 @@ function getParentCtxSnapshot(requestedMode = "premium") {
     epoch,
     userId,
     profileUserId,
+    displayName,
+    display_name: displayName,
     membershipRole,
     role: membershipRole,
     membership_role: membershipRole,
@@ -1913,6 +1957,16 @@ function canActOnRestaurant(roleLike, actorProfile, restaurantId) {
   return allowed.includes(rid);
 }
 
+function roleUsesOwnRestaurantOnly(roleLike = null) {
+  const role = normalizeMembershipRole(roleLike || appState?.profile || null);
+  return role === "waiter" || role === "single_manager";
+}
+
+function getOwnRestaurantId(profileLike = null) {
+  const profile = profileLike || appState?.profile || {};
+  return String(profile?.restaurant_id || profile?.restaurantId || "").trim() || null;
+}
+
 function getActorRestaurantSet(profileLike) {
   const profile = profileLike || {};
   const role = normalizeMembershipRole(profile);
@@ -1940,7 +1994,12 @@ function getActorRestaurantSet(profileLike) {
 }
 
 function getManagerActiveRestaurantId() {
-  const scopeId = appState?.profile?.scope_id || null;
+  const profile = appState?.profile || {};
+  if (roleUsesOwnRestaurantOnly(profile)) {
+    return getOwnRestaurantId(profile);
+  }
+
+  const scopeId = profile?.scope_id || null;
   const explicit =
     window.__BC_ACTIVE_MANAGER_RESTAURANT_ID__ ||
     window.__BC_ACTIVE_RESTAURANT_ID__ ||
@@ -1951,8 +2010,8 @@ function getManagerActiveRestaurantId() {
 
   return String(
     appState?.restaurant?.id ||
-    appState?.profile?.restaurant_id ||
-    appState?.profile?.restaurantId ||
+    profile?.restaurant_id ||
+    profile?.restaurantId ||
     ""
   ) || null;
 }
@@ -2244,6 +2303,7 @@ const ENCOUNTER_RESOLUTION_SUMMARY_COLUMNS = [
   "chosen_mode",
   "chosen_hook",
   "actual_guest_type",
+  "actual_guest_type_norm",
   "read_correct",
   "delivery_correct",
   "mode_status",
@@ -2256,6 +2316,8 @@ const ENCOUNTER_RESOLUTION_SUMMARY_COLUMNS = [
   "bottle_served",
   "chosen_path",
   "best_path",
+  "outcome",
+  "mode",
 ];
 
 async function fetchEncounterResolutionSummaries({
@@ -2264,6 +2326,10 @@ async function fetchEncounterResolutionSummaries({
   sinceIso = null,
   limit = 20,
 } = {}) {
+  if (!restaurantId) {
+    return { data: [], error: null };
+  }
+
   let columns = [...ENCOUNTER_RESOLUTION_SUMMARY_COLUMNS];
 
   for (let attempt = 0; attempt < ENCOUNTER_RESOLUTION_SUMMARY_COLUMNS.length; attempt += 1) {
@@ -2271,15 +2337,21 @@ async function fetchEncounterResolutionSummaries({
       .from("bc_encounter_resolutions_v2")
       .select(columns.join(", "))
       .eq("restaurant_id", restaurantId)
-      .neq("mode", "demo")
       .order("occurred_at", { ascending: false })
-      .limit(limit);
+      .limit(Math.max(limit * 2, limit));
 
     if (userId) query = query.eq("user_id", userId);
     if (sinceIso) query = query.gte("occurred_at", sinceIso);
 
     const res = await query;
-    if (!res?.error) return res;
+    if (!res?.error) {
+      const rows = Array.isArray(res.data) ? res.data : [];
+      // Keep premium + legacy null-mode rows; drop demo only in JS so null mode is not excluded.
+      const filtered = rows
+        .filter((row) => String(row?.mode || "").toLowerCase() !== "demo")
+        .slice(0, limit);
+      return { ...res, data: filtered };
+    }
     if (!isMissingColumnError(res.error)) return res;
 
     const missingColumn = parseMissingColumnFromError(res.error);
@@ -2346,6 +2418,8 @@ function clearLocalProgressionKeysForReset({ userId, restaurantId }) {
   try { localStorage.removeItem("bc_prog_v1_fallback_premium"); } catch {}
   try { localStorage.removeItem("bc_premium_encounter_index"); } catch {}
   try { localStorage.removeItem(skillsKey); } catch {}
+  try { localStorage.removeItem("BC_V2_BOTTLE_REWARDS_V1"); } catch {}
+  try { window.__BC_V2_BOTTLE_REWARD_STATE__ = null; } catch {}
 
   try { localStorage.setItem(resetMarkerKey, String(Date.now())); } catch {}
 
@@ -2508,18 +2582,20 @@ async function hydrateProgressionSpineFromLatestSnapshot({
 }
 
 // ---- expose restaurantId getter globally (for debug + bridge) ----
-window.getActiveRestaurantId =
-  window.getActiveRestaurantId ||
-  function getActiveRestaurantId() {
-    const S = window.appState;
-    return (
-      window.__BC_ACTIVE_MANAGER_RESTAURANT_ID__ ||
-      S?.activeRestaurantId ||
-      getStoredActiveRestaurantId?.() ||
-      S?.profile?.restaurant_id ||
-      null
-    );
-  };
+window.getActiveRestaurantId = function getActiveRestaurantId() {
+  const S = window.appState;
+  const profile = S?.profile || {};
+  if (roleUsesOwnRestaurantOnly(profile)) {
+    return getOwnRestaurantId(profile) || S?.activeRestaurantId || null;
+  }
+  return (
+    window.__BC_ACTIVE_MANAGER_RESTAURANT_ID__ ||
+    S?.activeRestaurantId ||
+    getStoredActiveRestaurantId?.(profile?.scope_id || null) ||
+    getOwnRestaurantId(profile) ||
+    null
+  );
+};
 
 window.__BC_ACTIVE_REST_READY__ =
   window.__BC_ACTIVE_REST_READY__ ||
@@ -4355,12 +4431,15 @@ window.__BC_BUILD_CTX__ = function buildBcCtx(requestedMode = null) {
   const accessTier = S?.profile?.access_tier ?? "demo";
   const restaurantId = window.getActiveRestaurantId?.() ?? null;
   const mode = requestedMode ?? "premium";
+  const displayName = resolveProfileDisplayName(S?.profile, S?.session);
   return {
     userId,
     restaurantId,
     scopeId,
     scopeType,
     accessTier,
+    displayName,
+    display_name: displayName,
     membershipRole,
     role,
     membership_role: membershipRole,
@@ -4953,6 +5032,8 @@ async function buildBcCtxSafe(requestedMode = null) {
   const mode = String(requestedMode || "").toLowerCase();
   const isDemo = mode === "demo";
 
+  const displayName = resolveProfileDisplayName(profile, live || S?.session);
+
   // DEMO: never attach to a real restaurant boundary
   if (isDemo) {
     return {
@@ -4964,6 +5045,8 @@ async function buildBcCtxSafe(requestedMode = null) {
       scopeId: null,
       scopeType: null,
       accessTier,
+      displayName,
+      display_name: displayName,
       membershipRole,
       role: membershipRole || profile?.role || null,
       membership_role: membershipRole,
@@ -4986,6 +5069,8 @@ async function buildBcCtxSafe(requestedMode = null) {
     scopeId: profile?.scope_id ?? null,
     scopeType,
     accessTier,
+    displayName,
+    display_name: displayName,
     membershipRole,
     role: membershipRole || profile?.role || null,
     membership_role: membershipRole,
@@ -5435,7 +5520,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
         }),
         event_log: async ({ msg, event }) => {
           const replyType = "event_log_ack";
-          const eventType = msg?.eventType || null;
+          const eventType = msg?.eventType || msg?.payload?.eventType || null;
           const gate = await getBridgeAuthedCtx({
             msg,
             event,
@@ -5446,13 +5531,16 @@ if (!window.__BC_PARENT_BRIDGE__) {
           if (!gate.ok) return;
 
           await handleEventLog({
-            msg,
+            msg: { ...msg, eventType },
             event,
             supabase,
             tagSource,
             ctx: gate.ctx,
             replyType,
           });
+          if (eventType === "shift_complete" || eventType === "encounter_resolved") {
+            window.__BC_MB_PERFORMANCE_MODEL__ = null;
+          }
         },
         drill_run_started: async ({ msg, event }) => {
           const replyType = "drill_run_started_result";
@@ -6145,7 +6233,7 @@ if (!window.__BC_PARENT_BRIDGE__) {
         const result = msg?.result || {};
 
         const statuses = [
-          document.getElementById("waiterSendProgressStatus"),
+          document.getElementById("waiterMessagesStatus"),
           document.getElementById("progressReportStatus")
         ].filter(Boolean);
 
@@ -6453,6 +6541,26 @@ function buildBlankCanonicalProgressionState() {
       premium: { count: 0, totalPoints: 0 },
       legacy: { count: 0, totalPoints: 0 },
     },
+    skills: {
+      bank: {
+        read: 0,
+        framing: 0,
+        delivery: 0,
+        recovery: 0,
+        closing: 0,
+        speed: 0,
+      },
+      bankMeta: {
+        updatedAt: capturedAt,
+        sampleCount: 0,
+        lastOutcome: null,
+        lastMode: "seed",
+        lastMeasurement: null,
+      },
+      measurements: null,
+      unlockedSkillIds: [],
+      unlockSource: null,
+    },
     mirror: {
       capturedAt,
       meta: {
@@ -6516,6 +6624,82 @@ async function clearProgressionSnapshots(sb, { userId, restaurantId }) {
   if (error) throw error;
 }
 
+async function deleteScopedRows(sb, table, filters = []) {
+  let query = sb.from(table).delete();
+  filters.forEach(([column, value]) => {
+    if (value != null && value !== "") query = query.eq(column, value);
+  });
+  return query;
+}
+
+async function clearProgressionSupportRows(sb, { userId, restaurantId }) {
+  // Historic Profile/leaderboard data lives in these tables, not just canonical state.
+  const tasks = [
+    deleteScopedRows(sb, "bc_readiness_v1", [["user_id", userId], ["restaurant_id", restaurantId]]),
+    deleteScopedRows(sb, "bc_totals_v1", [["user_id", userId], ["restaurant_id", restaurantId]]),
+    deleteScopedRows(sb, "bc_encounter_resolutions_v2", [["user_id", userId], ["restaurant_id", restaurantId]]),
+    deleteScopedRows(sb, "bc_encounter_resolutions_v1", [["user_id", userId], ["restaurant_id", restaurantId]]),
+    deleteScopedRows(sb, "bc_encounter_resolutions", [["user_id", userId], ["restaurant_id", restaurantId]]),
+    deleteScopedRows(sb, "bc_event_log", [["user_id", userId], ["restaurant_id", restaurantId]]),
+    sb.from("bc_messages_v1")
+      .delete()
+      .eq("sender_user_id", userId)
+      .eq("restaurant_id", restaurantId)
+      .in("type", ["drill_completed", "timed_challenge_completed", "timed_challenge_expired", "progress_report"]),
+  ];
+  const results = await Promise.allSettled(tasks);
+  results.forEach((result, index) => {
+    if (result.status === "rejected") {
+      console.warn("[BC hard reset] support table clear failed", index, result.reason);
+    } else if (result.value?.error) {
+      console.warn("[BC hard reset] support table clear error", index, result.value.error);
+    }
+  });
+}
+
+async function refreshProfileAfterProgressionReset() {
+  invalidateManagerBoardProgressionModels();
+  window.__BC_MB_PERFORMANCE_MODEL__ = null;
+
+  const standing = document.getElementById("profileStandingCard");
+  const badges = document.getElementById("profileBadgeShelf");
+  const skills = document.getElementById("profileSkillsCard");
+  const historyHost = document.getElementById("managerEncounterSummaryHost");
+  const summaryStrip = document.getElementById("mbHistorySummaryStrip");
+  const weekly = document.getElementById("mbWeeklyReport");
+
+  if (standing) {
+    standing.innerHTML = `
+      <div class="card">
+        <div style="font-weight:600; margin-bottom:8px;">My Standing</div>
+        <div class="small" style="opacity:.75;">No performance recorded yet.</div>
+      </div>
+    `;
+  }
+  if (badges) badges.innerHTML = "";
+  const cellar = document.getElementById("profileCellarCollectionCard");
+  if (cellar) renderProfileCellarCollection([]);
+  if (skills) {
+    skills.innerHTML = `
+      <div class="card">
+        <div style="font-weight:600; margin-bottom:8px;">Your Skills</div>
+        <div class="small" style="opacity:.75;">No skill history yet.</div>
+      </div>
+    `;
+  }
+  if (historyHost) {
+    historyHost.innerHTML = `<div class="small-text">No recent encounter summaries.</div>`;
+  }
+  if (summaryStrip) summaryStrip.innerHTML = "";
+  try { drawPerformanceHistoryChart([]); } catch {}
+  if (weekly) weekly.innerHTML = `<div class="small-text" style="opacity:.7;">No report yet.</div>`;
+
+  try { await renderProfileSkillDashboard(); } catch {}
+  try { await renderProfilePerformanceCards(); } catch {}
+  try { await loadProfilePerformanceHistory(); } catch {}
+  try { renderHud?.(); } catch {}
+}
+
 async function rehydrateBlankProgressionState({ userId, restaurantId }) {
   try {
     setActiveProgressionOwner({
@@ -6559,6 +6743,7 @@ async function hardResetProgressionStateOnly({
   try {
     await resetCanonicalProgressionRow(sb, { userId, restaurantId, scopeId });
     await clearProgressionSnapshots(sb, { userId, restaurantId });
+    await clearProgressionSupportRows(sb, { userId, restaurantId });
     await rehydrateBlankProgressionState({ userId, restaurantId });
     if (refreshParentView) {
       await refreshParentProgressionFromDb?.();
@@ -6622,6 +6807,39 @@ async function refreshManagerBoardAfterProgressionReset() {
   renderManagerPeopleSummary?.();
   safeCall("renderManagerBoardOverviewRitualStatusCard", () => renderManagerBoardOverviewRitualStatusCard?.());
 }
+
+async function hardResetOwnProgression(reason = "profile_self_reset") {
+  const profile = appState?.profile || null;
+  const sessionUserId = appState?.session?.user?.id || profile?.user_id || null;
+  const role = String(normalizeMembershipRole(profile) || profile?.role || "").toLowerCase();
+  const restaurantId =
+    getManagerActiveRestaurantId?.() ||
+    appState?.activeRestaurantId ||
+    profile?.restaurant_id ||
+    null;
+
+  if (!sessionUserId) throw new Error("not_authenticated");
+  if (!restaurantId) throw new Error("missing_restaurant");
+  if (!["waiter", "single_manager", "group_manager", "enterpriser"].includes(role)) {
+    throw new Error("forbidden_role");
+  }
+
+  const result = await hardResetProgressionStateOnly({
+    userId: sessionUserId,
+    restaurantId,
+    scopeId: profile?.scope_id || restaurantId,
+    refreshParentView: true,
+  });
+
+  try { await refreshProfileAfterProgressionReset(); } catch (error) {
+    console.warn("[BC] profile refresh after reset failed", error);
+    try { renderProfileScreen?.(); } catch {}
+  }
+  console.log("[BC] own progression reset", { reason, role, ...result });
+  return result;
+}
+
+window.__BC_HARD_RESET_OWN_PROGRESSION__ = hardResetOwnProgression;
 
 async function hardResetWaiterProgressionAsManager({ userId, restaurantId = null } = {}) {
   const snapshot = getParentCtxSnapshot("premium");
@@ -6866,6 +7084,10 @@ function renderAppChrome() {
   const isDemoCtaSuppressed =
     isDemoCockpit &&
     window.__BC_DEMO_SHELL_CTA_HIDDEN === true;
+  const isPremiumGodotActive =
+    appMode === "premium" &&
+    (document.documentElement?.dataset?.bcGodotDemo === "true" ||
+      window.__BC_DEMO_IFRAME_LAST_SCREEN__ === "screenGodotShift");
   const statusLabel = isDemoCockpit
     ? "DEMO"
     : hasSession
@@ -6875,14 +7097,16 @@ function renderAppChrome() {
   const showPlayCta =
     ((currentScreenId === "screenPremiumApp" && hasSession) || isDemoCockpit) &&
     !isDemoWelcomeOpen &&
-    !isDemoCtaSuppressed;
+    !isDemoCtaSuppressed &&
+    !isPremiumGodotActive;
 
   if (statusEl) statusEl.textContent = statusLabel;
   premiumBarEl?.classList.toggle("hidden", !showPremiumBar);
   playCtaEl?.classList.toggle("hidden", !showPlayCta);
   if (playCtaEl && showPlayCta) playCtaEl.style.opacity = "";
 
-  // Role profile (MEMBERSHIP_UI_GATES) owns cog visibility — waiter ≠ group_manager.
+  // Role profile (MEMBERSHIP_UI_GATES) owns cog visibility —
+  // waiter ≠ single_manager ≠ group_manager.
   applyPremiumCogMenu({ isDemoCockpit, hasSession });
 }
 
@@ -6901,11 +7125,6 @@ function removeGlobalResetButtons() {
   ];
 
   ids.forEach((id) => document.getElementById(id)?.remove());
-
-  document.querySelectorAll("button").forEach((b) => {
-    const t = (b.textContent || "").trim().toLowerCase();
-    if (t.includes("reset")) b.remove();
-  });
 }
 
 function onScreenChanged(id) {
@@ -7098,6 +7317,7 @@ function getPremiumCogVisibility(profileLike = null) {
 }
 
 function applyPremiumCogMenu(options = {}) {
+  removeLegacyProgressSendControls();
   const {
     isDemoCockpit = false,
     hasSession = !!appState?.session?.user,
@@ -7230,6 +7450,7 @@ function applyRoleTemplateGates() {
     hasSession: !!appState?.session?.user,
   });
   applyWineSetupAccessMode();
+  applyMultiRestaurantSwitcherVisibility(appState?.profile || null);
 }
 
 function applyWaiterTemplateGates() {
@@ -7245,8 +7466,9 @@ function buildBcCtx(requestedMode = null) {
   const scopeId = S?.profile?.scope_id ?? null;
   const restaurantId = window.getActiveRestaurantId();
   const mode = requestedMode ?? null;
+  const displayName = resolveProfileDisplayName(S?.profile, S?.session);
 
-  return { userId, restaurantId, scopeId, role, mode };
+  return { userId, restaurantId, scopeId, role, mode, displayName, display_name: displayName };
 }
 
 function setMsg(elId, msg, kind = "normal") {
@@ -8486,7 +8708,7 @@ function wireWaiterThreadButtons() {
           window.location.origin
         );
 
-        const status = document.getElementById("waiterSendProgressStatus");
+        const status = document.getElementById("waiterMessagesStatus");
         if (status) status.textContent = "Starting assigned drill…";
       } catch (e) {
         console.warn("[WAITER] start assigned drill failed", e);
@@ -8495,9 +8717,67 @@ function wireWaiterThreadButtons() {
   });
 }
 
-async function openWaiterMessages() {
+function isLegacyProgressSendButton(el) {
+  if (!el) return false;
+  const id = String(el.id || "");
+  const label = String(el.textContent || "").replace(/\s+/g, " ").trim().toLowerCase();
+  return (
+    id === "btnWaiterSendProgress" ||
+    id === "btnHudSendProgress" ||
+    id === "btnSendProgressReport" ||
+    label === "send progress" ||
+    label === "send progress to manager"
+  );
+}
+
+function removeLegacyProgressSendControls(root = document) {
+  const scope = root && typeof root.querySelectorAll === "function" ? root : document;
+  scope.querySelectorAll("button, [role='button']").forEach((btn) => {
+    if (isLegacyProgressSendButton(btn)) btn.remove();
+  });
+  document.getElementById("btnWaiterSendProgress")?.remove();
+  document.getElementById("waiterSendProgressStatus")?.remove();
+  document.getElementById("btnHudSendProgress")?.remove();
+  document.getElementById("hudSendProgressStatus")?.remove();
+}
+
+function renderWaiterMessagesInboxShell() {
   const panel = document.getElementById("waiterMessagesPanel");
-  if (panel && !panel.classList.contains("hidden")) {
+  if (!panel) return null;
+
+  panel.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+      <b>Coach Messages</b>
+      <button id="btnCloseMessages" type="button" style="font-size:12px;">Close</button>
+    </div>
+    <div id="waiterMessagesStatus" class="small-text" style="margin-top:10px; opacity:.85;"></div>
+    <div id="waiterMessagesThread" style="margin-top:12px; display:flex; flex-direction:column; gap:8px;">
+      <div class="small-text" style="opacity:.8;">No messages yet.</div>
+    </div>
+  `;
+
+  const closeBtn = document.getElementById("btnCloseMessages");
+  if (closeBtn) closeBtn.addEventListener("click", closeWaiterMessages);
+  removeLegacyProgressSendControls(panel);
+  return panel;
+}
+
+function wireLegacyProgressSendBlocker() {
+  if (document.__bcStripSendProgressBound) return;
+  document.__bcStripSendProgressBound = true;
+  document.addEventListener("click", (event) => {
+    const btn = event.target?.closest?.("button, [role='button']");
+    if (!isLegacyProgressSendButton(btn)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    btn.remove();
+  }, true);
+}
+
+async function openWaiterMessages() {
+  wireLegacyProgressSendBlocker();
+  const panel = renderWaiterMessagesInboxShell() || document.getElementById("waiterMessagesPanel");
+  if (panel && !panel.classList.contains("hidden") && panel.dataset.inboxOpen === "1") {
     closeWaiterMessages();
     return;
   }
@@ -8509,10 +8789,10 @@ async function openWaiterMessages() {
   }
   document.getElementById("waiterMessagesBackdrop")?.classList.add("hidden");
   panel?.classList.remove("hidden");
+  if (panel) panel.dataset.inboxOpen = "1";
   document.getElementById("btnOpenMessages")?.setAttribute("aria-expanded", "true");
-  const status = document.getElementById("waiterSendProgressStatus");
+  const status = document.getElementById("waiterMessagesStatus");
   if (status) status.textContent = "";
-  syncWaiterMessengerComposerVisibility();
   try {
     await loadWaiterMessagesThread();
   } catch (e) {
@@ -8522,43 +8802,24 @@ async function openWaiterMessages() {
 
 function closeWaiterMessages() {
   document.getElementById("waiterMessagesBackdrop")?.classList.add("hidden");
-  document.getElementById("waiterMessagesPanel")?.classList.add("hidden");
+  const panel = document.getElementById("waiterMessagesPanel");
+  panel?.classList.add("hidden");
+  if (panel) panel.dataset.inboxOpen = "0";
   document.getElementById("btnOpenMessages")?.setAttribute("aria-expanded", "false");
-  const status = document.getElementById("waiterSendProgressStatus");
+  const status = document.getElementById("waiterMessagesStatus");
   if (status) status.textContent = "";
 }
 
 function syncWaiterMessengerComposerVisibility() {
-  const profile = appState?.profile || {};
-  const membershipRole = normalizeMembershipRole(profile);
-  const roleAliases = roleAliasesForMatching(profile);
-  const isManagerLikeRole = roleAliases.some((role) =>
-    ["manager", "single_manager", "group_manager", "enterprise_admin", "enterpriser"].includes(role)
-  );
-  const isWaiter = membershipRole === "waiter" && !isManagerLikeRole;
-  const sendBtn = document.getElementById("btnWaiterSendProgress");
-  const status = document.getElementById("waiterSendProgressStatus");
-  const composerBlock = sendBtn?.parentElement || null;
-
-  if (composerBlock) {
-    composerBlock.classList.toggle("hidden", !isWaiter);
-    composerBlock.style.display = isWaiter ? "" : "none";
-  }
-
-  if (!isWaiter && status) status.textContent = "";
+  renderWaiterMessagesInboxShell();
 }
 
 function wireWaiterMessagesPanel() {
-  const closeBtn = document.getElementById("btnCloseMessages");
+  wireLegacyProgressSendBlocker();
+  renderWaiterMessagesInboxShell();
   const backdrop = document.getElementById("waiterMessagesBackdrop");
-  const sendBtn = document.getElementById("btnWaiterSendProgress");
   const openBtn = document.getElementById("btnOpenMessages");
   const panel = document.getElementById("waiterMessagesPanel");
-
-  if (closeBtn && !closeBtn.__bcBound) {
-    closeBtn.__bcBound = true;
-    closeBtn.addEventListener("click", closeWaiterMessages);
-  }
 
   if (backdrop && !backdrop.__bcBound) {
     backdrop.__bcBound = true;
@@ -8579,30 +8840,6 @@ function wireWaiterMessagesPanel() {
   }
 
   if (openBtn) openBtn.setAttribute("aria-expanded", panel?.classList.contains("hidden") ? "false" : "true");
-
-  if (sendBtn && !sendBtn.__bcBound) {
-    sendBtn.__bcBound = true;
-    sendBtn.addEventListener("click", async () => {
-      const frame = document.getElementById("premiumRootFrame");
-      const status = document.getElementById("waiterSendProgressStatus");
-
-      if (!frame || !frame.contentWindow) {
-        if (status) status.textContent = "Game not ready.";
-        return;
-      }
-
-      frame.contentWindow.postMessage(
-        {
-          source: "BC_MSG",
-          v: 1,
-          type: "waiter_messenger_send",
-        },
-        window.location.origin
-      );
-
-      if (status) status.textContent = "Sending progress…";
-    });
-  }
 }
 
 function describeProgressSendError(errorCode = "") {
@@ -8627,17 +8864,14 @@ window.addEventListener("message", (event) => {
   }
 
   if (msg.type === "progress_report_submit_result") {
-    const status = document.getElementById("waiterSendProgressStatus");
-    const hudStatus = document.getElementById("hudSendProgressStatus");
-
     const text = msg.ok
       ? (msg.snapshotOk === false
           ? `Sent, but snapshot failed${msg.snapshotError ? `: ${msg.snapshotError}` : "."}`
           : `Progress updated${msg.inserted ? ` (${msg.inserted})` : ""} ✅`)
       : describeProgressSendError(msg.error || "unknown_error");
 
-  if (status) status.textContent = text;
-  if (hudStatus) hudStatus.textContent = text;
+    const hudStatus = document.getElementById("hudSendProgressStatus");
+    if (hudStatus) hudStatus.textContent = text;
     renderProfileSkillDashboard();
 
     if (msg.ok) {
@@ -8650,8 +8884,7 @@ window.addEventListener("message", (event) => {
 });
 
 function wireHudSendProgressButton() {
-  const btn = document.getElementById("btnHudSendProgress");
-  if (btn) btn.remove();
+  removeLegacyProgressSendControls();
 }
 
 function setHudOpen(isOpen) {
@@ -8704,6 +8937,244 @@ function closeWaiterLeaderboardWindow() {
   renderAppChrome?.();
 }
 
+function isEncounterWineWin(row = {}) {
+  if (typeof row?.bottle_served === "boolean") return row.bottle_served;
+  if (typeof row?.reflection?.bottleServed === "boolean") return row.reflection.bottleServed;
+  const grade = String(row?.performance_grade || "").toUpperCase();
+  if (grade === "A" || grade === "B") return true;
+  if (String(row?.chain_signal || "").toLowerCase() === "green") return true;
+  return !!row?.is_green;
+}
+
+function isEncounterPassed(row = {}) {
+  const grade = String(row?.performance_grade || row?.latest_grade || "").toUpperCase();
+  return (
+    grade === "A" ||
+    grade === "B" ||
+    String(row?.chain_signal || "").toLowerCase() === "green" ||
+    !!row?.is_green
+  );
+}
+
+function isEncounterMastery(row = {}) {
+  return String(row?.performance_grade || "").toUpperCase() === "A";
+}
+
+function computeWineStreakFromEncounters(encounters = []) {
+  const rows = (Array.isArray(encounters) ? encounters : [])
+    .slice()
+    .sort((a, b) => new Date(b?.occurred_at || 0).getTime() - new Date(a?.occurred_at || 0).getTime());
+  const wins = rows.map((row) => isEncounterWineWin(row));
+
+  let current = 0;
+  for (const win of wins) {
+    if (win) current += 1;
+    else break;
+  }
+
+  let best = 0;
+  let run = 0;
+  for (const win of wins) {
+    if (win) {
+      run += 1;
+      if (run > best) best = run;
+    } else {
+      run = 0;
+    }
+  }
+
+  return {
+    current,
+    best,
+    sampleN: wins.length,
+  };
+}
+
+function resolveEncounterWineName(row = {}) {
+  const reflection = row?.reflection && typeof row.reflection === "object" ? row.reflection : {};
+  const product =
+    (reflection?.product && typeof reflection.product === "object" ? reflection.product : null) ||
+    (row?.product && typeof row.product === "object" ? row.product : null);
+  return String(
+    product?.name ||
+    row?.product_name ||
+    row?.bottle_name ||
+    reflection?.bottleName ||
+    ""
+  ).replace(/^Scroll of\s+/i, "").trim();
+}
+
+function resolveTopWineSold(encounters = [], snapshots = []) {
+  const counts = new Map();
+
+  (Array.isArray(encounters) ? encounters : []).forEach((row) => {
+    if (!isEncounterWineWin(row)) return;
+    const name = resolveEncounterWineName(row);
+    if (!name) return;
+    counts.set(name, (counts.get(name) || 0) + 1);
+  });
+
+  if (!counts.size) {
+    (Array.isArray(snapshots) ? snapshots : []).forEach((row) => {
+      const payload = row?.payload && typeof row.payload === "object" ? row.payload : {};
+      const v2 = payload?.v2Snapshot && typeof payload.v2Snapshot === "object" ? payload.v2Snapshot : {};
+      const bottleServed =
+        typeof v2?.bottleServed === "boolean"
+          ? v2.bottleServed
+          : typeof payload?.bottleServed === "boolean"
+            ? payload.bottleServed
+            : null;
+      if (bottleServed === false) return;
+      const name = String(
+        v2?.productName ||
+        payload?.productName ||
+        v2?.product?.name ||
+        payload?.product?.name ||
+        ""
+      ).replace(/^Scroll of\s+/i, "").trim();
+      if (!name) return;
+      if (bottleServed !== true && !isEncounterWineWin({ performance_grade: payload?.performanceGrade })) return;
+      counts.set(name, (counts.get(name) || 0) + 1);
+    });
+  }
+
+  let topName = "";
+  let topCount = 0;
+  counts.forEach((count, name) => {
+    if (count > topCount) {
+      topCount = count;
+      topName = name;
+    }
+  });
+
+  return topName
+    ? { name: topName, count: topCount }
+    : { name: "", count: 0 };
+}
+
+function connectReadinessAndMastery({
+  readinessRow = {},
+  latestRow = {},
+  masteryRate = 0,
+  encounterPassRate = 0,
+  baseFallback = null,
+} = {}) {
+  const readinessBase = firstFinite(
+    readinessRow?.readiness_score,
+    readinessRow?.readiness_pct,
+    latestRow?.readiness_score
+  );
+  const readinessFromWindow = (() => {
+    const n = firstFinite(readinessRow?.last10_count, latestRow?.last10_count);
+    const greens = firstFinite(readinessRow?.last10_greens, latestRow?.last10_greens);
+    const yellows = firstFinite(readinessRow?.last10_yellows, latestRow?.last10_yellows);
+    if (n && n > 0) {
+      return Math.max(0, Math.min(1, ((greens || 0) + ((yellows || 0) * 0.5)) / n));
+    }
+    return null;
+  })();
+  const storedLabel = firstNonEmpty(readinessRow?.readiness, latestRow?.readiness);
+  const mastery = Math.max(0, Math.min(1, Number(masteryRate || 0)));
+  const pass = Math.max(0, Math.min(1, Number(encounterPassRate || 0)));
+  // Keep readiness and mastery coupled: form window + mastery share the score when stored readiness is thin.
+  const connectedFallback = Math.max(0, Math.min(1, (mastery * 0.55) + (pass * 0.45)));
+  const readiness = Math.max(0, Math.min(1, firstFinite(
+    readinessBase != null ? (readinessBase > 1 ? readinessBase / 100 : readinessBase) : null,
+    readinessFromWindow != null
+      ? (readinessFromWindow * 0.65) + (mastery * 0.35)
+      : null,
+    storedLabel === "STABLE" ? Math.max(0.8, connectedFallback) : null,
+    storedLabel === "GROWING" ? Math.max(0.62, Math.min(0.79, connectedFallback)) : null,
+    storedLabel === "FRAGILE" ? Math.min(0.61, connectedFallback || 0.42) : null,
+    connectedFallback,
+    baseFallback
+  ) || 0));
+  const readinessLabel = firstNonEmpty(
+    storedLabel,
+    readiness >= 0.8 ? "STABLE" : readiness >= 0.62 ? "GROWING" : readiness > 0 ? "FRAGILE" : ""
+  );
+  return { readiness, readinessLabel };
+}
+
+function buildLeaderboardFormShape(user = {}) {
+  const readiness = Math.round(Math.max(0, Math.min(100, Number(user?.readiness || 0) * 100)));
+  const mastery = Math.round(Math.max(0, Math.min(100, Number(user?.masteryRate || 0) * 100)));
+  const wineStreak = Math.max(0, Number(user?.wineStreak || user?.wineStreakCurrent || 0));
+  // Map streak length onto a 0-100 slice so the donut stays comparable with rate metrics.
+  const wineStreakScore = Math.round(Math.max(0, Math.min(100, wineStreak * 20)));
+  return {
+    readiness,
+    mastery,
+    wineStreak: wineStreakScore,
+    wineStreakCount: wineStreak,
+  };
+}
+
+const LEADERBOARD_FORM_SLICES = [
+  { key: "readiness", label: "Readiness", color: "#34d399" },
+  { key: "mastery", label: "Mastery", color: "#60a5fa" },
+  { key: "wineStreak", label: "Wine streak", color: "#f59e0b" },
+];
+
+function formatTopWineSoldLabel(topWine = null) {
+  const name = String(topWine?.name || "").trim();
+  const count = Number(topWine?.count || 0);
+  if (!name) return "—";
+  return count > 0 ? `${name} (${count})` : name;
+}
+
+function ensureWaiterLeaderboardPlayerStatsPanel() {
+  const screen = document.getElementById("screenWaiterLeaderboard");
+  if (!screen) return null;
+
+  const leaderboardCard = screen.querySelector(".mb-performance-table-wrap")?.closest(".card");
+  const existingPanel = document.getElementById("waiterLeaderboardPlayerStatsPanel");
+  if (
+    existingPanel &&
+    leaderboardCard &&
+    (leaderboardCard.contains(existingPanel) || existingPanel !== leaderboardCard.nextElementSibling)
+  ) {
+    leaderboardCard.after(existingPanel);
+  }
+
+  let root = document.getElementById("waiterLeaderboardPlayerStats");
+  if (root) return root;
+
+  const stack = screen.querySelector(".panel.stack");
+  if (!stack) return null;
+
+  const panel = document.createElement("div");
+  panel.className = "card";
+  panel.id = "waiterLeaderboardPlayerStatsPanel";
+  panel.innerHTML = `
+    <style>
+      #waiterLeaderboardPlayerStatsPanel .mb-player-stats-summary{display:flex !important;align-items:center !important;justify-content:space-between !important;gap:12px !important;flex-wrap:wrap !important;list-style:none !important;}
+      #waiterLeaderboardPlayerStatsPanel details.mb-player-stats-card:not([open]) > .mb-player-stats-grid{display:none !important;}
+      #waiterLeaderboardPlayerStatsPanel details.mb-player-stats-card[open] > .mb-player-stats-grid{display:grid !important;grid-template-columns:repeat(4,minmax(0,1fr)) !important;gap:10px !important;margin-top:12px !important;}
+      #waiterLeaderboardPlayerStatsPanel .mb-player-stat-cell{display:flex !important;flex-direction:column !important;gap:6px !important;min-height:72px !important;padding:14px 16px !important;border-radius:12px !important;border:1px solid rgba(255,255,255,0.06) !important;background:rgba(255,255,255,0.04) !important;}
+      #waiterLeaderboardPlayerStatsPanel .mb-player-stat-cell .small-text{font-size:12px !important;color:rgba(244,246,247,0.62) !important;}
+      #waiterLeaderboardPlayerStatsPanel .mb-player-stat-cell strong{display:block !important;font-size:18px !important;font-weight:700 !important;color:rgba(244,246,247,0.96) !important;}
+      @media (max-width:980px){#waiterLeaderboardPlayerStatsPanel details[open] > .mb-player-stats-grid{grid-template-columns:repeat(2,minmax(0,1fr)) !important;}}
+    </style>
+    <div class="mb-section-header">
+      <strong>Player stats</strong>
+      <div class="small-text">Open to review your stats.</div>
+    </div>
+    <div id="waiterLeaderboardPlayerStats" class="mb-player-stats-list" data-panel-mode="player-stats" style="margin-top:14px;"></div>
+  `;
+  stack.appendChild(panel);
+  return document.getElementById("waiterLeaderboardPlayerStats");
+}
+
+function getSignedInLeaderboardUserId() {
+  return String(
+    appState?.profile?.user_id ||
+    appState?.profile?.userId ||
+    appState?.session?.user?.id ||
+    ""
+  ).trim();
+}
+
 function renderWaiterPerformanceLeaderboardTable(users = []) {
   const tbody = document.getElementById("waiterLeaderboardRows");
   if (!tbody) return;
@@ -8726,12 +9197,12 @@ function renderWaiterPerformanceLeaderboardTable(users = []) {
           </span>
         </button>
       </td>
-      <td data-label="Total Points">${formatMetricNumber(user.totalPoints, 1)}</td>
-      <td data-label="Drill Pass %">${formatPercent(user.drillPassRate)}</td>
+      <td data-label="Authority Points">${formatMetricNumber(user.authorityPoints, 0)}</td>
       <td data-label="Encounter Pass %">${formatPercent(user.encounterPassRate)}</td>
-      <td data-label="Challenge Success %">${formatPercent(user.challengeSuccessRate)}</td>
-      <td data-label="Premium Success %">${formatPercent(user.premiumSuccessRate)}</td>
       <td data-label="Mastery %">${formatPercent(user.masteryRate)}</td>
+      <td data-label="Wine Streak">${formatMetricNumber(user.wineStreak || 0, 0)}</td>
+      <td data-label="Top Wine Sold">${escapeHtml(formatTopWineSoldLabel(user.topWineSold))}</td>
+      <td data-label="Readiness">${escapeHtml(describeReadiness(user.readiness, user.readinessLabel))}</td>
       <td data-label="Last Active">${formatRelativeTime(user.lastActiveAt)}</td>
     </tr>
     <tr class="waiter-user-detail-row hidden" data-user-detail-id="${escapeHtml(user.userId)}">
@@ -8741,33 +9212,33 @@ function renderWaiterPerformanceLeaderboardTable(users = []) {
 }
 
 function renderWaiterPerformanceUserDetailMarkup(user = {}) {
+  const formShape = buildLeaderboardFormShape(user);
   return `
     <td colspan="9">
       <div class="waiter-user-detail-panel">
         <div class="waiter-user-detail-left">
           <div class="waiter-user-detail-chart-card">
-            <div class="small-text" style="margin-bottom:8px;">Current Skill Shape</div>
+            <div class="small-text" style="margin-bottom:8px;">Competitive form</div>
             <canvas id="wlUserSkillPie_${escapeHtml(user.userId)}" class="mb-user-skill-pie" width="240" height="240"></canvas>
             <div id="wlUserSkillLegend_${escapeHtml(user.userId)}" style="margin-top:12px;"></div>
           </div>
         </div>
         <div class="waiter-user-detail-right">
           <div class="waiter-user-metric-grid">
-            <div class="mb-user-metric-card"><div class="small-text">Total Points</div><strong>${formatMetricNumber(user.totalPoints, 1)}</strong></div>
-            <div class="mb-user-metric-card"><div class="small-text">Eligibility Tier</div><strong>T${user.eligibilityTier || 1}</strong></div>
-            <div class="mb-user-metric-card"><div class="small-text">Readiness</div><strong>${formatPercent(user.readiness)}</strong></div>
-            <div class="mb-user-metric-card"><div class="small-text">Drill Pass</div><strong>${formatPercent(user.drillPassRate)}</strong></div>
+            <div class="mb-user-metric-card"><div class="small-text">Authority Points</div><strong>${formatMetricNumber(user.authorityPoints, 0)}</strong></div>
             <div class="mb-user-metric-card"><div class="small-text">Encounter Pass</div><strong>${formatPercent(user.encounterPassRate)}</strong></div>
-            <div class="mb-user-metric-card"><div class="small-text">Challenge Success</div><strong>${formatPercent(user.challengeSuccessRate)}</strong></div>
-            <div class="mb-user-metric-card"><div class="small-text">Premium Success</div><strong>${formatPercent(user.premiumSuccessRate)}</strong></div>
             <div class="mb-user-metric-card"><div class="small-text">Mastery</div><strong>${formatPercent(user.masteryRate)}</strong></div>
+            <div class="mb-user-metric-card"><div class="small-text">Wine Streak</div><strong>${formatMetricNumber(user.wineStreak || 0, 0)}</strong></div>
+            <div class="mb-user-metric-card"><div class="small-text">Best Wine Streak</div><strong>${formatMetricNumber(user.wineStreakBest || 0, 0)}</strong></div>
+            <div class="mb-user-metric-card"><div class="small-text">Top Wine Sold</div><strong>${escapeHtml(formatTopWineSoldLabel(user.topWineSold))}</strong></div>
+            <div class="mb-user-metric-card"><div class="small-text">Readiness</div><strong>${escapeHtml(describeReadiness(user.readiness, user.readinessLabel))}</strong></div>
+            <div class="mb-user-metric-card"><div class="small-text">Readiness Score</div><strong>${formatPercent(user.readiness)}</strong></div>
             <div class="mb-user-metric-card"><div class="small-text">Last Active</div><strong>${escapeHtml(formatRelativeTime(user.lastActiveAt))}</strong></div>
           </div>
           <div class="waiter-user-badge-row" style="margin-top:12px;">
-            <span class="mb-badge">Strongest: ${escapeHtml(user.strongestSkill || "—")}</span>
-            <span class="mb-badge">Weakest: ${escapeHtml(user.weakestSkill || "—")}</span>
-            <span class="mb-badge">${escapeHtml(Number(user.challengeReadiness || 0) >= 0.7 ? "Challenge Ready" : "Needs Build-Up")}</span>
             <span class="mb-badge">Readiness: ${escapeHtml(describeReadiness(user.readiness, user.readinessLabel))}</span>
+            <span class="mb-badge">Mastery: ${escapeHtml(formatPercent(user.masteryRate))}</span>
+            <span class="mb-badge">Wine streak: ${escapeHtml(String(formShape.wineStreakCount || 0))}</span>
           </div>
         </div>
       </div>
@@ -8801,7 +9272,7 @@ async function buildLeaderboardUserDetail(userId, restaurantId, fallbackUser = {
     .maybeSingle();
   const encountersQuery = supabase
     .from("bc_encounter_resolutions_v2")
-    .select("occurred_at, performance_grade, chain_signal, is_green, tier")
+    .select("occurred_at, performance_grade, chain_signal, is_green, tier, bottle_served, reflection, outcome")
     .eq("user_id", uid)
     .neq("mode", "demo")
     .gte("occurred_at", sinceIso)
@@ -8846,6 +9317,11 @@ async function buildLeaderboardUserDetail(userId, restaurantId, fallbackUser = {
     normalizedRole === "single_manager" ||
     normalizedRole === "group_manager" ||
     normalizedRole === "enterpriser";
+  const bankSkillShape = extractSkillShapeFromSkillBank(progressionRow?.canonical_state) || {};
+  const bankSkillTotal = MANAGER_PERFORMANCE_SKILLS.reduce(
+    (sum, skill) => sum + Number(bankSkillShape?.[skill.key] || 0),
+    0
+  );
   const fetchedSkillShape = averageSkillShape(snapshotRows);
   const fallbackSkillShape = (fallbackUser?.skillShape && typeof fallbackUser.skillShape === "object")
     ? fallbackUser.skillShape
@@ -8885,7 +9361,9 @@ async function buildLeaderboardUserDetail(userId, restaurantId, fallbackUser = {
     }
   }
 
-  const skillShape = fallbackSkillTotal > 0
+  const skillShape = bankSkillTotal > 0
+    ? bankSkillShape
+    : fallbackSkillTotal > 0
     ? fallbackSkillShape
     : fetchedSkillTotal > 0
       ? fetchedSkillShape
@@ -8917,62 +9395,85 @@ async function buildLeaderboardUserDetail(userId, restaurantId, fallbackUser = {
   const challengeCompleted = messageRows.filter((row) => String(row?.type || "") === "timed_challenge_completed");
   const challengeExpired = messageRows.filter((row) => String(row?.type || "") === "timed_challenge_expired");
   const challengeRows = challengeCompleted.length + challengeExpired.length;
-  const encounterPasses = encounterRows.filter((row) => {
-    const grade = String(row?.performance_grade || "").toUpperCase();
-    return grade === "A" || grade === "B" || String(row?.chain_signal || "").toLowerCase() === "green" || !!row?.is_green;
-  }).length;
-  const encounterMastery = encounterRows.filter((row) => String(row?.performance_grade || "").toUpperCase() === "A").length;
+  const encounterPasses = encounterRows.filter((row) => isEncounterPassed(row)).length;
+  const encounterMastery = encounterRows.filter((row) => isEncounterMastery(row)).length;
   const premiumSuccesses = challengeCompleted.filter((row) => !!row?.payload?.premiumSuccess).length;
 
+  const godotServed = Number(canonicalState?.godotShift?.guestsServed || canonicalState?.godotShift?.guestServices || 0);
+  const godotLost = Number(canonicalState?.godotShift?.guestsLost || canonicalState?.godotShift?.walkAways || 0);
+  const godotFloorCount = godotServed + godotLost;
   const drillPassRate = drillRows.length ? drillPasses / drillRows.length : Number(fallbackUser?.drillPassRate || 0);
-  const encounterPassRate = encounterRows.length ? encounterPasses / encounterRows.length : Number(fallbackUser?.encounterPassRate || 0);
+  const encounterPassRate = encounterRows.length
+    ? encounterPasses / encounterRows.length
+    : (godotFloorCount ? godotServed / godotFloorCount : Number(fallbackUser?.encounterPassRate || 0));
   const challengeSuccessRate = challengeRows ? challengeCompleted.length / challengeRows : Number(fallbackUser?.challengeSuccessRate || 0);
   const premiumSuccessRate = challengeCompleted.length ? premiumSuccesses / challengeCompleted.length : Number(fallbackUser?.premiumSuccessRate || 0);
-  const masteryRate = encounterRows.length ? encounterMastery / encounterRows.length : Number(fallbackUser?.masteryRate || 0);
-  const readinessBase = firstFinite(readinessRow?.readiness_score, readinessRow?.readiness_pct);
-  const readiness = Math.max(0, Math.min(1, firstFinite(
-    readinessBase != null ? (readinessBase > 1 ? readinessBase / 100 : readinessBase) : null,
-    fallbackUser?.readiness,
+  const masteryRate = encounterRows.length
+    ? encounterMastery / encounterRows.length
+    : Number(fallbackUser?.masteryRate || 0);
+  const { readiness, readinessLabel } = connectReadinessAndMastery({
+    readinessRow,
     masteryRate,
-    totalPoints >= 10 ? 0.8 : totalPoints >= 5 ? 0.62 : 0.4
-  ) || 0));
-  const readinessLabel = firstNonEmpty(readinessRow?.readiness, fallbackUser?.readinessLabel, readiness >= 0.8 ? "STABLE" : readiness >= 0.62 ? "GROWING" : "FRAGILE");
+    encounterPassRate,
+    baseFallback: fallbackUser?.readiness,
+  });
   const challengeReadiness = Math.max(
     0,
     Math.min(1, (readiness * 0.45) + (encounterPassRate * 0.35) + (challengeSuccessRate * 0.20))
   );
-  const extremes = getSkillExtremes(skillShape);
+  const wineStreakInfo = computeWineStreakFromEncounters(encounterRows);
+  if (!wineStreakInfo.current && Number(canonicalState?.godotShift?.lastWineStreak || 0) > 0) {
+    wineStreakInfo.current = Number(canonicalState.godotShift.lastWineStreak || 0);
+    wineStreakInfo.best = Math.max(
+      Number(wineStreakInfo.best || 0),
+      Number(canonicalState.godotShift.lastWineStreak || 0),
+    );
+  }
+  const topWineSold = resolveTopWineSold(encounterRows, snapshotRows);
+  const authorityPoints = firstFinite(
+    canonicalEconomy?.authorityPoints,
+    canonicalEconomy?.ap,
+    canonicalAuthority?.totalAP,
+    fallbackUser?.authorityPoints,
+    fallbackUser?.playerStats?.authorityPoints
+  );
+  const formShape = buildLeaderboardFormShape({
+    readiness,
+    masteryRate,
+    wineStreak: wineStreakInfo.current,
+  });
+  const playerStats = buildPlayerTeamStats({
+    encounters: encounterRows,
+    snapshots: snapshotRows,
+    canonicalState,
+  });
 
   return {
     ...fallbackUser,
     userId: uid,
     displayName: String(profile?.display_name || fallbackUser?.displayName || uid).trim(),
     role: normalizeMembershipRole(profile) || fallbackUser?.role || "waiter",
+    playerStats,
     totalPoints,
+    authorityPoints: authorityPoints != null ? authorityPoints : Number(fallbackUser?.authorityPoints || 0),
     drillPassRate,
     encounterPassRate,
     challengeSuccessRate,
     premiumSuccessRate,
     masteryRate,
+    wineStreak: wineStreakInfo.current,
+    wineStreakBest: wineStreakInfo.best,
+    topWineSold,
     lastActiveAt: latestTimestamp(progressionRow?.updated_at, encounterRows[0]?.occurred_at, messageRows[0]?.created_at, fallbackUser?.lastActiveAt),
     eligibilityTier: servedTier,
     readiness,
     readinessLabel,
     servedTier,
     challengeReadiness,
-    strongestSkill:
-      fallbackSkillTotal > fetchedSkillTotal
-        ? (fallbackUser?.strongestSkill || extremes.strongestSkill)
-        : derivedSkillTotal > fetchedSkillTotal && fetchedSkillTotal === 0
-          ? extremes.strongestSkill
-          : extremes.strongestSkill,
-    weakestSkill:
-      fallbackSkillTotal > fetchedSkillTotal
-        ? (fallbackUser?.weakestSkill || extremes.weakestSkill)
-        : derivedSkillTotal > fetchedSkillTotal && fetchedSkillTotal === 0
-          ? extremes.weakestSkill
-          : extremes.weakestSkill,
+    strongestSkill: fallbackUser?.strongestSkill || "—",
+    weakestSkill: fallbackUser?.weakestSkill || "—",
     skillShape,
+    formShape,
   };
 }
 
@@ -9016,18 +9517,16 @@ async function toggleWaiterPerformanceUserDetail(userId, usersById = {}) {
 
   const canvas = document.getElementById(`wlUserSkillPie_${userId}`);
   const legend = document.getElementById(`wlUserSkillLegend_${userId}`);
+  const formShape = detailUser?.formShape || buildLeaderboardFormShape(detailUser);
   if (canvas && detailUser && !canvas.__drawn) {
-    drawUserSkillPieChart(canvas, detailUser.skillShape, {
-      centerTop: `T${detailUser.eligibilityTier || 1}`,
-      centerBottom: `${Math.round(Number(detailUser.readiness || 0) * 100)}%`,
+    drawLeaderboardFormPieChart(canvas, formShape, {
+      centerTop: describeReadiness(detailUser.readiness, detailUser.readinessLabel),
+      centerBottom: `Streak ${Math.round(Number(detailUser.wineStreak || 0))}`,
     });
     canvas.__drawn = true;
   }
   if (legend) {
-    renderUserSkillShapeLegend(legend, detailUser.skillShape, {
-      strongestSkill: detailUser.strongestSkill,
-      weakestSkill: detailUser.weakestSkill,
-    });
+    renderLeaderboardFormLegend(legend, formShape);
   }
   row.scrollIntoView({ block: "nearest", behavior: "smooth" });
 }
@@ -9122,11 +9621,17 @@ function mergeWaiterLeaderboardUsers(baseUsers = [], associatedManagers = []) {
       displayName: manager.displayName || userId.slice(0, 8),
       role: manager.role || "group_manager",
       totalPoints: 0,
+      authorityPoints: 0,
       drillPassRate: 0,
       encounterPassRate: 0,
       challengeSuccessRate: 0,
       premiumSuccessRate: 0,
       masteryRate: 0,
+      wineStreak: 0,
+      wineStreakBest: 0,
+      topWineSold: { name: "", count: 0 },
+      readiness: 0,
+      readinessLabel: "",
       lastActiveAt: "",
       rank: 0,
     });
@@ -9134,8 +9639,10 @@ function mergeWaiterLeaderboardUsers(baseUsers = [], associatedManagers = []) {
 
   return Array.from(merged.values())
     .sort((a, b) => {
-      const pointDiff = Number(b?.totalPoints || 0) - Number(a?.totalPoints || 0);
-      if (pointDiff) return pointDiff;
+      const apDiff = Number(b?.authorityPoints || 0) - Number(a?.authorityPoints || 0);
+      if (apDiff) return apDiff;
+      const masteryDiff = Number(b?.masteryRate || 0) - Number(a?.masteryRate || 0);
+      if (masteryDiff) return masteryDiff;
       return String(a?.displayName || "").localeCompare(String(b?.displayName || ""));
     })
     .map((user, index) => ({
@@ -9338,6 +9845,8 @@ async function renderWaiterPerformanceLeaderboardWindow() {
   managerContextEl.textContent = "";
   msgEl.textContent = "Loading leaderboard…";
   tbody.innerHTML = "";
+  const playerStatsEl = ensureWaiterLeaderboardPlayerStatsPanel();
+  if (playerStatsEl) playerStatsEl.innerHTML = `<div class="small-text">Loading player stats…</div>`;
 
   try {
     const model = await getManagerPerformanceModel({ force: true });
@@ -9370,6 +9879,23 @@ async function renderWaiterPerformanceLeaderboardWindow() {
       ? `Managers linked here: ${managerUsers.map((user) => `${user.displayName} (${getDisplayRoleLabel(user.role || "waiter")})`).join(", ")}`
       : "Managers linked here are not currently ranked in this leaderboard view.";
     renderWaiterPerformanceLeaderboardTable(visibleUsers);
+    tbody.querySelectorAll(
+      ".waiter-user-player-stats-row, .waiter-leaderboard-self-stats, .waiter-user-team-stats"
+    ).forEach((node) => {
+      const row = node.closest("tr") || node;
+      row.remove();
+    });
+    const playerStatsPanel = ensureWaiterLeaderboardPlayerStatsPanel();
+    const leaderboardCard = tbody.closest(".card");
+    const panel = document.getElementById("waiterLeaderboardPlayerStatsPanel") || playerStatsPanel?.closest(".card");
+    if (panel && leaderboardCard && (leaderboardCard.contains(panel) || panel !== leaderboardCard.nextElementSibling)) {
+      leaderboardCard.after(panel);
+    }
+    renderTeamPlayerStatsPanel(visibleUsers, {
+      rootId: "waiterLeaderboardPlayerStats",
+      openUserId: getSignedInLeaderboardUserId(),
+      onlyUserId: getSignedInLeaderboardUserId(),
+    });
     wireWaiterPerformanceRowExpansion(usersById);
     msgEl.textContent = visibleUsers.length
       ? ""
@@ -9654,7 +10180,10 @@ function armGodotDemoLock(reason = "godot") {
   window.__BC_GODOT_DEMO_LOCK_REASON__ = String(reason || "godot");
   document.documentElement.dataset.bcGodotDemo = "true";
   writeGodotSessionLock(true, reason);
-  persistV2DemoRequest();
+  // Premium Godot cockpit must not re-arm the anonymous demo latch.
+  if (appMode !== "premium") {
+    persistV2DemoRequest();
+  }
   try { localStorage.setItem("BC_GODOT_FLOOR", "1"); } catch {}
   // Short shield only — swallow splash-clear ghost taps, then allow Exit again.
   window.__BC_GODOT_CLICK_SHIELD_UNTIL__ = Date.now() + 8000;
@@ -9885,6 +10414,7 @@ function mountGameIframe(targetId, mode /* "demo" | "premium" */, options = {}) 
       id="${targetId}Frame"
       src="${src}"
       title="BottleCaller Game"
+      allow="autoplay; fullscreen; gamepad"
       style="
         width: 100%;
         height: ${initialHeight}px;
@@ -9976,8 +10506,32 @@ function postNavToPremiumIframe(screen) {
   setDebug({ step: "nav.post.sent", screen, time: new Date().toISOString() });
 }
 
+function shouldUsePremiumGodotCockpit(profileLike = null) {
+  const role = String(
+    normalizeMembershipRole(profileLike || appState?.profile || null) ||
+    (profileLike?.role ?? appState?.profile?.role ?? "")
+  ).toLowerCase();
+  return (
+    role === "waiter" ||
+    role === "single_manager" ||
+    role === "group_manager" ||
+    role === "enterpriser"
+  );
+}
+
+function getActiveGameIframe() {
+  const premium = document.getElementById("premiumRootFrame");
+  if (premium?.contentWindow) return premium;
+  const demo = document.getElementById("gameRootDemoFrame");
+  if (demo?.contentWindow) return demo;
+  return null;
+}
+
 function postStartV2DemoToIframe(reason = "mobile_enter") {
-  const frame = document.getElementById("gameRootDemoFrame");
+  const frame =
+    (appMode === "premium" && document.getElementById("premiumRootFrame")) ||
+    document.getElementById("gameRootDemoFrame") ||
+    document.getElementById("premiumRootFrame");
   if (!frame || !frame.contentWindow) {
     setDebug({ step: "demo.start_v2.failed", reason: "no_demo_iframe", source: reason });
     return false;
@@ -9998,7 +10552,9 @@ function postStartV2DemoToIframe(reason = "mobile_enter") {
     );
     window.__BC_DEMO_PLAY_STARTED_AT__ = Date.now();
     window.__BC_DEMO_IFRAME_LAST_SCREEN__ = "screenGodotShift";
-    document.documentElement.dataset.bcV2Demo = "true";
+    if (appMode !== "premium") {
+      document.documentElement.dataset.bcV2Demo = "true";
+    }
     frame.dataset.bcDemoPlayStarted = "true";
     setDebug({ step: "demo.start_v2.sent", reason, time: new Date().toISOString() });
     return true;
@@ -10027,6 +10583,7 @@ function burstStartV2Demo(reason = "mobile_enter") {
 }
 
 function startMobileDemoDirectly(reason = "mobile_enter") {
+  const skipHub = /recover/i.test(String(reason || ""));
   closeHud?.();
   appMode = "demo";
   persistV2DemoRequest();
@@ -10037,11 +10594,12 @@ function startMobileDemoDirectly(reason = "mobile_enter") {
   showScreen("screenGameDemo");
   setPremiumOverlayActive(false);
   document.documentElement.dataset.bcV2Demo = "true";
-  // Keep/re-arm Godot lock for recoveries and first entry alike.
-  armGodotDemoLock(reason);
+  if (skipHub) {
+    armGodotDemoLock(reason);
+  }
   destroyPremiumIframe(`${reason}:premium`);
   // Force remount when recovering so a dead iframe is replaced.
-  if (String(reason || "").includes("recover") || String(reason || "").includes("godot")) {
+  if (skipHub || String(reason || "").includes("godot")) {
     try { document.getElementById("gameRootDemoFrame")?.remove(); } catch {}
     try {
       const root = document.getElementById("gameRootDemo");
@@ -10051,13 +10609,12 @@ function startMobileDemoDirectly(reason = "mobile_enter") {
     destroyDemoIframe(`${reason}:remount`);
   }
   window.__BC_DEMO_PLAY_STARTED_AT__ = Date.now();
-  window.__BC_DEMO_IFRAME_LAST_SCREEN__ = "screenGodotShift";
+  window.__BC_DEMO_IFRAME_LAST_SCREEN__ = skipHub ? "screenGodotShift" : "screenHome";
   mountGameIframe("gameRootDemo", "demo", {
     initialScreen: "screenHome",
     v2Harness: true,
-    // Kick the iframe into the Godot floor on mobile (handled as start_v2_demo → Godot).
-    autoStartV2: true,
-    autoStartReason: `${reason}:godot`,
+    autoStartV2: skipHub,
+    autoStartReason: skipHub ? `${reason}:godot` : undefined,
   });
   try { renderAppChrome?.(); } catch {}
 }
@@ -10189,7 +10746,12 @@ function openPremiumBeginScreen() {
   const tryOpenBegin = () => {
     const frame = document.getElementById("premiumRootFrame");
     const nav = frame?.contentWindow?.__BC_NAV__;
-    if (nav && typeof nav.openWelcome === "function") {
+    if (!nav) return false;
+    if (typeof nav.openHome === "function") {
+      nav.openHome();
+      return true;
+    }
+    if (typeof nav.openWelcome === "function") {
       nav.openWelcome();
       return true;
     }
@@ -10198,17 +10760,22 @@ function openPremiumBeginScreen() {
 
   closeHud?.();
   showScreen("screenPremiumApp");
+  setPremiumOverlayActive(true);
+  destroyDemoIframe("openPremiumBeginScreen:premium_cockpit");
 
-  if (!document.getElementById("premiumRootFrame")) {
-    const role = String(appState?.profile?.role || "").toLowerCase();
-    const isWaiter = role === "waiter";
-    mountPremiumGameIframe({
-      mode: "premium",
-      showBack: true,
-      backTo: isWaiter ? "screenPremiumApp" : "screenManagerBoard",
-      initialScreen: "screenWelcome",
-    });
-  }
+  const useGodotCockpit = shouldUsePremiumGodotCockpit(appState?.profile);
+  const initialScreen =
+    useGodotCockpit && isV2WelcomeOnboardingComplete()
+      ? "screenHome"
+      : "screenWelcome";
+
+  mountPremiumGameIframe({
+    mode: "premium",
+    showBack: false,
+    backTo: "screenPremiumApp",
+    initialScreen,
+    forceRemount: useGodotCockpit,
+  });
 
   let attempts = 0;
   const maxAttempts = 12;
@@ -10222,6 +10789,67 @@ function openPremiumBeginScreen() {
   retryOpenBegin();
 }
 
+function applyMobilePlayFrameHeight(frame, { godotFloor = false, winePlay = false } = {}) {
+  if (!frame) return 0;
+  const viewportH = visualViewportHeight();
+  const prev = Number(frame.dataset.bcFrameHeight || 0);
+  if (godotFloor) {
+    if (Math.abs(prev - viewportH) < 2) return viewportH;
+    frame.dataset.bcFrameHeight = String(viewportH);
+    frame.style.setProperty("width", "100%", "important");
+    frame.style.setProperty("height", `${viewportH}px`, "important");
+    frame.style.setProperty("max-width", "100%", "important");
+    frame.style.setProperty("max-height", `${viewportH}px`, "important");
+    frame.style.opacity = "1";
+    return viewportH;
+  }
+  if (winePlay) {
+    const nextHeight = Math.max(viewportH, Math.min(2400, viewportH + 80));
+    if (Math.abs(prev - nextHeight) < 2) return nextHeight;
+    frame.dataset.bcFrameHeight = String(nextHeight);
+    frame.style.setProperty("height", `${nextHeight}px`, "important");
+    frame.style.opacity = "1";
+    try {
+      frame.scrollIntoView?.({ block: "start", behavior: "instant" });
+    } catch {
+      try { frame.scrollIntoView?.(true); } catch {}
+    }
+    return nextHeight;
+  }
+  return 0;
+}
+
+function syncParentGodotLandscape({ active = false, wine = false } = {}) {
+  const mobile = document.documentElement?.dataset?.bcMobileEnv === "true";
+  if (!mobile || !active || wine) {
+    void unlockLandscape();
+    return;
+  }
+  void requestLandscapeLock();
+}
+
+function resizeActiveMobilePlayFrame() {
+  if (document.documentElement?.dataset?.bcMobileEnv !== "true") return;
+  const demoFrame = document.getElementById("gameRootDemoFrame");
+  const premiumFrame = document.getElementById("premiumRootFrame");
+  const frame = demoFrame || premiumFrame;
+  if (!frame) return;
+  const screenId = String(window.__BC_DEMO_IFRAME_LAST_SCREEN__ || "");
+  applyMobilePlayFrameHeight(frame, {
+    godotFloor: screenId === "screenGodotShift",
+    winePlay: screenId === "screenPlay",
+  });
+}
+
+window.addEventListener("orientationchange", () => {
+  window.setTimeout(resizeActiveMobilePlayFrame, 80);
+});
+let bcViewportResizeTimer = 0;
+window.visualViewport?.addEventListener?.("resize", () => {
+  window.clearTimeout(bcViewportResizeTimer);
+  bcViewportResizeTimer = window.setTimeout(resizeActiveMobilePlayFrame, 120);
+});
+
 // ✅ Optional auto-resize (requires matching postMessage in game.html)
 window.addEventListener("message", (event) => {
   const data = event?.data;
@@ -10232,8 +10860,14 @@ window.addEventListener("message", (event) => {
     event.origin === window.location.origin
   ) {
     const demoFrame = document.getElementById("gameRootDemoFrame");
-    if (demoFrame && event.source === demoFrame.contentWindow) {
+    const premiumFrame = document.getElementById("premiumRootFrame");
+    const frame =
+      (demoFrame && event.source === demoFrame.contentWindow && demoFrame) ||
+      (premiumFrame && event.source === premiumFrame.contentWindow && premiumFrame) ||
+      null;
+    if (frame) {
       const active = !!data.active;
+      const isPremiumFrame = frame === premiumFrame;
       // Wine-offer handoff sets active=false temporarily; keep the Godot demo
       // latch so mobile auth/route logic cannot eject mid-encounter.
       if (active || readGodotSessionLock() || window.__BC_GODOT_DEMO_LOCK__) {
@@ -10247,33 +10881,53 @@ window.addEventListener("message", (event) => {
           ? "screenPlay"
           : (window.__BC_DEMO_IFRAME_LAST_SCREEN__ || null));
       if (active) {
+        document.documentElement.dataset.bcGodotWine = "";
+      } else if (String(data.screenId || "") === "screenPlay") {
+        document.documentElement.dataset.bcGodotWine = "true";
+      } else {
+        document.documentElement.dataset.bcGodotWine = "";
+      }
+      if (active) {
+        if (isPremiumFrame) {
+          appMode = "premium";
+        }
         armGodotDemoLock(data.reason || "godot_shift_active");
         // Keep the play latch fresh for the whole Godot download/boot window.
         window.__BC_DEMO_PLAY_STARTED_AT__ = Date.now();
-        demoFrame.dataset.bcDemoPlayStarted = "true";
-        const rect = demoFrame.getBoundingClientRect();
-        const width = Math.max(rect.width || demoFrame.clientWidth || 960, 640);
-        const viewportH = Math.ceil(window.visualViewport?.height || window.innerHeight || 800);
-        const landscapeHeight = Math.round((width * 9) / 16);
-        const maxHeight = document.documentElement?.dataset?.bcMobileEnv === "true" ? 6000 : Math.max(520, viewportH - 16);
-        // Fit the visible browser window — do not create a tall box that letterboxes the floor.
-        const nextHeight = Math.max(420, Math.min(maxHeight, landscapeHeight, viewportH - 16));
-        demoFrame.dataset.bcFrameHeight = String(nextHeight);
-        demoFrame.style.setProperty("width", "100%", "important");
-        demoFrame.style.setProperty("height", `${nextHeight}px`, "important");
-        demoFrame.style.setProperty("max-width", "100%", "important");
-        demoFrame.style.opacity = "1";
+        frame.dataset.bcDemoPlayStarted = "true";
+        syncParentGodotLandscape({ active: true, wine: false });
+        const isMobile = document.documentElement?.dataset?.bcMobileEnv === "true";
+        if (isMobile) {
+          applyMobilePlayFrameHeight(frame, { godotFloor: true });
+        } else {
+          const rect = frame.getBoundingClientRect();
+          const width = Math.max(rect.width || frame.clientWidth || 960, 640);
+          const viewportH = visualViewportHeight();
+          const landscapeHeight = Math.round((width * 9) / 16);
+          const maxHeight = Math.max(520, viewportH - 16);
+          const nextHeight = Math.max(420, Math.min(maxHeight, landscapeHeight, viewportH - 16));
+          frame.dataset.bcFrameHeight = String(nextHeight);
+          frame.style.setProperty("width", "100%", "important");
+          frame.style.setProperty("height", `${nextHeight}px`, "important");
+          frame.style.setProperty("max-width", "100%", "important");
+          frame.style.opacity = "1";
+        }
       } else if (String(data.screenId || "") === "screenPlay") {
-        // Wine-offer handoff: unlock height from Godot landscape clamp so
-        // encounter action buttons at the bottom of the art remain reachable.
-        demoFrame.dataset.bcFrameHeight = "";
-        const viewportH = Math.ceil(window.visualViewport?.height || window.innerHeight || 800);
-        demoFrame.style.setProperty("height", `${Math.max(640, Math.min(2400, viewportH + 80))}px`, "important");
-        demoFrame.style.opacity = "1";
-        try {
-          demoFrame.scrollIntoView?.({ block: "start", behavior: "instant" });
-        } catch {
-          try { demoFrame.scrollIntoView?.(true); } catch {}
+        // Wine-offer handoff: unlock landscape so the portrait encounter can rotate.
+        syncParentGodotLandscape({ active: true, wine: true });
+        const isMobile = document.documentElement?.dataset?.bcMobileEnv === "true";
+        if (isMobile) {
+          applyMobilePlayFrameHeight(frame, { winePlay: true });
+        } else {
+          frame.dataset.bcFrameHeight = "";
+          const viewportH = visualViewportHeight();
+          frame.style.setProperty("height", `${Math.max(640, Math.min(2400, viewportH + 80))}px`, "important");
+          frame.style.opacity = "1";
+          try {
+            frame.scrollIntoView?.({ block: "start", behavior: "instant" });
+          } catch {
+            try { frame.scrollIntoView?.(true); } catch {}
+          }
         }
       } else if (data.clearLock) {
         const reasonText = String(data.reason || "");
@@ -10283,6 +10937,8 @@ window.addEventListener("message", (event) => {
           console.warn("[BC] ignoring godot_shift clearLock during active play");
         } else {
           clearGodotDemoLock(userLeave ? reasonText : "godot_shift_inactive");
+          document.documentElement.dataset.bcGodotWine = "";
+          syncParentGodotLandscape({ active: false, wine: false });
         }
       }
       try { wireDemoButtons?.(); } catch {}
@@ -10298,7 +10954,12 @@ window.addEventListener("message", (event) => {
     event.origin === window.location.origin
   ) {
     const demoFrame = document.getElementById("gameRootDemoFrame");
-    if (demoFrame && event.source === demoFrame.contentWindow) {
+    const premiumFrame = document.getElementById("premiumRootFrame");
+    const frame =
+      (demoFrame && event.source === demoFrame.contentWindow && demoFrame) ||
+      (premiumFrame && event.source === premiumFrame.contentWindow && premiumFrame) ||
+      null;
+    if (frame) {
       window.__BC_DEMO_PLAY_STARTED_AT__ = Date.now();
       window.__BC_DEMO_START_ACK_AT__ = Date.now();
       const reasonText = String(data.reason || "");
@@ -10308,13 +10969,20 @@ window.addEventListener("message", (event) => {
         reasonText.includes("godot");
       if (onGodot) {
         window.__BC_DEMO_IFRAME_LAST_SCREEN__ = "screenGodotShift";
+        if (frame === premiumFrame) appMode = "premium";
         armGodotDemoLock(reasonText || "demo_play_started");
+        syncParentGodotLandscape({ active: true, wine: false });
+        if (document.documentElement?.dataset?.bcMobileEnv === "true") {
+          applyMobilePlayFrameHeight(frame, { godotFloor: true });
+        }
       } else if (window.__BC_DEMO_IFRAME_LAST_SCREEN__ !== "screenGodotShift") {
         window.__BC_DEMO_IFRAME_LAST_SCREEN__ = "screenPlay";
       }
-      document.documentElement.dataset.bcV2Demo = "true";
-      demoFrame.dataset.bcDemoPlayStarted = "true";
-      demoFrame.style.opacity = "1";
+      if (frame === demoFrame) {
+        document.documentElement.dataset.bcV2Demo = "true";
+      }
+      frame.dataset.bcDemoPlayStarted = "true";
+      frame.style.opacity = "1";
       try { wireDemoButtons?.(); } catch {}
       try { renderAppChrome?.(); } catch {}
     }
@@ -10335,6 +11003,10 @@ window.addEventListener("message", (event) => {
   const isV2Demo =
     String(data.mode || "").toLowerCase() === "demo" &&
     document.documentElement?.dataset?.bcV2Demo === "true";
+  const isPremiumV2Harness =
+    String(data.mode || "").toLowerCase() === "premium" &&
+    !!document.getElementById("premiumRootFrame")?.src?.includes("bcV2=1");
+  const isV2LikeHarness = isV2Demo || isPremiumV2Harness;
   // Only size for Godot when the active child screen is the floor.
   // Wine-offer keeps bcGodotDemo locked true, but screenPlay must use V2 height.
   const isGodotShift = String(data.screenId || "") === "screenGodotShift";
@@ -10345,7 +11017,7 @@ window.addEventListener("message", (event) => {
     String(data.mode || "").toLowerCase() === "demo" &&
     String(data.screenId || "") === "screenWelcome";
   const isStaleDemoWelcomeAfterPlay =
-    isV2Demo &&
+    isV2LikeHarness &&
     isDemoWelcome &&
     isDemoPlayStartRecent(1200) &&
     (window.__BC_DEMO_IFRAME_LAST_SCREEN__ === "screenPlay" ||
@@ -10358,31 +11030,45 @@ window.addEventListener("message", (event) => {
     });
     return;
   }
-  if (String(data.mode || "").toLowerCase() === "demo") {
+  if (String(data.mode || "").toLowerCase() === "demo" || isPremiumV2Harness) {
     const nextScreenId = String(data.screenId || "") || null;
     if (window.__BC_DEMO_IFRAME_LAST_SCREEN__ !== nextScreenId) {
       window.__BC_DEMO_IFRAME_LAST_SCREEN__ = nextScreenId;
       try { renderAppChrome?.(); } catch {}
     }
+    if (nextScreenId === "screenPlay") {
+      document.documentElement.dataset.bcGodotWine = "true";
+    } else if (nextScreenId === "screenGodotShift" || nextScreenId === "screenHome") {
+      document.documentElement.dataset.bcGodotWine = "";
+    }
+  }
+  const viewportH = visualViewportHeight();
+  if (isMobile && isGodotShift) {
+    applyMobilePlayFrameHeight(frame, { godotFloor: true });
+    document.documentElement.dataset.bcGodotDemo = "true";
+    return;
+  }
+  if (isMobile && isWinePlay && !isGodotShift) {
+    applyMobilePlayFrameHeight(frame, { winePlay: true });
+    return;
   }
   const maxHeight = isMobile
-    ? 6000
+    ? viewportH
     : isGodotShift
-      ? Math.max(520, Math.ceil((window.visualViewport?.height || window.innerHeight || 800) - 16))
+      ? Math.max(520, viewportH - 16)
       : isWinePlay
         ? 2400
         : 860;
   const minHeight = isDemoWelcome
     ? (isMobile ? 220 : 200)
     : (isGodotShift ? (isMobile ? 360 : 420) : (isMobile ? 320 : 360));
-  let measuredHeight = Math.max(minHeight, Math.min(maxHeight, h + (isMobile && isV2Demo ? 0 : isMobile ? 12 : 24)));
+  let measuredHeight = Math.max(minHeight, Math.min(maxHeight, h + (isMobile && isV2LikeHarness ? 0 : isMobile ? 12 : 24)));
   if (isGodotShift && !isMobile) {
     const width = Math.max(frame.getBoundingClientRect().width || frame.clientWidth || 960, 640);
-    const viewportH = Math.ceil(window.visualViewport?.height || window.innerHeight || 800);
     const landscapeHeight = Math.round((width * 9) / 16);
     measuredHeight = Math.max(minHeight, Math.min(maxHeight, landscapeHeight, viewportH - 16));
   }
-  const clamped = isMobile && isV2Demo
+  const clamped = isMobile && isV2LikeHarness
     ? (isDemoWelcome ? measuredHeight : Math.max(measuredHeight, 420))
     : measuredHeight;
   const previousHeight = Number(frame.dataset.bcFrameHeight || 0);
@@ -11246,7 +11932,26 @@ function applyManagerBoardVisibility() {
     enterpriseBtn.classList.toggle("hidden", !showEnterprise);
   }
   const picker = document.getElementById("mbRestaurantPicker");
-  if (picker) picker.classList.toggle("hidden", !caps.canAccessManagerBoard);
+  if (picker) picker.classList.toggle("hidden", !caps.canManageMultipleRestaurants);
+  applyMultiRestaurantSwitcherVisibility(profile);
+}
+
+function applyMultiRestaurantSwitcherVisibility(profileLike = null) {
+  const profile = profileLike || appState?.profile || {};
+  const caps = getPremiumRoleCapabilities(profile);
+  const showSwitcher = !!caps.canManageMultipleRestaurants;
+  [
+    "premiumActiveRestaurantCard",
+    "mbListingActiveRestaurantCard",
+    "mbRestaurantPicker",
+  ].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.toggle("hidden", !showSwitcher);
+    if (id !== "mbRestaurantPicker") {
+      el.style.display = showSwitcher ? "" : "none";
+    }
+  });
 }
 
 function wireActiveRestaurantPicker() {
@@ -11359,6 +12064,29 @@ function extractSkillShapeFromSnapshotRow(row = {}) {
     closing: Number(row?.closing_pct ?? skills.closing ?? skills.commit ?? row?.closing ?? 0) || 0,
     speed: Number(row?.speed_pct ?? skills.speed ?? row?.speed ?? 0) || 0,
   };
+}
+
+function extractSkillShapeFromSkillBank(canonicalState = null) {
+  const skills =
+    canonicalState?.skills && typeof canonicalState.skills === "object"
+      ? canonicalState.skills
+      : null;
+  const bank =
+    (skills?.bank && typeof skills.bank === "object" ? skills.bank : null) ||
+    (skills?.measurements && typeof skills.measurements === "object" ? skills.measurements : null);
+  if (!bank) return null;
+  return {
+    read: Number(bank.read ?? bank.ask ?? 0) || 0,
+    framing: Number(bank.framing ?? bank.recommend ?? 0) || 0,
+    delivery: Number(bank.delivery ?? bank.encounter_success ?? 0) || 0,
+    recovery: Number(bank.recovery ?? bank.recover ?? 0) || 0,
+    closing: Number(bank.closing ?? bank.commit ?? 0) || 0,
+    speed: Number(bank.speed ?? 0) || 0,
+  };
+}
+
+function skillShapeHasSignal(shape = {}) {
+  return MANAGER_PERFORMANCE_SKILLS.some((skill) => Number(shape?.[skill.key] || 0) > 0);
 }
 
 function averageSkillScoreFromRow(row = {}) {
@@ -11867,21 +12595,21 @@ async function loadManagerInsights() {
       <div class="mb-performance-overview card">
         <div class="mb-section-header">
           <strong>Team Performance</strong>
-          <div class="small-text">Live performance snapshot for the current restaurant.</div>
+          <div class="small-text">Player stats for the current restaurant. Values with — are not stored yet from the floor.</div>
         </div>
         <div id="mbPerformanceCards" class="mb-performance-card-grid" style="margin-top:12px;"></div>
       </div>
       <div id="mbPerformanceResultsPanel" class="card">
         <div class="mb-section-header">
-          <strong>Results Graph</strong>
-          <div class="small-text">Team average drill, encounter, challenge, and premium rates shown as donut graphics.</div>
+          <strong>Player stats</strong>
+          <div class="small-text">Open a player to review the same indicators individually.</div>
         </div>
-        <div id="mbPerformanceResultsChart" class="mb-team-results-grid" style="margin-top:14px;"></div>
+        <div id="mbPerformanceResultsChart" class="mb-player-stats-list" data-panel-mode="player-stats" style="margin-top:14px;"></div>
       </div>
     `;
 
     renderManagerPerformanceOverview(model.summary);
-    drawTeamPerformanceResultsChart(model.summary || {});
+    renderTeamPlayerStatsPanel(model.users || []);
   } catch (error) {
     console.error("[MB] loadManagerInsights failed", error);
     root.innerHTML = `
@@ -11963,7 +12691,7 @@ function normalizeEncounterSummaryRow(row) {
   const bestPath =
     Array.isArray(row?.best_path) ? row.best_path :
     Array.isArray(reflection?.bestPath) ? reflection.bestPath :
-    ["observe", "mode", "problem_solve"];
+    [];
 
   const stepSpine =
     Array.isArray(row?.step_spine) ? row.step_spine :
@@ -11976,28 +12704,28 @@ function normalizeEncounterSummaryRow(row) {
     Array.isArray(reflection?.reactionHistory) ? reflection.reactionHistory :
     [];
 
-  const chosenGuestType = row?.chosen_guest_type || "";
-  const chosenMode = row?.chosen_mode || "";
-  const chosenHook = row?.chosen_hook || "";
-  const actualGuestType = row?.actual_guest_type || "";
+  const chosenGuestType =
+    row?.chosen_guest_type ||
+    reflection?.chosen?.guestType ||
+    reflection?.chosenGuestType ||
+    "";
+  const chosenMode = row?.chosen_mode || reflection?.chosen?.mode || "";
+  const chosenHook = row?.chosen_hook || reflection?.chosen?.hook || "";
+  const actualGuestType =
+    row?.actual_guest_type ||
+    row?.actual_guest_type_norm ||
+    reflection?.actual?.guestTypeNorm ||
+    reflection?.actual?.guestType ||
+    reflection?.actualGuestType ||
+    "";
   const readCorrect = typeof row?.read_correct === "boolean" ? row.read_correct : null;
   const deliveryCorrect = typeof row?.delivery_correct === "boolean" ? row.delivery_correct : null;
   const modeStatus = row?.mode_status || "";
   const hookStatus = row?.hook_status || "";
-
-  const fallbackChosenPathExposition = [
-    `Read: chose ${chosenGuestType || "—"}${readCorrect == null ? "" : readCorrect ? " and it was correct" : " and it was wrong"}.`,
-    `Mode: chose ${chosenMode || "—"}${modeStatus ? ` (${modeStatus})` : ""}.`,
-    `Flash Learn: ${hookStatus ? `completed (${hookStatus})` : "—"}.`,
-    `Deliver: ${deliveryCorrect == null ? "—" : deliveryCorrect ? "prompt landed correctly" : "prompt choice was off"}.`,
-  ].filter(Boolean).join(" ");
-
-  const fallbackBestPathExposition = [
-    `Read: correct guest was ${actualGuestType || "—"}.`,
-    modeStatus ? `Mode: target outcome was ${modeStatus === "optimal" ? "the optimal mode" : modeStatus}.` : "",
-    hookStatus ? `Flash Learn: target outcome was ${hookStatus === "optimal" ? "complete flash learn" : hookStatus}.` : "",
-    deliveryCorrect == null ? "" : `Deliver: ${deliveryCorrect ? "the prompt choice was correct" : "the prompt needed a stronger guest fit"}.`,
-  ].filter(Boolean).join(" ");
+  const product =
+    (reflection?.product && typeof reflection.product === "object" ? reflection.product : null) ||
+    (row?.product && typeof row.product === "object" ? row.product : null) ||
+    null;
 
   return {
     userId: row?.user_id || "",
@@ -12006,6 +12734,8 @@ function normalizeEncounterSummaryRow(row) {
     chainSignal: row?.chain_signal || "",
     chainScore: row?.chain_score ?? null,
     tier: row?.tier ?? null,
+    outcome: row?.outcome || row?.final_outcome || reflection?.outcome || "",
+    finalOutcome: row?.final_outcome || row?.outcome || "",
     aiPerception:
       row?.ai_perception ||
       reflection?.aiPerception ||
@@ -12013,7 +12743,16 @@ function normalizeEncounterSummaryRow(row) {
     bottleServed:
       typeof row?.bottle_served === "boolean"
         ? row.bottle_served
-        : !!reflection?.bottleServed,
+        : typeof reflection?.bottleServed === "boolean"
+          ? reflection.bottleServed
+          : null,
+    bottleName:
+      product?.name ||
+      row?.product_name ||
+      row?.bottle_name ||
+      reflection?.bottleName ||
+      "",
+    product,
     chosenGuestType,
     chosenMode,
     chosenHook,
@@ -12024,14 +12763,6 @@ function normalizeEncounterSummaryRow(row) {
     hookStatus,
     chosenPath,
     bestPath,
-    chosenPathExposition:
-      reflection?.chosenPathExposition ||
-      fallbackChosenPathExposition ||
-      "",
-    bestPathExposition:
-      reflection?.bestPathExposition ||
-      fallbackBestPathExposition ||
-      "",
     stepSpine,
     stepReactionTrail,
     reactionSummary:
@@ -12039,6 +12770,780 @@ function normalizeEncounterSummaryRow(row) {
         ? row.reaction_summary
         : null,
     reflection,
+  };
+}
+
+function formatEncounterOutcomeLabel(summary = {}) {
+  const outcome = String(summary.outcome || summary.finalOutcome || "").trim().toLowerCase();
+  const labels = {
+    premium_success: "Premium success",
+    standard_success: "Standard success",
+    weak_success: "Weak success",
+    neutral_exit: "Neutral exit",
+    failure: "Failure",
+  };
+  if (labels[outcome]) return labels[outcome];
+  if (summary.bottleServed === true) return "Sale";
+  if (summary.bottleServed === false) return "No sale";
+  const grade = String(summary.performanceGrade || "").toUpperCase();
+  if (grade === "A" || grade === "B") return "Sale";
+  if (grade === "D" || grade === "F") return "Failure";
+  const signal = String(summary.chainSignal || "").toLowerCase();
+  if (signal === "green") return "Sale";
+  if (signal === "red") return "Failure";
+  return "—";
+}
+
+function formatEncounterSignalLabel(summary = {}) {
+  const signal = String(summary.chainSignal || "").trim().toLowerCase();
+  if (signal === "green") return "Green";
+  if (signal === "yellow") return "Yellow";
+  if (signal === "red") return "Red";
+  return "—";
+}
+
+function formatV2EncounterPathLabel(summary = {}) {
+  const labelForGroup = (raw) => {
+    let group = "";
+    if (raw && typeof raw === "object") {
+      group = String(raw.group || raw.step || "").trim().toLowerCase();
+    } else {
+      group = String(raw || "").split(":")[0].trim().toLowerCase();
+    }
+    switch (group) {
+      case "ask":
+      case "read":
+        return "Ask";
+      case "recommend":
+      case "framing":
+        return "Recommend";
+      case "commit":
+      case "closing":
+        return "Commit";
+      case "walk_away":
+        return "Walk away";
+      case "recover":
+      case "recovery":
+        return "Recover";
+      default:
+        return "";
+    }
+  };
+
+  const groups = [];
+  const pushGroup = (value) => {
+    const label = labelForGroup(value);
+    if (!label) return;
+    if (groups[groups.length - 1] === label) return;
+    groups.push(label);
+  };
+
+  (Array.isArray(summary.stepSpine) ? summary.stepSpine : []).forEach(pushGroup);
+  if (!groups.length) {
+    (Array.isArray(summary.chosenPath) ? summary.chosenPath : []).forEach(pushGroup);
+  }
+
+  if (!groups.length) return "";
+
+  let line = groups.join(" → ");
+  const hasSidePath = groups.includes("Recover") || groups.includes("Walk away");
+  if (
+    groups.includes("Ask") &&
+    groups.includes("Commit") &&
+    !groups.includes("Recommend") &&
+    !hasSidePath
+  ) {
+    line += " (skipped Recommend)";
+  }
+  return line;
+}
+
+function formatEncounterBottleLabel(summary = {}, { short = false } = {}) {
+  const rawName = String(summary.bottleName || summary.product?.name || "").trim();
+  const served =
+    summary.bottleServed === true
+      ? "Served"
+      : summary.bottleServed === false
+        ? "Not served"
+        : null;
+
+  let name = rawName;
+  if (!name) {
+    // Legacy expositions sometimes embed the wine name; pull a short candidate if obvious.
+    const blob = String(
+      summary.reflection?.chosenPathExposition ||
+      summary.chosenPathExposition ||
+      summary.aiPerception ||
+      ""
+    );
+    const match = blob.match(
+      /([A-Za-zÀ-ÖØ-öø-ÿ0-9][A-Za-zÀ-ÖØ-öø-ÿ0-9'’\- ]{1,40})\s*[—-]\s*([A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'’\- ]{1,30})/
+    );
+    if (match) name = `${match[1].trim()} — ${match[2].trim()}`;
+  }
+
+  if (short && name) {
+    name = name.replace(/\s*[—-]\s*.*$/, "").trim() || name;
+  }
+
+  if (name && served) return short ? name : `${name} • ${served}`;
+  if (name) return name;
+  if (served === "Served") return short ? "Bottle served" : "Bottle served";
+  if (served === "Not served") return short ? "No sale" : "Not served";
+  return short ? "" : "—";
+}
+
+function formatEncounterMissLabel(summary = {}) {
+  const actual = String(summary.actualGuestType || "").trim();
+  const chosen = String(summary.chosenGuestType || "").trim();
+  if (actual && chosen && actual.toLowerCase() !== chosen.toLowerCase()) {
+    return `Guest was ${actual.replaceAll("_", " ")}; read as ${chosen.replaceAll("_", " ")}`;
+  }
+  if (summary.readCorrect === false && actual) {
+    return `Guest read missed (${actual.replaceAll("_", " ")})`;
+  }
+  const path = formatV2EncounterPathLabel(summary);
+  if (path.includes("skipped Recommend")) {
+    return "Skipped Recommend before Commit";
+  }
+  return "";
+}
+
+function formatEncounterNoteLabel(summary = {}) {
+  const note = String(summary.aiPerception || "").trim();
+  if (!note) return "";
+  return note.length > 90 ? `${note.slice(0, 87).trim()}…` : note;
+}
+
+function formatEncounterSummaryClosedLabel(summary = {}) {
+  const when = summary.occurredAt
+    ? new Date(summary.occurredAt).toLocaleString(undefined, {
+        day: "numeric",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "Encounter";
+  const grade = String(summary.performanceGrade || "").trim().toUpperCase() || "—";
+  const sale =
+    summary.bottleServed === true
+      ? "Bottle served"
+      : summary.bottleServed === false
+        ? "No sale"
+        : formatEncounterOutcomeLabel(summary) === "Sale"
+          ? "Bottle served"
+          : formatEncounterOutcomeLabel(summary) === "Failure" ||
+              formatEncounterOutcomeLabel(summary) === "No sale"
+            ? "No sale"
+            : "—";
+  const bottleShort = formatEncounterBottleLabel(summary, { short: true });
+  const parts = [when, `Grade ${grade}`, sale];
+  if (bottleShort && bottleShort !== "Bottle served" && bottleShort !== "No sale") {
+    parts.push(bottleShort);
+  }
+  return parts.join(" • ");
+}
+
+function buildEncounterSummaryView(summary = {}) {
+  const fields = [
+    { label: "Outcome", value: formatEncounterOutcomeLabel(summary) },
+    { label: "Signal", value: formatEncounterSignalLabel(summary) },
+    { label: "Path", value: formatV2EncounterPathLabel(summary) || "—" },
+    { label: "Bottle", value: formatEncounterBottleLabel(summary) },
+  ];
+  const miss = formatEncounterMissLabel(summary);
+  const note = formatEncounterNoteLabel(summary);
+  if (miss) fields.push({ label: "Miss", value: miss });
+  if (note) fields.push({ label: "Note", value: note });
+  return {
+    closedLabel: formatEncounterSummaryClosedLabel(summary),
+    fields,
+  };
+}
+
+function buildEncounterSummaryItem(summary) {
+  const view = buildEncounterSummaryView(summary);
+  const summaryCard = document.createElement("div");
+  summaryCard.className = "manager-encounter-summary-item";
+
+  const summaryBtn = document.createElement("button");
+  summaryBtn.type = "button";
+  summaryBtn.className = "manager-encounter-summary-toggle";
+  summaryBtn.innerText = view.closedLabel;
+
+  const details = document.createElement("div");
+  details.className = "history-details is-collapsed manager-encounter-summary-details";
+  details.innerHTML = view.fields
+    .map(
+      (field) => `
+      <div class="manager-encounter-summary-field">
+        <span class="manager-encounter-summary-field-label">${escapeHtml(field.label)}</span>
+        <span class="manager-encounter-summary-field-value">${escapeHtml(field.value)}</span>
+      </div>
+    `
+    )
+    .join("");
+
+  summaryCard.appendChild(summaryBtn);
+  summaryCard.appendChild(details);
+
+  summaryBtn.addEventListener("click", () => {
+    const isHidden = details.classList.contains("is-collapsed");
+    details.classList.toggle("is-collapsed", !isHidden);
+    summaryBtn.innerText = isHidden ? `Hide • ${view.closedLabel}` : view.closedLabel;
+  });
+
+  return summaryCard;
+}
+
+function renderEncounterSummaryRows(host, summaries = []) {
+  const list = document.createElement("div");
+  list.className = "manager-encounter-detail-list";
+  const limited = summaries.slice(0, 12);
+  limited.forEach((summary) => {
+    list.appendChild(buildEncounterSummaryItem(summary));
+  });
+  if (summaries.length > limited.length) {
+    const more = document.createElement("div");
+    more.className = "small-text";
+    more.style.opacity = ".75";
+    more.textContent = `Showing latest ${limited.length} of ${summaries.length} encounters.`;
+    list.appendChild(more);
+  }
+  host.appendChild(list);
+}
+
+function renderManagerEncounterSummaryList(userId, rows, nameMap = new Map()) {
+  const host = document.getElementById("managerEncounterSummaryHost");
+  if (!host) return;
+
+  host.innerHTML = "";
+
+  if (!Array.isArray(rows) || !rows.length) {
+    const empty = document.createElement("div");
+    empty.className = "small-text";
+    empty.innerText = "No recent encounter summaries.";
+    host.appendChild(empty);
+    return;
+  }
+
+  const normalizedRows = rows
+    .map((row) => normalizeEncounterSummaryRow(row))
+    .filter((summary) => !userId || String(summary.userId || "") === String(userId))
+    .sort((a, b) => new Date(b.occurredAt || 0).getTime() - new Date(a.occurredAt || 0).getTime());
+
+  if (!normalizedRows.length) {
+    const empty = document.createElement("div");
+    empty.className = "small-text";
+    empty.innerText = "No recent encounter summaries for this player.";
+    host.appendChild(empty);
+    return;
+  }
+
+  const title = document.createElement("h4");
+  title.className = "manager-encounter-summary-title";
+  title.innerText = "Recent encounters";
+  host.appendChild(title);
+
+  const groupedRows = normalizedRows.reduce((acc, summary) => {
+    const encounterUserId = String(summary.userId || "").trim() || "__unknown__";
+    if (!acc.has(encounterUserId)) acc.set(encounterUserId, []);
+    acc.get(encounterUserId).push(summary);
+    return acc;
+  }, new Map());
+
+  const currentUserId = String(
+    appState?.profile?.user_id ||
+    appState?.session?.user?.id ||
+    userId ||
+    ""
+  );
+  const selectedUserId = String(userId || "");
+  const flatSelfView =
+    !!selectedUserId ||
+    (groupedRows.size === 1 && String([...groupedRows.keys()][0]) === currentUserId);
+
+  if (flatSelfView) {
+    const summaries = selectedUserId
+      ? normalizedRows
+      : (groupedRows.get(currentUserId) || normalizedRows);
+    renderEncounterSummaryRows(host, summaries);
+    return;
+  }
+
+  const listView = document.createElement("div");
+  listView.className = "manager-encounter-summary-list";
+  host.appendChild(listView);
+
+  const detailWindow = document.createElement("div");
+  detailWindow.className = "card manager-encounter-detail-window hidden";
+  host.appendChild(detailWindow);
+
+  const panels = Array.from(groupedRows.entries())
+    .map(([encounterUserId, summaries]) => {
+      const latestOccurredAt = Math.max(
+        ...summaries.map((summary) => new Date(summary.occurredAt || 0).getTime() || 0),
+        0
+      );
+      const displayName =
+        nameMap.get(encounterUserId) ||
+        (encounterUserId === "__unknown__" ? "Unknown player" : encounterUserId);
+      return {
+        userId: encounterUserId,
+        displayName,
+        summaries: summaries.slice().sort((a, b) =>
+          new Date(b.occurredAt || 0).getTime() - new Date(a.occurredAt || 0).getTime()
+        ),
+        latestOccurredAt,
+      };
+    })
+    .sort((a, b) => {
+      if (String(a.userId) === String(userId || "")) return -1;
+      if (String(b.userId) === String(userId || "")) return 1;
+      if (b.latestOccurredAt !== a.latestOccurredAt) return b.latestOccurredAt - a.latestOccurredAt;
+      return String(a.displayName).localeCompare(String(b.displayName));
+    });
+
+  function openWaiterWindow(panel) {
+    listView.classList.add("hidden");
+    detailWindow.classList.remove("hidden");
+    detailWindow.innerHTML = `
+      <div class="manager-encounter-detail-header">
+        <div>
+          <div class="manager-encounter-detail-title">${escapeHtml(panel.displayName)}</div>
+          <div class="manager-encounter-detail-meta">
+            ${panel.summaries.length} encounter${panel.summaries.length === 1 ? "" : "s"} •
+            Latest ${escapeHtml(new Date(panel.latestOccurredAt || Date.now()).toLocaleString())}
+          </div>
+        </div>
+        <button type="button" class="small-btn manager-encounter-detail-close">Back</button>
+      </div>
+    `;
+    const closeBtn = detailWindow.querySelector(".manager-encounter-detail-close");
+    renderEncounterSummaryRows(detailWindow, panel.summaries);
+    closeBtn?.addEventListener("click", () => {
+      detailWindow.classList.add("hidden");
+      detailWindow.innerHTML = "";
+      listView.classList.remove("hidden");
+    });
+  }
+
+  panels.forEach((panel) => {
+    const card = document.createElement("div");
+    card.className = "card manager-encounter-summary-card";
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "manager-encounter-user-btn";
+    btn.innerHTML = `
+      <span class="manager-encounter-user-title">${escapeHtml(panel.displayName)}</span>
+      <span class="manager-encounter-user-meta">
+        ${panel.summaries.length} encounter${panel.summaries.length === 1 ? "" : "s"} •
+        Latest ${escapeHtml(new Date(panel.latestOccurredAt || Date.now()).toLocaleString())}
+      </span>
+    `;
+    card.appendChild(btn);
+    listView.appendChild(card);
+    btn.addEventListener("click", () => openWaiterWindow(panel));
+  });
+}
+
+function moodLabelToScore(raw) {
+  const key = String(raw || "").trim().toLowerCase();
+  const map = {
+    ready: 4,
+    engaged: 3,
+    warming_up: 2,
+    guarded: 1,
+    calm: 4,
+    happy: 4,
+    content: 3,
+    neutral: 2.5,
+    slightly_annoyed: 2,
+    impatient: 1.5,
+    annoyed: 1,
+    frustrated: 1,
+    furious: 0.5,
+    tense: 1.5,
+    stressed: 1,
+  };
+  return Object.prototype.hasOwnProperty.call(map, key) ? map[key] : null;
+}
+
+function moodScoreToLabel(score) {
+  if (!Number.isFinite(score)) return null;
+  if (score >= 3.5) return "Happy";
+  if (score >= 2.75) return "Warm";
+  if (score >= 2.1) return "Neutral";
+  if (score >= 1.4) return "Uneasy";
+  return "Angry";
+}
+
+function isCorrectWinePairingFit(fit) {
+  const key = String(fit || "").trim().toLowerCase();
+  return key === "strong" || key === "safe" || key === "good" || key === "excellent";
+}
+
+function extractAuthorityDeltasFromSnapshots(snapshots = []) {
+  const deltas = [];
+  (Array.isArray(snapshots) ? snapshots : []).forEach((row) => {
+    const payload = row?.payload && typeof row.payload === "object" ? row.payload : {};
+    const v2 = payload?.v2Snapshot && typeof payload.v2Snapshot === "object" ? payload.v2Snapshot : {};
+    const delta = firstFinite(v2?.authorityDelta, payload?.authorityDelta);
+    if (delta != null) deltas.push(delta);
+  });
+  return deltas;
+}
+
+function extractAuthorityDeltasFromCanonical(canonicalState = null) {
+  const authority =
+    canonicalState?.authority && typeof canonicalState.authority === "object"
+      ? canonicalState.authority
+      : {};
+  const attempts = Array.isArray(authority?.attempts) ? authority.attempts : [];
+  return attempts
+    .map((attempt) => firstFinite(attempt?.authorityDelta))
+    .filter((value) => value != null);
+}
+
+function buildPlayerTeamStats({
+  encounters = [],
+  snapshots = [],
+  canonicalState = null,
+} = {}) {
+  const encounterRows = Array.isArray(encounters) ? encounters : [];
+  const snapshotRows = Array.isArray(snapshots) ? snapshots : [];
+  const economy =
+    canonicalState?.economy && typeof canonicalState.economy === "object"
+      ? canonicalState.economy
+      : {};
+  const authority =
+    canonicalState?.authority && typeof canonicalState.authority === "object"
+      ? canonicalState.authority
+      : {};
+  const godotShift =
+    canonicalState?.godotShift && typeof canonicalState.godotShift === "object"
+      ? canonicalState.godotShift
+      : {};
+
+  const bottlesSoldFromEncounters = encounterRows.filter((row) => {
+    if (typeof row?.bottle_served === "boolean") return row.bottle_served;
+    if (typeof row?.reflection?.bottleServed === "boolean") return row.reflection.bottleServed;
+    const outcome = String(row?.outcome || row?.final_outcome || "").toLowerCase();
+    return ["premium_success", "standard_success", "weak_success"].includes(outcome);
+  }).length;
+  const bottlesAttemptedFromEncounters = encounterRows.filter((row) => {
+    const source = String(row?.reflection?.source || row?.engineVersion || "").toLowerCase();
+    return source !== "godot_shift" || row?.bottle_served === true || row?.bottle_served === false;
+  }).length;
+  const godotBottlesSold = firstFinite(godotShift?.bottlesSold, godotShift?.wineSales);
+  const godotBottlesAttempted = firstFinite(godotShift?.bottlesAttempted, godotShift?.wineOffers);
+  const bottlesSold = Math.max(bottlesSoldFromEncounters, Number(godotBottlesSold || 0));
+  const bottlesAttempted = Math.max(
+    bottlesAttemptedFromEncounters,
+    Number(godotBottlesAttempted || 0),
+    bottlesSold,
+  );
+
+  const readRows = encounterRows.filter((row) => typeof row?.read_correct === "boolean");
+  const readCorrectCount = readRows.length
+    ? readRows.filter((row) => row.read_correct === true).length
+    : Number(godotShift?.greetingAcceptedCount || 0);
+  const readSamples = readRows.length
+    ? readRows.length
+    : Number(godotShift?.greetingSampleCount || 0);
+  const correctInitialReadRate = readSamples ? readCorrectCount / readSamples : null;
+
+  const pairingFits = snapshotRows
+    .map((row) => {
+      const payload = row?.payload && typeof row.payload === "object" ? row.payload : {};
+      const v2 = payload?.v2Snapshot && typeof payload.v2Snapshot === "object" ? payload.v2Snapshot : {};
+      return (
+        v2?.bottleChoiceFit ||
+        payload?.bottleChoice?.fit ||
+        v2?.bottleChoice?.fit ||
+        payload?.bottleChoiceFit ||
+        null
+      );
+    })
+    .filter((fit) => fit != null && String(fit).trim() !== "");
+  const correctPairingCount = pairingFits.filter((fit) => isCorrectWinePairingFit(fit)).length;
+  const correctWinePairingRate = pairingFits.length
+    ? correctPairingCount / pairingFits.length
+    : null;
+
+  const moodScores = snapshotRows
+    .map((row) => {
+      const payload = row?.payload && typeof row.payload === "object" ? row.payload : {};
+      const v2 = payload?.v2Snapshot && typeof payload.v2Snapshot === "object" ? payload.v2Snapshot : {};
+      // progressMood is guest warmth; frustrationMood is a different scale — do not mix.
+      return moodLabelToScore(v2?.progressMood || payload?.progressMood || null);
+    })
+    .filter((score) => score != null);
+  const avgGuestEmotionScore = moodScores.length
+    ? moodScores.reduce((sum, score) => sum + score, 0) / moodScores.length
+    : null;
+
+  let authorityDeltas = extractAuthorityDeltasFromCanonical(canonicalState);
+  if (!authorityDeltas.length) {
+    authorityDeltas = extractAuthorityDeltasFromSnapshots(snapshotRows);
+  }
+  if (!authorityDeltas.length && Array.isArray(godotShift?.authorityDeltas)) {
+    authorityDeltas = godotShift.authorityDeltas.map(Number).filter(Number.isFinite);
+  }
+  const lastOpDelta = firstFinite(godotShift?.lastOperationalAuthorityDelta);
+  if (lastOpDelta != null && !authorityDeltas.includes(lastOpDelta)) {
+    authorityDeltas = [...authorityDeltas, lastOpDelta];
+  }
+  const avgEncounterAuthority = authorityDeltas.length
+    ? authorityDeltas.reduce((sum, value) => sum + value, 0) / authorityDeltas.length
+    : null;
+  const highestEncounterAuthority = authorityDeltas.length
+    ? Math.max(...authorityDeltas)
+    : null;
+  const lowestEncounterAuthority = authorityDeltas.length
+    ? Math.min(...authorityDeltas)
+    : null;
+
+  const authorityPoints = firstFinite(
+    economy?.authorityPoints,
+    economy?.ap,
+    authority?.totalAP
+  );
+
+  const guestsServed = firstFinite(
+    godotShift?.guestsServed,
+    godotShift?.guestServices,
+    godotShift?.completedGuestServices
+  );
+  const guestsLost = firstFinite(
+    godotShift?.guestsLost,
+    godotShift?.walkAways,
+    godotShift?.walk_aways
+  );
+  const hasBottleMeter =
+    firstFinite(godotShift?.bottleMeter, godotShift?.bottlesSold) != null ||
+    firstFinite(godotShift?.bottleMeterMax, godotShift?.bottleTarget) != null;
+  const bottleMeterSold = hasBottleMeter
+    ? firstFinite(godotShift?.bottleMeter, godotShift?.bottlesSold)
+    : null;
+  const bottleMeterMax = hasBottleMeter
+    ? firstFinite(godotShift?.bottleMeterMax, godotShift?.bottleTarget)
+    : null;
+
+  return {
+    bottlesSold,
+    bottlesAttempted,
+    bottleMeterSold,
+    bottleMeterMax,
+    avgTimeSellingBottleSec: firstFinite(godotShift?.avgTimeSellingBottleSec),
+    avgGuestEmotionScore,
+    avgGuestEmotionLabel: moodScoreToLabel(avgGuestEmotionScore),
+    idleTimeSec: null,
+    authorityPoints,
+    avgEncounterAuthority,
+    highestEncounterAuthority,
+    lowestEncounterAuthority,
+    correctWinePairingRate,
+    correctWinePairingCount: correctPairingCount,
+    correctWinePairingSamples: pairingFits.length,
+    correctInitialReadRate,
+    correctInitialReadCount: readCorrectCount,
+    correctInitialReadSamples: readSamples,
+    avgStaffEmotionScore: null,
+    avgStaffEmotionLabel: null,
+    avgProduceWaitSec: null,
+    guestsServed,
+    guestsLost,
+    guestsLeftAngry: null,
+    guestsLeftNeutral: null,
+    guestsLeftHappy: null,
+  };
+}
+
+function formatPlayerStatValue(key, stats = {}) {
+  const s = stats || {};
+  switch (key) {
+    case "bottlesSold": {
+      if (s.bottlesAttempted > 0) {
+        return `${Math.round(s.bottlesSold || 0)} out of ${Math.round(s.bottlesAttempted)}`;
+      }
+      const meterSold = s.bottleMeterSold;
+      const meterMax = s.bottleMeterMax;
+      if (meterSold != null && meterMax != null && Number(meterMax) > 0) {
+        return `${Math.round(meterSold)} out of ${Math.round(meterMax)}`;
+      }
+      return "—";
+    }
+    case "avgTimeSellingBottle":
+      return s.avgTimeSellingBottleSec != null
+        ? `${formatMetricNumber(s.avgTimeSellingBottleSec, 0)}s`
+        : "—";
+    case "avgGuestEmotion":
+      return s.avgGuestEmotionLabel || "—";
+    case "idleTime":
+      return s.idleTimeSec != null ? `${formatMetricNumber(s.idleTimeSec, 0)}s` : "—";
+    case "authorityPoints":
+      return s.authorityPoints != null ? formatMetricNumber(s.authorityPoints, 0) : "—";
+    case "avgEncounterAuthority":
+      return s.avgEncounterAuthority != null
+        ? formatMetricNumber(s.avgEncounterAuthority, 1)
+        : "—";
+    case "highestEncounterAuthority":
+      return s.highestEncounterAuthority != null
+        ? formatMetricNumber(s.highestEncounterAuthority, 0)
+        : "—";
+    case "lowestEncounterAuthority":
+      return s.lowestEncounterAuthority != null
+        ? formatMetricNumber(s.lowestEncounterAuthority, 0)
+        : "—";
+    case "correctWinePairing":
+      return s.correctWinePairingRate != null
+        ? formatPercent(s.correctWinePairingRate)
+        : "—";
+    case "correctInitialRead":
+      return s.correctInitialReadRate != null
+        ? formatPercent(s.correctInitialReadRate)
+        : "—";
+    case "avgStaffEmotion":
+      return s.avgStaffEmotionLabel || "—";
+    case "avgProduceWait":
+      return s.avgProduceWaitSec != null
+        ? `${formatMetricNumber(s.avgProduceWaitSec, 0)}s`
+        : "—";
+    case "guestsServed":
+      return s.guestsServed != null ? formatMetricNumber(s.guestsServed, 0) : "—";
+    case "guestsLost":
+      return s.guestsLost != null ? formatMetricNumber(s.guestsLost, 0) : "—";
+    case "guestsLeftMood": {
+      const angry = s.guestsLeftAngry;
+      const neutral = s.guestsLeftNeutral;
+      const happy = s.guestsLeftHappy;
+      if (angry == null && neutral == null && happy == null) return "—";
+      return `${Math.round(angry || 0)} / ${Math.round(neutral || 0)} / ${Math.round(happy || 0)}`;
+    }
+    default:
+      return "—";
+  }
+}
+
+const TEAM_PLAYER_STAT_DEFS = [
+  { key: "bottlesSold", label: "Bottles sold" },
+  { key: "avgTimeSellingBottle", label: "Avg time selling bottle" },
+  { key: "avgGuestEmotion", label: "Avg guest emotion" },
+  { key: "idleTime", label: "Time spent doing nothing" },
+  { key: "authorityPoints", label: "Authority Points" },
+  { key: "avgEncounterAuthority", label: "Avg AP per encounter" },
+  { key: "highestEncounterAuthority", label: "Highest AP" },
+  { key: "lowestEncounterAuthority", label: "Lowest AP" },
+  { key: "correctWinePairing", label: "Correct wine pairing" },
+  { key: "correctInitialRead", label: "Correct initial table read" },
+  { key: "avgStaffEmotion", label: "Avg staff emotion" },
+  { key: "avgProduceWait", label: "Avg produce waiting time" },
+  { key: "guestsServed", label: "Guests served" },
+  { key: "guestsLost", label: "Guests lost" },
+  { key: "guestsLeftMood", label: "Left angry / neutral / happy" },
+];
+
+function renderPlayerTeamStatsGridMarkup(stats = {}) {
+  return TEAM_PLAYER_STAT_DEFS.map((def) => `
+    <div class="mb-player-stat-cell" style="display:flex;flex-direction:column;justify-content:flex-start;gap:6px;min-height:72px;padding:14px 16px;border-radius:12px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.04);">
+      <div class="small-text" style="font-size:12px;line-height:1.35;color:rgba(244,246,247,0.62);">${escapeHtml(def.label)}</div>
+      <strong style="display:block;margin-top:0;font-size:18px;font-weight:700;line-height:1.2;color:rgba(244,246,247,0.96);">${escapeHtml(formatPlayerStatValue(def.key, stats))}</strong>
+    </div>
+  `).join("");
+}
+
+function renderPlayerTeamStatsSectionMarkup(stats = {}, title = "Team performance stats") {
+  return `
+    <div class="waiter-user-team-stats">
+      <div class="small-text waiter-user-team-stats-title">${escapeHtml(title)}</div>
+      <div class="mb-player-stats-grid waiter-user-team-stats-grid">
+        ${renderPlayerTeamStatsGridMarkup(stats)}
+      </div>
+    </div>
+  `;
+}
+
+function aggregateTeamPlayerStats(users = []) {
+  const rows = (Array.isArray(users) ? users : [])
+    .map((user) => user?.playerStats)
+    .filter(Boolean);
+
+  const avgFinite = (getter) => {
+    const values = rows
+      .map((stats) => getter(stats))
+      .filter((value) => value != null && Number.isFinite(Number(value)))
+      .map(Number);
+    if (!values.length) return null;
+    return values.reduce((sum, value) => sum + value, 0) / values.length;
+  };
+  const sumFinite = (getter) => {
+    const values = rows
+      .map((stats) => getter(stats))
+      .filter((value) => value != null && Number.isFinite(Number(value)))
+      .map(Number);
+    if (!values.length) return null;
+    return values.reduce((sum, value) => sum + value, 0);
+  };
+
+  const bottlesSold = sumFinite((stats) => stats.bottlesSold) || 0;
+  const bottlesAttempted = sumFinite((stats) => stats.bottlesAttempted) || 0;
+  const meterRows = rows.filter(
+    (stats) => stats.bottleMeterSold != null && stats.bottleMeterMax != null && Number(stats.bottleMeterMax) > 0
+  );
+  const bottleMeterSold = meterRows.length
+    ? meterRows.reduce((sum, stats) => sum + Number(stats.bottleMeterSold || 0), 0)
+    : null;
+  const bottleMeterMax = meterRows.length
+    ? meterRows.reduce((sum, stats) => sum + Number(stats.bottleMeterMax || 0), 0)
+    : null;
+  const avgGuestEmotionScore = avgFinite((stats) => stats.avgGuestEmotionScore);
+  const avgEncounterAuthority = avgFinite((stats) => stats.avgEncounterAuthority);
+  const highestEncounterAuthorityValues = rows
+    .map((stats) => stats.highestEncounterAuthority)
+    .filter((value) => value != null && Number.isFinite(Number(value)))
+    .map(Number);
+  const lowestEncounterAuthorityValues = rows
+    .map((stats) => stats.lowestEncounterAuthority)
+    .filter((value) => value != null && Number.isFinite(Number(value)))
+    .map(Number);
+
+  const pairingCorrect = sumFinite((stats) => stats.correctWinePairingCount) || 0;
+  const pairingSamples = sumFinite((stats) => stats.correctWinePairingSamples) || 0;
+  const readCorrect = sumFinite((stats) => stats.correctInitialReadCount) || 0;
+  const readSamples = sumFinite((stats) => stats.correctInitialReadSamples) || 0;
+
+  return {
+    bottlesSold,
+    bottlesAttempted,
+    bottleMeterSold,
+    bottleMeterMax,
+    avgTimeSellingBottleSec: null,
+    avgGuestEmotionScore,
+    avgGuestEmotionLabel: moodScoreToLabel(avgGuestEmotionScore),
+    idleTimeSec: null,
+    authorityPoints: avgFinite((stats) => stats.authorityPoints),
+    avgEncounterAuthority,
+    highestEncounterAuthority: highestEncounterAuthorityValues.length
+      ? Math.max(...highestEncounterAuthorityValues)
+      : null,
+    lowestEncounterAuthority: lowestEncounterAuthorityValues.length
+      ? Math.min(...lowestEncounterAuthorityValues)
+      : null,
+    correctWinePairingRate: pairingSamples ? pairingCorrect / pairingSamples : null,
+    correctWinePairingCount: pairingCorrect,
+    correctWinePairingSamples: pairingSamples,
+    correctInitialReadRate: readSamples ? readCorrect / readSamples : null,
+    correctInitialReadCount: readCorrect,
+    correctInitialReadSamples: readSamples,
+    avgStaffEmotionScore: null,
+    avgStaffEmotionLabel: null,
+    avgProduceWaitSec: null,
+    guestsServed: sumFinite((stats) => stats.guestsServed),
+    guestsLost: sumFinite((stats) => stats.guestsLost),
+    guestsLeftAngry: null,
+    guestsLeftNeutral: null,
+    guestsLeftHappy: null,
   };
 }
 
@@ -12054,6 +13559,7 @@ async function getManagerPerformanceModel({ force = false } = {}) {
         avgEncounterPassRate: 0,
         avgChallengeSuccessRate: 0,
         avgPremiumSuccessRate: 0,
+        playerStats: aggregateTeamPlayerStats([]),
       },
       users: [],
       notes: ["No active restaurant selected."],
@@ -12260,9 +13766,14 @@ async function getManagerPerformanceModel({ force = false } = {}) {
       ? Math.max(1, Math.min(3, Math.round(canonicalTierRaw)))
       : null;
 
+    const bankSkillShape = extractSkillShapeFromSkillBank(canonicalState) || {};
+    const bankSkillTotal = MANAGER_PERFORMANCE_SKILLS.reduce(
+      (sum, skill) => sum + Number(bankSkillShape?.[skill.key] || 0),
+      0
+    );
     const baseSkillShape = averageSkillShape(userSnapshots);
     const baseSkillTotal = MANAGER_PERFORMANCE_SKILLS.reduce((sum, skill) => sum + Number(baseSkillShape?.[skill.key] || 0), 0);
-    const baseSkillAvg = baseSkillTotal /
+    const baseSkillAvg = (bankSkillTotal > 0 ? bankSkillTotal : baseSkillTotal) /
       MANAGER_PERFORMANCE_SKILLS.length;
 
     const drillRows = userMessages.filter((row) => String(row?.type || "") === "drill_completed");
@@ -12276,43 +13787,29 @@ async function getManagerPerformanceModel({ force = false } = {}) {
       return repTarget > 0 && repsDone >= repTarget;
     }).length;
 
-    const encounterPasses = userEncounters.filter((row) => {
-      const grade = String(row?.performance_grade || row?.latest_grade || "").toUpperCase();
-      return grade === "A" || grade === "B" || String(row?.chain_signal || "").toLowerCase() === "green" || !!row?.is_green;
-    }).length;
+    const encounterPasses = userEncounters.filter((row) => isEncounterPassed(row)).length;
 
-    const encounterMastery = userEncounters.filter((row) => String(row?.performance_grade || "").toUpperCase() === "A").length;
+    const encounterMastery = userEncounters.filter((row) => isEncounterMastery(row)).length;
     const premiumSuccesses = challengeCompleted.filter((row) => !!row?.payload?.premiumSuccess).length;
 
+    const godotServed = Number(canonicalState?.godotShift?.guestsServed || canonicalState?.godotShift?.guestServices || 0);
+    const godotLost = Number(canonicalState?.godotShift?.guestsLost || canonicalState?.godotShift?.walkAways || 0);
+    const godotFloorCount = godotServed + godotLost;
     const drillPassRate = drillRows.length ? drillPasses / drillRows.length : 0;
-    const encounterPassRate = userEncounters.length ? encounterPasses / userEncounters.length : 0;
+    const encounterPassRate = userEncounters.length
+      ? encounterPasses / userEncounters.length
+      : (godotFloorCount ? godotServed / godotFloorCount : 0);
     const challengeSuccessRate = challengeRows ? challengeCompleted.length / challengeRows : 0;
     const premiumSuccessRate = challengeCompleted.length ? premiumSuccesses / challengeCompleted.length : 0;
-    const masteryRate = userEncounters.length ? encounterMastery / userEncounters.length : baseSkillAvg / 100;
+    const masteryRate = userEncounters.length ? encounterMastery / userEncounters.length : 0;
 
-    const readinessBase = firstFinite(
-      readinessRow?.readiness_score,
-      readinessRow?.readiness_pct,
-      latestRow?.readiness_score
-    );
-    const readinessFromWindow = (() => {
-      const n = firstFinite(readinessRow?.last10_count, latestRow?.last10_count);
-      const greens = firstFinite(readinessRow?.last10_greens, latestRow?.last10_greens);
-      const yellows = firstFinite(readinessRow?.last10_yellows, latestRow?.last10_yellows);
-      if (n && n > 0) {
-        return Math.max(0, Math.min(1, ((greens || 0) + ((yellows || 0) * 0.5)) / n));
-      }
-      return null;
-    })();
-    const readinessLabel = firstNonEmpty(readinessRow?.readiness, latestRow?.readiness);
-    const readiness = Math.max(0, Math.min(1, firstFinite(
-      readinessBase != null ? (readinessBase > 1 ? readinessBase / 100 : readinessBase) : null,
-      readinessFromWindow,
-      readinessLabel === "STABLE" ? 0.84 : null,
-      readinessLabel === "GROWING" ? 0.68 : null,
-      readinessLabel === "FRAGILE" ? 0.42 : null,
-      baseSkillAvg / 100
-    ) || 0));
+    const { readiness, readinessLabel } = connectReadinessAndMastery({
+      readinessRow,
+      latestRow,
+      masteryRate,
+      encounterPassRate,
+      baseFallback: baseSkillAvg / 100,
+    });
 
     const totalPoints = hasCanonicalProgression
       ? Math.max(0, canonicalPoints ?? 0)
@@ -12368,7 +13865,9 @@ async function getManagerPerformanceModel({ force = false } = {}) {
       Math.min(1, (readiness * 0.45) + (encounterPassRate * 0.35) + (challengeSuccessRate * 0.20))
     );
 
-    const skillShape = baseSkillTotal > 0
+    const skillShape = bankSkillTotal > 0
+      ? bankSkillShape
+      : baseSkillTotal > 0
       ? baseSkillShape
       : deriveLeaderboardSkillShape({
           totalPoints,
@@ -12380,12 +13879,38 @@ async function getManagerPerformanceModel({ force = false } = {}) {
           readiness,
         });
     const extremes = getSkillExtremes(skillShape);
+    const playerStats = buildPlayerTeamStats({
+      encounters: userEncounters,
+      snapshots: userSnapshots,
+      canonicalState,
+    });
+    const wineStreakInfo = computeWineStreakFromEncounters(userEncounters);
+    if (!wineStreakInfo.current && Number(canonicalState?.godotShift?.lastWineStreak || 0) > 0) {
+      wineStreakInfo.current = Number(canonicalState.godotShift.lastWineStreak || 0);
+      wineStreakInfo.best = Math.max(
+        Number(wineStreakInfo.best || 0),
+        Number(canonicalState.godotShift.lastWineStreak || 0),
+      );
+    }
+    const topWineSold = resolveTopWineSold(userEncounters, userSnapshots);
+    const authorityPoints = firstFinite(
+      playerStats?.authorityPoints,
+      canonicalEconomy?.authorityPoints,
+      canonicalEconomy?.ap,
+      canonicalAuthority?.totalAP
+    );
+    const formShape = buildLeaderboardFormShape({
+      readiness,
+      masteryRate,
+      wineStreak: wineStreakInfo.current,
+    });
 
     return {
       userId: uid,
       displayName: nameMap.get(uid) || uid,
       role: profileRoleMap.get(uid) || "waiter",
       totalPoints,
+      authorityPoints: authorityPoints != null ? authorityPoints : 0,
       drillPassRate,
       drillCompletedCount: drillRows.length,
       drillPasses,
@@ -12397,6 +13922,9 @@ async function getManagerPerformanceModel({ force = false } = {}) {
       challengeCount: challengeRows,
       premiumSuccessRate,
       masteryRate,
+      wineStreak: wineStreakInfo.current,
+      wineStreakBest: wineStreakInfo.best,
+      topWineSold,
       lastActiveAt,
       eligibilityTier,
       readiness,
@@ -12407,11 +13935,18 @@ async function getManagerPerformanceModel({ force = false } = {}) {
       strongestSkill: extremes.strongestSkill,
       weakestSkill: extremes.weakestSkill,
       skillShape,
+      formShape,
       encounterSummaries: recentEncounterSummaries,
+      playerStats,
     };
   })
     .filter((user) => user.displayName)
-    .sort((a, b) => (b.totalPoints - a.totalPoints) || ((new Date(b.lastActiveAt).getTime() || 0) - (new Date(a.lastActiveAt).getTime() || 0)))
+    .sort((a, b) =>
+      (Number(b.authorityPoints || 0) - Number(a.authorityPoints || 0)) ||
+      (Number(b.masteryRate || 0) - Number(a.masteryRate || 0)) ||
+      (Number(b.wineStreak || 0) - Number(a.wineStreak || 0)) ||
+      ((new Date(b.lastActiveAt).getTime() || 0) - (new Date(a.lastActiveAt).getTime() || 0))
+    )
     .map((user, index) => ({
       ...user,
       rank: index + 1,
@@ -12560,6 +14095,10 @@ function buildPerformanceSummary(users = []) {
   const avg = (getter) => users.length
     ? users.reduce((sum, user) => sum + Number(getter(user) || 0), 0) / users.length
     : 0;
+  const playerUsers = (Array.isArray(users) ? users : []).filter((user) => {
+    const role = String(user?.role || "").toLowerCase();
+    return role === "waiter" || role === "single_manager" || !!user?.playerStats;
+  });
 
   return {
     activeWaiters: users.filter((user) => !!user.lastActiveAt).length,
@@ -12568,6 +14107,7 @@ function buildPerformanceSummary(users = []) {
     avgEncounterPassRate: avg((user) => user.encounterPassRate),
     avgChallengeSuccessRate: avg((user) => user.challengeSuccessRate),
     avgPremiumSuccessRate: avg((user) => user.premiumSuccessRate),
+    playerStats: aggregateTeamPlayerStats(playerUsers),
   };
 }
 
@@ -12575,21 +14115,65 @@ function renderManagerPerformanceOverview(summary = {}) {
   const el = document.getElementById("mbPerformanceCards");
   if (!el) return;
 
-  const cards = [
-    ["Active Waiters", summary.activeWaiters ?? 0],
-    ["Avg Total Points", formatMetricNumber(summary.avgTotalPoints, 1)],
-    ["Avg Drill Pass Rate", formatPercent(summary.avgDrillPassRate)],
-    ["Avg Encounter Pass Rate", formatPercent(summary.avgEncounterPassRate)],
-    ["Avg Challenge Success Rate", formatPercent(summary.avgChallengeSuccessRate)],
-    ["Avg Premium Success Rate", formatPercent(summary.avgPremiumSuccessRate)],
-  ];
-
-  el.innerHTML = cards.map(([label, value]) => `
+  const stats = summary?.playerStats || aggregateTeamPlayerStats([]);
+  el.innerHTML = TEAM_PLAYER_STAT_DEFS.map((def) => `
     <div class="mb-performance-card">
-      <div class="small-text">${escapeHtml(label)}</div>
-      <strong>${escapeHtml(String(value))}</strong>
+      <div class="small-text">${escapeHtml(def.label)}</div>
+      <strong>${escapeHtml(formatPlayerStatValue(def.key, stats))}</strong>
     </div>
   `).join("");
+}
+
+function renderTeamPlayerStatsPanel(users = [], options = {}) {
+  const root = document.getElementById(options.rootId || "mbPerformanceResultsChart");
+  if (!root) return;
+
+  const openUserId = String(options.openUserId || "").trim();
+  const onlyUserId = String(options.onlyUserId || "").trim();
+  const allRows = Array.isArray(users) ? users : [];
+  const rows = allRows.filter((user) => {
+    if (onlyUserId && String(user?.userId || "") !== onlyUserId) return false;
+    const role = String(user?.role || "").toLowerCase();
+    const stats = user?.playerStats || {};
+    const isPlayerRole = role === "waiter" || role === "single_manager";
+    const hasSignal =
+      Number(stats.bottlesAttempted || 0) > 0 ||
+      stats.authorityPoints != null ||
+      stats.avgEncounterAuthority != null ||
+      stats.guestsServed != null ||
+      stats.guestsLost != null;
+    return isPlayerRole || hasSignal || String(user?.userId || "") === openUserId;
+  });
+  if (!rows.length) {
+    root.innerHTML = `<div class="small-text">No player stats yet for this restaurant.</div>`;
+    return;
+  }
+
+  root.innerHTML = rows.map((user) => {
+    const stats = user?.playerStats || {};
+
+    return `
+      <details class="mb-player-stats-card" data-user-id="${escapeHtml(user.userId || "")}" style="border:1px solid rgba(255,255,255,0.08);border-radius:12px;background:linear-gradient(180deg, rgba(196,181,253,0.08), rgba(255,255,255,0.02)), rgba(255,255,255,0.03);padding:12px 14px;">
+        <summary class="mb-player-stats-summary" style="list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+          <span class="mb-player-stats-name" style="font-weight:600;color:rgba(244,246,247,0.96);">${escapeHtml(user.displayName || "Player")}</span>
+          <span class="small-text" style="color:rgba(244,246,247,0.62);">AP ${escapeHtml(formatPlayerStatValue("authorityPoints", stats))} · Bottles ${escapeHtml(formatPlayerStatValue("bottlesSold", stats))}</span>
+        </summary>
+        <div class="mb-player-stats-grid">
+          ${renderPlayerTeamStatsGridMarkup(stats)}
+        </div>
+      </details>
+    `;
+  }).join("");
+
+  root.querySelectorAll("details.mb-player-stats-card").forEach((el) => {
+    const userId = String(el.getAttribute("data-user-id") || "");
+    const shouldOpen = onlyUserId
+      ? userId === onlyUserId
+      : !!(openUserId && userId === openUserId);
+    el.open = shouldOpen;
+    if (shouldOpen) el.setAttribute("open", "");
+    else el.removeAttribute("open");
+  });
 }
 
 const TEAM_RESULTS_METRICS = [
@@ -12638,8 +14222,10 @@ function drawSingleMetricDonut(canvas, value = 0, color = "#60a5fa", options = {
 }
 
 function drawTeamPerformanceResultsChart(summary = {}) {
+  // Legacy donut chart retained for older callers; Team Performance now uses renderTeamPlayerStatsPanel.
   const root = document.getElementById("mbPerformanceResultsChart");
   if (!root) return;
+  if (root.dataset?.panelMode === "player-stats") return;
 
   const donutMetrics = [
     { ...TEAM_RESULTS_METRICS[0], value: Number(summary.avgDrillPassRate || 0), note: "Team average" },
@@ -12730,6 +14316,7 @@ function renderManagerPerformanceTable(users = []) {
               <span class="mb-badge">Readiness: ${escapeHtml(describeReadiness(user.readiness, user.readinessLabel))}</span>
             </div>
           </div>
+          ${renderPlayerTeamStatsSectionMarkup(user?.playerStats)}
         </div>
       </td>
     </tr>
@@ -12842,6 +14429,78 @@ function drawUserSkillPieChart(canvas, skillShape, options = {}) {
   ctx.fillText(String(options.centerTop || ""), cx, cy - 4);
   ctx.font = "12px sans-serif";
   ctx.fillText(String(options.centerBottom || ""), cx, cy + 16);
+}
+
+function drawLeaderboardFormPieChart(canvas, formShape = {}, options = {}) {
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const width = canvas.width;
+  const height = canvas.height;
+  const cx = width / 2;
+  const cy = height / 2;
+  const radius = Math.min(width, height) * 0.28;
+
+  ctx.clearRect(0, 0, width, height);
+  ctx.lineWidth = 26;
+  ctx.lineCap = "round";
+
+  const slices = LEADERBOARD_FORM_SLICES.map((slice) => ({
+    ...slice,
+    value: Math.max(0, Number(formShape?.[slice.key] || 0)),
+  }));
+  const total = slices.reduce((sum, slice) => sum + slice.value, 0);
+
+  if (!total) {
+    ctx.fillStyle = "rgba(255,255,255,0.72)";
+    ctx.font = "13px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("No form data", cx, cy);
+    return;
+  }
+
+  let angle = -Math.PI / 2;
+  slices.forEach((slice) => {
+    const nextAngle = angle + ((slice.value / total) * Math.PI * 2);
+    ctx.beginPath();
+    ctx.strokeStyle = slice.color;
+    ctx.arc(cx, cy, radius, angle, nextAngle);
+    ctx.stroke();
+    angle = nextAngle;
+  });
+
+  ctx.fillStyle = "rgba(4,7,12,0.9)";
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius - 22, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#fff";
+  ctx.textAlign = "center";
+  ctx.font = "bold 16px sans-serif";
+  ctx.fillText(String(options.centerTop || ""), cx, cy - 4);
+  ctx.font = "12px sans-serif";
+  ctx.fillText(String(options.centerBottom || ""), cx, cy + 16);
+}
+
+function renderLeaderboardFormLegend(root, formShape = {}) {
+  if (!root) return;
+  const shape = formShape || {};
+  root.innerHTML = `
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      ${LEADERBOARD_FORM_SLICES.map((slice) => {
+        const value = Math.max(0, Number(shape?.[slice.key] || 0));
+        const detail = slice.key === "wineStreak"
+          ? `${Math.round(Number(shape?.wineStreakCount || 0))} win${Number(shape?.wineStreakCount || 0) === 1 ? "" : "s"}`
+          : `${Math.round(value)}%`;
+        return `
+          <div style="display:grid; grid-template-columns:auto 1fr auto; gap:8px; align-items:center;">
+            <span style="width:10px; height:10px; border-radius:999px; background:${escapeHtml(slice.color)};"></span>
+            <span class="small-text" style="opacity:.92;">${escapeHtml(slice.label)}</span>
+            <span class="small-text" style="opacity:.82;">${escapeHtml(detail)}</span>
+          </div>
+        `;
+      }).join("")}
+    </div>
+  `;
 }
 
 function renderUserSkillShapeLegend(root, skillShape = {}, options = {}) {
@@ -13265,6 +14924,8 @@ function pushCtxToPremiumIframe(source = "manual") {
     scopeId: snapshot.scopeId,
     scopeType: snapshot.scopeType,
     accessTier: snapshot.accessTier,
+    displayName: snapshot.displayName,
+    display_name: snapshot.displayName || snapshot.display_name,
     membershipRole: snapshot.membershipRole,
     membership_role: snapshot.membership_role,
     role: snapshot.role,
@@ -13410,8 +15071,7 @@ function mountPremiumGameIframe({
   const root = document.getElementById("premiumRoot");
   let iframe = document.getElementById("premiumRootFrame");
   if (!root && !iframe) return;
-  const roleNow = String(appState?.profile?.role || "").toLowerCase();
-  const useV2Harness = roleNow === "group_manager";
+  const useV2Harness = shouldUsePremiumGodotCockpit(appState?.profile);
 
   // ✅ Do NOT remount if already present
   const iframeSrcNow = String(iframe?.getAttribute("src") || "");
@@ -13438,15 +15098,17 @@ function mountPremiumGameIframe({
   } else if (!iframe) {
     return;
   }
-  if (roleNow === "waiter" && appState?.profile) {
+  if (appState?.profile) {
     setActiveProgressionOwner({
-      user_id: appState.profile.user_id || null,
-      restaurant_id: appState.profile.restaurant_id || null,
+      user_id: appState.profile.user_id || appState.session?.user?.id || null,
+      restaurant_id:
+        window.getActiveRestaurantId?.() ||
+        getManagerActiveRestaurantId() ||
+        getOwnRestaurantId(appState.profile) ||
+        null,
     });
   }
-  const resolvedBackTo = roleNow === "waiter"
-    ? "screenPremiumApp"
-    : (backTo || "screenManagerBoard");
+  const resolvedBackTo = backTo || "screenPremiumApp";
 
   // ✅ New iframe generation
   window.__BC_IFRAME_EPOCH__ = Date.now();
@@ -13468,7 +15130,7 @@ function mountPremiumGameIframe({
     epoch,
     bustCache: true,
     v2Harness: useV2Harness,
-    v2EncounterLimit: useV2Harness ? 10 : null,
+    v2EncounterLimit: null,
   });
   iframe.style.width = "100%";
   iframe.style.height = "78vh";
@@ -15539,6 +17201,22 @@ async function loadHistoryWaiters() {
     null;
   const currentProfile = appState?.profile || {};
   const currentRole = String(normalizeMembershipRole(currentProfile) || currentProfile?.role || "").toLowerCase();
+  const canInspectTeamHistory =
+    currentRole === "single_manager" ||
+    currentRole === "group_manager" ||
+    currentRole === "enterpriser";
+  const pickerLabel = document.getElementById("mbHistoryUserPicker") || select.closest("label");
+  if (pickerLabel) {
+    pickerLabel.classList.toggle("hidden", !canInspectTeamHistory);
+    pickerLabel.style.display = canInspectTeamHistory ? "flex" : "none";
+  }
+  if (!canInspectTeamHistory) {
+    select.classList.add("hidden");
+    select.style.display = "none";
+  } else {
+    select.classList.remove("hidden");
+    select.style.display = "";
+  }
 
   const [profilesRes, snapshotsRes] = await Promise.all([
     supabase
@@ -15625,8 +17303,21 @@ async function loadHistoryWaiters() {
 }
 
 async function loadPerformanceHistory(userId) {
-  const { restaurantId } = getManagerBoardFilter();
+  const filter = getManagerBoardFilter();
+  const restaurantId =
+    filter?.restaurantId ||
+    getManagerActiveRestaurantId?.() ||
+    appState?.activeRestaurantId ||
+    appState?.profile?.restaurant_id ||
+    appState?.restaurant?.id ||
+    null;
   renderPerformanceHistorySummaryStrip(userId);
+
+  if (!restaurantId || !userId) {
+    drawPerformanceHistoryChart([]);
+    renderManagerEncounterSummaryList(userId || "", []);
+    return;
+  }
 
   const [snapshotsRes, encountersRes] = await Promise.all([
     supabase
@@ -15662,175 +17353,6 @@ async function loadPerformanceHistory(userId) {
 
   drawPerformanceHistoryChart(snapshotData || []);
   renderManagerEncounterSummaryList(userId, encounterData || [], encounterNameMap);
-}
-
-function renderManagerEncounterSummaryList(userId, rows, nameMap = new Map()) {
-  const host = document.getElementById("managerEncounterSummaryHost");
-  if (!host) return;
-
-  host.innerHTML = "";
-
-  const title = document.createElement("h4");
-  title.innerText = "Encounter summaries by waiter";
-  host.appendChild(title);
-
-  if (!Array.isArray(rows) || !rows.length) {
-    const empty = document.createElement("div");
-    empty.className = "small-text";
-    empty.innerText = "No recent encounter summaries.";
-    host.appendChild(empty);
-    return;
-  }
-
-  const normalizedRows = rows
-    .map((row) => normalizeEncounterSummaryRow(row))
-    .filter((summary) => !userId || String(summary.userId || "") === String(userId));
-  const hasAnyReactionTelemetry = normalizedRows.some((summary) =>
-    !!summary.reflection ||
-    !!summary.reactionSummary ||
-    !!summary.aiPerception ||
-    Array.isArray(summary.stepReactionTrail) && summary.stepReactionTrail.length > 0 ||
-    Array.isArray(summary.stepSpine) && summary.stepSpine.length > 0 ||
-    Array.isArray(summary.chosenPath) && summary.chosenPath.length > 0 ||
-    Array.isArray(summary.bestPath) && summary.bestPath.length > 0
-  );
-
-  if (!hasAnyReactionTelemetry) {
-    const note = document.createElement("div");
-    note.className = "small-text";
-    note.style.marginTop = "6px";
-    note.style.opacity = ".82";
-    note.innerText = "Recent encounters exist, but they were logged before reaction telemetry was included in the payload.";
-    host.appendChild(note);
-  }
-
-  const listView = document.createElement("div");
-  listView.className = "manager-encounter-summary-list";
-  host.appendChild(listView);
-
-  const detailWindow = document.createElement("div");
-  detailWindow.className = "card manager-encounter-detail-window hidden";
-  host.appendChild(detailWindow);
-
-  const groupedRows = normalizedRows.reduce((acc, summary) => {
-    const encounterUserId = String(summary.userId || "").trim() || "__unknown__";
-    if (!acc.has(encounterUserId)) acc.set(encounterUserId, []);
-    acc.get(encounterUserId).push(summary);
-    return acc;
-  }, new Map());
-
-  const panels = Array.from(groupedRows.entries())
-    .map(([encounterUserId, summaries]) => {
-      const latestOccurredAt = Math.max(
-        ...summaries.map((summary) => new Date(summary.occurredAt || 0).getTime() || 0),
-        0
-      );
-      const displayName =
-        nameMap.get(encounterUserId) ||
-        (encounterUserId === "__unknown__" ? "Unknown waiter" : encounterUserId);
-      return {
-        userId: encounterUserId,
-        displayName,
-        summaries: summaries.slice().sort((a, b) =>
-          new Date(b.occurredAt || 0).getTime() - new Date(a.occurredAt || 0).getTime()
-        ),
-        latestOccurredAt,
-      };
-    })
-    .sort((a, b) => {
-      if (String(a.userId) === String(userId || "")) return -1;
-      if (String(b.userId) === String(userId || "")) return 1;
-      if (b.latestOccurredAt !== a.latestOccurredAt) return b.latestOccurredAt - a.latestOccurredAt;
-      return String(a.displayName).localeCompare(String(b.displayName));
-    });
-
-  function buildEncounterSummaryItem(summary) {
-    const summaryCard = document.createElement("div");
-    summaryCard.className = "manager-encounter-summary-item";
-
-    const summaryBtn = document.createElement("button");
-    summaryBtn.type = "button";
-    summaryBtn.className = "small-btn";
-    summaryBtn.innerText =
-      `${new Date(summary.occurredAt || Date.now()).toLocaleString()} • ` +
-      `Grade ${summary.performanceGrade || "—"}`;
-
-    const details = document.createElement("div");
-    details.className = "history-details is-collapsed";
-
-    details.innerText =
-      "AI perception: " + (summary.aiPerception || "—") + "\n" +
-      "Bottle served: " + (summary.bottleServed ? "YES" : "NO") + "\n" +
-      "Chosen path: " + (summary.chosenPathExposition || ((summary.chosenPath || []).join(" -> ") || "—")) + "\n" +
-      "Best path: " + (summary.bestPathExposition || ((summary.bestPath || []).join(" -> ") || "—"));
-
-    summaryCard.appendChild(summaryBtn);
-    summaryCard.appendChild(details);
-
-    summaryBtn.addEventListener("click", () => {
-      const isHidden = details.classList.contains("is-collapsed");
-      details.classList.toggle("is-collapsed", !isHidden);
-      summaryBtn.innerText = isHidden
-        ? `Hide • ${new Date(summary.occurredAt || Date.now()).toLocaleString()}`
-        : `${new Date(summary.occurredAt || Date.now()).toLocaleString()} • Grade ${summary.performanceGrade || "—"}`;
-    });
-
-    return summaryCard;
-  }
-
-  function openWaiterWindow(panel) {
-    listView.classList.add("hidden");
-    detailWindow.classList.remove("hidden");
-
-    detailWindow.innerHTML = `
-      <div class="manager-encounter-detail-header">
-        <div>
-          <div class="manager-encounter-detail-title">${escapeHtml(panel.displayName)}</div>
-          <div class="manager-encounter-detail-meta">
-            ${panel.summaries.length} encounter${panel.summaries.length === 1 ? "" : "s"} •
-            Latest ${escapeHtml(new Date(panel.latestOccurredAt || Date.now()).toLocaleString())}
-          </div>
-        </div>
-        <button type="button" class="small-btn manager-encounter-detail-close">Back</button>
-      </div>
-      <div class="manager-encounter-detail-list"></div>
-    `;
-
-    const closeBtn = detailWindow.querySelector(".manager-encounter-detail-close");
-    const detailList = detailWindow.querySelector(".manager-encounter-detail-list");
-
-    panel.summaries.forEach((summary) => {
-      detailList.appendChild(buildEncounterSummaryItem(summary));
-    });
-
-    closeBtn?.addEventListener("click", () => {
-      detailWindow.classList.add("hidden");
-      detailWindow.innerHTML = "";
-      listView.classList.remove("hidden");
-    });
-  }
-
-  panels.forEach((panel) => {
-    const card = document.createElement("div");
-    card.className = "card manager-encounter-summary-card";
-
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "manager-encounter-user-btn";
-    btn.innerHTML = `
-      <span class="manager-encounter-user-title">${escapeHtml(panel.displayName)}</span>
-      <span class="manager-encounter-user-meta">
-        ${panel.summaries.length} encounter${panel.summaries.length === 1 ? "" : "s"} •
-        Latest ${escapeHtml(new Date(panel.latestOccurredAt || Date.now()).toLocaleString())}
-      </span>
-    `;
-    card.appendChild(btn);
-    listView.appendChild(card);
-
-    btn.addEventListener("click", () => {
-      openWaiterWindow(panel);
-    });
-  });
 }
 
 function renderPerformanceLegend(items = []) {
@@ -17794,6 +19316,64 @@ function renderProfileScreen() {
   }
 
   void renderProfilePerformanceCards();
+
+  const role = String(normalizeMembershipRole(profile) || profile?.role || "").toLowerCase();
+  const canSelfReset = ["waiter", "single_manager", "group_manager", "enterpriser"].includes(role);
+  const resetCard = document.getElementById("profileResetCard");
+  const resetMsg = document.getElementById("profileResetMsg");
+  let resetCardBtn = document.getElementById("btnResetOwnProgressionCard");
+  let resetTopBtn = document.getElementById("btnResetOwnProgression");
+
+  if (resetCard && !resetCardBtn) {
+    resetCardBtn = document.createElement("button");
+    resetCardBtn.id = "btnResetOwnProgressionCard";
+    resetCardBtn.className = "btn-danger";
+    resetCardBtn.type = "button";
+    resetCardBtn.style.marginTop = "10px";
+    resetCardBtn.textContent = "Reset Progression";
+    resetCard.appendChild(resetCardBtn);
+  }
+
+  if (resetCard) {
+    resetCard.classList.toggle("hidden", !canSelfReset);
+    resetCard.style.display = canSelfReset ? "" : "none";
+  }
+
+  const resetBtns = [resetTopBtn, resetCardBtn].filter(Boolean);
+  resetBtns.forEach((btn) => {
+    btn.classList.toggle("hidden", !canSelfReset);
+    btn.style.display = canSelfReset ? "" : "none";
+    btn.disabled = false;
+    btn.style.pointerEvents = "auto";
+    if (btn.__bcBound) return;
+    btn.__bcBound = true;
+    btn.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const label = "Reset Progression";
+      if (!window.confirm("Reset your progression for this restaurant?\n\nSkills, readiness, encounter summaries, and progression state will be cleared.")) {
+        return;
+      }
+      resetBtns.forEach((b) => { b.disabled = true; });
+      btn.textContent = "Resetting…";
+      if (resetMsg) resetMsg.textContent = "Clearing progression…";
+      try {
+        await hardResetOwnProgression("profile_button");
+        btn.textContent = "Reset done";
+        if (resetMsg) resetMsg.textContent = "Progression reset for this restaurant.";
+        window.setTimeout(() => {
+          btn.textContent = label;
+        }, 1600);
+      } catch (error) {
+        console.error("[BC] own progression reset failed", error);
+        if (resetMsg) resetMsg.textContent = error?.message || "Failed to reset progression.";
+        alert(error?.message || "Failed to reset progression.");
+        btn.textContent = label;
+      } finally {
+        resetBtns.forEach((b) => { b.disabled = false; });
+      }
+    });
+  });
 }
 
 function formatOrdinalRank(n) {
@@ -17808,12 +19388,162 @@ function formatOrdinalRank(n) {
   return `${num}th`;
 }
 
+const V2_BOTTLE_REWARD_CATALOG = Object.freeze({
+  starter_bottle: { name: "Starter Bottle", tier: 1 },
+  bronze_bottle: { name: "Bronze Bottle", tier: 1 },
+  tier_2_unlock_bottle: { name: "Tier 2 Unlock Bottle", tier: 1 },
+  tier_1_mastery_bottle: { name: "Tier 1 Mastery Bottle", tier: 1 },
+  silver_bottle: { name: "Silver Bottle", tier: 2 },
+  tier_3_unlock_bottle: { name: "Tier 3 Unlock Bottle", tier: 2 },
+  pairing_bottle: { name: "Pairing Bottle", tier: 2 },
+  tier_2_mastery_bottle: { name: "Tier 2 Mastery Bottle", tier: 2 },
+  gold_bottle: { name: "Gold Bottle", tier: 3 },
+  tier_4_unlock_bottle: { name: "Tier 4 Unlock Bottle", tier: 3 },
+  cellar_bottle: { name: "Cellar Bottle", tier: 3 },
+  tier_3_mastery_bottle: { name: "Tier 3 Mastery Bottle", tier: 3 },
+  reserve_bottle: { name: "Reserve Bottle", tier: 4 },
+  private_dining_bottle: { name: "Private Dining Bottle", tier: 4 },
+  tier_5_unlock_bottle: { name: "Tier 5 Unlock Bottle", tier: 4 },
+  tier_4_mastery_bottle: { name: "Tier 4 Mastery Bottle", tier: 4 },
+  grand_reserve_bottle: { name: "Grand Reserve Bottle", tier: 5 },
+  chaos_service_bottle: { name: "Chaos Service Bottle", tier: 5 },
+  premium_floor_bottle: { name: "Premium Floor Bottle", tier: 5 },
+  master_bottle: { name: "Master Bottle", tier: 5 },
+});
+
+function normalizeCellarRewardEntry(reward = {}) {
+  const id = String(reward?.id || "").trim();
+  if (!id) return null;
+  const catalog = V2_BOTTLE_REWARD_CATALOG[id] || {};
+  return {
+    id,
+    name: String(reward?.name || catalog.name || id),
+    tier: Number(reward?.tier || catalog.tier || 1),
+    unlockAP: Number(reward?.unlockAP || 0),
+    claimedAt: reward?.claimedAt || null,
+  };
+}
+
+function extractCellarCollectionFromRewardState(rewardState = null) {
+  const rewards = Array.isArray(rewardState?.rewards) ? rewardState.rewards : [];
+  return rewards
+    .filter((reward) => !!reward?.claimed)
+    .map((reward) => normalizeCellarRewardEntry(reward))
+    .filter(Boolean)
+    .sort((a, b) => Number(b.claimedAt || 0) - Number(a.claimedAt || 0));
+}
+
+function extractCellarCollectionFromCanonical(canonicalState = null) {
+  const bottleRewards =
+    canonicalState?.v2?.bottleRewards ||
+    canonicalState?.bottleRewards ||
+    null;
+  return extractCellarCollectionFromRewardState(bottleRewards);
+}
+
+function loadLocalCellarCollection() {
+  try {
+    const raw = localStorage.getItem("BC_V2_BOTTLE_REWARDS_V1");
+    if (!raw) return [];
+    return extractCellarCollectionFromRewardState(JSON.parse(raw));
+  } catch {
+    return [];
+  }
+}
+
+function mergeCellarCollections(...collections) {
+  const byId = new Map();
+  for (const collection of collections) {
+    for (const entry of collection || []) {
+      if (!entry?.id) continue;
+      const previous = byId.get(entry.id);
+      if (!previous || Number(entry.claimedAt || 0) >= Number(previous.claimedAt || 0)) {
+        byId.set(entry.id, entry);
+      }
+    }
+  }
+  return Array.from(byId.values()).sort((a, b) => Number(b.claimedAt || 0) - Number(a.claimedAt || 0));
+}
+
+function formatCellarClaimDate(claimedAt) {
+  const ms = Number(claimedAt || 0);
+  if (!ms) return "Opened";
+  try {
+    return new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  } catch {
+    return "Opened";
+  }
+}
+
+async function loadProfileCellarCollection() {
+  const profile = appState?.profile || {};
+  const userId = String(profile?.user_id || profile?.userId || appState?.session?.user?.id || "").trim();
+  const restaurantId = String(profile?.restaurant_id || appState?.activeRestaurantId || appState?.restaurant?.id || "").trim();
+  const localCollection = loadLocalCellarCollection();
+
+  if (!userId || !restaurantId) return localCollection;
+
+  try {
+    const progressionRow = await window.__BC_GET_PROGRESSION_SNAPSHOT__?.({ targetUserId: userId, restaurantId });
+    const canonicalState = progressionRow?.canonical_state && typeof progressionRow.canonical_state === "object"
+      ? progressionRow.canonical_state
+      : null;
+    const canonicalCollection = extractCellarCollectionFromCanonical(canonicalState);
+    return mergeCellarCollections(canonicalCollection, localCollection);
+  } catch (error) {
+    console.warn("[PROFILE] cellar collection load failed", error);
+    return localCollection;
+  }
+}
+
+function renderProfileCellarCollection(bottles = []) {
+  const root = document.getElementById("profileCellarCollectionCard");
+  if (!root) return;
+
+  if (!bottles.length) {
+    root.innerHTML = `
+      <div class="card" style="display:flex; flex-direction:column; gap:8px;">
+        <div style="font-weight:600;">Cellar Collection</div>
+        <div class="small-text" style="opacity:.78;">
+          Opened reward bottles will appear here after you claim them in training.
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  root.innerHTML = `
+    <div class="card" style="display:flex; flex-direction:column; gap:10px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+        <div style="font-weight:600;">Cellar Collection</div>
+        <span class="badge">${bottles.length} opened</span>
+      </div>
+      <div class="small-text" style="opacity:.78;">
+        Reward bottles you have opened stay in your cellar and reflect tier access earned through Authority Points.
+      </div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px;">
+        ${bottles.map((bottle) => `
+          <div class="card" style="padding:10px; border:1px solid rgba(214,166,56,0.22); background:rgba(214,166,56,0.08);">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+              <strong>${escapeHtml(bottle.name)}</strong>
+              <span class="badge">Tier ${escapeHtml(String(bottle.tier || 1))}</span>
+            </div>
+            <div class="small-text" style="margin-top:6px; opacity:.78;">
+              ${escapeHtml(formatCellarClaimDate(bottle.claimedAt))}${bottle.unlockAP ? ` · ${formatMetricNumber(bottle.unlockAP, 0)} AP unlock` : ""}
+            </div>
+          </div>
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+
 function getProfileBadgeDefinitions(user = {}, totalUsers = 0) {
   const rank = Number(user?.rank || 0);
   const percentile = Number(user?.percentile || 0);
   const readiness = Number(user?.readiness || 0);
   const challengeReadiness = Number(user?.challengeReadiness || 0);
-  const totalPoints = Number(user?.totalPoints || 0);
+  const authorityPoints = Number(user?.authorityPoints ?? 0);
   const drillPassRate = Number(user?.drillPassRate || 0);
   const challengeSuccessRate = Number(user?.challengeSuccessRate || 0);
   const premiumSuccessRate = Number(user?.premiumSuccessRate || 0);
@@ -17835,10 +19565,10 @@ function getProfileBadgeDefinitions(user = {}, totalUsers = 0) {
       detail: rank ? `Holding ${formatOrdinalRank(rank)} place.` : "No rank yet.",
     },
     {
-      title: "Hundred Point Club",
-      earned: totalPoints >= 100,
+      title: "Century Authority",
+      earned: authorityPoints >= 100,
       tone: "blue",
-      detail: `${formatMetricNumber(totalPoints, 1)} pts earned.`,
+      detail: `${formatMetricNumber(authorityPoints, 0)} Authority Points earned.`,
     },
     {
       title: "Challenge Ready",
@@ -17924,9 +19654,9 @@ function renderProfileStandingCard(user = null, model = null) {
           <div class="small-text" style="opacity:.72; margin-top:4px;">based on current restaurant peers</div>
         </div>
         <div class="card" style="padding:10px;">
-          <div class="small-text">Points</div>
-          <strong>${escapeHtml(formatMetricNumber(user.totalPoints, 1))}</strong>
-          <div class="small-text" style="opacity:.72; margin-top:4px;">Tier ${escapeHtml(String(user.servedTier || user.eligibilityTier || 1))}</div>
+          <div class="small-text">Authority Points</div>
+          <strong>${escapeHtml(formatMetricNumber(user.authorityPoints ?? 0, 0))}</strong>
+          <div class="small-text" style="opacity:.72; margin-top:4px;">Tier ${escapeHtml(String(user.servedTier || user.eligibilityTier || 1))} access</div>
         </div>
         <div class="card" style="padding:10px;">
           <div class="small-text">Readiness</div>
@@ -17934,6 +19664,7 @@ function renderProfileStandingCard(user = null, model = null) {
           <div class="small-text" style="opacity:.72; margin-top:4px;">${escapeHtml(describeReadiness(user.readiness, user.readinessLabel))}</div>
         </div>
       </div>
+      ${renderPlayerTeamStatsSectionMarkup(user?.playerStats, "Team performance stats")}
     </div>
   `;
 }
@@ -17947,7 +19678,7 @@ async function renderProfileSkillDashboard() {
       <div style="font-weight:600;">Your Personal Skills</div>
 
       <div class="small-text" id="profileSkillSummary" style="margin-bottom:8px; opacity:.85;">
-        Loading skill summary…
+        Loading long-term skill bank…
       </div>
 
       <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px 12px; margin-bottom:10px;">
@@ -18117,10 +19848,9 @@ async function buildSelfProfilePerformanceUser() {
       .maybeSingle(),
     supabase
       .from("bc_encounter_resolutions_v2")
-      .select("occurred_at, performance_grade, chain_signal, chain_score, is_green, is_red, tier")
+      .select("occurred_at, performance_grade, chain_signal, chain_score, is_green, is_red, tier, mode")
       .eq("user_id", userId)
       .eq("restaurant_id", restaurantId)
-      .neq("mode", "demo")
       .gte("occurred_at", sinceIso)
       .order("occurred_at", { ascending: false })
       .limit(200),
@@ -18136,7 +19866,8 @@ async function buildSelfProfilePerformanceUser() {
   ]);
 
   const readinessRow = readinessRes?.data || {};
-  const encounterRows = Array.isArray(encountersRes?.data) ? encountersRes.data : [];
+  const encounterRows = (Array.isArray(encountersRes?.data) ? encountersRes.data : [])
+    .filter((row) => String(row?.mode || "").toLowerCase() !== "demo");
   const messageRows = Array.isArray(messagesRes?.data) ? messagesRes.data : [];
   const canonicalState = progressionRow?.canonical_state && typeof progressionRow.canonical_state === "object"
     ? progressionRow.canonical_state
@@ -18148,8 +19879,22 @@ async function buildSelfProfilePerformanceUser() {
     ? canonicalState.authority
     : {};
   const totalPoints = Math.max(0, Number(canonicalEconomy?.points || 0));
+  const authorityPoints = firstFinite(
+    canonicalEconomy?.authorityPoints,
+    canonicalEconomy?.ap,
+    canonicalAuthority?.authorityPoints,
+    canonicalAuthority?.totalAP,
+    canonicalState?.v2?.authority?.totalAP,
+    canonicalState?.v2?.bottleRewards?.totalAP,
+    0
+  ) ?? 0;
   const servedTier = Math.max(1, Math.min(3, Math.round(
-    firstFinite(canonicalAuthority?.tierToServe, canonicalEconomy?.tier, 1) || 1
+    firstFinite(
+      canonicalAuthority?.tierToServe,
+      canonicalAuthority?.apTierUnlocked,
+      canonicalEconomy?.tier,
+      1
+    ) || 1
   )));
 
   const drillRows = messageRows.filter((row) => String(row?.type || "") === "drill_completed");
@@ -18161,11 +19906,8 @@ async function buildSelfProfilePerformanceUser() {
   const challengeCompleted = messageRows.filter((row) => String(row?.type || "") === "timed_challenge_completed");
   const challengeExpired = messageRows.filter((row) => String(row?.type || "") === "timed_challenge_expired");
   const challengeRows = challengeCompleted.length + challengeExpired.length;
-  const encounterPasses = encounterRows.filter((row) => {
-    const grade = String(row?.performance_grade || "").toUpperCase();
-    return grade === "A" || grade === "B" || String(row?.chain_signal || "").toLowerCase() === "green" || !!row?.is_green;
-  }).length;
-  const encounterMastery = encounterRows.filter((row) => String(row?.performance_grade || "").toUpperCase() === "A").length;
+  const encounterPasses = encounterRows.filter((row) => isEncounterPassed(row)).length;
+  const encounterMastery = encounterRows.filter((row) => isEncounterMastery(row)).length;
   const premiumSuccesses = challengeCompleted.filter((row) => !!row?.payload?.premiumSuccess).length;
 
   const drillPassRate = drillRows.length ? drillPasses / drillRows.length : 0;
@@ -18174,23 +19916,23 @@ async function buildSelfProfilePerformanceUser() {
   const premiumSuccessRate = challengeCompleted.length ? premiumSuccesses / challengeCompleted.length : 0;
   const masteryRate = encounterRows.length ? encounterMastery / encounterRows.length : 0;
 
-  const readinessBase = firstFinite(readinessRow?.readiness_score, readinessRow?.readiness_pct);
-  const readiness = Math.max(0, Math.min(1, firstFinite(
-    readinessBase != null ? (readinessBase > 1 ? readinessBase / 100 : readinessBase) : null,
+  const { readiness, readinessLabel } = connectReadinessAndMastery({
+    readinessRow,
     masteryRate,
-    totalPoints >= 10 ? 0.8 : totalPoints >= 5 ? 0.62 : 0.4
-  ) || 0));
-  const readinessLabel = firstNonEmpty(readinessRow?.readiness, readiness >= 0.8 ? "STABLE" : readiness >= 0.62 ? "GROWING" : "FRAGILE");
+    encounterPassRate,
+  });
   const challengeReadiness = Math.max(
     0,
     Math.min(1, (readiness * 0.45) + (encounterPassRate * 0.35) + (challengeSuccessRate * 0.20))
   );
+  const wineStreakInfo = computeWineStreakFromEncounters(encounterRows);
   const extremes = getSkillExtremes(skillShape);
 
   return {
     userId,
     displayName: String(profile?.display_name || profile?.displayName || appState?.session?.user?.email || "You"),
     totalPoints,
+    authorityPoints,
     drillPassRate,
     drillCompletedCount: drillRows.length,
     drillPasses,
@@ -18202,6 +19944,8 @@ async function buildSelfProfilePerformanceUser() {
     challengeCount: challengeRows,
     premiumSuccessRate,
     masteryRate,
+    wineStreak: wineStreakInfo.current,
+    wineStreakBest: wineStreakInfo.best,
     lastActiveAt: latestTimestamp(progressionRow?.updated_at, encounterRows[0]?.occurred_at, messageRows[0]?.created_at),
     eligibilityTier: servedTier,
     readiness,
@@ -18213,13 +19957,19 @@ async function buildSelfProfilePerformanceUser() {
     strongestSkill: extremes.strongestSkill,
     weakestSkill: extremes.weakestSkill,
     skillShape,
+    playerStats: buildPlayerTeamStats({
+      encounters: encounterRows,
+      snapshots: [],
+      canonicalState,
+    }),
   };
 }
 
 async function renderProfilePerformanceCards() {
   const rootStanding = document.getElementById("profileStandingCard");
   const rootBadges = document.getElementById("profileBadgeShelf");
-  if (!rootStanding && !rootBadges) return;
+  const rootCellar = document.getElementById("profileCellarCollectionCard");
+  if (!rootStanding && !rootBadges && !rootCellar) return;
 
   try {
     const profile = appState?.profile || {};
@@ -18240,6 +19990,8 @@ async function renderProfilePerformanceCards() {
 
     renderProfileStandingCard(user, model);
     renderProfileBadgeShelf(user, model);
+    const cellar = await loadProfileCellarCollection();
+    renderProfileCellarCollection(cellar);
   } catch (error) {
     console.warn("[PROFILE] performance card render failed", error);
     if (rootStanding) {
@@ -18251,6 +20003,7 @@ async function renderProfilePerformanceCards() {
       `;
     }
     if (rootBadges) rootBadges.innerHTML = "";
+    if (rootCellar) renderProfileCellarCollection([]);
   }
 }
 
@@ -20678,14 +22431,30 @@ async function loadLeaderboard() {
   renderLeaderboard(list);
 }
 
-function renderWeeklyTrainingReport(rows) {
-  const el = document.getElementById("mbWeeklyReport");
-  if (!el) return;
+function buildWeeklyTrainingReportContext(rows = [], model = null, weeklyEncounters = []) {
+  const users = Array.isArray(model?.users) ? model.users : [];
+  const sevenDaysAgoMs = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const activeUsers = users.filter((user) => {
+    const lastActiveMs = Date.parse(String(user?.lastActiveAt || ""));
+    return Number.isFinite(lastActiveMs) && lastActiveMs >= sevenDaysAgoMs;
+  });
+  const reportUsers = activeUsers.length ? activeUsers : users;
 
-  if (!rows.length) {
-    el.innerHTML = `<div class="small-text">No training data this week.</div>`;
-    return;
-  }
+  const apLeader = [...reportUsers].sort((a, b) =>
+    Number(b?.authorityPoints || 0) - Number(a?.authorityPoints || 0)
+  )[0] || null;
+
+  const readinessLeader = [...reportUsers].sort((a, b) =>
+    Number(b?.readiness || 0) - Number(a?.readiness || 0)
+  )[0] || null;
+
+  const weeklyEncounterRows = (weeklyEncounters || []).filter((row) =>
+    String(row?.mode || "").toLowerCase() !== "demo"
+  );
+  const weeklyPasses = weeklyEncounterRows.filter((row) => isEncounterPassed(row)).length;
+  const teamEncounterPassRate = weeklyEncounterRows.length
+    ? weeklyPasses / weeklyEncounterRows.length
+    : null;
 
   const waiterMap = {};
   const skillGrowth = {
@@ -20729,34 +22498,92 @@ function renderWeeklyTrainingReport(rows) {
     }))
     .sort((a, b) => b.avg - a.avg);
 
-  const topWaiter = waiters[0]?.name || "—";
+  const topSkillWaiter = waiters[0]?.name || "—";
 
   const skillAvg = Object.entries(skillGrowth)
     .map(([k, v]) => ({
       skill: prettySkillLabel(k),
-      avg: v / rows.length
+      avg: rows.length ? v / rows.length : 0
     }))
     .sort((a, b) => a.avg - b.avg);
 
   const recommendedFocus = skillAvg[0]?.skill || "—";
+  const teamReadiness = reportUsers.length
+    ? reportUsers.reduce((sum, user) => sum + Number(user?.readiness || 0), 0) / reportUsers.length
+    : null;
+  const teamMastery = reportUsers.length
+    ? reportUsers.reduce((sum, user) => sum + Number(user?.masteryRate || 0), 0) / reportUsers.length
+    : null;
+
+  return {
+    apLeader,
+    readinessLeader,
+    topSkillWaiter,
+    recommendedFocus,
+    teamEncounterPassRate,
+    teamReadiness,
+    teamMastery,
+    reportsAnalyzed: rows.length,
+    weeklyEncounters: weeklyEncounterRows.length,
+    activePlayers: activeUsers.length || reportUsers.length,
+  };
+}
+
+function renderWeeklyTrainingReport(rows, context = null) {
+  const el = document.getElementById("mbWeeklyReport");
+  if (!el) return;
+
+  const report = context || buildWeeklyTrainingReportContext(rows);
+
+  if (!rows.length && !report.activePlayers) {
+    el.innerHTML = `<div class="small-text">No training data this week.</div>`;
+    return;
+  }
 
   el.innerHTML = `
     <div style="display:flex; flex-direction:column; gap:6px;">
 
       <div>
-        🏆 <b>Top waiter:</b> ${escapeHtml(topWaiter)}
+        🥇 <b>Authority leader:</b> ${escapeHtml(report.apLeader?.displayName || "—")}
+        ${report.apLeader ? ` (${formatMetricNumber(report.apLeader.authorityPoints, 0)} AP)` : ""}
       </div>
 
       <div>
-        📉 <b>Team focus area:</b> ${escapeHtml(recommendedFocus)}
+        📈 <b>Readiness leader:</b> ${escapeHtml(report.readinessLeader?.displayName || "—")}
+        ${report.readinessLeader ? ` (${formatPercent(report.readinessLeader.readiness)})` : ""}
       </div>
 
       <div>
-        📊 <b>Total reports analyzed:</b> ${rows.length}
+        🏆 <b>Top skill growth:</b> ${escapeHtml(report.topSkillWaiter)}
+      </div>
+
+      <div>
+        📉 <b>Team focus area:</b> ${escapeHtml(report.recommendedFocus)}
+      </div>
+
+      <div>
+        ✅ <b>Weekly encounter pass:</b> ${
+          report.teamEncounterPassRate != null
+            ? escapeHtml(formatPercent(report.teamEncounterPassRate))
+            : "—"
+        }
+        ${report.weeklyEncounters ? ` · ${report.weeklyEncounters} encounter${report.weeklyEncounters === 1 ? "" : "s"}` : ""}
+      </div>
+
+      <div>
+        📊 <b>Team readiness / mastery:</b> ${
+          report.teamReadiness != null ? escapeHtml(formatPercent(report.teamReadiness)) : "—"
+        } / ${
+          report.teamMastery != null ? escapeHtml(formatPercent(report.teamMastery)) : "—"
+        }
+      </div>
+
+      <div>
+        🧾 <b>Skill snapshots analyzed:</b> ${report.reportsAnalyzed}
       </div>
 
       <div class="small-text" style="opacity:.7;">
-        Recommendation: run focused drills on ${escapeHtml(recommendedFocus)} this week.
+        Recommendation: run focused drills on ${escapeHtml(report.recommendedFocus)} while pushing encounter pass rate this week.
       </div>
 
     </div>
@@ -20773,33 +22600,49 @@ async function loadWeeklyTrainingReport() {
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-  const { data, error } = await supabase
-    .from("bc_skill_snapshots_v1")
-    .select(`
-      user_id,
-      read_pct,
-      framing_pct,
-      delivery_pct,
-      recovery_pct,
-      closing_pct,
-      payload,
-      created_at
-    `)
-    .eq("restaurant_id", restaurantId)
-    .gte("created_at", sevenDaysAgo.toISOString());
+  const [snapshotsRes, encountersRes, model] = await Promise.all([
+    supabase
+      .from("bc_skill_snapshots_v1")
+      .select(`
+        user_id,
+        read_pct,
+        framing_pct,
+        delivery_pct,
+        recovery_pct,
+        closing_pct,
+        payload,
+        created_at
+      `)
+      .eq("restaurant_id", restaurantId)
+      .gte("created_at", sevenDaysAgo.toISOString()),
+    supabase
+      .from("bc_encounter_resolutions_v2")
+      .select("user_id, occurred_at, performance_grade, chain_signal, is_green, is_red, mode")
+      .eq("restaurant_id", restaurantId)
+      .gte("occurred_at", sevenDaysAgo.toISOString()),
+    getManagerPerformanceModel().catch((error) => {
+      console.warn("[WEEKLY REPORT] performance model unavailable", error);
+      return null;
+    }),
+  ]);
 
-  if (error) {
-    console.warn("[WEEKLY REPORT]", error);
+  if (snapshotsRes.error) {
+    console.warn("[WEEKLY REPORT]", snapshotsRes.error);
     return [];
   }
 
-  const rows = data || [];
-  const nameMap = await mapUserIdsToNames(rows.map((row) => row?.user_id).filter(Boolean));
+  const rows = snapshotsRes.data || [];
+  const weeklyEncounters = encountersRes.error ? [] : (encountersRes.data || []);
+  const nameMap = await mapUserIdsToNames([
+    ...rows.map((row) => row?.user_id).filter(Boolean),
+    ...weeklyEncounters.map((row) => row?.user_id).filter(Boolean),
+  ]);
   const namedRows = rows.map((row) => ({
     ...row,
     __displayName: nameMap.get(row?.user_id) || row?.user_id || null,
   }));
-  renderWeeklyTrainingReport(namedRows);
+  const reportContext = buildWeeklyTrainingReportContext(namedRows, model, weeklyEncounters);
+  renderWeeklyTrainingReport(namedRows, reportContext);
   return namedRows;
 }
 
@@ -22008,6 +23851,11 @@ function routeAuth() {
 
 function routeHomeShell(reason = "home_shell", message = "") {
   if (isGodotDemoLocked() || isV2DemoPlayActive() || readGodotSessionLock()) {
+    if (appMode === "premium" && !!appState?.session?.user) {
+      console.warn("[ROUTE] home shell redirected to premium cockpit during Godot play", reason);
+      routeCockpitHomepage(`home_shell_premium:${reason}`);
+      return;
+    }
     console.warn("[ROUTE] home shell blocked during active Godot/demo play", reason);
     appMode = "demo";
     showScreen("screenGameDemo");
@@ -22043,6 +23891,7 @@ function routeCockpitHomepage(reason = "cockpit_homepage") {
   console.log("[ROUTE] cockpit homepage", {
     reason,
     authed: !!appState?.session?.user,
+    appMode,
   });
 
   try { clearGodotDemoLock(`homepage:${reason}`); } catch {}
@@ -22056,6 +23905,37 @@ function routeCockpitHomepage(reason = "cockpit_homepage") {
   closePremiumTopbarMenu();
   clearMsgs();
 
+  const profile = appState?.profile || {};
+  const hasPremiumSession = !!appState?.session?.user && (
+    appMode === "premium" ||
+    !!profile?.restaurant_id ||
+    !!appState?.activeRestaurantId ||
+    !!getManagerActiveRestaurantId?.() ||
+    canAccessPremium(profile).ok
+  );
+
+  // Signed-in waiter / manager: premium Godot cockpit (same Begin hub as demo).
+  if (hasPremiumSession) {
+    leaveDemoHarnessForPremiumAuth(`routeCockpitHomepage.premium:${reason}`);
+    appMode = "premium";
+    document.documentElement.dataset.bcGodotDemo = "";
+    destroyDemoIframe(`user_exit:premium_homepage:${reason}`);
+    showScreen("screenPremiumApp");
+    setPremiumOverlayActive(true);
+
+    window.__BC_DEMO_IFRAME_LAST_SCREEN__ = "screenHome";
+    mountPremiumGameIframe({
+      mode: "premium",
+      initialScreen: "screenHome",
+      showBack: false,
+      backTo: "screenPremiumApp",
+      forceRemount: true,
+    });
+    try { renderAppChrome?.(); } catch {}
+    return;
+  }
+
+  // Anonymous / demo path
   appMode = "demo";
   persistV2DemoRequest();
   document.documentElement.dataset.bcV2Demo = "true";
@@ -22314,6 +24194,23 @@ async function loadHudSkillSnapshot() {
     };
   }
 
+  // Prefer long-term skill bank (grows/decays). Fall back to latest snapshot for older rows.
+  try {
+    const { data: progressionRow, error: progressionError } = await supabase
+      .from("bc_progression_state_v1")
+      .select("canonical_state, updated_at")
+      .eq("user_id", ctx.userId)
+      .eq("restaurant_id", ctx.restaurantId)
+      .maybeSingle();
+
+    if (!progressionError && progressionRow?.canonical_state) {
+      const bank = extractSkillShapeFromSkillBank(progressionRow.canonical_state);
+      if (bank && skillShapeHasSignal(bank)) return bank;
+    }
+  } catch (error) {
+    console.warn("[HUD] skill bank load failed", error);
+  }
+
   const { data, error } = await supabase
     .from("bc_skill_snapshots_v1")
     .select(`
@@ -22356,6 +24253,22 @@ async function loadProfileSkillShape() {
       closing: 0,
       speed: 0,
     };
+  }
+
+  try {
+    const { data: progressionRow, error: progressionError } = await supabase
+      .from("bc_progression_state_v1")
+      .select("canonical_state, updated_at")
+      .eq("user_id", ctx.userId)
+      .eq("restaurant_id", ctx.restaurantId)
+      .maybeSingle();
+
+    if (!progressionError && progressionRow?.canonical_state) {
+      const bank = extractSkillShapeFromSkillBank(progressionRow.canonical_state);
+      if (bank && skillShapeHasSignal(bank)) return bank;
+    }
+  } catch (error) {
+    console.warn("[PROFILE] skill bank load failed", error);
   }
 
   const { data, error } = await supabase
@@ -22792,6 +24705,8 @@ function renderHud() {
   joinRow?.classList.toggle("hidden", !caps.canReadInvites);
   listingManagerBlock?.classList.toggle("hidden", !showManagerRestaurantControls);
   listingJoinRow?.classList.toggle("hidden", !caps.canReadInvites);
+
+  applyMultiRestaurantSwitcherVisibility(profile);
 
   const toggle = document.getElementById("toggleRequireInvite");
   if (toggle && r) toggle.checked = !!r.require_invite;

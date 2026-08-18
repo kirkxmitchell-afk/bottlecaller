@@ -38,32 +38,36 @@ const PREPARATION_TIMES := {
 }
 
 const PATIENCE_STAGE_TIMES := {
-	&"waiting_first_greeting": 90.0,
-	&"waiting_follow_up": 90.0,
-	&"waiting_pos_order": 100.0,
-	&"waiting_aperitif": 90.0,
-	&"waiting_wine": 100.0,
-	&"waiting_mise": 100.0,
-	&"waiting_food": 120.0,
-	&"waiting_to_clear": 130.0,
-	&"waiting_for_bill_and_payment": 100.0,
-	&"waiting_for_bill_close": 90.0,
+	&"waiting_first_greeting": 110.0,
+	&"waiting_follow_up": 110.0,
+	&"waiting_pos_order": 120.0,
+	&"waiting_aperitif": 110.0,
+	&"waiting_wine": 125.0,
+	&"waiting_mise": 125.0,
+	&"waiting_food": 140.0,
+	&"waiting_to_clear": 150.0,
+	&"waiting_for_bill_and_payment": 125.0,
+	&"waiting_for_bill_close": 110.0,
 }
 
 const MOOD_RECOVERY := {
-	&"offer_wine": 12.0,
-	&"offer_food": 12.0,
+	&"offer_wine": 16.0,
+	&"offer_food": 16.0,
 	&"walk_away": 0.0,
-	&"lay_mise": 16.0,
-	&"serve_aperitif": 22.0,
-	&"serve_wine": 25.0,
-	&"serve_food": 25.0,
-	&"collect_dirty_plates": 18.0,
-	&"take_payment": 18.0,
+	&"lay_mise": 22.0,
+	&"serve_aperitif": 28.0,
+	&"serve_wine": 32.0,
+	&"serve_food": 32.0,
+	&"collect_dirty_plates": 24.0,
+	&"take_payment": 24.0,
 }
 
 const GREETING_MINIMUM_PERCENT = 85.0
 const SUITABLE_GREETING_BONUS = 10.0
+const MOOD_GREEN_MIN = 42.0
+const MOOD_YELLOW_MIN = 24.0
+const MOOD_ORANGE_MIN = 10.0
+const STAGE_CHANGE_FLOOR_PERCENT = 18.0
 
 @export_range(0.0, 10.0, 0.05)
 var action_time_multiplier = 1.0
@@ -211,8 +215,17 @@ func change_table_patience_stage(
 		return
 
 	var current_percent = float(table.get_patience_percent())
-	var updated_percent = clampf(current_percent + recovery_percent, 0.0, 100.0)
-	_configure_table_stage(table, stage_id, updated_percent)
+	var updated_percent = current_percent + recovery_percent
+	if recovery_percent > 0.0:
+		updated_percent = cap_recovered_patience(current_percent, updated_percent)
+	# A new wait always gets a little time. Empty meters were re-breaching
+	# on every stage change and stacking annoyance events.
+	updated_percent = maxf(updated_percent, STAGE_CHANGE_FLOOR_PERCENT)
+	_configure_table_stage(
+		table,
+		stage_id,
+		clampf(updated_percent, 0.0, 100.0)
+	)
 
 
 func apply_greeting_recovery(
@@ -224,16 +237,21 @@ func apply_greeting_recovery(
 	if table == null:
 		return
 
-	var updated_percent = maxf(
-		float(table.get_patience_percent()),
-		GREETING_MINIMUM_PERCENT
-	)
-	if suitable_greeting:
-		updated_percent += SUITABLE_GREETING_BONUS
+	var current_percent = float(table.get_patience_percent())
+	var updated_percent = current_percent
+	if get_mood_from_patience(current_percent) == &"green":
+		updated_percent = maxf(current_percent, GREETING_MINIMUM_PERCENT)
+		if suitable_greeting:
+			updated_percent += SUITABLE_GREETING_BONUS
+	elif suitable_greeting:
+		updated_percent = cap_recovered_patience(
+			current_percent,
+			current_percent + SUITABLE_GREETING_BONUS
+		)
 	_configure_table_stage(
 		table,
 		next_stage,
-		clampf(updated_percent, 0.0, 100.0)
+		clampf(maxf(updated_percent, STAGE_CHANGE_FLOOR_PERCENT), 0.0, 100.0)
 	)
 
 
@@ -244,11 +262,62 @@ func restore_table_patience(
 	if not MOOD_RECOVERY.has(recovery_id):
 		push_warning("Unknown patience recovery ID: " + str(recovery_id))
 		return
+	adjust_table_patience(table_id, float(MOOD_RECOVERY[recovery_id]))
+
+
+func adjust_table_patience(table_id: StringName, delta: float) -> void:
 	var table = _get_table(table_id)
 	if table == null:
 		return
-	table.restore_patience_percent(float(MOOD_RECOVERY[recovery_id]))
+	var current_percent = float(table.get_patience_percent())
+	var proposed_percent = current_percent + delta
+	if delta > 0.0:
+		proposed_percent = cap_recovered_patience(current_percent, proposed_percent)
+	if table.has_method("set_patience_from_percent"):
+		table.set_patience_from_percent(proposed_percent)
+	else:
+		table.restore_patience_percent(proposed_percent - current_percent)
 	_refresh_table_mood(table)
+
+
+func cap_recovered_patience(from_percent: float, proposed_percent: float) -> float:
+	# Catching up a late action cools one mood band, including yellow→green.
+	# It still cannot skip two bands in one recovery.
+	var proposed = clampf(proposed_percent, 0.0, 100.0)
+	if proposed <= from_percent:
+		return proposed
+	var from_mood = get_mood_from_patience(from_percent)
+	if from_mood == &"green":
+		return proposed
+	return minf(proposed, _top_of_mood_band(_one_band_better(from_mood)))
+
+
+func _one_band_better(mood: StringName) -> StringName:
+	match mood:
+		&"annoyed":
+			return &"red"
+		&"red":
+			return &"orange"
+		&"orange":
+			return &"yellow"
+		&"yellow":
+			return &"green"
+		_:
+			return &"green"
+
+
+func _top_of_mood_band(mood: StringName) -> float:
+	match mood:
+		&"green":
+			return 100.0
+		&"yellow":
+			return MOOD_GREEN_MIN - 0.5
+		&"orange":
+			return MOOD_YELLOW_MIN - 0.5
+		&"red":
+			return MOOD_ORANGE_MIN - 0.5
+		_:
+			return 0.0
 
 
 func set_table_patience_paused(
@@ -309,12 +378,11 @@ func get_stage_duration(
 
 func get_mood_from_patience(percent: float) -> StringName:
 	var clamped_percent = clampf(percent, 0.0, 100.0)
-	# Wider green/yellow so mood does not drop through the bands as fast.
-	if clamped_percent >= 45.0:
+	if clamped_percent >= MOOD_GREEN_MIN:
 		return &"green"
-	if clamped_percent >= 25.0:
+	if clamped_percent >= MOOD_YELLOW_MIN:
 		return &"yellow"
-	if clamped_percent >= 10.0:
+	if clamped_percent >= MOOD_ORANGE_MIN:
 		return &"orange"
 	if clamped_percent > 0.0:
 		return &"red"

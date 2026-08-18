@@ -143,7 +143,6 @@ export function evaluateOfferAccess(args: {
   profileTier?: number;
   hasFoodRecovery?: boolean;
 }): OfferAccessResult {
-  const guestType = String(args.guestType || "").trim().toLowerCase();
   const greeting = String(args.greeting || "").trim();
   const offer = String(args.offer || "").trim();
   const path = evaluateObjectPath(greeting, offer);
@@ -165,44 +164,15 @@ export function evaluateOfferAccess(args: {
         placesWineOrder: false,
       };
     }
-    if (guestType === "regular" || guestType === "tourist") {
-      return {
-        accepted: true,
-        reason:
-          guestType === "regular"
-            ? "regular_accepts_food_offer"
-            : "tourist_accepts_food_offer",
-        placesFoodOrder: true,
-        placesWineOrder: false,
-      };
-    }
-    const foodRecovered =
-      Number(args.profileTier || 0) >= 2 && !!args.hasFoodRecovery;
     return {
-      accepted: foodRecovered,
-      reason: foodRecovered ? "food_offer_recovered" : "guest_declines_food_offer",
-      placesFoodOrder: foodRecovered,
+      accepted: true,
+      reason: "guest_accepts_food_offer",
+      placesFoodOrder: true,
       placesWineOrder: false,
     };
   }
 
   if (offer === "offer_wine") {
-    if (!pathOk) {
-      return {
-        accepted: false,
-        reason: "wine_offer_path_blocked",
-        placesFoodOrder: false,
-        placesWineOrder: false,
-      };
-    }
-    if (guestType === "skeptic" && greeting === "greet_food") {
-      return {
-        accepted: false,
-        reason: "skeptic_declines_wine_after_food_greet",
-        placesFoodOrder: false,
-        placesWineOrder: false,
-      };
-    }
     return {
       accepted: true,
       reason: "guest_accepts_wine_offer",

@@ -148,7 +148,7 @@ export interface TableServiceScenario {
   review: GuestReviewProfile;
   wineCandidates: ScenarioWineCandidate[];
   variants: Record<string, WineEncounterVariant>;
-  /** Allow a second wine opportunity after decline / unfinished sale. */
+  /** Second wine is allowed only after a failed wine playthrough reopens food. */
   secondWineOpportunityAllowed: boolean;
 }
 

@@ -152,7 +152,7 @@ offset_left = 72.0
 offset_top = 71.0
 offset_right = 174.0
 offset_bottom = 94.0
-text = "TABLES   0 / 5"
+text = "TABLES   0 / 4"
 
 [node name="CoinsRequirementLabel" type="Label" parent="HUDRoot/TierGoalsHUD"]
 layout_mode = 0

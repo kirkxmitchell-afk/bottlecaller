@@ -651,7 +651,7 @@ func set_tier_goal_progress(
 	var tables_required = int(
 		progress.get(
 			"tables_required",
-			5
+			4
 		)
 	)
 
@@ -677,7 +677,7 @@ func set_tier_goal_progress(
 	var wines_required = int(
 		progress.get(
 			"wines_required",
-			5
+			4
 		)
 	)
 
@@ -703,7 +703,7 @@ func set_tier_goal_progress(
 	var goals_required = int(
 		progress.get(
 			"goals_required",
-			5
+			4
 		)
 	)
 
@@ -727,7 +727,7 @@ func set_tier_goal_progress(
 			+ str(ap_value)
 			+ " / "
 			+ str(ap_required)
-			+ "\nComplete all five goals to unlock Tier 2."
+			+ "\nComplete all four goals to unlock Tier 2."
 		)
 
 	if tier_tables_label != null:

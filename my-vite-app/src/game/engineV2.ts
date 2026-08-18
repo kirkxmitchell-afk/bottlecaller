@@ -30,8 +30,8 @@ import {
 import type { GuestEncounterTraits } from "./guestService/types";
 
 const DEFAULT_REWARDS = {
-  premiumSuccess: 30,
-  standardSuccess: 20,
+  premiumSuccess: 20,
+  standardSuccess: 15,
   weakSuccess: 10,
   neutralExit: 5,
   failure: -15,

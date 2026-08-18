@@ -6574,6 +6574,13 @@ html, body{ height:100%; }
     pointer-events: none;
   }
 
+  #encounterPanel[data-v2-layout="tier1"] #stepButtons .v2-action-shell,
+  #encounterPanel[data-v2-layout="tier1"] #stepButtons .btn,
+  #encounterPanel[data-v2-layout="tier1"] #stepButtons button,
+  #encounterPanel[data-v2-layout="tier1"] #stepButtons .v2-action-card{
+    pointer-events: auto !important;
+  }
+
   #encounterPanel[data-v2-layout="tier1"] .v2-play-shell{
     height: auto;
     min-height: 0;
@@ -6624,14 +6631,14 @@ html, body{ height:100%; }
     justify-content: space-between;
     gap: 4px;
     margin-bottom: 2px;
-    font-size: 6px;
+    font-size: 11px;
     letter-spacing: 0.04em;
     white-space: nowrap;
     overflow: hidden;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-encounter-title{
-    font-size: clamp(12px, 3.5vw, 16px);
+    font-size: clamp(16px, 4.5vw, 22px);
     line-height: 1;
     text-align: center;
     white-space: nowrap;
@@ -6642,7 +6649,7 @@ html, body{ height:100%; }
   #encounterPanel[data-v2-layout="tier1"] .v2-product-title{
     margin-top: 2px;
     color: #ffffff;
-    font-size: 6.4px;
+    font-size: 12px;
     line-height: 1;
     letter-spacing: 0.02em;
     text-align: center;
@@ -6684,12 +6691,12 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-mood-label{
-    font-size: 6px;
+    font-size: 10px;
     letter-spacing: 0.04em;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-mood-value{
-    font-size: 10px;
+    font-size: 13px;
     line-height: 1;
     white-space: nowrap;
     overflow: hidden;
@@ -6726,19 +6733,19 @@ html, body{ height:100%; }
   #encounterPanel[data-v2-layout="tier1"] .v2-scene-label,
   #encounterPanel[data-v2-layout="tier1"] .v2-state-label,
   #encounterPanel[data-v2-layout="tier1"] .v2-guidance-label{
-    font-size: 6.5px;
+    font-size: 11px;
     letter-spacing: 0.06em;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-scene-copy{
     margin-top: 3px;
-    font-size: 9px;
+    font-size: 13px;
     line-height: 1.18;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-scene-clue .v2-scene-copy{
     margin-top: 2px;
-    font-size: 8.6px;
+    font-size: 13px;
     line-height: 1.08;
   }
 
@@ -6764,7 +6771,7 @@ html, body{ height:100%; }
     max-width: min(74vw, 304px);
     padding: 4px 7px;
     border-radius: 10px;
-    font-size: 7.5px;
+    font-size: 12px;
     line-height: 1.12;
   }
 
@@ -6773,7 +6780,7 @@ html, body{ height:100%; }
     margin-left: 26px;
     padding: 4px 7px;
     border-radius: 999px;
-    font-size: 7.5px;
+    font-size: 12px;
     line-height: 1.05;
   }
 
@@ -6789,7 +6796,7 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-quote-card p{
-    font-size: 10px;
+    font-size: 13px;
     line-height: 1.16;
     color: #362316;
   }
@@ -6838,7 +6845,7 @@ html, body{ height:100%; }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-state-meta{
     margin-top: 1px;
-    font-size: 6.5px;
+    font-size: 10px;
     line-height: 1;
   }
 
@@ -6852,7 +6859,7 @@ html, body{ height:100%; }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-guidance-copy{
     margin-top: 2px;
-    font-size: 9px;
+    font-size: 13px;
     line-height: 1.18;
   }
 
@@ -6860,7 +6867,7 @@ html, body{ height:100%; }
     display: block;
     margin-top: 1px;
     color: rgba(255, 244, 215, 0.88);
-    font-size: 7.5px;
+    font-size: 12px;
     line-height: 1.14;
   }
 
@@ -6868,7 +6875,7 @@ html, body{ height:100%; }
     display: block;
     margin-top: 2px;
     color: #fff4d7;
-    font-size: 8px;
+    font-size: 12px;
     line-height: 1.14;
   }
 
@@ -6906,12 +6913,12 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-group-button{
-    height: 22px !important;
-    min-height: 22px !important;
-    max-height: 22px !important;
-    padding: 2px 5px !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    max-height: 36px !important;
+    padding: 4px 6px !important;
     border-radius: 8px !important;
-    font-size: 8.5px !important;
+    font-size: 12px !important;
     line-height: 1 !important;
     letter-spacing: 0.04em;
     display: grid !important;
@@ -6927,7 +6934,7 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-card{
-    min-height: 42px;
+    min-height: 48px;
     padding: 3px 5px !important;
     border-radius: 8px !important;
     background:
@@ -6951,7 +6958,7 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-title{
-    font-size: 8.1px;
+    font-size: 13px;
     line-height: 1.05;
     color: #ffffff !important;
     text-align: center;
@@ -6961,7 +6968,7 @@ html, body{ height:100%; }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-subtitle{
     margin-top: 1px;
-    font-size: 6.2px;
+    font-size: 11px;
     line-height: 1.08;
     color: #ffffff !important;
     text-transform: none;
@@ -6982,10 +6989,10 @@ html, body{ height:100%; }
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-shell .button-row .btn{
-    min-height: 26px;
-    padding: 3px 8px !important;
+    min-height: 44px;
+    padding: 8px 10px !important;
     border-radius: 9px !important;
-    font-size: 9px !important;
+    font-size: 14px !important;
     line-height: 1.1;
   }
 
@@ -7269,6 +7276,17 @@ html, body{ height:100%; }
     min-height: calc(100vw * 1.62) !important;
   }
 
+  @media (orientation: landscape){
+    #encounterPanel[data-v2-layout="tier1"] .v2-hero-frame,
+    #encounterPanel[data-v2-layout="tier1"] .v2-preview-screen,
+    #encounterPanel[data-v2-layout="tier1"] .v2-choose-screen,
+    #encounterPanel[data-v2-layout="tier1"] .v2-end-screen{
+      min-height: 0 !important;
+      height: 100dvh !important;
+      aspect-ratio: auto !important;
+    }
+  }
+
   #bcShell.is-encounter-only #bcStage{
     grid-area: stage !important;
   }
@@ -7289,6 +7307,13 @@ html, body{ height:100%; }
     padding: 0 6px !important;
     background: transparent !important;
     pointer-events: none !important;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] #stepButtons .v2-action-shell,
+  #encounterPanel[data-v2-layout="tier1"] #stepButtons .btn,
+  #encounterPanel[data-v2-layout="tier1"] #stepButtons button,
+  #encounterPanel[data-v2-layout="tier1"] #stepButtons .v2-action-card{
+    pointer-events: auto !important;
   }
 
   #encounterPanel[data-v2-layout="tier1"] #stepButtons[data-v2-terminal-state="final"]{
@@ -7337,7 +7362,7 @@ html, body{ height:100%; }
   #encounterPanel[data-v2-layout="tier1"] .v2-action-shell.is-demo-final .button-row button,
   #encounterPanel[data-v2-layout="tier1"] .v2-action-shell.is-demo-final .button-row .btn{
     width: 100% !important;
-    min-height: 34px !important;
+    min-height: 44px !important;
   }
 
   #bcShell.is-encounter-only #bcHudTop{
@@ -7389,7 +7414,9 @@ html, body{ height:100%; }
   pointer-events:none !important;
 }
 
-#encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-preview-actions{
+#encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] .v2-preview-actions,
+#encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] #stepButtons .btn,
+#encounterPanel[data-v2-layout="tier1"][data-v2-screen="preview"] #stepButtons button{
   pointer-events:auto !important;
 }
 
@@ -8057,30 +8084,44 @@ html[data-bc-godot-shift="wine_offer"] #screenPlay.screen.active{
   width: 100%;
   min-height: 44px;
 }
-/* Real mobile portrait only — not a narrow desktop window. */
+/* Real mobile: fill the stage. Portrait uses a turn-phone overlay, not CSS rotate. */
 html[data-bc-godot-mobile="1"] .godot-shift-stage{
   aspect-ratio:auto;
   max-height:none;
 }
-@media (orientation: portrait) and (pointer: coarse){
-  html[data-bc-godot-mobile="1"] .godot-shift-shell{
-    min-height:100dvh;
-  }
-  html[data-bc-godot-mobile="1"] .godot-shift-stage{
-    position:absolute;
-    top:50%;
-    left:50%;
-    width:100dvh;
-    height:100dvw;
-    transform:translate(-50%, -50%) rotate(90deg);
-    transform-origin:center center;
-  }
-  html[data-bc-godot-mobile="1"] .godot-shift-chrome{
-    position:absolute;
-    top:0;
-    left:0;
-    right:0;
-  }
+html[data-bc-godot-mobile="1"] .godot-shift-shell{
+  min-height:100dvh;
+}
+.godot-landscape-gate{
+  position:fixed;
+  inset:0;
+  z-index:40;
+  display:grid;
+  place-items:center;
+  padding:24px;
+  background:rgba(6,7,9,.94);
+  color:#f4f6f7;
+  text-align:center;
+}
+.godot-landscape-gate[hidden]{
+  display:none !important;
+}
+.godot-landscape-gate-card{
+  max-width:22rem;
+}
+.godot-landscape-gate-card p{
+  margin:0 0 16px;
+  font-size:18px;
+  line-height:1.35;
+}
+.godot-landscape-gate-card button{
+  min-height:44px;
+  padding:10px 18px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,.18);
+  background:rgba(255,255,255,.1);
+  color:#f4f6f7;
+  font-size:16px;
 }
 
 /* Desktop uses the same portrait, in-image encounter HUD as mobile. */
@@ -8204,7 +8245,7 @@ html[data-bc-godot-mobile="1"] .godot-shift-stage{
   #encounterPanel[data-v2-layout="tier1"] .v2-header-topline{
     margin-bottom:3px;
     gap:5px;
-    font-size:8px;
+    font-size:12px;
     line-height:1.1;
     letter-spacing:0;
   }
@@ -8229,7 +8270,7 @@ html[data-bc-godot-mobile="1"] .godot-shift-stage{
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-header-shift-label{
-    font-size:7px;
+    font-size:11px;
     letter-spacing:.12em;
   }
 
@@ -8239,7 +8280,7 @@ html[data-bc-godot-mobile="1"] .godot-shift-stage{
 
   #encounterPanel[data-v2-layout="tier1"] .v2-product-title{
     margin-top:3px;
-    font-size:8px;
+    font-size:12px;
     line-height:1.1;
     letter-spacing:0;
     white-space:nowrap;
@@ -8263,7 +8304,7 @@ html[data-bc-godot-mobile="1"] .godot-shift-stage{
   #encounterPanel[data-v2-layout="tier1"] .v2-state-label,
   #encounterPanel[data-v2-layout="tier1"] .v2-guidance-label,
   #encounterPanel[data-v2-layout="tier1"] .v2-mood-label{
-    font-size:8px;
+    font-size:11px;
     line-height:1.1;
     letter-spacing:0;
   }
@@ -8477,11 +8518,11 @@ html[data-bc-godot-mobile="1"] .godot-shift-stage{
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-group-button{
-    min-height:30px !important;
-    height:30px !important;
+    min-height:36px !important;
+    height:36px !important;
     padding:4px 6px !important;
     border-radius:8px !important;
-    font-size:11px !important;
+    font-size:12px !important;
     line-height:1 !important;
     letter-spacing:0;
   }
@@ -8499,7 +8540,7 @@ html[data-bc-godot-mobile="1"] .godot-shift-stage{
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-title{
-    font-size:11px;
+    font-size:13px;
     line-height:1.05;
     text-align:center;
     overflow-wrap:anywhere;
@@ -8507,7 +8548,7 @@ html[data-bc-godot-mobile="1"] .godot-shift-stage{
 
   #encounterPanel[data-v2-layout="tier1"] .v2-action-subtitle{
     margin-top:2px;
-    font-size:8px;
+    font-size:11px;
     line-height:1.08;
     text-align:center;
   }

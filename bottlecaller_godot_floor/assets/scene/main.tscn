@@ -64,7 +64,6 @@ outlines = Array[PackedVector2Array]([PackedVector2Array(417, 101, 699, 99, 687,
 [node name="Main" type="Node2D"]
 script = ExtResource("1_qbxcr")
 guest_profile_resources = Array[Resource]([ExtResource("19_wgram"), ExtResource("21_d05g7"), ExtResource("5_5wykg"), ExtResource("6_lkaa4"), ExtResource("7_qbxcr")])
-tier_2_required_wine_sales = 4
 bottle_unlock_modal_scene = ExtResource("7_ybg3o")
 
 [node name="ShiftServiceSystem" type="Node" parent="."]
