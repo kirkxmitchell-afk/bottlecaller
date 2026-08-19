@@ -2108,6 +2108,12 @@ func _handle_table_arrival(
 			elif _try_open_mid_service_cross_offer(table_id):
 				pass
 			else:
+				_maybe_show_table_guest_dialogue(
+					table_id,
+					"negative",
+					true,
+					"mise"
+				)
 				_set_prompt(
 					table_id
 					+ " has food but needs mise en place / cutlery. Collect it from Mise, then return to the table."
@@ -2123,6 +2129,12 @@ func _handle_table_arrival(
 				elif _try_open_mid_service_cross_offer(table_id):
 					pass
 				else:
+					_maybe_show_table_guest_dialogue(
+						table_id,
+						"negative",
+						true,
+						"mise"
+					)
 					_set_prompt(
 						table_id
 						+ " is waiting for cutlery. Collect Mise en Place, then return."
@@ -2919,6 +2931,12 @@ func _restore_table_after_unresolved_wine(
 		if prompt != "":
 			mise_prompt = prompt + " " + mise_prompt
 		_set_prompt(mise_prompt)
+		_maybe_show_table_guest_dialogue(
+			table_id,
+			"negative",
+			true,
+			"mise"
+		)
 		return
 
 	session["phase"] = "eating"
@@ -3356,6 +3374,11 @@ func _choose_greeting(
 			encounter_response_label.text += (
 				" They do not engage with that opening. Step away and return later."
 			)
+	if bool(session["greeting_accepted"]) or bool(session["greeting_recovered"]):
+		if table.has_method("replay_patience_mood_feedback"):
+			table.replay_patience_mood_feedback()
+	elif table.has_method("set_mood_unhappy"):
+		table.set_mood_unhappy("Greeting declined")
 
 	_show_encounter_follow_up_panel(session)
 
@@ -3441,6 +3464,11 @@ func _choose_follow_up(
 			action_id
 		)
 		_sync_session_patience_mood(table_id)
+		if bool(session["object_success"]):
+			if table.has_method("replay_patience_mood_feedback"):
+				table.replay_patience_mood_feedback()
+		elif table.has_method("set_mood_unhappy"):
+			table.set_mood_unhappy("Offer declined")
 
 	var guest_reply = \
 		_get_profile_follow_up_response(
@@ -3764,6 +3792,10 @@ func _tourist_service_dialogue(
 	couple: bool
 ) -> String:
 	match beat:
+		"mise":
+			if couple:
+				return "Could we have cutlery and napkins, please?"
+			return "Could I have cutlery and a napkin, please?"
 		"wine":
 			if positive:
 				if couple:
@@ -3809,6 +3841,10 @@ func _regular_service_dialogue(
 	couple: bool
 ) -> String:
 	match beat:
+		"mise":
+			if couple:
+				return "Cutlery, please. We need it before we can eat."
+			return "Cutlery, please. I need it before I can eat."
 		"wine":
 			if positive:
 				if couple:
@@ -3853,6 +3889,8 @@ func _skeptic_service_dialogue(
 	couple: bool
 ) -> String:
 	match beat:
+		"mise":
+			return "The food is here, but there is no cutlery."
 		"wine":
 			if positive:
 				return "One clear reason. That wine service holds."
@@ -4465,7 +4503,7 @@ func _complete_follow_up_order(
 		table.set_order_pending_pos()
 
 	focused_table_id = table_id
-	_mark_table_progress(table_id)
+	_mark_table_progress(table_id, true)
 	_close_encounter_panel()
 
 	var order_summary = ""
@@ -5970,7 +6008,7 @@ func _deliver_bar_drink(
 	# Delivery beat — sparse positive reaction when service lands.
 	_maybe_show_table_guest_dialogue(table_id, "positive", false, "delivery")
 
-	_mark_table_progress(table_id)
+	_mark_table_progress(table_id, true)
 
 	if session["bar_status"] != "delivered":
 		var next_drink = "next drink"
@@ -6280,12 +6318,16 @@ func _deliver_food(
 			table.set_enjoying()
 		if table.has_method("set_waiting_for_mise"):
 			table.set_waiting_for_mise()
-		if table.has_method("show_guest_speech"):
-			table.show_guest_speech(
-				"Could we get cutlery — knife, fork, and a napkin?"
-			)
+		_maybe_show_table_guest_dialogue(
+			table_id,
+			"negative",
+			true,
+			"mise"
+		)
 
 		_mark_table_progress(table_id)
+		if table.has_method("set_mood_unhappy"):
+			table.set_mood_unhappy("Waiting for cutlery")
 		_set_prompt(
 			"Food delivered to "
 			+ table_id
@@ -6303,7 +6345,7 @@ func _deliver_food(
 	elif table.has_method("set_enjoying"):
 		table.set_enjoying()
 
-	_mark_table_progress(table_id)
+	_mark_table_progress(table_id, true)
 	_refresh_station_attention_alerts()
 
 	if _table_service_fully_delivered(session):
@@ -6634,7 +6676,7 @@ func _assign_mise_to_table(
 	):
 		table.set_eating()
 
-	_mark_table_progress(table_id)
+	_mark_table_progress(table_id, true)
 	_refresh_table_status(table_id)
 
 	print("MISE LAID AT TABLE: ", table_id)
@@ -6821,7 +6863,7 @@ func _collect_dirty_plates(
 	carrying_table_id = table_id
 
 	_sync_waiter_carrying_visual()
-	_mark_table_progress(table_id)
+	_mark_table_progress(table_id, true)
 
 	_set_prompt(
 		"Dirty plates collected from "
@@ -6975,6 +7017,7 @@ func _deliver_bill_and_take_payment(
 		table.set_waiting_for_bill_close()
 
 	_refresh_service_patience_stage(table_id, &"take_payment")
+	_mark_table_progress(table_id, true)
 	_maybe_spawn_early_guest_for_closing_table(table_id)
 	_sync_waiter_carrying_visual()
 	_set_prompt(
@@ -7597,11 +7640,17 @@ func _append_guest_service_outcome(outcome: Dictionary) -> void:
 
 
 func _mark_table_progress(
-	table_id: String
+	table_id: String,
+	replay_guest_feedback: bool = false
 ):
 	if not table_sessions.has(table_id):
 		return
 	_sync_session_patience_mood(table_id)
+	if replay_guest_feedback:
+		var session: Dictionary = table_sessions[table_id]
+		var table = session.get("table", null)
+		if table != null and table.has_method("replay_patience_mood_feedback"):
+			table.replay_patience_mood_feedback()
 	_refresh_table_status(table_id)
 
 

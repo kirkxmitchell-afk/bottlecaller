@@ -38,16 +38,16 @@ const PREPARATION_TIMES := {
 }
 
 const PATIENCE_STAGE_TIMES := {
-	&"waiting_first_greeting": 110.0,
-	&"waiting_follow_up": 110.0,
-	&"waiting_pos_order": 120.0,
-	&"waiting_aperitif": 110.0,
-	&"waiting_wine": 125.0,
-	&"waiting_mise": 125.0,
-	&"waiting_food": 140.0,
-	&"waiting_to_clear": 150.0,
-	&"waiting_for_bill_and_payment": 125.0,
-	&"waiting_for_bill_close": 110.0,
+	&"waiting_first_greeting": 100.0,
+	&"waiting_follow_up": 100.0,
+	&"waiting_pos_order": 110.0,
+	&"waiting_aperitif": 100.0,
+	&"waiting_wine": 115.0,
+	&"waiting_mise": 115.0,
+	&"waiting_food": 130.0,
+	&"waiting_to_clear": 140.0,
+	&"waiting_for_bill_and_payment": 115.0,
+	&"waiting_for_bill_close": 100.0,
 }
 
 const MOOD_RECOVERY := {
@@ -64,9 +64,9 @@ const MOOD_RECOVERY := {
 
 const GREETING_MINIMUM_PERCENT = 85.0
 const SUITABLE_GREETING_BONUS = 10.0
-const MOOD_GREEN_MIN = 42.0
-const MOOD_YELLOW_MIN = 24.0
-const MOOD_ORANGE_MIN = 10.0
+const MOOD_GREEN_MIN = 70.0
+const MOOD_YELLOW_MIN = 45.0
+const MOOD_ORANGE_MIN = 20.0
 const STAGE_CHANGE_FLOOR_PERCENT = 18.0
 
 @export_range(0.0, 10.0, 0.05)

@@ -8897,3 +8897,25 @@ html[data-bc-godot-mobile="1"] .godot-shift-shell{
   font-size:12px;
   opacity:.88;
 }
+
+/* Compact desktop/tablet viewports must keep the in-image controls inside the iframe. */
+@media (min-width: 520px) and (max-width: 760px){
+  #bcShell.is-encounter-only{
+    width:min(500px, 100%) !important;
+    max-width:500px !important;
+    margin-inline:auto !important;
+  }
+
+  #encounterPanel[data-v2-layout="tier1"] .v2-hero-frame,
+  #encounterPanel[data-v2-layout="tier1"] .v2-preview-screen,
+  #encounterPanel[data-v2-layout="tier1"] .v2-choose-screen,
+  #encounterPanel[data-v2-layout="tier1"] .v2-end-screen{
+    width:min(462px, calc((100dvh - 70px) * 941 / 1672), calc(100% - 16px)) !important;
+    min-height:0 !important;
+    height:auto !important;
+    max-height:calc(100dvh - 70px) !important;
+    aspect-ratio:941 / 1672 !important;
+    margin-inline:auto !important;
+    overflow:hidden !important;
+  }
+}

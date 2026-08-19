@@ -527,20 +527,11 @@ function buildHistoryReaction(
     return "";
   })();
 
-  const directResponsePointsToUsedOption = (text: string): boolean => {
-    const normalized = text.toLowerCase();
-    if (hasUsedActionType(gameState, "story") && /south african|local|story/.test(normalized)) return true;
-    if (hasUsedActionType(gameState, "flavour") && /taste|flavour|flavor/.test(normalized)) return true;
-    if (hasUsedActionType(gameState, "value") && /worth|price|value/.test(normalized)) return true;
-    if (hasUsedActionType(gameState, "confidence") && /would you choose|why that one|choose/.test(normalized)) return true;
-    return false;
-  };
-
   const canUseDirectResponse = (text: string | undefined): text is string => {
     if (!text) return false;
     if (isReady && choice.group !== "commit") return false;
     if (isCooling) return false;
-    return !directResponsePointsToUsedOption(text);
+    return true;
   };
 
   const fallbackReaction = (() => {
@@ -571,24 +562,24 @@ function buildHistoryReaction(
   })();
 
   if (choice.group === "ask" && isAskType(choice.type)) {
-    const direct = encounter.guestResponses?.ask?.[choice.type];
-    if (direct?.quality === quality && canUseDirectResponse(direct.text)) return direct.text;
     const authored = encounter.guestReactions.ask?.[choice.type]?.[quality];
     if (canUseDirectResponse(authored)) return authored;
+    const direct = encounter.guestResponses?.ask?.[choice.type];
+    if (direct?.quality === quality && canUseDirectResponse(direct.text)) return direct.text;
     return stateReaction || fallbackReaction;
   }
   if (choice.group === "recommend" && isRecommendType(choice.type)) {
-    const direct = encounter.guestResponses?.recommend?.[choice.type];
-    if (direct?.quality === quality && canUseDirectResponse(direct.text)) return direct.text;
     const authored = encounter.guestReactions.recommend?.[choice.type]?.[quality];
     if (canUseDirectResponse(authored)) return authored;
+    const direct = encounter.guestResponses?.recommend?.[choice.type];
+    if (direct?.quality === quality && canUseDirectResponse(direct.text)) return direct.text;
     return stateReaction || fallbackReaction;
   }
   if (choice.group === "commit" && isCommitType(choice.type)) {
-    const direct = encounter.guestResponses?.commit?.[choice.type];
-    if (direct?.quality === quality && canUseDirectResponse(direct.text)) return direct.text;
     const authored = encounter.guestReactions.commit?.[choice.type]?.[quality];
     if (canUseDirectResponse(authored)) return authored;
+    const direct = encounter.guestResponses?.commit?.[choice.type];
+    if (direct?.quality === quality && canUseDirectResponse(direct.text)) return direct.text;
     return stateReaction || fallbackReaction;
   }
   if (choice.group === "walk_away") {
@@ -727,9 +718,6 @@ function authorityForOutcome(encounter: EncounterV2, outcome: EncounterOutcome):
 
 function finalizeState(gameState: GameStateV2, outcome: EncounterOutcome): void {
   const policy = getDifficultyPolicyV2(gameState.difficultyMode);
-  if (gameState.mistakeCount >= 3) {
-    gameState.frustration = Math.max(gameState.frustration, policy.criticalResistance);
-  }
   gameState.progressMood = getProgressMood(gameState.progress);
   gameState.frustrationMood = getFrustrationMood(gameState.frustration);
   gameState.walkAwayUnlocked =
@@ -737,10 +725,7 @@ function finalizeState(gameState: GameStateV2, outcome: EncounterOutcome): void 
     gameState.mistakeCount >= getWalkAwayMistakeThreshold(policy.maxMistakes);
   gameState.outcome = outcome;
   if (outcome !== "continue" && outcome !== "not_available") {
-    gameState.authorityDelta =
-      authorityForOutcome(gameState.encounter, outcome) +
-      Number(gameState.bottleChoice?.score || 0) +
-      Number(gameState.selectionAuthorityBonus || 0);
+    gameState.authorityDelta = authorityForOutcome(gameState.encounter, outcome);
   }
 }
 

@@ -90,7 +90,7 @@ mood_happy_texture = ExtResource("25_hoeb4")
 mood_neutral_texture = ExtResource("26_a14qu")
 mood_annoyed_texture = ExtResource("27_bcunw")
 speech_bubble_head_offset = Vector2(36, 55)
-happy_icon_hold_seconds = 2.5
+happy_icon_hold_seconds = 4.0
 
 [node name="Sprite2D" type="Sprite2D" parent="RestaurantFloor/Stations/BarStation"]
 position = Vector2(-1.448, -275.3)
@@ -123,7 +123,7 @@ mood_icon_z_index = 1000
 speech_bubble_head_offset = Vector2(-12, 58)
 mood_hover_amplitude = 5.0
 mood_hover_speed = 2.2
-happy_icon_hold_seconds = 2.5
+happy_icon_hold_seconds = 4.0
 
 [node name="Sprite2D" type="Sprite2D" parent="RestaurantFloor/Stations/ChefStation"]
 position = Vector2(331.79, -358.62)
@@ -155,7 +155,7 @@ mood_annoyed_texture = ExtResource("27_bcunw")
 mood_icon_z_index = 1000
 mood_hover_amplitude = 5.0
 mood_hover_speed = 2.2
-happy_icon_hold_seconds = 2.5
+happy_icon_hold_seconds = 4.0
 
 [node name="Sprite2D" type="Sprite2D" parent="RestaurantFloor/Stations/SculleryStation"]
 position = Vector2(621.13, -325.18)
@@ -186,7 +186,7 @@ attention_texture = ExtResource("28_exclaim")
 mood_hover_amplitude = 5.0
 mood_hover_speed = 2.2
 show_happy_mood = false
-happy_icon_hold_seconds = 2.5
+happy_icon_hold_seconds = 4.0
 
 [node name="Sprite2D" type="Sprite2D" parent="RestaurantFloor/Stations/POSStation"]
 position = Vector2(1022.58, 94.11)
@@ -218,7 +218,7 @@ attention_texture = ExtResource("28_exclaim")
 mood_hover_amplitude = 5.0
 mood_hover_speed = 2.2
 show_mood_icon = false
-happy_icon_hold_seconds = 2.5
+happy_icon_hold_seconds = 4.0
 
 [node name="Sprite2D" type="Sprite2D" parent="RestaurantFloor/Stations/MiseEnPlaceStation"]
 position = Vector2(896.37, -316.83)
@@ -250,7 +250,7 @@ mood_icon_z_index = 1000
 attention_texture = ExtResource("28_exclaim")
 mood_hover_amplitude = 5.0
 mood_hover_speed = 2.2
-happy_icon_hold_seconds = 2.5
+happy_icon_hold_seconds = 4.0
 
 [node name="Sprite2D" type="Sprite2D" parent="RestaurantFloor/Tables/TableSlot_01"]
 scale = Vector2(0.24, 0.24)
@@ -278,7 +278,7 @@ mood_icon_z_index = 1000
 attention_texture = ExtResource("28_exclaim")
 mood_hover_amplitude = 5.0
 mood_hover_speed = 2.2
-happy_icon_hold_seconds = 2.5
+happy_icon_hold_seconds = 4.0
 
 [node name="Sprite2D" type="Sprite2D" parent="RestaurantFloor/Tables/TableSlot_02"]
 scale = Vector2(0.24, 0.24)

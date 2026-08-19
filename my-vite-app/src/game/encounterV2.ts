@@ -32,6 +32,19 @@ function makeGuestResponseMap(
   };
 }
 
+function alignRecommendResponseQualities(
+  responses: EncounterGuestResponseMap,
+  scoring: Partial<Record<RecommendAngle, ChoiceQuality>>,
+): EncounterGuestResponseMap {
+  const recommend = { ...(responses.recommend || {}) };
+  for (const angle of Object.keys(scoring) as RecommendAngle[]) {
+    const response = recommend[angle];
+    const quality = scoring[angle];
+    if (response && quality) recommend[angle] = { ...response, quality };
+  }
+  return { ...responses, recommend };
+}
+
 function makeEncounter(seed: EncounterSeed): EncounterV2 {
   return {
     ...seed,
@@ -711,6 +724,11 @@ function makeTier1Encounter(args: {
   reactions?: EncounterReactionMap;
   guestResponses?: EncounterGuestResponseMap;
 }): EncounterV2 {
+  const recommendScoring = args.recommendScoring || {};
+  const guestResponses = alignRecommendResponseQualities(
+    args.guestResponses || buildGuestResponsesForFamily(args.family),
+    recommendScoring,
+  );
   return makeEncounter({
     id: args.id,
     title: args.title,
@@ -745,12 +763,12 @@ function makeTier1Encounter(args: {
       commit: { ...COMMON_LINES.commit },
     },
     guestReactions: makeReactionMap(args.reactions),
-    guestResponses: makeGuestResponseMap(args.guestResponses || buildGuestResponsesForFamily(args.family)),
+    guestResponses: makeGuestResponseMap(guestResponses),
     serviceStage: args.serviceStage || "opening",
     targetProductId: args.targetProductId || null,
     targetProductCategory: args.targetProductCategory || null,
     targetRecommendAngle: args.targetRecommendAngle,
-    recommendScoring: args.recommendScoring || {},
+    recommendScoring,
     allowedProductIds: args.allowedProductIds || [],
     idealProductId: args.idealProductId || null,
     safeProductId: args.safeProductId || null,
@@ -1018,7 +1036,7 @@ export const TIER1_VERTICAL_SLICE_ENCOUNTERS: EncounterV2[] = [
           optimal: "That is a useful reason. Keep it there.",
         },
         confidence: {
-          disaster: "Confidence without a reason is just pressure.",
+          poor: "Confidence without a reason is just pressure.",
         },
       },
       commit: {
@@ -1482,7 +1500,10 @@ export const TIER1_VERTICAL_SLICE_ENCOUNTERS: EncounterV2[] = [
           optimal: "That sounds right. Familiar, but not lazy.",
         },
         story: {
-          disaster: "I do not need the long story tonight.",
+          poor: "I do not need the long story tonight.",
+        },
+        value: {
+          good: "That could work, as long as it still feels like my usual lane.",
         },
       },
       commit: {
@@ -1548,13 +1569,19 @@ export const TIER1_VERTICAL_SLICE_ENCOUNTERS: EncounterV2[] = [
         occasion: {
           optimal: "Exactly. We want it to feel like the night, not a big production.",
         },
+        experience: {
+          optimal: "Not much. We want your help finding something local that still feels easy tonight.",
+        },
         budget: {
           disaster: "That makes it feel a bit transactional.",
         },
       },
       recommend: {
         flavour: {
-          optimal: "That sounds elegant and easy. That is the mood.",
+          good: "That sounds elegant and easy. That is the mood.",
+        },
+        story: {
+          optimal: "That gives the night a sense of place without making the bottle too serious.",
         },
         value: {
           disaster: "We are not really trying to make this about value.",
@@ -1707,7 +1734,10 @@ export const TIER1_VERTICAL_SLICE_ENCOUNTERS: EncounterV2[] = [
           optimal: "That sounds like us. Familiar, but still interesting.",
         },
         story: {
-          disaster: "We do not need the whole story tonight.",
+          poor: "We do not need the whole story tonight.",
+        },
+        value: {
+          good: "That sounds sensible, provided it still feels like our kind of bottle.",
         },
       },
       commit: {

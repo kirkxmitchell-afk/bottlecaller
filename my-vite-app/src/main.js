@@ -19664,7 +19664,6 @@ function renderProfileStandingCard(user = null, model = null) {
           <div class="small-text" style="opacity:.72; margin-top:4px;">${escapeHtml(describeReadiness(user.readiness, user.readinessLabel))}</div>
         </div>
       </div>
-      ${renderPlayerTeamStatsSectionMarkup(user?.playerStats, "Team performance stats")}
     </div>
   `;
 }

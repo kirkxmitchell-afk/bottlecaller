@@ -109,7 +109,7 @@ var status_outline_size = 6
 var speech_bubble_vertical_lift = 28.0
 
 @export_range(1.0, 12.0, 0.1)
-var speech_bubble_duration = 4.2
+var speech_bubble_duration = 5.5
 
 @export_range(12, 36, 1)
 var speech_bubble_font_size = 20
@@ -1102,6 +1102,16 @@ func set_patience_mood_band(
 				+ " -> "
 				+ str(new_band)
 			)
+
+
+func replay_patience_mood_feedback(reason: String = "") -> void:
+	match patience_mood_band:
+		&"green":
+			set_mood_happy()
+		&"yellow", &"orange":
+			set_mood_warning(reason)
+		&"red", &"annoyed":
+			set_mood_unhappy(reason)
 
 
 # -------------------------------------------------------------------

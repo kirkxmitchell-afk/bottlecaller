@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { getTier1VerticalSliceEncounters } from "../src/game/encounterV2";
 import {
   applyChoice,
@@ -61,6 +63,14 @@ test("V2 success quality awards 20, 15, or 10 authority points", () => {
   }
 });
 
+test("browser V2 reward mapping matches the encounter authority contract", () => {
+  const gameHtml = readFileSync(resolve(process.cwd(), "game/game.html"), "utf8");
+
+  assert.match(gameHtml, /case "premium_success": return 20;/);
+  assert.match(gameHtml, /case "standard_success": return 15;/);
+  assert.match(gameHtml, /case "weak_success": return 10;/);
+});
+
 test("V2 difficulty settings affect gameplay pressure", () => {
   const encounter = getTier1VerticalSliceEncounters(1)[0];
   const easy = createGameStateV2(encounter, null, "easy");
@@ -94,6 +104,106 @@ test("V3 mood ladder is deterministic and keeps friction authoritative", () => {
   assert.equal(
     resolveEncounterMoodV3({ progress: 8, difficultyMode: "easy" }),
     "ready_to_buy",
+  );
+  assert.equal(
+    resolveEncounterMoodV3({ progress: 0, frustration: 3, mistakeCount: 3, difficultyMode: "medium" }),
+    "annoyed",
+  );
+  assert.equal(
+    resolveEncounterMoodV3({ progress: 0, frustration: 4, mistakeCount: 4, difficultyMode: "medium" }),
+    "furious",
+  );
+});
+
+test("V2 recommendation scoring is the authority for response quality", () => {
+  for (const encounter of getTier1VerticalSliceEncounters()) {
+    for (const [angle, quality] of Object.entries(encounter.recommendScoring || {})) {
+      assert.equal(
+        encounter.guestResponses?.recommend?.[angle as keyof typeof encounter.guestResponses.recommend]?.quality,
+        quality,
+        `${encounter.id}:${angle}`,
+      );
+    }
+  }
+});
+
+test("the five demo encounters use their authored ideal-path reactions", () => {
+  const expectedPaths = {
+    encounter_v2_014: {
+      ask: "experience",
+      askReaction: "Not much. We want your help finding something local that still feels easy tonight.",
+      recommend: "story",
+      recommendReaction: "That gives the night a sense of place without making the bottle too serious.",
+      commitReaction: "Yes, that feels right for us.",
+    },
+    encounter_v2_013: {
+      ask: "preference",
+      askReaction: "Exactly. You remember the style.",
+      recommend: "flavour",
+      recommendReaction: "That sounds right. Familiar, but not lazy.",
+      commitReaction: "Yes. That is the kind of bottle I meant.",
+    },
+    encounter_v2_011: {
+      ask: "preference",
+      askReaction: "Elegant and structured. I do not want anything heavy-handed.",
+      recommend: "story",
+      recommendReaction: "That is a useful reason. Keep it there.",
+      commitReaction: "Alright. That was specific enough. Bring it.",
+    },
+    encounter_v2_015: {
+      ask: "preference",
+      askReaction: "Structured, elegant, not too heavy. That is the lane.",
+      recommend: "story",
+      recommendReaction: "Good. That is an actual reason.",
+      commitReaction: "Alright. That makes sense. Bring it.",
+    },
+    encounter_v2_016: {
+      ask: "preference",
+      askReaction: "Exactly. Same lane, just something with a little more lift.",
+      recommend: "flavour",
+      recommendReaction: "That sounds like us. Familiar, but still interesting.",
+      commitReaction: "Yes, that feels right. Bring that one.",
+    },
+  } as const;
+
+  for (const encounter of getTier1VerticalSliceEncounters()) {
+    const expected = expectedPaths[encounter.id as keyof typeof expectedPaths];
+    const state = createGameStateV2(encounter, null, "medium");
+
+    applyChoice(state, { group: "ask", type: expected.ask });
+    assert.equal(state.history.at(-1)?.reaction, expected.askReaction, `${encounter.id}:ask`);
+
+    applyChoice(state, { group: "recommend", type: expected.recommend });
+    assert.equal(state.history.at(-1)?.reaction, expected.recommendReaction, `${encounter.id}:recommend`);
+
+    const commit = applyChoice(state, { group: "commit", type: "recommendation" });
+    assert.equal(commit.outcome, "premium_success", `${encounter.id}:outcome`);
+    assert.equal(state.history.at(-1)?.reaction, expected.commitReaction, `${encounter.id}:commit`);
+  }
+});
+
+test("three medium mistakes unlock restraint without forcing furious mood", () => {
+  const encounter = getTier1VerticalSliceEncounters().find((item) => item.id === "encounter_v2_013");
+  assert.ok(encounter);
+  const state = createGameStateV2(encounter, null, "medium");
+
+  applyChoice(state, { group: "ask", type: "occasion" });
+  applyChoice(state, { group: "ask", type: "budget" });
+  const third = applyChoice(state, { group: "recommend", type: "story" });
+
+  assert.equal(third.outcome, "continue");
+  assert.equal(state.mistakeCount, 3);
+  assert.equal(state.frustration, 3);
+  assert.equal(state.walkAwayUnlocked, true);
+  assert.equal(
+    resolveEncounterMoodV3({
+      progress: state.progress,
+      frustration: state.frustration,
+      mistakeCount: state.mistakeCount,
+      difficultyMode: state.difficultyMode,
+      lastQuality: state.history.at(-1)?.quality,
+    }),
+    "annoyed",
   );
 });
 
@@ -1113,9 +1223,7 @@ test("known Ask is penalized and greeting maxAp survives finalize", async () => 
   const rewards = session.encounter.rewards || {};
   assert.equal(
     Number(session.gameState.authorityDelta),
-    Number(rewards.failure || 0) +
-      Number(session.gameState.bottleChoice?.score || 0) +
-      Number(session.gameState.selectionAuthorityBonus || 0),
+    Number(rewards.failure || 0),
   );
 });
 

@@ -41,7 +41,7 @@ export function resolveEncounterMoodV3(input: EncounterMoodV3Input): EncounterMo
   // Friction has visual priority over progress so a damaged table cannot look won over.
   if (
     frustration >= policy.criticalResistance ||
-    mistakeCount >= Math.max(2, policy.maxMistakes - 1)
+    mistakeCount >= policy.maxMistakes
   ) {
     return "furious";
   }

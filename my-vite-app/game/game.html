@@ -5,7 +5,7 @@
   <title>BottleCaller Prototype</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <!-- ✅ IMPORTANT: because this file is served at /game/game.html -->
-  <link rel="stylesheet" href="/game/game.css?v=20260816-real-landscape" />
+  <link rel="stylesheet" href="/game/game.css?v=20260819-compact-interaction" />
   <script type="module" src="/src/game/gameEntry.ts"></script>
   <script>
     if (window.self !== window.top) {
@@ -24050,13 +24050,20 @@ function ensureProgLoaded() {
 
       function getV2OutcomeAP(outcome) {
         switch (String(outcome || "")) {
-          case "premium_success": return 15;
+          case "premium_success": return 20;
           case "standard_success": return 15;
-          case "weak_success": return 15;
+          case "weak_success": return 10;
           case "neutral_exit": return 5;
           case "failure": return -15;
           default: return 0;
         }
+      }
+
+      function getV2AwardedAP(snapshot, rewardProgress = null) {
+        if (rewardProgress && Number.isFinite(Number(rewardProgress.apDelta))) {
+          return Number(rewardProgress.apDelta);
+        }
+        return getV2OutcomeAPFromSnapshot(snapshot);
       }
 
       function getV2TierUnlockedByAP(totalAP) {
@@ -24670,7 +24677,7 @@ function ensureProgLoaded() {
           encounterTitle: snapshot.encounterTitle || "",
           tier: clampV2Tier(snapshot.tier || session?.encounter?.tier || 1, 3),
           outcome,
-          authorityDelta: Number(snapshot.authorityDelta || 0),
+          authorityDelta: getV2AwardedAP(snapshot, rewardProgress),
           apAfter: totalAP,
           isGreen: isV2GreenOutcome(outcome),
           isRed: isV2RedOutcome(outcome),
@@ -24807,7 +24814,7 @@ function ensureProgLoaded() {
             apTierUnlocked: clampV2Tier(authorityState.apTierUnlocked || 1, 3),
             rulesTierToServe: clampV2Tier(authorityState.rulesTierToServe || 1, 3),
             authorityPoints: Number(authorityState.totalAP || 0),
-            lastAuthorityDelta: Number(snapshot?.authorityDelta || 0),
+            lastAuthorityDelta: getV2AwardedAP(snapshot, rewardProgress),
             progressionSnapshot,
             encounterRange: tierBounds.encounterRange.slice(),
             guestTypes: tierBounds.guestTypes.slice(),
@@ -24856,7 +24863,7 @@ function ensureProgLoaded() {
             latestSnapshot: {
               encounterId: snapshot?.encounterId || null,
               outcome: snapshot?.outcome || null,
-              authorityDelta: Number(snapshot?.authorityDelta || 0),
+              authorityDelta: getV2AwardedAP(snapshot, rewardProgress),
               difficultyMode,
             },
           },
@@ -25059,12 +25066,12 @@ function ensureProgLoaded() {
       }
 
       function getV2ReactiveQuote(snapshot, encounter, reaction = "") {
+        if (reaction) return reaction;
         if (snapshot?.outcome === "premium_success") return "Perfect. That's exactly the bottle we were hoping you'd land on.";
         if (snapshot?.outcome === "standard_success") return "Great, that sounds like the right call for us.";
         if (snapshot?.outcome === "weak_success") return "Alright, let's do it.";
         if (snapshot?.outcome === "neutral_exit") return "No problem. Thanks for reading the table and leaving it there.";
         if (snapshot?.outcome === "failure") return "We'll leave it, thanks.";
-        if (reaction) return reaction;
         if (snapshot?.frustrationMood === "critical_resistance") return "We're fine, thanks. We'll choose ourselves.";
         if (snapshot?.progressMood === "ready") return "That sounds good. Which one would you choose?";
         if (snapshot?.progressMood === "engaged") return "Oh, that's interesting. Tell me more about that one.";
@@ -25107,7 +25114,9 @@ function ensureProgLoaded() {
         const choiceGroup = String(choice?.group || "");
         const normalizedQuality = String(quality || "").toLowerCase();
         const turnIndex = Math.max(0, Number(snapshot?.turnCount || 0) - 1);
-        const pick = (items) => items[turnIndex % items.length];
+        const encounterSeed = Array.from(String(snapshot?.encounterId || snapshot?.encounterTitle || ""))
+          .reduce((total, char) => total + char.charCodeAt(0), 0);
+        const pick = (items, offset = 0) => items[(encounterSeed + turnIndex + offset) % items.length];
 
         if (outcome === "neutral_exit" || choiceGroup === "walk_away") {
           return pick([
@@ -25125,31 +25134,32 @@ function ensureProgLoaded() {
           ]);
         }
         if (normalizedQuality === "optimal") {
-          return pick([
-            "Good read. Momentum builds.",
-            "Smart read. The table opens up.",
-            "Strong timing. Trust improves.",
-          ]);
+          if (choiceGroup === "ask") {
+            return pick(["You found the signal. The table opens.", "Right question. They feel understood.", "Clean read. Trust starts to build."]);
+          }
+          if (choiceGroup === "recommend") {
+            return pick(["The reason fits. Confidence builds.", "Strong match. The table moves with you.", "Relevant recommendation. Momentum rises."]);
+          }
+          if (choiceGroup === "commit") {
+            return pick(["Right moment. The close lands.", "Well timed. They are ready to decide.", "Clean close. Trust converts."]);
+          }
+          return pick(["Good read. Momentum builds.", "Smart read. The table opens up."]);
         }
         if (normalizedQuality === "good") {
-          return pick([
-            "Safe move. Progress builds.",
-            "Good direction. They stay engaged.",
-          ]);
+          if (choiceGroup === "ask") return pick(["Useful question. The picture gets clearer.", "Good read. They give you more to work with."]);
+          if (choiceGroup === "recommend") return pick(["Plausible fit. They stay with you.", "Good direction. Interest holds."]);
+          if (choiceGroup === "commit") return pick(["The timing works, though it was not perfect.", "Close accepted. Some friction remains."]);
+          return pick(["Safe move. Progress builds.", "Good direction. They stay engaged."]);
         }
         if (normalizedQuality === "poor") {
-          return pick([
-            "Wrong pace. Energy dropped.",
-            "Missed signal. The table cools.",
-            "Not quite. Resistance rises.",
-          ]);
+          if (choiceGroup === "ask") return pick(["That question misses the signal. Guard goes up.", "Wrong question. The table gives you less."]);
+          if (choiceGroup === "recommend") return pick(["Weak fit. Confidence slips.", "The angle misses. Resistance rises."]);
+          return pick(["Wrong pace. Energy dropped.", "Missed signal. The table cools.", "Not quite. Resistance rises."]);
         }
         if (normalizedQuality === "disaster") {
-          return pick([
-            "Bad read. Trust drops.",
-            "Too much pressure. They pull back.",
-            "Wrong angle. Energy collapses.",
-          ]);
+          if (choiceGroup === "ask") return pick(["The question feels tone-deaf. Trust drops.", "Bad read. The table closes off."]);
+          if (choiceGroup === "recommend") return pick(["Wrong reason. The recommendation loses credibility.", "The fit collapses. They pull back."]);
+          return pick(["Bad read. Trust drops.", "Too much pressure. They pull back.", "Wrong angle. Energy collapses."]);
         }
         return "";
       }
@@ -25196,6 +25206,15 @@ function ensureProgLoaded() {
 	          value === "failure"
 	        );
 	      }
+
+          function getV2TerminalReactionKey(snapshot) {
+            if (!isV2TerminalOutcome(snapshot?.outcome)) return "";
+            return [
+              snapshot?.encounterId || snapshot?.encounterOrdinal || "encounter",
+              snapshot?.turnCount || 0,
+              snapshot?.outcome || "complete",
+            ].join(":");
+          }
 
 	      function clampV2SkillScore(value) {
 	        const n = Number(value || 0);
@@ -25516,7 +25535,7 @@ function ensureProgLoaded() {
 	            productId: snapshot.productId || null,
 	          },
 	          v2Snapshot: {
-	            authorityDelta: Number(snapshot.authorityDelta || 0),
+		            authorityDelta: getV2AwardedAP(snapshot, rewardProgress),
 	            bottleChoiceScore: Number(snapshot.bottleChoiceScore || 0) || 0,
 	            bottleChoiceFit: snapshot.bottleChoiceFit || null,
 	            progress: Number(snapshot.progress || 0),
@@ -26309,10 +26328,18 @@ function ensureProgLoaded() {
         const session = api.getSession?.() || null;
         const encounter = getV2EncounterForSnapshot(snapshot, session?.encounter || null);
         const latestHistoryForImage = getV2LatestHistoryForSnapshot(snapshot, session);
-        const mainImagePresentation = getV2MainImagePresentation(snapshot, encounter, latestHistoryForImage);
+        const terminalReactionKey = getV2TerminalReactionKey(snapshot);
+        const isTerminalReaction = !!(
+          terminalReactionKey &&
+          window.__BC_V2_HARNESS_STATE__?.pendingTerminalReactionKey === terminalReactionKey
+        );
+        const presentationSnapshot = isTerminalReaction
+          ? { ...snapshot, outcome: "continue" }
+          : snapshot;
+        const mainImagePresentation = getV2MainImagePresentation(presentationSnapshot, encounter, latestHistoryForImage);
         const mainImageSrc = mainImagePresentation.src;
         encounterPanel.dataset.v3Mood = mainImagePresentation.mood || "";
-        void preloadV3MoodWindow(snapshot, encounter, latestHistoryForImage);
+        void preloadV3MoodWindow(presentationSnapshot, encounter, latestHistoryForImage);
 
         const selectedGroup =
           window.__BC_V2_HARNESS_STATE__?.selectedGroup &&
@@ -26331,10 +26358,11 @@ function ensureProgLoaded() {
           : `Encounter: ${snapshot.encounterTitle}`;
         const feedbackText = getV2FeedbackLine(snapshot, reaction);
         const feedbackIsTerminal = isV2TerminalOutcome(snapshot.outcome);
+        const isTerminal = feedbackIsTerminal && !isTerminalReaction;
         if (feedbackIsTerminal && (isGodotShiftWineOfferActive() || window.__BC_V2_FROM_GODOT__)) {
           clearGodotWineEncounterTimer();
         }
-        feedbackLine.textContent = feedbackIsTerminal ? feedbackText : "";
+        feedbackLine.textContent = isTerminal ? feedbackText : "";
 
         const outcome = snapshot.outcome ? v2HarnessLabel(snapshot.outcome) : "In Progress";
         const quote = getV2ReactiveQuote(snapshot, encounter, reaction);
@@ -26380,9 +26408,8 @@ function ensureProgLoaded() {
               .join("")
           : escapeHtml(quote);
         const sceneClue = getV2SceneClue(encounter);
-        const moodDescriptor = getV2MoodDescriptor(snapshot);
-        const tableMood = getV2TableMood(snapshot);
-        const isTerminal = feedbackIsTerminal;
+        const moodDescriptor = getV2MoodDescriptor(presentationSnapshot);
+        const tableMood = getV2TableMood(presentationSnapshot);
 	        const resultPresentation = isTerminal ? getV2ResultPresentation(snapshot, encounter) : null;
 	        const rewardProgress = isTerminal ? applyV2BottleRewardProgress(snapshot) : { state: loadV2BottleRewardState(), apDelta: 0, pendingRewards: [] };
 	        if (isTerminal) {
@@ -26447,7 +26474,7 @@ function ensureProgLoaded() {
           return `<span class="${nodeClass}"></span>`;
         }).join("");
 
-        stepContent.dataset.stage = "observe";
+        stepContent.dataset.stage = isTerminalReaction ? "reaction" : "observe";
         stepButtons.dataset.v2TerminalState = isTerminal ? (isFinalEncounter ? "final" : "terminal") : "";
         window.__BC_V2_DEMO_FINAL_SUMMARY_ACTIVE__ = !!(isTerminal && isFinalEncounter);
         stepContent.dataset.signal =
@@ -26565,7 +26592,8 @@ function ensureProgLoaded() {
           `;
         }
 
-        const groupButtons = isTerminal
+        const interactionLocked = isTerminal || isTerminalReaction;
+        const groupButtons = interactionLocked
           ? ""
           : snapshot.availableGroups
               .map((group) => {
@@ -26581,7 +26609,7 @@ function ensureProgLoaded() {
               .join("");
 
         const usedChoiceSet = new Set(Array.isArray(snapshot.usedChoices) ? snapshot.usedChoices.map(String) : []);
-        const actionButtons = selectedGroup
+        const actionButtons = !interactionLocked && selectedGroup
           ? api.availableActionTypes(selectedGroup)
               .map((type) => {
                 const choiceLine = getV2EncounterChoiceLine(encounter, selectedGroup, type, session?.product || null);
@@ -26607,8 +26635,11 @@ function ensureProgLoaded() {
 
         const showGodotExitButton = isTerminal && !!(window.__BC_V2_GODOT_PENDING_EXIT__ || isGodotShiftWineOfferActive());
         const showTerminalContinueButton = isTerminal && !isFinalEncounter && !showGodotExitButton;
+        const showTerminalReactionButton = isTerminalReaction;
         const actionLabel = selectedGroup
           ? `Choose one ${v2HarnessLabel(selectedGroup)} response card to continue the encounter.`
+          : isTerminalReaction
+            ? "Read the guest's final reaction, then view the encounter result."
           : isTerminal
             ? (showGodotExitButton
               ? "Encounter complete. Exit when you're ready to return to the floor."
@@ -26626,6 +26657,9 @@ function ensureProgLoaded() {
             ${groupButtons ? `<div class="v2-action-header">${groupButtons}</div>` : ""}
             ${showIntroGuidance ? `<div class="small-text v2-action-caption">${escapeHtml(actionLabel)}</div>` : ""}
             <div class="v2-action-grid">${actionButtons}</div>
+            ${showTerminalReactionButton ? `<div class="button-row" style="width:100%;">
+              <button type="button" class="btn" id="btnV2ViewResult">View Result</button>
+            </div>` : ""}
             ${shouldShowBottleRewardPanel ? renderV2BottleRewardHtml(rewardProgress) : ""}
             ${showTerminalContinueButton ? `<div class="button-row" style="width:100%;">
               <button type="button" class="btn" id="btnV2HarnessContinue">Continue</button>
@@ -26693,8 +26727,20 @@ function ensureProgLoaded() {
               result.snapshot,
               latestHistory?.feedbackText || "",
             );
+            const nextTerminalReactionKey = getV2TerminalReactionKey(result.snapshot);
+            if (nextTerminalReactionKey) {
+              window.__BC_V2_HARNESS_STATE__ = {
+                ...(window.__BC_V2_HARNESS_STATE__ || {}),
+                selectedGroup: null,
+                pendingTerminalReactionKey: nextTerminalReactionKey,
+              };
+            }
             emitV2HarnessOutcome(result.snapshot, liveSession, result.reaction || "");
-            const nextImage = getV2MainImageSrc(result.snapshot, liveEncounter, latestHistory);
+            const nextImage = getV2MainImageSrc(
+              nextTerminalReactionKey ? { ...result.snapshot, outcome: "continue" } : result.snapshot,
+              liveEncounter,
+              latestHistory,
+            );
             await preloadV2Image(nextImage, 700);
             renderV2HarnessPlay(result.snapshot, result.reaction || "", quickFeedback);
           });
@@ -26752,6 +26798,21 @@ function ensureProgLoaded() {
           stepButtons.removeEventListener("click", stepButtons.__BC_V2_TERMINAL_HANDLER__);
         }
         stepButtons.__BC_V2_TERMINAL_HANDLER__ = (event) => {
+          const reactionButton = event.target?.closest?.("#btnV2ViewResult");
+          if (reactionButton) {
+            event.preventDefault();
+            reactionButton.disabled = true;
+            window.__BC_V2_HARNESS_STATE__ = {
+              ...(window.__BC_V2_HARNESS_STATE__ || {}),
+              selectedGroup: null,
+              pendingTerminalReactionKey: null,
+            };
+            const resultImage = getV2TerminalImageSrc(encounter, snapshot?.outcome);
+            void preloadV2Image(resultImage, 700).then(() => {
+              renderV2HarnessPlay(snapshot, reaction, quickFeedback);
+            });
+            return;
+          }
           const exitButton = event.target?.closest?.("#btnV2ExitEncounter");
           if (exitButton) {
             event.preventDefault();
@@ -27816,7 +27877,7 @@ function ensureProgLoaded() {
         clearGodotWineEncounterTimer();
         const returnToFloor = options.returnToFloor !== false;
         const offer = window.__BC_GODOT_WINE_OFFER__ || {};
-        const authorityDelta = Number(snapshot?.authorityDelta || 0);
+        const authorityDelta = getV2AwardedAP(snapshot, rewardProgress);
         const outcome = String(snapshot?.outcome || "");
         const wineSold = ["premium_success", "standard_success", "weak_success"].includes(outcome);
         const resultId = String(offer.resultId || createGodotRuntimeId("godot_v2_result"));
@@ -28017,7 +28078,7 @@ function ensureProgLoaded() {
 
         const outcome = String(summarySnapshot.outcome || "complete");
         const title = String(summarySnapshot.encounterTitle || "Wine encounter");
-        const apDelta = Number(summarySnapshot.authorityDelta || 0);
+        const apDelta = getV2AwardedAP(summarySnapshot, summaryRewards);
         const apLabel = `${apDelta >= 0 ? "+" : ""}${apDelta} AP`;
 
         applyPlaySurfaceMode("encounter_only");
@@ -28173,6 +28234,11 @@ function ensureProgLoaded() {
         const fromGodot = !!(options.fromGodot || isGodotShiftWineOfferActive());
         const skipPreview = !!options.skipPreview;
         window.__BC_V2_DEMO_FINAL_SUMMARY_ACTIVE__ = false;
+        window.__BC_V2_HARNESS_STATE__ = {
+          ...(window.__BC_V2_HARNESS_STATE__ || {}),
+          selectedGroup: null,
+          pendingTerminalReactionKey: null,
+        };
         if (fromGodot) {
           window.__BC_V2_FROM_GODOT__ = true;
         }
