@@ -24059,7 +24059,20 @@ function ensureProgLoaded() {
         }
       }
 
+      function applySignedV2AuthorityDelta(totalAP, authorityDelta) {
+        const api = window.V2ProgressionAuthority;
+        if (typeof api?.applySignedAuthorityDelta === "function") {
+          return api.applySignedAuthorityDelta(totalAP, authorityDelta);
+        }
+        const current = Number.isFinite(Number(totalAP)) ? Number(totalAP) : 0;
+        const delta = Number.isFinite(Number(authorityDelta)) ? Number(authorityDelta) : 0;
+        return Math.max(0, Math.round(current + delta));
+      }
+
       function getV2AwardedAP(snapshot, rewardProgress = null) {
+        if (rewardProgress && Number.isFinite(Number(rewardProgress.authorityDelta))) {
+          return Number(rewardProgress.authorityDelta);
+        }
         if (rewardProgress && Number.isFinite(Number(rewardProgress.apDelta))) {
           return Number(rewardProgress.apDelta);
         }
@@ -24120,9 +24133,11 @@ function ensureProgLoaded() {
         const demoScoreTotal = demoCompletions.reduce((sum, entry) => sum + Number(entry?.ap || 0), 0);
         const encounterScoreTotal = Object.values(encounterScores).reduce((sum, entry) => sum + Number(entry?.ap || 0), 0);
         const scoreTotal = demoCompletions.length ? demoScoreTotal : encounterScoreTotal;
-        // Prefer scored AP, but keep an explicit floor when Godot deferred a bottle open.
-        const scoredAP = Number.isFinite(scoreTotal) ? scoreTotal : 0;
-        const totalAP = Math.max(0, Math.round(Math.max(scoredAP, Number(state.totalAP || 0))));
+        const explicitTotal = Number(state.totalAP);
+        const totalAP = Math.max(
+          0,
+          Math.round(Number.isFinite(explicitTotal) ? explicitTotal : (Number(scoreTotal) || 0))
+        );
         const claimedIds = new Set(
           rewards.filter((reward) => reward.claimed).map((reward) => String(reward.id))
         );
@@ -24141,6 +24156,7 @@ function ensureProgLoaded() {
           readyRewardIds,
           rewards,
           demoAPResetAt: state.demoAPResetAt || null,
+          updatedAt: Number(state.updatedAt || 0),
         };
       }
 
@@ -24190,70 +24206,98 @@ function ensureProgLoaded() {
           });
       }
 
-      function applyV2BottleRewardProgress(snapshot) {
+      function applyV2BottleRewardProgress(snapshot, session = null) {
         let state = loadV2BottleRewardState();
         if (!snapshot || !isV2TerminalOutcome(snapshot.outcome)) {
-          return { state, apDelta: 0, pendingRewards: getPendingV2BottleRewards(state) };
+          return { state, authorityDelta: 0, apDelta: 0, pendingRewards: getPendingV2BottleRewards(state) };
+        }
+
+        const cachedProgress = session?.v2BottleRewardProgress;
+        if (cachedProgress) {
+          const liveState = loadV2BottleRewardState();
+          return {
+            ...cachedProgress,
+            state: liveState,
+            pendingRewards: getPendingV2BottleRewards(liveState),
+          };
         }
 
         const encounterKey = String(snapshot.encounterId || `${snapshot.tier || 1}:${snapshot.encounterOrdinal || 0}`);
         const nextAP = getV2OutcomeAPFromSnapshot(snapshot);
-        if (isV2DemoRewardMode()) {
-          const previousTotal = Number(state.totalAP || 0);
-          const completionKey = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-          state.demoCompletions = [
-            ...(Array.isArray(state.demoCompletions) ? state.demoCompletions : []),
-            {
-              key: completionKey,
-              encounterKey,
-              encounterId: snapshot.encounterId || null,
-              encounterTitle: snapshot.encounterTitle || "",
-              ap: nextAP,
-              outcome: snapshot.outcome,
-              completedAt: Date.now(),
-            },
-          ];
-          state.encounterScores = {
-            ...(state.encounterScores || {}),
-            [completionKey]: state.demoCompletions[state.demoCompletions.length - 1],
-          };
-          const scoreTotal = state.demoCompletions.reduce((sum, entry) => sum + Number(entry?.ap || 0), 0);
-          state.totalAP = Math.max(0, Math.round(scoreTotal));
-          state.tierUnlocked = getV2TierUnlockedByAP(state.totalAP);
-          state = saveV2BottleRewardState(state);
-          syncV2DemoEncounterRotationFromRewardState(state);
-          return {
+        const authorityEventId = String(
+          session?.v2AuthorityEventId ||
+          window.__BC_GODOT_WINE_OFFER__?.resultId ||
+          (typeof crypto?.randomUUID === "function"
+            ? crypto.randomUUID()
+            : `v2_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`)
+        );
+        if (session) session.v2AuthorityEventId = authorityEventId;
+
+        const previousEntry = state.encounterScores?.[authorityEventId] ||
+          (Array.isArray(state.demoCompletions)
+            ? state.demoCompletions.find((entry) => String(entry?.key || "") === authorityEventId)
+            : null);
+        if (previousEntry) {
+          const result = {
             state,
-            apDelta: state.totalAP - previousTotal,
+            authorityEventId,
+            authorityDelta: Number(previousEntry.ap ?? nextAP),
+            apDelta: 0,
             pendingRewards: getPendingV2BottleRewards(state),
           };
+          if (session) session.v2BottleRewardProgress = result;
+          return result;
         }
 
-        const currentScore = state.encounterScores?.[encounterKey] || null;
-        const previousBest = currentScore ? Number(currentScore.ap || 0) : null;
-        const shouldUpdate = previousBest === null || nextAP > previousBest;
-        let apDelta = 0;
-
-        if (shouldUpdate) {
-          state.encounterScores = {
-            ...(state.encounterScores || {}),
-            [encounterKey]: {
-              encounterId: snapshot.encounterId || null,
-              encounterTitle: snapshot.encounterTitle || "",
-              ap: nextAP,
-              outcome: snapshot.outcome,
-              updatedAt: Date.now(),
-            },
-          };
-          const scoreTotal = Object.values(state.encounterScores).reduce((sum, entry) => sum + Number(entry?.ap || 0), 0);
-          const previousTotal = Number(state.totalAP || 0);
-          state.totalAP = Math.max(0, Math.round(scoreTotal));
-          state.tierUnlocked = getV2TierUnlockedByAP(state.totalAP);
-          apDelta = state.totalAP - previousTotal;
-          state = saveV2BottleRewardState(state);
+        const isDemo = isV2DemoRewardMode();
+        const authorityState = isDemo ? null : loadV2ProgressionAuthorityState();
+        const authorityHasCanonicalTotal = !!(
+          authorityState && (
+            Number(authorityState.totalAP || 0) !== 0 ||
+            Number(authorityState.updatedAt || 0) !== 0 ||
+            (Array.isArray(authorityState.attempts) && authorityState.attempts.length > 0)
+          )
+        );
+        const previousTotal = isDemo || !authorityHasCanonicalTotal
+          ? Number(state.totalAP || 0)
+          : Number(authorityState.totalAP || 0);
+        const completedAt = Date.now();
+        const completion = {
+          key: authorityEventId,
+          encounterKey,
+          encounterId: snapshot.encounterId || null,
+          encounterTitle: snapshot.encounterTitle || "",
+          ap: nextAP,
+          outcome: snapshot.outcome,
+          completedAt,
+          updatedAt: completedAt,
+        };
+        const encounterEntries = Object.entries({
+          ...(state.encounterScores || {}),
+          [authorityEventId]: completion,
+        }).slice(-100);
+        state.encounterScores = Object.fromEntries(encounterEntries);
+        if (isDemo) {
+          state.demoCompletions = [
+            ...(Array.isArray(state.demoCompletions) ? state.demoCompletions : []),
+            completion,
+          ].slice(-100);
         }
+        state.totalAP = applySignedV2AuthorityDelta(previousTotal, nextAP);
+        state.tierUnlocked = getV2TierUnlockedByAP(state.totalAP);
+        state.updatedAt = completedAt;
+        state = saveV2BottleRewardState(state);
+        if (isDemo) syncV2DemoEncounterRotationFromRewardState(state);
 
-        return { state, apDelta, pendingRewards: getPendingV2BottleRewards(state) };
+        const result = {
+          state,
+          authorityEventId,
+          authorityDelta: nextAP,
+          apDelta: state.totalAP - previousTotal,
+          pendingRewards: getPendingV2BottleRewards(state),
+        };
+        if (session) session.v2BottleRewardProgress = result;
+        return result;
       }
 
       function claimV2BottleReward(rewardId) {
@@ -24365,6 +24409,7 @@ function ensureProgLoaded() {
             pivotsTaken: 0,
             pivotsSuccess: 0,
           },
+          updatedAt: 0,
         };
       }
 
@@ -24484,7 +24529,7 @@ function ensureProgLoaded() {
           rulesTierToServe,
           attempts,
           progressionSnapshot,
-          updatedAt: Number(state.updatedAt || Date.now()),
+          updatedAt: Number(state.updatedAt || 0),
         };
       }
 
@@ -24613,8 +24658,8 @@ function ensureProgLoaded() {
           progressionSnapshot: attempts.length
             ? buildV2ProgressionSnapshotFromAttempts(attempts)
             : (base.progressionSnapshot || buildV2ProgressionSnapshotFromAttempts(attempts)),
-          totalAP: Math.max(Number(local.totalAP || 0), Number(auth.totalAP || 0)),
-          updatedAt: Math.max(Number(local.updatedAt || 0), Number(auth.updatedAt || 0), Date.now()),
+          totalAP: Number(preferAuth ? auth.totalAP : local.totalAP) || 0,
+          updatedAt: Math.max(Number(local.updatedAt || 0), Number(auth.updatedAt || 0)),
         });
       }
 
@@ -24671,6 +24716,12 @@ function ensureProgLoaded() {
           `v2_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
         );
         session.v2AuthorityEventId = authorityEventId;
+        if ((Array.isArray(state.attempts) ? state.attempts : []).some(
+          (item) => String(item?.key || "") === authorityEventId
+        )) {
+          session.v2ProgressionAuthorityRecorded = true;
+          return state;
+        }
         const attempt = {
           key: authorityEventId,
           encounterId: snapshot.encounterId || null,
@@ -24686,11 +24737,20 @@ function ensureProgLoaded() {
           difficultyMode: normalizeV2DifficultyMode(snapshot.difficultyMode || session?.difficultyMode || getV2DifficultyModeForStart()),
           completedAt: Date.now(),
         };
+        const attempts = [...(Array.isArray(state.attempts) ? state.attempts : []), attempt].slice(-100);
+        const progressionSnapshot = buildV2ProgressionSnapshotFromAttempts(attempts);
+        const apTierUnlocked = getV2TierUnlockedByAP(totalAP);
+        const rulesTierToServe = decideV2RulesTierFromSnapshot(progressionSnapshot);
+        const tierToServe = Math.max(1, Math.min(apTierUnlocked, rulesTierToServe));
         session.v2ProgressionAuthorityRecorded = true;
         return saveV2ProgressionAuthorityState({
           ...state,
           totalAP,
-          attempts: [...(Array.isArray(state.attempts) ? state.attempts : []), attempt],
+          attempts,
+          progressionSnapshot,
+          apTierUnlocked,
+          rulesTierToServe,
+          tierToServe,
         });
       }
 
@@ -24725,6 +24785,7 @@ function ensureProgLoaded() {
         return {
           totalAP: Number(rewardState.totalAP || 0),
           tierUnlocked: Number(rewardState.tierUnlocked || 1),
+          updatedAt: Number(rewardState.updatedAt || 0),
           rewards: rewards.map((reward) => ({
             id: String(reward?.id || ""),
             name: String(reward?.name || ""),
@@ -26411,7 +26472,7 @@ function ensureProgLoaded() {
         const moodDescriptor = getV2MoodDescriptor(presentationSnapshot);
         const tableMood = getV2TableMood(presentationSnapshot);
 	        const resultPresentation = isTerminal ? getV2ResultPresentation(snapshot, encounter) : null;
-	        const rewardProgress = isTerminal ? applyV2BottleRewardProgress(snapshot) : { state: loadV2BottleRewardState(), apDelta: 0, pendingRewards: [] };
+	        const rewardProgress = isTerminal ? applyV2BottleRewardProgress(snapshot, session) : { state: loadV2BottleRewardState(), authorityDelta: 0, apDelta: 0, pendingRewards: [] };
 	        if (isTerminal) {
 	          maybeSubmitV2ProgressReport(snapshot, session, rewardProgress);
 	        }
@@ -26444,7 +26505,6 @@ function ensureProgLoaded() {
           ? "Walk Away is now available because the table has reached critical resistance."
           : "Walk Away unlocks only when friction reaches critical resistance.";
         const showGuidanceCard = Number(snapshot.encounterOrdinal || 0) <= 1;
-        const wineTimerHtml = "";
         const guidanceCardHtml = showGuidanceCard
           ? `
                   <div class="v2-guidance-card">
@@ -26456,9 +26516,9 @@ function ensureProgLoaded() {
                   </div>
                   `
           : "";
-        const guidanceTimerRowHtml = showGuidanceCard
+        const guidanceRowHtml = showGuidanceCard
           ? `
-                  <div class="v2-guidance-timer-row">
+                  <div class="v2-guidance-row">
                     ${guidanceCardHtml}
                   </div>
                   `
@@ -26574,7 +26634,7 @@ function ensureProgLoaded() {
                     </div>
                   </div>
 
-                  ${guidanceTimerRowHtml}
+                  ${guidanceRowHtml}
                   <div class="v2-top-metrics">
                     <div class="v2-metrics-row">
                       ${stateGridHtml}
@@ -27078,7 +27138,7 @@ function ensureProgLoaded() {
 
       function getGodotShiftEmbedUrl() {
         // Bust cached Godot index/pck after floor re-exports.
-        const assetV = String(window.__BC_GODOT_SHIFT_ASSET_V__ || "346434464-pck-84b9543ead24adc9");
+        const assetV = String(window.__BC_GODOT_SHIFT_ASSET_V__ || "346445216-pck-ce35a941ba1872a4");
         return `${getGodotShiftBaseUrl()}/index.html?bcEmbed=1&v=${encodeURIComponent(assetV)}`;
       }
 
@@ -27270,16 +27330,20 @@ function ensureProgLoaded() {
         const rawOperational = Number(
           payload.operationalAuthorityDelta ?? (authorityDeltaTotal - v2AuthorityDelta)
         );
-        // Wine AP is already in the bottle wallet from each sale. Floor table
-        // AP is operational. Never subtract wines again (that wiped waiter AP).
-        const floorDelta = Math.max(0, Math.round(rawOperational));
-        const earnedWineAp = Math.max(
-          0,
-          Math.round(Number(bottleState.totalAP || 0)),
-          Math.round(Number(authorityState.totalAP || 0))
+        // V2 wine AP is already applied per encounter. Reconcile only the signed
+        // operational shift delta here, then clamp the final shared AP total at zero.
+        const operationalAuthorityDelta = Number.isFinite(rawOperational)
+          ? Math.round(rawOperational)
+          : 0;
+        const authorityHasCanonicalTotal = !!(
+          Number(authorityState.totalAP || 0) !== 0 ||
+          Number(authorityState.updatedAt || 0) !== 0 ||
+          (Array.isArray(authorityState.attempts) && authorityState.attempts.length > 0)
         );
-        const totalAP = earnedWineAp + floorDelta;
-        const operationalAuthorityDelta = floorDelta;
+        const currentAP = authorityHasCanonicalTotal
+          ? Number(authorityState.totalAP || 0)
+          : Number(bottleState.totalAP || 0);
+        const totalAP = applySignedV2AuthorityDelta(currentAP, operationalAuthorityDelta);
         const progressionSnapshot =
           authorityState.progressionSnapshot ||
           buildV2ProgressionSnapshotFromAttempts(authorityState.attempts);

@@ -13,6 +13,7 @@ import { decideAllowedTierFromSnapshot } from "../src/game/progressionEvaluator"
 import type { ProgressionSnapshot } from "../src/game/progressionRules";
 import { calculateRewardValue, deriveTier } from "../src/progressionStore.js";
 import {
+  applySignedAuthorityDelta,
   getWalkAwayMistakeThreshold,
   mergeV2ProgressionAuthorityStates,
   mergeBottleRewardStates,
@@ -69,6 +70,15 @@ test("browser V2 reward mapping matches the encounter authority contract", () =>
   assert.match(gameHtml, /case "premium_success": return 20;/);
   assert.match(gameHtml, /case "standard_success": return 15;/);
   assert.match(gameHtml, /case "weak_success": return 10;/);
+  assert.match(gameHtml, /case "neutral_exit": return 5;/);
+  assert.match(gameHtml, /case "failure": return -15;/);
+  assert.doesNotMatch(gameHtml, /const previousBest =/);
+});
+
+test("signed authority deltas accumulate and clamp only the final total", () => {
+  assert.equal(applySignedAuthorityDelta(100, 20), 120);
+  assert.equal(applySignedAuthorityDelta(100, -15), 85);
+  assert.equal(applySignedAuthorityDelta(10, -15), 0);
 });
 
 test("V2 difficulty settings affect gameplay pressure", () => {
@@ -364,6 +374,26 @@ test("hydrate prefers merge and never replaces richer local attempts with AP-onl
   assert.equal(merged.totalAP, 100);
 });
 
+test("authority merge accepts a newer equally rich lower total after failure", () => {
+  const attempts = [
+    { key: "a1", completedAt: 100, isGreen: true, tier: 1 },
+    { key: "a2", completedAt: 200, isRed: true, tier: 1, authorityDelta: -15, apAfter: 85 },
+  ];
+  const local = {
+    totalAP: 100,
+    updatedAt: 200,
+    attempts,
+    progressionSnapshot: { encountersTotal: 2, last10Count: 2, last10Greens: 1, last10Reds: 1, anyRedT2Plus: false, pivotsTaken: 0, pivotsSuccess: 0 },
+    tierToServe: 1,
+    apTierUnlocked: 1,
+    rulesTierToServe: 1,
+  };
+  const authoritative = { ...local, totalAP: 85, updatedAt: 300 };
+
+  assert.equal(shouldPreferAuthoritativeV2Authority(authoritative, local), true);
+  assert.equal(mergeV2ProgressionAuthorityStates(authoritative, local).totalAP, 85);
+});
+
 test("bottle reward merge keeps claimed rewards from both server and incoming", () => {
   const merged = mergeBottleRewardStates(
     {
@@ -386,6 +416,15 @@ test("bottle reward merge keeps claimed rewards from both server and incoming", 
   assert.equal(merged?.rewards?.length, 2);
   assert.ok(merged?.rewards?.some((reward) => reward.id === "starter_bottle" && reward.claimed));
   assert.ok(merged?.rewards?.some((reward) => reward.id === "bronze_bottle" && reward.claimed));
+});
+
+test("bottle reward merge mirrors a newer lower authority total", () => {
+  const merged = mergeBottleRewardStates(
+    { totalAP: 100, tierUnlocked: 1, updatedAt: 100, rewards: [] },
+    { totalAP: 85, tierUnlocked: 1, updatedAt: 200, rewards: [] },
+  );
+
+  assert.equal(merged?.totalAP, 85);
 });
 
 test("canonical upsert merges attempts and keeps server base when client basedOn is stale", () => {
@@ -504,6 +543,13 @@ test("Godot shift stats accumulate guests, bottles, and greetings without double
   assert.equal(second.bottlesSold, 3);
   assert.equal(second.shiftsCompleted, 2);
   assert.equal(second.authorityDeltas.length, 2);
+
+  const penalized = accumulateGodotShiftStats(second, {
+    shiftRunId: "shift-3",
+    operationalAuthorityDelta: -7,
+  }, { shiftRunId: "shift-3" });
+  assert.equal(penalized.lastOperationalAuthorityDelta, -7);
+  assert.equal(penalized.authorityDeltas.at(-1), -7);
 
   const merged = mergeGodotShiftCanonical(first, second);
   assert.equal(merged.guestsServed, 3);

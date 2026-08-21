@@ -52,6 +52,12 @@ function firstFinite(...values: unknown[]): number | null {
   return null;
 }
 
+export function applySignedAuthorityDelta(totalAP: unknown, authorityDelta: unknown): number {
+  const current = firstFinite(totalAP, 0) || 0;
+  const delta = firstFinite(authorityDelta, 0) || 0;
+  return Math.max(0, Math.round(current + delta));
+}
+
 export function buildV2ProgressionSnapshotFromAttempts(
   attempts: V2AuthorityAttempt[] | null | undefined,
 ): V2ProgressionSnapshot {
@@ -98,11 +104,15 @@ export function mergeV2AttemptLists(
 export function authorityRichness(state: Partial<V2AuthorityState> | null | undefined) {
   const attempts = Array.isArray(state?.attempts) ? state!.attempts!.length : 0;
   const snapshotTotal = Number(state?.progressionSnapshot?.encountersTotal || 0);
+  const latestAttemptAt = (Array.isArray(state?.attempts) ? state!.attempts! : []).reduce(
+    (latest, attempt) => Math.max(latest, Number(attempt?.completedAt || 0)),
+    0,
+  );
   return {
     attempts,
     encountersTotal: Math.max(snapshotTotal, attempts),
     totalAP: Math.max(0, Number(state?.totalAP || 0)),
-    updatedAt: Number(state?.updatedAt || 0),
+    updatedAt: Math.max(Number(state?.updatedAt || 0), latestAttemptAt),
   };
 }
 
@@ -120,9 +130,6 @@ export function shouldPreferAuthoritativeV2Authority(
 
   if (auth.encountersTotal > local.encountersTotal) return true;
   if (auth.attempts > local.attempts) return true;
-  if (auth.totalAP > local.totalAP && auth.encountersTotal >= local.encountersTotal && auth.attempts >= local.attempts) {
-    return true;
-  }
   if (
     auth.updatedAt > local.updatedAt &&
     auth.encountersTotal >= local.encountersTotal &&
@@ -167,6 +174,12 @@ export function mergeV2ProgressionAuthorityStates(
       ) || 0,
     ),
   );
+  const apTierUnlocked = getV2TierUnlockedByAP(totalAP);
+  const rulesTierToServe = Math.max(1, Number(base.rulesTierToServe || 1) || 1);
+  const tierToServe = Math.max(
+    1,
+    Math.min(apTierUnlocked, rulesTierToServe, Number(base.tierToServe || 1) || 1),
+  );
 
   return {
     v: 1,
@@ -175,10 +188,10 @@ export function mergeV2ProgressionAuthorityStates(
     totalAP,
     attempts,
     progressionSnapshot,
-    updatedAt: Math.max(Number(local.updatedAt || 0), Number(auth.updatedAt || 0), Date.now()),
-    tierToServe: Number(base.tierToServe || 1) || 1,
-    apTierUnlocked: Number(base.apTierUnlocked || 1) || 1,
-    rulesTierToServe: Number(base.rulesTierToServe || 1) || 1,
+    updatedAt: Math.max(Number(local.updatedAt || 0), Number(auth.updatedAt || 0)),
+    tierToServe,
+    apTierUnlocked,
+    rulesTierToServe,
   };
 }
 
@@ -215,9 +228,15 @@ export function mergeBottleRewardStates(
     }
   }
 
+  const serverUpdatedAt = Number(server?.updatedAt || 0);
+  const incomingUpdatedAt = Number(incoming?.updatedAt || 0);
+  const preferred = incomingUpdatedAt >= serverUpdatedAt ? incoming : server;
+  const totalAP = Math.max(0, Math.round(Number(preferred?.totalAP || 0)));
+
   return {
-    totalAP: Math.max(Number(server?.totalAP || 0), Number(incoming?.totalAP || 0)),
-    tierUnlocked: Math.max(Number(server?.tierUnlocked || 1), Number(incoming?.tierUnlocked || 1)),
+    totalAP,
+    tierUnlocked: getV2TierUnlockedByAP(totalAP),
+    updatedAt: Math.max(serverUpdatedAt, incomingUpdatedAt),
     rewards: Array.from(byId.values()),
   };
 }
@@ -528,6 +547,13 @@ export function mergeCanonicalProgressionState(
     asObject(server.v2)?.bottleRewards || asObject(server.bottleRewards),
     asObject(incoming.v2)?.bottleRewards || asObject(incoming.bottleRewards),
   );
+  const synchronizedBottleRewards = mergedBottleRewards
+    ? {
+        ...mergedBottleRewards,
+        totalAP: mergedAuthority.totalAP,
+        tierUnlocked: getV2TierUnlockedByAP(mergedAuthority.totalAP),
+      }
+    : null;
 
   const merged = {
     ...server,
@@ -569,12 +595,12 @@ export function mergeCanonicalProgressionState(
       ...(asObject(server.v2) || {}),
       ...(asObject(incoming.v2) || {}),
       authority: mergedAuthority,
-      ...(mergedBottleRewards ? { bottleRewards: mergedBottleRewards } : {}),
+      ...(synchronizedBottleRewards ? { bottleRewards: synchronizedBottleRewards } : {}),
       latestSnapshot: preferIncoming
         ? incoming.v2?.latestSnapshot || server.v2?.latestSnapshot || null
         : server.v2?.latestSnapshot || incoming.v2?.latestSnapshot || null,
     },
-    ...(mergedBottleRewards ? { bottleRewards: mergedBottleRewards } : {}),
+    ...(synchronizedBottleRewards ? { bottleRewards: synchronizedBottleRewards } : {}),
     // Preserve long-term skill bank across merges; bank writes are applied server-side.
     skills: {
       ...(asObject(server.skills) || {}),

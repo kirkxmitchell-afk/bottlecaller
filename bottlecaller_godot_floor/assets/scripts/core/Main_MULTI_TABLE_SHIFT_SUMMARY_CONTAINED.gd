@@ -3652,26 +3652,15 @@ func _choose_follow_up(
 		session["mid_service_offer"] = false
 		session["cross_offer_return_phase"] = ""
 
-		# Apéritif route: complete Bar service before wine selection opens.
+		# An accepted aperitif stays on the order, but wine selection opens now.
+		# POS will queue the aperitif before the wine after V2 resolves.
 		if (
 			session["greeting_choice"] == "greet_aperitif"
 			and not bool(session.get("aperitif_delivered", false))
 		):
 			session["aperitif_ordered"] = true
 			session["aperitif_opportunity_used"] = true
-			session["wine_opportunity_pending"] = true
-			session["wine_opportunity_number"] = int(
-				session.get("wine_opportunity_number", 1)
-			)
-			session["service_phase"] = "opening_service"
-			table_sessions[table_id] = session
-			_complete_follow_up_order(
-				table_id,
-				session,
-				guest_reply
-				+ " Start with the aperitif at Bar. Wine selection opens after delivery."
-			)
-			return
+			session["wine_opportunity_pending"] = false
 
 		# Embedded web flow: hand the matching guest into V2, then resume.
 		if _begin_v2_wine_offer(
@@ -4318,12 +4307,9 @@ func _on_bridge_v2_result_received(payload: Dictionary = {}):
 	var incoming_vite_ap = int(
 		round(float(payload.get("totalAP", vite_reported_total_ap)))
 	)
-	if payload.has("totalAP") or incoming_vite_ap > vite_reported_total_ap:
+	if payload.has("totalAP"):
 		var previous_vite_ap = vite_reported_total_ap
-		vite_reported_total_ap = max(
-			vite_reported_total_ap,
-			incoming_vite_ap
-		)
+		vite_reported_total_ap = max(0, incoming_vite_ap)
 		_check_bottle_reward_milestones(
 			previous_vite_ap,
 			vite_reported_total_ap
@@ -4422,6 +4408,31 @@ func _on_bridge_v2_result_received(payload: Dictionary = {}):
 			table_id,
 			session,
 			guest_reply
+		)
+		return
+
+	# V2 can now open before the accepted aperitif has been entered at POS.
+	# Preserve that aperitif on a no-sale instead of leaving it unticketed.
+	if (
+		bool(session.get("aperitif_ordered", false))
+		and not bool(session.get("aperitif_delivered", false))
+		and not bool(session.get("pos_entered", false))
+	):
+		var reopen_food_after_aperitif = (
+			can_second_wine
+			and not food_already_ordered
+		)
+		session["second_wine_after_food"] = reopen_food_after_aperitif
+		session["food_offer_reopened"] = reopen_food_after_aperitif
+		session["post_wine_follow_up"] = reopen_food_after_aperitif
+		session["second_wine_available"] = false
+		session["wine_opportunity_pending"] = false
+		session["service_phase"] = "continuing_service"
+		_complete_follow_up_order(
+			table_id,
+			session,
+			guest_reply
+			+ " The accepted aperitif is still ready to enter at POS."
 		)
 		return
 
@@ -6033,6 +6044,22 @@ func _deliver_bar_drink(
 			+ " The "
 			+ next_drink
 			+ " is now being prepared at Bar."
+		)
+	elif (
+		delivered_drink_type == "aperitif"
+		and bool(session.get("post_wine_follow_up", false))
+		and not bool(session.get("wine_ordered", false))
+		and not bool(session.get("food_ordered", false))
+	):
+		session["phase"] = "waiting_to_greet"
+		session["service_phase"] = "food_reopened_after_wine"
+		table_sessions[table_id] = session
+		if table.has_method("set_status_text"):
+			table.set_status_text("Food offer open again")
+		_set_prompt(
+			"Aperitif delivered to "
+			+ table_id
+			+ ". Return to the table to offer food."
 		)
 	elif _table_service_fully_delivered(session):
 		_begin_table_drinking(table_id)
@@ -9223,7 +9250,7 @@ func _on_result_continue_pressed():
 # ===================================================================
 
 func _get_shift_wine_ap() -> int:
-	return max(0, vite_reported_total_ap - vite_ap_at_shift_start)
+	return vite_reported_total_ap - vite_ap_at_shift_start
 
 
 func _get_shift_display_ap() -> int:

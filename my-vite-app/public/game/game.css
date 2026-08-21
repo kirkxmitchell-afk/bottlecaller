@@ -215,51 +215,15 @@ p { margin: 0; color: var(--muted); line-height: 1.5; }
   font-size:18px;
 }
 
-.v2-wine-timer{
+.v2-guidance-row{
   display:grid;
-  place-items:center;
-  min-width:64px;
-  height:64px;
-  padding:0 12px;
-  border-radius:18px;
-  border:1px solid rgba(227,187,117,.42);
-  background: linear-gradient(180deg, rgba(28,36,28,.96), rgba(12,16,12,.94));
-  color:#f4deba;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 22px;
-  letter-spacing: 0.04em;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
-}
-
-.v2-wine-timer[data-urgent="1"]{
-  border-color: rgba(248,113,113,.55);
-  color:#fecaca;
-  background: linear-gradient(180deg, rgba(72,20,20,.96), rgba(28,10,10,.94));
-}
-
-.v2-guidance-timer-row{
-  display:grid;
-  grid-template-columns: minmax(0, 1fr) minmax(160px, 220px);
+  grid-template-columns:minmax(0, 1fr);
   gap:8px;
   align-items:stretch;
 }
 
-.v2-guidance-timer-row .v2-guidance-card{
+.v2-guidance-row .v2-guidance-card{
   margin:0;
-}
-
-.v2-guidance-timer-row .v2-guidance-spacer{
-  min-height:0;
-}
-
-.v2-guidance-timer-row .v2-wine-timer{
-  width:100%;
-  min-width:0;
-  height:auto;
-  min-height:72px;
-  align-self:stretch;
-  border-radius:18px;
-  font-size:28px;
 }
 
 .v2-header-copy{
@@ -1729,27 +1693,18 @@ p { margin: 0; color: var(--muted); line-height: 1.5; }
   max-width: 88%;
 }
 
-#encounterPanel[data-v2-layout="tier1"] .v2-guidance-timer-row{
+#encounterPanel[data-v2-layout="tier1"] .v2-guidance-row{
   display:grid;
-  grid-template-columns: minmax(0, 1fr) minmax(160px, 220px);
+  grid-template-columns:minmax(0, 1fr);
   gap:8px;
   align-items:stretch;
   max-width:100%;
 }
 
-#encounterPanel[data-v2-layout="tier1"] .v2-guidance-timer-row .v2-guidance-card{
+#encounterPanel[data-v2-layout="tier1"] .v2-guidance-row .v2-guidance-card{
   max-width:none;
   width:auto;
   margin:0;
-}
-
-#encounterPanel[data-v2-layout="tier1"] .v2-guidance-timer-row .v2-wine-timer{
-  width:100%;
-  min-width:0;
-  min-height:72px;
-  height:auto;
-  border-radius:16px;
-  font-size:28px;
 }
 
 #encounterPanel[data-v2-layout="tier1"] .v2-scene-text,
@@ -8385,14 +8340,10 @@ html[data-bc-godot-mobile="1"] .godot-shift-shell{
     font-size:17px;
   }
 
-  #encounterPanel[data-v2-layout="tier1"] .v2-guidance-timer-row{
+  #encounterPanel[data-v2-layout="tier1"] .v2-guidance-row{
     grid-template-columns:minmax(0, 1fr);
     gap:4px;
     max-width:100%;
-  }
-
-  #encounterPanel[data-v2-layout="tier1"] .v2-guidance-timer-row.has-timer{
-    grid-template-columns:minmax(0, 1fr) 92px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-guidance-card{
@@ -8413,12 +8364,6 @@ html[data-bc-godot-mobile="1"] .godot-shift-shell{
     margin-top:3px;
     font-size:8px;
     line-height:1.15;
-  }
-
-  #encounterPanel[data-v2-layout="tier1"] .v2-guidance-timer-row .v2-wine-timer{
-    min-height:54px;
-    border-radius:10px;
-    font-size:20px;
   }
 
   #encounterPanel[data-v2-layout="tier1"] .v2-metrics-row{
